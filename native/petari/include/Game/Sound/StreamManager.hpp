@@ -51,5 +51,4 @@ private:
     SoundMove mParams;
     SoundAudience* mAudience;
     NebulaList< StreamSound > mStreamList;
-    SoundStrategyMgr< StreamSound >* soundStrategyMgr;
 };

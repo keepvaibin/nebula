@@ -18,7 +18,7 @@ public:
     virtual SoundTempo* getTempoMgr();
     virtual bool tryDie_();
 
-    EffectSound(EffectManager* seMgr, SoundStrategyMgr< EffectSound >* soundStrategyMgr, u32 priority);
+    EffectSound(EffectManager* seMgr, u32 priority);
     virtual ~EffectSound();
     void mixOut_(const SoundParams& params);
     void stopTrack_();
@@ -50,7 +50,5 @@ public:
     SeqData mSeqData;
     bool mTrackStarted;
     EffectManager* mManager;
-    SoundStrategyMgr< EffectSound >* mSoundStrategyMgr;
-    SoundStrategy< EffectSound >* mSoundStrategy;
     SoundTempo mTempoMgr;
 };

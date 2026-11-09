@@ -5,7 +5,6 @@
 
 SequenceManager::SequenceManager(bool setInstance) : SoundGlobal< SequenceManager >(setInstance), mAudience() {
     seqDataMgr = nullptr;
-    soundStrategyMgr = nullptr;
     mNumTracks = 16;
     mMove.init();
     mSoundActivity.init();
@@ -89,7 +88,7 @@ void SequenceManager::mixOut() {
 }
 
 SequenceSound* SequenceManager::beginStartSeq_() {
-    SequenceSound* seq = new SequenceSound(this, soundStrategyMgr);
+    SequenceSound* seq = new SequenceSound(this);
     return seq;
 }
 

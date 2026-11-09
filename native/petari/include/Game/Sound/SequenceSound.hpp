@@ -22,7 +22,7 @@ public:
     virtual SoundTempo* getTempoMgr();
     virtual bool tryDie_();
 
-    SequenceSound(SequenceManager* seqMgr, SoundStrategyMgr< SequenceSound >* soundStrategyMgr);
+    explicit SequenceSound(SequenceManager* seqMgr);
     virtual ~SequenceSound();
     void startID_(SoundID id, const Vec3f* posPtr, SoundAudience* audience, int category, int numTracks, const SeqData& rData);
     void playSeqData_(const SoundParams& params, SoundActivity activity);
@@ -53,6 +53,4 @@ public:
     SeqData mSeqData;
     s32 mCategory;
     SequenceManager* mManager;
-    SoundStrategyMgr< SequenceSound >* mStrategyMgr;
-    SoundStrategy< SequenceSound >* mSoundStrategy;
 };

@@ -85,7 +85,7 @@ AudSystem* AudNewAudSystem(NebulaArena* pArena, AssetFolder* pSeqArchive, AssetF
 AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
     : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundArchive(pSoundArchive),
       mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
-      mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
+      mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
     mLimitedSoundInfo = new (mSoundArchive->getArena(), 0) AudLimitedSoundInfo[2];
@@ -115,8 +115,7 @@ AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, As
     mRhythmMeSystem = new (mSoundArchive->getArena(), 0) AudRhythmMeSystem(mSoundArchive->getArena(), cRhythmParsers, true);
     mRemixMgr = new (mSoundArchive->getArena(), 0) AudRemixMgr(mSoundArchive->getArena());
     mRemixMgr->init();
-    mSeStrategyMgr = new (mSoundArchive->getArena(), 0) AudSeStrategyMgr();
-    mSeMgr.setStrategyMgr(mSeStrategyMgr);
+    mSeMgr.setSeCalc(&AudSeStrategy::calc);
     mAudEffector = new (mSoundArchive->getArena(), 0) AudEffector();
     mAudEffector->initFxLine();
 

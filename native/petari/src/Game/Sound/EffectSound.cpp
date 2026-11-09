@@ -2,11 +2,9 @@
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SoundAudience.hpp"
 
-EffectSound::EffectSound(EffectManager* seMgr, SoundStrategyMgr< EffectSound >* soundStrategyMgr, u32 priority) {
-    mSoundStrategyMgr = soundStrategyMgr;
+EffectSound::EffectSound(EffectManager* seMgr, u32 priority) {
     mManager = seMgr;
     mProperPriority = priority;
-    mSoundStrategy = nullptr;
     mTrackStarted = false;
 }
 
@@ -19,10 +17,6 @@ void EffectSound::mixOut_(const SoundParams& params) {
     mPlayer.setTempoRate(mTempoMgr.getTempo());
     SoundParams mixParams;
     mParams.mixOutAll(params, &mixParams, mFader.getIntensity());
-
-    if (mSoundStrategy != nullptr) {
-        mSoundStrategy->mix(this, &mixParams);
-    }
 
     if (mAudible != nullptr) {
         for (s32 i = 0; i < mAudible->getChannelCount(); i++) {
@@ -110,8 +104,8 @@ void EffectSound::categoryCalc_() {
 
     if (calcSound_()) {
         mTempoMgr.calc();
-        if (mSoundStrategy != nullptr) {
-            mSoundStrategy->calc(this);
+        if (mManager->mSeCalc != nullptr) {
+            mManager->mSeCalc(this);
         }
     }
 
@@ -126,10 +120,6 @@ bool EffectSound::tryDie_() {
     switch (mPlayer.status()) {
     case SeqTrack::STATUS_FREE:
     case SeqTrack::STATUS_STOPPED:
-        if (mSoundStrategy != nullptr) {
-            mSoundStrategyMgr->deleteStrategy(mSoundStrategy);
-            mSoundStrategy = nullptr;
-        }
         dieSound_();
         return true;
     case SeqTrack::STATUS_RUN:
@@ -145,11 +135,6 @@ void EffectSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* audie
     mPlayer.create(pFile != nullptr ? pFile->mTrackBound : 1, mAudible != nullptr ? mAudible->getChannelCount() : 1,
                    TrackRoom::of(pFile), 2, (u32)id, 1);
     mTrackStarted = false;
-    if (mSoundStrategyMgr != nullptr) {
-        mSoundStrategy = mSoundStrategyMgr->newStrategy(id);
-    } else {
-        mSoundStrategy = nullptr;
-    }
 }
 
 s32 EffectSound::getNumChild() const {

@@ -110,7 +110,7 @@ void EffectCategory::managerMixOut_(const SoundMove& params, SoundActivity activ
 EffectManager::EffectManager(bool setInstance) : SoundGlobal< EffectManager >(setInstance) {
     mAudience = nullptr;
     mSeqDataMgr = nullptr;
-    mStrategyMgr = nullptr;
+    mSeCalc = nullptr;
     mParams.init();
     mSoundActivity.init();
 }
@@ -150,8 +150,8 @@ void EffectManager::setAudience(SoundAudience* audience) {
     mAudience = audience;
 }
 
-void EffectManager::setStrategyMgr(SoundStrategyMgr< EffectSound >* soundStrategyMgr) {
-    mStrategyMgr = soundStrategyMgr;
+void EffectManager::setSeCalc(void (*pCalc)(EffectSound*)) {
+    mSeCalc = pCalc;
 }
 
 void EffectManager::setSeqDataMgr(SeqSource* seqDataMgr) {
@@ -168,7 +168,7 @@ EffectSound* EffectManager::newSe_(int category, u32 priority) {
         return nullptr;
     }
 
-    EffectSound* se = new EffectSound(this, mStrategyMgr, priority);
+    EffectSound* se = new EffectSound(this, priority);
     if (se == nullptr) {
         return nullptr;
     }

@@ -59,19 +59,3 @@ void AudSeStrategy::calc(EffectSound* pSe) {
         player->setChildIIR(cutoff);
     }
 }
-
-void AudSeStrategy::mix(EffectSound* pSe, SoundParams* pParams) {
-}
-
-SoundStrategy< EffectSound >* AudSeStrategyMgr::newStrategy(SoundID soundID) {
-    return new AudSeStrategy();
-}
-
-bool AudSeStrategyMgr::deleteStrategy(SoundStrategy< EffectSound >* pStrategy) {
-    if (pStrategy == nullptr) {
-        return false;
-    }
-
-    delete pStrategy;
-    return true;
-}

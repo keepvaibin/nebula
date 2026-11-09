@@ -7,11 +7,9 @@
 #include <cstring>
 #include <new>
 
-StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSound >* soundStrategyMgr_) {
+StreamSound::StreamSound(StreamManager* streamMgr_) {
     mPrepareState = 0;
-    soundStrategyMgr = soundStrategyMgr_;
     streamMgr = streamMgr_;
-    soundStrategy = nullptr;
     mIsPaused = false;
     for (int i = 0; i < NUM_CHILDREN; i++) {
         children[i] = nullptr;
@@ -133,12 +131,6 @@ void StreamSound::startID_(SoundID id, s32 streamFileEntry, const Vec3f* posPtr,
     mStreamFileEntry = streamFileEntry;
     startSound_(id, posPtr, audience);
     mPrepareState = 0;
-
-    if (soundStrategyMgr != nullptr) {
-        soundStrategy = soundStrategyMgr->newStrategy(id);
-    } else {
-        soundStrategy = nullptr;
-    }
 }
 
 bool StreamSound::prepare_prepareStream_() {
@@ -218,10 +210,6 @@ void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity acti
     SoundParams outParams;
     mParams.mixOutAll(inParams, &outParams, (mStatus.isMute() || activity.isMute()) ? 0.0f : mFader.getIntensity());
 
-    if (soundStrategy != nullptr) {
-        soundStrategy->mix(this, &outParams);
-    }
-
     // A stream is heard from the first listener only.
     const SoundParams* mixParams = &outParams;
     if (mAudible != nullptr && mAudience != nullptr) {
@@ -268,11 +256,6 @@ void StreamSound::dieStream_() {
             children[i] = nullptr;
         }
     }
-
-    if (soundStrategy != nullptr) {
-        soundStrategyMgr->deleteStrategy(soundStrategy);
-        soundStrategy = nullptr;
-    }
 }
 
 bool StreamSound::tryDie_() {
@@ -316,10 +299,6 @@ void StreamSound::managerCalc_() {
             if (children[i] != nullptr) {
                 children[i]->calc();
             }
-        }
-
-        if (soundStrategy != nullptr) {
-            soundStrategy->calc(this);
         }
     }
 }
