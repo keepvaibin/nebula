@@ -244,10 +244,6 @@ namespace MR {
         return ::nebula_stricmp(pStr1, pStr2);
     }
 
-    int compareString(const char* pStr1, const char* pStr2) {
-        return strcmp(pStr1, pStr2);
-    }
-
     bool isEqualString(const char* pStr1, const char* pStr2) {
         if (pStr1 == nullptr || pStr2 == nullptr) {
             return pStr1 == pStr2;

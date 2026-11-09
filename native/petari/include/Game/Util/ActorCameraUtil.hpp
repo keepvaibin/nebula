@@ -32,7 +32,6 @@ namespace MR {
     bool endActorCameraAtLanding(const LiveActor*, const ActorCameraInfo*, s32 = -1);
     bool endMultiActorCameraAtLanding(const LiveActor*, const ActorCameraInfo*, const char*, s32 = -1);
     void endActorCameraProgrammable(const LiveActor*, s32, bool);
-    bool isActiveMultiActorCamera(const LiveActor*, const ActorCameraInfo*, const char*);
     void setProgrammableCameraParam(const LiveActor*, const Vec3f&, const Vec3f&, const Vec3f&);
     void setProgrammableCameraParamFovy(const LiveActor*, f32);
     void initAnimCamera(const LiveActor*, const ActorCameraInfo*, const char*, const char*);

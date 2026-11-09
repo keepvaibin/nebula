@@ -262,24 +262,6 @@ void NebulaArena::free(void* pData) {
 #endif
 }
 
-void NebulaArena::freeAll() {
-    destroyOwned();
-
-    while (mFirstChild != nullptr) {
-        destroy(mFirstChild);
-    }
-
-    RenderTexture::forget(reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
-    GameAssets::unloadArena(this);
-
-    const NebulaHostServices* host = nebula_host();
-    UNPOISON_BLOCK(mStart, mCommitted - mStart);
-    host->memory_decommit(host->user, mStart, mCommitted - mStart);
-    mCommitted = mStart;
-    mNext = mStart;
-    memset(mFree, 0, sizeof(mFree));
-}
-
 NebulaArena* NebulaArena::makeCurrent() {
     NebulaArena* const pPrevious = sCurrent;
     sCurrent = this;

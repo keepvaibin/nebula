@@ -39,7 +39,6 @@ namespace MR {
 
     int strcasecmp(const char* pStr1, const char* pStr2);
     // Byte order: below zero when pStr1 comes first, zero when equal.
-    int compareString(const char* pStr1, const char* pStr2);
     bool isEqualString(const char* pStr1, const char* pStr2);
     // Whether pStr starts with all of pPrefix.
     bool isEqualStringPrefix(const char* pStr, const char* pPrefix);

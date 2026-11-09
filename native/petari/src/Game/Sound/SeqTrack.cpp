@@ -945,10 +945,6 @@ u32 SeqTrack::runningChildren() const {
     return bits;
 }
 
-u32 SeqTrack::seqOffset() const {
-    return mPc >= 0 ? mOffsets[mPc] : 0;
-}
-
 u32 SeqTrack::nextOffset() const {
     if (mPc < 0) {
         return 0;

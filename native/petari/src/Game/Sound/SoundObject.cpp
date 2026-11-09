@@ -55,16 +55,6 @@ SoundHandle* SoundObject::startSound(SoundID soundID) {
     return handle;
 }
 
-SoundHandle* SoundObject::startSoundIndex(SoundID soundID, u8 index) {
-    if (!mIsAllocated) {
-        return nullptr;
-    }
-
-    SoundHandle* handle = &mHandles[index];
-    SoundGlobal< SoundStarter >::getInstance()->startSound(soundID, handle, mPos);
-    return handle;
-}
-
 SoundHandle* SoundObject::startLevelSound(SoundID soundID) {
     if (!mIsAllocated) {
         return nullptr;
@@ -89,26 +79,6 @@ SoundHandle* SoundObject::startLevelSound(SoundID soundID) {
                 handle->getSound()->setLifeTime(1, false);
             }
         }
-    }
-
-    return handle;
-}
-
-SoundHandle* SoundObject::startLevelSoundIndex(SoundID soundID, u8 index) {
-    if (!mIsAllocated) {
-        return nullptr;
-    }
-    EffectManager* seMgr = SoundGlobal< EffectManager >::getInstance();
-    SoundHandle* handle = getHandleSoundID(soundID);
-    if (handle != nullptr) {
-        handle->getSound()->updateLifeTime(1);
-        return handle;
-    }
-
-    handle = &mHandles[index];
-    seMgr->startSound(soundID, handle, mPos);
-    if (handle->getSound() != nullptr) {
-        handle->getSound()->setLifeTime(1, false);
     }
 
     return handle;
