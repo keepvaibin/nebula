@@ -13,7 +13,8 @@
 extern "C" {
 #endif
 
-/* 2: setting() and setting_by_number() gave way to get_tunable(); a plugin built for 1 is not started. */
+/* 2: setting() and setting_by_number() gave way to get_tunable(), and object_arg(index) to placement_number(column) and
+   placement_text(column); a plugin built for 1 is not started. */
 #define NEBULA_MOD_API_VERSION 2u
 
 #if defined(_WIN32)
@@ -359,7 +360,8 @@ typedef struct NebulaModApi {
     void (*stop_effect)(NebulaActor* actor, const char* name); /* null: all of them */
     void (*stop_sound)(NebulaActor* actor, const char* name);
 
-    /* An object of register_object's own step in what it's doing. Starts at 0; state_frames counts from the set_state that began it. */
+    /* An object of register_object's own step in what it's doing: a number of the plugin's own (its enum of steps),
+       starting at 0; state_frames counts from the set_state that began it. */
     void (*set_state)(NebulaActor* actor, int32_t state);
     int32_t (*state)(NebulaActor* actor);
     int32_t (*state_frames)(NebulaActor* actor);
@@ -377,8 +379,13 @@ typedef struct NebulaModApi {
     void (*set_touchable)(NebulaActor* actor, int32_t touchable);
     int32_t (*hit_player)(NebulaActor* actor, NebulaHit how);
 
-    /* A placed object's numbers from the level (Obj_arg0 to 7; -1: none). */
-    int32_t (*object_arg)(NebulaActor* actor, int32_t index);
+    /* register_object's objects: a column of its row in the level, by the column's name, as a level editor shows it:
+       Obj_arg0 to Obj_arg7 (-1 where the level sets none), CommonPath_ID, ShapeModelNo, CameraSetId, MessageId, GroupId,
+       ClippingGroupId, DemoGroupId, ViewGroupId, CastId, ParentID, the SW_ columns, l_id... placement_number: 1 and the
+       number for a number column (whole or not); 0 for a column the row lacks or one of words, or an object the level
+       didn't place (spawn). placement_text: a column of words (name), or null. */
+    int32_t (*placement_number)(NebulaActor* actor, const char* column, double* value);
+    const char* (*placement_text)(NebulaActor* actor, const char* column);
     /* Its switches. is_valid: the level set one. */
     int32_t (*has_switch)(NebulaActor* actor, NebulaSwitch which);
     int32_t (*is_switch_on)(NebulaActor* actor, NebulaSwitch which);

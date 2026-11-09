@@ -763,7 +763,7 @@ std::string refusal(const Manifest& manifest, const std::string& game_id, std::s
     }
     for (const Plugin& plugin : manifest.plugins) {
         if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
-        if (plugin.api != 0u && plugin.api < kPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT, SETTING() IS NOW GET_TUNABLE()";
+        if (plugin.api != 0u && plugin.api < kPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H";
         if (plugin.binaries.find(std::string(plugin_target())) == plugin.binaries.end()) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
     }
     return {};

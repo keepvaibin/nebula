@@ -430,7 +430,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
         if (api_version() < NEBULA_MOD_API_VERSION) {
             say(name + " not started: it was built for plugin interface " + std::to_string(api_version()) +
-                "; rebuild it with this nebula_mod_api.h (setting() is now get_tunable())");
+                "; rebuild it with this nebula_mod_api.h (setting() is now get_tunable(), object_arg(index) is "
+                "placement_number(\"Obj_argN\"))");
             close_library(module);
             continue;
         }

@@ -2,6 +2,7 @@
 // Mods (mods.h, virtual_disc.h, mod_xml.h): the XML reader, the disc's patching and reads, Riivolution mods, files
 // mods, load order, saved choices, savegames, main.dol's memory patches, the mods' layouts and languages, and importing.
 
+#include "galaxy/asset_store.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/mod_xml.h"
@@ -166,6 +167,40 @@ bool importing() {
     return ok;
 }
 
+// Memory patches over the game's code: never applied; the mod's problem counts them and each has its own note, its
+// address and size, naming LumaLink's tunables and plugins.
+bool code_patch_notes() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_code_patches");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    write(root / "mods" / "Rules" / "riivolution" / "rules.xml",
+          "<wiidisc version=\"1\"><id game=\"RMG\"/><options><section name=\"S\"><option name=\"O\" default=\"1\">"
+          "<choice name=\"On\"><patch id=\"p\"/></choice></option></section></options>"
+          "<patch id=\"p\"><memory offset=\"0x80451234\" value=\"38600006\"/>"
+          "<memory offset=\"0x80001000\" value=\"6000000060000000\" search=\"true\"/></patch></wiidisc>");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto it = std::find_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == "Rules"; });
+    ok &= expect(it != mods.end() && it->code_patches == 2u && it->code_patch_notes.size() == 2u, "two code patches, two notes");
+    if (it != mods.end() && it->code_patch_notes.size() == 2u) {
+        const std::string& a = it->code_patch_notes[0];
+        const std::string& b = it->code_patch_notes[1];
+        ok &= expect(a.find("80451234") != std::string::npos && a.find("4 bytes") != std::string::npos &&
+                         a.find("tunables") != std::string::npos && a.find("plugin") != std::string::npos,
+                     "a note names its address, size and what replaces it");
+        ok &= expect(b.find("80001000") != std::string::npos && b.find("8 bytes, searched") != std::string::npos,
+                     "a searched patch says so");
+        ok &= expect(it->problem.find("2 CODE CHANGES") != std::string::npos, "the problem counts them");
+    }
+    fs::remove_all(root, ec);
+    // The cooked mods are named with the store's version: another version cooks them again.
+    const std::string signature = galaxy::mods::plan_signature(galaxy::mods::ModPlan{}, "RMGE01");
+    ok &= expect(signature.find(" store " + std::to_string(galaxy::assets::kStoreVersion) + "\n") != std::string::npos,
+                 "the plan's signature holds the store version");
+    return ok;
+}
+
 }  // namespace
 
 // Each kind of game file goes to the category a player would look for it in.
@@ -219,7 +254,7 @@ void test_texture_categories() {
 
 int main() {
     test_texture_categories();
-    const bool ok = xml() & importing();
+    const bool ok = xml() & importing() & code_patch_notes();
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';
     return ok ? 0 : 1;
 }

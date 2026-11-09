@@ -85,7 +85,8 @@ struct ModInfo {
     //                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
-    unsigned code_patches = 0;                // patches over the game's original code: the mod stays off (problem says so)
+    unsigned code_patches = 0;                // patches over the game's original code: never applied (problem says so)
+    std::vector<std::string> code_patch_notes;  // one per such patch: where it writes and what replaces it, for the log
     unsigned changed_files = 0;               // game files it changes (its choices as they stand)
     unsigned changed_textures = 0;            // textures its packs replace
     std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures

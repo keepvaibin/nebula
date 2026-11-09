@@ -86,22 +86,28 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
     Ok(Vec::new())
 }
 
-/// One file of a mod as store items. A wave archive needs the sound archive that lays it out.
+/// One file of a mod as store items, cooked as the game's own are: by its name (`cooks`) or, whatever its name, by
+/// what its bytes are (cook_file), as a member of an archive is at import. A mod's file can be one member
+/// (`X.arc/jmp/placement/common/objinfo`, `X.arc/x.kcl`, `X.arc/blyt/x.brlyt`), so the name alone does not decide. A
+/// file only a console reads is refused. A wave archive needs the sound archive that lays it out.
 fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<audio_data::WavePlace>>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
+    if super::console_only(change.path.trim_start_matches('/')) {
+        bail!("only the console reads this file (its banner, HOME menu or module list); Nebula has none");
+    }
     if cooks(&change.path) || archive::is_compressed(&bytes) || super::sound::is_sequence_path(&change.path) {
         return cook_entry(&change.path, bytes, stats);
     }
     if bytes.is_empty() {
         bail!("the mod's file is empty");
     }
-    if change.path.to_ascii_lowercase().ends_with(".aw") {
-        let places = waves
-            .get(&audio_data::wave_archive_key(&change.path))
-            .context("its wave layout is not known: the mod brings no sound archive, and the game was imported before Nebula kept the layout (import it again)")?;
-        let cooked = audio_data::wave_archive(&bytes, places).context("wave archive")?;
-        return Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]);
+    if !change.path.to_ascii_lowercase().ends_with(".aw") {
+        return cook_entry(&change.path, bytes, stats);
     }
-    Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }])
+    let places = waves
+        .get(&audio_data::wave_archive_key(&change.path))
+        .context("its wave layout is not known: the mod brings no sound archive, and the game was imported before Nebula kept the layout (import it again)")?;
+    let cooked = audio_data::wave_archive(&bytes, places).context("wave archive")?;
+    Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }])
 }
 
 /// Writes the store. A file that cannot be cooked is left out and named, so that the rest of a mod still loads; its
@@ -218,7 +224,12 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                         }
                     }
                 }
-                merged.insert(table_key, super::table::merge(&current, &bytes, &rows)?);
+                let (table, unmatched) = super::table::merge(&current, &bytes, &rows)?;
+                // Applied all the same: a row matching nothing is named in the log, not refused.
+                for words in unmatched {
+                    failed.push((format!("merge/{}", change.path), words));
+                }
+                merged.insert(table_key, table);
             } else if lower(&change.path).ends_with(".jpc") {
                 let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
                 let first = *first_particle.get(&folder).context("new particles need their names: ParticleNames.bcsv.json beside them")?;
@@ -390,6 +401,45 @@ mod tests {
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].0, "StageData/missing.txt");
         assert_eq!(store::read_file(&output, "StageData/note.txt").unwrap(), b"hello");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A disc table with one row: one long column.
+    fn one_row_table() -> Vec<u8> {
+        let mut out = Vec::new();
+        for word in [1u32, 1, 16 + 12, 4] {
+            out.extend_from_slice(&word.to_be_bytes());
+        }
+        out.extend_from_slice(&0x1234_5678u32.to_be_bytes());
+        out.extend_from_slice(&u32::MAX.to_be_bytes());
+        out.extend_from_slice(&[0, 0, 0, 0]);
+        out.extend_from_slice(&7u32.to_be_bytes());
+        out
+    }
+
+    #[test]
+    fn a_member_file_is_cooked_by_what_it_is_and_a_console_file_is_refused() {
+        let dir = std::env::temp_dir().join(format!("nebula_overlay_members_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let table = dir.join("objinfo");
+        fs::write(&table, one_row_table()).unwrap();
+        let banner = dir.join("opening.bnr");
+        fs::write(&banner, b"IMET").unwrap();
+        // A placement table has no ending that `cooks` knows: its bytes say it is one.
+        let placement = "StageData/TestGalaxy.arc/jmp/placement/common/objinfo";
+        assert!(!cooks(placement));
+        let changes = vec![
+            Change { path: placement.into(), source: table, merge: false },
+            Change { path: "opening.bnr".into(), source: banner, merge: false },
+        ];
+        let output = dir.join("mods.pak");
+        let mut stats = Stats::default();
+        let failed = write_overlay("RMGE01", &changes, None, &output, &mut stats).unwrap();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, "opening.bnr");
+        assert!(failed[0].1.contains("console"));
+        let cooked = store::read_file(&output, placement).unwrap();
+        assert_eq!(&cooked[..4], super::super::table::MAGIC);
         let _ = fs::remove_dir_all(&dir);
     }
 }

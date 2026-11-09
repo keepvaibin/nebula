@@ -1055,6 +1055,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         }
                     }
                     mod.code_patches += static_cast<unsigned>(p.memory.size());
+                    for (const MemoryPatch& m : p.memory) {
+                        char where[16];
+                        std::snprintf(where, sizeof(where), "%08X", static_cast<unsigned>(m.offset));
+                        mod.code_patch_notes.push_back("the code change at " + std::string(where) + " (" + std::to_string(m.value.size()) +
+                                                       (m.ocarina || m.search ? " bytes, searched" : " bytes") +
+                                                       ") is not applied: Nebula has no Wii program. LumaLink turns the known ones "
+                                                       "into tunables; the rest need a plugin");
+                    }
                 }
             }
         }
@@ -1170,7 +1178,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
         if (mod.code_patches != 0u) {
-            // Its files apply. LumaLink finds the native versions of known patches when it converts a mod.
+            // Its files apply; its code patches never do (code_patch_notes, one per patch, go to the log). LumaLink turns
+            // the known ones into tunables when it converts the mod.
             mod.problem = "MOST OF THIS MOD WORKS. " + std::to_string(mod.code_patches) + " CODE CHANGES NEED A NEBULA UPDATE OR A PLUGIN";
         }
         mod.unreadable = layout.unreadable;
@@ -1480,6 +1489,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         if (!mod.enabled) continue;
         active.push_back(mod.id);
         plan.code_patches += mod.code_patches;
+        for (const std::string& patch_note : mod.code_patch_notes) plan.notes.push_back(mod.id + ": " + patch_note);
         if (mod.package && !mod.problem.empty()) {
             plan.notes.push_back(mod.id + ": " + mod.problem);
             continue;
@@ -1775,7 +1785,8 @@ std::string plan_text(const ModPlan& plan, const std::string& game_id) {
 }
 
 std::string plan_signature(const ModPlan& plan, const std::string& game_id) {
-    std::string text = "1 " + game_id + "\n";
+    // The store's version too: a mods.pak of another version is not opened (asset_store.cpp), so it is cooked again.
+    std::string text = "1 " + game_id + " store " + std::to_string(galaxy::assets::kStoreVersion) + "\n";
     for (const ModPlan::File& file : plan.files) {
         std::error_code ec;
         const auto size = fs::file_size(file.host, ec);
