@@ -76,7 +76,8 @@ s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
 
     SaveReader stream(pBuffer, size);
 
-    u8 flag;
+    // A short save keeps the initial values.
+    u8 flag = mFlag;
     stream.read(&flag, sizeof(flag));
     mFlag = flag;
 
@@ -84,7 +85,7 @@ s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
     if (stream.getAvailable() == 0) {
         mLastModified = 0;
     } else {
-        s64 lastModified;
+        s64 lastModified = 0;
         stream.read(&lastModified, sizeof(lastModified));
         mLastModified = NebulaCalendar::fromSaved(lastModified);
     }

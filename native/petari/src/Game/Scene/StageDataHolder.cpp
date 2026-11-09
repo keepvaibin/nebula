@@ -186,7 +186,7 @@ s32 StageDataHolder::getCurrentStartCameraId() const {
 
 void StageDataHolder::getStartCameraIdInfoFromStartDataIndex(PlacementId* pInfo, int startDataIdx) const {
     TableIter startIter = getStartTableIterFromStartDataIndex(startDataIdx);
-    s32 cameraID;
+    s32 cameraID = -1;
     startIter.getValue< s32 >("Camera_id", &cameraID);
     pInfo->initialize(cameraID, startIter);
 }
@@ -346,7 +346,7 @@ const char* StageDataHolder::getJapaneseObjectName(const char* pName) const {
     }
 
     const TableIter englishName(mObjNameTbl, static_cast< s32 >(row));
-    const char* japaneseName;
+    const char* japaneseName = nullptr;
     englishName.getValue< const char* >("jp_name", &japaneseName);
     return japaneseName;
 }
