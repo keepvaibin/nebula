@@ -732,13 +732,8 @@ namespace Ui {
         }
         const u32 constants = Frame::addConstants(NEBULA_NONE32, vertexRows, rowCount - vertexRows, pRows, coordRows.data(), coordRows.count());
 
-        // The renderer's per-draw texture table takes NEBULA_MATERIAL_SLOTS textures, and a pipeline NEBULA_LAYOUT_MAX_INPUTS
-        // inputs: this check goes with the texture binding step.
+        // The renderer's draw tables and pipeline layouts are counted: any number of textures and inputs.
         const u32 textureCount = pForm->mTextures.mCount;
-        if (textureCount > NEBULA_MATERIAL_SLOTS || pForm->mInputs.mCount > NEBULA_LAYOUT_MAX_INPUTS) {
-            detail::SetDrawNothing();
-            return false;
-        }
         NebulaFrameTexture* const list = frameZeroed< NebulaFrameTexture >(textureCount);
         for (u32 i = 0; i < textureCount; i++) {
             const u32 map = pFormTextures[i];

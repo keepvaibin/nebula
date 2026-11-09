@@ -635,7 +635,7 @@ void StaffRoll::makeLine() {
     // once and the last column's end.
     MR::Text16 columnsText;
     char16_t* pColumn = columnsText.room(static_cast< u32 >(MR::textLength(pMessage)) + 2);
-    MR::Vector< MR::FixedArray< const char16_t*, 3 > > columns;
+    MR::InlineVector< const char16_t*, 3 > columns;
     columns.push_back(pColumn);
 
     while (true) {

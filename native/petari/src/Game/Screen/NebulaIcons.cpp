@@ -637,7 +637,7 @@ namespace {
 
     // `pText` (letters of cLetters) in `rInk`, its ink centred on (x, y), `capital` pixels tall.
     void drawText(Canvas& rCanvas, const char* pText, f32 x, f32 y, f32 capital, const Rgba& rInk) {
-        MR::Vector< MR::FixedArray< const Letter*, 8 > > letters;
+        MR::InlineVector< const Letter*, 8 > letters;
         f32 width = 0.0f;
         for (const char* p = pText; *p != 0; p++) {
             const Letter* const pLetter = findLetter(static_cast< u8 >(*p));
@@ -863,7 +863,7 @@ namespace {
 
     // A line of a legend: codes of cLetters (' ' a space), its capitals' size against the legend's.
     struct KeyLine {
-        MR::Vector< MR::FixedArray< u16, 8 > > mCodes;
+        MR::InlineVector< u16, 8 > mCodes;
         f32 mScale;
     };
     struct KeyLegend {
@@ -2343,8 +2343,8 @@ namespace {
 
     // Each of the IconAButton layout's pictures of A, ours in its place while it draws.
     struct Swaps {
-        MR::Vector< MR::FixedArray< Ui::TexMap*, 8 > > mMaps;
-        MR::Vector< MR::FixedArray< Ui::TexMap, 8 > > mSaved;
+        MR::InlineVector< Ui::TexMap*, 8 > mMaps;
+        MR::InlineVector< Ui::TexMap, 8 > mSaved;
     };
 
     void swapPane(Ui::Pane* pPane, Swaps& rSwaps, s32 depth) {
