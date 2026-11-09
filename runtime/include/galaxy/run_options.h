@@ -81,6 +81,7 @@ struct RunOptions {
     const char* test_settings_keys = nullptr;
     const char* test_motion_dump = nullptr;
     const char* test_pair_log = nullptr;
+    const char* test_flicker_log = nullptr;
     const char* test_settings_open = nullptr;
     const char* test_vram_budget_mb = nullptr;
     const char* test_wide_tables = nullptr;
