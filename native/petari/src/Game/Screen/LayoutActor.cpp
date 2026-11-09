@@ -1,4 +1,5 @@
 #include "Game/Screen/LayoutActor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/Spine.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
@@ -35,6 +36,9 @@ void LayoutActor::calcAnim() {
 }
 
 void LayoutActor::draw() const {
+    if (mFlag.mHudPart != 0 && NebulaMods::isHudHidden(mFlag.mHudPart)) {
+        return;
+    }
     if (MR::isExecuteDrawLayout(this)) {
         MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
         mLayoutManager->setDrawGeneration(mMotionEpoch);

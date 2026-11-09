@@ -45,6 +45,17 @@ public:
     void exeTimeUpReady();
     const Timing* getCurrentTiming() const;
     bool updateNormal();
+    // Steps counted and the whole length (plugins: NebulaMods).
+    u32 getTime() const {
+        return mTime;
+    }
+    u32 getTimeLimit() const {
+        return mTimeLimit;
+    }
+    void setTime(u32 time) {
+        mTime = time < mTimeLimit ? time : mTimeLimit;
+        updateTextBox();
+    }
 
 private:
     u32 mTime;

@@ -5,6 +5,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace {
@@ -34,6 +35,7 @@ namespace NrvTimeLimitLayout {
 
 TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
     : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), mIsNormalDisplay() {
+    mFlag.mHudPart = NEBULA_HUD_TIMER;
 }
 
 void TimeLimitLayout::init(const TableIter& /*rIter*/) {
@@ -53,11 +55,13 @@ void TimeLimitLayout::init(const TableIter& /*rIter*/) {
 void TimeLimitLayout::appear() {
     resetFrame();
     LayoutActor::appear();
+    NebulaMods::setCountdown(this, true);
     setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutAppear));
 }
 
 void TimeLimitLayout::kill() {
     LayoutActor::kill();
+    NebulaMods::setCountdown(this, false);
 }
 
 void TimeLimitLayout::setTimeLimit(u32 timeLimit) {
@@ -232,7 +236,7 @@ const Timing* TimeLimitLayout::getCurrentTiming() const {
 }
 
 bool TimeLimitLayout::updateNormal() {
-    if (mIsSuspend) {
+    if (mIsSuspend || NebulaMods::sCountdownHeld) {
         return false;
     }
 

@@ -1,4 +1,5 @@
 #include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -690,7 +691,7 @@ namespace MR {
     }
 
     void addVelocityToGravity(LiveActor* pActor, f32 speed) {
-        addVelocity(pActor, pActor->mGravity * speed);
+        addVelocity(pActor, pActor->mGravity * (speed * NebulaMods::gravityScale()));
     }
 
     void addVelocityToGravityOrGround(LiveActor* pActor, f32 speed) {

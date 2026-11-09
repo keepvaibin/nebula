@@ -53,6 +53,7 @@
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Util/GravityUtil.hpp"
+#include "Game/Screen/TimeLimitLayout.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -1951,6 +1952,131 @@ namespace {
         MR::setLayoutAlphaFloat(asLayout(pLayout), alpha);
     }
 
+    // The game's rules as a plugin changes them.
+    f32 sGameSpeed = 1.0f;
+    f32 sSpeedCarry = 0.0f;
+    s32 sStepsAsked = 0;
+    bool sSpeedSet = false;
+    bool sCameraPosition = false;
+    bool sCameraTarget = false;
+    f32 sCameraAt[3] = {};
+    f32 sCameraLook[3] = {};
+    f32 sCameraFov = 0.0f;
+    f32 sLastFov = 45.0f;
+    TimeLimitLayout* sCountdown = nullptr;
+    NebulaMods::TextLine sTextLines[NebulaMods::cTextLines] = {};
+    u32 sTextRevision = 0;
+
+    void apiSetGravityScale(float scale) {
+        NebulaMods::sGravityScale = scale;
+    }
+
+    float apiGravityScale() {
+        return NebulaMods::sGravityScale;
+    }
+
+    int32_t apiTimer(float* pSecondsLeft, float* pSecondsLimit) {
+        if (sCountdown == nullptr) {
+            return 0;
+        }
+        const u32 limit = sCountdown->getTimeLimit();
+        const u32 time = sCountdown->getTime();
+        const f32 step = (1.0f / static_cast< f32 >(NEBULA_STEPS_PER_SECOND));
+        if (pSecondsLeft != nullptr) {
+            *pSecondsLeft = static_cast< f32 >(limit - time) * step;
+        }
+        if (pSecondsLimit != nullptr) {
+            *pSecondsLimit = static_cast< f32 >(limit) * step;
+        }
+        return 1;
+    }
+
+    int32_t apiSetTimer(float secondsLeft) {
+        if (sCountdown == nullptr) {
+            return -1;
+        }
+        const u32 limit = sCountdown->getTimeLimit();
+        const f32 steps = secondsLeft / (1.0f / static_cast< f32 >(NEBULA_STEPS_PER_SECOND)) + 0.5f;
+        const u32 left = steps <= 0.0f ? 0u : steps >= static_cast< f32 >(limit) ? limit : static_cast< u32 >(steps);
+        sCountdown->setTime(limit - left);
+        return 0;
+    }
+
+    void apiPauseTimer(int32_t paused) {
+        NebulaMods::sCountdownHeld = paused != 0;
+    }
+
+    void apiSetCamera(const float* pPosition, const float* pTarget, float fov) {
+        sCameraPosition = pPosition != nullptr;
+        sCameraTarget = pTarget != nullptr;
+        for (s32 i = 0; i < 3; i++) {
+            sCameraAt[i] = pPosition != nullptr ? pPosition[i] : 0.0f;
+            sCameraLook[i] = pTarget != nullptr ? pTarget[i] : 0.0f;
+        }
+        sCameraFov = fov > 0.0f && fov < 180.0f ? fov : 0.0f;
+        NebulaMods::sCameraSet = sCameraPosition || sCameraTarget || sCameraFov > 0.0f;
+    }
+
+    float apiCameraFov() {
+        return sLastFov;
+    }
+
+    void apiShowHud(uint32_t parts, int32_t show) {
+        parts &= NEBULA_HUD_ALL;
+        NebulaMods::sHudHidden = show != 0 ? (NebulaMods::sHudHidden & ~parts) : (NebulaMods::sHudHidden | parts);
+    }
+
+    void apiSetGameSpeed(float speed) {
+        sGameSpeed = speed >= 1.0f ? 1.0f : speed > 0.0f ? speed : 0.0f;
+        sSpeedCarry = 0.0f;
+        sSpeedSet = sGameSpeed < 1.0f || sStepsAsked > 0;
+    }
+
+    void apiStepGame(int32_t steps) {
+        sStepsAsked = steps > 0 ? steps : 0;
+        sSpeedSet = sGameSpeed < 1.0f || sStepsAsked > 0;
+    }
+
+    int32_t apiDrawText(int32_t line, float x, float y, float size, uint32_t rgba, const char* pUtf8) {
+        if (line < 0 || line >= NebulaMods::cTextLines) {
+            return -1;
+        }
+        NebulaMods::TextLine& rLine = sTextLines[line];
+        rLine.mShown = pUtf8 != nullptr && pUtf8[0] != 0;
+        rLine.mX = x;
+        rLine.mY = y;
+        rLine.mSize = size > 0.0f ? size : 0.04f;
+        rLine.mRgba = rgba;
+        // UTF-8 as the game's UTF-16 (wordsOf), cut to the line's room on a whole character.
+        s32 out = 0;
+        if (rLine.mShown) {
+            const size_t length = strlen(pUtf8);
+            for (size_t i = 0; i < length;) {
+                const u8 lead = static_cast< u8 >(pUtf8[i]);
+                const size_t extra = lead < 0x80 ? 0 : lead < 0xE0 ? 1 : lead < 0xF0 ? 2 : 3;
+                u32 code = extra == 0 ? lead : extra == 1 ? lead & 0x1F : extra == 2 ? lead & 0x0F : lead & 0x07;
+                for (size_t c = 1; c <= extra && i + c < length; c++) {
+                    code = (code << 6) | (static_cast< u8 >(pUtf8[i + c]) & 0x3F);
+                }
+                i += extra + 1;
+                const s32 units = code >= 0x10000 ? 2 : 1;
+                if (out + units >= NebulaMods::cTextLength) {
+                    break;
+                }
+                if (code >= 0x10000) {
+                    code -= 0x10000;
+                    rLine.mText[out++] = static_cast< char16_t >(0xD800 | (code >> 10));
+                    rLine.mText[out++] = static_cast< char16_t >(0xDC00 | (code & 0x3FF));
+                } else {
+                    rLine.mText[out++] = static_cast< char16_t >(code);
+                }
+            }
+        }
+        rLine.mText[out] = 0;
+        sTextRevision++;
+        return 0;
+    }
+
     // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set, setting, store_get_text, store_set_text.
     // Set once any mod's rows or code have started.
     bool sAskedForApi = false;
@@ -2108,6 +2234,17 @@ namespace {
         apiSaveGame,
         apiSetTunable,
         apiTunableAt,
+        apiSetGravityScale,
+        apiGravityScale,
+        apiTimer,
+        apiSetTimer,
+        apiPauseTimer,
+        apiSetCamera,
+        apiCameraFov,
+        apiShowHud,
+        apiSetGameSpeed,
+        apiStepGame,
+        apiDrawText,
     };
 }  // namespace
 
@@ -2151,6 +2288,45 @@ namespace NebulaMods {
         return 0;
     }
 
+    f32 sGravityScale = 1.0f;
+    bool sSceneStep = true;
+    bool sCameraSet = false;
+    u32 sHudHidden = 0;
+    bool sCountdownHeld = false;
+
+    u32 cameraPoseSlow(f32* pPosition, f32* pTarget) {
+        for (s32 i = 0; i < 3; i++) {
+            pPosition[i] = sCameraAt[i];
+            pTarget[i] = sCameraLook[i];
+        }
+        return (sCameraPosition ? 1u : 0u) | (sCameraTarget ? 2u : 0u);
+    }
+
+    f32 cameraFov(f32 fovy) {
+        sLastFov = sCameraSet && sCameraFov > 0.0f ? sCameraFov : fovy;
+        return sLastFov;
+    }
+
+    void setCountdown(TimeLimitLayout* pLayout, bool shown) {
+        if (shown) {
+            sCountdown = pLayout;
+        } else if (sCountdown == pLayout) {
+            sCountdown = nullptr;
+        }
+    }
+
+    void sceneEnded() {
+        sCountdown = nullptr;
+    }
+
+    const TextLine& textLine(s32 line) {
+        return sTextLines[line];
+    }
+
+    u32 textRevision() {
+        return sTextRevision;
+    }
+
     StageFrame::StageFrame() {
         sStageFrames++;
         if (sAskedForApi) {
@@ -2175,6 +2351,23 @@ namespace NebulaMods {
             }
         }
         fire(NEBULA_MOD_EVENT_STAGE_FRAME);
+        // This frame's step, after the plugins have had their say: every frame at the game's speed; a share of them
+        // slower; while held, the steps asked for.
+        if (sSpeedSet) {
+            if (sStepsAsked > 0) {
+                sStepsAsked--;
+                sSceneStep = true;
+            } else {
+                sSpeedCarry += sGameSpeed;
+                sSceneStep = sSpeedCarry >= 1.0f;
+                if (sSceneStep) {
+                    sSpeedCarry -= 1.0f;
+                }
+            }
+            sSpeedSet = sGameSpeed < 1.0f || sStepsAsked > 0;
+        } else {
+            sSceneStep = true;
+        }
     }
 
     StageFrame::~StageFrame() {

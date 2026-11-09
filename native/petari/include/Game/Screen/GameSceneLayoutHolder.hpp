@@ -10,6 +10,7 @@ class MarioSubMeter;
 class MissLayout;
 class NebulaAchievementBoard;
 class NebulaAchievementToast;
+class NebulaModText;
 class NoteCounter;
 class OneUpBoard;
 class PurpleCoinCounter;
@@ -54,6 +55,8 @@ public:
     bool mIsActiveDefaultGameLayout;
     // Nebula's achievement pop-up: GameScene runs and draws it (only in play, above everything else in 2D).
     NebulaAchievementToast* mAchievementToast;
+    // Plugins' lines of text over the game (draw_text), drawn with the pop-up; null while no mod's code runs.
+    NebulaModText* mModText;
     // Nebula's achievement board, in the Observatory (its Luma opens it); null elsewhere.
     NebulaAchievementBoard* mAchievementBoard;
 };
