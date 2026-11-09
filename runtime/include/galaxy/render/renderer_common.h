@@ -30,6 +30,9 @@ using ScreenProbe = ::NebulaScreenProbe;
 inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
 inline constexpr std::uint8_t kSceneVariantHdr = 4u;
 inline constexpr std::uint8_t kSceneVariantTarget = 8u;
+// Every variant those bits make (a target pass with samples or the wide scene among them): the size of every cache kept
+// by variant.
+inline constexpr std::size_t kSceneVariantCount = std::size_t{kSceneVariantTarget} * 2u;
 
 // The picture channel each sampled channel reads (0-3: R, G, B, A; 4 one) for a target pass's NebulaTargetChannels:
 // RGBA, ALPHA (A A A A), RED (R R R R), RGB (alpha one).

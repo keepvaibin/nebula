@@ -1972,7 +1972,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 DWORD cookie = 0;
                 iq1->RegisterMessageCallback(
                     [](D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY severity,
-                       D3D12_MESSAGE_ID, LPCSTR description, void*) {
+                       D3D12_MESSAGE_ID id, LPCSTR description, void*) {
 #if defined(NEBULA_DEV)
                         if (s_listing_live_objects) {
                             std::cerr << "[D3D12-LIVE-OBJECT] " << description << '\n';
@@ -1981,8 +1981,22 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
 #endif
                         if (severity == D3D12_MESSAGE_SEVERITY_ERROR ||
                             severity == D3D12_MESSAGE_SEVERITY_CORRUPTION) {
-                            std::cerr << "[D3D12-LIVE-ERR] " << description
-                                      << '\n';
+                            // The callback runs inside the call the message is about: the executable's return addresses
+                            // name it (llvm-symbolizer --obj=NebulaNative.exe --relative-address).
+                            void* frames[24]{};
+                            const USHORT count = CaptureStackBackTrace(1u, 24u, frames, nullptr);
+                            const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+                            std::cerr << "[D3D12-LIVE-ERR] id " << static_cast<int>(id) << ": " << description << " | at";
+                            for (USHORT i = 0; i < count; ++i) {
+                                HMODULE module = nullptr;
+                                if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                                       static_cast<LPCWSTR>(frames[i]), &module) &&
+                                    reinterpret_cast<std::uintptr_t>(module) == base) {
+                                    std::cerr << " 0x" << std::hex << (reinterpret_cast<std::uintptr_t>(frames[i]) - base) << std::dec;
+                                }
+                            }
+                            std::cerr << '\n';
                             std::cerr.flush();
                         }
                     },

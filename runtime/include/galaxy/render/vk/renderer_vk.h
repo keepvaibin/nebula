@@ -832,13 +832,13 @@ private:
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
-    std::array<std::array<VkPipeline, 9>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
+    std::array<std::array<VkPipeline, kSceneVariantCount>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
-    std::array<VkPipeline, 9> motion_debug_pipelines_{};  // by scene variant (the 8-bit scene's: index below 8)
+    std::array<VkPipeline, kSceneVariantCount> motion_debug_pipelines_{};  // by scene variant
     // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the
     // depth clear's shader at the point's depth, tested GREATER_OR_EQUAL against the reversed depth on the first sample,
     // writing nothing, counted by an occlusion query.
-    std::array<std::array<VkPipeline, 9>, 4> probe_test_pipelines_{};
+    std::array<std::array<VkPipeline, kSceneVariantCount>, 4> probe_test_pipelines_{};
     [[nodiscard]] VkPipeline probe_test_pipeline();
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
