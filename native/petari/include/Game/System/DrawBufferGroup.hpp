@@ -9,7 +9,6 @@ class DrawBufferGroup {
 public:
     DrawBufferGroup();
 
-    void init(s32);
     s32 registerDrawBuffer(LiveActor*);
     void allocateActorListBuffer();
     void active(LiveActor*, s32);
