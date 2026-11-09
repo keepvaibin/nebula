@@ -402,14 +402,17 @@ namespace MR {
         if (!scanOpen(p)) {
             return;
         }
-        for (s32 i = 0; i < 4 && scanInt(p, &values[i]); i++) {
+        // Only the values read are written, as scani leaves pDst on a failed read.
+        s32 count = 0;
+        while (count < 4 && scanInt(p, &values[count])) {
+            count++;
             if (*p != ',') {
                 break;
             }
             p++;
         }
 
-        for (int i = 0; i < ARRAY_SIZE(values); i++) {
+        for (s32 i = 0; i < count; i++) {
             pDst[i] = values[i];
         }
     }
