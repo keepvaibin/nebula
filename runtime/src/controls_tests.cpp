@@ -1707,6 +1707,18 @@ void test_button_icons() {
     expect(icon(steam_icons, ButtonIcon::Home) == Glyph{ButtonGlyph::Home, 0u} &&
                icon(button_icon_spec(ButtonIconStyle::Xbox, steam_pad, false), ButtonIcon::Home) == Glyph{ButtonGlyph::Keep, 0u},
            "HOME is the Steam button on the Steam model alone");
+    // HOME rebound shows its button; a game button on a D-pad direction shows that direction.
+    BindingTable home_pad = xbox;
+    home_pad[GameInput::Home] = {};
+    home_pad[GameInput::Home][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kBackBit)};
+    expect(icon(button_icon_spec(ButtonIconStyle::Xbox, home_pad, false), ButtonIcon::Home) == Glyph{ButtonGlyph::Back, 0u} &&
+               icon(play, ButtonIcon::Home) == Glyph{ButtonGlyph::Keep, 0u},
+           "HOME on View shows View; on the home button the game's HOME");
+    expect(button_bound_to(pad::kDpadUpBit) == Glyph{ButtonGlyph::Dpad, 0u} &&
+               button_bound_to(pad::kDpadDownBit) == Glyph{ButtonGlyph::Dpad, 1u} &&
+               button_bound_to(pad::kDpadLeftBit) == Glyph{ButtonGlyph::Dpad, 2u} &&
+               button_bound_to(pad::kDpadRightBit) == Glyph{ButtonGlyph::Dpad, 3u},
+           "the D-pad's directions: up, down, left, right");
     // The Edge's Fn buttons: cells on the Edge model alone; anywhere else the game's own icon stays.
     BindingTable fn_pad = playstation;
     fn_pad[GameInput::A] = {};
