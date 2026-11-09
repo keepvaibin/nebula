@@ -7,7 +7,8 @@
 namespace galaxy::input::wiimote {
 
 namespace {
-// The most the remote's and the Nunchuk's sensors read, in g, and how far each report moves the eased tilt.
+// The most the remote's and the Nunchuk's sensors read, in g, and how far each game frame moves the eased tilt toward the
+// newest report (once a frame, whatever the rate the remote reports at).
 constexpr float kMainLimit = 3.4f;
 constexpr float kSubLimit = 2.1f;
 constexpr float kFollow = 0.15f;
@@ -47,6 +48,7 @@ void Motion::reset() {
     sub_.swing_distance = sub_distance;
     in_screen_ = false;
     pointer_passed_ = false;
+    have_report_ = false;
     valid_samples_ = invalid_samples_ = 0;
 }
 
@@ -67,14 +69,7 @@ bool Motion::past(const Hand& hand, int index, std::array<float, 3>& out) const 
 void Motion::add(const PlayerInput& report) {
     const std::lock_guard<std::mutex> lock(lock_);
     newest_ = report;
-    for (std::size_t i = 0; i < 3; ++i) {
-        main_.eased[i] += kFollow * (clamped(report.gravity[i], kMainLimit) - main_.eased[i]);
-        sub_.eased[i] += kFollow * (clamped(report.nunchuk_gravity[i], kSubLimit) - sub_.eased[i]);
-    }
-    push(main_, main_.eased);
-    main_.arrived = true;
-    push(sub_, sub_.eased);
-    sub_.arrived = true;
+    have_report_ = true;
 
     if (!report.pointer_on) {
         valid_samples_ = 0;
@@ -92,14 +87,15 @@ void Motion::add(const PlayerInput& report) {
     ++valid_samples_;
 }
 
-// A frame's look at a hand: whether a spin starts now.
-bool Motion::update(Hand& hand) {
-    if (!hand.arrived) {
-        const std::array<float, 3> previous =
-            hand.newest >= 0 ? hand.history[static_cast<std::size_t>(hand.newest)] : std::array<float, 3>{};
-        push(hand, previous);
+// A frame's look at a hand: the tilt eased toward the newest report once, one history entry, and whether a spin starts now.
+// The history counts game frames (a remote reports faster than 60 a second).
+bool Motion::update(Hand& hand, const std::array<float, 3>& gravity, float limit) {
+    if (have_report_) {
+        for (std::size_t i = 0; i < 3; ++i) {
+            hand.eased[i] += kFollow * (clamped(gravity[i], limit) - hand.eased[i]);
+        }
     }
-    hand.arrived = false;
+    push(hand, hand.eased);
 
     std::array<float, 3> now{};
     std::array<float, 3> then{};
@@ -158,8 +154,8 @@ bool Motion::update(Hand& hand) {
 
 PlayerInput Motion::read(MotionFrame& frame) {
     const std::lock_guard<std::mutex> lock(lock_);
-    frame.spin_presses = update(main_) ? 1u : 0u;
-    frame.sub_spin_presses = update(sub_) ? 1u : 0u;
+    frame.spin_presses = update(main_, newest_.gravity, kMainLimit) ? 1u : 0u;
+    frame.sub_spin_presses = update(sub_, newest_.nunchuk_gravity, kSubLimit) ? 1u : 0u;
     frame.tilt = main_.eased;
     frame.sub_tilt = sub_.eased;
 

@@ -21,6 +21,7 @@
 #if defined(NEBULA_DEV)
 #include "galaxy/frame_telemetry.h"
 #endif
+#include "render/core/draw_record.h"
 #include "render/core/frame_core.h"
 #include "render/core/pipelines.h"
 
@@ -232,6 +233,14 @@ private:
     void walk_pass(core::ListData& now, std::uint32_t index, std::uint32_t& target_channels);
     void set_scene_sky(const NebulaFramePass& scene_begin);
     void walk_draw_pass(const NebulaFramePass& pass);
+    // The pass's draws, resolved in order and handed to `encoder` (draw_walker.cpp: drawn at once, or recorded for chunks).
+    template <class Draws>
+    void walk_draw_items(const NebulaFramePass& pass, Draws& encoder);
+    [[nodiscard]] unsigned recording_workers(const NebulaFramePass& pass) const;
+    void submit_recorded(unsigned workers);
+    gpu::DrawRecorder draw_record_;
+    std::vector<std::uint8_t> record_chunk_aux_;
+    std::unique_ptr<core::RecordPool> record_pool_;
     const WalkView& walk_view(std::uint32_t index, const NebulaFramePass& pass);
     const core::StaticSlot& walk_material(std::uint32_t index);
     // A frame constants entry's rows as this walk uploads them: the list's own, or at t.

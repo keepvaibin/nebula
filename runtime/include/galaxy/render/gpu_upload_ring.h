@@ -18,8 +18,12 @@ namespace galaxy::render {
 // flight so a frame never overwrites data the GPU still reads for an earlier one.
 class UploadRing {
 public:
-    // Releases the buffer; the caller has retired every GPU reference to it.
+    // Releases the buffer; the caller has retired every GPU reference to it. The place stays.
     void reset() noexcept;
+    // Where the ring's memory lies from the next initialize on (and its chunks): kept across reset and release_into.
+    void set_place(gpu::UploadPlace place) noexcept { place_ = place; }
+    // The ring's buffer is in video memory (a GpuLocal ring on a device that offered it).
+    [[nodiscard]] bool local() const noexcept { return local_; }
     struct Allocation {
         std::byte* cpu = nullptr;
         gpu::Address gpu = 0;
@@ -118,6 +122,8 @@ private:
     [[nodiscard]] Allocation allocate_in_chunk(std::size_t size, std::size_t alignment);
 
     gpu::Device* device_ = nullptr;
+    gpu::UploadPlace place_ = gpu::UploadPlace::Host;
+    bool local_ = false;
     bool chunks_ = false;
     std::vector<std::vector<Chunk>> chunk_slots_;  // by frame slot; released when the slot begins again
     std::size_t chunk_bytes_made_ = 0;

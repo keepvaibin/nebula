@@ -419,7 +419,7 @@ void SnowFloorTile::draw() const {
     // where that is above the layer's threshold; blended by alpha, back faces culled, depth tested and written.
     SiteMaterial material;
     TDDraw::setupNative(&material, 1, 1, false);
-    material.mShader = NEBULA_SHADER_COLOR_TEX_ALPHA;
+    material.setShader(NEBULA_SHADER_COLOR_TEX_ALPHA);
     material.mState.cull = NEBULA_CULL_BACK;
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, true);
     material.setTexture(0, mTexture);

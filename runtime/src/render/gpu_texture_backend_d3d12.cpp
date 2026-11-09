@@ -110,6 +110,22 @@ void TextureBackend::release_view(std::uint32_t index) {
 }
 
 void TextureBackend::shutdown() {
+    drain();
+    async_.clear();
+    named_.clear();
+    copy_list_.Reset();
+    acquire_list_.Reset();
+    copy_allocators_.clear();
+    acquire_allocators_.clear();
+    slot_value_.clear();
+    copy_fence_.Reset();
+    copy_queue_.Reset();
+    if (copy_event_ != nullptr) {
+        CloseHandle(copy_event_);
+        copy_event_ = nullptr;
+    }
+    copy_value_ = 0u;
+    copy_open_ = false;
     texture_heap_.shutdown();
     direct_heap_.shutdown();
     direct_ = false;
@@ -272,6 +288,14 @@ gpu::TextureRef TextureBackend::create_texture(
     rd.SampleDesc.Count = 1;
     rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     gpu::TextureRef resource;
+    if (copy_queue_ != nullptr) {
+        // Born in the common state, where the copy queue writes it and the graphics queue picks it up (submit_uploads).
+        if (SUCCEEDED(texture_heap_.create(rd, gpu::Use::Common, nullptr, resource, allocation_bytes))) {
+            async_.insert_or_assign(resource.Get(), Async{});  // a stale entry of a freed texture at this address goes
+            return resource;
+        }
+        resource.Reset();
+    }
     if (writable && direct_) {
         // Born in the shader-resource state, where every uploaded texture rests (a texture is promoted from the common state
         // only with simultaneous access); the levels are written from the CPU by record_upload. A heap that refuses it falls
@@ -318,6 +342,14 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
         }
         return;
     }
+    if (copy_queue_ != nullptr) {
+        // A texture the graphics queue has not acquired yet (new, or rewritten before any frame named it) goes through the
+        // copy queue again; one it has acquired rests in the shader-resource state and is rewritten on the graphics list.
+        if (const auto found = async_.find(texture); found != async_.end()) {
+            record_async(texture, found->second, staging, offset, width, height, levels, offsets, pitches);
+            return;
+        }
+    }
     if (reused) {
         // A retired texture rests in the shader-resource state; the copies need copy-destination.
         BarriersD3D12 uses{upload_list_};
@@ -350,6 +382,208 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
     BarriersD3D12 uses{upload_list_};
     uses.texture(texture, gpu::Use::CopyDest, gpu::Use::PixelRead);
     uses.issue();
+}
+
+namespace {
+
+// One level's footprint copy from a staging buffer.
+void copy_level(ID3D12GraphicsCommandList* list, ID3D12Resource* texture, ID3D12Resource* staging, unsigned level,
+                std::uint32_t width, std::uint32_t height, std::uint64_t offset, std::uint32_t pitch) {
+    const DXGI_FORMAT format = texture->GetDesc().Format;
+    const bool blocks = format == DXGI_FORMAT_BC1_UNORM;
+    D3D12_TEXTURE_COPY_LOCATION copy_dst{};
+    copy_dst.pResource = texture;
+    copy_dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    copy_dst.SubresourceIndex = level;
+    D3D12_TEXTURE_COPY_LOCATION copy_src{};
+    copy_src.pResource = staging;
+    copy_src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    copy_src.PlacedFootprint.Offset = offset;
+    copy_src.PlacedFootprint.Footprint.Format = format;
+    // A block format's footprint covers whole blocks, also at levels smaller than one.
+    copy_src.PlacedFootprint.Footprint.Width = blocks ? (width + 3u) & ~3u : width;
+    copy_src.PlacedFootprint.Footprint.Height = blocks ? (height + 3u) & ~3u : height;
+    copy_src.PlacedFootprint.Footprint.Depth = 1;
+    copy_src.PlacedFootprint.Footprint.RowPitch = pitch;
+    list->CopyTextureRegion(&copy_dst, 0, 0, 0, &copy_src, nullptr);
+}
+
+}  // namespace
+
+bool TextureBackend::enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot) {
+    copy_queue_.Reset();
+    if (device_ == nullptr || direct_ || frames_in_flight == 0u ||
+        ::galaxy::run_option_flag(::galaxy::run_options().test_same_queue_uploads, false)) {
+        return false;
+    }
+    D3D12_COMMAND_QUEUE_DESC desc{};
+    desc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+    desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+    bool ok = SUCCEEDED(device_->CreateCommandQueue(&desc, IID_PPV_ARGS(&copy_queue_))) &&
+              SUCCEEDED(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&copy_fence_)));
+    copy_event_ = ok ? CreateEventW(nullptr, FALSE, FALSE, nullptr) : nullptr;
+    ok = ok && copy_event_ != nullptr;
+    copy_allocators_.assign(frames_in_flight, nullptr);
+    acquire_allocators_.assign(frames_in_flight, nullptr);
+    for (unsigned i = 0; ok && i < frames_in_flight; ++i) {
+        ok = SUCCEEDED(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(&copy_allocators_[i]))) &&
+             SUCCEEDED(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&acquire_allocators_[i])));
+    }
+    ok = ok && SUCCEEDED(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, copy_allocators_[0].Get(), nullptr,
+                                                    IID_PPV_ARGS(&copy_list_))) &&
+         SUCCEEDED(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, acquire_allocators_[0].Get(), nullptr,
+                                              IID_PPV_ARGS(&acquire_list_)));
+    if (ok) {
+        // Both lists start closed and are reset when a frame first uses them.
+        ok = SUCCEEDED(copy_list_->Close()) && SUCCEEDED(acquire_list_->Close());
+    }
+    if (!ok) {
+        copy_list_.Reset();
+        acquire_list_.Reset();
+        copy_allocators_.clear();
+        acquire_allocators_.clear();
+        copy_fence_.Reset();
+        copy_queue_.Reset();
+        if (copy_event_ != nullptr) {
+            CloseHandle(copy_event_);
+            copy_event_ = nullptr;
+        }
+        std::fprintf(stderr, "[textures] uploads: the copy queue could not be made; the frame's queue uploads\n");
+        return false;
+    }
+    copy_value_ = 0u;
+    copy_open_ = false;
+    slot_value_.assign(frames_in_flight, 0u);
+    slot_ = frame_slot < frames_in_flight ? frame_slot : 0u;
+    std::fprintf(stderr, "[textures] uploads: copy queue (textures are written beside the frame and acquired by its first use)\n");
+    return true;
+}
+
+void TextureBackend::wait_copy(std::uint64_t value) {
+    if (copy_fence_ == nullptr || value == 0u || copy_fence_->GetCompletedValue() >= value) {
+        return;
+    }
+    d3d_check(copy_fence_->SetEventOnCompletion(value, copy_event_), "copy fence event");
+    // 10 s: past that the device is lost, as the frame fence's wait decides.
+    if (WaitForSingleObject(copy_event_, 10000u) != WAIT_OBJECT_0 && copy_fence_->GetCompletedValue() < value) {
+        throw std::runtime_error("device lost: the copy queue never finished an upload");
+    }
+}
+
+void TextureBackend::drain() noexcept {
+    if (copy_queue_ == nullptr) {
+        return;
+    }
+    // The copy queue may still read staging memory and write textures.
+    try {
+        wait_copy(copy_value_);
+    } catch (const std::exception&) {
+    }
+}
+
+void TextureBackend::begin_frame(unsigned frame_slot) {
+    if (copy_queue_ == nullptr || frame_slot >= slot_value_.size()) {
+        return;
+    }
+    slot_ = frame_slot;
+    // What this slot's last frame sent the copy queue is done before its staging is written again.
+    wait_copy(slot_value_[frame_slot]);
+    d3d_check(copy_allocators_[frame_slot]->Reset(), "reset copy allocator");
+    d3d_check(acquire_allocators_[frame_slot]->Reset(), "reset acquire allocator");
+    copy_open_ = false;
+}
+
+ID3D12GraphicsCommandList* TextureBackend::open_copy_list() {
+    if (!copy_open_) {
+        d3d_check(copy_list_->Reset(copy_allocators_[slot_].Get(), nullptr), "reset copy list");
+        copy_open_ = true;
+    }
+    return copy_list_.Get();
+}
+
+void TextureBackend::note_named_slow(ID3D12Resource* texture) {
+    const auto found = async_.find(texture);
+    if (found != async_.end() && !found->second.named) {
+        found->second.named = true;
+        named_.push_back(texture);
+    }
+}
+
+void TextureBackend::forget_slow(ID3D12Resource* texture) {
+    if (async_.erase(texture) != 0u) {
+        const auto at = std::find(named_.begin(), named_.end(), texture);
+        if (at != named_.end()) {
+            *at = named_.back();
+            named_.pop_back();
+        }
+    }
+}
+
+void TextureBackend::record_async(ID3D12Resource* texture, Async& state, const UploadChunk& staging, std::uint64_t offset,
+                                  std::uint32_t width, std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
+                                  const std::uint32_t* pitches) {
+    ID3D12GraphicsCommandList* const list = open_copy_list();
+    // Legacy states: the copy queue takes a texture from common to copy-destination and back. Enhanced barriers: a texture
+    // in the common layout is copied to and from on any queue without a barrier.
+    const bool states = !BarrierPath::enhanced();
+    if (states) {
+        BarriersD3D12 before{list};
+        before.texture(texture, gpu::Use::Common, gpu::Use::CopyDest);
+        before.issue();
+    }
+    for (unsigned l = 0; l < levels; ++l) {
+        copy_level(list, texture, staging.resource.Get(), l, std::max<std::uint32_t>(1u, width >> l),
+                   std::max<std::uint32_t>(1u, height >> l), offset + offsets[l], pitches[l]);
+    }
+    if (states) {
+        BarriersD3D12 after{list};
+        after.texture(texture, gpu::Use::CopyDest, gpu::Use::Common);
+        after.issue();
+    }
+    // Carried by the list that closes at the next submit_uploads.
+    state.value = copy_value_ + 1u;
+}
+
+ID3D12CommandList* TextureBackend::submit_uploads(ID3D12CommandQueue* graphics) {
+    if (copy_queue_ == nullptr) {
+        return nullptr;
+    }
+    if (copy_open_) {
+        d3d_check(copy_list_->Close(), "close copy list");
+        ID3D12CommandList* lists[] = {copy_list_.Get()};
+        copy_queue_->ExecuteCommandLists(1, lists);
+        d3d_check(copy_queue_->Signal(copy_fence_.Get(), ++copy_value_), "copy queue signal");
+        copy_open_ = false;
+    }
+    slot_value_[slot_] = copy_value_;
+    if (named_.empty()) {
+        return nullptr;
+    }
+    // The textures this frame names, uploaded or not yet: an unuploaded one (made, never written) stays for later.
+    std::uint64_t wait = 0u;
+    d3d_check(acquire_list_->Reset(acquire_allocators_[slot_].Get(), nullptr), "reset acquire list");
+    BarriersD3D12 acquire{acquire_list_.Get()};
+    for (ID3D12Resource* const texture : named_) {
+        const auto found = async_.find(texture);
+        if (found == async_.end()) {
+            continue;
+        }
+        if (found->second.value == 0u) {
+            found->second.named = false;  // nothing written yet: named again when it is
+            continue;
+        }
+        wait = std::max(wait, found->second.value);
+        acquire.texture(texture, gpu::Use::Common, gpu::Use::PixelRead);
+        async_.erase(found);
+    }
+    named_.clear();
+    acquire.issue();
+    d3d_check(acquire_list_->Close(), "close acquire list");
+    if (wait == 0u) {
+        return nullptr;
+    }
+    d3d_check(graphics->Wait(copy_fence_.Get(), wait), "wait for the copy queue");
+    return acquire_list_.Get();
 }
 
 }  // namespace galaxy::render

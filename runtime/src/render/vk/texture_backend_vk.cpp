@@ -2,6 +2,7 @@
 // TextureStore's Vulkan side (gpu_texture_backend.h).
 
 #include "galaxy/render/gpu_texture_backend.h"
+#include "galaxy/run_options.h"
 
 #include "barriers_vk.h"
 
@@ -9,6 +10,7 @@
 #include <atomic>
 #include <cstdio>
 #include <stdexcept>
+#include <utility>
 
 namespace galaxy::render {
 
@@ -48,6 +50,30 @@ bool host_copy_format(VkFormat format) {
            performance.optimalDeviceAccess == VK_TRUE;
 }
 
+// The copy regions of a texture's levels from a staging buffer (rows in texels: a block format's hold 4 texels per 8 bytes).
+std::vector<VkBufferImageCopy> copy_regions(const vk::Texture& texture, std::uint64_t offset, std::uint32_t width,
+                                            std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
+                                            const std::uint32_t* pitches) {
+    std::vector<VkBufferImageCopy> regions(levels);
+    for (unsigned l = 0; l < levels; ++l) {
+        VkBufferImageCopy& region = regions[l];
+        region = {};
+        region.bufferOffset = offset + offsets[l];
+        region.bufferRowLength = texture.format == VK_FORMAT_R8_UNORM          ? pitches[l]
+                                 : texture.format == VK_FORMAT_R8G8_UNORM      ? pitches[l] / 2u
+                                 : texture.format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
+                                                                                : pitches[l] / 4u;
+        region.bufferImageHeight = 0;
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
+        region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};
+    }
+    return regions;
+}
+
+// What a draw does with a texture the transfer queue wrote (fragment shading, or a copy into it again).
+constexpr VkPipelineStageFlags2 kAcquireStages = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT;
+constexpr VkAccessFlags2 kAcquireAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT;
+
 }  // namespace
 
 bool TextureBackend::initialize(gpu::Device*, std::uint32_t view_capacity) {
@@ -82,6 +108,8 @@ bool TextureBackend::initialize(gpu::Device*, std::uint32_t view_capacity) {
 }
 
 void TextureBackend::shutdown() {
+    drain();
+    destroy_async();
     views_.clear();
     mirror_ = VK_NULL_HANDLE;
     mirror_count_ = 0;
@@ -225,6 +253,9 @@ gpu::TextureRef TextureBackend::create_texture(
         texture->view = view;
     }
     allocation_bytes = texture->allocation_bytes;
+    if (!async_slots_.empty() && !host) {
+        async_.insert_or_assign(texture.get(), Async{});  // a stale entry of a freed image at this address goes
+    }
     return texture;
 }
 
@@ -279,28 +310,203 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
         texture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         return;
     }
+    if (!async_slots_.empty()) {
+        // A texture the graphics queue has not acquired yet is written by the transfer queue (new, or rewritten before any
+        // frame named it); one rewritten after a frame wrote it for the first time is acquired in this frame's upload list
+        // first and then copied into here, on the graphics queue, as an image that rests sampled.
+        if (const auto found = async_.find(texture); found != async_.end()) {
+            if (!reused || found->second.value == 0u) {
+                record_async(texture, found->second, staging, offset, width, height, levels, offsets, pitches);
+                return;
+            }
+            acquire_now(texture);
+        }
+    }
     transition(upload_list_, *texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                reused ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
                VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    std::vector<VkBufferImageCopy> regions(levels);
+    const std::vector<VkBufferImageCopy> regions = copy_regions(*texture, offset, width, height, levels, offsets, pitches);
     const unsigned count = levels;
-    for (unsigned l = 0; l < count; ++l) {
-        VkBufferImageCopy& region = regions[l];
-        region = {};
-        region.bufferOffset = offset + offsets[l];
-        // In texels: a block format's rows hold 4 texels per 8 bytes.
-        region.bufferRowLength = texture->format == VK_FORMAT_R8_UNORM          ? pitches[l]
-                                 : texture->format == VK_FORMAT_R8G8_UNORM      ? pitches[l] / 2u
-                                 : texture->format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
-                                                                                : pitches[l] / 4u;
-        region.bufferImageHeight = 0;
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
-        region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};
-    }
     vkCmdCopyBufferToImage(upload_list_, staging.resource->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            count, regions.data());
     transition(upload_list_, *texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
                VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+}
+
+bool TextureBackend::enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot) {
+    destroy_async();
+    vk::Context& context = vk::Context::get();
+    if (frames_in_flight == 0u || context.transfer_queue() == VK_NULL_HANDLE ||
+        ::galaxy::run_option_flag(::galaxy::run_options().test_same_queue_uploads, false)) {
+        return false;
+    }
+    const VkDevice device = context.device();
+    async_slots_.assign(frames_in_flight, AsyncSlot{});
+    for (AsyncSlot& slot : async_slots_) {
+        VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+        pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        pool_info.queueFamilyIndex = context.transfer_family();
+        VkCommandBufferAllocateInfo allocate{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocate.commandBufferCount = 1u;
+        if (vkCreateCommandPool(device, &pool_info, nullptr, &slot.pool) != VK_SUCCESS) {
+            destroy_async();
+            return false;
+        }
+        allocate.commandPool = slot.pool;
+        if (vkAllocateCommandBuffers(device, &allocate, &slot.commands) != VK_SUCCESS) {
+            destroy_async();
+            return false;
+        }
+    }
+    async_slot_ = frame_slot < frames_in_flight ? frame_slot : 0u;
+    std::fprintf(stderr, "[textures] uploads: transfer queue (family %u; images are written beside the frame and acquired by its first use)\n",
+                 context.transfer_family());
+    return true;
+}
+
+void TextureBackend::destroy_async() noexcept {
+    const VkDevice device = vk::Context::get().device();
+    if (device != VK_NULL_HANDLE) {
+        for (AsyncSlot& slot : async_slots_) {
+            if (slot.pool != VK_NULL_HANDLE) {
+                vkDestroyCommandPool(device, slot.pool, nullptr);  // frees its buffer
+            }
+        }
+    }
+    async_slots_.clear();
+    async_.clear();
+    named_.clear();
+    transfer_open_ = false;
+    forced_wait_ = 0u;
+}
+
+void TextureBackend::drain() noexcept {
+    if (async_slots_.empty()) {
+        return;
+    }
+    vk::Context& context = vk::Context::get();
+    if (context.device() != VK_NULL_HANDLE) {
+        static_cast<void>(context.wait_transfer(context.transfer_submitted(), 10'000'000'000ull));
+    }
+}
+
+void TextureBackend::begin_frame(unsigned frame_slot) {
+    if (async_slots_.empty() || frame_slot >= async_slots_.size()) {
+        return;
+    }
+    async_slot_ = frame_slot;
+    AsyncSlot& slot = async_slots_[frame_slot];
+    vk::Context& context = vk::Context::get();
+    // What this slot's last frame sent the transfer queue is done before its staging is written again.
+    if (!context.wait_transfer(slot.value, 10'000'000'000ull)) {
+        throw std::runtime_error("[TextureStore] the transfer queue never finished an upload: the device was lost or it timed out");
+    }
+    vk::check(vkResetCommandPool(context.device(), slot.pool, 0), "vkResetCommandPool (transfer)");
+    transfer_open_ = false;
+}
+
+void TextureBackend::note_named_slow(vk::Texture* texture) {
+    const auto found = async_.find(texture);
+    if (found != async_.end() && !found->second.named) {
+        found->second.named = true;
+        named_.push_back(texture);
+    }
+}
+
+void TextureBackend::forget_slow(vk::Texture* texture) {
+    if (async_.erase(texture) != 0u) {
+        const auto at = std::find(named_.begin(), named_.end(), texture);
+        if (at != named_.end()) {
+            *at = named_.back();
+            named_.pop_back();
+        }
+    }
+}
+
+void TextureBackend::record_async(vk::Texture* texture, Async& state, const UploadChunk& staging, std::uint64_t offset,
+                                  std::uint32_t width, std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
+                                  const std::uint32_t* pitches) {
+    vk::Context& context = vk::Context::get();
+    const VkCommandBuffer commands = async_slots_[async_slot_].commands;
+    if (!transfer_open_) {
+        VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vk::check(vkBeginCommandBuffer(commands, &begin), "vkBeginCommandBuffer (transfer)");
+        transfer_open_ = true;
+    }
+    // Every level is overwritten: the old contents (a rewrite before any frame acquired the image) are dropped.
+    vk::image_barrier(commands, texture->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+                      VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, texture->levels);
+    const std::vector<VkBufferImageCopy> regions = copy_regions(*texture, offset, width, height, levels, offsets, pitches);
+    vkCmdCopyBufferToImage(commands, staging.resource->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, levels,
+                           regions.data());
+    // The release: the writes made available and the image given to the graphics family, in the layout it is sampled in; the
+    // acquire (submit_uploads, acquire_now) repeats the same barrier on that queue.
+    vk::BarriersVk release(commands);
+    release.image_transfer(texture->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.transfer_family(), context.queue_family(),
+                           VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE,
+                           VK_ACCESS_2_NONE, texture->levels);
+    release.issue();
+    texture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    // Carried by the command buffer that submit_uploads submits.
+    state.value = context.transfer_submitted() + 1u;
+}
+
+std::uint64_t TextureBackend::acquire_now(vk::Texture* texture) {
+    const auto found = async_.find(texture);
+    if (found == async_.end()) {
+        return 0u;
+    }
+    const std::uint64_t value = found->second.value;
+    vk::Context& context = vk::Context::get();
+    vk::BarriersVk acquire(upload_list_);
+    acquire.image_transfer(texture->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.transfer_family(), context.queue_family(),
+                           kAcquireStages, VK_ACCESS_2_NONE, kAcquireStages, kAcquireAccess, texture->levels);
+    acquire.issue();
+    forced_wait_ = std::max(forced_wait_, value);
+    forget_slow(texture);
+    return value;
+}
+
+std::uint64_t TextureBackend::submit_uploads() {
+    if (async_slots_.empty()) {
+        return 0u;
+    }
+    vk::Context& context = vk::Context::get();
+    AsyncSlot& slot = async_slots_[async_slot_];
+    if (transfer_open_) {
+        vk::check(vkEndCommandBuffer(slot.commands), "vkEndCommandBuffer (transfer)");
+        slot.value = context.submit_transfer(slot.commands);
+        transfer_open_ = false;
+    } else {
+        slot.value = std::max(slot.value, context.transfer_submitted());
+    }
+    std::uint64_t wait = std::exchange(forced_wait_, 0u);
+    if (!named_.empty() && upload_list_ != VK_NULL_HANDLE) {
+        vk::BarriersVk acquire(upload_list_);
+        for (vk::Texture* const texture : named_) {
+            const auto found = async_.find(texture);
+            if (found == async_.end()) {
+                continue;
+            }
+            if (found->second.value == 0u) {
+                found->second.named = false;  // nothing written yet: named again when it is
+                continue;
+            }
+            wait = std::max(wait, found->second.value);
+            acquire.image_transfer(texture->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, context.transfer_family(), context.queue_family(),
+                                   kAcquireStages, VK_ACCESS_2_NONE, kAcquireStages, kAcquireAccess, texture->levels);
+            async_.erase(found);
+        }
+        named_.clear();
+        acquire.issue();
+    }
+    return wait;
 }
 
 }  // namespace galaxy::render

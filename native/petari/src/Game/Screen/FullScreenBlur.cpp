@@ -25,7 +25,7 @@ namespace MR {
         // its constant alpha, blended by it over the 2D view (TDDraw's draw mode 1, blend 1, view 2).
         SiteMaterial layer;
         TDDraw::setupNative(&layer, 1, 1, 2);
-        layer.mShader = NEBULA_SHADER_TEX_CONST_ALPHA;
+        layer.setShader(NEBULA_SHADER_TEX_CONST_ALPHA);
         layer.setColor(0, 0, 0, 0, param3);
         layer.setTexture(0, &texture);
         TypedDraw site = TDDraw::site(layer, 2);

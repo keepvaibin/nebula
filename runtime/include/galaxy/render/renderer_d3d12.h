@@ -35,6 +35,7 @@
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/renderer_common.h"
 #include "render/core/gpu_encoder.h"
+#include "render/core/draw_record.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
@@ -561,6 +562,17 @@ public:
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
     // The draw heaps, every texture and sampler, and the texture lists in `lists`.
     void bind_draw_textures(gpu::Address lists);
+    // What bind_draw_textures would bind, as plain values (the recorder keeps them for a chunk's list).
+    [[nodiscard]] gpu::TextureArrays draw_texture_arrays(gpu::Address lists);
+
+    // Parallel recording of a draw pass (draw_walker.cpp): the pass was recorded as ops in chunks; each chunk is replayed into a
+    // command list of its own, on any thread, and the lists run in order after the commands recorded so far. begin closes the
+    // frame's list at this point (false: not possible now, nothing changed) and says each chunk's draw targets; chunk replays
+    // chunk `i`; end carries the frame on in a new list after the chunks'. replay_draws replays one chunk on the frame's list.
+    [[nodiscard]] bool parallel_record_begin(const std::uint8_t* chunk_aux, unsigned chunk_count);
+    void parallel_record_chunk(unsigned chunk, const gpu::DrawOp* ops, std::size_t count);
+    void parallel_record_end();
+    void replay_draws(std::uint8_t aux, const gpu::DrawOp* ops, std::size_t count);
 
 private:
     void invalidate_draw_bindings();
@@ -709,6 +721,21 @@ private:
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>,
         kFramesInFlight> allocators_;
+    // Parallel recording: a command list and allocator for each chunk of each recorded pass of a frame (by frame slot; the
+    // allocators restart with the slot), the frame's list so far and the lists it was cut into, which run before command_list_.
+    struct RecordList {
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;
+    };
+    void set_render_targets(ID3D12GraphicsCommandList* list, unsigned aux) const;
+    std::array<std::vector<RecordList>, kFramesInFlight> record_lists_;
+    std::array<unsigned, kFramesInFlight> record_used_{};
+    unsigned record_base_ = 0u;
+    std::vector<std::uint8_t> record_aux_;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>> segment_lists_;
+    unsigned segments_used_ = 0u;
+    std::vector<ID3D12CommandList*> frame_lists_;
+    std::vector<ID3D12CommandList*> submit_lists_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     std::array<std::uint64_t, kFramesInFlight> fence_values_{};
     HANDLE fence_event_ = nullptr;
@@ -1099,6 +1126,9 @@ private:
     // telemetry window, how many refreshes each displayed frame stayed on
     // screen (DXGI frame statistics; index 4 counts 4 or more).
     double display_refresh_hz_ = 0.0;
+    // The display varies its refresh with the presents (next_variable_refresh): display_refresh_hz_ is then the cap that keeps
+    // it in its range (variable_refresh_cap), the sync interval is the configured one, and presents are spaced at the cap.
+    bool variable_refresh_ = false;
     std::uint64_t display_refresh_presents_ = 0;
     // The output's colour space and peak luminance as last read (read_display_output).
     struct DisplayReading {

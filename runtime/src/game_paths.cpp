@@ -1,6 +1,7 @@
 // Where the game's store is: a game.pak named directly, or the folder holding it.
 #include "galaxy/game_paths.h"
 
+#include <array>
 #include <filesystem>
 #include <stdexcept>
 

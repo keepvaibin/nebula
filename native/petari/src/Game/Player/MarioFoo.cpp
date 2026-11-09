@@ -633,7 +633,7 @@ void MarioFoo::draw3D() const {
     if (getPlayer()->mHitStates.jet) {
         SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
-        material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.setShader(NEBULA_SHADER_TEX_ALPHA_LERP);
         material.constants[9] = 2.0f;
         material.setTexture(0, mTrailTexture);
         const Color8 color0(255, 32, 32, 128);
@@ -676,7 +676,7 @@ void MarioFoo::draw3D() const {
     if (mTrailLength) {
         SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
-        material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.setShader(NEBULA_SHADER_TEX_ALPHA_LERP);
         material.constants[9] = 2.0f;
         material.setTexture(0, mTrailTexture);
 

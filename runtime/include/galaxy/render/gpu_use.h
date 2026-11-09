@@ -21,6 +21,7 @@ enum class Use : std::uint8_t {
     ResolveSource,
     ResolveDest,
     Present,
+    Common,         // owned by no pass: a texture another queue wrote (the copy queue's uploads) and this one has not acquired
 };
 
 // A change of use whose old contents the next pass overwrites whole (a released picture, a bloom level, an AO

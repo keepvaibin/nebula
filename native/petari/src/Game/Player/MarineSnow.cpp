@@ -85,7 +85,7 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
     // vertices' alpha); blended by alpha, depth tested.
     SiteMaterial flakes;
     TDDraw::setupNative(&flakes, 1, 1, 0);
-    flakes.mShader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
+    flakes.setShader(NEBULA_SHADER_TEX_VERTEX_ALPHA);
     flakes.constants[0] = 1.0f;
     flakes.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
     flakes.setTexture(0, mTexture);

@@ -2,9 +2,11 @@
 // The one path every presented frame takes through a frame list: a real frame at t = 1, a generated one at its t.
 #include "galaxy/render/render_core.h"
 
+#include "galaxy/cpu_count.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/run_options.h"
 #include "render/core/inspector.h"
 
 #include <algorithm>
@@ -830,9 +832,161 @@ bool RenderCore::item_culled(const NebulaFrameItem& item, const NebulaFramePass&
            outside(0.0f, c, d - 1.0f - y_slack) || outside(0.0f, -c, -d - 1.0f - y_slack);
 }
 
+namespace {
+
+// The walker's draws as the renderer takes them at once: the encoder, and the renderer's own draw targets and texture arrays.
+class DirectDraws {
+public:
+    static constexpr bool kDirect = true;
+    DirectDraws(gpu::Encoder& encoder, Renderer& renderer) noexcept : encoder_(encoder), renderer_(renderer) {}
+    [[nodiscard]] gpu::Encoder& raw() noexcept { return encoder_; }
+    void set_rows(gpu::Address rows, gpu::Address instances) noexcept { encoder_.set_rows(rows, instances); }
+    void set_draw_aux(unsigned aux) { renderer_.set_draw_aux(aux); }
+    void bind_textures(gpu::Address lists) { renderer_.bind_draw_textures(lists); }
+#if defined(NEBULA_GPU_VULKAN)
+    void set_tables(gpu::Table textures, gpu::Table samplers) noexcept {
+        renderer_.bind_draw_tables(textures, samplers);
+        encoder_.set_tables(textures, samplers);
+    }
+#endif
+    void set_pipeline(gpu::Pipeline* pipeline) noexcept { encoder_.set_pipeline(pipeline); }
+    void set_view(gpu::Address view) noexcept { encoder_.set_view(view); }
+    void set_material(gpu::Address vertex_rows, gpu::Address pixel_rows) noexcept { encoder_.set_material(vertex_rows, pixel_rows); }
+    void set_root(const gpu::DrawRoot& root) noexcept { encoder_.set_root(root); }
+    void set_scissor(const gpu::Rect& rect) noexcept { encoder_.set_scissor(rect); }
+    void set_viewport(const gpu::ViewportRect& rect) noexcept { encoder_.set_viewport(rect); }
+    void set_stream(unsigned slot, const gpu::StreamView& view) noexcept { encoder_.set_stream(slot, view); }
+    void set_indices(gpu::Address address, std::uint32_t bytes, std::uint32_t index_bytes) noexcept {
+        encoder_.set_indices(address, bytes, index_bytes);
+    }
+    void draw_indexed(std::uint32_t count, std::uint32_t instances, std::uint32_t first, std::int32_t base_vertex) noexcept {
+        encoder_.draw_indexed(count, instances, first, base_vertex);
+    }
+    void draw(std::uint32_t count, std::uint32_t instances, std::uint32_t first) noexcept { encoder_.draw(count, instances, first); }
+
+private:
+    gpu::Encoder& encoder_;
+    Renderer& renderer_;
+};
+
+// The same calls recorded (draw_record.h) for a pass replayed in chunks. What the renderer's own state answers is asked now.
+class RecordedDraws {
+public:
+    static constexpr bool kDirect = false;
+    RecordedDraws(gpu::DrawRecorder& recorder, Renderer& renderer) noexcept : recorder_(recorder), renderer_(renderer) {}
+    void set_rows(gpu::Address rows, gpu::Address instances) noexcept { recorder_.set_rows(rows, instances); }
+    void set_draw_aux(unsigned aux) { recorder_.set_draw_aux(aux); }
+    void bind_textures(gpu::Address lists) { recorder_.set_texture_arrays(renderer_.draw_texture_arrays(lists)); }
+#if defined(NEBULA_GPU_VULKAN)
+    void set_tables(gpu::Table textures, gpu::Table samplers) { recorder_.set_tables(textures, samplers); }
+#endif
+    void set_pipeline(gpu::Pipeline* pipeline) { recorder_.set_pipeline(pipeline); }
+    void set_view(gpu::Address view) { recorder_.set_view(view); }
+    void set_material(gpu::Address vertex_rows, gpu::Address pixel_rows) { recorder_.set_material(vertex_rows, pixel_rows); }
+    void set_root(const gpu::DrawRoot& root) { recorder_.set_root(root); }
+    void set_scissor(const gpu::Rect& rect) { recorder_.set_scissor(rect); }
+    void set_viewport(const gpu::ViewportRect& rect) { recorder_.set_viewport(rect); }
+    void set_stream(unsigned slot, const gpu::StreamView& view) { recorder_.set_stream(slot, view); }
+    void set_indices(gpu::Address address, std::uint32_t bytes, std::uint32_t index_bytes) {
+        recorder_.set_indices(address, bytes, index_bytes);
+    }
+    void draw_indexed(std::uint32_t count, std::uint32_t instances, std::uint32_t first, std::int32_t base_vertex) {
+        recorder_.draw_indexed(count, instances, first, base_vertex);
+    }
+    void draw(std::uint32_t count, std::uint32_t instances, std::uint32_t first) { recorder_.draw(count, instances, first); }
+
+private:
+    gpu::DrawRecorder& recorder_;
+    Renderer& renderer_;
+};
+
+// A draw pass of at least this many items is recorded in chunks, on a machine with at least kRecordMinCores logical processors
+// (GALAXY_TEST_RECORD_THRESHOLD lowers the first and ignores the second). A chunk is at least kRecordMinChunkDraws draws, and a
+// recorded pass of fewer than kRecordMinParallelDraws draws is replayed by the render thread.
+constexpr std::uint32_t kRecordThreshold = 1500u;
+constexpr unsigned kRecordMinCores = 6u;
+constexpr std::uint32_t kRecordMinChunkDraws = 64u;
+constexpr std::uint32_t kRecordMinParallelDraws = 96u;
+
+}  // namespace
+
+// 0: the pass is drawn through the encoder as it is walked. Else the threads that replay its recording (1: the render thread
+// alone, GALAXY_TEST_ONE_RECORD_THREAD).
+unsigned RenderCore::recording_workers(const NebulaFramePass& pass) const {
+    const RunOptions& options = ::galaxy::run_options();
+#if defined(NEBULA_DEV)
+    // The inspector names each draw to the encoder as it is made.
+    for (const char* const inspect : {options.inspect_dir, options.inspect_dump, options.inspect_includes, options.inspect_motion,
+                                      options.inspect_names, options.inspect_pixel, options.inspect_programs, options.inspect_show,
+                                      options.inspect_solo, options.inspect_views}) {
+        if (inspect != nullptr && inspect[0] != '\0') {
+            return 0u;
+        }
+    }
+#endif
+    const bool lowered = options.test_record_threshold != nullptr && options.test_record_threshold[0] != '\0';
+    const unsigned cores = logical_cores();
+    if (!lowered && cores < kRecordMinCores) {
+        return 0u;
+    }
+    if (pass.item_count < (lowered ? ::galaxy::run_option_u64(options.test_record_threshold, kRecordThreshold) : kRecordThreshold)) {
+        return 0u;
+    }
+    if (::galaxy::run_option_flag(options.test_one_record_thread, false)) {
+        return 1u;
+    }
+    return std::clamp(cores / 2u, 2u, 8u);
+}
+
+// The recorded pass, replayed: in chunks on the pool's threads and the render thread, each into a command list or secondary
+// command buffer of its own (the renderer runs them in order), or chunk by chunk on the render thread's own list.
+void RenderCore::submit_recorded(unsigned workers) {
+    const std::vector<gpu::DrawRecorder::Chunk>& chunks = draw_record_.chunks();
+    const std::vector<gpu::DrawOp>& ops = draw_record_.ops();
+    if (draw_record_.draws() == 0u) {
+        return;
+    }
+    bool parallel = workers > 1u && chunks.size() > 1u && draw_record_.draws() >= kRecordMinParallelDraws;
+    if (parallel) {
+        record_chunk_aux_.clear();
+        for (const gpu::DrawRecorder::Chunk& chunk : chunks) {
+            record_chunk_aux_.push_back(chunk.aux);
+        }
+        parallel = renderer_.parallel_record_begin(record_chunk_aux_.data(), static_cast<unsigned>(record_chunk_aux_.size()));
+    }
+    if (!parallel) {
+        for (const gpu::DrawRecorder::Chunk& chunk : chunks) {
+            renderer_.replay_draws(chunk.aux, ops.data() + chunk.first, chunk.count);
+        }
+        return;
+    }
+    if (record_pool_ == nullptr || record_pool_->extra_threads() + 1u != workers) {
+        record_pool_ = std::make_unique<core::RecordPool>(workers - 1u);
+    }
+    record_pool_->run(static_cast<unsigned>(chunks.size()), [this, &chunks, &ops](unsigned chunk) {
+        renderer_.parallel_record_chunk(chunk, ops.data() + chunks[chunk].first, chunks[chunk].count);
+    });
+    renderer_.parallel_record_end();
+}
+
 void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
+    const unsigned workers = recording_workers(pass);
+    if (workers == 0u) {
+        DirectDraws draws(renderer_.encoder(), renderer_);
+        walk_draw_items(pass, draws);
+        return;
+    }
+    // A big pass is resolved here as ever, in order; its encoder calls are recorded and replayed afterwards.
+    draw_record_.begin(std::max(kRecordMinChunkDraws, pass.item_count / (workers * 2u)));
+    RecordedDraws draws(draw_record_, renderer_);
+    walk_draw_items(pass, draws);
+    draw_record_.finish();
+    submit_recorded(workers);
+}
+
+template <class Draws>
+void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
     const NebulaFrameList& list = *walk_.now->list;
-    gpu::Encoder& encoder = renderer_.encoder();
     encoder.set_rows(walk_.rows_address, walk_.instances);
     const unsigned target_variant = renderer_.scene_variant();
     const bool scene_layer = pass.layer == NEBULA_LAYER_SCENE;
@@ -903,9 +1057,11 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         if (ring && !instanced && (item.flags & NEBULA_ITEM_INDEXED) != 0u && aux != 1u) {
             instances = merge_ring_run(i, end, entry.matrix_at, ring_index_count);
         }
-        NEBULA_INSPECT_ITEM(*this, i, instances, pass, aux, pipeline, entry);
+        if constexpr (Draws::kDirect) {
+            NEBULA_INSPECT_ITEM(*this, i, instances, pass, aux, pipeline, entry);
+        }
 
-        renderer_.set_draw_aux(aux);
+        encoder.set_draw_aux(aux);
         renderer_.note_scene_draw(state);
         encoder.set_pipeline(pipeline);
         encoder.set_view(view.address);
@@ -916,14 +1072,13 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         if (!renderer_.bindless()) {
             gpu::Table textures{}, samplers{};
             walk_bound_tables(item.textures, textures, samplers);
-            renderer_.bind_draw_tables(textures, samplers);
             encoder.set_tables(textures, samplers);
         } else
 #endif
         {
             gpu::Address lists = 0u;
             walk_tables(item.textures, lists, root.table);
-            renderer_.bind_draw_textures(lists);
+            encoder.bind_textures(lists);
         }
         root.first_instance = i;
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
@@ -933,7 +1088,9 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         encoder.set_root(root);
         encoder.set_scissor(view.scissor);
         encoder.set_viewport(view.viewport);
-        NEBULA_INSPECT_DRAW_BEGIN(*this, i, instances, pass, encoder, view.scissor);
+        if constexpr (Draws::kDirect) {
+            NEBULA_INSPECT_DRAW_BEGIN(*this, i, instances, pass, encoder.raw(), view.scissor);
+        }
 
         if (instanced) {
             // The vertex stage reads its instances from the rows: every stream the layout names reads zero.
@@ -988,7 +1145,9 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
             encoder.set_indices(refined ? mesh->refined_indices : mesh->indices, index_count * mesh->index_bytes, mesh->index_bytes);
             encoder.draw_indexed(index_count, instances, 0u, 0);
         }
-        NEBULA_INSPECT_DRAW_END(*this);
+        if constexpr (Draws::kDirect) {
+            NEBULA_INSPECT_DRAW_END(*this);
+        }
         i += instances;
     }
 }

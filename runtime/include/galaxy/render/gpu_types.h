@@ -151,16 +151,24 @@ using Rect = D3D12_RECT;
 
 namespace galaxy::render::gpu {
 
+// Where upload memory lies: Host (system memory the GPU reads across the bus; the CPU writes it write-combined) or GpuLocal
+// (video memory the CPU writes through a resizable BAR, for data the GPU reads every frame: the vertex and constant rings),
+// on a device that maps its video memory for the CPU in bulk (Direct3D 12: the GPU upload heap; Vulkan: device-local
+// host-visible memory in a heap of its own larger than the 256 MB window); Host elsewhere.
+enum class UploadPlace : std::uint8_t { Host, GpuLocal };
+
 // A persistently mapped buffer the CPU writes and the GPU reads: the upload rings and RenderCore's resident vertices.
 struct UploadMemory {
     BufferRef buffer;
     std::byte* cpu = nullptr;
     Address gpu = 0;
+    bool local = false;  // in video memory (UploadPlace::GpuLocal was given)
     explicit operator bool() const noexcept { return cpu != nullptr; }
 };
 
 // `bytes` of upload memory, mapped for its lifetime; empty when it cannot be created.
-[[nodiscard]] UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name);
+[[nodiscard]] UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name,
+                                                UploadPlace place = UploadPlace::Host);
 // The device reports itself lost, where the API can say so without a failed call.
 [[nodiscard]] bool device_removed(Device* device) noexcept;
 

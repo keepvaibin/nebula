@@ -11,8 +11,9 @@ class GameTexture;
 namespace TDDraw {
     void close();
     // Its draw (0 vertex colour, 1 a texture, 2 a texture plus colour 0) and blend modes (0 none, 1 by alpha, 2 added by
-    // alpha) as a material: depth off, no culling, colour written and alpha not, passing every alpha; the projection for
-    // view mode 1 (the camera's) and 2 (the screen). The site adjusts it and sets its textures and colour.
+    // alpha) as a material: depth off, no culling, colour written and alpha not, passing every alpha (constant 0 for modes
+    // 0 and 1, constant 4 after the colour for mode 2); the projection for view mode 1 (the camera's) and 2 (the screen). The
+    // site adjusts it and sets its textures and colour; a site that takes another written shader sets it with setShader.
     void setupNative(SiteMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode);
     // A site under the camera, or the screen for view mode 2.
     TypedDraw site(const SiteMaterial& rMaterial, u8 viewMode);

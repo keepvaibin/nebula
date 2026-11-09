@@ -35,7 +35,6 @@ private:
         int newest = -1;
         int count = 0;
         std::array<float, 3> eased{0.0f, 0.0f, 1.0f};
-        bool arrived = false;  // a report since the last frame
         float swing_distance = 1.0f;
         bool latched = false;
         int latched_frames = 0;
@@ -47,7 +46,7 @@ private:
 
     void push(Hand& hand, const std::array<float, 3>& value);
     [[nodiscard]] bool past(const Hand& hand, int index, std::array<float, 3>& out) const;
-    [[nodiscard]] bool update(Hand& hand);
+    [[nodiscard]] bool update(Hand& hand, const std::array<float, 3>& gravity, float limit);
 
     std::mutex lock_;
     PlayerInput newest_{};
@@ -55,6 +54,7 @@ private:
     Hand sub_;
     bool in_screen_ = false;
     bool pointer_passed_ = false;
+    bool have_report_ = false;  // a report since the last reset: the tilt eases toward it
     int valid_samples_ = 0;
     int invalid_samples_ = 0;
     float pointer_x_ = 0.0f;

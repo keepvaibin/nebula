@@ -48,6 +48,14 @@ void SiteMaterial::init(NebulaShaderId shader, Blend blend, u8 depthFunc, bool d
     constants.clear(mRowCount * 4);
 }
 
+void SiteMaterial::setShader(NebulaShaderId shader) {
+    mShader = shader;
+    const u32 rows = nebula_shader_rows[shader];
+    if (mRowCount < rows) {
+        mRowCount = rows;
+    }
+}
+
 void SiteMaterial::setMatrix(u32 first, u32 index, const f32 (*pMtx)[4]) {
     constants.ensure((first + index * 3 + 3) * 4);
     memcpy(constants + (first + index * 3) * 4, pMtx, 12 * sizeof(f32));

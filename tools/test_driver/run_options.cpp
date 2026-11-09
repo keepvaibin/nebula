@@ -101,6 +101,9 @@ RunOptions read_options() {
     o.test_post_fault = nebula_switch::test_post_fault();
     o.test_script_clock = nebula_switch::test_script_clock();
     o.test_small_heaps = nebula_switch::test_small_heaps();
+    o.test_same_queue_uploads = nebula_switch::test_same_queue_uploads();
+    o.test_one_record_thread = nebula_switch::test_one_record_thread();
+    o.test_record_threshold = nebula_switch::test_record_threshold();
     o.test_settings_keys = nebula_switch::test_settings_keys();
     o.test_motion_dump = nebula_switch::test_motion_dump();
     o.test_pair_log = nebula_switch::test_pair_log();

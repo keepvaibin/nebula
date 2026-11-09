@@ -354,7 +354,7 @@ void RendererVk::begin_scene_pass(const SceneClearValues* clear, const char* cal
 }
 
 void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* clear, bool discard_color, const char* caller,
-                                       unsigned clear_depth) {
+                                       unsigned clear_depth, bool secondary) {
     if (scene_pass_open_) {
         if (scene_pass_aux_ == aux) {
             return;
@@ -401,7 +401,8 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         begin.pClearValues = values;
     }
     gpu_pass(current_pass_);
-    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBeginRenderPass(commands, &begin,
+                         secondary ? VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS : VK_SUBPASS_CONTENTS_INLINE);
     scene_pass_open_ = true;
     ++gpu_window_.passes;
     for (GpuWindow::Open& open : gpu_window_.opens) {
@@ -416,6 +417,9 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         }
     }
     encoder_.forget_rects();
+    if (secondary) {
+        return;  // only secondary command buffers run in this pass: each sets its own dynamic state
+    }
     // Dynamic state and bindings outlive the pass, but the renderer's own passes in between changed them.
     if (bound_.viewport_valid) {
         vkCmdSetViewport(commands, 0, 1, &bound_.viewport);
@@ -1862,6 +1866,11 @@ VkDescriptorSet RendererVk::allocate_persistent_set(VkDescriptorSetLayout layout
 
 void RendererVk::attach_texture_uploads(TextureStore& cache) {
     const VkCommandBuffer uploads = frames_[frame_slot_].uploads;
+    if (uploads_store_ != &cache) {
+        // New images are written on the transfer queue where the device has one of its own (texture_backend_vk.h).
+        uploads_store_ = &cache;
+        cache.backend().enable_async_uploads(kFramesInFlight, frame_slot_);
+    }
     cache.backend().set_upload_list(uploads);
     cache.backend().prepare_null_view(uploads);
     if (bindless_ && mirrored_backend_ != &cache.backend() && cache.backend().ready()) {
@@ -2126,11 +2135,103 @@ gpu::TextureRef RendererVk::take_frame_picture(gpu::TextureRef fresh) {
 void RendererVk::set_draw_aux(unsigned aux) {
     // Aux 3 needs the layer's window open (the walker asks for it only then); otherwise it is a reactive draw. Aux 4 draws in
     // the motion pass.
-    const unsigned wanted = aux == 4u ? 1u : aux == 3u ? (layer_window_ ? 3u : 2u) : aux;
+    const unsigned wanted = effective_draw_aux(aux);
     if (scene_pass_open_ && scene_pass_aux_ == wanted) {
         return;
     }
     begin_scene_pass_with(wanted, nullptr);
+}
+
+gpu::TextureArrays RendererVk::draw_texture_arrays(gpu::Address lists) {
+    gpu::TextureArrays arrays;
+    arrays.textures = gpu::Table{reinterpret_cast<std::uint64_t>(bindless_images_)};
+    arrays.samplers = gpu::Table{reinterpret_cast<std::uint64_t>(bindless_samplers_)};
+    arrays.lists = lists;
+    return arrays;
+}
+
+// A chunk of a recorded pass replayed inline, as the walker would have drawn it.
+void RendererVk::replay_draws(std::uint8_t aux, const gpu::DrawOp* ops, std::size_t count) {
+    set_draw_aux(aux);
+    gpu::replay_ops(encoder_, ops, count, [this](const gpu::TextureArrays& arrays) {
+        encoder_.set_texture_arrays(arrays.textures, arrays.samplers, arrays.lists);
+    });
+}
+
+bool RendererVk::parallel_record_begin(const std::uint8_t* chunk_aux, unsigned chunk_count) {
+    constexpr unsigned kMaxRecordBuffers = 256u;
+    std::vector<RecordCommands>& list = record_commands_[frame_slot_];
+    if (chunk_count == 0u || record_used_[frame_slot_] + chunk_count > kMaxRecordBuffers) {
+        return false;
+    }
+    const VkDevice device = vk::Context::get().device();
+    record_base_ = record_used_[frame_slot_];
+    while (list.size() < record_base_ + chunk_count) {
+        RecordCommands made;
+        VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+        pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        pool_info.queueFamilyIndex = vk::Context::get().queue_family();
+        vk::check(vkCreateCommandPool(device, &pool_info, nullptr, &made.pool), "vkCreateCommandPool (chunk)");
+        VkCommandBufferAllocateInfo allocate{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+        allocate.commandPool = made.pool;
+        allocate.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+        allocate.commandBufferCount = 1u;
+        const VkResult result = vkAllocateCommandBuffers(device, &allocate, &made.commands);
+        if (result != VK_SUCCESS) {
+            vkDestroyCommandPool(device, made.pool, nullptr);
+            vk::check(result, "vkAllocateCommandBuffers (chunk)");
+        }
+        list.push_back(made);
+    }
+    record_used_[frame_slot_] += chunk_count;
+    record_aux_.assign(chunk_aux, chunk_aux + chunk_count);
+    record_variant_ = scene_variant();
+    recording_parallel_.store(true, std::memory_order_release);
+    return true;
+}
+
+void RendererVk::parallel_record_chunk(unsigned chunk, const gpu::DrawOp* ops, std::size_t count) {
+    const VkCommandBuffer commands = record_commands_[frame_slot_][record_base_ + chunk].commands;
+    const unsigned aux = effective_draw_aux(record_aux_[chunk]);
+    // The render pass the chunk runs in (any compatible one: the load and store operations are the primary's).
+    VkCommandBufferInheritanceInfo inherit{VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO};
+    inherit.renderPass = aux != 0u ? draw_layout_.aux_pass_for(record_variant_, aux) : draw_layout_.pass_for(record_variant_, false);
+    inherit.subpass = 0u;
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+    begin.pInheritanceInfo = &inherit;
+    vk::check(vkBeginCommandBuffer(commands, &begin), "vkBeginCommandBuffer (chunk)");
+    gpu::Encoder encoder;
+    encoder.configure(encoding_layout_);
+    encoder.attach(commands);
+    gpu::replay_ops(encoder, ops, count, [&encoder](const gpu::TextureArrays& arrays) {
+        encoder.set_texture_arrays(arrays.textures, arrays.samplers, arrays.lists);
+    });
+    vk::check(vkEndCommandBuffer(commands), "vkEndCommandBuffer (chunk)");
+}
+
+void RendererVk::parallel_record_end() {
+    recording_parallel_.store(false, std::memory_order_release);
+    const std::vector<RecordCommands>& list = record_commands_[frame_slot_];
+    // The pass the walk had open ran its draws before; the chunks run in passes of their own (secondary buffers only).
+    end_scene_pass("parallel recording");
+    std::vector<VkCommandBuffer> run;
+    for (std::size_t first = 0; first < record_aux_.size();) {
+        const unsigned aux = effective_draw_aux(record_aux_[first]);
+        run.clear();
+        std::size_t next = first;
+        while (next < record_aux_.size() && effective_draw_aux(record_aux_[next]) == aux) {
+            run.push_back(list[record_base_ + next].commands);
+            ++next;
+        }
+        begin_scene_pass_with(aux, nullptr, false, "parallel recording", 0u, true);
+        vkCmdExecuteCommands(commands_, static_cast<std::uint32_t>(run.size()), run.data());
+        end_scene_pass("parallel recording");
+        first = next;
+    }
+    // After secondary buffers ran, the primary's bound pipeline, sets, buffers and dynamic state are undefined.
+    encoder_.reset();
+    reset_draw_bindings();
 }
 
 gpu::Address RendererVk::zero_stream(std::uint32_t bytes) {
@@ -2274,6 +2375,10 @@ namespace {
 
 VkDescriptorSet RendererVk::constants_set(const VkBuffer* buffers, gpu::Address rows, gpu::Address instances,
                                           gpu::Address lists) {
+    std::unique_lock<std::mutex> lock(constants_mutex_, std::defer_lock);
+    if (recording_parallel_.load(std::memory_order_acquire)) {
+        lock.lock();
+    }
     for (const ConstantsKey& key : constants_sets_) {
         if (key.rows == rows && key.instances == instances && key.lists == lists && key.buffers[0] == buffers[0] &&
             key.buffers[1] == buffers[1] && key.buffers[2] == buffers[2]) {
