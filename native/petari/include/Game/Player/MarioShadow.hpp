@@ -35,8 +35,7 @@ public:
     const Vec2f& getDrawTx(u32, u32) const;
 
     u8 mMode;  // the shadow's mode (setMode; 255 none)
-    f32 mRadius;  // the box's half size this frame (smaller over many polygons)
-    f32 mMaxRadius;  // the mode's radius
+    f32 mRadius;  // the polygon box's half size
     f32 mVolumeHeight;  // the volume box's up size (MarioActor::calcAnim)
     f32 mVolumeWidth;  // the volume box's side size
     f32 mLength;  // the shadow's length along mDirection (MarioActor sets it each frame)
@@ -66,6 +65,5 @@ public:
     f32 mCheckOffset;  // the polygon box's offset back along the direction (by mode)
     f32 mDrawOffset;  // the vertices' offset along their normal (by mode)
     Triangle* mPolygons;  // the polygons found (createAreaPolygonListArray)
-    u32 mFoundCount;  // polygons found: more makes mRadius smaller
     // The volume's drawing state (built; nothing in the game draws with it).
 };
