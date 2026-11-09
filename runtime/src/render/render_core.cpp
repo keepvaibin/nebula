@@ -134,8 +134,8 @@ std::string present_snapshot_path() {
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
 std::int64_t vblanks_per_slot(double refresh, double rate) {
     std::int64_t slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::ceil(refresh / rate - 0.02)));
-    if (refresh / static_cast<double>(slot) < 61.0) {
-        slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / 61.0));
+    if (refresh / static_cast<double>(slot) < kGameStepRate + 1.0) {
+        slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / (kGameStepRate + 1.0)));
     }
     return slot;
 }
@@ -766,7 +766,7 @@ void RenderCore::start_interp_sequence() {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     const std::int64_t now = galaxy::qpc_now();
     const RenderConfig cfg = get_render_config();
-    double rate = std::max(61.0, present_frame_rate(
+    double rate = std::max(kGameStepRate + 1.0, present_frame_rate(
         presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
     // VSync with the display's vblanks timed: every slot is a vblank (every n-th for a rate below the refresh, kept
     // above 60), so each picture's moment is the one its vblank shows. The game's 60 Hz is not locked to the
@@ -807,7 +807,7 @@ void RenderCore::start_interp_sequence() {
     // restarts.
     interp_slot_period_qpc_ = on_vblanks ? vblanks_per_slot * vblank_period
                                          : static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
-    const bool locked = !on_vblanks && std::abs(rate / 60.0 - std::round(rate / 60.0)) < 0.02;
+    const bool locked = !on_vblanks && std::abs(rate / kGameStepRate - std::round(rate / kGameStepRate)) < 0.02;
     // The arrival clock: the render thread sees a frame's present when it
     // reaches the queue (a chunk in progress delays it by milliseconds), so
     // arrivals are the game's frame cadence, smoothed: the prediction one or
@@ -815,7 +815,7 @@ void RenderCore::start_interp_sequence() {
     // period tracking the game's rate. A miss by a third of a period or more
     // (pause, hitch) restarts it at the measured time.
     if (interp_frame_period_qpc_ == 0) {
-        interp_frame_period_qpc_ = frequency / 60;
+        interp_frame_period_qpc_ = frequency / kGameStepsPerSecond;
     }
     std::int64_t arrival = now;
     if (interp_arrival_qpc_ != 0 && now > interp_arrival_qpc_) {
@@ -827,12 +827,12 @@ void RenderCore::start_interp_sequence() {
         if (periods <= 4 && std::abs(error) < interp_frame_period_qpc_ / 3) {
             arrival = predicted + error / 8;
             interp_frame_period_qpc_ = std::clamp<std::int64_t>(
-                interp_frame_period_qpc_ + error / (64 * periods), frequency / 62, frequency / 58);
+                interp_frame_period_qpc_ + error / (64 * periods), frequency / (kGameStepsPerSecond + 2), frequency / (kGameStepsPerSecond - 2));
         }
     }
     interp_arrival_qpc_ = arrival;
     interp_sequence_.frame_qpc = arrival;
-    interp_sequence_.lead = locked ? 60.0 / rate : 0.0;
+    interp_sequence_.lead = locked ? kGameStepRate / rate : 0.0;
     if (on_vblanks) {
         // The next slot moves to the vblank nearest where it was due, so the clock follows the display without
         // adding or dropping a slot; a clock not running starts at the vblank nearest now.
@@ -903,7 +903,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
         return configured;
     }
     ++interp_gpu_capped_;
-    rate = 60.0 * static_cast<double>(generated + 1u);
+    rate = kGameStepRate * static_cast<double>(generated + 1u);
     return generated;
 }
 
@@ -987,7 +987,7 @@ void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
         // The walk at t = 1 alone costs the game its frames when it takes a
         // quarter of a frame or more.
         const double generated_ms = renderer_.interpolation_gpu_cost_ms();
-        if (cap == 0u && renderer_.temporal_interpolation() && generated_ms * 4.0 >= 1000.0 / 60.0) {
+        if (cap == 0u && renderer_.temporal_interpolation() && generated_ms * 4.0 >= 1000.0 / kGameStepRate) {
             renderer_.suspend_temporal_interpolation(generated_ms);
         }
         interp_cadence_cap_ = cap;
@@ -1076,12 +1076,12 @@ void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
 double RenderCore::interp_rate_with(unsigned generated) const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     if (generated == 0u) {
-        return 60.0;
+        return kGameStepRate;
     }
     const RenderConfig cfg = get_render_config();
     double rate = generated < interp_frames_
-        ? 60.0 * static_cast<double>(generated + 1u)
-        : std::max(61.0, present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
+        ? kGameStepRate * static_cast<double>(generated + 1u)
+        : std::max(kGameStepRate + 1.0, present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
     std::int64_t vblank = 0;
     std::int64_t vblank_period = 0;
     if (cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period) && vblank_period > 0) {
@@ -1132,7 +1132,7 @@ void RenderCore::supersede_interp_sequence() {
 // t of the next slot in the playing sequence (see advance_interp_sequence).
 double RenderCore::interp_slot_t() const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    return static_cast<double>(interp_slot_due_qpc_ - interp_sequence_.frame_qpc) * 60.0 /
+    return static_cast<double>(interp_slot_due_qpc_ - interp_sequence_.frame_qpc) * kGameStepRate /
                static_cast<double>(frequency) + interp_sequence_.lead;
 }
 
@@ -1235,7 +1235,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
         }
         const std::int64_t slot = interp_slot_due_qpc_;
         // A free-running slot due just before the arrival shows t = 0.
-        const double t = std::max(0.0, static_cast<double>(slot - sequence.frame_qpc) * 60.0 /
+        const double t = std::max(0.0, static_cast<double>(slot - sequence.frame_qpc) * kGameStepRate /
                                            static_cast<double>(frequency) + sequence.lead);
         if (!flush) {
             interp_slot_due_qpc_ = slot + interp_slot_period_qpc_;
@@ -1427,7 +1427,7 @@ bool RenderCore::render_generated_frame(float t) {
 bool RenderCore::skip_for_present_rate() {
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz());
-    if (rate >= 59.0) {
+    if (rate >= kGameStepRate - 1.0) {
         next_rate_present_qpc_ = 0;
         return false;
     }

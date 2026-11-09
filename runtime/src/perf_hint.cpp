@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/perf_hint.h"
+#include "galaxy/game_step.h"
 
 #if !defined(_WIN32)
 #include <pthread.h>
@@ -50,7 +51,7 @@ struct Api {
     bool loaded = false;
 };
 
-constexpr std::int64_t kTargetNs = 1000000000ll / 60;
+constexpr std::int64_t kTargetNs = galaxy::kGameStepNs;
 
 Api g_api;
 bool g_api_tried = false;

@@ -14,6 +14,8 @@
 #include <utility>
 #include <vector>
 
+#include "galaxy/game_step.h"
+
 namespace galaxy::render {
 
 inline constexpr float kMinFrameRate = 1.0f;
@@ -37,7 +39,7 @@ struct RenderConfig {
     bool     taa_enabled         = false;
 
     // Frames per second presented (0: the display's rate, at least 60; see present_frame_rate).
-    float    max_fps             = 60.0f;
+    float    max_fps             = static_cast<float>(kGameStepsPerSecond);
 
     // Submits the game's records at their own 60 Hz cadence instead of one present per game frame.
     bool     frame_rate_decouple = false;
@@ -158,7 +160,7 @@ struct RenderConfig {
 // least 60). VSync limits the rate to the display's.
 inline double present_frame_rate(float max_fps, unsigned vsync_interval, double refresh_hz) {
     double rate = max_fps > 0.0f ? static_cast<double>(max_fps)
-                                 : (refresh_hz > 1.0 ? std::max(refresh_hz, 60.0) : 60.0);
+                                 : (refresh_hz > 1.0 ? std::max(refresh_hz, kGameStepRate) : kGameStepRate);
     if (vsync_interval != 0u && refresh_hz > 1.0) rate = std::min(rate, refresh_hz);
     return rate;
 }
@@ -171,8 +173,8 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
 inline constexpr bool kRayTracingParked = true;
 
 inline unsigned interpolated_frames_per_game_frame(double rate) {
-    if (!(rate > 61.0)) return 0u;
-    const double frames = std::ceil(rate / 60.0 - 1e-3) - 1.0;
+    if (!(rate > kGameStepRate + 1.0)) return 0u;
+    const double frames = std::ceil(rate / kGameStepRate - 1e-3) - 1.0;
     return static_cast<unsigned>(std::clamp(frames, 1.0, 7.0));
 }
 
@@ -289,7 +291,7 @@ void note_camera_water(float depth) noexcept;
 [[nodiscard]] float camera_water_depth() noexcept;
 // The rate the game presents at: max_fps, or 60 while frame generation runs.
 [[nodiscard]] inline float presented_max_fps(const RenderConfig& cfg) noexcept {
-    return frame_generation_running() ? 60.0f : cfg.max_fps;
+    return frame_generation_running() ? static_cast<float>(kGameStepsPerSecond) : cfg.max_fps;
 }
 void set_render_config(const RenderConfig& cfg);
 

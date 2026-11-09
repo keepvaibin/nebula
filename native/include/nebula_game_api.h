@@ -26,6 +26,10 @@ extern "C" {
 
 #define NEBULA_GAME_API_VERSION 142u
 
+/* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
+   display's rate; the host presents each or interpolates between them. */
+#define NEBULA_STEPS_PER_SECOND 60
+
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
 

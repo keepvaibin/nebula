@@ -1,4 +1,5 @@
 #include "Game/NPC/TrickRabbitSnowCollect.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BombTimerLayout.hpp"
@@ -209,8 +210,8 @@ void TrickRabbitSnowCollect::exeWaitHideSnow() {
 void TrickRabbitSnowCollect::exeStart() {
     if (MR::isFirstStep(this)) {
         MR::startEventBGM(1);
-        mTimerLayout->setTimeLimit(mTimeLimit * 60);
-        mTimerLayout->mDangerTransFrame = 20 * 60;
+        mTimerLayout->setTimeLimit(NebulaFrameClock::stepsOfSeconds(mTimeLimit));
+        mTimerLayout->mDangerTransFrame = NebulaFrameClock::stepsOfSeconds(20);
         mTimerLayout->appear();
     }
 

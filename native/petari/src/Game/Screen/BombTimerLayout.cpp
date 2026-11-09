@@ -1,4 +1,5 @@
 #include "Game/Screen/BombTimerLayout.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -83,7 +84,7 @@ u32 BombTimerLayout::getRestTime() const {
 }
 
 void BombTimerLayout::updateTextBox() {
-    MR::setTextBoxNumberRecursive(this, "Counter", (getRestTime() + 59) / 60);
+    MR::setTextBoxNumberRecursive(this, "Counter", (getRestTime() + NebulaFrameClock::cStepsPerSecond - 1) / NebulaFrameClock::cStepsPerSecond);
 }
 
 void BombTimerLayout::exeAppear() {

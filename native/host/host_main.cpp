@@ -20,6 +20,7 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/run_options.h"
+#include "galaxy/game_step.h"
 #include "../../tools/test_driver/switches.h"
 #include "galaxy/disc_files.h"
 #include "galaxy/save_files.h"
@@ -737,7 +738,7 @@ Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanosec
 // frame follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
 // stays on screen for the same time; the host's clock takes over where the display gives none.
 void svc_frame_wait(void*) {
-    const auto display_period = std::chrono::nanoseconds(1000000000ull / 60);
+    const auto display_period = std::chrono::nanoseconds(galaxy::kGameStepNs);
     static auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootPeriod) : display_period;
     static auto next = Clock::now() + period;
 #if defined(NEBULA_HOST_SDL)
@@ -804,7 +805,7 @@ void svc_test_frame_step(void*) {
         ticks_per_second = gAiRunning ? gSoundTicksPerSecond : 0u;
     }
     if (ticks_per_second != 0u) {
-        due_ns += 1e9 / 60.0;
+        due_ns += 1e9 / galaxy::kGameStepRate;
         const double period_ns = 1e9 / ticks_per_second;
         while (due_ns >= period_ns) {
             due_ns -= period_ns;
@@ -1512,6 +1513,7 @@ void copy_settings_text(char (&field)[N], const std::string& text) {
 #endif
 
 #if defined(NEBULA_HOST_RENDERER)
+static_assert(galaxy::kGameStepsPerSecond == NEBULA_STEPS_PER_SECOND, "the game and the host step at one rate");
 static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Preparing) == NEBULA_SETTINGS_STATUS_PREPARING &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Arrange) == NEBULA_SETTINGS_STATUS_ARRANGE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
@@ -1638,7 +1640,7 @@ int64_t svc_calendar_ns(void*) {
     if (deterministic_mode()) {
         // A fixed date (2026-01-01 from 2000-01-01), then the frames' time.
         constexpr int64_t kFixedDate = 820454400;
-        return kFixedDate * 1000000000ll + static_cast<int64_t>(gDeterministicFrames.load(std::memory_order_relaxed)) * 1000000000ll / 60;
+        return kFixedDate * 1000000000ll + static_cast<int64_t>(gDeterministicFrames.load(std::memory_order_relaxed)) * galaxy::kGameStepNs;
     }
     const auto now = std::chrono::system_clock::now();
     const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
@@ -3830,7 +3832,7 @@ int main(int argc, char** argv) {
                           gFileReads.load(std::memory_order_relaxed), gSaveOps.load(std::memory_order_relaxed),
                           gSoundBlocks.load(std::memory_order_relaxed), gSoundSubframes.load(std::memory_order_relaxed));
 #if defined(NEBULA_HOST_RENDERER)
-            if (frames / 60 % 30 == 0) {
+            if (frames / galaxy::kGameStepsPerSecond % 30 == 0) {
                 log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
             }
             const size_t length = std::strlen(text);
