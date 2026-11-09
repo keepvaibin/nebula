@@ -348,7 +348,7 @@ struct HostPointerTransitionPoll {
 
 // Bounded, non-destructive transition journal. Each reader keeps its own sequence cursor and reads
 // the event after it. A reader more than kHostPointerTransitionCapacity events behind gets Overflow,
-// which the caller treats as fatal: resynchronizing silently would lose button edges.
+// which the caller answers by taking the pointer's current buttons and the latest sequence (the lost edges are dropped).
 class HostPointerEventRing {
 public:
     HostPointerEventRing() = default;
