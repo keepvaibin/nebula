@@ -163,6 +163,7 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
                                   [&](const Retired& r) { return frame_index > r.release_after_frame; }),
                    retired_.end());
     if (target.resource && target.width == width && target.height == height) {
+        target.used_frame = frame_index;
         return true;
     }
     if (target.resource) {
@@ -189,7 +190,19 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
     target.width = width;
     target.height = height;
     target.use = gpu::Use::ComputeRead;
+    target.used_frame = frame_index;
     return true;
+}
+
+void AmbientOcclusion::trim_idle(std::uint64_t frame_index, unsigned frames_in_flight) {
+    constexpr std::uint64_t kIdleFrames = 600u;
+    std::erase_if(retired_, [&](const Retired& r) { return frame_index > r.release_after_frame; });
+    for (Target* target : {&distance_, &raw_, &denoised_, &scale_}) {
+        if (target->resource && frame_index > target->used_frame + kIdleFrames) {
+            retired_.push_back({std::move(target->resource), frame_index + frames_in_flight});
+            *target = {};
+        }
+    }
 }
 
 void AmbientOcclusion::transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use) {

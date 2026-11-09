@@ -38,6 +38,10 @@ public:
                  const StageMarker& mark = {});
     // Inside a scene target pass of 2^samples_log2 samples: the multiply.
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
+    // Once a frame, outside a submission being recorded: hands back the occlusion targets after 600 frames in which prepare()
+    // did not run (the occlusion switched off); the next prepare() makes them again. The images go through the context's
+    // deferred destruction, behind the fence of any submission naming them.
+    void trim_idle();
 
 private:
     enum Pass : unsigned { kDistance, kOcclusion, kDenoise, kUpsample, kSsao, kPassCount };
@@ -59,6 +63,8 @@ private:
     std::shared_ptr<Texture> raw_;
     std::shared_ptr<Texture> denoised_;
     std::shared_ptr<Texture> scale_;
+    std::uint64_t clock_ = 0;  // trim_idle() calls
+    std::uint64_t used_ = 0;   // the clock at the last prepare()
     ao::Constants constants_{};
     std::vector<float> object_values_;
     std::vector<std::uint32_t> object_tiles_;

@@ -929,6 +929,11 @@ private:
     bool fg_hudless_scene_ = false;              // this frame's scene was taken
     bool fg_hudless_taken_ = false;              // a picture's HUD-less copy is waiting
     std::uint32_t fg_hudless_slot_ = 0u;         // the picture it went with
+    std::uint64_t fg_hudless_used_frame_ = 0u;   // the last frame frame generation ran
+    std::uint64_t hdr_capture_used_frame_ = 0u;  // the last frame a capture drew the SDR picture
+    std::uint64_t motion_used_frame_ = 0u;       // the last frame a scene asked for the motion, reactive and layer targets
+    // Once a frame: hands the frame generation and temporal targets back after 600 frames unused, at the frame's fence.
+    void trim_idle_effect_targets();
     void take_fg_hudless_scene();
     void present_fg_hudless(const DisplayTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
     unsigned temporal_render_w_ = 0;

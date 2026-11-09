@@ -148,6 +148,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
 bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height, bool unordered,
                               std::uint64_t frame_index, unsigned frames_in_flight, const wchar_t* name) {
     if (target.resource && target.width == width && target.height == height && target.format == format) {
+        target.used_frame = frame_index;
         return true;
     }
     if (target.resource) {
@@ -175,6 +176,7 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
     target.height = height;
     target.format = format;
     target.use = use;
+    target.used_frame = frame_index;
     return true;
 }
 
@@ -226,6 +228,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_image(ID3D12Graphics
                                                                    std::uint64_t frame_index,
                                                                    unsigned frames_in_flight) {
     retire(frame_index);
+    frame_ = frame_index;
     Microsoft::WRL::ComPtr<ID3D12Resource> image;
     if (keep_.resource) {
         const D3D12_RESOURCE_DESC desc = keep_.resource->GetDesc();
@@ -247,7 +250,24 @@ void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, con
     keep_.height = in.frame_height;
     keep_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     keep_.use = gpu::Use::PixelRead;
+    keep_.used_frame = frame_;
     kept_ = true;
+}
+
+void GameBloom::trim_idle(std::uint64_t frame_index, unsigned frames_in_flight) {
+    constexpr std::uint64_t kIdleFrames = 600u;
+    retire(frame_index);
+    const auto trim = [&](Target& target) {
+        if (target.resource && frame_index > target.used_frame + kIdleFrames) {
+            retired_.push_back({std::move(target.resource), frame_index + frames_in_flight});
+            target = {};
+        }
+    };
+    for (Target* target : {&keep_, &source_, &work_, &box_tmp_, &mask_, &level1_, &level2_in_, &level2_}) {
+        trim(*target);
+    }
+    for (Target& target : blur_h_) trim(target);
+    for (Target& target : blur2_h_) trim(target);
 }
 
 bool GameBloom::keep(ID3D12GraphicsCommandList* list, const Inputs& in, std::uint64_t frame_index,

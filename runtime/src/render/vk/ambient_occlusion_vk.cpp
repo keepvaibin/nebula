@@ -207,6 +207,17 @@ bool AmbientOcclusionVk::ensure(std::shared_ptr<Texture>& target, unsigned width
     return target != nullptr;
 }
 
+void AmbientOcclusionVk::trim_idle() {
+    constexpr std::uint64_t kIdleFrames = 600u;
+    ++clock_;
+    if (clock_ > used_ + kIdleFrames && (distance_ || raw_ || denoised_ || scale_)) {
+        distance_.reset();
+        raw_.reset();
+        denoised_.reset();
+        scale_.reset();
+    }
+}
+
 VkDescriptorSet AmbientOcclusionVk::set_of(const SetAllocator& allocate, VkImageView depth, VkImageLayout depth_layout,
                                            const Texture& sampled1, const Texture& sampled2, const Texture& storage) {
     const VkDescriptorSet set = allocate(set_layout_);
@@ -247,6 +258,7 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     if (!ready_) {
         return false;
     }
+    used_ = clock_;
     const unsigned divisor = ao::occlusion_divisor(depth.height);
     const unsigned width = (depth.width + divisor - 1u) / divisor;
     const unsigned height = (depth.height + divisor - 1u) / divisor;

@@ -980,7 +980,33 @@ void RendererVk::destroy_motion_framebuffers() {
     motion_.framebuffer_depth = VK_NULL_HANDLE;
 }
 
+void RendererVk::trim_idle_effect_targets() {
+    constexpr std::uint64_t kIdleFrames = 600u;
+    if (frame_generation_running()) {
+        fg_hudless_used_frame_ = frame_index_;
+    }
+    if (frame_index_ > fg_hudless_used_frame_ + kIdleFrames) {
+        retire(std::move(fg_hudless_scene_color_));
+        retire(std::move(fg_hudless_display_));
+        retire(std::move(fg_hudless_target_));
+        fg_hudless_scene_ = fg_hudless_taken_ = fg_hudless_ready_ = false;
+    }
+    if (hdr_capture_ && frame_index_ > hdr_capture_used_frame_ + kIdleFrames) {
+        retire(std::move(hdr_capture_));
+    }
+    if (motion_.motion && !layer_window_ && frame_index_ > motion_used_frame_ + kIdleFrames) {
+        destroy_motion_framebuffers();
+        retire(std::move(motion_.motion));
+        retire(std::move(motion_.reactive));
+        retire(std::move(motion_.layer_color));
+        retire(std::move(motion_.layer_trans));
+        reactive_scene_ = false;
+        motion_.map = FrameMap{};
+    }
+}
+
 bool RendererVk::ensure_motion_targets() {
+    motion_used_frame_ = frame_index_;
     if (motion_.motion && motion_.map == scene_map_) {
         return true;
     }

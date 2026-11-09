@@ -52,6 +52,9 @@ public:
     // and render target bound. Returns false when nothing was recorded.
     bool record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in, std::uint64_t frame_index,
                 unsigned frames_in_flight);
+    // Once a frame: frees what record() released, and hands back the targets no record() has asked for in 600 frames
+    // (the occlusion switched off), at the frame's fence; the next record() makes them again.
+    void trim_idle(std::uint64_t frame_index, unsigned frames_in_flight);
 
 private:
     struct Target {
@@ -59,6 +62,7 @@ private:
         unsigned width = 0;
         unsigned height = 0;
         gpu::Use use = gpu::Use::ComputeRead;
+        std::uint64_t used_frame = 0;   // the last frame record() asked for it
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;

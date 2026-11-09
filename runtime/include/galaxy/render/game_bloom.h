@@ -86,6 +86,9 @@ public:
     // scene): the bloom over the frame. Leaves this pass's root signature, pipeline and render target bound.
     bool apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in, const Params& params,
                std::uint64_t frame_index, unsigned frames_in_flight);
+    // Once a frame: frees what the passes released, and hands back the images no pass has asked for in 600 frames (the
+    // bloom switched off or a scene without one), at the frame's fence; the next bloom makes them again.
+    void trim_idle(std::uint64_t frame_index, unsigned frames_in_flight);
 
 private:
     struct Target {
@@ -94,6 +97,7 @@ private:
         unsigned height = 0;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         gpu::Use use = gpu::Use::CopyDest;
+        std::uint64_t used_frame = 0;   // the last frame a pass asked for it
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -116,6 +120,7 @@ private:
     ID3D12Device* device_ = nullptr;
     bool ready_ = false;
     bool kept_ = false;   // keep() ran since the last normal apply
+    std::uint64_t frame_ = 0;  // the frame of the last pass call, what keep_picture() stamps the kept image with
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> down_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> box_;

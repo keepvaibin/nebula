@@ -1745,6 +1745,8 @@ void RendererVk::begin_frame() {
     }
     sync_post_process();
     bloom_.poll_ready();
+    bloom_.trim_idle();
+    ao_.trim_idle();
 
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     Frame& frame = frames_[frame_slot_];
@@ -1783,6 +1785,7 @@ void RendererVk::begin_frame() {
     frame.retired.clear();
     frame.retired_buffers.clear();
     destroy_retired_pools(frame);
+    trim_idle_effect_targets();
     if (frame_index_ % 120u == 0u) {
         sweep_target_slots();
     }
@@ -2582,6 +2585,7 @@ bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture
             return false;
         }
     }
+    hdr_capture_used_frame_ = frame_index_;
     if (!hdr_capture_ || hdr_capture_->width != width || hdr_capture_->height != height) {
         if (hdr_capture_) {
             retire(std::move(hdr_capture_));  // an earlier capture's commands may still read it
