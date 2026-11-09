@@ -4,6 +4,7 @@
 #include "Game/Render/Material.hpp"
 #include <NebulaGpu.h>
 #include "Game/Render/GameTexture.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <nebula_math.h>
 #include <nebula_model.h>
 
@@ -114,8 +115,16 @@ public:
 };
 
 // A loaded model file (nebula_model.h), used in place. One set of materials, joints and meshes; each Model draws from it.
-class ModelData {
+// It lives in the arena of the holder that loads it, which is its file's (ResourceHolderManager), so the arena destroys
+// it before the file goes; its joints, materials and meshes are that arena's memory.
+class ModelData : public ArenaOwned {
 public:
+    ModelData();
+    // The renderer's copy goes (the host holds it until the frames naming it are drawn).
+    ~ModelData() override;
+    ModelData(const ModelData&) = delete;
+    ModelData& operator=(const ModelData&) = delete;
+
     static ModelData* load(void* pFile);
     // A material table's file (no joints or meshes).
     static ModelData* loadMaterials(void* pFile);
@@ -233,7 +242,6 @@ public:
     ResTIMG* mTextures;
     ModelData* mTextureOwner;
     MtxCalc* mBasicMtxCalc;
-    ModelData* mNextLive;  // every model file loaded, for the arena that holds it going away
     u32 mGpuModel;
     u32 mTextureStamp;
     u32 mResourceHash;
@@ -245,11 +253,6 @@ public:
         return reinterpret_cast< const char* >(at(offset));
     }
 };
-
-namespace ModelDataList {
-    // Memory from `start` to `end` is going: the models and textures in it leave the renderer.
-    void forget(uintptr_t start, uintptr_t end);
-}  // namespace ModelDataList
 
 // The first 32 bits of the hash the importer names joints and materials by.
 u32 nebula_name_hash(const char* pName);

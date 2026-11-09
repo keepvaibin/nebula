@@ -4,6 +4,7 @@
 #include "Game/Util/Color.hpp"
 #include <NebulaGpu.h>
 #include "Game/Render/GameTexture.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstddef>
 #include <string.h>
 
@@ -590,12 +591,14 @@ private:
     bool mOpen;
 };
 
-// Geometry a site builds once and draws for a long time: handed to the renderer, which keeps its own copy. A scene's
-// meshes go with its memory (ModelDataList::forget).
-class SiteMeshData {
+// Geometry a site builds once and draws for a long time: handed to the renderer, which keeps its own copy. The arena
+// holding the mesh destroys it, if its owner has not, and the renderer's copy goes with it.
+class SiteMeshData : public ArenaOwned {
 public:
     SiteMeshData();
-    ~SiteMeshData();
+    ~SiteMeshData() override;
+    SiteMeshData(const SiteMeshData&) = delete;
+    SiteMeshData& operator=(const SiteMeshData&) = delete;
     // Hands the geometry written over and frees the writing room.
     void send();
 
@@ -606,9 +609,6 @@ protected:
     void drawData(TypedDraw& rDraw, const NebulaLayoutInput* pInputs, u32 inputCount, u32 flags) const;
 
 private:
-    friend void forgetSiteMeshes(const void* pStart, const void* pEnd);
-    void unlink();
-
     u32 mId;
     u32 mIndexCount;
     u32 mStride;
@@ -616,11 +616,7 @@ private:
     u32 mWritten;
     u8* mVertices;
     u32* mIndices;
-    SiteMeshData* mNextLive;
 };
-
-// Frees the meshes lying in the memory given.
-void forgetSiteMeshes(const void* pStart, const void* pEnd);
 
 template < class T >
 class SiteMesh : public SiteMeshData {

@@ -1,4 +1,3 @@
-#include "Game/Render/ModelData.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -100,7 +99,7 @@ namespace GameAssets {
         void release(const Mapped& rMapped) {
             const NebulaHostServices* const host = nebula_host();
             const uintptr_t start = reinterpret_cast< uintptr_t >(rMapped.mData);
-            ModelDataList::forget(start, start + rMapped.mSize);
+            RenderTexture::forget(start, start + rMapped.mSize);
             host->asset_unmap(host->user, rMapped.mData, rMapped.mSize);
         }
 
