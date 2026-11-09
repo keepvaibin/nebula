@@ -188,7 +188,7 @@ void TrampleStar::toSphere(f32 radius) {
 }
 
 void TrampleStar::initCheckFlag(u32 numFlags) {
-    mCheckFlags = new (-0x4) u16[numFlags * numFlags];
+    mCheckFlags = new u16[numFlags * numFlags];
     mNumFlags = numFlags;
 
     for (u32 idx = 0; idx < mNumFlags * mNumFlags; idx++) {
@@ -242,7 +242,7 @@ void TrampleStar::divide() {
 
     mNumSurfaces = numSurfaces;
     mNumVtxs = numVtxs;
-    delete mCheckFlags;
+    delete[] mCheckFlags;
 }
 
 void TrampleStar::moveVtx(f32 deformRate, u32 vtxIdx, u32 /* unused */, f32 /* unused */, u32 /* unused */) {
