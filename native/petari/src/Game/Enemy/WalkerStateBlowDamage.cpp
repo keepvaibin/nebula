@@ -6,6 +6,9 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 5);
+
 namespace {
     NEBULA_TUNABLE(f32, sAirFric, 0.99f);
     NEBULA_TUNABLE(f32, sAirGravityAccel, 1.0f);
@@ -36,7 +39,7 @@ void WalkerStateBlowDamage::exeBlow() {
     MR::addVelocityToGravity(getHost(), ::sAirGravityAccel);
     MR::turnDirectionDegree(getHost(), mDirection, -getHost()->mVelocity, ::sDamageTurnLimit);
 
-    if (MR::isGreaterStep(this, 5) && MR::isBindedGround(getHost())) {
+    if (MR::isGreaterStep(this, cStep_exeBlow_1) && MR::isBindedGround(getHost())) {
         MR::startAction(getHost(), "DamageLand");
         MR::zeroVelocity(getHost());
         setNerve(GET_NERVE(WalkerStateBlowDamage, WalkerStateBlowDamageNrvBlowLand));

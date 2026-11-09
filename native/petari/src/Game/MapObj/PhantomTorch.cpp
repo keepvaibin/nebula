@@ -12,6 +12,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeExtinguish_1, "exeExtinguish.1", 15);
 
 namespace NrvPhantomTorch {
     NEW_NERVE(HostTypeWait, PhantomTorch, Wait);
@@ -183,7 +187,7 @@ void PhantomTorch::exeExtinguish() {
         MR::startSound(this, "SE_OJ_PHANTOM_TOACH_OFF");
     }
 
-    if (MR::isStep(this, 15)) {
+    if (MR::isStep(this, cStep_exeExtinguish_1)) {
         kill();
     }
 }

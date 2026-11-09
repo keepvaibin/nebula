@@ -4,6 +4,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAdjust_1, "exeAdjust.1", 3);
 
 namespace NrvValveSwitch {
     NEW_NERVE(ValveSwitchNrvWait, ValveSwitch, Wait);
@@ -78,7 +82,7 @@ void ValveSwitch::exeAdjust() {
 
     mBindActor->mPosition.lerp(mBindActor->mPosition, getSensor("binder")->mPosition, getNerveStep() / 3.0f);
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeAdjust_1)) {
         setNerve(GET_NERVE(ValveSwitch, ValveSwitchNrvValve));
     }
 }

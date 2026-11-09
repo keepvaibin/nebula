@@ -10,6 +10,11 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeEscapeJump_1, "exeEscapeJump.1", 49);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFindPos_1, "exeFindPos.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFindPos_2, "exeFindPos.2", 1);
+
 namespace {
     NEBULA_TUNABLE(f32, sKnockSpeed, 10.0f);
     NEBULA_TUNABLE(s32, sStopSceneFrame, 10);
@@ -313,7 +318,7 @@ void DodoryuStateLv2::exeEscapeJump() {
         mEscapeStepMinLeft--;
     }
 
-    if (MR::isGreaterEqualStep(this, 49)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeEscapeJump_1)) {
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvEscape));
         mHost->snapToGround();
     } else {
@@ -429,11 +434,11 @@ void DodoryuStateLv2::exeFindPos() {
         mChaseAppearEndCounter = 0;
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeFindPos_1)) {
         calcRandomVelocity(mFindPosStep);
     }
 
-    if (MR::isGreaterEqualStep(this, 1)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeFindPos_2)) {
         keepVerticalizedVelocity();
         addVelocity(false);
         Vec3f offset;

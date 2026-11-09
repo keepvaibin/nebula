@@ -10,6 +10,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeShoot_1, "exeShoot.1", 40);
 
 namespace {
     const Vec sShellPos = {0.0f, 0.0f, 700.0f};
@@ -86,7 +90,7 @@ void KillerGunnerSingle::exeShoot() {
         getSensor("shell")->validate();
     }
 
-    if (MR::isStep(this, 40)) {
+    if (MR::isStep(this, cStep_exeShoot_1)) {
         getSensor("shell")->invalidate();
     }
 

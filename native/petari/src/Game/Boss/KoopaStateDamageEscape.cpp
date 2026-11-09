@@ -13,6 +13,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_1, "isDownEnd.1", 45);
+NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_2, "isDownEnd.2", 45);
+NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_3, "isDownEnd.3", 20);
+
 namespace {
     static MR::ActorMoveParam sEscapeStartParam = {1.8f, 1.5f, 0.95f, 3.0f};
     static MR::ActorMoveParam sEscapeRunParamLv1 = {7.0f, 1.5f, 0.8f, 0.0f};
@@ -157,17 +162,17 @@ void KoopaStateDamageEscape::startDamageReverse() {
 
 bool KoopaStateDamageEscape::isDownEnd() const {
     if ((KoopaFunction::isKoopaVs1(mHost) || KoopaFunction::isKoopaVs2(mHost)) && KoopaFunction::isKoopaLv3(mHost) &&
-        isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDown)) && MR::isGreaterStep(this, 45)) {
+        isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDown)) && MR::isGreaterStep(this, cStep_isDownEnd_1)) {
         return true;
     }
 
     if (KoopaFunction::isKoopaVs3(mHost) && KoopaFunction::isKoopaAngry(mHost) &&
         isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDown))) {
-        if ((KoopaFunction::isKoopaLv1(mHost) || KoopaFunction::isKoopaLv2(mHost)) && MR::isGreaterStep(this, 45)) {
+        if ((KoopaFunction::isKoopaLv1(mHost) || KoopaFunction::isKoopaLv2(mHost)) && MR::isGreaterStep(this, cStep_isDownEnd_2)) {
             return true;
         }
 
-        if (KoopaFunction::isKoopaLv3(mHost) && MR::isGreaterStep(this, 20)) {
+        if (KoopaFunction::isKoopaLv3(mHost) && MR::isGreaterStep(this, cStep_isDownEnd_3)) {
             return true;
         }
     }

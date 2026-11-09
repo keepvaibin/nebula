@@ -41,6 +41,14 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemo_1, "exeAppearDemo.1", 280);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDeadDemo_1, "exeDeadDemo.1", 218);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakDemo_1, "exeBreakDemo.1", 204);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakDemo_2, "exeBreakDemo.2", 206);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakDemo_3, "exeBreakDemo.3", 200);
 
 
 namespace {
@@ -490,7 +498,7 @@ void SkeletalFishBoss::exeAppearDemo() {
         mGuardHolder->invalidate();
     }
 
-    if (MR::isStep(this, 280)) {
+    if (MR::isStep(this, cStep_exeAppearDemo_1)) {
         MR::startStageBGM("MBGM_BOSS_09_A", false);
     }
 
@@ -565,7 +573,7 @@ void SkeletalFishBoss::exeDeadDemo() {
         MR::startSound(mBossHead, "SE_BM_SKL_BOSS_BODY_SOLID");
     }
 
-    if (MR::isLessStep(this, 218)) {
+    if (MR::isLessStep(this, cStep_exeDeadDemo_1)) {
         MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_DIE");
     }
 
@@ -590,11 +598,11 @@ void SkeletalFishBoss::exeBreakDemo() {
         MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
-    if (MR::isStep(this, 204)) {
+    if (MR::isStep(this, cStep_exeBreakDemo_1)) {
         MR::tryRumblePadStrong(this, PLAYER_1);
     }
 
-    if (MR::isStep(this, 206)) {
+    if (MR::isStep(this, cStep_exeBreakDemo_2)) {
         MR::startSound(mBossHead, "SE_BM_SKL_BOSS_EXPLODE_2");
     }
 
@@ -602,7 +610,7 @@ void SkeletalFishBoss::exeBreakDemo() {
         MR::startCenterScreenBlur(60, 5.0f, 0x50, 5, 30);
     }
 
-    if (MR::isStep(this, 200)) {
+    if (MR::isStep(this, cStep_exeBreakDemo_3)) {
         MR::startCenterScreenBlur(60, 80.0f, 0x50, 5, 30);
     }
 

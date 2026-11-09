@@ -26,6 +26,11 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBumpWall_1, "exeBumpWall.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeLand_1, "exeLand.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBindEnd_1, "exeBindEnd.1", 12);
+
 namespace {
     NEBULA_TUNABLE(f32, mBaseRadius, 150.0f);
     NEBULA_TUNABLE(f32, sBindableUpperDegree, 60.0f);
@@ -787,7 +792,7 @@ void Tamakoro::exeBumpWall() {
     updateMarioPose(3.0f);
     updateMarioOffset();
 
-    if (!tryJump() && MR::isGreaterStep(this, 15)) {
+    if (!tryJump() && MR::isGreaterStep(this, cStep_exeBumpWall_1)) {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvWait));
     }
 }
@@ -807,7 +812,7 @@ void Tamakoro::exeLand() {
     updateMarioPose(3.0f);
     updateMarioOffset();
 
-    if (!tryJump() && MR::isGreaterStep(this, 15)) {
+    if (!tryJump() && MR::isGreaterStep(this, cStep_exeLand_1)) {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvWait));
     }
 }
@@ -961,7 +966,7 @@ void Tamakoro::exeBindEnd() {
         MR::stopStageBGM(10);
     }
 
-    if ((MR::isGreaterStep(this, 12) && MR::isOnGroundPlayer()) || MR::isGreaterStep(this, ::sForceBindEndTime)) {
+    if ((MR::isGreaterStep(this, cStep_exeBindEnd_1) && MR::isOnGroundPlayer()) || MR::isGreaterStep(this, ::sForceBindEndTime)) {
         MR::startLastStageBGM();
         MR::requestAppearPowerStar(this, mPosition);
         kill();

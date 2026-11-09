@@ -27,6 +27,9 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_tryPatrol_1, "tryPatrol.1", 500);
+
 namespace NrvEyeBeamer {
     NEW_NERVE(EyeBeamerNrvDemoStartWait, EyeBeamer, DemoStartWait);
     NEW_NERVE(EyeBeamerNrvDemoWait, EyeBeamer, DemoWait);
@@ -238,7 +241,7 @@ bool EyeBeamer::tryGotoPatrol() {
 }
 
 bool EyeBeamer::tryPatrol() {
-    if (MR::isGreaterStep(this, 500)) {
+    if (MR::isGreaterStep(this, cStep_tryPatrol_1)) {
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvPatrol));
         return true;
     }

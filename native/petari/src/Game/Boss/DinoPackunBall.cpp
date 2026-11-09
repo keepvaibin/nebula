@@ -12,6 +12,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCharge_1, "exeCharge.1", 35);
+
 namespace NrvDinoPackunBall {
     NEW_NERVE(DinoPackunBallNrvWait, DinoPackunBall, Wait);
     NEW_NERVE(DinoPackunBallNrvShoot, DinoPackunBall, Shoot);
@@ -282,7 +285,7 @@ void DinoPackunBall::exeCharge() {
     MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     MR::startLevelSound(this, "SE_BM_LV_D_PAKKUN_TAIL_CRG");
 
-    if (MR::isGreaterStep(this, 35)) {
+    if (MR::isGreaterStep(this, cStep_exeCharge_1)) {
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvReverse));
     }
 }

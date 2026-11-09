@@ -18,6 +18,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitPointer_1, "exeHitPointer.1", 3);
 
 namespace NrvGCaptureTarget {
     NEW_NERVE(GCaptureTargetNrvTryDemoAppear, GCaptureTarget, TryDemoAppear);
@@ -232,7 +236,7 @@ void GCaptureTarget::exeHitPointer() {
             emitNerveEffect();
         }
 
-        if (MR::isStep(this, 3)) {
+        if (MR::isStep(this, cStep_exeHitPointer_1)) {
             MR::startCSSound("CS_STAR_POWER", nullptr, 0);
         }
 

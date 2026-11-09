@@ -10,6 +10,12 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyOnRailSearch_1, "exeFlyOnRailSearch.1", 54);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyOnRailSearch_2, "exeFlyOnRailSearch.2", 54);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyWithAttack_1, "exeFlyWithAttack.1", 130);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeTrample_1, "exeTrample.1", 36);
+
 namespace {
     const BombBirdParam hFallParam = {0.0f, 1.2f, 0.98f, 0.0f};
     const BombBirdParam hOnGroundParam = {0.0f, 1.2f, 0.8f, 0.0f};
@@ -197,7 +203,7 @@ void BombBird::exeFlyOnRailSearch() {
     if (MR::isValidSwitchB(this) && MR::isOnSwitchB(this)) {
         setNerve(GET_NERVE(BombBird, HostTypeNrvEscape));
     } else {
-        if (MR::isStep(this, 54)) {
+        if (MR::isStep(this, cStep_exeFlyOnRailSearch_1)) {
             mHoldBomb = true;
             mHeldBomb = nullptr;
             for (BombBirdBomb** it = mBombs.begin(); it < mBombs.end(); it++) {
@@ -207,7 +213,7 @@ void BombBird::exeFlyOnRailSearch() {
                     break;
                 }
             }
-        } else if (MR::isGreaterStep(this, 54)) {
+        } else if (MR::isGreaterStep(this, cStep_exeFlyOnRailSearch_2)) {
             mHoldBomb = true;
             if (mHeldBomb) {
                 Vec3f scale;
@@ -274,7 +280,7 @@ void BombBird::exeFlyWithAttack() {
             bomb->mVelocity.zero();
         }
 
-        if (MR::isStep(this, 130)) {
+        if (MR::isStep(this, cStep_exeFlyWithAttack_1)) {
             MR::startSound(mHeldBomb, "SE_EM_BOMBBIRD_DROP_BOMB");
             mHeldBomb->start(mPosition, mFront * ::hBombFallFrontVel - mGravity * ::hBombFallUpVel);
             mHeldBomb = nullptr;
@@ -451,7 +457,7 @@ void BombBird::exeTrample() {
     const BombBirdParam* param = &::hOnGroundParam;
     MR::moveAndTurnToPlayer(this, &mFront, {param->mMoveAccel, param->mGravityAccel, param->mFriction, param->mTurnDegree});
 
-    if (MR::isStep(this, 36)) {
+    if (MR::isStep(this, cStep_exeTrample_1)) {
         Vec3f pos(mPosition - mGravity * getSensor("body")->getRadius());
         MR::appearCoinPop(this, pos, 1);
         MR::startSound(this, "SE_EM_EXPLODE_S");

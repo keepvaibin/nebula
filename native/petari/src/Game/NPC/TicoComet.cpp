@@ -19,6 +19,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeEatPst_1, "exeEatPst.1", 4);
 
 namespace NrvTicoEat {
     NEW_NERVE(TicoEatNrvEatPre, TicoEat, EatPre);
@@ -178,7 +182,7 @@ void TicoEat::exeEatNow() {
 }
 
 void TicoEat::exeEatPst() {
-    if (MR::isGreaterEqualStep(this, 4)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeEatPst_1)) {
         mParam.mTalkAction = "Joy2";
         mParam.mTalkTurnAction = "Joy2";
         popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatEnd));

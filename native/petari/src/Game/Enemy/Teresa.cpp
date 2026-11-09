@@ -26,6 +26,12 @@
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_tryWalk_1, "tryWalk.1", 192);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryAggressiveEnd_1, "tryAggressiveEnd.1", 75);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryDriftEnd_1, "tryDriftEnd.1", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_addDriftVelocity_1, "addDriftVelocity.1", 35);
+
 namespace {
     static Color8 sPointLightColor(255, 255, 255, 255);
 
@@ -388,7 +394,7 @@ bool Teresa::tryRailTurnEnd() {
 }
 
 bool Teresa::tryWalk() {
-    if (MR::isGreaterStep(this, 192)) {
+    if (MR::isGreaterStep(this, cStep_tryWalk_1)) {
         Vec3f offset;
         MR::getRandomVector(&offset, 1.0f);
         MR::normalizeOrZero(&offset);
@@ -520,7 +526,7 @@ bool Teresa::tryLoveHitEnd() {
 }
 
 bool Teresa::tryAggressiveEnd() {
-    if (MR::isGreaterStep(this, 75)) {
+    if (MR::isGreaterStep(this, cStep_tryAggressiveEnd_1)) {
         setNerve(GET_NERVE(Teresa, TeresaNrvWait));
         return true;
     }
@@ -538,7 +544,7 @@ bool Teresa::tryAttackSuccessEnd() {
 }
 
 bool Teresa::tryDriftEnd() {
-    if (MR::isGreaterStep(this, 50)) {
+    if (MR::isGreaterStep(this, cStep_tryDriftEnd_1)) {
         setNerve(GET_NERVE(Teresa, TeresaNrvWait));
         return true;
     }
@@ -931,7 +937,7 @@ void Teresa::updateNormalVelocity() {
 }
 
 void Teresa::addDriftVelocity() {
-    if (MR::isLessEqualStep(this, 35)) {
+    if (MR::isLessEqualStep(this, cStep_addDriftVelocity_1)) {
         Vec3f pull;
         MR::calcPlayerSpinPullVelocity(&pull, mPosition);
         pull *= 0.12f;

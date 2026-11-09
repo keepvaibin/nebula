@@ -6,6 +6,15 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeTrampleBound_1, "exeTrampleBound.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeTrampleBound_2, "exeTrampleBound.2", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeTrampleBound_3, "exeTrampleBound.3", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropBound_1, "exeHipDropBound.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropBound_2, "exeHipDropBound.2", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropBound_3, "exeHipDropBound.3", 20);
 
 namespace NrvJumpStand {
     NEW_NERVE(JumpStandNrvWait, JumpStand, Wait);
@@ -58,14 +67,14 @@ void JumpStand::exeTrampleBound() {
         MR::startSound(this, "SE_OJ_JUMP_STAND_LAND_S");
     }
 
-    if (MR::isLessEqualStep(this, 5) && MR::isPressedJump(0)) {
+    if (MR::isLessEqualStep(this, cStep_exeTrampleBound_1) && MR::isPressedJump(0)) {
         mIsMarioJumpingHigh = true;
         MR::startBck(this, "BoundJump");
         MR::setBckFrame(this, getNerveStep());
     }
 
     // A jump press in the first 5 steps bounces higher.
-    if (MR::isStep(this, 5)) {
+    if (MR::isStep(this, cStep_exeTrampleBound_2)) {
         if (mIsMarioJumpingHigh) {
             MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_M");
             MR::startSoundPlayer("SE_PV_JUMP_L");
@@ -79,7 +88,7 @@ void JumpStand::exeTrampleBound() {
         MR::validateCollisionParts(this);
     }
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeTrampleBound_3)) {
         MR::validateCollisionParts(this);
     }
 
@@ -97,20 +106,20 @@ void JumpStand::exeHipDropBound() {
     }
 
     // Presses the player down into the stand for 15 steps, 6 a step easing to 5.
-    if (MR::isLessStep(this, 15) && mBindedActor != nullptr) {
+    if (MR::isLessStep(this, cStep_exeHipDropBound_1) && mBindedActor != nullptr) {
         f32 pressDepth = (6.0f - MR::calcNerveEaseOutRate(this, 15));
         Vec3f up;
         MR::calcUpVec(&up, this);
         mBindedActor->mPosition.scaleAdd(-pressDepth, up, mBindedActor->mPosition);
     }
 
-    if (MR::isStep(this, 15)) {
+    if (MR::isStep(this, cStep_exeHipDropBound_2)) {
         MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_L");
         MR::startSoundPlayer("SE_PV_JUMP_JOY");
         endBindAndShootUp(43.0f, Jump_High);
     }
 
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeHipDropBound_3)) {
         MR::validateCollisionParts(this);
     }
 

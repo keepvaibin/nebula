@@ -21,6 +21,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitToPlayer_1, "exeHitToPlayer.1", 58);
+
 
 namespace {
     NEBULA_TUNABLE(f32, hGroundDamp, 0.8f);
@@ -206,7 +209,7 @@ void JumpSpider::exeHitToPlayer() {
     MR::applyVelocityDampAndGravity(this, 0.3f, 0.8f, 0.98f, 0.98f, 1.0f);
     MR::killVelocityOnGroundH(this);
 
-    if (MR::isGreaterStep(this, 58)) {
+    if (MR::isGreaterStep(this, cStep_exeHitToPlayer_1)) {
         Vec3f heightVec;
         MR::calcVecToPlayerH(&heightVec, this, nullptr);
         MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.05f, mGravity);

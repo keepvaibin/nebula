@@ -9,6 +9,10 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_isValidPushedFromPlayer_1, "isValidPushedFromPlayer.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeMove_1, "exeMove.1", 1);
+
 namespace NrvCocoNut {
     NEW_NERVE(CocoNutNrvWait, CocoNut, Wait);
     NEW_NERVE(CocoNutNrvWaitOnBind, CocoNut, WaitOnBind);
@@ -496,7 +500,7 @@ bool CocoNut::isValidPushedFromPlayer(const HitSensor* pMySensor, const HitSenso
         return false;
     }
 
-    if (isNerve(GET_NERVE(CocoNut, CocoNutNrvMove)) && MR::isLessStep(this, 15)) {
+    if (isNerve(GET_NERVE(CocoNut, CocoNutNrvMove)) && MR::isLessStep(this, cStep_isValidPushedFromPlayer_1)) {
         return false;
     }
 
@@ -856,7 +860,7 @@ void CocoNut::exeMove() {
         }
     }
 
-    if (mIsKicked && MR::isStep(this, 1)) {
+    if (mIsKicked && MR::isStep(this, cStep_exeMove_1)) {
         MR::stopScene(4);
     }
 

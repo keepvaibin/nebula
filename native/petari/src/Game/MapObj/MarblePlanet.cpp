@@ -5,6 +5,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakCore_1, "exeBreakCore.1", 1);
 
 namespace NrvMarblePlanet {
     NEW_NERVE(MarblePlanetNrvWait, MarblePlanet, Wait);
@@ -102,7 +106,7 @@ void MarblePlanet::exeBreakCore() {
         MR::setBtkFrameAndStop(mCorePlanetModel, MR::getBtkFrameMax(mCorePlanetModel));
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeBreakCore_1)) {
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         MR::startAfterBossBGM();

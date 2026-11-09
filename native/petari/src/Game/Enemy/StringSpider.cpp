@@ -29,6 +29,10 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeTrampleFall_1, "exeTrampleFall.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWallHitDeath_1, "exeWallHitDeath.1", 35);
+
 namespace {
     // Swing sounds: volume 0 to 100 over these speeds.
     NEBULA_TUNABLE(f32, cSwing1MinSpeed, 2.0f);
@@ -556,7 +560,7 @@ void StringSpider::exeTrampleFall() {
         MR::setBinderRadius(this, 10.0f);
     }
 
-    if (MR::isGreaterStep(this, 5)) {
+    if (MR::isGreaterStep(this, cStep_exeTrampleFall_1)) {
         MR::appearCoinPop(this, mPosition, 1);
         kill();
     }
@@ -567,7 +571,7 @@ void StringSpider::exeWallHitDeath() {
         mVelocity.zero();
     }
 
-    if (MR::isGreaterStep(this, 35)) {
+    if (MR::isGreaterStep(this, cStep_exeWallHitDeath_1)) {
         kill();
     }
 }

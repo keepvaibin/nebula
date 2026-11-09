@@ -34,6 +34,15 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_receiveMsgTrample_1, "receiveMsgTrample.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryBrakeTurnEnd_1, "tryBrakeTurnEnd.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryEndFallDownLand_1, "tryEndFallDownLand.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryComebackRouteStart_1, "tryComebackRouteStart.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryEndTumble_1, "tryEndTumble.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryEndGetUp_1, "tryEndGetUp.1", 20);
 
 namespace {
     class RunnawayNodeSelecter : public RailGraphNodeSelecter {
@@ -239,7 +248,7 @@ bool TrickRabbit::receiveMsgTrample() {
         return false;
     }
 
-    if (isNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvJump)) && MR::isGreaterStep(this, 1)) {
+    if (isNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvJump)) && MR::isGreaterStep(this, cStep_receiveMsgTrample_1)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvFallDown));
     } else {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvTumble));
@@ -330,7 +339,7 @@ bool TrickRabbit::tryBrakeTurn() {
 }
 
 bool TrickRabbit::tryBrakeTurnEnd() {
-    if (MR::isGreaterStep(this, 40)) {
+    if (MR::isGreaterStep(this, cStep_tryBrakeTurnEnd_1)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvRunaway));
         return true;
     }
@@ -391,7 +400,7 @@ bool TrickRabbit::tryEndFallDown() {
 }
 
 bool TrickRabbit::tryEndFallDownLand() {
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_tryEndFallDownLand_1)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvGetUpFromFallDown));
         return true;
     }
@@ -400,7 +409,7 @@ bool TrickRabbit::tryEndFallDownLand() {
 }
 
 bool TrickRabbit::tryComebackRouteStart() {
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_tryComebackRouteStart_1)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvComebackRouteStart));
         return true;
     }
@@ -423,7 +432,7 @@ void TrickRabbit::endComebackRoute() {
 }
 
 bool TrickRabbit::tryEndTumble() {
-    if (MR::isGreaterStep(this, 20) && MR::isBindedGround(this)) {
+    if (MR::isGreaterStep(this, cStep_tryEndTumble_1) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvGetUp));
         return true;
     }
@@ -432,7 +441,7 @@ bool TrickRabbit::tryEndTumble() {
 }
 
 bool TrickRabbit::tryEndGetUp() {
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_tryEndGetUp_1)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvRunaway));
         return true;
     }

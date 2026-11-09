@@ -37,6 +37,13 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAim_1, "exeAim.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoCrackCapsule_1, "exeDemoCrackCapsule.1", 27);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoAnger_1, "exeDemoAnger.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoBreakWait_1, "exeDemoBreakWait.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoBreakExplosion_1, "exeDemoBreakExplosion.1", 53);
+
 namespace NrvWaterBazooka {
     NEW_NERVE(WaterBazookaNrvWaitForBattle, WaterBazooka, WaitForBattle);
     NEW_NERVE(WaterBazookaNrvWait, WaterBazooka, Wait);
@@ -298,7 +305,7 @@ void WaterBazooka::exeAim() {
 
     MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_TURN");
 
-    if (mIsElectric && MR::isGreaterEqualStep(this, 10)) {
+    if (mIsElectric && MR::isGreaterEqualStep(this, cStep_exeAim_1)) {
         MR::startLevelSound(this, "SE_EM_LV_ELECBAZ_PRE_SHOOT");
     }
 
@@ -409,7 +416,7 @@ void WaterBazooka::exeDemoCrackCapsule() {
         mShooter->hitShock();
     }
 
-    if (MR::isStep(this, 27)) {
+    if (MR::isStep(this, cStep_exeDemoCrackCapsule_1)) {
         MR::startSound(this, "SE_EV_MOGUBAZ_ANGRY1");
     }
 
@@ -433,7 +440,7 @@ void WaterBazooka::exeDemoAnger() {
         startBrk("PowerUp");
     }
 
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeDemoAnger_1)) {
         MR::startSound(this, "SE_EV_MOGUBAZ_ANGRY2");
     }
 
@@ -478,7 +485,7 @@ void WaterBazooka::exeDemoBreakWait() {
         }
     }
 
-    if (MR::isStep(this, 5)) {
+    if (MR::isStep(this, cStep_exeDemoBreakWait_1)) {
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakSign));
     }
 }
@@ -527,7 +534,7 @@ void WaterBazooka::exeDemoBreakExplosion() {
         MR::startSound(this, "SE_EV_MOGUBAZ_DEAD");
     }
 
-    if (MR::isStep(this, 53)) {
+    if (MR::isStep(this, cStep_exeDemoBreakExplosion_1)) {
         if (mHasPowerStar) {
             Vec3f spawnPos;
             MR::copyJointPos(this, "Cockpit", &spawnPos);

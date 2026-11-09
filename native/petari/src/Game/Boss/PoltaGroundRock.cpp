@@ -11,6 +11,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeJut_1, "exeJut.1", 20);
 
 namespace NrvPoltaGroundRock {
     NEW_NERVE(PoltaGroundRockNrvSign, PoltaGroundRock, Sign);
@@ -136,7 +140,7 @@ void PoltaGroundRock::exeJut() {
         MR::startSound(this, "SE_OJ_POLTA_G_ROCK_JUT");
     }
     mPosition.scaleAdd(MR::calcNerveEaseOutValue(this, 20, 500.0f, 0.0f), mGravity, mGroundPos);
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeJut_1)) {
         MR::tryRumblePadAndCameraDistanceMiddle(this, 800.0f, 1200.0f, 2000.0f);
         setNerve(GET_NERVE(PoltaGroundRock, PoltaGroundRockNrvWait));
         MR::deleteEffect(this, "Shadow");

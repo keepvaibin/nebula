@@ -20,6 +20,9 @@
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeIntro_1, "exeIntro.1", 110);
+
 
 namespace {
     NEBULA_TUNABLE(s32, sBgmStartStep, 166);
@@ -274,7 +277,7 @@ void RaceManager::exeIntro() {
         }
     }
 
-    if (MR::isStep(this, 110)) {
+    if (MR::isStep(this, cStep_exeIntro_1)) {
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvCount));
     }
 }

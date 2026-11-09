@@ -8,6 +8,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_isUpsideDown_1, "isUpsideDown.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_isStaggerStart_1, "isStaggerStart.1", 1);
 
 namespace {
     WalkerStateStaggerParam sDefaultStaggerParam;
@@ -107,11 +112,11 @@ bool WalkerStateStagger::isEnableKick() const {
 }
 
 bool WalkerStateStagger::isUpsideDown() const {
-    return !mIsDead && !(isNerve(GET_NERVE(WalkerStateStagger, WalkerStateStaggerNrvStaggerEnd)) && MR::isGreaterStep(this, 15));
+    return !mIsDead && !(isNerve(GET_NERVE(WalkerStateStagger, WalkerStateStaggerNrvStaggerEnd)) && MR::isGreaterStep(this, cStep_isUpsideDown_1));
 }
 
 bool WalkerStateStagger::isStaggerStart() const {
-    return isNerve(GET_NERVE(WalkerStateStagger, WalkerStateStaggerNrvStagger)) && MR::isStep(this, 1);
+    return isNerve(GET_NERVE(WalkerStateStagger, WalkerStateStaggerNrvStagger)) && MR::isStep(this, cStep_isStaggerStart_1);
 }
 
 bool WalkerStateStagger::isSwooning(s32 swoonStep) const {

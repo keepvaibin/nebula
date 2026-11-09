@@ -27,6 +27,10 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCaught_1, "exeCaught.1", 7);
+
 namespace {
     NEBULA_TUNABLE(f32, sLightLength, 1500.0f);
     NEBULA_TUNABLE(f32, sBodyRadius, 70.0f);
@@ -355,7 +359,7 @@ void RunawayRabbit::exeAppear() {
     MR::turnDirectionDegree(this, &mFrontVec, mVelocity, ::sWaitTurnLimit);
     MR::addVelocityToGravity(this, ::sAirGravityAccel);
     MR::attenuateVelocity(this, ::sAirFric);
-    if (MR::isGreaterStep(this, 5) && MR::isBindedGround(this)) {
+    if (MR::isGreaterStep(this, cStep_exeAppear_1) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvRunaway));
         mPressureTimer = 0;
     }
@@ -435,7 +439,7 @@ void RunawayRabbit::exeCaught() {
         MR::zeroVelocity(this);
     }
     updateBindActorMatrix();
-    if (MR::isGreaterEqualStep(this, 7) && MR::isBindedGround(this)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeCaught_1) && MR::isBindedGround(this)) {
         MR::zeroVelocity(this);
         setNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvCaughtTalk));
     }

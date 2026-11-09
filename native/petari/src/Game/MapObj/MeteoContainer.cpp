@@ -9,6 +9,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDestroy_1, "exeDestroy.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDestroy_2, "exeDestroy.2", 3);
 
 namespace NrvMeteoContainer {
     NEW_NERVE(MeteoContainerNrvWait, MeteoContainer, Wait);
@@ -85,11 +90,11 @@ void MeteoContainer::exeWait() {
 }
 
 void MeteoContainer::exeDestroy() {
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeDestroy_1)) {
         MR::stopScene(10);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeDestroy_2)) {
         MR::shakeCameraNormal();
         kill();
     }

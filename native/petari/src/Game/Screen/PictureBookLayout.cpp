@@ -20,6 +20,9 @@
 #include <cstdio>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeOpen_1, "exeOpen.1", 140);
+
 namespace {
     inline void advanceBookIndex(s32& rIndex, const s32& rDirection) {
         rIndex += rDirection;
@@ -466,7 +469,7 @@ void PictureBookLayout::exeOpen() {
         MR::setAnimRate(this, 1.0f, 0);
     }
 
-    if (MR::isStep(this, 140)) {
+    if (MR::isStep(this, cStep_exeOpen_1)) {
         MR::startSystemSE("SE_SY_PICTUREBOOK_NEXT_ST");
     }
 

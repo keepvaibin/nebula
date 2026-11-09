@@ -7,6 +7,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/KeySwitch.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeTryStartDemoAppear_1, "exeTryStartDemoAppear.1", 5);
 
 namespace NrvExterminationChecker {
     NEW_NERVE(ExterminationCheckerNrvWatching, ExterminationChecker, Watching);
@@ -113,7 +117,7 @@ void ExterminationChecker::exeTryStartDemoAppear() {
         MR::stopStageBGM(10);
     }
 
-    if (MR::isGreaterStep(this, 5)) {
+    if (MR::isGreaterStep(this, cStep_exeTryStartDemoAppear_1)) {
         if (MR::tryStartDemo(this, "全滅スター出現")) {
             setNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvAppearStar));
         }

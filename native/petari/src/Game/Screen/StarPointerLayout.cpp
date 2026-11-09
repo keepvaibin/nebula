@@ -27,6 +27,10 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_isChanceToRumble_1, "isChanceToRumble.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_isChanceToRumble_2, "isChanceToRumble.2", 1);
+
 namespace {
     // Two colours for each of the four pad channels (setPortAndColor): the blur takes both, the command stream the first.
     static NebulaColor8 sColorA[] = {
@@ -772,11 +776,11 @@ bool StarPointerLayout::isChanceToRumble() const {
         return true;
     }
 
-    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOnReaction)) && MR::isStep(this, 1)) {
+    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOnReaction)) && MR::isStep(this, cStep_isChanceToRumble_1)) {
         return true;
     }
 
-    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip)) && MR::isStep(this, 1)) {
+    if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip)) && MR::isStep(this, cStep_isChanceToRumble_2)) {
         return true;
     }
 

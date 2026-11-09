@@ -12,6 +12,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreak_1, "exeBreak.1", 5);
+
 namespace {
     NEBULA_TUNABLE(f32, sRepairPlayerDistance, 1000.0f);
     NEBULA_TUNABLE(s32, sRepairTiming, 600);
@@ -110,7 +113,7 @@ void TripodBossGuardWallPart::exeBreak() {
         MR::invalidateCollisionParts(this);
     }
 
-    if (MR::isStep(this, 5)) {
+    if (MR::isStep(this, cStep_exeBreak_1)) {
         MR::startBck(this, "2ndDemo");
         MR::setBckFrameAndStop(this, 0.0f);
     }

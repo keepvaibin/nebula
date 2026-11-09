@@ -14,6 +14,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 1);
+
 namespace {
     struct Anim {
         const char* mEntryAnimName;
@@ -73,7 +76,7 @@ void DemoKoopaJrShip::exeAppear() {
         MR::hideModel(this);
     }
 
-    if (MR::isGreaterEqualStep(this, 1) && MR::isHiddenModel(this)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeAppear_1) && MR::isHiddenModel(this)) {
         MR::showModel(this);
     }
 

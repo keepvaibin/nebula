@@ -11,6 +11,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFly_1, "exeFly.1", 10);
 
 namespace NrvElectricPressureBullet {
     NEW_NERVE(ElectricPressureBulletNrvFly, ElectricPressureBullet, Fly);
@@ -61,7 +65,7 @@ void ElectricPressureBullet::exeFly() {
         MR::startBck(this, "Move");
     }
     MR::startLevelSound(this, "SE_EM_LV_ELECBUBLLET_FLY");
-    if (MR::isGreaterEqualStep(this, 10)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeFly_1)) {
         if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
             if (getNerveStep() % 5 == 0) {
                 Vec3f toPlayer;

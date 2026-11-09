@@ -5,6 +5,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFindJump_1, "exeFindJump.1", 5);
 
 namespace {
     WalkerStateFindPlayerParam sDefaultParam;
@@ -68,7 +72,7 @@ void WalkerStateFindPlayer::exeFindJump() {
 
     WalkerStateFunction::calcPassiveMovement(getHost(), mStateParam);
 
-    if (MR::isBindedGround(getHost()) && MR::isGreaterStep(this, 5)) {
+    if (MR::isBindedGround(getHost()) && MR::isGreaterStep(this, cStep_exeFindJump_1)) {
         setNerve(GET_NERVE(WalkerStateFindPlayer, WalkerStateFindPlayerNrvFindJumpEnd));
     }
 }

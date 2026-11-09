@@ -25,6 +25,15 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_1, "exeChaseStart.1", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_2, "exeChaseStart.2", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_3, "exeChaseStart.3", 34);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeQuickTurnStart_1, "exeQuickTurnStart.1", 45);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackEnd_1, "exeAttackEnd.1", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBack_1, "exeHitBack.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttachCelling_1, "exeAttachCelling.1", 42);
+
 namespace {
     NEBULA_TUNABLE(f32, cFlyAccel, 2.0f);
     NEBULA_TUNABLE(f32, cTurnDegree, 2.55f);
@@ -170,15 +179,15 @@ void BasaBasa::exeChaseStart() {
         MR::startSound(this, "SE_EV_BASABASA_FIND");
     }
 
-    if (MR::isLessStep(this, 50)) {
+    if (MR::isLessStep(this, cStep_exeChaseStart_1)) {
         mVelocity.scaleAdd(15.0f, mGravity, mVelocity);
     }
 
-    if (MR::isStep(this, 15)) {
+    if (MR::isStep(this, cStep_exeChaseStart_2)) {
         MR::onBind(this);
     }
 
-    if (MR::isStep(this, 34)) {
+    if (MR::isStep(this, cStep_exeChaseStart_3)) {
         mHangModel->kill();
     }
 
@@ -218,7 +227,7 @@ void BasaBasa::exeChase() {
 
 void BasaBasa::exeQuickTurnStart() {
     mVelocity.scaleAdd(cFlyAccel, mFront, mVelocity);
-    if (MR::isStep(this, 45)) {
+    if (MR::isStep(this, cStep_exeQuickTurnStart_1)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvQuickTurn));
     } else {
         trySetNervePointerSwoon();
@@ -328,7 +337,7 @@ void BasaBasa::exeAttackEnd() {
     }
 
     mVelocity.scaleAdd(0.1f, mFront, mVelocity);
-    if (MR::isStep(this, 50)) {
+    if (MR::isStep(this, cStep_exeAttackEnd_1)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttackEndRecover));
     } else {
         trySetNervePointerSwoon();
@@ -363,7 +372,7 @@ void BasaBasa::exeHitBack() {
         MR::startSound(this, "SE_EM_ICEBASA_SPIN_BLOW");
     }
 
-    if (MR::isLessEqualStep(this, 5)) {
+    if (MR::isLessEqualStep(this, cStep_exeHitBack_1)) {
         Vec3f backUp;
         backUp.add(mFront, mGravity);
         backUp.negate();
@@ -433,7 +442,7 @@ void BasaBasa::exeAttachCelling() {
         mVelocity.scale(cAttachSpeedRate, toHome);
     }
 
-    if (MR::isStep(this, 42)) {
+    if (MR::isStep(this, cStep_exeAttachCelling_1)) {
         mHangModel->appear();
     }
 

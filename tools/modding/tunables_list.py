@@ -1,6 +1,7 @@
 """tunables_list.py <Nebula tree> <out.md>: docs/modding/TUNABLES.md
 
-Every tunable of the game, from its source (NEBULA_TUNABLE and NEBULA_TUNABLE_LIST in native/petari/src): the key a
+Every tunable of the game, from its source (NEBULA_TUNABLE, NEBULA_TUNABLE_NAMED and NEBULA_TUNABLE_LIST in
+native/petari/src): the key a
 mod sets it by (luma.json "tunables", set_tunable), its type and the game's value as written, grouped by the game's
 folders. The game's own list at runtime (--dump-tunables <file>) holds the same keys.
 """
@@ -10,6 +11,7 @@ import sys
 from collections import defaultdict
 
 ONE = re.compile(r"NEBULA_TUNABLE\(\s*(\w+)\s*,\s*(\w+)\s*,\s*(.+?)\);")
+NAMED = re.compile(r"NEBULA_TUNABLE_NAMED\(\s*(\w+)\s*,\s*\w+\s*,\s*\"([^\"]+)\"\s*,\s*(.+?)\);")
 LIST = re.compile(r"NEBULA_TUNABLE_LIST\(\s*(\w+)\s*,\s*(\w+)\s*,\s*([^,]*),\s*\{(.*?)\}\s*\);", re.S)
 
 
@@ -27,6 +29,9 @@ def main():
         for m in ONE.finditer(text):
             by_folder[folder].append((f"{stem}.{m.group(2)}", m.group(1), m.group(3).strip()))
             count += 1
+        for m in NAMED.finditer(text):
+            by_folder[folder].append((f"{stem}.{m.group(2)}", m.group(1), m.group(3).strip()))
+            count += 1
         for m in LIST.finditer(text):
             values = [v.strip() for v in m.group(4).replace("\n", " ").split(",") if v.strip()]
             by_folder[folder].append((f"{stem}.{m.group(2)}", f"{m.group(1)}[{len(values)}]", ", ".join(values)))
@@ -38,6 +43,7 @@ def main():
         "",
         "A mod sets one by its key in a luma.json layer's `\"tunables\"` (with `\"requires\": [\"tunables\"]`), or from a",
         "plugin with `set_tunable`; `get_tunable` reads one. A list's place is `key[i]`. Values are the game's, as written.",
+        "`<file>.<function>.<k>` keys are the k-th step count (frames) in that function.",
         "",
     ]
     for folder in sorted(by_folder):

@@ -23,6 +23,9 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackSuccess_1, "exeAttackSuccess.1", 2);
+
 namespace {
     static const s32 sStepFreeInvalid = NebulaFrameClock::stepsOfMilliseconds(500);
     NEBULA_TUNABLE(f32, sNpcSensorPosOffsetZ, 200.0f);
@@ -257,7 +260,7 @@ void SlingShooter::exeAttackSuccess() {
         mIsLastDamage = false;
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeAttackSuccess_1)) {
         if (mPassThroughEnable) {
             mVelocity.set(mAttackVelocity);
             mPassThroughEnable = false;

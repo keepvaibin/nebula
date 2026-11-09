@@ -9,6 +9,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeEndPrepare_1, "exeEndPrepare.1", 20);
+
 namespace {
     // The most panels in a FlipPanel group (0x20).
     NEBULA_TUNABLE(s32, cPanelGroupSize, 0x20);
@@ -149,7 +152,7 @@ void FlipPanel::exeWait() {
 }
 
 void FlipPanel::exeEndPrepare() {
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeEndPrepare_1)) {
         setNerve(GET_NERVE(FlipPanel, FlipPanelNrvEnd));
     }
 }

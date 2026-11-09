@@ -10,6 +10,10 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeGenerate_1, "exeGenerate.1", 15);
 
 namespace NrvPoltaStateGenerateBombTeresa {
     NEW_NERVE(PoltaStateGroundRockAttackNrvSign, PoltaStateGroundRockAttack, Sign);
@@ -51,7 +55,7 @@ void PoltaStateGroundRockAttack::exeGenerate() {
         MR::startSound(getHost(), "SE_BV_POLTA_GEN_GND_ROCK");
         MR::startSound(getHost(), "SE_BM_POLTA_GEN_GND_ROCK");
     }
-    if (MR::isLessEqualStep(this, 15 * (mRockNum - 1)) && MR::isIntervalStep(this, 15)) {
+    if (MR::isLessEqualStep(this, 15 * (mRockNum - 1)) && MR::isIntervalStep(this, cStep_exeGenerate_1)) {
         // Rocks come in rings of four, each farther out; every new ring turns the other way.
         s32 rockIndex = getNerveStep() / 15;
         s32 ringStep = rockIndex % 4;

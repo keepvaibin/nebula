@@ -9,6 +9,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_1, "exeDown.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_2, "exeDown.2", 3);
+
 namespace {
     const s32 cCocoNutNum = 4;
     const s32 cFireBallNum = 3;
@@ -314,11 +318,11 @@ void OtaRock::exeDown() {
         }
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeDown_1)) {
         MR::stopScene(16);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeDown_2)) {
         MR::shakeCameraNormal();
     }
 

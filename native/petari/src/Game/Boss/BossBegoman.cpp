@@ -24,6 +24,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
+
 namespace {
     const MR::ActorMoveParam hWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
     const MR::ActorMoveParam hSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
@@ -297,7 +300,7 @@ void BossBegoman::control() {
         mPursueSpeedRate = ::hPursueSpeedRateMin;
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_control_1)) {
         if (isNerve(GET_NERVE(BossBegoman, HostTypeNrvWait)) || isNerve(GET_NERVE(BossBegoman, HostTypeNrvNoCalcWait))) {
             MR::validateClipping(this);
         } else {

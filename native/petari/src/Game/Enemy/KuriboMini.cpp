@@ -26,6 +26,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropDown_1, "exeHipDropDown.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlatDown_1, "exeFlatDown.1", 20);
 
 namespace {
     class KuriboMiniParam {
@@ -464,7 +469,7 @@ void KuriboMini::exeHipDropDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, 40)) {
+    if (MR::isGreaterStep(this, cStep_exeHipDropDown_1)) {
         kill();
     }
 }
@@ -475,7 +480,7 @@ void KuriboMini::exeFlatDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeFlatDown_1)) {
         kill();
     }
 }

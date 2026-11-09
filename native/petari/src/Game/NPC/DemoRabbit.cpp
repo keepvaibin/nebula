@@ -4,6 +4,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 5);
+
 namespace {
     NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
     NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
@@ -219,7 +222,7 @@ void DemoRabbit::exeAppear() {
     MR::addVelocityToGravity(this, ::sAirGravityAccel);
     MR::attenuateVelocity(this, ::sAirFric);
 
-    if (MR::isGreaterStep(this, 5) && MR::isBindedGround(this)) {
+    if (MR::isGreaterStep(this, cStep_exeAppear_1) && MR::isBindedGround(this)) {
         mVelocity.zero();
         setNerve(GET_NERVE(DemoRabbit, DemoRabbitNrvDemo));
     }

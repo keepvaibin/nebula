@@ -9,6 +9,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_isTimingForSelectedSe_1, "isTimingForSelectedSe.1", 1);
+
 namespace {
     NEBULA_TUNABLE(f32, cDecidedToDisappearAnimRate, 1.5f);
 };  // namespace
@@ -99,7 +102,7 @@ bool ButtonPaneController::isPointingTrigger() const {
 }
 
 bool ButtonPaneController::isTimingForSelectedSe() const {
-    return isNerve(GET_NERVE(ButtonPaneController, ButtonPaneControllerNrvDecided)) && MR::isStep(this, 1);
+    return isNerve(GET_NERVE(ButtonPaneController, ButtonPaneControllerNrvDecided)) && MR::isStep(this, cStep_isTimingForSelectedSe_1);
 }
 
 void ButtonPaneController::invalidateDecide() {

@@ -21,6 +21,9 @@
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCaught_1, "exeCaught.1", 20);
+
 namespace {
     NEBULA_TUNABLE(f32, sProvokeRangeIn, 1000.0f);
     NEBULA_TUNABLE(f32, sProvokeRangeOut, 2000.0f);
@@ -380,7 +383,7 @@ void PenguinSkater::exeCaught() {
         MR::zeroVelocity(this);
         setCaughtStartMarioPose();
     }
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeCaught_1)) {
         MR::startSound(this, "SE_SV_PENGUIN_S_CAUGHT");
         MR::startSystemSE("SE_SY_TOTAL_COMPLETE");
     }

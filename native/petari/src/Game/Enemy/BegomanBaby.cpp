@@ -16,6 +16,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/GameRules.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAfterLaunch_1, "exeAfterLaunch.1", 80);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAfterLaunch_2, "exeAfterLaunch.2", 85);
 
 namespace NrvBegomanBaby {
     NEW_NERVE_ONEND(HostTypeNrvNoCalcWait, BegomanBaby, NoCalcWait, NoCalcWait);
@@ -152,7 +159,7 @@ void BegomanBaby::control() {
     isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow));
     checkTouchElectricRail(true);
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_control_1)) {
         if (isNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait)) || isNerve(GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait))) {
             MR::validateClipping(this);
         } else {
@@ -302,7 +309,7 @@ void BegomanBaby::exeBlow() {
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
 
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeBlow_1)) {
         killWithGenItem();
     }
 }
@@ -312,11 +319,11 @@ void BegomanBaby::exeAfterLaunch() {
         MR::startBck(this, "Fly");
     }
 
-    if (MR::isLessStep(this, 80)) {
+    if (MR::isLessStep(this, cStep_exeAfterLaunch_1)) {
         // Eight bobs over the 80 steps.
         f32 bob = 5.0f * MR::cos(getNerveStep() * (16 * PI) / 80.0f);
         mVelocity.set(mFaceVec * 5.0f - mGravity * bob);
-    } else if (MR::isLessStep(this, 85)) {
+    } else if (MR::isLessStep(this, cStep_exeAfterLaunch_2)) {
         mVelocity.zero();
     } else {
         MR::applyVelocityDampAndGravity(this, 3.0f, 0.8f, 0.98f, 0.98f, 1.0f);

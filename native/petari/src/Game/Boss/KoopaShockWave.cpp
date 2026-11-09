@@ -12,6 +12,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWaveAttack_1, "exeWaveAttack.1", 350);
 
 namespace NrvKoopaShockWave {
     NEW_NERVE(KoopaShockWaveNrvWaveAttack, KoopaShockWave, WaveAttack);
@@ -135,7 +139,7 @@ void KoopaShockWave::exeWaveAttack() {
     volume *= 100.0f;
     MR::startLevelSound(mKoopa, "SE_BM_LV_KOOPA_SWAVE_MOVE", volume);
 
-    if (MR::isStep(this, 350)) {
+    if (MR::isStep(this, cStep_exeWaveAttack_1)) {
         MR::startBrk(this, "Erase");
         MR::startBrk(mShadow, "Erase");
         MR::startBrk(mPartsModel, "Erase");

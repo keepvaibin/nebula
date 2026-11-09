@@ -13,6 +13,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDisappear_1, "exeDisappear.1", 20);
+
 namespace {
     // One sensor per stacked rail (obj_arg3).
     const char* const cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
@@ -500,7 +503,7 @@ void ElectricRailMoving::exeDisappear() {
     move();
     mRailWidth = MR::calcNerveEaseInValue(this, 20, 30.0f, 0.0f);
 
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeDisappear_1)) {
         setNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvDisappeared));
     }
 }

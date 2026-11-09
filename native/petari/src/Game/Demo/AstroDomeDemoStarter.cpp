@@ -6,6 +6,9 @@
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSpinDriverStart_1, "exeSpinDriverStart.1", 43);
+
 namespace {
     const char* const cJumpOutPartName = "飛び出す";
     const Vec cAppearRotate = {90.0f, -5.0f, 0.0f};
@@ -157,7 +160,7 @@ void AstroDomeDemoStarter::exeSpinDriverStart() {
         MR::startSoundPlayer("SE_PM_SPIN_ATTACK");
     }
 
-    if (MR::isLessStep(this, 43)) {
+    if (MR::isLessStep(this, cStep_exeSpinDriverStart_1)) {
         MR::tryRumblePadMiddle(this, PLAYER_1);
     } else {
         MR::setBckRate(this, 0.0f);

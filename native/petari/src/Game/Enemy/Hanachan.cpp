@@ -22,6 +22,9 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 15);
+
 namespace {
     NEBULA_TUNABLE(f32, hFarDistToPursuePlayer, 2000.0f);
     NEBULA_TUNABLE(f32, hCommonGravity, 0.5f);
@@ -702,7 +705,7 @@ void HanachanParts::exeBlow() {
 
     mVelocity.add(mGravity * ::hBlowGravity);
 
-    if ((MR::isGreaterStep(this, 15) && MR::isBinded(this)) || MR::isGreaterStep(this, ::hBlowTime)) {
+    if ((MR::isGreaterStep(this, cStep_exeBlow_1) && MR::isBinded(this)) || MR::isGreaterStep(this, ::hBlowTime)) {
         kill();
     }
 }

@@ -10,6 +10,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeGround_1, "exeGround.1", 20);
 
 namespace NrvDinoPackunFire {
     NEW_NERVE(DinoPackunFireNrvShot, DinoPackunFire, Shot);
@@ -109,7 +113,7 @@ void DinoPackunFire::exeGround() {
     MR::zeroVelocity(this);
     MR::startLevelSound(this, "SE_BM_LV_D_PAKKUN_FIREBALL_L");
     MR::sendMsgEnemyAttackToBindedSensor(this, getSensor(nullptr));
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeGround_1)) {
         MR::startSound(this, "SE_BM_D_PAKKUN_FIREBALL_L_END");
         kill();
     }

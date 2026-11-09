@@ -16,6 +16,18 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_updateFlyDash_1, "updateFlyDash.1", 100);
+NEBULA_TUNABLE_NAMED(s32, cStep_calcShakeOffSignSpeed_1, "calcShakeOffSignSpeed.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateGroundAttackSuccess_1, "updateGroundAttackSuccess.1", 12);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateGroundTurn_1, "updateGroundTurn.1", 160);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateGroundDamage_1, "updateGroundDamage.1", 9);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateFlyRollSign_1, "updateFlyRollSign.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateFallDamage_1, "updateFallDamage.1", 9);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateToGround_1, "updateToGround.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_updateLand_1, "updateLand.1", 20);
 
 BossStinkBugActionBase::BossStinkBugActionBase(const char* pName, BossStinkBug* pStinkBug)
     : ActorStateBase< BossStinkBug >(pName, pStinkBug), mSpringValue(), mRailDiff(0.0f, 0.0f, 0.0f), mTurnFront(0.0f, 0.0f, 1.0f), mFlySpeed(15.0f), mHeightOffset(), mLocalHeightOffset(),
@@ -102,7 +114,7 @@ bool BossStinkBugActionBase::updateFlyDash(f32 startSpeed) {
 
     BossStinkBugFunction::regainToRail(getHost(), mRailDiff, MR::calcNerveRate(this, 100), mSpeed, mHeightOffset, mLocalHeightOffset);
 
-    if (MR::isGreaterStep(this, 100)) {
+    if (MR::isGreaterStep(this, cStep_updateFlyDash_1)) {
         return true;
     } else {
         return false;
@@ -123,7 +135,7 @@ void BossStinkBugActionBase::resetThrowBombTiming() {
 }
 
 f32 BossStinkBugActionBase::calcShakeOffSignSpeed(s32 numSteps) const {
-    if (MR::isLessStep(this, 10)) {
+    if (MR::isLessStep(this, cStep_calcShakeOffSignSpeed_1)) {
         return MR::calcNerveEaseInOutValue(this, numSteps, mFlySpeed, 3.0f);
     } else {
         return 3.0f;
@@ -289,7 +301,7 @@ bool BossStinkBugActionBase::updateGroundAttackSuccess() {
         MR::startBck(getHost(), "AttackSuccess");
     }
 
-    if (MR::isStep(this, 12)) {
+    if (MR::isStep(this, cStep_updateGroundAttackSuccess_1)) {
         MR::startSound(getHost(), "SE_BV_BOSS_BUG_GLAD");
     }
 
@@ -341,7 +353,7 @@ bool BossStinkBugActionBase::updateGroundTurn() {
 
     BossStinkBugFunction::turnRailGround(getHost(), mTurnFront, MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(2)), mIsRailToEnd);
 
-    if (MR::isGreaterStep(this, 160)) {
+    if (MR::isGreaterStep(this, cStep_updateGroundTurn_1)) {
         return true;
     } else {
         return false;
@@ -364,7 +376,7 @@ bool BossStinkBugActionBase::updateGroundDamage() {
         MR::offPlayerControl();
     }
 
-    if (MR::isStep(this, 9)) {
+    if (MR::isStep(this, cStep_updateGroundDamage_1)) {
         MR::startSound(getHost(), "SE_BV_BOSS_BUG_DAMAGE");
     }
 
@@ -467,7 +479,7 @@ bool BossStinkBugActionBase::updateFlyRollSign(s32 numSteps) {
         MR::startBck(getHost(), "FlyRollSignRight");
     }
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_updateFlyRollSign_1)) {
         MR::startSound(getHost(), "SE_BV_BOSS_BUG_ROLL");
     }
 
@@ -558,7 +570,7 @@ bool BossStinkBugActionBase::updateFallDamage() {
         getHost()->disposeBomb();
     }
 
-    if (MR::isStep(this, 9)) {
+    if (MR::isStep(this, cStep_updateFallDamage_1)) {
         MR::startSound(getHost(), "SE_BV_BOSS_BUG_DAMAGE");
     }
 
@@ -588,7 +600,7 @@ bool BossStinkBugActionBase::updateToGround() {
     startSoundFly(0);
     mLandingHeight += mLandingHeightSpeed;
 
-    if (MR::isLessEqualStep(this, 40)) {
+    if (MR::isLessEqualStep(this, cStep_updateToGround_1)) {
         mLandingHeightSpeed += 1.2f;
     }
 
@@ -623,7 +635,7 @@ bool BossStinkBugActionBase::updateLand() {
     mSpeed *= 0.99f;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_updateLand_1)) {
         return true;
     } else {
         return false;

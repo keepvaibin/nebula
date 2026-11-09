@@ -10,6 +10,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWait_1, "exeWait.1", 112);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeExplosion_1, "exeExplosion.1", 20);
 
 namespace NrvBossStinkBugBomb {
     NEW_NERVE(BossStinkBugBombNrvWait, BossStinkBugBomb, Wait);
@@ -102,7 +107,7 @@ void BossStinkBugBomb::exeWait() {
         }
     }
 
-    if (MR::isLessStep(this, 112)) {
+    if (MR::isLessStep(this, cStep_exeWait_1)) {
         MR::startLevelSound(this, "SE_BM_BOSS_BUG_BOMB_COUNT1");
     } else {
         MR::startLevelSound(this, "SE_BM_BOSS_BUG_BOMB_COUNT2");
@@ -135,7 +140,7 @@ void BossStinkBugBomb::exeExplosion() {
 
     MR::setSensorRadius(this, "bomb", MR::calcNerveEaseOutValue(this, 10, 0.0f, 280.0f));
 
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeExplosion_1)) {
         kill();
     }
 }

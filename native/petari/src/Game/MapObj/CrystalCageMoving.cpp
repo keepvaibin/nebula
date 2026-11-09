@@ -7,6 +7,10 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakBig_1, "exeBreakBig.1", 10);
 
 namespace {
     const Vec sDummyModelOffset = {0.0f, -150.0f, 0.0f};
@@ -73,7 +77,7 @@ void CrystalCageMoving::exeBreakBig() {
         MR::startSound(this, "SE_OJ_CRY_CAGE_MV_BREAK_EDG");
     }
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeBreakBig_1)) {
         setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvWaitSmall));
     }
 }

@@ -38,6 +38,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemo_1, "exeDemo.1", 89);
 
 namespace NrvTicoFat {
     NEW_NERVE(TicoFatNrvReaction, TicoFat, Reaction);
@@ -781,7 +785,7 @@ void TicoFat::exeDemo() {
     }
 
     MR::turnPlayerToActor(this, 10.0f);
-    if (MR::isStep(this, 89)) {
+    if (MR::isStep(this, cStep_exeDemo_1)) {
         MR::startBrk(this, "FatRed");
         MR::setBrkFrameAndStop(this, 0.0f);
     }

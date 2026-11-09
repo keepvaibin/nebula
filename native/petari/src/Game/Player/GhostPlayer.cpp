@@ -41,6 +41,9 @@ static_assert(sizeof(GhostFrame) == 32, "GhostFrame is cook/ghost.rs's 32-byte f
 #include <nebula_format.h>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWinDemo_1, "exeWinDemo.1", 180);
+
 namespace {
     struct AnimSoundInfo {
         const char* pAnimName;
@@ -463,7 +466,7 @@ void GhostPlayer::exeWinDemo() {
         MR::extractMtxTrans(getBaseMtx(), &mPosition);
     }
 
-    if (MR::isStep(this, 180)) {
+    if (MR::isStep(this, cStep_exeWinDemo_1)) {
         if (mIsDemoCameraActive) {
             MR::endMultiActorCamera(this, mCameraInfo, "レース終了", true);
             mIsDemoCameraActive = false;

@@ -29,6 +29,20 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeShadowAppear_1, "exeShadowAppear.1", 130);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBallAppear_1, "exeBallAppear.1", 160);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBallAppear_2, "exeBallAppear.2", 70);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackTongueFailed_1, "exeAttackTongueFailed.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDrift_1, "exeDrift.1", 190);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDrift_2, "exeDrift.2", 190);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDrift_3, "exeDrift.3", 190);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeExplosion_1, "exeExplosion.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeShock_1, "exeShock.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDisperse_1, "exeDisperse.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_isEnableHitExplosionToPlayer_1, "isEnableHitExplosionToPlayer.1", 190);
 
 namespace NrvBombTeresa {
     NEW_NERVE(BombTeresaNrvAppear, BombTeresa, Appear);
@@ -425,7 +439,7 @@ void BombTeresa::exeShadowAppear() {
         MR::addVelocityToGravity(this, 1.0f);
     }
 
-    MR::attenuateVelocity(this, MR::isLessStep(this, 130) ? 0.995f : 0.8f);
+    MR::attenuateVelocity(this, MR::isLessStep(this, cStep_exeShadowAppear_1) ? 0.995f : 0.8f);
     MR::turnDirectionToPlayerDegree(this, &mFront, 3.0f);
     mTonguePos = mPosition;
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
@@ -453,7 +467,7 @@ void BombTeresa::exeBallAppear() {
         MR::startSound(this, "SE_EM_BOMBTERE_BOUND");
     }
 
-    if (MR::isLessStep(this, 160)) {
+    if (MR::isLessStep(this, cStep_exeBallAppear_1)) {
         MR::rotateQuatRollBall(&mPoseQuat, mVelocity, -mGravity, 70.0f);
         mPoseQuat.getZDir(mFront);
     } else {
@@ -465,7 +479,7 @@ void BombTeresa::exeBallAppear() {
         MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.1f);
     }
 
-    if (MR::isGreaterStep(this, 70)) {
+    if (MR::isGreaterStep(this, cStep_exeBallAppear_2)) {
         MR::deleteEffect(this, "Ball");
         MR::emitEffect(this, "Appear");
         MR::startSound(this, "SE_EM_BOMBTERE_APPEAR");
@@ -538,7 +552,7 @@ void BombTeresa::exeAttackTongueFailed() {
     MR::startLevelSound(this, "SE_EM_LV_BOMBTERE_TONGUE_BACK");
     mTongueRate = MR::calcNerveEaseInOutValue(this, 0, 1.0f, 0.0f);
     updateNormalVelocity();
-    if (MR::isGreaterStep(this, 40)) {
+    if (MR::isGreaterStep(this, cStep_exeAttackTongueFailed_1)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvWait));
     }
 }
@@ -628,7 +642,7 @@ void BombTeresa::exeDrift() {
             mDriftStep = 40;
             mDriftPullSpeed += 20.0f;
             mDriftSpinSpeed += 20.0f;
-            if (MR::isGreaterStep(this, 190)) {
+            if (MR::isGreaterStep(this, cStep_exeDrift_1)) {
                 mIsDriftRelease = true;
             }
         }
@@ -636,12 +650,12 @@ void BombTeresa::exeDrift() {
 
     addTeresaSpinPullVelocity(MR::calcNerveEaseInOutValue(this, 190, NebulaFrameClock::stepsOfSeconds(4), 150.0f, 70.0f));
     updateNormalVelocity();
-    if (MR::isStep(this, 190)) {
+    if (MR::isStep(this, cStep_exeDrift_2)) {
         MR::startBrk(this, "CountDown");
     }
 
     mDriftSpinSpeed = MR::getInterpolateValue(0.15f, mDriftSpinSpeed, 7.0f);
-    if (MR::isLessStep(this, 190)) {
+    if (MR::isLessStep(this, cStep_exeDrift_3)) {
         mDriftPullSpeed = MR::getInterpolateValue(0.15f, mDriftPullSpeed, 7.0f);
     } else {
         if (mDriftPullSpeed > 7.0f) {
@@ -698,7 +712,7 @@ void BombTeresa::exeExplosion() {
     }
 
     mTonguePos = mPosition;
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeExplosion_1)) {
         tryRevival();
     }
 }
@@ -711,7 +725,7 @@ void BombTeresa::exeShock() {
 
     mTonguePos = mPosition;
     MR::attenuateVelocity(this, 0.98f);
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeShock_1)) {
         MR::deleteEffect(this, "SpinBlur");
         MR::emitEffect(this, "MisFire");
         MR::startSound(this, "SE_EM_BOMBTERE_HIDE");
@@ -731,7 +745,7 @@ void BombTeresa::exeDisperse() {
     }
 
     mTonguePos = mPosition;
-    if (MR::isGreaterStep(this, 40)) {
+    if (MR::isGreaterStep(this, cStep_exeDisperse_1)) {
         tryRevival();
     }
 }
@@ -786,7 +800,7 @@ bool BombTeresa::isEnableDisperse() const {
 
 bool BombTeresa::isEnableHitExplosionToPlayer() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift))) {
-        return MR::isGreaterStep(this, 190);
+        return MR::isGreaterStep(this, cStep_isEnableHitExplosionToPlayer_1);
     }
 
     return isEnableHitExplosion();
