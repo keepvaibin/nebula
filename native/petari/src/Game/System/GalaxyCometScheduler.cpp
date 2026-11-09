@@ -209,15 +209,6 @@ bool GalaxyCometTimeTable::isLand() const {
     return mState->isLand();
 }
 
-bool GalaxyCometTimeTable::isIncluded(const char* galaxyName) const {
-    for (s32 i = 0; mTimePaper[i].mGalaxyName != nullptr; i++) {
-        if (MR::isEqualString(galaxyName, mTimePaper[i].mGalaxyName)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 s32 GalaxyCometTimeTable::getCometCategory() const {
     return mTimePaper[mTimePaperPos].mCategory;
 }
@@ -443,14 +434,3 @@ bool GalaxyCometScheduler::isHideAll() const {
     return true;
 }
 
-s32 GalaxyCometScheduler::getStateValueIncluded(const char* pGalaxyName) {
-    for (s32 i = 0; i < mTimeTables.size(); i++) {
-        GalaxyCometTimeTable* timeTable = mTimeTables[i];
-        if (timeTable->isIncluded(pGalaxyName)) {
-            s32 state = timeTable->mState->getStateIndex();
-            s32 pos = timeTable->mTimePaperPos;
-            return (pos << 1) + state;
-        }
-    }
-    return -1;
-}
