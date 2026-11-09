@@ -1540,7 +1540,7 @@ void RendererVk::shutdown() {
         record_used_.fill(0u);
         for (Frame& frame : frames_) {
             frame.retired.clear();
-    frame.retired_buffers.clear();
+            frame.retired_buffers.clear();
             destroy_retired_pools(frame);
             if (frame.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, frame.pool, nullptr);
             if (frame.descriptors != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, frame.descriptors, nullptr);

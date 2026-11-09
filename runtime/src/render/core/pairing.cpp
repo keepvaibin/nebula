@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <unordered_map>
 
 namespace galaxy::render::core {
@@ -59,14 +60,67 @@ void Pairing::pair(ListData& now, const ListData* before) {
     const NebulaFrameList& last = *before->list;
     now.cut = (list.flags & NEBULA_FRAME_CAMERA_CUT) != 0u;
 
-    // Cameras pair by what they are for, in order.
+    // Cameras pair by what they are for. The game's own (scene, mirror, shadow) pair in order. The OTHER ones are views a
+    // draw named (2D model views, capture views, a world site drawn in a 2D phase), listed in the order a frame first used
+    // them, which can change from frame to frame: those pair by the nearest view matrix, the closest pairs first.
     {
         std::array<std::uint32_t, NEBULA_CAMERA_ROLE_COUNT> next{};
+        const auto role_of = [](const NebulaFrameCamera& camera) {
+            return std::min<std::uint32_t>(camera.role, NEBULA_CAMERA_ROLE_COUNT - 1u);
+        };
+        std::uint64_t other_now = 0u, other_last = 0u;
         for (std::uint32_t c = 0; c < list.camera_count; ++c) {
-            const std::uint32_t role = std::min<std::uint32_t>(list.cameras[c].role, NEBULA_CAMERA_ROLE_COUNT - 1u);
+            other_now += role_of(list.cameras[c]) == NEBULA_CAMERA_OTHER ? 1u : 0u;
+        }
+        for (std::uint32_t p = 0; p < last.camera_count; ++p) {
+            other_last += role_of(last.cameras[p]) == NEBULA_CAMERA_OTHER ? 1u : 0u;
+        }
+        // A list with very many views (the candidates are every pair) keeps the order rule instead of costing a sort.
+        const bool nearest = other_now * other_last <= kNearestCameraPairs;
+        camera_pairs_.clear();
+        for (std::uint32_t c = 0; nearest && c < list.camera_count; ++c) {
+            if (role_of(list.cameras[c]) != NEBULA_CAMERA_OTHER) {
+                continue;
+            }
+            for (std::uint32_t p = 0; p < last.camera_count; ++p) {
+                if (role_of(last.cameras[p]) != NEBULA_CAMERA_OTHER) {
+                    continue;
+                }
+                float distance = 0.0f;
+                for (std::uint32_t row = 0; row < 3u; ++row) {
+                    for (std::uint32_t column = 0; column < 4u; ++column) {
+                        const float d = list.cameras[c].view[row][column] - last.cameras[p].view[row][column];
+                        distance += d * d;
+                    }
+                }
+                // An unreadable matrix is the farthest candidate, not an unordered one.
+                if (!(distance <= std::numeric_limits<float>::max())) {
+                    distance = std::numeric_limits<float>::max();
+                }
+                camera_pairs_.push_back({distance, c, p});
+            }
+        }
+        // Equal distances (the same views in both lists) keep the list order, so identical cameras pair nth with nth.
+        std::sort(camera_pairs_.begin(), camera_pairs_.end(), [](const CameraCandidate& a, const CameraCandidate& b) {
+            if (a.distance != b.distance) return a.distance < b.distance;
+            if (a.now != b.now) return a.now < b.now;
+            return a.before < b.before;
+        });
+        camera_used_.assign(last.camera_count, 0u);
+        for (const CameraCandidate& candidate : camera_pairs_) {
+            if (now.camera_before[candidate.now] == NEBULA_NONE32 && camera_used_[candidate.before] == 0u) {
+                now.camera_before[candidate.now] = candidate.before;
+                camera_used_[candidate.before] = 1u;
+            }
+        }
+        for (std::uint32_t c = 0; c < list.camera_count; ++c) {
+            const std::uint32_t role = role_of(list.cameras[c]);
+            if (nearest && role == NEBULA_CAMERA_OTHER) {
+                continue;
+            }
             std::uint32_t seen = 0u;
             for (std::uint32_t p = 0; p < last.camera_count; ++p) {
-                if (std::min<std::uint32_t>(last.cameras[p].role, NEBULA_CAMERA_ROLE_COUNT - 1u) == role && seen++ == next[role]) {
+                if (role_of(last.cameras[p]) == role && seen++ == next[role]) {
                     now.camera_before[c] = p;
                     break;
                 }

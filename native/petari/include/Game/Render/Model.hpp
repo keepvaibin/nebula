@@ -329,6 +329,7 @@ public:
     Material** mMaterials;
     u32 mSlot;
     u32 mMotionEpoch;  // counts the model's lives (MotionSignal)
+    u32 mItemJumps;    // counts steps whose constants must not blend into the next (items only; the pose keeps its pair)
     ModelPose mPose;
     ModelPose* mDrawPose;
     ModelPose* mNormalPose;  // the pose the normals were last worked out for

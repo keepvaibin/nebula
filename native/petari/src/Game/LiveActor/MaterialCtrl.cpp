@@ -3,6 +3,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Render/Material.hpp"
+#include "Game/Util/MotionSignal.hpp"
 
 char MirrorReflectionMtxSetter::sMirrorTextureName[] = "MirrorTex";
 
@@ -195,7 +196,7 @@ void MirrorReflectionMtxSetter::update() {
 }
 
 MarioShadowProjmapMtxSetter::MarioShadowProjmapMtxSetter(Model* pModel, const ResourceHolder* pResourceHolder)
-    : MaterialCtrl(pModel, nullptr), mProjmapMtxSetter() {
+    : MaterialCtrl(pModel, nullptr), mProjmapMtxSetter(), mPlayerLife(0), mHeightState(-1) {
     mProjmapMtxSetter = new ProjmapEffectMtxSetter(pModel, pResourceHolder);
 }
 
@@ -210,6 +211,18 @@ void MarioShadowProjmapMtxSetter::update() {
     if (MR::isNearZero(shadowVec.length() - 1.0f)) {
         height = MR::vecKillElement(offset, shadowVec, &offset);
     }
+
+    // The matrix is a projection about the player: a generated frame blends it with the step before. A player placed far
+    // away (MotionSignal::playerPlaced: a new life) would slide the projection across the receiver, and the 1e6
+    // translation of a receiver that is not below the player would sweep the shadow through it; either starts new item
+    // numbers (the model's pose keeps its pair), so that step's constants draw as they are.
+    const u32 playerLife = MotionSignal::playerLife();
+    const s32 heightState = height > 0.0f ? 1 : 0;
+    if (mHeightState >= 0 && (playerLife != mPlayerLife || heightState != mHeightState)) {
+        ++mModel->mItemJumps;
+    }
+    mPlayerLife = playerLife;
+    mHeightState = heightState;
 
     Pos3f effectMtx;
     Pos3f translationMtx;

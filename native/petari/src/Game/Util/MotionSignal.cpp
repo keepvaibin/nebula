@@ -145,6 +145,13 @@ namespace MotionSignal {
         }
     }
 
+    u32 playerLife() {
+        if (MR::isExistSceneObj(SceneObj_MarioHolder) && MR::getMarioHolder()->getMarioActor() != nullptr) {
+            return MR::getMarioHolder()->getMarioActor()->mMotionEpoch;
+        }
+        return 0;
+    }
+
     void emitterInit(EmitterCore* pEmitter) {
         bump(pEmitter->mMotionEpoch);
     }

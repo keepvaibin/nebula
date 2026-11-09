@@ -109,6 +109,8 @@ public:
     virtual void update() override;
 
     ProjmapEffectMtxSetter* mProjmapMtxSetter;
+    u32 mPlayerLife;   // the player's life count at the last update
+    s32 mHeightState;  // -1 before the first update, else 1 when the receiver lies below the player along the shadow
 };
 
 class TexMtxCtrl : public MaterialCtrl {
