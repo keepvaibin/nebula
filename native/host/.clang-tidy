@@ -1,0 +1,10 @@
+# clang-tidy for the host program (native/host): the same checks as runtime/.clang-tidy, which says why each is on.
+InheritParentConfig: true
+Checks: >-
+  bugprone-narrowing-conversions,
+  cert-err33-c,
+  clang-analyzer-cplusplus.*,
+  clang-analyzer-unix.*
+CheckOptions:
+  cert-err33-c.CheckedFunctions: '::aligned_alloc;::calloc;::fclose;::fflush;::fopen;::fread;::fseek;::ftell;::fwrite;::malloc;::realloc;::remove;::rename;::setvbuf;::strtod;::strtof;::strtol;::strtoll;::strtoul;::strtoull;::tmpfile'
+HeaderFilterRegex: 'native/host/'

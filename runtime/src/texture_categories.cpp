@@ -2,7 +2,7 @@
 #include "galaxy/texture_categories.h"
 
 #include "galaxy/atomic_file.h"
-#include "galaxy/disc_files.h"
+#include "galaxy/asset_store.h"
 
 #include <algorithm>
 #include <atomic>
@@ -196,12 +196,12 @@ void note_records(const std::vector<std::uint8_t>& bytes, Category category,
     }
 }
 
-void scan_folder(const galaxy::disc::AssetStore& store, std::int32_t folder, const std::string& path,
+void scan_folder(const galaxy::assets::AssetStore& store, std::int32_t folder, const std::string& path,
                  std::vector<std::uint8_t>& buffer, std::vector<std::pair<std::uint64_t, std::uint8_t>>& out) {
-    const std::optional<galaxy::disc::Entry> self = store.entry(folder);
+    const std::optional<galaxy::assets::Entry> self = store.entry(folder);
     if (!self) return;
     for (std::uint32_t c = 0; c < self->children; ++c) {
-        const std::optional<galaxy::disc::Entry> child = store.child(folder, c);
+        const std::optional<galaxy::assets::Entry> child = store.child(folder, c);
         if (!child) continue;
         const std::string name = path.empty() ? std::string(child->name) : path + "/" + child->name;
         if (path.empty() && (name == "AudioRes" || name == "MovieData")) continue;
@@ -227,7 +227,7 @@ void build(const std::filesystem::path& store_file, const std::filesystem::path&
         return;
     }
     // A store of its own: the game's may be closed while this runs.
-    auto* store = new galaxy::disc::AssetStore();
+    auto* store = new galaxy::assets::AssetStore();
     if (error || !store->open(store_file)) {
         std::cerr << "[textures] the game's files could not be read to sort textures\n";
         finish({}, false);

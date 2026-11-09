@@ -8,10 +8,6 @@
 
 namespace galaxy::saves {
 
-namespace {
-
-}  // namespace
-
 bool is_plain_name(std::string_view name) noexcept {
     return !name.empty() && name != "." && name != ".." && name.find_first_of("/\\:") == std::string_view::npos;
 }

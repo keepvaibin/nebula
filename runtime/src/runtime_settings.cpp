@@ -182,6 +182,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
                 settings.button_icons = static_cast<ButtonIcons>(i);
             }
         }
+        // Files of earlier builds name the game's own icons "wii"; the next save writes "game".
+        if (::galaxy::text_iequal(value, "wii")) settings.button_icons = ButtonIcons::Game;
     } else if (std::strcmp(key, "language") == 0) {
         if (::galaxy::text_iequal(value, game_language_key(GameLanguage::Auto))) settings.language = GameLanguage::Auto;
         for (const GameLanguage language : kGameLanguages) {
@@ -314,8 +316,8 @@ namespace {
 // kNotAsked until the game first asks for its language, then that language's number.
 constexpr std::uint8_t kNotAsked = 0xFFu;
 std::atomic<std::uint8_t> s_running_language{kNotAsked};
-// A bit for each GameLanguage the game's data holds (bit `value`); all until set_disc_languages.
-std::atomic<std::uint32_t> s_disc_languages{~0u};
+// A bit for each GameLanguage the game's data holds (bit `value`); all until set_game_languages.
+std::atomic<std::uint32_t> s_game_languages{~0u};
 
 // The language a language folder holds, whatever its release ("UsEnglish", "EuEnglish": English); Auto for none.
 GameLanguage folder_language(std::string_view folder) noexcept {
@@ -364,7 +366,7 @@ GameLanguage system_language() noexcept {
 }
 }  // namespace
 
-void set_disc_languages(std::span<const std::string> folders) noexcept {
+void set_game_languages(std::span<const std::string> folders) noexcept {
     std::uint32_t bits = 0u;
     for (const std::string& folder : folders) {
         if (const GameLanguage language = folder_language(folder); language != GameLanguage::Auto) {
@@ -372,21 +374,21 @@ void set_disc_languages(std::span<const std::string> folders) noexcept {
         }
     }
     // No language folder the game knows (not one it plays): English, as the game's own fallback.
-    s_disc_languages.store(bits != 0u ? bits : 1u << static_cast<unsigned>(GameLanguage::English),
+    s_game_languages.store(bits != 0u ? bits : 1u << static_cast<unsigned>(GameLanguage::English),
                            std::memory_order_release);
 }
 
-bool game_language_on_disc(GameLanguage language) noexcept {
+bool game_language_available(GameLanguage language) noexcept {
     return language != GameLanguage::Auto &&
-           (s_disc_languages.load(std::memory_order_acquire) >> static_cast<unsigned>(language) & 1u) != 0u;
+           (s_game_languages.load(std::memory_order_acquire) >> static_cast<unsigned>(language) & 1u) != 0u;
 }
 
 GameLanguage game_language_resolved(GameLanguage setting) noexcept {
-    if (game_language_on_disc(setting)) return setting;
-    if (const GameLanguage system = system_language(); game_language_on_disc(system)) return system;
-    if (game_language_on_disc(GameLanguage::English)) return GameLanguage::English;
+    if (game_language_available(setting)) return setting;
+    if (const GameLanguage system = system_language(); game_language_available(system)) return system;
+    if (game_language_available(GameLanguage::English)) return GameLanguage::English;
     for (const GameLanguage language : kGameLanguages) {
-        if (game_language_on_disc(language)) return language;
+        if (game_language_available(language)) return language;
     }
     return GameLanguage::English;
 }
@@ -421,7 +423,7 @@ const char* sound_output_key(SoundOutput output) noexcept {
 }
 
 const char* button_icons_key(ButtonIcons icons) noexcept {
-    static constexpr const char* kKeys[] = {"auto", "wii", "xbox", "nintendo", "playstation", "keyboard"};
+    static constexpr const char* kKeys[] = {"auto", "game", "xbox", "nintendo", "playstation", "keyboard"};
     return kKeys[std::min<std::size_t>(static_cast<std::size_t>(icons), std::size(kKeys) - 1u)];
 }
 
@@ -543,6 +545,7 @@ bool save_runtime_settings_to_file() {
                  << "button_icons=" << button_icons_key(settings.button_icons) << '\n'
                  << "menu_text_size=" << settings.menu_text_size << '\n'
                  << "focus_loss=" << focus_loss_key(settings.focus_loss) << '\n'
+                 << "co_star=" << (settings.co_star ? 1 : 0) << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

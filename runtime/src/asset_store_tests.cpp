@@ -1,6 +1,6 @@
-// Tests for galaxy/disc_files.h on a small store: paths in either case, "." and "..", '/' returning to the root, a folder's
+// Tests for galaxy/asset_store.h on a small store: paths in either case, "." and "..", '/' returning to the root, a folder's
 // entries in order, 64-bit positions, malformed stores refused.
-#include "galaxy/disc_files.h"
+#include "galaxy/asset_store.h"
 #include "galaxy/test_temp.h"
 
 #include <algorithm>
@@ -77,8 +77,8 @@ std::vector<std::uint8_t> store_of(const std::vector<Item>& items) {
     const std::uint64_t names_at = out.size();
     out.insert(out.end(), names.begin(), names.end());
     std::vector<std::uint8_t> header;
-    header.insert(header.end(), galaxy::disc::kStoreMagic, galaxy::disc::kStoreMagic + 8);
-    put<std::uint32_t>(header, galaxy::disc::kStoreVersion);
+    header.insert(header.end(), galaxy::assets::kStoreMagic, galaxy::assets::kStoreMagic + 8);
+    put<std::uint32_t>(header, galaxy::assets::kStoreVersion);
     put<std::uint32_t>(header, static_cast<std::uint32_t>(items.size()));
     put<std::uint64_t>(header, nodes);
     put<std::uint64_t>(header, hashes_at);
@@ -93,7 +93,7 @@ std::vector<std::uint8_t> store_of(const std::vector<Item>& items) {
 }  // namespace
 
 int main() {
-    using galaxy::disc::AssetStore;
+    using galaxy::assets::AssetStore;
     bool passed = true;
 
     const std::vector<Item> items = {
@@ -117,7 +117,7 @@ int main() {
     passed &= expect(table.load(bytes.data(), bytes.size()), "the store loads");
     passed &= expect(table.game_id() == "RMGE01" && table.revision() == 2, "the game id and revision");
 
-    using galaxy::disc::store_path;
+    using galaxy::assets::store_path;
     for (const auto& [disc, store] : {std::pair{"ObjectData/Kuribo.ARC/kuribo.bdl", "ObjectData/Kuribo/kuribo.bdl"},
                                       std::pair{"/StageData/EggStarGalaxy.arc", "/StageData/EggStarGalaxy"},
                                       std::pair{"/StageData/EggStarGalaxy/EggStarGalaxyScenario.arc/x.bcsv",
@@ -174,7 +174,7 @@ int main() {
                          table.map(bytes.size(), 0) != nullptr,
                      "a store in memory maps inside itself only");
     // From a file: every byte where the store says it is, and the mapping gone with the store.
-    const auto path = galaxy::test_temp_path("nebula_disc_files_test.pak");
+    const auto path = galaxy::test_temp_path("nebula_asset_store_test.pak");
     {
         std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         AssetStore from_file;

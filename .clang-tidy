@@ -1,6 +1,8 @@
 # clang-tidy for the game module (native/petari): defects and avoidable cost, and a few checks that find real mistakes.
 # Nothing stylistic. tools/dev/static_analysis.sh runs it over a build and writes the findings to a file; tools/dev/tidy.py
-# prints counts by check. The reason each group is on or off is in tools/dev/static_analysis.sh.
+# prints counts by check. The reason each group is on or off is in tools/dev/static_analysis.sh. runtime/.clang-tidy and
+# native/host/.clang-tidy inherit this list and add what the host's ordinary operator new allows (the analyzer's C++ and
+# unix groups, narrowing, unchecked results of C file and allocation calls).
 Checks: >-
   -*,
   bugprone-*,

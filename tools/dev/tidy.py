@@ -3,7 +3,8 @@
 tidy.py COMPILE_COMMANDS [--filter TEXT] [--clang-tidy PATH] [--jobs N] [--log FILE]
 
 COMPILE_COMMANDS: a compile_commands.json (or the folder that holds it). Only the files whose path holds --filter
-(default native/petari) are checked, with the .clang-tidy at the repo root. --log writes the full output; the counts
+(default native/petari) are checked, each with its nearest .clang-tidy (the repo root's; runtime/ and native/host add the
+host's checks). --log writes the full output; the counts
 go to stdout, most frequent first.
 """
 import argparse

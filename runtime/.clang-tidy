@@ -1,0 +1,21 @@
+# clang-tidy for the host runtime (runtime/): the root .clang-tidy's checks plus the ones that need the host's ordinary
+# operator new and its standard library use. tools/dev/static_analysis.sh runs it (FILTER=runtime/src/).
+#   bugprone-narrowing-conversions   on here: the host's integer, time and size arithmetic is where a silent narrowing
+#                                    loses data. The game module keeps it off (its f32/s32 mixing is audited by
+#                                    native/tools/narrowing.py and narrow_float_audit.py).
+#   cert-err33-c                     the result of fclose, fflush, fopen, fread, fseek, ftell, fwrite, remove, rename, the
+#                                    allocators and the strto* family is used. The printf family is not in the list: log
+#                                    lines to stderr are best effort by design.
+#   clang-analyzer-cplusplus.*       use after move, use after free, leaks and double delete along each path. On here
+#                                    because the host's operator new throws as usual (the game module's returns null).
+#   clang-analyzer-unix.*            file, memory and stream API misuse.
+# Off, as a style call in kept code: easily-swappable-parameters, macro-parentheses (inherited).
+InheritParentConfig: true
+Checks: >-
+  bugprone-narrowing-conversions,
+  cert-err33-c,
+  clang-analyzer-cplusplus.*,
+  clang-analyzer-unix.*
+CheckOptions:
+  cert-err33-c.CheckedFunctions: '::aligned_alloc;::calloc;::fclose;::fflush;::fopen;::fread;::fseek;::ftell;::fwrite;::malloc;::realloc;::remove;::rename;::setvbuf;::strtod;::strtof;::strtol;::strtoll;::strtoul;::strtoull;::tmpfile'
+HeaderFilterRegex: 'runtime/(include|src)/'

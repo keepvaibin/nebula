@@ -4,7 +4,10 @@
 # -DCMAKE_EXPORT_COMPILE_COMMANDS=ON). Every finding goes to OUT_FILE (default BUILD_DIR/static_analysis.txt), grouped by
 # source file, with a count by check at the end; the counts are printed too. Environment:
 #   CLANG_TIDY   the clang-tidy to run (default: clang-tidy on PATH)
-#   FILTER       only the database files whose path holds this text (default native/petari/src/)
+#   FILTER       only the database files whose path holds this text (default native/petari/src/; the host: runtime/src/ or
+#                native/host/, which read runtime/.clang-tidy and native/host/.clang-tidy: the root list plus narrowing,
+#                unchecked results of C file and allocation calls, and the analyzer's C++ and unix groups)
+#   TESTS=1      also check the *_tests.cpp files (default: left out)
 #   JOBS         files checked at once (default: the processor count)
 #   STRICT=1     exit 1 when any finding is left (default: exit 0 after writing the report)
 # This script was written without being run: the first run shows which checks are too noisy for this code, and the
@@ -33,8 +36,11 @@
 #                         where == is meant). Naming, braces and magic-number checks stay off: they only churn.
 #   clang-analyzer-core.* The static analyzer's null dereference, division by zero, uninitialized value and stack address
 #                         checks along each path: what the compiler's warnings cannot see across a call. Slow, so only
-#                         core; DeadStores for assigned values never read. The cplusplus and unix groups stay off: the
-#                         module's operator new returns null when full (-fcheck-new), which they report on every new.
+#                         core; DeadStores for assigned values never read. The cplusplus and unix groups stay off for the
+#                         game module: its operator new returns null when full (-fcheck-new), which they report on every
+#                         new. The host (runtime/, native/host) turns them on in its own .clang-tidy, with narrowing
+#                         conversions and cert-err33-c on a short list of C calls (use after move, leaks, an ignored
+#                         fclose or fread, a size narrowed to int).
 set -u
 
 BUILD=${1:-}
@@ -67,6 +73,10 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 
 # The database's files (a JSON string per "file" key; Windows paths may carry doubled backslashes), one per line.
 sed -n 's/^ *"file": *"\([^"]*\)".*$/\1/p' "$DB" | sed 's|\\\\|/|g' | grep -F "$FILTER" | sort -u > "$WORK/files.txt"
+if [ "${TESTS:-0}" != "1" ]; then
+    grep -v '_tests\.cpp$' "$WORK/files.txt" > "$WORK/files.notests" || true
+    mv "$WORK/files.notests" "$WORK/files.txt"
+fi
 COUNT=$(wc -l < "$WORK/files.txt" | tr -d ' ')
 if [ "$COUNT" -eq 0 ]; then
     echo "static_analysis.sh: no file in $DB holds \"$FILTER\"" >&2

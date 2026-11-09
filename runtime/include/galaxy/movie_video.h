@@ -1,4 +1,4 @@
-// Movie frame decoder (the disc's movies: baseline 4:2:0 JPEG frames).
+// Movie frame decoder (the game's movies: baseline 4:2:0 JPEG frames).
 #pragma once
 #include <algorithm>
 #include <array>

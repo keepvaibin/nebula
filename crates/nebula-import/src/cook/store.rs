@@ -1,5 +1,5 @@
 //! The game's asset store: game.pak as the game reads it (D-01). A 64-byte header, the files, then the index:
-//! little-endian, 64-bit offsets, no disc layout. Read by runtime/src/disc_files.cpp.
+//! little-endian, 64-bit offsets, no disc layout. Read by runtime/src/asset_store.cpp.
 //!
 //! Header: magic, version u32, node count u32, nodes u64, hashes u64, names u64, names' size u64, game id 6 bytes, disc
 //! number, revision.

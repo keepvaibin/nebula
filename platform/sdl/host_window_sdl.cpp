@@ -5,6 +5,7 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/playstation_controller.h"
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/host_input.h"
@@ -404,8 +405,17 @@ galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
     case SDL_GAMEPAD_TYPE_STEAM:
         return galaxy::input::ControlScheme::Steam;
     default:
-        return galaxy::input::ControlScheme::Xbox;
+        break;
     }
+    // A pad SDL types as standard or unknown still names its maker: Sony's and Nintendo's pads keep their families.
+    const Uint16 vendor = SDL_GetGamepadVendor(pad);
+    if (vendor == galaxy::input::playstation::kSonyVendorId) {
+        return galaxy::input::ControlScheme::PlayStation;
+    }
+    if (vendor == sw::kNintendoVendorId) {
+        return galaxy::input::ControlScheme::SwitchPro;
+    }
+    return galaxy::input::ControlScheme::Xbox;
 }
 
 // The icon model of a gamepad whose buttons are not its family's: the DualShock 3 (Select and Start) and the GameCube

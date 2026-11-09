@@ -12,7 +12,7 @@
 #include <string_view>
 #include <vector>
 
-namespace galaxy::disc {
+namespace galaxy::assets {
 
 struct Entry {
     std::int32_t index = -1;    // 0 is the root folder
@@ -103,7 +103,7 @@ private:
     unsigned revision_ = 0;
 };
 
-// The store's name for a disc or mod path (cook/store.rs store_path): an archive or compressed file loses its ".arc" or
+// The store's name for a game or mod path (cook/store.rs store_path): an archive or compressed file loses its ".arc" or
 // ".szs", and an archive in a stage's folder (StageData/<S>/<S>Scenario.arc) is in StageData. A store path maps to itself.
 [[nodiscard]] std::string store_path(std::string_view path);
 
@@ -115,4 +115,4 @@ inline constexpr std::uint32_t kStoreVersion =
 #include "store_version.inc"
     ;
 
-}  // namespace galaxy::disc
+}  // namespace galaxy::assets

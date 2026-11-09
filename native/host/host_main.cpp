@@ -23,7 +23,7 @@
 #include "galaxy/run_options.h"
 #include "galaxy/game_step.h"
 #include "../../tools/test_driver/switches.h"
-#include "galaxy/disc_files.h"
+#include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
@@ -506,10 +506,10 @@ void load_module(const fs::path& path) {
 
 #endif
 
-// The game: Setup's game.pak, the asset store (galaxy/disc_files.h).
+// The game: Setup's game.pak, the asset store (galaxy/asset_store.h).
 struct Pak {
     char id[7] = {};  // the game id
-    galaxy::disc::AssetStore store;
+    galaxy::assets::AssetStore store;
     fs::path store_file;
 };
 Pak gPak;
@@ -2029,11 +2029,11 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
     }
 }
 
-const galaxy::disc::AssetStore& disc_table() {
+const galaxy::assets::AssetStore& asset_table() {
     return gPak.store;
 }
 
-int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaAssetEntry* out) {
+int asset_entry_out(const std::optional<galaxy::assets::Entry>& entry, NebulaAssetEntry* out) {
     if (!entry) {
         return 0;
     }
@@ -2049,23 +2049,23 @@ int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaAssetE
 }
 
 int svc_asset_find(void*, const char* path, NebulaAssetEntry* out) {
-    return path != nullptr ? disc_entry_out(disc_table().find(path), out) : 0;
+    return path != nullptr ? asset_entry_out(asset_table().find(path), out) : 0;
 }
 
 int svc_asset_find_game(void*, const char* path, NebulaAssetEntry* out) {
-    return path != nullptr ? disc_entry_out(disc_table().find_game(path), out) : 0;
+    return path != nullptr ? asset_entry_out(asset_table().find_game(path), out) : 0;
 }
 
 int svc_asset_entry(void*, int32_t index, NebulaAssetEntry* out) {
-    return disc_entry_out(disc_table().entry(index), out);
+    return asset_entry_out(asset_table().entry(index), out);
 }
 
 int svc_asset_added_child(void*, const char* path, uint32_t child, NebulaAssetEntry* out) {
-    return path != nullptr ? disc_entry_out(disc_table().added_child(path, child), out) : 0;
+    return path != nullptr ? asset_entry_out(asset_table().added_child(path, child), out) : 0;
 }
 
 int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out) {
-    return disc_entry_out(disc_table().child(folder, child), out);
+    return asset_entry_out(asset_table().child(folder, child), out);
 }
 
 // The game's memory. GALAXY_TEST_MEMORY_AT places the first arena (the next follow), far from the file views and across a 4 GB
@@ -2126,7 +2126,7 @@ void test_drive_delay() {
 
 const void* svc_asset_map(void*, int32_t file) {
     test_drive_delay();
-    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (!entry) {
         return nullptr;
     }
@@ -2135,7 +2135,7 @@ const void* svc_asset_map(void*, int32_t file) {
 
 void* svc_asset_map_private(void*, int32_t file) {
     test_drive_delay();
-    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (!entry) {
         return nullptr;
     }
@@ -2161,7 +2161,7 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TRACE_FILE_READS=1: each read with the frame it came on: two runs of deterministic mode compare by it.
     static const bool trace_reads = ::galaxy::run_options().trace_file_reads != nullptr;
-    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
                      file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
@@ -3171,12 +3171,12 @@ std::string json_text(std::string_view text) {
 
 // The mods' disc files, cooked once into a store the game reads over its own (cook/overlay.rs): by the cooker beside
 // this program, again when what they change has changed. A failure leaves the game as it is and says why in the log.
-void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id);
+void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id);
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id) {
     galaxy::mods::set_played_language(static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
-    const galaxy::mods::DiscPlan plan = galaxy::mods::plan_disc_changes(gPak.store, game_id, language);
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language);
     gModPatches = plan.native_patches;
     gPlugins = plan.plugins;
     gModRows = plan.rows;
@@ -3231,7 +3231,7 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     }
 }
 
-void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
+void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
     if (plan.files.empty() && plan.merges.empty()) {
         return;
     }
@@ -3364,7 +3364,7 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
 bool read_game_id(const fs::path& path, std::string& id) {
     std::ifstream file(path, std::ios::binary);
     char header[64];
-    if (!file.read(header, sizeof(header)) || std::memcmp(header, galaxy::disc::kStoreMagic, 8) != 0) return false;
+    if (!file.read(header, sizeof(header)) || std::memcmp(header, galaxy::assets::kStoreMagic, 8) != 0) return false;
     id.assign(header + 48, 6);
     return true;
 }
@@ -3672,7 +3672,7 @@ int main(int argc, char** argv) {
                                      (list.empty() ? std::string("no language folders") : list);
             log_line("disc:", text.c_str());
 #if defined(NEBULA_HOST_RENDERER)
-            galaxy::set_disc_languages(languages);
+            galaxy::set_game_languages(languages);
 #endif
         }
     }

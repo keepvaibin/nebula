@@ -3,7 +3,7 @@
 // The old store is refused as it is (the importer writes the current one; nothing converts it in place). The old save
 // is read by name and left as it was while Nebula.sav is written in the game's own folder with its backups; a second
 // run that only reads changes no file.
-#include "galaxy/disc_files.h"
+#include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 
 #include <array>
@@ -53,7 +53,7 @@ std::vector<std::uint8_t> store_with(std::uint32_t version) {
     const std::uint64_t names_at = out.size();
     out.push_back(0u);  // the name table: one terminator
     std::vector<std::uint8_t> header;
-    header.insert(header.end(), galaxy::disc::kStoreMagic, galaxy::disc::kStoreMagic + 8);
+    header.insert(header.end(), galaxy::assets::kStoreMagic, galaxy::assets::kStoreMagic + 8);
     put<std::uint32_t>(header, version);
     put<std::uint32_t>(header, 1u);  // one node
     put<std::uint64_t>(header, nodes_at);
@@ -139,13 +139,13 @@ int main() {
     // The store: the old one is refused and left alone; the importer's current one opens.
     const Tree old_content = snapshot(content);
     {
-        galaxy::disc::AssetStore store;
+        galaxy::assets::AssetStore store;
         passed &= expect(!store.open(content / "game.pak"), "a store of an older version is refused");
     }
     passed &= expect(snapshot(content) == old_content, "refusing the old store changes no file");
-    write_file(content / "game.pak", store_with(galaxy::disc::kStoreVersion));
+    write_file(content / "game.pak", store_with(galaxy::assets::kStoreVersion));
     {
-        galaxy::disc::AssetStore store;
+        galaxy::assets::AssetStore store;
         passed &= expect(store.open(content / "game.pak") && store.game_id() == "RMGE01", "the current store opens");
     }
 
@@ -181,7 +181,7 @@ int main() {
     // A second run that only reads (the store opened, Nebula.sav read) changes no file.
     const Tree settled = snapshot(root);
     {
-        galaxy::disc::AssetStore store;
+        galaxy::assets::AssetStore store;
         passed &= expect(store.open(content / "game.pak"), "the store opens again");
     }
     passed &= expect(saves::read(new_folder, "Nebula.sav", buffer.data(), 512, &length) == saves::kDone && length == third.size() &&

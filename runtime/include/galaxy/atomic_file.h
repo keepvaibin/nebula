@@ -1,4 +1,4 @@
-// Crash-safe replacement of small text files (settings, achievements).
+// Crash-safe replacement of small files (settings, saves, stats, achievements, caches).
 #pragma once
 
 #include <filesystem>

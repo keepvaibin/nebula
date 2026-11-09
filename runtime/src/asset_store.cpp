@@ -1,4 +1,4 @@
-#include "galaxy/disc_files.h"
+#include "galaxy/asset_store.h"
 
 #include <algorithm>
 #include <array>
@@ -13,7 +13,7 @@
 #include <unistd.h>
 #endif
 
-namespace galaxy::disc {
+namespace galaxy::assets {
 
 namespace {
 
@@ -482,4 +482,4 @@ std::vector<std::string> AssetStore::language_folders() const {
     }
 }
 
-}  // namespace galaxy::disc
+}  // namespace galaxy::assets
