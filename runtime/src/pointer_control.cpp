@@ -166,6 +166,25 @@ PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept {
     }
 }
 
+std::int32_t CoveredModeHold::game(std::int32_t mode) noexcept {
+    game_ = mode;
+    return follow();
+}
+
+std::int32_t CoveredModeHold::covered(bool covered) noexcept {
+    covered_ = covered;
+    return follow();
+}
+
+std::int32_t CoveredModeHold::follow() noexcept {
+    // 0 HOME menu, 1 error window, 2 pause menu, 7 pause menu (galaxy map): seen over the wipe, opening and closing.
+    const auto over_wipe = [](std::int32_t mode) { return mode == 0 || mode == 1 || mode == 2 || mode == 7; };
+    if (!covered_ || over_wipe(game_) || over_wipe(shown_)) {
+        shown_ = game_;
+    }
+    return shown_;
+}
+
 JumpBackLatch::Output JumpBackLatch::update(bool pressed, PlayContext context) noexcept {
     if (pressed && !held) {
         as_a = context == PlayContext::Play;

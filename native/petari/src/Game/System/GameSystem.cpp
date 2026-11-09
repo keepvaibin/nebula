@@ -22,6 +22,7 @@
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
@@ -268,6 +269,8 @@ void GameSystem::updateSceneController() {
 
     // After the scene: what it asked for this frame starts now, not a frame later.
     mObjHolder->updateAudioSystem();
+
+    NebulaHost::gameContext(NEBULA_CONTEXT_SCREEN_COVERED, MR::isScreenCoveredByWipe() ? 1 : 0);
 }
 
 void GameSystem::calcAnim() {
