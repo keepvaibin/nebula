@@ -90,7 +90,8 @@ void KoopaSequencer::updateDemoDown(const char* pPlayerPosName) {
             MR::setPlayerPosAndWait(pPlayerPosName);
         }
 
-        Vec3f namePos;
+        // Without a demo centre point the star appears at Bowser.
+        Vec3f namePos(mKoopa->mPosition);
         MR::findNamePos("デモ中心", &namePos, nullptr);
 
         MR::startAfterBossBGM();

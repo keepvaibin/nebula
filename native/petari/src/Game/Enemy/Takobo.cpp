@@ -87,7 +87,8 @@ void Takobo::init(const TableIter& rIter) {
 
     s32 moveSpeed = -1;
     MR::getPlacementArg2NoInit(rIter, &moveSpeed);
-    if (moveSpeed != -1) {
+    // Only a positive speed replaces the default: the sweep time below divides by it.
+    if (moveSpeed > 0) {
         mMoveSpeed = moveSpeed;
     }
 
