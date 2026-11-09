@@ -18,20 +18,21 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     inline void advanceBookIndex(s32& rIndex, const s32& rDirection) {
         rIndex += rDirection;
     }
 
-    const s32 cBookOpenFrame = 60;
+    NEBULA_TUNABLE(s32, cBookOpenFrame, 60);
     // const s32 cBookCloseFrame
-    const s32 cFadeFrame = 60;
+    NEBULA_TUNABLE(s32, cFadeFrame, 60);
     const s32 cWaitNoTextFrame = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 cFadeTextFrame = 30;
+    NEBULA_TUNABLE(s32, cFadeTextFrame, 30);
     // const s32 cReadedSpeedRate
-    const s32 cPageNextEndNormalSeStep = 81;
-    const s32 cPageNextEndFastSeStep = 27;
+    NEBULA_TUNABLE(s32, cPageNextEndNormalSeStep, 81);
+    NEBULA_TUNABLE(s32, cPageNextEndFastSeStep, 27);
     const char* const cContentsPaneName[] = {
         "Chapter1", "Chapter2", "Chapter3", "Chapter4", "Chapter5", "Chapter6", "Chapter7", "Chapter8", "Chapter9",
     };

@@ -8,31 +8,32 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/FixedPosition.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const BombBirdParam hFallParam = {0.0f, 1.2f, 0.98f, 0.0f};
     const BombBirdParam hOnGroundParam = {0.0f, 1.2f, 0.8f, 0.0f};
 
-    const f32 hDamp = 0.96f;
-    const f32 hGravity = 1.0f;
-    const f32 hFlyVel = 0.3f;
-    const f32 hToRailDiv = 200.0f;
-    const f32 hBombFallUpVel = -10.0f;
-    const f32 hTurnLimitRadian = 4.5836625f;
-    const f32 hDotEpsilon = 0.001f;
-    const f32 hSearchDist = 2000.0f;
-    const f32 hSearchKeepHeight = 800.0f;
-    const f32 hSearchKeepHeightAccUp = 10.0f;
-    const f32 hEscapeVel = 5.0f;
-    const f32 hEscapeUpVel = 5.0f;
-    const f32 hSpinAttackedVelH = 10.0f;
-    const f32 hSpinAttackedVelV = 20.0f;
+    NEBULA_TUNABLE(f32, hDamp, 0.96f);
+    NEBULA_TUNABLE(f32, hGravity, 1.0f);
+    NEBULA_TUNABLE(f32, hFlyVel, 0.3f);
+    NEBULA_TUNABLE(f32, hToRailDiv, 200.0f);
+    NEBULA_TUNABLE(f32, hBombFallUpVel, -10.0f);
+    NEBULA_TUNABLE(f32, hTurnLimitRadian, 4.5836625f);
+    NEBULA_TUNABLE(f32, hDotEpsilon, 0.001f);
+    NEBULA_TUNABLE(f32, hSearchDist, 2000.0f);
+    NEBULA_TUNABLE(f32, hSearchKeepHeight, 800.0f);
+    NEBULA_TUNABLE(f32, hSearchKeepHeightAccUp, 10.0f);
+    NEBULA_TUNABLE(f32, hEscapeVel, 5.0f);
+    NEBULA_TUNABLE(f32, hEscapeUpVel, 5.0f);
+    NEBULA_TUNABLE(f32, hSpinAttackedVelH, 10.0f);
+    NEBULA_TUNABLE(f32, hSpinAttackedVelV, 20.0f);
     const s32 hSwoonTime = NebulaFrameClock::stepsOfSeconds(4);
-    const f32 hShiftingSandVel = 1.0f;
-    const f32 hSwoonEndJump = 10.0f;
-    const f32 hSwoonEndUpVel = 5.0f;
+    NEBULA_TUNABLE(f32, hShiftingSandVel, 1.0f);
+    NEBULA_TUNABLE(f32, hSwoonEndJump, 10.0f);
+    NEBULA_TUNABLE(f32, hSwoonEndUpVel, 5.0f);
     const s32 hSwoonEndFlyStartTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 hBombFallFrontVel = 0.0f;
+    NEBULA_TUNABLE(f32, hBombFallFrontVel, 0.0f);
 };  // namespace
 
 namespace NrvBombBird {

@@ -31,9 +31,10 @@ namespace {
 }  // namespace
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sScale = 10000.0f;
+    NEBULA_TUNABLE(f32, sScale, 10000.0f);
 };  // namespace
 
 ScreenBlurEffect::ScreenBlurEffect(const char* pName) : ImageEffectBase(pName), mFullTexture(), mHalfTexture(), mScale(::sScale), mSkipDraw(true), mIntensity(1.0f) {

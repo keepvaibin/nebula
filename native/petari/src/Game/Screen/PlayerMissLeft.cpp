@@ -6,9 +6,10 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 hCountDownTime = 15;
+    NEBULA_TUNABLE(s32, hCountDownTime, 15);
     const s32 hEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
 };  // namespace
 

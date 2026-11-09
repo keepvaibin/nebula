@@ -28,6 +28,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Indexed by PowerStar::Color.
@@ -53,36 +54,36 @@ namespace {
 
     const char* const cAppearDemoName = "パワースター出現";
     const char* const cStageClearAnimNameKoopaVs3 = "GrandStarGetKoopaVs3";
-    const s32 cAppearPointGroupMax = 16;
-    const u16 cSensorGroupSize = 8;
-    const f32 cBodyRadius = 75.0f;
-    const f32 cClippingRadius = 5000.0f;
-    const f32 cCometClipDistance = 5000.0f;
-    const f32 cCometClipLeaveMargin = 500.0f;
-    const f32 cGrandStarNearClip = 250.0f;
-    const f32 cGrandStarNearClipMargin = 50.0f;
-    const f32 cPowerStarRotateSpeed = 3.0f;
-    const f32 cGrandStarRotateSpeed = 2.0f;
-    const f32 cWeakRotateSpeed = 0.3f;
-    const f32 cWeakNoRotateAngle = 45.0f;
+    NEBULA_TUNABLE(s32, cAppearPointGroupMax, 16);
+    NEBULA_TUNABLE(u16, cSensorGroupSize, 8);
+    NEBULA_TUNABLE(f32, cBodyRadius, 75.0f);
+    NEBULA_TUNABLE(f32, cClippingRadius, 5000.0f);
+    NEBULA_TUNABLE(f32, cCometClipDistance, 5000.0f);
+    NEBULA_TUNABLE(f32, cCometClipLeaveMargin, 500.0f);
+    NEBULA_TUNABLE(f32, cGrandStarNearClip, 250.0f);
+    NEBULA_TUNABLE(f32, cGrandStarNearClipMargin, 50.0f);
+    NEBULA_TUNABLE(f32, cPowerStarRotateSpeed, 3.0f);
+    NEBULA_TUNABLE(f32, cGrandStarRotateSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, cWeakRotateSpeed, 0.3f);
+    NEBULA_TUNABLE(f32, cWeakNoRotateAngle, 45.0f);
     const s32 cWeakToWaitSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 cBgmFadeOutSteps = 5;
+    NEBULA_TUNABLE(s32, cBgmFadeOutSteps, 5);
     const s32 cBgmFadeInSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cRiseEaseSteps = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 cRiseHeight = 300.0f;
-    const f32 cRiseSpinSpeed = 10.0f;
-    const s32 cRiseSteps = 80;
+    NEBULA_TUNABLE(f32, cRiseHeight, 300.0f);
+    NEBULA_TUNABLE(f32, cRiseSpinSpeed, 10.0f);
+    NEBULA_TUNABLE(s32, cRiseSteps, 80);
     const s32 cMoveSteps = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 cMoveSpinSpeed = 20.0f;
-    const f32 cArcHeightMin = 300.0f;
-    const f32 cArcHeightMax = 5000.0f;
-    const f32 cSpinDownSteps = 90.0f;
+    NEBULA_TUNABLE(f32, cMoveSpinSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, cArcHeightMin, 300.0f);
+    NEBULA_TUNABLE(f32, cArcHeightMax, 5000.0f);
+    NEBULA_TUNABLE(f32, cSpinDownSteps, 90.0f);
     const s32 cMoveEndStep = NebulaFrameClock::stepsOfMilliseconds(3500);
     const s32 cKoopaVs3LightDuration = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cKoopaBgmStep = NebulaFrameClock::stepsOfMilliseconds(1500);
-    const s32 cKoopaVs3BgmStep = 152;
+    NEBULA_TUNABLE(s32, cKoopaVs3BgmStep, 152);
     // Steps before the demo bck ends.
-    const s32 cKoopaVs3StageBgmLead = 30;
+    NEBULA_TUNABLE(s32, cKoopaVs3StageBgmLead, 30);
     const s32 cKoopaVs3ClearStep = NebulaFrameClock::stepsOfSeconds(10);
 
     const char* getKoopaDemoName() {

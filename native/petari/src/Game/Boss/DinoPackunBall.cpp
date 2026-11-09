@@ -10,6 +10,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvDinoPackunBall {
     NEW_NERVE(DinoPackunBallNrvWait, DinoPackunBall, Wait);
@@ -21,12 +22,12 @@ namespace NrvDinoPackunBall {
 };  // namespace NrvDinoPackunBall
 
 namespace {
-    const f32 sRadius = 135.0f;
+    NEBULA_TUNABLE(f32, sRadius, 135.0f);
     // Steps the drag sound keeps going after the ball stops dragging.
-    const s32 sDragSoundSteps = 10;
+    NEBULA_TUNABLE(s32, sDragSoundSteps, 10);
     // Shot away from the head it stays clear of it out to sDodgeFarDistance and is pushed off inside sDodgeNearDistance.
-    const f32 sDodgeNearDistance = 500.0f;
-    const f32 sDodgeFarDistance = 1500.0f;
+    NEBULA_TUNABLE(f32, sDodgeNearDistance, 500.0f);
+    NEBULA_TUNABLE(f32, sDodgeFarDistance, 1500.0f);
     const s32 sReboundSteps = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 

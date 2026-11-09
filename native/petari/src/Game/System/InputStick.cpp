@@ -2,10 +2,11 @@
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // A direction is on past this deflection.
-    const f32 cIsOnValue = 0.2f;
+    NEBULA_TUNABLE(f32, cIsOnValue, 0.2f);
 
     u32 calcDirections(const Vec2f& rStick) {
         u32 directions = 0;

@@ -6,9 +6,10 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 hOverlapAddValue = 1.2f;
+    NEBULA_TUNABLE(f32, hOverlapAddValue, 1.2f);
 };  // namespace
 
 Binder::Binder(MtxPtr pHostMtx, const Vec3f* pHostPos, const Vec3f* pGravity, f32 radius, f32 offsetY, u32 planeCapacity)

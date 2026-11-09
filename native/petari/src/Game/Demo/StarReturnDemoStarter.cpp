@@ -22,15 +22,16 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 cDemoAppearEffectStep = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 cDemoAppearWaitFrame = 45;
-    const s32 cFadeOutFrame = 60;
-    const s32 cOverlayFrame = 3;
-    const s32 cCapHideStartStep = 21;
-    const s32 cCapHideEndStep = 221;
-    const s32 cFallStartFrameGrandStar = 360;
+    NEBULA_TUNABLE(s32, cDemoAppearWaitFrame, 45);
+    NEBULA_TUNABLE(s32, cFadeOutFrame, 60);
+    NEBULA_TUNABLE(s32, cOverlayFrame, 3);
+    NEBULA_TUNABLE(s32, cCapHideStartStep, 21);
+    NEBULA_TUNABLE(s32, cCapHideEndStep, 221);
+    NEBULA_TUNABLE(s32, cFallStartFrameGrandStar, 360);
     const char* const cDemoMovePartName = "移動";
     const char* const cDemoWaitPartName = "ウェイト";
 

@@ -12,16 +12,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sAppearKameckTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sVs1DemoAppearSeStopTime = NebulaFrameClock::stepsOfMilliseconds(4500);
-    static const s32 sDeadVoiceSeTiming = 18;
-    static const s32 sDeadMotionSeTiming = 150;
-    static const s32 sAfterBossBgmTiming = 285;
-    static const s32 sAppearPowerStarSeTiming = 345;
-    static const s32 sVs2DemoAppearSeStopTime = 155;
-    static const s32 sVs2DemoAppearVoiceTiming = 60;
+    NEBULA_TUNABLE(s32, sDeadVoiceSeTiming, 18);
+    NEBULA_TUNABLE(s32, sDeadMotionSeTiming, 150);
+    NEBULA_TUNABLE(s32, sAfterBossBgmTiming, 285);
+    NEBULA_TUNABLE(s32, sAppearPowerStarSeTiming, 345);
+    NEBULA_TUNABLE(s32, sVs2DemoAppearSeStopTime, 155);
+    NEBULA_TUNABLE(s32, sVs2DemoAppearVoiceTiming, 60);
 };  // namespace
 
 BossKameckDemoPosition::BossKameckDemoPosition() : LiveActor("キャスト位置") {

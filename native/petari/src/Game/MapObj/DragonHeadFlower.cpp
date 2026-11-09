@@ -12,15 +12,16 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sGravityAcc = 0.94f;
-    const f32 sBreatheAccel = 3.0f;
-    const s32 sBreatheFreq = 40;
-    const f32 sStartLaunchRange = 50.0f;
-    const f32 sStartForceFixPos = 0.0f;
-    const f32 sEndForceFixPos = 1.0f;
-    const s32 sDelayStartToCenter = 15;
+    NEBULA_TUNABLE(f32, sGravityAcc, 0.94f);
+    NEBULA_TUNABLE(f32, sBreatheAccel, 3.0f);
+    NEBULA_TUNABLE(s32, sBreatheFreq, 40);
+    NEBULA_TUNABLE(f32, sStartLaunchRange, 50.0f);
+    NEBULA_TUNABLE(f32, sStartForceFixPos, 0.0f);
+    NEBULA_TUNABLE(f32, sEndForceFixPos, 1.0f);
+    NEBULA_TUNABLE(s32, sDelayStartToCenter, 15);
 };  // namespace
 
 namespace NrvDragonHeadFlower {

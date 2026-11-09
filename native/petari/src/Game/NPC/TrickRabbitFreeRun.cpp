@@ -8,19 +8,20 @@
 #include "Game/NPC/RabbitStateWaitStart.hpp"
 #include "Game/NPC/TrickRabbitUtil.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static MR::ActorMoveParam sStartAwayParam = {1.4f, 1.0f, 0.9f, 4.0f};
-    static const f32 sBodyRadius = 70.0f;
-    static const f32 sCatchRadius = 30.0f;
-    static const f32 sBindRadius = 60.0f;
-    static const f32 sBindYOffset = 60.0f;
-    static const f32 sUpVecBlendRate = 0.1f;
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const f32 sPressureRange = 600.0f;
-    static const f32 sNormalAccel = 0.7f;
-    static const f32 sPressureAccel = 1.5f;
-    static const f32 sBrakeAccelRate = 0.3f;
+    NEBULA_TUNABLE(f32, sBodyRadius, 70.0f);
+    NEBULA_TUNABLE(f32, sCatchRadius, 30.0f);
+    NEBULA_TUNABLE(f32, sBindRadius, 60.0f);
+    NEBULA_TUNABLE(f32, sBindYOffset, 60.0f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sPressureRange, 600.0f);
+    NEBULA_TUNABLE(f32, sNormalAccel, 0.7f);
+    NEBULA_TUNABLE(f32, sPressureAccel, 1.5f);
+    NEBULA_TUNABLE(f32, sBrakeAccelRate, 0.3f);
 };  // namespace
 
 namespace NrvTrickRabbitFreeRun {

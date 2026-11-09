@@ -14,17 +14,18 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sPointGravity = 0.2f;
-    static const f32 sPointFrictionRate = 0.995f;
-    static const f32 sSensorMoveDistance = 50.0f;
-    static const f32 sPointInterval = 30.0f;
-    static const f32 sDistanceStartBindZ = 70.0f;
-    static const f32 sTransDiffMinY = 1.0f;
+    NEBULA_TUNABLE(f32, sPointGravity, 0.2f);
+    NEBULA_TUNABLE(f32, sPointFrictionRate, 0.995f);
+    NEBULA_TUNABLE(f32, sSensorMoveDistance, 50.0f);
+    NEBULA_TUNABLE(f32, sPointInterval, 30.0f);
+    NEBULA_TUNABLE(f32, sDistanceStartBindZ, 70.0f);
+    NEBULA_TUNABLE(f32, sTransDiffMinY, 1.0f);
     static const s32 sStepInvalidBind = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sJumpSpeed = 10.0f;
-    static const f32 sJumpSpeedOffsetY = 16.0f;
+    NEBULA_TUNABLE(f32, sJumpSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedOffsetY, 16.0f);
 };  // namespace
 
 namespace NrvJumpBranch {

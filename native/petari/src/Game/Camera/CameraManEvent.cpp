@@ -10,10 +10,11 @@
 #include "Game/Camera/CameraParamChunkID.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sMinDistance = 300.0f;
-    static const s32 sDefaultBlendFrame = 60;
+    NEBULA_TUNABLE(f32, sMinDistance, 300.0f);
+    NEBULA_TUNABLE(s32, sDefaultBlendFrame, 60);
 };  // namespace
 
 CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)

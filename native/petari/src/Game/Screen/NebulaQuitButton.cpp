@@ -13,10 +13,11 @@
 #include <cstring>
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The button waits this long after its corner frees up: a pointer crossing between files does not flash it.
-    const s32 cShowDelayFrames = 8;
+    NEBULA_TUNABLE(s32, cShowDelayFrames, 8);
 
     // The label in the played language (NebulaText; the game's own Yes and No answer the question).
     const char16_t* getLabel() {

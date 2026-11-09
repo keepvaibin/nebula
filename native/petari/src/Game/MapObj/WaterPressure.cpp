@@ -3,9 +3,10 @@
 #include "Game/MapObj/WaterPressureBulletHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sGunPointOffset = 200.0f;
+    NEBULA_TUNABLE(f32, sGunPointOffset, 200.0f);
 };  // namespace
 
 WaterPressure::WaterPressure(const char* pName) : PressureBase(pName), mCameraInfo(), mIsInvalidSpinKill() {

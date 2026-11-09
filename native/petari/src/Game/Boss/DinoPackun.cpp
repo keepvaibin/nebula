@@ -35,6 +35,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     template < bool IsRight >
@@ -56,8 +57,8 @@ namespace {
     // The tail is a root, sTailJointNum parts and the ball.
     const u32 sTailJointNum = 7;
     const char* const sJointName[sTailJointNum] = {"Tail1", "Tail2", "Tail3", "Tail4", "Tail5", "Tail6", "Tail7"};
-    static const f32 sKeepBendPower[sTailJointNum] = {30.0f, 25.0f, 20.0f, 15.0f, 10.0f, 10.0f, 10.0f};
-    static const f32 sJointRadius[sTailJointNum] = {80.0f, 70.0f, 60.0f, 55.0f, 50.0f, 45.0f, 50.0f};
+    NEBULA_TUNABLE_LIST(f32, sKeepBendPower, sTailJointNum, {30.0f, 25.0f, 20.0f, 15.0f, 10.0f, 10.0f, 10.0f});
+    NEBULA_TUNABLE_LIST(f32, sJointRadius, sTailJointNum, {80.0f, 70.0f, 60.0f, 55.0f, 50.0f, 45.0f, 50.0f});
 
     class DinoPackunParam : public AnimScaleParam {
     public:

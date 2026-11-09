@@ -12,10 +12,11 @@
 #include <nebula_game_api.h>
 #include <cstring>
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const u32 sL1RoundPoints = 6;
-    const u32 sL2RoundPoints = 12;
+    NEBULA_TUNABLE(u32, sL1RoundPoints, 6);
+    NEBULA_TUNABLE(u32, sL2RoundPoints, 12);
 
     // Whether the renderer's bloom is there (NEBULA_OPTION_BLOOM): decided at the frame's first pass, so a change in
     // between never draws a bloom over a scene that was not kept.

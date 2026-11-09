@@ -7,10 +7,11 @@
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAngleConstrainRate = 0.2f;
-    const f32 sPartialRate = 0.5f;
+    NEBULA_TUNABLE(f32, sAngleConstrainRate, 0.2f);
+    NEBULA_TUNABLE(f32, sPartialRate, 0.5f);
 };  // namespace
 
 CameraMedianPlanet::CameraMedianPlanet(const char* pName)

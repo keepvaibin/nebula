@@ -3,16 +3,17 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Lifts ride joints 1..cLiftNum.
     const s32 cLiftNum = 4;
     // Degrees per frame; the start eases up to it over cMoveStartStep frames.
-    const f32 cRotateSpeed = 0.3f;
+    NEBULA_TUNABLE(f32, cRotateSpeed, 0.3f);
     const s32 cMoveStartStep = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 cClippingRadiusOffset = 1500.0f;
-    const f32 cLiftShadowStartDropOffset = 300.0f;
-    const f32 cLiftShadowDropLength = 370.0f;
+    NEBULA_TUNABLE(f32, cClippingRadiusOffset, 1500.0f);
+    NEBULA_TUNABLE(f32, cLiftShadowStartDropOffset, 300.0f);
+    NEBULA_TUNABLE(f32, cLiftShadowDropLength, 370.0f);
 }  // namespace
 
 namespace NrvWatchTowerRotateStep {

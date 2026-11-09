@@ -19,21 +19,22 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <algorithm>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sProvokeRangeIn = 1000.0f;
-    static const f32 sProvokeRangeOut = 2000.0f;
-    static const f32 sSwitchRange = 3000.0f;
-    static const f32 sAwaySpeed = 14.0f;
-    static const f32 sSwitchSpeed = 10.0f;
-    static const f32 sDemoSpeed = 18.0f;
-    static const f32 sAwayAccele = 0.15f;
-    static const f32 sAwayBrake = 0.2f;
-    static const f32 sBlendRatio = 0.05f;
-    static const f32 sSameDirection = 0.55f;
-    static const f32 sSamePosition = 10.0f;
-    static const s32 sMarioPoseBlendTime = 5;
-    static const s32 sDemoSkateSeStartTiming = 33;
+    NEBULA_TUNABLE(f32, sProvokeRangeIn, 1000.0f);
+    NEBULA_TUNABLE(f32, sProvokeRangeOut, 2000.0f);
+    NEBULA_TUNABLE(f32, sSwitchRange, 3000.0f);
+    NEBULA_TUNABLE(f32, sAwaySpeed, 14.0f);
+    NEBULA_TUNABLE(f32, sSwitchSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sDemoSpeed, 18.0f);
+    NEBULA_TUNABLE(f32, sAwayAccele, 0.15f);
+    NEBULA_TUNABLE(f32, sAwayBrake, 0.2f);
+    NEBULA_TUNABLE(f32, sBlendRatio, 0.05f);
+    NEBULA_TUNABLE(f32, sSameDirection, 0.55f);
+    NEBULA_TUNABLE(f32, sSamePosition, 10.0f);
+    NEBULA_TUNABLE(s32, sMarioPoseBlendTime, 5);
+    NEBULA_TUNABLE(s32, sDemoSkateSeStartTiming, 33);
 };  // namespace
 
 namespace NrvPenguinSkater {

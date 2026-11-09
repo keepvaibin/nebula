@@ -12,28 +12,29 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sDistancePartMesh = 13000.0f;
-    const f32 sTexSpeed0U = -0.003f;
-    const f32 sTexSpeed0V = -0.001f;
-    const f32 sTexSpeed1U = -0.002f;
-    const f32 sTexSpeed1V = 0.001f;
-    const f32 sTexSpeed2V = 0.003f;
-    const f32 sIndirectScale = 0.1f;
-    const f32 sBloomCameraOffsetZ = 3000.0f;
-    const f32 sDistancePartDrawBloom = 4000.0f;
+    NEBULA_TUNABLE(f32, sDistancePartMesh, 13000.0f);
+    NEBULA_TUNABLE(f32, sTexSpeed0U, -0.003f);
+    NEBULA_TUNABLE(f32, sTexSpeed0V, -0.001f);
+    NEBULA_TUNABLE(f32, sTexSpeed1U, -0.002f);
+    NEBULA_TUNABLE(f32, sTexSpeed1V, 0.001f);
+    NEBULA_TUNABLE(f32, sTexSpeed2V, 0.003f);
+    NEBULA_TUNABLE(f32, sIndirectScale, 0.1f);
+    NEBULA_TUNABLE(f32, sBloomCameraOffsetZ, 3000.0f);
+    NEBULA_TUNABLE(f32, sDistancePartDrawBloom, 4000.0f);
 
     // Draw numbers a part keeps for itself: one strip per segment of the part, a part has fewer segments than this.
-    const u32 cPartsPerDrawer = 256;
+    NEBULA_TUNABLE(u32, cPartsPerDrawer, 256);
 
     // Material colours 0 and 4.
     const NebulaColor8 cBaseColor = {0x28, 0x28, 0x28, 0x14};
     const NebulaColor8 cWaterColor = {0x76, 0xD7, 0xFF, 0xFF};
 
     // Texture steps: U per segment along the rail, V per point across it. Textures 0 and 1 share the step.
-    const f32 cTexStep01 = 0.05f;
-    const f32 cTexStep2 = 0.1f;
+    NEBULA_TUNABLE(f32, cTexStep01, 0.05f);
+    NEBULA_TUNABLE(f32, cTexStep2, 0.1f);
 
     struct OceanRingUV {
         f32 u0, u1, u2;

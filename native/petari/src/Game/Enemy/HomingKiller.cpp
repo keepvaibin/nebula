@@ -20,6 +20,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const Vec cBodyHitSensorOffset = {0.0f, 0.0f, -10.0f};
@@ -30,46 +31,46 @@ namespace {
                                               ATYPE_TRIPODBOSS_GUARD_WALL, ATYPE_TRIPODBOSS_KILLER_GENERATER, ATYPE_MAP_OBJ};
     const u32 cSensorTableTryExplosion[] = {ATYPE_KILLER_TARGET_ENEMY, ATYPE_KILLER_TARGET_MAPOBJ, ATYPE_ROCK, ATYPE_WANWAN, ATYPE_KARIKARI};
 
-    static const f32 cBodyHitSensorRadius = 70.0f;
-    static const f32 cEyeHitSensorRadius = 750.0f;
-    static const f32 cBinderRadius = 70.0f;
-    static const f32 cExplosionDistance = 250.0f;
-    static const f32 cShadowRadiusXY = 60.0f;
-    static const f32 cShadowRadiusZ = 100.0f;
-    static const f32 cStarWandRadius3d = 150.0f;
-    static const f32 cSandColumnEmitDot = -0.75f;
+    NEBULA_TUNABLE(f32, cBodyHitSensorRadius, 70.0f);
+    NEBULA_TUNABLE(f32, cEyeHitSensorRadius, 750.0f);
+    NEBULA_TUNABLE(f32, cBinderRadius, 70.0f);
+    NEBULA_TUNABLE(f32, cExplosionDistance, 250.0f);
+    NEBULA_TUNABLE(f32, cShadowRadiusXY, 60.0f);
+    NEBULA_TUNABLE(f32, cShadowRadiusZ, 100.0f);
+    NEBULA_TUNABLE(f32, cStarWandRadius3d, 150.0f);
+    NEBULA_TUNABLE(f32, cSandColumnEmitDot, -0.75f);
     static const s32 cAppearIntervalFrame = NebulaFrameClock::stepsOfSeconds(3);
-    static const s32 cForceKillFrame = 600;
-    static const f32 cCameraShakeDistance = 1000.0f;
-    static const f32 cChaseStartAngle = 360.0f;
-    static const f32 cChaseSpeed = 12.0f;
-    static const f32 cChaseTargetHeight = 200.0f;
-    static const f32 cChaseEndDistance = 3000.0f;
-    static const f32 cChaseInvalidFrame = 35;  // BUG: typo, should be an s32 :)
-    static const f32 cChaseRotateZSpeed = 1.0f;
-    static const f32 cChaseRotateZMax = 60.0f;
-    static const f32 cChaseRotateZDot = 0.95f;
-    static const f32 cChaseHeightMin = 150.0f;
-    static const f32 cUpVecRotateSpeed = 2.0f;
-    static const f32 cMoveRotateCosineMax = 0.9995f;  // ~cos(1.8)
-    static const s32 cFreezeFrame = 20;
-    static const f32 cFreezeRumbleSpeed = 75.0f;
-    static const f32 cFreezeRumbleWidth = 5.0f;
-    static const f32 cFreezeRotateCosineMax = 0.9997f;  // ~cos(1.4)
-    static const s32 cAppearMoveFrame = 20;
-    static const s32 cAppearRumbleFrame = 22;
-    static const s32 cAppearStopFrame = 30;
-    static const f32 cAppearMoveDistance = 200.0f;
-    static const f32 cAppearRumbleSpeed = 100.0f;
-    static const f32 cAppearRumbleWidth = 18.0f;
-    static const f32 cChaseSpeedTorpedo = 5.0f;
-    static const f32 cChaseTargetHeightTorpedo = 75.0f;
-    static const f32 cTorpedoLightClippingRadius = 1000.0f;
-    static const f32 cNearClipDistanceMagnum = 400.0f;
-    static const f32 cMagnamFlySeDistMin = 500.0f;
-    static const f32 cMagnamFlySeDistMax = 1400.0f;
-    static const f32 cMagnamFlySePitchMin = 0.9f;
-    static const f32 cMagnamFlySePitchMax = 1.8f;
+    NEBULA_TUNABLE(s32, cForceKillFrame, 600);
+    NEBULA_TUNABLE(f32, cCameraShakeDistance, 1000.0f);
+    NEBULA_TUNABLE(f32, cChaseStartAngle, 360.0f);
+    NEBULA_TUNABLE(f32, cChaseSpeed, 12.0f);
+    NEBULA_TUNABLE(f32, cChaseTargetHeight, 200.0f);
+    NEBULA_TUNABLE(f32, cChaseEndDistance, 3000.0f);
+    NEBULA_TUNABLE(f32, cChaseInvalidFrame, 35);  // BUG: typo, should be an s32 :)
+    NEBULA_TUNABLE(f32, cChaseRotateZSpeed, 1.0f);
+    NEBULA_TUNABLE(f32, cChaseRotateZMax, 60.0f);
+    NEBULA_TUNABLE(f32, cChaseRotateZDot, 0.95f);
+    NEBULA_TUNABLE(f32, cChaseHeightMin, 150.0f);
+    NEBULA_TUNABLE(f32, cUpVecRotateSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, cMoveRotateCosineMax, 0.9995f);  // ~cos(1.8)
+    NEBULA_TUNABLE(s32, cFreezeFrame, 20);
+    NEBULA_TUNABLE(f32, cFreezeRumbleSpeed, 75.0f);
+    NEBULA_TUNABLE(f32, cFreezeRumbleWidth, 5.0f);
+    NEBULA_TUNABLE(f32, cFreezeRotateCosineMax, 0.9997f);  // ~cos(1.4)
+    NEBULA_TUNABLE(s32, cAppearMoveFrame, 20);
+    NEBULA_TUNABLE(s32, cAppearRumbleFrame, 22);
+    NEBULA_TUNABLE(s32, cAppearStopFrame, 30);
+    NEBULA_TUNABLE(f32, cAppearMoveDistance, 200.0f);
+    NEBULA_TUNABLE(f32, cAppearRumbleSpeed, 100.0f);
+    NEBULA_TUNABLE(f32, cAppearRumbleWidth, 18.0f);
+    NEBULA_TUNABLE(f32, cChaseSpeedTorpedo, 5.0f);
+    NEBULA_TUNABLE(f32, cChaseTargetHeightTorpedo, 75.0f);
+    NEBULA_TUNABLE(f32, cTorpedoLightClippingRadius, 1000.0f);
+    NEBULA_TUNABLE(f32, cNearClipDistanceMagnum, 400.0f);
+    NEBULA_TUNABLE(f32, cMagnamFlySeDistMin, 500.0f);
+    NEBULA_TUNABLE(f32, cMagnamFlySeDistMax, 1400.0f);
+    NEBULA_TUNABLE(f32, cMagnamFlySePitchMin, 0.9f);
+    NEBULA_TUNABLE(f32, cMagnamFlySePitchMax, 1.8f);
 };  // namespace
 
 namespace NrvHomingKiller {

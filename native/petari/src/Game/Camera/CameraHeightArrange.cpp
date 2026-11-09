@@ -5,9 +5,10 @@
 #include "Game/Camera/CameraPoseParam.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sLocalOffsetRateScale = 0.05f;
+    NEBULA_TUNABLE(f32, sLocalOffsetRateScale, 0.05f);
 };  // namespace
 
 CameraHeightArrange::CameraHeightArrange(Camera* pCamera)

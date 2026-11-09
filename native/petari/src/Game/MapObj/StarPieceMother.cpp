@@ -2,11 +2,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // const f32 hMoveSpeed = _;
-    const f32 hAddRandomVectorValue = 0.5f;
-    const f32 hAddRotateY = 10.0f;
+    NEBULA_TUNABLE(f32, hAddRandomVectorValue, 0.5f);
+    NEBULA_TUNABLE(f32, hAddRotateY, 10.0f);
 };  // namespace
 
 namespace NrvStarPieceMother {

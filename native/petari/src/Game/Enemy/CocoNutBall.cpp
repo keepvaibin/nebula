@@ -4,44 +4,45 @@
 #include "Game/MapObj/CocoNut.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec cReboundVelocity = {0.0f, 15.0f, 5.0f};
-    const f32 cBodyRadius = 40.0f;
-    const f32 cBindRadius = 500.0f;
-    const u16 cSensorGroupSize = 8;
-    const f32 cBinderRadius = 60.0f;
-    const f32 cPointerRadius = 150.0f;
-    const f32 cShadowRadius = 60.0f;
-    const f32 cDefaultHeightMax = 450.0f;
-    const f32 cDefaultKillDistance = 10000.0f;
-    const f32 cThrowSpeed = 15.0f;
-    const f32 cRallyAngleMin = 12.5f;
-    const f32 cRallyAngleMax = 17.5f;
-    const f32 cRallySpeedPerHit = 3.0f;
-    const f32 cPunchDistance = 400.0f;
+    NEBULA_TUNABLE(f32, cBodyRadius, 40.0f);
+    NEBULA_TUNABLE(f32, cBindRadius, 500.0f);
+    NEBULA_TUNABLE(u16, cSensorGroupSize, 8);
+    NEBULA_TUNABLE(f32, cBinderRadius, 60.0f);
+    NEBULA_TUNABLE(f32, cPointerRadius, 150.0f);
+    NEBULA_TUNABLE(f32, cShadowRadius, 60.0f);
+    NEBULA_TUNABLE(f32, cDefaultHeightMax, 450.0f);
+    NEBULA_TUNABLE(f32, cDefaultKillDistance, 10000.0f);
+    NEBULA_TUNABLE(f32, cThrowSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, cRallyAngleMin, 12.5f);
+    NEBULA_TUNABLE(f32, cRallyAngleMax, 17.5f);
+    NEBULA_TUNABLE(f32, cRallySpeedPerHit, 3.0f);
+    NEBULA_TUNABLE(f32, cPunchDistance, 400.0f);
     // Horizontal speed of a hit back; the flight time follows from the distance.
-    const f32 cHitBackSpeed = 42.0f;
-    const f32 cHitBackGravityScale = 2.2f;
-    const f32 cHitBackCurve = 1.2f;
+    NEBULA_TUNABLE(f32, cHitBackSpeed, 42.0f);
+    NEBULA_TUNABLE(f32, cHitBackGravityScale, 2.2f);
+    NEBULA_TUNABLE(f32, cHitBackCurve, 1.2f);
     // The player is in line between the host and the ball below this dot.
-    const f32 cHitBackFrontDot = -0.95f;
-    const f32 cHitBackSideOffset = 150.0f;
-    const f32 cHitBackHeight = 100.0f;
-    const f32 cAimHeight = 120.0f;
+    NEBULA_TUNABLE(f32, cHitBackFrontDot, -0.95f);
+    NEBULA_TUNABLE(f32, cHitBackSideOffset, 150.0f);
+    NEBULA_TUNABLE(f32, cHitBackHeight, 100.0f);
+    NEBULA_TUNABLE(f32, cAimHeight, 120.0f);
     // Height-limited aim: the step raised past a clear line, the probe length scale, and the step otherwise.
-    const f32 cAimClearRaise = 120.0f;
-    const f32 cAimProbeScale = 1.5f;
-    const f32 cAimRaiseStep = 60.0f;
-    const f32 cNearClipDistance = 300.0f;
-    const s32 cFreezableStep = 20;
-    const f32 cFarFromPlayer = 5000.0f;
-    const s32 cHitBackStopSceneFrames = 6;
-    const f32 cReboundBckRate = 0.25f;
-    const f32 cReboundGravityScale = 2.0f;
-    const f32 cFreezeShakeSpeed = 75.0f;
-    const f32 cFreezeShakeWidth = 7.5f;
-    const s32 cFreezeSteps = 20;
+    NEBULA_TUNABLE(f32, cAimClearRaise, 120.0f);
+    NEBULA_TUNABLE(f32, cAimProbeScale, 1.5f);
+    NEBULA_TUNABLE(f32, cAimRaiseStep, 60.0f);
+    NEBULA_TUNABLE(f32, cNearClipDistance, 300.0f);
+    NEBULA_TUNABLE(s32, cFreezableStep, 20);
+    NEBULA_TUNABLE(f32, cFarFromPlayer, 5000.0f);
+    NEBULA_TUNABLE(s32, cHitBackStopSceneFrames, 6);
+    NEBULA_TUNABLE(f32, cReboundBckRate, 0.25f);
+    NEBULA_TUNABLE(f32, cReboundGravityScale, 2.0f);
+    NEBULA_TUNABLE(f32, cFreezeShakeSpeed, 75.0f);
+    NEBULA_TUNABLE(f32, cFreezeShakeWidth, 7.5f);
+    NEBULA_TUNABLE(s32, cFreezeSteps, 20);
 };  // namespace
 
 namespace NrvCocoNutBall {

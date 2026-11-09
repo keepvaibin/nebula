@@ -6,10 +6,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sCamShakeIntensity = 0.1f;
-    static const f32 sCamShakeSpeed = 2.2f;
+    NEBULA_TUNABLE(f32, sCamShakeIntensity, 0.1f);
+    NEBULA_TUNABLE(f32, sCamShakeSpeed, 2.2f);
 };  // namespace
 
 namespace NrvLavaShellTower {

@@ -5,11 +5,12 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cInfinityIntensity = 1.0f;
-    const f32 cInfinitySpeed = 15.0f;
-    const u32 cInfinityInitialNum = 4;
+    NEBULA_TUNABLE(f32, cInfinityIntensity, 1.0f);
+    NEBULA_TUNABLE(f32, cInfinitySpeed, 15.0f);
+    NEBULA_TUNABLE(u32, cInfinityInitialNum, 4);
 }  // namespace
 
 CameraShaker::CameraShaker(const char* pName) : NameObj(pName) {

@@ -10,8 +10,9 @@
 #include "Game/Ui/ResourceAccessor.hpp"
 #include <nebula_module.h>
 #include <new>
+#include "Game/Util/Tunable.hpp"
 
-const f32 R_FRAME_TOLERANCE = 0.001F;
+NEBULA_TUNABLE(f32, R_FRAME_TOLERANCE, 0.001F);
 
 namespace Ui {
     namespace {

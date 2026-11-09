@@ -13,11 +13,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 hPreRecoverTime = 188;
+    NEBULA_TUNABLE(s32, hPreRecoverTime, 188);
     static const s32 hBeginExplodeTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 hExplodeTime = 8;
+    NEBULA_TUNABLE(s32, hExplodeTime, 8);
     static const s32 hExplodeInvalidTime = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 

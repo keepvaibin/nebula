@@ -6,9 +6,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 hIsOutScreenCounter = 5;
+    NEBULA_TUNABLE(s32, hIsOutScreenCounter, 5);
 };  // namespace
 
 PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDepth(), mViewDistZ() {

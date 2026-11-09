@@ -9,12 +9,13 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAttachBodyBackRadius = 500.0f;
-    const f32 sAttachBodyBackOffset = 100.0f;
-    const f32 sAttachFootRadius = 300.0f;
-    const f32 sAttachFootOffset = 100.0f;
+    NEBULA_TUNABLE(f32, sAttachBodyBackRadius, 500.0f);
+    NEBULA_TUNABLE(f32, sAttachBodyBackOffset, 100.0f);
+    NEBULA_TUNABLE(f32, sAttachFootRadius, 300.0f);
+    NEBULA_TUNABLE(f32, sAttachFootOffset, 100.0f);
 };  // namespace
 
 TombSpiderParts::TombSpiderParts(TombSpider* pParent)

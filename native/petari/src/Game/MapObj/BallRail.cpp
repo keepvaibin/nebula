@@ -3,6 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvBallRail {
     NEW_NERVE(BallRailNrvWait, BallRail, Wait);
@@ -12,11 +13,11 @@ namespace NrvBallRail {
 };  // namespace NrvBallRail
 
 namespace {
-    const s32 sSetUpBlendSteps = 15;
-    const s32 sSetUpSteps = 45;
+    NEBULA_TUNABLE(s32, sSetUpBlendSteps, 15);
+    NEBULA_TUNABLE(s32, sSetUpSteps, 45);
     const s32 sNoBindSteps = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 sSetUpSpeed = 3.0f;
-    const f32 sMinRunSpeed = 6.0f;
+    NEBULA_TUNABLE(f32, sSetUpSpeed, 3.0f);
+    NEBULA_TUNABLE(f32, sMinRunSpeed, 6.0f);
 };  // namespace
 
 BallRail::BallRail(const char* pName)

@@ -8,9 +8,10 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sSensorRadius = 500.0f;
+    NEBULA_TUNABLE(f32, sSensorRadius, 500.0f);
     const s32 sRiddleSeStep = NebulaFrameClock::stepsOfMilliseconds(1500);
 };  // namespace
 

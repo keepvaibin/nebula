@@ -18,17 +18,18 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sTimeToNextPoint = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sGravityScalar = 1.6f;
-    static const s32 sWaitTimeQuick = 45;
-    static const s32 sTimeToNextPointQuick = 15;
-    static const f32 sGravityScalarQuick = 6.4f;
-    static const f32 sCamShakeDistanceStrong = 2000.0f;
-    static const f32 sCamShakeDistanceWeak = 3500.0f;
-    static const f32 sSensorRadius = 800.0f;
+    NEBULA_TUNABLE(f32, sGravityScalar, 1.6f);
+    NEBULA_TUNABLE(s32, sWaitTimeQuick, 45);
+    NEBULA_TUNABLE(s32, sTimeToNextPointQuick, 15);
+    NEBULA_TUNABLE(f32, sGravityScalarQuick, 6.4f);
+    NEBULA_TUNABLE(f32, sCamShakeDistanceStrong, 2000.0f);
+    NEBULA_TUNABLE(f32, sCamShakeDistanceWeak, 3500.0f);
+    NEBULA_TUNABLE(f32, sSensorRadius, 800.0f);
 };  // namespace
 
 namespace NrvOnimasu {

@@ -8,22 +8,23 @@
 #include <nebula_geometry.hpp>
 
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sKnockSpeed = 10.0f;
-    static const s32 sStopSceneFrame = 10;
-    static const s32 sChaseShakeStart = 0;
-    static const s32 sChaseShakeEnd = 180;
-    static const s32 sAppearSignEffectFrame = 15;
-    static const s32 sInvalidHipDropFrame = 15;
-    static const s32 sDiveShakeStartFrame = 40;
-    static const s32 sDiveShadowOffFrame = 50;
-    static const s32 sDiveAttackInvalidFrame = 20;
-    static const s32 sChaseMoreStartDiveSoundStep = 40;
+    NEBULA_TUNABLE(f32, sKnockSpeed, 10.0f);
+    NEBULA_TUNABLE(s32, sStopSceneFrame, 10);
+    NEBULA_TUNABLE(s32, sChaseShakeStart, 0);
+    NEBULA_TUNABLE(s32, sChaseShakeEnd, 180);
+    NEBULA_TUNABLE(s32, sAppearSignEffectFrame, 15);
+    NEBULA_TUNABLE(s32, sInvalidHipDropFrame, 15);
+    NEBULA_TUNABLE(s32, sDiveShakeStartFrame, 40);
+    NEBULA_TUNABLE(s32, sDiveShadowOffFrame, 50);
+    NEBULA_TUNABLE(s32, sDiveAttackInvalidFrame, 20);
+    NEBULA_TUNABLE(s32, sChaseMoreStartDiveSoundStep, 40);
     static const s32 sLaughAtkSuccessSoundStep = NebulaFrameClock::stepsOfMilliseconds(500);
 
-    static const s32 sHideShakeStartStep = 0;
-    static const s32 sReadyChaseShakeStart = 0;
+    NEBULA_TUNABLE(s32, sHideShakeStartStep, 0);
+    NEBULA_TUNABLE(s32, sReadyChaseShakeStart, 0);
 };  // namespace
 
 namespace {

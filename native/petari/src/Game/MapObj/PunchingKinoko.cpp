@@ -5,6 +5,7 @@
 #include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvPunchingKinoko {
     NEW_NERVE(PunchingKinokoNrvWait, PunchingKinoko, Wait);
@@ -19,8 +20,8 @@ namespace NrvPunchingKinoko {
 
 namespace {
     // The head rests this far above the stem's base.
-    const f32 cHeadHeight = 130.0f;
-    const f32 cSpringRate = 0.008f;
+    NEBULA_TUNABLE(f32, cHeadHeight, 130.0f);
+    NEBULA_TUNABLE(f32, cSpringRate, 0.008f);
 };  // namespace
 
 PunchingKinoko::PunchingKinoko(const char* pName)

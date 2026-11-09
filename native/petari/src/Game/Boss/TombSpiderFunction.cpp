@@ -21,9 +21,10 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sPlanetInsideRadius = 1800.0f;
+    NEBULA_TUNABLE(f32, sPlanetInsideRadius, 1800.0f);
 };  // namespace
 
 TombSpiderGland* TombSpiderFunction::getGlandFrontL(const TombSpider* pParent) {

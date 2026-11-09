@@ -5,11 +5,12 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // An arrow's hit part by which edge planes it lies on (bit 0-2 for plane 0-2): one, its edge; two, their vertex; else
     // the face.
-    const u8 cHitPartByEdges[8] = {1, 2, 3, 5, 4, 7, 6, 1};
+    NEBULA_TUNABLE_LIST(u8, cHitPartByEdges, 8, {1, 2, 3, 5, 4, 7, 6, 1});
 }  // namespace
 
 KCollisionServer::KCollisionServer() : mFile(), mapInfo(new Table()), mMaxVertexDistance(1.0f), mModel() {

@@ -4,10 +4,11 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sInterpolation = 120;
-    const f32 sWarpDistance = 500.0f;
+    NEBULA_TUNABLE(s32, sInterpolation, 120);
+    NEBULA_TUNABLE(f32, sWarpDistance, 500.0f);
 };  // namespace
 
 CameraFrontAndBack::CameraFrontAndBack(const char* pName)

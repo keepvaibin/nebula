@@ -9,9 +9,10 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sStepForMelt = 20;
+    NEBULA_TUNABLE(s32, sStepForMelt, 20);
 };  // namespace
 
 namespace NrvSnowMan {

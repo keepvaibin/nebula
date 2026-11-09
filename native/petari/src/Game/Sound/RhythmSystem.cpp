@@ -3,13 +3,14 @@
 #include "Game/Sound/StreamPlayer.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <new>
+#include "Game/Util/Tunable.hpp"
 namespace {
     // The beat note keys of kinds 0-4.
-    const u8 cRhythmKeys[5] = {0x18, 0x1e, 0x1b, 0x19, 0x1a};
-    const s32 cRhythmBeat = 0;
+    NEBULA_TUNABLE_LIST(u8, cRhythmKeys, 5, {0x18, 0x1e, 0x1b, 0x19, 0x1a});
+    NEBULA_TUNABLE(s32, cRhythmBeat, 0);
     // Kind 5: a beat note played softer than 100 (its velocity less 10), told before the beat itself.
-    const s32 cRhythmSoftBeat = 5;
-    const u32 cLookAheadSteps = 1000;
+    NEBULA_TUNABLE(s32, cRhythmSoftBeat, 5);
+    NEBULA_TUNABLE(u32, cLookAheadSteps, 1000);
 
     // The authored program's operations at 0xA0-0xFF as the sequence format lays them out: operand count and widths (2 bits each:
     // byte, 16-bit, 24-bit, register).

@@ -17,20 +17,21 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sSpeed = 20.0f;
-    static const f32 sAccele = 0.1f;
-    static const f32 sCameraDirScale = 0.4f;
+    NEBULA_TUNABLE(f32, sSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, sAccele, 0.1f);
+    NEBULA_TUNABLE(f32, sCameraDirScale, 0.4f);
     static const s32 sBgmChangeStep = NebulaFrameClock::stepsOfSeconds(8);
-    static const s32 sNearBgm_Fadetime = 90;
-    static const s32 sFarBgm_Fadetime = 150;
-    static const f32 sNearBgmDist = 3000.0f;
-    static const f32 sNearGoalDist = 500.0f;
-    static const f32 sRasterParamMax = 2500.0f;
-    static const s32 sRasterParamX = 300;
-    static const s32 sRasterParamTime = 16;
-    static const s32 sRasterParamY = 1000;
+    NEBULA_TUNABLE(s32, sNearBgm_Fadetime, 90);
+    NEBULA_TUNABLE(s32, sFarBgm_Fadetime, 150);
+    NEBULA_TUNABLE(f32, sNearBgmDist, 3000.0f);
+    NEBULA_TUNABLE(f32, sNearGoalDist, 500.0f);
+    NEBULA_TUNABLE(f32, sRasterParamMax, 2500.0f);
+    NEBULA_TUNABLE(s32, sRasterParamX, 300);
+    NEBULA_TUNABLE(s32, sRasterParamTime, 16);
+    NEBULA_TUNABLE(s32, sRasterParamY, 1000);
 };  // namespace
 
 namespace NrvTeresaRacer {

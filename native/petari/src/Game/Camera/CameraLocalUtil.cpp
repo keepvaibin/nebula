@@ -11,6 +11,7 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace CameraLocalUtil {
     const Vec3f& getWatchPos(const CameraMan* pCameraMan) {
@@ -563,7 +564,7 @@ namespace CameraLocalUtil {
     }
 
     namespace {
-        const f32 cSafeWatchDistance = 300.0f;
+        NEBULA_TUNABLE(f32, cSafeWatchDistance, 300.0f);
 
         // A watch point closer than cSafeWatchDistance is pushed out to it; one on the camera keeps the man's view vector.
         void keepAwayWatchPos(const CameraMan* pCameraMan, Vec3f* pWatchPos, const Vec3f& rPos) {

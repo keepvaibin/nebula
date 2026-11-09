@@ -10,9 +10,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sAttackSensorSize = 70.0f;
+    NEBULA_TUNABLE(f32, sAttackSensorSize, 70.0f);
 };  // namespace
 
 namespace NrvNeedlePlant {

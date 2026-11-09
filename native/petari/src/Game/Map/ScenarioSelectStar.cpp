@@ -5,25 +5,26 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 cAppearWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 cAppearDelayFrame = 15;
-    static const s32 cHideDelayFrame = 10;
-    static const f32 cNotPointingRotateSpeedZ = 1.5f;
-    static const f32 cPointingRotateSpeedZ = 3.0f;
-    static const f32 cPointingScale = 1.5f;
-    static const f32 cNotPointingScale = 0.9f;
+    NEBULA_TUNABLE(s32, cAppearDelayFrame, 15);
+    NEBULA_TUNABLE(s32, cHideDelayFrame, 10);
+    NEBULA_TUNABLE(f32, cNotPointingRotateSpeedZ, 1.5f);
+    NEBULA_TUNABLE(f32, cPointingRotateSpeedZ, 3.0f);
+    NEBULA_TUNABLE(f32, cPointingScale, 1.5f);
+    NEBULA_TUNABLE(f32, cNotPointingScale, 0.9f);
     static const s32 cMoveInterval = NebulaFrameClock::stepsOfSeconds(3);
-    static const f32 cMoveDistance = 15.0f;
-    static const s32 cAppearFrame = 60;
-    static const s32 cStartPointingFrame = 20;
-    static const s32 cEndPointingFrame = 10;
-    static const s32 cSelectedWaitFrame = 40;
-    static const s32 cSelectedMoveFrame = 60;
-    static const f32 cSelectedRotateSpeedZ = 20.0f;
-    static const f32 cSelectedRotateMoveRate = 6.0f;
-    static const s32 cSelectedRotateAccelFrame = 180;
+    NEBULA_TUNABLE(f32, cMoveDistance, 15.0f);
+    NEBULA_TUNABLE(s32, cAppearFrame, 60);
+    NEBULA_TUNABLE(s32, cStartPointingFrame, 20);
+    NEBULA_TUNABLE(s32, cEndPointingFrame, 10);
+    NEBULA_TUNABLE(s32, cSelectedWaitFrame, 40);
+    NEBULA_TUNABLE(s32, cSelectedMoveFrame, 60);
+    NEBULA_TUNABLE(f32, cSelectedRotateSpeedZ, 20.0f);
+    NEBULA_TUNABLE(f32, cSelectedRotateMoveRate, 6.0f);
+    NEBULA_TUNABLE(s32, cSelectedRotateAccelFrame, 180);
 };  // namespace
 
 namespace NrvScenarioSelectStar {

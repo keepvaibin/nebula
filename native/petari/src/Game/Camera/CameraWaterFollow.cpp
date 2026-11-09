@@ -5,9 +5,10 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sRoundingFrame = 60;
+    NEBULA_TUNABLE(s32, sRoundingFrame, 60);
 };  // namespace
 
 CameraWaterFollow::CameraWaterFollow(const char* pName)

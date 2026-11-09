@@ -8,10 +8,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Map/StageSwitch.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const u32 sAllLodCtrlNumMax = 0x100;
-    const s32 sInsideHoldSteps = 30;  // half a second
+    NEBULA_TUNABLE(u32, sAllLodCtrlNumMax, 0x100);
+    NEBULA_TUNABLE(s32, sInsideHoldSteps, 30);  // half a second
 };  // namespace
 
 // Only the first mViewCtrlCount slots are read.

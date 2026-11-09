@@ -22,6 +22,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <algorithm>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const char* cJointNamePropellerBack0 = "Screw00";
@@ -31,10 +32,10 @@ namespace {
     static const char* cJointNameKoopaJrPos = "KoopaJrShip";
     static const char* cJointNamePodPos = "KoopaJrShipPod";
 
-    const s32 sShellNum = 18;
-    const s32 sMainShellNum = 9;
+    NEBULA_TUNABLE(s32, sShellNum, 18);
+    NEBULA_TUNABLE(s32, sMainShellNum, 9);
     const s32 sSpeedEaseTime = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 sKillerBackOffset = 100.0f;  // killers start this far behind their cannon
+    NEBULA_TUNABLE(f32, sKillerBackOffset, 100.0f);  // killers start this far behind their cannon
 
     static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
     static const Vec sKoopaJrPosFront = {0.0f, 188.0f, 135.0f};

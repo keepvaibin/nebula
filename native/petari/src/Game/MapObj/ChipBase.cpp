@@ -14,14 +14,15 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sBubbleHitRadius = 150.0f;
-    static const f32 sBodyHitRadius = 80.0f;
-    static const f32 sShadowRadius = 50.0f;
-    static const f32 sBaseScale = 1.0f;
-    static const s32 sCannotGetTime = 40;
-    static const f32 sBodyHitYOffset = 0.0f;
+    NEBULA_TUNABLE(f32, sBubbleHitRadius, 150.0f);
+    NEBULA_TUNABLE(f32, sBodyHitRadius, 80.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 50.0f);
+    NEBULA_TUNABLE(f32, sBaseScale, 1.0f);
+    NEBULA_TUNABLE(s32, sCannotGetTime, 40);
+    NEBULA_TUNABLE(f32, sBodyHitYOffset, 0.0f);
 };  // namespace
 
 namespace NrvChipBase {

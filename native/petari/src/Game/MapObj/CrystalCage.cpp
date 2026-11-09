@@ -6,28 +6,29 @@
 #include "Game/Util.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cSensorRadius = 130.0f;
-    const f32 cSmallClippingRadius = 300.0f;
-    const f32 cClippingRadius = 600.0f;
+    NEBULA_TUNABLE(f32, cSensorRadius, 130.0f);
+    NEBULA_TUNABLE(f32, cSmallClippingRadius, 300.0f);
+    NEBULA_TUNABLE(f32, cClippingRadius, 600.0f);
     // The ground is looked for this far above and below.
-    const f32 cGroundSearchHeight = 300.0f;
-    const f32 cLargeGroundSearchHeight = 1000.0f;
-    const f32 cBinderRadius = 50.0f;
-    const f32 cBinderLift = 50.0f;
-    const f32 cBinderFallSpeed = 2.0f;
-    const f32 cLargeStarHeight = 250.0f;
-    const s32 cLargeHitPoint = 2;
+    NEBULA_TUNABLE(f32, cGroundSearchHeight, 300.0f);
+    NEBULA_TUNABLE(f32, cLargeGroundSearchHeight, 1000.0f);
+    NEBULA_TUNABLE(f32, cBinderRadius, 50.0f);
+    NEBULA_TUNABLE(f32, cBinderLift, 50.0f);
+    NEBULA_TUNABLE(f32, cBinderFallSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, cLargeStarHeight, 250.0f);
+    NEBULA_TUNABLE(s32, cLargeHitPoint, 2);
     // Hits after one that does not break it are ignored this long.
-    const s32 cHitInvalidSteps = 20;
+    NEBULA_TUNABLE(s32, cHitInvalidSteps, 20);
     // A small cage's sensor slides along its axis to the point nearest the player.
-    const f32 cSmallSensorBottom = -40.0f;
-    const f32 cSmallSensorTop = 140.0f;
+    NEBULA_TUNABLE(f32, cSmallSensorBottom, -40.0f);
+    NEBULA_TUNABLE(f32, cSmallSensorTop, 140.0f);
     // A super spin driver comes out a little after the cage breaks.
-    const s32 cSuperSpinDriverDeadStep = 10;
-    const s32 cBreakHitStopStep = 2;
-    const s32 cBreakHitStopFrames = 3;
+    NEBULA_TUNABLE(s32, cSuperSpinDriverDeadStep, 10);
+    NEBULA_TUNABLE(s32, cBreakHitStopStep, 2);
+    NEBULA_TUNABLE(s32, cBreakHitStopFrames, 3);
 };  // namespace
 
 namespace NrvCrystalCage {

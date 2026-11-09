@@ -3,10 +3,11 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sLandMotionStartTime = 28;
-    static const s32 sJumpBackTime = 56;
+    NEBULA_TUNABLE(s32, sLandMotionStartTime, 28);
+    NEBULA_TUNABLE(s32, sJumpBackTime, 56);
 };  // namespace
 
 namespace NrvDinoPackunDemoPosition {

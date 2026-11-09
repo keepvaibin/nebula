@@ -14,17 +14,18 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sCoinSpeed = 20.0f;
-    static const s32 sStepToTouch2nd = 5;
+    NEBULA_TUNABLE(f32, sCoinSpeed, 20.0f);
+    NEBULA_TUNABLE(s32, sStepToTouch2nd, 5);
     static const s32 sStepToucnAndApart = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sRotateSpeedY = 30.0f;
-    static const f32 sPointerSpeedMin = 5.0f;
-    static const f32 sPointerSpeedDotToKill = -20.0f;
-    static const f32 sModelOffset = 50.0f;
-    static const f32 sCocoonOffsetY = 20.0f;
-    static const f32 sCocoonOffsetZ = 20.0f;
+    NEBULA_TUNABLE(f32, sRotateSpeedY, 30.0f);
+    NEBULA_TUNABLE(f32, sPointerSpeedMin, 5.0f);
+    NEBULA_TUNABLE(f32, sPointerSpeedDotToKill, -20.0f);
+    NEBULA_TUNABLE(f32, sModelOffset, 50.0f);
+    NEBULA_TUNABLE(f32, sCocoonOffsetY, 20.0f);
+    NEBULA_TUNABLE(f32, sCocoonOffsetZ, 20.0f);
 };  // namespace
 
 namespace NrvSpiderCoin {

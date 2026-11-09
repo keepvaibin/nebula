@@ -1,8 +1,9 @@
 #include "Game/Boss/PoltaRockHolder.hpp"
 #include "Game/Boss/PoltaRock.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sMaxPoltaRock = 16;
+    NEBULA_TUNABLE(s32, sMaxPoltaRock, 16);
 };  // namespace
 
 PoltaRockHolder::PoltaRockHolder() : DeriveActorGroup< PoltaRock >("ポルタの岩管理", ::sMaxPoltaRock) {

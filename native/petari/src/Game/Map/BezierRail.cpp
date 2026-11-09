@@ -6,13 +6,14 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const int cLengthSegments = 10;        // Simpson pairs per length integral
-    const f32 cParamTolerance = 0.01f;     // getParam stops within this length
-    const s32 cParamIterations = 5;
-    const f32 cDirectionStep = 0.01f;      // param step for a zero-velocity direction
-    const f32 cNearestSampleStep = 100.0f; // length between getNearestParam samples
+    NEBULA_TUNABLE(int, cLengthSegments, 10);        // Simpson pairs per length integral
+    NEBULA_TUNABLE(f32, cParamTolerance, 0.01f);     // getParam stops within this length
+    NEBULA_TUNABLE(s32, cParamIterations, 5);
+    NEBULA_TUNABLE(f32, cDirectionStep, 0.01f);      // param step for a zero-velocity direction
+    NEBULA_TUNABLE(f32, cNearestSampleStep, 100.0f); // length between getNearestParam samples
 
     int getNextIndex(int index, int pointNum) {
         return pointNum > 0 ? (index + 1) % pointNum : 0;

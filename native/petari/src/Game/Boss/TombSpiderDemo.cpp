@@ -23,24 +23,25 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sStepDemoGateOpen = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 sGateOpenPlayerDistance = 6000.0f;
-    const f32 sPlanetRadius = 7000.0f;
-    const f32 sPlanetInsideRadius = 1800.0f;
-    const s32 sStepGateBreak = 75;
-    const f32 sGateOpenPlayerSpeed = 60.0f;
+    NEBULA_TUNABLE(f32, sGateOpenPlayerDistance, 6000.0f);
+    NEBULA_TUNABLE(f32, sPlanetRadius, 7000.0f);
+    NEBULA_TUNABLE(f32, sPlanetInsideRadius, 1800.0f);
+    NEBULA_TUNABLE(s32, sStepGateBreak, 75);
+    NEBULA_TUNABLE(f32, sGateOpenPlayerSpeed, 60.0f);
     const s32 sStepGateOpenChangeCamera = NebulaFrameClock::stepsOfSeconds(2);
     const s32 sStepCocoonBreak = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sStepJumpRotateToPlayerStart = 20;
-    const s32 sStepJumpRotateToPlayerEnd = 70;
-    const s32 sStepBattle2ndStartCameraInterpolateFrame = 10;
+    NEBULA_TUNABLE(s32, sStepJumpRotateToPlayerStart, 20);
+    NEBULA_TUNABLE(s32, sStepJumpRotateToPlayerEnd, 70);
+    NEBULA_TUNABLE(s32, sStepBattle2ndStartCameraInterpolateFrame, 10);
     const s32 sStepChanceDamagePlanetBreak = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sStepBattle2ndStartJumpStart = NebulaFrameClock::stepsOfMilliseconds(2500);
-    const s32 sStepBattle2ndStartJumpEnd = 190;
-    const s32 sStepBattleEndPlanetBreak = 15;
-    const s32 sBattle2ndStartStarPieceNum = 25;
+    NEBULA_TUNABLE(s32, sStepBattle2ndStartJumpEnd, 190);
+    NEBULA_TUNABLE(s32, sStepBattleEndPlanetBreak, 15);
+    NEBULA_TUNABLE(s32, sBattle2ndStartStarPieceNum, 25);
 };  // namespace
 
 TombSpiderDemo::TombSpiderDemo(TombSpider* pParent) : mParent(pParent), mRotateSpeed(0.0f) {

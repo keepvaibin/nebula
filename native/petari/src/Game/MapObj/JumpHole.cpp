@@ -3,20 +3,21 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sGravityAcc = 1.2f;
-    const f32 sHoleRadius = 200.0f;
-    const f32 sHoleDepth = 400.0f;
-    const f32 sHoleRefrecRate = 0.9f;
-    const s32 sForceSetStartTime = 40;
+    NEBULA_TUNABLE(f32, sGravityAcc, 1.2f);
+    NEBULA_TUNABLE(f32, sHoleRadius, 200.0f);
+    NEBULA_TUNABLE(f32, sHoleDepth, 400.0f);
+    NEBULA_TUNABLE(f32, sHoleRefrecRate, 0.9f);
+    NEBULA_TUNABLE(s32, sForceSetStartTime, 40);
     const s32 sForceSetEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    const f32 sBallToCenterFreq = 0.98f;
-    const f32 sBallToCenterEndFreq = 0.7f;
+    NEBULA_TUNABLE(f32, sBallToCenterFreq, 0.98f);
+    NEBULA_TUNABLE(f32, sBallToCenterEndFreq, 0.7f);
     const s32 sForceSetCenterTime = NebulaFrameClock::stepsOfSeconds(3);
-    const s32 sLaunchFixTime = 10;
-    const s32 sSetUpTime = 45;
-    const f32 sLaunchValidHeight = 160.0f;
+    NEBULA_TUNABLE(s32, sLaunchFixTime, 10);
+    NEBULA_TUNABLE(s32, sSetUpTime, 45);
+    NEBULA_TUNABLE(f32, sLaunchValidHeight, 160.0f);
 };  // namespace
 
 namespace NrvJumpHole {

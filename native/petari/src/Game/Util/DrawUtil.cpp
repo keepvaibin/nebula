@@ -13,10 +13,11 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include <NebulaGpuTypes.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cNearZ = -10000.0f;
-    const f32 cFarZ = 10000.0f;
+    NEBULA_TUNABLE(f32, cNearZ, -10000.0f);
+    NEBULA_TUNABLE(f32, cFarZ, 10000.0f);
 
     inline s32 getScreenHeightInline() {
         return MR::getScreenHeight();

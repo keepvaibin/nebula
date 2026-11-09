@@ -18,6 +18,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvTamakoroTutorial {
     NEW_NERVE(HostTypeNrvFirst, TamakoroTutorial, First);
@@ -39,8 +40,8 @@ namespace NrvTamakoroTutorial {
 
 namespace {
     static const Vec3f hRaiseAcc = Vec3f(0.0f, -1.0f, 0.0f);
-    static const f32 hRaiseCheckDegree = 30.0f;
-    static const f32 hDistToStartTutorial = 400.0f;
+    NEBULA_TUNABLE(f32, hRaiseCheckDegree, 30.0f);
+    NEBULA_TUNABLE(f32, hDistToStartTutorial, 400.0f);
 };  // namespace
 
 TamakoroTutorial::TamakoroTutorial(const char* pName)

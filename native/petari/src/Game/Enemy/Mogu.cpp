@@ -22,6 +22,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     struct SightParam {
@@ -33,26 +34,26 @@ namespace {
     const SightParam sThrowableSightParam = {900.0f, 10.0f, 90.0f};
     const SightParam sCannonFleetSightParam = {1500.0f, 10.0f, 90.0f};
 
-    const f32 sHideNearDistance = 400.0f;
-    const f32 sHideFarDistance = 2000.0f;
-    const f32 sPlayerAboveDot = -0.75f;
+    NEBULA_TUNABLE(f32, sHideNearDistance, 400.0f);
+    NEBULA_TUNABLE(f32, sHideFarDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, sPlayerAboveDot, -0.75f);
     const s32 sHideWaitSteps = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 sFastHidePlayerSpeed = 8.0f;
-    const f32 sFastHideDistance = 200.0f;
-    const f32 sFastHideRate = 1.5f;
+    NEBULA_TUNABLE(f32, sFastHidePlayerSpeed, 8.0f);
+    NEBULA_TUNABLE(f32, sFastHideDistance, 200.0f);
+    NEBULA_TUNABLE(f32, sFastHideRate, 1.5f);
     const s32 sAppearHipDropSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sTurnSpeed = 0.03f;
-    const s32 sThrowAfterSteps = 45;
-    const s32 sThrowReleaseStep = 47;
-    const f32 sThrowSpeed = 15.0f;
+    NEBULA_TUNABLE(f32, sTurnSpeed, 0.03f);
+    NEBULA_TUNABLE(s32, sThrowAfterSteps, 45);
+    NEBULA_TUNABLE(s32, sThrowReleaseStep, 47);
+    NEBULA_TUNABLE(f32, sThrowSpeed, 15.0f);
     const s32 sSwoonSteps = NebulaFrameClock::stepsOfSeconds(2);
     const s32 sStampDeathSteps = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sHitBlowSteps = 20;
-    const f32 sHipDropNearDistance = 130.0f;
-    const f32 sHipDropFarDistance = 1500.0f;
-    const f32 sPunchSpeedH = 30.0f;
-    const f32 sPunchSpeedUp = 50.0f;
-    const f32 sPunchLift = 5.0f;
+    NEBULA_TUNABLE(s32, sHitBlowSteps, 20);
+    NEBULA_TUNABLE(f32, sHipDropNearDistance, 130.0f);
+    NEBULA_TUNABLE(f32, sHipDropFarDistance, 1500.0f);
+    NEBULA_TUNABLE(f32, sPunchSpeedH, 30.0f);
+    NEBULA_TUNABLE(f32, sPunchSpeedUp, 50.0f);
+    NEBULA_TUNABLE(f32, sPunchLift, 5.0f);
 };  // namespace
 
 namespace NrvMogu {

@@ -21,6 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     struct SnakeheadData {
@@ -34,18 +35,18 @@ namespace {
         const char* mBackBck;
     };
 
-    const f32 sDefaultForwardSpeed = 15.0f;
-    const f32 sDefaultBackSpeed = 10.0f;
+    NEBULA_TUNABLE(f32, sDefaultForwardSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sDefaultBackSpeed, 10.0f);
     const f32 sGoHomeSpeedWaylay = 20.0f;
     const f32 sGoHomeSpeedMove = 50.0f;
     const s32 sStepForWaitBig = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sStepForRestBig = 100;
     const s32 sStepForWaitSmall = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepForRestSmall = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 sStartCoord = 300.0f;  // Home: this far along the rail.
-    const f32 sPushRadiusSmall = 100.0f;
-    const f32 sPushRadiusBig = 300.0f;
-    const f32 sNearHomeSlowDown = 1.5f;
+    NEBULA_TUNABLE(f32, sStartCoord, 300.0f);  // Home: this far along the rail.
+    NEBULA_TUNABLE(f32, sPushRadiusSmall, 100.0f);
+    NEBULA_TUNABLE(f32, sPushRadiusBig, 300.0f);
+    NEBULA_TUNABLE(f32, sNearHomeSlowDown, 1.5f);
 
     // By SnakeheadType.
     const SnakeheadData sSnakeheadDataTable[] = {

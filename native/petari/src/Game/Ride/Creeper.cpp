@@ -23,6 +23,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvCreeper {
     NEW_NERVE(CreeperNrvFree, Creeper, Free);
@@ -33,29 +34,29 @@ namespace NrvCreeper {
 };  // namespace NrvCreeper
 
 namespace {
-    static const f32 sInterval = 50.0f;
-    static const s32 sHeadPointNo = 1;
-    static const f32 sDefaultBendRate = 100.0f;
-    static const f32 sDefaultJumpSpeedFront = 25.0f;
-    static const f32 sDefaultJumpSpeedUp = 40.0f;
-    static const f32 sFreeBackAccelRate = 0.05f;
-    static const f32 sPointFrictionFree = 0.9f;
-    static const f32 sPointFrictionHang = 0.7f;
-    static const f32 sHangStartRotateSpeed = 15.0f;
-    static const f32 sHangUpAccel = 5.0f;
-    static const f32 sHangUpSpeedMin = 5.0f;
-    static const f32 sHangUpSpeedMax = 15.0f;
-    static const f32 sHangDownGravity = 0.4f;
-    static const f32 sHangDownSpeedMax = 20.0f;
-    static const f32 sHangRotateSpeedRate = 1.5f;
-    static const f32 sHangStartCoordMin = 100.0f;
-    static const f32 sHangEndCoord = 80.0f;
-    static const s32 sAnimInterpoleFrame = 15;
+    NEBULA_TUNABLE(f32, sInterval, 50.0f);
+    NEBULA_TUNABLE(s32, sHeadPointNo, 1);
+    NEBULA_TUNABLE(f32, sDefaultBendRate, 100.0f);
+    NEBULA_TUNABLE(f32, sDefaultJumpSpeedFront, 25.0f);
+    NEBULA_TUNABLE(f32, sDefaultJumpSpeedUp, 40.0f);
+    NEBULA_TUNABLE(f32, sFreeBackAccelRate, 0.05f);
+    NEBULA_TUNABLE(f32, sPointFrictionFree, 0.9f);
+    NEBULA_TUNABLE(f32, sPointFrictionHang, 0.7f);
+    NEBULA_TUNABLE(f32, sHangStartRotateSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sHangUpAccel, 5.0f);
+    NEBULA_TUNABLE(f32, sHangUpSpeedMin, 5.0f);
+    NEBULA_TUNABLE(f32, sHangUpSpeedMax, 15.0f);
+    NEBULA_TUNABLE(f32, sHangDownGravity, 0.4f);
+    NEBULA_TUNABLE(f32, sHangDownSpeedMax, 20.0f);
+    NEBULA_TUNABLE(f32, sHangRotateSpeedRate, 1.5f);
+    NEBULA_TUNABLE(f32, sHangStartCoordMin, 100.0f);
+    NEBULA_TUNABLE(f32, sHangEndCoord, 80.0f);
+    NEBULA_TUNABLE(s32, sAnimInterpoleFrame, 15);
     static const s32 sStepInvalidSpin = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 sStepInvalid = 20;
-    static const f32 sDistanceNear = 200.0f;
-    static const f32 sDrawWidthX = 10.0f;
-    static const f32 sDrawWidthZ = 10.0f;
+    NEBULA_TUNABLE(s32, sStepInvalid, 20);
+    NEBULA_TUNABLE(f32, sDistanceNear, 200.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthX, 10.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthZ, 10.0f);
 
     static Color8 sColorPlusZ(0xFF, 0xFF, 0xFF, 0xFF);
     static Color8 sColorPlusX(0x96, 0x96, 0x96, 0xFF);

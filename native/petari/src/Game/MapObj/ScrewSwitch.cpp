@@ -14,12 +14,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sStepForAdjust = 3;
+    NEBULA_TUNABLE(s32, sStepForAdjust, 3);
     static const s32 sStepToRumbleCamera = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sStepForScrewStart = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sStepForPause = 0;
+    NEBULA_TUNABLE(s32, sStepForPause, 0);
 };  // namespace
 
 namespace NrvScrewSwitch {

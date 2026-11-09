@@ -12,13 +12,14 @@
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sCameraRadius = 15.0f;  // the move speed that turns the camera at the full round speed
-    static const f32 sSlopeFrontDist = 500.0f;
-    static const f32 sColCheckHeight = 100.0f;
-    static const f32 sRoundAddition = 0.08f;
-    static const f32 sRoundResetAddition = 0.2f;
+    NEBULA_TUNABLE(f32, sCameraRadius, 15.0f);  // the move speed that turns the camera at the full round speed
+    NEBULA_TUNABLE(f32, sSlopeFrontDist, 500.0f);
+    NEBULA_TUNABLE(f32, sColCheckHeight, 100.0f);
+    NEBULA_TUNABLE(f32, sRoundAddition, 0.08f);
+    NEBULA_TUNABLE(f32, sRoundResetAddition, 0.2f);
     static const f32 sRoundInterval = FloatUtil::PI() / 4.0f;
     static const f32 sLookDownAngle = 75.0f * FloatUtil::PI() / 180.0f;
 };  // namespace

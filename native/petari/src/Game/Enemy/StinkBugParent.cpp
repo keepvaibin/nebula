@@ -14,24 +14,25 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sTurnRateSearch = 1.0f;
-    const f32 sTurnRateDashSign = 3.0f;
-    const s32 sStepForWait = 1;
-    const s32 sStepForDashSignEnd = 10;
-    const s32 sStepForShakeStart = 40;
-    const s32 sStepForEnableShake = 25;
+    NEBULA_TUNABLE(f32, sTurnRateSearch, 1.0f);
+    NEBULA_TUNABLE(f32, sTurnRateDashSign, 3.0f);
+    NEBULA_TUNABLE(s32, sStepForWait, 1);
+    NEBULA_TUNABLE(s32, sStepForDashSignEnd, 10);
+    NEBULA_TUNABLE(s32, sStepForShakeStart, 40);
+    NEBULA_TUNABLE(s32, sStepForEnableShake, 25);
     const s32 sStepForRecover = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sStepToJumpBackPlayer = 22;
-    const s32 sStepForChildDeathSound = 48;
-    const s32 sStepForSurpriseSound = 65;
-    const f32 sTerritoryReachMargin = 400.0f;
-    const f32 sTerritorySideHalfSize = 200.0f;
-    const f32 sTerritoryUpHalfSize = 600.0f;
-    const f32 sTerritoryBackOffset = 200.0f;
-    const f32 sChildRadius = 150.0f;
-    const f32 sHornMargin = 25.0f;
+    NEBULA_TUNABLE(s32, sStepToJumpBackPlayer, 22);
+    NEBULA_TUNABLE(s32, sStepForChildDeathSound, 48);
+    NEBULA_TUNABLE(s32, sStepForSurpriseSound, 65);
+    NEBULA_TUNABLE(f32, sTerritoryReachMargin, 400.0f);
+    NEBULA_TUNABLE(f32, sTerritorySideHalfSize, 200.0f);
+    NEBULA_TUNABLE(f32, sTerritoryUpHalfSize, 600.0f);
+    NEBULA_TUNABLE(f32, sTerritoryBackOffset, 200.0f);
+    NEBULA_TUNABLE(f32, sChildRadius, 150.0f);
+    NEBULA_TUNABLE(f32, sHornMargin, 25.0f);
     const char* const cDemoEndPointName = "子連れカメムシデモ後ポイント";
 
     struct Param {

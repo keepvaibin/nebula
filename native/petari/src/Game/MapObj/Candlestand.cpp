@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvCandlestand {
     NEW_NERVE(HostTypeWaitFire, Candlestand, WaitFire);
@@ -33,11 +34,11 @@ namespace {
     };
 
     const char* const sBurnSound = "SE_OJ_LV_PHANTOM_TOACH_BURN";
-    const f32 sAttackRange = 50.0f;
-    const f32 sFireRange = 150.0f;
-    const f32 sSpinStormRange = 350.0f;
+    NEBULA_TUNABLE(f32, sAttackRange, 50.0f);
+    NEBULA_TUNABLE(f32, sFireRange, 150.0f);
+    NEBULA_TUNABLE(f32, sSpinStormRange, 350.0f);
     const s32 sFireStep = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sExtinguishStep = 15;
+    NEBULA_TUNABLE(s32, sExtinguishStep, 15);
     const s32 sFlickerStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sAttackStep = NebulaFrameClock::stepsOfMilliseconds(500);
 

@@ -3,13 +3,14 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // By the ring's number; the rest play ring 1.
     const char* const sPlaySoundNames[] = {nullptr, "SE_SY_GET_PRIZE_RING_5", "SE_SY_GET_PRIZE_RING_4", "SE_SY_GET_PRIZE_RING_3",
                                            "SE_SY_GET_PRIZE_RING_2"};
-    const f32 sOnTriggerFlashFrames[] = {10.0f, 60.0f, 110.0f, 160.0f, 210.0f, 240.0f, 270.0f, 300.0f, -1.0f};
-    const s32 sDefaultLifeTime = 800;
+    NEBULA_TUNABLE_LIST(f32, sOnTriggerFlashFrames, , {10.0f, 60.0f, 110.0f, 160.0f, 210.0f, 240.0f, 270.0f, 300.0f, -1.0f});
+    NEBULA_TUNABLE(s32, sDefaultLifeTime, 800);
 };  // namespace
 
 namespace NrvPrizeRing {

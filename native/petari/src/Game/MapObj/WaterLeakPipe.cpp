@@ -2,10 +2,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDefaultHeight = 500.0f;
-    static const s32 sLifeTime = 15;
+    NEBULA_TUNABLE(f32, sDefaultHeight, 500.0f);
+    NEBULA_TUNABLE(s32, sLifeTime, 15);
 };  // namespace
 
 namespace NrvIceStepNoSlip {

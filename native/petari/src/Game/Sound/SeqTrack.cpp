@@ -3,6 +3,7 @@
 #include "Game/Sound/SoundEngine.hpp"
 #include <new>
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 
 namespace {
@@ -12,8 +13,8 @@ namespace {
 
     enum Condition : u32 { COND_ALWAYS, COND_NULL, COND_NONNULL, COND_EQUAL_ONE, COND_NEGATIVE, COND_POSITIVE };
     // Interrupt kinds: 0 unpause, 1 pause, 2 and 3 a write to port 0 or 1, 5 the interrupt timer, 6 every tick.
-    const u32 cIntrTimer = 5;
-    const u32 cIntrTick = 6;
+    NEBULA_TUNABLE(u32, cIntrTimer, 5);
+    NEBULA_TUNABLE(u32, cIntrTick, 6);
 
     u8 hiByte(u32 v) {
         return static_cast< u8 >(v >> 8);

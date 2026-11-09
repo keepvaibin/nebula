@@ -2,10 +2,11 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec sSensorOffset = {55.0f, 170.0f, -100.0f};
-    const f32 sSensorRadius = 70.0f;
+    NEBULA_TUNABLE(f32, sSensorRadius, 70.0f);
 };  // namespace
 
 namespace NrvPomponPlant {

@@ -11,12 +11,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sFlyUpDirDegreeMax = 45.0f;
-    const f32 sRotateSpeed = 15.0f;
-    const f32 sArcHeight = 1500.0f;
-    const f32 sHitEffectAhead = 100.0f;
+    NEBULA_TUNABLE(f32, sFlyUpDirDegreeMax, 45.0f);
+    NEBULA_TUNABLE(f32, sRotateSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sArcHeight, 1500.0f);
+    NEBULA_TUNABLE(f32, sHitEffectAhead, 100.0f);
 };  // namespace
 
 namespace NrvKoopaFireStairs {

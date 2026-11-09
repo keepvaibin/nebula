@@ -27,6 +27,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
@@ -37,51 +38,51 @@ namespace {
     const MR::ActorMoveParam hKeepDistanceNearParam = {-0.22f, 1.0f, 0.95f, 3.0f};
     const MR::ActorMoveParam hKeepDistanceWaitParam = {0.0f, 1.0f, 0.95f, 3.0f};
     // Rail contact must last longer than this before it knocks the begoman away.
-    const s32 hElectricTouchTime = 40;
-    const f32 hReboundWallAddVel = 5.0f;
-    const f32 hNoCalcWaitRotate = 0.15f;
-    const f32 hBlendGravityRate = 0.1f;
-    const f32 hRailPushH = 10.0f;
-    const f32 hRailPushJump = 20.0f;
-    const f32 hRailPushHBoss = 30.0f;
-    const f32 hRailPushJumpBoss = 30.0f;
+    NEBULA_TUNABLE(s32, hElectricTouchTime, 40);
+    NEBULA_TUNABLE(f32, hReboundWallAddVel, 5.0f);
+    NEBULA_TUNABLE(f32, hNoCalcWaitRotate, 0.15f);
+    NEBULA_TUNABLE(f32, hBlendGravityRate, 0.1f);
+    NEBULA_TUNABLE(f32, hRailPushH, 10.0f);
+    NEBULA_TUNABLE(f32, hRailPushJump, 20.0f);
+    NEBULA_TUNABLE(f32, hRailPushHBoss, 30.0f);
+    NEBULA_TUNABLE(f32, hRailPushJumpBoss, 30.0f);
     // Light pushes: the side rail sensor, and body contact before the knock.
-    const f32 hPushedRailPush = 0.5f;
-    const f32 hBodyRailPush = 8.0f;
-    const f32 hTurnStartDegree = 3;
-    const f32 hTurnEndDegree = 10;
-    const f32 hIsFaceToPlayerDegree = 30;
-    const f32 hPursueLimitTurnDegree = 3.0f;
-    const f32 hPursueRange = 2000.0f;
+    NEBULA_TUNABLE(f32, hPushedRailPush, 0.5f);
+    NEBULA_TUNABLE(f32, hBodyRailPush, 8.0f);
+    NEBULA_TUNABLE(f32, hTurnStartDegree, 3);
+    NEBULA_TUNABLE(f32, hTurnEndDegree, 10);
+    NEBULA_TUNABLE(f32, hIsFaceToPlayerDegree, 30);
+    NEBULA_TUNABLE(f32, hPursueLimitTurnDegree, 3.0f);
+    NEBULA_TUNABLE(f32, hPursueRange, 2000.0f);
     const s32 hPursueLimitTime = NebulaFrameClock::stepsOfSeconds(3);
-    const s32 hPursueAnimFrame = 10;
-    const s32 hPursueDashFrame = 18;
-    const f32 hPursueDashVelocity = 15.0f;
+    NEBULA_TUNABLE(s32, hPursueAnimFrame, 10);
+    NEBULA_TUNABLE(s32, hPursueDashFrame, 18);
+    NEBULA_TUNABLE(f32, hPursueDashVelocity, 15.0f);
     const s32 hTurnTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 hTurnTimeCanNotAttack = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 hBrakeTime = 50;
+    NEBULA_TUNABLE(s32, hBrakeTime, 50);
     const s32 hProvokeTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 hTiredTime = NebulaFrameClock::stepsOfSeconds(2);
-    const s32 hTiredCount = 180;
+    NEBULA_TUNABLE(s32, hTiredCount, 180);
     const s32 hReturnWaitTime = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 hKeepDistanceToWaitDist = 1200.0f;
-    const f32 hKeepDistSideVel = 0.6f;
-    const s32 hReceiveLimitTime = 2;
+    NEBULA_TUNABLE(f32, hKeepDistanceToWaitDist, 1200.0f);
+    NEBULA_TUNABLE(f32, hKeepDistSideVel, 0.6f);
+    NEBULA_TUNABLE(s32, hReceiveLimitTime, 2);
     const s32 hPermitLimitTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Closer than this the player wakes a waiting begoman.
-    const f32 hWakeDist = 1000.0f;
+    NEBULA_TUNABLE(f32, hWakeDist, 1000.0f);
     // A rail ahead within this cosine of the face keeps a waiting begoman from attacking.
-    const f32 hWaitRailAheadDot = 0.5f;
-    const f32 hFallCheckDist = 150.0f;
-    const f32 hFallCheckDepth = 150.0f;
+    NEBULA_TUNABLE(f32, hWaitRailAheadDot, 0.5f);
+    NEBULA_TUNABLE(f32, hFallCheckDist, 150.0f);
+    NEBULA_TUNABLE(f32, hFallCheckDepth, 150.0f);
     const f32 hInitPosNearDistSq = 200.0f * 200.0f;
-    const f32 hStarPointerRadiusRate = 0.75f;
-    const f32 hLaunchDamp = 0.98f;
-    const f32 hLaunchGravity = 1.0f;
-    const f32 hGroundReboundRate = 0.5f;
-    const f32 hGroundReboundCosMin = 100.0f;
-    const s32 hGroupClippingNum = 16;
-    const f32 hPermitterNoDist = 99999.0f;
+    NEBULA_TUNABLE(f32, hStarPointerRadiusRate, 0.75f);
+    NEBULA_TUNABLE(f32, hLaunchDamp, 0.98f);
+    NEBULA_TUNABLE(f32, hLaunchGravity, 1.0f);
+    NEBULA_TUNABLE(f32, hGroundReboundRate, 0.5f);
+    NEBULA_TUNABLE(f32, hGroundReboundCosMin, 100.0f);
+    NEBULA_TUNABLE(s32, hGroupClippingNum, 16);
+    NEBULA_TUNABLE(f32, hPermitterNoDist, 99999.0f);
     const BegomanSound sound_normal = {"SE_EM_LV_BEGOMAN_DASH"};
     const BegomanSound sound_boss = {"SE_BM_LV_BBEGO_DASH"};
 

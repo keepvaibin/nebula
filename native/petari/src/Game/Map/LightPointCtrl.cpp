@@ -3,10 +3,11 @@
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sDefaultBlendTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sDefaultDistRef = 15.0f;
+    NEBULA_TUNABLE(f32, sDefaultDistRef, 15.0f);
 };  // namespace
 
 LightPointCtrl::LightPointCtrl()

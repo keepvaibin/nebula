@@ -13,13 +13,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sHitSensorRadius = 900.0f;
-    static const s32 sBreakStopStep = 4;
-    static const s32 sBreakStopFrame = 30;
-    static const f32 sBreakStopDistance = 1000.0f;
-    static const f32 sStartEventForceJumpPlayerPower = 40.0f;
+    NEBULA_TUNABLE(f32, sHitSensorRadius, 900.0f);
+    NEBULA_TUNABLE(s32, sBreakStopStep, 4);
+    NEBULA_TUNABLE(s32, sBreakStopFrame, 30);
+    NEBULA_TUNABLE(f32, sBreakStopDistance, 1000.0f);
+    NEBULA_TUNABLE(f32, sStartEventForceJumpPlayerPower, 40.0f);
 };  // namespace
 
 namespace NrvTripodBossShell {

@@ -13,9 +13,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cJudgeNotMovingFrame = 60;
+    NEBULA_TUNABLE(s32, cJudgeNotMovingFrame, 60);
     const s32 cShowWaitFrame = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 

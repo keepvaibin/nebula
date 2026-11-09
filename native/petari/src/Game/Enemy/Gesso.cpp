@@ -5,9 +5,10 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sStepForWalk = 43;
+    NEBULA_TUNABLE(s32, sStepForWalk, 43);
 };  // namespace
 
 namespace NrvGesso {

@@ -4,11 +4,12 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRotateSpeed = 8.0f;
-    static const s32 sStepFlyUp = 10;
-    static const f32 sFlyUpSpeed = 30.0f;
+    NEBULA_TUNABLE(f32, sRotateSpeed, 8.0f);
+    NEBULA_TUNABLE(s32, sStepFlyUp, 10);
+    NEBULA_TUNABLE(f32, sFlyUpSpeed, 30.0f);
 };  // namespace
 
 namespace NrvNote {

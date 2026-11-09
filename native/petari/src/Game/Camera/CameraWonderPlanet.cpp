@@ -7,12 +7,13 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cCameraResetFrame = 30;
+    NEBULA_TUNABLE(s32, cCameraResetFrame, 30);
     const f32 cWatchPointRate = 0.1f / 15.0f;
     // The camera eases up toward mAngleX by this much of the gap each frame.
-    const f32 cAngleXChaseRate = 0.05f;
+    NEBULA_TUNABLE(f32, cAngleXChaseRate, 0.05f);
 }  // namespace
 
 CameraWonderPlanet::CameraWonderPlanet(const char* pName)

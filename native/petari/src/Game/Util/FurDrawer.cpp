@@ -6,11 +6,12 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <cmath>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const u32 cFurMapSeed = 1;
+    NEBULA_TUNABLE(u32, cFurMapSeed, 1);
     // Shell pixels at or under this alpha (0-255) are not drawn.
-    const f32 cAlphaReference = 32.0f;
+    NEBULA_TUNABLE(f32, cAlphaReference, 32.0f);
 
     // The fur's native material (runtime/src/render/materials/fur.hlsl) as setupMaterial set it; each shell sends it
     // with its own brightness, alphas and reach.

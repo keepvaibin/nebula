@@ -8,17 +8,18 @@
 #include "Game/Render/Material.hpp"
 #include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sScaleMin = 0.0001f;
-    static const f32 sDistancePush = 50.0f;
-    static const f32 sPlayerPushRate = 0.02f;
-    static const f32 sSpringAccelRate = 0.1f;
-    static const f32 sSpringFrictionRate = 0.9f;
-    static const f32 sSpringSpeedMax = 0.5f;
-    static const f32 sSpringCoordMax = 0.9f;
-    static const f32 sSpringCoordToStop = 0.01f;
-    static const f32 sSpringSpeedToStop = 0.001f;
+    NEBULA_TUNABLE(f32, sScaleMin, 0.0001f);
+    NEBULA_TUNABLE(f32, sDistancePush, 50.0f);
+    NEBULA_TUNABLE(f32, sPlayerPushRate, 0.02f);
+    NEBULA_TUNABLE(f32, sSpringAccelRate, 0.1f);
+    NEBULA_TUNABLE(f32, sSpringFrictionRate, 0.9f);
+    NEBULA_TUNABLE(f32, sSpringSpeedMax, 0.5f);
+    NEBULA_TUNABLE(f32, sSpringCoordMax, 0.9f);
+    NEBULA_TUNABLE(f32, sSpringCoordToStop, 0.01f);
+    NEBULA_TUNABLE(f32, sSpringSpeedToStop, 0.001f);
 };  // namespace
 
 PlantLeaf::PlantLeaf(f32 leafCoord, const Vec3f& rPosition, const Vec3f& rGrowDirection, f32 leafSize)

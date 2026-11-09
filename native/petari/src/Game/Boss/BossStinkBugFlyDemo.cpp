@@ -11,15 +11,16 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sFlySoundStartStep1 = 113;
-    static const s32 sFlySoundStartStep2 = 260;
-    static const s32 sShakeSoundStartStep = 48;
+    NEBULA_TUNABLE(s32, sFlySoundStartStep1, 113);
+    NEBULA_TUNABLE(s32, sFlySoundStartStep2, 260);
+    NEBULA_TUNABLE(s32, sShakeSoundStartStep, 48);
     static const s32 sShakeSoundEndStep = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const s32 sCloseFeetSoundStartStep = 230;
-    static const s32 sFlyStartSoundStartStep = 110;
-    static const s32 sFlyStartSoundEndStep = 263;
+    NEBULA_TUNABLE(s32, sCloseFeetSoundStartStep, 230);
+    NEBULA_TUNABLE(s32, sFlyStartSoundStartStep, 110);
+    NEBULA_TUNABLE(s32, sFlyStartSoundEndStep, 263);
 };  // namespace
 
 namespace NrvBossStinkBugFlyDemo {

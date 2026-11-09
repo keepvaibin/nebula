@@ -36,6 +36,7 @@
 
 #include <nebula_math.h>
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvWaterBazooka {
     NEW_NERVE(WaterBazookaNrvWaitForBattle, WaterBazooka, WaitForBattle);
@@ -57,7 +58,7 @@ namespace NrvWaterBazooka {
 };  // namespace NrvWaterBazooka
 
 namespace {
-    static const f32 sElectricBulletSpeed = 12.0f;
+    NEBULA_TUNABLE(f32, sElectricBulletSpeed, 12.0f);
     const char* const sDropPointStringTable[] = {"落下点1", "落下点2", "落下点3", "落下点4"};
     const s32 sElectricBulletNum = 5;
 };  // namespace

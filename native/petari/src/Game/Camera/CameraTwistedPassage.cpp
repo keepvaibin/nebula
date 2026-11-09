@@ -5,9 +5,10 @@
 #include "Game/Camera/CameraRailHolder.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sUpVecBlend = 0.97f;
+    NEBULA_TUNABLE(f32, sUpVecBlend, 0.97f);
 };  // namespace
 
 CameraTwistedPassage::CameraTwistedPassage(const char* pName) : Camera(pName), mRailRider(), mDistMin(500.0f), mDistMax(1300.0f), mIsReversed() {

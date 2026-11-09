@@ -10,17 +10,18 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sGroundFric = 1.0f;
-    static const f32 sMomentFric = 0.96f;
-    static const f32 sGravityAccel = 1.2f;
-    static const f32 sReboundRate = 0.4f;
-    static const f32 sReboundSpeedMin = 5.0f;
+    NEBULA_TUNABLE(f32, sGroundFric, 1.0f);
+    NEBULA_TUNABLE(f32, sMomentFric, 0.96f);
+    NEBULA_TUNABLE(f32, sGravityAccel, 1.2f);
+    NEBULA_TUNABLE(f32, sReboundRate, 0.4f);
+    NEBULA_TUNABLE(f32, sReboundSpeedMin, 5.0f);
     static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(2500);
-    static const s32 sExplosionMaxTime = 10;
-    static const s32 sExplosionTime = 20;
-    static const f32 sExplosionRadius = 280.0f;
+    NEBULA_TUNABLE(s32, sExplosionMaxTime, 10);
+    NEBULA_TUNABLE(s32, sExplosionTime, 20);
+    NEBULA_TUNABLE(f32, sExplosionRadius, 280.0f);
 };  // namespace
 
 namespace NrvBombBirdBomb {

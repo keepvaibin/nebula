@@ -9,46 +9,47 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/JointController.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 hCommonGravity = 1.5f;
-    const f32 hGroundDamp = 0.8f;
-    const f32 hAirDampH = 0.96f;
-    const f32 hAirDampV = 0.93f;
-    const f32 hPushedAcc = 2.0f;
-    const f32 hSearchDistance = 1000.0f;
-    const f32 hFlyDistance = 2000.0f;
-    const f32 hFlyPursueVel = 0.2f;
-    const f32 hFlyPursueLastSubVel = 0.01f;
-    const f32 hFlyHeight = 100.0f;
-    const s32 hFlyStartTime = 20;
-    const s32 hFlyPursueTime = 200;
-    const f32 hKeepAcc = 1.8f;
-    const f32 hFreqRange = 40.0f;
-    const f32 hOverturnFallJumpVelV = 30.0f;
+    NEBULA_TUNABLE(f32, hCommonGravity, 1.5f);
+    NEBULA_TUNABLE(f32, hGroundDamp, 0.8f);
+    NEBULA_TUNABLE(f32, hAirDampH, 0.96f);
+    NEBULA_TUNABLE(f32, hAirDampV, 0.93f);
+    NEBULA_TUNABLE(f32, hPushedAcc, 2.0f);
+    NEBULA_TUNABLE(f32, hSearchDistance, 1000.0f);
+    NEBULA_TUNABLE(f32, hFlyDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, hFlyPursueVel, 0.2f);
+    NEBULA_TUNABLE(f32, hFlyPursueLastSubVel, 0.01f);
+    NEBULA_TUNABLE(f32, hFlyHeight, 100.0f);
+    NEBULA_TUNABLE(s32, hFlyStartTime, 20);
+    NEBULA_TUNABLE(s32, hFlyPursueTime, 200);
+    NEBULA_TUNABLE(f32, hKeepAcc, 1.8f);
+    NEBULA_TUNABLE(f32, hFreqRange, 40.0f);
+    NEBULA_TUNABLE(f32, hOverturnFallJumpVelV, 30.0f);
     const s32 hOverturnTime = NebulaFrameClock::stepsOfSeconds(4);
-    const f32 hRecoverJumpVelV = 24.0f;
-    const f32 hDistNoCalcWait = 1000.0f;
-    const s32 hSeachTime = 50;
-    const s32 hEscapeSeachTime = 20;
-    const f32 hPreEscapeTurnLimitDegree = 9.0f;
+    NEBULA_TUNABLE(f32, hRecoverJumpVelV, 24.0f);
+    NEBULA_TUNABLE(f32, hDistNoCalcWait, 1000.0f);
+    NEBULA_TUNABLE(s32, hSeachTime, 50);
+    NEBULA_TUNABLE(s32, hEscapeSeachTime, 20);
+    NEBULA_TUNABLE(f32, hPreEscapeTurnLimitDegree, 9.0f);
     const s32 hFlyPursueLastTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    const f32 hFlyJitabataHeightBase = 60.0f;
-    const f32 hFlyJitabataHeight = 150.0f;
-    const f32 hJitabataPostureRate = 0.02f;
-    const f32 hJitabataAngle = -1.8f;
-    const f32 hFlyPursueLastAddRate = 1.0f;
-    const f32 hHitToPlayerJumpVelV = 10.0f;
-    const f32 hHitToPlayerJumpVelH = -10.0f;
-    const f32 hHitScaleYSpeed = 0.1f;
-    const s32 hStampDeathTime = 20;
-    const s32 hBlowStopSceneTime = 3;
-    const f32 hSearchTurnLimitDegree = 5.7f;
-    const f32 hFlyTurnLimitDegree = 5.7f;
-    const f32 hFlyEscapeTurnLimitDegree = 11.5f;
-    const f32 hOverturnRotateRate = 0.15f;
-    const f32 hRecoverRotateRate = 0.2f;
-    const f32 hBlowRotateAngle = -1.0f;
+    NEBULA_TUNABLE(f32, hFlyJitabataHeightBase, 60.0f);
+    NEBULA_TUNABLE(f32, hFlyJitabataHeight, 150.0f);
+    NEBULA_TUNABLE(f32, hJitabataPostureRate, 0.02f);
+    NEBULA_TUNABLE(f32, hJitabataAngle, -1.8f);
+    NEBULA_TUNABLE(f32, hFlyPursueLastAddRate, 1.0f);
+    NEBULA_TUNABLE(f32, hHitToPlayerJumpVelV, 10.0f);
+    NEBULA_TUNABLE(f32, hHitToPlayerJumpVelH, -10.0f);
+    NEBULA_TUNABLE(f32, hHitScaleYSpeed, 0.1f);
+    NEBULA_TUNABLE(s32, hStampDeathTime, 20);
+    NEBULA_TUNABLE(s32, hBlowStopSceneTime, 3);
+    NEBULA_TUNABLE(f32, hSearchTurnLimitDegree, 5.7f);
+    NEBULA_TUNABLE(f32, hFlyTurnLimitDegree, 5.7f);
+    NEBULA_TUNABLE(f32, hFlyEscapeTurnLimitDegree, 11.5f);
+    NEBULA_TUNABLE(f32, hOverturnRotateRate, 0.15f);
+    NEBULA_TUNABLE(f32, hRecoverRotateRate, 0.2f);
+    NEBULA_TUNABLE(f32, hBlowRotateAngle, -1.0f);
 };  // namespace
 
 namespace NrvKoteBug {

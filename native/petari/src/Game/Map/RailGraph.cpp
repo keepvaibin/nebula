@@ -3,9 +3,10 @@
 #include "Game/Map/RailGraphEdge.hpp"
 #include "Game/Map/RailGraphIter.hpp"
 #include "Game/Map/RailGraphNode.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cInitialCapacity = 0x100;
+    NEBULA_TUNABLE(s32, cInitialCapacity, 0x100);
 }  // namespace
 
 RailGraph::RailGraph()

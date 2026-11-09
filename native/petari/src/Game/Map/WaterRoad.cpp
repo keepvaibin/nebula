@@ -28,36 +28,37 @@
 #include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRiderSpeedMin = 100.0f;
-    static const f32 sRiderSpeedMax = 150.0f;
-    static const f32 sRiderSpinAccel = 50.0f;
-    static const f32 sRiderFrictionRate = 0.99f;
+    NEBULA_TUNABLE(f32, sRiderSpeedMin, 100.0f);
+    NEBULA_TUNABLE(f32, sRiderSpeedMax, 150.0f);
+    NEBULA_TUNABLE(f32, sRiderSpinAccel, 50.0f);
+    NEBULA_TUNABLE(f32, sRiderFrictionRate, 0.99f);
     static const s32 sStepRideSpin = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sDisappearStep = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sSensorOffsetY = 300.0f;
-    static const f32 sPointIntervalLine = 100.0f;
-    static const f32 sDotPointCreateHigh = 0.998f;
-    static const f32 sDotPointCreateLow = 0.99f;
-    static const f32 sFloatToShortShift = 32768.0f;
-    static const f32 sDefaultRadius = 500.0f;
-    static const f32 sDotUpdateAxis = 0.99f;
-    static const f32 sTexRateU0 = 0.05f;
-    static const f32 sTexRateV0 = 0.0001f;
-    static const f32 sTexRateU1 = 0.05f;
-    static const f32 sTexRateV1 = 0.0001f;
-    static const f32 sTexRateU2 = 0.1f;
-    static const f32 sTexRateV2 = 0.0001f;
-    static const f32 sTexSpeedU0 = 0.002f;
-    static const f32 sTexSpeedV0 = -0.005f;
-    static const f32 sTexSpeedU1 = -0.0015f;
-    static const f32 sTexSpeedV1 = -0.005f;
-    static const f32 sTexSpeedV2 = -0.005f;
-    static const f32 sIndirectScale = 0.2f;
-    static const f32 sClippingRadiusOffset = 100.0f;
-    static const f32 sDistanceToLow = 10000.0f;
-    static const f32 sTexSpeedU2 = 0.0f;
+    NEBULA_TUNABLE(f32, sSensorOffsetY, 300.0f);
+    NEBULA_TUNABLE(f32, sPointIntervalLine, 100.0f);
+    NEBULA_TUNABLE(f32, sDotPointCreateHigh, 0.998f);
+    NEBULA_TUNABLE(f32, sDotPointCreateLow, 0.99f);
+    NEBULA_TUNABLE(f32, sFloatToShortShift, 32768.0f);
+    NEBULA_TUNABLE(f32, sDefaultRadius, 500.0f);
+    NEBULA_TUNABLE(f32, sDotUpdateAxis, 0.99f);
+    NEBULA_TUNABLE(f32, sTexRateU0, 0.05f);
+    NEBULA_TUNABLE(f32, sTexRateV0, 0.0001f);
+    NEBULA_TUNABLE(f32, sTexRateU1, 0.05f);
+    NEBULA_TUNABLE(f32, sTexRateV1, 0.0001f);
+    NEBULA_TUNABLE(f32, sTexRateU2, 0.1f);
+    NEBULA_TUNABLE(f32, sTexRateV2, 0.0001f);
+    NEBULA_TUNABLE(f32, sTexSpeedU0, 0.002f);
+    NEBULA_TUNABLE(f32, sTexSpeedV0, -0.005f);
+    NEBULA_TUNABLE(f32, sTexSpeedU1, -0.0015f);
+    NEBULA_TUNABLE(f32, sTexSpeedV1, -0.005f);
+    NEBULA_TUNABLE(f32, sTexSpeedV2, -0.005f);
+    NEBULA_TUNABLE(f32, sIndirectScale, 0.2f);
+    NEBULA_TUNABLE(f32, sClippingRadiusOffset, 100.0f);
+    NEBULA_TUNABLE(f32, sDistanceToLow, 10000.0f);
+    NEBULA_TUNABLE(f32, sTexSpeedU2, 0.0f);
 
     static NebulaColor8 sStageColor1 = {0x28, 0x28, 0x28, 0x14};
     static NebulaColor8 sStageColor2 = {0x55, 0x96, 0xBE, 0xFF};

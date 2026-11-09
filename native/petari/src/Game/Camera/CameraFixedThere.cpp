@@ -7,9 +7,10 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sGroundFixAngle = 30.0f;
+    NEBULA_TUNABLE(f32, sGroundFixAngle, 30.0f);
 };  // namespace
 
 CameraFixedThere::CameraFixedThere(const char* pName)

@@ -10,6 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const MR::ActorMoveParam sRunParam = {3.0f, 1.0f, 0.9f, 3.0f};
@@ -19,15 +20,15 @@ namespace {
     const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.9f, 0.0f};
     const MR::ActorMoveParam sEvenParam = {0.0f, 1.0f, 0.95f, 0.5f};
     const s32 sWaitToStartStep = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sDistanceToJump = 1000.0f;
+    NEBULA_TUNABLE(f32, sDistanceToJump, 1000.0f);
     const s32 sRunStepMax = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 sRunWallJumpSpeed = 10.0f;
-    const f32 sStartTurnSpeed = 5.0f;
-    const f32 sWallJumpSpeed = 15.0f;
+    NEBULA_TUNABLE(f32, sRunWallJumpSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sStartTurnSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sWallJumpSpeed, 15.0f);
     const s32 sSpinBrakeStep = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sSpinAttackStepMin = 5;
-    const s32 sSpinAttackStepMax = 65;
-    const s32 sEvenStopSceneStep = 15;
+    NEBULA_TUNABLE(s32, sSpinAttackStepMin, 5);
+    NEBULA_TUNABLE(s32, sSpinAttackStepMax, 65);
+    NEBULA_TUNABLE(s32, sEvenStopSceneStep, 15);
 };  // namespace
 
 namespace NrvKoopaStateAttackSpin {

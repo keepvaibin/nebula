@@ -25,56 +25,57 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sLightLength = 1500.0f;
-    static const f32 sBodyRadius = 70.0f;
-    static const f32 sCatchRadius = 30.0f;
-    static const f32 sBindRadius = 60.0f;
-    static const f32 sBindYOffset = 60.0f;
-    static const f32 sShadowRadius = 45.0f;
-    static const f32 sUpVecBlendRate = 0.1f;
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const f32 sAirFric = 0.99f;
-    static const f32 sAirGravityAccel = 1.0f;
-    static const f32 sPushAccel = 0.5f;
-    static const f32 sWaitTurnLimit = 20.0f;
-    static const f32 sHoleAppearPowerH = 19.0f;
-    static const f32 sHoleAppearPowerV = 25.0f;
-    static const f32 sGroundAppearPowerH = 16.0f;
-    static const f32 sGroundAppearPowerV = 25.0f;
-    static const f32 sRunawayAccelMax = 1.8f;
-    static const f32 sRunawayAccelMin = 0.5f;
+    NEBULA_TUNABLE(f32, sLightLength, 1500.0f);
+    NEBULA_TUNABLE(f32, sBodyRadius, 70.0f);
+    NEBULA_TUNABLE(f32, sCatchRadius, 30.0f);
+    NEBULA_TUNABLE(f32, sBindRadius, 60.0f);
+    NEBULA_TUNABLE(f32, sBindYOffset, 60.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 45.0f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sAirFric, 0.99f);
+    NEBULA_TUNABLE(f32, sAirGravityAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sPushAccel, 0.5f);
+    NEBULA_TUNABLE(f32, sWaitTurnLimit, 20.0f);
+    NEBULA_TUNABLE(f32, sHoleAppearPowerH, 19.0f);
+    NEBULA_TUNABLE(f32, sHoleAppearPowerV, 25.0f);
+    NEBULA_TUNABLE(f32, sGroundAppearPowerH, 16.0f);
+    NEBULA_TUNABLE(f32, sGroundAppearPowerV, 25.0f);
+    NEBULA_TUNABLE(f32, sRunawayAccelMax, 1.8f);
+    NEBULA_TUNABLE(f32, sRunawayAccelMin, 0.5f);
     // bool sIsTireRunawayAccel;
-    static const f32 sNoPressureAccel = 0.6f;
-    static const f32 sPressureRange = 400.0f;
-    static const s32 sPressureLimitTime = 2000;
-    static const s32 sPressureDeccelStart = 200;
+    NEBULA_TUNABLE(f32, sNoPressureAccel, 0.6f);
+    NEBULA_TUNABLE(f32, sPressureRange, 400.0f);
+    NEBULA_TUNABLE(s32, sPressureLimitTime, 2000);
+    NEBULA_TUNABLE(s32, sPressureDeccelStart, 200);
     static const s32 sPressureDeccelTimeLv1 = NebulaFrameClock::stepsOfSeconds(4);
-    static const s32 sPressureDeccelTimeLv2 = 500;
-    static const s32 sPressureDeccelTimeLv3 = 800;
+    NEBULA_TUNABLE(s32, sPressureDeccelTimeLv2, 500);
+    NEBULA_TUNABLE(s32, sPressureDeccelTimeLv3, 800);
     // f32 sRunawayTurnStartLimit;
     // f32 sRunawayTurnLimit;
     // s32 sRunawayTurnDeccelTime;
-    static const f32 sAwayTargetVelocityRate = 0.3f;
+    NEBULA_TUNABLE(f32, sAwayTargetVelocityRate, 0.3f);
     // f32 sRunAccelbyBckRate;
-    static const f32 sMinRunBckRate = 0.9f;
-    static const f32 sMaxRunBckRate = 1.4f;
-    static const s32 sMarioPoseBlendTime = 5;
+    NEBULA_TUNABLE(f32, sMinRunBckRate, 0.9f);
+    NEBULA_TUNABLE(f32, sMaxRunBckRate, 1.4f);
+    NEBULA_TUNABLE(s32, sMarioPoseBlendTime, 5);
     // const f32 sCaughtJumpPower;
     // f32 sCaughtJumpFrontPower;
-    static const f32 sDamageTurnLimit = 3.0f;
-    static const f32 sBlowAccelH = 25.0f;
-    static const f32 sBlowAccelV = 30.0f;
+    NEBULA_TUNABLE(f32, sDamageTurnLimit, 3.0f);
+    NEBULA_TUNABLE(f32, sBlowAccelH, 25.0f);
+    NEBULA_TUNABLE(f32, sBlowAccelV, 30.0f);
     // s32 sDamageLandTime;
-    static const f32 sStarPieceHitAccelH = 20.0f;
-    static const f32 sStarPieceHitAccelV = 20.0f;
-    static const f32 sNearSoundRadiusDefault = 600.0f;
-    static const f32 sNearSoundRadiusEdge = 250.0f;
-    static const s32 sNearSoundFxSend = 60;
-    static const f32 sNearSoundMinVolume = 35.0f;
-    static const f32 sNearSoundMaxVolume = 100.0f;
-    static const s32 sTossStep = 10;
+    NEBULA_TUNABLE(f32, sStarPieceHitAccelH, 20.0f);
+    NEBULA_TUNABLE(f32, sStarPieceHitAccelV, 20.0f);
+    NEBULA_TUNABLE(f32, sNearSoundRadiusDefault, 600.0f);
+    NEBULA_TUNABLE(f32, sNearSoundRadiusEdge, 250.0f);
+    NEBULA_TUNABLE(s32, sNearSoundFxSend, 60);
+    NEBULA_TUNABLE(f32, sNearSoundMinVolume, 35.0f);
+    NEBULA_TUNABLE(f32, sNearSoundMaxVolume, 100.0f);
+    NEBULA_TUNABLE(s32, sTossStep, 10);
 
     class RunawayRabbitParam : public WalkerStateRunawayParam {
     public:

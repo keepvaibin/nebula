@@ -4,12 +4,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sDistance = 300.0f;
-    const f32 sAttenuation = 0.7f;
-    const f32 sRoundDiv = 8.0f;
-    const f32 sRoundAddition = 0.08f;
+    NEBULA_TUNABLE(f32, sDistance, 300.0f);
+    NEBULA_TUNABLE(f32, sAttenuation, 0.7f);
+    NEBULA_TUNABLE(f32, sRoundDiv, 8.0f);
+    NEBULA_TUNABLE(f32, sRoundAddition, 0.08f);
 };  // namespace
 
 CameraTripodBossJoint::CameraTripodBossJoint(const char* pName)

@@ -9,11 +9,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sJumpFrontSpeed = 20.0f;
-    const f32 sJumpFlyUpSpeed = 35.0f;
-    const f32 sJumpGravity = 1.0f;
+    NEBULA_TUNABLE(f32, sJumpFrontSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, sJumpFlyUpSpeed, 35.0f);
+    NEBULA_TUNABLE(f32, sJumpGravity, 1.0f);
     const s32 sLandStepVs3Lv3 = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 

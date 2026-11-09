@@ -6,9 +6,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDisappearAnimRate = 0.25f;
+    NEBULA_TUNABLE(f32, sDisappearAnimRate, 0.25f);
 
     // A text's code units with its terminator.
     u32 unitsWithEnd(const char16_t* pText) {

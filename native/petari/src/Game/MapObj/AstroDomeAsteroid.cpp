@@ -4,9 +4,10 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cBckRate = 1.0f;
+    NEBULA_TUNABLE(f32, cBckRate, 1.0f);
 };  // namespace
 
 namespace NrvAstroDomeAsteroid {

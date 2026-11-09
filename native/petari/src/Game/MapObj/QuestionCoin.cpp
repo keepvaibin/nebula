@@ -5,15 +5,16 @@
 #include "Game/MapObj/SpinDriverUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sHitRadius = 150.0f;
-    const f32 sOffsetY = 210.0f;
-    const f32 sInWaterScale = 2.0f;
-    const f32 sShadowRadius = 120.0f;
-    const f32 sShadowHeightMargin = 300.0f;
-    const s32 sBindAnimFrame = 3;
-    const s32 sBindStartBlendFrame = 0;
+    NEBULA_TUNABLE(f32, sHitRadius, 150.0f);
+    NEBULA_TUNABLE(f32, sOffsetY, 210.0f);
+    NEBULA_TUNABLE(f32, sInWaterScale, 2.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 120.0f);
+    NEBULA_TUNABLE(f32, sShadowHeightMargin, 300.0f);
+    NEBULA_TUNABLE(s32, sBindAnimFrame, 3);
+    NEBULA_TUNABLE(s32, sBindStartBlendFrame, 0);
 };  // namespace
 
 namespace NrvQuestionCoin {

@@ -29,41 +29,42 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDistanceNear = 700.0f;
-    static const f32 sDistanceBody = 300.0f;
-    static const f32 sDistancePush = 50.0f;
+    NEBULA_TUNABLE(f32, sDistanceNear, 700.0f);
+    NEBULA_TUNABLE(f32, sDistanceBody, 300.0f);
+    NEBULA_TUNABLE(f32, sDistancePush, 50.0f);
     static const s32 sStepDemoAppearEffect = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sStepDemoWaitGrowUp = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const f32 sHangUpStartTopLength = 150.0f;
-    static const f32 sHangUpPlayerSpeedMin = 10.0f;
-    static const f32 sHangStartRotateSpeed = 15.0f;
-    static const f32 sGrowUpPlayerSpeed = 10.0f;
-    static const f32 sHangUpAccel = 1.0f;
-    static const f32 sHangUpSpeedStartMin = -2.0f;
-    static const f32 sHangDownGravity = 0.3f;
-    static const f32 sHangUpSpeedMin = 15.0f;
-    static const f32 sHangUpSpeedMax = 35.0f;
-    static const f32 sHangDownSpeedMax = 20.0f;
-    static const f32 sHangUpRotateSpeedMax = 30.0f;
-    static const f32 sHangDownRotateSpeedMax = 20.0f;
-    static const f32 sHangRotateSpeedRate = 1.3f;
-    static const f32 sHangReachedDistance = 10.0f;
-    static const f32 sDefaultJumpSpeed = 30.0f;
+    NEBULA_TUNABLE(f32, sHangUpStartTopLength, 150.0f);
+    NEBULA_TUNABLE(f32, sHangUpPlayerSpeedMin, 10.0f);
+    NEBULA_TUNABLE(f32, sHangStartRotateSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sGrowUpPlayerSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sHangUpAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sHangUpSpeedStartMin, -2.0f);
+    NEBULA_TUNABLE(f32, sHangDownGravity, 0.3f);
+    NEBULA_TUNABLE(f32, sHangUpSpeedMin, 15.0f);
+    NEBULA_TUNABLE(f32, sHangUpSpeedMax, 35.0f);
+    NEBULA_TUNABLE(f32, sHangDownSpeedMax, 20.0f);
+    NEBULA_TUNABLE(f32, sHangUpRotateSpeedMax, 30.0f);
+    NEBULA_TUNABLE(f32, sHangDownRotateSpeedMax, 20.0f);
+    NEBULA_TUNABLE(f32, sHangRotateSpeedRate, 1.3f);
+    NEBULA_TUNABLE(f32, sHangReachedDistance, 10.0f);
+    NEBULA_TUNABLE(f32, sDefaultJumpSpeed, 30.0f);
     static const s32 sTimeInvalid = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sLeafIntervalMin = 100.0f;
-    static const f32 sLeafIntervalMax = 300.0f;
-    static const f32 sLeafPosOffsetStart = 100.0f;
-    static const f32 sLeafPosOffsetEnd = 200.0f;
-    static const f32 sLeafScaleMin = 1.0f;
-    static const f32 sLeafScaleMax = 1.5f;
-    static const f32 sLeafRotateMin = 90.0f;
-    static const f32 sLeafRotateMax = 270.0f;
-    static const f32 sLeafAxisDotMax = 0.7f;
+    NEBULA_TUNABLE(f32, sLeafIntervalMin, 100.0f);
+    NEBULA_TUNABLE(f32, sLeafIntervalMax, 300.0f);
+    NEBULA_TUNABLE(f32, sLeafPosOffsetStart, 100.0f);
+    NEBULA_TUNABLE(f32, sLeafPosOffsetEnd, 200.0f);
+    NEBULA_TUNABLE(f32, sLeafScaleMin, 1.0f);
+    NEBULA_TUNABLE(f32, sLeafScaleMax, 1.5f);
+    NEBULA_TUNABLE(f32, sLeafRotateMin, 90.0f);
+    NEBULA_TUNABLE(f32, sLeafRotateMax, 270.0f);
+    NEBULA_TUNABLE(f32, sLeafAxisDotMax, 0.7f);
 
-    static const s32 sHangAccelInvalidTime = 0;
-    static const f32 sDefaultJumpSpeedOffsetY = 0.0f;
+    NEBULA_TUNABLE(s32, sHangAccelInvalidTime, 0);
+    NEBULA_TUNABLE(f32, sDefaultJumpSpeedOffsetY, 0.0f);
 };  // namespace
 
 namespace NrvPlant {

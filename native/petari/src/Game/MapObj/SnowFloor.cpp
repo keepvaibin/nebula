@@ -10,34 +10,35 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const u16 sTextureSize = 128;
     // log2(sTextureSize): row offset of a cell in the depth arrays.
     const u16 sTextureShift = 7;
     const u16 sStripCount = 16;
-    const s16 sLayerCount = 12;
-    const s16 sColorR = 220;
-    const s16 sColorStepR = -3;
-    const s16 sColorG = 220;
-    const s16 sColorStepG = -3;
-    const s16 sColorB = 250;
-    const s16 sColorStepB = -3;
-    const s16 sColorA = 64;
-    const s16 sColorStepA = 8;
-    const s16 sLayerHeight = 6;
-    const f32 cPointerDigAmount = 30.0f;
-    const f32 cPlayerDigAmount = 600.0f;
-    const f32 cFireballDigAmount = 200.0f;
-    const f32 cSwingDigAmount = 20.0f;
-    const f32 cSwingDigRadius = 100.0f;
-    const f32 cHipdropDigAmount = 1000.0f;
-    const f32 cHipdropDigRadius = 50.0f;
-    const f32 cSnowFallRateBottom = 30.0f;
-    const f32 cSnowFallRate = 0.2f;
-    const f32 cSnowFallRateQuick = 0.5f;
-    const f32 cSnowFallRateFirst = 0.1f;
-    const f32 cPlayerWalkResist = 0.5f;
+    NEBULA_TUNABLE(s16, sLayerCount, 12);
+    NEBULA_TUNABLE(s16, sColorR, 220);
+    NEBULA_TUNABLE(s16, sColorStepR, -3);
+    NEBULA_TUNABLE(s16, sColorG, 220);
+    NEBULA_TUNABLE(s16, sColorStepG, -3);
+    NEBULA_TUNABLE(s16, sColorB, 250);
+    NEBULA_TUNABLE(s16, sColorStepB, -3);
+    NEBULA_TUNABLE(s16, sColorA, 64);
+    NEBULA_TUNABLE(s16, sColorStepA, 8);
+    NEBULA_TUNABLE(s16, sLayerHeight, 6);
+    NEBULA_TUNABLE(f32, cPointerDigAmount, 30.0f);
+    NEBULA_TUNABLE(f32, cPlayerDigAmount, 600.0f);
+    NEBULA_TUNABLE(f32, cFireballDigAmount, 200.0f);
+    NEBULA_TUNABLE(f32, cSwingDigAmount, 20.0f);
+    NEBULA_TUNABLE(f32, cSwingDigRadius, 100.0f);
+    NEBULA_TUNABLE(f32, cHipdropDigAmount, 1000.0f);
+    NEBULA_TUNABLE(f32, cHipdropDigRadius, 50.0f);
+    NEBULA_TUNABLE(f32, cSnowFallRateBottom, 30.0f);
+    NEBULA_TUNABLE(f32, cSnowFallRate, 0.2f);
+    NEBULA_TUNABLE(f32, cSnowFallRateQuick, 0.5f);
+    NEBULA_TUNABLE(f32, cSnowFallRateFirst, 0.1f);
+    NEBULA_TUNABLE(f32, cPlayerWalkResist, 0.5f);
     const u16 sCellSize = 1024 / sTextureSize;
 }  // namespace
 

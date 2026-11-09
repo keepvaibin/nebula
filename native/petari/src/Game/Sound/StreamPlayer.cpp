@@ -1,5 +1,6 @@
 #include "Game/Sound/StreamPlayer.hpp"
 #include <cstring>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const SeqPoint cReleaseTable[2] = {
@@ -8,7 +9,7 @@ namespace {
     };
     const OscData cStreamEnv = {Oscillator::TARGET_VOLUME, 1.0f, nullptr, cReleaseTable, 1.0f, 0.0f};
     // A stream's samples stay mapped while it plays.
-    const u32 cAlwaysLive = 1;
+    NEBULA_TUNABLE(u32, cAlwaysLive, 1);
 }  // namespace
 
 void StreamPlayer::init() {

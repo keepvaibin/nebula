@@ -19,19 +19,20 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const char* sPictureBookDemoName = "プロローグデモ";
     static const char* sArriveDemoName = "主人公ピーチ城に到着";
-    static const s32 sPicBookStartWipeFrame = 60;
-    static const s32 sPeachLetterWait = 20;
-    static const s32 sPeachLetterStartWipeFrame = 60;
-    static const s32 sPeachLetterEndWipeFrame = 60;
-    static const s32 sArriveStartWipeFrame = 30;
-    static const s32 sArriveEndWipeFrame = 30;
-    static const s32 sGameStartWipeFrame = 30;
-    static const s32 sGameStartFrame = 15;
-    static const s32 sFallingStarStep = 130;
+    NEBULA_TUNABLE(s32, sPicBookStartWipeFrame, 60);
+    NEBULA_TUNABLE(s32, sPeachLetterWait, 20);
+    NEBULA_TUNABLE(s32, sPeachLetterStartWipeFrame, 60);
+    NEBULA_TUNABLE(s32, sPeachLetterEndWipeFrame, 60);
+    NEBULA_TUNABLE(s32, sArriveStartWipeFrame, 30);
+    NEBULA_TUNABLE(s32, sArriveEndWipeFrame, 30);
+    NEBULA_TUNABLE(s32, sGameStartWipeFrame, 30);
+    NEBULA_TUNABLE(s32, sGameStartFrame, 15);
+    NEBULA_TUNABLE(s32, sFallingStarStep, 130);
 
     PrologueHolder* getPrologueHolder() {
         return MR::getSceneObj< PrologueHolder >(SceneObj_PrologueHolder);

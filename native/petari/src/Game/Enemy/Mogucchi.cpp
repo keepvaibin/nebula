@@ -23,6 +23,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     NEW_NERVE_ONEND(MogucchiNrvStroll, Mogucchi, Stroll, Stroll);
@@ -33,30 +34,30 @@ namespace {
     NEW_NERVE(MogucchiNrvDie, Mogucchi, Die);
 
     const Vec cHeadOffset = {40.0f, 0.0f, -8.0f};
-    const f32 cHeadRadius = 83.0f;
-    const f32 cBodyRadius = 120.0f;
-    const f32 cSpinRadius = 180.0f;
-    const f32 cDefaultMaxStrollSpeed = 5.0f;
-    const f32 cStrollAccel = 0.1f;
+    NEBULA_TUNABLE(f32, cHeadRadius, 83.0f);
+    NEBULA_TUNABLE(f32, cBodyRadius, 120.0f);
+    NEBULA_TUNABLE(f32, cSpinRadius, 180.0f);
+    NEBULA_TUNABLE(f32, cDefaultMaxStrollSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, cStrollAccel, 0.1f);
     // A hip drop landing this close knocks it out of the ground.
-    const f32 cHipDropReach = 800.0f;
+    NEBULA_TUNABLE(f32, cHipDropReach, 800.0f);
     const s32 cDownTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Hits are ignored for the first frames of being knocked up.
-    const s32 cAppearDownGuardTime = 10;
-    const s32 cHitStopFrame = 8;
-    const f32 cScatterUpSpeed = 50.0f;
-    const f32 cScatterUpDecel = 1.2f;
-    const f32 cScatterSideSpeed = 23.0f;
-    const s32 cScatterTime = 15;
+    NEBULA_TUNABLE(s32, cAppearDownGuardTime, 10);
+    NEBULA_TUNABLE(s32, cHitStopFrame, 8);
+    NEBULA_TUNABLE(f32, cScatterUpSpeed, 50.0f);
+    NEBULA_TUNABLE(f32, cScatterUpDecel, 1.2f);
+    NEBULA_TUNABLE(f32, cScatterSideSpeed, 23.0f);
+    NEBULA_TUNABLE(s32, cScatterTime, 15);
     const s32 cDieTime = NebulaFrameClock::stepsOfSeconds(1);
     // The hill gets one piece per cHillPieceLength of rail, up to cHillPieceMax; the last cHillHiddenPieces stay hidden.
-    const f32 cHillPieceLength = 150.0f;
-    const s32 cHillPieceMax = 20;
-    const s32 cHillHiddenPieces = 5;
-    const f32 cHillAppearDistance = 80.0f;
-    const f32 cHillAppearDistanceMax = 100.0f;
-    const f32 cPointerEffectScale = 1.4f;
-    const f32 cGroundCheckLength = 1000.0f;
+    NEBULA_TUNABLE(f32, cHillPieceLength, 150.0f);
+    NEBULA_TUNABLE(s32, cHillPieceMax, 20);
+    NEBULA_TUNABLE(s32, cHillHiddenPieces, 5);
+    NEBULA_TUNABLE(f32, cHillAppearDistance, 80.0f);
+    NEBULA_TUNABLE(f32, cHillAppearDistanceMax, 100.0f);
+    NEBULA_TUNABLE(f32, cPointerEffectScale, 1.4f);
+    NEBULA_TUNABLE(f32, cGroundCheckLength, 1000.0f);
 }  // namespace
 
 Mogucchi::Mogucchi(const char* pName)

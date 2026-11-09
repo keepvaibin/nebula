@@ -5,13 +5,14 @@
 #include "Game/MapObj/Coin.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sCreateCoinNum = 32;
-    const f32 sRandomizeVel = 4.0f;
-    const f32 sCoinVelVertical = 25.0f;
-    const f32 sCircleVelHRatio = 0.25f;
-    const f32 sCircleVelLength = 30.0f;
+    NEBULA_TUNABLE(s32, sCreateCoinNum, 32);
+    NEBULA_TUNABLE(f32, sRandomizeVel, 4.0f);
+    NEBULA_TUNABLE(f32, sCoinVelVertical, 25.0f);
+    NEBULA_TUNABLE(f32, sCircleVelHRatio, 0.25f);
+    NEBULA_TUNABLE(f32, sCircleVelLength, 30.0f);
 };  // namespace
 
 CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sCreateCoinNum) {

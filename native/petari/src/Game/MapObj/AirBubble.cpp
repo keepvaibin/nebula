@@ -11,16 +11,17 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cHitSensorRadius = 130.0f;
-    const f32 cSwingRange = 250.0f;
+    NEBULA_TUNABLE(f32, cHitSensorRadius, 130.0f);
+    NEBULA_TUNABLE(f32, cSwingRange, 250.0f);
     // const s32 cGrowTime = _;
-    const f32 cCorioriRotSpeed = 1.5f;
+    NEBULA_TUNABLE(f32, cCorioriRotSpeed, 1.5f);
     // const f32 cCoriolisAccel = _;
-    const f32 cMoveStartAccel = 7.0f;
+    NEBULA_TUNABLE(f32, cMoveStartAccel, 7.0f);
     // const f32 cFloatAccel = _;
-    const s32 cDefaultLife = 360;
+    NEBULA_TUNABLE(s32, cDefaultLife, 360);
 };  // namespace
 
 namespace NrvAirBubble {

@@ -18,31 +18,32 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sLiftHeight = 1000.0f;  // above the step point: lift ends, ankle fully turned, landing target
+    NEBULA_TUNABLE(f32, sLiftHeight, 1000.0f);  // above the step point: lift ends, ankle fully turned, landing target
     const s32 sLeaveOutWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 sTargetBrakeDistance = 300.0f;
-    const f32 sStampSignDistance = 300.0f;
-    const f32 sMoveDamping = 0.9f;
-    const f32 sApproachDamping = 0.95f;
-    const f32 sFallDamping = 0.98f;
-    const f32 sFallAccel = 1.0f;
-    const f32 sUpAccel = 1.5f;
-    const f32 sLeaveOutUpAccel = 0.8f;
-    const f32 sAnkleSlerpRate = 0.2f;
-    const f32 sAnkleLandingStartRate = 0.15f;
-    const f32 sAnkleShadowOffset = 630.0f;
+    NEBULA_TUNABLE(f32, sTargetBrakeDistance, 300.0f);
+    NEBULA_TUNABLE(f32, sStampSignDistance, 300.0f);
+    NEBULA_TUNABLE(f32, sMoveDamping, 0.9f);
+    NEBULA_TUNABLE(f32, sApproachDamping, 0.95f);
+    NEBULA_TUNABLE(f32, sFallDamping, 0.98f);
+    NEBULA_TUNABLE(f32, sFallAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sUpAccel, 1.5f);
+    NEBULA_TUNABLE(f32, sLeaveOutUpAccel, 0.8f);
+    NEBULA_TUNABLE(f32, sAnkleSlerpRate, 0.2f);
+    NEBULA_TUNABLE(f32, sAnkleLandingStartRate, 0.15f);
+    NEBULA_TUNABLE(f32, sAnkleShadowOffset, 630.0f);
     const s32 sStampSignTime = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sStampSignVibrationTime = 20;
-    const f32 sStampSignVibrationCycle = 10.0f;
-    const f32 sStampSignVibrationAmplitude = 20.0f;
-    const f32 sLandShakeStrongDistance = 2000.0f;
-    const f32 sLandShakeMiddleDistance = 3500.0f;
-    const s32 sDamageVibrationTime = 27;
-    const f32 sDamageVibrationCycle = 0.25f;
-    const f32 sDamageVibrationAmplitude = 40.0f;
-    const f32 sShadowDropLength = 2000.0f;
+    NEBULA_TUNABLE(s32, sStampSignVibrationTime, 20);
+    NEBULA_TUNABLE(f32, sStampSignVibrationCycle, 10.0f);
+    NEBULA_TUNABLE(f32, sStampSignVibrationAmplitude, 20.0f);
+    NEBULA_TUNABLE(f32, sLandShakeStrongDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, sLandShakeMiddleDistance, 3500.0f);
+    NEBULA_TUNABLE(s32, sDamageVibrationTime, 27);
+    NEBULA_TUNABLE(f32, sDamageVibrationCycle, 0.25f);
+    NEBULA_TUNABLE(f32, sDamageVibrationAmplitude, 40.0f);
+    NEBULA_TUNABLE(f32, sShadowDropLength, 2000.0f);
 
     inline Vec3f calcAnkleShadowPosition(const Vec3f& rPosition, const Vec3f& rNormal) {
         Vec3f offset(rNormal);

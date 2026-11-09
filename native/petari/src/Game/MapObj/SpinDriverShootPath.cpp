@@ -2,10 +2,11 @@
 #include "Game/LiveActor/RailRider.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ParabolicPath.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cInitDirectionStep = 0.01f;
-    const s32 cParabolicLengthSamples = 32;
+    NEBULA_TUNABLE(f32, cInitDirectionStep, 0.01f);
+    NEBULA_TUNABLE(s32, cParabolicLengthSamples, 32);
 };  // namespace
 
 SpinDriverShootPath::SpinDriverShootPath() : mRailRider(nullptr), mPath(nullptr), mStartPosition(0.0f, 0.0f, 0.0f), mUsesParabolic(false) {

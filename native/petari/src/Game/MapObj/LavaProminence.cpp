@@ -18,13 +18,14 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sDefaultTimeWait = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sTimeSign = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const f32 sDefaultMoveSpeed = 20.0f;
+    NEBULA_TUNABLE(f32, sDefaultMoveSpeed, 20.0f);
     // Distance the body's sphere must pass beyond the view before the drop effect is deleted (it is made at the view's edge).
-    static const f32 sDropClipLeaveMargin = 150.0f;
+    NEBULA_TUNABLE(f32, sDropClipLeaveMargin, 150.0f);
 };  // namespace
 
 namespace NrvLavaProminence {

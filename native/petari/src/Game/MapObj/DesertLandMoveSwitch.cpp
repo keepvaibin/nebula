@@ -21,12 +21,13 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The press animation starts after this many steps, and the switch turns on when it ends.
-    const s32 cSwitchDownSteps = 6;
+    NEBULA_TUNABLE(s32, cSwitchDownSteps, 6);
     // Stepping on gives the top this push down.
-    const f32 cStepOnVelocity = -10.0f;
+    NEBULA_TUNABLE(f32, cStepOnVelocity, -10.0f);
     const s32 cTimerTickSteps = NebulaFrameClock::stepsOfSeconds(1);
     // SandClockGalaxy's down switch ticks as if 180 steps further on.
     const s32 cSandClockTimerLead = NebulaFrameClock::stepsOfSeconds(3);

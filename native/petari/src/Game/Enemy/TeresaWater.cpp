@@ -3,12 +3,13 @@
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const MR::ActorMoveParam sMoveParam = {0.5f, 0.0f, 0.9f, 1.5f};
-    static const f32 sDefaultMoveLength = 800.0f;
-    static const f32 sSideFriction = 0.5f;
-    static const f32 sTargetRadius = 30.0f;
+    NEBULA_TUNABLE(f32, sDefaultMoveLength, 800.0f);
+    NEBULA_TUNABLE(f32, sSideFriction, 0.5f);
+    NEBULA_TUNABLE(f32, sTargetRadius, 30.0f);
 };  // namespace
 
 namespace NrvTeresaWater {

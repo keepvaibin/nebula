@@ -14,11 +14,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cRockCircleBaseAngle = 15.0f;
-    const f32 cRockCircleAngleStep = 7.0f;
-    const f32 cBombTeresaRootHeight = 120.0f;
+    NEBULA_TUNABLE(f32, cRockCircleBaseAngle, 15.0f);
+    NEBULA_TUNABLE(f32, cRockCircleAngleStep, 7.0f);
+    NEBULA_TUNABLE(f32, cBombTeresaRootHeight, 120.0f);
 }  // namespace
 
 namespace PoltaFunction {

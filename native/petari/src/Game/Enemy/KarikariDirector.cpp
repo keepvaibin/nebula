@@ -5,6 +5,7 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
 
@@ -15,7 +16,7 @@ namespace {
                                     {"ShoulderR", {19.04f, 0.0f, 0.0f}, {2.29f, -199.69f, 205.0f}}};
 
     static const s32 hKarikariHoldingMax = ARRAY_SIZE(cling_data);
-    static const s32 sNoReleaseTime = 10;
+    NEBULA_TUNABLE(s32, sNoReleaseTime, 10);
     static const s32 sRumbleInterval = NebulaFrameClock::stepsOfSeconds(2);
 
     KarikariDirector* getKarikariDirector() {

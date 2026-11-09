@@ -22,29 +22,30 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sBodyHitRadius = 100.0f;
-    static const f32 sBodyHitYOffset = 100.0f;
-    static const f32 sAttackHitRadius = 70.0f;
-    static const f32 sAttackHitYOffset = 70.0f;
-    static const f32 sBinderRadius = 90.0f;
-    static const f32 sShadowRadius = 90.0f;
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const f32 sUpVecBlendRate = 0.1f;
-    static const f32 sNormalFreq = 0.9f;
-    static const f32 sNormalGravity = 0.2f;
-    static const f32 sRailCoordStepInterval = 50.0f;
+    NEBULA_TUNABLE(f32, sBodyHitRadius, 100.0f);
+    NEBULA_TUNABLE(f32, sBodyHitYOffset, 100.0f);
+    NEBULA_TUNABLE(f32, sAttackHitRadius, 70.0f);
+    NEBULA_TUNABLE(f32, sAttackHitYOffset, 70.0f);
+    NEBULA_TUNABLE(f32, sBinderRadius, 90.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 90.0f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
+    NEBULA_TUNABLE(f32, sNormalFreq, 0.9f);
+    NEBULA_TUNABLE(f32, sNormalGravity, 0.2f);
+    NEBULA_TUNABLE(f32, sRailCoordStepInterval, 50.0f);
     static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sWalkSpeed = 0.2f;
-    static const f32 sWalkTurnDegree = 2.0f;
-    static const f32 sWalkGoalRange = 25.0f;
-    static const s32 sHitAttackedMinTime = 1;
-    static const s32 sHitAttackedMaxTime = 1;
-    static const f32 sHitAttackedAccelH = 15.0f;
-    static const f32 sHitAttackedAccelV = 30.0f;
-    static const f32 sHitAttackedGravity = 1.6f;
-    static const f32 sHitAttackedFreq = 0.99f;
+    NEBULA_TUNABLE(f32, sWalkSpeed, 0.2f);
+    NEBULA_TUNABLE(f32, sWalkTurnDegree, 2.0f);
+    NEBULA_TUNABLE(f32, sWalkGoalRange, 25.0f);
+    NEBULA_TUNABLE(s32, sHitAttackedMinTime, 1);
+    NEBULA_TUNABLE(s32, sHitAttackedMaxTime, 1);
+    NEBULA_TUNABLE(f32, sHitAttackedAccelH, 15.0f);
+    NEBULA_TUNABLE(f32, sHitAttackedAccelV, 30.0f);
+    NEBULA_TUNABLE(f32, sHitAttackedGravity, 1.6f);
+    NEBULA_TUNABLE(f32, sHitAttackedFreq, 0.99f);
 };  // namespace
 
 namespace NrvKabokuri {

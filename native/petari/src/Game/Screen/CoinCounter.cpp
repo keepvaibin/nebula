@@ -7,10 +7,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cInvalidCountUpInterval = 3;
-    const f32 cAstroLocationOffsetY = 40.0f;
+    NEBULA_TUNABLE(s32, cInvalidCountUpInterval, 3);
+    NEBULA_TUNABLE(f32, cAstroLocationOffsetY, 40.0f);
 };  // namespace
 
 namespace NrvCoinCounter {

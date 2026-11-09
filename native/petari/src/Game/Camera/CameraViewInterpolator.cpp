@@ -10,11 +10,12 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sCollisionBallRadius = 10000.0f;
-    static const f32 sCollisionThroughDistance = 3400.0f;
-    static const f32 sNearZ = 100.0f;
+    NEBULA_TUNABLE(f32, sCollisionBallRadius, 10000.0f);
+    NEBULA_TUNABLE(f32, sCollisionThroughDistance, 3400.0f);
+    NEBULA_TUNABLE(f32, sNearZ, 100.0f);
 };  // namespace
 
 CameraViewInterpolator::CameraViewInterpolator()

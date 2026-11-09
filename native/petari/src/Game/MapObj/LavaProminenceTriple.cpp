@@ -6,17 +6,18 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const f32 sNoSensorTable[] = {
         0.0f, 59.765598f, 134.2f, 176.045f, 222.6f, 278.26199f, 360.0f,
     };
 
-    static const f32 sInitRotateVel = 100.0f;
+    NEBULA_TUNABLE(f32, sInitRotateVel, 100.0f);
     // Distance a head must pass beyond the view before its drop effect is deleted (it is made at the view's edge).
-    static const f32 sDropClipLeaveMargin = 150.0f;
-    static const f32 sToSensorRadius = 1900.0f;
-    static const f32 sEnvironmentRadius = 2100.0f;
+    NEBULA_TUNABLE(f32, sDropClipLeaveMargin, 150.0f);
+    NEBULA_TUNABLE(f32, sToSensorRadius, 1900.0f);
+    NEBULA_TUNABLE(f32, sEnvironmentRadius, 2100.0f);
 };  // namespace
 
 LavaProminenceTriple::LavaProminenceTriple(const char* pName)

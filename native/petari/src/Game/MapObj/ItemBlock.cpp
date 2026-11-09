@@ -2,15 +2,16 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 cAppearItemStep = 1;
-    static const f32 cAppearItemOffsetY = 100.0f;
+    NEBULA_TUNABLE(s32, cAppearItemStep, 1);
+    NEBULA_TUNABLE(f32, cAppearItemOffsetY, 100.0f);
     static const s32 cTimerLimit = NebulaFrameClock::stepsOfSeconds(4);
-    static const s32 hNumTimerLastPiece = 11;
-    static const f32 hLastBonusSplashRangeH = 10.0f;
-    static const f32 hPointLightOffsetY = 100.0f;
-    static const f32 hBrightness = 0.998646f;
+    NEBULA_TUNABLE(s32, hNumTimerLastPiece, 11);
+    NEBULA_TUNABLE(f32, hLastBonusSplashRangeH, 10.0f);
+    NEBULA_TUNABLE(f32, hPointLightOffsetY, 100.0f);
+    NEBULA_TUNABLE(f32, hBrightness, 0.998646f);
 };  // namespace
 
 namespace NrvItemBlock {

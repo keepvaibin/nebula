@@ -4,10 +4,11 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sDepth = 500.0f;
-    const f32 sOffset = 50.0f;
+    NEBULA_TUNABLE(f32, sDepth, 500.0f);
+    NEBULA_TUNABLE(f32, sOffset, 50.0f);
 };  // namespace
 
 MapObjConnector::MapObjConnector(LiveActor* pActor) : mHost(pActor), mParts() {

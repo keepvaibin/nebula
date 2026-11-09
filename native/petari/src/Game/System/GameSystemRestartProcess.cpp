@@ -13,11 +13,12 @@
 #include "Game/Util/ValueControl.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
+#include "Game/Util/Tunable.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    static const s32 sFadeinoutFrame = 30;
+    NEBULA_TUNABLE(s32, sFadeinoutFrame, 30);
 };  // namespace
 
 namespace NrvGameSystemRestartProcess {

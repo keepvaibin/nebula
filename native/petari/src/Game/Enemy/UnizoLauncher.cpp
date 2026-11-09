@@ -5,10 +5,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sUnizoNumber = 4;
-    const s32 sUnizoInter = 300;
+    NEBULA_TUNABLE(s32, sUnizoInter, 300);
 };  // namespace
 
 namespace NrvUnizoLauncher {

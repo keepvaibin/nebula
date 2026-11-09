@@ -26,6 +26,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvIceMerameraKing {
     NEW_NERVE(HostTypeNrvSearch, IceMerameraKing, Search);
@@ -61,11 +62,11 @@ namespace {
     static const MR::ActorMoveParam hExtinguishFallOnAirParam = {0.0f, 4.0f, 0.96f, 0.0f};
     static const Vec3f hBinderOffset(-100.586f, 222.65601f, -91.796898f);
 
-    const s32 sIceNum = 6;
-    const f32 sBodyRadius = 130.0f;  // at joint scale 1
-    const f32 sAttackDistance = 1000.0f;
-    const f32 sSearchDistance = 4500.0f;
-    const f32 sPinchBgmDistance = 5000.0f;
+    NEBULA_TUNABLE(s32, sIceNum, 6);
+    NEBULA_TUNABLE(f32, sBodyRadius, 130.0f);  // at joint scale 1
+    NEBULA_TUNABLE(f32, sAttackDistance, 1000.0f);
+    NEBULA_TUNABLE(f32, sSearchDistance, 4500.0f);
+    NEBULA_TUNABLE(f32, sPinchBgmDistance, 5000.0f);
     const u32 sEscapeTime = NebulaFrameClock::stepsOfSeconds(10);
     // Shock wave hit radii by the scale of these joints.
     const char* const sShockCircleJoint = "Hirgh1";

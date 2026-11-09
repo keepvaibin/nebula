@@ -9,9 +9,10 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sEffectEmitterInterval = 600.0f;
+    NEBULA_TUNABLE(f32, sEffectEmitterInterval, 600.0f);
     static const s32 sStepBlowWindMin = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sStepBlowWindMax = NebulaFrameClock::stepsOfSeconds(4);
     static const s32 sStepToValidateClipping = NebulaFrameClock::stepsOfSeconds(3);

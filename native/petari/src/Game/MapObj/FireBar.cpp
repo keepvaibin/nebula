@@ -4,10 +4,11 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Distance the player must pass beyond the 5000 range before the ball's flame is deleted.
-    const f32 sEffectLeaveMargin = 500.0f;
+    NEBULA_TUNABLE(f32, sEffectLeaveMargin, 500.0f);
 };  // namespace
 
 namespace NrvFireBar {

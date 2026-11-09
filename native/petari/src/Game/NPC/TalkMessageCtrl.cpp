@@ -25,6 +25,7 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Indexed by a select branch's mNextIdx.
@@ -36,11 +37,11 @@ namespace {
     };
 
     // Selects that are not a yes/no question.
-    const u32 sSelectTicoShopWhich = 14;
-    const u32 sSelectCometTicoTell = 16;
+    NEBULA_TUNABLE(u32, sSelectTicoShopWhich, 14);
+    NEBULA_TUNABLE(u32, sSelectCometTicoTell, 16);
 
-    const f32 sDefaultTalkDistance = 240.0f;
-    const f32 sComposeTalkDistanceScale = 2.0f;
+    NEBULA_TUNABLE(f32, sDefaultTalkDistance, 240.0f);
+    NEBULA_TUNABLE(f32, sComposeTalkDistanceScale, 2.0f);
 
     // Events that go on to the next node by themselves.
     bool isNodeEventContinue(const TalkNode* pEvent) {

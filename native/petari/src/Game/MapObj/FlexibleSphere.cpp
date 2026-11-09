@@ -19,15 +19,16 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_math.h>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Placement args 0-2 are scales in ten-thousandths.
-    const f32 cArgScaleUnit = 10000.0f;
-    const f32 cDefaultMaxScale = 1.0f;
-    const f32 cDefaultMinScale = 0.1f;
-    const f32 cDefaultScaleRate = 0.002f;
-    const f32 cQuakeHearDistance = 4000.0f;
-    const u16 cQuakeFrames = 60;
+    NEBULA_TUNABLE(f32, cArgScaleUnit, 10000.0f);
+    NEBULA_TUNABLE(f32, cDefaultMaxScale, 1.0f);
+    NEBULA_TUNABLE(f32, cDefaultMinScale, 0.1f);
+    NEBULA_TUNABLE(f32, cDefaultScaleRate, 0.002f);
+    NEBULA_TUNABLE(f32, cQuakeHearDistance, 4000.0f);
+    NEBULA_TUNABLE(u16, cQuakeFrames, 60);
     const s32 cTimerSoundInterval = NebulaFrameClock::stepsOfSeconds(1);
 
     // The texture coordinate scale of the sphere being drawn: the surface pattern keeps its size as the sphere shrinks.

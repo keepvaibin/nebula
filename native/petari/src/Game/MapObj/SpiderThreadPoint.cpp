@@ -6,15 +6,16 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     SpiderThreadWindCtrl* getWindCtrl() {
         return MR::getSceneObj< SpiderThread >(SceneObj_SpiderThread)->mWindCtrl;
     }
 
-    static const f32 sAccelRate = 0.02f;
-    static const f32 sSpeedMinToStop = 0.1f;
-    static const f32 sDistanceToStop = 1.0f;
+    NEBULA_TUNABLE(f32, sAccelRate, 0.02f);
+    NEBULA_TUNABLE(f32, sSpeedMinToStop, 0.1f);
+    NEBULA_TUNABLE(f32, sDistanceToStop, 1.0f);
 };  // namespace
 
 SpiderThreadPoint::SpiderThreadPoint(const Vec3f& rPos, f32 friction)

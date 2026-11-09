@@ -21,15 +21,16 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sGoalBrake = 0.005f;
-    static const f32 sFallBrake = 0.002f;
-    static const s32 sTurnFrame = 60;
-    static const s32 sFallFrame = 240;
-    static const f32 sSensorRadius = 80.0f;
-    static const f32 sNearClipping = 200.0f;
-    static const f32 sSwimSoundPlayDistance = 500.0f;
+    NEBULA_TUNABLE(f32, sGoalBrake, 0.005f);
+    NEBULA_TUNABLE(f32, sFallBrake, 0.002f);
+    NEBULA_TUNABLE(s32, sTurnFrame, 60);
+    NEBULA_TUNABLE(s32, sFallFrame, 240);
+    NEBULA_TUNABLE(f32, sSensorRadius, 80.0f);
+    NEBULA_TUNABLE(f32, sNearClipping, 200.0f);
+    NEBULA_TUNABLE(f32, sSwimSoundPlayDistance, 500.0f);
 };  // namespace
 
 namespace NrvPenguinRacer {

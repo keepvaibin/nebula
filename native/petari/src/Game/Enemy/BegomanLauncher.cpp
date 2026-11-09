@@ -14,6 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvBegomanLauncher {
     NEW_NERVE(HostTypeNrvWaitAfterSwitchOn, BegomanLauncher, WaitAfterSwitchOn);
@@ -25,7 +26,7 @@ namespace NrvBegomanLauncher {
 };  // namespace NrvBegomanLauncher
 
 namespace {
-    const s32 sLaunchTime = 0;
+    NEBULA_TUNABLE(s32, sLaunchTime, 0);
 };  // namespace
 
 BegomanLauncher::BegomanLauncher(const char* pName) : LiveActor(pName), mBegomanCount(), mAppearDelay(), mBegomanArray(), mLaunchType(3) {

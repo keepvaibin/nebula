@@ -11,12 +11,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sDefaultShadowLength = 1000;
-    const s32 sStepForAdjust = 3;
-    const s32 sStepToRumbleCamera = 25;
-    const f32 sJumpPower = 28.0f;
+    NEBULA_TUNABLE(s32, sDefaultShadowLength, 1000);
+    NEBULA_TUNABLE(s32, sStepForAdjust, 3);
+    NEBULA_TUNABLE(s32, sStepToRumbleCamera, 25);
+    NEBULA_TUNABLE(f32, sJumpPower, 28.0f);
 };  // namespace
 
 namespace NrvScrewSwitchReverse {

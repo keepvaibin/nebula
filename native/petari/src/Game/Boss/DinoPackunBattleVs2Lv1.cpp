@@ -18,20 +18,21 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
 
     // While moving the tail bends up to sMovingBendRate over sBendEaseSteps.
     const s32 sBendEaseSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sMovingBendRate = 1.5f;
+    NEBULA_TUNABLE(f32, sMovingBendRate, 1.5f);
     // The mouth fires on these frames of the chase animation.
-    const f32 sMouthFireFrame0 = 32.0f;
-    const f32 sMouthFireFrame1 = 132.0f;
+    NEBULA_TUNABLE(f32, sMouthFireFrame0, 32.0f);
+    NEBULA_TUNABLE(f32, sMouthFireFrame1, 132.0f);
     // Tail fire leaves a trail point every this far.
-    const f32 sTailFireSpacing = 120.0f;
-    const f32 sSightDistance = 1050.0f;
-    const f32 sChaseSightDistance = 2000.0f;
+    NEBULA_TUNABLE(f32, sTailFireSpacing, 120.0f);
+    NEBULA_TUNABLE(f32, sSightDistance, 1050.0f);
+    NEBULA_TUNABLE(f32, sChaseSightDistance, 2000.0f);
 };  // namespace
 
 namespace NrvDinoPackunBattleVs2Lv1 {

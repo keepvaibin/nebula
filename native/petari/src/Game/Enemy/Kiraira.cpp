@@ -18,20 +18,21 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sTurnRate = 2.8f;
-    static const s32 sStepToStare = 5;
-    static const f32 sRailGoalOffset = 50.0f;
-    static const s32 sIntervalToExplode = 10;
-    static const f32 sEyeHitSize = 600.0f;
-    static const f32 sMindEyeHitSize = 1500.0f;
-    static const f32 sCameraShakeDistance = 3000.0f;
+    NEBULA_TUNABLE(f32, sTurnRate, 2.8f);
+    NEBULA_TUNABLE(s32, sStepToStare, 5);
+    NEBULA_TUNABLE(f32, sRailGoalOffset, 50.0f);
+    NEBULA_TUNABLE(s32, sIntervalToExplode, 10);
+    NEBULA_TUNABLE(f32, sEyeHitSize, 600.0f);
+    NEBULA_TUNABLE(f32, sMindEyeHitSize, 1500.0f);
+    NEBULA_TUNABLE(f32, sCameraShakeDistance, 3000.0f);
     static const f32 sNoCameraShakeDistance = FLOAT_MAX;
     static const s32 sStepToRecoverSign = NebulaFrameClock::stepsOfSeconds(5);
     static const s32 sStepToRecover = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 sEyeSensorInRadius = 1500.0f;
-    static const f32 sEyeSensorOutRadius = 2000.0f;
+    NEBULA_TUNABLE(f32, sEyeSensorInRadius, 1500.0f);
+    NEBULA_TUNABLE(f32, sEyeSensorOutRadius, 2000.0f);
 };  // namespace
 
 namespace NrvKiraira {

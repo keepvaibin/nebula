@@ -5,10 +5,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sLifeTime = NebulaFrameClock::stepsOfSeconds(10);
-    static const s32 sRandWidth = 180;
+    NEBULA_TUNABLE(s32, sRandWidth, 180);
 };  // namespace
 
 RandomEffectObj::RandomEffectObj(const char* pName) : SimpleEffectObj(pName), mStep(), mSeStep(-1), mLifeTime(::sLifeTime), mRandWidth(::sRandWidth), mIsFireworks(false) {

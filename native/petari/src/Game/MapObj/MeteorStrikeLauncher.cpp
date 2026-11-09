@@ -7,6 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvMeteorStrikeLauncher {
     NEW_NERVE(MeteorStrikeLauncherNrvCreate, MeteorStrikeLauncher, Create);
@@ -14,7 +15,7 @@ namespace NrvMeteorStrikeLauncher {
 };  // namespace NrvMeteorStrikeLauncher
 
 namespace {
-    const f32 sClipRadius = 200.0f;
+    NEBULA_TUNABLE(f32, sClipRadius, 200.0f);
 };  // namespace
 
 MeteorStrikeLauncher::MeteorStrikeLauncher(const char* pName)

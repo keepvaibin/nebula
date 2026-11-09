@@ -10,27 +10,28 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cSightDistance = 1300.0f;
-    const f32 cSightDegree = 90.0f;
+    NEBULA_TUNABLE(f32, cSightDistance, 1300.0f);
+    NEBULA_TUNABLE(f32, cSightDegree, 90.0f);
     const s32 cTurnSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 cTurnDegree = 1.0f;
+    NEBULA_TUNABLE(f32, cTurnDegree, 1.0f);
     // Turns walk, as fast as the walk.
-    const f32 cWalkSpeed = 1.3f;
+    NEBULA_TUNABLE(f32, cWalkSpeed, 1.3f);
     const s32 cWalkSteps = NebulaFrameClock::stepsOfSeconds(3);
-    const s32 cWalkFootPrintPeriod = 50;
+    NEBULA_TUNABLE(s32, cWalkFootPrintPeriod, 50);
     const s32 cChaseSteps = NebulaFrameClock::stepsOfSeconds(5);
-    const f32 cChaseFaceDegree = 180.0f;
-    const f32 cChaseTurnDegree = 1.3f;
-    const f32 cChaseSpeed = 1.8f;
+    NEBULA_TUNABLE(f32, cChaseFaceDegree, 180.0f);
+    NEBULA_TUNABLE(f32, cChaseTurnDegree, 1.3f);
+    NEBULA_TUNABLE(f32, cChaseSpeed, 1.8f);
     const s32 cChaseAccelSteps = NebulaFrameClock::stepsOfMilliseconds(1500);
-    const s32 cChaseFootPrintPeriod = 46;
+    NEBULA_TUNABLE(s32, cChaseFootPrintPeriod, 46);
     // A star piece hit stops the chase this long.
-    const s32 cHitReactionSteps = 15;
+    NEBULA_TUNABLE(s32, cHitReactionSteps, 15);
     const s32 cCoolDownSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 cFindLandStep = 14;
-    const f32 cFindTurnDegree = 4.0f;
+    NEBULA_TUNABLE(s32, cFindLandStep, 14);
+    NEBULA_TUNABLE(f32, cFindTurnDegree, 4.0f);
 };  // namespace
 
 namespace NrvDinoPackunBattleVs1Lv2 {

@@ -2,12 +2,13 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraPoseParam.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sMinDistance = 1.0f;
-    static const f32 sBaseLength = 300.0f;
-    static const f32 sAccel = 1.0f;
-    static const f32 sSpeedMax = 100.0f;
+    NEBULA_TUNABLE(f32, sMinDistance, 1.0f);
+    NEBULA_TUNABLE(f32, sBaseLength, 300.0f);
+    NEBULA_TUNABLE(f32, sAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sSpeedMax, 100.0f);
 };  // namespace
 
 OnlyCamera::OnlyCamera(const char* pName)

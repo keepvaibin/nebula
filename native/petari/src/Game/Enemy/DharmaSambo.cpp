@@ -25,47 +25,48 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 hPursueGoParam[] = {0.3f, 1.0f, 0.97f, 3.0f};
-    const f32 hPursueEscapeParam[] = {-0.25f, 1.0f, 0.97f, 3.0f};
-    const f32 hOnlyTurnParam[] = {0.0f, 1.0f, 0.97f, 3.0f};
-    const f32 hNoMoveNoTurnParam[] = {0.0f, 1.0f, 0.8f, 0.0f};
-    const f32 hSpinHittedOnGroundParam[] = {0.0f, 1.0f, 0.8f, 0.0f};
-    const f32 hSpinHittedAirParam[] = {0.0f, 2.0f, 0.97f, 0.0f};
-    const f32 hEscapeOnGroundParam[] = {0.0f, 1.0f, 0.7f, 5.0f};
-    const f32 hEscapeAirParam[] = {0.15f, 2.0f, 0.98f, 5.0f};
-    const f32 hEscapeWaitOnGroundParam[] = {0.0f, 1.0f, 0.7f, 5.0f};
-    const f32 hEscapeWaitAirParam[] = {0.0f, 2.0f, 0.98f, 5.0f};
-    const f32 hPursueEscapeDist[] = {100.0f, 200.0f, 300.0f, 400.0f};
+    NEBULA_TUNABLE_LIST(f32, hPursueGoParam, , {0.3f, 1.0f, 0.97f, 3.0f});
+    NEBULA_TUNABLE_LIST(f32, hPursueEscapeParam, , {-0.25f, 1.0f, 0.97f, 3.0f});
+    NEBULA_TUNABLE_LIST(f32, hOnlyTurnParam, , {0.0f, 1.0f, 0.97f, 3.0f});
+    NEBULA_TUNABLE_LIST(f32, hNoMoveNoTurnParam, , {0.0f, 1.0f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_LIST(f32, hSpinHittedOnGroundParam, , {0.0f, 1.0f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_LIST(f32, hSpinHittedAirParam, , {0.0f, 2.0f, 0.97f, 0.0f});
+    NEBULA_TUNABLE_LIST(f32, hEscapeOnGroundParam, , {0.0f, 1.0f, 0.7f, 5.0f});
+    NEBULA_TUNABLE_LIST(f32, hEscapeAirParam, , {0.15f, 2.0f, 0.98f, 5.0f});
+    NEBULA_TUNABLE_LIST(f32, hEscapeWaitOnGroundParam, , {0.0f, 1.0f, 0.7f, 5.0f});
+    NEBULA_TUNABLE_LIST(f32, hEscapeWaitAirParam, , {0.0f, 2.0f, 0.98f, 5.0f});
+    NEBULA_TUNABLE_LIST(f32, hPursueEscapeDist, , {100.0f, 200.0f, 300.0f, 400.0f});
     const char* joint_name[] = {"Spine1", "Spine2", "Spine3", "Spine4"};
     const s32 hEscapeTime = NebulaFrameClock::stepsOfSeconds(5);
-    const f32 hEscapeRunVelH = 7.0f;
-    const f32 hEscapeRunVelV = 30.0f;
-    const f32 hEscapeWaitDist = 800.0f;
-    const f32 hEscapeWaitJumpVel = 30.0f;
-    const f32 hInitPosRange = 1250.0f;
+    NEBULA_TUNABLE(f32, hEscapeRunVelH, 7.0f);
+    NEBULA_TUNABLE(f32, hEscapeRunVelV, 30.0f);
+    NEBULA_TUNABLE(f32, hEscapeWaitDist, 800.0f);
+    NEBULA_TUNABLE(f32, hEscapeWaitJumpVel, 30.0f);
+    NEBULA_TUNABLE(f32, hInitPosRange, 1250.0f);
     const s32 hAppearTime = NebulaFrameClock::stepsOfSeconds(10);
-    const s32 hBodyPartsNum = 4;
-    const f32 hWaitUnderGroundDistance = 800.0f;
+    NEBULA_TUNABLE(s32, hBodyPartsNum, 4);
+    NEBULA_TUNABLE(f32, hWaitUnderGroundDistance, 800.0f);
     const s32 hWaitUnderGroundTime = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 hPursueGoAddDist = 100.0f;
+    NEBULA_TUNABLE(f32, hPursueGoAddDist, 100.0f);
     const s32 hToAttackTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 hAttackTurnTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 hHideTime = NebulaFrameClock::stepsOfSeconds(5);
-    const s32 hHitStopTime = 5;
-    const f32 hSpinHittedMoveBodyRate = 0.5f;
-    const f32 hSpinHitVelH = 10.0f;
-    const f32 hSpinHitVelV = 30.0f;
-    const s32 hSpinHittedBlowableTime = 50;
-    const s32 hSpinHittedStarPointerBindableTime = 50;
-    const s32 hSpinHittedLandTime = 27;
+    NEBULA_TUNABLE(s32, hHitStopTime, 5);
+    NEBULA_TUNABLE(f32, hSpinHittedMoveBodyRate, 0.5f);
+    NEBULA_TUNABLE(f32, hSpinHitVelH, 10.0f);
+    NEBULA_TUNABLE(f32, hSpinHitVelV, 30.0f);
+    NEBULA_TUNABLE(s32, hSpinHittedBlowableTime, 50);
+    NEBULA_TUNABLE(s32, hSpinHittedStarPointerBindableTime, 50);
+    NEBULA_TUNABLE(s32, hSpinHittedLandTime, 27);
     const s32 hSpinHittedNoAttackTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 hBindMinStep = 10;
-    const s32 hStarPointerBindEndLandTime = 27;
-    const s32 hAppearSeTiming = 60;
-    const s32 hHideSeTiming = 65;
-    const s32 hPreHideSeTiming = 30;
+    NEBULA_TUNABLE(s32, hBindMinStep, 10);
+    NEBULA_TUNABLE(s32, hStarPointerBindEndLandTime, 27);
+    NEBULA_TUNABLE(s32, hAppearSeTiming, 60);
+    NEBULA_TUNABLE(s32, hHideSeTiming, 65);
+    NEBULA_TUNABLE(s32, hPreHideSeTiming, 30);
 };  // namespace
 
 void DharmaSambo::endStarPointerBind() {

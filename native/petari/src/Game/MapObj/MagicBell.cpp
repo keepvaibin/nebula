@@ -1,6 +1,7 @@
 #include "Game/MapObj/MagicBell.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvMagicBell {
     NEW_NERVE(MagicBellNrvWait, MagicBell, Wait);
@@ -9,11 +10,11 @@ namespace NrvMagicBell {
 
 namespace {
     // A ringing bell takes a new hit after this many steps.
-    const s32 sRehitStep = 10;
+    NEBULA_TUNABLE(s32, sRehitStep, 10);
     // The pointer must move faster than 8 screen units a frame to ring.
-    const f32 sPointerFlickSpeedSq = 64.0f;
+    NEBULA_TUNABLE(f32, sPointerFlickSpeedSq, 64.0f);
     // The bell and its clapper touch when their swing directions part this far.
-    const f32 sClapperTouchCos = 0.95f;
+    NEBULA_TUNABLE(f32, sClapperTouchCos, 0.95f);
 };  // namespace
 
 MagicBell::MagicBell(const char* pName)

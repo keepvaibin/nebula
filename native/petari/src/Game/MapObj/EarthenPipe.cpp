@@ -7,6 +7,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvEarthenPipe {
     NEW_NERVE(EarthenPipeNrvWait, EarthenPipe, Wait);
@@ -37,7 +38,7 @@ namespace {
         PIPE_REARM_WHEN_AWAY = 4,
     };
 
-    const f32 sRearmDistance = 100.0f;
+    NEBULA_TUNABLE(f32, sRearmDistance, 100.0f);
     // The rise out of the lava takes half a second.
     const s32 sRiseSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;
 

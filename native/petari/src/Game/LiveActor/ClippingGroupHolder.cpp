@@ -4,9 +4,10 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sGroupCapacity = 0x40;
+    NEBULA_TUNABLE(s32, sGroupCapacity, 0x40);
 };  // namespace
 
 ClippingInfoGroup::ClippingInfoGroup(const char* pGroupName, s32 capacity)

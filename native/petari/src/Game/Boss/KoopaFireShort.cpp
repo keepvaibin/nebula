@@ -13,14 +13,15 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sFlySpeedNormal = 15.0f;
-    static const f32 sFlySpeedFast = 30.0f;
+    NEBULA_TUNABLE(f32, sFlySpeedNormal, 15.0f);
+    NEBULA_TUNABLE(f32, sFlySpeedFast, 30.0f);
     static const s32 sFlyStepNormal = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sFlyStepLong = NebulaFrameClock::stepsOfSeconds(15);
     static const s32 sCurveLifeTime = NebulaFrameClock::stepsOfSeconds(5);
-    static const f32 sCurveRotateSpeed = 0.1f;
+    NEBULA_TUNABLE(f32, sCurveRotateSpeed, 0.1f);
     static const s32 sStepToValidSensor = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 

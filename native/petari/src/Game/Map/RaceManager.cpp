@@ -18,10 +18,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
+#include "Game/Util/Tunable.hpp"
 
 
 namespace {
-    static const s32 sBgmStartStep = 166;
+    NEBULA_TUNABLE(s32, sBgmStartStep, 166);
 };  // namespace
 
 namespace {

@@ -5,9 +5,10 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cInvalidCountUpInterval = 3;
+    NEBULA_TUNABLE(s32, cInvalidCountUpInterval, 3);
 };  // namespace
 
 namespace NrvPurpleCoinCounter {

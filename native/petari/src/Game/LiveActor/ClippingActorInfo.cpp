@@ -8,11 +8,12 @@
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Distance a clipping sphere must pass beyond the view volume before an actor that runs is clipped (or stops being
     // drawn while clipped); about the width of a large enemy, more than any camera or actor jitter at an edge.
-    const f32 sClipLeaveMargin = 150.0f;
+    NEBULA_TUNABLE(f32, sClipLeaveMargin, 150.0f);
 };  // namespace
 
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor)

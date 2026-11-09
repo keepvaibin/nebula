@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvOceanSmallTurtle {
     NEW_NERVE(OceanSmallTurtleNrvWait, OceanSmallTurtle, Wait);
@@ -14,16 +15,16 @@ namespace NrvOceanSmallTurtle {
 };  // namespace NrvOceanSmallTurtle
 
 namespace {
-    static const f32 sRisingSpeedAtFloatSignal = 0.5f;
-    static const f32 sCatchRailSpeed = 2.0f;
-    static const f32 sJudgeForCatchRail = 100.0f;
-    static const f32 sBoundAmpMax = 20.0f;
+    NEBULA_TUNABLE(f32, sRisingSpeedAtFloatSignal, 0.5f);
+    NEBULA_TUNABLE(f32, sCatchRailSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, sJudgeForCatchRail, 100.0f);
+    NEBULA_TUNABLE(f32, sBoundAmpMax, 20.0f);
     static const s32 sBoundTime = NebulaFrameClock::stepsOfMilliseconds(2500);
-    static const f32 sStartFloatPower = 1.0f;
-    static const f32 sRambleSide = 1.0f;
-    static const f32 sRambleRotX = 1.0f;
-    static const f32 sDefaultAccelRate = 20.0f;
-    static const f32 sAccelMax = 40.0f;
+    NEBULA_TUNABLE(f32, sStartFloatPower, 1.0f);
+    NEBULA_TUNABLE(f32, sRambleSide, 1.0f);
+    NEBULA_TUNABLE(f32, sRambleRotX, 1.0f);
+    NEBULA_TUNABLE(f32, sDefaultAccelRate, 20.0f);
+    NEBULA_TUNABLE(f32, sAccelMax, 40.0f);
     static const s32 sStepForFloatSignal = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sStepToRisingForFloatSignal = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace

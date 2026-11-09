@@ -9,11 +9,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sSensorSize = 175.0f;
-    static const f32 sShadowRadius = 100.0f;
-    static const s32 sStarPieceNum = 20;
+    NEBULA_TUNABLE(f32, sSensorSize, 175.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 100.0f);
+    NEBULA_TUNABLE(s32, sStarPieceNum, 20);
 };  // namespace
 
 namespace NrvKoopaJr {

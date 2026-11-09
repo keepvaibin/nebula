@@ -17,6 +17,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvStinkBugSmall {
     NEW_NERVE(StinkBugSmallNrvWait, StinkBugSmall, Wait);
@@ -38,20 +39,20 @@ namespace NrvStinkBugSmall {
 };  // namespace NrvStinkBugSmall
 
 namespace {
-    const f32 sTurnRateSearch = 1.0f;
-    const f32 sTurnRateDashSign = 3.0f;
-    const s32 sStepForWait = 1;
-    const s32 sStepForDashSignEnd = 10;
-    const s32 sStepForShakeStart = 40;
+    NEBULA_TUNABLE(f32, sTurnRateSearch, 1.0f);
+    NEBULA_TUNABLE(f32, sTurnRateDashSign, 3.0f);
+    NEBULA_TUNABLE(s32, sStepForWait, 1);
+    NEBULA_TUNABLE(s32, sStepForDashSignEnd, 10);
+    NEBULA_TUNABLE(s32, sStepForShakeStart, 40);
     const s32 sStepForRecover = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepForPanic = NebulaFrameClock::stepsOfMilliseconds(1500);
-    const f32 sDashSpeed = 20.0f;
-    const f32 sBackSpeed = 5.0f;
-    const f32 sHomeDistance = 10.0f;
-    const f32 sTerritoryReachMargin = 400.0f;
-    const f32 sTerritorySideHalfSize = 600.0f;
-    const f32 sTerritoryUpHalfSize = 200.0f;
-    const f32 sTerritoryBackOffset = 200.0f;
+    NEBULA_TUNABLE(f32, sDashSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, sBackSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sHomeDistance, 10.0f);
+    NEBULA_TUNABLE(f32, sTerritoryReachMargin, 400.0f);
+    NEBULA_TUNABLE(f32, sTerritorySideHalfSize, 600.0f);
+    NEBULA_TUNABLE(f32, sTerritoryUpHalfSize, 200.0f);
+    NEBULA_TUNABLE(f32, sTerritoryBackOffset, 200.0f);
 };  // namespace
 
 StinkBugSmall::StinkBugSmall(const char* pName) : StinkBugBase(pName), mScaleController(nullptr), mBindStarPointer(nullptr), mIsBodyAttack(false) {

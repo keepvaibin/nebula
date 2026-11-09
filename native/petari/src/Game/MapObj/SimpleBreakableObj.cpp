@@ -6,11 +6,12 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sDefaultBreakOffsetFrame = 60;
-    const s32 sDefaultItemNumCoin = 1;
-    const s32 sDefaultItemNumStarPiece = 5;
+    NEBULA_TUNABLE(s32, sDefaultBreakOffsetFrame, 60);
+    NEBULA_TUNABLE(s32, sDefaultItemNumCoin, 1);
+    NEBULA_TUNABLE(s32, sDefaultItemNumStarPiece, 5);
     const char* const cBckNameBreak = "Break";
     const char* const cDemoName = "注目カメラ";
 };  // namespace

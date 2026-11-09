@@ -12,16 +12,17 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sStartRunAwayBgmState = 2;
-    const s32 sFoundRabbitBgmState = 3;
-    const s32 sCaughtRabbitBgmState = 2;
-    const s32 sEndRunAwayBgmState = 1;
-    static const s32 sStartRunAwayBgmChangeFrames = 60;
-    static const s32 sFoundRabbitBgmChangeFrames = 30;
-    static const s32 sCaughtRabbitBgmChangeFrames = 90;
-    static const s32 sEndRunAwayBgmChangeFrames = 120;
+    NEBULA_TUNABLE(s32, sStartRunAwayBgmState, 2);
+    NEBULA_TUNABLE(s32, sFoundRabbitBgmState, 3);
+    NEBULA_TUNABLE(s32, sCaughtRabbitBgmState, 2);
+    NEBULA_TUNABLE(s32, sEndRunAwayBgmState, 1);
+    NEBULA_TUNABLE(s32, sStartRunAwayBgmChangeFrames, 60);
+    NEBULA_TUNABLE(s32, sFoundRabbitBgmChangeFrames, 30);
+    NEBULA_TUNABLE(s32, sCaughtRabbitBgmChangeFrames, 90);
+    NEBULA_TUNABLE(s32, sEndRunAwayBgmChangeFrames, 120);
 };  // namespace
 
 namespace NrvRunawayRabbitCollect {

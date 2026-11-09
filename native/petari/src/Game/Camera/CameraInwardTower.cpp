@@ -4,11 +4,12 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRoundThreshold = 0.3f;
-    static const f32 sAttenuation = 20.0f;
-    static const f32 sResetRotSpeed = 0.2f;
+    NEBULA_TUNABLE(f32, sRoundThreshold, 0.3f);
+    NEBULA_TUNABLE(f32, sAttenuation, 20.0f);
+    NEBULA_TUNABLE(f32, sResetRotSpeed, 0.2f);
 };  // namespace
 
 CameraInwardTower::CameraInwardTower(const char* pName)

@@ -11,12 +11,13 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sStepToScreenBlur = 65;
-    const s32 sScreenBlurStep = 135;
-    const s32 sStepToScreenBlurFinal = 50;
-    const s32 sScreenBlurStepFinal = 140;
+    NEBULA_TUNABLE(s32, sStepToScreenBlur, 65);
+    NEBULA_TUNABLE(s32, sScreenBlurStep, 135);
+    NEBULA_TUNABLE(s32, sStepToScreenBlurFinal, 50);
+    NEBULA_TUNABLE(s32, sScreenBlurStepFinal, 140);
 };  // namespace
 
 namespace NrvKoopaDemoPowerUp {

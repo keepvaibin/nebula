@@ -27,45 +27,46 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sAimAnimInterpole = 10;
-    static const f32 sAimDistanceToStretch = 300.0f;
-    static const f32 sAimDistanceToWait = 200.0f;
-    static const f32 sAccelRate = 0.02f;
-    static const f32 sFrictionRate = 0.95f;
-    static const f32 sDistanceToStop = 1.0f;
-    static const f32 sSpeedMinToStop = 0.1f;
-    static const f32 sPointerSpeedMin = 5.0f;
-    static const f32 sPointerSpeedAccelRate = 5.0f;
-    static const f32 sDistanceBindInvalid = 300.0f;
-    static const s32 sTouchTimerMax = 20;
-    static const s32 sStepFreeInvalidMin = 5;
-    static const f32 sDistanceMax = 500.0f;
-    static const f32 sFollowRate = 0.03f;
-    static const f32 sAimDistanceMin = 100.0f;
-    static const f32 sAimRumbleDistanceWeak = 100.0f;
-    static const f32 sAimRumbleDistanceStrong = 500.0f;
-    static const f32 sBindAttackSpeed = 60.0f;
-    static const f32 sBindAttackFrictionRate = 0.98f;
-    static const s32 sDefaultStepBindAttack = 60;
-    static const s32 sStepFriction = 90;
-    static const s32 sBindAttackInvalidTime = 20;
-    static const s32 sStepToStopScene = 1;
-    static const s32 sStepStopScene = 8;
-    static const f32 sDistanceBindCancel = 3000.0f;
-    static const f32 sCancelJumpSpeedXZ = 0.0f;
-    static const f32 sCancelJumpSpeedY = 0.0f;
-    static const s32 sWidthBottomPointNum = 3;
-    static const f32 sWidthTop = 2.0f;
-    static const f32 sWidthBottom = 1.0f;
-    static const f32 sStarPieceAccel = 5.0f;
-    static const f32 sDefaultHeight = 100.0f;
-    static const f32 sPointInterval = 10.0f;
-    static const f32 sDrawScaleX = 25.0f;
-    static const f32 sDrawScaleZ0 = 10.0f;
-    static const f32 sDrawScaleZ1 = 25.0f;
-    static const f32 sTexDiffU = -0.5f;
+    NEBULA_TUNABLE(s32, sAimAnimInterpole, 10);
+    NEBULA_TUNABLE(f32, sAimDistanceToStretch, 300.0f);
+    NEBULA_TUNABLE(f32, sAimDistanceToWait, 200.0f);
+    NEBULA_TUNABLE(f32, sAccelRate, 0.02f);
+    NEBULA_TUNABLE(f32, sFrictionRate, 0.95f);
+    NEBULA_TUNABLE(f32, sDistanceToStop, 1.0f);
+    NEBULA_TUNABLE(f32, sSpeedMinToStop, 0.1f);
+    NEBULA_TUNABLE(f32, sPointerSpeedMin, 5.0f);
+    NEBULA_TUNABLE(f32, sPointerSpeedAccelRate, 5.0f);
+    NEBULA_TUNABLE(f32, sDistanceBindInvalid, 300.0f);
+    NEBULA_TUNABLE(s32, sTouchTimerMax, 20);
+    NEBULA_TUNABLE(s32, sStepFreeInvalidMin, 5);
+    NEBULA_TUNABLE(f32, sDistanceMax, 500.0f);
+    NEBULA_TUNABLE(f32, sFollowRate, 0.03f);
+    NEBULA_TUNABLE(f32, sAimDistanceMin, 100.0f);
+    NEBULA_TUNABLE(f32, sAimRumbleDistanceWeak, 100.0f);
+    NEBULA_TUNABLE(f32, sAimRumbleDistanceStrong, 500.0f);
+    NEBULA_TUNABLE(f32, sBindAttackSpeed, 60.0f);
+    NEBULA_TUNABLE(f32, sBindAttackFrictionRate, 0.98f);
+    NEBULA_TUNABLE(s32, sDefaultStepBindAttack, 60);
+    NEBULA_TUNABLE(s32, sStepFriction, 90);
+    NEBULA_TUNABLE(s32, sBindAttackInvalidTime, 20);
+    NEBULA_TUNABLE(s32, sStepToStopScene, 1);
+    NEBULA_TUNABLE(s32, sStepStopScene, 8);
+    NEBULA_TUNABLE(f32, sDistanceBindCancel, 3000.0f);
+    NEBULA_TUNABLE(f32, sCancelJumpSpeedXZ, 0.0f);
+    NEBULA_TUNABLE(f32, sCancelJumpSpeedY, 0.0f);
+    NEBULA_TUNABLE(s32, sWidthBottomPointNum, 3);
+    NEBULA_TUNABLE(f32, sWidthTop, 2.0f);
+    NEBULA_TUNABLE(f32, sWidthBottom, 1.0f);
+    NEBULA_TUNABLE(f32, sStarPieceAccel, 5.0f);
+    NEBULA_TUNABLE(f32, sDefaultHeight, 100.0f);
+    NEBULA_TUNABLE(f32, sPointInterval, 10.0f);
+    NEBULA_TUNABLE(f32, sDrawScaleX, 25.0f);
+    NEBULA_TUNABLE(f32, sDrawScaleZ0, 10.0f);
+    NEBULA_TUNABLE(f32, sDrawScaleZ1, 25.0f);
+    NEBULA_TUNABLE(f32, sTexDiffU, -0.5f);
 
 };  // namespace
 
@@ -87,7 +88,7 @@ namespace NrvSpaceCocoon {
 };  // namespace NrvSpaceCocoon
 
 namespace {
-    static const f32 sTexStartU = 0.0f;
+    NEBULA_TUNABLE(f32, sTexStartU, 0.0f);
     static Color8 sColor(0xC8, 0xC8, 0xD7, 0xFF);
 };  // namespace
 

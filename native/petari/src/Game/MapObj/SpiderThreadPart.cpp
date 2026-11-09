@@ -11,22 +11,23 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static Color8 sColorPlusX(0x64, 0x64, 0x64, 0xFF);
     static Color8 sColorMinusX(0x96, 0x96, 0x96, 0xFF);
     static Color8 sColorMinusY(0xFF, 0xFF, 0xFF, 0xFF);
 
-    static const f32 sPointInterval = 50.0f;
-    static const f32 sFrictionLengthMin = 200.0f;
-    static const f32 sFrictionLengthMax = 700.0f;
-    static const s32 sTouchTimerMax = 5;
+    NEBULA_TUNABLE(f32, sPointInterval, 50.0f);
+    NEBULA_TUNABLE(f32, sFrictionLengthMin, 200.0f);
+    NEBULA_TUNABLE(f32, sFrictionLengthMax, 700.0f);
+    NEBULA_TUNABLE(s32, sTouchTimerMax, 5);
     static const s32 sActorTouchTimerMax = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 sForceAttachTime = 20;
-    static const f32 sWindFrictionRate = 0.93f;
-    static const f32 sTexRateV = 0.002f;
-    static const f32 sIndirectTexRateV = 0.001f;
-    static const f32 sIndirectTexSpeed = -0.002f;
+    NEBULA_TUNABLE(s32, sForceAttachTime, 20);
+    NEBULA_TUNABLE(f32, sWindFrictionRate, 0.93f);
+    NEBULA_TUNABLE(f32, sTexRateV, 0.002f);
+    NEBULA_TUNABLE(f32, sIndirectTexRateV, 0.001f);
+    NEBULA_TUNABLE(f32, sIndirectTexSpeed, -0.002f);
 };  // namespace
 
 SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadMainPoint* pPointB, f32 boundBoxPadding)

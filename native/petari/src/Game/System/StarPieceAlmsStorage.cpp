@@ -4,9 +4,10 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const u32 sMaxValueArray[] = {32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 400, 400, 600, 1200, 1600, 1000, 800, 32767};
+    NEBULA_TUNABLE_LIST(u32, sMaxValueArray, , {32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 400, 400, 600, 1200, 1600, 1000, 800, 32767});
 
     // The game's sixteen, and past them the slots mods add.
     s32 valueCount() {

@@ -7,10 +7,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sInertiaConstDefault = 500.0f;
-    const f32 sRestoreForceDefault = 100.0f;
+    NEBULA_TUNABLE(f32, sInertiaConstDefault, 500.0f);
+    NEBULA_TUNABLE(f32, sRestoreForceDefault, 100.0f);
 };  // namespace
 
 namespace NrvMapPartsSeesaw2AxisRotator {

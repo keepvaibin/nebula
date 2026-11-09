@@ -10,24 +10,25 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Passing: within this far of the ring's plane and this far of its centre.
-    const f32 cPassPlaneDistance = 20.0f;
-    const f32 cPassRadius = 200.0f;
+    NEBULA_TUNABLE(f32, cPassPlaneDistance, 20.0f);
+    NEBULA_TUNABLE(f32, cPassRadius, 200.0f);
     // Farther than this, the ring turns a little to face the player.
-    const f32 cTurnDistance = 300.0f;
-    const f32 cTurnRate = 0.03f;
+    NEBULA_TUNABLE(f32, cTurnDistance, 300.0f);
+    NEBULA_TUNABLE(f32, cTurnRate, 0.03f);
     // After a pass it follows the player this long, then rests before coming back.
-    const u16 cActiveSteps = 15;
+    NEBULA_TUNABLE(u16, cActiveSteps, 15);
     const u16 cRevivalSteps = NebulaFrameClock::stepsOfSeconds(3);
     // Following the player farther than this from home sends it back.
-    const f32 cFollowLimit = 2000.0f;
+    NEBULA_TUNABLE(f32, cFollowLimit, 2000.0f);
     // Defaults for args 0-2 (arg 2 in hundredths).
     const s32 cDefaultBoostTime = NebulaFrameClock::stepsOfSeconds(5);
     const s32 cDefaultMaxDuration = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 cDefaultSpeedScale = 2.5f;
-    const f32 cSpeedScaleArgUnit = 100.0f;
+    NEBULA_TUNABLE(f32, cDefaultSpeedScale, 2.5f);
+    NEBULA_TUNABLE(f32, cSpeedScaleArgUnit, 100.0f);
 
     void startAnim(LiveActor* pActor, const char* pName) {
         MR::startBck(pActor, pName);

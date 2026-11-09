@@ -11,13 +11,14 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sStarPieceNeed = 30;
-    static const f32 sMouthSize = 30.0f;
-    static const f32 sSensorSize = 100.0f;
-    static const f32 sSensorOffset = 100.0f;
-    static const f32 sShadowLength = 500.0f;
+    NEBULA_TUNABLE(s32, sStarPieceNeed, 30);
+    NEBULA_TUNABLE(f32, sMouthSize, 30.0f);
+    NEBULA_TUNABLE(f32, sSensorSize, 100.0f);
+    NEBULA_TUNABLE(f32, sSensorOffset, 100.0f);
+    NEBULA_TUNABLE(f32, sShadowLength, 500.0f);
 };  // namespace
 
 namespace NrvTicoShop {

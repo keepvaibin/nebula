@@ -25,15 +25,16 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     TalkDirector* getTalkDirector() {
         return MR::getSceneObj< TalkDirector >(SceneObj_TalkDirector);
     }
 
-    const f32 sTalkDistanceScale = 1.0f;
+    NEBULA_TUNABLE(f32, sTalkDistanceScale, 1.0f);
     // Range for the host of the long talk already running.
-    const f32 sNearScale = 1.2f;
+    NEBULA_TUNABLE(f32, sNearScale, 1.2f);
     const char* const cTalkDemoName = "会話";
 
     // TalkDirector::mDemoType.

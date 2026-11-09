@@ -10,9 +10,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 hZCheckAddDepth = 60.0f;
+    NEBULA_TUNABLE(f32, hZCheckAddDepth, 60.0f);
 
     inline void multProj(const Proj3f& rMtx, const Vec3f& rSrc, Vec3f& rDest) {
         f32 w = -rSrc.z;

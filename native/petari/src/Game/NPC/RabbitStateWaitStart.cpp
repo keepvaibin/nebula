@@ -8,15 +8,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sGravityAccel = 0.1f;
+    NEBULA_TUNABLE(f32, sGravityAccel, 0.1f);
     static const s32 sSmallTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sSmallTurnStopTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sSmallTurnDegree = 6.0f;
-    static const f32 sSmallTurnStartDegree = 45.0f;
-    static const f32 sSpinDegree = 2.0f;
-    static const f32 sInStartTalkRange = 300.0f;
+    NEBULA_TUNABLE(f32, sSmallTurnDegree, 6.0f);
+    NEBULA_TUNABLE(f32, sSmallTurnStartDegree, 45.0f);
+    NEBULA_TUNABLE(f32, sSpinDegree, 2.0f);
+    NEBULA_TUNABLE(f32, sInStartTalkRange, 300.0f);
 };  // namespace
 
 namespace NrvRabbitStateWaitStart {

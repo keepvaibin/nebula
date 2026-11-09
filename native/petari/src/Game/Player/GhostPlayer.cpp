@@ -39,6 +39,7 @@ static_assert(sizeof(GhostFrame) == 32, "GhostFrame is cook/ghost.rs's 32-byte f
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <nebula_format.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     struct AnimSoundInfo {
@@ -78,7 +79,7 @@ namespace {
 
     // Animations whose frame control stays as the file gives it; a frame naming its animation tests the first four.
     const char* const cGhostSpecialAnims[] = {"基本", "壁押し", "しゃがみ歩き", "がんばり走り", "スケートアクセルジャンプ", "スケートジャンプ2", "スケートジャンプ3"};
-    const u32 cGhostNamedSpecialAnims = 4;
+    NEBULA_TUNABLE(u32, cGhostNamedSpecialAnims, 4);
     // The one that takes the recorded track weights.
     const char* const cGhostWeightedAnim = cGhostSpecialAnims[0];
 

@@ -1,8 +1,9 @@
 #include "Game/MapObj/CollisionBlocker.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cRadius = 50.0f;
+    NEBULA_TUNABLE(f32, cRadius, 50.0f);
 };  // namespace
 
 CollisionBlocker::CollisionBlocker(const char* pName) : LiveActor(pName) {

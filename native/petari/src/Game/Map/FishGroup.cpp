@@ -11,32 +11,33 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sDefaultFishNum = 10;
-    const f32 sDefaultGroupSpeed = 5.0f;
-    const f32 sFriction = 0.95f;
-    const f32 sWanderAccel = 1.0f;
+    NEBULA_TUNABLE(s32, sDefaultFishNum, 10);
+    NEBULA_TUNABLE(f32, sDefaultGroupSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sFriction, 0.95f);
+    NEBULA_TUNABLE(f32, sWanderAccel, 1.0f);
     const s32 sStepToWanderMoveMin = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepToWanderMoveMax = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 sApproachAccel = 5.0f;
-    const s32 sStepToApproachMin = 5;
+    NEBULA_TUNABLE(f32, sApproachAccel, 5.0f);
+    NEBULA_TUNABLE(s32, sStepToApproachMin, 5);
     const s32 sStepToApproachMax = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sDistanceToApproachMin = 100.0f;
-    const f32 sDistanceToApproachMax = 500.0f;
-    const f32 sEscapeAccel = 5.0f;
-    const s32 sStepToEscapeMin = 5;
-    const s32 sStepToEscapeMax = 20;
-    const f32 sDistanceSafe = 600.0f;
-    const f32 sDistanceToSpinEscape = 500.0f;
-    const s32 sTimeToSearchPlayerMin = 5;
-    const s32 sTimeToSearchPlayerMax = 10;
-    const f32 sDistanceToEscapeFromPlayer = 150.0f;
-    const f32 sRotateDotMax = 0.9f;
-    const f32 sRotateRate = 0.2f;
-    const f32 sDirectionMaxY = 0.99f;
-    const f32 sAnimFrameRate = 0.2f;
-    const f32 sFollowPosOffsetMax = 150.0f;
+    NEBULA_TUNABLE(f32, sDistanceToApproachMin, 100.0f);
+    NEBULA_TUNABLE(f32, sDistanceToApproachMax, 500.0f);
+    NEBULA_TUNABLE(f32, sEscapeAccel, 5.0f);
+    NEBULA_TUNABLE(s32, sStepToEscapeMin, 5);
+    NEBULA_TUNABLE(s32, sStepToEscapeMax, 20);
+    NEBULA_TUNABLE(f32, sDistanceSafe, 600.0f);
+    NEBULA_TUNABLE(f32, sDistanceToSpinEscape, 500.0f);
+    NEBULA_TUNABLE(s32, sTimeToSearchPlayerMin, 5);
+    NEBULA_TUNABLE(s32, sTimeToSearchPlayerMax, 10);
+    NEBULA_TUNABLE(f32, sDistanceToEscapeFromPlayer, 150.0f);
+    NEBULA_TUNABLE(f32, sRotateDotMax, 0.9f);
+    NEBULA_TUNABLE(f32, sRotateRate, 0.2f);
+    NEBULA_TUNABLE(f32, sDirectionMaxY, 0.99f);
+    NEBULA_TUNABLE(f32, sAnimFrameRate, 0.2f);
+    NEBULA_TUNABLE(f32, sFollowPosOffsetMax, 150.0f);
 
     // Indexed by Fish::mFishType; an unlisted group object name is kind 0.
     struct FishKind {

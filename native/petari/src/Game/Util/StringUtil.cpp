@@ -10,10 +10,11 @@
 #include <cstring>
 #include <cstdarg>
 #include <nebula_format.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Clear times count game frames.
-    const s32 cCentisecPerSec = 100;
+    NEBULA_TUNABLE(s32, cCentisecPerSec, 100);
     const s32 cSecPerMin = 60;
     const s32 cMinPerHour = 60;
     const s32 cFramePerSec = 60;

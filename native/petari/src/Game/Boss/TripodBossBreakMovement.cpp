@@ -7,12 +7,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sBreakRandamaize = 1.0f;
-    static const f32 sMinStartMoment = 0.01f;
-    static const f32 sMaxStartMoment = 0.04f;
-    static const f32 sGravityAccel = 0.2f;
+    NEBULA_TUNABLE(f32, sBreakRandamaize, 1.0f);
+    NEBULA_TUNABLE(f32, sMinStartMoment, 0.01f);
+    NEBULA_TUNABLE(f32, sMaxStartMoment, 0.04f);
+    NEBULA_TUNABLE(f32, sGravityAccel, 0.2f);
 };  // namespace
 
 namespace NrvTripodBossBreakMovement {

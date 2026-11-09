@@ -24,70 +24,71 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 mBaseRadius = 150.0f;
-    static const f32 sBindableUpperDegree = 60.0f;
-    static const s32 sBindStartTime = 40;
-    static const f32 sBindStartJumpHeight = 150.0f;
-    static const f32 sBindStartUpAdjustRate = 0.1f;
-    static const f32 sBindStartFrontAdjustRate = 0.1f;
-    static const s32 sBindStartLandTime = 14;
-    static const f32 sLandStartPositionDegree = 35.0f;
-    static const f32 sLandStartVelocityDegree = 40.0f;
-    static const f32 sGravityAccel = 2.0f;
-    static const f32 sGroundFric = 0.99f;
-    static const f32 sIdleBckRate = 1.0f;
-    static const f32 sSoftWalkSpeed = 0.25f;
-    static const f32 sSoftWalkBckRate = 1.0f;
-    static const f32 sWalkSpeed = 6.0f;
-    static const f32 sWalkBckRate = 2.0f;
-    static const f32 sRunSpeed = 18.0f;
-    static const f32 sRunBckRate = 3.0f;
-    static const f32 sRunMaxBckRate = 4.0f;
-    static const s32 sFallStartTime = 5;
-    static const f32 sFallOffsetSpeed = 3.0f;
-    static const f32 sJumpPowerV = 40.0f;
-    static const f32 sJumpPowerH = 7.0f;
-    static const f32 sJumpOffsetSpeed = 4.0f;
-    static const f32 sMarioJumpOffsetMax = 150.0f;
-    static const f32 sMarioOffsetGravityAccel = 1.0f;
-    static const f32 sMarioOffsetFric = 0.99f;
-    static const f32 sNeedLandPower = 20.0f;
-    static const s32 sLandTime = 2;
-    static const f32 sLandFric = 0.88f;
-    static const f32 sNeedBumpWallPower = 10.0f;
-    static const f32 sCollisionStrongPower = 60.0f;
-    static const f32 sCollisionMiddlePower = 25.0f;
-    static const f32 sCollisionWeakPower = 5.0f;
-    static const f32 sStampReactionV = 30.0f;
-    static const f32 sStampReactionInvalidSpeed = 15.0f;
-    static const f32 sExplosionReactionH = 20.0f;
-    static const f32 sExplosionReactionV = 40.0f;
-    static const f32 sRaidRailFastSpeed = 30.0f;
-    static const f32 sRollBckRate = 1.5f;
-    static const s32 sDashRailTime = 40;
-    static const f32 sDashRailFric = 0.99f;
-    static const f32 sDashBallRollSpeed = 60.0f;
-    static const f32 sEndBindFrontPower = 5.0f;
-    static const f32 sEndBindJumpPower = 35.0f;
+    NEBULA_TUNABLE(f32, mBaseRadius, 150.0f);
+    NEBULA_TUNABLE(f32, sBindableUpperDegree, 60.0f);
+    NEBULA_TUNABLE(s32, sBindStartTime, 40);
+    NEBULA_TUNABLE(f32, sBindStartJumpHeight, 150.0f);
+    NEBULA_TUNABLE(f32, sBindStartUpAdjustRate, 0.1f);
+    NEBULA_TUNABLE(f32, sBindStartFrontAdjustRate, 0.1f);
+    NEBULA_TUNABLE(s32, sBindStartLandTime, 14);
+    NEBULA_TUNABLE(f32, sLandStartPositionDegree, 35.0f);
+    NEBULA_TUNABLE(f32, sLandStartVelocityDegree, 40.0f);
+    NEBULA_TUNABLE(f32, sGravityAccel, 2.0f);
+    NEBULA_TUNABLE(f32, sGroundFric, 0.99f);
+    NEBULA_TUNABLE(f32, sIdleBckRate, 1.0f);
+    NEBULA_TUNABLE(f32, sSoftWalkSpeed, 0.25f);
+    NEBULA_TUNABLE(f32, sSoftWalkBckRate, 1.0f);
+    NEBULA_TUNABLE(f32, sWalkSpeed, 6.0f);
+    NEBULA_TUNABLE(f32, sWalkBckRate, 2.0f);
+    NEBULA_TUNABLE(f32, sRunSpeed, 18.0f);
+    NEBULA_TUNABLE(f32, sRunBckRate, 3.0f);
+    NEBULA_TUNABLE(f32, sRunMaxBckRate, 4.0f);
+    NEBULA_TUNABLE(s32, sFallStartTime, 5);
+    NEBULA_TUNABLE(f32, sFallOffsetSpeed, 3.0f);
+    NEBULA_TUNABLE(f32, sJumpPowerV, 40.0f);
+    NEBULA_TUNABLE(f32, sJumpPowerH, 7.0f);
+    NEBULA_TUNABLE(f32, sJumpOffsetSpeed, 4.0f);
+    NEBULA_TUNABLE(f32, sMarioJumpOffsetMax, 150.0f);
+    NEBULA_TUNABLE(f32, sMarioOffsetGravityAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sMarioOffsetFric, 0.99f);
+    NEBULA_TUNABLE(f32, sNeedLandPower, 20.0f);
+    NEBULA_TUNABLE(s32, sLandTime, 2);
+    NEBULA_TUNABLE(f32, sLandFric, 0.88f);
+    NEBULA_TUNABLE(f32, sNeedBumpWallPower, 10.0f);
+    NEBULA_TUNABLE(f32, sCollisionStrongPower, 60.0f);
+    NEBULA_TUNABLE(f32, sCollisionMiddlePower, 25.0f);
+    NEBULA_TUNABLE(f32, sCollisionWeakPower, 5.0f);
+    NEBULA_TUNABLE(f32, sStampReactionV, 30.0f);
+    NEBULA_TUNABLE(f32, sStampReactionInvalidSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sExplosionReactionH, 20.0f);
+    NEBULA_TUNABLE(f32, sExplosionReactionV, 40.0f);
+    NEBULA_TUNABLE(f32, sRaidRailFastSpeed, 30.0f);
+    NEBULA_TUNABLE(f32, sRollBckRate, 1.5f);
+    NEBULA_TUNABLE(s32, sDashRailTime, 40);
+    NEBULA_TUNABLE(f32, sDashRailFric, 0.99f);
+    NEBULA_TUNABLE(f32, sDashBallRollSpeed, 60.0f);
+    NEBULA_TUNABLE(f32, sEndBindFrontPower, 5.0f);
+    NEBULA_TUNABLE(f32, sEndBindJumpPower, 35.0f);
     static const s32 sForceBindEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const f32 sMarioUpAdjustRate = 0.1f;
-    static const f32 sMarioFrontAdjustRate = 0.25f;
-    static const f32 sStandDirInterRate = 0.02f;
-    static const f32 sMarioUpperYAccel = 5.0f;
-    static const f32 sMarioUpperYFric = 0.9f;
-    static const f32 sRingMaxDegree = 45.0f;
-    static const f32 sRingMaxAngleSpeed = 4.0f;
-    static const f32 sTutorialAccel = 0.5f;
-    static const f32 sTutorialFric = 0.95f;
-    static const s32 sBgmStateChangeFrames = 30;
+    NEBULA_TUNABLE(f32, sMarioUpAdjustRate, 0.1f);
+    NEBULA_TUNABLE(f32, sMarioFrontAdjustRate, 0.25f);
+    NEBULA_TUNABLE(f32, sStandDirInterRate, 0.02f);
+    NEBULA_TUNABLE(f32, sMarioUpperYAccel, 5.0f);
+    NEBULA_TUNABLE(f32, sMarioUpperYFric, 0.9f);
+    NEBULA_TUNABLE(f32, sRingMaxDegree, 45.0f);
+    NEBULA_TUNABLE(f32, sRingMaxAngleSpeed, 4.0f);
+    NEBULA_TUNABLE(f32, sTutorialAccel, 0.5f);
+    NEBULA_TUNABLE(f32, sTutorialFric, 0.95f);
+    NEBULA_TUNABLE(s32, sBgmStateChangeFrames, 30);
 
     // Tilt steering (player 1's main controller): the rest angle in the YZ plane, a dead zone, and the tilt that
     // reaches full input.
-    const f32 cTiltBaseDegreeYZ = 10.0f;
-    const f32 cTiltDegreeMargin = 5.0f;
-    const f32 cTiltDegreeRange = 25.0f;
+    NEBULA_TUNABLE(f32, cTiltBaseDegreeYZ, 10.0f);
+    NEBULA_TUNABLE(f32, cTiltDegreeMargin, 5.0f);
+    NEBULA_TUNABLE(f32, cTiltDegreeRange, 25.0f);
 
     // Signed angle from rV2 to rV1; both unit length.
     f32 calcSignedAngle(const Vec2f& rV1, const Vec2f& rV2) {

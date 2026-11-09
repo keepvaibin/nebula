@@ -4,9 +4,10 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <NebulaGpu.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sModelScale = 100.0f;
+    NEBULA_TUNABLE(f32, sModelScale, 100.0f);
 };  // namespace
 
 ShadowVolumeCylinder::~ShadowVolumeCylinder() {

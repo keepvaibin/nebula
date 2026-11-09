@@ -27,32 +27,33 @@
 #include <nebula_geometry.hpp>
 
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sTargetKeepSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 sGuidanceSteps = 20;
+    NEBULA_TUNABLE(s32, sGuidanceSteps, 20);
     const s32 sCaptureSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 sCaptureCancelSteps = 40;
-    const s32 sRecaptureSteps = 15;
-    const s32 sTractionSpinSteps = 35;
+    NEBULA_TUNABLE(s32, sCaptureCancelSteps, 40);
+    NEBULA_TUNABLE(s32, sRecaptureSteps, 15);
+    NEBULA_TUNABLE(s32, sTractionSpinSteps, 35);
     const s32 sReleaseHoldSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sHoldReleaseSteps = NebulaFrameClock::stepsOfSeconds(3);
-    const s32 sCoolDownSteps = 10;
-    const s32 sBreakSteps = 5;
-    const f32 sRibbonLength = 180.0f;
-    const f32 sRibbonGrowSpeed = 0.033333335f;
-    const f32 sMinBindRadius = 75.0f;
-    const f32 sMaxBindRadius = 130.0f;
-    const f32 sTractSpinAccel = 0.002f;
-    const f32 sTractionAccel = 0.7f;
-    const f32 sNearTargetRange = 500.0f;
-    const f32 sFriction = 0.99f;
-    const f32 sNearTargetFriction = 0.75f;
-    const f32 sRotateFriction = 0.992f;
-    const f32 sPointerSpinPower = 0.055104f;
-    const f32 sMaxSpinSpeed = 0.2f;
-    const f32 sReflectSpeed = 25.0f;
-    const f32 sPointRadius = 200.0f;
+    NEBULA_TUNABLE(s32, sCoolDownSteps, 10);
+    NEBULA_TUNABLE(s32, sBreakSteps, 5);
+    NEBULA_TUNABLE(f32, sRibbonLength, 180.0f);
+    NEBULA_TUNABLE(f32, sRibbonGrowSpeed, 0.033333335f);
+    NEBULA_TUNABLE(f32, sMinBindRadius, 75.0f);
+    NEBULA_TUNABLE(f32, sMaxBindRadius, 130.0f);
+    NEBULA_TUNABLE(f32, sTractSpinAccel, 0.002f);
+    NEBULA_TUNABLE(f32, sTractionAccel, 0.7f);
+    NEBULA_TUNABLE(f32, sNearTargetRange, 500.0f);
+    NEBULA_TUNABLE(f32, sFriction, 0.99f);
+    NEBULA_TUNABLE(f32, sNearTargetFriction, 0.75f);
+    NEBULA_TUNABLE(f32, sRotateFriction, 0.992f);
+    NEBULA_TUNABLE(f32, sPointerSpinPower, 0.055104f);
+    NEBULA_TUNABLE(f32, sMaxSpinSpeed, 0.2f);
+    NEBULA_TUNABLE(f32, sReflectSpeed, 25.0f);
+    NEBULA_TUNABLE(f32, sPointRadius, 200.0f);
 };  // namespace
 
 namespace NrvGCapture {

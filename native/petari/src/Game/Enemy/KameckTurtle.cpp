@@ -5,19 +5,20 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/JetTurtle.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // const f32 sBeamRadius =
-    const f32 sUpVecBlendRate = 0.2f;
-    const f32 sFrontVecBlendRate = 0.2f;
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
     const s32 sRunTime = NebulaFrameClock::stepsOfSeconds(10);
     const s32 sEnableAttackTime = NebulaFrameClock::stepsOfSeconds(5);
-    const s32 sDeccelStartTime = 200;
-    const s32 sDeccelEndTime = 400;
-    const f32 sRunSpeed = 15.0f;
-    const f32 sRunGravity = 0.7f;
-    const f32 sRunFric = 0.98f;
-    const f32 sRunSpinDegree = -25.0f;
+    NEBULA_TUNABLE(s32, sDeccelStartTime, 200);
+    NEBULA_TUNABLE(s32, sDeccelEndTime, 400);
+    NEBULA_TUNABLE(f32, sRunSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sRunGravity, 0.7f);
+    NEBULA_TUNABLE(f32, sRunFric, 0.98f);
+    NEBULA_TUNABLE(f32, sRunSpinDegree, -25.0f);
     // const s32 sMorphTime =
 };  // namespace
 

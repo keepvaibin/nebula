@@ -16,9 +16,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cBackSequenceFadeFrame = 90;
+    NEBULA_TUNABLE(s32, cBackSequenceFadeFrame, 90);
 
     bool isInvalidBackAstroDome() {
         return !MR::isOnGameEventFlagUseAstroDome() || (MR::isStageAstroLocation() && !MR::isEqualStageName("HeavensDoorGalaxy"));

@@ -10,21 +10,22 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_game_api.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec cRotateOutermost = {20.0f, 45.0f, 0.0f};
     // Orbit radius by galaxy index: five galaxies in a dome, four in the last one.
-    const f32 cRadius[] = {4000.0f, 6200.0f, 8100.0f, 10300.0f, 12000.0f};
-    const f32 cRadiusLastDome[] = {4000.0f, 6700.0f, 9100.0f, 11800.0f};
+    NEBULA_TUNABLE_LIST(f32, cRadius, , {4000.0f, 6200.0f, 8100.0f, 10300.0f, 12000.0f});
+    NEBULA_TUNABLE_LIST(f32, cRadiusLastDome, , {4000.0f, 6700.0f, 9100.0f, 11800.0f});
     // The fifth ring is tilted.
-    const s32 cOutermostIndex = 4;
+    NEBULA_TUNABLE(s32, cOutermostIndex, 4);
     const s32 cDivideNum = AstroDomeOrbit::cRingPointNum - 1;
-    const f32 cWidth = 100.0f;
-    const f32 cHeight = 50.0f;
-    const f32 cGalaxyRotateSpeed = -0.05f;
-    const f32 cGalaxyRotateCoordOffset = 230.0f;
-    const f32 cBloomWidth = 131.0f;
-    const f32 cBloomHeight = 60.0f;
+    NEBULA_TUNABLE(f32, cWidth, 100.0f);
+    NEBULA_TUNABLE(f32, cHeight, 50.0f);
+    NEBULA_TUNABLE(f32, cGalaxyRotateSpeed, -0.05f);
+    NEBULA_TUNABLE(f32, cGalaxyRotateCoordOffset, 230.0f);
+    NEBULA_TUNABLE(f32, cBloomWidth, 131.0f);
+    NEBULA_TUNABLE(f32, cBloomHeight, 60.0f);
 
     const Color8 cColor(0x13, 0xB1, 0xFF, 0xFF);
     const Color8 cBloomColor(0x00, 0xB4, 0x64, 0xFF);

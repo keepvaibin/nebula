@@ -5,9 +5,10 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sSensorRadius = 70.0f;
+    NEBULA_TUNABLE(f32, sSensorRadius, 70.0f);
 };  // namespace
 
 SnowplowSwitch::SnowplowSwitch(const char* pName) : LiveActor(pName), mIsDiscovered() {

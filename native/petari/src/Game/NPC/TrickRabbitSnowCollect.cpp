@@ -4,9 +4,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sInStartEventRange = 700.0f;
+    NEBULA_TUNABLE(f32, sInStartEventRange, 700.0f);
 };  // namespace
 
 namespace NrvTrickRabbitFreeRunCollect {

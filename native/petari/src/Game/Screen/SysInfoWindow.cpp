@@ -13,6 +13,7 @@
 #include <Game/Ui/TextBox.hpp>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const MessageChangeFuncTableEntry cMessageChangeFuncTable[] = {
@@ -25,10 +26,10 @@ namespace {
     u32 sDimEpoch = 0;
     // A closed window's dim holds this many frames for the next window (the pause menu's question opens 9 frames
     // after the save's last window closes), then lifts over 10, as the windows' own end animations do.
-    const s32 cDimLinger = 12;
-    const f32 cDimStep = 0.1f;
+    NEBULA_TUNABLE(s32, cDimLinger, 12);
+    NEBULA_TUNABLE(f32, cDimStep, 0.1f);
     // A dim left longer ago than this belongs to an earlier screen.
-    const s32 cDimHandOverMs = 100;
+    NEBULA_TUNABLE(s32, cDimHandOverMs, 100);
 };  // namespace
 
 namespace NrvSysInfoWindow {

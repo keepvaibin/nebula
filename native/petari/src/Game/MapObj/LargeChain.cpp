@@ -6,10 +6,11 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sPartsLength = 200.0f;
-    static const s32 sBreakInterval = 5;
+    NEBULA_TUNABLE(f32, sPartsLength, 200.0f);
+    NEBULA_TUNABLE(s32, sBreakInterval, 5);
 };  // namespace
 
 namespace NrvLargeChain {

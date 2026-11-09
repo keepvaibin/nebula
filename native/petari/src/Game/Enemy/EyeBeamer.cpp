@@ -25,6 +25,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvEyeBeamer {
     NEW_NERVE(EyeBeamerNrvDemoStartWait, EyeBeamer, DemoStartWait);
@@ -39,9 +40,9 @@ namespace NrvEyeBeamer {
 
 namespace {
     // The beam model is this long at scale 1.
-    const f32 cBeamModelLength = 2000.0f;
-    const f32 cBeamRadius = 140.0f;
-    const f32 cClipMargin = 300.0f;
+    NEBULA_TUNABLE(f32, cBeamModelLength, 2000.0f);
+    NEBULA_TUNABLE(f32, cBeamRadius, 140.0f);
+    NEBULA_TUNABLE(f32, cClipMargin, 300.0f);
 };  // namespace
 
 EyeBeamer::EyeBeamer(const char* pName)
