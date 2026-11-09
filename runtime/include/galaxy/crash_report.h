@@ -44,7 +44,7 @@ bool session_mods_change_game() noexcept;
 struct Facts {
     enum class Kind : std::uint8_t {
         Fault,      // an access violation or other hardware exception
-        GameFatal,  // the game's own fatal stop (OSPanic, a failed assertion)
+        GameFatal,  // the game's own fatal stop (NEBULA_PANIC, a failed check)
         Exception,  // an uncaught C++ exception
         Abort,      // abort()
         Startup,    // Nebula could not start or stopped itself (die())
