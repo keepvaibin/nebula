@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 146u
+#define NEBULA_GAME_API_VERSION 147u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -930,6 +930,10 @@ typedef struct NebulaHostServices {
     uint32_t (*probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* The players input_read serves (0 to this - 1), fixed for the session. */
     uint32_t (*input_players)(void* user);
+    /* The player chose to pause the game when its window loses focus (runtime settings, focus_loss) and the window has: 1 once
+       per loss, then 0. The game asks only while it could open its pause menu, and opens it as the pause button does. A
+       request the game did not take (a cutscene, a wipe) lapses when the window is in front again. */
+    int (*take_pause_request)(void* user);
 } NebulaHostServices;
 
 

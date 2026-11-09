@@ -98,6 +98,22 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                         normalize_interpolation(draft, host.query(draft).frame_rates);
                     },
                     "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
+    // Only while the display reports HDR mode: the picture is sent as HDR10, white at the paper white, highlights up to the
+    // display's peak.
+    if (state.hdr_offered) {
+        rows.push_back({"HDR", render.hdr ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.hdr = !draft.hdr; },
+                        render.hdr && !state.hdr_active ? "WAITING: FRAME GENERATION KEEPS THE PICTURE SDR"
+                                                        : "WIDE BRIGHTNESS RANGE ON AN HDR DISPLAY"});
+        if (render.hdr) {
+            std::snprintf(text, sizeof(text), "%u NITS", std::clamp(render.paper_white, 80u, 500u));
+            rows.push_back({"PAPER WHITE", text,
+                            [](RenderConfig& draft, int delta) {
+                                draft.paper_white = static_cast<unsigned>(std::clamp(static_cast<int>(draft.paper_white) + delta * 10, 80, 500));
+                            },
+                            "BRIGHTNESS OF THE PICTURE'S WHITE. RAISE IT IN A BRIGHT ROOM"});
+        }
+    }
     rows.push_back({"INTERFACE", {}, nullptr, {}, true});
     // An exact internal resolution and a temporal upscaler always draw the HUD at the display's.
     const bool fixed = render_internal_height(render) != 0u || state.temporal_upscaling;

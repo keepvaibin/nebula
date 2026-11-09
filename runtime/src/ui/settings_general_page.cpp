@@ -77,6 +77,15 @@ std::vector<SettingsRow> general_page(const RuntimeSettings& runtime, RuntimeSet
                                                                                                          : chosen;
                     },
                     "THE GAME'S TEXT AND MENUS"});
+    if (state.focus_loss_offered) {
+        static constexpr const char* kFocus[] = {"KEEP RUNNING", "PAUSE", "MUTE"};
+        rows.push_back({"ON LOSING FOCUS", kFocus[std::min<std::size_t>(static_cast<std::size_t>(runtime.focus_loss), 2u)],
+                        [&draft_runtime](RenderConfig&, int delta) {
+                            draft_runtime.focus_loss = static_cast<FocusLoss>(
+                                settings_step(static_cast<unsigned>(draft_runtime.focus_loss), 3u, delta));
+                        },
+                        "WHEN ANOTHER PROGRAM COMES IN FRONT. PAUSE USES THE GAME'S OWN PAUSE MENU. MINIMISING ALWAYS HOLDS THE GAME"});
+    }
     rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),
                     [&draft_runtime, &host](RenderConfig&, int delta) {
                         if (delta == 0) return;

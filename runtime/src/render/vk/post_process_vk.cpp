@@ -714,11 +714,11 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
 }
 
 void PostProcessorVk::finish_present(VkCommandBuffer commands, const PresentStep& step, const VkRect2D& viewport,
-                                     const SetAllocator& allocate) {
+                                     const SetAllocator& allocate, const PostOutput& output) {
     PostConstants constants = step.constants;
     constants.origin[0] = viewport.offset.x;
     constants.origin[1] = viewport.offset.y;
-    constants.origin[2] = 1;
+    set_post_output(constants, output);
     draw(commands, step.pipeline, {step.input}, viewport, constants, allocate);
 }
 

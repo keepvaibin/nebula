@@ -57,6 +57,8 @@ public:
     // kept across frames and replaced only when a size changes; replaced
     // resources are released `frames_in_flight` frames later.
     // `source` holds its `source_width` x `source_height` picture from its top left (a handed-over scene target is taller).
+    // `output.hdr`: the target is an R10G10B10A2 HDR10 swap chain buffer and the last write encodes for it (prepare_hdr first);
+    // the default is the 8-bit window, the SDR write.
     void record(ID3D12GraphicsCommandList* list,
                 DescriptorRing& srv_ring,
                 ID3D12Resource* source,
@@ -65,7 +67,12 @@ public:
                 D3D12_CPU_DESCRIPTOR_HANDLE target_rtv,
                 const D3D12_VIEWPORT& viewport,
                 std::uint64_t frame_index,
-                unsigned frames_in_flight);
+                unsigned frames_in_flight,
+                const PostOutput& output = PostOutput{});
+
+    // Builds the last-write pipelines for an R10G10B10A2 target (once; kept). False when they cannot be made: the renderer
+    // then keeps its 8-bit swap chain, since record() with output.hdr writes nothing a different target format could take.
+    [[nodiscard]] bool prepare_hdr();
 
     // SMAA or FXAA of the 3D scene in `color` (RGBA8, RENDER_TARGET state, `width` x `height`) in
     // place: RGB only, the alpha the game left there stays. `picture_*` is the part the display
@@ -156,6 +163,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_;
     // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
+    // The same four last writes into an R10G10B10A2 HDR10 swap chain buffer (prepare_hdr).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_hdr_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_hdr_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_hdr_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_hdr_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;

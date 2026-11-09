@@ -152,6 +152,8 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "internal_height") == 0) cfg.internal_height = normalized_internal_height(parse_uint(val, cfg.internal_height));
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
+    else if (std::strcmp(key, "hdr") == 0) cfg.hdr = parse_bool(val, cfg.hdr);
+    else if (std::strcmp(key, "paper_white") == 0) cfg.paper_white = std::clamp(parse_uint(val, cfg.paper_white), 80u, 500u);
     else if (std::strcmp(key, "aa") == 0) {
         static constexpr const char* kNames[] = {"off", "smaa", "auto", "fxaa"};
         cfg.aa_mode = parse_choice(val, kNames, cfg.aa_mode);
@@ -256,6 +258,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.spatial_quality = std::min(cfg.spatial_quality, 5u);
     cfg.internal_height = normalized_internal_height(cfg.internal_height);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
+    cfg.paper_white = std::clamp(cfg.paper_white, 80u, 500u);  // kPaperWhiteMin, kPaperWhiteMax (post_process_settings.h)
     // Win32 client geometry is int while DXGI's is UINT: keep sizes representable in both.
     constexpr unsigned kMaxWindowDimension =
         static_cast<unsigned>(std::numeric_limits<int>::max());
@@ -577,6 +580,8 @@ bool save_render_config_to_file() {
              << "internal_height=" << cfg.internal_height << '\n'
              << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
+             << "hdr=" << (cfg.hdr ? 1u : 0u) << '\n'
+             << "paper_white=" << cfg.paper_white << '\n'
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "ray_tracing_enabled="

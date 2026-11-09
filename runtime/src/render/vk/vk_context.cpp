@@ -313,6 +313,18 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         surface_maintenance_khr_ = std::strcmp(surface_maintenance, "VK_KHR_surface_maintenance1") == 0;
         surface_maintenance_ = true;
     }
+    // The surface's HDR formats (HDR10 ST 2084, scRGB) are listed only with this on the instance.
+    bool test_no_hdr = false;
+    if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
+        test_no_hdr = (std::string(",") + names + ",").find(",hdr,") != std::string::npos;
+    }
+    if (!test_no_hdr && has_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME)) {
+        if (std::none_of(instance_extensions.begin(), instance_extensions.end(),
+                         [&](const char* have) { return std::strcmp(have, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0; })) {
+            instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+        }
+        swapchain_colorspace_ = true;
+    }
     VkInstanceCreateInfo instance_info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instance_info.pApplicationInfo = &app;
     instance_info.enabledExtensionCount = static_cast<std::uint32_t>(instance_extensions.size());
@@ -658,6 +670,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     memory_budget_ = has_device_extension(physical_, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     if (memory_budget_) {
         device_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+    }
+    // The HDR10 metadata of a swap chain (vkSetHdrMetadataEXT): the display's tone mapping is told the range the picture uses.
+    hdr_metadata_ = swapchain_colorspace_ && has_device_extension(physical_, VK_EXT_HDR_METADATA_EXTENSION_NAME);
+    if (hdr_metadata_) {
+        device_extensions.push_back(VK_EXT_HDR_METADATA_EXTENSION_NAME);
     }
     // Depth clipping apart from depth clamping: with both, fragment depth (shader-written too) is clamped to the
     // viewport's range while primitives are still clipped, as D3D does.

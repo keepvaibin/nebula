@@ -58,6 +58,8 @@ constexpr ShaderBytes bytes(const BYTE (&code)[N]) noexcept {
 // Pictures between passes, as the scene; the window.
 constexpr DXGI_FORMAT kColorFormat = kSceneColorFormat;
 constexpr DXGI_FORMAT kWindowFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+// The HDR10 swap chain's buffers.
+constexpr DXGI_FORMAT kHdrWindowFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
 // SMAA's blending weights: one in each channel, the alpha's as fine as the rest.
 constexpr DXGI_FORMAT kWeightsFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
@@ -304,9 +306,36 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     return true;
 }
 
+bool PostProcessor::prepare_hdr() {
+    if (!ready_) {
+        return false;
+    }
+    if (easu_hdr_ && rcas_hdr_ && rcas_scaled_hdr_ && resample_hdr_) {
+        return true;
+    }
+    const bool made =
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kHdrWindowFormat, 0, easu_hdr_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kHdrWindowFormat, 0, rcas_hdr_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_ps)), kHdrWindowFormat, 0,
+                        rcas_scaled_hdr_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kHdrWindowFormat, 0, resample_hdr_);
+    if (!made) {
+        easu_hdr_.Reset();
+        rcas_hdr_.Reset();
+        rcas_scaled_hdr_.Reset();
+        resample_hdr_.Reset();
+        std::cerr << "[hdr] the HDR10 last-write pipelines could not be made\n";
+    }
+    return made;
+}
+
 void PostProcessor::shutdown() noexcept {
     easu_window_.Reset();
     resample_window_.Reset();
+    easu_hdr_.Reset();
+    rcas_hdr_.Reset();
+    rcas_scaled_hdr_.Reset();
+    resample_hdr_.Reset();
     ready_ = false;
     status_.initialized = false;
     status_.smaa_ok = false;
@@ -834,8 +863,17 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
                            D3D12_CPU_DESCRIPTOR_HANDLE target_rtv,
                            const D3D12_VIEWPORT& viewport,
                            std::uint64_t frame_index,
-                           unsigned frames_in_flight) {
+                           unsigned frames_in_flight,
+                           const PostOutput& output) {
     release_retired(frame_index);
+    // The last write's pipelines and constants: the 8-bit window's, or HDR10's when the target is (prepare_hdr made them).
+    const bool hdr = output.hdr && easu_hdr_ && rcas_hdr_ && rcas_scaled_hdr_ && resample_hdr_;
+    ID3D12PipelineState* const easu_last = (hdr ? easu_hdr_ : easu_window_).Get();
+    ID3D12PipelineState* const rcas_last = (hdr ? rcas_hdr_ : rcas_).Get();
+    ID3D12PipelineState* const rcas_scaled_last = (hdr ? rcas_scaled_hdr_ : rcas_scaled_).Get();
+    ID3D12PipelineState* const resample_last = (hdr ? resample_hdr_ : resample_window_).Get();
+    PostOutput last_write = output;
+    last_write.hdr = hdr;
     const unsigned target_width = static_cast<unsigned>(viewport.Width);
     const unsigned target_height = static_cast<unsigned>(viewport.Height);
     // The scene was antialiased before the 2D layer (record_scene_aa).
@@ -856,7 +894,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
 
     // Enlarging on both axes with sharpening: enlargement and RCAS in one pass straight into the
     // target, without a window-sized intermediate.
-    if (plan.resample && plan.rcas && rcas_scaled_ && target_width >= source_width &&
+    if (plan.resample && plan.rcas && rcas_scaled_last != nullptr && target_width >= source_width &&
         target_height >= source_height) {
         Constants s = c;
         set_fsr_rcas_constants(s, settings_.sharpness);
@@ -867,8 +905,8 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         list->OMSetRenderTargets(1, &target_rtv, FALSE, nullptr);
         s.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
         s.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
-        s.origin[2] = 1;
-        draw(list, srv_ring, rcas_scaled_.Get(), {image}, viewport, s);
+        set_post_output(s, last_write);
+        draw(list, srv_ring, rcas_scaled_last, {image}, viewport, s);
         return;
     }
 
@@ -889,7 +927,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
             out_viewport = viewport;
             constants.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
             constants.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
-            constants.origin[2] = 1;
+            set_post_output(constants, last_write);
         } else {
             transition(list, scaled_, gpu::Use::ColorWrite);
             list->OMSetRenderTargets(1, &scaled_.rtv, FALSE, nullptr);
@@ -905,7 +943,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
                                static_cast<float>(target_width), static_cast<float>(target_height));
         D3D12_VIEWPORT vp{};
         into(!plan.rcas, vp, e);
-        draw(list, srv_ring, (plan.rcas ? easu_ : easu_window_).Get(), {image}, vp, e);
+        draw(list, srv_ring, plan.rcas ? easu_.Get() : easu_last, {image}, vp, e);
         if (plan.rcas) {
             transition(list, scaled_, gpu::Use::PixelRead);
             image = scaled_.resource.Get();
@@ -918,7 +956,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         r.params[3] = static_cast<float>(target_height);
         D3D12_VIEWPORT vp{};
         into(plan.resample_to_target, vp, r);
-        draw(list, srv_ring, (plan.resample_to_target ? resample_window_ : resample_).Get(), {image}, vp, r);
+        draw(list, srv_ring, plan.resample_to_target ? resample_last : resample_.Get(), {image}, vp, r);
         if (!plan.resample_to_target) {
             transition(list, scaled_, gpu::Use::PixelRead);
             image = scaled_.resource.Get();
@@ -932,7 +970,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         s.params[1] = static_cast<float>(target_height);
         D3D12_VIEWPORT vp{};
         into(true, vp, s);
-        draw(list, srv_ring, rcas_.Get(), {image}, vp, s);
+        draw(list, srv_ring, rcas_last, {image}, vp, s);
     }
 }
 

@@ -18,6 +18,8 @@ struct DisplayPageState {
     FrameRateCaps frame_rates;
     bool fullscreen_only = false;
     bool temporal_upscaling = false;  // a temporal upscaler runs: the HUD draws at the display's resolution
+    bool hdr_offered = false;         // the display is in HDR mode and the renderer can write HDR10 to it (get_display_hdr)
+    bool hdr_active = false;          // the swap chain is HDR10 now
 };
 enum class DisplayChange { Monitor, Mode, Resolution, Aspect };
 class DisplayPageHost {

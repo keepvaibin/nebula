@@ -34,6 +34,8 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
     apply_env(cfg, "GALAXY_SPATIAL_QUALITY", "spatial_quality");
     apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
+    apply_env(cfg, "GALAXY_HDR", "hdr");
+    apply_env(cfg, "GALAXY_PAPER_WHITE", "paper_white");
     apply_env(cfg, "GALAXY_RAY_TRACING", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");

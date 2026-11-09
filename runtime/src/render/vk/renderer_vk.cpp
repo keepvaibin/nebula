@@ -33,6 +33,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -709,6 +710,20 @@ bool RendererVk::create_layouts() {
     return true;
 }
 
+namespace {
+// The HDR10 (ST 2084) format a surface lists: A2B10G10R10 first, the RGB order of the post chain's own.
+std::optional<VkSurfaceFormatKHR> hdr10_format_of(const std::vector<VkSurfaceFormatKHR>& formats) {
+    for (const VkFormat wanted : {VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_FORMAT_A2R10G10B10_UNORM_PACK32}) {
+        for (const VkSurfaceFormatKHR& candidate : formats) {
+            if (candidate.format == wanted && candidate.colorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT) {
+                return candidate;
+            }
+        }
+    }
+    return std::nullopt;
+}
+}  // namespace
+
 bool RendererVk::create_swapchain() {
     const vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
@@ -750,6 +765,20 @@ bool RendererVk::create_swapchain() {
                 format = candidate;
                 chosen = true;
             }
+        }
+    }
+    // HDR10 where it is asked for and the surface lists it; a surface turned from its natural orientation ends in a blit that
+    // knows only the 8-bit write.
+    const bool hdr_asked = wants_hdr();
+    const bool surface_turned = (caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
+                                 caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR ||
+                                 caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) &&
+                                (caps.supportedTransforms & caps.currentTransform) != 0u;
+    bool hdr_made = false;
+    if (hdr_asked && !surface_turned) {
+        if (const std::optional<VkSurfaceFormatKHR> hdr_format = hdr10_format_of(formats)) {
+            format = *hdr_format;
+            hdr_made = true;
         }
     }
 
@@ -897,6 +926,8 @@ bool RendererVk::create_swapchain() {
     swapchain_.mode = mode;
     swapchain_.vsync = vsync;
     swapchain_.relaxed = relaxed;
+    swapchain_.hdr_asked = hdr_asked;
+    swapchain_.hdr = hdr_made;
     last_present_id_ = 0u;  // present ids belong to a swap chain: nothing to wait for on the new one
     swapchain_calls_.get_images(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
@@ -921,10 +952,12 @@ bool RendererVk::create_swapchain() {
                      waits ? "present wait (the previous frame must show before the next is queued, 100 ms at most)" : "the frame fences");
     }
 
-    if (present_pass_ == VK_NULL_HANDLE || swapchain_.format != format.format) {
+    const bool present_pass_replaced = present_pass_ != VK_NULL_HANDLE;
+    if (present_pass_ == VK_NULL_HANDLE || present_pass_format_ != format.format) {
         if (present_pass_ != VK_NULL_HANDLE) {
             post_.set_present_pass(VK_NULL_HANDLE);
             vkDestroyRenderPass(device, present_pass_, nullptr);
+            present_pass_ = VK_NULL_HANDLE;
         }
         VkAttachmentDescription attachment{};
         attachment.format = format.format;
@@ -957,6 +990,20 @@ bool RendererVk::create_swapchain() {
         pass_info.dependencyCount = 1;
         pass_info.pDependencies = &dependency;
         vk::check(vkCreateRenderPass(device, &pass_info, nullptr, &present_pass_), "present render pass");
+        present_pass_format_ = format.format;
+        if (present_pass_replaced) {
+            // The format changed (HDR10 on or off; the device is idle): the chain's last passes and the plain blit are made again
+            // for the new pass.
+            post_.set_present_pass(present_pass_);
+            if (blit_pipeline_ != VK_NULL_HANDLE) {
+                vkDestroyPipeline(device, blit_pipeline_, nullptr);
+                blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::PresentVs,
+                                                         vk::UtilitySpirv::BlitPs,
+                                                         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                                                         false, false, false);
+            }
+        }
     }
     for (VkImage image : swapchain_.images) {
         VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
@@ -982,10 +1029,95 @@ bool RendererVk::create_swapchain() {
         vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &rendered), "vkCreateSemaphore");
         swapchain_.rendered.push_back(rendered);
     }
+    if (hdr_made) {
+        hdr_output_ = post_output_for(get_render_config(), get_display_hdr());
+        apply_hdr_metadata(hdr_output_);
+        std::fprintf(stderr, "[hdr] on peak %u nits paper %u (swapchain format %d)\n", hdr_output_.peak_nits,
+                     hdr_output_.paper_white_nits, static_cast<int>(format.format));
+    } else {
+        hdr_output_ = PostOutput{};
+        if (hdr_asked) {
+            std::fprintf(stderr, "[hdr] %s: SDR\n", surface_turned ? "the surface is turned from its natural orientation" : "the surface lists no HDR10 format");
+        }
+    }
+    {
+        DisplayHdr published = get_display_hdr();
+        if (published.active != hdr_made) {
+            published.active = hdr_made;
+            set_display_hdr(published);
+        }
+    }
     host_window::backbuffer_width = extent.width;
     host_window::backbuffer_height = extent.height;
     swapchain_dirty_ = false;
     return true;
+}
+
+// HDR10 asked for and possible now. The post chain writes the encoding in its last pass, so it must be ready with its
+// present-pass pipelines; AMD's frame generation swap chain and DLSS frame generation take the picture as SDR.
+bool RendererVk::wants_hdr() const {
+    return hdr_output_wanted(get_render_config(), get_display_hdr()) && post_.ready() && post_.present_ready() &&
+           !fsr_generation_wanted() && !frame_generation_running();
+}
+
+// What the display offers, read at the first frame, after a move to another monitor and when the post chain becomes ready:
+// the surface lists an HDR10 format (VK_EXT_swapchain_colorspace) and, where Windows describes the output, the output is in HDR
+// mode (its figures set the peak). GALAXY_TEST_FORCE_HDR=1 takes the display as HDR when the surface lists the format.
+void RendererVk::read_display_hdr() {
+    const vk::Context& context = vk::Context::get();
+    hdr_read_ = true;
+    hdr_post_ready_ = post_.ready();
+    bool offered = false;
+    if (context.swapchain_colorspace() && surface_ != VK_NULL_HANDLE) {
+        std::uint32_t count = 0;
+        if (vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device(), surface_, &count, nullptr) == VK_SUCCESS && count != 0u) {
+            std::vector<VkSurfaceFormatKHR> formats(count);
+            if (vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device(), surface_, &count, formats.data()) >= VK_SUCCESS) {
+                formats.resize(count);
+                offered = hdr10_format_of(formats).has_value();
+            }
+        }
+    }
+    DisplayHdr hdr{};
+    bool display_is_hdr = true;  // no description of the output (not Windows): the surface's listing is all there is
+#if defined(_WIN32)
+    const OutputHdr output = read_output_hdr(window_);
+    if (!(output == hdr_reading_)) {
+        hdr_reading_ = output;
+        if (output.known) {
+            std::fprintf(stderr, "[display] output %s, colour space %d, %u bits, peak %u nits, full frame %u nits\n", output.hdr ? "HDR" : "SDR",
+                         output.colour_space, output.bits, output.peak_nits, output.full_frame_nits);
+        }
+    }
+    if (output.known) {
+        display_is_hdr = output.hdr;
+        hdr.peak_nits = output.hdr ? output.peak_nits : 0u;
+        hdr.full_frame_nits = output.hdr ? output.full_frame_nits : 0u;
+        hdr.min_nits_10000 = output.hdr ? output.min_nits_10000 : 0u;
+    }
+#endif
+    const bool forced = ::galaxy::run_option_flag(::galaxy::run_options().test_force_hdr, false);
+    hdr.available = offered && (display_is_hdr || forced) && post_.ready() && post_.present_ready();
+    hdr.active = swapchain_.hdr;
+    set_display_hdr(hdr);
+}
+
+void RendererVk::apply_hdr_metadata(const PostOutput& levels) {
+    const vk::Context& context = vk::Context::get();
+    if (!context.hdr_metadata() || swapchain_.handle == VK_NULL_HANDLE) {
+        return;
+    }
+    const HdrMetadata m = hdr10_metadata(get_display_hdr(), levels.paper_white_nits);
+    VkHdrMetadataEXT meta{VK_STRUCTURE_TYPE_HDR_METADATA_EXT};
+    meta.displayPrimaryRed = {m.red[0], m.red[1]};
+    meta.displayPrimaryGreen = {m.green[0], m.green[1]};
+    meta.displayPrimaryBlue = {m.blue[0], m.blue[1]};
+    meta.whitePoint = {m.white[0], m.white[1]};
+    meta.maxLuminance = m.max_luminance;
+    meta.minLuminance = m.min_luminance;
+    meta.maxContentLightLevel = m.max_content_light;
+    meta.maxFrameAverageLightLevel = m.max_frame_average_light;
+    vkSetHdrMetadataEXT(context.device(), 1u, &swapchain_.handle, &meta);
 }
 
 void RendererVk::destroy_swapchain() noexcept {
@@ -1392,6 +1524,7 @@ void RendererVk::shutdown() {
         post_.shutdown();
         bloom_.shutdown();
         oriented_.reset();
+        hdr_capture_.reset();
         fg_hudless_scene_color_.reset();
         fg_hudless_display_.reset();
         fg_hudless_target_.reset();
@@ -2395,6 +2528,20 @@ void RendererVk::follow_window_and_resize() {
         swapchain_dirty_ = true;
     }
 #endif
+    if (!hdr_read_ || monitor_moved || post_.ready() != hdr_post_ready_) {
+        read_display_hdr();
+    }
+    if (wants_hdr() != swapchain_.hdr_asked) {
+        swapchain_dirty_ = true;
+    } else if (swapchain_.hdr) {
+        // The paper white or the display's peak changed: the last write's constants and the metadata, not the swap chain.
+        const PostOutput levels = post_output_for(get_render_config(), get_display_hdr());
+        if (levels.paper_white_nits != hdr_output_.paper_white_nits || levels.peak_nits != hdr_output_.peak_nits) {
+            hdr_output_ = levels;
+            apply_hdr_metadata(levels);
+            std::fprintf(stderr, "[hdr] on peak %u nits paper %u\n", levels.peak_nits, levels.paper_white_nits);
+        }
+    }
     if (swapchain_dirty_) {
         // A surface with no area (the window minimised) is not retried: nothing is waited for or made until the surface has an
         // area again, and that is noticed here, at the next frame boundary the game's resumed frames bring (the host stops
@@ -2409,6 +2556,80 @@ void RendererVk::follow_window_and_resize() {
     if (monitor_moved || display_refresh_checks_++ % 120u == 0u) {
         refresh_display_rate();
     }
+}
+
+bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture& picture, const galaxy::ContentViewport& content,
+                                     const vk::PostProcessorVk::SetAllocator& allocate) {
+    vk::Context& context = vk::Context::get();
+    const std::uint32_t width = swapchain_.image.width;
+    const std::uint32_t height = swapchain_.image.height;
+    vk::PostProcessorVk::PresentStep step{};
+    if (!present_black_) {
+        // The window-pass pipelines (8 bits, dithered): the picture as an SDR window shows it.
+        step = post_.prepare_present(commands, picture, picture.width, picture.height, static_cast<unsigned>(content.width),
+                                     static_cast<unsigned>(content.height), false, allocate);
+        if (step.pipeline == VK_NULL_HANDLE) {
+            return false;
+        }
+    }
+    if (!hdr_capture_ || hdr_capture_->width != width || hdr_capture_->height != height) {
+        if (hdr_capture_) {
+            retire(std::move(hdr_capture_));  // an earlier capture's commands may still read it
+        }
+        hdr_capture_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+                                              VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                                                  VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                              true, "HDR capture (SDR picture)");
+        if (hdr_capture_) {
+            VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+            info.renderPass = rgba8_pass_;
+            info.attachmentCount = 1;
+            info.pAttachments = &hdr_capture_->target_view;
+            info.width = width;
+            info.height = height;
+            info.layers = 1;
+            if (vkCreateFramebuffer(context.device(), &info, nullptr, &hdr_capture_->framebuffer) != VK_SUCCESS) {
+                hdr_capture_.reset();
+            }
+        }
+    }
+    const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * 4u;
+    if (!backbuffer_capture_.buffer || backbuffer_capture_.buffer->size < bytes) {
+        backbuffer_capture_.buffer = context.create_readback_buffer(bytes, "backbuffer capture");
+    }
+    if (!hdr_capture_ || !backbuffer_capture_.buffer) {
+        return false;
+    }
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = rgba8_pass_;
+    begin.framebuffer = hdr_capture_->framebuffer;
+    begin.renderArea = {{0, 0}, {width, height}};
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    VkClearValue clear{};
+    clear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    const VkClearAttachment attachment{VK_IMAGE_ASPECT_COLOR_BIT, 0, clear};
+    const VkClearRect rect{{{0, 0}, {width, height}}, 0, 1};
+    vkCmdClearAttachments(commands, 1, &attachment, 1, &rect);
+    if (!present_black_) {
+        const VkRect2D area{{content.left, content.top}, {static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height)}};
+        post_.finish_present(commands, step, area, allocate);
+    }
+    vkCmdEndRenderPass(commands);
+    image_barrier(commands, hdr_capture_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT, 1u);
+    VkBufferImageCopy region{};
+    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageExtent = {width, height, 1};
+    vkCmdCopyImageToBuffer(commands, hdr_capture_->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           backbuffer_capture_.buffer->buffer, 1, &region);
+    hdr_capture_->layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    backbuffer_capture_.fence = 0u;
+    backbuffer_capture_pending_path_ = backbuffer_capture_path_;
+    backbuffer_capture_width_ = width;
+    backbuffer_capture_height_ = height;
+    backbuffer_capture_bgra_ = false;
+    return true;
 }
 
 bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, bool black) {
@@ -2562,7 +2783,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     if (step.pipeline != VK_NULL_HANDLE) {
-        post_.finish_present(commands, step, scissor, allocate);
+        post_.finish_present(commands, step, scissor, allocate, swapchain_.hdr ? hdr_output_ : PostOutput{});
     } else {
         vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, blit_pipeline_);
         vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set, 0, nullptr);
@@ -2583,7 +2804,13 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         }
     };
 
-    if (capture_backbuffer && swapchain_.copyable && !backbuffer_capture_path_.empty() &&
+    // Screenshots and test pictures stay SDR: an HDR10 image is not one the gates compare, so the SDR picture is drawn again.
+    if (capture_backbuffer && swapchain_.hdr && !backbuffer_capture_path_.empty() && backbuffer_capture_pending_path_.empty() &&
+        capture_sdr_picture(commands, *shown, content, allocate)) {
+        hand_to_amd();
+        return true;
+    }
+    if (capture_backbuffer && swapchain_.copyable && !swapchain_.hdr && !backbuffer_capture_path_.empty() &&
         backbuffer_capture_pending_path_.empty()) {
         // The finished image, copied out for a test snapshot (PRESENT_SRC -> TRANSFER_SRC and back).
         const std::uint64_t bytes = static_cast<std::uint64_t>(bb_w) * bb_h * 4u;

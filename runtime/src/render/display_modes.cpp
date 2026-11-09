@@ -1,6 +1,9 @@
 // Monitor and display-mode enumeration for the display settings (display_modes.h).
 #include "galaxy/render/display_modes.h"
 
+#include <dxgi1_6.h>
+#include <wrl/client.h>
+
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -126,6 +129,49 @@ std::wstring widen_utf8(std::string_view text) {
     if (units > 0) {
         MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()),
                             out.data(), units);
+    }
+    return out;
+}
+
+OutputHdr read_output_hdr(HWND window) {
+    OutputHdr out;
+    const HMONITOR monitor = window != nullptr ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST) : nullptr;
+    if (monitor == nullptr) {
+        return out;
+    }
+    out.monitor = monitor;
+    // dxgi.dll by name: the Vulkan build reads this too and need not link DXGI.
+    using CreateFactory1 = HRESULT(WINAPI*)(REFIID, void**);
+    static const HMODULE dxgi = LoadLibraryW(L"dxgi.dll");
+    const auto create = dxgi != nullptr ? reinterpret_cast<CreateFactory1>(GetProcAddress(dxgi, "CreateDXGIFactory1")) : nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+    if (create == nullptr || FAILED(create(IID_PPV_ARGS(&factory)))) {
+        return out;
+    }
+    for (UINT adapter_index = 0u;; ++adapter_index) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if (factory->EnumAdapters1(adapter_index, &adapter) == DXGI_ERROR_NOT_FOUND) {
+            break;
+        }
+        for (UINT output_index = 0u;; ++output_index) {
+            Microsoft::WRL::ComPtr<IDXGIOutput> output;
+            if (adapter->EnumOutputs(output_index, &output) == DXGI_ERROR_NOT_FOUND) {
+                break;
+            }
+            Microsoft::WRL::ComPtr<IDXGIOutput6> output6;
+            DXGI_OUTPUT_DESC1 desc{};
+            if (FAILED(output.As(&output6)) || FAILED(output6->GetDesc1(&desc)) || desc.Monitor != monitor) {
+                continue;
+            }
+            out.known = true;
+            out.colour_space = static_cast<int>(desc.ColorSpace);
+            out.hdr = desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+            out.bits = desc.BitsPerColor;
+            out.peak_nits = desc.MaxLuminance > 0.0f ? static_cast<unsigned>(std::lround(desc.MaxLuminance)) : 0u;
+            out.full_frame_nits = desc.MaxFullFrameLuminance > 0.0f ? static_cast<unsigned>(std::lround(desc.MaxFullFrameLuminance)) : 0u;
+            out.min_nits_10000 = desc.MinLuminance > 0.0f ? static_cast<unsigned>(std::lround(desc.MinLuminance * 10000.0f)) : 0u;
+            return out;
+        }
     }
     return out;
 }

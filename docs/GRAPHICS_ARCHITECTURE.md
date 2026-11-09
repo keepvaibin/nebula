@@ -192,6 +192,22 @@ and descriptor heaps (Direct3D 12); pipeline, sets and dynamic state are the enc
 thread alone (replayed from the recording on its own list, or at once). `GALAXY_TEST_RECORD_THRESHOLD=<items>` lowers the threshold (and the core
 count rule) so small lists take the path; `GALAXY_TEST_ONE_RECORD_THREAD=1` makes it record and replay on the render thread alone, to tell the recording from the threads.
 
+## HDR output
+
+On a display Windows has in HDR mode (`IDXGIOutput6::GetDesc1`, read at the first frame and again on a monitor move or `WM_DISPLAYCHANGE`
+through a new factory; on Vulkan the surface must also list an HDR10 format, `VK_EXT_swapchain_colorspace`), the display page offers HDR
+and PAPER WHITE (80 to 500 nits, default 200; `hdr=` and `paper_white=` in config.ini). With HDR on, the swap chain becomes
+R10G10B10A2 in the ST 2084 / BT.2020 colour space (`ResizeBuffers` and `SetColorSpace1`, or a swap chain made with the HDR10 format) with the
+display's figures as metadata (`SetHDRMetaData`, `vkSetHdrMetadataEXT`). Only the post chain's last write changes (`FinalWriteHdr` in
+post_process.hlsl, selected by `PostConstants::origin[2] == 2`): gamma 2.2 decoded, BT.709 to BT.2020, scaled so 1.0 is the paper white,
+BT.2390 roll-off of the brightest channel to the display's peak when that is under four times the paper white, PQ encoded, 10-bit
+triangular dither. `hdr10_encode` (post_process_settings.cpp) is the CPU twin the tests check. With HDR off nothing differs: the same
+passes write the same 8-bit values (`origin[2] == 1`). Screenshots and test pictures stay SDR: while the chain is HDR, a capture draws
+the last write again for an 8-bit window into a scratch target and reads that. HDR stays off under frame generation (AMD's swap chain,
+DLSS), on a pre-rotated Vulkan surface, and without the post chain. `GALAXY_TEST_FORCE_HDR=1` offers HDR on any monitor (Vulkan:
+whose surface lists the format) to run the path; `GALAXY_VK_TEST_NO_FEATURE=hdr` leaves the Vulkan extensions out.
+Log lines: `[display] output HDR|SDR ...`, `[hdr] on peak N nits paper M`, `[hdr] off`.
+
 ## Failure
 
 A lost device (driver reset) restarts the game from its save, twice in a row at most; the third is report NEB-G01

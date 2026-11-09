@@ -2610,6 +2610,14 @@ void RendererD3D12::shutdown() {
     next_scene_capture_path_.clear();
     readback_capture_path_.clear();
     backbuffer_readback_buf_.Reset();
+    hdr_capture_target_.Reset();
+    hdr_capture_rtv_heap_.Reset();
+    hdr_active_ = false;
+    hdr_failed_ = false;
+    hdr_output_ = PostOutput{};
+    display_read_ = false;
+    display_reading_ = OutputHdr{};
+    set_display_hdr(DisplayHdr{});
     backbuffer_readback_pending_ = false;
     backbuffer_readback_fence_value_ = 0;
     backbuffer_readback_width_ = backbuffer_readback_height_ =
@@ -2693,7 +2701,8 @@ bool RendererD3D12::create_swap_chain(bool fsr) {
     scd.BufferCount  = kSwapChainBuffers;
     scd.Width        = host_window::backbuffer_width;
     scd.Height       = host_window::backbuffer_height;
-    scd.Format       = kBackbufferFormat;
+    scd.Format       = kBackbufferFormat;  // HDR10 is switched to by reconcile_hdr_output (ResizeBuffers)
+    hdr_active_      = false;
     scd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     scd.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     scd.SampleDesc.Count = 1;
@@ -3152,6 +3161,7 @@ void RendererD3D12::begin_frame() {
         streamline::marker(streamline::Marker::kSimulationStart);
         streamline_frame_open_ = true;
     }
+    reconcile_hdr_output();
     apply_window_size();
     prepare_temporal_upscaler();
     sync_post_process_settings();
@@ -3445,32 +3455,202 @@ void RendererD3D12::refresh_display_rate() {
     display_refresh_hz_ = hz;
 }
 
-// The output the window is on, read again after a move to another monitor, a density change or a display mode change: its
-// colour space (HDR10 / scRGB when Windows has HDR on for it), bits and peak luminance. The picture is SDR on every display
-// (the swap chain is RGBA8 in the Rec.709 / 2.2 colour space, which Windows maps onto an HDR display itself), so a change here
-// rebuilds nothing; the refresh rate, which sets the pacing period, is read by refresh_display_rate right after, and the
-// change is logged once.
+// The output the window is on, read at the first frame and again after a move to another monitor, a density change or a
+// display mode change (Windows turning HDR on or off for the output is one): its colour space (HDR10 when Windows has HDR on
+// for it), bits and luminances, through a new factory (read_output_hdr), so the HDR state is the current one. The refresh rate,
+// which sets the pacing period, is read by refresh_display_rate right after. The change is logged once and published
+// (publish_display_hdr); reconcile_hdr_output switches the swap chain at the next frame boundary.
 void RendererD3D12::read_display_output() {
-    if (swap_chain_ == nullptr) {
+    if (swap_chain_ == nullptr || window_ == nullptr) {
         return;
     }
-    Microsoft::WRL::ComPtr<IDXGIOutput> output;
-    Microsoft::WRL::ComPtr<IDXGIOutput6> output6;
-    DXGI_OUTPUT_DESC1 desc{};
-    if (FAILED(swap_chain_->GetContainingOutput(&output)) || output == nullptr || FAILED(output.As(&output6)) ||
-        FAILED(output6->GetDesc1(&desc))) {
-        return;
-    }
-    const DisplayReading now{true, desc.ColorSpace, desc.BitsPerColor, desc.MaxLuminance, desc.Monitor};
-    const DisplayReading& before = display_reading_;
-    if (!before.valid || before.colour_space != now.colour_space || before.bits != now.bits || before.monitor != now.monitor ||
-        before.peak_nits != now.peak_nits) {
-        const bool hdr = now.colour_space == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ||
-                         now.colour_space == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
-        std::cerr << "[display] output " << (hdr ? "HDR" : "SDR") << ", colour space " << static_cast<int>(now.colour_space) << ", "
-                  << now.bits << " bits, peak " << now.peak_nits << " nits" << '\n';
+    const OutputHdr now = read_output_hdr(window_);
+    if (!display_read_ || !(now == display_reading_)) {
+        hdr_failed_ = false;  // another display, or its HDR mode changed: a switch that failed may work now
+        if (now.known) {
+            std::cerr << "[display] output " << (now.hdr ? "HDR" : "SDR") << ", colour space " << now.colour_space << ", " << now.bits
+                      << " bits, peak " << now.peak_nits << " nits, full frame " << now.full_frame_nits << " nits, black "
+                      << static_cast<double>(now.min_nits_10000) / 10000.0 << " nits" << '\n';
+        } else {
+            std::cerr << "[display] output not described by DXGI: taken as SDR\n";
+        }
     }
     display_reading_ = now;
+    display_read_ = true;
+    publish_display_hdr();
+}
+
+// What the settings page and the logs know of HDR: the display is in HDR mode (or GALAXY_TEST_FORCE_HDR=1 says so) and the
+// post chain, which writes the last pass, is here to encode for it.
+void RendererD3D12::publish_display_hdr() {
+    DisplayHdr hdr{};
+    const bool forced = ::galaxy::run_option_flag(::galaxy::run_options().test_force_hdr, false);
+    hdr.available = (display_reading_.hdr || forced) && swap_chain_ != nullptr && post_process_.ready();
+    hdr.active = hdr_active_;
+    hdr.peak_nits = display_reading_.known && display_reading_.hdr ? display_reading_.peak_nits : 0u;
+    hdr.full_frame_nits = display_reading_.known && display_reading_.hdr ? display_reading_.full_frame_nits : 0u;
+    hdr.min_nits_10000 = display_reading_.known && display_reading_.hdr ? display_reading_.min_nits_10000 : 0u;
+    set_display_hdr(hdr);
+}
+
+// Frame boundary: the swap chain is HDR10 while HDR is on in the settings, the display is in HDR mode and nothing needs the
+// 8-bit chain (AMD's frame generation chain and DLSS frame generation take the picture as SDR). The paper white and the
+// display's peak only change the last write's constants (and the metadata), not the chain.
+void RendererD3D12::reconcile_hdr_output() {
+    if (swap_chain_ == nullptr || rtv_heap_ == nullptr) {
+        return;
+    }
+    if (!display_read_) {
+        read_display_output();
+    }
+    const RenderConfig cfg = get_render_config();
+    const DisplayHdr display = get_display_hdr();
+    const bool wanted = hdr_output_wanted(cfg, display) && !fsr_swap_chain_ && !frame_generation_running() && post_process_.ready();
+    const PostOutput levels = post_output_for(cfg, display);
+    if (!wanted) {
+        hdr_failed_ = false;
+    }
+    if (wanted != hdr_active_) {
+        if ((wanted && hdr_failed_) || !set_swap_chain_hdr(wanted, levels)) {
+            return;
+        }
+    } else if (wanted && (levels.paper_white_nits != hdr_output_.paper_white_nits || levels.peak_nits != hdr_output_.peak_nits)) {
+        apply_hdr_metadata(levels);
+        hdr_output_ = levels;
+        std::cerr << "[hdr] on peak " << levels.peak_nits << " nits paper " << levels.paper_white_nits << '\n';
+    }
+    if (display.active != hdr_active_) {
+        publish_display_hdr();
+    }
+}
+
+bool RendererD3D12::set_swap_chain_hdr(bool hdr, const PostOutput& levels) {
+    Microsoft::WRL::ComPtr<IDXGISwapChain3> chain3;
+    DXGI_SWAP_CHAIN_DESC1 current{};
+    if (FAILED(swap_chain_.As(&chain3)) || FAILED(swap_chain_->GetDesc1(&current))) {
+        return false;
+    }
+    if (hdr) {
+        // The output must take the colour space for presenting, and the post chain's last writes exist for the new format.
+        UINT support = 0u;
+        if (FAILED(chain3->CheckColorSpaceSupport(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, &support)) ||
+            (support & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == 0u) {
+            std::cerr << "[hdr] the swap chain cannot present HDR10 here: staying SDR\n";
+            hdr_output_ = PostOutput{};
+            hdr_failed_ = true;
+            return false;
+        }
+        if (!post_process_.prepare_hdr()) {
+            hdr_failed_ = true;
+            return false;
+        }
+    }
+    wait_for_gpu();
+    for (auto& buffer : backbuffers_) {
+        buffer.Reset();
+    }
+    const HRESULT resized = swap_chain_->ResizeBuffers(kSwapChainBuffers, current.Width, current.Height,
+                                                       hdr ? DXGI_FORMAT_R10G10B10A2_UNORM : kBackbufferFormat, current.Flags);
+    if (FAILED(resized)) {
+        // The buffers are released already: this is as fatal as a failed resize.
+        dump_device_removal(device_.Get());
+        d3d_check(resized, "ResizeBuffers (HDR)");
+        return false;
+    }
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    D3D12_CPU_DESCRIPTOR_HANDLE h = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    for (unsigned i = 0; i < kSwapChainBuffers; ++i) {
+        d3d_check(swap_chain_->GetBuffer(i, IID_PPV_ARGS(&backbuffers_[i])), "HDR GetBuffer");
+        device_->CreateRenderTargetView(backbuffers_[i].Get(), nullptr, h);
+        h.ptr += stride;
+    }
+    if (FAILED(chain3->SetColorSpace1(hdr ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709))) {
+        std::cerr << "[hdr] SetColorSpace1 failed\n";
+    }
+    if (hdr) {
+        apply_hdr_metadata(levels);
+    } else {
+        (void)swap_chain_->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0u, nullptr);
+    }
+    hdr_active_ = hdr;
+    hdr_output_ = hdr ? levels : PostOutput{};
+    if (hdr) {
+        std::cerr << "[hdr] on peak " << levels.peak_nits << " nits paper " << levels.paper_white_nits << '\n';
+    } else {
+        std::cerr << "[hdr] off\n";
+    }
+    publish_display_hdr();
+    return true;
+}
+
+void RendererD3D12::apply_hdr_metadata(const PostOutput& levels) {
+    const HdrMetadata m = hdr10_metadata(get_display_hdr(), levels.paper_white_nits);
+    const auto chromaticity = [](float value) { return static_cast<UINT16>(std::lround(value * 50000.0f)); };
+    DXGI_HDR_METADATA_HDR10 meta{};
+    meta.RedPrimary[0] = chromaticity(m.red[0]);
+    meta.RedPrimary[1] = chromaticity(m.red[1]);
+    meta.GreenPrimary[0] = chromaticity(m.green[0]);
+    meta.GreenPrimary[1] = chromaticity(m.green[1]);
+    meta.BluePrimary[0] = chromaticity(m.blue[0]);
+    meta.BluePrimary[1] = chromaticity(m.blue[1]);
+    meta.WhitePoint[0] = chromaticity(m.white[0]);
+    meta.WhitePoint[1] = chromaticity(m.white[1]);
+    meta.MaxMasteringLuminance = static_cast<UINT>(std::lround(m.max_luminance));
+    meta.MinMasteringLuminance = static_cast<UINT>(std::lround(m.min_luminance * 10000.0f));
+    meta.MaxContentLightLevel = static_cast<UINT16>(std::min(std::lround(m.max_content_light), 65535L));
+    meta.MaxFrameAverageLightLevel = static_cast<UINT16>(std::min(std::lround(m.max_frame_average_light), 65535L));
+    if (FAILED(swap_chain_->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(meta), &meta))) {
+        std::cerr << "[hdr] SetHDRMetaData failed\n";
+    }
+}
+
+// The frame's picture as the SDR window would show it, for a capture (screenshots and test pictures stay SDR whatever the
+// swap chain is): the post chain's last write run again into an 8-bit target of the swap chain's size.
+ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source, const D3D12_VIEWPORT& viewport) {
+    if (!hdr_capture_target_ || hdr_capture_target_->GetDesc().Width != host_window::backbuffer_width ||
+        hdr_capture_target_->GetDesc().Height != host_window::backbuffer_height) {
+        if (hdr_capture_target_) {
+            wait_for_gpu();
+        }
+        hdr_capture_target_.Reset();
+        if (!hdr_capture_rtv_heap_) {
+            D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+            dhd.NumDescriptors = 1;
+            dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&hdr_capture_rtv_heap_)))) {
+                return nullptr;
+            }
+        }
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rd.Width = host_window::backbuffer_width;
+        rd.Height = host_window::backbuffer_height;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = kBackbufferFormat;
+        rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_CLEAR_VALUE cv{};
+        cv.Format = kBackbufferFormat;
+        cv.Color[3] = 1.0f;
+        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite, &cv,
+                                  IID_PPV_ARGS(&hdr_capture_target_)))) {
+            return nullptr;
+        }
+        hdr_capture_target_->SetName(L"HDR capture (SDR picture)");
+        device_->CreateRenderTargetView(hdr_capture_target_.Get(), nullptr, hdr_capture_rtv_heap_->GetCPUDescriptorHandleForHeapStart());
+    }
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = hdr_capture_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    constexpr float kBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    command_list_->ClearRenderTargetView(rtv, kBlack, 0, nullptr);
+    command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    srv_ring_.bind(command_list_.Get());
+    post_process_.record(command_list_.Get(), srv_ring_, source.texture.Get(), source.width, source.height, rtv, viewport,
+                         frame_index_, kFramesInFlight);
+    invalidate_draw_bindings();
+    return hdr_capture_target_.Get();
 }
 
 UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
@@ -6180,7 +6360,7 @@ bool RendererD3D12::present(
         // The picture: an display picture copy's whole texture, or the top rows of a handed-over scene target.
         post_process_.record(
             command_list_.Get(), srv_ring_, source->texture.Get(), source->width, source->height,
-            back_rtv, vp, frame_index_, kFramesInFlight);
+            back_rtv, vp, frame_index_, kFramesInFlight, hdr_active_ ? hdr_output_ : PostOutput{});
         // The overlay reads a copy: publish when what it shows changes.
         const PostProcessStatus& post = post_process_.status();
         static PostProcessStatus published{};
@@ -6216,6 +6396,15 @@ bool RendererD3D12::present(
 
     host_window::native_settings_present();
 
+    // A capture is the SDR picture whatever the swap chain is: the HDR10 buffer itself is not a picture the gates compare.
+    ID3D12Resource* capture_from = nullptr;
+    if (capture_backbuffer) {
+        capture_from = hdr_active_ ? hdr_capture_picture(*source, vp) : backbuffers_[buf_idx].Get();
+        if (capture_from == nullptr) {
+            std::cerr << "[backbuffer-dump] skipped=no-sdr-picture-for-hdr\n";
+            capture_backbuffer = false;
+        }
+    }
     if (capture_backbuffer) {
         if (backbuffer_readback_pending_) {
             throw std::runtime_error(
@@ -6249,11 +6438,11 @@ bool RendererD3D12::present(
         }
 
         BarriersD3D12 capture{command_list_.Get()};
-        capture.texture(backbuffers_[buf_idx].Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
+        capture.texture(capture_from, gpu::Use::ColorWrite, gpu::Use::CopySource);
         capture.issue();
 
         D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
-        src.pResource = backbuffers_[buf_idx].Get();
+        src.pResource = capture_from;
         src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         dst.pResource = backbuffer_readback_buf_.Get();
         dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;

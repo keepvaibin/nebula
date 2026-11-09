@@ -177,6 +177,10 @@ public:
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
     // VK_KHR_present_wait with VK_KHR_present_id, enabled: vkWaitForPresentKHR waits until a presented frame is on the screen.
     [[nodiscard]] bool present_wait() const noexcept { return present_wait_; }
+    // VK_EXT_swapchain_colorspace on the instance (the surface can list HDR10 formats) and VK_EXT_hdr_metadata on the device
+    // (vkSetHdrMetadataEXT), each where it is here and not switched off by GALAXY_VK_TEST_NO_FEATURE=hdr.
+    [[nodiscard]] bool swapchain_colorspace() const noexcept { return swapchain_colorspace_; }
+    [[nodiscard]] bool hdr_metadata() const noexcept { return hdr_metadata_; }
     // Swapchain maintenance 1, enabled with its surface extension on the instance: a swap chain made with a list of present
     // modes takes any of them per present (VkSwapchainPresentModeInfoEXT).
     [[nodiscard]] bool present_mode_switching() const noexcept { return present_mode_switching_; }
@@ -319,6 +323,8 @@ private:
     bool present_mode_switching_ = false;   // swapchain maintenance 1, enabled
     bool surface_maintenance_ = false;      // the instance has the surface extension of that kind (decided in initialize)
     bool surface_maintenance_khr_ = false;  // ... in its KHR form (else EXT)
+    bool swapchain_colorspace_ = false;     // VK_EXT_swapchain_colorspace, enabled on the instance
+    bool hdr_metadata_ = false;             // VK_EXT_hdr_metadata, enabled on the device
     bool host_image_copy_ = false;      // VK_EXT_host_image_copy, enabled, with the layout the textures rest in
     bool device_mapped_memory_ = false; // see device_mapped_memory()
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
