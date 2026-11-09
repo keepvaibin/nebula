@@ -80,7 +80,7 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
         }
         return Ok(vec![(renamed(".bti"), super::gltf::png_to_bti(bytes)?, false)]);
     }
-    if lower.ends_with(".wav") || lower.ends_with(".ogg") {
+    if super::modern_audio::is_stream_source(&lower) {
         return Ok(vec![(renamed(".ast"), super::modern_audio::to_stream(&change.path, bytes)?, true)]);
     }
     Ok(Vec::new())
