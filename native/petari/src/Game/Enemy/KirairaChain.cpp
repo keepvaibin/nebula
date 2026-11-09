@@ -60,6 +60,11 @@ KirairaChain::KirairaChain(const LiveActor* pHost)
         mPointCount -= 2;
     }
 
+    // A chain is at least two points (a short rail would give none or a divide by zero in initPoints).
+    if (mPointCount < 2) {
+        mPointCount = 2;
+    }
+
     mFixPointTopMtx.getXDir(mFixPointTopDir);
     mFixPointBottomMtx.getXDir(mFixPointBottomDir);
 }

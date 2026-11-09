@@ -325,7 +325,8 @@ void StinkBugParent::exeDemoAnger() {
         MR::startBrk(this, "Anger");
         MR::resetPosition(this, mInitPos);
         MR::setPlayerPosAndWait(cDemoEndPointName);
-        Vec3f demoEndPos;
+        // Without the point the bug turns to its home.
+        Vec3f demoEndPos(mInitPos);
         MR::findNamePos(cDemoEndPointName, &demoEndPos, nullptr);
         MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, demoEndPos, 180.0f);
     }
@@ -455,7 +456,8 @@ bool StinkBugParent::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor*
 
 // Throws the player toward the demo's end point, away from the child.
 void StinkBugParent::jumpBackPlayerFromChild() const {
-    Vec3f demoEndPos;
+    // Without the point the player is thrown from where the bug stands.
+    Vec3f demoEndPos(mPosition);
     MR::findNamePos(cDemoEndPointName, &demoEndPos, nullptr);
     Vec3f toEnd;
     toEnd.sub(demoEndPos, *MR::getPlayerPos());

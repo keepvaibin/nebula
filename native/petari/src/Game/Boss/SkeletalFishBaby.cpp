@@ -125,9 +125,13 @@ void SkeletalFishBaby::kill() {
 }
 
 void SkeletalFishBaby::control() {
-    mRailControl->mSpeed = mSpeed;
-    mRailControl->update();
-    mRailControl->getPos(&mPosition, 0.0f);
+    // A fish placed without a rail (initRail needs a valid placement) stays where it is.
+    if (mRailControl->mRail != nullptr) {
+        mRailControl->mSpeed = mSpeed;
+        mRailControl->update();
+        mRailControl->getPos(&mPosition, 0.0f);
+    }
+
     mScaleController->updateNerve();
 
     if (isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim))) {

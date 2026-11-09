@@ -35,6 +35,12 @@ void BegomanLauncher::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     s32 count = 1;
     MR::getPlacementArg3NoInit(rIter, &count);
+
+    // A negative count makes no launcher begomen (it would size the array below zero).
+    if (count < 0) {
+        count = 0;
+    }
+
     mBegomanCount = count;
     MR::getPlacementArg2NoInit(rIter, &mAppearDelay);
     const char* pObjectName = nullptr;

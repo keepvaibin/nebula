@@ -65,6 +65,18 @@ namespace {
 };  // namespace
 
 namespace {
+    // The first rail placed for the boss, or null when the stage has none (the holder is made by the first rail).
+    SkeletalFishBossRail* findFirstBossRail() {
+        if (!MR::isExistSceneObj(SceneObj_SkeletalFishBossRailHolder)) {
+            return nullptr;
+        }
+
+        const SkeletalFishBossRailHolder* pHolder = MR::getSkeletalFishBossRailHolder();
+        return pHolder->mRails.size() > 0 ? pHolder->getInOrder(0) : nullptr;
+    }
+};  // namespace
+
+namespace {
     NEW_NERVE(SkeletalFishBossNrvSwim, SkeletalFishBoss, Swim);
     NEW_NERVE(SkeletalFishBossNrvOpen, SkeletalFishBoss, Open);
     NEW_NERVE(SkeletalFishBossNrvOpenWait, SkeletalFishBoss, OpenWait);
@@ -172,6 +184,13 @@ void SkeletalFishBoss::init(const TableIter& rIter) {
 
 void SkeletalFishBoss::initAfterPlacement() {
     NameObj::initAfterPlacement();
+
+    // A stage with no boss rail leaves the boss dead: it has nowhere to swim, and appear() and makeActorAppeared() keep it so.
+    if (findFirstBossRail() == nullptr) {
+        makeActorDead();
+        return;
+    }
+
     mLevel = -1;
     powerUp();
     makeActorDead();
@@ -180,6 +199,10 @@ void SkeletalFishBoss::initAfterPlacement() {
 }
 
 void SkeletalFishBoss::makeActorAppeared() {
+    if (findFirstBossRail() == nullptr) {
+        return;
+    }
+
     LiveActor::makeActorAppeared();
     validateCollision();
     mLevel = -1;
@@ -187,6 +210,10 @@ void SkeletalFishBoss::makeActorAppeared() {
 }
 
 void SkeletalFishBoss::appear() {
+    if (findFirstBossRail() == nullptr) {
+        return;
+    }
+
     LiveActor::appear();
     MR::hideModel(this);
     setNerve(GET_NERVE_ANON(SkeletalFishBossNrvAppearWait));
@@ -771,10 +798,17 @@ void SkeletalFishBoss::startDamageAnim() {
 }
 
 void SkeletalFishBoss::calcPlanetCenterPosition() {
+    SkeletalFishBossRail* pRail = findFirstBossRail();
+
+    // The planet centre comes from the first two points of the first rail; fewer points keep the centre at the origin.
+    if (pRail == nullptr || MR::getRailPointNum(pRail) < 2) {
+        return;
+    }
+
     Vec3f firstPnt;
-    MR::calcRailPointPos(&firstPnt, MR::getSkeletalFishBossRailHolder()->getInOrder(0), 0);
+    MR::calcRailPointPos(&firstPnt, pRail, 0);
     Vec3f secondPnt;
-    MR::calcRailPointPos(&secondPnt, MR::getSkeletalFishBossRailHolder()->getInOrder(0), 1);
+    MR::calcRailPointPos(&secondPnt, pRail, 1);
     calcGravityCenter(&mPlanetCenter, firstPnt, secondPnt);
 }
 
@@ -812,6 +846,12 @@ bool SkeletalFishBoss::calcGravityCenter(Vec3f* pOut, const Vec3f& rFirstPoint, 
 void SkeletalFishBoss::resetRail() {
     SkeletalFishBossInfo::LevelStatus* lvl = mBossInfo->getLevelStatus(mLevel);
     SkeletalFishBossRail* rail = MR::getSkeletalFishBossRailHolder()->getByID(lvl->mRailIDLevel);
+
+    // Nothing to swim on: the rail stays as it is.
+    if (rail == nullptr) {
+        return;
+    }
+
     mRailControl->setRailActor(rail, nullptr, true);
     mRailControl->mSpeed = mBossInfo->getLevelStatus(mLevel)->mSpeedLevel;
 }

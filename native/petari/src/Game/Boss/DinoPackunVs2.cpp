@@ -26,6 +26,7 @@ DinoPackunVs2::DinoPackunVs2(DinoPackun* pPackun) : DinoPackunSequencer("ディ�
     mEgg = nullptr;
     mBattleLv1 = nullptr;
     mTrackFireHolder = nullptr;
+    mFireHolder = nullptr;
 }
 
 void DinoPackunVs2::init() {
