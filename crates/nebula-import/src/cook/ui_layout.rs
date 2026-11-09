@@ -751,11 +751,11 @@ pub fn write_layout(ir: &UiLayoutIr) -> Result<Vec<u8>> {
         let mut r = [0u8; MATERIAL];
         put32(&mut r, 0, pool.add(&m.name));
         put16(&mut r, 4, material_next[i]);
-        r[6] = u8::from(m.channel.is_some()) * MATERIAL_CHANNEL
-            | u8::from(m.material_color.is_some()) * MATERIAL_COLOR
-            | u8::from(m.alpha_compare.is_some()) * MATERIAL_ALPHA_COMPARE
-            | u8::from(m.blend.is_some()) * MATERIAL_BLEND
-            | u8::from(m.has_stages) * MATERIAL_STAGES;
+        r[6] = (u8::from(m.channel.is_some()) * MATERIAL_CHANNEL)
+            | (u8::from(m.material_color.is_some()) * MATERIAL_COLOR)
+            | (u8::from(m.alpha_compare.is_some()) * MATERIAL_ALPHA_COMPARE)
+            | (u8::from(m.blend.is_some()) * MATERIAL_BLEND)
+            | (u8::from(m.has_stages) * MATERIAL_STAGES);
         for (a, reg) in m.registers.iter().enumerate() {
             for (c, v) in reg.iter().enumerate() {
                 put16(&mut r, 8 + a * 8 + c * 2, *v as u16);

@@ -1250,8 +1250,6 @@ impl Curve {
     }
 }
 
-/// An animation, each joint sampled on every other frame.
-
 /// One axis of a joint: a single value if it never changes, else time, value and slope per sample.
 fn axis_track(out: &mut Vec<f32>, frames: &[usize], values: &[f32]) -> Result<Track> {
     let at = out.len() as u32;
@@ -1268,6 +1266,7 @@ fn axis_track(out: &mut Vec<f32>, frames: &[usize], values: &[f32]) -> Result<Tr
     Ok(Track { count, stride: 3, integer_keys: false, at })
 }
 
+/// An animation, each joint sampled on every other frame.
 fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_node: &BTreeMap<usize, usize>, timing: &Timing) -> Result<ClipIr> {
     let samplers = animation["samplers"].as_array().context("an animation with no samplers")?;
     let mut curves: BTreeMap<(usize, &str), Curve> = BTreeMap::new();
@@ -1329,6 +1328,106 @@ fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_no
         }
     }
     Ok(clip)
+}
+
+/// A camera animation (the game's CameraAnim, NCAM) from the first camera of a glTF file and the first animation that
+/// moves it. Its node's place and turn at each frame (1/60 s) give the eye, the point it watches (`watch_distance`
+/// metres ahead, `extras.nebula.watch_distance` on the camera's node, default 10) and the twist about the view; the
+/// camera's `yfov` (or an animation of it, `/cameras/<n>/perspective/yfov`) the field of view. The game plays the clip
+/// relative to what it follows (a cutscene's actor or point): the glTF's origin is that, its +Y that one's up. Parents
+/// of the camera's node may place it but not move. Cuts are found as a disc clip's are.
+pub fn to_camera(bytes: &[u8], folder: Option<&Path>) -> Result<Vec<u8>> {
+    let document = Document::parse(bytes, folder)?;
+    let root = &document.root;
+    let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let node = nodes.iter().position(|n| n["camera"].is_u64()).context("no camera: a node with a \"camera\"")?;
+    let camera_index = nodes[node]["camera"].as_u64().unwrap_or(0) as usize;
+    let camera = &root["cameras"][camera_index];
+    if camera["type"].as_str() != Some("perspective") {
+        bail!("camera {camera_index} is not a perspective camera");
+    }
+    let yfov = camera["perspective"]["yfov"].as_f64().context("the camera has no yfov")? as f32;
+    let watch = nodes[node]["extras"]["nebula"]["watch_distance"].as_f64().map_or(10.0, |d| d as f32) * UNITS_PER_METRE;
+    // Its parents' placing, root first.
+    let mut parent_of = BTreeMap::new();
+    for (p, n) in nodes.iter().enumerate() {
+        for c in n["children"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            parent_of.insert(c.as_u64().unwrap_or(0) as usize, p);
+        }
+    }
+    let mut chain = Vec::new();
+    let mut at = node;
+    while let Some(&p) = parent_of.get(&at) {
+        chain.push(p);
+        at = p;
+    }
+    let parents = chain.iter().rev().fold(IDENTITY, |m, &p| multiply(&m, &node_matrix(&nodes[p])));
+    let animations = root["animations"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let fov_pointer = format!("/cameras/{camera_index}/perspective/yfov");
+    let moves = |a: &Value| {
+        a["channels"].as_array().map(Vec::as_slice).unwrap_or_default().iter().any(|c| {
+            c["target"]["node"].as_u64() == Some(node as u64) || pointer_of(c) == Some(fov_pointer.as_str())
+        })
+    };
+    let animation = animations.iter().find(|a| moves(a)).context("no animation moves the camera")?;
+    for c in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        if c["target"]["node"].as_u64().is_some_and(|n| chain.contains(&(n as usize))) {
+            bail!("the camera's parent node {} moves: animate the camera's own node", c["target"]["node"]);
+        }
+    }
+    let samplers = animation["samplers"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let (mut translation, mut rotation, mut fov) = (None, None, None);
+    for c in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        if pointer_of(c) == Some(fov_pointer.as_str()) {
+            fov = Some(pointer_curve(&document, samplers, c, 1)?);
+        } else if c["target"]["node"].as_u64() == Some(node as u64) {
+            match c["target"]["path"].as_str() {
+                Some("translation") => translation = Some(pointer_curve(&document, samplers, c, 3)?),
+                Some("rotation") => {
+                    let mut curve = pointer_curve(&document, samplers, c, 4)?;
+                    curve.turns = true;
+                    rotation = Some(curve);
+                }
+                _ => {}
+            }
+        }
+    }
+    let length = [&translation, &rotation, &fov].iter().filter_map(|c| c.as_ref().and_then(|c| c.times.last().copied())).fold(0.0f32, f32::max);
+    let frames = (length * FRAMES_PER_SECOND).round() as usize + 1;
+    let rest = node_trs(&nodes[node]);
+    let mut tracks: [Vec<f32>; super::camera::TRACKS] = Default::default();
+    for frame in 0..frames {
+        let time = frame as f32 / FRAMES_PER_SECOND;
+        let place = translation.as_ref().map_or(rest.translation, |c| { let v = c.at(time); [v[0], v[1], v[2]] });
+        let turn = rotation.as_ref().map_or(rest.rotation, |c| { let v = c.at(time); [v[0], v[1], v[2], v[3]] });
+        let m = multiply(&parents, &trs_matrix(&Trs { translation: place, rotation: turn, scale: [1.0; 3] }));
+        let unit = |v: [f32; 3]| { let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-6); v.map(|x| x / l) };
+        let eye = transform(&m, [0.0; 3], 1.0).map(|v| v * UNITS_PER_METRE);
+        let front = unit(transform(&m, [0.0, 0.0, -1.0], 0.0));
+        let up = unit(transform(&m, [0.0, 1.0, 0.0], 0.0));
+        // The twist CameraDirector::calcViewMtxFromPoseParam turns the untwisted view by (about its Z) to reach this up:
+        // untwisted, X is -(world up x front), Y is front x side.
+        let cross = |a: [f32; 3], b: [f32; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+        let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let side = unit(cross([0.0, 1.0, 0.0], front));
+        let (x0, y0) = (side.map(|v| -v), unit(cross(front, side)));
+        let twist = (-dot(up, x0)).atan2(dot(up, y0)).to_degrees();
+        let fovy = fov.as_ref().map_or(yfov, |c| c.at(time)[0]).to_degrees();
+        let values = [eye[0], eye[1], eye[2], eye[0] + front[0] * watch, eye[1] + front[1] * watch, eye[2] + front[2] * watch, twist, fovy];
+        for (track, v) in tracks.iter_mut().zip(values) {
+            track.push(v);
+        }
+    }
+    let mut ncam = super::camera::Ncam { frames: frames as u32, ..Default::default() };
+    for (i, values) in tracks.iter().enumerate() {
+        // A track that never changes is one value.
+        let held = values.iter().all(|v| (v - values[0]).abs() < 1e-4);
+        let kept: &[f32] = if held { &values[..1] } else { values };
+        ncam.tracks[i] = super::camera::Track { count: kept.len() as u32, first: ncam.values.len() as u32, stride: 1 };
+        ncam.values.extend_from_slice(kept);
+    }
+    ncam.cuts = super::camera::find_cuts(&ncam);
+    Ok(ncam.to_bytes())
 }
 
 #[cfg(test)]
@@ -1527,6 +1626,46 @@ mod tests {
             assert_eq!(word(slot), n as u32);
             assert_eq!(block[slot + 6], super::super::model_write::SLOT_USES_MAP | super::super::model_write::SLOT_USES_COORD);
         }
+    }
+
+    #[test]
+    fn a_gltf_camera_is_a_camera_animation() {
+        // A camera 5 m behind the origin turning from looking at it to looking left over one second, rolled 90 degrees at
+        // the end; 40 degrees of view.
+        let half = std::f32::consts::FRAC_PI_4.sin();
+        let mut document = serde_json::json!({
+            "asset": { "version": "2.0" }, "buffers": [], "bufferViews": [], "accessors": [],
+            "nodes": [{ "camera": 0, "translation": [0, 0, 5] }],
+            "cameras": [{ "type": "perspective", "perspective": { "yfov": 40f32.to_radians(), "znear": 0.1 } }],
+            "animations": [{ "channels": [{ "sampler": 0, "target": { "node": 0, "path": "rotation" } }],
+                             "samplers": [{ "input": 0, "output": 1 }] }]
+        });
+        // From no turn to a quarter turn about Y then a quarter turn about Z (its own view axis).
+        let q_y = [0.0, half, 0.0, half];
+        let q_z = [0.0, 0.0, half, half];
+        let product = |a: [f32; 4], b: [f32; 4]| [
+            a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+            a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+            a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+            a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+        ];
+        let last = product(q_y, q_z);
+        let views = add_floats(&mut document, &[(2, "SCALAR", vec![0.0, 1.0]), (2, "VEC4", [[0.0, 0.0, 0.0, 1.0], last].concat())]);
+        document["animations"][0]["samplers"][0] = serde_json::json!({ "input": views[0], "output": views[1] });
+        let ncam = super::super::camera::Ncam::from_ncam(&to_camera(document.to_string().as_bytes(), None).unwrap()).unwrap();
+        assert_eq!(ncam.frames, 61);
+        let read = |track: usize, frame: f32| super::super::camera::read(&ncam, track, frame).unwrap();
+        // The eye stands still: one value each, in the game's units.
+        assert_eq!(ncam.tracks[2].count, 1);
+        assert!((read(2, 0.0) - 500.0).abs() < 1e-3);
+        // At first it watches 10 m ahead, the origin's way, untwisted; at the end to its left (-X), twisted a quarter.
+        assert!((read(5, 0.0) - (500.0 - 1000.0)).abs() < 1e-2, "{}", read(5, 0.0));
+        assert!(read(6, 0.0).abs() < 1e-3);
+        assert!((read(3, 60.0) - -1000.0).abs() < 1e-1, "{}", read(3, 60.0));
+        assert!((read(6, 60.0).abs() - 90.0).abs() < 1e-2, "{}", read(6, 60.0));
+        assert!((read(7, 30.0) - 40.0).abs() < 1e-3);
+        let error = to_camera(serde_json::json!({ "asset": { "version": "2.0" }, "nodes": [{}] }).to_string().as_bytes(), None).unwrap_err();
+        assert!(error.to_string().contains("no camera"));
     }
 
     #[test]
