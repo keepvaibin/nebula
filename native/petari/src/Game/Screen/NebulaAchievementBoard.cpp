@@ -1135,6 +1135,7 @@ void NebulaAchievementBoard::init(const TableIter& /*rIter*/) {
     if (pRoot == nullptr || !p->mText.init(pManager->mLayoutHolder, "InformationWindow", pManager->mLayout) ||
         !p->mButton.init("BackButton", pManager->mLayout)) {
         nebula_log("NebulaAchievementBoard: no InformationWindow or BackButton layout\n");
+        delete p;
         return;
     }
     const bool ringed = p->mWindow.init("SysInfoWindowMini", pManager->mLayout);
