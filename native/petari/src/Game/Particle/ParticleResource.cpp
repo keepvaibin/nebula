@@ -610,9 +610,9 @@ void ParticleResource::drawC(EmitterWork* work) {
 namespace {
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
     // textures the emitter's functions chose, the blending, depth and culling the
-    // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
+    // shape and the manager set.
     // The particle material in use and the colours the emitter and particle functions set (ParticleMaterial): prm and
-    // env carry over from one emitter to the next.
+    // env carry over from one emitter to the next and travel on the particles' instances and corners.
     SiteMaterial sParticle;
     bool sParticleSent = false;
     // The textures the emitter's functions chose, by slot.
@@ -622,18 +622,12 @@ namespace {
     // The indirect matrix the emitter's extra texture shape gives (its rows scaled by 2^exponent), or none.
     f32 sIndirect[2][4];
 
-    void putColor(f32* pOut, const NebulaColor8& rColor) {
-        pOut[0] = rColor.r / 255.0f;
-        pOut[1] = rColor.g / 255.0f;
-        pOut[2] = rColor.b / 255.0f;
-        pOut[3] = rColor.a / 255.0f;
-    }
-
-    // The material with its own values: prm and env, the indirect matrix (rows 0-1), the alpha test's references.
+    // The material with its own values: the indirect matrix (rows 0-1), the alpha test's references. prm and env are
+    // not in its constants (the colour registers stay zero): the shader reads them from each particle's instance or
+    // corner, and sPrm and sEnv carry over from the emitter drawn before, so they would only make the rows change from
+    // frame to frame with nothing reading them.
     void sendParticle() {
         SiteMaterial& rMaterial = sParticle;
-        putColor(rMaterial.constants + 4, sPrm);
-        putColor(rMaterial.constants + 8, sEnv);
         for (u32 row = 0; row < 2; row++) {
             for (u32 c = 0; c < 4; c++) {
                 rMaterial.constants[48 + row * 4 + c] = sIndirect[row][c];
