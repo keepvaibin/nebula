@@ -80,7 +80,7 @@ namespace Ui {
         // The block's bytes follow, from a cArenaAlign boundary.
     };
 
-    Layout::Layout() : mpRootPane(nullptr), mpGroupContainer(nullptr), mLayoutSize(0.0f, 0.0f), mOriginType(0) {
+    Layout::Layout() : mpRootPane(nullptr), mpGroupContainer(nullptr), mLayoutSize(0.0f, 0.0f), mOriginType(0), mDrawGeneration(0) {
     }
 
     // Every arena object newest first (a pane before the materials its constructor made; the groups, built last,
@@ -533,7 +533,7 @@ namespace Ui {
                 i = order.mEnd[i];
                 continue;
             }
-            MotionSignal::drawObject(pPane->mDrawSlot, 0);
+            MotionSignal::drawObject(pPane->mDrawSlot, mDrawGeneration);
             pPane->DrawSelf(rInfo);
             i++;
         }

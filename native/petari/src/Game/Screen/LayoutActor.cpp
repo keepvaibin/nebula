@@ -37,11 +37,17 @@ void LayoutActor::calcAnim() {
 void LayoutActor::draw() const {
     if (MR::isExecuteDrawLayout(this)) {
         MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
+        mLayoutManager->setDrawGeneration(mMotionEpoch);
         mLayoutManager->draw();
     }
 }
 
 void LayoutActor::appear() {
+    // Back from dead: a new life, so its panes do not blend from where they were before it was killed.
+    if (mFlag.mIsDead) {
+        ++mMotionEpoch;
+    }
+
     mFlag.mIsDead = false;
 
     calcAnim();
