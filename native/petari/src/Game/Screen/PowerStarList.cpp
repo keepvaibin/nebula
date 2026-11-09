@@ -372,10 +372,6 @@ namespace {
     };
 };  // namespace
 
-namespace {
-    ListItem* sListItems = nullptr;
-}  // namespace
-
 void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     if (pageNumber >= 0) {
         mPageNo = pageNumber;
@@ -405,10 +401,8 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
         MR::hidePaneRecursive(this, ::cSeparatorPaneTable[idx]);
     }
 
-    if (sListItems == nullptr) {
-        sListItems = new ListItem[::listRoom()];
-    }
-    ListItem* const listItems = sListItems;
+    // Built for this page and freed at its end: the list belongs to the scene showing it.
+    ListItem* const listItems = new ListItem[::listRoom()];
 
     s32 itemCount = ::getSortedList(listItems);
     mPageNum = (itemCount - 1) / ITEMS_PER_PAGE + 1;
@@ -512,6 +506,7 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     coinBuffer.finish(row);
     crownBuffer.finish(row);
     timeBuffer.finish(row);
+    delete[] listItems;
 }
 
 namespace {
