@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/frame_core.h"
 
+#include "galaxy/run_options.h"
+
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <unordered_map>
 
 namespace galaxy::render::core {
 
@@ -164,6 +168,66 @@ void Pairing::pair(ListData& now, const ListData* before) {
                 if (same_camera) now.light_set_before[item.light_set] = other.light_set;
             }
         }
+    }
+#if defined(NEBULA_DEV)
+    if (::galaxy::run_option_flag(::galaxy::run_options().test_pair_log, false)) {
+        log_lost_ring_pairs(now, last);
+    }
+#endif
+}
+
+// A ring draw shown at its newest vertices while the rest of its object blends between frames looks like a jump under
+// interpolation (vines, shadow volumes). Logged: a ring item with no pair whose object (slot and generation) has another
+// item that paired, and a paired ring item whose vertex count changed (ring_item_before then uses its own vertices),
+// with the first field that differs from the last list's item of the same identity.
+void Pairing::log_lost_ring_pairs(const ListData& now, const NebulaFrameList& last) {
+    const NebulaFrameList& list = *now.list;
+    const auto object = [](const NebulaFrameItem& item) {
+        return static_cast<std::uint64_t>(item.slot) << 32u | item.generation;
+    };
+    std::unordered_map<std::uint64_t, std::uint32_t> paired_objects;
+    for (std::uint32_t i = 0; i < list.item_count; ++i) {
+        if (now.item_before[i] != NEBULA_NONE32) ++paired_objects[object(list.items[i])];
+    }
+    std::unordered_map<std::uint64_t, std::uint32_t> last_by_part;  // (slot, generation, part) -> its first item
+    for (std::uint32_t i = last.item_count; i != 0u; --i) {
+        const NebulaFrameItem& item = last.items[i - 1u];
+        last_by_part[object(item) * 0x9E3779B97F4A7C15ull ^ item.part] = i - 1u;
+    }
+    for (std::uint32_t i = 0; i < list.item_count; ++i) {
+        const NebulaFrameItem& item = list.items[i];
+        if ((item.flags & NEBULA_ITEM_RING) == 0u || (item.flags & NEBULA_ITEM_DISCRETE_VERTICES) != 0u) continue;
+        const std::uint32_t pair = now.item_before[i];
+        const char* why = nullptr;
+        std::uint32_t was = 0u;
+        if (pair != NEBULA_NONE32) {
+            const NebulaFrameItem& other = last.items[pair];
+            if (other.ring_count != item.ring_count) {
+                why = "vertex count changed";
+                was = other.ring_count;
+            }
+        } else if (paired_objects.count(object(item)) != 0u) {
+            const auto found = last_by_part.find(object(item) * 0x9E3779B97F4A7C15ull ^ item.part);
+            if (found == last_by_part.end()) {
+                why = "no part of this number last frame (parts shifted)";
+            } else {
+                const NebulaFrameItem& other = last.items[found->second];
+                was = other.ring_count;
+                why = other.pipeline != item.pipeline       ? "pipeline changed"
+                      : other.mesh != item.mesh             ? "vertex layout changed"
+                      : other.textures != item.textures     ? "textures changed"
+                      : other.matrix != item.matrix         ? "matrix changed"
+                      : other.flags != item.flags           ? "flags changed"
+                      : other.source_hash != item.source_hash ? "material changed"
+                      : now.block_before[item.block] != other.block ? "block did not pair"
+                                                                    : "consumed by an earlier item of the same identity";
+            }
+        }
+        if (why == nullptr) continue;
+        const std::uint64_t key = static_cast<std::uint64_t>(item.source_hash) << 32u ^ reinterpret_cast<std::uintptr_t>(why);
+        if (!pair_logged_.insert(key).second) continue;
+        std::fprintf(stderr, "[pair] ring item lost its history: %s (material %08x, slot %u, part %u, vertices %u, before %u)\n",
+                     why, item.source_hash, item.slot, item.part, item.ring_count, was);
     }
 }
 
