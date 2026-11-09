@@ -177,7 +177,7 @@ void TalkBalloonShort::open(TalkMessageCtrl* pCtrl) {
         message = TalkFunction::getMessage(pCtrl);
     }
 
-    tempFormer->formMessage(message, 0);
+    tempFormer->formMessage(message, TalkTextForm_Talk);
     tempFormer->setArg(pCtrl->mTagArg, 0);
 
     s32 numLine = MR::countMessageLine(message);
@@ -245,7 +245,7 @@ void TalkBalloonShort::exeOpen() {
     }
 }
 
-TalkBalloonEvent::TalkBalloonEvent(const char* pName) : TalkBalloon(pName), mFormMode(1), mAButton() {
+TalkBalloonEvent::TalkBalloonEvent(const char* pName) : TalkBalloon(pName), mFormMode(TalkTextForm_Event), mAButton() {
     initNerve(GET_NERVE(TalkBalloonEvent, TalkBalloonEventNrvWait));
 }
 
@@ -370,7 +370,7 @@ void TalkBalloonEvent::exeClose() {
 }
 
 TalkBalloonSign::TalkBalloonSign(const char* pName) : TalkBalloonEvent(pName) {
-    mFormMode = 2;
+    mFormMode = TalkTextForm_Whole;
 }
 
 void TalkBalloonSign::init(const TableIter& rIter) {
@@ -406,7 +406,7 @@ void TalkBalloonIcon::open(TalkMessageCtrl* pCtrl) {
     const char16_t* message = TalkFunction::getMessage(pCtrl);
     TalkTextFormer* former = mTextFormer;
 
-    former->formMessage(message, 2);
+    former->formMessage(message, TalkTextForm_Whole);
     former->setArg(pCtrl->mTagArg, 0);
     LayoutActor::setNerve(GET_NERVE(TalkBalloonShort, TalkBalloonShortNrvOpen));
 }
