@@ -454,6 +454,11 @@ inline const char* trace_memory() noexcept { return nullptr; }
 inline const char* trace_memory() noexcept { return std::getenv("GALAXY_TRACE_MEMORY"); }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* trace_cuts() noexcept { return nullptr; }
+#else
+inline const char* trace_cuts() noexcept { return std::getenv("GALAXY_TRACE_CUTS"); }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* trace_present_stats() noexcept { return nullptr; }
 #else
 inline const char* trace_present_stats() noexcept { return std::getenv("GALAXY_TRACE_PRESENT_STATS"); }

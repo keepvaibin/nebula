@@ -121,6 +121,7 @@ RunOptions read_options() {
     o.test_mods_screen = nebula_switch::test_mods_screen();
     o.test_mods_changed = nebula_switch::test_mods_changed();
     o.trace_memory = nebula_switch::trace_memory();
+    o.trace_cuts = nebula_switch::trace_cuts();
     o.trace_present_stats = nebula_switch::trace_present_stats();
     o.trace_thread_cpu = nebula_switch::trace_thread_cpu();
     o.vk_simulate_driver = nebula_switch::vk_simulate_driver();

@@ -32,6 +32,26 @@ constexpr bool state_depth_test(std::uint32_t s) noexcept { return (s & (1u << 1
 constexpr bool state_stencil(std::uint32_t s) noexcept { return ((s >> 20u) & 3u) != 0u; }
 constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_STATE_COLOR_WRITE) != 0u; }
 
+// GALAXY_TRACE_CUTS=1 (dev): each pair of lists whose scene camera is cut, marked by the game (MotionSignal) or by the
+// eye's move or turn; and each pair whose camera moved over 300 units or turned over 10 degrees in a step and was blended.
+void trace_cuts(const ListData& now) {
+    static const bool enabled = ::galaxy::run_option_u64(::galaxy::run_options().trace_cuts, 0u) != 0u;
+    if (!enabled) {
+        return;
+    }
+    const NebulaFrameList& list = *now.list;
+    for (std::uint32_t c = 0; c < list.camera_count && c < now.camera_motion.size(); ++c) {
+        const CameraMotion& m = now.camera_motion[c];
+        if (list.cameras[c].role != NEBULA_CAMERA_SCENE || !m.known) {
+            continue;
+        }
+        if (m.cut || m.moved > 300.0f || m.turn_degrees > 10.0f) {
+            std::fprintf(stderr, "[cut] list=%u %s moved=%.0f turn=%.1f\n", now.serial,
+                         m.cut ? (now.cut ? "game" : "detected") : "blended", m.moved, m.turn_degrees);
+        }
+    }
+}
+
 // Two constants entries are one material when they are one entry or name one registered slot.
 inline bool same_material(const NebulaFrameList& list, std::uint32_t a, std::uint32_t b) noexcept {
     return a == b || (list.constants[a].slot != NEBULA_NONE32 && list.constants[a].slot == list.constants[b].slot);
@@ -130,7 +150,11 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     walk_.serial = ++walk_serial_;
     const bool between = time.t < 1.0f && before != nullptr;
     if (between) {
+        const bool fresh = !now.motion_ready;
         pairing_.prepare_motion(now, *before);
+        if (fresh) {
+            trace_cuts(now);
+        }
     }
     walk_.between = between;
 
