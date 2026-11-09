@@ -76,6 +76,8 @@
                         events.push_back({NEBULA_TEST_SHAKE_CAMERA, frame, 0});
                     } else if (kind == "actors") {
                         events.push_back({NEBULA_TEST_LIST_ACTORS, frame, 0});
+                    } else if (kind == "domelaunch") {
+                        events.push_back({NEBULA_TEST_DOME_LAUNCH, frame, 0});
                     } else if (kind == "koopahit") {
                         events.push_back({NEBULA_TEST_KOOPA_HIT, frame, 0});
                     } else if (kind.rfind("materials:", 0) == 0) {
