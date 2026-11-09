@@ -142,15 +142,44 @@ std::uint32_t Registries::take_mesh_ids(std::uint32_t count) {
 
 namespace {
 
-PipelineEntry entry_of(const NebulaPipelineDesc& desc) {
-    PipelineEntry entry{desc, program_reads_world(desc.vertex), program_lit(desc.pixel)};
-    for (std::uint32_t i = 0; i < desc.input_count && i < NEBULA_LAYOUT_MAX_INPUTS; ++i) {
-        const NebulaLayoutInput& input = desc.inputs[i];
+PipelineEntry entry_of(const NebulaPipelineDesc& desc, const NebulaLayoutInput* inputs) {
+    PipelineEntry entry{desc, {}, program_reads_world(desc.vertex), program_lit(desc.pixel)};
+    if (desc.input_count != 0u) {
+        entry.inputs.assign(inputs, inputs + desc.input_count);
+    }
+    for (const NebulaLayoutInput& input : entry.inputs) {
         if (input.semantic == NEBULA_INPUT_MATRIX && input.stream == 0u && input.format == 3u) {
             entry.matrix_at = input.offset;
         }
     }
     return entry;
+}
+
+// A pipeline's identity: its description and its inputs, field by field.
+std::uint64_t pipeline_hash(const NebulaPipelineDesc& desc, const NebulaLayoutInput* inputs) {
+    const std::uint64_t head[] = {desc.vertex, desc.pixel, (std::uint64_t{desc.state} << 32u) | desc.input_count, desc.position_stride};
+    std::uint64_t hash = hash_bytes(head, sizeof(head));
+    for (std::uint32_t i = 0; i < desc.input_count; ++i) {
+        const std::uint64_t word[] = {(std::uint64_t{inputs[i].semantic} << 16u) | (std::uint64_t{inputs[i].stream} << 8u) | inputs[i].format,
+                                      (std::uint64_t{inputs[i].offset} << 32u) | inputs[i].stride};
+        hash = hash_bytes(word, sizeof(word), hash);
+    }
+    return hash;
+}
+
+bool same_pipeline(const PipelineEntry& entry, const NebulaPipelineDesc& desc, const NebulaLayoutInput* inputs) {
+    if (entry.desc.vertex != desc.vertex || entry.desc.pixel != desc.pixel || entry.desc.state != desc.state ||
+        entry.desc.input_count != desc.input_count || entry.desc.position_stride != desc.position_stride) {
+        return false;
+    }
+    for (std::uint32_t i = 0; i < desc.input_count; ++i) {
+        const NebulaLayoutInput& a = entry.inputs[i];
+        const NebulaLayoutInput& b = inputs[i];
+        if (a.semantic != b.semantic || a.stream != b.stream || a.format != b.format || a.offset != b.offset || a.stride != b.stride) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // What a model's file says, with no device involved.
@@ -387,8 +416,8 @@ void Registries::restart(gpu::Device* device) {
     for (const SlotRecord* record : records) {
         place_slot(reinterpret_cast<const float (*)[4]>(record->cpu.get()), record->vertex_rows, record->pixel_rows);
     }
-    for (const NebulaPipelineDesc& desc : all_pipelines_) {
-        incoming_.pipelines.push_back(entry_of(desc));
+    for (const PipelineEntry& entry : all_pipelines_) {
+        incoming_.pipelines.push_back(entry);
     }
     std::vector<const TableKey*> keys(next_table_, nullptr);
     for (const auto& [hash, bucket] : table_by_hash_) {
@@ -437,27 +466,41 @@ std::uint32_t Registries::material_register_locked(const float (*rows)[4], std::
     return id;
 }
 
-std::uint32_t Registries::pipeline_register(const NebulaPipelineDesc& desc) {
-    const std::uint64_t hash = hash_bytes(&desc, sizeof(desc));
+std::uint32_t Registries::pipeline_register(const NebulaPipelineDesc& desc, const NebulaLayoutInput* inputs) {
+    const std::uint64_t hash = pipeline_hash(desc, inputs);
     const std::lock_guard guard(lock_);
     auto& bucket = pipeline_by_hash_[hash];
     for (const std::uint32_t id : bucket) {
-        if (std::memcmp(&all_pipelines_[id], &desc, sizeof(desc)) == 0) {
+        if (same_pipeline(all_pipelines_[id], desc, inputs)) {
             return id;
         }
     }
     const std::uint32_t id = static_cast<std::uint32_t>(all_pipelines_.size());
-    all_pipelines_.push_back(desc);
-    incoming_.pipelines.push_back(entry_of(desc));
+    all_pipelines_.push_back(entry_of(desc, inputs));
+    incoming_.pipelines.push_back(all_pipelines_.back());
     bucket.push_back(id);
     return id;
 }
 
+// Pipelines.bin's format (nebula_frame_list.h NEBULA_PIPELINE_FILE_MAGIC).
 void Registries::write_pipeline_list(const char* path) {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     const std::lock_guard guard(lock_);
-    out.write(reinterpret_cast<const char*>(all_pipelines_.data()),
-              static_cast<std::streamsize>(all_pipelines_.size() * sizeof(NebulaPipelineDesc)));
+    const auto put = [&out](const void* bytes, std::size_t size) { out.write(static_cast<const char*>(bytes), static_cast<std::streamsize>(size)); };
+    const std::uint32_t count = static_cast<std::uint32_t>(all_pipelines_.size());
+    const std::uint32_t reserved = 0u;
+    put(NEBULA_PIPELINE_FILE_MAGIC, 8u);
+    put(&count, 4u);
+    put(&reserved, 4u);
+    for (const PipelineEntry& entry : all_pipelines_) {
+        const NebulaPipelineDesc& desc = entry.desc;
+        put(&desc.vertex, 8u);
+        put(&desc.pixel, 8u);
+        put(&desc.state, 4u);
+        put(&desc.input_count, 4u);
+        put(&desc.position_stride, 4u);
+        put(entry.inputs.data(), entry.inputs.size() * sizeof(NebulaLayoutInput));
+    }
 }
 
 std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uint32_t count) {

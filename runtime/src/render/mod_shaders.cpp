@@ -77,7 +77,7 @@ ModShadersResult load_mod_shaders(const std::filesystem::path& file) {
         std::memcpy(&id, entry, 8);
         std::memcpy(&offset, entry + 16, 8);
         std::memcpy(&length, entry + 24, 8);
-        if (entry[8] >= kProgramVariants || entry[9] > 1u || offset > total || length > total - offset || length == 0u) {
+        if (entry[8] >= kProgramStored || entry[9] > 1u || offset > total || length > total - offset || length == 0u) {
             return ModShadersResult::Unreadable;
         }
         found.emplace_back(key_of(id, entry[8], entry[9] != 0u), ProgramBytes{bytes + offset, static_cast<std::size_t>(length)});

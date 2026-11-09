@@ -261,15 +261,15 @@ typedef struct NebulaFrameList {
 
 /* A pipeline: two programs named by their texts' hashes, or for a written shader NEBULA_PROGRAM_SITE | shader number << 1
    (vertex: | 1 its widened lines and points' variant), a state word (NEBULA_STATE_* in nebula_model.h) and a vertex layout:
-   position first (stream 0, `position_stride`), the vertex's matrix number (stream 2, or zero for a ring), then `inputs`. */
+   position first (stream 0, `position_stride`), the vertex's matrix number (stream 2, or zero for a ring), then
+   `input_count` NebulaLayoutInput, as many as the layout names. */
 #define NEBULA_PROGRAM_SITE (1ull << 63)
-enum { NEBULA_LAYOUT_MAX_INPUTS = NEBULA_MATERIAL_SLOTS + 8, NEBULA_STREAM_ZERO = 15 /* no buffer: the input reads zero */ };
+enum { NEBULA_STREAM_ZERO = 15 /* no buffer: the input reads zero */ };
 
 typedef struct NebulaLayoutInput {
-    uint8_t semantic; /* NEBULA_INPUT_* (nebula_model.h); a coordinate by the program's number, in the order of its form's inputs */
+    uint16_t semantic; /* NEBULA_INPUT_* (nebula_model.h); a coordinate NEBULA_INPUT_COORD0 + the program's number, in the order of its form's inputs */
     uint8_t stream;
     uint8_t format;   /* 0 three floats, 1 two floats, 2 RGBA8 unorm, 3 one uint */
-    uint8_t reserved;
     uint32_t offset, stride;
 } NebulaLayoutInput;
 
@@ -278,8 +278,14 @@ typedef struct NebulaPipelineDesc {
     uint32_t state;
     uint32_t input_count;
     uint32_t position_stride;
-    NebulaLayoutInput inputs[NEBULA_LAYOUT_MAX_INPUTS];
 } NebulaPipelineDesc;
+
+/* Pipelines.bin (NebulaData/, written by the cooker): "NBPIPEL2", the record count u32, 4 reserved bytes; then each record,
+   NEBULA_PIPELINE_RECORD_BYTES of NebulaPipelineDesc's fields in order (no padding) and its `input_count` NebulaLayoutInput
+   (12 bytes each) straight after, so a record is NEBULA_PIPELINE_RECORD_BYTES + 12 * input_count bytes. Records are not aligned:
+   read them with memcpy. */
+#define NEBULA_PIPELINE_FILE_MAGIC "NBPIPEL2"
+enum { NEBULA_PIPELINE_FILE_HEADER_BYTES = 16, NEBULA_PIPELINE_RECORD_BYTES = 28, NEBULA_LAYOUT_INPUT_BYTES = 12 };
 
 #ifdef __cplusplus
 }

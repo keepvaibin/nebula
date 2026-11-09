@@ -394,6 +394,7 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
     // The renderer has waited for this slot's fence: what it retired and read is idle.
     for (Retired& retired : retired_[frame_slot]) {
         if (retired.view != ~0u) {
+            backend_.release_view(retired.view);
             free_srv_indices_.push_back(retired.view);
         }
     }
@@ -686,6 +687,7 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
 void TextureStore::retire(gpu::TextureRef texture, std::uint32_t view) {
     if (retired_.empty()) {
         if (view != ~0u) {
+            backend_.release_view(view);
             free_srv_indices_.push_back(view);
         }
         return;

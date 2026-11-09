@@ -22,7 +22,7 @@ step).
 
 | Variable | Effect |
 |---|---|
-| `GALAXY_BOOT_FAST=0` | Retraces at 60 a second from the start (by default the black frames before the first 3D scene run ahead) |
+| `GALAXY_BOOT_FAST=0` | Frames at 60 a second from the start (by default the black frames before the first 3D scene run ahead) |
 | `GALAXY_PROFILE_GAME=<seconds>` | Sample the game thread each millisecond from its start, with its callers, into `game-profile.txt` beside the crash dumps; `tools/perf/game_profile.py` names them from the game module's link map |
 | `GALAXY_TRACE_THREAD_CPU=1` | Log each thread's CPU time each second |
 

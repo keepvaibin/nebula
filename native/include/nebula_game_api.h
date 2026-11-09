@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 144u
+#define NEBULA_GAME_API_VERSION 145u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -907,7 +907,8 @@ typedef struct NebulaHostServices {
     uint32_t (*texture_table)(void* user, const NebulaFrameTexture* list, uint32_t count);
     /* A material's constants that do not change; the renderer takes a copy. */
     uint32_t (*material_register)(void* user, const float (*rows)[4], uint32_t vertex_rows, uint32_t pixel_rows);
-    uint32_t (*pipeline_register)(void* user, const NebulaPipelineDesc* desc);
+    /* `desc->input_count` NebulaLayoutInput at `inputs` (any count); the renderer takes copies of both. */
+    uint32_t (*pipeline_register)(void* user, const NebulaPipelineDesc* desc, const NebulaLayoutInput* inputs);
     /* The frame's list. The renderer owns it until it sets `released`; nothing waits. */
     void (*submit_frame)(void* user, NebulaFrameList* list);
     /* `channel`'s latest finished probes with their values, at most `capacity`; how many (0 before any has finished).

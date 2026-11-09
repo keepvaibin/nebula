@@ -101,6 +101,11 @@ namespace Frame {
     void setPassAlpha(bool write);
     void setPassStencil(u8 test, u8 op);
 
+    // Room for `count` layout inputs that lasts until the next call with the same `which` (cLayoutRoomBuild: the pipeline
+    // being made; cLayoutRoomWiden: a widened draw's layout). Any count.
+    enum { cLayoutRoomBuild = 0, cLayoutRoomWiden = 1, cLayoutRooms = 2 };
+    NebulaLayoutInput* layoutRoom(u32 which, u32 count);
+
     // A pipeline of a written shader for these fixed values and this vertex layout.
     u32 sitePipeline(u32 shader, u32 state, const NebulaModelMesh* pMesh);
     // A cooked form's programs over a site's vertices: inputs the site has none of read zero.

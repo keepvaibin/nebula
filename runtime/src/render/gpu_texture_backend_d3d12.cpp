@@ -53,7 +53,31 @@ bool TextureBackend::initialize(gpu::Device* device, std::uint32_t view_capacity
     null_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     null_desc.Texture2D.MipLevels = 1u;
     device->CreateShaderResourceView(nullptr, &null_desc, null_srv_);
+    // Every view slot holds the null view from the start, so a copy never reads an undefined descriptor.
+    fill_null(srv_cpu_base_, view_capacity);
     return true;
+}
+
+void TextureBackend::fill_null(D3D12_CPU_DESCRIPTOR_HANDLE first, std::uint32_t count) {
+    if (count == 0u) {
+        return;
+    }
+    device_->CopyDescriptorsSimple(1u, first, null_srv_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    for (std::uint32_t done = 1u; done < count;) {
+        const std::uint32_t run = std::min(done, count - done);
+        D3D12_CPU_DESCRIPTOR_HANDLE to = first;
+        to.ptr += static_cast<SIZE_T>(done) * srv_stride_;
+        device_->CopyDescriptorsSimple(run, to, first, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        done += run;
+    }
+}
+
+void TextureBackend::release_view(std::uint32_t index) {
+    if (index >= views_made_) {
+        return;
+    }
+    device_->CopyDescriptorsSimple(1u, srv_cpu(index), null_srv_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    publish_view(index);
 }
 
 void TextureBackend::shutdown() {
@@ -79,6 +103,7 @@ void TextureBackend::ensure_view(std::uint32_t index) {
         desc.NumDescriptors = views_per_page_;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next;
         d3d_check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&next)), "create texture view page");
+        fill_null(next->GetCPUDescriptorHandleForHeapStart(), views_per_page_);
         srv_pages_.push_back(std::move(next));
     }
 }
@@ -109,20 +134,37 @@ void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, un
     publish_view(index);
 }
 
-void TextureBackend::mirror_into(D3D12_CPU_DESCRIPTOR_HANDLE slots, std::uint32_t count) {
+void TextureBackend::mirror_into(D3D12_CPU_DESCRIPTOR_HANDLE slots, std::uint32_t count, GrowFn grow, void* owner) {
+    if (views_made_ > count) {
+        throw std::runtime_error("[textures] more texture views than the shader-visible heap holds");
+    }
     mirror_ = slots;
     mirror_count_ = count;
-    for (std::uint32_t i = 0; i < views_made_; ++i) {
-        publish_view(i);
+    mirror_grow_ = grow;
+    mirror_owner_ = owner;
+    // The views made so far, one copy per page of the CPU views.
+    for (std::uint32_t first = 0; first < views_made_;) {
+        const std::uint32_t in_page = views_per_page_ - first % views_per_page_;
+        const std::uint32_t run = std::min(in_page, views_made_ - first);
+        D3D12_CPU_DESCRIPTOR_HANDLE slot = mirror_;
+        slot.ptr += static_cast<SIZE_T>(first) * srv_stride_;
+        device_->CopyDescriptorsSimple(run, slot, srv_cpu(first), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        first += run;
     }
 }
 
-void TextureBackend::publish_view(std::uint32_t index) const {
+void TextureBackend::publish_view(std::uint32_t index) {
     if (mirror_.ptr == 0u) {
         return;
     }
     if (index >= mirror_count_) {
-        throw std::runtime_error("[textures] more texture views than the shader-visible heap holds");
+        // A larger heap that already holds the earlier views (mirror_into); this one is copied below.
+        if (mirror_grow_ != nullptr) {
+            mirror_grow_(mirror_owner_, index);
+        }
+        if (index >= mirror_count_) {
+            throw std::runtime_error("[textures] more texture views than the shader-visible heap holds");
+        }
     }
     D3D12_CPU_DESCRIPTOR_HANDLE slot = mirror_;
     slot.ptr += static_cast<SIZE_T>(index) * srv_stride_;

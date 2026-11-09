@@ -14,8 +14,12 @@ std::uint32_t mod_shader_compiler_revision() noexcept {
     return vk::kCompilerRevision;
 }
 
+bool mod_shader_has_bound_form() noexcept {
+    return true;
+}
+
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
-                                                   const std::vector<const char*>& defines, std::string& problem) {
+                                                   const std::vector<const char*>& defines, std::string& problem, bool bound_tables) {
     std::string text = source;
     std::vector<std::string> included;
     for (std::size_t at = text.find("#include \""); at != std::string::npos; at = text.find("#include \"", at)) {
@@ -46,7 +50,7 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
     head += pixel ? "#define program_ps main\n" : "#define program_vs main\n";
     const std::vector<std::uint32_t> spirv =
         vk::compile_hlsl(vk::annotate(head + text, vk::draw_bindings()), pixel ? vk::ShaderStage::Fragment : vk::ShaderStage::Vertex, "main", {}, problem,
-                         {false, false});
+                         {.bound_tables = bound_tables});
     std::vector<std::uint8_t> out(spirv.size() * sizeof(std::uint32_t));
     if (!out.empty()) {
         std::memcpy(out.data(), spirv.data(), out.size());

@@ -705,7 +705,9 @@ CookedMovieIndex index_cooked_movie(const std::uint8_t* data, std::uint64_t size
     const std::uint32_t frames = word(4);
     const std::uint32_t width = word(20);
     const std::uint32_t height = word(24);
-    if (frames == 0u || width == 0u || height == 0u || width > 4096u || height > 4096u) {
+    // Each frame takes at least its header, so a count the file cannot hold is refused before anything is reserved.
+    if (frames == 0u || width == 0u || height == 0u || width > 4096u || height > 4096u ||
+        frames > (size - kHeader) / kFrameHeader) {
         return index;
     }
     index.video_at.reserve(frames);

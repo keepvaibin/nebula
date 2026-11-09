@@ -8,7 +8,7 @@
 namespace {
 
 using galaxy::host::FramePhase;
-using galaxy::host::Retraces;
+using galaxy::host::DisplayRefresh;
 
 int g_failures = 0;
 
@@ -21,20 +21,20 @@ void expect(bool condition, const char* message) {
 
 constexpr std::int64_t kFrame = 1'000'000'000 / 60;
 
-// The time from a frame's present to the next retrace after it.
-std::int64_t to_retrace(std::int64_t present, const Retraces& display) {
+// The time from a frame's present to the next refresh after it.
+std::int64_t to_refresh(std::int64_t present, const DisplayRefresh& display) {
     std::int64_t left = (display.vblank_ns - present) % display.period_ns;
     return left < 0 ? left + display.period_ns : left;
 }
 
-// Frames of `work` on this display: the last frame's distance from its present to a retrace, the longest and shortest
+// Frames of `work` on this display: the last frame's distance from its present to a refresh, the longest and shortest
 // start-to-start times once settled.
 struct Result {
     std::int64_t last_gap = 0;
     std::int64_t shortest = INT64_MAX;
     std::int64_t longest = 0;
 };
-Result run(const Retraces& display, std::int64_t work, std::int64_t frame = kFrame, int frames = 2000) {
+Result run(const DisplayRefresh& display, std::int64_t work, std::int64_t frame = kFrame, int frames = 2000) {
     FramePhase phase;
     std::int64_t start = 12'345'678;
     Result result;
@@ -46,29 +46,29 @@ Result run(const Retraces& display, std::int64_t work, std::int64_t frame = kFra
         }
         start = next;
     }
-    result.last_gap = to_retrace(start + work, display);
+    result.last_gap = to_refresh(start + work, display);
     return result;
 }
 
 void test_counts() {
-    using galaxy::host::frame_retraces;
-    expect(frame_retraces(kFrame, 1'000'000'000 / 60) == 1, "60 Hz: one retrace a frame");
-    expect(frame_retraces(kFrame, 16'683'350) == 1, "59.94 Hz: one retrace a frame");
-    expect(frame_retraces(kFrame, 1'000'000'000 / 120) == 2, "120 Hz: two");
-    expect(frame_retraces(kFrame, 1'000'000'000 / 240) == 4, "240 Hz: four");
-    expect(frame_retraces(kFrame, 1'000'000'000 / 144) == 0, "144 Hz: none fits");
-    expect(frame_retraces(kFrame, 1'000'000'000 / 75) == 0, "75 Hz: none fits");
-    expect(frame_retraces(kFrame, 0) == 0, "no display");
+    using galaxy::host::refreshes_per_frame;
+    expect(refreshes_per_frame(kFrame, 1'000'000'000 / 60) == 1, "60 Hz: one refresh a frame");
+    expect(refreshes_per_frame(kFrame, 16'683'350) == 1, "59.94 Hz: one refresh a frame");
+    expect(refreshes_per_frame(kFrame, 1'000'000'000 / 120) == 2, "120 Hz: two");
+    expect(refreshes_per_frame(kFrame, 1'000'000'000 / 240) == 4, "240 Hz: four");
+    expect(refreshes_per_frame(kFrame, 1'000'000'000 / 144) == 0, "144 Hz: none fits");
+    expect(refreshes_per_frame(kFrame, 1'000'000'000 / 75) == 0, "75 Hz: none fits");
+    expect(refreshes_per_frame(kFrame, 0) == 0, "no display");
 }
 
 void test_settles() {
-    for (const std::int64_t retrace : {std::int64_t{1'000'000'000 / 60}, std::int64_t{16'683'350}, std::int64_t{1'000'000'000 / 120}}) {
-        const Retraces display{987'654, retrace};
+    for (const std::int64_t refresh : {std::int64_t{1'000'000'000 / 60}, std::int64_t{16'683'350}, std::int64_t{1'000'000'000 / 120}}) {
+        const DisplayRefresh display{987'654, refresh};
         for (const std::int64_t work : {std::int64_t{1'000'000}, std::int64_t{3'000'000}, std::int64_t{5'000'000}}) {
             const Result r = run(display, work);
             expect(r.last_gap >= FramePhase::kMarginNs - 100'000 && r.last_gap <= FramePhase::kMarginNs + 2'000'000,
-                   "a settled present lands just before a retrace");
-            const std::int64_t step = galaxy::host::frame_retraces(kFrame, retrace) * retrace;
+                   "a settled present lands just before a refresh");
+            const std::int64_t step = galaxy::host::refreshes_per_frame(kFrame, refresh) * refresh;
             expect(std::llabs(r.shortest - step) <= 1'000 && std::llabs(r.longest - step) <= 1'000, "settled frames keep the display's period");
         }
     }
@@ -77,12 +77,12 @@ void test_settles() {
 void test_free_running() {
     FramePhase phase;
     expect(phase.next_start(1000, 3'000'000, kFrame, std::nullopt) == 1000 + kFrame, "no display clock: the frame's period");
-    expect(phase.next_start(1000, 3'000'000, kFrame, Retraces{0, 1'000'000'000 / 144}) == 1000 + kFrame, "144 Hz: the frame's period");
+    expect(phase.next_start(1000, 3'000'000, kFrame, DisplayRefresh{0, 1'000'000'000 / 144}) == 1000 + kFrame, "144 Hz: the frame's period");
 }
 
 void test_budget() {
     FramePhase phase;
-    const Retraces display{0, kFrame};
+    const DisplayRefresh display{0, kFrame};
     std::int64_t start = 0;
     for (int i = 0; i < 4000; ++i) start = phase.next_start(start, 2'000'000, kFrame, display);
     expect(std::llabs(phase.budget_ns() - (2'000'000 + FramePhase::kMarginNs)) < 50'000, "the budget falls to the work and the margin");
@@ -96,12 +96,12 @@ void test_budget() {
     (void)start;
     // One frame's move is bounded.
     FramePhase slow;
-    const std::int64_t first = slow.next_start(0, 1'000'000, kFrame, Retraces{5'000'000, kFrame});
+    const std::int64_t first = slow.next_start(0, 1'000'000, kFrame, DisplayRefresh{5'000'000, kFrame});
     expect(std::llabs(first - kFrame) <= FramePhase::kSlewNs, "a start moves a little at a time");
 }
 
 void test_falls_back() {
-    const Retraces display{0, kFrame};
+    const DisplayRefresh display{0, kFrame};
     FramePhase phase;
     std::int64_t start = 1'000'000;
     for (int i = 0; i < 1000; ++i) start = phase.next_start(start, 3'000'000, kFrame, display);
@@ -128,12 +128,12 @@ void test_falls_back() {
 }
 
 void test_in_step() {
-    using galaxy::host::retraces_in_step;
-    const Retraces now{1'000'000'000, kFrame};
-    expect(retraces_in_step(1'000'000'000 - 30 * kFrame, now), "a fixed display's retraces");
-    expect(retraces_in_step(1'000'000'000 - 30 * kFrame - 50'000, now), "rounding is in step");
-    expect(!retraces_in_step(1'000'000'000 - 30 * kFrame - kFrame / 3, now), "retraces that follow something else are not");
-    expect(!retraces_in_step(0, Retraces{0, 0}), "no display");
+    using galaxy::host::refreshes_in_step;
+    const DisplayRefresh now{1'000'000'000, kFrame};
+    expect(refreshes_in_step(1'000'000'000 - 30 * kFrame, now), "a fixed display's refreshes");
+    expect(refreshes_in_step(1'000'000'000 - 30 * kFrame - 50'000, now), "rounding is in step");
+    expect(!refreshes_in_step(1'000'000'000 - 30 * kFrame - kFrame / 3, now), "refreshes that follow something else are not");
+    expect(!refreshes_in_step(0, DisplayRefresh{0, 0}), "no display");
 }
 
 }  // namespace

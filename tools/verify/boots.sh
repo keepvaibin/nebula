@@ -11,7 +11,7 @@ one() {
   . $V/common.sh; VERIFY=$V
   run_build "$B" r 25 GALAXY_MAX_FPS=60 GALAXY_PRESENT_SNAPSHOT_EVERY=1000000 $5 >/dev/null 2>&1
   L="$RUNS/r/run.log"
-  if grep -q "boot: title screen" "$L"; then rm -rf "$W0"; else echo "HANG $1: $(grep -a 'host: retrace' "$L" | tail -1 | cut -c1-60)"; fi
+  if grep -q "boot: title screen" "$L"; then rm -rf "$W0"; else echo "HANG $1: $(grep -a '\[latency\] frame' "$L" | tail -1 | cut -c1-60)"; fi
 }
 i=0
 while [ $i -lt $N ]; do

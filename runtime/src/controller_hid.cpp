@@ -1132,20 +1132,6 @@ OffKind off_kind_of(const Device& device) noexcept {
     }
 }
 
-// Set unless the value is empty, 0, false, off or no.
-bool env_flag(const char* name) noexcept {
-    char value[16]{};
-    const DWORD length = GetEnvironmentVariableA(name, value, sizeof(value));
-    if (length == 0) return false;
-    if (length >= sizeof(value)) return true;
-    for (DWORD i = 0; i < length; ++i) {
-        value[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(value[i])));
-    }
-    const std::string_view text(value, length);
-    return !(text == "0" || text == "false" || text == "off" || text == "no");
-}
-
-
 // The 0..255 speed of the light motor that PlayStation controllers are driven
 // with, as the Xbox light motor is.
 std::uint8_t playstation_motor(std::uint8_t level, std::uint8_t strength) noexcept {

@@ -5,27 +5,61 @@ leaving out what the cook's own list has.
 site_pipelines.py PIPELINES_BIN RUN_LIST...
 
 PIPELINES_BIN is a cooked store's NebulaData/Pipelines.bin: the cook's own pipelines and this file's. The cook's own are
-the ones this file does not hold.
+the ones this file does not hold. A run list is Pipelines.bin's format (nebula_frame_list.h NEBULA_PIPELINE_FILE_MAGIC): a
+16-byte header, then records of 28 bytes and 12 bytes for each of the input count at offset 20. A file of the fixed-size records
+before the list was counted (320 bytes each, no header) reads too; the lines written are counted records.
 """
 import os
+import struct
 import sys
 
-RECORD = 320
+MAGIC = b"NBPIPEL2"
+HEADER = 16
+RECORD_HEADER = 28
+INPUT = 12
+FIXED_RECORD = 320
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "crates", "nebula-import", "data", "site_pipelines.txt")
+
+
+def from_fixed(old):
+    """A fixed-size record (24 inputs of a byte-wide semantic) as a counted one."""
+    count = min(struct.unpack_from("<I", old, 20)[0], 24)
+    out = bytearray(old[:RECORD_HEADER])
+    struct.pack_into("<I", out, 20, count)
+    for i in range(count):
+        at = RECORD_HEADER + i * INPUT
+        out += bytes([old[at], 0, old[at + 1], old[at + 2]]) + old[at + 4:at + 12]
+    return bytes(out)
 
 
 def records(path):
     with open(path, "rb") as f:
         data = f.read()
-    return {data[i:i + RECORD] for i in range(0, len(data), RECORD)}
+    found = set()
+    if data[:8] != MAGIC:
+        for i in range(0, len(data) - FIXED_RECORD + 1, FIXED_RECORD):
+            found.add(from_fixed(data[i:i + FIXED_RECORD]))
+        return found
+    count = struct.unpack_from("<I", data, 8)[0]
+    at = HEADER
+    for _ in range(count):
+        inputs = struct.unpack_from("<I", data, at + 20)[0]
+        end = at + RECORD_HEADER + inputs * INPUT
+        found.add(data[at:end])
+        at = end
+    return found
 
 
 def main():
     kept = set()
     if os.path.exists(OUT):
         with open(OUT, encoding="ascii") as f:
-            kept = {bytes.fromhex(line.strip()) for line in f if line.strip()}
+            kept = set()
+        for line in f:
+            if line.strip():
+                raw = bytes.fromhex(line.strip())
+                kept.add(from_fixed(raw) if len(raw) == FIXED_RECORD else raw)
     cooked = records(sys.argv[1]) - kept
     for path in sys.argv[2:]:
         kept |= records(path) - cooked

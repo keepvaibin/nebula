@@ -4,6 +4,8 @@
 #include "galaxy/render/scene_camera_shape.h"
 #include "galaxy/render/vk/utility_spirv.h"
 
+#include "barriers_vk.h"
+
 #include <algorithm>
 #include <iostream>
 
@@ -215,16 +217,11 @@ void SceneCameraVk::widen(VkCommandBuffer commands, VkRenderPass pass, unsigned 
 
 void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout,
                           float seconds, const SetAllocator& allocate) {
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcAccessMask = exposure_ready_ ? VK_ACCESS_SHADER_READ_BIT : 0u;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.oldLayout = exposure_ready_ ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = exposure_->image;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    // The last frame's reads finish before the meter writes (a read before a write needs the execution dependency alone).
+    image_barrier(commands, exposure_->image, VK_IMAGE_ASPECT_COLOR_BIT,
+                  exposure_ready_ ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, 1u);
     camera::Constants constants{};
     constants.width = static_cast<float>(wide.width);
     constants.height = static_cast<float>(wide.height);
@@ -235,11 +232,9 @@ void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const T
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &set, 0, nullptr);
     vkCmdPushConstants(commands, layout_, kStages, 0, sizeof(constants), &constants);
     vkCmdDispatch(commands, 1u, 1u, 1u);
-    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                         nullptr, 0, nullptr, 1, &barrier);
+    image_barrier(commands, exposure_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                  VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 1u);
 }
 
 void SceneCameraVk::draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide,

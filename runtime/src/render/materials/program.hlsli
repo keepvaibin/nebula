@@ -4,7 +4,11 @@
 // beside this file. Bindings: b0 the view, b1 a generated vertex stage's material constants, b2 a generated pixel stage's
 // and both stages' of a written program, b3 the draw's root constants, t16 the composed rows, t17 the instance table;
 // the textures and samplers: TEX/SAMP below (every texture at t0 and every sampler at s0 in space1, the draws' lists at
-// t18; or, under NEBULA_BOUND_TABLES, the draw's own table at t0-t15 and s0-s15).
+// t18; or, under NEBULA_BOUND_TABLES, the draw's own table at t0 and s0 of NEBULA_TABLE_SLOTS maps).
+// Vulkan sets (shader_compile_vk.cpp kDrawBindings): set 0 b0-b2 at bindings 0-2 (dynamic), t16 at 3, t17 at 4, t18 at 5
+// (storage buffers); set 1 binding 0 the images (t0, space1 or the bound t0); set 2 binding 0 the samplers (s0, space1 or
+// the bound s0); b3 the push constants. The compiler defines NEBULA_VULKAN, and on a device without descriptor indexing
+// NEBULA_BOUND_TABLES with NEBULA_TABLE_SLOTS; otherwise the arrays are runtime-sized.
 //
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
 // effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
@@ -38,14 +42,19 @@ StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's ro
 
 // The draw's textures: TEX(n) and SAMP(n) are its n-th map and that map's sampler.
 #if NEBULA_BOUND_TABLES
-// Devices without descriptor indexing: the draw's own table of NEBULA_MATERIAL_SLOTS, bound per draw.
-Texture2D tex[NEBULA_MATERIAL_SLOTS] : register(t0);
-SamplerState samp[NEBULA_MATERIAL_SLOTS] : register(s0);
+// Devices without descriptor indexing (Vulkan only): the draw's own table of NEBULA_TABLE_SLOTS maps, bound per draw.
+#ifndef NEBULA_TABLE_SLOTS
+#error NEBULA_BOUND_TABLES needs NEBULA_TABLE_SLOTS
+#endif
+Texture2D tex[NEBULA_TABLE_SLOTS] : register(t0);
+SamplerState samp[NEBULA_TABLE_SLOTS] : register(s0);
 #define TEX(n) tex[n]
 #define SAMP(n) samp[n]
 #else
 // Every texture and sampler in one array each, bound once; the draw's list holds each map's places in them (x the
 // texture, y the sampler), the same for every pixel of the draw.
+// Unbounded on both back ends: Direct3D 12 binds the descriptor heap, and in SPIR-V they are OpTypeRuntimeArray
+// (capability RuntimeDescriptorArray) over the image and sampler sets, whose lengths the renderer chooses.
 Texture2D gTextures[] : register(t0, space1);
 SamplerState gSamplers[] : register(s0, space1);
 StructuredBuffer<uint2> draw_tables : register(t18);

@@ -156,7 +156,7 @@ struct WiiRemoteState {
 [[nodiscard]] WiiRemoteState wii_remote_state() noexcept;
 
 // The live controls (bindings, keyboard and mouse, controllers, the scripted and replayed test input) as player 1's
-// input at retrace `current_vi`. `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) come
+// input at game frame `current_vi` (the console's video interface count: one per frame). `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) come
 // from the game: the control mapping's menu or play context and the tilt steering.
 [[nodiscard]] galaxy::input::PlayerInput native_game_input(
     std::uint64_t current_vi,

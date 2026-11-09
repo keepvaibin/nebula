@@ -120,7 +120,7 @@ void perf_hint_add_current_thread() noexcept {
 #endif
 }
 
-std::int64_t perf_hint_retrace() noexcept {
+std::int64_t perf_hint_frame_done() noexcept {
     std::lock_guard<std::mutex> lock(g_mutex);
     std::int64_t work = 0;
     for (FrameThread& thread : g_threads) {
@@ -142,7 +142,7 @@ std::int64_t perf_hint_retrace() noexcept {
 
 void perf_hint_add_current_thread() noexcept {}
 
-std::int64_t perf_hint_retrace() noexcept {
+std::int64_t perf_hint_frame_done() noexcept {
     return 0;
 }
 

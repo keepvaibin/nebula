@@ -480,13 +480,13 @@ void TypedDraw::widen() {
     u32* pIndices = FrameRing::indices(segments * 6, &first);
     writeIndices(NEBULA_PRIMITIVE_QUADS, segments * 4, pIndices);
 
-    NebulaLayoutInput* const inputs = Frame::alloc< NebulaLayoutInput >(mLayoutCount + 2);
+    NebulaLayoutInput* inputs = Frame::layoutRoom(Frame::cLayoutRoomWiden, mLayoutCount + 2);
     for (u32 i = 0; i < mLayoutCount; i++) {
         inputs[i] = mLayout[i];
         inputs[i].stride = static_cast< u32 >(stride);
     }
-    inputs[mLayoutCount] = {NEBULA_INPUT_TANGENT, 0, 0, 0, static_cast< u32 >(mStride), static_cast< u32 >(stride)};
-    inputs[mLayoutCount + 1] = {NEBULA_INPUT_WIDEN, 0, 3, 0, static_cast< u32 >(mStride + 12), static_cast< u32 >(stride)};
+    inputs[mLayoutCount] = {NEBULA_INPUT_TANGENT, 0, 0, static_cast< u32 >(mStride), static_cast< u32 >(stride)};
+    inputs[mLayoutCount + 1] = {NEBULA_INPUT_WIDEN, 0, 3, static_cast< u32 >(mStride + 12), static_cast< u32 >(stride)};
 
     NebulaFrameItem& rItem = Frame::itemAt(mItem);
     rItem.mesh = stride;

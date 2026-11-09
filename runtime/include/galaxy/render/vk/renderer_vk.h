@@ -163,6 +163,19 @@ public:
     // ones without motion leaving it as it is, so the pass is not closed and reopened between them.
     [[nodiscard]] bool motion_pass_only() const;
     [[nodiscard]] bool has_layer_targets() const noexcept { return false; }
+    // The draws' textures, as the Direct3D 12 renderer offers them (renderer_d3d12.h): with descriptor indexing (bindless())
+    // every texture view sits in one array at its index and every sampler in another, and a draw names its maps by their
+    // places in a list of {texture slot, sampler slot} pairs.
+    [[nodiscard]] bool bindless() const noexcept { return bindless_; }
+    [[nodiscard]] std::uint32_t texture_slot(const TextureHandle& handle) const noexcept;
+    [[nodiscard]] std::uint32_t sampler_slot(const SamplerKey& key);
+    // `count` pairs into this frame's texture lists: the buffer they went to and the first pair's place in it
+    // (DrawRoot::table).
+    void write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists, std::uint32_t& first);
+    // The arrays and the lists, for the draws that follow.
+    void bind_draw_textures(gpu::Address lists);
+    // Without descriptor indexing: a draw's own tables of up to table_slots() maps.
+    [[nodiscard]] std::uint32_t table_slots() const noexcept { return vk::kBoundTableSlots; }
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache);
     // A table that lives until replaced: `old` is given back once the GPU is past it.
     [[nodiscard]] gpu::Table persistent_texture_table(const TextureHandle* handles, unsigned count, const TextureStore& cache, gpu::Table old);
@@ -295,7 +308,10 @@ public:
     bool debug_copy_scene_to_readback();
     void debug_log_readback();
     void debug_log_backbuffer_readback();
-    bool debug_copy_selected_display_to_readback(const DisplayTexture&) noexcept { return false; }
+    // The presented display picture itself (before the post chain), copied in the present's command buffer to
+    // <backbuffer path>.display.ppm, as the Direct3D 12 renderer's selected-display capture.
+    bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
+    void debug_log_display_readback();
     void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
@@ -320,7 +336,7 @@ public:
     [[nodiscard]] UploadRing& matrix_ring() noexcept { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const noexcept { return frame_slot_; }
     void bind_draw_tables(gpu::Table, gpu::Table) noexcept {}
-    [[nodiscard]] gpu::Table sampler_table_for(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count);
+    [[nodiscard]] gpu::Table sampler_table_for(const SamplerKey* keys, unsigned count);
 
 private:
     struct Frame {
@@ -334,6 +350,7 @@ private:
         std::uint64_t fence = 0;  // the submission that used this slot last
         std::vector<gpu::TextureRef> retired;  // kept until the slot's fence passes
         std::vector<gpu::BufferRef> retired_buffers;
+        std::vector<VkDescriptorPool> retired_pools;  // image arrays replaced by larger ones, kept until the slot's fence passes
     };
     struct Swapchain {
         VkSwapchainKHR handle = VK_NULL_HANDLE;
@@ -439,9 +456,26 @@ private:
     [[nodiscard]] bool wants_vsync() const;
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
-    void refresh_default_sampler_table();
+    // At each frame's start: the sampler array (or the default table) starts again when the settings changed or the array
+    // is nearly full.
+    void reset_sampler_frame();
+    void write_sampler(unsigned slot, VkSampler sampler);
+    void fill_sampler_array(VkSampler sampler);
+    // Slots [first, first + count) of binding 0 of `set` take `info`: one write per chunk of kFillChunk infos, taken from
+    // fill_infos_, the one array every fill reuses (no allocation the size of the set).
+    void fill_slots(VkDescriptorSet set, VkDescriptorType type, std::uint32_t first, std::uint32_t count,
+                    const VkDescriptorImageInfo& info);
+    static constexpr std::uint32_t kFillChunk = 4096u;
+    std::vector<VkDescriptorImageInfo> fill_infos_;
+    // The image array: a set of `slots` (the null slot last) over the store's views, made when the store is first attached
+    // and again, twice as large, when a view index reaches the end (the earlier views are copied; the frames that read
+    // the old set finish before its pool is destroyed).
+    void install_texture_array(TextureStore& cache, std::uint32_t slots);
+    void grow_texture_array(std::uint32_t index);
+    void destroy_retired_pools(Frame& frame) noexcept;
     // Set 0 for the three constants' buffers, the rows and the instances: one per list of them in a frame.
-    [[nodiscard]] VkDescriptorSet constants_set(const VkBuffer* buffers, gpu::Address rows, gpu::Address instances);
+    [[nodiscard]] VkDescriptorSet constants_set(const VkBuffer* buffers, gpu::Address rows, gpu::Address instances,
+                                                gpu::Address lists);
     [[nodiscard]] VkSampler sampler_for(const SamplerKey& key, const RenderConfig& cfg);
     void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
                                 std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y);
@@ -456,6 +490,19 @@ private:
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
     void follow_window_and_resize();
+#if defined(_WIN32)
+    // The window's mode (windowed or borderless fullscreen), monitor and windowed size from the settings, at a frame
+    // boundary: as RendererD3D12::reconcile_display_state. The swap chain follows through the window's size message.
+    void reconcile_display_state();
+    struct AppliedDisplay {
+        bool valid = false;
+        unsigned mode = 0;
+        std::array<char, 64> monitor{};
+        unsigned window_width = 0;
+        unsigned window_height = 0;
+    };
+    AppliedDisplay applied_display_{};
+#endif
     void report_present_stats();
 
     WindowOwner* window_owner_ = nullptr;
@@ -673,6 +720,33 @@ private:
     std::unordered_map<SamplerTableKey, VkDescriptorSet, SamplerTableKeyHasher> sampler_tables_;
     std::uint32_t sampler_config_ = 0;
     gpu::Table default_sampler_table_{};
+    // Descriptor indexing (vk::Context::bindless): the image array (set 1) and the sampler array (set 2) every draw reads,
+    // updated while bound. A texture's slot is its view's index (TextureBackend::mirror_into), the last slot the null view;
+    // a sampler's slot comes from the cache, slot 0 the default sampler. The sampler set is fixed at kBindlessSamplerSlots
+    // (bindless_pool_). The image set has the length the views need (bindless_images_pool_, texture_array_slots_ slots,
+    // the null slot included, never above texture_array_limit_) and is replaced by one twice as large when a view index
+    // reaches its end (grow_texture_array); the old one's pool goes to the frame's retired_pools. A new image set holds the
+    // null view in every slot and the sampler array the default sampler in every slot before a slot is named.
+    bool bindless_ = false;
+    VkDescriptorPool bindless_pool_ = VK_NULL_HANDLE;
+    VkDescriptorPool bindless_images_pool_ = VK_NULL_HANDLE;
+    VkDescriptorSet bindless_images_ = VK_NULL_HANDLE;
+    VkDescriptorSet bindless_samplers_ = VK_NULL_HANDLE;
+    SamplerSlotCache sampler_slots_;
+    bool sampler_slots_ready_ = false;
+    std::uint32_t null_texture_slot_ = 0u;
+    std::uint32_t texture_array_slots_ = 0u;
+    std::uint32_t texture_array_limit_ = 0u;
+    const void* mirrored_backend_ = nullptr;
+    TextureStore* mirrored_store_ = nullptr;
+    // The texture lists (draw_tables, set 0 binding 5): a host-visible storage buffer per frame in flight, written from its
+    // start each frame; a full one is replaced by one twice its size, the old kept until the frame's fence passes.
+    struct TextureListBuffer {
+        std::shared_ptr<vk::Buffer> buffer;
+        std::uint32_t capacity = 0u;  // pairs
+    };
+    std::array<TextureListBuffer, kFramesInFlight> texture_lists_{};
+    std::uint32_t texture_lists_used_ = 0u;
     std::uint32_t zero_stream_bytes_ = 0u;
     gpu::Address zero_stream_address_ = 0u;
     unsigned history_segment_ = 0u;
@@ -732,6 +806,11 @@ private:
     unsigned backbuffer_capture_width_ = 0;
     unsigned backbuffer_capture_height_ = 0;
     bool backbuffer_capture_bgra_ = false;
+    Readback display_capture_;
+    std::string display_capture_pending_path_;
+    unsigned display_capture_width_ = 0;
+    unsigned display_capture_height_ = 0;
+    bool display_capture_ten_bit_ = false;
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
     std::uint64_t display_refresh_checks_ = 0;
@@ -753,7 +832,7 @@ private:
     std::shared_ptr<vk::Buffer> zero_vertices_;
     struct ConstantsKey {
         std::array<VkBuffer, 3> buffers{};
-        gpu::Address rows = 0u, instances = 0u;
+        gpu::Address rows = 0u, instances = 0u, lists = 0u;
         VkDescriptorSet set = VK_NULL_HANDLE;
     };
     std::vector<ConstantsKey> constants_sets_;
@@ -777,10 +856,10 @@ private:
     std::uint64_t frame_pass_depth_key_ = 0u;
     std::uint64_t window_size_refused_ms_ = 0;
     PresentPacer present_pacer_;
-    // VK_GOOGLE_display_timing (Android), as Swappy paces: each frame gets the retrace slot after the previous
-    // frame's on the display's vsync grid (host_window::present_grid), two retraces after the latest retrace at
+    // VK_GOOGLE_display_timing (Android), as Swappy paces: each frame gets the present slot after the previous
+    // frame's on the display's vsync grid (host_window::present_grid), two frame periods after the latest frame start at
     // first (one of pipelining) and later only when the frame itself is late, and asks for half a vsync before it,
-    // so the compositor shows it at that vsync for exactly one retrace period. The past presentation times report
+    // so the compositor shows it at that vsync for exactly one frame period. The past presentation times report
     // how many were ([present-timing], every 600 frames).
     struct PresentTiming {
         std::uint32_t next_id = 0;
@@ -808,7 +887,7 @@ private:
         unsigned delayed_late = 0;
         unsigned intervals = 0;
         std::int64_t interval_sum = 0, interval_max = 0, margin_sum = 0;
-        unsigned even = 0;  // shown one retrace period after the frame before
+        unsigned even = 0;  // shown one frame period after the frame before
     };
     PresentTiming present_timing_;
     void report_present_timing();

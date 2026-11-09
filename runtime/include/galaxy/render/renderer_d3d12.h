@@ -115,75 +115,100 @@ inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     const SamplerKey& key,
     const RenderConfig& cfg) noexcept;
 
-// Shader-visible descriptor allocator, segmented per frame in flight like the upload rings.
+// The one shader-visible CBV/SRV/UAV heap, bound once per command list:
+//   [texture region][persistent descriptors][one segment per frame in flight]
+// The texture region holds the draws' texture views (slot n = TextureStore index n, the last slot the null view) and is the
+// only part that grows: resize_textures builds a larger heap and the others move with it. Everything else is written into a
+// CPU-only shadow heap ([persistent][segments][null block]) and copied to the heap from there: a descriptor is never copied
+// out of the shader-visible heap, and a replaced heap is rebuilt from the shadow. A persistent descriptor is named by its
+// index in the persistent region, so it keeps its name when the heap is replaced; gpu_at turns it into a handle of the
+// current heap. A transient table's handle belongs to the heap that was current when it was allocated.
 class DescriptorRing {
 public:
+    // The most descriptors one shader-visible CBV/SRV/UAV heap holds on every resource binding tier.
+    static constexpr unsigned kMaxHeapDescriptors = 1000000u;
+
     // Caller must have retired all GPU references to this heap.
     void reset() noexcept;
-    // The heap: `texture_slots` first (every texture view at its index, TextureBackend::mirror_into), the persistent
-    // descriptors, then one segment per frame in flight.
+    // `texture_descriptors` slots first (the last one the caller's null view), then the persistent descriptors, then one
+    // segment of `descriptors_per_frame` per frame in flight.
     bool initialize(
         ID3D12Device* device,
         D3D12_DESCRIPTOR_HEAP_TYPE type,
         unsigned descriptors_per_frame,
         unsigned frames_in_flight,
         unsigned persistent_descriptors = 0,
-        unsigned texture_slots = 0);
+        unsigned texture_descriptors = 0);
+    // The sampler heap that goes with this heap in bind().
+    void set_sampler_heap(ID3D12DescriptorHeap* heap) noexcept { sampler_heap_ = heap; }
     void begin_frame(unsigned frame_slot);
 
+    // A table of this frame's segment: `cpu` is its place in the shadow heap (write views there), `gpu` its place in the
+    // heap. Unwritten slots hold the null SRV. flush() copies the frame's tables into the heap.
     struct Table {
         D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
         D3D12_GPU_DESCRIPTOR_HANDLE gpu{};
     };
-    // Reserves `count` consecutive slots; the caller copies SRVs in via
-    // ID3D12Device::CopyDescriptors.
+    // Reserves `count` consecutive slots; the caller writes views at `cpu`.
     Table allocate(unsigned count);
-    // Reserves from a non-rewound prefix of the same shader-visible heap.
-    // These descriptors must remain unchanged until all referencing GPU work
-    // completes; frame-slot reuse never rewinds or overwrites this prefix.
-    Table allocate_persistent(unsigned count);
+    // Copies this frame's tables from the shadow heap into the heap (before the frame's command list is submitted).
+    void flush();
+
+    // A table of the persistent region: written at `cpu`, then commit() copies it into the heap. Never rewound; the
+    // descriptors must stay unchanged while the GPU reads them.
+    struct Persistent {
+        D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
+        std::uint32_t index = 0u;  // in the persistent region
+    };
+    static constexpr std::uint32_t kNoPersistent = ~0u;
+    Persistent allocate_persistent(unsigned count);
+    // Copies `count` descriptors from `table` into the heap.
+    void commit(const Persistent& table, unsigned count);
+    // The handle of persistent descriptor `index` in the current heap.
+    [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE gpu_at(std::uint32_t index) const noexcept;
 
     [[nodiscard]] ID3D12DescriptorHeap* heap() const { return heap_.Get(); }
-    // The texture slots: the first, and how many.
-    [[nodiscard]] Table texture_slots() const noexcept { return {cpu_base_, gpu_base_}; }
-    [[nodiscard]] unsigned texture_slot_count() const noexcept { return texture_slots_; }
-    [[nodiscard]] ID3D12DescriptorHeap* heap_for(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept;
-    [[nodiscard]] Table table_at(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept;
-    [[nodiscard]] std::uint32_t index_of(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept;
+    // The texture region.
+    [[nodiscard]] std::uint32_t texture_slots() const noexcept { return texture_descriptors_; }
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE texture_cpu(std::uint32_t slot) const noexcept;
+    [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE texture_gpu_start() const noexcept;
+    // Descriptors outside the texture region.
+    [[nodiscard]] unsigned ring_descriptors() const noexcept {
+        return persistent_descriptors_ + descriptors_per_frame_ * frames_in_flight_;
+    }
+    // A heap with `texture_descriptors` texture slots takes the place of the current one: the persistent descriptors and the
+    // frame's tables so far are copied into it, and the texture slots are the caller's to fill (the earlier slots move with
+    // the textures' own CPU views). Returns the replaced heap, which commands already recorded still read: free it once the
+    // GPU is past them. Throws past kMaxHeapDescriptors; an empty result when the count is not larger.
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> resize_textures(unsigned texture_descriptors);
+
+    // Sets the heap (and the sampler heap given to set_sampler_heap) on `list` unless this list already has them. A new
+    // frame or a new heap asks again; forget_bound() after code that sets heaps of its own (a library's dispatch).
+    void bind(ID3D12GraphicsCommandList* list);
+    void forget_bound() noexcept { bound_list_ = nullptr; }
 
 private:
-    ID3D12DescriptorHeap* page(std::size_t number);
-    [[nodiscard]] ID3D12DescriptorHeap* page_at(std::size_t number) const noexcept;
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_at(unsigned index) const noexcept;
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE heap_cpu_at(unsigned index) const noexcept;  // a ring index, past the textures
+    void fill_null(unsigned index, unsigned count);
+    void copy_in(unsigned index, unsigned count);  // shadow -> heap, both by ring index
     ID3D12Device* device_ = nullptr;
     D3D12_DESCRIPTOR_HEAP_TYPE type_{};
-    std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> pages_;
-    std::size_t persistent_page_ = 0;
-    std::size_t transient_page_ = 0;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu_base_{};
-    D3D12_GPU_DESCRIPTOR_HANDLE gpu_base_{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadow_;
+    ID3D12DescriptorHeap* sampler_heap_ = nullptr;
+    ID3D12GraphicsCommandList* bound_list_ = nullptr;
+    ID3D12DescriptorHeap* bound_heap_ = nullptr;
     bool frame_ready_ = false;
-    unsigned texture_slots_ = 0;
+    unsigned texture_descriptors_ = 0;
     unsigned persistent_descriptors_ = 0;
     unsigned persistent_cursor_ = 0;
     unsigned descriptors_per_frame_ = 0;
-    unsigned segment_base_ = 0;
+    unsigned frame_base_ = 0;  // ring index of this frame's segment
     unsigned cursor_ = 0;
     unsigned increment_ = 0;
     unsigned frames_in_flight_ = 0;
 };
-
-namespace detail {
-
-// scene target resources and these views share the renderer's initialize/shutdown
-// lifetime. The source resources must outlive every submitted use of the heap.
-// Returns color then depth; consumes exactly two persistent descriptors.
-[[nodiscard]] std::array<D3D12_GPU_DESCRIPTOR_HANDLE, 2>
-create_scene_conversion_source_views(
-    ID3D12Device* device, ID3D12Resource* color, ID3D12Resource* depth,
-    DescriptorRing& ring);
-
-}  // namespace detail
 
 class RendererD3D12 final {
 public:
@@ -565,7 +590,7 @@ private:
     // (Re)creates the scene target color/depth conversion SRVs in their fixed slots.
     void refresh_scene_conversion_source_views();
     // The scene target's conversion views (colour and depth) into `table`.
-    void write_scene_conversion_views(const DescriptorRing::Table& table);
+    void write_scene_conversion_views(const DescriptorRing::Persistent& table);
 // The colour target becomes a picture and `fresh`, or a new target, takes its place.
     [[nodiscard]] gpu::TextureRef swap_scene_color(gpu::TextureRef fresh);
     // The conversion views after a swap, several in a frame: a table of its own, as the GPU reads views when it
@@ -573,7 +598,7 @@ private:
     std::uint64_t frame_pass_color_key_ = 0u;
     std::uint64_t frame_pass_depth_key_ = 0u;
     struct ConvSceneTable {
-        DescriptorRing::Table table;
+        DescriptorRing::Persistent table;
         std::uint64_t free_from = 0u;
     };
     std::vector<ConvSceneTable> conv_scene_tables_;
@@ -625,6 +650,9 @@ private:
     // FSR 3 frame generation: its pacing swap chain while it is chosen.
     FsrFrameGeneration fsr_generation_;
     bool fsr_swap_chain_ = false;
+    // The swap chain was made with DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING (the system allows it): a present with VSync off
+    // may then tear and does not wait for the display, as Vulkan's immediate mode.
+    bool tearing_allowed_ = false;
     bool fg_hudless_ready_ = false;
     unsigned fsr_rect_[4]{};
     [[nodiscard]] bool fsr_generation_wanted() const;
@@ -699,7 +727,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;  // the multisampled depth, then the resolve's target
-        std::optional<DescriptorRing::Table> depth_srv;  // the multisampled depth, read by the depth resolve
+        std::optional<DescriptorRing::Persistent> depth_srv;  // the multisampled depth, read by the depth resolve
         unsigned samples = 1;
         bool color_dirty = false;
         bool depth_dirty = false;
@@ -720,9 +748,10 @@ private:
         bool hdr = false;   // colour kSceneHdrColorFormat (else kSceneColorFormat, or kTargetColorFormat for a target's)
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
-        std::optional<DescriptorRing::Table> conv_table;
-        D3D12_GPU_DESCRIPTOR_HANDLE conv_color_srv{};
-        D3D12_GPU_DESCRIPTOR_HANDLE conv_depth_srv{};
+        std::optional<DescriptorRing::Persistent> conv_table;
+        // The conversion views' persistent indices (srv_ring_.gpu_at turns one into a handle of the current heap).
+        std::uint32_t conv_color_index = DescriptorRing::kNoPersistent;
+        std::uint32_t conv_depth_index = DescriptorRing::kNoPersistent;
     };
     SceneTargetSet alt_scene_;
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
@@ -820,7 +849,7 @@ private:
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
                         bool hdr = false, unsigned width = kFrameUnits, unsigned height = kFrameUnits, bool target = false);
-    void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Table& table);
+    void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Persistent& table);
     void swap_scene_with(SceneTargetSet& other);
     // The last frame's start (the hitch log's intervals, begin to begin).
     // The effects layer: its colour (what the effects added, as they blended into the scene target) and transmittance (what of
@@ -900,10 +929,22 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
     std::uint32_t sampler_config_ = ~0u;
     std::uint32_t sampler_generation_ = 1u;
-    SamplerTableCache sampler_tables_;
-    // The texture slots' last place holds the null view (an empty map).
+    SamplerSlotCache sampler_slots_;
+    // The texture region is the first part of srv_ring_'s heap: a view's slot is its TextureStore index and the last slot
+    // (null_texture_slot_) holds the null view (an empty map). When the region grows (install_texture_heap,
+    // grow_texture_heap) the ring builds a larger heap; the replaced heap is kept until the GPU is past the frames that
+    // recorded commands with it.
     std::uint32_t null_texture_slot_ = 0u;
+    struct RetiredHeap {
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
+        std::uint64_t fence = 0u;
+    };
+    std::vector<RetiredHeap> retired_heaps_;
+    void install_texture_heap(TextureStore& cache, std::uint32_t slots);
+    void fill_sampler_heap(const RenderConfig& cfg);
+    void grow_texture_heap(std::uint32_t index);
     const void* mirrored_backend_ = nullptr;
+    TextureStore* mirrored_store_ = nullptr;
     // The texture lists (t18): one upload buffer per frame in flight, written from the start each frame; a full one is
     // replaced by one twice its size, the old kept until the GPU is past it.
     struct TextureListBuffer {
@@ -1033,9 +1074,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
     detail::ConversionRtvSlot conv_scratch_rtv_slot_;
-    std::optional<DescriptorRing::Table> conv_scene_source_table_;
-    D3D12_GPU_DESCRIPTOR_HANDLE conv_scene_color_srv_{};
-    D3D12_GPU_DESCRIPTOR_HANDLE conv_scene_depth_srv_{};
+    std::optional<DescriptorRing::Persistent> conv_scene_source_table_;
+    std::uint32_t conv_scene_color_index_ = DescriptorRing::kNoPersistent;
+    std::uint32_t conv_scene_depth_index_ = DescriptorRing::kNoPersistent;
     // The masked scene target clears (color / alpha only): shaders and pipelines, made at first use.
     UtilityShaderBytes clear_vs_;
     UtilityShaderBytes clear_ps_;

@@ -4,6 +4,7 @@
 #include <cmath>
 #include "render/core/pipelines.h"
 #include <iostream>
+#include <stdexcept>
 #include <unordered_map>
 
 namespace {
@@ -55,60 +56,89 @@ int main() {
     const auto nearest_key = make_sampler_key(nearest, true, 6u);
     passed &= expect(nearest_key.max_lod == 0.0f && ((nearest_key.filter >> 5u) & 7u) == 4u,
                      "nearest magnification keeps authored mip selection");
-    std::array<SamplerKey, kSamplerTableSlots> keys{};
-    keys[11] = key;
-    const auto a = make_sampler_table_key(keys, 12, cfg);
-    keys[11].lod_bias += 0.0001f;
-    const auto b = make_sampler_table_key(keys, 12, cfg);
+    const auto a = make_sampler_slot_key(key, cfg);
+    auto biased_key = key;
+    biased_key.lod_bias += 0.0001f;
+    const auto b = make_sampler_slot_key(biased_key, cfg);
     auto maximum_cfg = cfg;
     maximum_cfg.anisotropic_filtering = 16u;
     maximum_cfg.texture_lod_bias = 8u;
     auto excessive_cfg = maximum_cfg;
     excessive_cfg.anisotropic_filtering = 100u;
     excessive_cfg.texture_lod_bias = 100u;
-    passed &= expect(make_sampler_table_key(keys, 12, maximum_cfg) == make_sampler_table_key(keys, 12, excessive_cfg),
+    passed &= expect(make_sampler_slot_key(key, maximum_cfg) == make_sampler_slot_key(key, excessive_cfg),
                      "cache equality follows device-clamped settings");
-    passed &= expect(!(make_sampler_table_key(keys, 11, cfg) == b) && !(make_sampler_table_key(keys, 12, maximum_cfg) == b),
-                     "cache identity includes table length and live configuration");
-    struct SameBucket { std::size_t operator()(const SamplerTableKey&) const { return 0; } };
-    std::unordered_map<SamplerTableKey, unsigned, SameBucket> collisions;
+    passed &= expect(!(a == b) && !(make_sampler_slot_key(biased_key, maximum_cfg) == b),
+                     "cache identity includes the sampler and live configuration");
+    struct SameBucket { std::size_t operator()(const SamplerSlotKey&) const { return 0; } };
+    std::unordered_map<SamplerSlotKey, unsigned, SameBucket> collisions;
     collisions.emplace(a, 1); collisions.emplace(b, 2);
     passed &= expect(collisions.size() == 2 && collisions.at(b) == 2,
-                     "the twelfth slot and sub-fixed-point LOD changes remain distinct under hash collisions");
-    SamplerTableCache cache;
+                     "sub-fixed-point LOD changes remain distinct under hash collisions");
+    SamplerSlotCache cache;
     const auto first = cache.get_or_allocate(a);
     const auto again = cache.get_or_allocate(a);
-    passed &= expect(first.created && !again.created && first.index == again.index, "tables are reused by complete identity");
+    passed &= expect(first.created && !again.created && first.index == again.index, "slots are reused by complete identity");
+    passed &= expect(first.index == kSamplerReservedSlots, "the first slot follows the reserved ones");
     auto changed = a;
-    unsigned last = 0;
+    unsigned previous = first.index;
     for (unsigned i = 0; i < 3000; ++i) {
-        changed.samplers[0].lod_bias = static_cast<float>(i);
+        changed.sampler.lod_bias = static_cast<float>(i);
         const auto allocation = cache.get_or_allocate(changed);
-        passed &= expect(allocation.index != 0, "heap exhaustion never substitutes the default table");
-        passed &= expect(allocation.index % kSamplerHeapSlots + kSamplerTableSlots <= kSamplerHeapSlots,
-                         "each table's full descriptor span stays in one physical heap");
-        last = allocation.index;
+        passed &= expect(allocation.index >= kSamplerReservedSlots, "no sampler takes the default slot");
+        passed &= expect(allocation.created && allocation.index == previous + 1u, "each new sampler takes the next slot");
+        previous = allocation.index;
     }
-    passed &= expect(last >= kSamplerHeapSlots, "sampler tables grow across physical heap pages");
+    passed &= expect(cache.used() == previous + 1u && cache.used() > kSamplerHeapSlots,
+                     "the cache counts past the array: the renderer starts again before it is full");
     cache.reset();
-    passed &= expect(cache.get_or_allocate(a).index == kSamplerTableSlots, "reset reclaims table space");
+    passed &= expect(cache.get_or_allocate(a).index == kSamplerReservedSlots, "reset reclaims slot space");
+    {
+        // A bound table's key: its length and settings count.
+        const SamplerKey two[2] = {key, biased_key};
+        const auto table = make_sampler_table_key(two, 2u, cfg);
+        passed &= expect(!(table == make_sampler_table_key(two, 1u, cfg)) && !(table == make_sampler_table_key(two, 2u, maximum_cfg)) &&
+                             table == make_sampler_table_key(two, 2u, cfg),
+                         "a bound table's identity includes its length and live configuration");
+    }
     Microsoft::WRL::ComPtr<ID3D12Device> device;
     passed &= expect(SUCCEEDED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))), "descriptor test device");
     if (device) {
         DescriptorRing ring;
-        passed &= expect(ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 16u, 2u, 16u), "small descriptor pages");
+        const UINT increment = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        passed &= expect(ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 16u, 2u, 32u, 8u), "small descriptor heap");
         const auto p0 = ring.allocate_persistent(16u);
         const auto p1 = ring.allocate_persistent(16u);
+        passed &= expect(p0.index == 0u && p1.index == 16u, "persistent descriptors are named by their index in the persistent region");
         ring.begin_frame(0);
         const auto t0 = ring.allocate(16u);
-        const auto t1 = ring.allocate(16u);
-        passed &= expect(ring.heap_for(p0.gpu) != ring.heap_for(p1.gpu) && ring.heap_for(t0.gpu) != ring.heap_for(t1.gpu),
-                         "persistent and transient descriptors grow to another heap without replacing live pages");
-        passed &= expect(ring.table_at(p1.gpu).cpu.ptr == p1.cpu.ptr && ring.table_at(t1.gpu).cpu.ptr == t1.cpu.ptr,
-                         "retirement resolves the owning page");
+        passed &= expect(t0.gpu.ptr == ring.gpu_at(32u).ptr, "a frame segment follows the persistent region");
+        bool refused = false;
+        try {
+            static_cast<void>(ring.allocate_persistent(1u));
+        } catch (const std::runtime_error&) {
+            refused = true;
+        }
+        passed &= expect(refused, "a full persistent region refuses instead of opening another heap");
+        refused = false;
+        try {
+            static_cast<void>(ring.allocate(1u));
+        } catch (const std::runtime_error&) {
+            refused = true;
+        }
+        passed &= expect(refused, "a full frame segment refuses instead of opening another heap");
         ring.begin_frame(1);
         const auto t2 = ring.allocate(16u);
-        passed &= expect(t2.gpu.ptr != t0.gpu.ptr && t2.gpu.ptr != t1.gpu.ptr, "another frame slot never overwrites in-flight descriptors");
+        passed &= expect(t2.gpu.ptr != t0.gpu.ptr, "another frame slot never overwrites in-flight descriptors");
+        ring.flush();
+        const auto p1_before = ring.gpu_at(p1.index).ptr - ring.texture_gpu_start().ptr;
+        ID3D12DescriptorHeap* const first_heap = ring.heap();
+        auto replaced = ring.resize_textures(24u);
+        passed &= expect(replaced.Get() == first_heap && ring.heap() != first_heap && ring.texture_slots() == 24u,
+                         "a larger texture region replaces the heap and returns the old one");
+        passed &= expect(ring.gpu_at(p1.index).ptr - ring.texture_gpu_start().ptr == p1_before + 16u * increment,
+                         "a persistent index keeps its place in the ring part when the heap is replaced");
+        passed &= expect(!ring.resize_textures(24u), "a region that is not larger changes nothing");
     }
     {
         core::Pipelines pipelines;

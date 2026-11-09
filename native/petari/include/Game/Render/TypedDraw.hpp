@@ -135,9 +135,9 @@ struct VertexCorner {
 template < class T >
 struct VertexLayout;
 
-#define NEBULA_INPUT3(semantic, type, field) {semantic, 0, 0, 0, static_cast< u32 >(offsetof(type, field)), static_cast< u32 >(sizeof(type))}
-#define NEBULA_INPUT2(semantic, type, field) {semantic, 0, 1, 0, static_cast< u32 >(offsetof(type, field)), static_cast< u32 >(sizeof(type))}
-#define NEBULA_INPUTC(semantic, type, field) {semantic, 0, 2, 0, static_cast< u32 >(offsetof(type, field)), static_cast< u32 >(sizeof(type))}
+#define NEBULA_INPUT3(semantic, type, field) {semantic, 0, 0, static_cast< u32 >(offsetof(type, field)), static_cast< u32 >(sizeof(type))}
+#define NEBULA_INPUT2(semantic, type, field) {semantic, 0, 1, static_cast< u32 >(offsetof(type, field)), static_cast< u32 >(sizeof(type))}
+#define NEBULA_INPUTC(semantic, type, field) {semantic, 0, 2, static_cast< u32 >(offsetof(type, field)), static_cast< u32 >(sizeof(type))}
 
 template <>
 struct VertexLayout< VertexP > {

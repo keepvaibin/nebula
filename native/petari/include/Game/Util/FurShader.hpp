@@ -25,7 +25,7 @@ struct VertexLayout< VertexFur > {
             NEBULA_INPUT3(NEBULA_INPUT_NORMAL, VertexFur, nx),
             NEBULA_INPUTC(NEBULA_INPUT_COLOR0, VertexFur, color),
             NEBULA_INPUT2(NEBULA_INPUT_COORD0, VertexFur, s),
-            {NEBULA_INPUT_MATRIX, 0, 3, 0, static_cast< u32 >(offsetof(VertexFur, matrix)), static_cast< u32 >(sizeof(VertexFur))},
+            {NEBULA_INPUT_MATRIX, 0, 3, static_cast< u32 >(offsetof(VertexFur, matrix)), static_cast< u32 >(sizeof(VertexFur))},
             NEBULA_INPUT3(NEBULA_INPUT_BINORMAL, VertexFur, dx),
             NEBULA_INPUT3(NEBULA_INPUT_TANGENT, VertexFur, length),
         };

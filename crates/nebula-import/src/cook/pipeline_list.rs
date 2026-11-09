@@ -1,7 +1,8 @@
 //! Every pipeline the game can ask for, written with the game's files: the game registers them at boot and the host
 //! prepares them in the background. Each model's meshes under each form of their material, then what no model file
 //! says: sites and per-object states (`data/site_pipelines.txt`, one record in hexadecimal per line, from
-//! `tools/dev/site_pipelines.py`). Records are `NebulaPipelineDesc` (nebula_frame_list.h).
+//! `tools/dev/site_pipelines.py`). A record is a `NebulaPipelineDesc` and its inputs, a header and as many inputs as it
+//! names (nebula_frame_list.h NEBULA_PIPELINE_FILE_MAGIC).
 
 use std::collections::BTreeSet;
 use std::sync::Mutex;
@@ -9,8 +10,13 @@ use std::sync::Mutex;
 use super::model_write::{further_stride, MeshStreams, MESH_COLOR0, MESH_COLOR1, MESH_COORD0, MESH_NORMAL, MESH_TANGENTS};
 
 pub const PATH: &str = "NebulaData/Pipelines.bin";
-const MAX_INPUTS: usize = super::limits::MATERIAL_SLOTS + 8;
-const RECORD: usize = 32 + MAX_INPUTS * 12;
+/// NEBULA_PIPELINE_RECORD_BYTES and NEBULA_LAYOUT_INPUT_BYTES.
+const RECORD_HEADER: usize = 28;
+const INPUT_BYTES: usize = 12;
+const MAGIC: &[u8; 8] = b"NBPIPEL2";
+/// The records of site_pipelines.txt before the list was counted: the header and room for 24 inputs, padded to 320 bytes.
+const FIXED_RECORD: usize = 320;
+const FIXED_INPUTS: usize = 24;
 const STREAM_ZERO: u8 = 15;
 const INPUT_COORD0: u8 = 16;
 const STATE_ALPHA_WRITE: u32 = 1 << 18;
@@ -24,7 +30,7 @@ pub fn reset() {
     LIST.lock().unwrap().clear();
 }
 
-fn input(code: u8, program_number: u8, m: &MeshStreams) -> [u8; 12] {
+fn input(code: u8, program_number: u16, m: &MeshStreams) -> [u8; INPUT_BYTES] {
     let further = further_stride(m);
     let coords = (1..super::limits::MATERIAL_SLOTS).filter(|n| m.attributes & (MESH_COORD0 << n) != 0).count() as u32;
     let after_coords = coords * 8;
@@ -46,25 +52,27 @@ fn input(code: u8, program_number: u8, m: &MeshStreams) -> [u8; 12] {
         }
         c => (STREAM_ZERO, if c >= INPUT_COORD0 { 1 } else if c == 1 || c == 2 { 2 } else { 0 }, 0, 0),
     };
-    let semantic = if code >= INPUT_COORD0 { INPUT_COORD0 + program_number } else { code };
-    let mut out = [0u8; 12];
-    out[0] = semantic;
-    out[1] = stream;
-    out[2] = format;
+    // NebulaLayoutInput: semantic u16, stream, format, offset, stride.
+    let semantic = if code >= INPUT_COORD0 { u16::from(INPUT_COORD0) + program_number } else { u16::from(code) };
+    let mut out = [0u8; INPUT_BYTES];
+    out[0..2].copy_from_slice(&semantic.to_le_bytes());
+    out[2] = stream;
+    out[3] = format;
     out[4..8].copy_from_slice(&offset.to_le_bytes());
     out[8..12].copy_from_slice(&stride.to_le_bytes());
     out
 }
 
 fn record(vertex: u64, pixel: u64, state: u32, inputs: &[u8], m: &MeshStreams) -> Vec<u8> {
-    let mut out = vec![0u8; RECORD];
+    let mut out = vec![0u8; RECORD_HEADER + inputs.len() * INPUT_BYTES];
     out[0..8].copy_from_slice(&vertex.to_le_bytes());
     out[8..16].copy_from_slice(&pixel.to_le_bytes());
     out[16..20].copy_from_slice(&state.to_le_bytes());
     out[20..24].copy_from_slice(&(inputs.len() as u32).to_le_bytes());
-    let mut program_number = 0u8;
+    let mut program_number = 0u16;
     for (i, &code) in inputs.iter().enumerate() {
-        out[28 + i * 12..40 + i * 12].copy_from_slice(&input(code, program_number, m));
+        let at = RECORD_HEADER + i * INPUT_BYTES;
+        out[at..at + INPUT_BYTES].copy_from_slice(&input(code, program_number, m));
         if code >= INPUT_COORD0 {
             program_number += 1;
         }
@@ -112,16 +120,16 @@ const EXTEX_USE_SECOND: usize = 28;
 
 /// A site record: programs, state, the position stride and the inputs (semantic, format, offset) of one stream.
 fn site_record(vertex: u64, pixel: u64, state: u32, stride: u32, inputs: &[(u8, u8, u32)]) -> Vec<u8> {
-    let mut out = vec![0u8; RECORD];
+    let mut out = vec![0u8; RECORD_HEADER + inputs.len() * INPUT_BYTES];
     out[0..8].copy_from_slice(&vertex.to_le_bytes());
     out[8..16].copy_from_slice(&pixel.to_le_bytes());
     out[16..20].copy_from_slice(&state.to_le_bytes());
     out[20..24].copy_from_slice(&(inputs.len() as u32).to_le_bytes());
     out[24..28].copy_from_slice(&stride.to_le_bytes());
     for (i, &(semantic, format, offset)) in inputs.iter().enumerate() {
-        let at = 28 + i * 12;
-        out[at] = semantic;
-        out[at + 2] = format;
+        let at = RECORD_HEADER + i * INPUT_BYTES;
+        out[at..at + 2].copy_from_slice(&u16::from(semantic).to_le_bytes());
+        out[at + 3] = format;
         out[at + 4..at + 8].copy_from_slice(&offset.to_le_bytes());
         out[at + 8..at + 12].copy_from_slice(&stride.to_le_bytes());
     }
@@ -200,25 +208,69 @@ pub fn add_particles(ir: &super::particles::ParticleIr) {
     }
 }
 
+/// One line of data/site_pipelines.txt as a record: in this format, or in the fixed-size one of before the list was counted.
+fn parse_line(line: &str) -> Option<Vec<u8>> {
+    let line = line.trim();
+    if line.len() % 2 != 0 {
+        return None;
+    }
+    let raw: Vec<u8> = (0..line.len() / 2).map(|i| u8::from_str_radix(&line[i * 2..i * 2 + 2], 16)).collect::<Result<_, _>>().ok()?;
+    if raw.len() == FIXED_RECORD {
+        return Some(from_fixed(&raw));
+    }
+    if raw.len() >= RECORD_HEADER {
+        let count = u32::from_le_bytes(raw[20..24].try_into().ok()?) as usize;
+        if raw.len() == RECORD_HEADER + count * INPUT_BYTES {
+            return Some(raw);
+        }
+    }
+    None
+}
+
+/// A fixed-size record (the header, then room for 24 inputs of a byte-wide semantic) as a counted one.
+fn from_fixed(old: &[u8]) -> Vec<u8> {
+    let count = (u32::from_le_bytes(old[20..24].try_into().unwrap()) as usize).min(FIXED_INPUTS);
+    let mut out = old[..RECORD_HEADER].to_vec();
+    out[20..24].copy_from_slice(&(count as u32).to_le_bytes());
+    for i in 0..count {
+        let input = &old[RECORD_HEADER + i * INPUT_BYTES..RECORD_HEADER + (i + 1) * INPUT_BYTES];
+        out.extend_from_slice(&[input[0], 0, input[1], input[2]]);
+        out.extend_from_slice(&input[4..12]);
+    }
+    out
+}
+
 /// The whole list, in a stable order, with the sites'.
-pub fn bytes() -> Vec<u8> {
+fn records() -> Vec<Vec<u8>> {
     let mut list = LIST.lock().unwrap();
     for line in include_str!("../../data/site_pipelines.txt").lines() {
-        let line = line.trim();
-        if line.len() == RECORD * 2 {
-            let parsed: Vec<u8> = (0..RECORD).filter_map(|i| u8::from_str_radix(&line[i * 2..i * 2 + 2], 16).ok()).collect();
-            if parsed.len() == RECORD {
-                list.insert(parsed);
-            }
+        if let Some(record) = parse_line(line) {
+            list.insert(record);
         }
     }
     println!("pipelines: {}", list.len());
-    list.iter().flatten().copied().collect()
+    list.iter().cloned().collect()
+}
+
+/// Pipelines.bin: the magic, the count, 4 reserved bytes, the records.
+fn file(records: &[Vec<u8>]) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(MAGIC);
+    out.extend_from_slice(&(records.len() as u32).to_le_bytes());
+    out.extend_from_slice(&[0u8; 4]);
+    for record in records {
+        out.extend_from_slice(record);
+    }
+    out
+}
+
+pub fn bytes() -> Vec<u8> {
+    file(&records())
 }
 
 /// A base-game import must only name the programs shipped with the renderer. Mods use their own compiler path.
 pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
-    let bytes = bytes();
+    let records = records();
     let mut vertex = BTreeSet::new();
     let mut pixel = BTreeSet::new();
     for line in include_str!("../../../../runtime/src/render/programs/table.tsv").lines() {
@@ -233,35 +285,50 @@ pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
     vertex.extend([SITE | SHADER_PARTICLE << 1, SITE | SHADER_PARTICLE << 1 | 1, SITE | SHADER_PARTICLE_INSTANCES << 1]);
     pixel.insert(SITE | SHADER_PARTICLE << 1);
     for line in include_str!("../../data/site_pipelines.txt").lines() {
-        let line = line.trim();
-        if line.len() != RECORD * 2 { continue; }
-        let id = |at| -> Option<u64> {
-            let mut words = [0u8; 8];
-            for (i, word) in words.iter_mut().enumerate() {
-                *word = u8::from_str_radix(&line[at + i * 2..at + i * 2 + 2], 16).ok()?;
-            }
-            Some(u64::from_le_bytes(words))
-        };
-        if let Some(v) = id(0) { vertex.insert(v); }
-        if let Some(p) = id(16) { pixel.insert(p); }
+        if let Some(record) = parse_line(line) {
+            vertex.insert(u64::from_le_bytes(record[..8].try_into().unwrap()));
+            pixel.insert(u64::from_le_bytes(record[8..16].try_into().unwrap()));
+        }
     }
-    for record in bytes.chunks_exact(RECORD) {
+    for record in &records {
         let v = u64::from_le_bytes(record[..8].try_into().unwrap());
         let p = u64::from_le_bytes(record[8..16].try_into().unwrap());
         anyhow::ensure!(vertex.contains(&v) && pixel.contains(&p),
             "The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
     }
-    Ok(bytes)
+    Ok(file(&records))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A record written as a fixed-size one (trailing zeros left off), as a counted one.
     fn recorded(hex: &str) -> Vec<u8> {
         let mut out: Vec<u8> = (0..hex.len() / 2).map(|i| u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).unwrap()).collect();
-        out.resize(RECORD, 0);
-        out
+        out.resize(FIXED_RECORD, 0);
+        from_fixed(&out)
+    }
+
+    #[test]
+    fn a_record_of_either_format_reads_the_same() {
+        let counted = record(0x8000_0000_0000_0010, 0x8000_0000_0000_0012, 7, &[0, 1, 16], &MeshStreams::default());
+        let mut fixed = vec![0u8; FIXED_RECORD];
+        fixed[..RECORD_HEADER].copy_from_slice(&counted[..RECORD_HEADER]);
+        for i in 0..3 {
+            let at = RECORD_HEADER + i * INPUT_BYTES;
+            fixed[at] = counted[at];
+            fixed[at + 1] = counted[at + 2];
+            fixed[at + 2] = counted[at + 3];
+            fixed[at + 4..at + 12].copy_from_slice(&counted[at + 4..at + 12]);
+        }
+        let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        assert_eq!(parse_line(&hex(&fixed)), Some(counted.clone()));
+        assert_eq!(parse_line(&hex(&counted)), Some(counted.clone()));
+        let file = file(&[counted.clone()]);
+        assert_eq!(&file[..8], MAGIC);
+        assert_eq!(u32::from_le_bytes(file[8..12].try_into().unwrap()), 1);
+        assert_eq!(&file[16..], &counted[..]);
     }
 
     /// The records a game run registered (additive blend by source and inverse source colour, depth tested less or

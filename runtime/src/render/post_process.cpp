@@ -493,7 +493,7 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
     }
     list->SetPipelineState(pipeline);
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &constants, 0);
-    { ID3D12DescriptorHeap* heap = srv_ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
+    srv_ring.bind(list);
     list->SetGraphicsRootDescriptorTable(1, table.gpu);
     const D3D12_RECT full{
         static_cast<LONG>(viewport.TopLeftX), static_cast<LONG>(viewport.TopLeftY),
@@ -755,8 +755,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
     BarriersD3D12 uses{list.Get()};
     uses.texture(source.Get(), gpu::Use::CopyDest, gpu::Use::PixelRead);
     uses.issue();
-    ID3D12DescriptorHeap* heaps[] = {ring.heap()};
-    list->SetDescriptorHeaps(1, heaps);
+    ring.bind(list.Get());
 
     const AaRun passes[2] = {AaRun::kSmaa, AaRun::kFxaa};
     bool recorded[2] = {false, false};
@@ -780,6 +779,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         transition(list.Get(), antialiased_, gpu::Use::PixelRead);
         recorded[i] = true;
     }
+    ring.flush();
     if (FAILED(list->Close())) {
         fail(AaRun::kNone, "TEST SETUP");
         return;

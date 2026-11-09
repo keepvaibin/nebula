@@ -231,13 +231,15 @@ private:
     // The ring draws from `first` that are one draw with it; their indices in `index_count`.
     [[nodiscard]] std::uint32_t merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at,
                                                std::uint32_t& index_count);
-#if defined(NEBULA_GPU_VULKAN)
-    void walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
-#else
-    // The table's texture list for this walk: the buffer and its first pair (DrawRoot::table).
+    // The table's texture list for this walk: the buffer and its first pair (DrawRoot::table). Direct3D 12, and Vulkan with
+    // descriptor indexing (renderer_.bindless()).
     void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
     std::vector<TextureHandle> walk_handles_;
     std::vector<std::uint32_t> walk_pairs_;
+#if defined(NEBULA_GPU_VULKAN)
+    // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
+    void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
+    std::vector<SamplerKey> walk_keys_;
 #endif
     [[nodiscard]] bool item_culled(const NebulaFrameItem& item, const NebulaFramePass& pass, std::uint32_t state,
                                    const core::GpuMesh* mesh) noexcept;
@@ -350,9 +352,9 @@ private:
     unsigned interp_gpu_cap_ = 7u;
     std::uint64_t interp_gpu_cap_serial_ = 0;
     std::uint64_t interp_gpu_checked_ = 0;
-    // Sequences after a rate or upscaler change whose GPU times are not used (pipeline,
+    // After a rate or upscaler change, the time (QPC) before which GPU times are not used (pipeline,
     // upscaler and target creation).
-    std::uint64_t interp_gpu_warm_until_ = 0;
+    std::int64_t interp_gpu_warm_until_qpc_ = 0;
     // A new generated frame configuration (interp_frames_ changed): both governors start over.
     void restart_interp_governors();
     std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer generated frames

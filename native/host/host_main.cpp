@@ -86,7 +86,7 @@
 namespace galaxy::host {
 // The headless host gives the platform no performance hints.
 inline void perf_hint_add_current_thread() noexcept {}
-inline int64_t perf_hint_retrace() noexcept { return 0; }
+inline int64_t perf_hint_frame_done() noexcept { return 0; }
 }  // namespace galaxy::host
 #endif
 #if defined(NEBULA_HOST_SDL)
@@ -692,9 +692,9 @@ void audio_frame_tick() {
 }
 
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
-// The display's retraces by the compositor's clock, looked at twice a second.
-std::optional<galaxy::host::Retraces> display_retraces() {
-    static std::optional<galaxy::host::Retraces> known;
+// The display's refreshes by the compositor's clock, looked at twice a second.
+std::optional<galaxy::host::DisplayRefresh> display_refresh() {
+    static std::optional<galaxy::host::DisplayRefresh> known;
     static int64_t earlier_vblank_ns = 0;
     static uint32_t frames = 0;
     if (frames++ % 30u != 0u) return known;
@@ -709,8 +709,8 @@ std::optional<galaxy::host::Retraces> display_retraces() {
             const uint64_t part = qpc % static_cast<uint64_t>(frequency.QuadPart);
             return static_cast<int64_t>(whole * 1000000000ull + part * 1000000000ull / static_cast<uint64_t>(frequency.QuadPart));
         };
-        const galaxy::host::Retraces now{to_ns(timing.qpcVBlank), to_ns(timing.qpcRefreshPeriod)};
-        if (earlier_vblank_ns != 0 && galaxy::host::retraces_in_step(earlier_vblank_ns, now)) known = now;
+        const galaxy::host::DisplayRefresh now{to_ns(timing.qpcVBlank), to_ns(timing.qpcRefreshPeriod)};
+        if (earlier_vblank_ns != 0 && galaxy::host::refreshes_in_step(earlier_vblank_ns, now)) known = now;
         earlier_vblank_ns = now.vblank_ns;
     }
     return known;
@@ -724,7 +724,7 @@ Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanosec
     const int64_t present_ns = galaxy::render::g_last_present_ns.load(std::memory_order_relaxed);
     const int64_t work_ns = previous_ns != 0 && present_ns > previous_ns ? present_ns - previous_ns : 0;
     previous_ns = start_ns;
-    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_retraces());
+    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh());
     return start + std::chrono::nanoseconds(next_ns - start_ns);
 }
 #endif
@@ -746,7 +746,7 @@ void svc_frame_wait(void*) {
 #endif
     for (;;) {
 #if defined(NEBULA_HOST_SDL)
-        const bool vsync = galaxy::sdl::wait_display_retrace(period.count(), vsync_ns);
+        const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns);
         if (!vsync) {
             sleep_until_precise(next);
         }
@@ -758,7 +758,7 @@ void svc_frame_wait(void*) {
             continue;
         }
         // The last frame's work (the game and render threads' CPU time), to the performance hints (Android).
-        [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_retrace();
+        [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_frame_done();
         if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
             period = display_period;
         }
@@ -1808,8 +1808,8 @@ uint32_t svc_texture_table(void*, const NebulaFrameTexture* list, uint32_t count
 uint32_t svc_material_register(void*, const float (*rows)[4], uint32_t vertex_rows, uint32_t pixel_rows) {
     return galaxy::render::registries().material_register(rows, vertex_rows, pixel_rows);
 }
-uint32_t svc_pipeline_register(void*, const NebulaPipelineDesc* desc) {
-    return galaxy::render::registries().pipeline_register(*desc);
+uint32_t svc_pipeline_register(void*, const NebulaPipelineDesc* desc, const NebulaLayoutInput* inputs) {
+    return galaxy::render::registries().pipeline_register(*desc, inputs);
 }
 void svc_texture_hd(void*, uint32_t texture, const void* hd) {
     galaxy::render::textures().set_built_in(texture, hd);
@@ -1851,7 +1851,7 @@ uint32_t svc_texture_table(void*, const NebulaFrameTexture*, uint32_t) {
 uint32_t svc_material_register(void*, const float (*)[4], uint32_t, uint32_t) {
     return 0u;
 }
-uint32_t svc_pipeline_register(void*, const NebulaPipelineDesc*) {
+uint32_t svc_pipeline_register(void*, const NebulaPipelineDesc*, const NebulaLayoutInput*) {
     return 0u;
 }
 void svc_texture_hd(void*, uint32_t, const void*) {}
@@ -2145,7 +2145,7 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
         const char* value = ::galaxy::run_options().trace_frame_times;
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }();
-    if (trace_vi) std::fprintf(stderr, "[latency] retrace vi=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
+    if (trace_vi) std::fprintf(stderr, "[latency] frame vi=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
 #endif
 #if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)

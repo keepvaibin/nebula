@@ -59,7 +59,7 @@ struct LiveControlsFrame {
     std::span<const LivePad> pads;
     galaxy::input::KeyboardMouseLevels keyboard_levels{};
     NativeInputScriptOverlay script{};
-    std::uint64_t vi = 0;
+    std::uint64_t vi = 0;  // the game frame number (the console's video interface count)
     std::uint64_t script_pointer_grace_ms = 250;
     bool window_focused = false;
     bool use_keyboard = false;

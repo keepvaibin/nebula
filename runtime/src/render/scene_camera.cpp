@@ -227,7 +227,7 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetPipelineState(meter_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(constants) / 4u, &constants, 0);
-    { ID3D12DescriptorHeap* heap = ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
+    ring.bind(list);
     list->SetComputeRootDescriptorTable(1, gpu(0));
     list->SetComputeRootDescriptorTable(2, gpu(3));
     list->Dispatch(1, 1, 1);
@@ -292,7 +292,7 @@ bool SceneCamera::widen(ID3D12GraphicsCommandList* list, DescriptorRing& ring, c
     picture.issue();
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetPipelineState(pipeline);
-    { ID3D12DescriptorHeap* heap = ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
+    ring.bind(list);
     list->SetGraphicsRootDescriptorTable(1, table.gpu);
     list->SetGraphicsRootDescriptorTable(2, storage_table);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(in.width), static_cast<float>(in.height), 0.0f, 1.0f};
