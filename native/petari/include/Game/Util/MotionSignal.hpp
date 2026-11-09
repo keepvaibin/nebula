@@ -51,6 +51,7 @@ namespace MotionSignal {
     void playerPlaced(LiveActor* pPlayer, const Vec3f& rTarget);
     // EmitterCore::init: a pooled emitter starts a new effect.
     void emitterInit(EmitterCore* pEmitter);
-    // CameraViewInterpolator::reduceOscillation took its target without blending: a camera cut.
+    // A camera cut: CameraViewInterpolator::reduceOscillation took its target without blending, or a camera animation
+    // played across one of its own cuts.
     void cameraCut();
 };  // namespace MotionSignal

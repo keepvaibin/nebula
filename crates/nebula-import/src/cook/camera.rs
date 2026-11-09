@@ -5,9 +5,14 @@
 //! - header (12 bytes): "NCAM", frames, the value count;
 //! - eight tracks (12 bytes): count, first value, stride. Stride 1: a value per frame, linear between frames; 3: keys
 //!   (frame, value, slope); 4: keys (frame, value, slope in, slope out); a track of one entry is its first value;
-//! - the values.
+//! - the values;
+//! - the cuts: a count, then each cut's step s, ascending (the shot changes between frames s and s + 1).
 //!
 //! The tracks: position x, y, z, watch position x, y, z, twist, field of view.
+//!
+//! A cut is the clip's own shot change, so the frames on either side are not blended (CameraAnim signals it as it plays
+//! across). The disc marks one as two keys a frame apart with a hold on each side; dense baked motion also has keys a
+//! frame apart, so a step is a cut when it moves or turns far more than the steps around it.
 
 use anyhow::{bail, Context, Result};
 
@@ -27,6 +32,108 @@ pub struct Ncam {
     pub frames: u32,
     pub tracks: [Track; TRACKS],
     pub values: Vec<f32>,
+    pub cuts: Vec<u32>,
+}
+
+/// A step is a cut when the eye moves more than this many units and this many times the median of the steps around it,
+/// or the look direction or the twist turns more than this many degrees and that many times their steps' median.
+const CUT_MOVE: f64 = 100.0;
+const CUT_TURN_DEGREES: f64 = 20.0;
+const CUT_RATIO: f64 = 8.0;
+/// The steps on each side a step is measured against.
+const CUT_AROUND: usize = 4;
+
+/// The game's hermiteInterpolation (nebula_geometry.hpp), operation for operation.
+fn hermite(key: f32, t0: f32, p0: f32, m0: f32, t1: f32, p1: f32, m1: f32) -> f32 {
+    let from = key - t0;
+    let t = from / (t1 - t0);
+    let squared = t * t;
+    let twice = t + t;
+    let a = squared - t;
+    let rise = p0 - p1;
+    let mut b = twice * a - squared;
+    let mut c = m0 * a + m0;
+    b = b * rise + p0;
+    c = m1 * a + c;
+    c = t * m0 - c;
+    b - from * c
+}
+
+fn search(values: &[f32], key: f32, first: usize, count: usize, stride: usize) -> usize {
+    let (mut low, mut high) = (0usize, count);
+    while low < high {
+        let middle = (low + high) / 2;
+        if values[first + middle * stride] <= key {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    low.wrapping_sub(1)
+}
+
+/// A track at `key` as CameraAnim::getTrack reads it.
+pub fn read(ncam: &Ncam, track: usize, key: f32) -> Option<f32> {
+    let t = ncam.tracks[track];
+    let (count, first, stride) = (t.count as usize, t.first as usize, t.stride as usize);
+    let values = &ncam.values;
+    if count == 1 {
+        return values.get(first).copied();
+    }
+    if stride == 1 {
+        let floor = key as u32 as usize;
+        let rate = (key - floor as f32).clamp(0.0, 1.0);
+        return if floor < count.wrapping_sub(1) {
+            Some((1.0 - rate) * *values.get(first + floor)? + rate * *values.get(first + floor + 1)?)
+        } else {
+            values.get((first + count).wrapping_sub(1)).copied()
+        };
+    }
+    let index = search(values, key, first, count, stride);
+    // A key's slope out is its last word; the next key's slope in is its third.
+    let v = values.get(first + index.wrapping_mul(stride)..)?;
+    Some(hermite(key, *v.first()?, *v.get(1)?, *v.get(stride - 1)? / 30.0, *v.get(stride)?, *v.get(stride + 1)?, *v.get(stride + 2)? / 30.0))
+}
+
+fn median_around(steps: &[f64], at: usize) -> f64 {
+    let mut around: Vec<f64> = steps[at.saturating_sub(CUT_AROUND)..at].iter().chain(steps.iter().skip(at + 1).take(CUT_AROUND)).copied().collect();
+    if around.is_empty() {
+        return 0.0;
+    }
+    around.sort_by(f64::total_cmp);
+    around[around.len() / 2]
+}
+
+/// The clip's cuts: each step (frame s to s + 1) that jumps against the steps around it.
+pub fn find_cuts(ncam: &Ncam) -> Vec<u32> {
+    let at = |track: usize, frame: u32| read(ncam, track, frame as f32).map_or(0.0, f64::from);
+    let frames = ncam.frames;
+    if frames < 2 || ncam.tracks.iter().take(6).any(|t| t.count == 0) {
+        return Vec::new();
+    }
+    let eye = |f: u32| [at(0, f), at(1, f), at(2, f)];
+    let look = |f: u32| {
+        let (e, w) = (eye(f), [at(3, f), at(4, f), at(5, f)]);
+        let d = [w[0] - e[0], w[1] - e[1], w[2] - e[2]];
+        let length = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+        if length > 0.0 { [d[0] / length, d[1] / length, d[2] / length] } else { [0.0, 0.0, 1.0] }
+    };
+    let twisted = ncam.tracks[6].count != 0;
+    let (mut moves, mut turns, mut twists) = (Vec::new(), Vec::new(), Vec::new());
+    for f in 0..frames - 1 {
+        let (a, b) = (eye(f), eye(f + 1));
+        moves.push(((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt());
+        let (la, lb) = (look(f), look(f + 1));
+        turns.push((la[0] * lb[0] + la[1] * lb[1] + la[2] * lb[2]).clamp(-1.0, 1.0).acos().to_degrees());
+        twists.push(if twisted { (at(6, f + 1) - at(6, f)).abs() } else { 0.0 });
+    }
+    let turned = |steps: &[f64], s: usize| steps[s] > CUT_TURN_DEGREES.max(CUT_RATIO * median_around(steps, s));
+    (0..moves.len())
+        .filter(|&s| {
+            (moves[s] > CUT_MOVE && moves[s] > CUT_RATIO * median_around(&moves, s).max(1.0)) || turned(&turns, s) || turned(&twists, s)
+        })
+        .map(|s| s as u32)
+        .collect()
 }
 
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
@@ -81,11 +188,13 @@ impl Ncam {
                 bail!("camera animation track {i} ({track:?}) outside its {} values", values.len());
             }
         }
-        Ok(Ncam { frames: be32(bytes, 0x18)?, tracks, values })
+        let mut ncam = Ncam { frames: be32(bytes, 0x18)?, tracks, values, cuts: Vec::new() };
+        ncam.cuts = find_cuts(&ncam);
+        Ok(ncam)
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(HEADER + 12 * TRACKS + 4 * self.values.len());
+        let mut out = Vec::with_capacity(HEADER + 12 * TRACKS + 4 * (self.values.len() + 1 + self.cuts.len()));
         out.extend_from_slice(MAGIC);
         for word in [self.frames, self.values.len() as u32] {
             out.extend_from_slice(&word.to_le_bytes());
@@ -97,6 +206,10 @@ impl Ncam {
         }
         for value in &self.values {
             out.extend_from_slice(&value.to_le_bytes());
+        }
+        out.extend_from_slice(&(self.cuts.len() as u32).to_le_bytes());
+        for step in &self.cuts {
+            out.extend_from_slice(&step.to_le_bytes());
         }
         out
     }
@@ -112,14 +225,20 @@ impl Ncam {
             *track = Track { count: le32(bytes, at)?, first: le32(bytes, at + 4)?, stride: le32(bytes, at + 8)? };
         }
         let values_at = HEADER + 12 * TRACKS;
-        let values = (0..w(2)? as usize).map(|v| le32(bytes, values_at + 4 * v).map(f32::from_bits)).collect::<Result<_>>()?;
-        Ok(Ncam { frames: w(1)?, tracks, values })
+        let count = w(2)? as usize;
+        let values = (0..count).map(|v| le32(bytes, values_at + 4 * v).map(f32::from_bits)).collect::<Result<_>>()?;
+        let cuts_at = values_at + 4 * count;
+        let cuts = (0..le32(bytes, cuts_at)? as usize).map(|c| le32(bytes, cuts_at + 4 + 4 * c)).collect::<Result<_>>()?;
+        Ok(Ncam { frames: w(1)?, tracks, values, cuts })
     }
 }
 
-/// A camera animation cooked: a disc's to NCAM; a cooked one as it is.
+/// A camera animation cooked: a disc's to NCAM; a cooked one as it is, once it reads whole (with its cuts).
 pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.starts_with(MAGIC) {
+        if Ncam::from_ncam(bytes)?.to_bytes() != bytes {
+            bail!("a cooked camera animation of another layout");
+        }
         return Ok(bytes.to_vec());
     }
     let ncam = Ncam::from_disc(bytes)?;
@@ -138,35 +257,6 @@ pub mod proof {
 
     pub static CLIPS: AtomicU64 = AtomicU64::new(0);
     pub static READS: AtomicU64 = AtomicU64::new(0);
-
-    /// The game's hermiteInterpolation (nebula_geometry.hpp), operation for operation.
-    fn hermite(key: f32, t0: f32, p0: f32, m0: f32, t1: f32, p1: f32, m1: f32) -> f32 {
-        let from = key - t0;
-        let t = from / (t1 - t0);
-        let squared = t * t;
-        let twice = t + t;
-        let a = squared - t;
-        let rise = p0 - p1;
-        let mut b = twice * a - squared;
-        let mut c = m0 * a + m0;
-        b = b * rise + p0;
-        c = m1 * a + c;
-        c = t * m0 - c;
-        b - from * c
-    }
-
-    fn search(values: &[f32], key: f32, first: usize, count: usize, stride: usize) -> usize {
-        let (mut low, mut high) = (0usize, count);
-        while low < high {
-            let middle = (low + high) / 2;
-            if values[first + middle * stride] <= key {
-                low = middle + 1;
-            } else {
-                high = middle;
-            }
-        }
-        low.wrapping_sub(1)
-    }
 
     /// CameraAnim before NCAM: frame tracks linear, key tracks by type word.
     fn old(values: &[f32], key: f32, count: u32, offset: u32, key_type: Option<u32>) -> Option<f32> {
@@ -195,29 +285,6 @@ pub mod proof {
         }
     }
 
-    /// NCAM as CameraAnim reads it.
-    pub fn new(ncam: &Ncam, track: usize, key: f32) -> Option<f32> {
-        let t = ncam.tracks[track];
-        let (count, first, stride) = (t.count as usize, t.first as usize, t.stride as usize);
-        let values = &ncam.values;
-        if count == 1 {
-            return values.get(first).copied();
-        }
-        if stride == 1 {
-            let floor = key as u32 as usize;
-            let rate = (key - floor as f32).clamp(0.0, 1.0);
-            return if floor < count.wrapping_sub(1) {
-                Some((1.0 - rate) * *values.get(first + floor)? + rate * *values.get(first + floor + 1)?)
-            } else {
-                values.get((first + count).wrapping_sub(1)).copied()
-            };
-        }
-        let index = search(values, key, first, count, stride);
-        // A key's slope out is its last word; the next key's slope in is its third.
-        let v = values.get(first + index.wrapping_mul(stride)..)?;
-        Some(hermite(key, *v.first()?, *v.get(1)?, *v.get(stride - 1)? / 30.0, *v.get(stride)?, *v.get(stride + 1)?, *v.get(stride + 2)? / 30.0))
-    }
-
     pub fn reads_agree(bytes: &[u8], cooked: &[u8]) -> Result<()> {
         let ncam = Ncam::from_ncam(cooked)?;
         if ncam.to_bytes() != cooked {
@@ -234,7 +301,7 @@ pub mod proof {
             let (count, offset) = (be32(bytes, at)?, be32(bytes, at + 4)?);
             for half in -2..=(2 * ncam.frames as i64 + 2) {
                 let key = half as f32 * 0.5;
-                let (a, b) = (old(&disc, key, count, offset, key_type), new(&ncam, track, key));
+                let (a, b) = (old(&disc, key, count, offset, key_type), read(&ncam, track, key));
                 if a.map(f32::to_bits) != b.map(f32::to_bits) {
                     bail!("track {track} at {key}: the disc reads {a:?}, NCAM {b:?}");
                 }
@@ -288,7 +355,53 @@ mod tests {
         assert!(cooked.starts_with(MAGIC));
         assert_eq!(Ncam::from_ncam(&cooked).unwrap(), keys);
         assert_eq!(cook(&cooked).unwrap(), cooked);
-        assert_eq!(cooked.len(), 12 + 12 * TRACKS + 4 * 6);
+        assert_eq!(cooked.len(), 12 + 12 * TRACKS + 4 * 6 + 4);
+    }
+
+    /// A clip of a value per frame: the eye's x from `xs`, the watch 100 ahead in z, the rest still.
+    fn per_frame(xs: &[f32]) -> Ncam {
+        let n = xs.len() as u32;
+        let mut values = Vec::new();
+        let mut tracks = [Track::default(); TRACKS];
+        for (i, track) in tracks.iter_mut().enumerate() {
+            *track = Track { count: n, first: values.len() as u32, stride: 1 };
+            for &x in xs {
+                values.push(match i {
+                    0 | 3 => x,
+                    5 => 100.0,
+                    7 => 45.0,
+                    _ => 0.0,
+                });
+            }
+        }
+        Ncam { frames: n, tracks, values, cuts: Vec::new() }
+    }
+
+    #[test]
+    fn a_jump_against_its_neighbours_is_a_cut() {
+        let mut xs: Vec<f32> = (0..10).map(|f| f as f32).collect();
+        xs.extend((0..10).map(|f| 500.0 + f as f32));
+        assert_eq!(find_cuts(&per_frame(&xs)), [9]);
+        // Fast steady motion is no cut, nor is a clip that holds still.
+        let fast: Vec<f32> = (0..20).map(|f| 300.0 * f as f32).collect();
+        assert!(find_cuts(&per_frame(&fast)).is_empty());
+        assert!(find_cuts(&per_frame(&[7.0; 20])).is_empty());
+        let mut ncam = per_frame(&xs);
+        ncam.cuts = find_cuts(&ncam);
+        assert_eq!(Ncam::from_ncam(&ncam.to_bytes()).unwrap(), ncam);
+    }
+
+    #[test]
+    fn a_turn_is_a_cut() {
+        let mut ncam = per_frame(&[0.0; 20]);
+        // The watch swings from ahead (z) to the side (x) between frames 11 and 12.
+        let watch_x = ncam.tracks[3].first as usize;
+        let watch_z = ncam.tracks[5].first as usize;
+        for f in 12..20 {
+            ncam.values[watch_x + f] = 100.0;
+            ncam.values[watch_z + f] = 0.0;
+        }
+        assert_eq!(find_cuts(&ncam), [11]);
     }
 
     #[test]
