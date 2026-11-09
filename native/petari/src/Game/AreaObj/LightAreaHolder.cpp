@@ -7,31 +7,35 @@ LightAreaHolder::LightAreaHolder(s32 firstCapacity, const char* pName) : AreaObj
     LightFunction::registerLightAreaHolder(this);
 }
 
+namespace {
+    // Leaving an area, or crossing into another, changes the light once the position has stayed out this many steps
+    // in a row: an actor that sways over an edge (a platform, an animated joint, a camera spring) keeps one light.
+    // Entering from no area, and a cleared id (a reset), change at once.
+    const s32 cLeaveSteps = 8;
+}  // namespace
+
 bool LightAreaHolder::tryFindLightID(const Vec3f& rArea, ZoneLightID* pLightID) const {
     AreaObj* pArea = find_in(rArea);
+    const LightArea* pLightArea = static_cast< LightArea* >(pArea);
+
+    if (pArea == nullptr ? pLightID->isOutOfArea() : pLightID->isTargetArea(pLightArea)) {
+        pLightID->mChangeSteps = 0;
+        return false;
+    }
+
+    if (!pLightID->isOutOfArea() && ++pLightID->mChangeSteps < cLeaveSteps) {
+        return false;
+    }
 
     if (pArea == nullptr) {
-        if (pLightID->isOutOfArea()) {
-            pLightID->clear();
-
-            return false;
-        } else {
-            pLightID->clear();
-
-            return true;
-        }
+        pLightID->clear();
     } else {
-        const LightArea* pLightArea = static_cast< LightArea* >(pArea);
-
-        if (pLightID->isTargetArea(pLightArea)) {
-            return false;
-        } else {
-            pLightID->mZoneId = pLightArea->mPlacedZoneID;
-            pLightID->mLightID = pLightArea->mObjArg0;
-
-            return true;
-        }
+        pLightID->mZoneId = pLightArea->mPlacedZoneID;
+        pLightID->mLightID = pLightArea->mObjArg0;
+        pLightID->mChangeSteps = 0;
     }
+
+    return true;
 }
 
 void LightAreaHolder::initAfterPlacement() {

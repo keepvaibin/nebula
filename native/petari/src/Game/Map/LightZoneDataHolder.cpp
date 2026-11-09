@@ -6,11 +6,13 @@
 ZoneLightID::ZoneLightID() {
     mZoneId = -1;
     mLightID = -1;
+    mChangeSteps = 0;
 }
 
 void ZoneLightID::clear() {
     mZoneId = -1;
     mLightID = -1;
+    mChangeSteps = 0;
 }
 
 bool ZoneLightID::isTargetArea(const LightArea* pLightArea) const {

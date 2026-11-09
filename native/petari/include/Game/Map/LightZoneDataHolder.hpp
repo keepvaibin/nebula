@@ -15,6 +15,8 @@ public:
 
     s32 mZoneId;
     s32 mLightID;
+    // The steps in a row the position has been outside the area named (in none, or in another): LightAreaHolder.
+    s32 mChangeSteps;
 };
 
 // I am assuming they called this "AreaInfo" because the debug map
