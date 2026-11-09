@@ -1,0 +1,1 @@
+<wiidisc version="1"><id game="RMG"/><options><section name="S"><option name="O" default="1"><choice name="On"><patch id="p"/></choice></option></section></options><patch id="p"><memory offset="0x80451234" value="38600006"/><memory offset="0x80001000" value="6000000060000000" search="true"/></patch></wiidisc>
