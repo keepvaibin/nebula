@@ -18,6 +18,12 @@
 namespace {
     const static f32 sSunRadius = 3000.0f;
     const static f32 sSunModelScale = 100.0f;
+    // Each point is asked about a tenth of the radius in front of the sphere's surface. The object's own model is a
+    // polygon sphere (corners on the sphere, faces inside it), and at the sun's distance one step of a float depth near
+    // 1 spans about 6 units (56 with the near plane at 10): asked at the surface itself, a point near a corner of the
+    // model was hidden or seen by rounding, and the flare's points came and went as the camera moved. Anything that
+    // really hides the object stands far nearer than this.
+    const static f32 sSurfaceMargin = 0.1f;
 
     // The depth of a point, 0 near to 1 far.
     f32 calcDepth(const Vec3f& rTrans, const Pos3f& rViewMtx, const Proj3f& rProjMtx) {
@@ -144,7 +150,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
     pProbes[0].user_x = center.x;
     pProbes[0].user_y = center.y;
     // Each point's depth is the sphere's near surface in front of it.
-    pProbes[0].user_z = ::calcDepth(drawPos + drawDir * mDrawRadius, rView, rProj);
+    pProbes[0].user_z = ::calcDepth(drawPos + drawDir * (mDrawRadius * (1.0f + ::sSurfaceMargin)), rView, rProj);
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = idx * MR::pi() / 4.0f;
@@ -154,7 +160,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
         mtx.mult(innerProbe, innerProbe);
 
         checkVisible(&pProbes[1 + idx], innerProbe, rView, rProj);
-        pProbes[1 + idx].user_z = ::calcDepth(innerProbe + drawDir * (mDrawRadius * 0.9165f), rView, rProj);
+        pProbes[1 + idx].user_z = ::calcDepth(innerProbe + drawDir * (mDrawRadius * (0.9165f + ::sSurfaceMargin)), rView, rProj);
     }
 
     for (u32 idx = 0; idx < 8; idx++) {
@@ -165,7 +171,7 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
         mtx.mult(outerProbe, outerProbe);
 
         checkVisible(&pProbes[9 + idx], outerProbe, rView, rProj);
-        pProbes[9 + idx].user_z = ::calcDepth(outerProbe + drawDir * (mDrawRadius * 0.7141f), rView, rProj);
+        pProbes[9 + idx].user_z = ::calcDepth(outerProbe + drawDir * (mDrawRadius * (0.7141f + ::sSurfaceMargin)), rView, rProj);
     }
 }
 
