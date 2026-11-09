@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/controls_engine.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/pointer_control.h"
 
 namespace galaxy::host::controls {
@@ -21,29 +22,34 @@ void apply_tilt_accel(galaxy::input::PlayerInput& input,
     input.pointer_on = input.pointer_on && galaxy::input::remote_faces_screen(input.gravity);
 }
 
-#if !defined(NEBULA_DEV)
-NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t, const ScriptServices&) {
-    return {};
+NativeInputScriptOverlay extension_controls(std::uint64_t frame) {
+    NativeInputScriptOverlay overlay{};
+    NebulaExtensionControls given{};
+    if (!galaxy::extensions::controls(NebulaExtensionFrame{frame}, given)) {
+        return overlay;
+    }
+    const auto held = [&given](std::uint32_t button) { return (given.buttons & button) != 0u; };
+    overlay.buttons.a = held(NEBULA_EXT_BUTTON_A);
+    overlay.buttons.b = held(NEBULA_EXT_BUTTON_B);
+    overlay.buttons.one = held(NEBULA_EXT_BUTTON_ONE);
+    overlay.buttons.two = held(NEBULA_EXT_BUTTON_TWO);
+    overlay.buttons.plus = held(NEBULA_EXT_BUTTON_PLUS);
+    overlay.buttons.minus = held(NEBULA_EXT_BUTTON_MINUS);
+    overlay.buttons.home = held(NEBULA_EXT_BUTTON_HOME);
+    overlay.buttons.up = held(NEBULA_EXT_BUTTON_UP);
+    overlay.buttons.down = held(NEBULA_EXT_BUTTON_DOWN);
+    overlay.buttons.left = held(NEBULA_EXT_BUTTON_LEFT);
+    overlay.buttons.right = held(NEBULA_EXT_BUTTON_RIGHT);
+    overlay.buttons.c = held(NEBULA_EXT_BUTTON_C);
+    overlay.buttons.z = held(NEBULA_EXT_BUTTON_Z);
+    overlay.shake = given.shake != 0u;
+    overlay.has_stick = given.has_stick != 0u;
+    overlay.stick_x = given.stick_x;
+    overlay.stick_y = given.stick_y;
+    overlay.has_pointer = given.has_pointer != 0u;
+    overlay.pointer_x = given.pointer_x;
+    overlay.pointer_y = given.pointer_y;
+    return overlay;
 }
-
-NativeInputReplayLog load_native_input_replay_log(const std::string&) {
-    return {};
-}
-
-const NativeInputReplayLog* active_native_input_replay_log() {
-    return nullptr;
-}
-
-const NativeInputReplaySample* native_input_replay_sample_for_frame(std::uint64_t) {
-    return nullptr;
-}
-
-galaxy::input::PlayerInput build_replayed_input(std::uint64_t, const NativeInputReplaySample&,
-                                                const NativeInputScriptOverlay&, galaxy::RuntimeInputMode,
-                                                galaxy::input::tilt::Section,
-                                                const galaxy::input::NativeMousePointerProjection&, const void*) {
-    return {};
-}
-#endif
 
 }  // namespace galaxy::host::controls

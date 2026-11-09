@@ -8,23 +8,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 
 namespace galaxy::input {
-
-// An integer field of the input scripts: ASCII digits only, no sign or
-// whitespace, and overflow fails instead of wrapping. `value` is changed only
-// on success.
-[[nodiscard]] bool parse_native_input_script_u64(
-    std::string_view text,
-    std::uint64_t& value) noexcept;
-
-// `anchor_frame` plus the script offset `offset_text`, failing on overflow.
-// `start_frame` is changed only on success.
-[[nodiscard]] bool resolve_native_input_script_start_frame(
-    std::uint64_t anchor_frame,
-    std::string_view offset_text,
-    std::uint64_t& start_frame) noexcept;
 
 struct ButtonState {
     bool left = false;

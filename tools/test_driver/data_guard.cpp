@@ -41,7 +41,7 @@ const char* test_data_paths_error(int argc, char** argv) {
         }
     }
     // Folders and files a run writes or downloads to when it names them: each is private too when set.
-    for (const auto* name : {nebula_switch::audio_wav_dump_wide_name(), L"GALAXY_PRESENT_SNAPSHOT_DIR"}) {
+    for (const auto* name : {L"GALAXY_AUDIO_WAV_DUMP", L"GALAXY_PRESENT_SNAPSHOT_DIR"}) {
         const auto path = get_env_path(name);
         if (path && (!path_is_within(*path, *work) || path_is_within(*path, protected_root))) {
             return "tests require output and download paths inside NEBULA_WORK";

@@ -5,7 +5,6 @@
 
 #include "galaxy/input/host_input.h"
 #include "galaxy/platform_time.h"
-#include "galaxy/run_options.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/wiimote_link.h"
 

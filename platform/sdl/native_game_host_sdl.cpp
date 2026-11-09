@@ -445,6 +445,8 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     controls::LiveControlsFrame controls_frame{config};
     controls_frame.pads = std::span<const controls::LivePad>(pads.data(), pad_count);
     controls_frame.keyboard_levels = state.keys;
+    controls_frame.script = controls::extension_controls(frame);
+    controls_frame.script_pointer_grace_ms = 250u;
     controls_frame.game_frame = frame;
     controls_frame.window_focused = state.window_focused;
     controls_frame.use_keyboard = use_keyboard;
@@ -499,7 +501,6 @@ void install_host_pointer_provider(HostPointerProvider) noexcept {}
 void install_host_pointer_transition_provider(HostPointerTransitionProvider) noexcept {}
 void install_native_keyboard_capture_provider(NativeKeyboardCaptureProvider) noexcept {}
 void install_native_settings_pad_hooks(NativeSettingsVisibleProvider, NativeSettingsKeySink) noexcept {}
-void set_env_flag_cache_enabled(bool) noexcept {}
 
 
 }  // namespace galaxy::host

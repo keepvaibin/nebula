@@ -42,15 +42,11 @@ pointer-latency, present-stats, gpu-passes), `0` (nothing). Texture dumps are a 
 
 Every start logs its steps as `boot:` lines (milliseconds from the process's creation: the game's data, the module, the
 renderer, the game, its first frame, the title screen) and the renderer's as `[boot] renderer` lines (milliseconds a
-step).
-
-| Variable | Effect |
-|---|---|
-| `GALAXY_BOOT_FAST=0` | Game frames at 60 a second from the start (by default the black frames before the first 3D scene run ahead) |
+step). The black frames before the first 3D scene run ahead.
 
 ## Scripted input
 
-Times are in video frames (60 per second) from the start of the session. `GALAXY_TEST_SCRIPT_CLOCK` picks the clock of the `GALAXY_INPUT_*_SCRIPT` variables (and the pointer path and waypoints): unset, game frames from boot; `frames`, scene frames from boot (the same for builds with different renderer speeds); `stop`, scene frames since the current tour stop began, with no scripted input before the first stop. `GALAXY_TEST_EVENTS`, `GALAXY_TEST_TELEPORT`, `GALAXY_TEST_WALK` and the by-stop present snapshots always count scene frames from the current tour stop (from boot without a tour), so `stop` puts a script and the events on one clock. The replay log (`GALAXY_INPUT_REPLAY_LOG`) follows the same clock but is not held before the first stop.
+Times are in video frames (60 per second) from the start of the session. `GALAXY_TEST_SCRIPT_CLOCK` picks the clock of the `GALAXY_INPUT_*_SCRIPT` variables (and the waypoints): unset, game frames from boot; `frames`, scene frames from boot (the same for builds with different renderer speeds); `stop`, scene frames since the current tour stop began, with no scripted input before the first stop. `GALAXY_TEST_EVENTS`, `GALAXY_TEST_TELEPORT`, `GALAXY_TEST_WALK` and the by-stop present snapshots always count scene frames from the current tour stop (from boot without a tour), so `stop` puts a script and the events on one clock.
 
 | Variable | Format |
 |---|---|
@@ -58,7 +54,6 @@ Times are in video frames (60 per second) from the start of the session. `GALAXY
 | `GALAXY_INPUT_STICK_SCRIPT` | `start:duration:x:y;...`, axes from -1 to 1 |
 | `GALAXY_INPUT_SHAKE_SCRIPT` | `start:duration;...`, Wii Remote shakes |
 | `GALAXY_INPUT_POINTER_X`, `GALAXY_INPUT_POINTER_Y` | Fixed pointer position, -1 to 1 |
-| `GALAXY_INPUT_REPLAY_LOG` | A recorded input log (TSV) replayed as host input |
 
 ## Audio
 

@@ -305,7 +305,7 @@ typedef struct NebulaFrameList {
     uint32_t camera_epoch;
     float sky_up[3];           /* the player's up, unit length, in eye space of the scene's view */
     uint32_t sky_up_known;
-    uint32_t snapshot_number;  /* test pictures by stop; 0 none */
+    uint32_t game_frame;       /* set by the host: the game frame that made the list */
     /* Set by the renderer when it no longer reads this list. */
     volatile uint32_t released;
     uint32_t reserved;

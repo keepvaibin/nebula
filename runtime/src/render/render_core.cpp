@@ -18,7 +18,7 @@
 #endif
 #include "galaxy/loss_report.h"
 #include "galaxy/crash_report.h"
-#include "galaxy/run_options.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
@@ -26,7 +26,6 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
-#include "galaxy/host_env.h"
 #include "galaxy/render/host_window.h"
 
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -99,46 +98,28 @@ namespace {
 
 std::atomic<unsigned> s_layer_2d_lines{0u};
 
-// Test aid for runs without a display: every Nth swap-chain present is read
-// back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
-// presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
-std::uint64_t g_snapshot_presents = 0u;
-// number_present_snapshots: the next present's number comes from the tour; none while it waits for a stop.
-bool g_snapshot_numbered = false;
-bool g_snapshot_hold = false;
-// Game thread: what number_present_snapshots asked for, until the next list carries it.
-std::uint64_t g_next_snapshot_number = 0u;
-bool g_next_snapshot_set = false;
+// lose_gpu_device's request, taken at the renderer's next frame.
+std::atomic<bool> g_lose_device{false};
 
-// `kind` tags the present in the log: "game" (a picture the game made, shown for the first time), "repeat" (a picture shown
-// again) or "generated" (an interpolated frame between two game frames), so a capture with interpolation on can be compared with
-// one with it off by its game frames alone (tools/verify/interp_real.sh).
-std::string present_snapshot_path(const char* kind) {
-    static const std::uint64_t every = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_every, 0u);
-    static const std::uint64_t first = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_first, 0u);
-    static const std::uint64_t last = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_last, std::numeric_limits<std::uint64_t>::max());
-    // GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1: an interpolated present is not counted, so a run with interpolation on numbers the
-    // pictures the game made as a run with it off does and the two compare picture for picture.
-    static const bool game_only = ::galaxy::run_option_flag(::galaxy::run_options().present_snapshot_game_only, false);
-    if (game_only && std::string_view(kind) == "generated") {
-        static std::uint64_t left_out = 0u;
-        if (++left_out % 300u == 0u) {
-            std::cerr << "[snapshot] " << left_out << " generated presents left out" << '\n';
-        }
+// Render thread: the game frame of the newest list drawn (NebulaFrameList.game_frame).
+std::uint32_t g_drawn_game_frame = 0u;
+
+// The file an extension keeps this present of the game's picture in (host_extension.h), or none. `kind` is a
+// NEBULA_EXT_PICTURE_*: the picture the game made shown for the first time, shown again, or a frame generated between
+// two of the game's, so a capture with interpolation on compares with one with it off by its game frames alone
+// (tools/verify/interp_real.sh).
+std::string present_snapshot_path(std::uint32_t kind) {
+    if (!galaxy::extensions::keeps_pictures()) {
         return {};
     }
-    static const std::string directory = [] {
-        const char* value = ::galaxy::run_options().present_snapshot_dir;
-        return value != nullptr ? std::string(value) : std::string{};
-    }();
-    const std::uint64_t presents = ++g_snapshot_presents;
-    if (every == 0u || directory.empty() || presents < first || presents > last ||
-        presents % every != 0u || (g_snapshot_numbered && (g_snapshot_hold || presents % 1000u == 0u))) {
+    const char* const path = galaxy::extensions::picture_path(g_drawn_game_frame, kind);
+    if (path == nullptr) {
         return {};
     }
-    // Its time, for latency measurements against the input's (GALAXY_INPUT_POINTER_PATH's jumps).
-    std::cerr << "[snapshot] present=" << presents << " qpc=" << galaxy::qpc_now() << " kind=" << kind << '\n';
-    return directory + "\\present_" + std::to_string(presents) + ".ppm";
+    // Its time, for latency measurements against the input's.
+    static constexpr const char* kKinds[] = {"game", "repeat", "generated"};
+    std::cerr << "[snapshot] " << path << " qpc=" << galaxy::qpc_now() << " kind=" << kKinds[kind % 3u] << '\n';
+    return path;
 }
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
@@ -160,6 +141,10 @@ struct GameWaitTimer {
 };
 
 }  // anonymous namespace
+
+void lose_gpu_device() noexcept {
+    g_lose_device.store(true, std::memory_order_release);
+}
 
 void RenderCore::reset_session_state() {
     // While no producer or render thread runs.
@@ -550,9 +535,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     chunk.pointer_response=producer_pointer_response_;
     chunk.list = std::exchange(producer_list_, nullptr);
     if (chunk.list != nullptr) {
-        chunk.snapshot_set = std::exchange(g_next_snapshot_set, false);
-        chunk.snapshot_number = g_next_snapshot_number;
-        chunk.list->snapshot_number = chunk.snapshot_set ? static_cast<std::uint32_t>(chunk.snapshot_number) : 0u;
         const auto hold = device_gate_.hold();
         chunk.device_epoch = device_gate_.epoch();
         // Registries first: a table taken here names textures whose work is taken too.
@@ -1536,9 +1518,9 @@ bool RenderCore::restart_device() {
         return false;
     }
     std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency() << " ms\n";
-    if (test_loss_frame_ != 0u) {
-        std::cerr << "[gpu] recovered from the test device loss at frame " << test_loss_frame_ << " (rendering goes on)\n";
-        test_loss_frame_ = 0u;
+    if (asked_loss_frame_ != 0u) {
+        std::cerr << "[gpu] recovered from the device loss asked at frame " << asked_loss_frame_ << " (rendering goes on)\n";
+        asked_loss_frame_ = 0u;
     }
     return true;
 }
@@ -1847,7 +1829,7 @@ void RenderCore::present_black_picture(bool in_frame) {
     if (layout == nullptr || (black_shown_ && !native_settings_overlay_visible())) {
         return;
     }
-    const std::string snapshot_path = present_snapshot_path("game");
+    const std::string snapshot_path = present_snapshot_path(NEBULA_EXT_PICTURE_GAME);
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
@@ -1903,7 +1885,7 @@ void RenderCore::present_cached_display_on_thread(
     if (skip_duplicate_present) {
         return;
     }
-    const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path(duplicate_stamp ? "repeat" : "game");
+    const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path(duplicate_stamp ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
@@ -1960,8 +1942,6 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
     entry->registry_ops = std::move(chunk.registry_ops);
     entry->texture_ops = std::move(chunk.texture_ops);
     entry->ops_waiting = true;
-    entry->snapshot_set = chunk.snapshot_set;
-    entry->snapshot_number = chunk.snapshot_number;
     lists_.push_back(std::move(entry));
     return *lists_.back();
 }
@@ -1988,8 +1968,8 @@ void RenderCore::enforce_video_memory() {
     if (!renderer_.video_memory(usage, budget)) {
         return;
     }
-    if (const std::uint64_t forced = ::galaxy::run_option_u64(::galaxy::run_options().test_vram_budget_mb, 0u); forced != 0u) {
-        budget = forced << 20u;
+    if (const std::uint64_t asked = galaxy::extensions::vram_budget_bytes(); asked != 0u) {
+        budget = asked;
     }
     texture_store_.enforce_budget(usage, budget);
     if (frame_index_ >= vram_log_at_) {
@@ -2104,13 +2084,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     // What the services queued before this list: its ids exist when it walks, and the lists before it have walked.
     if (entry.ops_waiting) {
         entry.ops_waiting = false;
-        if (entry.snapshot_set) {
-            g_snapshot_numbered = true;
-            g_snapshot_hold = entry.snapshot_number == 0u;
-            if (entry.snapshot_number != 0u) {
-                g_snapshot_presents = entry.snapshot_number - 1u;
-            }
-        }
+        g_drawn_game_frame = entry.data.list->game_frame;
         if (rt_backend_.started()) {
             for (const auto& [id, mesh] : entry.registry_ops.meshes) {
                 rt_want(id, mesh);
@@ -2287,7 +2261,7 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, time);
     const bool real = time.t >= 1.0f;
     const DisplayTexture* const selected = present ? display_pictures_.latest() : nullptr;
-    const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? "game" : "generated") : std::string{};
+    const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
@@ -2327,20 +2301,12 @@ void RenderCore::flush_waiting_list() {
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
-    // GALAXY_TEST_DEVICE_LOST=n (GALAXY_TEST_GPU_LOST_FRAME is the older name; GALAXY_TEST_GPU_LOST_TIMES, default 1, how
-    // many): the card is lost on purpose at frame n and every 300 frames after. Direct3D 12 removes its device; Vulkan has no
-    // call for that, so its next submission reports VK_ERROR_DEVICE_LOST. Both go on through the loss recovery below.
-    static const std::uint64_t lose_at = [] {
-        const std::uint64_t named = ::galaxy::run_option_u64(::galaxy::run_options().test_device_lost, 0u);
-        return named != 0u ? named : ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
-    }();
-    if (lose_at != 0u && frame_index_ >= lose_at + std::uint64_t{test_losses_injected_} * 300u) [[unlikely]] {
-        if (test_losses_injected_ < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
-            ++test_losses_injected_;
-            test_loss_frame_ = frame_index_;
-            std::cerr << "[gpu] device lost (test) at frame " << frame_index_ << '\n';
-            renderer_.test_lose_device();
-        }
+    // An extension's lose_gpu_device: Direct3D 12 removes its device; Vulkan has no call for that, so its next submission
+    // reports VK_ERROR_DEVICE_LOST. Both go on through the loss recovery below.
+    if (g_lose_device.exchange(false, std::memory_order_acq_rel)) [[unlikely]] {
+        asked_loss_frame_ = frame_index_;
+        std::cerr << "[gpu] device lost (asked) at frame " << frame_index_ << '\n';
+        renderer_.lose_device();
     }
     {
         // Interpolated frames: a present rate above 60. Decided per list.
@@ -2410,7 +2376,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         note_interp_real_present();
     }
     if (present_swap_chain) {
-        const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? "repeat" : "game");
+        const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }
@@ -2456,9 +2422,4 @@ unsigned layer_2d_lines() noexcept {
 
 
 // With the frame's list, so that a picture's number is its frame's whatever the render thread is doing.
-void number_present_snapshots(std::uint64_t number) noexcept {
-    g_next_snapshot_number = number;
-    g_next_snapshot_set = true;
-}
-
 }  // namespace galaxy::render

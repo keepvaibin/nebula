@@ -2,7 +2,6 @@
 // Windows' sound output (audio_device.h): WASAPI shared mode, event driven, on one MMCSS thread that also runs the game's
 // sound (the render callback). The default endpoint is followed; with none, the thread paces itself and retries.
 #include "galaxy/audio_device.h"
-#include "galaxy/run_options.h"
 
 #include <algorithm>
 #include <array>
@@ -230,20 +229,9 @@ private:
         if (rate < 8000u || rate > 192000u) {
             return false;
         }
-        // A test's reopening: the session silent, and six channels asked of whatever the device is.
-        const char* const reopen = ::galaxy::run_options().audio_test_reopen;
-        if (reopen != nullptr && surround_.load(std::memory_order_relaxed)) {
-            mask = KSAUDIO_SPEAKER_5POINT1;
-        }
         if (!initialize(device.Get(), rate, mask)) {
             if (mask == kStereo || !activate(device.Get()) || !initialize(device.Get(), rate, kStereo)) {
                 return false;
-            }
-        }
-        if (reopen != nullptr) {
-            ComPtr<ISimpleAudioVolume> volume;
-            if (SUCCEEDED(client_->GetService(__uuidof(ISimpleAudioVolume), reinterpret_cast<void**>(volume.GetAddressOf())))) {
-                volume->SetMasterVolume(0.0f, nullptr);
             }
         }
         REFERENCE_TIME period = 0;
@@ -306,18 +294,9 @@ private:
         LARGE_INTEGER last_wake{};
         QueryPerformanceCounter(&last_wake);
         LARGE_INTEGER last_trouble = last_wake;
-        const bool report_gaps = ::galaxy::run_options().audio_test_gaps != nullptr;
-        const LARGE_INTEGER stream_start = last_wake;
-        std::uint64_t written = fill_frames_;
-        double least_behind = 0.0;
-        std::uint64_t gaps = 0u;
-        double gap_frames = 0.0;
-        LONGLONG last_report = last_wake.QuadPart;
-        const char* const reopen = ::galaxy::run_options().audio_test_reopen;
-        const ULONGLONG reopen_at = reopen != nullptr ? GetTickCount64() + std::strtoull(reopen, nullptr, 10) * 1000u : 0u;
         for (;;) {
             const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, 500);
-            if (woke == WAIT_OBJECT_0 + 1u || (reopen != nullptr && GetTickCount64() >= reopen_at)) {
+            if (woke == WAIT_OBJECT_0 + 1u) {
                 return;
             }
             UINT32 padding = 0;
@@ -335,29 +314,6 @@ private:
                 last_trouble = wake;
             }
             last_wake = wake;
-            if (report_gaps) {
-                // GALAXY_AUDIO_TEST_GAPS=2: one 50 ms stall of this thread, 20 s in: the counter must see it.
-                static bool stalled = false;
-                if (!stalled && ::galaxy::run_options().audio_test_gaps[0] == '2' && wake.QuadPart - stream_start.QuadPart > frequency.QuadPart * 20) {
-                    stalled = true;
-                    Sleep(50);
-                }
-                // Taken by the device so far against the time passed: more time than sound is silence it played.
-                const double rate_now = rate_.load(std::memory_order_relaxed);
-                const double behind = static_cast<double>(wake.QuadPart - stream_start.QuadPart) * rate_now / static_cast<double>(frequency.QuadPart) -
-                                      static_cast<double>(written - padding);
-                if (behind - least_behind > static_cast<double>(period_frames_) * 0.5) {
-                    ++gaps;
-                    gap_frames += behind - least_behind;
-                    least_behind = behind;
-                } else if (behind < least_behind) {
-                    least_behind = behind;
-                }
-                if (wake.QuadPart - last_report > frequency.QuadPart * 10) {
-                    last_report = wake.QuadPart;
-                    std::cout << "[audio] gaps " << gaps << ", " << gap_frames * 1000.0 / rate_now << " ms, fill " << fill_frames_ << std::endl;
-                }
-            }
             if (padding >= fill_frames_) {
                 continue;
             }
@@ -377,7 +333,6 @@ private:
             if (FAILED(renderer_->ReleaseBuffer(frames, 0))) {
                 return;
             }
-            written += frames;
             LARGE_INTEGER rendered{};
             QueryPerformanceCounter(&rendered);
             if (rendered.QuadPart - wake.QuadPart > period_ticks * 3 / 4) {

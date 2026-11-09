@@ -6,7 +6,6 @@
 #include "galaxy/render/mtl/mtl_context.h"
 #endif
 #include "galaxy/render/post_process_settings.h"
-#include "galaxy/run_options.h"
 #include "galaxy/render/render_config.h"
 
 #include <cstring>

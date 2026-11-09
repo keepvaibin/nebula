@@ -143,8 +143,6 @@ private:
         bool present_swap_chain = true;
         bool present_only = false;
         NebulaFrameList* list = nullptr;
-        bool snapshot_set = false;
-        std::uint64_t snapshot_number = 0u;
     };
 
     void reset_session_state();
@@ -196,8 +194,6 @@ private:
         core::RegistryOps registry_ops;
         std::shared_ptr<TextureStore::Ops> texture_ops;
         bool ops_waiting = false;
-        bool snapshot_set = false;
-        std::uint64_t snapshot_number = 0u;
     };
     struct WalkState {
         core::ListData* now = nullptr;
@@ -289,8 +285,7 @@ private:
     std::int64_t occlusion_probe_due_qpc_ = 0;  // render thread: the next look at whether a covered window shows again
     // The frame boundary's read of the adapter's video memory: past its budget the texture store gives textures back.
     void enforce_video_memory();
-    std::uint32_t test_losses_injected_ = 0u;  // GALAXY_TEST_DEVICE_LOST: losses made on purpose so far
-    std::uint64_t test_loss_frame_ = 0u;       // the frame of the one being recovered from (0: none)
+    std::uint64_t asked_loss_frame_ = 0u;  // lose_gpu_device: the frame of the loss being recovered from (0: none)
     std::int64_t last_device_loss_qpc_ = 0;
     NebulaFrameList* in_hand_list_ = nullptr;  // popped from the queue, not yet a ListEntry
 

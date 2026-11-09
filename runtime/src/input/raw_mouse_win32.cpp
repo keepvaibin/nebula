@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/raw_mouse_win32.h"
 #include "galaxy/launch_args.h"
-#include "galaxy/run_options.h"
-#include "galaxy/host_env.h"
 #include "galaxy/windows_api.h"
 #include <atomic>
 #include <cstring>
