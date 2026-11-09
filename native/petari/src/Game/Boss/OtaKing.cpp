@@ -537,6 +537,9 @@ void OtaKing::damage() {
 
 void OtaKing::throwCocoNut() {
     CocoNutBall* cocoNut = getDisappearedCocoNut();
+    if (cocoNut == nullptr) {
+        return;
+    }
 
     mThrowPos->calc();
     Vec3f trans;
@@ -565,6 +568,9 @@ void OtaKing::throwFireBall() {
 
     for (int i = 0; i < ::cFireBallThrowNum; i++) {
         FireBall* currentFireBall = getDisappearedFireBall();
+        if (currentFireBall == nullptr) {
+            break;
+        }
 
         f32 throwAngle = angle;
         if (i != 0) {

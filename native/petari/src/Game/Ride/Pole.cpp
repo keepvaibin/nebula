@@ -249,7 +249,9 @@ void Pole::exeBindStart() {
         }
 
         s32 frame = MR::getBckCtrl(mRider)->getEnd();
-        mRotation.y += rotateSpeed * MR::getEaseOutValue(1.0f - ((f32)getNerveStep() / frame), 0.0f, 1.0f, 1.0f);
+        if (frame > 0) {
+            mRotation.y += rotateSpeed * MR::getEaseOutValue(1.0f - ((f32)getNerveStep() / frame), 0.0f, 1.0f, 1.0f);
+        }
     }
 
     if (!tryJump(false, 0.0f) && MR::isBckStopped(mRider)) {
