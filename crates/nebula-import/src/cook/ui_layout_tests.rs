@@ -132,7 +132,7 @@ fn material_lists_are_counted_and_whole() {
     let form = |k: u16| material_layout::LayoutForm {
         vertex: 0x1111_0000_0000_0000 | u64::from(k),
         pixel: 0x2222_0000_0000_0000 | u64::from(k),
-        rows: (0..70).map(|r| r + k).collect(),
+        rows: (0..70).map(|r| u32::from(r + k)).collect(),
         vertex_rows: 30,
         textures: (0..20).collect(),
         inputs: (0..30).collect(),

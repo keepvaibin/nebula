@@ -484,7 +484,7 @@ namespace {
         s32 idLength = 2;
         MR::Text16 numberText;
         char16_t* const pNumbers = numberText.room(textBytes + 2);
-        MR::Vector< MR::FixedArray< u32, 4 > > starts;
+        MR::InlineVector< u32, 4 > starts;
         u32 used = 0;
         for (const char* p = pText; *p != 0;) {
             if (*p < '0' || *p > '9') {
@@ -504,7 +504,7 @@ namespace {
         if (!NebulaText::has(id)) {
             return false;
         }
-        MR::Vector< MR::FixedArray< const char16_t*, 4 > > args;
+        MR::InlineVector< const char16_t*, 4 > args;
         for (s32 i = 0; i < starts.size(); i++) {
             args.push_back(pNumbers + starts[i]);
         }
