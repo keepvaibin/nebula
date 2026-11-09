@@ -112,6 +112,7 @@ struct TextureTable {
     // for it (retire_idle_tables) and is `retired` until a walk names it again.
     std::uint64_t last_frame = 0u;
     bool retired = false;
+    std::uint64_t touched_walk = 0u;  // the walk (RenderCore::walk_.serial) that last named its textures to the store (bound tables)
 };
 
 struct StaticSlot {

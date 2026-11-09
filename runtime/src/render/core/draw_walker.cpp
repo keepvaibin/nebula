@@ -148,6 +148,7 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     walk_.before = before;
     walk_.time = time;
     walk_.serial = ++walk_serial_;
+    walk_.mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
     const bool between = time.t < 1.0f && before != nullptr;
     if (between) {
         const bool fresh = !now.motion_ready;
@@ -652,7 +653,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         first = table.list_first;
         return;
     }
-    const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
+    const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
     // The run is as long as the list: no count caps it (GALAXY_TEST_WIDE_TABLES pads it, entry_of repeats the last map).
     const std::uint32_t count = walked_textures(table.count);
     const NebulaFrameTexture none{};
@@ -743,7 +744,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
     };
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
     const bool per_walk = table.has_target && table.walk_stamp != walk_.serial;
-    const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
+    const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
     const auto generation = renderer_.sampler_generation();
     const bool samplers_stale = table.samplers.ptr == 0u || table.samplers_generation != generation ||
         table.samplers_mip_lines != mip_lines || table.samplers_scene_bias != scene_mip_bias_;
@@ -804,8 +805,10 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
             table.samplers_mip_lines = mip_lines;
             table.samplers_scene_bias = scene_mip_bias_;
         }
-    } else {
-        // The table stands as it was built: its textures are named again all the same (the budget evicts the unnamed ones).
+    } else if (table.touched_walk != walk_.serial) {
+        // The table stands as it was built: its textures are named again all the same (the budget evicts the unnamed ones). Once
+        // a walk is enough (the store counts frames), and this runs for every draw that binds the table.
+        table.touched_walk = walk_.serial;
         for (std::uint32_t i = 0; i < count; ++i) {
             texture_store_.touch(entry_of(i).texture);
         }
@@ -949,7 +952,8 @@ unsigned RenderCore::recording_workers(const NebulaFramePass& pass) const {
     }
 #endif
     const bool lowered = options.test_record_threshold != nullptr && options.test_record_threshold[0] != '\0';
-    const unsigned cores = logical_cores();
+    // Asked once: this runs for every draw pass of every walk, and the count asks the OS (it cannot change in a run).
+    static const unsigned cores = logical_cores();
     if (!lowered && cores < kRecordMinCores) {
         return 0u;
     }

@@ -118,7 +118,8 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   3D scene runs (`wide_probe.hlsl`, `Game/Render/NebulaWideProbe.cpp`): a list of 24 one-texel maps, the shader samples map 23 and writes
   its red as the pixel's depth, a depth probe brings it back, and one line says `[wide-table] map 23 of 24: red read 240, expected 240:
   ok` (or `WRONG`) on either backend.
-- **Video memory**: no size of it is assumed. Each frame boundary reads the adapter's usage and budget: DXGI `QueryVideoMemoryInfo`
+- **Video memory**: no size of it is assumed. The renderer reads the adapter's usage and budget at most ten times a second (a kernel
+  call; DXGI's budget-change event is taken at once) and each frame boundary acts on the latest reading: DXGI `QueryVideoMemoryInfo`
   (usage at most every 100 ms; the budget at once when the OS signals `RegisterVideoMemoryBudgetChangeNotificationEvent`, which is
   also logged), Vulkan `VK_EXT_memory_budget` of the largest device-local heap (read at most every 100 ms), else the allocator's
   estimate. Past the budget (or when walks want reduced textures whole and nothing is free) the texture store makes the textures no
