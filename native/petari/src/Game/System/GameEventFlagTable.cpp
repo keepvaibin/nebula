@@ -1,4 +1,3 @@
-#include "Game/Util/SortUtil.hpp"
 #include <nebula_game_api.h>
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
@@ -6,7 +5,6 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <algorithm>
 
 namespace {
     GameEventFlag* sAddedFlags = nullptr;
@@ -208,12 +206,6 @@ namespace {
         {"[同期]クッパスタープラント発見", GameEventFlag::Type_StoryEventSync, 1, {0}, {0}, 0, {"PowerStarNumForButlerKoopaDemo"},
          {"クッパスタープラント発見"} /* クッパスタープラント発見 */},
     };
-
-    struct GameEventFlagSortLt {
-        bool operator()(GameEventFlagTableInstance::Key& key1, GameEventFlagTableInstance::Key& key2) {
-            return (key1.mHashCode < key2.mHashCode) ? true : false;
-        }
-    };
 };  // namespace
 
 bool GameEventFlagIter::isEnd() const {
@@ -242,47 +234,28 @@ bool GameEventFlagIter::isValid() const {
     }
 }
 
-GameEventFlagTableInstance::GameEventFlagTableInstance() : mSortTable(nullptr), mLength(0) {
-    initSortTable();
-}
+GameEventFlagTableInstance::GameEventFlagTableInstance() {
+    const s32 size = GameEventFlagTable::getTableSize();
+    mNames.reset(static_cast< u32 >(size));
+    mSaveHashes.reset(static_cast< u32 >(size));
 
-const GameEventFlag* GameEventFlagTableInstance::findFlag(const char* flagName) {
-    int i;
-    u16 hashCode = MR::getHashCode(flagName);
-    i = mLength;
-    i = (i * 8) / 8;
-    GameEventFlagTableInstance::Key* key = mSortTable;
-
-    while (i > 0) {
-        int mid = i / 2;
-
-        if (key[i / 2].mHashCode < hashCode) {
-            i -= mid + 1;
-            key = &key[mid] + 1;
-        } else {
-            i = mid;
+    for (s32 i = 0; i < size; i++) {
+        const GameEventFlag* pFlag = GameEventFlagTable::getFlag(i);
+        mNames.add(pFlag->mName, static_cast< u32 >(i));
+        if ((pFlag->mSaveFlag & 0x1) == 0) {
+            mSaveHashes.add(pFlag->mName, GameEventFlagTable::getSaveHash(pFlag->mName), static_cast< u32 >(i));
         }
     }
-
-    if (key->mHashCode == hashCode && MR::isEqualString(flagName, key->mFlag->mName)) {
-        return key->mFlag;
-    }
-
-    return nullptr;
 }
 
-void GameEventFlagTableInstance::initSortTable() {
-    mSortTable = new GameEventFlagTableInstance::Key[GameEventFlagTable::getTableSize()];
-    mLength = GameEventFlagTable::getTableSize();
+const GameEventFlag* GameEventFlagTableInstance::findFlag(const char* flagName) const {
+    const u32 index = mNames.find(flagName);
+    return index == MR::NameIndex::cNoValue ? nullptr : GameEventFlagTable::getFlag(static_cast< int >(index));
+}
 
-    for (int i = 0; i < mLength; i++) {
-        const GameEventFlag* pFlag = GameEventFlagTable::getFlag(i);
-
-        mSortTable[i].mFlag = pFlag;
-        mSortTable[i].mHashCode = MR::getHashCode(pFlag->mName);
-    }
-
-    MR::sort(&mSortTable[0], &mSortTable[mLength], GameEventFlagSortLt());
+s32 GameEventFlagTableInstance::findSaveIndex(u16 saveHash) const {
+    const u32 index = mSaveHashes.findHash(saveHash);
+    return index == MR::NameIndex::cNoValue ? -1 : static_cast< s32 >(index);
 }
 
 namespace GameEventFlagTable {
@@ -562,21 +535,7 @@ namespace GameEventFlagTable {
     }
 
     int getIndexFromHashCode(u16 hashCode) {
-        for (GameEventFlagIter iter = getBeginIter(); !iter.isEnd(); iter.goNext()) {
-            if ((iter.getFlag()->mSaveFlag & 0x1) != 0) {
-                continue;
-            }
-
-            GameEventFlagAccessor accessor = GameEventFlagAccessor(iter.getFlag());
-
-            if (getSaveHash(accessor.getName()) != hashCode) {
-                continue;
-            }
-
-            return getIndex(getFlag(iter.mIter));
-        }
-
-        return -1;
+        return SingletonHolder< GameEventFlagTableInstance >::get()->findSaveIndex(hashCode);
     }
 
     s32 calcSpecialPowerStarNum(const char* pPowerStarType) {

@@ -2,6 +2,7 @@
 
 #include "Game/System/GameEventFlag.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 class GameEventFlagIter {
 public:
@@ -13,20 +14,17 @@ public:
     s32 mIter;
 };
 
+// Indexes of the table as it stands when made (after every mod row is added).
 class GameEventFlagTableInstance {
 public:
-    struct Key {
-        u16 mHashCode;
-        const GameEventFlag* mFlag;
-    };
-
     GameEventFlagTableInstance();
 
-    void initSortTable();
-    const GameEventFlag* findFlag(const char*);
+    const GameEventFlag* findFlag(const char*) const;
+    // The first saved flag with this save hash; -1 for none.
+    s32 findSaveIndex(u16 saveHash) const;
 
-    Key* mSortTable;
-    s32 mLength;
+    MR::NameIndex mNames;       // flag name -> table index
+    MR::NameIndex mSaveHashes;  // keyed by save hash, saved flags only, in table order
 };
 
 namespace GameEventFlagTable {
