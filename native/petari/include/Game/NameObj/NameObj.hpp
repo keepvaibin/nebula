@@ -3,6 +3,8 @@
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/Table.hpp"
 
+class NameObjHolder;
+
 // The base of every scene object.
 class NameObj {
 public:
@@ -51,6 +53,9 @@ public:
     s32 mListPlace[3];
     // An actor's place in its draw buffer executer's list (DrawBufferExecuter); -1: none.
     s32 mDrawBufferPlace;
+    // The holder that finds it by name, and its place there (NameObjHolder::add); null and -1: none.
+    NameObjHolder* mNameHolder;
+    s32 mHolderPlace;
 };
 
 class NameObjFunction {
