@@ -118,11 +118,11 @@ LiveActorGroup* LiveActorGroupArray::entry(LiveActor* pActor, const TableIter& r
     MR::getPlacementGroupID(rIter, &groupID);
 
     // Function scope: pName points here past the if block .
-    char defaultName[256];
+    MR::FormattedName defaultName;
     if (pName == nullptr) {
-        nebula_snprintf(defaultName, sizeof(defaultName), "group%02d", groupID);
+        defaultName.format("group%02d", groupID);
 
-        pName = defaultName;
+        pName = defaultName.c_str();
     }
 
     LiveActorGroup* pGroup = findGroup(rIter);

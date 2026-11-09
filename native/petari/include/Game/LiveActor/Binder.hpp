@@ -7,7 +7,8 @@ class CollisionPartsFilterBase;
 
 class Binder {
 public:
-    // planeCapacity 0: a bind keeps up to 32 planes in a buffer the binders share.
+    // planeCapacity 0: a bind keeps every plane it meets in a buffer the binders share. Otherwise the binder keeps them in
+    // a list of its own (room for planeCapacity to start, grown when a bind meets more), which getPlane reads.
     Binder(MtxPtr pHostMtx, const Vec3f* pHostPos, const Vec3f* pGravity, f32 radius, f32 offsetY, u32 planeCapacity);
 
     void setTriangleFilter(TriangleFilterBase*);
@@ -23,12 +24,16 @@ public:
     u32 copyPlaneArrayAndSortingSensor(HitInfo**, u32);
     static bool compSensor(const HitInfo*, const HitInfo*);
     const Vec3f bind(const Vec3f&);
-    void moveAlongHittedPlanes(Vec3f*, Vec3f*, Vec3f*, const Vec3f&, const Vec3f&, HitInfo*, u32, bool*);
-    u32 findBindedPos(Vec3f*, Vec3f*, bool*, HitInfo*, u32, bool, bool);
+    void moveAlongHittedPlanes(Vec3f*, Vec3f*, Vec3f*, const Vec3f&, const Vec3f&, bool*);
+    u32 findBindedPos(Vec3f*, Vec3f*, bool*, bool, bool);
     bool moveWithCollisionParts(Vec3f*, Vec3f*);
-    u32 storeCurrentHitInfo(HitInfo*, u32, bool);
-    void obtainMomentFixReaction(HitInfo*, u32, Vec3f*, u32);
-    void storeContactPlane(HitInfo*, u32);
+    u32 storeCurrentHitInfo(bool);
+    void obtainMomentFixReaction(Vec3f*, u32);
+    void storeContactPlane();
+    // The planes of the current bind: the binder's own list, or the shared one.
+    HitInfo* planes();
+    // planes() with room for `count`; it may move.
+    HitInfo* planeRoom(u32 count);
 
     inline bool isBindedGround() const {
         return 0.0f <= mGroundDepth;
@@ -51,7 +56,7 @@ public:
     f32 mRadius;
     f32 mOffsetY;
     const Vec3f* mOffsetVec;
-    u32 mPlaneCapacity;
+    u32 mPlaneCapacity;  // the room of mPlane; 0: the shared list
     u32 mPlaneNum;
     HitInfo* mPlane;
     Vec3f mFixReactionVector;
