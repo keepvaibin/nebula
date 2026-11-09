@@ -1,4 +1,5 @@
 #include "Game/Util/SortUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Map/RaceManager.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceRail.hpp"
@@ -311,7 +312,7 @@ void RaceManager::exeRace() {
 
     s32 maxTime = ::getRaceStruceData(mCurrentRace).getMaxTime();
     MR::updateClearTimeTextBox(mLayout, "TimeCounter", getNerveStep());
-    if (maxTime > 0 && getNerveStep() >= maxTime * 60) {
+    if (maxTime > 0 && getNerveStep() >= NebulaFrameClock::stepsOfSeconds(maxTime)) {
         mRank = 0;
         renewTime();
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvDemo));

@@ -1603,7 +1603,7 @@ void RendererVk::present_swapchain_image() {
         unsigned generated = 0u;
         if (frame_generation_running() && frame_generation_allowed()) {
             const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
-            generated = static_cast<unsigned>(std::clamp<long>(static_cast<long>(rate / 60.0 + 1e-3) - 1, 1,
+            generated = static_cast<unsigned>(std::clamp<long>(static_cast<long>(rate / kGameStepRate + 1e-3) - 1, 1,
                                                                static_cast<long>(host_window::upscaler_caps().frame_generation_max)));
         }
         vk::streamline_vk::set_generation(generated, host_window::upscaler_caps().frame_generation_dynamic,
@@ -1738,17 +1738,16 @@ void RendererVk::report_present_timing() {
     if (vkGetPastPresentationTimingGOOGLE(device, swapchain_.handle, &count, past.data()) < VK_SUCCESS) {
         return;
     }
-    constexpr std::int64_t kRetraceNs = 1000000000 / 60;
-    const std::int64_t half_vsync = (timing.vsync_ns != 0 ? timing.vsync_ns : kRetraceNs / 2) / 2;
+    const std::int64_t half_vsync = (timing.vsync_ns != 0 ? timing.vsync_ns : kGameStepNs / 2) / 2;
     for (std::uint32_t i = 0; i < count; ++i) {
         const auto actual = static_cast<std::int64_t>(past[i].actualPresentTime);
         const auto at = past[i].presentID % timing.requested.size();
         const bool identified = timing.requested_id[at] == past[i].presentID;
         const std::int64_t requested = identified ? timing.requested[at] : 0;
-        const auto expected = identified ? timing.requested_period[at] : kRetraceNs;
+        const auto expected = identified ? timing.requested_period[at] : kGameStepNs;
         timing.margin_sum += static_cast<std::int64_t>(past[i].presentMargin);
         if (identified && timing.called[at] != 0) {
-            const std::int64_t vsync = timing.vsync_ns != 0 ? timing.vsync_ns : kRetraceNs;
+            const std::int64_t vsync = timing.vsync_ns != 0 ? timing.vsync_ns : kGameStepNs;
             const auto earliest = static_cast<std::int64_t>(past[i].earliestPresentTime);
             if (actual > requested + half_vsync && earliest > requested + half_vsync) {
                 // At most four vsyncs, and a vsync more per late frame: a stall (the app put away, a GPU hitch) is not

@@ -1,4 +1,5 @@
 #include "Game/NPC/CometEventExecutorTimeLimit.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/TimeLimitLayout.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -54,5 +55,5 @@ void CometEventExecutorTimeLimit::exeStartEvent() {
 }
 
 u32 CometEventExecutorTimeLimit::getTimeLimit() const {
-    return (mTimeLimit != 0 ? mTimeLimit : ::sCometTimeLimitDefault) * 60;
+    return NebulaFrameClock::stepsOfSeconds(mTimeLimit != 0 ? mTimeLimit : ::sCometTimeLimitDefault);
 }

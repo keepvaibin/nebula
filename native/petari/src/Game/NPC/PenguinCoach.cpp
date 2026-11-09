@@ -1,4 +1,5 @@
 #include "Game/NPC/PenguinCoach.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceManager.hpp"
@@ -146,9 +147,9 @@ bool PenguinCoach::branchFunc(u32 state) {
     } else if (state == 3) {
         return mIsRaceComplete;
     } else if (state == 4) {
-        return MR::getRaceCurrentTime() < 90 * 60;
+        return MR::getRaceCurrentTime() < NebulaFrameClock::stepsOfSeconds(90);
     } else if (state == 5) {
-        return MR::getRaceCurrentTime() < 180 * 60;
+        return MR::getRaceCurrentTime() < NebulaFrameClock::stepsOfSeconds(180);
     }
 
     return false;

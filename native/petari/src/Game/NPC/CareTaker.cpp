@@ -1,4 +1,5 @@
 #include "Game/NPC/CareTaker.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Effect/EffectSystem.hpp"
 #include "Game/Effect/EffectSystemUtil.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -112,7 +113,7 @@ void Caretaker::init(const TableIter& rIter) {
 
         mBombTimerLayout = new BombTimerLayout(true);
         mBombTimerLayout->initWithoutIter();
-        mBombTimerLayout->setTimeLimit(mTidyTimeLimit * 60);
+        mBombTimerLayout->setTimeLimit(NebulaFrameClock::stepsOfSeconds(mTidyTimeLimit));
         mBombTimerLayout->kill();
 
         MR::joinToGroupArray(this, rIter, "ゴミ管理", 32);
@@ -364,7 +365,7 @@ void Caretaker::exePreWipeOut() {
     MR::callInvalidateClippingAllGroupMember(this);
     mBombTimerLayout->appear();
     mBombTimerLayout->suspend();
-    mBombTimerLayout->setTimeLimit(mTidyTimeLimit * 60);
+    mBombTimerLayout->setTimeLimit(NebulaFrameClock::stepsOfSeconds(mTidyTimeLimit));
     setNerve(GET_NERVE(Caretaker, CaretakerNrvPreWipeIn));
 }
 

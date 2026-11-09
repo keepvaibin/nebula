@@ -1,4 +1,5 @@
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
@@ -1968,7 +1969,7 @@ namespace NebulaMods {
         for (int i = sCometLimits.mCount - 1; i >= 0; i--) {
             const CometLimit& rLimit = sCometLimits.mItems[i];
             if (rLimit.mMission == mission && MR::isEqualString(rLimit.mGalaxy, pGalaxy)) {
-                return rLimit.mSeconds * 60;
+                return NebulaFrameClock::stepsOfSeconds(rLimit.mSeconds);
             }
         }
         return 0;

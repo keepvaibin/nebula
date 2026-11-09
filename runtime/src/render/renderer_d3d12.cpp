@@ -2918,7 +2918,7 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76. A game frame without generated frames
     // holds for its whole 60 Hz frame (4 refreshes at 240 Hz) rather than the next refresh after it is ready, which
     // drifts against the display.
-    const double rate = game_frame ? std::min(60.0, present_frame_rate(max_fps, configured, hz))
+    const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
                                    : present_frame_rate(max_fps, configured, hz);
     const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 &&
@@ -2968,7 +2968,7 @@ void RendererD3D12::present_to_swap_chain() {
         if (generating && frame_generation_allowed()) {
             const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
             generated = static_cast<unsigned>(std::clamp<long>(
-                static_cast<long>(rate / 60.0 + 1e-3) - 1, 1, static_cast<long>(streamline::frame_generation_max())));
+                static_cast<long>(rate / kGameStepRate + 1e-3) - 1, 1, static_cast<long>(streamline::frame_generation_max())));
         }
         streamline::set_frame_generation(generated, streamline::frame_generation_dynamic(),
                                          cfg.max_fps > 0.0f ? cfg.max_fps : 0.0f);
