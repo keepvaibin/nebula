@@ -123,7 +123,7 @@ public:
 
     bool mIsResetReady;
     bool mIsReset;
-    bool mStopThreads;
+    bool mStopClock;  // the reset stops the engine's clock (a restart or quit): nothing waits for sounds to end
     SoundReset mReseter;
     bool mIsPaused;
     bool mIsTrigSeBlocked;  // blocks startSound

@@ -23,11 +23,11 @@ namespace NrvScenarioSelectScene {
     NEW_NERVE(ScenarioSelectSceneNrvWaitStartScenarioSelect, ScenarioSelectScene, WaitStartScenarioSelect);
     NEW_NERVE(ScenarioSelectSceneNrvStartScenarioSelect, ScenarioSelectScene, StartScenarioSelect);
     NEW_NERVE(ScenarioSelectSceneNrvWaitScenarioSelect, ScenarioSelectScene, WaitScenarioSelect);
-    NEW_NERVE(ScenarioSelectSceneNrvWaitResumeInitializeThread, ScenarioSelectScene, WaitResumeInitializeThread);
+    NEW_NERVE(ScenarioSelectSceneNrvWaitSceneLoad, ScenarioSelectScene, WaitSceneLoad);
     NEW_NERVE(ScenarioSelectSceneNrvWaitInitializeEnd, ScenarioSelectScene, WaitInitializeEnd);
     NEW_NERVE(ScenarioSelectSceneNrvWaitDisappearLayout, ScenarioSelectScene, WaitDisappearLayout);
-    NEW_NERVE(ScenarioSelectSceneNrvWaitResumeInitializeThreadIfRequestedReset, ScenarioSelectScene, WaitResumeInitializeThreadIfRequestedReset);
-    NEW_NERVE(ScenarioSelectSceneNrvWaitResumeInitializeThreadIfCanceledSelect, ScenarioSelectScene, WaitResumeInitializeThreadIfCanceledSelect);
+    NEW_NERVE(ScenarioSelectSceneNrvWaitSceneLoadIfRequestedReset, ScenarioSelectScene, WaitSceneLoadIfRequestedReset);
+    NEW_NERVE(ScenarioSelectSceneNrvWaitSceneLoadIfCanceledSelect, ScenarioSelectScene, WaitSceneLoadIfCanceledSelect);
 };  // namespace NrvScenarioSelectScene
 
 namespace {
@@ -35,10 +35,6 @@ namespace {
         ItemBuffer* buffer = new ItemBuffer();
         buffer->setNonSort();
         return buffer;
-    }
-
-    bool tryResumeInitializeThread() {
-        return MR::tryResumeSceneInitialize();
     }
 };  // namespace
 
@@ -141,13 +137,13 @@ bool ScenarioSelectScene::isScenarioSelecting() const {
 void ScenarioSelectScene::validateScenarioSelect() {
     if (!mIsResetRequested) {
         if (mIsBackground) {
-            setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitResumeInitializeThread));
+            setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitSceneLoad));
             return;
         }
 
         setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitStartScenarioSelect));
     } else {
-        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitResumeInitializeThreadIfRequestedReset));
+        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitSceneLoadIfRequestedReset));
     }
 }
 
@@ -170,7 +166,7 @@ void ScenarioSelectScene::requestReset(bool waitForInitialize) {
             setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
         }
     } else {
-        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitResumeInitializeThreadIfRequestedReset));
+        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitSceneLoadIfRequestedReset));
     }
 }
 
@@ -268,17 +264,17 @@ void ScenarioSelectScene::exeWaitScenarioSelect() {
 
     if (trySetCurrentScenarioNo()) {
         MR::endStarPointerMode(this);
-        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitResumeInitializeThread));
+        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitSceneLoad));
     } else if (mScenarioLayout->isCanceled()) {
         MR::endStarPointerMode(this);
-        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitResumeInitializeThreadIfCanceledSelect));
+        setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitSceneLoadIfCanceledSelect));
     }
 }
 
-void ScenarioSelectScene::exeWaitResumeInitializeThread() {
+void ScenarioSelectScene::exeWaitSceneLoad() {
     tryStartScreenToFrame();
 
-    if (::tryResumeInitializeThread()) {
+    if (MR::tryResumeSceneInitialize()) {
         setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitInitializeEnd));
     }
 }
@@ -308,20 +304,20 @@ void ScenarioSelectScene::exeWaitDisappearLayout() {
     }
 }
 
-void ScenarioSelectScene::exeWaitResumeInitializeThreadIfRequestedReset() {
+void ScenarioSelectScene::exeWaitSceneLoadIfRequestedReset() {
     if (MR::isFirstStep(this)) {
         GameSystemFunction::resetCurrentScenarioNo();
     }
 
-    if (::tryResumeInitializeThread()) {
+    if (MR::tryResumeSceneInitialize()) {
         mIsResetRequested = false;
         setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
     }
 }
 
-void ScenarioSelectScene::exeWaitResumeInitializeThreadIfCanceledSelect() {
+void ScenarioSelectScene::exeWaitSceneLoadIfCanceledSelect() {
     if (MR::isDead(mScenarioLayout)) {
-        if (::tryResumeInitializeThread()) {
+        if (MR::tryResumeSceneInitialize()) {
             GameSystemFunction::resetCurrentScenarioNo();
             GameSequenceFunction::requestCancelScenarioSelect();
             suspend();

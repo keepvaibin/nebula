@@ -90,12 +90,12 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystemRestartProcess >::get()->setResetOperationQuit();
     }
 
-    void requestResetGameSystem(bool param1) {
-        SingletonHolder< GameSystemRestartProcess >::get()->requestReset(param1);
+    void requestResetGameSystem(bool isImmediate) {
+        SingletonHolder< GameSystemRestartProcess >::get()->requestReset(isImmediate);
     }
 
-    void requestQuitGame(bool param1) {
-        SingletonHolder< GameSystemRestartProcess >::get()->requestQuitGame(param1);
+    void requestQuitGame(bool isImmediate) {
+        SingletonHolder< GameSystemRestartProcess >::get()->requestQuitGame(isImmediate);
     }
 
     void forceToDeactivateHomeButtonLayout() {
@@ -128,8 +128,8 @@ namespace GameSystemFunction {
         ::getAudSystemWrapper()->prepareReset();
     }
 
-    void requestResetAudioSystem(bool param1) {
-        ::getAudSystemWrapper()->requestReset(param1);
+    void requestResetAudioSystem(bool stopClock) {
+        ::getAudSystemWrapper()->requestReset(stopClock);
     }
 
     bool isDoneResetAudioSystem() {

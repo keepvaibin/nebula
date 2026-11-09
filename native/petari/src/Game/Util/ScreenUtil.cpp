@@ -264,8 +264,8 @@ namespace MR {
         getImageEffectDirector()->turnOnNormal();
     }
 
-    void turnOnDepthOfField(bool param1) {
-        getImageEffectDirector()->turnOnDepthOfField(param1);
+    void turnOnDepthOfField(bool isPlayerSync) {
+        getImageEffectDirector()->turnOnDepthOfField(isPlayerSync);
     }
 
     void turnOffImageEffect() {
@@ -416,8 +416,8 @@ namespace MR {
         ::appearInformationMessage(hasButtonLayout, false);
     }
 
-    void setInformationMessageReplaceString(const char16_t* pMessage, s32 param2) {
-        getGameSceneLayoutHolder()->mInformationMessage->setReplaceString(pMessage, param2);
+    void setInformationMessageReplaceString(const char16_t* pMessage, s32 argIndex) {
+        getGameSceneLayoutHolder()->mInformationMessage->setReplaceString(pMessage, argIndex);
     }
 
     void disappearInformationMessage() {
