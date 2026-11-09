@@ -43,8 +43,17 @@ typedef int BOOL;
 
 #define ROUND_UP(x, align) (((x) + (align) - 1) & (-(align)))
 
+#ifdef __cplusplus
+// The number of elements of a C array. Anything else does not compile: a pointer, or a class with operator[] (sizeof
+// over its first element counted its other members as elements).
+template < class T, decltype(sizeof(0)) N >
+char (&nebula_array_count(T (&)[N]))[N];
+#define ARRAY_SIZE(o) (s32)(sizeof(nebula_array_count(o)))
+#define ARRAY_SIZEU(o) (sizeof(nebula_array_count(o)))
+#else
 #define ARRAY_SIZE(o) (s32)(sizeof(o) / sizeof(o[0]))
 #define ARRAY_SIZEU(o) (sizeof(o) / sizeof(o[0]))
+#endif
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 

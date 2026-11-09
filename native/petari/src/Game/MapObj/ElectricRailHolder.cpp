@@ -59,7 +59,7 @@ void ElectricRailHolder::calcAnim() {
         return;
     }
 
-    for (s32 i = 0; i < ARRAY_SIZE(mRailModels); i++) {
+    for (s32 i = 0; i < mRailModels.size(); i++) {
         if (mRailModels[i] != nullptr) {
             mRailModels[i]->calcAnim();
         }
@@ -128,7 +128,7 @@ void ElectricRailHolder::control() {
         return;
     }
 
-    for (s32 i = 0; i < 4; i++) {
+    for (s32 i = 0; i < mRailModels.size(); i++) {
         if (mRailModels[i] != nullptr) {
             mRailModels[i]->movement();
         }
