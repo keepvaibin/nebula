@@ -211,18 +211,13 @@ TalkNode* TalkNodeCtrl::getNextNodeEvent() const {
 }
 
 void TalkNodeCtrl::updateMessage() {
-    u32 idx;
-    u8 groupID;
     TalkNode* cur = mCurrentNode;
 
     if (cur != nullptr) {
         if (cur->mNodeType != TalkNodeType_Message) {
-            mMessageInfo.mMessage = 0;
+            mMessageInfo.mMessage = nullptr;
         } else {
-            idx = cur->mIndex;
-            groupID = cur->mGroupID;
-            MessageData* msg = MessageSystem::getSceneMessageData();
-            msg->getMessage(&mMessageInfo, groupID, idx);
+            MessageSystem::getSceneMessageData()->getMessage(&mMessageInfo, cur->mIndex);
             mCurrentNodeIdx = cur->mIndex;
 
             TalkNode* nextBranchNode = getNextNodeBranch();
@@ -265,7 +260,7 @@ void TalkNodeCtrl::readMessage() {
 }
 
 const char16_t* TalkNodeCtrl::getSubMessage() const {
-    const char16_t* pMessage = reinterpret_cast< const char16_t* >(mMessageInfo.mMessage);
+    const char16_t* pMessage = mMessageInfo.mMessage;
 
     if (*pMessage != cMessageTagEscape) {
         return nullptr;
@@ -277,11 +272,10 @@ const char16_t* TalkNodeCtrl::getSubMessage() const {
         return nullptr;
     }
 
-    TalkMessageInfo info2 = TalkMessageInfo();
-    u32 param = messageTag.getParam32(0);
+    TalkMessageInfo subInfo;
 
-    if (MessageSystem::getSceneMessageData()->getMessage(&info2, 0, param)) {
-        return (const char16_t*)info2.mMessage;
+    if (MessageSystem::getSceneMessageData()->getMessage(&subInfo, messageTag.getParam32(0))) {
+        return subInfo.mMessage;
     }
 
     return nullptr;

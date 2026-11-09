@@ -15,7 +15,7 @@ namespace MR {
 
         MessageSystem::getSystemMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< char16_t* >(messageInfo.mMessage);
+        return messageInfo.mMessage;
     }
 
     const char16_t* getGameMessageDirect(const char* pMessageId) {
@@ -23,7 +23,7 @@ namespace MR {
 
         MessageSystem::getGameMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< char16_t* >(messageInfo.mMessage);
+        return messageInfo.mMessage;
     }
 
     const char16_t* getLayoutMessageDirect(const char* pMessageId) {
@@ -31,7 +31,7 @@ namespace MR {
 
         MessageSystem::getLayoutMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< char16_t* >(messageInfo.mMessage);
+        return messageInfo.mMessage;
     }
 
     const char16_t* getCurrentGalaxyNameOnCurrentLanguage() {
@@ -53,7 +53,7 @@ namespace MR {
         TalkMessageInfo messageInfo = TalkMessageInfo();
 
         return MessageSystem::getGameMessageDirect(&messageInfo, pMessageId) &&
-               getStringLengthWithMessageTag(reinterpret_cast< char16_t* >(messageInfo.mMessage)) != 0;
+               getStringLengthWithMessageTag(messageInfo.mMessage) != 0;
     }
 
     const char16_t* getMessageLine(char16_t* pDst, u32 capacity, const char16_t* pMessage, u32 line) {
