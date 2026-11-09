@@ -1299,10 +1299,12 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
     spec.style = style;
     if (style == ButtonIconStyle::Game) return spec;
     if ((model == ButtonIconModel::Sixaxis && style == ButtonIconStyle::PlayStation) ||
-        (model == ButtonIconModel::GameCube && style == ButtonIconStyle::Nintendo)) {
+        (model == ButtonIconModel::DualSenseEdge && style == ButtonIconStyle::PlayStation) ||
+        (model == ButtonIconModel::GameCube && style == ButtonIconStyle::Nintendo) ||
+        (model == ButtonIconModel::Steam && style == ButtonIconStyle::Xbox)) {
         spec.model = model;
     }
-    // HOME and the Control Pad look alike on every controller: the game's own stay (Keep).
+    // HOME and the Control Pad look alike on every controller: the game's own stay (Keep), but for the Steam button.
     static constexpr GameInput kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
         GameInput::A, GameInput::B, GameInput::C, GameInput::Z, GameInput::One, GameInput::Two, GameInput::Plus,
         GameInput::Minus};
@@ -1318,6 +1320,14 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
         if (found.glyph == ButtonGlyph::Keep) found = first(kTargets[i]);
         spec.glyphs[i] = found.glyph;
         spec.places[i] = found.place;
+    }
+    if (spec.model == ButtonIconModel::Steam) {
+        // HOME bound to the Steam button shows it; bound to anything else it stays the game's.
+        const GlyphPlace home = first(GameInput::Home);
+        if (home.glyph == ButtonGlyph::Home) {
+            spec.glyphs[static_cast<std::size_t>(ButtonIcon::Home)] = ButtonGlyph::Home;
+            spec.places[static_cast<std::size_t>(ButtonIcon::Home)] = home.place;
+        }
     }
     return spec;
 }

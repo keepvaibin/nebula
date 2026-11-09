@@ -1793,6 +1793,8 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
                   static_cast<int>(galaxy::input::ButtonGlyph::Key) == NEBULA_ICON_KEY &&
                   static_cast<int>(galaxy::input::ButtonGlyph::StickAxis) == NEBULA_ICON_STICK_AXIS &&
                   static_cast<int>(galaxy::input::ButtonIconModel::GameCube) == NEBULA_ICON_MODEL_GAMECUBE &&
+                  static_cast<int>(galaxy::input::ButtonIconModel::Steam) == NEBULA_ICON_MODEL_STEAM &&
+                  static_cast<int>(galaxy::input::ButtonIconModel::DualSenseEdge) == NEBULA_ICON_MODEL_DUALSENSE_EDGE &&
                   galaxy::input::kKeyIconLayoutFirst == NEBULA_KEY_LAYOUT_FIRST &&
                   galaxy::input::kKeyIconLayoutCount == NEBULA_KEY_LAYOUT_KEYS &&
                   galaxy::input::kKeyIconMouseLeft == NEBULA_KEY_MOUSE_LEFT &&
