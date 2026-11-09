@@ -52,6 +52,10 @@
 #include "galaxy/render/host_window_win32.h"
 #endif
 #include "galaxy/perf_hint.h"
+#include "galaxy/power_policy.h"
+#if defined(_WIN32)
+#include "galaxy/windows_power.h"
+#endif
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
 #include "galaxy/input/wiimote_motion.h"
@@ -87,6 +91,7 @@
 namespace galaxy::host {
 // The headless host gives the platform no performance hints.
 inline void perf_hint_add_current_thread() noexcept {}
+inline void perf_hint_set_target(int64_t) noexcept {}
 inline int64_t perf_hint_frame_done() noexcept { return 0; }
 inline bool perf_hint_on_battery() noexcept { return false; }
 }  // namespace galaxy::host
@@ -653,6 +658,18 @@ bool gSuspended = false;  // guarded by gSuspendLock
 // (the game is held then and takes it at its first frame after the return).
 std::atomic<bool> gPauseRequest{false};
 
+// When the player last gave the game an input (a button, a stick pushed, the pointer moved) and when the game last played a
+// movie's sound, in steady-clock milliseconds (power_policy.h): the host's main loop tells the OS whether anyone is playing.
+// 0 until the first; the start counts as an input.
+#if defined(NEBULA_HOST_RENDERER)
+std::atomic<int64_t> gLastInputMs{0};
+std::atomic<int64_t> gLastMovieMs{-1};
+
+int64_t steady_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+#endif
+
 // The start runs ahead: the game shows nothing until its first 3D scene (the title's, or a test's galaxy), and its
 // loads advance a step each frame while it takes well under a millisecond a frame, so until then frames come every
 // kBootPeriod and one frame a display period is presented. The first 3D scene, or kBootFrames frames, end it.
@@ -760,6 +777,30 @@ Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanosec
     const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh());
     return start + std::chrono::nanoseconds(next_ns - start_ns);
 }
+
+// Tells the OS about the player's presence (power_policy.h) when it changes: the process asks for efficiency (EcoQoS) while the
+// window is behind another, minimised, or left alone for a minute with no cutscene; the display is held on only while the window
+// is in front and someone plays or watches. Called from the host's main loop, which is also the thread that holds the display.
+void apply_power_wish(bool background, bool minimised) {
+    static galaxy::host::PowerWish applied;  // the OS's state at the start: full speed, the display's own timers
+    static const int64_t started_ms = steady_ms();  // the start counts as an input
+    const int64_t now_ms = steady_ms();
+    const galaxy::host::PowerFacts facts{now_ms, std::max(gLastInputMs.load(std::memory_order_relaxed), started_ms),
+                                         gLastMovieMs.load(std::memory_order_relaxed), background, minimised};
+    const galaxy::host::PowerWish wish = galaxy::host::power_wish(facts);
+    if (wish == applied) {
+        return;
+    }
+    if (wish.efficient != applied.efficient) {
+        galaxy::host::set_process_efficiency(wish.efficient);
+        log_line("[power]", wish.efficient ? "efficiency requested (away or idle)" : "full speed (playing)");
+    }
+    if (wish.display_required != applied.display_required) {
+        galaxy::host::keep_display_on(wish.display_required);
+        log_line("[power]", wish.display_required ? "display held on (playing)" : "display left to the OS's timers");
+    }
+    applied = wish;
+}
 #endif
 
 // The display's frame at 60 Hz: 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
@@ -795,6 +836,8 @@ void svc_frame_wait(void*) {
         if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
             period = display_period;
         }
+        // The hints' budget is the frame the clock keeps now (the short boot frame, then the game step).
+        galaxy::host::perf_hint_set_target(period.count());
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
         next = next_frame_start(next, period);
 #else
@@ -2593,6 +2636,22 @@ galaxy::input::PlayerInput controls_input() {
         frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gGameFrames.load(std::memory_order_relaxed), mode,
         static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
+
+// Whether the sample is someone playing: a button down, a stick pushed past its dead zone, a spin, or the pointer moved. Taken
+// on the game's thread at each read, under gInputSampleLock; the time goes to the power policy (power_policy.h).
+void note_input_activity(const NebulaInputSample& sample) {
+    static float last_pointer[2] = {0.0f, 0.0f};
+    constexpr float kStickPush = 0.25f;
+    constexpr float kPointerMove = 0.01f;
+    const bool pointer_moved = sample.pointer_on != 0u && (std::fabs(sample.pointer[0] - last_pointer[0]) > kPointerMove ||
+                                                          std::fabs(sample.pointer[1] - last_pointer[1]) > kPointerMove);
+    last_pointer[0] = sample.pointer[0];
+    last_pointer[1] = sample.pointer[1];
+    if (sample.buttons != 0u || std::fabs(sample.stick[0]) > kStickPush || std::fabs(sample.stick[1]) > kStickPush ||
+        sample.spin_presses != 0u || sample.sub_spin_presses != 0u || pointer_moved) {
+        gLastInputMs.store(steady_ms(), std::memory_order_relaxed);
+    }
+}
 #endif
 
 // The players svc_input_read serves: player 1's live controls, and with the renderer player 2 (co-star mode).
@@ -2673,6 +2732,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         galaxy::host::real_wiimote_set_rumble(motor_on);
 #endif
     }
+    note_input_activity(*sample);
     return 1;
 #else
     *sample = rest_input_sample();
@@ -2864,6 +2924,7 @@ void svc_audio_frame(void*) {
 // The movie's sound: headless, every frame is taken and dropped.
 int svc_movie_audio(void*, const void* record, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
+    gLastMovieMs.store(steady_ms(), std::memory_order_relaxed);  // a cutscene is playing (power_policy.h)
     return gAudio->movie_audio(record, size);
 #else
     (void)record, (void)size;
@@ -3941,6 +4002,9 @@ int main(int argc, char** argv) {
             }
             was_away = away;
             galaxy::set_background_muted(away && focus == galaxy::FocusLoss::Mute);
+            // Behind another window (not minimised, which holds the game): the renderer shows the game's own frames only.
+            galaxy::render::set_window_background(away && !minimised_now);
+            apply_power_wish(away, minimised_now);
         }
         const bool minimised = galaxy::render::host_window::is_minimized();
         if (minimised != gSuspended) {

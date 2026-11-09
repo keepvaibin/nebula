@@ -191,9 +191,15 @@ namespace Nebula.Setup
             bool reuseContent = request.GameInput == null && ContentValid(layout);
             string keptContent = request.GameInput == null && !reuseContent ? KeptCurrentContent(layout) : null;
             string cookSource = request.GameInput == null && !reuseContent && keptContent == null ? CookSource(layout) : null;
-            if (!reuseContent && keptContent == null && cookSource == null && request.GameInput == null)
+            // A packed game of an older store cannot be read by this version and cannot be cooked again (the cook reads the raw
+            // files, which an import never keeps): it is packed again from the image it was made from, when that is still where
+            // it was, so an update needs no question. Otherwise the disc is asked for, as before.
+            string remembered = request.GameInput == null && !reuseContent && keptContent == null && cookSource == null ? RememberedSource(layout) : null;
+            string gameInput = request.GameInput ?? remembered;
+            if (!reuseContent && keptContent == null && cookSource == null && gameInput == null)
                 throw new InvalidOperationException(NebulaText.Of("Choose your Super Mario Galaxy ISO, RVZ or extracted folder."));
-            Log("Reuse the packed game: " + reuseContent + "; kept for this version: " + keptContent + "; cook from: " + cookSource);
+            Log("Reuse the packed game: " + reuseContent + "; kept for this version: " + keptContent + "; cook from: " + cookSource + "; pack again from: " + remembered);
+            bool imported = false;
             if (cookSource != null)
             {
                 Stage(0.00, 0.70, NebulaText.Of("Converting the game files"));
@@ -202,9 +208,10 @@ namespace Nebula.Setup
             else if (!reuseContent && keptContent == null)
             {
                 Stage(0.00, 0.02, NebulaText.Of("Checking your game"));
-                Identify(request.GameInput);
+                Identify(gameInput);
                 Stage(0.02, 0.68, NebulaText.Of("Packing the game files"));
-                Import(request.GameInput, Path.Combine(staging, "content"));
+                Import(gameInput, Path.Combine(staging, "content"));
+                imported = true;
             }
 
             Stage(0.75, 0.15, NebulaText.Of("Installing Nebula {0}", BuildInfo.Version));
@@ -248,6 +255,7 @@ namespace Nebula.Setup
                     throw new InvalidOperationException(NebulaText.Of("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again."));
             }
             RemoveOtherVersions(Commit(app, current, keptContent));
+            if (imported) RememberSource(gameInput);
             RemoveRecompiledGame();
             var installed = InstalledInfo.Read(layout);
             PruneKeptContent(layout, installed != null ? installed.Previous : null, Log);
@@ -349,7 +357,46 @@ namespace Nebula.Setup
         /// <summary>The packed game an install keeps is intact, kept aside or can be cooked from, so an update or repair needs no game.</summary>
         public static bool RetainedGameValid(InstallLayout layout)
         {
-            return ContentValid(layout) || KeptCurrentContent(layout) != null || CookSource(layout) != null;
+            return ContentValid(layout) || KeptCurrentContent(layout) != null || CookSource(layout) != null || RememberedSource(layout) != null;
+        }
+
+        private static string GameSourcePath(InstallLayout layout) { return Path.Combine(layout.Root, "game-source.json"); }
+
+        /// <summary>
+        /// The disc image or folder the packed game was last made from, when it is still there as it was (a file of the same
+        /// size); null otherwise. Kept in the install root beside current.json, not in the data folder: it belongs to this install.
+        /// </summary>
+        internal static string RememberedSource(InstallLayout layout)
+        {
+            try
+            {
+                string file = GameSourcePath(layout);
+                if (!File.Exists(file)) return null;
+                var map = Json.Load(file);
+                string path = Json.Str(map, "path");
+                if (string.IsNullOrEmpty(path)) return null;
+                if (Json.Bool(map, "folder")) return Directory.Exists(path) ? path : null;
+                return File.Exists(path) && new FileInfo(path).Length == Json.Long(map, "size") ? path : null;
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>Notes where the packed game came from, for the next update that has to pack it again (a failure only costs that question).</summary>
+        private void RememberSource(string input)
+        {
+            try
+            {
+                bool folder = Directory.Exists(input);
+                Json.Save(GameSourcePath(layout), new Dictionary<string, object>
+                {
+                    { "path", Path.GetFullPath(input) },
+                    { "folder", folder },
+                    { "size", folder ? 0L : new FileInfo(input).Length },
+                    { "storeVersion", (long)BuildInfo.StoreVersion },
+                    { "recordedUtc", DateTime.UtcNow.ToString("o") }
+                });
+            }
+            catch (Exception error) { Log("Could not note where the game came from: " + error.Message); }
         }
 
         /// <summary>A content folder's format; -1 without its marker or its game.pak.</summary>
@@ -432,26 +479,47 @@ namespace Nebula.Setup
         {
             string versionDir = layout.VersionDir(BuildInfo.Version);
             string newContent = keptContent ?? Path.Combine(staging, "content");
-            WaitUntilClosed(Directory.Exists(versionDir), Directory.Exists(newContent));
-            Directory.CreateDirectory(layout.Versions);
-            string replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-            Swap(app, versionDir, replaced, Log);
-
-            if (Directory.Exists(newContent))
+            bool swapContent = Directory.Exists(newContent);
+            if (swapContent && keptContent == null)
             {
-                if (keptContent == null)
-                    Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-                string old = Path.Combine(staging, "content-old");
-                Swap(newContent, layout.Content, old, Log);
-                KeepReplacedContent(layout, old, Log);
+                // The new packed game is stamped and has to open before anything installed is touched: one that does not stays in staging.
+                Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
+                if (!StoreOpens(newContent))
+                    throw new InvalidOperationException(NebulaText.Of("The packed game did not come out whole. Nothing installed was changed."));
             }
-
+            WaitUntilClosed(Directory.Exists(versionDir), swapContent);
+            Directory.CreateDirectory(layout.Versions);
+            // The saves, the settings and the mods' small files stay where they are (the data folder); a copy is taken once, before
+            // a new version can convert anything of them.
+            UserDataSnapshot.Take(current != null ? current.Version : null, Log);
             string previous = current != null && current.Version != BuildInfo.Version ? current.Version : (current != null ? current.Previous : null);
-            Json.Save(layout.Current, new Dictionary<string, object>
+            string replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            string oldContent = Path.Combine(staging, "content-old");
+            Swap(app, versionDir, replaced, Log);
+            bool contentSwapped = false;
+            try
             {
-                { "version", BuildInfo.Version },
-                { "previous", previous }
-            });
+                if (swapContent)
+                {
+                    Swap(newContent, layout.Content, oldContent, Log);
+                    contentSwapped = true;
+                }
+                // The previous version and its packed game stay beside the new ones until the new ones are seen whole in place.
+                if (!File.Exists(Path.Combine(versionDir, "NebulaNative.exe")) || !StoreOpens(layout.Content))
+                    throw new InvalidOperationException(NebulaText.Of("The new version or its packed game did not come out whole. The previous version is back."));
+                Json.Save(layout.Current, new Dictionary<string, object>
+                {
+                    { "version", BuildInfo.Version },
+                    { "previous", previous }
+                });
+            }
+            catch (Exception error)
+            {
+                Log("Putting the previous version back: " + error.Message);
+                UndoCommit(versionDir, replaced, contentSwapped, newContent, oldContent);
+                throw;
+            }
+            if (swapContent) KeepReplacedContent(layout, oldContent, Log);
             // Nebula is installed from here on: what follows is shortcuts, and does not fail the install.
             string self = Assembly.GetExecutingAssembly().Location;
             if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
@@ -461,6 +529,41 @@ namespace Nebula.Setup
             InstalledVersionDir = versionDir;
             Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
             return previous;
+        }
+
+        /// <summary>A packed game that opens: its marker says this format, its game.pak starts with this build's store version, and it is not an empty shell.</summary>
+        private static bool StoreOpens(string content)
+        {
+            try
+            {
+                return ContentFormatOf(content) == ContentFormatVersion && CurrentStoreValid(content) &&
+                       new FileInfo(Path.Combine(content, "game.pak")).Length > (1L << 20);
+            }
+            catch (Exception) { return false; }
+        }
+
+        /// <summary>
+        /// A switch that did not take, undone: the new packed game goes back to where it came from (staging, or the folder kept
+        /// for this version) and the previous one into place, the new version's folder goes and the previous version's returns.
+        /// Each step is logged if it fails; the install stays as whole as it can be.
+        /// </summary>
+        private void UndoCommit(string versionDir, string replaced, bool contentSwapped, string newContent, string oldContent)
+        {
+            if (contentSwapped)
+            {
+                try
+                {
+                    FileUtil.MoveDirectoryInPlace(layout.Content, newContent);
+                    if (Directory.Exists(oldContent)) FileUtil.MoveDirectoryInPlace(oldContent, layout.Content);
+                }
+                catch (Exception error) { Log("Could not put the previous game files back: " + error.Message); }
+            }
+            try
+            {
+                FileUtil.DeleteTree(versionDir);
+                if (Directory.Exists(replaced)) FileUtil.MoveDirectoryInPlace(replaced, versionDir);
+            }
+            catch (Exception error) { Log("Could not put the previous version back: " + error.Message); }
         }
 
         /// <summary>Once the new version is in place: exactly one previous version stays for rollback; a folder still held is removed by a later install.</summary>

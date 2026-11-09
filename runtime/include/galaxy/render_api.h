@@ -166,6 +166,10 @@ void pump_messages();
 // (Direct3D 12's present status; Vulkan on Windows reports none, so false there).
 void set_window_hidden(bool hidden) noexcept;
 [[nodiscard]] bool window_occluded() noexcept;
+// The window is open but not in front (another program is, or its own dialog is not the active one): the renderer shows the game's
+// own frames at the game's rate and makes no generated frames and no repeated pictures, so a window nobody is playing in costs
+// the GPU the least a moving picture needs. The host sets it from the OS's word on the foreground; false brings everything back.
+void set_window_background(bool background) noexcept;
 
 // The latest pointer state of the native window, from its client-area mouse messages and the OS cursor position.
 [[nodiscard]] HostPointerState poll_host_pointer_state() noexcept;

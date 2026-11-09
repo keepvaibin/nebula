@@ -410,6 +410,54 @@ namespace Nebula.Setup
             Check(Directory.Exists(update.KeptContent(1)) && !Directory.Exists(update.KeptContent(3)), "with no previous version only format 1 stays");
         }
 
+        // An update of a packed game of an older store packs it again from the image it was made from, when that is still there;
+        // the saves, settings and the mods' small files are copied aside once per version.
+        static void CheckRememberedSourceAndSnapshot()
+        {
+            var layout = new InstallLayout(Path.Combine(scratch, "install-remember"));
+            Directory.CreateDirectory(layout.Root);
+            Check(InstallEngine.RememberedSource(layout) == null && !InstallEngine.RetainedGameValid(layout), "no note of where the game came from: the disc is asked for");
+            string image = Path.Combine(scratch, "game-image.iso");
+            File.WriteAllBytes(image, new byte[1000]);
+            string note = Path.Combine(layout.Root, "game-source.json");
+            Json.Save(note, new Dictionary<string, object> { { "path", image }, { "folder", false }, { "size", 1000L } });
+            Check(InstallEngine.RememberedSource(layout) == image && InstallEngine.RetainedGameValid(layout), "the image is still there as it was: an update packs the game again from it");
+            File.WriteAllBytes(image, new byte[1001]);
+            Check(InstallEngine.RememberedSource(layout) == null, "the image changed size: the disc is asked for");
+            File.Delete(image);
+            Check(InstallEngine.RememberedSource(layout) == null, "the image is gone: the disc is asked for");
+            string folder = Path.Combine(scratch, "game-folder");
+            Directory.CreateDirectory(folder);
+            Json.Save(note, new Dictionary<string, object> { { "path", folder }, { "folder", true }, { "size", 0L } });
+            Check(InstallEngine.RememberedSource(layout) == folder, "an extracted folder is found while it is there");
+            File.WriteAllText(note, "not json");
+            Check(InstallEngine.RememberedSource(layout) == null, "a damaged note is no note");
+
+            string data = NebulaPaths.DataRoot;
+            string save = Path.Combine(data, "saves", "RMGE01", "Nebula.sav");
+            Directory.CreateDirectory(Path.GetDirectoryName(save));
+            File.WriteAllBytes(save, new byte[] { 1, 2, 3 });
+            File.WriteAllText(Path.Combine(data, "runtime_settings.ini"), "focus_loss=keep\n");
+            Directory.CreateDirectory(Path.Combine(data, "mods", "a"));
+            File.WriteAllText(Path.Combine(data, "mods", "a", "mod.json"), "{}");
+            File.WriteAllBytes(Path.Combine(data, "mods", "a", "big.bin"), new byte[(1 << 20) + 1]);
+            var log = new List<string>();
+            string copy = UserDataSnapshot.Take("2.0.1-beta.1", log.Add);
+            Check(copy != null && File.Exists(Path.Combine(copy, "saves", "RMGE01", "Nebula.sav")) && File.Exists(Path.Combine(copy, "runtime_settings.ini")) &&
+                  File.Exists(Path.Combine(copy, "mods", "a", "mod.json")) && !File.Exists(Path.Combine(copy, "mods", "a", "big.bin")),
+                  "the saves, settings and the mods' small files are copied aside, the large mod file is not");
+            File.WriteAllBytes(save, new byte[] { 9 });
+            Check(UserDataSnapshot.Take("2.0.1-beta.1", log.Add) == copy && File.ReadAllBytes(Path.Combine(copy, "saves", "RMGE01", "Nebula.sav")).Length == 3, "one copy per version: it is not taken again");
+            Check(File.ReadAllBytes(save).Length == 1, "and the player's save is where it was");
+            Check(UserDataSnapshot.Take(null, log.Add) == null, "no version to name a copy by: none");
+            Thread.Sleep(50);
+            UserDataSnapshot.Take("2.0.2-beta.1", log.Add);
+            Thread.Sleep(50);
+            UserDataSnapshot.Take("2.0.3-beta.1", log.Add);
+            Check(Directory.GetDirectories(UserDataSnapshot.Folder).Length == 2 && Directory.Exists(Path.Combine(UserDataSnapshot.Folder, "2.0.3-beta.1")),
+                  "the newest two copies stay");
+        }
+
         public static int Main(string[] args)
         {
             scratch = args[0];
@@ -427,6 +475,7 @@ namespace Nebula.Setup
                 CheckDownloads();
                 CheckRollback();
                 CheckFormatRollback();
+                CheckRememberedSourceAndSnapshot();
             }
             catch (Exception error)
             {

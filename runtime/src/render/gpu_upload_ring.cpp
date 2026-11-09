@@ -25,8 +25,10 @@ std::atomic<std::uint64_t> g_upload_ring_identity{1};
 
 void UploadRing::reset() noexcept {
     const gpu::UploadPlace place = place_;
+    const std::size_t floor_capacity = floor_capacity_;
     *this = UploadRing{};
     place_ = place;
+    floor_capacity_ = floor_capacity;
 }
 
 void UploadRing::release_into(std::vector<gpu::BufferRef>& out) {
@@ -83,6 +85,13 @@ bool UploadRing::initialize(
     frame_spill_ = 0u;
     high_water_ = 0u;
     requested_ = 0u;
+    // The first capacity is the least the ring is ever shrunk to; a new buffer starts a new quiet window.
+    if (floor_capacity_ == 0u) {
+        floor_capacity_ = total;
+    }
+    window_peak_ = shrink_peak_ = 0u;
+    window_frames_ = 0u;
+    shrink_ready_ = false;
     active_slot_ = 0u;
     frame_ready_ = false;
     segment_allocation_pending_ = true;
@@ -113,6 +122,17 @@ bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_fligh
 void UploadRing::begin_frame(unsigned frame_slot) {
     if (mapped_ == nullptr || frame_slot >= frames_in_flight_) {
         throw std::runtime_error("UploadRing frame slot is out of range");
+    }
+    // The frame before: what it took (segment, spill and chunks) joins the quiet window. A window of kQuietFrames frames whose
+    // peak stayed within a quarter of the budget lets the ring shrink (wants_shrink); a busier one does not.
+    if (frame_ready_) {
+        window_peak_ = std::max(window_peak_, cursor_ - segment_base_ + frame_spill_);
+        if (++window_frames_ >= kQuietFrames) {
+            shrink_ready_ = capacity_ > floor_capacity_ && window_peak_ <= bytes_per_frame_ / 4u;
+            shrink_peak_ = window_peak_;
+            window_peak_ = 0u;
+            window_frames_ = 0u;
+        }
     }
     active_slot_ = frame_slot;
     if (frame_slot < chunk_slots_.size()) {

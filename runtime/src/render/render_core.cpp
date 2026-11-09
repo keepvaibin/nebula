@@ -1625,7 +1625,10 @@ void RenderCore::render_loop() {
         // polls. A covered window is looked at every 100 ms to see whether the OS shows it again; the device and its
         // resources stay as they are, so a return costs no rebuild.
         const bool hidden = out_of_sight();
-        if (hidden) {
+        // Open but not in front (set_window_background): the game's own frames at its own rate, no generated frames and no
+        // repeated pictures.
+        const bool background = window_background_.load(std::memory_order_relaxed);
+        if (hidden || background) {
             try {
                 if (interp_sequence_.active) {
                     supersede_interp_sequence();
@@ -1648,15 +1651,15 @@ void RenderCore::render_loop() {
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             const RenderConfig cfg = get_render_config();
-            idle_present = !hidden && cfg.frame_rate_decouple &&
+            idle_present = !hidden && !background && cfg.frame_rate_decouple &&
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_probes = !probe_flights_.empty();
-            // Draining for a stop: queued frames present without generated frames.
-            interp_stopping_ = stop_render_thread_ || hidden;
+            // Draining for a stop, out of sight or behind another window: queued frames present without generated frames.
+            interp_stopping_ = stop_render_thread_ || hidden || background;
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
             // interpolation waits while the settings are open): the latest frame again at each display slot, so the
             // overlay keeps the rate play had instead of the game's 60 Hz frame rate.
-            overlay_idle = !hidden && !stop_render_thread_ && overlay_idle_presents();
+            overlay_idle = !hidden && !background && !stop_render_thread_ && overlay_idle_presents();
             if (!overlay_idle) {
                 overlay_idle_due_qpc_ = 0;
             } else if (overlay_idle_due_qpc_ == 0) {
@@ -2021,9 +2024,12 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     }
 }
 
-// Video memory: no size of it is assumed anywhere. The adapter's own figures (DXGI's local segment budget, Vulkan's device-local
-// heap budget) are read at each frame boundary; past the budget the store gives back textures no frame in flight names.
-// GALAXY_TEST_VRAM_BUDGET_MB=N (test builds) replaces the budget with N megabytes of the same reading.
+// Video memory: no size of it is assumed anywhere. The adapter's own figures (DXGI's local segment budget, told by the OS when it
+// moves; Vulkan's device-local heap budget) are read at each frame boundary; past the budget the store leaves the top levels out
+// of the textures no frame in flight names, and puts them back when they are named again and there is room (TextureStore
+// enforce_budget). GALAXY_TEST_VRAM_BUDGET_MB=N (test builds) replaces the budget with N megabytes of the same reading.
+// One line when the budget or what is left out changes (looked at once a second), and one an hour (at 60 frames a second) whatever
+// changed.
 void RenderCore::enforce_video_memory() {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
@@ -2034,19 +2040,20 @@ void RenderCore::enforce_video_memory() {
         budget = forced << 20u;
     }
     texture_store_.enforce_budget(usage, budget);
-#if defined(NEBULA_DEV)
     if (frame_index_ >= vram_log_at_) {
-        vram_log_at_ = frame_index_ + 600u;
+        vram_log_at_ = frame_index_ + 60u;
         const TextureStore::BudgetStats stats = texture_store_.budget_stats();
-        std::fprintf(stderr,
-                     "[vram] usage=%llu MB budget=%llu MB textures=%u resident=%llu MB evicted=%u (%llu evictions, %llu MB, "
-                     "%llu rebuilt, %llu blank draws)\n",
-                     static_cast<unsigned long long>(usage >> 20u), static_cast<unsigned long long>(budget >> 20u), stats.resident,
-                     static_cast<unsigned long long>(stats.resident_bytes >> 20u), stats.evicted,
-                     static_cast<unsigned long long>(stats.evictions), static_cast<unsigned long long>(stats.evicted_bytes >> 20u),
-                     static_cast<unsigned long long>(stats.rebuilds), static_cast<unsigned long long>(stats.blank_draws));
+        const std::uint64_t budget_mb = budget >> 20u;
+        const std::uint64_t left_out_mb = stats.reduced_bytes >> 20u;
+        if (budget_mb != vram_logged_budget_mb_ || left_out_mb != vram_logged_left_out_mb_ || frame_index_ >= vram_report_at_) {
+            vram_logged_budget_mb_ = budget_mb;
+            vram_logged_left_out_mb_ = left_out_mb;
+            vram_report_at_ = frame_index_ + 216000u;
+            std::fprintf(stderr, "[vram] budget %llu MB used %llu MB evicted %llu MB (%u textures reduced of %u)\n",
+                         static_cast<unsigned long long>(budget_mb), static_cast<unsigned long long>(usage >> 20u),
+                         static_cast<unsigned long long>(left_out_mb), stats.reduced, stats.resident);
+        }
     }
-#endif
 }
 
 void RenderCore::begin_walk_frame(ListEntry& entry) {

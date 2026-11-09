@@ -76,6 +76,10 @@ void set_window_hidden(bool hidden) noexcept {
     backend().set_window_hidden(hidden);
 }
 
+void set_window_background(bool background) noexcept {
+    backend().set_window_background(background);
+}
+
 bool window_occluded() noexcept {
     return backend().window_occluded();
 }
