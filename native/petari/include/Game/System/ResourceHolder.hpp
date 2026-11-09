@@ -59,5 +59,4 @@ public:
     Mtx44* mBackupMaterialData;
     AssetFolder* mArchive;
     NebulaArena* mArena;
-    u32 mTotalResourceSize;
 };

@@ -1,4 +1,5 @@
 #include "Game/Enemy/Karon.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/TerritoryMover.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
@@ -34,13 +35,13 @@ namespace {
     const f32 cPursueGiveUpDistance = 1200.0f;
     const f32 cFaceToDegree = 80.0f;
     const f32 cFollowRailDistance = 600.0f;
-    const s32 cWaitTime = 120;
-    const s32 cStarPieceHitWaitTime = 60;
-    const s32 cWalkLimitTime = 180;
+    const s32 cWaitTime = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 cStarPieceHitWaitTime = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 cWalkLimitTime = NebulaFrameClock::stepsOfSeconds(3);
     const f32 cGoalDist = 40.0f;
     // A turn may end only after this many steps.
     const s32 cTurnMinTime = 10;
-    const s32 cBrokenTime = 300;
+    const s32 cBrokenTime = NebulaFrameClock::stepsOfSeconds(5);
     const f32 cPrePursueJumpVel = 10.0f;
     const f32 cHitReactionVelH = 10.0f;
     const f32 cHitReactionVelV = 20.0f;

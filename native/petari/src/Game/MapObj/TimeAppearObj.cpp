@@ -1,4 +1,5 @@
 #include "Game/MapObj/TimeAppearObj.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/EffectUtil.hpp"
@@ -8,7 +9,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    const s32 sDefaultTimer = 30;
+    const s32 sDefaultTimer = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace NrvTimeAppearObj {

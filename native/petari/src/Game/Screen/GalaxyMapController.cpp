@@ -28,7 +28,7 @@ namespace {
     static const s32 sDisplayKeepFrame = 30;
     static const s32 sMapFadeinoutFrame = 12;
     static const s32 sTicoCometFadeinoutFrame = 60;
-    static const s32 sTicoCometWaitFrame = 60;
+    static const s32 sTicoCometWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sWaitForNewGalaxyDiscoverPhaseAstroMap = 1;
     // static const s32 sCaptureWidth = _;
     // static const s32 sCaptureHeight = _;

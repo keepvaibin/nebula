@@ -1,4 +1,5 @@
 #include "Game/Screen/MeterLayout.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -35,10 +36,10 @@ namespace {
     static const f32 sMaxAlpha = 1.2f;
     // static const f32 sHideSpeed = ...;
     // static const f32 sShowSpeed = ...;
-    static const s32 sAppearTime = 120;
-    static const s32 sWaitStartTime = 240;
+    static const s32 sAppearTime = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sWaitStartTime = NebulaFrameClock::stepsOfSeconds(4);
     static const s32 sBreakDelayTime = 40;
-    static const s32 sPowerUpWaitTime = 60;
+    static const s32 sPowerUpWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sRecoveryCountInterval = 5;
 };  // namespace
 

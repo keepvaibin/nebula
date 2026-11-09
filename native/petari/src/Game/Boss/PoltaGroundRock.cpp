@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaGroundRock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -125,7 +126,7 @@ void PoltaGroundRock::exeSign() {
         MR::emitEffect(this, "Shadow");
     }
     MR::startLevelSound(this, "SE_OJ_LV_POLTA_G_ROCK_SIGN");
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(PoltaGroundRock, PoltaGroundRockNrvJut));
     }
 }

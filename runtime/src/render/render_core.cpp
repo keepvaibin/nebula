@@ -518,7 +518,7 @@ void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept
     };
     try {
         std::ostringstream row;
-        row<<"[mouse-response-latency] boundary=selected-KPAD-to-first-marked-display picture-Present-return physical-display-time=unmeasured"
+        row<<"[mouse-response-latency] boundary=selected-pad-sample-to-first-marked-display picture-Present-return physical-display-time=unmeasured"
            <<" samples="<<pointer_response_count_<<" mean-us="<<pointer_latency_total_/pointer_response_count_/1000u
            <<" p50-upper-us="<<percentile(50u)<<" p95-upper-us="<<percentile(95u)<<" p99-upper-us="<<percentile(99u)
            <<" max-us="<<pointer_latency_max_/1000u<<" source-serial="<<stamp.serial<<" generation="<<stamp.generation

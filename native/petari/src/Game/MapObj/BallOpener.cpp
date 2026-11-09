@@ -1,4 +1,5 @@
 #include "Game/MapObj/BallOpener.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -9,10 +10,10 @@ namespace {
     const f32 sHoleDepth = 400.0f;
     const f32 sHoleRefrecRate = 0.9f;
     const s32 sForceSetStartTime = 40;
-    const s32 sForceSetEndTime = 90;
+    const s32 sForceSetEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 sBallToCenterFreq = 0.98f;
     const f32 sBallToCenterEndFreq = 0.7f;
-    const s32 sForceSetCenterTime = 180;
+    const s32 sForceSetCenterTime = NebulaFrameClock::stepsOfSeconds(3);
     const s32 sLaunchFixTime = 20;
     const s32 sSetUpTime = 45;
     const f32 sLaunchValidHeight = 160.0f;

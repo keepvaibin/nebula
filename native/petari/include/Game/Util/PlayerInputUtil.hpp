@@ -80,7 +80,6 @@ namespace MR {
 
     bool isMoveStickPressedRight(s32 channel);
 
-    void getSubTilt(Vec3f* pAccel, s32 channel);
 
     bool isSubSpin(s32 channel);
 

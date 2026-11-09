@@ -43,8 +43,6 @@ public:
     PointerInfo mInfo;
     Vec2f mScreenPos;
     s32 mOutScreenTime;
-    Vec2f* mPastPosition;
-    s32 mPastPointNum;
     Vec2f* mNextPastPosition;
     s32 mNextPastPointNum;
     f32 mScreenDist;
@@ -52,5 +50,4 @@ public:
     Vec2f mScreenVel;
     Vec3f mWorldVel;
     Vec3f mWorldPos;
-    bool mNotInScreen;
 };

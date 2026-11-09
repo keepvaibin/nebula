@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpringWaterFloaterSpot.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -134,13 +135,13 @@ void SpringWaterFloaterSpot::exeFloatSignal() {
         mRotation.x += getNerveStep() % 12 < 6 ? 1.0f : -1.0f;
     }
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         mVelocity.scale(0.5f, -mGravity);
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_SPR_FLOATER_SIGN");
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(SpringWaterFloaterSpot, SpringWaterFloaterSpotNrvFloatUp));
     }
 }
@@ -201,7 +202,7 @@ bool SpringWaterFloaterSpot::boundFloater() {
         MR::startSound(this, "SE_OJ_SPR_FLOATER_BOUND");
     }
 
-    if (mBoundStep == 150) {
+    if (mBoundStep == NebulaFrameClock::stepsOfMilliseconds(2500)) {
         mNeedsBound = false;
         mBoundSize = 0.0f;
         mBoundStep = 0;

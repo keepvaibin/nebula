@@ -1,4 +1,5 @@
 #include "Game/MapObj/JetTurtle.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -247,14 +248,14 @@ void JetTurtle::exeWait() {
     }
 
     if (isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenReserve))) {
-        if (getNerveStep() >= 120) {
+        if (getNerveStep() >= NebulaFrameClock::stepsOfSeconds(2)) {
             Vec3f direction = *MR::getPlayerCenterPos() - mPosition;
             f32 rate = MR::clamp((getNerveStep() - 120) / 120.0f, 0.0f, 1.0f);
             direction.setLength(mVelocity.length());
             MR::vecBlendSphere(mVelocity, direction, &mVelocity, rate);
         }
 
-        if (MR::isStep(this, 300)) {
+        if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
             reset(0);
         }
     }
@@ -678,7 +679,7 @@ void JetTurtle::exeDrop() {
     boundDrop();
     MR::addVelocityToGravity(this, 1.0f);
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         mVelocity.zero();
         reset(0);
     }

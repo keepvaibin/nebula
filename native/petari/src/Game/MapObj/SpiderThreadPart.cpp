@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpiderThreadPart.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
@@ -20,7 +21,7 @@ namespace {
     static const f32 sFrictionLengthMin = 200.0f;
     static const f32 sFrictionLengthMax = 700.0f;
     static const s32 sTouchTimerMax = 5;
-    static const s32 sActorTouchTimerMax = 60;
+    static const s32 sActorTouchTimerMax = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sForceAttachTime = 20;
     static const f32 sWindFrictionRate = 0.93f;
     static const f32 sTexRateV = 0.002f;

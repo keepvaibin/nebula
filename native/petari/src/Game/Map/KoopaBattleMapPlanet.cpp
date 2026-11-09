@@ -1,4 +1,5 @@
 #include "Game/Map/KoopaBattleMapPlanet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
@@ -76,7 +77,7 @@ void KoopaBattleMapPlanet::exeWait() {
 }
 
 void KoopaBattleMapPlanet::exeDemoGrandStarAppear() {
-    if ((!mIsFinalPlanet && MR::isStep(this, 90)) || (mIsFinalPlanet && MR::isStep(this, 151))) {
+    if ((!mIsFinalPlanet && MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) || (mIsFinalPlanet && MR::isStep(this, 151))) {
         MR::startBrk(mDamagePlate, "PowerStarAppear");
         MR::emitEffect(mDamagePlate, "GrandStarAppear");
     }

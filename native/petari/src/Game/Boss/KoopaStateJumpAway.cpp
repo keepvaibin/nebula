@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaStateJumpAway.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -13,7 +14,7 @@ namespace {
     const f32 sJumpFrontSpeed = 20.0f;
     const f32 sJumpFlyUpSpeed = 35.0f;
     const f32 sJumpGravity = 1.0f;
-    const s32 sLandStepVs3Lv3 = 30;
+    const s32 sLandStepVs3Lv3 = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace NrvKoopaStateJumpAway {

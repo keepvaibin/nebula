@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Boss/DodoryuStateLv2.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -19,7 +20,7 @@ namespace {
     static const s32 sDiveShadowOffFrame = 50;
     static const s32 sDiveAttackInvalidFrame = 20;
     static const s32 sChaseMoreStartDiveSoundStep = 40;
-    static const s32 sLaughAtkSuccessSoundStep = 30;
+    static const s32 sLaughAtkSuccessSoundStep = NebulaFrameClock::stepsOfMilliseconds(500);
 
     static const s32 sHideShakeStartStep = 0;
     static const s32 sReadyChaseShakeStart = 0;

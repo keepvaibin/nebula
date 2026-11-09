@@ -1,4 +1,5 @@
 #include "Game/Screen/GameStageClearSequence.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/PowerStar.hpp"
 #include "Game/Screen/SimpleLayout.hpp"
@@ -16,11 +17,11 @@ namespace {
     static const s32 sClearDemoWipeFramePowerStar = 80;
     static const s32 sFanfareStartStepPowerStar = 15;
     static const f32 sLayoutOffsetYPowerStar = 80.0f;
-    static const s32 sLayoutStartStepGrandStar = 510;
+    static const s32 sLayoutStartStepGrandStar = NebulaFrameClock::stepsOfMilliseconds(8500);
     static const s32 sClearDemoWipeStepGrandStar = 670;
     static const s32 sFanfareStartStepGrandStar = 53;
     static const f32 sLayoutOffsetYGrandStar = 20.0f;
-    static const s32 sClearDemoWipeStepKoopaVs3 = 840;
+    static const s32 sClearDemoWipeStepKoopaVs3 = NebulaFrameClock::stepsOfSeconds(14);
     static const s32 sClearDemoWipeFrameKoopaVs3 = 60;
 };  // namespace
 

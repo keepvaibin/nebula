@@ -1,4 +1,6 @@
 #include "Game/Screen/NebulaPrepare.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <nebula_module.h>
 
 #include "Game/Screen/LayoutActor.hpp"
@@ -266,6 +268,8 @@ namespace {
 
 namespace NebulaPrepare {
     void init() {
+        // The screen lasts as long as the process: made in the permanent arena, whatever is current.
+        NebulaArena::CurrentScope home(Arenas::permanent());
         sScreen = new NebulaPrepareScreen();
         sScreen->initWithoutIter();
     }

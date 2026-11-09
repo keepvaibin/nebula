@@ -1,4 +1,5 @@
 #include "Game/MapObj/SandCapsulePressGround.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -15,10 +16,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sStepForMove = 1200;
-    static const s32 sStepForMoveStart = 120;
-    static const s32 sStepForMoveEnd = 180;
-    static const s32 sStepToStop = 30;
+    static const s32 sStepForMove = NebulaFrameClock::stepsOfSeconds(20);
+    static const s32 sStepForMoveStart = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sStepForMoveEnd = NebulaFrameClock::stepsOfSeconds(3);
+    static const s32 sStepToStop = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace NrvSandCapsulePressGround {

@@ -1,4 +1,5 @@
 #include "Game/Screen/InformationObserver.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -32,7 +33,7 @@ static InformationObserverAttribute sAttr[] = {
 };
 
 namespace {
-    static s32 sDisplayFramesMin = 30;
+    static s32 sDisplayFramesMin = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace {

@@ -1,4 +1,5 @@
 #include "Game/Ride/Creeper.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -50,7 +51,7 @@ namespace {
     static const f32 sHangStartCoordMin = 100.0f;
     static const f32 sHangEndCoord = 80.0f;
     static const s32 sAnimInterpoleFrame = 15;
-    static const s32 sStepInvalidSpin = 60;
+    static const s32 sStepInvalidSpin = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sStepInvalid = 20;
     static const f32 sDistanceNear = 200.0f;
     static const f32 sDrawWidthX = 10.0f;

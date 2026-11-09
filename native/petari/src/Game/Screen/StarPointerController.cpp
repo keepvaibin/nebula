@@ -15,9 +15,8 @@ PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDept
 }
 
 StarPointerController::StarPointerController()
-    : mPadChannel(-1), mScreenPos(0.0f, 0.0f), mOutScreenTime(), mPastPosition(), mPastPointNum(), mNextPastPosition(), mNextPastPointNum(),
+    : mPadChannel(-1), mScreenPos(0.0f, 0.0f), mOutScreenTime(), mNextPastPosition(), mNextPastPointNum(),
       mScreenDist(), mScreenSpeed(), mScreenVel(0.0f, 0.0f), mWorldVel(0.0f, 0.0f, 0.0f), mWorldPos(0.0f, 0.0f, 0.0f) {
-    mPastPosition = new Vec2f[16];
     mNextPastPosition = new Vec2f[16];
 }
 
@@ -54,11 +53,6 @@ void StarPointerController::storeDataFromCallback(const f32* pProjectionParams, 
 }
 
 void StarPointerController::storePastPointingData() {
-    mPastPointNum = mNextPastPointNum;
-    for (s32 idx = 0; idx < mNextPastPointNum; idx++) {
-        mPastPosition[idx] = mNextPastPosition[idx];
-    }
-
     s32 pastCount = MR::min(MR::getPointerPastCount(mPadChannel), 16);
     mNextPastPointNum = pastCount;
 
@@ -92,7 +86,7 @@ void StarPointerController::updatePointerInfo() {
         mScreenPos.set(mInfo.mPos);
         mInfo.mInScreen = true;
         mInfo.mPos.set(mNextPastPosition[0]);
-        mNotInScreen = StarPointerFunction::forceInsideScreenEdge(&mInfo.mPos);
+        StarPointerFunction::forceInsideScreenEdge(&mInfo.mPos);
         mScreenDist = MR::getPointerDistance(mPadChannel);
         updateAdditionalInfo();
     }

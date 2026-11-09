@@ -1,4 +1,5 @@
 #include "Game/MapObj/SuperSpinDriver.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -10,7 +11,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    const s32 sCanBindTime = 90;
+    const s32 sCanBindTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 sSensorRadius = 300.0f;
     const f32 sClippingRadius = 300.0f;
     const f32 sPullPlayerDistance = 240.0f;
@@ -29,7 +30,7 @@ namespace {
     // A rush cancel early in the shot is refused.
     const s32 sShootNoCancelStep = 40;
     const s32 sCoolDownFrame = 60;
-    const s32 sCoolDownWaitStep = 60;
+    const s32 sCoolDownWaitStep = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sSpinDamp = 0.985f;
     const f32 sSwingSpinAccel = 0.1f;
     const f32 sSwingSpinMax = 0.23f;

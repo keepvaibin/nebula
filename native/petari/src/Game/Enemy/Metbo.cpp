@@ -1,4 +1,5 @@
 #include "Game/Enemy/Metbo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
@@ -27,12 +28,12 @@
 namespace {
     const f32 cSpeedMax = 30.0f;
     const f32 cReceivePushPower = 1.5f;
-    const s32 cStepForWait = 150;
+    const s32 cStepForWait = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 cStepForWalkAround = 200;
-    const s32 cStepForChaseMin = 120;
+    const s32 cStepForChaseMin = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cStepForChaseMax = 220;
-    const s32 cStepForSwoonWait = 150;
-    const s32 cStepForRest = 60;
+    const s32 cStepForSwoonWait = NebulaFrameClock::stepsOfMilliseconds(2500);
+    const s32 cStepForRest = NebulaFrameClock::stepsOfSeconds(1);
     // Beyond this from the player Metbo goes inactive; within it it wakes.
     const f32 cActiveRadius = 3000.0f;
     const f32 cWalkAroundRadius = 300.0f;

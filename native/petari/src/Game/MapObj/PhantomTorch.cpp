@@ -1,4 +1,5 @@
 #include "Game/MapObj/PhantomTorch.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Effect/SpinPullParticleCallBack.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -168,7 +169,7 @@ void PhantomTorch::exeWait() {
 }
 
 void PhantomTorch::exeAttack() {
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(PhantomTorch, HostTypeWait));
     } else {
         MR::startLevelSound(this, mBurnSe);

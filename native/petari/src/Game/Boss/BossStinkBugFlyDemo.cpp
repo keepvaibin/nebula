@@ -1,4 +1,5 @@
 #include "Game/Boss/BossStinkBugFlyDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/BossStinkBug.hpp"
 #include "Game/Demo/DemoPositionController.hpp"
 #include "Game/LiveActor/ActorJointCtrl.hpp"
@@ -15,7 +16,7 @@ namespace {
     static const s32 sFlySoundStartStep1 = 113;
     static const s32 sFlySoundStartStep2 = 260;
     static const s32 sShakeSoundStartStep = 48;
-    static const s32 sShakeSoundEndStep = 90;
+    static const s32 sShakeSoundEndStep = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sCloseFeetSoundStartStep = 230;
     static const s32 sFlyStartSoundStartStep = 110;
     static const s32 sFlyStartSoundEndStep = 263;

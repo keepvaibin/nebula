@@ -1,4 +1,5 @@
 #include "Game/Enemy/Karikari.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -45,7 +46,7 @@ namespace {
     static const f32 sDistToCling = 80.0f;
     static const s32 sSpinAttackedTime = 8;
     static const f32 sVelocityDampSpinAttacked = 0.9f;
-    static const s32 sBlowOutTime = 60;
+    static const s32 sBlowOutTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sBlowOutGravity = 1.3f;
     static const f32 sBlowOutVel = 10.0f;
     static const f32 sBlowOutVerticalVel = 38.0f;
@@ -53,10 +54,10 @@ namespace {
     static const f32 sVelocityDampAttacked = 0.9f;
     static const f32 sAttackedVel = 43.0f;
     static const f32 sAttackedVerticalVel = 33.0f;
-    static const s32 sFrozenLimitTime = 180;
+    static const s32 sFrozenLimitTime = NebulaFrameClock::stepsOfSeconds(3);
     static const f32 sFrozenRecoverGravity = 2.4f;
     static const f32 sJumpToFrozenRecoverVel = 40.0f;
-    static const s32 sPreWaitTime = 90;
+    static const s32 sPreWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sBeginWaitMotionFrame = 20;
     static const s32 sPressTime = 40;
     static const f32 sExplosionBlowOutVel = 30.0f;

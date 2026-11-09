@@ -1,4 +1,5 @@
 #include "Game/MapObj/SeesawMoveNut.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
@@ -92,7 +93,7 @@ void SeesawMoveNut::exeEdge() {
 }
 
 void SeesawMoveNut::autoBackHome() {
-    if (mBackHomeStep >= 180) {
+    if (mBackHomeStep >= NebulaFrameClock::stepsOfSeconds(3)) {
         if (isNerve(GET_NERVE(SeesawMoveNut, SeesawMoveNutNrvEdge)) && MR::getRailCoord(this) == MR::getRailTotalLength(this)) {
             MapObjActorUtil::startRotator(this);
             setNerve(GET_NERVE(SeesawMoveNut, SeesawMoveNutNrvHalfway));

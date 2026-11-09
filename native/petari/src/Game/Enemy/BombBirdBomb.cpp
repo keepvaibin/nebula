@@ -1,4 +1,5 @@
 #include "Game/Enemy/BombBirdBomb.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -16,7 +17,7 @@ namespace {
     static const f32 sGravityAccel = 1.2f;
     static const f32 sReboundRate = 0.4f;
     static const f32 sReboundSpeedMin = 5.0f;
-    static const s32 sWaitTime = 150;
+    static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(2500);
     static const s32 sExplosionMaxTime = 10;
     static const s32 sExplosionTime = 20;
     static const f32 sExplosionRadius = 280.0f;

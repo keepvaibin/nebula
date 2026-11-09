@@ -112,34 +112,6 @@ namespace Ui {
             mRegisterColors[idx] = color;
         }
 
-        void SetStageConstant(u32 idx, Color8 value) {
-            mConstantColors[idx] = value;
-        }
-
-        void SetTexSRT(u32 texSRTIdx, const TexSRT& value) {
-            GetTexSRTAry()[texSRTIdx] = value;
-        }
-
-        void SetIndTexSRT(u32 texSRTIdx, const TexSRT& value) {
-            GetIndTexSRTAry()[texSRTIdx] = value;
-        }
-
-        void SetChanCtrl(ChanCtrl value) {
-            GetChanCtrlAry()[0] = value;
-        }
-
-        void SetMatColor(Color8 value) {
-            GetMatColAry()[0] = value;
-        }
-
-        void SetAlphaCompare(AlphaCompare value) {
-            *GetAlphaComparePtr() = value;
-        }
-
-        void SetBlendMode(BlendMode value) {
-            *GetBlendModePtr() = value;
-        }
-
         const NebulaColor16 GetStageColor(u32 idx) const {
             return mRegisterColors[idx];
         }

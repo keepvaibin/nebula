@@ -1,4 +1,5 @@
 #include "Game/Enemy/MoguStone.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -17,7 +18,7 @@
 namespace {
     const f32 sIceArcAddHeight = 200.0f;
     const s32 sThrowSteps = 100;
-    const s32 sFallSteps = 60;
+    const s32 sFallSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sIcePathSteps = 101;
 };  // namespace
 

@@ -1,4 +1,5 @@
 #include "Game/Enemy/Mogucchi.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/MogucchiHill.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -39,7 +40,7 @@ namespace {
     const f32 cStrollAccel = 0.1f;
     // A hip drop landing this close knocks it out of the ground.
     const f32 cHipDropReach = 800.0f;
-    const s32 cDownTime = 30;
+    const s32 cDownTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Hits are ignored for the first frames of being knocked up.
     const s32 cAppearDownGuardTime = 10;
     const s32 cHitStopFrame = 8;
@@ -47,7 +48,7 @@ namespace {
     const f32 cScatterUpDecel = 1.2f;
     const f32 cScatterSideSpeed = 23.0f;
     const s32 cScatterTime = 15;
-    const s32 cDieTime = 60;
+    const s32 cDieTime = NebulaFrameClock::stepsOfSeconds(1);
     // The hill gets one piece per cHillPieceLength of rail, up to cHillPieceMax; the last cHillHiddenPieces stay hidden.
     const f32 cHillPieceLength = 150.0f;
     const s32 cHillPieceMax = 20;

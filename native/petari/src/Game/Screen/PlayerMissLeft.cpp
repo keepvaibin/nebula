@@ -1,4 +1,5 @@
 #include "Game/Screen/PlayerMissLeft.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/CountUpPaneRumbler.hpp"
 #include "Game/Screen/CounterLayoutAppearer.hpp"
@@ -8,7 +9,7 @@
 
 namespace {
     const s32 hCountDownTime = 15;
-    const s32 hEndTime = 90;
+    const s32 hEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
 };  // namespace
 
 namespace NrvPlayerMissLeft {

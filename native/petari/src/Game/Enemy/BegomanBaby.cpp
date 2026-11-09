@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Enemy/BegomanBaby.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -270,7 +271,7 @@ void BegomanBaby::exeTrample() {
     updateRotateY(0.25f, 0.5f);
     MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam);
     reboundWallAndGround(&mFaceVec, false);
-    if (MR::isGreaterStep(this, 180)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvSignAttack));
     }
 }
@@ -281,8 +282,6 @@ void BegomanBaby::exeHitReaction() {
 }
 
 void BegomanBaby::exeTired() {
-    if (MR::isFirstStep(this)) {
-    }
 
     updateRotateY(0.2f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_TURN");
@@ -363,7 +362,7 @@ void BegomanBaby::exeInWater() {
         MR::startSound(this, "SE_EM_FALL_INTO_WATER_S");
     }
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         killWithGenItem();
         MR::emitEffect(this, "DeathWater");
         MR::startSound(this, "SE_EM_BEGOMAN_DEAD_IN_WATER");

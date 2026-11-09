@@ -59,7 +59,6 @@ namespace MR {
                 if (-rSphere.getRadius() < height && height < 0.0f) {
                     if (pResult != nullptr) {
                         pResult->mPosition = rCone.mVertex + rCone.mDirection * rSphere.getRadius();
-                        pResult->mContactPosition = rCone.mVertex;
                         pResult->mNormal = rCone.mDirection;
                         pResult->mIsBound = true;
                     }
@@ -70,7 +69,6 @@ namespace MR {
                 if (0.0f <= height && height < expandedHeight) {
                     if (pResult != nullptr) {
                         pResult->mPosition = rCone.mVertex - rCone.mDirection * expandedHeight;
-                        pResult->mContactPosition = rCone.mVertex - rCone.mDirection * (expandedHeight + rSphere.getRadius());
                         pResult->mNormal = -rCone.mDirection;
                         pResult->mIsBound = true;
                     }
@@ -112,7 +110,6 @@ namespace MR {
                 if (rCone.mDirection.dot(rCone.mVertex - nextPosition) < expandedHeight) {
                     if (pResult != nullptr) {
                         pResult->mPosition = rCone.mVertex - rCone.mDirection * expandedHeight;
-                        pResult->mContactPosition = rCone.mVertex - rCone.mDirection * (expandedHeight + rSphere.getRadius());
                         pResult->mNormal = -rCone.mDirection;
                         pResult->mIsBound = true;
                     }
@@ -124,7 +121,6 @@ namespace MR {
 
         if (within && wasInside != isInside) {
             if (pResult != nullptr) {
-                pResult->mContactPosition = closest;
                 pResult->mNormal = -contactDirection;
                 pResult->mIsBound = true;
             }
@@ -136,7 +132,6 @@ namespace MR {
             if (pResult != nullptr) {
                 Vec3f pushedPosition(nextPosition + contactDirection * (rSphere.getRadius() - distance));
                 pResult->mPosition = pushedPosition;
-                pResult->mContactPosition = closest;
                 pResult->mNormal = contactDirection;
                 pResult->mIsBound = true;
             }

@@ -1,4 +1,5 @@
 #include "Game/Map/SphereSelector.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/SphereSelectorHandle.hpp"
@@ -169,7 +170,7 @@ void SphereSelector::exeSelectWait() {
     } else {
         mClickStep++;
 
-        if (isMoveClickedPos() || mClickStep > 30) {
+        if (isMoveClickedPos() || mClickStep > NebulaFrameClock::stepsOfMilliseconds(500)) {
             sendSelectedMsgAndSetTarget(mHandle);
             mClickStep = -1;
         } else if (!isButtonAPressed()) {
@@ -247,7 +248,7 @@ void SphereSelector::exeSelectStart() {
         sendMsgToAllActor(ACTMES_SPHERE_SELECTOR_SELECT_START);
     }
 
-    MR::setNerveAtStep(this, GET_NERVE(SphereSelector, SphereSelectorNrvSelectWait), 60);
+    MR::setNerveAtStep(this, GET_NERVE(SphereSelector, SphereSelectorNrvSelectWait), NebulaFrameClock::stepsOfSeconds(1));
 }
 
 void SphereSelector::exeConfirmWait() {

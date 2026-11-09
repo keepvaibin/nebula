@@ -1,4 +1,5 @@
 #include "Game/Map/SeaGull.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
@@ -186,7 +187,7 @@ void SeaGull::updateHover() {
 
         f32 height = toTarget.dot(mUp);
         if (height < 500.0f) {
-            mGlideTimer = 300;
+            mGlideTimer = NebulaFrameClock::stepsOfSeconds(5);
         } else {
             mGlideTimer--;
 

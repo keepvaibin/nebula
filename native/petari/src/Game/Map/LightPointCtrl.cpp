@@ -1,10 +1,11 @@
 #include "Game/Map/LightPointCtrl.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    const s32 sDefaultBlendTime = 30;
+    const s32 sDefaultBlendTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sDefaultDistRef = 15.0f;
 };  // namespace
 

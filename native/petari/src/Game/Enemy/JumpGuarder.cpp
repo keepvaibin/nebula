@@ -1,4 +1,5 @@
 #include "Game/Enemy/JumpGuarder.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -20,7 +21,7 @@
 
 namespace {
     static const f32 sRotateDegree = 3.0f;
-    static const s32 sHopStep = 300;
+    static const s32 sHopStep = NebulaFrameClock::stepsOfSeconds(5);
     static const s32 sOpenInt = 74;
     static const s32 sAttack = 360;
     static const s32 sBabyNum = 4;

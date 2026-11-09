@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunBattleVs2Lv1.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunBall.hpp"
 #include "Game/Boss/DinoPackunFire.hpp"
@@ -22,7 +23,7 @@ namespace {
     const Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
 
     // While moving the tail bends up to sMovingBendRate over sBendEaseSteps.
-    const s32 sBendEaseSteps = 30;
+    const s32 sBendEaseSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sMovingBendRate = 1.5f;
     // The mouth fires on these frames of the chase animation.
     const f32 sMouthFireFrame0 = 32.0f;
@@ -278,7 +279,7 @@ void DinoPackunBattleVs2Lv1::exeCrazy() {
 
     updateChaseMouthFire();
 
-    if (MR::isLessStep(this, 60) || MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 45.0f)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)) || MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 45.0f)) {
         MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 1.2f);
     } else {
         MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (1.4f * calcWiggleSign(60)));
@@ -286,11 +287,11 @@ void DinoPackunBattleVs2Lv1::exeCrazy() {
 
     getHost()->updateFootPrintNerve(getNerveStep(), 46);
     updateOnOffFireTail(60, 10, 15);
-    f32 rate = MR::calcNerveRate(this, 30);
+    f32 rate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfMilliseconds(500));
     MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (1.9f * rate));
     getHost()->updateRunVelocity();
 
-    if (MR::isGreaterStep(this, 240) && MR::isInSightConePlayer(getHost(), getHost()->mFront, 1600.0f, 45.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(4)) && MR::isInSightConePlayer(getHost(), getHost()->mFront, 1600.0f, 45.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvFindCrazy));
     }
 }
@@ -319,7 +320,7 @@ void DinoPackunBattleVs2Lv1::exeChase() {
     MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (1.8f * rate));
     getHost()->updateRunVelocity();
 
-    if (MR::isGreaterStep(this, 120) && !MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 60.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && !MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 60.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
     }
 }

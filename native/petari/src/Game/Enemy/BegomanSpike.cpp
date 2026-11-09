@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Enemy/BegomanSpike.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/BegomanSpringHead.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -72,9 +73,9 @@ namespace {
     const f32 cSlowRotate = 0.2f;
     const f32 cCoinTransY = 80.0f;
     const s32 cCoinGenerateNum = 1;
-    const s32 cTrampleReactionTime = 120;
+    const s32 cTrampleReactionTime = NebulaFrameClock::stepsOfSeconds(2);
     // A trample within this many steps of the last one does not restart the reaction.
-    const s32 cTrampleRepeatTime = 30;
+    const s32 cTrampleRepeatTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cStopSceneTime = 2;
     const s32 cBlowFrame = 20;
     const f32 cBlowVel = 40.0f;
@@ -84,7 +85,7 @@ namespace {
     const s32 cDeathStopSceneTime = 5;
     const s32 cElectricDeathTime = 20;
     const f32 cInWaterVel = 10.0f;
-    const s32 cInWaterTime = 60;
+    const s32 cInWaterTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 cKeepDistFar = 800.0f;
     const f32 cKeepDistNear = 600.0f;
 }  // namespace

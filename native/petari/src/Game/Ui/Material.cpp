@@ -138,7 +138,7 @@ namespace Ui {
         }
 
         inline u32 GetTexMtxIdx(u32 mtx) {
-            return (mtx - MODEL_FILE_TEXMTX0) / 3;
+            return (mtx - MODEL_FILE_MATRIX_FIRST) / 3;
         }
 
         void SetColorComponentValue(Color8* pColor, u32 idx, s16 value) {
@@ -566,8 +566,8 @@ namespace Ui {
         // Channel 0 unlit: its colour and alpha from the material colour or the vertex.
         if (IsChanCtrlCap()) {
             const ChanCtrl* const pChanCtrl = GetChanCtrlAry();
-            useVtxColor = pChanCtrl->GetColorSrc() == MODEL_FILE_SRC_VTX || pChanCtrl->GetAlphaSrc() == MODEL_FILE_SRC_VTX;
-            useMatColor = pChanCtrl->GetColorSrc() == MODEL_FILE_SRC_REG || pChanCtrl->GetAlphaSrc() == MODEL_FILE_SRC_REG;
+            useVtxColor = pChanCtrl->GetColorSrc() == MODEL_FILE_SOURCE_VERTEX || pChanCtrl->GetAlphaSrc() == MODEL_FILE_SOURCE_VERTEX;
+            useMatColor = pChanCtrl->GetColorSrc() == MODEL_FILE_SOURCE_REGISTER || pChanCtrl->GetAlphaSrc() == MODEL_FILE_SOURCE_REGISTER;
         }
 
         bool useRasStage = false;
@@ -611,7 +611,7 @@ namespace Ui {
         bool* const useTexMtx = frameZeroed< bool >(mNum.texSRT);
         u8* const places = frameZeroed< u8 >(coordCount);
         for (u32 c = 0; c < coordCount; c++) {
-            places[c] = MODEL_FILE_IDENTITY;
+            places[c] = MODEL_FILE_MATRIX_IDENTITY;
             values.coord[c * 12] = values.coord[c * 12 + 5] = values.coord[c * 12 + 10] = 1.0f;
         }
         if (mNum.texCoordGen > 0) {
@@ -620,7 +620,7 @@ namespace Ui {
             for (u32 i = 0; i < genCount; i++) {
                 u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
-                if (pTexCoordGen[i].GetTexGenType() == MODEL_FILE_TG_MTX2x4 && texMtx != MODEL_FILE_IDENTITY) {
+                if (pTexCoordGen[i].GetTexGenType() == MODEL_FILE_TEXGEN_MATRIX_2x4 && texMtx != MODEL_FILE_MATRIX_IDENTITY) {
                     if (GetTexMtxIdx(texMtx) < mNum.texSRT) {
                         useTexMtx[GetTexMtxIdx(texMtx)] = true;
                     }
@@ -635,7 +635,7 @@ namespace Ui {
             const TexSRT* const pTexSrt = GetTexSRTAry();
 
             for (u32 c = 0; c < coordCount; c++) {
-                if (places[c] == MODEL_FILE_IDENTITY || GetTexMtxIdx(places[c]) >= mNum.texSRT || !useTexMtx[GetTexMtxIdx(places[c])]) {
+                if (places[c] == MODEL_FILE_MATRIX_IDENTITY || GetTexMtxIdx(places[c]) >= mNum.texSRT || !useTexMtx[GetTexMtxIdx(places[c])]) {
                     continue;
                 }
 
@@ -704,8 +704,8 @@ namespace Ui {
             const u8 type = pBlendMode->GetType();
             // NEBULA_FACTOR_*: source colour factors 2 and 3 are the destination's colour.
             const u8 src = pBlendMode->GetSrcFactor();
-            state.blend_op = type == MODEL_FILE_BM_BLEND ? NEBULA_BLEND_ADD : type == MODEL_FILE_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
-            state.blend_src = src == MODEL_FILE_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR : src == MODEL_FILE_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
+            state.blend_op = type == MODEL_FILE_BLEND_ADD ? NEBULA_BLEND_ADD : type == MODEL_FILE_BLEND_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_REPLACE;
+            state.blend_src = src == MODEL_FILE_FACTOR_DST_COLOR ? NEBULA_FACTOR_DST_COLOR : src == MODEL_FILE_FACTOR_INV_DST_COLOR ? NEBULA_FACTOR_INV_DST_COLOR : src;
             state.blend_dst = pBlendMode->GetDstFactor();
         } else {
             state.blend_op = NEBULA_BLEND_ADD;

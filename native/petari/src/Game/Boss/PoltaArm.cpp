@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaArm.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -152,7 +153,7 @@ void PoltaArm::endRepair() {
 void PoltaArm::exeBroken() {
     mBrokenCounter++;
 
-    if (mBrokenCounter > 1200) {
+    if (mBrokenCounter > NebulaFrameClock::stepsOfSeconds(20)) {
         setNerve(GET_NERVE(PoltaArm, PoltaArmNrvRepair));
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/MapObj/LavaBallRisingPlanetLava.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
@@ -13,8 +14,8 @@ namespace NrvLavaBallRisingPlanetLava {
 };  // namespace NrvLavaBallRisingPlanetLava
 
 namespace {
-    const s32 sWaitStep = 120;
-    const s32 sScaleStep = 240;
+    const s32 sWaitStep = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 sScaleStep = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
 LavaBallRisingPlanetLava::LavaBallRisingPlanetLava(const char* pName) : MapObjActor(pName) {

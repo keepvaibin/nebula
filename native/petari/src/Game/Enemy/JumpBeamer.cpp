@@ -1,4 +1,5 @@
 #include "Game/Enemy/JumpBeamer.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/JumpGuarder.hpp"
 #include "Game/Enemy/RingBeam.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -27,7 +28,7 @@ namespace {
     const f32 cAppearDistance = 3000.0f;
     const f32 cLeaveDistance = 3200.0f;
     const f32 cGroupHeight = 500.0f;
-    const s32 cHopWaitSteps = 300;
+    const s32 cHopWaitSteps = NebulaFrameClock::stepsOfSeconds(5);
     // One beam each interval, charged over the interval; then it closes.
     const s32 cBeamInterval = 80;
     const s32 cOpenSteps = cBeamInterval * JumpBeamer::sBeamCount;

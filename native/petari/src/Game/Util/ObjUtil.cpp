@@ -47,10 +47,6 @@
 #include <cstdarg>
 #include "Game/Util/StringUtil.hpp"
 
-namespace {
-    static const Vec3f sDefaultPlayerPos = Vec3f(0, 0, 0);
-};  // namespace
-
 bool MR::isJudgedToClipFrustum(const Vec3f& rCenter, f32 radius) {
     return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius);
 }

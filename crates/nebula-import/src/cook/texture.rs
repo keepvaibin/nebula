@@ -109,7 +109,7 @@ const LAYOUT_RGBA8: u8 = 0;
 const LAYOUT_L8: u8 = 1;
 const LAYOUT_LA8: u8 = 2;
 const LAYOUT_BLOCK4: u8 = 3;
-/// The disc format of a record never on the disc (nebula_cooked_texture.h NEBULA_TEXTURE_MADE).
+/// The source format of a record that has no source image (nebula_cooked_texture.h NEBULA_TEXTURE_MADE).
 const MADE: u8 = 0xFF;
 /// Levels below the first were made here (nebula_cooked_texture.h NEBULA_TEXTURE_GENERATED_LEVELS).
 const GENERATED_LEVELS: u8 = 1;

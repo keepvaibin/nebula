@@ -67,7 +67,6 @@ namespace Ui {
 
         void Init();
         void SetName(const char*);
-        void SetUserData(const char*);
 
         bool IsInfluencedAlpha() const {
             return detail::TestBit(mFlag, 1);

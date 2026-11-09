@@ -1,4 +1,5 @@
 #include "Game/Boss/BossStinkBugFinishDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/BossStinkBug.hpp"
 #include "Game/Demo/DemoPositionController.hpp"
 #include "Game/LiveActor/ActorStateBase.hpp"
@@ -14,7 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sAppearPowerStarStep = 60;
+    static const s32 sAppearPowerStarStep = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 namespace NrvBossStinkBugFinishDemo {

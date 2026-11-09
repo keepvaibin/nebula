@@ -206,8 +206,8 @@ namespace Mii {
         }
         // The light function's forms as the material shaders take them (channel_light: attenuation 1 specular, 2 none
         // (directional), 3 spot; diffuse 0 under specular attenuation).
-        const u32 atten = rStyle.atten == MODEL_FILE_AF_SPEC ? 1 : rStyle.atten == MODEL_FILE_AF_SPOT ? 3 : 2;
-        const u32 diffuse = rStyle.atten == MODEL_FILE_AF_SPEC ? 0 : static_cast< u32 >(rStyle.diffuse);
+        const u32 atten = rStyle.atten == MODEL_FILE_ATTEN_SPECULAR ? 1 : rStyle.atten == MODEL_FILE_ATTEN_SPOT ? 3 : 2;
+        const u32 diffuse = rStyle.atten == MODEL_FILE_ATTEN_SPECULAR ? 0 : static_cast< u32 >(rStyle.diffuse);
         u8 cull = rPart.cull;
         if (rStyle.reverseCulling && cull != MODEL_FILE_CULL_NONE) {
             cull = cull == MODEL_FILE_CULL_FRONT ? MODEL_FILE_CULL_BACK : MODEL_FILE_CULL_FRONT;

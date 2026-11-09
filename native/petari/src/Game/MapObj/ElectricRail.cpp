@@ -1,4 +1,5 @@
 #include "Game/MapObj/ElectricRail.hpp"
+#include <nebula_format.h>
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
@@ -337,7 +338,16 @@ void ElectricRail::initSensor() {
     mSensorPositions = new Vec3f[mRailHeight];
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        MR::addHitSensorPosMapObj(this, cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &mSensorPositions[i], Vec3f(0.0f, 0.0f, 0.0f));
+        // The sensor keeps its name: the table's for the first eight, a name made here (in this actor's arena) past them.
+        const char* pName;
+        if (i < static_cast< s32 >(ARRAY_SIZE(cSensorNameTable))) {
+            pName = cSensorNameTable[i];
+        } else {
+            char* const pMade = new char[16];
+            nebula_snprintf(pMade, 16, "body%d", static_cast< int >(i));
+            pName = pMade;
+        }
+        MR::addHitSensorPosMapObj(this, pName, 8, ElectricRailFunction::getHitSensorRadius(), &mSensorPositions[i], Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     updateHitSensorPos();

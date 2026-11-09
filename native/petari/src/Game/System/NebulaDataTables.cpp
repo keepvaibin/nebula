@@ -90,7 +90,7 @@ namespace {
 
 namespace NebulaDataTables {
     void addGalaxy(const AddedGalaxy& rGalaxy) {
-        AddedGalaxy* pGalaxies = new AddedGalaxy[sAddedGalaxyCount + 1];
+        AddedGalaxy* pGalaxies = new (NebulaArena::root(), 0) AddedGalaxy[sAddedGalaxyCount + 1];
         for (s32 i = 0; i < sAddedGalaxyCount; i++) {
             pGalaxies[i] = sAddedGalaxies[i];
         }

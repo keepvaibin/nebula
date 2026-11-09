@@ -1,4 +1,5 @@
 #include "Game/Boss/TripodBossLeg.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Boss/TripodBoss.hpp"
 #include "Game/Boss/TripodBossMovableArea.hpp"
@@ -20,7 +21,7 @@
 
 namespace {
     const f32 sLiftHeight = 1000.0f;  // above the step point: lift ends, ankle fully turned, landing target
-    const s32 sLeaveOutWaitTime = 60;
+    const s32 sLeaveOutWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sTargetBrakeDistance = 300.0f;
     const f32 sStampSignDistance = 300.0f;
     const f32 sMoveDamping = 0.9f;
@@ -32,7 +33,7 @@ namespace {
     const f32 sAnkleSlerpRate = 0.2f;
     const f32 sAnkleLandingStartRate = 0.15f;
     const f32 sAnkleShadowOffset = 630.0f;
-    const s32 sStampSignTime = 60;
+    const s32 sStampSignTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStampSignVibrationTime = 20;
     const f32 sStampSignVibrationCycle = 10.0f;
     const f32 sStampSignVibrationAmplitude = 20.0f;

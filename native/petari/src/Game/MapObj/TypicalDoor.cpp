@@ -1,4 +1,5 @@
 #include "Game/MapObj/TypicalDoor.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
@@ -12,7 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sCollisionChangeTimeOpen = 30;
+    static const s32 sCollisionChangeTimeOpen = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace NrvTypicalDoor {

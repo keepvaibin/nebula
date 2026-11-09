@@ -1,4 +1,5 @@
 #include "Game/System/NebulaAchievements.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_module.h>
 
 #include "Game/System/GalaxyInfoTable.hpp"
@@ -458,14 +459,14 @@ namespace NebulaAchievements {
 
     void update() {
         // Play time: the game's 60 steps a second, in any stage with a file (not the title and file select).
-        if (sFileInPlay && ++sPlayFrames >= 60) {
+        if (sFileInPlay && ++sPlayFrames >= NebulaFrameClock::stepsOfSeconds(1)) {
             sPlayFrames = 0;
             countStat(NebulaStat_PlaySeconds, 1);
         }
         if (++sStatFlushFrames >= cStatFlushFrames) {
             flushStats();
         }
-        if (++sUpdateFrames < 60) {
+        if (++sUpdateFrames < NebulaFrameClock::stepsOfSeconds(1)) {
             return;
         }
         sUpdateFrames = 0;

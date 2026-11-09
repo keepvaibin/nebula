@@ -1,4 +1,5 @@
 #include "Game/Enemy/Jiraira.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/CollisionParts.hpp"
@@ -15,9 +16,9 @@
 
 namespace {
     static const s32 hPreRecoverTime = 188;
-    static const s32 hBeginExplodeTime = 30;
+    static const s32 hBeginExplodeTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 hExplodeTime = 8;
-    static const s32 hExplodeInvalidTime = 120;
+    static const s32 hExplodeInvalidTime = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 
 namespace NrvJiraira {

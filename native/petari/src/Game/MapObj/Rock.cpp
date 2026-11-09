@@ -1,4 +1,5 @@
 #include "Game/MapObj/Rock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -49,7 +50,7 @@ namespace {
     static const s32 cStarPieceNum = 9;
     static const s32 cStarPieceNumWanwanMini = 1;
     static const f32 cWeakSensorRadius = 125.0f;
-    static const s32 cSeWanwanVoiceInterval = 120;
+    static const s32 cSeWanwanVoiceInterval = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 cSeWanwanVoiceDistance = 600.0f;
     static const s32 cRollSoundTime = 20;
     static const s32 cFreezeFrame = 20;

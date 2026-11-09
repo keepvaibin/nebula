@@ -1,4 +1,7 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <nebula_module.h>
 
 #include "Game/AudioLib/AudSystem.hpp"
@@ -36,9 +39,9 @@ namespace {
     };
 
     const s32 cEndQuietFrames = 2;        // frames with no cutscene before the picture returns
-    const u32 cStepBudgetMicros = 9000;   // the extra steps' share of a frame
+    const u32 cStepBudgetMicros = NebulaFrameClock::stepsOfSeconds(150);   // the extra steps' share of a frame
     const s32 cStepsPerFrameMax = 40;
-    const s32 cStallSteps = 600;          // a demo's clock held this long waits on the player: the skip ends there
+    const s32 cStallSteps = NebulaFrameClock::stepsOfSeconds(10);          // a demo's clock held this long waits on the player: the skip ends there
     const u32 cSkipMaxMicros = 15000000;  // a skip that has not ended by then shows the game as it is
 
     // The demos + skips, by their time sheets; EscapeDriverApr only in the launch star lessons.
@@ -227,6 +230,8 @@ namespace {
 
 namespace NebulaCutsceneSkip {
     void init() {
+        // The window lasts as long as the process: made in the permanent arena, whatever is current.
+        NebulaArena::CurrentScope home(Arenas::permanent());
         sWindow = MR::createSysInfoWindow();
         sWindow->setBackAnswersNo(true);
         sWindow->kill();

@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaFireShort.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -16,11 +17,11 @@
 namespace {
     static const f32 sFlySpeedNormal = 15.0f;
     static const f32 sFlySpeedFast = 30.0f;
-    static const s32 sFlyStepNormal = 180;
-    static const s32 sFlyStepLong = 900;
-    static const s32 sCurveLifeTime = 300;
+    static const s32 sFlyStepNormal = NebulaFrameClock::stepsOfSeconds(3);
+    static const s32 sFlyStepLong = NebulaFrameClock::stepsOfSeconds(15);
+    static const s32 sCurveLifeTime = NebulaFrameClock::stepsOfSeconds(5);
     static const f32 sCurveRotateSpeed = 0.1f;
-    static const s32 sStepToValidSensor = 30;
+    static const s32 sStepToValidSensor = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace NrvKoopaFireShort {

@@ -1,4 +1,5 @@
 #include "Game/Enemy/BegomanBase.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
@@ -52,21 +53,21 @@ namespace {
     const f32 hIsFaceToPlayerDegree = 30;
     const f32 hPursueLimitTurnDegree = 3.0f;
     const f32 hPursueRange = 2000.0f;
-    const s32 hPursueLimitTime = 180;
+    const s32 hPursueLimitTime = NebulaFrameClock::stepsOfSeconds(3);
     const s32 hPursueAnimFrame = 10;
     const s32 hPursueDashFrame = 18;
     const f32 hPursueDashVelocity = 15.0f;
-    const s32 hTurnTime = 60;
-    const s32 hTurnTimeCanNotAttack = 30;
+    const s32 hTurnTime = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 hTurnTimeCanNotAttack = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 hBrakeTime = 50;
-    const s32 hProvokeTime = 120;
-    const s32 hTiredTime = 120;
+    const s32 hProvokeTime = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 hTiredTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 hTiredCount = 180;
-    const s32 hReturnWaitTime = 180;
+    const s32 hReturnWaitTime = NebulaFrameClock::stepsOfSeconds(3);
     const f32 hKeepDistanceToWaitDist = 1200.0f;
     const f32 hKeepDistSideVel = 0.6f;
     const s32 hReceiveLimitTime = 2;
-    const s32 hPermitLimitTime = 30;
+    const s32 hPermitLimitTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Closer than this the player wakes a waiting begoman.
     const f32 hWakeDist = 1000.0f;
     // A rail ahead within this cosine of the face keeps a waiting begoman from attacking.

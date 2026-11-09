@@ -1,4 +1,5 @@
 #include "Game/Render/Material.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Ride/Plant.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
@@ -33,8 +34,8 @@ namespace {
     static const f32 sDistanceNear = 700.0f;
     static const f32 sDistanceBody = 300.0f;
     static const f32 sDistancePush = 50.0f;
-    static const s32 sStepDemoAppearEffect = 60;
-    static const s32 sStepDemoWaitGrowUp = 90;
+    static const s32 sStepDemoAppearEffect = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sStepDemoWaitGrowUp = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const f32 sHangUpStartTopLength = 150.0f;
     static const f32 sHangUpPlayerSpeedMin = 10.0f;
     static const f32 sHangStartRotateSpeed = 15.0f;
@@ -50,7 +51,7 @@ namespace {
     static const f32 sHangRotateSpeedRate = 1.3f;
     static const f32 sHangReachedDistance = 10.0f;
     static const f32 sDefaultJumpSpeed = 30.0f;
-    static const s32 sTimeInvalid = 60;
+    static const s32 sTimeInvalid = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sLeafIntervalMin = 100.0f;
     static const f32 sLeafIntervalMax = 300.0f;
     static const f32 sLeafPosOffsetStart = 100.0f;

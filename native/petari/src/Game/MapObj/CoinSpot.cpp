@@ -1,4 +1,5 @@
 #include "Game/MapObj/CoinSpot.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
@@ -74,7 +75,7 @@ void CoinSpot::exeIsInTornado() {
         mSpawnTimer = 0;
     }
 
-    if (mSpawnedCount >= mCoinCount || MR::isGreaterStep(this, 180)) {
+    if (mSpawnedCount >= mCoinCount || MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         MR::deleteEffect(this, "光");
         kill();
     }

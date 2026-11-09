@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaStateGenerateRock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
 #include "Game/LiveActor/ActorStateBase.hpp"
@@ -19,7 +20,7 @@ namespace {
     };
     // The draw is a float in [0, 9) cut to an int, so the last pattern is never picked.
     const s32 cPatternDrawMax = 9;
-    const s32 cRockInterval = 30;
+    const s32 cRockInterval = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cRockCircleRadius = 600.0f;
     const f32 cYellowRockRate = 0.08f;
 }  // namespace

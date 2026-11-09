@@ -1,4 +1,5 @@
 #include "Game/Enemy/HomingKiller.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -37,7 +38,7 @@ namespace {
     static const f32 cShadowRadiusZ = 100.0f;
     static const f32 cStarWandRadius3d = 150.0f;
     static const f32 cSandColumnEmitDot = -0.75f;
-    static const s32 cAppearIntervalFrame = 180;
+    static const s32 cAppearIntervalFrame = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 cForceKillFrame = 600;
     static const f32 cCameraShakeDistance = 1000.0f;
     static const f32 cChaseStartAngle = 360.0f;

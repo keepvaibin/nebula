@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaSequencerVs3.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleMain.hpp"
 #include "Game/Boss/KoopaBattleStairsVs3.hpp"
@@ -29,7 +30,7 @@ namespace {
     const s32 sLastImpactSeStep = 70;
     const s32 sFallSeStartStep = 471;
     const s32 sFallAmbientSeStartStep = 544;
-    const s32 sFallBurnStartStep = 930;
+    const s32 sFallBurnStartStep = NebulaFrameClock::stepsOfMilliseconds(15500);
     const s32 sFallEndStep = 1049;
     const s32 sDownCameraCoverStep = 640;
 };  // namespace

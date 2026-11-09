@@ -1,4 +1,5 @@
 #include "Game/NPC/TeresaRacer.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceRail.hpp"
 #include "Game/MapObj/GCapture.hpp"
@@ -21,7 +22,7 @@ namespace {
     static const f32 sSpeed = 20.0f;
     static const f32 sAccele = 0.1f;
     static const f32 sCameraDirScale = 0.4f;
-    static const s32 sBgmChangeStep = 480;
+    static const s32 sBgmChangeStep = NebulaFrameClock::stepsOfSeconds(8);
     static const s32 sNearBgm_Fadetime = 90;
     static const s32 sFarBgm_Fadetime = 150;
     static const f32 sNearBgmDist = 3000.0f;

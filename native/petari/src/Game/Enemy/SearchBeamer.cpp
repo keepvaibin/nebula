@@ -1,4 +1,5 @@
 #include "Game/Enemy/SearchBeamer.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -118,7 +119,7 @@ void SearchBeamer::exeCloseWaitFar() {
 
     reformDirection(false);
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseSearch));
     } else if (MR::isNearPlayer(this, cNearDistance)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitNear));
@@ -281,11 +282,11 @@ void SearchBeamer::exeStop() {
 }
 
 void SearchBeamer::exeRecover() {
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::startBrk(this, "Wait");
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitNear));
     }
 }

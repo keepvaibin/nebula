@@ -49,7 +49,6 @@ void XanimePlayer::init() {
     mModelData = nullptr;
     mCurrentBckName = nullptr;
     mPendingAnimation = nullptr;
-    mPrevAnimation = nullptr;
     mCurrentAnimation = nullptr;
     mDefaultAnimation = nullptr;
     mCore = nullptr;
@@ -91,7 +90,6 @@ void XanimePlayer::changeCurrentAnimation(const XanimeGroupInfo* pAnimation) {
         return;
     }
 
-    mPrevAnimation = mCurrentAnimation;
     mCurrentAnimation = pAnimation;
 
     updateAfterMovement();

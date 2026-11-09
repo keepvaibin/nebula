@@ -137,5 +137,4 @@ public:
     u32 mUsrIdx;
     u32 mFieldBlockNum;
     u32 mKeyBlockNum;
-    u32 mTDB1Num;
 };

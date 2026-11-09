@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Util/CameraUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Map/WaterPlant.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -49,7 +50,7 @@ namespace {
     // Plants rotate their face by this many degrees each.
     const f32 cPlantTurnDegree = 15.0f;
     const f32 cSpinWaveDistanceMax = 1500.0f;
-    const s32 cSpinWaveSwingTimeMax = 90;
+    const s32 cSpinWaveSwingTimeMax = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 cSpinWaveSwingTimeMaxF = 90.0f;
     const s32 cSpinWaveValidTime = 20;
     // Frames of delay per unit of distance before the spin wave reaches a plant.

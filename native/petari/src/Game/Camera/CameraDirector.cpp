@@ -186,10 +186,6 @@ void CameraDirector::calcPose() {
         mViewInterpolator->mIsCorrectErpPositionOn = false;
     }
 
-    if (getCurrentCameraMan()->isZeroFrameMoveOff()) {
-        mOnlyCamera->mIsZeroFrameMoveOff = true;
-    }
-
     mOnlyCamera->calcPose(getCurrentCameraMan());
     mPoseParam1->copyFrom(*mOnlyCamera->mPoseParam);
 }

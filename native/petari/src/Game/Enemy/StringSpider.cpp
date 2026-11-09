@@ -1,4 +1,5 @@
 #include "Game/Enemy/StringSpider.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/AnimStampController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
@@ -45,7 +46,7 @@ namespace {
     const f32 cSpinHitUpSpeed = 0.0f;
     // The string never gets shorter than this share of its placed length (Obj_arg0).
     const f32 cMinStringRate = 0.333f;
-    const s32 cSpinnedSteps = 480;
+    const s32 cSpinnedSteps = NebulaFrameClock::stepsOfSeconds(8);
     const f32 cNoticeDistance = 1400.0f;
 };  // namespace
 
@@ -217,11 +218,11 @@ void StringSpider::doSwingAction(f32 accel, bool isSideSwing) {
             MR::startBck(this, "PreAttack");
         }
 
-        if (MR::isStep(this, 30)) {
+        if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
             MR::startBck(this, "Attack");
         }
 
-        if (MR::isLessStep(this, 30)) {
+        if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
             swingDir = -swingDir;
         }
     }
@@ -267,7 +268,7 @@ void StringSpider::reactPointer() {
             flick.setLength(getSensor("body")->mRadius);
             hitPos.add(flick);
             MR::emitEffectHit(this, hitPos, nullptr);
-            mPointerStep = 30;
+            mPointerStep = NebulaFrameClock::stepsOfMilliseconds(500);
             MR::start2PAttackAssistSound();
             setNerve(GET_NERVE(StringSpider, HostTypeNrvSpinned));
         }
@@ -490,7 +491,7 @@ void StringSpider::exeAttack() {
 
     doSwingAction(0.8f, false);
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
     }
 }

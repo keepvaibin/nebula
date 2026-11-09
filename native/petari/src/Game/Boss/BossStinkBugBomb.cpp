@@ -1,4 +1,5 @@
 #include "Game/Boss/BossStinkBugBomb.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -109,7 +110,7 @@ void BossStinkBugBomb::exeWait() {
 
     MR::attenuateVelocity(this, MR::isBinded(this) ? 0.9f : 0.98f);
 
-    if (MR::isGreaterStep(this, 150)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE(BossStinkBugBomb, BossStinkBugBombNrvExplosion));
     }
 }

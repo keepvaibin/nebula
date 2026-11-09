@@ -1,4 +1,5 @@
 #include "Game/Enemy/FireBubble.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
@@ -17,9 +18,9 @@ namespace {
     const f32 cChaseRotateSpeed = 1.0f;
     const s32 cChaseFrame = 30;
     const f32 cReflectGravity = 1.5f;
-    const s32 cReflectWaitFrame = 60;
+    const s32 cReflectWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
     const f32 cReflectCursorSpeed = 10.0f;
-    const s32 cAppearInterval = 120;
+    const s32 cAppearInterval = NebulaFrameClock::stepsOfSeconds(2);
     const Vec cAppearVelocity = {0.0f, 35.0f, 6.0f};
     const Vec cReflectVelocity = {0.0f, 40.0f, -15.0f};
 };  // namespace

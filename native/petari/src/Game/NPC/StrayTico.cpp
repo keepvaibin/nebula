@@ -1,4 +1,5 @@
 #include "Game/NPC/StrayTico.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/CollectTico.hpp"
@@ -16,7 +17,7 @@ namespace {
     static const f32 sUpVecBlendRate = 0.2f;
     static const f32 sFrontVecBlendRate = 0.2f;
     static const s32 sCompletePlacementTime = 40;
-    static const s32 sCompleteRotateStartTime = 60;
+    static const s32 sCompleteRotateStartTime = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sCompleteDemoTime = 200;
     static const f32 sCompleteDemoRotate = 4.0f;
     static const f32 sCompleteStartRadius = 450.0f;

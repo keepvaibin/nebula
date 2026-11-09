@@ -30,8 +30,8 @@ namespace Mii {
         PassState pass;
         Chain chain;
         u32 lightMask;
-        u8 diffuse;    // MODEL_FILE_DF_*
-        u8 atten;      // MODEL_FILE_AF_*
+        u8 diffuse;    // MODEL_FILE_DIFFUSE_*
+        u8 atten;      // MODEL_FILE_ATTEN_*
         NebulaColor8 ambient;
         NebulaColor8 material;
         u32 alphaTest;  // 0 above 0, 1 not 255

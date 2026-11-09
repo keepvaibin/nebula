@@ -1,4 +1,5 @@
 #include "Game/MapObj/StarPiece.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -47,14 +48,14 @@ namespace {
     // Effects are skipped when the piece is this close to the camera.
     const f32 cEffectCameraDistance = 200.0f;
     const f32 cHopSpeed = 30.0f;
-    const s32 cHopSteps = 30;
+    const s32 cHopSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cFallDamp = 0.97f;
     const f32 cFallGravity = 1.0f;
     const f32 cWaterFallGravity = 0.1f;
     const f32 cReboundBounce = 0.99f;
     const f32 cLandSpeedMin = 20.0f;
     const f32 cWaterLandSpeedMin = 10.0f;
-    const s32 cFallKillSteps = 600;
+    const s32 cFallKillSteps = NebulaFrameClock::stepsOfSeconds(10);
     const s32 cReflectFallSteps = 9;
     const f32 cPlayerTouchDistance = 160.0f;
     // More launched pieces than this use the small effects.
@@ -67,10 +68,10 @@ namespace {
     const f32 cTargetScaleRate = 0.05f;
     const f32 cTouchEffectSize = 10.0f;
     const s32 cToPlayerEndShrinkSteps = 10;
-    const s32 cToPlayerEndSteps = 30;
-    const s32 cThrowSteps = 30;
+    const s32 cToPlayerEndSteps = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 cThrowSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cThrowBindStep = 28;
-    const s32 cThrowFallSteps = 60;
+    const s32 cThrowFallSteps = NebulaFrameClock::stepsOfSeconds(1);
     // The throw path is a straight line from start to end.
     const f32 cThrowArcHeight = 0.0f;
     const f32 cThrowBindCameraDistance = 1500.0f;
@@ -124,8 +125,6 @@ StarPiece::StarPiece(const char* pName)
     : LiveActor(pName), mFront(0, 0, 1), mTurnRate(cTurnRateStart), mChaseRate(), mThrowStart(0, 0, 0), mThrowEnd(0, 0, 0), mDelegator(nullptr), mTargetSensor(),
       mGettableEffectStep(-1), mGettableDelayCounter(-1), mFallKillTimer(), mColor(NebulaColor8{0, 0, 0, 255}), mGroupType(groupType_noGroup), mHostInfo(nullptr),
       mReceiverInfo(nullptr), mNumGift(1) {
-    MR::incNumStarPieceNewed();
-
     mFlags.isGoToPlayer = false;
     mFlags.isGettable = true;
     mFlags.isCheckGround = false;
@@ -138,7 +137,6 @@ StarPiece::StarPiece(const char* pName)
 
 void StarPiece::initAndSetFloatingFromGroup(const TableIter& rIter) {
     mGroupType = groupType_FloatingGroup;
-    MR::incNumStarPieceGettable(0);
     init(rIter);
     MR::invalidateClipping(this);
     mFlags.isGroup = true;
@@ -146,7 +144,6 @@ void StarPiece::initAndSetFloatingFromGroup(const TableIter& rIter) {
 
 void StarPiece::initAndSetRailMoveFromGroup(const TableIter& rIter) {
     mGroupType = groupType_RailMoveGroup;
-    MR::incNumStarPieceGettable(0);
     init(rIter);
     MR::invalidateClipping(this);
     mFlags.isGroup = true;
@@ -156,10 +153,6 @@ void StarPiece::init(const TableIter& rIter) {
     s32 colorIndex = -1;
 
     if (MR::isValidInfo(rIter)) {
-        if (mGroupType == groupType_noGroup) {
-            MR::incNumStarPieceGettable(0);
-        }
-
         MR::initDefaultPos(this, rIter);
         MR::getPlacementArg3NoInit(rIter, &colorIndex);
     }

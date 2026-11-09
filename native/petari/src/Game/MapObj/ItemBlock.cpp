@@ -1,11 +1,12 @@
 #include "Game/MapObj/ItemBlock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
 namespace {
     static const s32 cAppearItemStep = 1;
     static const f32 cAppearItemOffsetY = 100.0f;
-    static const s32 cTimerLimit = 240;
+    static const s32 cTimerLimit = NebulaFrameClock::stepsOfSeconds(4);
     static const s32 hNumTimerLastPiece = 11;
     static const f32 hLastBonusSplashRangeH = 10.0f;
     static const f32 hPointLightOffsetY = 100.0f;

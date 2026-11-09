@@ -1,11 +1,12 @@
 #include "Game/MapObj/IronCannonShell.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
 namespace {
     const f32 cShellBaseScale = 1.3f;
     const s32 cShellNum = 3;
-    const s32 cDefaultShotInterval = 300;
+    const s32 cDefaultShotInterval = NebulaFrameClock::stepsOfSeconds(5);
     const f32 cDefaultBulletSpeed = 30.0f;
     // Shells start this far along the front; the launcher model's muzzle is cGunPointModelOffset further.
     const f32 cGunPointOffset = 75.0f;

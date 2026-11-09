@@ -1,4 +1,5 @@
 #include "Game/MapObj/BlackHole.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -207,12 +208,12 @@ void BlackHole::exeDisappear() {
         MR::startSound(this, "SE_OJ_BLACK_HOLE_DISAPPEAR");
     }
 
-    f32 nerveEaseIn = MR::calcNerveEaseInValue(this, 90, mModelScale, 0.0f);
-    f32 blackHoleEase = MR::calcNerveEaseInValue(this, 30, 90, mModelScale, 0.0f);
+    f32 nerveEaseIn = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(1500), mModelScale, 0.0f);
+    f32 blackHoleEase = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(500), NebulaFrameClock::stepsOfMilliseconds(1500), mModelScale, 0.0f);
     mScale.setAll< f32 >(nerveEaseIn);
     mBlackHoleModel->mScale.setAll< f32 >(0.5f * blackHoleEase);
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         kill();
     }
 }

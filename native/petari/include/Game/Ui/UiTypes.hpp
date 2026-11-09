@@ -84,20 +84,6 @@ namespace Ui {
         }
 
         template < typename T >
-        inline void SetBits(T* pBits, int pos, int len, T val) {
-            const u32 MaxValue = 0xFFFFFFFFU >> (32 - len);
-            const T mask = T(~(MaxValue << pos));
-            *pBits &= mask;
-            *pBits |= val << pos;
-        }
-
-        template < typename T >
-        inline T GetBits(T bits, int pos, int len) {
-            const u32 mask = ~(0xFFFFFFFFU << len);
-            return T((bits >> pos) & mask);
-        }
-
-        template < typename T >
         inline bool TestBit(T bits, int pos) {
             const T mask = T(1 << pos);
 
@@ -175,7 +161,7 @@ namespace Ui {
 
     struct ChanCtrl {
         ChanCtrl() : reserve1(0), reserve2(0) {
-            Set(MODEL_FILE_SRC_VTX, MODEL_FILE_SRC_VTX);
+            Set(MODEL_FILE_SOURCE_VERTEX, MODEL_FILE_SOURCE_VERTEX);
         }
 
         ChanCtrl(u8 colSrc, u8 alpSrc) : reserve1(0), reserve2(0) {
@@ -209,7 +195,7 @@ namespace Ui {
 
     struct TexCoordGen {
         TexCoordGen() : reserve(0) {
-            Set(MODEL_FILE_TG_MTX2x4, MODEL_FILE_TG_TEX0, MODEL_FILE_IDENTITY);
+            Set(MODEL_FILE_TEXGEN_MATRIX_2x4, MODEL_FILE_TEXGEN_SOURCE_TEX0, MODEL_FILE_MATRIX_IDENTITY);
         }
 
         TexCoordGen(u8 aTexGenType, u8 aTexGenSrc, u32 aTexMtx)
@@ -229,10 +215,6 @@ namespace Ui {
             return u8(texGenType);
         }
 
-        u8 GetTexGenSrc() const {
-            return u8(texGenSrc);
-        }
-
         u32 GetTexMtx() const {
             return texMtx;
         }
@@ -245,7 +227,7 @@ namespace Ui {
 
     struct AlphaCompare {
         AlphaCompare() {
-            Set(NEBULA_COMPARE_ALWAYS, 0, MODEL_FILE_AOP_AND, NEBULA_COMPARE_ALWAYS, 0);
+            Set(NEBULA_COMPARE_ALWAYS, 0, MODEL_FILE_ALPHA_OP_AND, NEBULA_COMPARE_ALWAYS, 0);
         }
 
         AlphaCompare(u8 aComp0, u8 aRef0, u8 aOp, u8 aComp1, u8 aRef1) {
@@ -259,20 +241,8 @@ namespace Ui {
             ref1 = aRef1;
         }
 
-        u8 GetComp0() const {
-            return u8((comp >> 0) & 0xF);
-        }
-
         u8 GetRef0() const {
             return ref0;
-        }
-
-        u8 GetOp() const {
-            return u8(op);
-        }
-
-        u8 GetComp1() const {
-            return u8((comp >> 4) & 0xF);
         }
 
         u8 GetRef1() const {
@@ -287,7 +257,7 @@ namespace Ui {
 
     struct BlendMode {
         BlendMode() {
-            Set(MODEL_FILE_BM_BLEND, MODEL_FILE_BL_SRCALPHA, MODEL_FILE_BL_INVSRCALPHA, 0);
+            Set(MODEL_FILE_BLEND_ADD, MODEL_FILE_FACTOR_SRC_ALPHA, MODEL_FILE_FACTOR_INV_SRC_ALPHA, 0);
         }
 
         BlendMode(u8 aType, u8 aSrcFactor, u8 aDstFactor, u8 aOp) {
@@ -311,10 +281,6 @@ namespace Ui {
 
         u8 GetDstFactor() const {
             return u8(dstFactor);
-        }
-
-        u8 GetOp() const {
-            return u8(op);
         }
 
         u8 type;

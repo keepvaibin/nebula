@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Enemy/BegomanSpring.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/Enemy/BegomanSpringHead.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
@@ -86,8 +87,8 @@ namespace {
     const f32 cHitReactionRotate = 0.25f;
     // Step back, return, tired and keep distance.
     const f32 cSlowRotate = 0.2f;
-    const s32 cShakeTime = 180;
-    const s32 cTrampleTime = 180;
+    const s32 cShakeTime = NebulaFrameClock::stepsOfSeconds(3);
+    const s32 cTrampleTime = NebulaFrameClock::stepsOfSeconds(3);
     const s32 cStopSceneTime = 2;
     const s32 cBlowFrame = 20;
     const f32 cBlowVel = 40.0f;
@@ -105,7 +106,7 @@ namespace {
     // Star pieces bounce off while hidden and for this many steps of the hop.
     const s32 cHopStarPieceReflectTime = 40;
     const f32 cInWaterVel = 10.0f;
-    const s32 cInWaterTime = 60;
+    const s32 cInWaterTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 cKeepDistFar = 800.0f;
     const f32 cKeepDistNear = 600.0f;
 }  // namespace

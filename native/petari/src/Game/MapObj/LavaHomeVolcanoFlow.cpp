@@ -1,4 +1,5 @@
 #include "Game/MapObj/LavaHomeVolcanoFlow.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
@@ -57,7 +58,7 @@ void LavaHomeVolcanoFlow::exeMove() {
         MR::startBck(this, "LavaHomeVolcanoFlow");
     }
     MR::startLevelSound(this, "SE_OJ_LV_VOLCANO_EXPL_SIGN");
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::emitEffect(this, "Active");
         MR::emitEffect(this, "Loop");
         MR::startSound(this, "SE_OJ_VOLCANO_EXPLODE");

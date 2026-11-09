@@ -1,4 +1,5 @@
 #include "Game/MapObj/RainCloud.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
@@ -196,7 +197,7 @@ void RainCloud::exeHardTouch() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::validateCollisionParts(this);
         setNerve(GET_NERVE(RainCloud, RainCloudNrvWait));
     }

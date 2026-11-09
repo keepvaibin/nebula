@@ -1,4 +1,5 @@
 #include "Game/Enemy/Kabokuri.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/KabokuriFireHolder.hpp"
 #include "Game/Enemy/Kuribo.hpp"
@@ -34,7 +35,7 @@ namespace {
     static const f32 sNormalFreq = 0.9f;
     static const f32 sNormalGravity = 0.2f;
     static const f32 sRailCoordStepInterval = 50.0f;
-    static const s32 sWaitTime = 60;
+    static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sWalkSpeed = 0.2f;
     static const f32 sWalkTurnDegree = 2.0f;
     static const f32 sWalkGoalRange = 25.0f;

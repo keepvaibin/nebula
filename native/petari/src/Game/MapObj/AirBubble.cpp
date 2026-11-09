@@ -1,4 +1,5 @@
 #include "Game/MapObj/AirBubble.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -84,10 +85,8 @@ void AirBubble::appearMove(const Vec3f& rTrans, s32 life) {
 }
 
 void AirBubble::exeWait() {
-    if (MR::isFirstStep(this)) {
-    }
 
-    mBobOffset = MR::sin(MR::calcNerveRate(this, 120) * MR::pi() * 2.0f);
+    mBobOffset = MR::sin(MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(2)) * MR::pi() * 2.0f);
 
     if (mIsFollowRail) {
         if (MR::isRailReachedGoal(this)) {
@@ -150,7 +149,7 @@ void AirBubble::exeBreak() {
 }
 
 void AirBubble::exeKillWait() {
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         kill();
     }
 }

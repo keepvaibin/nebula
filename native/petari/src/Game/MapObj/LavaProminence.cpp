@@ -1,4 +1,5 @@
 #include "Game/MapObj/LavaProminence.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
@@ -19,8 +20,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const s32 sDefaultTimeWait = 180;
-    static const s32 sTimeSign = 90;
+    static const s32 sDefaultTimeWait = NebulaFrameClock::stepsOfSeconds(3);
+    static const s32 sTimeSign = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const f32 sDefaultMoveSpeed = 20.0f;
 };  // namespace
 

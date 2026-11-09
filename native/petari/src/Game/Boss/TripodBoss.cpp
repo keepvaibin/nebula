@@ -10,6 +10,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/DummyDisplayModel.hpp"
 #include "Game/Scene/SceneFunction.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -32,16 +33,18 @@ namespace {
     const char* const sLegBoneNameTable[] = {"LeftLeg", "RightLeg", "BackLeg"};
     const Vec3f sAppearStarPieceOffset(0.0f, 3600.0f, 0.0f);
     const Vec3f sEndMarioPosition(0.0f, 2160.0f, 1260.0f);
-    const s32 sBreakDownTime = 240;
-    const s32 sExplosionTime = 150;
+    const s32 sBreakDownTime = NebulaFrameClock::stepsOfSeconds(4);
+    const s32 sExplosionTime = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 sKillerGeneraterIncreaseSeTiming = 90;
     const s32 sHeadExplodeSeTiming = 0;
     const s32 sDamageTime = 129;
-    const s32 sRideMarioKeepTime = 120;  // steps "riding" lasts after the player leaves the boss's gravity
+    const s32 sRideMarioKeepTime = NebulaFrameClock::stepsOfSeconds(2);  // steps "riding" lasts after the player leaves the boss's gravity
     const s32 sBgmStateNormal = 1;
     const s32 sBgmStateRide = 3;
     const f32 sLegAngleStep = 2.0943952f;  // 2 pi / 3
     const s32 sBonesPerLeg = 7;
+    // The demo blends the legs in over half a second.
+    const s32 sDemoBlendSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;
 
     // Bone 7 * leg + k is that leg's joint cBoneSubParts[k]; bone 21 is the body.
     const TripodBoss::SUB_PART_ID cBoneSubParts[sBonesPerLeg] = {
@@ -548,7 +551,7 @@ void TripodBoss::exeLeaveLegOutOfPlayer() {
 
 // After 30 steps the body shakes along its height, 3 steps down then 3 up, sinking slowly (79.5 against 80).
 void TripodBoss::exeDamage() {
-    if (MR::isGreaterStep(this, 30)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         Vec3f outward = mBodyPos - mMovableArea->mCenter;
 
         MR::normalizeOrZero(&outward);
@@ -576,15 +579,15 @@ void TripodBoss::exeStartDemo() {
         MR::startBck(this, "StartDemo");
     }
 
-    if (MR::isLessStep(this, 120)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::startLevelSound(this, "SE_BM_LV_TRIPOD_SIREN");
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::startBossBGM(MR::BossBgmID_TripodBossA);
     }
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::startLevelSound(this, "SE_BM_LV_TRIPOD_START_DEMO");
     }
 
@@ -632,7 +635,7 @@ void TripodBoss::exePainDemo() {
         mDemoBlendRate = 0.0f;
     }
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         Pos3f mtx(getBaseMtx());
         Vec3f marioPos;
         mtx.mult(sEndMarioPosition, marioPos);
@@ -644,19 +647,18 @@ void TripodBoss::exePainDemo() {
         MR::emitEffect(this, "BreakLight");
     }
 
-    if (MR::isLessStep(this, 90)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         mDummyModelOffset.y = MR::calcNerveEaseInOutValue(this, 70, 3200.0f, 3400.0f);
     } else {
-        mDummyModelOffset.y = MR::calcNerveEaseInValue(this, 90, 150, 3400.0f, 5000.0f);
+        mDummyModelOffset.y = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(1500), NebulaFrameClock::stepsOfMilliseconds(2500), 3400.0f, 5000.0f);
     }
 
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::startLevelSound(this, "SE_BM_LV_TRIPOD_END_DEMO");
         MR::startLevelSound(this, "SE_BM_LV_TRIPOD_BREAK_LIGHT");
         calcDemoMovement();
 
-        // The blend takes 30 steps (the demo's authored length), not half a second at any rate.
-        mDemoBlendRate += 1.0f / 30.0f;
+        mDemoBlendRate += 1.0f / static_cast< f32 >(sDemoBlendSteps);
 
         if (mDemoBlendRate > 1.0f) {
             mDemoBlendRate = 1.0f;

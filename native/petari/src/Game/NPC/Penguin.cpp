@@ -1,4 +1,5 @@
 #include "Game/NPC/Penguin.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/MapObj/JetTurtle.hpp"
@@ -23,8 +24,8 @@ namespace {
     static const f32 sBlendDash = 0.08f;
     static const f32 sSpeedSwim = 5.0f;
     static const f32 sSpeedSwimTurtle = 10.0f;
-    static const s32 sStepToDiveMin = 120;
-    static const s32 sStepToDiveMax = 300;
+    static const s32 sStepToDiveMin = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sStepToDiveMax = NebulaFrameClock::stepsOfSeconds(5);
 };  // namespace
 
 namespace NrvPenguin {

@@ -25,8 +25,6 @@ namespace MR {
 
     bool giftStarPieceToTarget(HitSensor*, u32);
 
-    void incNumStarPieceGettable(s32);
-    void incNumStarPieceNewed();
 
 };  // namespace MR
 
@@ -56,8 +54,6 @@ public:
     StarPieceReceiverInfo* findReceiverInfo(const NameObj*);
     void calcShootGoalUsingPointingDepth();
 
-    u32 mNumStarPieceNewed;
-    u32 mNumStarPieceGettable;
     s32 mColorIndex;
     s32 mNumStarPiecesLaunched;
 

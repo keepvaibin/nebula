@@ -35,8 +35,8 @@ namespace {
     const f32 hOverturnBoundJumpVelV = 15.0f;
     const f32 hRecoverJumpVelV = 17.0f;
     const f32 hWallHitEndJumpVelV = 20.0f;
-    const s32 hAngryPursueTime = 300;
-    const s32 hOverturnTime = 180;
+    const s32 hAngryPursueTime = NebulaFrameClock::stepsOfSeconds(5);
+    const s32 hOverturnTime = NebulaFrameClock::stepsOfSeconds(3);
     const f32 hWalkSpeed = 4.0f;
     const f32 hAngrySpeed = 13.0f;
     const s32 hWalkStep = 8;
@@ -46,23 +46,23 @@ namespace {
     const s32 hPunchStopSceneTime = 4;
     const s32 hSpinInterval = 3;
     const s32 hOverturnCanTrampleDeathTime = 50;
-    const s32 hRecoverCanTrampleDeathTime = 60;
+    const s32 hRecoverCanTrampleDeathTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 hRecoverInit = 67;
     const s32 hRecoverInterval = 3;
     const s32 hRecoverAnimBegin = 55;
-    const s32 hHipDroppedTime = 30;
+    const s32 hHipDroppedTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 hNearHipDropReactionDist = 1000.0f;
     const s32 hOverturnBoundInterval = 2;
     const s32 hWallHitInterval = 3;
     const f32 hHitWallCheck = -0.9f;
     const f32 hInitBlowRadian = 0.2f;
-    const s32 hBlowTime = 30;
+    const s32 hBlowTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 hBlowVelH = 30.0f;
     const f32 hBlowVelV = 20.0f;
     const s32 hBindMinStep = 10;
     const f32 hPushRate = 0.25f;
     const f32 hCollideRange = 2.0f;
-    const s32 hRecoverSteamSeTime = 60;
+    const s32 hRecoverSteamSeTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 hRecoverGetupSeTime = 63;
     const s32 hOverturnBoundSeTime = 29;
     const f32 hAngryEndJumpVelV = 0.0f;
@@ -956,7 +956,7 @@ void Hanachan::exeAngryEnd() {
     moveBodyAlongHead();
     applyPlayerHipDropReaction();
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         if (mBodyParts[0]->isLandedInNerve(GET_NERVE(Hanachan, HanachanPartsNrvAngryEnd)) &&
             mBodyParts[4]->isLandedInNerve(GET_NERVE(Hanachan, HanachanPartsNrvAngryEnd))) {
             setNerve(GET_NERVE(Hanachan, HanachanNrvHanachanWalk));

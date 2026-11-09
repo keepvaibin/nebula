@@ -181,10 +181,6 @@ namespace MR {
         return (MR::getPlayerInput(channel)->mStick->mTrigger & InputStick::Direction_Right) != 0;
     }
 
-    void getSubTilt(Vec3f* pAccel, s32 channel) {
-        MR::getPlayerInput(channel)->mSubTilt->getAcceleration(pAccel);
-    }
-
     bool isSubSpin(s32 channel) {
         return MR::getPlayerInput(channel)->mSubSwing->mIsSwing;
     }

@@ -1,4 +1,5 @@
 #include "Game/Enemy/BombTeresa.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -325,7 +326,7 @@ bool BombTeresa::requestDrift() {
 }
 
 bool BombTeresa::tryChaseEnd() {
-    if (MR::isGreaterStep(this, 240) || MR::isPlayerElementModeTeresa() || isOutOfRange(2000.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(4)) || MR::isPlayerElementModeTeresa() || isOutOfRange(2000.0f)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvWait));
         return true;
     }
@@ -361,7 +362,7 @@ bool BombTeresa::tryDriftRelease() {
 }
 
 bool BombTeresa::tryDriftReleaseEnd() {
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::deleteEffect(this, "SpinBlur");
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvWait));
         return true;
@@ -428,7 +429,7 @@ void BombTeresa::exeShadowAppear() {
     MR::turnDirectionToPlayerDegree(this, &mFront, 3.0f);
     mTonguePos = mPosition;
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::deleteEffect(this, "Shadow");
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvAppear));
     }
@@ -488,7 +489,7 @@ void BombTeresa::exeWait() {
     } else if (MR::isNearPlayerAnyTime(this, 1800.0f)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase));
     } else if (mIsWanderAfterWait) {
-        if (MR::isGreaterStep(this, 60)) {
+        if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             setNerve(GET_NERVE(BombTeresa, BombTeresaNrvWander));
         }
     }
@@ -521,7 +522,7 @@ void BombTeresa::exeChase() {
     }
 
     MR::turnDirectionToPlayerDegree(this, &mFront, 1.4f);
-    MR::addVelocityMoveToDirection(this, mFront, (0.9f * MR::calcNerveRate(this, 60)));
+    MR::addVelocityMoveToDirection(this, mFront, (0.9f * MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1))));
     mTonguePos = mPosition;
     updateNormalVelocity();
     if (!tryChaseEnd() && tryDirectTackle()) {
@@ -570,7 +571,7 @@ void BombTeresa::exeDirectTackle() {
     MR::addVelocityKeepHeight(this, *MR::getPlayerCenterPos(), 100.0f, 0.6f, 100.0f);
     updateNormalVelocity();
     mTonguePos = mPosition;
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvWander));
     }
 }
@@ -633,7 +634,7 @@ void BombTeresa::exeDrift() {
         }
     }
 
-    addTeresaSpinPullVelocity(MR::calcNerveEaseInOutValue(this, 190, 240, 150.0f, 70.0f));
+    addTeresaSpinPullVelocity(MR::calcNerveEaseInOutValue(this, 190, NebulaFrameClock::stepsOfSeconds(4), 150.0f, 70.0f));
     updateNormalVelocity();
     if (MR::isStep(this, 190)) {
         MR::startBrk(this, "CountDown");
@@ -744,7 +745,7 @@ void BombTeresa::exeReadyRestart() {
     }
 
     mTonguePos = mPosition;
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvAppear));
     }
 }

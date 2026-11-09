@@ -30,14 +30,14 @@ namespace {
     const Vec cSkyTrans = {0.0f, 0.0f, -10000.0f};
     const f32 cPointingTargetRadius = 60.0f;
     const s32 cDecideFrame = 40;
-    const s32 cSelectedAccelStartStep = 60;
+    const s32 cSelectedAccelStartStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cSelectedAccelFrame = 150;
     const f32 cSelectedEffectRateMin = 2.0f;
     const f32 cSelectedEffectRateMax = 15.0f;
     const f32 cSelectedEffectSpeedMin = 9.0f;
     const f32 cSelectedEffectSpeedMax = 15.0f;
-    const s32 cSelectedEndAnimStartStep = 60;
-    const s32 cSelectedFadeOutStartStep = 180;
+    const s32 cSelectedEndAnimStartStep = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 cSelectedFadeOutStartStep = NebulaFrameClock::stepsOfSeconds(3);
     const s32 cSelectedFadeOutFrame = 30;
     const s32 cSelectedFadeInFrame = 180;
     const s32 cCancelFadeOutFrame = 90;
@@ -283,7 +283,7 @@ s32 ScenarioSelectLayout::getSelectedScenarioNo() const {
 
 bool ScenarioSelectLayout::isReadyToDisappear() const {
     if (isNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvAfterScenarioSelected))) {
-        return MR::isGreaterStep(this, 210);
+        return MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(3500));
     }
 
     return false;

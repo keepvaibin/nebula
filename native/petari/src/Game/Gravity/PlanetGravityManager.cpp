@@ -56,7 +56,6 @@ bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* 
         if (pInfo != nullptr && storeInfo) {
             largestScalar = scalar;
             pInfo->mGravityVector = gravityVec;
-            pInfo->mLargestPriority = largestPriority;
             pInfo->mGravityInstance = gravity;
         }
     }

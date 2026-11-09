@@ -1,4 +1,5 @@
 #include "Game/Enemy/DharmaSambo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/SamboFunction.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
@@ -38,20 +39,20 @@ namespace {
     const f32 hEscapeWaitAirParam[] = {0.0f, 2.0f, 0.98f, 5.0f};
     const f32 hPursueEscapeDist[] = {100.0f, 200.0f, 300.0f, 400.0f};
     const char* joint_name[] = {"Spine1", "Spine2", "Spine3", "Spine4"};
-    const s32 hEscapeTime = 300;
+    const s32 hEscapeTime = NebulaFrameClock::stepsOfSeconds(5);
     const f32 hEscapeRunVelH = 7.0f;
     const f32 hEscapeRunVelV = 30.0f;
     const f32 hEscapeWaitDist = 800.0f;
     const f32 hEscapeWaitJumpVel = 30.0f;
     const f32 hInitPosRange = 1250.0f;
-    const s32 hAppearTime = 600;
+    const s32 hAppearTime = NebulaFrameClock::stepsOfSeconds(10);
     const s32 hBodyPartsNum = 4;
     const f32 hWaitUnderGroundDistance = 800.0f;
-    const s32 hWaitUnderGroundTime = 120;
+    const s32 hWaitUnderGroundTime = NebulaFrameClock::stepsOfSeconds(2);
     const f32 hPursueGoAddDist = 100.0f;
-    const s32 hToAttackTime = 120;
-    const s32 hAttackTurnTime = 90;
-    const s32 hHideTime = 300;
+    const s32 hToAttackTime = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 hAttackTurnTime = NebulaFrameClock::stepsOfMilliseconds(1500);
+    const s32 hHideTime = NebulaFrameClock::stepsOfSeconds(5);
     const s32 hHitStopTime = 5;
     const f32 hSpinHittedMoveBodyRate = 0.5f;
     const f32 hSpinHitVelH = 10.0f;
@@ -59,7 +60,7 @@ namespace {
     const s32 hSpinHittedBlowableTime = 50;
     const s32 hSpinHittedStarPointerBindableTime = 50;
     const s32 hSpinHittedLandTime = 27;
-    const s32 hSpinHittedNoAttackTime = 30;
+    const s32 hSpinHittedNoAttackTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 hBindMinStep = 10;
     const s32 hStarPointerBindEndLandTime = 27;
     const s32 hAppearSeTiming = 60;

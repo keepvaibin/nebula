@@ -1,4 +1,5 @@
 #include "Game/Boss/OtaKing.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Boss/OtaKingLongFoot.hpp"
@@ -67,15 +68,15 @@ namespace {
     const f32 cFireBallThrowNum = 3;
     const f32 cFireBallThrowSpeed = 15.0f;
     const f32 cFireBallThrowAngle = 30.0f;
-    const s32 cThrowFireBallWaitFrame = 60;
+    const s32 cThrowFireBallWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cBubbleAppearStep = 100;
     const s32 cBubbleAppearNum = 6;
     const f32 cBubbleAppearRandomAngle = 30.0f;
     const s32 cAppearDemoRippleStepS = 40;
     const s32 cAppearDemoRippleStepL = 190;
-    const s32 cCocoNutRippleStep = 30;
-    const s32 cFireBallRippleStep = 30;
-    const s32 cDownRippleStep = 90;
+    const s32 cCocoNutRippleStep = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 cFireBallRippleStep = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 cDownRippleStep = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 cNearAttackRippleStep = 20;
     const s32 cBubbleAttackRippleStep = 85;
     const s32 cDownSinkStartStep = 80;

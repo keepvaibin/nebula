@@ -37,7 +37,6 @@ public:
     ~UiList() { Clear(); }
 
     T* First() const { return mFirst; }
-    T* Last() const { return mLast; }
     u32 Size() const { return mSize; }
     bool Empty() const { return mFirst == nullptr; }
     static T* Next(const T* p) { return p->mLink.mNext; }

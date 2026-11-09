@@ -1,4 +1,5 @@
 #include "Game/System/NebulaText.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/StarPointerGuidance.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -10,10 +11,10 @@
 #include "Game/Screen/NebulaUi.hpp"
 
 namespace {
-    static const s32 hOutScreenTime = 60;
-    static const s32 hRequestTime = 30;
-    static const s32 hNotRequestEndTime = 30;
-    static const s32 hEndTimeOutHide = 240;
+    static const s32 hOutScreenTime = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 hRequestTime = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 hNotRequestEndTime = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 hEndTimeOutHide = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
 namespace NrvStarPointerGuidance {

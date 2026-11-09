@@ -1,4 +1,5 @@
 #include "Game/MapObj/LavaGeyser.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -107,7 +108,7 @@ void LavaGeyser::exeSign() {
         MR::emitEffect(this, "Sign");
     }
     MR::startLevelSound(this, "SE_OJ_LV_LAVA_GEYSER_SIGN");
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::deleteEffect(this, "Sign");
         setNerve(GET_NERVE(LavaGeyser, HostTypeNrvShootUp));
     }

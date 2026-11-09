@@ -1,4 +1,5 @@
 #include "Game/NPC/Butler.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -379,7 +380,7 @@ void Butler::tryReplaceStarPieceIfExecLecture() {
 
     mReplaceStep++;
 
-    if (mReplaceStep != 120) {
+    if (mReplaceStep != NebulaFrameClock::stepsOfSeconds(2)) {
         return;
     }
 
@@ -467,7 +468,7 @@ void Butler::exeDemoShowGalaxyMap() {
         MR::pauseTimeKeepDemo(this);
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         MR::startAstroMapLayoutForChallengeGalaxyDiscover();
     }
 

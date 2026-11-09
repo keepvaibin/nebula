@@ -1,4 +1,5 @@
 #include "Game/Screen/SuddenDeathMeter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/CountUpPaneRumbler.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -18,9 +19,9 @@ namespace {
     static const f32 sMaxAlpha = 1.2f;
     // static const f32 sHideSpeed = _;
     // static const f32 sShowSpeed = _;
-    static const s32 sAppearTime = 120;
+    static const s32 sAppearTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sBreakDelayTime = 40;
-    static const s32 sPowerUpWaitTime = 60;
+    static const s32 sPowerUpWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     // static const s32 sRecoveryCountInterval = _;
     // static const s32 sRecoveryCountStartTime = _;
 };  // namespace

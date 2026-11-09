@@ -1,4 +1,5 @@
 #include "Game/Demo/ScenarioStarter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/SpinDriverCamera.hpp"
 #include "Game/MapObj/SpinDriverShootPath.hpp"
@@ -178,7 +179,7 @@ void ScenarioStarter::exeShowWelcomeLayout() {
         MR::executeOnWelcomeAndRetry();
     }
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::forceAppearDefaultGameLayout();
     }
 
@@ -288,7 +289,7 @@ void ScenarioStarter::calcShootMotionTime() {
     mFallMotionStartStep = mFlightTime - 20;
     s32 flyTime = 0.2f * mFlightTime;
     if (flyTime > 90) {
-        flyTime = 90;
+        flyTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     }
 
     mFlyMotionStartStep = startTime != 0 ? startTime * (flyTime / startTime) : 0;

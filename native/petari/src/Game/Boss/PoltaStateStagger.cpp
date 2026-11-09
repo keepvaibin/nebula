@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaStateStagger.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaActionBase.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
@@ -50,7 +51,7 @@ void PoltaStateStagger::exeWait() {
     MR::attenuateVelocity(getHost(), 0.9f);
     MR::addVelocityKeepHeight(getHost(), getHost()->mStartPos, 0.5f, 50.0f);
     getHost()->rotateToPlayer();
-    if (MR::isIntervalStep(this, 210) && PoltaFunction::appearBombTeresaFromRoot(getHost())) {
+    if (MR::isIntervalStep(this, NebulaFrameClock::stepsOfMilliseconds(3500)) && PoltaFunction::appearBombTeresaFromRoot(getHost())) {
         MR::startSound(getHost(), "SE_BM_POLTA_GEN_BOMB_TERESA");
     }
 }

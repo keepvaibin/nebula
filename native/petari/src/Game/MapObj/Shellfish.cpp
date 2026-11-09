@@ -1,4 +1,5 @@
 #include "Game/MapObj/Shellfish.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -14,15 +15,15 @@ namespace {
     const Vec sCoinOffset = {0.0f, 50.0f, 30.0f};
     const Vec sChipOffset = {0.0f, 100.0f, 50.0f};
     const Vec sKinokoOneUpOffset = {0.0f, 70.0f, 30.0f};
-    const s32 sStepToOpen = 150;
+    const s32 sStepToOpen = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 sStepToSetPosItem = 100;
     const s32 sStepToCloseSignal = 170;
-    const s32 sStepToClose = 150;
+    const s32 sStepToClose = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 sStepToHitSensorOn = 0;
     const s32 sStepToHitSensorOff = 15;
     const s32 sStepToApperItem = 40;
     const s32 sStepToDeadItem = 5;
-    const s32 sStepToRecover = 540;
+    const s32 sStepToRecover = NebulaFrameClock::stepsOfSeconds(9);
     const s32 sShockToInterpole = 2;
     const f32 sHitPushPower = 40.0f;
 };  // namespace

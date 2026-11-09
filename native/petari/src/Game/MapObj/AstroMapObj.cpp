@@ -1,4 +1,5 @@
 #include "Game/MapObj/AstroMapObj.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/AstroMapObjFunction.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
@@ -11,7 +12,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    const s32 cAstroPathAppearStep = 90;
+    const s32 cAstroPathAppearStep = NebulaFrameClock::stepsOfMilliseconds(1500);
 
     // Doors: a Close and an Open collision, swapped when the door opens.
     bool isDoorObj(const char* pObjName) {

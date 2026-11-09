@@ -1,4 +1,5 @@
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Ride/PlantStalk.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -21,7 +22,7 @@ namespace {
     static const f32 sGrowAccelMin = 15.0f;
     static const f32 sGrowAccelMax = 30.0f;
     static const s32 sGrowAccelTimeMin = 5;
-    static const s32 sGrowAccelTimeMax = 30;
+    static const s32 sGrowAccelTimeMax = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sOffsetPointNum = 3;
     static const f32 sInterval = 30.0f;
     static const f32 sWidthRateMin = 0.45f;

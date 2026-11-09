@@ -206,19 +206,22 @@ namespace ReplaceTagProcessor {
         }
         va_end(copy);
 
+        // The room getReplaceRoom and ReplaceTagFunction::ReplaceArgs set aside for a number tag: an s32 is at most 11
+        // characters, "-2147483648", and the terminator.
+        const size_t room = 12;
         switch (rTag.getTag()) {
         case 5:
-            return MR::formatText(pDst, 0x100, u"%02d", number);
+            return MR::formatText(pDst, room, u"%02d", number);
         case 6:
-            return MR::formatText(pDst, 0x100, u"%03d", number);
+            return MR::formatText(pDst, room, u"%03d", number);
         case 7:
-            return MR::formatText(pDst, 0x100, u"%04d", number);
+            return MR::formatText(pDst, room, u"%04d", number);
         case 8:
-            return MR::formatText(pDst, 0x100, u"%05d", number);
+            return MR::formatText(pDst, room, u"%05d", number);
         case 9:
-            return MR::formatText(pDst, 0x100, u"%06d", number);
+            return MR::formatText(pDst, room, u"%06d", number);
         default:
-            return MR::formatText(pDst, 0x100, u"%d", number);
+            return MR::formatText(pDst, room, u"%d", number);
         }
     }
 

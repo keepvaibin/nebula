@@ -1,4 +1,5 @@
 #include "Game/MapObj/BreakableCage.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -349,7 +350,7 @@ void BreakableCage::exeBreak() {
     bool canDoSwitch;
 
     if (mCameraInfo != nullptr) {
-        canDoSwitch = MR::isStep(this, 120);
+        canDoSwitch = MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2));
     } else if (isTypeCage()) {
         canDoSwitch = MR::isBckStopped(mBreakModel);
     } else {

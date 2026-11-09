@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaStateAttackGround.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
 #include "Game/LiveActor/ActorStateBase.hpp"
@@ -34,7 +35,7 @@ void PoltaStateAttackGround::exeStart() {
         MR::startSound(getHost(), "SE_BV_POLTA_PREP_ARM_DOWN");
         MR::startSound(getHost(), "SE_BM_POLTA_ARM_LIFT_UP");
     }
-    if (MR::isLessStep(this, 60)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         getHost()->rotateToPlayer();
     }
     if (!PoltaFunction::isEnableAttackLeftArm(getHost()) && !PoltaFunction::isEnableAttackRightArm(getHost())) {

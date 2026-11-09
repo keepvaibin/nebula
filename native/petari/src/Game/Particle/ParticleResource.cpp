@@ -24,7 +24,6 @@ ParticleResource::ParticleResource() {
     mpFieldBlocks = NULL;
     mpKeyBlocks = NULL;
     mpTDB1 = NULL;
-    mTDB1Num = 0;
     mKeyBlockNum = 0;
     mFieldBlockNum = 0;
     mUsrIdx = 0;

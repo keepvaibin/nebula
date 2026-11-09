@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaStateAttackFireShort.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleBase.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
@@ -11,8 +12,8 @@ namespace {
     static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
     static const s32 sStepToEmitFire = 1;
     static const s32 sStepToNextAttack = 45;
-    static const s32 sStepToNextAttackVs2 = 30;
-    static const s32 sStepToNextAttackVs3 = 30;
+    static const s32 sStepToNextAttackVs2 = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sStepToNextAttackVs3 = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sStepToNextAttackVs3Angry = 15;
     static const f32 sTurnSpeed = 2.0f;
 };  // namespace
@@ -113,7 +114,7 @@ void KoopaStateAttackFireShort::exeEmit() {
         if (MR::isStep(this, mFireDelay)) {
             setNerve(GET_NERVE(KoopaStateAttackFireShort, KoopaStateAttackFireShortNrvEmit));
         }
-    } else if (MR::isGreaterStep(this, 30)) {
+    } else if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         kill();
     }
 }

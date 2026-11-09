@@ -9,7 +9,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sTidyTimeLimit = 1800;
+    static const s32 sTidyTimeLimit = NebulaFrameClock::stepsOfSeconds(30);
     static const s32 sBgmStartStep = 166;
     static const s32 sPreRaceWait = 100;
     static const s32 sPstRaceWait = 50;
@@ -403,7 +403,7 @@ void Caretaker::exeCountDown() {
         MR::startStageBGM("MBGM_RACE_01", false);
     }
 
-    if (MR::isGreaterEqualStep(this, 180)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         MR::onPlayerControl(true);
         setNerve(GET_NERVE(Caretaker, CaretakerNrvTidy));
     }

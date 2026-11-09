@@ -1,13 +1,14 @@
 #include "Game/MapObj/PressureBase.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sDefaultShotInterval = 300;
+    static const s32 sDefaultShotInterval = NebulaFrameClock::stepsOfSeconds(5);
     static const f32 sDefaultFirstSpeed = 30.0f;
     static const s32 sStepForChargeToShot = 16;
     static const s32 sStepForChargeToShortShot = 54;
-    static const s32 sSyncWaitTime = 60;
+    static const s32 sSyncWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sAimTurnRate = 5.0f;
     static const s32 sStepForBound = 20;
     static const f32 sBoundFreq = 1.0f;

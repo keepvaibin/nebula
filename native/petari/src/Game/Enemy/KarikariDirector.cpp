@@ -1,4 +1,5 @@
 #include "Game/Enemy/KarikariDirector.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/Karikari.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/FixedPosition.hpp"
@@ -15,7 +16,7 @@ namespace {
 
     static const s32 hKarikariHoldingMax = ARRAY_SIZE(cling_data);
     static const s32 sNoReleaseTime = 10;
-    static const s32 sRumbleInterval = 120;
+    static const s32 sRumbleInterval = NebulaFrameClock::stepsOfSeconds(2);
 
     KarikariDirector* getKarikariDirector() {
         return MR::getSceneObj< KarikariDirector >(SceneObj_KarikariDirector);

@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaBattleStairsVs1.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaFireStairs.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
@@ -25,7 +26,7 @@ namespace {
     const s32 cStepToEmitFire = 15;
     const f32 cFireSpeed = 20.0f;
     const s32 cFireAttackStep = 33;
-    const s32 cJumpTime = 60;
+    const s32 cJumpTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 cJumpHeight = 1000.0f;
     const f32 cTurnSpeed = 2.0f;
     const char* const cLandingPosName[KoopaBattleStairsVs1::cLandingNum] = {
@@ -72,7 +73,7 @@ namespace NrvKoopaBattleStairsVs1 {
 
 // calcFireStartPos moves Koopa to each landing in turn; he is left on landing 2 until the demo places him.
 KoopaBattleStairsVs1::KoopaBattleStairsVs1(Koopa* pKoopa)
-    : KoopaBattleStairsBase(pKoopa), mFarBattleMapStair(), mNearBattleMapStair(), mFarFireStairs(), mNearFireStairs(), mFireStair(), mIsJumpRequested(),
+    : KoopaBattleStairsBase(pKoopa), mFarBattleMapStair(), mNearBattleMapStair(), mFireStair(), mIsJumpRequested(),
       mStairNum(), mAttackCount(), mLandingIndex(), mOldPosition(0.0f, 0.0f, 0.0f), mNewPosition(0.0f, 0.0f, 0.0f), mNewDirection(0.0f, 0.0f, 1.0f) {
     initNerve(GET_NERVE(KoopaBattleStairsVs1, KoopaBattleStairsVs1NrvWaitDemo));
 
@@ -117,11 +118,11 @@ void KoopaBattleStairsVs1::exeWaitDemo() {
 
 void KoopaBattleStairsVs1::exeDemo() {
     if (MR::isStep(this, ::cDemoFarFireStep)) {
-        mFarFireStairs = ::emitDemoFireStairs(mKoopa, mFarBattleMapStair);
+        ::emitDemoFireStairs(mKoopa, mFarBattleMapStair);
     }
 
     if (MR::isStep(this, ::cDemoNearFireStep)) {
-        mNearFireStairs = ::emitDemoFireStairs(mKoopa, mNearBattleMapStair);
+        ::emitDemoFireStairs(mKoopa, mNearBattleMapStair);
     }
 
     if (MR::isBckStopped(mKoopa)) {

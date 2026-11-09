@@ -24,6 +24,10 @@ namespace NebulaFrameClock {
     constexpr s32 stepsOfSeconds(s32 seconds) {
         return seconds * static_cast< s32 >(NEBULA_STEPS_PER_SECOND);
     }
+    // Milliseconds of play as steps, to the nearest step: a duration that is not a whole number of seconds.
+    constexpr s32 stepsOfMilliseconds(s32 milliseconds) {
+        return (milliseconds * static_cast< s32 >(NEBULA_STEPS_PER_SECOND) + 500) / 1000;
+    }
     // Steps as seconds of play (a fraction).
     constexpr f32 secondsOfSteps(s32 steps) {
         return static_cast< f32 >(steps) / static_cast< f32 >(NEBULA_STEPS_PER_SECOND);

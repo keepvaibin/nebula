@@ -1,4 +1,5 @@
 #include "Game/MapObj/MarioLauncher.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -49,7 +50,7 @@ namespace {
     static const f32 sSensorOffsetY = 20.0f;
     static const s32 sPrepFrame = 26;
     static const s32 sRejectFrame = 20;
-    static const s32 sWaitFrame = 30;
+    static const s32 sWaitFrame = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sLandFrame = 1;
     static const f32 sEarthenPipeInScale = 4.0f;
     static const f32 sCameraYOffset = 150.0f;

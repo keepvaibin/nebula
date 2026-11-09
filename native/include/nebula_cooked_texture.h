@@ -26,7 +26,7 @@ extern "C" {
 #define NEBULA_TEXTURE_LINEAR_L8 0x41u
 #define NEBULA_TEXTURE_LINEAR_LA8 0x42u
 #define NEBULA_TEXTURE_LINEAR_RGBA8 0x43u
-/* disc_format of a record the game made while running. */
+/* source_format of a record the game made while running. */
 #define NEBULA_TEXTURE_MADE 0xFFu
 
 enum {
@@ -80,10 +80,10 @@ typedef struct NebulaTexture {
     uint32_t width, height; /* level 0, in texels */
     uint32_t levels;         /* 1 .. NEBULA_TEXTURE_MAX_LEVELS */
     uint8_t layout;         /* NEBULA_TEXTURE_RGBA8, _L8 or _LA8 */
-    uint8_t disc_format;    /* the format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
+    uint8_t source_format;  /* the pixel format the image was authored in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
     uint8_t flags;          /* NEBULA_TEXTURE_GENERATED_LEVELS */
-    /* Texture packs name a texture by these: xxh64 of the disc's level-0 bytes, and of the
+    /* Texture packs name a texture by these: xxh64 of the source image's level-0 bytes, and of the
        palette entries a colour-indexed one used (0 for the others). 0 and 0 for an image the game makes. */
     uint8_t reserved_byte;
     uint64_t pack_hash;
@@ -147,7 +147,7 @@ static inline void nebula_texture_init(void* p, uint32_t width, uint32_t height,
     t->height = height;
     t->levels = levels;
     t->layout = layout;
-    t->disc_format = NEBULA_TEXTURE_MADE;
+    t->source_format = NEBULA_TEXTURE_MADE;
     t->flags = flags;
     t->size = NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, levels, layout);
 }

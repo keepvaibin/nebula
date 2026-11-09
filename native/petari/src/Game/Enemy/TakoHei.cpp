@@ -22,26 +22,26 @@ namespace {
     static const s32 sNoPushTime = 20;
     static const f32 sPushScaleYMarioSpeed = 0.15f;
     static const f32 sPushMarioAccel = 12.0f;
-    static const s32 sNoPushMarioTime = 60;
+    static const s32 sNoPushMarioTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sNormalGroundFrec = 0.85f;
     static const f32 sNormalAirFrec = 0.99f;
     static const f32 sNormalGravityAccel = 1.5f;
     static const f32 sActiveDistance = 3000.0f;
-    static const s32 sWaitTime = 120;
+    static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sWalkMoveStartTime = 10;
-    static const s32 sWalkEndTime = 120;
+    static const s32 sWalkEndTime = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sWalkAccel = 0.2f;
     static const f32 sWalkGoalDistance = 500.0f;
     static const f32 sWalkTurnDegree = 6.0f;
     static const f32 sWalkTerritoryRadius = 400.0f;
     static const s32 sFindTurnTime = 20;
-    static const s32 sFindTime = 30;
+    static const s32 sFindTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sFindDistance = 1600.0f;
     static const f32 sFindTurnDegree = 6.0f;
-    static const s32 sPursueTime = 300;
+    static const s32 sPursueTime = NebulaFrameClock::stepsOfSeconds(5);
     static const f32 sPursueAccel = 0.5f;
     static const f32 sPursueTurnDegree = 6.0f;
-    static const s32 sCoolDownTime = 60;
+    static const s32 sCoolDownTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sAttackSignDegree = 8.0f;
     static const f32 sAttackDistanceNear = 650.0f;
     static const f32 sAttackDistanceFar = 750.0f;
@@ -51,9 +51,9 @@ namespace {
     static const f32 sCheckFrontHeight = 40.0f;
     static const f32 sCheckFrontAttackSpace = 140.0f;
     static const f32 sBackAttackSpaceAccel = -0.1f;
-    static const s32 sAttackSuccessTime = 60;
+    static const s32 sAttackSuccessTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sAttackSuccessHitPower = 8.0f;
-    static const s32 sSwoonTime = 180;
+    static const s32 sSwoonTime = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sRecoverTime = 20;
     static const f32 sSwoonGroundFrec = 0.85f;
     static const f32 sSwoonGravityAccel = 1.5f;
@@ -63,7 +63,7 @@ namespace {
     static const f32 sPunchVerticalPower = 35.0f;
     static const s32 sFlatDownTime = 20;
     static const s32 sHipDropDownTime = 40;
-    static const s32 sPressDownTime = 180;
+    static const s32 sPressDownTime = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
 namespace NrvTakoHei {

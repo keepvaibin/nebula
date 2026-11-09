@@ -1,4 +1,5 @@
 #include "Game/Enemy/BallBeamer.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/RingBeam.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -112,7 +113,7 @@ void BallBeamer::exeWait() {
 }
 
 void BallBeamer::exeAttack() {
-    if (MR::isGreaterEqualStep(this, 360)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(6))) {
         setNerve(GET_NERVE(BallBeamer, BallBeamerNrvInter));
     } else {
         if (getNerveStep() % 120 >= 75 && getNerveStep() % 120 < 119) {
@@ -132,10 +133,8 @@ void BallBeamer::exeAttack() {
 }
 
 void BallBeamer::exeInter() {
-    if (MR::isFirstStep(this)) {
-    }
 
-    if (MR::isGreaterEqualStep(this, 120)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         if (mIsSwitchOn) {
             setNerve(GET_NERVE(BallBeamer, BallBeamerNrvAttack));
         } else {

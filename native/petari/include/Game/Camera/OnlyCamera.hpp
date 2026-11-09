@@ -20,6 +20,5 @@ public:
     bool mCalcIdeal;
     Vec3f mPos;
     f32 mSpeed;
-    bool mIsZeroFrameMoveOff;
     bool mIsResetting;
 };

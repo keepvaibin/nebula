@@ -1,4 +1,5 @@
 #include "Game/NPC/CollectTico.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/StrayTico.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -103,7 +104,7 @@ void CollectTico::exeFlash() {
         }
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         if (!mIsDemoCast) {
             MR::requestAppearPowerStar(this, mStarPos);
             setNerve(GET_NERVE(CollectTico, CollectTicoNrvAppearPowerStar));

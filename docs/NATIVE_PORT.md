@@ -47,7 +47,7 @@ The base types are the same fundamental types on every host (`types.h`): `s32` i
 - The game's memory is arenas (`NebulaArena`): each has its own 4 GB of addresses from the host and commits memory as it grows, 1 MB at a time. No sizes are given, and only the machine's memory limits them.
 - The store has no archives: a folder's files lie side by side (`store.rs`), and the game mounts it as one view of those bytes (`AssetFolder`).
 - The store is mapped read-only for the process's life (`AssetStore::map`). Waves and streams play from the mapping. A file the game loads whole, from 8 KB up, is a private view of the store.
-- Images and shapes reach the renderer as records; an arena's going tells the renderer to forget what lay in it (`shape_forget`).
+- Images and shapes reach the renderer as records; an arena's going tells the renderer to forget what lay in it (`texture_free`, `model_free`).
 - The game's thread and the audio clock's are host threads with stacks the OS guards.
 
 ## Platform boundary

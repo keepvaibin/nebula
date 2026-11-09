@@ -1,4 +1,5 @@
 #include "Game/Ride/JumpBranch.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
@@ -21,7 +22,7 @@ namespace {
     static const f32 sPointInterval = 30.0f;
     static const f32 sDistanceStartBindZ = 70.0f;
     static const f32 sTransDiffMinY = 1.0f;
-    static const s32 sStepInvalidBind = 30;
+    static const s32 sStepInvalidBind = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sJumpSpeed = 10.0f;
     static const f32 sJumpSpeedOffsetY = 16.0f;
 };  // namespace

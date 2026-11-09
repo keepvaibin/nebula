@@ -1,4 +1,5 @@
 #include "Game/MapObj/FountainBig.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -43,7 +44,7 @@ void FountainBig::exeWait() {
         MR::invalidateHitSensors(this);
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(FountainBig, FountainBigNrvSign));
     }
 }
@@ -63,7 +64,7 @@ void FountainBig::exeSignStop() {
         MR::deleteEffect(this, "FountainBigSign");
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(FountainBig, FountainBigNrvSpout));
     }
 }
@@ -92,7 +93,7 @@ void FountainBig::exeSpout() {
         MR::clamp(calcNerve, 0.01f, 1.0f);
     }
     MR::startLevelSound(this, "SE_OJ_LV_FOUNTAIN_BIG_SPOUT");
-    if (MR::isStep(this, 180)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         MR::invalidateHitSensors(this);
         MR::deleteEffect(this, "FountainBig");
         setNerve(GET_NERVE(FountainBig, FountainBigNrvSpoutEnd));

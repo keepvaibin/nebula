@@ -1,4 +1,5 @@
 #include "Game/MapObj/IceStep.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -101,7 +102,7 @@ void IceStep::setOn(u32 stepIndex, const Vec3f& rPosition, const Vec3f& rRotatio
     MR::startBpk(this, "Start");
     MR::startSound(this, "SE_OJ_ICE_FLOOR_FREEZE");
 
-    mTimer = 1200;
+    mTimer = NebulaFrameClock::stepsOfSeconds(20);
 
     MR::invalidateClipping(this);
 

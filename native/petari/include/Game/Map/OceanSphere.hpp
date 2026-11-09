@@ -100,6 +100,5 @@ public:
     bool mAlwaysUseRealDrawing;
     bool mIsCameraInside;
     bool mIsStartPosCamera;
-    bool mIsTearDrop;
     bool mEnableStartPosCameraSwitch;
 };

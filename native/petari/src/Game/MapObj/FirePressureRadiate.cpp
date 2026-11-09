@@ -1,4 +1,5 @@
 #include "Game/MapObj/FirePressureRadiate.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActorGroupArray.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -18,8 +19,8 @@ namespace NrvFirePressureRadiate {
 FirePressureRadiate::FirePressureRadiate(const char* pName) : LiveActor(pName) {
     mJointController = nullptr;
     mCannonRotation = 0.0f;
-    mWaitTime = 300;
-    mShootTime = 300;
+    mWaitTime = NebulaFrameClock::stepsOfSeconds(5);
+    mShootTime = NebulaFrameClock::stepsOfSeconds(5);
     mRadiateStep = -1;
     mRadiateLength = 0.0f;
     mRadiateMaxLength = 500.0f;
@@ -102,7 +103,7 @@ void FirePressureRadiate::exeRelax() {
 
 void FirePressureRadiate::exeSyncWait() {
     if (mIsGroupLeader) {
-        if (MR::isStep(this, 60)) {
+        if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             mGroup->sendMsgToGroupMember(ACTMES_GROUP_MOVE_START, getSensor("body"), "body");
         }
     }

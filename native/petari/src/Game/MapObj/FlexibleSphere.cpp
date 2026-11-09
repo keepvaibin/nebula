@@ -1,4 +1,5 @@
 #include "Game/Render/Material.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/FlexibleSphere.hpp"
@@ -27,7 +28,7 @@ namespace {
     const f32 cDefaultScaleRate = 0.002f;
     const f32 cQuakeHearDistance = 4000.0f;
     const u16 cQuakeFrames = 60;
-    const s32 cTimerSoundInterval = 60;
+    const s32 cTimerSoundInterval = NebulaFrameClock::stepsOfSeconds(1);
 
     // The texture coordinate scale of the sphere being drawn: the surface pattern keeps its size as the sphere shrinks.
     // Set by draw() just before directDraw() runs the hook.

@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpinningBox.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -26,7 +27,7 @@ namespace {
     static const f32 hSpinningAttackStrongVel = 10.0f;
     static const f32 hStopCheckVel = 0.1f;
     static const f32 hGroundCosine = 0.4f;
-    static const s32 hWaitTime = 30;
+    static const s32 hWaitTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 hPlayerIsSideDotCheck = 0.25f;
     static const f32 hSpinningAngle = 2.0f;
     static const f32 hDampVelHWait = 0.6f;
@@ -38,7 +39,7 @@ namespace {
     static const f32 hSlidingRotateSub = 0.01f;
     static const f32 hSlidingRotVelMin = 0.02f;
     static const f32 hSlidingRotVelMax = 0.02f;
-    static const s32 hKickableTime = 30;
+    static const s32 hKickableTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 hSpinningVelocitySub = 0.01f;
     static const f32 hSpinningVelMin = 0.0f;
     static const f32 hSpinningVelMax = 25.0f;

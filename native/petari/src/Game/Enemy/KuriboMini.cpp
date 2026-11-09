@@ -1,4 +1,5 @@
 #include "Game/Enemy/KuriboMini.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/ItemGenerator.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
@@ -46,8 +47,8 @@ namespace {
         mStateParam.mPlayerSightFanDegreeH = 70.0f;
         mStateParam.mPlayerSightFanDegreeV = 30.0f;
         mWanderParam.mSpeed = 0.1f;
-        mWanderParam.mWaitTime = 120;
-        mWanderParam.mWalkTime = 120;
+        mWanderParam.mWaitTime = NebulaFrameClock::stepsOfSeconds(2);
+        mWanderParam.mWalkTime = NebulaFrameClock::stepsOfSeconds(2);
         mWanderParam.mTurnMaxRateDegree = 3.0f;
         mChaseParam.mChaseSpeed = 0.2f;
         mFindPlayerParam.mTurnMaxRateDegree = 5.0f;
@@ -452,7 +453,7 @@ void KuriboMini::exeAttackSuccess() {
         return;
     }
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(KuriboMini, KuriboMiniNrvWander));
     }
 }
@@ -485,7 +486,7 @@ void KuriboMini::exePressDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, 180)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         kill();
     }
 }
@@ -500,7 +501,7 @@ void KuriboMini::exeBlowDown() {
     calcPassiveMovement();
     MR::turnDirectionDegree(this, &mFront, -mVelocity, 30.0f);
 
-    if (MR::isGreaterStep(this, 30)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         kill();
     }
 }

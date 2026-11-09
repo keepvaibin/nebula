@@ -1,4 +1,5 @@
 #include "Game/NPC/TrickRabbit.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/ActorStateBase.hpp"
@@ -312,7 +313,7 @@ bool TrickRabbit::tryRunaway() {
 }
 
 bool TrickRabbit::tryBrakeTurn() {
-    if (MR::isGreaterStep(this, 60) && MR::isNearPlayer(this, 600.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1)) && MR::isNearPlayer(this, 600.0f)) {
         // The player is ahead on the route: turn back.
         Vec3f toPlayer(*MR::getPlayerPos() - mPosition);
         Vec3f toNextNode(*MR::getNextNodePosition(mRailGraphIter) - mPosition);
@@ -539,7 +540,7 @@ void TrickRabbit::exeDemoEnd() {
     }
 
     doWait();
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         endDemoRunnaway();
     }
 }

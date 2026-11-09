@@ -1,4 +1,5 @@
 #include "Game/Enemy/Takobo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -40,9 +41,9 @@ namespace {
     const f32 sTurnRadian = 0.05f;
     const f32 sAttackAimRadian = 0.1f;
     const f32 sFireBounceSpeed = 28.0f;
-    const s32 sWaitSteps = 60;
-    const s32 sPressSteps = 30;
-    const s32 sStunSteps = 120;
+    const s32 sWaitSteps = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sPressSteps = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 sStunSteps = NebulaFrameClock::stepsOfSeconds(2);
     const s32 sAttackHitStart = 85;
     const s32 sAttackHitEnd = 90;
 };  // namespace

@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerLayout.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
@@ -46,8 +47,8 @@ namespace {
     static const f32 sHandRadius = 20;
 
     static const s32 hGripTime = 20;
-    static const s32 hReleaseTime = 30;
-    static const s32 hHideRumbleTime = 30;
+    static const s32 hReleaseTime = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 hHideRumbleTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sRotateMult = 900.0f;
     // static const f32 sRotateHandMult =
     static const f32 hEndAnimRate = 2.0f;

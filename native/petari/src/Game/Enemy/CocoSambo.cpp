@@ -1,4 +1,5 @@
 #include "Game/Enemy/CocoSambo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/SamboFunction.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -127,7 +128,7 @@ bool CocoSamboHead::isBodySensor(const HitSensor* pSensor) const {
 
 inline bool CocoSamboHead::isNerveSwoon() const {
     return isNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadFallLand)) || isNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadSwoon)) ||
-           (isNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadSwoonEnd)) && MR::isLessStep(this, 60));
+           (isNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadSwoonEnd)) && MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)));
 }
 
 void CocoSamboHead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -606,7 +607,7 @@ void CocoSambo::exeAttackInterval() {
 
     dirToPlayer(1.0f);
     if (!tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
-        MR::setNerveAtStep(this, GET_NERVE(CocoSambo, CocoSamboNrvWait), 60);
+        MR::setNerveAtStep(this, GET_NERVE(CocoSambo, CocoSamboNrvWait), NebulaFrameClock::stepsOfSeconds(1));
     }
 }
 
@@ -655,7 +656,7 @@ void CocoSambo::exeRecoverWait() {
         MR::invalidateHitSensors(mHead);
     }
 
-    MR::setNerveAtStep(this, GET_NERVE(CocoSambo, CocoSamboNrvRecover), 90);
+    MR::setNerveAtStep(this, GET_NERVE(CocoSambo, CocoSamboNrvRecover), NebulaFrameClock::stepsOfMilliseconds(1500));
 }
 
 void CocoSambo::exeRecover() {

@@ -1,4 +1,5 @@
 #include "Game/Enemy/Onimasu.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
@@ -19,8 +20,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sWaitTime = 90;
-    static const s32 sTimeToNextPoint = 30;
+    static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
+    static const s32 sTimeToNextPoint = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sGravityScalar = 1.6f;
     static const s32 sWaitTimeQuick = 45;
     static const s32 sTimeToNextPointQuick = 15;

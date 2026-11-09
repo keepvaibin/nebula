@@ -1,4 +1,5 @@
 #include "Game/MapObj/ElectricBall.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
@@ -9,7 +10,7 @@ namespace {
     const f32 sMoveRadiusDefault = 750.0f;
     const f32 sMoveAngularSpeedDefault = 0.01f;
     const s32 sNumBallsDefault = 4;
-    const s32 sAttackTime = 90;
+    const s32 sAttackTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 sSensorRadius = 75.0f;
     const f32 sShadowRadius = 75.0f;
     const s32 sNumBallsMax = 16;

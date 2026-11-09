@@ -1,4 +1,5 @@
 #include "Game/MapObj/MorphItemObjNeo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -660,7 +661,7 @@ void MorphItemObjNeo::exeAppear() {
     }
 
     if (mContainerBreakModel != nullptr) {
-        if (MR::isBckStopped(mContainerBreakModel) && getNerveStep() > 30) {
+        if (MR::isBckStopped(mContainerBreakModel) && getNerveStep() > NebulaFrameClock::stepsOfMilliseconds(500)) {
             setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2));
         }
 
@@ -697,7 +698,7 @@ void MorphItemObjNeo::exeSwitchAppear() {
         mVelocity = mGravity * -10.0f;
     }
 
-    if (getNerveStep() == 60) {
+    if (getNerveStep() == NebulaFrameClock::stepsOfSeconds(1)) {
         MR::showModel(this);
 
         if (mMorphType == PlayerItemStatus_Ice) {
@@ -757,7 +758,7 @@ void MorphItemObjNeo::exeFly() {
 
     mVelocity += mGravity * 0.2f;
 
-    if (getNerveStep() == 300) {
+    if (getNerveStep() == NebulaFrameClock::stepsOfSeconds(5)) {
         kill();
         setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait));
     }

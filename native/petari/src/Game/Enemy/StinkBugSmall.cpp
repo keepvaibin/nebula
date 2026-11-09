@@ -1,4 +1,5 @@
 #include "Game/Enemy/StinkBugSmall.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -42,8 +43,8 @@ namespace {
     const s32 sStepForWait = 1;
     const s32 sStepForDashSignEnd = 10;
     const s32 sStepForShakeStart = 40;
-    const s32 sStepForRecover = 60;
-    const s32 sStepForPanic = 90;
+    const s32 sStepForRecover = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sStepForPanic = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 sDashSpeed = 20.0f;
     const f32 sBackSpeed = 5.0f;
     const f32 sHomeDistance = 10.0f;

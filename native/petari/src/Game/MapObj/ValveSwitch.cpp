@@ -1,4 +1,5 @@
 #include "Game/MapObj/ValveSwitch.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
@@ -94,11 +95,11 @@ void ValveSwitch::exeValve() {
         MR::startBckPlayer("ScrewSwitchOn", static_cast< const char* >(nullptr));
     }
 
-    if (MR::isLessStep(this, 30)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         MR::startLevelSound(this, "SE_OJ_LV_VALVE_SWITCH_MOVE");
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         MR::startSound(this, "SE_OJ_VALVE_SWITCH_ON");
         MR::tryRumblePadVeryStrong(this, PLAYER_1);
         MR::shakeCameraNormal();

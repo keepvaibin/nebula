@@ -17,7 +17,6 @@ namespace NrvMapPartsFloatingForce {
 };  // namespace NrvMapPartsFloatingForce
 
 SpringStep::SpringStep(f32 cond, f32 speed, f32 angle) : mSpringValue() {
-    mCondition = cond;
     mSpeed = speed;
     mAngle = angle;
     mSpringValue = new SpringValue(cond, 0.0f, speed, angle, 0.0f);
@@ -28,7 +27,6 @@ void SpringStep::addSpringVelocity(f32 vel) {
 }
 
 void SpringStep::setSpringBaseValue(f32 val) {
-    mCondition = val;
     mSpringValue->setParam(static_cast< f64 >(val), 0.0f, mSpeed, mAngle, 0.0f);
 }
 

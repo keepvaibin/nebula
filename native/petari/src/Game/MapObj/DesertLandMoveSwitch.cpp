@@ -1,4 +1,5 @@
 #include "Game/MapObj/DesertLandMoveSwitch.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
@@ -26,9 +27,9 @@ namespace {
     const s32 cSwitchDownSteps = 6;
     // Stepping on gives the top this push down.
     const f32 cStepOnVelocity = -10.0f;
-    const s32 cTimerTickSteps = 60;
+    const s32 cTimerTickSteps = NebulaFrameClock::stepsOfSeconds(1);
     // SandClockGalaxy's down switch ticks as if 180 steps further on.
-    const s32 cSandClockTimerLead = 180;
+    const s32 cSandClockTimerLead = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
 namespace NrvDesertLandMoveSwitch {

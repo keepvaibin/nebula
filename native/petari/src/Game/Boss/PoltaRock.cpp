@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaRock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaArm.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
@@ -26,14 +27,14 @@ namespace {
     const f32 cFloatHeightSpeed = 1.5f;
     const f32 cFloatHeightRange = 300.0f;
     const f32 cFloatFriction = 0.92f;
-    const s32 cFloatTime = 90;
-    const s32 cSignTime = 60;
+    const s32 cFloatTime = NebulaFrameClock::stepsOfMilliseconds(1500);
+    const s32 cSignTime = NebulaFrameClock::stepsOfSeconds(1);
     // The throw speeds up over cThrowAccelTime frames, then the rock drifts up against gravity until it hits or times out.
-    const s32 cThrowAccelTime = 30;
+    const s32 cThrowAccelTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cThrowAccel = 3.0f;
     const f32 cFlyGravity = -0.02f;
     const f32 cFlyFriction = 0.999f;
-    const s32 cFlyTime = 300;
+    const s32 cFlyTime = NebulaFrameClock::stepsOfSeconds(5);
 }  // namespace
 
 namespace NrvPoltaRock {

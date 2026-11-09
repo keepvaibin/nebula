@@ -1,4 +1,5 @@
 #include "Game/NPC/TrickRabbitFreeRun.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/WalkerStateBlowDamage.hpp"
 #include "Game/Enemy/WalkerStateRunaway.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -212,7 +213,7 @@ void TrickRabbitFreeRun::exeRunawayStart() {
         startJumpSound();
     }
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::endDemo(this, "逃走");
         setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitFreeRunNrvRunaway));
     }

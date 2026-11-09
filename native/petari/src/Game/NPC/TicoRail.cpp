@@ -1,4 +1,5 @@
 #include "Game/NPC/TicoRail.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
@@ -14,15 +15,15 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    const s32 cStepForWait = 60;
+    const s32 cStepForWait = NebulaFrameClock::stepsOfSeconds(1);
     // Look around: turn one way until L, back until LR, then forward again until LRL.
     const s32 cStepForLookAroundL = 40;
-    const s32 cStepForLookAroundLR = 120;
+    const s32 cStepForLookAroundLR = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cStepForLookAroundLRL = 160;
     const s32 cStepForMove = 500;
     const s32 cStepForTalk = 320;
     // Past its minimum step a nerve ends with one chance in this many per step, and surely this many steps later.
-    const s32 cStepRandomRange = 300;
+    const s32 cStepRandomRange = NebulaFrameClock::stepsOfSeconds(5);
     // One chance in this many per step of a reaction while talking.
     const s32 cTalkReactionChance = 60;
     const s32 cTalkReactionInterpole = 5;

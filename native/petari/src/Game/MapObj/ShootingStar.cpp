@@ -1,4 +1,5 @@
 #include "Game/MapObj/ShootingStar.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -11,9 +12,9 @@ namespace {
     const f32 sFallHeight = 2000.0f;
     const f32 sFallRotateYAngle = 10.0f;
     const f32 sFallVelScale = 25.0f;
-    const s32 sShootingLimitTime = 360;
+    const s32 sShootingLimitTime = NebulaFrameClock::stepsOfSeconds(6);
     const s32 sPreShootingTime = 20;
-    const s32 sWaitForNextShootTime = 240;
+    const s32 sWaitForNextShootTime = NebulaFrameClock::stepsOfSeconds(4);
     const f32 sLaunchYVel = 40.0f;
     const f32 sLaunchHVel = 15.0f;
     const s32 sDefaultStarPieceNum = 5;

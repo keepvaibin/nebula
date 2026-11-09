@@ -26,7 +26,6 @@ public:
         mAngleX = angleX;
         mSpeedBlendRate = speedBlendRate;
         mBlendFriction = blendFriction;
-        mIsVertical = isVertical;
         mAngleYMin = angleYMin;
     }
 
@@ -43,6 +42,5 @@ public:
     f32 mAngleX;
     f32 mSpeedBlendRate;
     f32 mBlendFriction;
-    bool mIsVertical;
     f32 mAngleYMin;
 };

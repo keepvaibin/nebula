@@ -95,7 +95,7 @@ void FileSelectCameraController::exeMoveToFarPoint() {
     mFovy += (::cFarFovy - mFovy) * squaredTime;
     mPosition.add((Vec3f(::cFarPoint) - mPosition) * squaredTime);
 
-    MR::setNerveAtStep(this, GET_NERVE_ANON(FileSelectCameraControllerNrvFarPoint), 60);
+    MR::setNerveAtStep(this, GET_NERVE_ANON(FileSelectCameraControllerNrvFarPoint), NebulaFrameClock::stepsOfSeconds(1));
 }
 
 void FileSelectCameraController::exeFarPoint() {
@@ -113,7 +113,7 @@ void FileSelectCameraController::exeMoveToNearPoint() {
     mFovy += (::cNearFovy - mFovy) * squaredTime;
     mPosition += (nearPoint - mPosition) * squaredTime;
 
-    MR::setNerveAtStep(this, GET_NERVE_ANON(FileSelectCameraControllerNrvNearPoint), 60);
+    MR::setNerveAtStep(this, GET_NERVE_ANON(FileSelectCameraControllerNrvNearPoint), NebulaFrameClock::stepsOfSeconds(1));
 }
 
 void FileSelectCameraController::exeNearPoint() {

@@ -1,4 +1,5 @@
 #include "Game/NPC/RabbitStateWaitStart.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -10,8 +11,8 @@
 
 namespace {
     static const f32 sGravityAccel = 0.1f;
-    static const s32 sSmallTurnTime = 30;
-    static const s32 sSmallTurnStopTime = 30;
+    static const s32 sSmallTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sSmallTurnStopTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sSmallTurnDegree = 6.0f;
     static const f32 sSmallTurnStartDegree = 45.0f;
     static const f32 sSpinDegree = 2.0f;

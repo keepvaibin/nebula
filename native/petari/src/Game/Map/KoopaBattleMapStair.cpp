@@ -1,4 +1,5 @@
 #include "Game/Map/KoopaBattleMapStair.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -16,7 +17,7 @@ namespace {
         f32 z;
     };
 
-    const s32 cDefaultTimeToBreak = 300;
+    const s32 cDefaultTimeToBreak = NebulaFrameClock::stepsOfSeconds(5);
     const f32 cNormalHalfWidthX = 200.0f;
     const f32 cNormalHalfWidthZ = 300.0f;
     const f32 cHalfHeight = 100.0f;
@@ -24,8 +25,8 @@ namespace {
     const f32 cBigHalfWidthZ = 400.0f;
     const f32 cTurnHalfWidthX = 140.0f;
     const f32 cTurnHalfWidthZ = 300.0f;
-    const s32 cDefaultStepWaitFall = 60;
-    const s32 cDefaultStepFall = 240;
+    const s32 cDefaultStepWaitFall = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 cDefaultStepFall = NebulaFrameClock::stepsOfSeconds(4);
     const f32 cFallGravity = 0.03f;
     const f32 cFallSpeedMax = 1.5f;
     const f32 cClippingRadius = 500.0f;

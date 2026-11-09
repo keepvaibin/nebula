@@ -1,4 +1,5 @@
 #include "Game/MapObj/CrystalCageMoving.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -106,12 +107,12 @@ void CrystalCageMoving::exeDemoTicoMove() {
     Vec3f toStart;
     toStart.sub(mStartPos, mPosition);
 
-    f32 nerveRate = MR::calcNerveRate(this, 30);
+    f32 nerveRate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfMilliseconds(500));
     Vec3f ticoPos;
     ticoPos.scaleAdd(nerveRate, toStart, mPosition);
     mDummyModelMtx.setTrans(ticoPos);
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoStop));
     }
 }
@@ -123,7 +124,7 @@ void CrystalCageMoving::exeDemoTicoStop() {
         MR::setBckRate(mTicoModel, 1.5f);
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoChange));
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/Ride/SlingShooter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -22,7 +23,7 @@
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
-    static const s32 sStepFreeInvalid = 30;
+    static const s32 sStepFreeInvalid = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sNpcSensorPosOffsetZ = 200.0f;
     static const f32 sAimFollowRate = 0.1f;
     static const f32 sAimDistanceMin = 100.0f;
@@ -32,11 +33,11 @@ namespace {
     static const f32 sAimDistanceToWait = 200.0f;
     static const f32 sBindAttackSpeed = 45.0f;
     static const f32 sBindAttackFrictionRate = 1.0f;
-    static const s32 sStepBindAttack = 120;
+    static const s32 sStepBindAttack = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sBindAttackInvalidTime = 10;
     static const s32 sStepToStopScene = 1;
     static const s32 sStepStopSceneAttackSuccess = 15;
-    static const s32 sStepStopSceneLastDamage = 30;
+    static const s32 sStepStopSceneLastDamage = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sStepToEnableBindCancel = 10;
 
     void endBindAndPlayerNoJump(LiveActor* pActor) {

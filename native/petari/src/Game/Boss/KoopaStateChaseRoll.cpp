@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaStateChaseRoll.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleBase.hpp"
 #include "Game/Boss/KoopaFigureBall.hpp"
@@ -18,12 +19,12 @@ namespace {
     const MR::ActorMoveParam sChaseRollParam = {1.1f, 2.0f, 0.95f, 1.5f};
     const MR::ActorMoveParam sChaseRollParamFast = {1.5f, 2.0f, 0.95f, 1.5f};
     const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.98f, 1.0f};
-    const s32 sWaitToStartStep = 60;
-    const s32 sWaitToStartStepAngry = 60;
+    const s32 sWaitToStartStep = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sWaitToStartStepAngry = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStartStepToJump = 24;
     const f32 sStartJumpSpeed = 30.0f;
     const f32 sRotateSpeed = 5.0f;
-    const s32 sStepRollGround = 900;
+    const s32 sStepRollGround = NebulaFrameClock::stepsOfSeconds(15);
     const f32 sEndJumpSpeed = 30.0f;
 
     // The break model follows its own matrix only while the break animation starts.

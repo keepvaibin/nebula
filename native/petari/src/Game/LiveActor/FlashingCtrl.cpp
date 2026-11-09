@@ -1,4 +1,5 @@
 #include "Game/LiveActor/FlashingCtrl.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -33,7 +34,7 @@ void FlashingCtrl::movement() {
 void FlashingCtrl::start(int timer) {
     mIsEnded = false;
     mTimer = timer;
-    mFlashStartTime = 180;
+    mFlashStartTime = NebulaFrameClock::stepsOfSeconds(3);
     mOverrideInterval = 0;
 }
 

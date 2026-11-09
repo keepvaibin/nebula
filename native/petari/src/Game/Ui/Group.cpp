@@ -26,14 +26,4 @@ namespace Ui {
     void GroupContainer::AppendGroup(Group* pGroup) {
         mGroupList.PushBack(pGroup);
     }
-
-    Group* GroupContainer::FindGroupByName(const char* findName) {
-        for (Group* pGroup : mGroupList) {
-            if (detail::EqualsResName(pGroup->GetName(), findName)) {
-                return pGroup;
-            }
-        }
-
-        return nullptr;
-    }
 }  // namespace Ui

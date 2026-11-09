@@ -1,4 +1,5 @@
 #include "Game/Enemy/MogucchiShooter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/WaterBazooka.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -16,9 +17,9 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sStepForLaugh = 120;
+    static const s32 sStepForLaugh = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sStepToAngerBlur = 40;
-    static const s32 sAngerBlurTime = 60;
+    static const s32 sAngerBlurTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sAngerBlurOffset = 100.0f;
     static const s32 sExplosionBlurTime = 50;
     static const f32 sExplosionBlurOffset = 100.0f;

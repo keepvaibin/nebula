@@ -5,6 +5,10 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
+    // The cooked camera tracks store a key's slopes per authored frame of 30 a second (the cooker reads them the same way);
+    // key times are in those frames.
+    const f32 cKeySlopeUnit = 30.0f;
+
     // The first key at or before the key (a binary search; one before the first when the key is before it).
     u32 searchKey(const f32* pValues, f32 key, u32 count, u32 stride) {
         u32 low = 0;
@@ -51,7 +55,7 @@ f32 CameraAnim::getTrack(u32 trackId, f32 key) const {
     // A key's slope out is its last word; the next key's slope in is its third.
     const u32 stride = track.mStride;
     const f32* pKey = values + searchKey(values, key, track.mCount, stride) * stride;
-    return hermiteInterpolation(key, pKey[0], pKey[1], pKey[stride - 1] / 30.0f, pKey[stride], pKey[stride + 1], pKey[stride + 2] / 30.0f);
+    return hermiteInterpolation(key, pKey[0], pKey[1], pKey[stride - 1] / cKeySlopeUnit, pKey[stride], pKey[stride + 1], pKey[stride + 2] / cKeySlopeUnit);
 }
 
 void CameraAnim::getPos(Vec3f* pPos, f32 key) const {
@@ -63,7 +67,7 @@ void CameraAnim::getWatchPos(Vec3f* pWatchPos, f32 key) const {
 }
 
 CameraAnim::CameraAnim(const char* pName)
-    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mFileData(), mIsPaused() {
+    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mIsPaused() {
 }
 
 void CameraAnim::reset() {
@@ -116,7 +120,6 @@ CameraTargetObj* CameraAnim::calc() {
 
 void CameraAnim::setParam(u8* pFile, f32 speed) {
     loadBin(pFile);
-    mFileData = pFile;
     mSpeed = speed;
 }
 

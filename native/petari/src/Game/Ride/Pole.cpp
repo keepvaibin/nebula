@@ -1,4 +1,5 @@
 #include "Game/Ride/Pole.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
@@ -50,7 +51,7 @@ namespace {
     static const f32 sPlayerPosOffsetAtLanding = 30.0f;
     static const f32 sClimbUpAnimFrameRate = 1.75f;
     static const f32 sSquareClimbUpAnimFrameRate = 1.6f;
-    static const s32 sStepDemoAppear = 60;
+    static const s32 sStepDemoAppear = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sHeightRate = 100.0f;
     static const f32 sSquareHeightOffset = 100.0f;
 };  // namespace

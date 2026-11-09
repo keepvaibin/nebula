@@ -2,6 +2,7 @@
 #include "Game/LiveActor/FlashingCtrl.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -27,15 +28,16 @@ namespace {
     const f32 cAppearThrowUpSpd2 = 15.0f;
     const f32 cGravity = 0.5f;
     const f32 cReflectWallX = 0.3f;
-    const f32 cSpdRotateY = FloatUtil::PI() / 60.0f;
+    // Half a turn a second.
+    const f32 cSpdRotateY = FloatUtil::PI() / static_cast< f32 >(NebulaFrameClock::stepsOfSeconds(1));
     const f32 cDefaultRailSpeed = 5.0f;
     const f32 cDefaultShadowLength = 2000.0f;
     const s32 cDefaultDemoFrames = 120;
     const s32 cShootLandSteps = 10;
-    const s32 cShootSensorOnStep = 60;
-    const s32 cGroundAppearStep = 60;
-    const s32 cPreEscapeSteps = 30;
-    const s16 cEscapeLifeSteps = 600;
+    const s32 cShootSensorOnStep = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 cGroundAppearStep = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 cPreEscapeSteps = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s16 cEscapeLifeSteps = NebulaFrameClock::stepsOfSeconds(10);
     const f32 cEscapeSpeed = 7.0f;
     const f32 cEscapeTurnAway = 0.02f;
     const f32 cEscapeKeepAway = 0.01f;

@@ -1,4 +1,5 @@
 #include "Game/MapObj/PlantGroup.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -14,7 +15,7 @@ namespace {
     const f32 sPointerTouchRadius = 100.0f;
     const f32 sScratchVel = 6.0f;
     const s32 hGenerateItemTouch = 1;
-    const s32 sHintEffectEmitInterval = 300;
+    const s32 sHintEffectEmitInterval = NebulaFrameClock::stepsOfSeconds(5);
     const f32 hShakeStartFrame = 3.0f;
     const f32 hWeakRate = 0.5f;
     const f32 hMiddleRate = 1.0f;

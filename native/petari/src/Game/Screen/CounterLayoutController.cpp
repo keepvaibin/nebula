@@ -1,4 +1,5 @@
 #include "Game/Screen/CounterLayoutController.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/CoinCounter.hpp"
 #include "Game/Screen/MarioMeter.hpp"
@@ -15,7 +16,7 @@
 
 namespace {
     const s32 cJudgeNotMovingFrame = 60;
-    const s32 cShowWaitFrame = 240;
+    const s32 cShowWaitFrame = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
 namespace NrvCounterLayoutController {

@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaStatePunch.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaArm.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
@@ -39,7 +40,7 @@ void PoltaStatePunch::exeStart() {
         PoltaFunction::startAction(getHost(), mIsLeftArmActor ? "PunchLeftStart" : "PunchRightStart", mIsActionAffectBody);
         MR::startSound(getHost(), "SE_BV_POLTA_PREP_PUNCH");
     }
-    if (MR::isLessStep(this, 60)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         getHost()->rotateToPlayer();
     }
 

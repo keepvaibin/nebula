@@ -1,4 +1,5 @@
 #include "Game/Screen/NoteCounter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
@@ -8,7 +9,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sStepShowWait = 180;
+    static const s32 sStepShowWait = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sStepMove = 10;
     static const f32 sTransMinY = -100.0f;
     static const f32 sTransMaxY = 0.0f;

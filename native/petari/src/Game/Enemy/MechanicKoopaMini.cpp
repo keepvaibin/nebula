@@ -1,4 +1,5 @@
 #include "Game/Enemy/MechanicKoopaMini.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -163,7 +164,7 @@ void MechanicKoopaMini::exeWait() {
 
     if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, 120.0f)) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFind));
-    } else if (MR::isGreaterStep(this, 120)) {
+    } else if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
     }
 }
@@ -196,7 +197,7 @@ void MechanicKoopaMini::exeWalkOnRail() {
 
     if (canTurn) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvTurn));
-    } else if (!mIsForbidPause && MR::isGreaterStep(this, 120)) {
+    } else if (!mIsForbidPause && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWait));
     }
 }
@@ -312,7 +313,7 @@ void MechanicKoopaMini::exePreFireAttack() {
         mVelocity.set(mGravity * -10.0f);
     }
 
-    if (MR::isLessEqualStep(this, 60)) {
+    if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::startLevelSound(this, "SE_EM_LV_MKOOPAMINI_PRE_FIRE");
     }
 
@@ -340,9 +341,9 @@ void MechanicKoopaMini::exeFireAttack() {
         MR::moveAndTurnToPlayer(this, ::hOnAirParam);
     }
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFireAttackEnd));
-    } else if (MR::isLessEqualStep(this, 90)) {
+    } else if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::startLevelSound(this, "SE_EM_LV_MKOOPAMINI_FIRE");
     }
 }
@@ -391,7 +392,7 @@ void MechanicKoopaMini::exeSpinHit() {
         MR::startSound(this, "SE_EM_MKOOPAMINI_SPIN_HIT");
     }
 
-    if (MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::startLevelSound(this, "SE_EM_LV_MKOOPAMINI_PRE_FIRE");
     }
 
@@ -411,7 +412,7 @@ void MechanicKoopaMini::exeTrample() {
         MR::startAction(this, "Trample");
     }
 
-    if (MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::startLevelSound(this, "SE_EM_LV_MKOOPAMINI_PRE_FIRE");
     }
 
@@ -520,7 +521,7 @@ bool MechanicKoopaMini::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     }
 
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        if (!isNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvSpinHit)) || !MR::isLessStep(this, 120)) {
+        if (!isNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvSpinHit)) || !MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
             setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvSpinHit));
         }
         return true;

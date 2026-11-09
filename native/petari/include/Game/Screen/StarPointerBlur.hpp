@@ -38,13 +38,11 @@ public:
     void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* pSubColor) {
         mPadChannel = padChannel;
         mMainColor = pMainColor;
-        mSubColor = pSubColor;
     }
 
     GameTexture* mTexture;
     s32 mPadChannel;
     const NebulaColor8* mMainColor;
-    const NebulaColor8* mSubColor;
     BlurPoint* mBlurPoints;
     f32* mBlurThicks;
     f32* mBlurTexCoords;

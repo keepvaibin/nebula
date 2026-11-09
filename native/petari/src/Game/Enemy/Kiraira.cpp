@@ -1,4 +1,5 @@
 #include "Game/Enemy/Kiraira.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/KirairaChain.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActorGroupArray.hpp"
@@ -27,8 +28,8 @@ namespace {
     static const f32 sMindEyeHitSize = 1500.0f;
     static const f32 sCameraShakeDistance = 3000.0f;
     static const f32 sNoCameraShakeDistance = FLOAT_MAX;
-    static const s32 sStepToRecoverSign = 300;
-    static const s32 sStepToRecover = 120;
+    static const s32 sStepToRecoverSign = NebulaFrameClock::stepsOfSeconds(5);
+    static const s32 sStepToRecover = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sEyeSensorInRadius = 1500.0f;
     static const f32 sEyeSensorOutRadius = 2000.0f;
 };  // namespace

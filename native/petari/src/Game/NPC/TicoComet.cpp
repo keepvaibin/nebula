@@ -1,4 +1,5 @@
 #include "Game/NPC/TicoComet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -162,8 +163,6 @@ void TicoEat::exeEatPre() {
 }
 
 void TicoEat::exeEatNow() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (mStarPieceLeft != 0 && MR::isIntervalStep(this, 100 / mStarPieceNeed)) {
         MR::giftStarPieceToTarget(getSensor("Mouth"), 1);
@@ -286,7 +285,7 @@ void TicoComet::exeDemoAnim() {
         MR::startSound(this, "SE_SM_TICOFAT_META");
     }
 
-    if (MR::isGreaterEqualStep(this, 90)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::startSound(this, "SE_SM_METAMORPHOSE_SMOKE");
         MR::startSystemSE("SE_DM_TICOFAT_MORPH_WIPE_IN");
         popAndPushNerve(GET_NERVE(TicoComet, TicoCometNrvDemoFade));

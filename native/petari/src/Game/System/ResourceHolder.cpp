@@ -23,7 +23,7 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
-      mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mTotalResourceSize(0) {
+      mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr) {
     mArena = NebulaArena::current();
     initializeArc(*mArchive);
 
@@ -124,7 +124,6 @@ void ResourceHolder::mount(const AssetFolder& rArchive, s32 folder) {
             ResFileInfo* info = createAndRegisterObject(item);
             info->mData = item.mData;
             info->mSize = item.mSize;
-            mTotalResourceSize += info->mSize;
         }
     }
 }

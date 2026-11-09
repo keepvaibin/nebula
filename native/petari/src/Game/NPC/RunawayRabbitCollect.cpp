@@ -30,7 +30,7 @@ namespace NrvRunawayRabbitCollect {
 };  // namespace NrvRunawayRabbitCollect
 
 RunawayRabbitCollect::RunawayRabbitCollect(const char* pName)
-    : LiveActor(pName), mRabbit(), mRabbitNum(), mLinkedRabbitCount(), mCaughtRabbitCount(), mCompleteRabbitCount(), mBgmState() {
+    : LiveActor(pName), mRabbit(), mRabbitNum(), mCaughtRabbitCount(), mCompleteRabbitCount(), mBgmState() {
 }
 
 void RunawayRabbitCollect::init(const TableIter& rIter) {
@@ -233,7 +233,6 @@ void RunawayRabbitCollect::exeActive() {
         if (mRabbit[i]->isCaught()) {
             caughtCount++;
             if (!mRabbit[i]->mIsLinked) {
-                mLinkedRabbitCount++;
 
                 for (s32 j = 0; j < mTicoNum; j++) {
                     if (mTico[j]->mDemoCastID == mRabbit[i]->getGroupId()) {

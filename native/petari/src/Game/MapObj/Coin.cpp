@@ -1,4 +1,5 @@
 #include "Game/MapObj/Coin.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/CoinHolder.hpp"
 #include "Game/MapObj/CoinRotater.hpp"
@@ -15,11 +16,11 @@ namespace {
     const f32 cClippingShadowMargin = 150.0f;
     // Defaults when a negative life or pickup delay is asked for.
     const s32 cDefaultLife = 600;
-    const s32 cDefaultCannotTime = 30;
+    const s32 cDefaultCannotTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cHopSpeed = 30.0f;
     // A non-active coin activated with gravity pops up this fast.
     const f32 cActivateLaunchSpeed = 30.0f;
-    const s32 cHopSteps = 30;
+    const s32 cHopSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cWaterGravityScale = 0.3f;
     // Rebound: walls and roofs keep 0.6, the ground 0.75 when it lands at least this fast (sound from 6% of the cap).
     const f32 cWallRebound = 0.6f;

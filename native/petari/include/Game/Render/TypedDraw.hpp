@@ -577,7 +577,6 @@ private:
     u32 mCamera;
     u32 mSource;
     u32 mFlags;
-    u32 mPart;
     NebulaPrimitive mPrimitive;
     u32 mCount;
     u32 mStride;

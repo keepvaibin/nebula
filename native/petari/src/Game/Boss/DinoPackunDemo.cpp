@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunDemoPosition.hpp"
 #include "Game/Boss/DinoPackunEggShell.hpp"
@@ -37,7 +38,7 @@ namespace {
     static const u8 sDeathBlurAlpha = 80;
     static const s32 sDeathBlurFadeIn = 15;
     static const s32 sDeathBlurFadeOut = 40;
-    static const s32 sAppearPowerStarTime = 60;
+    static const s32 sAppearPowerStarTime = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 namespace NrvDinoPackunDemo {

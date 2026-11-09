@@ -1,4 +1,5 @@
 #include "Game/Boss/Dodoryu.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Boss/DodoryuDemo.hpp"
 #include "Game/Boss/DodoryuHill.hpp"
@@ -68,7 +69,7 @@ namespace {
     const f32 sHeadNeedleReach = 105.0f;
     const s32 sJumpOutStopSceneFrame = 8;
     const char* const sSpinOutCamera = "ドドリュウ吹っ飛び";
-    const s32 sSpinOutCameraSteps = 120;
+    const s32 sSpinOutCameraSteps = NebulaFrameClock::stepsOfSeconds(2);
     const f32 sRumblePadNearDist = 500.0f;
     const f32 sRumblePadFarDist = 1000.0f;
     const f32 sCameraRegisterHeight = 150.0f;
@@ -90,28 +91,28 @@ namespace {
     // Rail distance the rabbit starts ahead of Dodoryu.
     const f32 sRabbitLead = 1075.0f;
     const f32 sRabbitHopSoundFrame = 3.0f;
-    const s32 sRabbitTalkSwitchSteps = 300;
+    const s32 sRabbitTalkSwitchSteps = NebulaFrameClock::stepsOfSeconds(5);
     const s32 sRabbitTalkNodeCount = 2;
     const s32 sRabbitPleasureTalkNode = 2;
     const f32 sRabbitTalkDistance = 1500.0f;
     const f32 sRabbitPleasureTalkDistance = 350.0f;
     // Pleasure stops following the spine joint after this step.
-    const s32 sRabbitPleasureTalkFollowSteps = 30;
+    const s32 sRabbitPleasureTalkFollowSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sRabbitBodyRadius = 50.0f;
     const f32 sRabbitRumbleRadius = 4.0f;
     const f32 sRabbitRumbleSpeed = 0.2f;
-    const s32 sRabbitTrampleRumbleSteps = 60;
-    const s32 sRabbitStarPieceRumbleSteps = 30;
+    const s32 sRabbitTrampleRumbleSteps = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sRabbitStarPieceRumbleSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sLeadHillSpinSpeed = 0.07f;
 
     const DodoryuChaseParam sDodoryuChaseDataLv2 = {
-        .mReadyChaseStep = 60,
+        .mReadyChaseStep = NebulaFrameClock::stepsOfSeconds(1),
         .mUndergroundMaxSpeed = 16.0f,
         .mUndergroundAccel = 0.1f,
         .mUndergroundTurnAngle = 1.5f,
         .mUndergroundLateralDamping = 0.0f,
         .mChaseAppearDistance = 600.0f,
-        .mAppearSignStep = 30,
+        .mAppearSignStep = NebulaFrameClock::stepsOfMilliseconds(500),
         .mExposingHeadMaxSpeed = 9.0f,
         .mExposingHeadAccel = 0.1f,
         .mExposingHeadTurnAngle = 1.0f,
@@ -124,8 +125,8 @@ namespace {
         .mExposingBustAccel = 0.2f,
         .mExposingBustTurnAngle = 2.0f,
         .mExposingBustLateralDamping = 0.0f,
-        .mChaseAppearStepMin = 120,
-        .mChaseAppearStepMax = 150,
+        .mChaseAppearStepMin = NebulaFrameClock::stepsOfSeconds(2),
+        .mChaseAppearStepMax = NebulaFrameClock::stepsOfMilliseconds(2500),
         .mChaseAppearEndStep = 5,
         .mEscapeStepMax = 250,
         .mEscapeEndDistance = 1500.0f,
@@ -134,10 +135,10 @@ namespace {
         .mEscapeSpeed = 8.0f,
         .mEscapeDirAngleMax = 50.0f,
         .mEscapeTurnAngle = 1.5f,
-        .mEscapeStepMin = 60,
-        .mLaughStep = 120,
-        .mFindPosStepMin = 60,
-        .mFindPosStepMax = 90,
+        .mEscapeStepMin = NebulaFrameClock::stepsOfSeconds(1),
+        .mLaughStep = NebulaFrameClock::stepsOfSeconds(2),
+        .mFindPosStepMin = NebulaFrameClock::stepsOfSeconds(1),
+        .mFindPosStepMax = NebulaFrameClock::stepsOfMilliseconds(1500),
         .mRandomMoveDistanceMin = 1200.0f,
         .mRandomMoveDistanceMax = 1500.0f,
         .mJumpOutSpeed = 5.0f,
@@ -148,7 +149,7 @@ namespace {
         .mInAngerAccel = 1.0f,
         .mInAngerTurnAngle = 3.0f,
         .mInAngerLateralDamping = 0.92f,
-        .mChaseMoreStep = 360,
+        .mChaseMoreStep = NebulaFrameClock::stepsOfSeconds(6),
         .mChaseMoreAccelCounterMin = 50,
         .mChaseMoreAccelCounterMax = 60,
         .mChaseMoreBrakeCounterMin = 10,
@@ -177,13 +178,13 @@ namespace {
     };
 
     const DodoryuChaseParam sDodoryuChaseDataLv3 = {
-        .mReadyChaseStep = 60,
+        .mReadyChaseStep = NebulaFrameClock::stepsOfSeconds(1),
         .mUndergroundMaxSpeed = 20.0f,
         .mUndergroundAccel = 0.2f,
         .mUndergroundTurnAngle = 1.0f,
         .mUndergroundLateralDamping = 0.0f,
         .mChaseAppearDistance = 500.0f,
-        .mAppearSignStep = 30,
+        .mAppearSignStep = NebulaFrameClock::stepsOfMilliseconds(500),
         .mExposingHeadMaxSpeed = 9.0f,
         .mExposingHeadAccel = 0.1f,
         .mExposingHeadTurnAngle = 1.0f,
@@ -196,20 +197,20 @@ namespace {
         .mExposingBustAccel = 0.2f,
         .mExposingBustTurnAngle = 2.0f,
         .mExposingBustLateralDamping = 0.99f,
-        .mChaseAppearStepMin = 60,
+        .mChaseAppearStepMin = NebulaFrameClock::stepsOfSeconds(1),
         .mChaseAppearStepMax = 75,
         .mChaseAppearEndStep = 5,
         .mEscapeStepMax = 140,
         .mEscapeEndDistance = 1500.0f,
         .mEscapeDirStepMin = 40,
-        .mEscapeDirStepMax = 60,
+        .mEscapeDirStepMax = NebulaFrameClock::stepsOfSeconds(1),
         .mEscapeSpeed = 9.0f,
         .mEscapeDirAngleMax = 70.0f,
         .mEscapeTurnAngle = 2.0f,
-        .mEscapeStepMin = 60,
-        .mLaughStep = 120,
-        .mFindPosStepMin = 60,
-        .mFindPosStepMax = 90,
+        .mEscapeStepMin = NebulaFrameClock::stepsOfSeconds(1),
+        .mLaughStep = NebulaFrameClock::stepsOfSeconds(2),
+        .mFindPosStepMin = NebulaFrameClock::stepsOfSeconds(1),
+        .mFindPosStepMax = NebulaFrameClock::stepsOfMilliseconds(1500),
         .mRandomMoveDistanceMin = 1500.0f,
         .mRandomMoveDistanceMax = 1600.0f,
         .mJumpOutSpeed = 5.0f,
@@ -220,7 +221,7 @@ namespace {
         .mInAngerAccel = 0.5f,
         .mInAngerTurnAngle = 0.1f,
         .mInAngerLateralDamping = 0.96f,
-        .mChaseMoreStep = 240,
+        .mChaseMoreStep = NebulaFrameClock::stepsOfSeconds(4),
         .mChaseMoreAccelCounterMin = 50,
         .mChaseMoreAccelCounterMax = 60,
         .mChaseMoreBrakeCounterMin = 10,

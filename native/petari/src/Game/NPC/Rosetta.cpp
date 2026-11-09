@@ -1,4 +1,5 @@
 #include "Game/NPC/Rosetta.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/RosettaDemoAstroDome.hpp"
@@ -10,7 +11,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sWaitActionInterval = 300;
+    static const s32 sWaitActionInterval = NebulaFrameClock::stepsOfSeconds(5);
 };  // namespace
 
 namespace NrvRosetta {
@@ -205,8 +206,6 @@ bool Rosetta::canUpdateStarePos() const {
 }
 
 void Rosetta::exeReaction() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_ROSETTA_BARRIER");

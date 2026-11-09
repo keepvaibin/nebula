@@ -1,4 +1,5 @@
 #include "Game/Enemy/Balloonfish.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -15,11 +16,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
-    static const s32 hWaitTime = 120;
+    static const s32 hWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 hAttackBeginTime = 82;
     static const f32 hTargetPlayerVelocityMult = 10.0f;
     static const f32 hWaitMaxScale = 1.5f;
-    static const s32 hDashTime = 180;
+    static const s32 hDashTime = NebulaFrameClock::stepsOfSeconds(3);
     static const f32 hDashVel = 10.0f;
     static const f32 hDashScale = 0.5f;
     static const s32 hDashEndTime = 95;

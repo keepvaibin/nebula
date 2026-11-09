@@ -1,4 +1,5 @@
 #include "Game/Demo/GrandStarReturnDemoStarter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/ReturnDemoRailMove.hpp"
@@ -197,11 +198,11 @@ void GrandStarReturnDemoStarter::exeFlyWait() {
         mReturnDemoRailMove->posToEnd();
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         emitEffectRush();
     }
 
-    if (MR::isLessStep(this, 60)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::startLevelSound(mPowerStar, "SE_OJ_LV_RET_POW_STAR_FLY");
     }
 
