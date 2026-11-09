@@ -83,7 +83,7 @@ AudSystem* AudNewAudSystem(NebulaArena* pArena, AssetFolder* pSeqArchive, AssetF
 }
 
 AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
-    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundArchive(pSoundArchive),
+    : mIsResetReady(), mIsReset(), mStopClock(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundArchive(pSoundArchive),
       mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
@@ -177,7 +177,7 @@ void AudSystem::frameWork() {
 
 void AudSystem::calc() {
     if (mIsReset && mReseter.checkDone()) {
-        if (!mStopThreads) {
+        if (!mStopClock) {
             // Everything stops; what is still ending ends over the next frames, which come back here.
             SoundManager::stop(0);
             SoundManager::calc();
@@ -328,9 +328,9 @@ void AudSystem::preProcessToReset() {
     mIsResetReady = true;
 }
 
-void AudSystem::resetAudio(u32 time, bool stopThreads) {
-    mReseter.start(time * SoundEngine::cTicksPerStep, stopThreads);
-    mStopThreads = stopThreads;
+void AudSystem::resetAudio(u32 time, bool stopClock) {
+    mReseter.start(time * SoundEngine::cTicksPerStep, stopClock);
+    mStopClock = stopClock;
     mIsReset = true;
 }
 
@@ -353,7 +353,7 @@ void AudSystem::resumeReset() {
 }
 
 bool AudSystem::hasReset() const {
-    return mIsReset && mReseter.checkDone() && (mStopThreads || getNumActiveSounds() == 0);
+    return mIsReset && mReseter.checkDone() && (mStopClock || getNumActiveSounds() == 0);
 }
 
 void AudSystem::initSceneVolume() {

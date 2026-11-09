@@ -38,11 +38,11 @@ public:
     void exeWaitStartScenarioSelect();
     void exeStartScenarioSelect();
     void exeWaitScenarioSelect();
-    void exeWaitResumeInitializeThread();
+    void exeWaitSceneLoad();
     void exeWaitInitializeEnd();
     void exeWaitDisappearLayout();
-    void exeWaitResumeInitializeThreadIfRequestedReset();
-    void exeWaitResumeInitializeThreadIfCanceledSelect();
+    void exeWaitSceneLoadIfRequestedReset();
+    void exeWaitSceneLoadIfCanceledSelect();
 
     bool mIsInitialized;
     bool mIsBackground;
