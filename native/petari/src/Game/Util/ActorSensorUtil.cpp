@@ -605,7 +605,7 @@ namespace MR {
         HitSensor* pReceiver = info[0]->mParentTriangle.mSensor;
         isSent |= pReceiver->receiveMessage(msg, pSender);
 
-        for (int i = 1; i < size; i++) {
+        for (u32 i = 1; i < size; i++) {
             if (info[i]->mParentTriangle.mSensor == pReceiver) {
                 continue;
             }

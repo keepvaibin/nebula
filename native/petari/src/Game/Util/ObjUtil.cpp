@@ -559,15 +559,19 @@ Table* MR::createCsvParser(const char* pArchive, const char* pFormat, ...) {
 Table* MR::tryCreateCsvParser(const LiveActor* pActor, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
+    Table* const pInfo = ::tryCreateCsvParserLocal(getResourceHolder(pActor), pFormat, list);
+    va_end(list);
 
-    return ::tryCreateCsvParserLocal(getResourceHolder(pActor), pFormat, list);
+    return pInfo;
 }
 
 Table* MR::tryCreateCsvParser(const ResourceHolder* pHolder, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
+    Table* const pInfo = ::tryCreateCsvParserLocal(pHolder, pFormat, list);
+    va_end(list);
 
-    return ::tryCreateCsvParserLocal(pHolder, pFormat, list);
+    return pInfo;
 }
 
 s32 MR::getCsvDataElementNum(const Table* pMapInfo) {
