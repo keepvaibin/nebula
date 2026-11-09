@@ -49,16 +49,14 @@ namespace NebulaWideProbe {
         NebulaScreenProbe answer;
         if (Frame::screenProbeResults(cChannel, sAsker, &answer, 1) == 1 && answer.x >= 0.0f) {
             const u32 read = static_cast< u32 >(answer.value * 255.0f + 0.5f);
-            nebula_log("[wide-table] map %u of %u: red read %u, expected %u: %s
-", static_cast< unsigned >(cPicked),
+            nebula_log("[wide-table] map %u of %u: red read %u, expected %u: %s\n", static_cast< unsigned >(cPicked),
                        static_cast< unsigned >(cMaps), static_cast< unsigned >(read), static_cast< unsigned >(redOf(cPicked)),
                        read == redOf(cPicked) ? "ok" : "WRONG");
             sDone = true;
             return;
         }
         if (++sFrames > cGiveUpFrames) {
-            nebula_log("[wide-table] no answer after %u frames
-", static_cast< unsigned >(cGiveUpFrames));
+            nebula_log("[wide-table] no answer after %u frames\n", static_cast< unsigned >(cGiveUpFrames));
             sDone = true;
             return;
         }
