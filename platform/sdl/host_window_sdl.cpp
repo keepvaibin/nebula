@@ -1592,7 +1592,22 @@ bool window_modal_active() noexcept {
     return false;
 }
 
-void test_resize_window(unsigned long, unsigned long) noexcept {}
+void resize_window_client(unsigned width, unsigned height) noexcept {
+    // SDL's window calls belong to its main thread; the size is in the window's points.
+    const auto packed = static_cast<std::uintptr_t>(width) << 16u | static_cast<std::uintptr_t>(height & 0xFFFFu);
+    (void)SDL_RunOnMainThread(
+        [](void* size) {
+            SDL_Window* const window = galaxy::sdl::g_window;
+            if (window == nullptr) {
+                return;
+            }
+            const auto value = reinterpret_cast<std::uintptr_t>(size);
+            const float density = std::max(SDL_GetWindowPixelDensity(window), 1.0f);
+            (void)SDL_SetWindowSize(window, static_cast<int>(std::lround(static_cast<float>(value >> 16u) / density)),
+                                    static_cast<int>(std::lround(static_cast<float>(value & 0xFFFFu) / density)));
+        },
+        reinterpret_cast<void*>(packed), false);
+}
 
 #if defined(__ANDROID__)
 // The document picker (GameActivity.pickFiles): Android hands back copies of the chosen files the game reads by path

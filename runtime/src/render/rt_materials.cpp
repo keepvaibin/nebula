@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The ray tracer's material and stage sun tables (rt_materials.h) and the texture-pack hash.
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/run_options.h"
 
 #include "galaxy/platform_paths.h"
 

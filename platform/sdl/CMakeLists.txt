@@ -136,7 +136,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/game_bloom_vk.cpp
     "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     ${rt}/runtime_settings.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test_driver/run_options.cpp
+    ${rt}/host_extension.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp

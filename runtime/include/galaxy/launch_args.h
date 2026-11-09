@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <string_view>
+#include <vector>
 
 namespace galaxy {
 
@@ -103,6 +104,7 @@ struct LaunchArgs {
     // status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
+    std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
 };
 
 inline LaunchArgs g_launch_args;

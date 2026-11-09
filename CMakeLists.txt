@@ -125,16 +125,25 @@ target_link_libraries(galaxy_asset_store PUBLIC galaxy_runtime_abi)
 add_library(galaxy_save_files STATIC runtime/src/save_files.cpp)
 target_link_libraries(galaxy_save_files PUBLIC galaxy_runtime_abi galaxy_atomic_file)
 
-add_library(galaxy_run_options STATIC tools/test_driver/run_options.cpp)
-target_include_directories(galaxy_run_options PUBLIC runtime/include)
-galaxy_host_options(galaxy_run_options)
+# The host's extensions (host_extension.h, --extension).
+add_library(galaxy_host_extension STATIC runtime/src/host_extension.cpp)
+target_link_libraries(galaxy_host_extension PUBLIC galaxy_runtime_abi)
+galaxy_host_options(galaxy_host_extension)
+# The test runs' extension (run.sh: --extension): scripted controls, pictures, sound, menus and device losses from the
+# run's GALAXY_* environment. Never in an install.
+add_library(nebula_test_extension MODULE tools/test_driver/extension/test_extension.cpp)
+target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi)
+target_compile_features(nebula_test_extension PRIVATE cxx_std_20)
+if(MSVC)
+    target_compile_options(nebula_test_extension PRIVATE /W4 /WX /permissive- /EHsc)
+endif()
 
 add_library(galaxy_runtime_settings STATIC
     runtime/src/runtime_settings.cpp
     runtime/src/input_bindings.cpp
     runtime/src/achievements.cpp
     runtime/src/stats.cpp)
-target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file galaxy_run_options)
+target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file galaxy_host_extension)
 galaxy_host_options(galaxy_runtime_settings)
 
 add_library(galaxy_host_pointer_events STATIC runtime/src/host_pointer_events.cpp)
@@ -172,7 +181,6 @@ add_library(galaxy_native_host STATIC
     runtime/src/host_env.cpp
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
-    tools/test_driver/scripted_input.cpp
     tools/test_driver/data_guard.cpp
     runtime/src/input/live_controls_engine.cpp
     runtime/src/input/key_positions_win32.cpp
@@ -559,7 +567,6 @@ galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.c
 galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
-galaxy_test(galaxy_controls_engine_tests SOURCES ${rt}/input/controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
@@ -578,6 +585,8 @@ galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_wiimote_speaker_tests SOURCES ${rt}/wiimote_speaker_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_player_input_tests SOURCES ${rt}/input/player_input_tests.cpp LIBS galaxy_render)
+target_compile_definitions(galaxy_player_input_tests PRIVATE NEBULA_TEST_EXTENSION_FILE="$<TARGET_FILE:nebula_test_extension>")
+add_dependencies(galaxy_player_input_tests nebula_test_extension)
 galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_tests.cpp
     LIBS galaxy_host_pointer_events)
 galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
@@ -595,7 +604,7 @@ galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${r
 target_compile_definitions(galaxy_mods_tests PRIVATE MODS_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/runtime/tests")
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
-galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS galaxy_run_options shell32)
+galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS shell32)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
 
@@ -622,7 +631,7 @@ set(render_src runtime/src/render)
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.cpp ${render_src}/core/pairing.cpp
-    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp LIBS galaxy_run_options)
+    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/include)
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
 galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
@@ -799,5 +808,5 @@ runtime/src/render/host_window_win32.cpp
     # The Vulkan pipeline cache file name (device_quirks_vk.cpp driver_key).
     galaxy_test(galaxy_vk_driver_key_tests SOURCES runtime/src/render/vk/driver_key_tests.cpp
         runtime/src/render/vk/device_quirks_vk.cpp runtime/src/render/vk/vk_libraries.cpp
-        LIBS nebula_vulkan_deps galaxy_run_options)
+        LIBS nebula_vulkan_deps)
 endif()

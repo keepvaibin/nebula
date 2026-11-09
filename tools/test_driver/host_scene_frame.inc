@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // svc_test_scene_frame's body in a test build: tours, events, teleports, walks.
-    // GALAXY_TEST_GAME_STALL_MS=<ms>: the game's main thread stops that long every 120 scene frames; the sound must not
-    // notice (sound blocks x 7 = sound subframes in the status line).
-    static const int stall_ms = [] {
-        const char* value = nebula_switch::test_game_stall_ms();
-        return value != nullptr ? std::atoi(value) : 0;
-    }();
-    static uint32_t stall_frames = 0;
-    if (stall_ms > 0 && ++stall_frames % 120u == 0u) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(stall_ms));
-    }
     struct Stop {
         std::string stage;
         int32_t scenario;
@@ -199,19 +189,8 @@
         char text[128];
         std::snprintf(text, sizeof(text), "%zu/%zu %s %d", next, stops.size(), stop.stage.c_str(), stop.scenario);
         log_line("tour:", text);
-#if defined(NEBULA_HOST_RENDERER)
-        if (nebula_switch::present_snapshot_by_stop() != nullptr) {
-            galaxy::render::number_present_snapshots(0u);
-        }
-#endif
         return 1;
     }
-#if defined(NEBULA_HOST_RENDERER)
-    // Pictures named by stop and scene frame: a build's load frames do not move them.
-    if (touring && nebula_switch::present_snapshot_by_stop() != nullptr) {
-        galaxy::render::number_present_snapshots(next * 1000u + since_stop);
-    }
-#endif
     if (touring && stop_frame == 0) {
         return 0;
     }

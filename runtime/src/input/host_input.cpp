@@ -2,8 +2,6 @@
 // icons, vibration, and the scripted and replayed test input, as the input the game reads.
 #include "galaxy/game_paths.h"
 #include "galaxy/launch_args.h"
-#include "galaxy/run_options.h"
-#include "galaxy/host_env.h"
 
 #include "galaxy/platform_time.h"
 #include "galaxy/controller_hid.h"
@@ -1092,39 +1090,9 @@ galaxy::input::PlayerInput build_live_input(
     const galaxy::RuntimeInputModeState& input_mode_state,
     galaxy::input::PlayContext play_context,
     galaxy::input::tilt::Section tilt_section) {
-    const NativeInputScriptOverlay script = build_native_input_script_overlay(
-        current_frame, {galaxy::qpc_now});
-    if (const NativeInputReplaySample* replay =
-            native_input_replay_sample_for_frame(current_frame);
-        replay != nullptr) {
-        // Replayed pads reach the settings overlay the way live pads do.
-        NativeInputReplaySample routed = *replay;
-        if (routed.xinput_connected &&
-            route_native_settings_pad(
-                routed.xinput_buttons,
-                galaxy::input::normalize_xinput_axis(
-                    routed.thumb_lx, kReplayLeftDeadzone),
-                galaxy::input::normalize_xinput_axis(
-                    routed.thumb_ly, kReplayLeftDeadzone))) {
-            routed.left_trigger = routed.right_trigger = 0u;
-            routed.thumb_lx = routed.thumb_ly = 0;
-            routed.thumb_rx = routed.thumb_ry = 0;
-        }
-        return build_replayed_input(
-            current_frame,
-            routed,
-            script,
-            input_mode_state.mode,
-            tilt_section,
-            project_client_mouse_pointer(replay->game_focused, replay->client_w > 1 && replay->client_h > 1,
-                replay->mouse_client_x >= 0 && replay->mouse_client_y >= 0 &&
-                replay->mouse_client_x < replay->client_w && replay->mouse_client_y < replay->client_h,
-                replay->mouse_client_x, replay->mouse_client_y, replay->client_w, replay->client_h),
-            active_native_input_replay_log());
-    }
-
-    // A hidden start (a test) is no keyboard or mouse source: no focus, key or cursor calls are made, while controllers,
-    // replay and scripts still work.
+    const NativeInputScriptOverlay script = extension_controls(current_frame);
+    // A hidden start (a test) is no keyboard or mouse source: no focus, key or cursor calls are made, while controllers
+    // and extensions still work.
     const bool host_window_input_enabled = !::galaxy::launch_args().started_hidden;
     HWND focused_window = nullptr;
     const bool window_focused =

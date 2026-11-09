@@ -1,6 +1,5 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
 #include "galaxy/render/utility_shaders.h"
-#include "galaxy/run_options.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include <nebula_frame_list.h>
@@ -3285,7 +3284,7 @@ void RendererD3D12::gpu_pass(GpuPass pass) {
     pass_marks_[frame_slot_][marks++] = pass;
 }
 
-void RendererD3D12::test_lose_device() {
+void RendererD3D12::lose_device() {
     ComPtr<ID3D12Device5> device;
     if (SUCCEEDED(device_.As(&device))) {
         device->RemoveDevice();

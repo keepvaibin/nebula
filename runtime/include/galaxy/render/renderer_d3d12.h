@@ -321,7 +321,7 @@ public:
     // present(), after scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     // Test only (GALAXY_TEST_DEVICE_LOST): the device removed, as a driver reset leaves it.
-    void test_lose_device();
+    void lose_device();
     void begin_frame();
     // Called after the queue signal, before pacing and Present; the context is not retained.
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);

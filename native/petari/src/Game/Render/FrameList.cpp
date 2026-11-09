@@ -494,7 +494,6 @@ namespace Frame {
         rList.ring_vertex_bytes = pStore->mRingBytes;
         rList.ring_index_count = pStore->mRingIndices.mCount;
         rList.camera_epoch = sCuts;
-        rList.snapshot_number = 0;
         if (sCutPending) {
             rList.flags |= NEBULA_FRAME_CAMERA_CUT;
             sCutPending = false;

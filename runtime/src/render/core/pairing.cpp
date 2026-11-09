@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/frame_core.h"
 
-#include "galaxy/run_options.h"
 
 #include <algorithm>
 #include <cmath>

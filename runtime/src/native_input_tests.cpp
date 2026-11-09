@@ -13,7 +13,6 @@
 #include <cstdint>
 #include <cmath>
 #include <iostream>
-#include <limits>
 #include <span>
 #include <string_view>
 
@@ -98,55 +97,6 @@ bool settings_pad_toggles_navigates_and_hides_buttons() {
     s = step(pad::kStart, true, 760u);
     ok &= expect(only_key(s, pad::kKeyClose), "Menu alone closes the overlay");
     return ok;
-}
-
-bool native_input_script_unsigned_fields_fail_closed() {
-    std::uint64_t value = 0x1122334455667788ull;
-    bool passed = expect(
-        galaxy::input::parse_native_input_script_u64("0", value) &&
-            value == 0u,
-        "native input script unsigned parser accepts zero");
-    passed &= expect(
-        galaxy::input::parse_native_input_script_u64(
-            "18446744073709551615", value) &&
-            value == std::numeric_limits<std::uint64_t>::max(),
-        "native input script unsigned parser accepts UINT64_MAX exactly");
-
-    constexpr std::array<std::string_view, 8> invalid_values{
-        "",
-        "18446744073709551616",
-        "999999999999999999999999999999999999999999",
-        "-1",
-        "+1",
-        " 1",
-        "1 ",
-        "1x",
-    };
-    for (const std::string_view invalid : invalid_values) {
-        value = 0x1122334455667788ull;
-        passed &= expect(
-            !galaxy::input::parse_native_input_script_u64(invalid, value) &&
-                value == 0x1122334455667788ull,
-            "native input script unsigned parser rejects malformed or overflowing text without changing output");
-    }
-
-    std::uint64_t start_frame = 0x8877665544332211ull;
-    passed &= expect(
-        galaxy::input::resolve_native_input_script_start_frame(
-            std::numeric_limits<std::uint64_t>::max() - 7u,
-            "7",
-            start_frame) &&
-            start_frame == std::numeric_limits<std::uint64_t>::max(),
-        "native input script relative start accepts the exact non-wrapping limit");
-    start_frame = 0x8877665544332211ull;
-    passed &= expect(
-        !galaxy::input::resolve_native_input_script_start_frame(
-            std::numeric_limits<std::uint64_t>::max() - 7u,
-            "8",
-            start_frame) &&
-            start_frame == 0x8877665544332211ull,
-        "native input script relative start rejects anchor addition overflow without changing output");
-    return passed;
 }
 
 bool normalizes_xinput_axes() {
@@ -480,7 +430,6 @@ int main(int argc, char** argv) {
     bool ok = true;
     const bool base_only = argc > 1 && std::string_view(argv[1]) == "--base";
     if (!base_only) ok &= settings_pad_toggles_navigates_and_hides_buttons();
-    ok &= native_input_script_unsigned_fields_fail_closed();
     ok &= normalizes_xinput_axes();
     ok &= player_buttons_are_bits();
     ok &= virtual_pointer_and_motion();
