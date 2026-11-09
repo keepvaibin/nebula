@@ -9,6 +9,15 @@
 
 namespace {
     static const f32 sDisappearAnimRate = 0.25f;
+
+    // A text's code units with its terminator.
+    u32 unitsWithEnd(const char16_t* pText) {
+        u32 units = 1;
+        while (pText[units - 1] != 0) {
+            units++;
+        }
+        return units;
+    }
 };  // namespace
 
 namespace {
@@ -101,10 +110,10 @@ void FileSelectInfo::setInfo(u16* pName, s32 number, s32 starNum, s32 starPieceN
     mIsViewNormalEnding = isViewNormalEnding;
     mIsViewCompleteEnding = isViewCompleteEnding;
 
-    const u32 dateUnits = static_cast< u32 >(MR::textLength(pDateMessage)) + 1;
-    MR::copyText(mDateMessage.room(dateUnits), pDateMessage, dateUnits);
-    const u32 timeUnits = static_cast< u32 >(MR::textLength(pTimeMessage)) + 1;
-    MR::copyText(mTimeMessage.room(timeUnits), pTimeMessage, timeUnits);
+    const u32 dateUnits = unitsWithEnd(pDateMessage);
+    MR::copyString(mDateMessage.room(dateUnits), pDateMessage, dateUnits);
+    const u32 timeUnits = unitsWithEnd(pTimeMessage);
+    MR::copyString(mTimeMessage.room(timeUnits), pTimeMessage, timeUnits);
 
     mMissNum = missNum;
 }
