@@ -28,6 +28,7 @@ Use a Windows user that never ran Nebula, a mid-range PC and a low-end one, and 
 | # | Do | Expected |
 |---|----|----------|
 | W11 | Play: reach the title, File Select, a new game | Title music plays; no black frames; the Mii picker opens |
+| W11b | Install from a European (RMGP01) and a Japanese (RMGJ01) disc image as well as the American one; in each, choose every language the disc has (Language row), then play the prologue and a galaxy | Each is accepted; title, menus, talk, star names and voices are in the language chosen, with no missing letters; the speed is the game's own on every disc |
 | W12 | Every launcher page and every in-game settings page (`F1`): change a row, quit, reopen | The value is kept and shown the same in both; Defaults resets only its own page |
 | W13 | Save in a galaxy, quit, start | The file shows its stars and Mii |
 | W14 | Export saves; import the `.zip` into a fresh install | Same files, stars and Miis |
@@ -55,6 +56,7 @@ Use a Windows user that never ran Nebula, a mid-range PC and a low-end one, and 
 | # | Do | Expected |
 |---|----|----------|
 | W26 | Import a mod from a folder, a `.zip` and a `.7z`; enable, disable, reorder, remove | Appears, applies and reverts; the higher mod wins a shared file; removal goes to the Recycle Bin |
+| W26b | A mod with code (a plugin): enable it; allow its code, then replace its library with another build | Its code runs only once allowed; a changed library is asked about again |
 | W27 | A mod for another region; a mod that crashes the game; a damaged texture pack image; a bad video | Marked; NEB-M01 or NEB-M02 naming the mod; NEB-T01; NEB-V01; no hang |
 | W28 | Force a crash; open the report | A NEB code, advice, the report file; no user name, path, e-mail or MAC address in it; the next start is normal |
 | W29 | Watch the network while the launcher and game run | Only the update check and downloads asked for; the Discord status follows its setting |
