@@ -291,7 +291,8 @@ bool AssetStore::read(std::uint64_t position, std::size_t size, void* dst) const
         return true;
     }
 #if defined(_WIN32)
-    // One event a thread, so reads of different threads run at once.
+    // One event a thread, so reads of different threads run at once. The readers are a few long-lived threads, so
+    // the events are not closed.
     thread_local const HANDLE done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     auto* out = static_cast<std::uint8_t*>(dst);
     while (size != 0) {
