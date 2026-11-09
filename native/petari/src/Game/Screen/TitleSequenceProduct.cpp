@@ -15,6 +15,15 @@
 
 namespace {
     static const s32 sPressABAppearFrame = 25;
+
+    // A prompt box the layout lacks (a mod's layout, or one that is not a text box) takes no buffer.
+    void allocPromptBuffer(LayoutActor* pLayout, const char* pPaneName, u32 length) {
+        Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(MR::getPane(pLayout, pPaneName));
+
+        if (pTextBox != nullptr) {
+            pTextBox->AllocStringBuffer(length);
+        }
+    }
 };  // namespace
 
 namespace TitleSequenceProductSub {
@@ -65,15 +74,15 @@ TitleSequenceProduct::TitleSequenceProduct()
     }
     // The layout's boxes hold the prompt they ship with, or the room it needs.
     const u32 promptLength = static_cast< u32 >(MR::textLength(prompt.c_str()));
-    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(promptLength);
-    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(promptLength);
+    allocPromptBuffer(mPressStartLayout, "TxtStart", promptLength);
+    allocPromptBuffer(mPressStartLayout, "ShaStart", promptLength);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", prompt.c_str());
 #else
     MR::Text16 prompt;
     NebulaUi::getText(prompt, "PressAnyStart");
     const u32 promptLength = static_cast< u32 >(MR::textLength(prompt.c_str()));
-    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(promptLength);
-    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(promptLength);
+    allocPromptBuffer(mPressStartLayout, "TxtStart", promptLength);
+    allocPromptBuffer(mPressStartLayout, "ShaStart", promptLength);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", prompt.c_str());
 #endif
     mAButtonChecker = new TriggerChecker();

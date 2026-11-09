@@ -229,7 +229,8 @@ void LavaProminence::exeMoveStartExtra() {
     MR::startLevelSound(this, "SE_OJ_LV_PROMINENCE_MOVE");
     mPosition.add(mRailStartDir * mMoveSpeed);
     MR::calcGravity(this);
-    s32 endStartStep = 300.0f / mMoveSpeed;
+    // A speed of 0 or less (placement arg 1) ends the start at once, not at 300 / 0.
+    s32 endStartStep = mMoveSpeed > 0.0f ? static_cast< s32 >(300.0f / mMoveSpeed) : 0;
 
     if (MR::isGreaterStep(this, endStartStep - 1)) {
         MR::deleteEffect(this, "Start");

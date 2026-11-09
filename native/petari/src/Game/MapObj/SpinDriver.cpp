@@ -606,7 +606,8 @@ void SpinDriver::cancelBind() {
 }
 
 void SpinDriver::updateBindPosition() {
-    f32 coord = static_cast< f32 >(getNerveStep()) / mShootTime;
+    // A shoot time of 0 or less (placement arg 0) is at the path's end.
+    f32 coord = mShootTime > 0 ? static_cast< f32 >(getNerveStep()) / mShootTime : 1.0f;
 
     Vec3f lastPos(mBindPos);
 

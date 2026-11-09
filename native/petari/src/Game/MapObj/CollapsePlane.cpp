@@ -105,7 +105,8 @@ void CollapsePlane::control() {
 }
 
 bool CollapsePlane::calcJointPlane(Pos3f* pMtx, const JointControllerInfo&) {
-    f32 xzScale = 1.0f - (::sScaleMin * mCollapseStep) / mCollapseTime;
+    // A collapse time of 0 or less (placement arg 0) is collapsed at once.
+    f32 xzScale = mCollapseTime > 0 ? 1.0f - (::sScaleMin * mCollapseStep) / mCollapseTime : 1.0f - ::sScaleMin;
 
     Pos3f mtx;
     mtx.identity();

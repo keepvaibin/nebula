@@ -96,7 +96,8 @@ bool PlantStalk::updateGrowUp() {
     mGrowSpeed *= ::sGrowSpeedFriction;
     mGrowSpeed = MR::clamp(mGrowSpeed, ::sGrowSpeedMin, ::sGrowSpeedMax);
 
-    mGrowthPercent = mStalkLength / MR::getRailTotalLength(this);
+    // A rail with no length is fully grown.
+    mGrowthPercent = MR::getRailTotalLength(this) > 0.0f ? mStalkLength / MR::getRailTotalLength(this) : 1.0f;
     mGrowthPercent = MR::clamp(mGrowthPercent, 0.0f, 1.0f);
 
     if (mStalkLength >= MR::getRailTotalLength(this)) {

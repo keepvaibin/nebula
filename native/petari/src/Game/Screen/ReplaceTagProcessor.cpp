@@ -283,6 +283,11 @@ namespace ReplaceTagProcessor {
 };  // namespace ReplaceTagProcessor
 
 u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* pFormat, ...) {
+    // No format (a message id the text lacks) is the empty text.
+    if (pFormat == nullptr) {
+        pFormat = u"";
+    }
+
     va_list args;
     va_start(args, pFormat);
     // Room for the replaced text: a number tag gives at most 12 units, a string tag its argument's length, any other

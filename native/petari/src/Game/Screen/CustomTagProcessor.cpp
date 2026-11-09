@@ -40,6 +40,11 @@ namespace {
     }
 
     const NebulaColor8& getTextColor(s32 index) {
+        // A colour number past the table (an edited message) is the default colour.
+        if (index < 0 || index >= ARRAY_SIZE(::sTextColor)) {
+            index = 0;
+        }
+
         return ::sTextColor[index];
     }
 
@@ -457,6 +462,11 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, 
         return OPERATION_NO_CHAR_SPACE;
     }
 
+    // Only the first eight sounds of a message are tracked (a ninth made no mask before either).
+    if (mSoundIndex >= 8) {
+        return OPERATION_NO_CHAR_SPACE;
+    }
+
     u8 mask = 1 << mSoundIndex;
 
     if (mask != static_cast< u8 >(mPlayedSounds & mask)) {
@@ -605,6 +615,11 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupColor(Ui::Rect* 
 
 CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
     if (MR::getLanguage() != LanguageId_JpJapanese) {
+        return OPERATION_NO_CHAR_SPACE;
+    }
+
+    // A ruby tag with no room for its text (an edited message) draws no ruby.
+    if (tag.getParamLength() < 2 + static_cast< s32 >(sizeof(char16_t))) {
         return OPERATION_NO_CHAR_SPACE;
     }
 

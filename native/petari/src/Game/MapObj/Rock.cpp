@@ -817,7 +817,8 @@ void Rock::exeMove() {
 
     move(moveSpeed);
 
-    f32 rotateSpeed = mRotateSpeed * moveSpeed / mMoveSpeed;
+    // A rock with no speed does not turn.
+    f32 rotateSpeed = mMoveSpeed != 0.0f ? mRotateSpeed * moveSpeed / mMoveSpeed : 0.0f;
 
     if (mSlowDownTimer > ::cSlowMoveFrame - ::cSlowMoveRumbleFrame) {
         s32 step = ::cSlowMoveFrame - mSlowDownTimer;

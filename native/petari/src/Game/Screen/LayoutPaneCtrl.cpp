@@ -9,6 +9,11 @@ LayoutPaneCtrl::LayoutPaneCtrl(LayoutManager* pHost, const char* pPaneName, u32 
     LayoutManager* pManager = mHost;
     mPane = pPaneName == nullptr ? pManager->mLayout->mpRootPane : pManager->mLayout->mpRootPane->FindPaneByName(pPaneName, true);
 
+    // A pane the layout lacks (a mod's layout) is the root, as LayoutManager::findPaneOrRoot answers.
+    if (mPane == nullptr) {
+        mPane = pManager->mLayout->mpRootPane;
+    }
+
     for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i] = new LayoutAnmPlayer(pHost);
     }
@@ -38,6 +43,11 @@ void LayoutPaneCtrl::start(const char* pAnimName, u32 layer) {
     }
 
     pAnmPlayer->start(pAnimName);
+
+    // The layout has no such animation: nothing to bind.
+    if (pAnmPlayer->mAnimTransform == nullptr) {
+        return;
+    }
 
     if (mHost->mParentAnimValid) {
         mPane->UnbindAnimation(pAnmPlayer->mAnimTransform, true);

@@ -114,7 +114,8 @@ void DesertMovingLand::exeWait() {
 void DesertMovingLand::exeMoveDown() {
     if (MR::isFirstStep(this)) {
         Vec3f velocity(mLowerPos - mUpperPos);
-        velocity.setLength(velocity.length() / mMoveDownTime);
+        // A time of 0 or less (placement arg 1) crosses the whole way in one step.
+        velocity.setLength(velocity.length() / (mMoveDownTime > 0 ? mMoveDownTime : 1));
         mVelocity.set(velocity);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");
     }
@@ -139,7 +140,7 @@ void DesertMovingLand::exeMoveDown() {
 void DesertMovingLand::exeMoveUp() {
     if (MR::isFirstStep(this)) {
         Vec3f velocity(mUpperPos - mLowerPos);
-        velocity.setLength(velocity.length() / mMoveUpTime);
+        velocity.setLength(velocity.length() / (mMoveUpTime > 0 ? mMoveUpTime : 1));
         mVelocity.set(velocity);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");
     }

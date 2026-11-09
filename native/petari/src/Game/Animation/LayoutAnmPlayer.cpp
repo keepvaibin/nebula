@@ -20,6 +20,13 @@ void LayoutAnmPlayer::reflectFrame() {
 void LayoutAnmPlayer::start(const char* pAnimName) {
     Ui::AnimTransform* pAnimTransform = mManager->getAnimTransform(pAnimName);
 
+    // An animation the layout lacks (a mod's layout) plays nothing and reads as stopped.
+    if (pAnimTransform == nullptr) {
+        mAnimTransform = nullptr;
+        mAnimName = pAnimName;
+        return;
+    }
+
     if (pAnimTransform != mAnimTransform) {
         mAnimTransform = pAnimTransform;
     }

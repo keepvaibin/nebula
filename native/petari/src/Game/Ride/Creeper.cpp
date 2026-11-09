@@ -269,7 +269,9 @@ void Creeper::control() {
         MR::moveCoordAndTransToNearestRailPos(this, *MR::getPlayerPos());
     } else {
         bendPoints();
-        mCoord = MR::getRailCoord(this) / MR::getRailTotalLength(this);
+        // A rail with no length is already at its end.
+        const f32 railLength = MR::getRailTotalLength(this);
+        mCoord = railLength > 0.0f ? MR::getRailCoord(this) / railLength : 1.0f;
     }
 
     mTopMtx.setXYZDir(getHeadPoint()->mSide, getHeadPoint()->mUp, getHeadPoint()->mFront);

@@ -59,6 +59,11 @@ namespace MR {
     const char16_t* getMessageLine(char16_t* pDst, u32 capacity, const char16_t* pMessage, u32 line) {
         u32 currentLine = 0;
 
+        // No message (an id the text lacks) has no lines: the empty line.
+        if (pMessage == nullptr) {
+            pMessage = u"";
+        }
+
         while (*pMessage != 0) {
             if (currentLine == line) {
                 break;
@@ -111,6 +116,11 @@ namespace MR {
 
     s32 countMessageLine(const char16_t* pMessage) {
         s32 count = 1;
+
+        // No message (an id the text lacks) is one empty line.
+        if (pMessage == nullptr) {
+            return count;
+        }
 
         while (*pMessage != 0) {
             if (*pMessage == cMessageTagEscape) {
@@ -178,6 +188,11 @@ namespace MR {
     }
 
     const char16_t* getNextMessagePage(const char16_t* pMessage) {
+        // No message (an id the text lacks) has no next page.
+        if (pMessage == nullptr) {
+            return nullptr;
+        }
+
         while (*pMessage != 0) {
             if (*pMessage == cMessageTagEscape) {
                 pMessage++;

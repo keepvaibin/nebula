@@ -132,7 +132,9 @@ bool MR::isExistPaneCtrl(LayoutActor* pActor, const char* pPaneName) {
 }
 
 u8 MR::getPaneAlpha(const LayoutActor* pActor, const char* pPaneName) {
-    return getPane(pActor, pPaneName)->mAlpha;
+    // A pane the layout lacks (a mod's layout) is fully transparent; the pane setters below leave it alone.
+    const Ui::Pane* pPane = getPane(pActor, pPaneName);
+    return pPane != nullptr ? pPane->mAlpha : 0;
 }
 
 void MR::setInfluencedAlphaToChild(const LayoutActor* pActor) {
@@ -150,7 +152,10 @@ void MR::setLayoutAlphaFloat(const LayoutActor* pActor, f32 alpha) {
 }
 
 void MR::setPaneAlpha(const LayoutActor* pActor, const char* pPaneName, u8 alpha) {
-    getPane(pActor, pPaneName)->mAlpha = alpha;
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        pPane->mAlpha = alpha;
+    }
 }
 
 void MR::setPaneAlphaFloat(const LayoutActor* pActor, const char* pPaneName, f32 alpha) {
@@ -160,13 +165,17 @@ void MR::setPaneAlphaFloat(const LayoutActor* pActor, const char* pPaneName, f32
 }
 
 void MR::executeTextBoxRecursive(LayoutActor* pActor, const char* pPaneName, const TextBoxRecursiveOperation& rOperation) {
-    Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(getPane(pActor, pPaneName));
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+
+    if (pPane == nullptr) {
+        return;
+    }
+
+    Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(pPane);
 
     if (pTextBox != nullptr) {
         rOperation.execute(pTextBox);
     }
-
-    Ui::Pane* pPane = getPane(pActor, pPaneName);
 
     for (Ui::Pane* pChild : pPane->GetChildList()) {
         executeTextBoxRecursive(pActor, pChild->mName, rOperation);
@@ -255,7 +264,10 @@ void MR::setTextBoxFontRecursive(LayoutActor* pActor, const char* pPaneName, Ui:
 }
 
 void MR::showPane(LayoutActor* pActor, const char* pPaneName) {
-    getPane(pActor, pPaneName)->SetVisible(true);
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        pPane->SetVisible(true);
+    }
 }
 
 void MR::showPaneRecursive(Ui::Pane* pPane) {
@@ -273,19 +285,29 @@ void MR::hidePaneRecursive(Ui::Pane* pPane) {
 }
 
 void MR::showPaneRecursive(LayoutActor* pActor, const char* pPaneName) {
-    showPaneRecursive(getPane(pActor, pPaneName));
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        showPaneRecursive(pPane);
+    }
 }
 
 void MR::hidePane(LayoutActor* pActor, const char* pPaneName) {
-    getPane(pActor, pPaneName)->SetVisible(false);
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        pPane->SetVisible(false);
+    }
 }
 
 void MR::hidePaneRecursive(LayoutActor* pActor, const char* pPaneName) {
-    hidePaneRecursive(getPane(pActor, pPaneName));
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        hidePaneRecursive(pPane);
+    }
 }
 
 bool MR::isHiddenPane(const LayoutActor* pActor, const char* pPaneName) {
-    return !getPane(pActor, pPaneName)->IsVisible();
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    return pPane == nullptr || !pPane->IsVisible();
 }
 
 void MR::showScreen(LayoutActor* pActor) {
@@ -315,23 +337,22 @@ void MR::setFollowTypeAdd(const LayoutActor* pActor, const char* pPaneName) {
 }
 
 void MR::copyPaneTrans(Vec2f* pTrans, const LayoutActor* pActor, const char* pPaneName) {
+    // A pane the layout lacks (a mod's layout) sits at the layout's origin.
     Ui::Pane* pPane = getPane(pActor, pPaneName);
-    pTrans->x = pPane->mGlbMtx.mMtx[0][3];
-    pTrans->y = pPane->mGlbMtx.mMtx[1][3];
+    pTrans->x = pPane != nullptr ? pPane->mGlbMtx.mMtx[0][3] : 0.0f;
+    pTrans->y = pPane != nullptr ? pPane->mGlbMtx.mMtx[1][3] : 0.0f;
     convertLayoutPosToScreenPos(pTrans, *pTrans);
 }
 
 f32 MR::getPaneTransX(const LayoutActor* pActor, const char* pPaneName) {
-    Ui::Pane* pPane = getPane(pActor, pPaneName);
-    Vec2f trans(pPane->mGlbMtx.mMtx[0][3], pPane->mGlbMtx.mMtx[1][3]);
-    convertLayoutPosToScreenPos(&trans, trans);
+    Vec2f trans;
+    copyPaneTrans(&trans, pActor, pPaneName);
     return trans.x;
 }
 
 f32 MR::getPaneTransY(const LayoutActor* pActor, const char* pPaneName) {
-    Ui::Pane* pPane = getPane(pActor, pPaneName);
-    Vec2f trans(pPane->mGlbMtx.mMtx[0][3], pPane->mGlbMtx.mMtx[1][3]);
-    convertLayoutPosToScreenPos(&trans, trans);
+    Vec2f trans;
+    copyPaneTrans(&trans, pActor, pPaneName);
     return trans.y;
 }
 
@@ -342,13 +363,22 @@ void MR::setLayoutPosAtPaneTrans(LayoutActor* pActor, const LayoutActor* pFollow
 }
 
 void MR::copyPaneScale(Vec2f* pScale, const LayoutActor* pActor, const char* pPaneName) {
+    // A pane the layout lacks (a mod's layout) has scale 1.
     Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane == nullptr) {
+        pScale->set< f32 >(1.0f, 1.0f);
+        return;
+    }
+
     pScale->set< f32 >(pPane->mScale.x, pPane->mScale.y);
 }
 
 void MR::setPaneScale(const LayoutActor* pActor, f32 x, f32 y, const char* pPaneName) {
     Vec2f scale(x, y);
-    getPane(pActor, pPaneName)->mScale = scale;
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        pPane->mScale = scale;
+    }
 }
 
 void MR::setLayoutScaleAtPaneScale(LayoutActor* pActor, const LayoutActor* pFollowActor, const char* pPaneName) {
@@ -362,7 +392,10 @@ void MR::setPaneRotate(const LayoutActor* pActor, f32 x, f32 y, f32 z, const cha
     rotate.x = x;
     rotate.y = y;
     rotate.z = z;
-    getPane(pActor, pPaneName)->mRotate = rotate;
+    Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane != nullptr) {
+        pPane->mRotate = rotate;
+    }
 }
 
 void MR::setLayoutScalePosAtPaneScaleTrans(LayoutActor* pActor, const LayoutActor* pFollowActor, const char* pPaneName) {
@@ -391,11 +424,21 @@ Ui::TexMap* MR::createLytTexMap(ResTIMG* pImage) {
 Ui::TexMap* MR::getLytTexMap(LayoutActor* pActor, const char* pPaneName, u8 textureIndex) {
     Ui::Picture* pPicture = Ui::PaneCast< Ui::Picture >(getPane(pActor, pPaneName));
 
+    // A pane that is not a picture (a mod's layout) has no texture map.
+    if (pPicture == nullptr) {
+        return nullptr;
+    }
+
     return const_cast< Ui::TexMap* >(&pPicture->GetMaterial()->GetTexture(textureIndex));
 }
 
 void MR::replacePaneTexture(LayoutActor* pActor, const char* pPaneName, const Ui::TexMap* pTexture, u8 textureIndex) {
     Ui::Picture* pPicture = Ui::PaneCast< Ui::Picture >(getPane(pActor, pPaneName));
+
+    if (pPicture == nullptr) {
+        return;
+    }
+
     pPicture->GetMaterial()->SetTexture(textureIndex, *pTexture);
 }
 
@@ -461,6 +504,10 @@ void MR::setAnimFrameAndStopAtEnd(LayoutActor* pActor, u32 animLayer) {
 
 void MR::setAnimFrameAndStopAdjustTextWidth(LayoutActor* pActor, const char* pPaneName, u32 animLayer) {
     Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane == nullptr) {
+        return;
+    }
+
     Ui::Rect rect;
     ::getTextDrawRectRecursive(&rect, pPane, false);
     setAnimFrameAndStop(pActor, rect.GetWidth(), animLayer);
@@ -468,6 +515,10 @@ void MR::setAnimFrameAndStopAdjustTextWidth(LayoutActor* pActor, const char* pPa
 
 void MR::setAnimFrameAndStopAdjustTextHeight(LayoutActor* pActor, const char* pPaneName, u32 animLayer) {
     Ui::Pane* pPane = getPane(pActor, pPaneName);
+    if (pPane == nullptr) {
+        return;
+    }
+
     Ui::Rect rect;
     ::getTextDrawRectRecursive(&rect, pPane, false);
     setAnimFrameAndStop(pActor, rect.GetHeight(), animLayer);
@@ -533,7 +584,9 @@ s16 MR::getPaneAnimFrameMax(const LayoutActor* pActor, const char* pPaneName, u3
 }
 
 s16 MR::getAnimFrameMax(const LayoutActor* pActor, const char* pAnimName) {
-    return pActor->getLayoutManager()->getAnimTransform(pAnimName)->GetFrameSize();
+    // An animation the layout lacks (a mod's layout) has no frames.
+    Ui::AnimTransform* pAnimTransform = pActor->getLayoutManager()->getAnimTransform(pAnimName);
+    return pAnimTransform != nullptr ? pAnimTransform->GetFrameSize() : 0;
 }
 
 FrameCtrl* MR::getAnimCtrl(const LayoutActor* pActor, u32 animLayer) {
@@ -565,15 +618,25 @@ void MR::forceDeleteEffectAll(LayoutActor* pActor) {
 }
 
 void MR::setEffectHostMtx(LayoutActor* pActor, const char* pParam2, MtxPtr pHostMtx) {
-    getEffect(pActor, pParam2)->setHostMtx(pHostMtx);
+    // An effect name the layout's effect list lacks (a mod's list) is left alone.
+    MultiEmitter* pEmitter = getEffect(pActor, pParam2);
+    if (pEmitter != nullptr) {
+        pEmitter->setHostMtx(pHostMtx);
+    }
 }
 
 void MR::setEffectRate(LayoutActor* pActor, const char* pEffectName, f32 rate) {
-    getEffect(pActor, pEffectName)->setRate(rate, -1);
+    MultiEmitter* pEmitter = getEffect(pActor, pEffectName);
+    if (pEmitter != nullptr) {
+        pEmitter->setRate(rate, -1);
+    }
 }
 
 void MR::setEffectDirectionalSpeed(LayoutActor* pActor, const char* pEffectName, f32 speed) {
-    getEffect(pActor, pEffectName)->setDirectionalSpeed(speed, -1);
+    MultiEmitter* pEmitter = getEffect(pActor, pEffectName);
+    if (pEmitter != nullptr) {
+        pEmitter->setDirectionalSpeed(speed, -1);
+    }
 }
 
 void MR::pauseOffEffectAll(LayoutActor* pActor) {
@@ -785,7 +848,8 @@ void MR::calcTextBoxRectRecursive(Box2f* pBox, const LayoutActor* pActor, const 
     Ui::Pane* pPane = getPane(pActor, pPaneName);
     Ui::Rect rect;
 
-    if (::getTextDrawRectRecursive(&rect, pPane, false)) {
+    // A pane the layout lacks (a mod's layout) has an empty box.
+    if (pPane != nullptr && ::getTextDrawRectRecursive(&rect, pPane, false)) {
         Vec2f min;
         Vec2f max;
         convertPaneLocalPosToScreenPos(&min, pPane, Vec2f(rect.left, rect.top));

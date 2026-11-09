@@ -113,7 +113,8 @@ bool OceanBowl::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInf
     Vec3f horizontal(rPos);
     horizontal.sub(mPosition);
     f32 height = MR::vecKillElement(horizontal, mUp, &horizontal);
-    f32 angle = horizontal.length() / mRadius;
+    // A bowl placed with no scale (radius 0) has no depth, not a division by 0.
+    f32 angle = mRadius > 0.0f ? horizontal.length() / mRadius : 1.0f;
     angle *= PI;
     angle *= 0.5f;
 

@@ -172,7 +172,10 @@ void CounterLayoutController::exePlayerMoving() {
         mPlayerNotMovingFrame = 0;
     }
 
-    mHPMeter->requestPlayerMoving();
+    // No life meter set (a scene layout without one) has nothing to tell.
+    if (mHPMeter != nullptr) {
+        mHPMeter->requestPlayerMoving();
+    }
 
     if (tryEndTicoEatStarPiece()) {
         setNerve(GET_NERVE(CounterLayoutController, CounterLayoutControllerNrvPlayerMoving));
@@ -192,7 +195,9 @@ void CounterLayoutController::exePlayerNotMoving() {
         showAllLayout();
     }
 
-    mHPMeter->requestPlayerStopped();
+    if (mHPMeter != nullptr) {
+        mHPMeter->requestPlayerStopped();
+    }
 
     if (tryEndTicoEatStarPiece()) {
         setNerve(GET_NERVE(CounterLayoutController, CounterLayoutControllerNrvPlayerNotMoving));

@@ -57,7 +57,9 @@ void SphereRailDash::exeWait() {
         }
 
         f32 endSpeed = mEndSpeed;
-        f32 duration = 3.0f * MR::getRailTotalLength(this) / (speed + 2.0f * endSpeed);
+        // No speed at either end (the arg is 0 and the player stands still) crosses the rail in one step.
+        const f32 speedSum = speed + 2.0f * endSpeed;
+        f32 duration = speedSum > 0.0f ? 3.0f * MR::getRailTotalLength(this) / speedSum : 1.0f;
         f32 acceleration = 2.0f * (endSpeed - speed) / duration;
         mCoordCubic = -acceleration / (2.0f * duration) / 3.0f;
         mCoordQuadratic = acceleration / 2.0f;
@@ -84,7 +86,9 @@ void SphereRailDash::exeRailMove() {
         MR::setRailCoord(this, time * (mCoordLinear + time * (mCoordQuadratic + mCoordCubic * time)));
     }
 
-    f32 progress = MR::getRailCoord(this) / MR::getRailTotalLength(this);
+    // A rail with no length is already at its end.
+    const f32 railLength = MR::getRailTotalLength(this);
+    f32 progress = railLength > 0.0f ? MR::getRailCoord(this) / railLength : 1.0f;
     mOffset += mOffsetVelocity;
     mOffsetVelocity.mult(0.85f);
     Vec3f previousPosition(mBinderSensor->mHost->mPosition);

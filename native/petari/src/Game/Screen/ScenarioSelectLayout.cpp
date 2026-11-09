@@ -539,7 +539,8 @@ void ScenarioSelectLayout::appearAllStar(s32 normalScenarioCompleteNum, s32 /*ex
         if (mListNum <= 7) {
             s32 starIndex = 0;
             for (s32 i = 0; i < mListNum; i++) {
-                if (i == normalScenarioCompleteNum && starIndex < 3) {
+                // The jump to the fourth place only when the rest still fits the seven (a mod's galaxy with many extras).
+                if (i == normalScenarioCompleteNum && starIndex < 3 && 3 + (mListNum - i) <= 7) {
                     starIndex = 3;
                 }
                 appearStar(starIndex++, mListScenario[i], mListState[i]);

@@ -35,7 +35,9 @@ void FullnessMeter::control() {
 void FullnessMeter::setNumber(s32 num) {
     mNumber = num;
 
-    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - (static_cast< f32 >(mNumber) / mNumberMax))));
+    // A target of 0 or less (placement data) is already full, not a division by 0.
+    const f32 fullness = mNumberMax > 0 ? static_cast< f32 >(mNumber) / mNumberMax : 1.0f;
+    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - fullness)));
 
     MR::startPaneAnim(this, "TargetMeter", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "TargetMeter", frame, 0);
