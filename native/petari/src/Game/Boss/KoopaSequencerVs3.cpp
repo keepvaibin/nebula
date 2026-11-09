@@ -96,6 +96,10 @@ void KoopaSequencerVs3::init(Koopa* pKoopa, const TableIter& rIter) {
 }
 
 void KoopaSequencerVs3::exeWaitPlayer() {
+    // A stage that places no keeper reads as both switches off.
+    KoopaViewSwitchKeeper* pViewKeeper = KoopaFunction::getKoopaViewSwitchKeeper(mKoopa);
+    KoopaSwitchKeeper* pKeeper = KoopaFunction::getKoopaSwitchKeeper(mKoopa);
+
     if (MR::isFirstStep(this)) {
         KoopaFunction::setKoopaPos(mKoopa, "デモ中心");
 
@@ -104,11 +108,11 @@ void KoopaSequencerVs3::exeWaitPlayer() {
         MR::hideModel(KoopaFunction::getKoopaPlanetLv3(mKoopa));
     }
 
-    if (MR::isOnSwitchAppear(KoopaFunction::getKoopaViewSwitchKeeper(mKoopa)) && MR::isHiddenModel(mKoopa)) {
+    if (pViewKeeper != nullptr && MR::isOnSwitchAppear(pViewKeeper) && MR::isHiddenModel(mKoopa)) {
         MR::showModel(mKoopa);
     }
 
-    if (MR::isOnSwitchA(KoopaFunction::getKoopaViewSwitchKeeper(mKoopa))) {
+    if (pViewKeeper != nullptr && MR::isOnSwitchA(pViewKeeper)) {
         if (!MR::isHiddenModel(KoopaFunction::getKoopaPlanet(mKoopa))) {
             MR::hideModel(KoopaFunction::getKoopaPlanet(mKoopa));
             MR::hideModel(KoopaFunction::getKoopaPlanetLv2(mKoopa));
@@ -126,7 +130,7 @@ void KoopaSequencerVs3::exeWaitPlayer() {
         KoopaFunction::endKoopaDemoMeetPeach(mKoopa);
     }
 
-    if (MR::isOnSwitchAppear(KoopaFunction::getKoopaSwitchKeeper(mKoopa))) {
+    if (pKeeper != nullptr && MR::isOnSwitchAppear(pKeeper)) {
         MR::overlayWithPreviousScreen(2);
 
         setNerve(GET_NERVE(KoopaSequencerVs3, KoopaSequencerVs3NrvBattleStairs));

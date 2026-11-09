@@ -59,7 +59,9 @@ void KoopaDemoFallToPlanetVs3Lv2::exeDemoFall() {
 
     if (KoopaFunction::tryEndKoopaCameraDemo(mHost, "クッパＶｓ３惑星移動（Ｌｖ１からＬｖ２）", "DemoKoopaFall")) {
         MR::offSwitchB(mHost);
-        MR::onSwitchA(KoopaFunction::getKoopaSwitchKeeper(mHost));
+        if (KoopaSwitchKeeper* pKeeper = KoopaFunction::getKoopaSwitchKeeper(mHost)) {
+            MR::onSwitchA(pKeeper);
+        }
         MR::overlayWithPreviousScreen(2);
 
         setNerve(GET_NERVE(KoopaDemoFallToPlanetVs3Lv2, KoopaDemoFallToPlanetVs3Lv2NrvFallToLand));
