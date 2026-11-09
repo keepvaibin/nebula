@@ -109,7 +109,12 @@ struct ObjectClassToSet {
 struct ModRows {
     std::vector<GalaxyToAdd> galaxies;
     std::vector<MusicToAdd> music;
-    std::vector<std::pair<std::string, std::string>> texts;  // a message's id: its words in the language play
+    struct TextToAdd {
+        std::string id;
+        std::string words;  // in the language of play
+        std::string like;   // the game message whose talk a new line takes; empty: none
+    };
+    std::vector<TextToAdd> texts;
     std::vector<EventFlagToSet> event_flags;
     std::vector<CometsToSet> comets;
     std::vector<ObjectChangeToSet> object_changes;

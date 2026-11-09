@@ -2,6 +2,7 @@
 // luma.json as docs/format.md has it: every field, every refusal, and what a person might get wrong.
 #include "galaxy/luma.h"
 #include "galaxy/test_temp.h"
+#include "nebula_text_tags.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -249,6 +250,43 @@ int main() {
         }
         check(!read_manifest(folder).has_value(), "a luma.json past 16 MB is not read");
         std::filesystem::remove_all(folder, error);
+    }
+
+    {
+        // A message's words: "like" names the game message whose talk a new line takes; it is not a language.
+        const std::optional<Manifest> talk = parse_manifest(std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","layers":[],)") +
+            R"("text":{"MyNpc_001":{"default":"Hi [player]!","fr":"Salut [player] !","like":"AstroGalaxy_Tico034"},"GalaxyName_X":"X"}})");
+        check(talk.has_value(), "text with like reads");
+        if (talk) {
+            check(talk->text.size() == 2u, "two lines");
+            check(talk->text_like.size() == 1u && talk->text_like.at("MyNpc_001") == "AstroGalaxy_Tico034", "like read");
+            check(talk->text.at("MyNpc_001").languages.size() == 1u && talk->text.at("MyNpc_001").in("fr") == "Salut [player] !", "like is not a language");
+            check(talk->text.at("MyNpc_001").in("de") == "Hi [player]!", "the default");
+        }
+    }
+    {
+        // Mod text as the game's message text: the game's tags in brackets, as its own messages hold them.
+        const auto encoded = [](const char* utf8) {
+            std::u16string out(nebula_text::encode(utf8, nullptr, 0), u'\0');
+            std::u16string buffer(out.size() + 1u, u'\0');
+            nebula_text::encode(utf8, buffer.data(), static_cast<uint32_t>(buffer.size()));
+            out.assign(buffer.data(), out.size());
+            return out;
+        };
+        // A tag: 0x1A, length and group (length in the low byte), tag number, parameters.
+        check(encoded("A[wait 30]B") == std::u16string({u'A', 0x1A, 8 | (1 << 8), 0, 30, u'B'}), "wait");
+        check(encoded("[page]") == std::u16string({0x1A, 6 | (1 << 8), 1}), "page");
+        check(encoded("[color 1]x[color 0]") == std::u16string({0x1A, 8 | (255 << 8), 0, 0x100, u'x', 0x1A, 8 | (255 << 8), 0, 0}),
+              "colour in the parameter's high byte, as the game's 2359 colour tags");
+        check(encoded("[player]") == std::u16string({0x1A, 8 | (5 << 8), 0, 0}), "the player's name");
+        check(encoded("[icon 7][LARGE]") == std::u16string({0x1A, 6 | (3 << 8), 7, 0x1A, 6 | (4 << 8), 2}), "icon and size, any case");
+        check(encoded("[sound SE_A]") == std::u16string({0x1A, 14 | (2 << 8), 0, u'S', u'E', u'_', u'A'}), "a sound by name");
+        check(encoded("[tag 6 5 0 0x1 2]") == std::u16string({0x1A, 12 | (6 << 8), 5, 0, 1, 2}), "any tag");
+        check(encoded("[[a] [nope 1] [wait] [wait x] [color 256]") == u"[a] [nope 1] [wait] [wait x] [color 256]", "anything else stays as written");
+        check(encoded("[wait 1") == u"[wait 1", "an unclosed bracket stays");
+        check(encoded("\xC3\xA9\xF0\x9F\x98\x80") == std::u16string({0xE9, 0xD83D, 0xDE00}), "UTF-8 to UTF-16");
+        char16_t small[4];
+        check(nebula_text::encode("abcdef", small, 4) == 6u && small[2] == u'c' && small[3] == 0, "cut to its room, with its 0");
     }
 
     if (failed == 0) std::puts("luma: all passed");

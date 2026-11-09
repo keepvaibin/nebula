@@ -634,6 +634,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         let skinned = programs::mesh_skinned(ir, m);
         let registers = written.registers(m);
         let forms = programs::forms_of(stem, m, index)?;
+        // A form starts with its two u64 program hashes (NebulaModelForm): 8-aligned in the file, which the store
+        // places 32-aligned (cook ALIGN), so 8-aligned wherever the game reads it.
+        b.align(8);
         let forms_at = b.at();
         let form_start = b.0.len();
         b.0.resize(form_start + forms.len() * FORM_BYTES, 0);

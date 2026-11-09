@@ -379,7 +379,13 @@ bool read_rows(const Value& from, Rows& out) {
     }
     if (const Value* messages = from.get("text"); messages != nullptr && messages->object() != nullptr) {
         for (const auto& [id, words] : *messages->object()) {
-            out.text[id] = read_text(&words);
+            Text read = read_text(&words);
+            // "like" names a game message, not a language.
+            if (const auto like = read.languages.find("like"); like != read.languages.end()) {
+                out.text_like[id] = like->second;
+                read.languages.erase(like);
+            }
+            out.text[id] = std::move(read);
         }
     }
     if (const Value* galaxies = from.get("galaxies"); galaxies != nullptr && galaxies->array() != nullptr) {
