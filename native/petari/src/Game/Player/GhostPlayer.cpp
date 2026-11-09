@@ -778,14 +778,3 @@ namespace MR {
         *pOutFloat = static_cast< f32 >(inS8) * factor;
     }
 };  // namespace MR
-
-// Unused; Unknown data structure
-struct BallData {
-    f32 value1;
-    u32 value2;
-};
-BallData ballData[] = {{0.0f, 0x00000000},  {0.0f, 0x00000000}, {0.0f, 0x00000000}, {0.0f, 0xFFFFFFFF},  {8.0f, 0x0000FFC0},  {0.0f, 0x0000FFC0},
-                       {10.0f, 0xFF00FFFF}, {8.0f, 0x0000FFC0}, {0.0f, 0x0000FFC0}, {10.0f, 0xFF00FFFF}, {10.0f, 0x000000FF}, {6.0f, 0x000000FF},
-                       {15.0f, 0xFFFF40FF}, {0.0f, 0x00000000}, {0.0f, 0x00000000}, {0.0f, 0x00000000},  {0.0f, 0x00000000},  {0.0f, 0x00000000},
-                       {0.0f, 0x00000000},  {0.0f, 0xFF0000C0}, {6.0f, 0xFF0000C0}, {6.0f, 0xFF0000C0},  {0.0f, 0xFF0000C0},  {10.0f, 0xFF0000FF},
-                       {0.0f, 0xFF0000C0},  {6.0f, 0xFF0000C0}, {6.0f, 0xFF0000C0}, {0.0f, 0xFF0000C0},  {10.0f, 0xFF0000FF}, {0.0f, 0x00000000}};
