@@ -227,14 +227,14 @@ void build(const std::filesystem::path& store_file, const std::filesystem::path&
         return;
     }
     // A store of its own: the game's may be closed while this runs.
-    auto* store = new galaxy::assets::AssetStore();
-    if (error || !store->open(store_file)) {
+    galaxy::assets::AssetStore store;
+    if (error || !store.open(store_file)) {
         std::cerr << "[textures] the game's files could not be read to sort textures\n";
         finish({}, false);
         return;
     }
     std::vector<std::uint8_t> buffer;
-    scan_folder(*store, 0, {}, buffer, entries);
+    scan_folder(store, 0, {}, buffer, entries);
     // One texture in several files keeps the first: stable by hash.
     std::stable_sort(entries.begin(), entries.end(),
                      [](const auto& a, const auto& b) { return a.first < b.first; });

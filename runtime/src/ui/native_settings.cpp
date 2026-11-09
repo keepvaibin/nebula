@@ -38,6 +38,7 @@
 #include <atomic>
 #include <bit>
 #include <condition_variable>
+#include <exception>
 #include <functional>
 #include <cmath>
 #include <cstdint>
@@ -2148,7 +2149,13 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             if (folder.empty()) {
                 result.message = "NO MODS FOLDER";
             } else {
-                result = galaxy::mods::import_mod(sources[i], folder, progress);
+                // An exception out of this thread ends the process: a failed import is a result.
+                try {
+                    result = galaxy::mods::import_mod(sources[i], folder, progress);
+                } catch (const std::exception&) {
+                    result = galaxy::mods::ImportResult{};
+                    result.message = "THE IMPORT FAILED";
+                }
             }
             std::cerr << "[mods] import " << galaxy::path_text(sources[i]) << ": " << result.message << " (" << result.files
                       << " files, " << (result.bytes >> 20u) << " MB)\n";

@@ -476,8 +476,11 @@ MiiMergeResult import_mii_folder(std::string* message) {
     std::vector<std::filesystem::path> files;
     std::error_code error;
     if (!folder.empty() && std::filesystem::is_directory(folder, error)) {
-        for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
-            if (entry.is_regular_file(error)) files.push_back(entry.path());
+        // increment(ec) ends the list when the folder goes away mid-walk; the range-for form throws there.
+        std::error_code walk_error;
+        for (auto it = std::filesystem::directory_iterator(folder, walk_error);
+             !walk_error && it != std::filesystem::directory_iterator(); it.increment(walk_error)) {
+            if (it->is_regular_file(error)) files.push_back(it->path());
         }
     }
     std::sort(files.begin(), files.end());
