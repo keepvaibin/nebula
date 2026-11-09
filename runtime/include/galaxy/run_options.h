@@ -75,6 +75,9 @@ struct RunOptions {
     const char* test_post_fault = nullptr;
     const char* test_script_clock = nullptr;
     const char* test_small_heaps = nullptr;
+    const char* test_same_queue_uploads = nullptr;     // textures upload through the frame's own queue, as before the copy queue (A/B)
+    const char* test_one_record_thread = nullptr;      // a pass's draws are recorded on the render thread alone (A/B)
+    const char* test_record_threshold = nullptr;       // the item count from which a draw pass is recorded in chunks (small: the path runs on small lists)
     const char* test_settings_keys = nullptr;
     const char* test_motion_dump = nullptr;
     const char* test_pair_log = nullptr;

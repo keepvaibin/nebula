@@ -32,7 +32,7 @@ namespace {
         SiteMaterial material;
         material.init(NEBULA_SHADER_VERTEX_COLOR, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        material.constants[4] = -1.0f;
+        material.constants[0] = -1.0f;
         return material;
     }
 

@@ -30,6 +30,7 @@
 #include "galaxy/render/vk/utility_spirv.h"
 #include "galaxy/render/vk/vk_context.h"
 #include "render/core/gpu_encoder.h"
+#include "render/core/draw_record.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
@@ -361,9 +362,33 @@ public:
     [[nodiscard]] UploadRing& matrix_ring() noexcept { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const noexcept { return frame_slot_; }
     void bind_draw_tables(gpu::Table, gpu::Table) noexcept {}
+    // What bind_draw_textures would bind, as plain values (the recorder keeps them for a chunk's command buffer).
+    [[nodiscard]] gpu::TextureArrays draw_texture_arrays(gpu::Address lists);
+
+    // Parallel recording of a draw pass (draw_walker.cpp): the pass was recorded as ops in chunks; each chunk is replayed into a
+    // secondary command buffer of its own, on any thread, and run in a render pass of its draw targets (a run of chunks with the
+    // same targets shares one) after the commands recorded so far. begin says each chunk's draw targets (false: not possible now,
+    // nothing changed); chunk replays chunk `i`; end runs them. replay_draws replays one chunk inline.
+    [[nodiscard]] bool parallel_record_begin(const std::uint8_t* chunk_aux, unsigned chunk_count);
+    void parallel_record_chunk(unsigned chunk, const gpu::DrawOp* ops, std::size_t count);
+    void parallel_record_end();
+    void replay_draws(std::uint8_t aux, const gpu::DrawOp* ops, std::size_t count);
     [[nodiscard]] gpu::Table sampler_table_for(const SamplerKey* keys, unsigned count);
 
 private:
+    // Parallel recording: a pool and a secondary command buffer for each chunk of each recorded pass of a frame (by frame slot).
+    struct RecordCommands {
+        VkCommandPool pool = VK_NULL_HANDLE;
+        VkCommandBuffer commands = VK_NULL_HANDLE;
+    };
+    std::array<std::vector<RecordCommands>, kFramesInFlight> record_commands_;
+    std::array<unsigned, kFramesInFlight> record_used_{};
+    unsigned record_base_ = 0u;
+    std::vector<std::uint8_t> record_aux_;
+    std::uint8_t record_variant_ = 0u;
+    gpu::Encoder::Layout encoding_layout_{};
+    std::mutex constants_mutex_;  // the chunks' encoders share the frame's descriptor sets (constants_set)
+    std::atomic<bool> recording_parallel_{false};
     struct Frame {
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer commands = VK_NULL_HANDLE;
@@ -453,9 +478,15 @@ private:
     // `caller` (the calling function's name) counts why the scene target was opened again (GpuWindow::opens).
     void begin_scene_pass(const SceneClearValues* clear = nullptr, const char* caller = __builtin_FUNCTION());
     // The same with a temporal scene's second target (`aux`: 1 the motion target, 2 the reactive mask, 3 the reactive mask and the effects layer); a pass open with another one ends.
+    // `secondary`: the pass runs secondary command buffers only (parallel recording): no viewport or scissor is set inline.
     void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false,
                                const char* caller = __builtin_FUNCTION(),
-                               unsigned clear_depth = 0u);
+                               unsigned clear_depth = 0u, bool secondary = false);
+    // The draw targets a walker's aux names (set_draw_aux): aux 4 draws in the motion pass, aux 3 in the effects layer's only
+    // while its window is open.
+    [[nodiscard]] unsigned effective_draw_aux(unsigned aux) const noexcept {
+        return aux == 4u ? 1u : aux == 3u ? (layer_window_ ? 3u : 2u) : aux;
+    }
     void end_scene_pass(const char* caller = __builtin_FUNCTION());
     const char* scene_pass_closed_by_ = "frame start";
     void reset_draw_bindings() noexcept;
@@ -790,6 +821,7 @@ private:
     std::uint32_t texture_array_limit_ = 0u;
     const void* mirrored_backend_ = nullptr;
     TextureStore* mirrored_store_ = nullptr;
+    TextureStore* uploads_store_ = nullptr;  // the store whose uploads the transfer queue may take (attach_texture_uploads)
     // The texture lists (draw_tables, set 0 binding 5): a host-visible storage buffer per frame in flight, written from its
     // start each frame; a full one is replaced by one twice its size, the old kept until the frame's fence passes.
     struct TextureListBuffer {
@@ -864,6 +896,9 @@ private:
     bool display_capture_ten_bit_ = false;
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
+    // The display varies its refresh with the presents (next_variable_refresh): display_refresh_hz_ is then the cap that keeps
+    // it in its range, and presents are spaced at the cap.
+    bool variable_refresh_ = false;
     std::uint64_t display_refresh_checks_ = 0;
     std::int64_t measured_present_window_qpc_ = 0;
     std::int64_t swap_present_qpc_ = 0;   // every present's (last_present_qpc)

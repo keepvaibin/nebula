@@ -6,6 +6,7 @@
 #include "galaxy/windows_power.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdio>
 #endif
 
@@ -154,9 +155,12 @@ std::atomic<bool> g_on_battery{false};
 void perf_hint_add_current_thread() noexcept {}
 
 std::int64_t perf_hint_frame_done() noexcept {
-    // Two seconds of game frames: the power state is looked at, a change said once.
-    static std::atomic<unsigned> frames{0u};
-    if (frames.fetch_add(1u, std::memory_order_relaxed) % (120u) == 0u) {
+    // Every two seconds (by the clock, not by the game's frame count): the power state is looked at, a change said once.
+    static std::atomic<std::int64_t> next_look{0};
+    const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch()).count();
+    std::int64_t due = next_look.load(std::memory_order_relaxed);
+    if (now >= due && next_look.compare_exchange_strong(due, now + 2000, std::memory_order_relaxed)) {
         const bool battery = galaxy::host::running_on_battery();
         if (g_on_battery.exchange(battery, std::memory_order_relaxed) != battery) {
             std::fprintf(stderr, "[power] %s\n", battery ? "on battery" : "on mains power");

@@ -9,6 +9,7 @@
 #include "galaxy/render/texel_format.h"
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #if defined(NEBULA_GPU_VULKAN)
@@ -62,6 +63,38 @@ public:
                        const std::uint32_t* pitches);
     void set_upload_list(ID3D12GraphicsCommandList* list) noexcept { upload_list_ = list; }
     [[nodiscard]] bool has_upload_list() const noexcept { return upload_list_ != nullptr; }
+
+    // Uploads on the device's copy queue: a new texture is made in the common state, its levels are copied on that queue
+    // (record_upload, a list of its own), and the graphics queue acquires it (common -> shader resource, after a wait on the
+    // copy queue's fence) in submit_uploads, before the first frame whose draws name it (note_named, called wherever a handle
+    // is given out). A texture already acquired is rewritten on the graphics list as before. Not with direct_writes() (no
+    // copy to overlap). `frames_in_flight` sizes the per-slot lists, `frame_slot` is the frame now open. False: the same
+    // queue, as before.
+    // GALAXY_TEST_SAME_QUEUE_UPLOADS=1 keeps the old path.
+    bool enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot);
+    [[nodiscard]] bool async_uploads() const noexcept { return copy_queue_ != nullptr; }
+    // At the start of a frame in `frame_slot`, after the renderer has waited for the slot's fence: waits until the copy queue
+    // has finished what that slot's frame submitted (its staging chunks and retired textures go free next), and starts the
+    // slot's lists again.
+    void begin_frame(unsigned frame_slot);
+    // The frame names `texture` in a draw. Free when no upload is outstanding.
+    void note_named(ID3D12Resource* texture) {
+        if (!async_.empty()) {
+            note_named_slow(texture);
+        }
+    }
+    // The texture is given up (retired): no acquire will name it.
+    void forget(ID3D12Resource* texture) {
+        if (!async_.empty()) {
+            forget_slow(texture);
+        }
+    }
+    // Ends the frame's uploads: the copy list goes to the copy queue (signalling the fence), and when this frame names a
+    // texture that queue wrote, `graphics` waits on the fence and the returned list (to execute before the frame's list)
+    // acquires those textures. Null when there is nothing to acquire.
+    [[nodiscard]] ID3D12CommandList* submit_uploads(ID3D12CommandQueue* graphics);
+    // Waits until the copy queue has finished everything sent to it (before textures and staging are released).
+    void drain() noexcept;
     [[nodiscard]] PlacedTextureAllocator::Stats heap_stats() const {
         PlacedTextureAllocator::Stats stats = texture_heap_.stats();
         if (direct_) {
@@ -92,6 +125,19 @@ public:
     [[nodiscard]] std::uint32_t views_made() const noexcept { return views_made_; }
 
 private:
+    // A texture made for the copy queue: the copy fence value that carries its latest upload (0: not uploaded yet), and
+    // whether a draw named it since.
+    struct Async {
+        std::uint64_t value = 0u;
+        bool named = false;
+    };
+    void note_named_slow(ID3D12Resource* texture);
+    void forget_slow(ID3D12Resource* texture);
+    ID3D12GraphicsCommandList* open_copy_list();
+    void wait_copy(std::uint64_t value);
+    void record_async(ID3D12Resource* texture, Async& state, const UploadChunk& staging, std::uint64_t offset,
+                      std::uint32_t width, std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
+                      const std::uint32_t* pitches);
     // `count` descriptors from `first` take the null view (a copy, then doubling copies).
     void fill_null(D3D12_CPU_DESCRIPTOR_HANDLE first, std::uint32_t count);
     PlacedTextureAllocator texture_heap_{D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
@@ -113,6 +159,22 @@ private:
     void* mirror_owner_ = nullptr;
     std::uint32_t views_made_ = 0u;  // one past the highest view index ensured
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
+
+    // The copy queue (enable_async_uploads): its fence counts the lists it ran; slot_value_[slot] is the value after the
+    // slot's last frame, which that slot's staging and retired textures wait for.
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> copy_queue_;
+    Microsoft::WRL::ComPtr<ID3D12Fence> copy_fence_;
+    HANDLE copy_event_ = nullptr;
+    std::uint64_t copy_value_ = 0u;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>> copy_allocators_;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>> acquire_allocators_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> copy_list_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> acquire_list_;
+    std::vector<std::uint64_t> slot_value_;
+    unsigned slot_ = 0u;
+    bool copy_open_ = false;
+    std::unordered_map<ID3D12Resource*, Async> async_;
+    std::vector<ID3D12Resource*> named_;  // async_ entries a draw named since the last submit_uploads
 };
 
 }  // namespace galaxy::render

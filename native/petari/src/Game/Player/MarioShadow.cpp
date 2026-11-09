@@ -260,7 +260,8 @@ namespace {
     // (0 above, 1 equal to, 2 not equal to `ref`), blended by alpha unless the site changes it; no culling.
     void initShadowMaterial(SiteMaterial* pMaterial, const GameTexture* pTexture, u32 test, u8 ref) {
         TDDraw::setupNative(pMaterial, 1, 1, 0);
-        pMaterial->mShader = NEBULA_SHADER_COLOR_TEX_ALPHA;
+        pMaterial->setShader(NEBULA_SHADER_COLOR_TEX_ALPHA);
+        pMaterial->constants[0] = 0.0f;  // the colour: black (the reference of the shader it began as is gone)
         pMaterial->constants[4] = ref;
         pMaterial->constants[5] = static_cast< f32 >(test);
         pMaterial->setTexture(0, pTexture);
@@ -447,7 +448,7 @@ void CollisionShadow::drawVolumeBox(const Vec3f& rPosition, const Vec3f& rDepth)
     // The box's faces in the stencil, depth tested: what its front faces reach and its back faces do not.
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
-    material.mShader = NEBULA_SHADER_FLAT_COLOR;
+    material.setShader(NEBULA_SHADER_FLAT_COLOR);
     material.setColor(0, 255, 255, 255, 255);
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
     material.mState.color_write = 0;
@@ -499,7 +500,7 @@ void CollisionShadow::draw3() const {
     sendZsortedVtx(site, true);
     if (mEdgePolygonCount) {
         SiteMaterial clear = material;
-        clear.mShader = NEBULA_SHADER_FLAT_COLOR;
+        clear.setShader(NEBULA_SHADER_FLAT_COLOR);
         clear.setColor(0, 0, 0, 0, 0);
         site.setMaterial(clear);
         VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLES, mEdgePolygonCount * 3);
@@ -530,7 +531,7 @@ void CollisionShadow::draw3() const {
 
     // What the polygons did not cover.
     SiteMaterial wipe = material;
-    wipe.mShader = NEBULA_SHADER_FLAT_COLOR;
+    wipe.setShader(NEBULA_SHADER_FLAT_COLOR);
     wipe.mState.color_write = 0;
     wipe.mState.blend_op = NEBULA_BLEND_REPLACE;
     wipe.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);

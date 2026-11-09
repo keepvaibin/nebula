@@ -151,6 +151,47 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   latency object (asleep, 100 ms at most). On battery, background threads (pipeline workers, shape builder) ask the OS for efficiency; the
   frame threads never do.
 
+## Beside the frame: uploads, sync, memory, recording
+
+Four things the renderer does beside the draws (batch 12). Each has a test switch to fall back to the plain path, and each logs which path it took.
+
+**Texture uploads on their own queue.** Where the adapter has memory of its own (Direct3D 12: not unified; Vulkan: a queue family that only
+transfers, with timeline semaphores) a new texture is written by a copy queue / transfer queue, beside the frame, not on the frame's queue.
+The texture is made in the common state (Vulkan: undefined layout) and stays there until a draw names it: `TextureStore::handle` and `touch`
+tell the backend (`note_named`), and at the end of the frame (`submit_uploads`) the frame's queue waits for the copy queue's fence or the
+transfer queue's timeline semaphore (Vulkan: the fragment and transfer stages only) and takes the texture (Direct3D 12: a transition from
+common to shader resource in a small list before the frame's; Vulkan: the queue family ownership acquire, matching the release recorded
+after the copy, in the frame's upload command buffer). A texture no draw names is never taken and costs the frame nothing. A texture
+already taken is rewritten on the frame's queue as before (a pooled or movie texture), and one rewritten before it was taken goes through
+the copy queue again (Direct3D 12) or is taken first (Vulkan). A frame slot waits for the copy queue to finish what the slot's last frame
+sent it before its staging chunks (the 16 MB pool of `TextureStore`) and retired textures are reused; `Context::defer` also waits for the
+transfer queue's value at the time of the call before it destroys anything. With enhanced barriers a texture in the common layout is copied
+to and from on a copy queue without a barrier; with legacy states the copy list moves it common to copy destination and back. Not used with
+direct host writes (unified memory with coherence, or `VK_EXT_host_image_copy`), which have no copy to overlap.
+`GALAXY_TEST_SAME_QUEUE_UPLOADS=1` keeps the old path; `GALAXY_VK_TEST_NO_FEATURE=transfer_queue` leaves the transfer queue out.
+
+**Vulkan frame sync.** Where the device has timeline semaphores (core 1.2, or `VK_KHR_timeline_semaphore`) every submission signals the
+next value of one timeline semaphore; `completed_value` reads it and `wait` waits on it. One object instead of a fence for each
+submission (and no fence pool). Without them the fences stay. `GALAXY_VK_TEST_NO_FEATURE=timeline` keeps the fences.
+
+**Rings in video memory.** The vertex and constant rings are written once, in order, and read by the GPU every frame. Where the device maps
+its video memory for the CPU in bulk they live there (Direct3D 12: `D3D12_HEAP_TYPE_GPU_UPLOAD`, where `OPTIONS16` says it is supported;
+Vulkan: a device-local host-visible coherent memory type in a heap larger than the 256 MB window, beside video memory the CPU cannot map).
+The index and matrix rings and everything else stay in host memory. `[ring]` lines and `[gpu-rings]` say `memory=video (CPU-mapped)` or
+`host`. `GALAXY_D3D12_TEST_NO_FEATURE=gpu_upload` and `GALAXY_VK_TEST_NO_FEATURE=gpu_upload` keep host memory.
+
+**Recording a big pass on several threads.** A draw pass of at least 1500 items on a machine with at least 6 logical processors is
+resolved on the render thread as ever (views, materials, pipelines, texture lists), but its encoder calls go to a recorder as plain
+operations (`render/core/draw_record.h`), cut into chunks of at least 64 draws (never across a change of the draw targets). The chunks are
+replayed through an encoder each on a pool of worker threads (`logical_cores() / 2`, 2 to 8, the render thread taking a share) into one
+command list each (Direct3D 12: the frame's list is closed at the pass, the chunks' lists follow it in `ExecuteCommandLists`, and the frame
+continues in a new list) or one secondary command buffer each (Vulkan: run in a render pass opened for secondary buffers, one per run of
+chunks with the same draw targets). A chunk's lists start with the state the frame's list had at the pass: root signature, draw targets
+and descriptor heaps (Direct3D 12); pipeline, sets and dynamic state are the encoder's own (both). Vulkan's descriptor-set cache
+(`constants_set`) is locked while chunks record. A pass under the inspector, one with pipeline statistics queries (Direct3D 12), or a recorded pass with fewer than 96 draws is drawn by the render
+thread alone (replayed from the recording on its own list, or at once). `GALAXY_TEST_RECORD_THRESHOLD=<items>` lowers the threshold (and the core
+count rule) so small lists take the path; `GALAXY_TEST_ONE_RECORD_THREAD=1` makes it record and replay on the render thread alone, to tell the recording from the threads.
+
 ## Failure
 
 A lost device (driver reset) restarts the game from its save, twice in a row at most; the third is report NEB-G01
@@ -163,7 +204,9 @@ the CPU-projected motion of their vertices with the motion target (`[motion-prob
 temporal upscaler's inputs (jitter against Halton, depth range and reversed Z, the previous camera, the reactive and transparency masks
 where particles draw: `[frame-inputs]`); `GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1` leaves interpolated frames out of the snapshot
 numbering, `tools/verify/interp_real.sh` uses it to compare a run with interpolation on against one with it off by the game's own
-frames. `GALAXY_VK_TEST_NO_FEATURE` also takes `present_wait`, `present_mode_switch` and `pipeline_library`.
+frames. `GALAXY_VK_TEST_NO_FEATURE` also takes `present_wait`, `present_mode_switch`, `pipeline_library`, `timeline`, `transfer_queue`
+and `gpu_upload`; `GALAXY_D3D12_TEST_NO_FEATURE` also takes `gpu_upload`. `GALAXY_TEST_SAME_QUEUE_UPLOADS`, `GALAXY_TEST_RECORD_THRESHOLD` and
+`GALAXY_TEST_ONE_RECORD_THREAD` are described above.
 
 `tools/verify`: identical pictures between builds in deterministic mode (`GALAXY_TEST_DETERMINISTIC=1`), a window against the same build's
 control in real time, all stops in the tour, `[loss]` counters for draws without a material or pipeline.

@@ -171,7 +171,6 @@ add_library(galaxy_native_host STATIC
     tools/test_driver/data_guard.cpp
     runtime/src/input/live_controls_engine.cpp
     runtime/src/input/key_positions_win32.cpp
-    runtime/src/input/raw_mouse_win32.cpp
     runtime/src/input/rumble_route.cpp
     runtime/src/native_audio.cpp
     runtime/src/audio_device_wasapi.cpp
@@ -545,13 +544,11 @@ galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_
 galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests.cpp)
-galaxy_test(galaxy_raw_mouse_tests SOURCES ${rt}/input/raw_mouse_tests.cpp)
 galaxy_test(galaxy_rumble_route_tests SOURCES ${rt}/input/rumble_route_tests.cpp ${rt}/input/rumble_route.cpp)
 galaxy_test(galaxy_wiimote_motion_tests SOURCES ${rt}/input/wiimote_motion_tests.cpp ${rt}/input/wiimote_motion.cpp)
 galaxy_test(galaxy_wiimote_motion_pointer_tests SOURCES ${rt}/input/wiimote_motion_pointer_tests.cpp
     LIBS galaxy_native_input)
 galaxy_test(galaxy_mouse_projection_tests SOURCES ${rt}/input/mouse_projection_tests.cpp LIBS galaxy_native_input)
-galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
     ${rt}/input/key_positions_win32.cpp LIBS user32)
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp

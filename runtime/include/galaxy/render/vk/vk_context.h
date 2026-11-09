@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan device every Vulkan object shares (docs/VULKAN.md): instance and device through volk, one graphics
-// queue, VMA for memory. Every submission gets the next fence value (as D3D12's fence), kept with a VkFence of its
-// own, which works on any Vulkan 1.0 device (timeline semaphores need 1.2 or an extension many Android drivers lack).
+// queue, VMA for memory. Every submission gets the next fence value (as D3D12's fence): one timeline semaphore the
+// submissions signal in turn where the device has timeline semaphores (core 1.2 or VK_KHR_timeline_semaphore), else a
+// VkFence of its own each, which works on any Vulkan 1.0 device (many Android drivers lack timeline semaphores).
 // Objects released while the GPU may still use them are destroyed once it passes the last submitted value.
 #pragma once
 
@@ -121,6 +122,21 @@ public:
     [[nodiscard]] VkQueue generation_present_queue() const noexcept { return generation_present_queue_; }
     [[nodiscard]] VkQueue generation_acquire_queue() const noexcept { return generation_acquire_queue_; }
     [[nodiscard]] std::uint32_t queue_family() const noexcept { return queue_family_; }
+    // Frame sync on one timeline semaphore (completed_value reads it, wait waits on it) rather than a fence per submission.
+    // GALAXY_VK_TEST_NO_FEATURE=timeline keeps the fences.
+    [[nodiscard]] bool timeline_semaphores() const noexcept { return timeline_ != VK_NULL_HANDLE; }
+    // A queue of a family that only transfers (no graphics or compute), when the device has one and timeline semaphores:
+    // textures are copied there beside the frame (texture_backend_vk.cpp). Null otherwise.
+    // GALAXY_VK_TEST_NO_FEATURE=transfer_queue leaves it out.
+    [[nodiscard]] VkQueue transfer_queue() const noexcept { return transfer_queue_; }
+    [[nodiscard]] std::uint32_t transfer_family() const noexcept { return transfer_family_; }
+    // Submits one command buffer to the transfer queue; it signals the transfer timeline semaphore, whose value is returned.
+    std::uint64_t submit_transfer(VkCommandBuffer commands);
+    // The highest transfer value submitted, and the highest it has passed.
+    [[nodiscard]] std::uint64_t transfer_submitted() const noexcept { return transfer_submitted_.load(std::memory_order_acquire); }
+    [[nodiscard]] std::uint64_t transfer_completed();
+    // Waits until the transfer queue has passed `value`; false on a timeout or a lost device.
+    bool wait_transfer(std::uint64_t value, std::uint64_t timeout_ns = UINT64_MAX);
     [[nodiscard]] VmaAllocator_T* allocator() const noexcept { return allocator_; }
     [[nodiscard]] const VkPhysicalDeviceProperties& properties() const noexcept { return properties_; }
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
@@ -172,6 +188,10 @@ public:
     // VK_EXT_host_image_copy was enabled (the device has it and its feature, and copies into SHADER_READ_ONLY_OPTIMAL): a
     // texture made with VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT is written from host memory with no command (texture_backend_vk.cpp).
     [[nodiscard]] bool host_image_copy() const noexcept { return host_image_copy_; }
+    // The device maps video memory for the CPU in bulk (resizable BAR): a device-local host-visible coherent type in a heap
+    // larger than the 256 MB window, on a device that also has video memory the CPU cannot map. BufferPlace::DeviceMapped
+    // buffers lie there; elsewhere they are Host. GALAXY_VK_TEST_NO_FEATURE=gpu_upload keeps host memory.
+    [[nodiscard]] bool device_mapped_memory() const noexcept { return device_mapped_memory_; }
     // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports VK_ERROR_DEVICE_LOST without reaching the driver, as a
     // lost device would; no API removes a Vulkan device. The fault report is skipped (the device is not lost).
     void simulate_device_loss() noexcept { simulated_loss_.store(true, std::memory_order_release); }
@@ -188,14 +208,17 @@ public:
     bool device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
 
     // Submits command buffers in order (waiting on `wait_semaphore` at `wait_stage` and signalling `signal_semaphore`
-    // when given) and returns their fence value.
+    // when given; `transfer_wait`, when not 0, also waits for the transfer queue to pass that value before the fragment
+    // and transfer stages) and returns their fence value.
     std::uint64_t submit(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore = VK_NULL_HANDLE,
-                         VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE);
+                         VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE,
+                         std::uint64_t transfer_wait = 0);
     std::uint64_t submit(VkCommandBuffer commands) { return submit(std::span<const VkCommandBuffer>(&commands, 1u)); }
     // A frame's submission (the renderer's end_frame): objects released since the previous one (defer) are destroyed
     // once it completes.
     std::uint64_t submit_frame(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore = VK_NULL_HANDLE,
-                               VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE);
+                               VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE,
+                               std::uint64_t transfer_wait = 0);
     // The highest fence value the GPU has passed.
     [[nodiscard]] std::uint64_t completed_value();
     // Waits until the GPU has passed `value`; false on a timeout or a lost device.
@@ -258,6 +281,7 @@ private:
     struct Deferred {
         std::uint64_t value;
         std::function<void()> destroy;
+        std::uint64_t transfer = 0;  // the transfer queue's value at the call: it may still copy into what is released
     };
     VkInstance instance_ = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT messenger_ = VK_NULL_HANDLE;
@@ -266,6 +290,13 @@ private:
     VkQueue queue_ = VK_NULL_HANDLE;
     VkQueue generation_present_queue_ = VK_NULL_HANDLE;
     VkQueue generation_acquire_queue_ = VK_NULL_HANDLE;
+    VkQueue transfer_queue_ = VK_NULL_HANDLE;
+    std::uint32_t transfer_family_ = 0;
+    VkSemaphore timeline_ = VK_NULL_HANDLE;           // the graphics queue's submissions, in turn
+    VkSemaphore transfer_timeline_ = VK_NULL_HANDLE;  // the transfer queue's
+    PFN_vkGetSemaphoreCounterValue timeline_value_ = nullptr;
+    PFN_vkWaitSemaphores timeline_wait_ = nullptr;
+    std::atomic<std::uint64_t> transfer_submitted_{0};
     std::uint32_t queue_family_ = 0;
     VmaAllocator_T* allocator_ = nullptr;
     VkPhysicalDeviceProperties properties_{};
@@ -289,6 +320,7 @@ private:
     bool surface_maintenance_ = false;      // the instance has the surface extension of that kind (decided in initialize)
     bool surface_maintenance_khr_ = false;  // ... in its KHR form (else EXT)
     bool host_image_copy_ = false;      // VK_EXT_host_image_copy, enabled, with the layout the textures rest in
+    bool device_mapped_memory_ = false; // see device_mapped_memory()
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
     bool device_fault_binary_ = false;  // and its vendor binary feature
     std::atomic<bool> fault_reported_{false};

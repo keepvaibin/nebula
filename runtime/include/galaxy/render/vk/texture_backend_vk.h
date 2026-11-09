@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace galaxy::render {
@@ -84,6 +85,35 @@ public:
     void prepare_null_view(VkCommandBuffer commands);
     void set_upload_list(VkCommandBuffer commands) noexcept { upload_list_ = commands; }
     [[nodiscard]] bool has_upload_list() const noexcept { return upload_list_ != VK_NULL_HANDLE; }
+
+    // Uploads on a transfer-only queue (Context::transfer_queue): a new image is written by a command buffer of that queue's
+    // family (record_upload) and handed to the graphics family with a queue family ownership transfer; the release is
+    // recorded there, the acquire in the frame's upload list by submit_uploads, before the first frame whose draws name the
+    // image (note_named, called wherever a handle is given out); that frame's submission waits for the transfer timeline
+    // semaphore. An image already acquired is rewritten on the graphics queue as before. Not for images host copies write.
+    // False: the same queue, as before. GALAXY_TEST_SAME_QUEUE_UPLOADS=1 keeps the old path.
+    bool enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot);
+    [[nodiscard]] bool async_uploads() const noexcept { return !async_slots_.empty(); }
+    // At the start of a frame in `frame_slot`, after the renderer has waited for the slot's fence: waits until the transfer
+    // queue has finished what that slot's frame sent it (its staging buffers and retired images go free next).
+    void begin_frame(unsigned frame_slot);
+    // The frame names `texture` in a draw. Free when no upload is outstanding.
+    void note_named(vk::Texture* texture) {
+        if (!async_.empty()) {
+            note_named_slow(texture);
+        }
+    }
+    // The texture is given up (retired): no acquire will name it.
+    void forget(vk::Texture* texture) {
+        if (!async_.empty()) {
+            forget_slow(texture);
+        }
+    }
+    // Ends the frame's uploads: the transfer command buffer is submitted, the images this frame names are acquired in the
+    // upload list, and the returned transfer value is what the frame's submission must wait for (0: nothing).
+    [[nodiscard]] std::uint64_t submit_uploads();
+    // Waits until the transfer queue has finished everything sent to it.
+    void drain() noexcept;
     [[nodiscard]] HeapStats heap_stats() const noexcept { return {}; }
 
     // The renderer writes these views into its frame descriptor sets.
@@ -91,6 +121,24 @@ public:
     [[nodiscard]] VkImageView null_view() const noexcept { return null_texture_->view; }
 
 private:
+    // An image made for the transfer queue: the transfer value that carries its latest upload (0: not uploaded yet), and
+    // whether a draw named it since.
+    struct Async {
+        std::uint64_t value = 0u;
+        bool named = false;
+    };
+    struct AsyncSlot {
+        VkCommandPool pool = VK_NULL_HANDLE;
+        VkCommandBuffer commands = VK_NULL_HANDLE;
+        std::uint64_t value = 0u;  // the transfer value after this slot's last frame
+    };
+    void note_named_slow(vk::Texture* texture);
+    void forget_slow(vk::Texture* texture);
+    void record_async(vk::Texture* texture, Async& state, const UploadChunk& staging, std::uint64_t offset, std::uint32_t width,
+                      std::uint32_t height, unsigned levels, const std::uint64_t* offsets, const std::uint32_t* pitches);
+    // Records the acquire of `texture` in the frame's upload list now and returns its transfer value.
+    std::uint64_t acquire_now(vk::Texture* texture);
+    void destroy_async() noexcept;
     std::vector<VkImageView> views_;
     std::shared_ptr<vk::Texture> null_texture_;
     std::uint32_t host_formats_ = 0u;  // bit per TexelFormat the device host-copies to at full speed
@@ -99,6 +147,12 @@ private:
     GrowFn mirror_grow_ = nullptr;
     void* mirror_owner_ = nullptr;
     VkCommandBuffer upload_list_ = VK_NULL_HANDLE;
+    std::vector<AsyncSlot> async_slots_;
+    unsigned async_slot_ = 0u;
+    bool transfer_open_ = false;
+    std::unordered_map<vk::Texture*, Async> async_;
+    std::vector<vk::Texture*> named_;  // async_ entries a draw named since the last submit_uploads
+    std::uint64_t forced_wait_ = 0u;   // the transfer value a frame must wait for apart from the named images' (acquire_now)
 };
 
 }  // namespace galaxy::render

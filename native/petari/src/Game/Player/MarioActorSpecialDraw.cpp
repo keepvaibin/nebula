@@ -393,7 +393,7 @@ void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32
     f32 radius = 100.0f;
     SiteMaterial material;
     TDDraw::setupNative(&material, 1, 1, 0);
-    material.mShader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
+    material.setShader(NEBULA_SHADER_TEX_VERTEX_ALPHA);
     material.constants[0] = 0.0f;
     material.setDepth(true, NEBULA_COMPARE_GREATER, false);
     material.setTexture(0, mMaskTextures[mMaskIndex]);
@@ -656,7 +656,7 @@ bool MarioActor::drawDarkMask() const {
     TDDraw::setupNative(&material, 1, 0, 2);
     material.mState.color_write = 0;
     material.mState.alpha_write = 0;
-    material.constants[4] = 1.0f;
+    material.constants[0] = 1.0f;
     material.setTexture(0, mMaskTextures[mMaskIndex]);
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     Vec3f spine;

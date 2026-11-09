@@ -115,6 +115,7 @@ bool TextureStore::initialize(gpu::Device* device, DeviceGate& gate) {
 }
 
 void TextureStore::shutdown() {
+    backend_.drain();
     packs_.shutdown();
     pack_waiters_.clear();
     pack_uploads_.clear();
@@ -430,6 +431,8 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
         movie_staging_.resize(frames_in_flight);
     }
     ++frame_;
+    // The copy queue is done with what this slot's last frame sent it before its staging and retired textures go free.
+    backend_.begin_frame(frame_slot);
     // The renderer has waited for this slot's fence: what it retired and read is idle.
     for (Retired& retired : retired_[frame_slot]) {
         evicting_bytes_ -= std::min(evicting_bytes_, retired.evicted_bytes);
@@ -722,6 +725,7 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
     if (movie_active_) [[unlikely]] {
         for (unsigned p = 0; p < 3u; ++p) {
             if (id == movie_ids_[p]) {
+                backend_.note_named(movie_handles_[p].resource);
                 return movie_handles_[p];
             }
         }
@@ -739,6 +743,7 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
             }
             return {};
         }
+        backend_.note_named(entry.current.resource);
         return entry.current;
     }
     // An image that never came: blank. One that went with its scene is blank too and has lost nothing.
@@ -750,6 +755,7 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
 }
 
 void TextureStore::retire(gpu::TextureRef texture, std::uint32_t view, std::uint64_t evicted_bytes) {
+    backend_.forget(gpu::raw(texture));  // no draw acquires it from now on
     if (retired_.empty()) {
         if (view != ~0u) {
             backend_.release_view(view);

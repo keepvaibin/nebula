@@ -444,6 +444,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     bool test_no_present_wait = false;
     bool test_no_present_mode_switch = false;
     bool test_no_pipeline_library = false;
+    bool test_no_timeline = false;
+    bool test_no_transfer_queue = false;
+    bool test_no_gpu_upload = false;
     if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
         const std::string list = std::string(",") + names + ",";
         const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
@@ -456,6 +459,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         test_no_present_wait = off("present_wait");
         test_no_present_mode_switch = off("present_mode_switch");
         test_no_pipeline_library = off("pipeline_library");
+        test_no_timeline = off("timeline");
+        test_no_transfer_queue = off("transfer_queue");
+        test_no_gpu_upload = off("gpu_upload");
     }
     VkPhysicalDeviceFeatures enabled{};
     enabled.sampleRateShading = available.sampleRateShading;
@@ -533,7 +539,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         table_slots_ = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers, by_resources});
     }
     std::vector<float> queue_priorities(1u, priority);
-    VkDeviceQueueCreateInfo queue_infos[2]{};
+    VkDeviceQueueCreateInfo queue_infos[3]{};
     std::uint32_t queue_info_count = 1u;
     bool generation_device = false;
     std::uint32_t optical_flow_family = UINT32_MAX;
@@ -596,6 +602,47 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         queue_infos[1].queueCount = 1u;
         queue_infos[1].pQueuePriorities = &priority;
         queue_info_count = 2u;
+    }
+    // Timeline semaphores: the core feature of Vulkan 1.2 or the extension's, wherever the device has it. One for the graphics
+    // queue's frame sync (submit, completed_value, wait) and, with a transfer-only queue family, one for that queue's copies.
+    bool timeline_wanted = false;
+    if (!test_no_timeline && (properties_.apiVersion >= VK_API_VERSION_1_2 ||
+                              has_device_extension(physical_, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))) {
+        VkPhysicalDeviceTimelineSemaphoreFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &have;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        timeline_wanted = have.timelineSemaphore == VK_TRUE;
+    }
+    std::uint32_t transfer_family = UINT32_MAX;
+    if (timeline_wanted && !test_no_transfer_queue) {
+        std::uint32_t families = 0u;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_, &families, nullptr);
+        std::vector<VkQueueFamilyProperties> props(families);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_, &families, props.data());
+        for (std::uint32_t i = 0; i < families && transfer_family == UINT32_MAX; ++i) {
+            const VkQueueFlags flags = props[i].queueFlags;
+            if ((flags & VK_QUEUE_TRANSFER_BIT) != 0u && (flags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) == 0u &&
+                i != queue_family_ && i != optical_flow_family && props[i].queueCount != 0u) {
+                transfer_family = i;
+            }
+        }
+        if (transfer_family != UINT32_MAX) {
+            queue_infos[queue_info_count].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queue_infos[queue_info_count].queueFamilyIndex = transfer_family;
+            queue_infos[queue_info_count].queueCount = 1u;
+            queue_infos[queue_info_count].pQueuePriorities = &priority;
+            ++queue_info_count;
+        }
+    }
+    VkPhysicalDeviceTimelineSemaphoreFeatures timeline_features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
+    if (timeline_wanted) {
+        if (core_12) {
+            features12.timelineSemaphore = VK_TRUE;
+        } else {
+            timeline_features.timelineSemaphore = VK_TRUE;
+            device_extensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+        }
     }
     // A device that is a portability subset (MoltenVK) must have it enabled; Nebula uses nothing it leaves out.
     if (has_device_extension(physical_, "VK_KHR_portability_subset")) {
@@ -813,6 +860,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         pipeline_library.pNext = const_cast<void*>(device_info.pNext);
         device_info.pNext = &pipeline_library;
     }
+    if (timeline_wanted && !core_12) {
+        timeline_features.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &timeline_features;
+    }
     if (core_12) {
         if (temporal_upscaling_) {
             features11.storageBuffer16BitAccess = VK_TRUE;
@@ -955,6 +1006,29 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     loss_was_simulated_ = false;
     pipeline_barrier2_ = sync2_core ? vkCmdPipelineBarrier2 : sync2_extension ? vkCmdPipelineBarrier2KHR : nullptr;
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
+    if (timeline_wanted) {
+        timeline_value_ = core_12 ? vkGetSemaphoreCounterValue : vkGetSemaphoreCounterValueKHR;
+        timeline_wait_ = core_12 ? vkWaitSemaphores : vkWaitSemaphoresKHR;
+        const auto make = [this](VkSemaphore& semaphore) {
+            VkSemaphoreTypeCreateInfo type{VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO};
+            type.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+            type.initialValue = 0u;
+            VkSemaphoreCreateInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+            info.pNext = &type;
+            return vkCreateSemaphore(device_, &info, nullptr, &semaphore) == VK_SUCCESS;
+        };
+        if (timeline_value_ == nullptr || timeline_wait_ == nullptr || !make(timeline_)) {
+            timeline_ = VK_NULL_HANDLE;  // the fences
+        } else if (transfer_family != UINT32_MAX) {
+            transfer_family_ = transfer_family;
+            vkGetDeviceQueue(device_, transfer_family, 0, &transfer_queue_);
+            if (transfer_queue_ == VK_NULL_HANDLE || !make(transfer_timeline_)) {
+                transfer_queue_ = VK_NULL_HANDLE;
+                transfer_timeline_ = VK_NULL_HANDLE;
+            }
+        }
+    }
+    transfer_submitted_.store(0u, std::memory_order_relaxed);
     if (generation_queues_at != 0u) {
         vkGetDeviceQueue(device_, queue_family_, generation_queues_at, &generation_present_queue_);
         vkGetDeviceQueue(device_, queue_family_, generation_queues_at + 1u, &generation_acquire_queue_);
@@ -998,6 +1072,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
                  properties_.driverVersion, layers.empty() ? 0 : 1);
     std::fprintf(stderr, "[vulkan] driver: %s; workarounds: %s\n", describe(identity_).c_str(),
                  describe(quirks_).c_str());
+    std::fprintf(stderr, "[vulkan] frame sync: %s; transfer queue: %s\n",
+                 timeline_ != VK_NULL_HANDLE ? "timeline semaphore" : "fences",
+                 transfer_queue_ != VK_NULL_HANDLE ? ("family " + std::to_string(transfer_family_)).c_str() : "none");
     if (bindless_) {
         std::fprintf(stderr, "[vulkan] textures: bindless, image array from %u up to %u slots, %u sampler slots (%s)\n",
                      kBindlessTextureSlotsMin, texture_array_max_, kBindlessSamplerSlots, indexing_note.c_str());
@@ -1019,6 +1096,18 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     {
         VkPhysicalDeviceMemoryProperties memory{};
         vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+        // Resizable BAR: a heap of video memory the CPU maps that is larger than the 256 MB window, beside video memory it cannot.
+        constexpr VkMemoryPropertyFlags kMapped =
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        bool large_mapped = false, unmapped_video = false;
+        for (std::uint32_t i = 0; i < memory.memoryTypeCount; ++i) {
+            const VkMemoryPropertyFlags flags = memory.memoryTypes[i].propertyFlags;
+            const VkDeviceSize heap_size = memory.memoryHeaps[memory.memoryTypes[i].heapIndex].size;
+            large_mapped = large_mapped || ((flags & kMapped) == kMapped && heap_size > (VkDeviceSize{256} << 20u));
+            unmapped_video = unmapped_video || ((flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0u &&
+                                                (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0u);
+        }
+        device_mapped_memory_ = !test_no_gpu_upload && large_mapped && unmapped_video;
         std::string text;
         for (std::uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
             const VkMemoryHeap& heap = memory.memoryHeaps[i];
@@ -1033,7 +1122,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
                     ((flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0u ? "C" : "") +
                     ((flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) != 0u ? "$" : "");
         }
-        std::fprintf(stderr, "[vulkan] memory:%s\n", text.c_str());
+        std::fprintf(stderr, "[vulkan] memory:%s; video memory the CPU maps: %s\n", text.c_str(),
+                     device_mapped_memory_ ? "yes" : "no");
     }
     return true;
 }
@@ -1064,6 +1154,20 @@ void Context::shutdown() noexcept {
         completed_ = submitted_.load(std::memory_order_acquire);
         free_fences_.clear();
     }
+    if (device_ != VK_NULL_HANDLE) {
+        if (timeline_ != VK_NULL_HANDLE) {
+            vkDestroySemaphore(device_, timeline_, nullptr);
+        }
+        if (transfer_timeline_ != VK_NULL_HANDLE) {
+            vkDestroySemaphore(device_, transfer_timeline_, nullptr);
+        }
+    }
+    timeline_ = VK_NULL_HANDLE;
+    transfer_timeline_ = VK_NULL_HANDLE;
+    transfer_queue_ = VK_NULL_HANDLE;
+    timeline_value_ = nullptr;
+    timeline_wait_ = nullptr;
+    transfer_submitted_.store(0u, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> lock(address_mutex_);
         for (auto& page : address_pages_) delete page.exchange(nullptr, std::memory_order_relaxed);
@@ -1092,30 +1196,65 @@ void Context::shutdown() noexcept {
 }
 
 std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore,
-                              VkPipelineStageFlags wait_stage, VkSemaphore signal_semaphore) {
+                              VkPipelineStageFlags wait_stage, VkSemaphore signal_semaphore, std::uint64_t transfer_wait) {
     std::lock_guard<std::mutex> lock(submit_mutex_);
+    const bool timeline = timeline_ != VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
-    // A free fence may still be in a wait() that read it before it signalled; reset none while one is.
-    if (!free_fences_.empty() && waiters_ == 0) {
-        fence = free_fences_.back();
-        free_fences_.pop_back();
-        check(vkResetFences(device_, 1, &fence), "vkResetFences");
-    } else {
-        VkFenceCreateInfo fence_info{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-        check(vkCreateFence(device_, &fence_info, nullptr, &fence), "vkCreateFence");
+    if (!timeline) {
+        // A free fence may still be in a wait() that read it before it signalled; reset none while one is.
+        if (!free_fences_.empty() && waiters_ == 0) {
+            fence = free_fences_.back();
+            free_fences_.pop_back();
+            check(vkResetFences(device_, 1, &fence), "vkResetFences");
+        } else {
+            VkFenceCreateInfo fence_info{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+            check(vkCreateFence(device_, &fence_info, nullptr, &fence), "vkCreateFence");
+        }
     }
-    VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    submit.commandBufferCount = static_cast<std::uint32_t>(commands.size());
-    submit.pCommandBuffers = commands.data();
+    const std::uint64_t value = submitted_.load(std::memory_order_relaxed) + 1u;
+    // The waits (the swap chain image's, then the transfer queue's) and the signals (this submission's value on the timeline
+    // semaphore, then the present semaphore); a binary semaphore's value is ignored.
+    std::array<VkSemaphore, 2> waits{};
+    std::array<VkPipelineStageFlags, 2> wait_stages{};
+    std::array<std::uint64_t, 2> wait_values{};
+    std::uint32_t wait_count = 0u;
     if (wait_semaphore != VK_NULL_HANDLE) {
-        submit.waitSemaphoreCount = 1;
-        submit.pWaitSemaphores = &wait_semaphore;
-        submit.pWaitDstStageMask = &wait_stage;
+        waits[wait_count] = wait_semaphore;
+        wait_stages[wait_count] = wait_stage;
+        ++wait_count;
+    }
+    if (transfer_wait != 0u && transfer_timeline_ != VK_NULL_HANDLE) {
+        // The copies' textures are acquired by barriers at the start of the batch (fragment shading, or a later copy into them).
+        waits[wait_count] = transfer_timeline_;
+        wait_stages[wait_count] = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT;
+        wait_values[wait_count] = transfer_wait;
+        ++wait_count;
+    }
+    std::array<VkSemaphore, 2> signals{};
+    std::array<std::uint64_t, 2> signal_values{};
+    std::uint32_t signal_count = 0u;
+    if (timeline) {
+        signals[signal_count] = timeline_;
+        signal_values[signal_count] = value;
+        ++signal_count;
     }
     if (signal_semaphore != VK_NULL_HANDLE) {
-        submit.signalSemaphoreCount = 1;
-        submit.pSignalSemaphores = &signal_semaphore;
+        signals[signal_count++] = signal_semaphore;
     }
+    VkTimelineSemaphoreSubmitInfo timeline_info{VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO};
+    timeline_info.waitSemaphoreValueCount = wait_count;
+    timeline_info.pWaitSemaphoreValues = wait_values.data();
+    timeline_info.signalSemaphoreValueCount = signal_count;
+    timeline_info.pSignalSemaphoreValues = signal_values.data();
+    VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.pNext = timeline || transfer_wait != 0u ? &timeline_info : nullptr;
+    submit.commandBufferCount = static_cast<std::uint32_t>(commands.size());
+    submit.pCommandBuffers = commands.data();
+    submit.waitSemaphoreCount = wait_count;
+    submit.pWaitSemaphores = waits.data();
+    submit.pWaitDstStageMask = wait_stages.data();
+    submit.signalSemaphoreCount = signal_count;
+    submit.pSignalSemaphores = signals.data();
     const std::int64_t cpu_start = thread_cpu_ns();
     VkResult result = VK_ERROR_DEVICE_LOST;
     if (simulated_loss_.exchange(false, std::memory_order_acq_rel)) {
@@ -1125,17 +1264,87 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
     }
     note_driver_cpu(DriverCall::Submit, thread_cpu_ns() - cpu_start);
     if (result != VK_SUCCESS) {
-        free_fences_.push_back(fence);
+        if (fence != VK_NULL_HANDLE) {
+            free_fences_.push_back(fence);
+        }
         check(result, "vkQueueSubmit");
     }
-    const std::uint64_t value = submitted_.load(std::memory_order_relaxed) + 1u;
-    pending_.push_back({value, fence});
+    if (!timeline) {
+        pending_.push_back({value, fence});
+    }
     submitted_.store(value, std::memory_order_release);
     return value;
 }
 
+std::uint64_t Context::submit_transfer(VkCommandBuffer commands) {
+    if (transfer_queue_ == VK_NULL_HANDLE) {
+        throw std::runtime_error("[vulkan] no transfer queue");
+    }
+    std::lock_guard<std::mutex> lock(submit_mutex_);
+    const std::uint64_t value = transfer_submitted_.load(std::memory_order_relaxed) + 1u;
+    VkTimelineSemaphoreSubmitInfo timeline_info{VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO};
+    timeline_info.signalSemaphoreValueCount = 1u;
+    timeline_info.pSignalSemaphoreValues = &value;
+    VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submit.pNext = &timeline_info;
+    submit.commandBufferCount = 1u;
+    submit.pCommandBuffers = &commands;
+    submit.signalSemaphoreCount = 1u;
+    submit.pSignalSemaphores = &transfer_timeline_;
+    const std::int64_t cpu_start = thread_cpu_ns();
+    const VkResult result = vkQueueSubmit(transfer_queue_, 1, &submit, VK_NULL_HANDLE);
+    note_driver_cpu(DriverCall::Submit, thread_cpu_ns() - cpu_start);
+    check(result, "vkQueueSubmit (transfer)");
+    transfer_submitted_.store(value, std::memory_order_release);
+    return value;
+}
+
+std::uint64_t Context::transfer_completed() {
+    if (transfer_timeline_ == VK_NULL_HANDLE) {
+        return 0u;
+    }
+    std::uint64_t value = 0u;
+    const VkResult status = timeline_value_(device_, transfer_timeline_, &value);
+    if (status == VK_ERROR_DEVICE_LOST) {
+        report_device_fault("vkGetSemaphoreCounterValue (transfer)");
+    }
+    return status == VK_SUCCESS ? value : 0u;
+}
+
+bool Context::wait_transfer(std::uint64_t value, std::uint64_t timeout_ns) {
+    if (value == 0u || transfer_timeline_ == VK_NULL_HANDLE) {
+        return true;
+    }
+    if (value > transfer_submitted_.load(std::memory_order_acquire)) {
+        return false;  // never submitted
+    }
+    VkSemaphoreWaitInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
+    info.semaphoreCount = 1u;
+    info.pSemaphores = &transfer_timeline_;
+    info.pValues = &value;
+    const std::int64_t cpu_start = thread_cpu_ns();
+    const VkResult result = timeline_wait_(device_, &info, timeout_ns);
+    note_driver_cpu(DriverCall::Wait, thread_cpu_ns() - cpu_start);
+    if (result == VK_ERROR_DEVICE_LOST) {
+        report_device_fault("vkWaitSemaphores (transfer)");
+    }
+    return result == VK_SUCCESS;
+}
+
 std::uint64_t Context::completed_value() {
     std::lock_guard<std::mutex> lock(submit_mutex_);
+    if (timeline_ != VK_NULL_HANDLE) {
+        const std::int64_t poll_start = thread_cpu_ns();
+        std::uint64_t value = 0u;
+        const VkResult status = timeline_value_(device_, timeline_, &value);
+        note_driver_cpu(DriverCall::Poll, thread_cpu_ns() - poll_start);
+        if (status == VK_SUCCESS) {
+            completed_ = std::max(completed_, std::min(value, submitted_.load(std::memory_order_acquire)));
+        } else if (status == VK_ERROR_DEVICE_LOST) {
+            report_device_fault("vkGetSemaphoreCounterValue");
+        }
+        return completed_;
+    }
     std::size_t done = 0;
     const std::int64_t cpu_start = thread_cpu_ns();
     while (done < pending_.size()) {
@@ -1157,6 +1366,32 @@ std::uint64_t Context::completed_value() {
 }
 
 bool Context::wait(std::uint64_t value, std::uint64_t timeout_ns) {
+    if (timeline_ != VK_NULL_HANDLE) {
+        {
+            std::lock_guard<std::mutex> lock(submit_mutex_);
+            if (value <= completed_) {
+                return true;
+            }
+            if (value > submitted_.load(std::memory_order_acquire)) {
+                return false;  // never submitted
+            }
+        }
+        VkSemaphoreWaitInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
+        info.semaphoreCount = 1u;
+        info.pSemaphores = &timeline_;
+        info.pValues = &value;
+        const std::int64_t cpu_start = thread_cpu_ns();
+        const VkResult result = timeline_wait_(device_, &info, timeout_ns);
+        note_driver_cpu(DriverCall::Wait, thread_cpu_ns() - cpu_start);
+        if (result != VK_SUCCESS) {
+            if (result == VK_ERROR_DEVICE_LOST) {
+                report_device_fault("vkWaitSemaphores");
+            }
+            return false;
+        }
+        static_cast<void>(completed_value());
+        return true;
+    }
     VkFence fence = VK_NULL_HANDLE;
     {
         std::lock_guard<std::mutex> lock(submit_mutex_);
@@ -1287,8 +1522,9 @@ void Context::report_device_fault(const char* where) noexcept {
 }
 
 std::uint64_t Context::submit_frame(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore,
-                                    VkPipelineStageFlags wait_stage, VkSemaphore signal_semaphore) {
-    const std::uint64_t value = submit(commands, wait_semaphore, wait_stage, signal_semaphore);
+                                    VkPipelineStageFlags wait_stage, VkSemaphore signal_semaphore,
+                                    std::uint64_t transfer_wait) {
+    const std::uint64_t value = submit(commands, wait_semaphore, wait_stage, signal_semaphore, transfer_wait);
     std::lock_guard<std::mutex> lock(deferred_mutex_);
     for (Deferred& deferred : deferred_) {
         if (deferred.value == 0u) {
@@ -1302,16 +1538,18 @@ void Context::defer(std::function<void()> destroy) {
     // Commands recorded into the open frame may name the object: it waits for that frame's submission (a peek or
     // one-time submission in between carries none of them).
     std::lock_guard<std::mutex> lock(deferred_mutex_);
-    deferred_.push_back({0u, std::move(destroy)});
+    deferred_.push_back({0u, std::move(destroy), transfer_submitted_.load(std::memory_order_acquire)});
 }
 
 void Context::collect() {
     const std::uint64_t completed = completed_value();
+    // What the transfer queue copied into or from goes after it has passed the copies submitted before the release.
+    const std::uint64_t transfer_done = transfer_timeline_ != VK_NULL_HANDLE ? transfer_completed() : ~std::uint64_t{0};
     std::vector<Deferred> due;
     {
         std::lock_guard<std::mutex> lock(deferred_mutex_);
-        auto split = std::stable_partition(deferred_.begin(), deferred_.end(), [completed](const Deferred& d) {
-            return d.value == 0u || d.value > completed;
+        auto split = std::stable_partition(deferred_.begin(), deferred_.end(), [completed, transfer_done](const Deferred& d) {
+            return d.value == 0u || d.value > completed || d.transfer > transfer_done;
         });
         due.assign(std::make_move_iterator(split), std::make_move_iterator(deferred_.end()));
         deferred_.erase(split, deferred_.end());
@@ -1425,6 +1663,9 @@ MappedBuffer Context::create_mapped_buffer(std::uint64_t size, VkBufferUsageFlag
     // Mapped memory is coherent: the shared ring code never flushes (every Vulkan device has a host-visible coherent
     // type). With sequential writes, preferring the device picks device memory that is also host-visible where there
     // is some, else host memory.
+    if (place == BufferPlace::DeviceMapped && !device_mapped_memory_) {
+        place = BufferPlace::Host;  // no bulk-mapped video memory: the device-local host-visible window is not for rings
+    }
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = place == BufferPlace::Host ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     if (place != BufferPlace::Device) {
@@ -1558,22 +1799,24 @@ bool device_removed(Device*) noexcept {
     return false;
 }
 
-UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name) {
+UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, UploadPlace place) {
     vk::Context& context = vk::Context::get();
     if (!context.ready() || bytes == 0u) {
         return {};
     }
+    const bool local = place == UploadPlace::GpuLocal && context.device_mapped_memory();
     // One buffer serves any ring: vertices, indices, constants (uniform) and rows (storage). A binding's whole range must
     // lie in its buffer at any offset an allocation can have, hence the room past the end.
     std::shared_ptr<vk::Buffer> buffer = context.create_buffer(
         bytes + kBindingRoom,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        name);
+        name, local ? vk::BufferPlace::DeviceMapped : vk::BufferPlace::Host);
     if (!buffer) {
         return {};
     }
     UploadMemory out;
+    out.local = local;
     out.cpu = buffer->mapped;
     out.gpu = buffer->address;
     out.buffer = std::move(buffer);

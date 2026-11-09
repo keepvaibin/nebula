@@ -83,7 +83,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
 - **Texture uploads.** With `VK_EXT_host_image_copy` (and SHADER_READ_ONLY_OPTIMAL among the layouts it copies into, and
   `optimalDeviceAccess` for the format) a new game or pack texture is written from host memory, with no copy command; the log says
   `[textures] uploads: ...` once. Movie planes and textures an id updates in place are still copied.
-- **Test switches** (test builds): `GALAXY_VK_TEST_NO_FEATURE` also takes `device_fault`, `host_image_copy`, `present_wait`, `present_mode_switch` and `pipeline_library`;
+- **Test switches** (test builds): `GALAXY_VK_TEST_NO_FEATURE` also takes `device_fault`, `host_image_copy`, `present_wait`, `present_mode_switch`, `pipeline_library`, `timeline` (fences for frame sync), `transfer_queue` and `gpu_upload`;
   `GALAXY_D3D12_TEST_NO_FEATURE=uma_writes` keeps Direct3D 12's staged copies on a shared-memory adapter.
 
 ## Android controls (the user's design, 2026-10-18)

@@ -91,7 +91,10 @@ public:
     [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
     // A list that keeps its texture handles from walk to walk (Vulkan's bound tables) names texture `id` again by this.
     void touch(std::uint32_t id) noexcept {
-        if (id < entries_.size() && entries_[id] != nullptr) entries_[id]->named = frame_;
+        if (id < entries_.size() && entries_[id] != nullptr) {
+            entries_[id]->named = frame_;
+            backend_.note_named(entries_[id]->current.resource);
+        }
     }
     // At a frame boundary, with the adapter's video memory `usage` and its `budget` (0: not known): past the budget, textures
     // that no frame in flight names are given back, the least recently named first, at most kEvictBytesPerFrame a call. An

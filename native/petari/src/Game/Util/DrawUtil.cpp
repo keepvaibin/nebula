@@ -71,7 +71,7 @@ namespace MR {
         SiteMaterial material;
         material.init(NEBULA_SHADER_VERTEX_COLOR, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        material.constants[4] = 0.0f;
+        material.constants[0] = 0.0f;
         const f32 width = getScreenWidth();
         const f32 height = ::getScreenHeightInline();
         const u32 color = static_cast< u32 >(rColor.r) << 24 | static_cast< u32 >(rColor.g) << 16 |

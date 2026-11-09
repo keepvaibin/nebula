@@ -14,7 +14,6 @@
 #include "galaxy/input/key_positions.h"
 #include "galaxy/input/key_positions_win32.h"
 #include "galaxy/input/keyboard_state.h"
-#include "galaxy/input/raw_mouse_win32.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
@@ -427,7 +426,6 @@ void publish_native_window_key_press(std::uint32_t key) noexcept {
 
 void clear_native_window_key_presses() noexcept {
     g_keyboard_events.clear();
-    clear_native_raw_mouse();
 }
 
 struct HostPointerTransitionConsumerState {
@@ -995,11 +993,11 @@ public:
             deliver = select_host_pointer_mouse_button_delivery(position.window_focused, position.absolute_valid,
                 position.inside_client, projected.visible, under_cursor);
         }
-        const auto raw = sample_native_raw_mouse();
+        // The pointer is the window's cursor position (WM_MOUSEMOVE, one OS pointer curve): no raw device motion is read.
         return {true, position.window_focused, position.absolute_valid, position.inside_client,
                 position.left_button, position.right_button, deliver, buttons.has_transition_coordinates,
                 position.absolute_sequence, buttons.transition_sequence, projected,
-                position.window_focused && raw.moved};
+                false};
     }
     galaxy::input::NativeMousePointerProjection cursor() override {
         POINT position{};

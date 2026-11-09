@@ -157,6 +157,21 @@ struct ScreenProbePixel {
 [[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(std::uint8_t channels, float src_x, float src_y,
                                                                              float step_x, float step_y) noexcept;
 
+// Variable refresh. A display whose refreshes follow the presents (G-SYNC, FreeSync, Adaptive-Sync) shows itself in the vblank grid:
+// IDXGIOutput::WaitForVBlank returns at each refresh, so the interval between wakes is the frame time, well over the mode's own
+// period, where a fixed-rate display gives the mode's period. `was` keeps the answer between the two thresholds.
+[[nodiscard]] inline bool next_variable_refresh(bool was, double mode_hz, double measured_hz) noexcept {
+    if (mode_hz <= 1.0 || measured_hz <= 1.0) {
+        return was;
+    }
+    return was ? measured_hz < mode_hz * 0.95 : measured_hz < mode_hz * 0.8;
+}
+// The rate a variable refresh display is held under so that it stays in its range: a presented frame never waits for a
+// refresh. The mode's rate less mode^2 / 3600 (the rule the latency-reduction libraries use: 144 gives 138.2, 60 gives 59).
+[[nodiscard]] inline double variable_refresh_cap(double mode_hz) noexcept {
+    return mode_hz > 1.0 ? mode_hz - mode_hz * mode_hz / 3600.0 : 0.0;
+}
+
 // Present pacing with vsync off and a frame-rate cap. The game's frame clock paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,
 // then yields.

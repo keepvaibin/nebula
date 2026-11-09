@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "galaxy/run_options.h"
+
 #if !defined(NEBULA_GPU_VULKAN)
 #include "galaxy/windows_api.h"
 #include <d3d12.h>
@@ -22,7 +24,9 @@ std::atomic<std::uint64_t> g_upload_ring_identity{1};
 }  // namespace
 
 void UploadRing::reset() noexcept {
+    const gpu::UploadPlace place = place_;
     *this = UploadRing{};
+    place_ = place;
 }
 
 void UploadRing::release_into(std::vector<gpu::BufferRef>& out) {
@@ -48,7 +52,7 @@ bool UploadRing::initialize(
     }
     // Everything that can fail runs before the current buffer is replaced.
     const std::size_t total = std::max(bytes_per_frame * frames_in_flight, capacity);
-    gpu::UploadMemory memory = gpu::create_upload_memory(device, total, name);
+    gpu::UploadMemory memory = gpu::create_upload_memory(device, total, name, place_);
     if (!memory) {
         return false;
     }
@@ -57,7 +61,8 @@ bool UploadRing::initialize(
     // GPU address ranges, so a DRED page-fault address can be attributed.
     std::cout << "[ring] name=" << (name != nullptr ? name : "") << " gpu=0x"
               << std::hex << gpu_base << "-0x" << (gpu_base + total) << std::dec
-              << " bytes=" << total << '\n';
+              << " bytes=" << total << " memory=" << (memory.local ? "video (CPU-mapped)" : "host") << '\n';
+    local_ = memory.local;
     device_ = device;
     chunks_ = chunks;
     chunk_slots_.clear();
@@ -141,7 +146,7 @@ UploadRing::Allocation UploadRing::allocate_in_chunk(std::size_t size, std::size
     constexpr std::size_t kFirstChunk = std::size_t{4} << 20u;
     const std::size_t wanted = std::max({size + alignment, kFirstChunk, chunks.empty() ? std::size_t{0} : chunks.back().size * 2u});
     Chunk chunk;
-    chunk.memory = gpu::create_upload_memory(device_, wanted, name_);
+    chunk.memory = gpu::create_upload_memory(device_, wanted, name_, place_);
     if (!chunk.memory) {
         throw std::runtime_error(std::string("UploadRing '") + name_ + "' out of upload memory for a chunk of " +
                                  std::to_string(wanted) + " B");
@@ -220,7 +225,25 @@ bool device_removed(Device* device) noexcept {
     return device != nullptr && device->GetDeviceRemovedReason() != S_OK;
 }
 
-UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name) {
+namespace {
+
+// GPU upload heaps (OPTIONS16): video memory the CPU maps through a resizable BAR. GALAXY_D3D12_TEST_NO_FEATURE=gpu_upload
+// keeps upload heaps.
+bool gpu_upload_heaps(Device* device) {
+    if (const char* const names = ::galaxy::run_options().d3d12_test_no_feature) {
+        const std::string list = std::string(",") + names + ",";
+        if (list.find(",gpu_upload,") != std::string::npos) {
+            return false;
+        }
+    }
+    D3D12_FEATURE_DATA_D3D12_OPTIONS16 options{};
+    return SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16, &options, sizeof(options))) &&
+           options.GPUUploadHeapSupported == TRUE;
+}
+
+}  // namespace
+
+UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name, UploadPlace place) {
     UploadMemory out;
     if (device == nullptr || bytes == 0u) {
         return out;
@@ -239,9 +262,27 @@ UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char*
     BufferRef buffer;
     void* mapped = nullptr;
     const D3D12_RANGE no_read{0, 0};
-    if (FAILED(device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                               nullptr, IID_PPV_ARGS(&buffer))) ||
-        FAILED(buffer->Map(0, &no_read, &mapped)) || mapped == nullptr) {
+    bool local = false;
+    if (place == UploadPlace::GpuLocal && gpu_upload_heaps(device)) {
+        // In video memory the CPU writes: created in the common state (a buffer there is promoted to the read state a draw
+        // needs), else as an upload heap's buffer is; a heap that refuses either leaves the upload heap below.
+        D3D12_HEAP_PROPERTIES local_hp{};
+        local_hp.Type = D3D12_HEAP_TYPE_GPU_UPLOAD;
+        for (const D3D12_RESOURCE_STATES state : {D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ}) {
+            if (SUCCEEDED(device->CreateCommittedResource(&local_hp, D3D12_HEAP_FLAG_NONE, &rd, state, nullptr,
+                                                          IID_PPV_ARGS(&buffer))) &&
+                SUCCEEDED(buffer->Map(0, &no_read, &mapped)) && mapped != nullptr) {
+                local = true;
+                break;
+            }
+            buffer.Reset();
+            mapped = nullptr;
+        }
+    }
+    if (!local &&
+        (FAILED(device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                                nullptr, IID_PPV_ARGS(&buffer))) ||
+         FAILED(buffer->Map(0, &no_read, &mapped)) || mapped == nullptr)) {
         return out;
     }
     if (name != nullptr) {
@@ -250,6 +291,7 @@ UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char*
     out.cpu = static_cast<std::byte*>(mapped);
     out.gpu = buffer->GetGPUVirtualAddress();
     out.buffer = std::move(buffer);
+    out.local = local;
     return out;
 }
 

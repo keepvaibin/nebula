@@ -2276,6 +2276,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             bytes = first_ring_bytes(bytes);
             return target.initialize(device_.Get(), name, UploadRing::budget(bytes, segments), segments, bytes, chunks);
         };
+        // The vertex and constant rings are read by the GPU every frame and written once, in order: video memory the CPU maps,
+        // where the adapter has it (gpu_upload_ring.cpp); the others stay in upload heaps.
+        vertex_ring_.set_place(gpu::UploadPlace::GpuLocal);
+        constant_ring_.set_place(gpu::UploadPlace::GpuLocal);
         if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments, true) ||
             !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight, true) ||
             !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight, true) ||
@@ -2318,6 +2322,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                   << " constant-mb=" << (kConstantRingBytes >> 20u)
                   << " matrix-mb=" << (kMatrixRingBytes >> 20u)
                   << " unified-memory=" << (adapter_is_unified_memory() ? 1 : 0)
+                  << " vertex-ring=" << (vertex_ring_.local() ? "video" : "host")
+                  << " constant-ring=" << (constant_ring_.local() ? "video" : "host")
                   << " frames-in-flight=" << kFramesInFlight
                   << " total-mb="
                   << ((kVertexRingBytes + kIndexRingBytes + kConstantRingBytes + kMatrixRingBytes) >> 20u)
@@ -2337,6 +2343,8 @@ UploadBuffer RendererD3D12::create_upload_buffer(std::size_t bytes, const char* 
 void RendererD3D12::attach_texture_uploads(TextureStore& cache) {
     cache.backend().set_upload_list(command_list_.Get());
     if (mirrored_backend_ != &cache.backend()) {
+        // New textures are written on the copy queue where the adapter has memory of its own (gpu_texture_backend.h).
+        cache.backend().enable_async_uploads(kFramesInFlight, frame_slot_);
         // Every view goes into the texture region from now on: room for twice the views made so far (at least
         // kTextureSlotsMin), the null view in its last slot.
         const std::uint64_t wanted = std::max<std::uint64_t>(texture_slots_first(), 2u * std::uint64_t{cache.backend().views_made()} + 1u);
@@ -2909,20 +2917,139 @@ void RendererD3D12::invalidate_draw_bindings() {
     encoder_.reset();
 }
 
+void RendererD3D12::set_render_targets(ID3D12GraphicsCommandList* list, unsigned aux) const {
+    if (aux == 3u) {
+        const D3D12_CPU_DESCRIPTOR_HANDLE targets[4]{scene_rtv_, reactive_rtv_, layer_color_rtv_, layer_trans_rtv_};
+        list->OMSetRenderTargets(4, targets, FALSE, &scene_dsv_);
+    } else if (aux != 0u) {
+        const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{scene_rtv_, aux == 1u ? motion_rtv_ : reactive_rtv_};
+        list->OMSetRenderTargets(2, targets, FALSE, &scene_dsv_);
+    } else {
+        list->OMSetRenderTargets(1, &scene_rtv_, FALSE, &scene_dsv_);
+    }
+}
+
 void RendererD3D12::set_draw_aux(unsigned aux) {
     if (aux == bound_rt_aux_) {
         return;
     }
-    if (aux == 3u) {
-        const D3D12_CPU_DESCRIPTOR_HANDLE targets[4]{scene_rtv_, reactive_rtv_, layer_color_rtv_, layer_trans_rtv_};
-        command_list_->OMSetRenderTargets(4, targets, FALSE, &scene_dsv_);
-    } else if (aux != 0u) {
-        const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{scene_rtv_, aux == 1u ? motion_rtv_ : reactive_rtv_};
-        command_list_->OMSetRenderTargets(2, targets, FALSE, &scene_dsv_);
-    } else {
-        command_list_->OMSetRenderTargets(1, &scene_rtv_, FALSE, &scene_dsv_);
-    }
+    set_render_targets(command_list_.Get(), aux);
     bound_rt_aux_ = static_cast<std::uint8_t>(aux);
+}
+
+gpu::TextureArrays RendererD3D12::draw_texture_arrays(gpu::Address lists) {
+    if (mirrored_backend_ == nullptr) {
+        throw std::runtime_error("[textures] a draw before the texture heap was made");
+    }
+    gpu::TextureArrays arrays;
+    arrays.textures = srv_ring_.texture_gpu_start();
+    arrays.samplers = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
+    arrays.lists = lists;
+    arrays.heap = srv_ring_.heap();
+    return arrays;
+}
+
+namespace {
+// The heaps a list of draws reads: the texture heap and the sampler heap.
+void set_draw_heaps(ID3D12GraphicsCommandList* list, ID3D12DescriptorHeap* textures, ID3D12DescriptorHeap* samplers) {
+    ID3D12DescriptorHeap* heaps[] = {textures, samplers};
+    list->SetDescriptorHeaps(samplers != nullptr ? 2u : 1u, heaps);
+}
+}  // namespace
+
+// A chunk of a recorded pass replayed on the frame's own list, as the walker would have drawn it.
+void RendererD3D12::replay_draws(std::uint8_t aux, const gpu::DrawOp* ops, std::size_t count) {
+    set_draw_aux(aux);
+    gpu::replay_ops(encoder_, ops, count, [this](const gpu::TextureArrays& arrays) {
+        ID3D12DescriptorHeap* const heap = const_cast<ID3D12DescriptorHeap*>(static_cast<const ID3D12DescriptorHeap*>(arrays.heap));
+        if (heap == srv_ring_.heap()) {
+            srv_ring_.bind(command_list_.Get());
+        } else {
+            // The heap was replaced while the pass was walked: the tables are the old one's.
+            set_draw_heaps(command_list_.Get(), heap, sampler_heap_.Get());
+            srv_ring_.forget_bound();
+        }
+        encoder_.set_texture_arrays(arrays.textures, arrays.samplers, arrays.lists);
+    });
+}
+
+bool RendererD3D12::parallel_record_begin(const std::uint8_t* chunk_aux, unsigned chunk_count) {
+    constexpr unsigned kMaxRecordLists = 256u;
+    std::vector<RecordList>& lists = record_lists_[frame_slot_];
+    // A pipeline statistics query begins and ends on one list: the diagnostics that ask for it keep the pass on one.
+    if (device_gone_ || chunk_count == 0u || stats_query_heap_ || record_used_[frame_slot_] + chunk_count > kMaxRecordLists) {
+        return false;
+    }
+    record_base_ = record_used_[frame_slot_];
+    while (lists.size() < record_base_ + chunk_count) {
+        RecordList made;
+        d3d_check(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&made.allocator)),
+                  "CreateCommandAllocator (chunk)");
+        d3d_check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, made.allocator.Get(), nullptr,
+                                             IID_PPV_ARGS(&made.list)),
+                  "CreateCommandList (chunk)");
+        d3d_check(made.list->Close(), "CommandList Close (chunk)");
+        lists.push_back(std::move(made));
+    }
+    record_used_[frame_slot_] += chunk_count;
+    record_aux_.assign(chunk_aux, chunk_aux + chunk_count);
+    // What the frame's list holds so far runs first.
+    const HRESULT close_hr = command_list_->Close();
+    if (FAILED(close_hr)) {
+        dump_device_removal(device_.Get());
+        d3d_check(close_hr, "CommandList Close (before a recorded pass)");
+    }
+    frame_lists_.push_back(command_list_.Get());
+    return true;
+}
+
+void RendererD3D12::parallel_record_chunk(unsigned chunk, const gpu::DrawOp* ops, std::size_t count) {
+    RecordList& record = record_lists_[frame_slot_][record_base_ + chunk];
+    ID3D12GraphicsCommandList* const list = record.list.Get();
+    d3d_check(list->Reset(record.allocator.Get(), nullptr), "CommandList Reset (chunk)");
+    // The state the frame's list had at the pass: its root signature, the draw targets of the chunk, and (below) the heaps.
+    list->SetGraphicsRootSignature(root_signature_.Get());
+    set_render_targets(list, record_aux_[chunk]);
+    gpu::Encoder encoder;
+    encoder.attach(list);
+    ID3D12DescriptorHeap* heap = nullptr;
+    gpu::replay_ops(encoder, ops, count, [&](const gpu::TextureArrays& arrays) {
+        ID3D12DescriptorHeap* const wanted = const_cast<ID3D12DescriptorHeap*>(static_cast<const ID3D12DescriptorHeap*>(arrays.heap));
+        if (wanted != heap) {
+            set_draw_heaps(list, wanted, sampler_heap_.Get());
+            heap = wanted;
+        }
+        encoder.set_texture_arrays(arrays.textures, arrays.samplers, arrays.lists);
+    });
+    d3d_check(list->Close(), "CommandList Close (chunk)");
+}
+
+void RendererD3D12::parallel_record_end() {
+    const std::vector<RecordList>& lists = record_lists_[frame_slot_];
+    for (std::size_t c = 0; c < record_aux_.size(); ++c) {
+        frame_lists_.push_back(lists[record_base_ + c].list.Get());
+    }
+    // The frame goes on in another list: opened on the frame's allocator after the one just closed.
+    if (segment_lists_.size() <= segments_used_) {
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> made;
+        d3d_check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocators_[frame_slot_].Get(), nullptr,
+                                             IID_PPV_ARGS(&made)),
+                  "CreateCommandList (frame continues)");
+        d3d_check(made->Close(), "CommandList Close (frame continues)");
+        segment_lists_.push_back(std::move(made));
+    }
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& next = segment_lists_[segments_used_++];
+    d3d_check(next->Reset(allocators_[frame_slot_].Get(), nullptr), "CommandList Reset (frame continues)");
+    std::swap(command_list_, next);  // `next` now keeps the closed list alive until the frame is submitted
+    const unsigned last_aux = record_aux_.empty() ? 0u : record_aux_.back();
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    set_render_targets(command_list_.Get(), last_aux);
+    bound_rt_aux_ = static_cast<std::uint8_t>(last_aux);
+    srv_ring_.forget_bound();
+    encoder_.attach(command_list_.Get());
+    if (mirrored_store_ != nullptr) {
+        mirrored_store_->backend().set_upload_list(command_list_.Get());
+    }
 }
 
 gpu::Address RendererD3D12::zero_stream(std::uint32_t bytes) {
@@ -3206,6 +3333,12 @@ void RendererD3D12::begin_frame() {
         dump_device_removal(device_.Get());
         d3d_check(allocator_reset_hr, "CommandAllocator Reset");
     }
+    for (RecordList& record : record_lists_[frame_slot_]) {
+        d3d_check(record.allocator->Reset(), "CommandAllocator Reset (chunk)");
+    }
+    record_used_[frame_slot_] = 0u;
+    segments_used_ = 0u;
+    frame_lists_.clear();
     const HRESULT command_reset_hr =
         command_list_->Reset(allocators_[frame_slot_].Get(), nullptr);
     if (FAILED(command_reset_hr)) {
@@ -3275,35 +3408,39 @@ bool RendererD3D12::vblank_grid(std::int64_t& vblank, std::int64_t& period) cons
 }
 
 void RendererD3D12::refresh_display_rate() {
-    // The vblanks' own rate when they are timed (the mode reports whole hertz: 239 or 240 for 239.76).
+    // The mode's rate (whole hertz: 239 or 240 for 239.76), and the vblanks' own when they are timed.
+    double mode_hz = 0.0;
+    if (swap_chain_ != nullptr) {
+        Microsoft::WRL::ComPtr<IDXGIOutput> output;
+        DXGI_OUTPUT_DESC desc{};
+        DEVMODEW mode{};
+        mode.dmSize = sizeof(mode);
+        if (SUCCEEDED(swap_chain_->GetContainingOutput(&output)) && output != nullptr && SUCCEEDED(output->GetDesc(&desc)) &&
+            EnumDisplaySettingsW(desc.DeviceName, ENUM_CURRENT_SETTINGS, &mode) != FALSE && mode.dmDisplayFrequency > 1u) {
+            mode_hz = static_cast<double>(mode.dmDisplayFrequency);
+        }
+    }
     std::int64_t vblank = 0;
     std::int64_t period = 0;
-    if (vblank_grid(vblank, period)) {
-        const double hz =
-            std::round(static_cast<double>(qpc_frequency_.QuadPart) / static_cast<double>(period) * 100.0) / 100.0;
-        if (std::abs(hz - display_refresh_hz_) >= 0.1) {
-            std::cerr << "[display] refresh-hz=" << hz << " (vblanks)\n";
-            display_refresh_hz_ = hz;
+    const bool timed = vblank_grid(vblank, period);
+    const double measured_hz =
+        timed ? std::round(static_cast<double>(qpc_frequency_.QuadPart) / static_cast<double>(period) * 100.0) / 100.0 : 0.0;
+    // A flip-model chain that may tear is what a variable refresh display needs to engage (DXGI_FEATURE_PRESENT_ALLOW_TEARING).
+    const bool variable = tearing_allowed_ && next_variable_refresh(variable_refresh_, mode_hz, measured_hz);
+    if (variable != variable_refresh_ || (variable && std::abs(variable_refresh_cap(mode_hz) - display_refresh_hz_) >= 0.1)) {
+        if (variable) {
+            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << variable_refresh_cap(mode_hz) << '\n';
+        } else {
+            std::cerr << "[pacing] vrr off\n";
         }
+    }
+    variable_refresh_ = variable;
+    const double hz = variable ? variable_refresh_cap(mode_hz) : (timed ? measured_hz : mode_hz);
+    if (hz <= 1.0) {
         return;
     }
-    if (swap_chain_ == nullptr) {
-        return;
-    }
-    Microsoft::WRL::ComPtr<IDXGIOutput> output;
-    DXGI_OUTPUT_DESC desc{};
-    if (FAILED(swap_chain_->GetContainingOutput(&output)) || output == nullptr || FAILED(output->GetDesc(&desc))) {
-        return;
-    }
-    DEVMODEW mode{};
-    mode.dmSize = sizeof(mode);
-    if (EnumDisplaySettingsW(desc.DeviceName, ENUM_CURRENT_SETTINGS, &mode) == FALSE ||
-        mode.dmDisplayFrequency <= 1u) {
-        return;
-    }
-    const double hz = static_cast<double>(mode.dmDisplayFrequency);
-    if (hz != display_refresh_hz_) {
-        std::cerr << "[display] refresh-hz=" << hz << '\n';
+    if (!variable && std::abs(hz - display_refresh_hz_) >= 0.1) {
+        std::cerr << "[display] refresh-hz=" << hz << (timed ? " (vblanks)\n" : "\n");
     }
     display_refresh_hz_ = hz;
 }
@@ -3338,8 +3475,8 @@ void RendererD3D12::read_display_output() {
 
 UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     const bool game_frame = std::exchange(present_game_frame_, false);
-    if (configured != 1u) {
-        return configured;
+    if (configured != 1u || variable_refresh_) {
+        return configured;  // a variable refresh display shows a frame at once: whole refreshes mean nothing
     }
     const double hz = display_refresh_hz_;
     if (hz <= 0.0) {
@@ -3385,8 +3522,13 @@ void RendererD3D12::present_to_swap_chain() {
     const UINT present_flags =
         vsync == 0u && tearing_allowed_ && !generating && !fsr_swap_chain_ ? DXGI_PRESENT_ALLOW_TEARING : 0u;
     // Interpolation presents on its own slot clock.
+    // On a variable refresh display the pacer holds presents under the cap whatever the VSync setting (display_refresh_hz_ is the
+    // cap there); a frame under the cap goes out as soon as it is ready.
+    const float variable_rate = variable_refresh_ ? static_cast<float>(display_refresh_hz_) : 0.0f;
+    const float paced_fps = variable_refresh_ ? (presented_max_fps(cfg) > 0.0f ? std::min(presented_max_fps(cfg), variable_rate) : variable_rate)
+                                               : presented_max_fps(cfg);
     const double pace_wait_ms =
-        interpolation_mode() ? 0.0 : present_pacer_.pace(cfg.vsync_interval, presented_max_fps(cfg));
+        interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
     if (trace_present_stats_enabled()) {
         telemetry_pace_wait_ms_ += pace_wait_ms;
         telemetry_pace_wait_max_ms_ = std::max(telemetry_pace_wait_max_ms_, pace_wait_ms);
@@ -3713,12 +3855,21 @@ std::uint64_t RendererD3D12::end_frame(
         dump_device_removal(device_.Get());
         d3d_check(close_hr, "CommandList Close");
     }
-    ID3D12CommandList* lists[] = {command_list_.Get()};
+    // The textures the copy queue wrote and this frame names are acquired first (the queue waits for the copy fence).
+    submit_lists_.clear();
+    if (mirrored_store_ != nullptr) {
+        if (ID3D12CommandList* const acquire = mirrored_store_->backend().submit_uploads(queue_.Get())) {
+            submit_lists_.push_back(acquire);
+        }
+    }
+    // The lists a recorded pass cut the frame into (parallel_record_begin), then the frame's last.
+    submit_lists_.insert(submit_lists_.end(), frame_lists_.begin(), frame_lists_.end());
+    submit_lists_.push_back(command_list_.Get());
     if (present_swap_chain) {
         streamline::marker(streamline::Marker::kSimulationEnd);
         streamline::marker(streamline::Marker::kRenderSubmitStart);
     }
-    queue_->ExecuteCommandLists(1, lists);
+    queue_->ExecuteCommandLists(static_cast<UINT>(submit_lists_.size()), submit_lists_.data());
     if (present_swap_chain) {
         streamline::marker(streamline::Marker::kRenderSubmitEnd);
     }

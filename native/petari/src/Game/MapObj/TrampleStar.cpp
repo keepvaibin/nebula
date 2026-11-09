@@ -600,7 +600,7 @@ void TrampleStar::drawSelf() const {
     // runtime/src/render/materials/trample_star.hlsl: blended by alpha, depth tested early and written, no culling.
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
-    material.mShader = NEBULA_SHADER_TRAMPLE_STAR;
+    material.setShader(NEBULA_SHADER_TRAMPLE_STAR);
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, true);
     material.setMatrix(3, 0, texMtx);
     material.setColor(0, 0xCC, 0xCC, 0xCC, 0xFF);

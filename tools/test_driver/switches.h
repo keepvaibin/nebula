@@ -290,6 +290,33 @@ inline constexpr const char* test_device_lost_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* test_device_lost_wide_name() noexcept { return L"GALAXY_TEST_DEVICE_LOST"; }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* test_same_queue_uploads() noexcept { return nullptr; }
+inline constexpr const char* test_same_queue_uploads_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_same_queue_uploads_wide_name() noexcept { return L""; }
+#else
+inline const char* test_same_queue_uploads() noexcept { return std::getenv("GALAXY_TEST_SAME_QUEUE_UPLOADS"); }
+inline constexpr const char* test_same_queue_uploads_name() noexcept { return "GALAXY_TEST_SAME_QUEUE_UPLOADS"; }
+inline constexpr const wchar_t* test_same_queue_uploads_wide_name() noexcept { return L"GALAXY_TEST_SAME_QUEUE_UPLOADS"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* test_record_threshold() noexcept { return nullptr; }
+inline constexpr const char* test_record_threshold_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_record_threshold_wide_name() noexcept { return L""; }
+#else
+inline const char* test_record_threshold() noexcept { return std::getenv("GALAXY_TEST_RECORD_THRESHOLD"); }
+inline constexpr const char* test_record_threshold_name() noexcept { return "GALAXY_TEST_RECORD_THRESHOLD"; }
+inline constexpr const wchar_t* test_record_threshold_wide_name() noexcept { return L"GALAXY_TEST_RECORD_THRESHOLD"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* test_one_record_thread() noexcept { return nullptr; }
+inline constexpr const char* test_one_record_thread_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_one_record_thread_wide_name() noexcept { return L""; }
+#else
+inline const char* test_one_record_thread() noexcept { return std::getenv("GALAXY_TEST_ONE_RECORD_THREAD"); }
+inline constexpr const char* test_one_record_thread_name() noexcept { return "GALAXY_TEST_ONE_RECORD_THREAD"; }
+inline constexpr const wchar_t* test_one_record_thread_wide_name() noexcept { return L"GALAXY_TEST_ONE_RECORD_THREAD"; }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* test_small_heaps() noexcept { return nullptr; }
 inline constexpr const char* test_small_heaps_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L""; }

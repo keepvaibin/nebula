@@ -68,6 +68,8 @@ struct UseScope {
         return {VK_PIPELINE_STAGE_2_RESOLVE_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL};
     case gpu::Use::Present:
         return {VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+    case gpu::Use::Common:
+        return {VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_UNDEFINED};
     }
     return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
             VK_IMAGE_LAYOUT_GENERAL};
@@ -144,6 +146,22 @@ public:
         b.dstAccessMask = dst_access;
         b.oldLayout = from;
         b.newLayout = to;
+    }
+
+    // A queue family ownership transfer of `image` with the layout change: recorded once on the source family's queue (the
+    // release: the writes made available, no destination scope) and once, the same, on the destination family's (the
+    // acquire: no source scope, the reads that follow).
+    void image_transfer(VkImage image, VkImageAspectFlags aspect, VkImageLayout from, VkImageLayout to, std::uint32_t src_family,
+                        std::uint32_t dst_family, VkPipelineStageFlags2 src_stages, VkAccessFlags2 src_access,
+                        VkPipelineStageFlags2 dst_stages, VkAccessFlags2 dst_access,
+                        std::uint32_t levels = VK_REMAINING_MIP_LEVELS) noexcept {
+        if (image == VK_NULL_HANDLE) {
+            return;
+        }
+        image_scoped(image, aspect, from, to, src_stages, src_access, dst_stages, dst_access, levels);
+        VkImageMemoryBarrier2& b = images_[count_ - 1u];
+        b.srcQueueFamilyIndex = src_family;
+        b.dstQueueFamilyIndex = dst_family;
     }
 
     // A memory dependency between all resources (one per call; later ones widen it).
@@ -226,7 +244,8 @@ public:
             images[i].dstAccessMask = access_v1(b.dstAccessMask);
             images[i].oldLayout = b.oldLayout;
             images[i].newLayout = b.newLayout;
-            images[i].srcQueueFamilyIndex = images[i].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            images[i].srcQueueFamilyIndex = b.srcQueueFamilyIndex;
+            images[i].dstQueueFamilyIndex = b.dstQueueFamilyIndex;
             images[i].image = b.image;
             images[i].subresourceRange = b.subresourceRange;
             src |= b.srcStageMask;

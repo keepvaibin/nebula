@@ -179,6 +179,10 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             bytes = first_ring_bytes(bytes);
             return target.initialize(device, name, UploadRing::budget(bytes, segments), segments, bytes, chunks);
         };
+        // The vertex and constant rings are read by the GPU every frame and written once, in order: video memory the CPU maps,
+        // where the device has it (vk::Context::device_mapped_memory); the others stay in host memory.
+        vertex_ring_.set_place(gpu::UploadPlace::GpuLocal);
+        constant_ring_.set_place(gpu::UploadPlace::GpuLocal);
         if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments, true) ||
             !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight, true) ||
             !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight, true) ||
@@ -200,6 +204,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         };
         encoding.renderer = this;
         encoder_.configure(encoding);
+        encoding_layout_ = encoding;
         reset_sampler_frame();
         // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
         bloom_.initialize();
@@ -1381,6 +1386,7 @@ void RendererVk::shutdown() {
         texture_array_slots_ = texture_array_limit_ = null_texture_slot_ = 0u;
         mirrored_backend_ = nullptr;
         mirrored_store_ = nullptr;
+        uploads_store_ = nullptr;
         texture_lists_ = {};
         texture_lists_used_ = 0u;
         post_.shutdown();
@@ -1392,6 +1398,13 @@ void RendererVk::shutdown() {
         turn_source_ = VK_NULL_HANDLE;
         zero_vertices_.reset();
         frame_pass_targets_.clear();
+        for (std::vector<RecordCommands>& records : record_commands_) {
+            for (RecordCommands& record : records) {
+                if (record.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, record.pool, nullptr);
+            }
+            records.clear();
+        }
+        record_used_.fill(0u);
         for (Frame& frame : frames_) {
             frame.retired.clear();
     frame.retired_buffers.clear();
@@ -1632,6 +1645,10 @@ void RendererVk::begin_frame() {
     destroy_retired_pools(frame);
     reset_sampler_frame();
     vk::check(vkResetCommandPool(device, frame.pool, 0), "vkResetCommandPool");
+    for (RecordCommands& record : record_commands_[frame_slot_]) {
+        vk::check(vkResetCommandPool(device, record.pool, 0), "vkResetCommandPool (chunk)");
+    }
+    record_used_[frame_slot_] = 0u;
     vk::check(vkResetDescriptorPool(device, frame.descriptors, 0), "vkResetDescriptorPool");
     for (VkDescriptorPool pool : frame.overflow_descriptors) {
         vkDestroyDescriptorPool(device, pool, nullptr);
@@ -1702,6 +1719,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         vkCmdEndQuery(frame.commands, stats_queries_, frame_slot_);
         stats_pending_[frame_slot_] = true;
     }
+    // The transfer queue's copies go out, and the images this frame names are acquired in the upload list (the submission
+    // waits for the queue's timeline semaphore).
+    const std::uint64_t transfer_wait = uploads_store_ != nullptr ? uploads_store_->backend().submit_uploads() : 0u;
     vk::check(vkEndCommandBuffer(frame.uploads), "vkEndCommandBuffer");
     vk::check(vkEndCommandBuffer(frame.commands), "vkEndCommandBuffer");
     const VkCommandBuffer buffers[] = {frame.uploads, frame.commands};
@@ -1712,8 +1732,8 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     }
     const std::uint64_t fence = presenting
         ? context.submit_frame(buffers, frame.acquired, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                               swapchain_.rendered[swap_image_])
-        : context.submit_frame(buffers);
+                               swapchain_.rendered[swap_image_], transfer_wait)
+        : context.submit_frame(buffers, VK_NULL_HANDLE, 0, VK_NULL_HANDLE, transfer_wait);
     if (presenting) {
         vk::streamline_vk::mark_submit_end();
     }
@@ -1802,7 +1822,12 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
-    const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, presented_max_fps(cfg));
+    // On a variable refresh display the pacer holds presents under the cap whatever the VSync setting (display_refresh_hz_ is the
+    // cap there); a frame under the cap goes out as soon as it is ready.
+    const float variable_rate = variable_refresh_ ? static_cast<float>(display_refresh_hz_) : 0.0f;
+    const float paced_fps = variable_refresh_ ? (presented_max_fps(cfg) > 0.0f ? std::min(presented_max_fps(cfg), variable_rate) : variable_rate)
+                                               : presented_max_fps(cfg);
+    const double pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
     const std::int64_t present_start = galaxy::qpc_now();
     {
         // The target rate: dynamic multi frame generation reaches it, a fixed multiplier is the largest multiple of 60 at or
@@ -2239,12 +2264,30 @@ bool RendererVk::vblank_grid(std::int64_t& vblank, std::int64_t& period) const n
 }
 
 void RendererVk::refresh_display_rate() {
-    const double hz = host_window::display_refresh_hz(window_);
-    if (hz <= 1.0) {
+    const double mode_hz = host_window::display_refresh_hz(window_);
+    if (mode_hz <= 1.0) {
         return;
     }
+    // The vblanks' own rate (where the platform times them): a display that varies its refresh with the presents shows a rate
+    // well under the mode's.
+    std::int64_t vblank = 0;
+    std::int64_t period = 0;
+    const double measured_hz = vblank_grid(vblank, period) && period > 0
+        ? static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) : 0.0;
+    const bool variable = next_variable_refresh(variable_refresh_, mode_hz, measured_hz);
+    const double hz = variable ? variable_refresh_cap(mode_hz) : mode_hz;
+    if (variable != variable_refresh_ || (variable && std::abs(hz - display_refresh_hz_) >= 0.1)) {
+        if (variable) {
+            std::cerr << "[pacing] vrr " << mode_hz << " Hz cap " << hz << '\n';
+        } else {
+            std::cerr << "[pacing] vrr off\n";
+        }
+    }
+    variable_refresh_ = variable;
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
-        std::cerr << "[display] refresh-hz=" << hz << '\n';
+        if (!variable) {
+            std::cerr << "[display] refresh-hz=" << hz << '\n';
+        }
         display_refresh_hz_ = hz;
     }
 }

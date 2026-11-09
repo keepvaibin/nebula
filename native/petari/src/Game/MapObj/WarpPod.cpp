@@ -519,7 +519,7 @@ void WarpPod::drawCylinder() const {
     // added; depth tested.
     SiteMaterial material;
     TDDraw::setupNative(&material, 1, 2, 0);
-    material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;
+    material.setShader(NEBULA_SHADER_TEX_ALPHA_LERP);
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
     const NebulaColor8& rGlow = cGlowColors[mGlowColorIndex];
     material.setColor(0, rGlow.r, rGlow.g, rGlow.b, rGlow.a);

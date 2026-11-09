@@ -31,7 +31,9 @@ namespace TDDraw {
         pMaterial->mState.color_write = 1;
         pMaterial->mState.alpha_write = 0;
         pMaterial->mState.line_width = 1.0f;
-        pMaterial->constants[4] = -1.0f;
+        // The alpha reference opens the shader's constants: mode 2 has its colour before it (dd_texture_color.hlsl), modes 0 and
+        // 1 declare nothing else (vertex_color.hlsl, dd_texture.hlsl).
+        pMaterial->constants[drawMode == 2 ? 4 : 0] = -1.0f;
     }
 
     TypedDraw site(const SiteMaterial& rMaterial, u8 viewMode) {

@@ -421,6 +421,8 @@ struct SiteMaterial {
         init(shader, blend, depthFunc, depthWrite, cull);
     }
     void init(NebulaShaderId shader, Blend blend, u8 depthFunc, bool depthWrite, u8 cull);
+    // Another written shader after init: the constants stay, and the rows the draw copies grow to what it declares.
+    void setShader(NebulaShaderId shader);
 
     // Coordinate matrix `index` among the constants the shader declares from row `first` (three rows each).
     void setMatrix(u32 first, u32 index, const f32 (*pMtx)[4]);
