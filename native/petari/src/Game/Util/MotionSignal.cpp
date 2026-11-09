@@ -11,6 +11,7 @@
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/EmitterManager.hpp"
 #include "Game/Particle/ParticleResource.hpp"
+#include <nebula_module.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
