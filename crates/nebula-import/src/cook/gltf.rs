@@ -1056,6 +1056,12 @@ mod tests {
         assert_eq!(ir.materials.len(), 1);
         assert_eq!(ir.materials[0].name, "material");
         assert_eq!(ir.joints.len(), 1);
+        // Its names read back from the cooked model, as `lumalink list models` reads the game's.
+        let names = super::super::model_write::names(&model).unwrap();
+        assert_eq!(names.joints, ir.joints.iter().map(|j| j.name.clone()).collect::<Vec<_>>());
+        assert_eq!(names.materials, ["material"]);
+        assert_eq!(names.textures, ir.textures.iter().map(|t| t.name.clone()).collect::<Vec<_>>());
+        assert!(super::super::model_write::names(&model[..8]).is_err());
     }
 
     #[test]

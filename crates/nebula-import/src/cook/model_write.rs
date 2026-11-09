@@ -5,7 +5,7 @@ use super::mesh_order;
 use super::model_ir::*;
 use super::pipeline_list;
 use super::programs::{self, Written};
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
@@ -869,6 +869,44 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         b.patch32(i * 4, v);
     }
     Ok(b.0)
+}
+
+/// A cooked model's names, in its order: what a mod's model made like it, or in its place, is matched by.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ModelNames {
+    pub joints: Vec<String>,
+    pub materials: Vec<String>,
+    pub textures: Vec<String>,
+}
+
+/// The names `write` placed in a cooked model: each record's name word is the offset of its text (a byte a character).
+pub fn names(bytes: &[u8]) -> Result<ModelNames> {
+    let word = |at: usize| -> Result<u32> {
+        let four = bytes.get(at..at + 4).context("a model's word past its end")?;
+        Ok(u32::from_le_bytes([four[0], four[1], four[2], four[3]]))
+    };
+    if word(0)? != MAGIC {
+        bail!("not a cooked model");
+    }
+    if word(4)? != VERSION {
+        bail!("a cooked model of version {}, not {VERSION}", word(4)?);
+    }
+    let list = |count: usize, at: usize, stride: usize, name_word: usize| -> Result<Vec<String>> {
+        (0..count)
+            .map(|i| {
+                let text = word(at + i * stride + name_word)? as usize;
+                let rest = bytes.get(text..).context("a name past the model's end")?;
+                let end = rest.iter().position(|&c| c == 0).context("a name with no end")?;
+                Ok(rest[..end].iter().map(|&c| char::from(c)).collect())
+            })
+            .collect()
+    };
+    let header = |i: usize| -> Result<usize> { Ok(word(i * 4)? as usize) };
+    Ok(ModelNames {
+        joints: list(header(4)?, header(15)?, JOINT_BYTES, JOINT_BYTES - 8)?,
+        materials: list(header(12)?, header(24)?, MATERIAL_BYTES, 0)?,
+        textures: list(header(13)?, header(25)?, TEXTURE_BYTES, 0)?,
+    })
 }
 
 pub fn further_stride(s: &MeshStreams) -> u32 {
