@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <memory>
+#include <new>
 #include <unordered_map>
 #include <vector>
 
@@ -49,7 +50,12 @@ ModShadersResult load_mod_shaders(const std::filesystem::path& file) {
     if (size < static_cast<std::streamoff>(kHeaderBytes)) {
         return ModShadersResult::Unreadable;
     }
-    auto words = std::make_unique<std::vector<std::uint64_t>>(static_cast<std::size_t>(size + 7) / 8u);
+    std::unique_ptr<std::vector<std::uint64_t>> words;
+    try {
+        words = std::make_unique<std::vector<std::uint64_t>>(static_cast<std::size_t>(size + 7) / 8u);
+    } catch (const std::bad_alloc&) {
+        return ModShadersResult::Unreadable;  // a file larger than the memory there is
+    }
     in.seekg(0);
     const auto bytes = reinterpret_cast<const unsigned char*>(words->data());
     if (!in.read(reinterpret_cast<char*>(words->data()), size) || std::memcmp(bytes, "NBSHADER", 8) != 0) {
@@ -77,7 +83,9 @@ ModShadersResult load_mod_shaders(const std::filesystem::path& file) {
         std::memcpy(&id, entry, 8);
         std::memcpy(&offset, entry + 16, 8);
         std::memcpy(&length, entry + 24, 8);
-        if (entry[8] >= kProgramStored || entry[9] > 1u || offset > total || length > total - offset || length == 0u) {
+        // A program starts on a word of 8 bytes (the writer pads to it) and is whole 32-bit words: SPIR-V is read as words.
+        if (entry[8] >= kProgramStored || entry[9] > 1u || offset > total || length > total - offset || length == 0u ||
+            (offset & 7u) != 0u || (length & 3u) != 0u) {
             return ModShadersResult::Unreadable;
         }
         found.emplace_back(key_of(id, entry[8], entry[9] != 0u), ProgramBytes{bytes + offset, static_cast<std::size_t>(length)});

@@ -131,6 +131,7 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
             !resolve(module, "slSetTagForFrame", api.set_tag_for_frame) ||
             !resolve(module, "slEvaluateFeature", api.evaluate_feature) ||
             !resolve(module, "slFreeResources", api.free_resources)) {
+            FreeLibrary(module);  // nothing was initialised: the interposer is not kept loaded
             return false;
         }
         sl::Preferences preferences{};

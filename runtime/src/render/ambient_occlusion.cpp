@@ -118,11 +118,9 @@ void AmbientOcclusion::shutdown() noexcept {
     device_ = nullptr;
 }
 
-// The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays), no depth. `view`: the
-// shader's output replaces the colour (GALAXY_AO_VIEW).
-ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr, bool view) {
-    const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) +
-                           (hdr ? 4u : 0u) + (view ? 8u : 0u);
+// The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays), no depth.
+ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr) {
+    const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) + (hdr ? 4u : 0u);
     if (apply_[index]) {
         return apply_[index].Get();
     }
@@ -131,7 +129,7 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     pd.VS = code(g_ao_apply_vs, sizeof(g_ao_apply_vs));
     pd.PS = code(g_ao_apply_ps, sizeof(g_ao_apply_ps));
     D3D12_RENDER_TARGET_BLEND_DESC& blend = pd.BlendState.RenderTarget[0];
-    blend.BlendEnable = false ? FALSE : TRUE;
+    blend.BlendEnable = TRUE;
     blend.SrcBlend = D3D12_BLEND_ZERO;
     blend.DestBlend = D3D12_BLEND_SRC_COLOR;
     blend.BlendOp = D3D12_BLEND_OP_ADD;
@@ -220,7 +218,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     if (!ready_ || in.depth == nullptr || in.width == 0u || in.height == 0u) {
         return false;
     }
-    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr, false);
+    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr);
     const unsigned divisor = ao::occlusion_divisor(in.height);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;

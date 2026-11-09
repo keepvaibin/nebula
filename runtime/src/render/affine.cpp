@@ -272,6 +272,11 @@ Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept {
         q[i] = m.qa[i] * wa + m.qb[i] * wb;
         norm += q[i] * q[i];
     }
+    if (!(norm > 1e-12f)) {
+        // The weights cancelled (a t far outside 0..1): the first rotation stands.
+        for (unsigned i = 0; i < 4u; ++i) q[i] = m.qa[i];
+        norm = 1.0f;
+    }
     norm = 1.0f / std::sqrt(norm);
     for (float& v : q) v *= norm;
     const float x = q[0], y = q[1], z = q[2], w = q[3];

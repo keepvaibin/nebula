@@ -281,7 +281,7 @@ public:
     [[nodiscard]] const float* slot_rows(std::uint32_t id) const noexcept { return id < slot_rows_.size() ? slot_rows_[id] : nullptr; }
     [[nodiscard]] const std::byte* mesh_cpu(const GpuMesh& mesh, gpu::Address address) const noexcept {
         const Arena& arena = arenas_[mesh.arena];
-        return arena.shadow.get() + (address - arena.memory.gpu);
+        return arena.shadow ? arena.shadow.get() + (address - arena.memory.gpu) : nullptr;
     }
 #endif
 

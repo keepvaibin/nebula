@@ -331,7 +331,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         uavs.ptr += 3u * static_cast<UINT64>(increment);
         list->SetPipelineState(pipeline);
         list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
-    ring.bind(list);
+        ring.bind(list);
         list->SetComputeRootDescriptorTable(1, gpu);
         list->SetComputeRootDescriptorTable(2, uavs);
         list->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
