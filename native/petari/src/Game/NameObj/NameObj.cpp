@@ -6,6 +6,9 @@
 NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mExecutorIdx(-1) {
     mMotionEpoch = 0;
     mDrawSlot = 0;
+    mListPlace[0] = -1;
+    mListPlace[1] = -1;
+    mListPlace[2] = -1;
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
 

@@ -52,11 +52,11 @@ namespace {
 };  // namespace
 
 void SceneNameObjListExecutor::initMovementList() {
-    mMovementList = new NameObjCategoryList(::cMovementTypeNum, &NameObj::executeMovement);
+    mMovementList = new NameObjCategoryList(::cMovementTypeNum, &NameObj::executeMovement, 0);
 }
 
 void SceneNameObjListExecutor::initCalcAnimList() {
-    mCalcAnimList = new NameObjCategoryList(::cCalcAnimTypeNum, &NameObj::calcAnim);
+    mCalcAnimList = new NameObjCategoryList(::cCalcAnimTypeNum, &NameObj::calcAnim, 1);
 }
 
 void SceneNameObjListExecutor::initCalcViewAndEntryList() {
@@ -65,5 +65,5 @@ void SceneNameObjListExecutor::initCalcViewAndEntryList() {
 }
 
 void SceneNameObjListExecutor::initDrawList() {
-    mDrawList = new NameObjCategoryList(::cDrawTypeNum, &NameObj::draw);
+    mDrawList = new NameObjCategoryList(::cDrawTypeNum, &NameObj::draw, 2);
 }
