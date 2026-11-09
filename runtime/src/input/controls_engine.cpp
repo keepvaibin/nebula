@@ -34,7 +34,7 @@ const NativeInputReplayLog* active_native_input_replay_log() {
     return nullptr;
 }
 
-const NativeInputReplaySample* native_input_replay_sample_for_vi(std::uint64_t) {
+const NativeInputReplaySample* native_input_replay_sample_for_frame(std::uint64_t) {
     return nullptr;
 }
 

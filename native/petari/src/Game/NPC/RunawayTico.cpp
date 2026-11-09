@@ -1,4 +1,5 @@
 #include "Game/NPC/RunawayTico.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"

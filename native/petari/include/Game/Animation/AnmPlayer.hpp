@@ -27,6 +27,8 @@ public:
     Clip* mAnmRes;
     const ResTable* mResTable;
     FrameCtrl mFrameCtrl;
+    // The running clip's name in mResTable, found once by start().
+    const char* mAnmName;
 };
 
 class MaterialAnmPlayerBase : public AnmPlayerBase {

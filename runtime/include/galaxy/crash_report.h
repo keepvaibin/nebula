@@ -30,9 +30,9 @@ private:
 // The calling thread's activity, its file copied (UTF-8) into `file`. For the crash handler on the failing thread.
 Activity current_activity(char* file, std::size_t size) noexcept;
 
-// The disc reader: the game read `disc_path` from mod `mod`. Kept with the time; one thread calls it.
-void note_mod_read(std::string_view mod, std::string_view disc_path) noexcept;
-// The last such read as "<mod>: <disc path>" in `out` and seconds since it; false when there was none.
+// The game-file reader: the game read `game_path` from mod `mod`. Kept with the time; one thread calls it.
+void note_mod_read(std::string_view mod, std::string_view game_path) noexcept;
+// The last such read as "<mod>: <game path>" in `out` and seconds since it; false when there was none.
 bool last_mod_read(char* out, std::size_t size, double* seconds_ago) noexcept;
 
 // The mods this session started with, one line each ("name (game files, code)"); `change_game`: at least one
@@ -44,7 +44,7 @@ bool session_mods_change_game() noexcept;
 struct Facts {
     enum class Kind : std::uint8_t {
         Fault,      // an access violation or other hardware exception
-        GameFatal,  // the game's own fatal stop (OSPanic, a failed assertion)
+        GameFatal,  // the game's own fatal stop (NEBULA_PANIC, a failed assertion)
         Exception,  // an uncaught C++ exception
         Abort,      // abort()
         Startup,    // Nebula could not start or stopped itself (die())
@@ -55,7 +55,7 @@ struct Facts {
     std::string_view text;        // the fatal text, the exception's what(), the die() message, the fault's location
     Activity activity = Activity::None;
     std::string_view activity_file;
-    std::string_view last_mod_read;  // "<mod>: <disc path>"
+    std::string_view last_mod_read;  // "<mod>: <game path>"
     double last_mod_seconds = -1.0;  // since that read; below 0: none
     bool mods_change_game = false;
 };

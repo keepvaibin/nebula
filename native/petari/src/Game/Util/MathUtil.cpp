@@ -1293,18 +1293,6 @@ namespace MR {
         }
     }
 
-    f32 diffAngleSigned(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis) {
-        f32 angleDiff = diffAngleAbs(rA, rB);
-
-        Vec3f v = rA.cross(rAxis);
-
-        if (v.dot(rB) >= 0.0f) {
-            return angleDiff;
-        } else {
-            return -angleDiff;
-        }
-    }
-
     f32 diffAngleAbsHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis) {
         Vec3f horizonA, horizonB;
 

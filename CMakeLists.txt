@@ -132,10 +132,6 @@ add_library(galaxy_runtime_settings STATIC
 target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file galaxy_run_options)
 galaxy_host_options(galaxy_runtime_settings)
 
-add_library(galaxy_frame_cadence_diagnostics STATIC runtime/src/frame_cadence_diagnostics.cpp)
-target_link_libraries(galaxy_frame_cadence_diagnostics PUBLIC galaxy_runtime_abi)
-galaxy_host_options(galaxy_frame_cadence_diagnostics)
-
 add_library(galaxy_host_pointer_events STATIC runtime/src/host_pointer_events.cpp)
 target_link_libraries(galaxy_host_pointer_events PUBLIC galaxy_runtime_abi)
 galaxy_host_options(galaxy_host_pointer_events)
@@ -200,7 +196,6 @@ target_link_libraries(galaxy_native_host
         galaxy_runtime_settings
         galaxy_native_input
         galaxy_audio_mixer
-        galaxy_frame_cadence_diagnostics
         galaxy_atomic_file
         nebula_archive
         shell32
@@ -455,7 +450,6 @@ target_link_libraries(galaxy_render PRIVATE mfplat mfreadwrite mfuuid d3d11)
 target_link_libraries(galaxy_render
     PUBLIC
         galaxy_native_host
-        galaxy_frame_cadence_diagnostics
         galaxy_runtime_abi
         galaxy_runtime_settings
         galaxy_host_pointer_events
@@ -491,6 +485,8 @@ target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HO
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
 target_link_libraries(NebulaNative PRIVATE galaxy_render galaxy_save_files galaxy_disc_files dwmapi)
 if(MSVC)
+    # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
+    target_sources(NebulaNative PRIVATE native/host/nebula_host.manifest)
     # Symbols for crash dumps and the thread profiler; code generation is unchanged.
     target_compile_options(NebulaNative PRIVATE /Zi)
     target_link_options(NebulaNative PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNative.pdb)
@@ -503,7 +499,7 @@ if(NEBULA_HOST_IPO)
     check_ipo_supported(RESULT nebula_host_ipo_supported OUTPUT nebula_host_ipo_error LANGUAGES CXX)
     if(nebula_host_ipo_supported)
         foreach(target galaxy_native_host galaxy_render galaxy_native_input galaxy_host_pointer_events
-                galaxy_frame_cadence_diagnostics galaxy_runtime_settings galaxy_atomic_file galaxy_audio_mixer)
+                galaxy_runtime_settings galaxy_atomic_file galaxy_audio_mixer)
             set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         endforeach()
         if(TARGET nebula_minhook)
@@ -610,14 +606,14 @@ galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.c
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback frame_pass post_process
-        render_core_host)
+        render_core_host game_lights)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 
 if(MSVC)
-    foreach(target galaxy_render galaxy_runtime_settings galaxy_atomic_file galaxy_frame_cadence_diagnostics
+    foreach(target galaxy_render galaxy_runtime_settings galaxy_atomic_file
             galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_audio_mixer)
         target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
     endforeach()
@@ -735,7 +731,6 @@ runtime/src/render/host_window_win32.cpp
         PUBLIC
             nebula_vulkan_deps
             galaxy_native_host
-            galaxy_frame_cadence_diagnostics
             galaxy_runtime_abi
             galaxy_runtime_settings
             galaxy_host_pointer_events)
@@ -753,8 +748,12 @@ runtime/src/render/host_window_win32.cpp
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(NebulaNativeVk PRIVATE dwmapi galaxy_render_vk galaxy_save_files galaxy_disc_files)
     if(MSVC)
+        target_sources(NebulaNativeVk PRIVATE native/host/nebula_host.manifest)
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
 
+    # The Vulkan pipeline cache file name (device_quirks_vk.cpp driver_key).
+    galaxy_test(galaxy_vk_driver_key_tests SOURCES runtime/src/render/vk/driver_key_tests.cpp
+        runtime/src/render/vk/device_quirks_vk.cpp LIBS nebula_vulkan_deps galaxy_run_options)
 endif()

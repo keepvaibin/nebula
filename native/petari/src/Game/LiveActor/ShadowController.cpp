@@ -26,10 +26,6 @@ ShadowController::ShadowController(LiveActor* pActor, const char* pName)
     MR::addShadowController(this);
 }
 
-template MR::Vector< MR::AssignableArray< ShadowController* > >::Vector();
-template MR::Vector< MR::AssignableArray< ShadowController* > >::~Vector();
-template void MR::Vector< MR::AssignableArray< ShadowController* > >::push_back(ShadowController* const&);
-
 void ShadowControllerHolder::movement() {
     updateController();
 }
@@ -423,8 +419,6 @@ namespace MR {
         }
     }
 };  // namespace MR
-
-template MR::AssignableArray< ShadowController* >::~AssignableArray();
 
 ShadowControllerHolder::~ShadowControllerHolder() {
 }

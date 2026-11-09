@@ -1,4 +1,5 @@
 #include <nebula_game_api.h>
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Boss/SkeletalFishBaby.hpp"
 #include "Game/Boss/SkeletalFishJointCalc.hpp"
 #include "Game/Boss/SkeletalFishRailControl.hpp"

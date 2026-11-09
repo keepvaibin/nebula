@@ -5,6 +5,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static Vec3f sInkShotOffset(0.0f, 20.0f, 0.0f);
@@ -514,7 +515,7 @@ void TakoHei::exeWait() {
         MR::startBtp(this, "Open");
     }
 
-    if (getNerveStep() % 60 == 59) {
+    if (getNerveStep() % NebulaFrameClock::stepsOfSeconds(1) == NebulaFrameClock::stepsOfSeconds(1) - 1) {
         MR::startBtp(this, "Blink");
     }
 
@@ -537,7 +538,7 @@ void TakoHei::exeWalk() {
         MR::startBtp(this, "Open");
     }
 
-    if (getNerveStep() % 60 == 59) {
+    if (getNerveStep() % NebulaFrameClock::stepsOfSeconds(1) == NebulaFrameClock::stepsOfSeconds(1) - 1) {
         MR::startBtp(this, "Blink");
     }
 

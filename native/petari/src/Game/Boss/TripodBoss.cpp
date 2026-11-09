@@ -655,6 +655,7 @@ void TripodBoss::exePainDemo() {
         MR::startLevelSound(this, "SE_BM_LV_TRIPOD_BREAK_LIGHT");
         calcDemoMovement();
 
+        // The blend takes 30 steps (the demo's authored length), not half a second at any rate.
         mDemoBlendRate += 1.0f / 30.0f;
 
         if (mDemoBlendRate > 1.0f) {

@@ -35,11 +35,6 @@ public:
     s32 mIndex;
 };
 
-class MessageNode {
-public:
-    const char* mMessage;
-};
-
 class TalkNodeCtrl {
 public:
     TalkNodeCtrl();

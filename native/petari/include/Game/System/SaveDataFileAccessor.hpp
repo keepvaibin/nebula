@@ -24,18 +24,12 @@ public:
 
     SaveDataFileAccessor(u8*);
 
-    u32 getCheckSum() const { return MR::loadSaveU32(mFile + 0x0); }
-    void setCheckSum(u32 value) { MR::storeSaveU32(mFile + 0x0, value); }
     u32 getVersion() const { return MR::loadSaveU32(mFile + 0x4); }
-    void setVersion(u32 value) { MR::storeSaveU32(mFile + 0x4, value); }
     u32 getUserFileInfoNum() const { return MR::loadSaveU32(mFile + 0x8); }
-    void setUserFileInfoNum(u32 value) { MR::storeSaveU32(mFile + 0x8, value); }
     u32 getFileSize() const { return MR::loadSaveU32(mFile + 0xC); }
-    void setFileSize(u32 value) { MR::storeSaveU32(mFile + 0xC, value); }
     // The entry's name: cNameSize bytes, NUL-padded.
     char* getFileName(int index) const { return reinterpret_cast< char* >(mFile + cHeaderSize + index * cInfoSize); }
     u32 getFileOffset(int index) const { return MR::loadSaveU32(mFile + cHeaderSize + index * cInfoSize + cNameSize); }
-    void setFileOffset(int index, u32 value) { MR::storeSaveU32(mFile + cHeaderSize + index * cInfoSize + cNameSize, value); }
     void makeUserFileInfo(SaveDataUserFileInfo*, const char*);
 
 private:

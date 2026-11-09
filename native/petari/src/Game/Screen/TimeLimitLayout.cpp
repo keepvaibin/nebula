@@ -4,11 +4,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static const Timing sTimingTable[] = {
-        {18000, 100, true, true, true}, {10800, 100, true, true, true},  {3600, 100, true, true, true},
-        {1800, 100, true, true, false}, {600, 600, false, false, false},
+        {NebulaFrameClock::stepsOfSeconds(300), 100, true, true, true}, {NebulaFrameClock::stepsOfSeconds(180), 100, true, true, true},  {NebulaFrameClock::stepsOfSeconds(60), 100, true, true, true},
+        {NebulaFrameClock::stepsOfSeconds(30), 100, true, true, false}, {NebulaFrameClock::stepsOfSeconds(10), NebulaFrameClock::stepsOfSeconds(10), false, false, false},
     };
     static const s32 sScaleUpDownFrame = 8;
     static const f32 sScaleMaxAdd = 0.5f;
@@ -238,21 +239,21 @@ bool TimeLimitLayout::updateNormal() {
 
     u32 timeLeft = mTimeLimit - mTime;
 
-    if (timeLeft <= 120) {
-        if (timeLeft % 60 == 0 && timeLeft != 0) {
+    if (timeLeft <= NebulaFrameClock::stepsOfSeconds(2)) {
+        if (timeLeft % NebulaFrameClock::stepsOfSeconds(1) == 0 && timeLeft != 0) {
             MR::startSystemSE("SE_SY_E3_TIMER_COUNT_4");
         }
-    } else if (timeLeft <= 360) {
-        if (timeLeft % 60 == 0) {
+    } else if (timeLeft <= NebulaFrameClock::stepsOfSeconds(6)) {
+        if (timeLeft % NebulaFrameClock::stepsOfSeconds(1) == 0) {
             MR::startSystemSE("SE_SY_E3_TIMER_COUNT_2");
         }
-    } else if (timeLeft <= 600) {
-        if (timeLeft % 60 == 0) {
+    } else if (timeLeft <= NebulaFrameClock::stepsOfSeconds(10)) {
+        if (timeLeft % NebulaFrameClock::stepsOfSeconds(1) == 0) {
             MR::startSystemSE("SE_SY_E3_TIMER_COUNT_1");
         }
     }
 
-    if (mTimeLimit - mTime == 600) {
+    if (mTimeLimit - mTime == NebulaFrameClock::stepsOfSeconds(10)) {
         MR::startAnim(this, "TimeLimit", 0);
     }
 

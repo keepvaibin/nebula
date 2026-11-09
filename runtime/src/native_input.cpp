@@ -31,16 +31,16 @@ bool parse_native_input_script_u64(
     return true;
 }
 
-bool resolve_native_input_script_start_vi(
-    std::uint64_t anchor_vi,
+bool resolve_native_input_script_start_frame(
+    std::uint64_t anchor_frame,
     std::string_view offset_text,
-    std::uint64_t& start_vi) noexcept {
+    std::uint64_t& start_frame) noexcept {
     std::uint64_t offset = 0u;
     if (!parse_native_input_script_u64(offset_text, offset) ||
-        offset > std::numeric_limits<std::uint64_t>::max() - anchor_vi) {
+        offset > std::numeric_limits<std::uint64_t>::max() - anchor_frame) {
         return false;
     }
-    start_vi = anchor_vi + offset;
+    start_frame = anchor_frame + offset;
     return true;
 }
 

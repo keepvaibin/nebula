@@ -32,8 +32,6 @@ public:
     // This folder's index-th entry, a file's bytes; null past the end.
     void* getResource(u32 index) const;
     u32 getResSize(const void* pData) const;
-    // The files below this folder, at any depth.
-    u32 countResource() const;
     // The folder at "/a/b" below this one: its entries, none when there is no such folder.
     u32 countFile(const char* pDirectory) const;
     s32 findFolder(const char* pDirectory) const;

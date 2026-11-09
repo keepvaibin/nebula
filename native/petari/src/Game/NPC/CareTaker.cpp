@@ -269,16 +269,16 @@ void Caretaker::updateCounterSE() {
 
     if (restTime == 0) {
         MR::startSystemSE("SE_SY_E3_TIMER_TIME_UP");
-    } else if (restTime <= 120) {
-        if (restTime % 60 == 0) {
+    } else if (restTime <= NebulaFrameClock::stepsOfSeconds(2)) {
+        if (restTime % NebulaFrameClock::stepsOfSeconds(1) == 0) {
             MR::startSystemSE("SE_SY_E3_TIMER_COUNT_4");
         }
-    } else if (restTime <= 360) {
-        if (restTime % 60 == 0) {
+    } else if (restTime <= NebulaFrameClock::stepsOfSeconds(6)) {
+        if (restTime % NebulaFrameClock::stepsOfSeconds(1) == 0) {
             MR::startSystemSE("SE_SY_E3_TIMER_COUNT_2");
         }
     } else if (restTime <= mBombTimerLayout->mDangerTransFrame) {
-        if (restTime % 60 == 0) {
+        if (restTime % NebulaFrameClock::stepsOfSeconds(1) == 0) {
             MR::startSystemSE("SE_SY_E3_TIMER_COUNT_1");
         }
     }
@@ -395,7 +395,7 @@ void Caretaker::exePreWait() {
 }
 
 void Caretaker::exeCountDown() {
-    if (getNerveStep() % 60 == 0) {
+    if (getNerveStep() % NebulaFrameClock::stepsOfSeconds(1) == 0) {
         MR::startSystemSE("SE_SY_RACE_COUNT_DOWN");
     }
 

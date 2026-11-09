@@ -53,14 +53,14 @@ inline constexpr float kReplayKeyboardPointerSpeed = 1.6f;
 struct ScriptServices {
     std::int64_t (*clock_ticks)() noexcept = nullptr;
 };
-NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_vi, const ScriptServices& services);
+NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_frame, const ScriptServices& services);
 NativeInputReplayLog load_native_input_replay_log(const std::string& path);
 const NativeInputReplayLog* active_native_input_replay_log();
-const NativeInputReplaySample* native_input_replay_sample_for_vi(std::uint64_t current_vi);
+const NativeInputReplaySample* native_input_replay_sample_for_frame(std::uint64_t current_frame);
 void apply_tilt_accel(galaxy::input::PlayerInput& input, galaxy::input::tilt::Tilt& state,
                       galaxy::input::tilt::Section section, const galaxy::input::tilt::Vec3* controller_up,
                       float stick_x, float stick_y, bool recenter);
-galaxy::input::PlayerInput build_replayed_input(std::uint64_t current_vi, const NativeInputReplaySample& replay,
+galaxy::input::PlayerInput build_replayed_input(std::uint64_t current_frame, const NativeInputReplaySample& replay,
     const NativeInputScriptOverlay& script, galaxy::RuntimeInputMode input_mode,
     galaxy::input::tilt::Section tilt_section, const galaxy::input::NativeMousePointerProjection& replay_pointer,
     const void* log_identity);

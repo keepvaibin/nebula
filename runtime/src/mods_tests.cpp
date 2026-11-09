@@ -63,6 +63,15 @@ bool xml() {
     }
     ok &= expect(!galaxy::mods::parse_xml("<a><b></a>", &error) && error.find("line 1") != std::string::npos,
                  "a mismatched tag is refused, its line said");
+    // A numeric reference that is no character (zero, past U+10FFFF, half a surrogate pair) gives U+FFFD, valid UTF-8;
+    // one that is a character is itself.
+    const auto refs = galaxy::mods::parse_xml("<a k=\"&#0;|&#x110000;|&#xFFFFFFFF;|&#xD800;|&#x10FFFF;|&#x20AC;\"/>", &error);
+    ok &= expect(refs.has_value(), "a document with character references");
+    if (refs) {
+        ok &= expect(refs->attribute("k") ==
+                         "\xEF\xBF\xBD|\xEF\xBF\xBD|\xEF\xBF\xBD|\xEF\xBF\xBD|\xF4\x8F\xBF\xBF|\xE2\x82\xAC",
+                     "character references: invalid ones give U+FFFD");
+    }
     return ok;
 }
 

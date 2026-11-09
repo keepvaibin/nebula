@@ -134,7 +134,9 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
     std::vector<Stage> built;
     std::atomic<std::size_t> next{0u};
     std::atomic<unsigned> done{0u};
-    const unsigned threads = std::clamp(std::thread::hardware_concurrency(), 1u, 4u);
+    // Every core but the one this call runs on, and no more than there are shaders to build.
+    const unsigned hardware = std::thread::hardware_concurrency();
+    const unsigned threads = std::max(1u, std::min(hardware > 1u ? hardware - 1u : 1u, static_cast<unsigned>(jobs.size())));
     std::vector<std::thread> pool;
     for (unsigned t = 0u; t < threads; ++t) {
         pool.emplace_back([&]() {

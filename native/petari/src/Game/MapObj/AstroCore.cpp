@@ -1,4 +1,5 @@
 #include "Game/MapObj/AstroCore.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"

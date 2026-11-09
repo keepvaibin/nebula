@@ -16,9 +16,6 @@ namespace {
     const s32 sLaunchFixTime = 10;
     const s32 sSetUpTime = 45;
     const f32 sLaunchValidHeight = 160.0f;
-
-    static Vec3f sTestBindSpherePos(0, 0, 0);
-    static Vec3f sTestBindSphereVelocity(0, 0, 0);
 };  // namespace
 
 namespace NrvJumpHole {

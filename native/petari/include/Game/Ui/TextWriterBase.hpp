@@ -44,10 +44,6 @@ namespace Ui {
         TextWriterBase();
         ~TextWriterBase();
 
-        f32 GetWidthLimit() const {
-            return mWidthLimit;
-        }
-
         void SetWidthLimit(f32 limit) {
             mWidthLimit = limit;
         }
@@ -72,10 +68,6 @@ namespace Ui {
             return mTabWidth;
         }
 
-        void SetTabWidth(int width) {
-            mTabWidth = width;
-        }
-
         u32 GetDrawFlag() const {
             return mDrawFlag;
         }
@@ -85,10 +77,6 @@ namespace Ui {
         }
 
         f32 GetLineHeight() const;
-
-        TagProcessor& GetTagProcessor() const {
-            return *mTagProcessor;
-        }
 
         void SetTagProcessor(TagProcessor* tagProcessor) {
 

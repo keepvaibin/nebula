@@ -34,8 +34,6 @@ namespace MR {
     // At most num - 1 characters, always terminated.
     void copyString(char* pDst, const char* pSrc, u32 num);
     void copyString(char16_t* pDst, const char16_t* pSrc, u32 num);
-    // The first num characters, cut to fit dstSize with the terminator.
-    void extractString(char* pDst, const char* pSrc, u32 num, u32 dstSize);
     // num counts the terminator; returns the characters written without it.
     int convertUTF16ToASCII(char* pDst, const char16_t* pSrc, s32 num);
 

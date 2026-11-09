@@ -1,6 +1,7 @@
 // Environment variables the host reads (host_env.h).
 #include "galaxy/host_env.h"
 #include "galaxy/run_options.h"
+#include "galaxy/windows_paths.h"
 
 #include "galaxy/windows_api.h"
 #include <Shlobj.h>
@@ -21,12 +22,11 @@ std::atomic<bool> g_env_flag_cache_enabled{false};
 }  // namespace
 
 std::optional<std::filesystem::path> get_env_path(const wchar_t* name) {
-    wchar_t buffer[MAX_PATH]{};
-    const DWORD length = GetEnvironmentVariableW(name, buffer, MAX_PATH);
-    if (length == 0 || length >= MAX_PATH) {
+    const std::wstring value = windows::environment_text(name);
+    if (value.empty()) {
         return std::nullopt;
     }
-    return std::filesystem::path(buffer);
+    return std::filesystem::path(value);
 }
 
 bool read_env_flag_uncached(const char* name, bool default_value) {

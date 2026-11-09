@@ -126,7 +126,7 @@ void PauseMenu::appear() {
     MR::setTextBoxNumberRecursive(this, "ShaPieceNum", starPieceNum);
     MR::setTextBoxGameMessageRecursive(this, "ShaMario", "PlayerLeft");
 
-    char16_t starPieceMessage[3];
+    char16_t starPieceMessage[3];  // two picture font codes and the terminator
 
     starPieceMessage[0] = MR::isStageAstroLocation() ? 0x57 : 0x3B;
     starPieceMessage[1] = 0x40;

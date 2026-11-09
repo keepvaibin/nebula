@@ -42,7 +42,7 @@ public:
     // MovementFlag bits.
     u16 mMovementFlag;
     // The index into the NameObjExecuteInfo array.
-    s16 mExecutorIdx;
+    s32 mExecutorIdx;
     // Names its draws from frame to frame.
     mutable u32 mDrawSlot;
     // Counts the object's lives (MotionSignal).

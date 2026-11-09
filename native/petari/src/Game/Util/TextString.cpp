@@ -21,7 +21,7 @@ namespace {
     }
 
     void putNumber(Writer& rOut, unsigned int value, bool minus, unsigned int base, bool upper, bool zero, bool left, int width) {
-        char digits[16];
+        char digits[16];  // a u32 in base 10 or 16 (the formats %d %u %x): at most 10 digits
         int count = 0;
         do {
             const unsigned int digit = value % base;

@@ -1,4 +1,4 @@
-"""gaps.py run.log: game frames over 25 ms from the [latency] lines (GALAXY_TRACE_VI_TIMES), each with the last scene state seen."""
+"""gaps.py run.log: game frames over 25 ms from the [latency] lines (GALAXY_TRACE_FRAME_TIMES), each with the last scene state seen."""
 import re
 import sys
 
@@ -11,7 +11,7 @@ for s in open(sys.argv[1], errors="replace"):
     m = re.search(r"scene: (\[.*\])|tour: (\d+/\d+ \S+ \d+)", s)
     if m:
         state = m.group(1) or m.group(2)
-    m = re.search(r"\[latency\] retrace vi=(\d+) qpc=(\d+)", s)
+    m = re.search(r"\[latency\] frame=(\d+) qpc=(\d+)", s)
     if m:
         t = int(m.group(2)) / QPC
         frames += 1

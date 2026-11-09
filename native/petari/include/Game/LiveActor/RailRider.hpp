@@ -39,14 +39,6 @@ public:
     s32 getNextPointNo() const;
     void syncPosDir();
 
-    inline Vec3f getStartPos() {
-        return mStartPos;
-    }
-
-    inline Vec3f getEndPos() {
-        return mEndPos;
-    }
-
     BezierRail* mBezierRail;
     f32 mCoord;
     f32 mSpeed;

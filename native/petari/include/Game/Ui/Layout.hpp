@@ -88,8 +88,6 @@ namespace Ui {
         // Plain memory from the arena (16-byte aligned), freed with it.
         void* ArenaAlloc(u32 size);
 
-        GroupContainer* GetGroupContainer() const { return mpGroupContainer; }
-
         // The tree as it is now, depth first from the root: mPanes[i] is the i-th pane, mParent[i] its
         // parent's place (cNoParent at the root), mEnd[i] one past its branch (the next sibling of j is at
         // mEnd[j]). Built from the child links whenever an edit or rename moved the structure version.
@@ -132,12 +130,6 @@ namespace Ui {
 
         template < typename T, typename Param1, typename Param2 >
         static T* NewObj(Param1 param1, Param2 param2);
-
-        template < typename T >
-        static T* NewArray(u32 num);
-
-        template < typename T >
-        static void DeleteObj(T*);
 
         template < typename T >
         static void DeleteArray(T objAry[], u32 num);
@@ -203,14 +195,6 @@ namespace Ui {
     };
 
     template < typename T >
-    inline void Layout::DeleteObj(T* pObj) {
-        if (pObj) {
-            pObj->~T();
-            FreeMemory(pObj);
-        }
-    }
-
-    template < typename T >
     inline T* Layout::NewObj() {
         if (void* pMem = Layout::AllocMemory(sizeof(T))) {
             return new (pMem) T();
@@ -233,18 +217,6 @@ namespace Ui {
             return new (pMem) T(param1, param2);
         }
         return 0;
-    }
-
-    template < typename T >
-    T* Layout::NewArray(u32 num) {
-        void* pMem = AllocMemory(sizeof(T) * num);
-        T* const objAry = static_cast< T* >(pMem);
-
-        for (u32 i = 0; i < num; ++i) {
-            new (&objAry[i]) T();
-        }
-
-        return objAry;
     }
 
     template < typename T >

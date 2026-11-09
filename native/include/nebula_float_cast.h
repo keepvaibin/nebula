@@ -12,13 +12,6 @@ static inline uint8_t nebula_f32_to_u8(float value) {
     return value > 0.0f ? (uint8_t)value : (uint8_t)0;
 }
 
-static inline uint16_t nebula_f32_to_u16(float value) {
-    if (value != value || value >= 65535.0f) {
-        return 65535;
-    }
-    return value > 0.0f ? (uint16_t)value : (uint16_t)0;
-}
-
 static inline int16_t nebula_f32_to_s16(float value) {
     if (value != value || value >= 32767.0f) {
         return 32767;

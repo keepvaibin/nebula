@@ -73,7 +73,7 @@ public:
     bool mIsUpdateTransHolder;
     bool mIsAllowP1StarPieceShot;
     bool mIsAllowP2StarPieceShot;
-    bool mIsOSPointerMode;
+    bool mIsSystemPointerMode;
     StarPointerController* mControllers;
     StarPointerLayout* mStarPointerLayouts;
     StarPointerTransformHolder* mTransHolder;
@@ -88,8 +88,6 @@ namespace StarPointerFunction {
     bool forceInsideScreenEdge(Vec2f*);
     StarPointerDirector* getStarPointerDirector();
     s32 getNumStarPointer();
-    s32 getPastPointNum(s32);
-    const Vec2f& getPastPosition(s32, s32);
     const Vec2f& getNextPastPosition(s32, s32);
     s32 getNextPastPointNum(s32);
     bool canShoot(s32);

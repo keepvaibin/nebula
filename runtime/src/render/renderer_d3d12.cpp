@@ -1708,10 +1708,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                                        std::memory_order_relaxed);
         (void)adapter.As(&adapter3_);
         {
-            char narrow[128]{};
-            WideCharToMultiByte(
-                CP_UTF8, 0, adapter_desc.Description, -1, narrow,
-                static_cast<int>(sizeof(narrow) - 1), nullptr, nullptr);
+            const std::string narrow = narrow_utf8(adapter_desc.Description);
             const bool is_software =
                 (adapter_desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0;
             std::cout << "[gpu] adapter=\"" << narrow << "\""
@@ -1726,8 +1723,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                       << " vendor=0x" << std::hex << adapter_desc.VendorId
                       << " device=0x" << adapter_desc.DeviceId << std::dec
                       << '\n';
-            char gpu[256]{};
-            std::snprintf(gpu, sizeof(gpu), "\"%s\" vram-mb=%llu vendor=0x%04X device=0x%04X", narrow,
+            char gpu[640]{};
+            std::snprintf(gpu, sizeof(gpu), "\"%s\" vram-mb=%llu vendor=0x%04X device=0x%04X", narrow.c_str(),
                           static_cast<unsigned long long>(adapter_desc.DedicatedVideoMemory / (1024 * 1024)),
                           static_cast<unsigned>(adapter_desc.VendorId), static_cast<unsigned>(adapter_desc.DeviceId));
             galaxy::crash_notes::set(galaxy::crash_notes::Fixed::Gpu, gpu);

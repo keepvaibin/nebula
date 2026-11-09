@@ -276,13 +276,6 @@ namespace MR {
         return (toPlayer.dot(sideVec) >= 0.0f);
     }
 
-    bool isLeftSideFromPlayer(const LiveActor* pActor) {
-        Vec3f playerSide;
-        getPlayerSideVec(&playerSide);
-        Vec3f fromPlayer = pActor->mPosition - *MR::getPlayerPos();
-        return (playerSide.dot(fromPlayer) >= 0.0f);
-    }
-
     bool isInSightConePlayer(const LiveActor* pActor, const Vec3f& rFront, f32 distance, f32 angle) {
         return isNearPlayerAnyTime(pActor, distance) && isFaceToPlayerDegree(pActor, rFront, angle);
     }

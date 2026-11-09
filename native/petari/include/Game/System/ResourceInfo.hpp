@@ -31,8 +31,6 @@ public:
     ResFileInfo* getFileInfo(u32) const;
     bool isExistRes(const char*) const;
     int getResIndex(const char*) const;
-    const char* findResName(const void*) const;
-    const char* getResName(const void*) const;
 
     ResFileInfo* mFileInfoTable;
     u32 mCount;

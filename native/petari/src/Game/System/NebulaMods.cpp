@@ -384,6 +384,10 @@ namespace {
         if (pGalaxy == nullptr || pGalaxy->size < sizeof(NebulaGalaxy) || pGalaxy->name == nullptr) {
             return -1;
         }
+        // The tables keep both as a byte.
+        if (pGalaxy->stars_to_open < 0 || pGalaxy->stars_to_open > 255 || pGalaxy->dome < 0 || pGalaxy->dome > 255) {
+            return -1;
+        }
         // A galaxy is its scenario file: without one (a mod that ships none, or files that could not be cooked)
         // it would be a name with no stars, scenarios or stage, so it never enters a table.
         MR::FormattedName scenarioFile;
@@ -399,9 +403,9 @@ namespace {
             sMapSpots.add(spot);
             // A layout's pane names are short: this one is only ever looked for by the game.
             if (added.mPane == nullptr) {
-                char paneName[16];
-                nebula_snprintf(paneName, sizeof(paneName), "NebMap%d", sMapSpots.mCount);
-                added.mPane = copyText(paneName);
+                MR::FormattedName paneName;
+                paneName.format("NebMap%d", sMapSpots.mCount);
+                added.mPane = copyText(paneName.c_str());
             }
         }
         for (int i = 0; i < 3; i++) {
@@ -538,7 +542,7 @@ namespace {
         if (dome < 1 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
             return -1;
         }
-        GalaxyCometTimePaper* pPaper = new GalaxyCometTimePaper[count + 1];
+        GalaxyCometTimePaper* pPaper = new GalaxyCometTimePaper[static_cast< size_t >(count) + 1];
         for (s32 i = 0; i < count; i++) {
             pPaper[i].mGalaxyName = copyText(ppGalaxies[i]);
             pPaper[i].mCategory = pCoins[i];

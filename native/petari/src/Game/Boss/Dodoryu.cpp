@@ -1,4 +1,5 @@
 #include "Game/Boss/Dodoryu.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Boss/DodoryuDemo.hpp"
 #include "Game/Boss/DodoryuHill.hpp"
 #include "Game/Boss/DodoryuMove.hpp"

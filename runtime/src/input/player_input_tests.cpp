@@ -33,8 +33,8 @@ void set_env(const char* name, const char* value) {
     _putenv_s(name, value != nullptr ? value : "");
 }
 
-galaxy::input::PlayerInput input_at(std::uint64_t vi, std::uint8_t tilt = 0) {
-    return galaxy::host::native_game_input(vi, -1, tilt);
+galaxy::input::PlayerInput input_at(std::uint64_t frame, std::uint8_t tilt = 0) {
+    return galaxy::host::native_game_input(frame, -1, tilt);
 }
 
 void scripted_input() {

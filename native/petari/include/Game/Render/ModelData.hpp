@@ -144,20 +144,11 @@ public:
     void useTexturesOf(ModelData* pOwner) {
         mTextureOwner = pOwner->mTextureOwner;
     }
-    u32 getDrawMatrixCount() const {
-        return static_cast< u32 >(mFile->draw_matrix_count);
-    }
     u32 getFullWeightCount() const {
         return static_cast< u32 >(mFile->full_weight_count);
     }
-    u32 getEnvelopeCount() const {
-        return static_cast< u32 >(mFile->envelope_count);
-    }
     u8 getScaleMode() const {
         return static_cast< u8 >(mFile->flags & 15);
-    }
-    bool hasBillboard() const {
-        return (mFile->flags & NEBULA_MODEL_HAS_BILLBOARD) != 0;
     }
 
     Joint* getJointAt(u32 index) const {
@@ -198,18 +189,6 @@ public:
     u32 getDrawMtxJoint(u32 index) const {
         return reinterpret_cast< const NebulaModelDrawMatrix* >(at(mFile->draw_matrices_at))[index].index;
     }
-    bool isDrawMtxWeighted(u32 index) const {
-        return reinterpret_cast< const NebulaModelDrawMatrix* >(at(mFile->draw_matrices_at))[index].weighted != 0;
-    }
-    const u32* getImportantMtxIndex() const {
-        return reinterpret_cast< const u32* >(at(mFile->important_at));
-    }
-    const NebulaModelEnvelope* getEnvelope(u32 index) const {
-        return reinterpret_cast< const NebulaModelEnvelope* >(at(mFile->envelopes_at)) + index;
-    }
-    const NebulaModelMix* getMix(u32 index) const {
-        return reinterpret_cast< const NebulaModelMix* >(at(mFile->mixes_at)) + index;
-    }
     const f32 (*getInverseBinds() const)[4] {
         return reinterpret_cast< const f32 (*)[4] >(at(mFile->inverse_binds_at));
     }
@@ -225,9 +204,6 @@ public:
     void show();
     void hide();
 
-    void setBasicMtxCalc(MtxCalc* pCalc) {
-        mBasicMtxCalc = pCalc;
-    }
     MtxCalc* getBasicMtxCalc() const {
         return mBasicMtxCalc;
     }

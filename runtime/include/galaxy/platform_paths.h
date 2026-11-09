@@ -11,6 +11,7 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#include "galaxy/windows_paths.h"
 #include <Shlobj.h>
 #endif
 
@@ -19,11 +20,11 @@ namespace galaxy {
 // Empty when the platform gives no folder.
 [[nodiscard]] inline std::filesystem::path nebula_data_directory() {
 #if defined(_WIN32)
-    wchar_t app_data[MAX_PATH]{};
-    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", app_data, MAX_PATH);
-    if (length != 0u && length < MAX_PATH) {
-        return std::filesystem::path(app_data) / L"Nebula";
+    const std::wstring local = windows::environment_text(L"LOCALAPPDATA");
+    if (!local.empty()) {
+        return std::filesystem::path(local) / L"Nebula";
     }
+    wchar_t app_data[MAX_PATH]{};
     if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, app_data))) {
         return {};
     }
@@ -45,10 +46,8 @@ namespace galaxy {
 // The running executable's folder (where a release keeps its data tables); empty when unknown.
 [[nodiscard]] inline std::filesystem::path program_directory() {
 #if defined(_WIN32)
-    wchar_t exe[MAX_PATH]{};
-    const DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    return length == 0u || length >= MAX_PATH ? std::filesystem::path{}
-                                              : std::filesystem::path(exe, exe + length).parent_path();
+    const std::wstring exe = windows::executable_path();
+    return exe.empty() ? std::filesystem::path{} : std::filesystem::path(exe).parent_path();
 #else
     std::error_code error;
     const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", error);

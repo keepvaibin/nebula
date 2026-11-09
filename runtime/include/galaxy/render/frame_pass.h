@@ -13,6 +13,8 @@
 #include "galaxy/render/pointer_response.h"
 #include "galaxy/render/render_config.h"
 
+#include <nebula_game_api.h>
+
 #include <cmath>
 #include <algorithm>
 #include <cstddef>
@@ -30,7 +32,7 @@ namespace galaxy::render {
 inline constexpr unsigned kFrameUnits = 65536;
 // The picture height effects and arbitrary mip chains were made for: their reach and bias follow the frame's height
 // over it.
-inline constexpr double kAuthoredLines = 456.0;
+inline constexpr double kAuthoredLines = NEBULA_AUTHORED_LINES;
 
 // A target's size in pixels and its pixels per unit.
 struct FrameMap {

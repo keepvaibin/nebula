@@ -223,7 +223,7 @@ namespace {
         f32 mPop;      // a press's pop, 1 at the press and down to 0
     };
 
-    // The HOME Menu (the host's NEBULA_HBM_VIEW): its rows top to bottom, then "are you sure?" about the choice it asks
+    // The HOME Menu (the host's NEBULA_HOME_MENU_VIEW): its rows top to bottom, then "are you sure?" about the choice it asks
     // about (1 leave, 2 reset), answered no or yes as the game's own questions are.
 #if defined(__ANDROID__)
     const char* const cQuitRow = "Quit";  // no desktop to quit to
@@ -1046,7 +1046,7 @@ private:
     bool mClosing;
     s32 mQuestionShown;  // cQuestions' index; -1 none
     bool mHome;          // the HOME Menu, not the settings
-    s32 mHomeView;       // the host's NEBULA_HBM_VIEW as drawn; -1 none
+    s32 mHomeView;       // the host's NEBULA_HOME_MENU_VIEW as drawn; -1 none
     Button* mFocusButton;  // the HOME Menu's selected answer
     s32 mFrame;
     f32 mScroll;

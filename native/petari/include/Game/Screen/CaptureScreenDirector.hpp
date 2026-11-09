@@ -39,8 +39,8 @@ private:
 class CaptureScreenActor : public NameObj {
 public:
     /// @brief Creates a new `CaptureScreenActor`.
-    /// @param drawType TODO.
-    /// @param pCameraName TODO.
+    /// @param drawType The draw order slot the capture is made in.
+    /// @param pCameraName The camera whose picture is captured.
     CaptureScreenActor(u32 drawType, const char* pCameraName);
 
     /// @brief Draws the `CaptureScreenActor` to the screen.

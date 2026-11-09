@@ -32,24 +32,6 @@ public:
     ResFileInfo* createAndRegisterObject(const AssetFolder::Item&);
     void backupInitMaterialData(const ModelData*);
 
-    static int findBckIndex(const ResourceHolder* pResHolder, const char* pName) {
-        return pResHolder->mMotionResTable->getResIndex(pName);
-    }
-    static int findBpkIndex(const ResourceHolder* pResHolder, const char* pName) {
-        return pResHolder->mBpkResTable->getResIndex(pName);
-    }
-    static int findBtkIndex(const ResourceHolder* pResHolder, const char* pName) {
-        return pResHolder->mBtkResTable->getResIndex(pName);
-    }
-    static int findBtpIndex(const ResourceHolder* pResHolder, const char* pName) {
-        return pResHolder->mBtpResTable->getResIndex(pName);
-    }
-    static int findBrkIndex(const ResourceHolder* pResHolder, const char* pName) {
-        return pResHolder->mBrkResTable->getResIndex(pName);
-    }
-    static int findBvaIndex(const ResourceHolder* pResHolder, const char* pName) {
-        return pResHolder->mBvaResTable->getResIndex(pName);
-    }
 
     const ResTable* getBvaResTable() const {
         return mBvaResTable;

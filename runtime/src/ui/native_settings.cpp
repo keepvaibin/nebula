@@ -3215,13 +3215,12 @@ void native_settings_test_frame(std::uint32_t frame) {
     // right, enter, esc, tab, backspace, space; f1 opens and closes the menu).
     static const std::vector<std::pair<unsigned long, std::uintptr_t>> test_keys = [] {
         std::vector<std::pair<unsigned long, std::uintptr_t>> keys;
-        static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
-        std::size_t length = 0u;
-        if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_settings_keys) != 0 || length <= 1u) return keys;
+        const char* const text = ::galaxy::run_options().test_settings_keys;
+        if (text == nullptr || text[0] == '\0') return keys;
         static constexpr std::pair<std::string_view, std::uintptr_t> kNames[] = {
             {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
             {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
-        std::string_view rest(value);
+        std::string_view rest(text);
         while (!rest.empty()) {
             const std::size_t comma = rest.find(',');
             const std::string_view item = rest.substr(0, comma);
@@ -3256,10 +3255,9 @@ void native_settings_present() {
         };
         static const std::vector<TestSize> test_sizes = [] {
             std::vector<TestSize> sizes;
-            char value[512]{};
-            std::size_t length = 0u;
-            if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_window_sizes) != 0 || length <= 1u) return sizes;
-            for (char* item = value; item != nullptr && *item != '\0';) {
+            const char* value = ::galaxy::run_options().test_window_sizes;
+            if (value == nullptr || value[0] == '\0') return sizes;
+            for (const char* item = value; item != nullptr && *item != '\0';) {
                 char* end = nullptr;
                 TestSize size{std::strtoul(item, &end, 10), 0u, 0u};
                 if (end != nullptr && *end == ':') size.width = std::strtoul(end + 1, &end, 10);

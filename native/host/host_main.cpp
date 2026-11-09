@@ -9,6 +9,7 @@
 //   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N]
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#include "galaxy/windows_paths.h"
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 #include <dwmapi.h>
@@ -247,9 +248,7 @@ fs::path crash_folder() {
 #if defined(_WIN32)
     if (const wchar_t* dir = ::galaxy::run_options().crash_dump_dir_w; dir != nullptr && dir[0] != 0) return fs::path(dir);
 #if defined(NEBULA_HOST_RENDERER)
-    wchar_t local[MAX_PATH] = {};
-    GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
-    return fs::path(local) / "Nebula" / "crashes";
+    return fs::path(::galaxy::windows::environment_text(L"LOCALAPPDATA")) / "Nebula" / "crashes";
 #endif
 #else
     if (const char* dir = ::galaxy::run_options().crash_dump_dir; dir != nullptr && dir[0] != 0) return fs::path(dir);
@@ -309,13 +308,12 @@ void report_crash_facts(const fs::path& dump) {
     }
     if (!crash_dialog_wanted()) return;
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
-    wchar_t exe[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    std::wstring command = L"\"" + std::wstring(exe) + L"\" --crash-report \"" + file.wstring() + L"\"";
+    const std::wstring exe = ::galaxy::windows::executable_path();
+    std::wstring command = L"\"" + exe + L"\" --crash-report \"" + file.wstring() + L"\"";
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
-    if (CreateProcessW(exe, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+    if (!exe.empty() && CreateProcessW(exe.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
     }
@@ -604,11 +602,12 @@ bool save_folder_path(const char* path, fs::path* out) {
     return true;
 }
 
-// The audio clock: started by the game with its frame's length (in 32 kHz samples).
-std::mutex gAiLock;
-std::condition_variable gAiWake;
+// The sound clock: the game starts it with its frame's length (sound ticks a second); the lock guards the running
+// flag and the rate, and the clock thread waits on the condition variable until both are set.
+std::mutex gSoundClockLock;
+std::condition_variable gSoundClockWake;
 uint32_t gSoundTicksPerSecond = 0;
-bool gAiRunning = false;
+bool gSoundClockRunning = false;
 
 #if defined(NEBULA_HOST_RENDERER)
 extern galaxy::host::NativeGameAudio* gAudio;
@@ -664,7 +663,7 @@ bool wait_while_suspended() {
 
 #if !defined(NEBULA_HOST_RENDERER)
 // Headless, nothing is mixed: the game's sound logic runs on the clock.
-void ai_thread() {
+void sound_clock_thread() {
     if (deterministic_mode()) {
         return;  // the audio ticks come with each frame (svc_test_frame_step)
     }
@@ -673,8 +672,8 @@ void ai_thread() {
     for (;;) {
         uint32_t ticks_per_second = 0;
         {
-            std::unique_lock<std::mutex> lock(gAiLock);
-            gAiWake.wait(lock, [] { return gAiRunning && gSoundTicksPerSecond != 0; });
+            std::unique_lock<std::mutex> lock(gSoundClockLock);
+            gSoundClockWake.wait(lock, [] { return gSoundClockRunning && gSoundTicksPerSecond != 0; });
             ticks_per_second = gSoundTicksPerSecond;
         }
         gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
@@ -797,8 +796,8 @@ void svc_test_frame_step(void*) {
     static double due_ns = 0.0;
     uint32_t ticks_per_second = 0;
     {
-        std::lock_guard<std::mutex> lock(gAiLock);
-        ticks_per_second = gAiRunning ? gSoundTicksPerSecond : 0u;
+        std::lock_guard<std::mutex> lock(gSoundClockLock);
+        ticks_per_second = gSoundClockRunning ? gSoundTicksPerSecond : 0u;
     }
     if (ticks_per_second != 0u) {
         due_ns += 1e9 / galaxy::kGameStepRate;
@@ -966,14 +965,16 @@ void crash_writer() {
         fs::create_directories(folder, ignored);
         SYSTEMTIME now;
         GetLocalTime(&now);
-        wchar_t path[MAX_PATH];
-        std::swprintf(path, MAX_PATH, L"%ls\\nebula-native-%04u%02u%02u-%02u%02u%02u-%lu.dmp", folder.c_str(), now.wYear, now.wMonth,
-                      now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
+        // The file name is fixed width (a date, a time and a process id); the folder is any length.
+        wchar_t dump_name[64];
+        std::swprintf(dump_name, sizeof(dump_name) / sizeof(dump_name[0]), L"nebula-native-%04u%02u%02u-%02u%02u%02u-%lu.dmp", now.wYear,
+                      now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
+        const std::wstring path = (folder / dump_name).wstring();
         const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
         const auto write = dbghelp != nullptr
                                ? reinterpret_cast<MiniDumpWriteDumpFn>(GetProcAddress(dbghelp, "MiniDumpWriteDump"))
                                : nullptr;
-        const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (write != nullptr && file != INVALID_HANDLE_VALUE) {
             MINIDUMP_EXCEPTION_INFORMATION exception{gCrashThread, gCrashInfo, FALSE};
             // Stacks and what they point at (the module's data segments would add its half-gigabyte image window).
@@ -1363,9 +1364,8 @@ void submit_frame(bool present, bool black) {
     try {
         submit_frame_unchecked(present, black);
     } catch (const std::exception& error) {
-        char text[1024];
-        std::snprintf(text, sizeof(text), "the renderer stopped: %s", error.what());
-        svc_fatal(nullptr, text);
+        const std::string text = std::string("the renderer stopped: ") + error.what();
+        svc_fatal(nullptr, text.c_str());
     }
 }
 #endif
@@ -1378,7 +1378,7 @@ void svc_game_stage(void*, const char* name) {
     }
 }
 
-// The Discord application Nebula's status shows under ("Super Mario Galaxy"; GALAXY_DISCORD_CLIENT_ID replaces it).
+// The Discord application Nebula's status shows under ("Super Mario Galaxy").
 constexpr const char* kDiscordClientId = "1562359210463727617";
 
 // The game's message text (UTF-16, its tags skipped: 0x1A, then the tag's size in bytes in the next unit's high byte)
@@ -1675,7 +1675,7 @@ void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, c
 // The game's steady clock: nanoseconds since the process's first read, plus one (0 means "never" to its users).
 uint64_t svc_clock_ns(void*) {
     if (deterministic_mode()) {
-        return gDeterministicFrames.load(std::memory_order_relaxed) * 1000000000ull / 60u + 1u;
+        return gDeterministicFrames.load(std::memory_order_relaxed) * 1000000000ull / static_cast<unsigned>(galaxy::kGameStepsPerSecond) + 1u;
     }
     static const Clock::time_point start = Clock::now();
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) + 1u;
@@ -2141,11 +2141,11 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     // GALAXY_TRACE_FRAME_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
-    static const bool trace_vi = [] {
+    static const bool trace_frames = [] {
         const char* value = ::galaxy::run_options().trace_frame_times;
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }();
-    if (trace_vi) std::fprintf(stderr, "[latency] frame vi=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
+    if (trace_frames) std::fprintf(stderr, "[latency] frame=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
 #endif
 #if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)
@@ -2366,6 +2366,9 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
 // (gSaveDataPath under the save folder, or a mod's save folder).
 std::atomic<int> gSavesPending{0};
+// The exit waits here for the saves still on the worker.
+std::mutex gSavesMutex;
+std::condition_variable gSavesDone;
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
@@ -2394,7 +2397,10 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
 #else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same release store.
         __atomic_store_n(r.status, result, __ATOMIC_RELEASE);
 #endif
-        gSavesPending.fetch_sub(1, std::memory_order_acq_rel);
+        if (gSavesPending.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            { const std::lock_guard<std::mutex> lock(gSavesMutex); }
+            gSavesDone.notify_all();
+        }
     };
     // Deterministic test mode: done before the call returns, as disc reads are, so the game's poll sees the same
     // status on the same frame every run.
@@ -2824,14 +2830,14 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
         std::fprintf(stderr, "[read] sound clock %u at frame %llu\n", what, static_cast<unsigned long long>(gDeterministicFrames.load()));
     }
     {
-        std::lock_guard<std::mutex> lock(gAiLock);
+        std::lock_guard<std::mutex> lock(gSoundClockLock);
         if (what == NEBULA_AUDIO_START) {
-            gAiRunning = true;
+            gSoundClockRunning = true;
             gSoundTicksPerSecond = value;
         } else if (what == NEBULA_AUDIO_STOP) {
-            gAiRunning = false;
+            gSoundClockRunning = false;
         }
-        gAiWake.notify_one();
+        gSoundClockWake.notify_one();
     }
 #if defined(NEBULA_HOST_RENDERER)
     if (what == NEBULA_AUDIO_START) {
@@ -2842,13 +2848,13 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
 #endif
 }
 
-int svc_hbm(void*, uint32_t what, uint32_t value) {
+int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
     switch (what) {
-    case NEBULA_HBM_OPEN:
+    case NEBULA_HOME_MENU_OPEN:
         galaxy::render::home_menu_open();
         return 0;
-    case NEBULA_HBM_POLL: {
+    case NEBULA_HOME_MENU_POLL: {
         // GALAXY_TEST_HOME_ROW=<row>:<polls>: picks a row by the keys a player would press, and answers yes when it
         // asks (reset, leave).
         static const char* test = ::galaxy::run_options().test_home_row;
@@ -2868,15 +2874,15 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
         }
         return galaxy::render::home_menu_poll();
     }
-    case NEBULA_HBM_CLOSE:
+    case NEBULA_HOME_MENU_CLOSE:
         galaxy::render::home_menu_close();
         return 0;
-    case NEBULA_HBM_VIEW:
+    case NEBULA_HOME_MENU_VIEW:
         return galaxy::render::home_menu_view();
-    case NEBULA_HBM_POINT:
+    case NEBULA_HOME_MENU_POINT:
         galaxy::render::home_menu_point(value);
         return 0;
-    case NEBULA_HBM_CHOOSE:
+    case NEBULA_HOME_MENU_CHOOSE:
         galaxy::render::home_menu_choose(value);
         return 0;
     default:
@@ -2884,7 +2890,7 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
     }
 #else
     (void)value;
-    return what == NEBULA_HBM_VIEW ? -1 : 0;  // headless: the menu closes at once
+    return what == NEBULA_HOME_MENU_VIEW ? -1 : 0;  // headless: the menu closes at once
 #endif
 }
 
@@ -2953,6 +2959,19 @@ bool one_game_at_a_time() {
     }
     return true;
 }
+
+// The launcher's sign that the game runs (Launcher.RuntimeLeaseHeld): a named mutex for the release, held by the main
+// thread until the process ends.
+HANDLE gRuntimeLease = nullptr;
+
+void hold_runtime_lease() {
+    std::wstring name = L"Local\\Nebula.";
+    for (const char* c = gPak.id; *c != '\0'; ++c) {
+        name += static_cast<wchar_t>(*c);
+    }
+    name += L".NativeRuntime";
+    gRuntimeLease = CreateMutexW(nullptr, TRUE, name.c_str());
+}
 #endif
 
 [[noreturn]] void finish_and_exit(bool restart) {
@@ -2962,8 +2981,9 @@ bool one_game_at_a_time() {
     }
 #endif
     log_line("host:", restart ? "restart" : "the game ended");
-    for (int waited = 0; gSavesPending.load(std::memory_order_acquire) != 0 && waited < 500; waited++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    {
+        std::unique_lock<std::mutex> lock(gSavesMutex);
+        gSavesDone.wait_for(lock, std::chrono::seconds(5), [] { return gSavesPending.load(std::memory_order_acquire) == 0; });
     }
     if (gSavesPending.load(std::memory_order_acquire) != 0) {
         log_line("host:", "a save still pending at exit");
@@ -2979,14 +2999,17 @@ bool one_game_at_a_time() {
         if (gOneGame != nullptr) {
             CloseHandle(gOneGame);  // the new process takes it
         }
+        if (gRuntimeLease != nullptr) {
+            CloseHandle(gRuntimeLease);
+        }
 #endif
-        wchar_t path[MAX_PATH];
-        if (GetModuleFileNameW(nullptr, path, MAX_PATH) != 0) {
+        const std::wstring path = ::galaxy::windows::executable_path();
+        if (!path.empty()) {
             STARTUPINFOW startup{};
             startup.cb = sizeof(startup);
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
-            if (CreateProcessW(path, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+            if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
             }
@@ -3167,9 +3190,7 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
         std::error_code cook_error;
         fs::remove(signature_file, cook_error);
 #if defined(_WIN32)
-        wchar_t exe[MAX_PATH] = {};
-        GetModuleFileNameW(nullptr, exe, MAX_PATH);
-        const fs::path cooker = fs::path(exe).parent_path() / "nebula-import.exe";
+        const fs::path cooker = fs::path(::galaxy::windows::executable_path()).parent_path() / "nebula-import.exe";
         std::wstring command = L"\"" + cooker.wstring() + L"\" overlay \"" + plan_file.wstring() + L"\" --output \"" +
                                overlay.wstring() + L"\"";
         STARTUPINFOW startup{};
@@ -3504,6 +3525,9 @@ int main(int argc, char** argv) {
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
+#if defined(_WIN32)
+    hold_runtime_lease();
+#endif
     {
         // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
@@ -3577,10 +3601,9 @@ int main(int argc, char** argv) {
             const std::vector<std::string> languages = gPak.store.language_folders();
             std::string list;
             for (const std::string& language : languages) list += (list.empty() ? "" : ", ") + language;
-            char text[256];
-            std::snprintf(text, sizeof(text), "%s revision %u: %s", game_id.c_str(), gPak.store.revision(),
-                          list.empty() ? "no language folders" : list.c_str());
-            log_line("disc:", text);
+            const std::string text = game_id + " revision " + std::to_string(gPak.store.revision()) + ": " +
+                                     (list.empty() ? std::string("no language folders") : list);
+            log_line("disc:", text.c_str());
 #if defined(NEBULA_HOST_RENDERER)
             galaxy::set_disc_languages(languages);
 #endif
@@ -3661,7 +3684,7 @@ int main(int argc, char** argv) {
     services.movie_audio_position = svc_movie_audio_position;
     services.movie_audio_control = svc_movie_audio_control;
     services.sound_clock = svc_audio_control;
-    services.hbm = svc_hbm;
+    services.home_menu = svc_home_menu;
     services.game_context = svc_game_context;
     services.app_exit = svc_app_exit;
     services.app_restart = svc_app_restart;
@@ -3732,7 +3755,7 @@ int main(int argc, char** argv) {
     name_thread(L"Nebula Host Main");
     gFs.start();
 #if !defined(NEBULA_HOST_RENDERER)
-    std::thread(ai_thread).detach();
+    std::thread(sound_clock_thread).detach();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
     std::thread(input_thread).detach();

@@ -5,11 +5,13 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <mutex>
 #include <span>
+#include <vector>
 
 namespace galaxy::render {
 namespace {
@@ -25,7 +27,7 @@ std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
 std::uint64_t g_game_sun_updates = 0u;
 
-// The game's lights by position (a light that moves takes a new entry; old ones age out).
+// The game's lights by id, else by position (a light that moves takes a new entry; one unseen for kLightForget is reused).
 struct NotedLight {
     GameLight light{};
     std::chrono::steady_clock::time_point first{};   // since when it has lit without a gap
@@ -39,12 +41,21 @@ struct NotedLight {
 constexpr std::chrono::duration<float, std::milli> kLightFadeIn{200.0f};
 constexpr std::chrono::duration<float, std::milli> kLightFadeOut{300.0f};
 constexpr std::chrono::milliseconds kLightGap{500};
+// An entry unseen this long is free for another light; readers ask for lights newer than this. The stores hold as many
+// entries as lights are lit at once.
+constexpr std::chrono::seconds kLightForget{10};
 std::mutex g_game_lights_mutex;
 // The last point light request (note_game_point_request); guarded by g_game_lights_mutex.
 std::chrono::steady_clock::time_point g_point_request_seen{};
 std::uint32_t g_light_serial = 0u;
-std::array<NotedLight, 32> g_point_lights{};
-std::array<NotedLight, 16> g_world_lights{};
+std::vector<NotedLight> g_point_lights;
+std::vector<NotedLight> g_world_lights;
+// Added to the clock the light stores read: a test moves past kLightForget without waiting (0 in the game).
+std::atomic<std::int64_t> g_clock_skew_ms{0};
+std::chrono::steady_clock::time_point light_now() {
+    return std::chrono::steady_clock::now() +
+           std::chrono::milliseconds(g_clock_skew_ms.load(std::memory_order_relaxed));
+}
 
 std::mutex g_area_mutex;
 std::array<GameAreaLight, 2> g_area_lights{};
@@ -52,12 +63,12 @@ std::array<std::chrono::steady_clock::time_point, 2> g_area_time{};
 std::array<bool, 2> g_area_known{};
 
 // A light is matched by its game info (id) when it has one, else by position.
-template <std::size_t N>
-void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
+void note_light(std::vector<NotedLight>& lights, const std::array<float, 3>& position,
                 const std::array<float, 3>& color, float half_distance = 0.0f, std::uint64_t id = 0u) {
-    const auto now = std::chrono::steady_clock::now();
+    const auto now = light_now();
     const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
-    NotedLight* slot = &lights[0];
+    NotedLight* slot = nullptr;
+    NotedLight* stale = nullptr;
     bool found = false;
     for (NotedLight& entry : lights) {
         const bool same = id != 0u ? entry.id == id
@@ -69,9 +80,12 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
             found = true;
             break;
         }
-        if (!entry.used || (slot->used && entry.seen < slot->seen)) {
-            slot = &entry;
+        if (!entry.used || now - entry.seen > kLightForget) {
+            stale = &entry;
         }
+    }
+    if (!found) {
+        slot = stale != nullptr ? stale : &lights.emplace_back();
     }
     if (!found || now - slot->seen > kLightGap) {
         slot->first = now;
@@ -86,16 +100,30 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
     slot->used = true;
 }
 
-template <std::size_t N>
-std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<GameLight> out, std::uint64_t max_age_ms) {
-    const auto now = std::chrono::steady_clock::now();
+// Whether a light lights now: noted within `limit` and not black.
+bool is_lit(const NotedLight& entry, std::chrono::steady_clock::time_point now, std::chrono::milliseconds limit) {
+    const auto& c = entry.light.color;
+    return entry.used && now - entry.seen <= limit && c[0] + c[1] + c[2] > 0.01f;
+}
+
+std::size_t lit_count(const std::vector<NotedLight>& lights, std::uint64_t max_age_ms) {
+    const auto now = light_now();
+    const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
+    std::size_t count = 0u;
+    for (const NotedLight& entry : lights) {
+        count += is_lit(entry, now, std::chrono::milliseconds(max_age_ms)) ? 1u : 0u;
+    }
+    return count;
+}
+
+std::size_t active_lights(const std::vector<NotedLight>& lights, std::span<GameLight> out, std::uint64_t max_age_ms) {
+    const auto now = light_now();
     const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
     std::size_t count = 0u;
     const std::chrono::milliseconds limit(max_age_ms);
     for (const NotedLight& entry : lights) {
-        const auto& c = entry.light.color;
         const auto age = now - entry.seen;
-        if (count < out.size() && entry.used && age <= limit && c[0] + c[1] + c[2] > 0.01f) {
+        if (count < out.size() && is_lit(entry, now, limit)) {
             const float in = std::min((now - entry.first) / kLightFadeIn, 1.0f);
             const float fade = std::clamp((limit - age) / kLightFadeOut, 0.0f, 1.0f);
             GameLight& light = out[count++];
@@ -169,12 +197,24 @@ void note_game_world_light(const std::array<float, 3>& position, const std::arra
     note_light(g_world_lights, position, color);
 }
 
+std::size_t game_point_light_count(std::uint64_t max_age_ms) noexcept {
+    return lit_count(g_point_lights, max_age_ms);
+}
+
+std::size_t game_world_light_count(std::uint64_t max_age_ms) noexcept {
+    return lit_count(g_world_lights, max_age_ms);
+}
+
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
     return active_lights(g_point_lights, out, max_age_ms);
 }
 
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
     return active_lights(g_world_lights, out, max_age_ms);
+}
+
+void advance_game_lights_clock(std::uint64_t ms) noexcept {
+    g_clock_skew_ms.fetch_add(static_cast<std::int64_t>(ms), std::memory_order_relaxed);
 }
 
 void set_game_area_light(GameAreaLightKind kind, const GameAreaLight& light) noexcept {

@@ -29,7 +29,7 @@ struct ExperimentalUltrawideAspect {
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
 make_experimental_ultrawide_aspect(double content_aspect) noexcept;
 
-// Set at a completed frame start and read as one value, so camera, screen width, layouts, presentation and pointer never
+// Set at a completed frame and read as one value, so camera, screen width, layouts, presentation and pointer never
 // see half a resize. The upper word is a generation; the lower holds width << 16 | height in client pixels, or zero
 // for a shape that falls back to the game's 16:9.
 inline std::atomic<std::uint64_t> g_experimental_dynamic_aspect_word{0u};

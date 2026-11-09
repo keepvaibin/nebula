@@ -476,7 +476,7 @@ namespace MiiSelectSub {
     }
 
     inline void setPointedMiiName(MiiSelect* pHost, s32 index) {
-        char16_t name[Mii::NameLength + 1];
+        char16_t name[Mii::NameLength + 1];  // a Mii's name: the Mii record's field and the terminator
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), pHost->makeIconID(index));
         MR::setTextBoxMessageRecursive(pHost, "TxtName", name);
     }

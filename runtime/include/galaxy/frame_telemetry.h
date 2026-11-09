@@ -17,8 +17,8 @@ namespace galaxy::telemetry {
 inline constexpr std::uint64_t kMagic = 0x47414c5854463031ull;
 inline constexpr std::size_t kWords = 32;
 using Packet = std::array<std::uint64_t, kWords>;
-// Frame-buffer copies, first Present returns of a new game-timed serial, game-timed returns, repeats, the last
-// serial, stamp and address, and the steady-clock ns of the last production and of its first return.
+// Pictures made, new pictures shown, pictures presented, pictures shown again, the last picture, its stamp and slot, and
+// the steady-clock ns of the last picture made and of the last new picture shown.
 using Counts = std::array<std::uint64_t, 9>;
 
 class Publisher {

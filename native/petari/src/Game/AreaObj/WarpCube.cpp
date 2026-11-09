@@ -1,4 +1,5 @@
 #include "Game/AreaObj/WarpCube.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"

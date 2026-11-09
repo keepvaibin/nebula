@@ -130,21 +130,21 @@ bool native_input_script_unsigned_fields_fail_closed() {
             "native input script unsigned parser rejects malformed or overflowing text without changing output");
     }
 
-    std::uint64_t start_vi = 0x8877665544332211ull;
+    std::uint64_t start_frame = 0x8877665544332211ull;
     passed &= expect(
-        galaxy::input::resolve_native_input_script_start_vi(
+        galaxy::input::resolve_native_input_script_start_frame(
             std::numeric_limits<std::uint64_t>::max() - 7u,
             "7",
-            start_vi) &&
-            start_vi == std::numeric_limits<std::uint64_t>::max(),
+            start_frame) &&
+            start_frame == std::numeric_limits<std::uint64_t>::max(),
         "native input script relative start accepts the exact non-wrapping limit");
-    start_vi = 0x8877665544332211ull;
+    start_frame = 0x8877665544332211ull;
     passed &= expect(
-        !galaxy::input::resolve_native_input_script_start_vi(
+        !galaxy::input::resolve_native_input_script_start_frame(
             std::numeric_limits<std::uint64_t>::max() - 7u,
             "8",
-            start_vi) &&
-            start_vi == 0x8877665544332211ull,
+            start_frame) &&
+            start_frame == 0x8877665544332211ull,
         "native input script relative start rejects anchor addition overflow without changing output");
     return passed;
 }

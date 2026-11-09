@@ -130,7 +130,6 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/post_process_vk.cpp
     ${rt}/render/vk/game_bloom_vk.cpp
     "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
-    ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test_driver/run_options.cpp
     ${rt}/achievements.cpp

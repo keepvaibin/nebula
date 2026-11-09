@@ -6,6 +6,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 
 namespace {
@@ -18,7 +19,7 @@ namespace {
         virtual void execute(const char* pGalaxyName) {
         }
 
-        char _4[11];
+        MR::FormattedName mGalaxyText;  // "Galaxy" and the dome's number, whole
         bool mIsPass;
     };
 
@@ -190,8 +191,7 @@ bool GalaxyMapDomeIcon::hasNewGalaxy() const {
 }
 
 namespace {
-    AstroDomeCheckerBase::AstroDomeCheckerBase(int param1) {
-        nebula_snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
+    AstroDomeCheckerBase::AstroDomeCheckerBase(int param1) : mGalaxyText("Galaxy%1d", param1), mIsPass(false) {
     }
 };  // namespace
 
@@ -203,7 +203,7 @@ namespace {
         rIter.getValue("MapPaneName", &pMapPaneName);
         rIter.getValue("name", &pName);
 
-        if (pMapPaneName != nullptr && pName != nullptr && strstr(pMapPaneName, _4) != nullptr) {
+        if (pMapPaneName != nullptr && pName != nullptr && strstr(pMapPaneName, mGalaxyText.c_str()) != nullptr) {
             execute(pName);
         }
     }

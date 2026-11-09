@@ -53,7 +53,6 @@ public:
     void initUserFileArray();
     void createCameraController();
     void createSky();
-    void createFileItems();
     bool createFileItemStep();
     unsigned mInitStep = 0;
     unsigned mInitItem = 0;

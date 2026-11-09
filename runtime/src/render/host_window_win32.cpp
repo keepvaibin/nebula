@@ -5,10 +5,12 @@
 #include "galaxy/vendor_download.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/xess_library.h"
+#include "galaxy/windows_paths.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/run_options.h"
 #include "galaxy/path_text.h"
 #include "galaxy/controller_hid.h"
+#include "galaxy/input/raw_mouse_win32.h"
 
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/galaxy_select.h"
@@ -391,12 +393,10 @@ void hold_display_on(bool hold) noexcept {
 
 
 std::wstring launcher_path() {
-    wchar_t path[MAX_PATH]{};
-    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
-    if (length == 0u || length >= MAX_PATH) {
+    std::wstring launcher = ::galaxy::windows::executable_path();
+    if (launcher.empty()) {
         return {};
     }
-    std::wstring launcher(path, length);
     const std::size_t slash = launcher.find_last_of(L"\\/");
     if (slash == std::wstring::npos) {
         return {};
@@ -468,6 +468,8 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     store_monitor_cache(start_monitors);
     const MonitorInfo* start_monitor =
         find_monitor(start_monitors, widen_utf8(start_config.monitor.data()));
+    // The window is made on that monitor: its frame is the one of that monitor's scale.
+    const UINT frame_dpi = start_monitor != nullptr ? monitor_dpi(*start_monitor) : GetDpiForSystem();
     int actual_window_width = window_width;
     int actual_window_height = window_height;
     int window_x = CW_USEDEFAULT;
@@ -492,8 +494,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
             *start_monitor, static_cast<unsigned>(window_width),
             static_cast<unsigned>(window_height));
         RECT frame{0, 0, 0, 0};
-        (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW,
-                                       GetDpiForSystem());
+        (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, frame_dpi);
         window_x = outer.left;
         window_y = outer.top;
         actual_window_width = static_cast<int>(
@@ -527,7 +528,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
 
         RECT frame{0, 0, 0, 0};
         if (!fullscreen_window) {
-            if (!AdjustWindowRectExForDpi(&frame, window_style, FALSE, WS_EX_APPWINDOW, GetDpiForSystem())) {
+            if (!AdjustWindowRectExForDpi(&frame, window_style, FALSE, WS_EX_APPWINDOW, frame_dpi)) {
                 std::cerr << "[Renderer] AdjustWindowRect failed\n";
                 return {};
             }
@@ -609,6 +610,17 @@ double display_refresh_hz(NativeWindow window) noexcept {
     return static_cast<double>(mode.dmDisplayFrequency);
 }
 
+// Raw relative mouse motion (WM_INPUT) for the window while it is in front: no input sink and no legacy suppression, so
+// the cursor and the settings menu work as without it. GALAXY_TEST_NO_RAW_MOUSE=1 (NEBULA_DEV) leaves it off.
+static void raw_mouse_attach(HWND hwnd) noexcept {
+    if (::galaxy::run_option_flag(::galaxy::run_options().test_no_raw_mouse, false)) return;
+    (void)galaxy::host::install_native_raw_mouse(reinterpret_cast<std::uintptr_t>(hwnd));
+}
+
+static void raw_mouse_detach(HWND hwnd) noexcept {
+    galaxy::host::remove_native_raw_mouse(reinterpret_cast<std::uintptr_t>(hwnd));
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DROPFILES) {
         // Dropped files: mod archives and folders into the mods folder (the MODS page opens on the import),
@@ -664,6 +676,12 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_CREATE) {
         host_window::pointer_hwnd.store(reinterpret_cast<std::uintptr_t>(hwnd),
                              std::memory_order_release);
+        raw_mouse_attach(hwnd);
+    }
+    if (msg == WM_INPUT) {
+        // Relative motion for the pointer paths that ask for raw movement; DefWindowProc releases the packet.
+        galaxy::host::publish_native_raw_mouse(reinterpret_cast<std::uintptr_t>(hwnd), static_cast<std::uintptr_t>(lp));
+        return DefWindowProcW(hwnd, msg, wp, lp);
     }
     if (msg == WM_ENTERMENULOOP || msg == WM_ENTERSIZEMOVE) {
         (msg == WM_ENTERMENULOOP ? s_system_menu_active : host_window::move_size_active)
@@ -719,6 +737,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 galaxy::host::publish_native_window_key_press(normalized);
             }
             galaxy::host::publish_native_window_key_state(normalized, true);
+            // The scan code too: the movement keys are bound by position (a letter's place on a US keyboard), whatever
+            // the layout calls the key.
+            galaxy::host::publish_native_window_key_event(normalized, static_cast<std::uintptr_t>(lp), true, was_down,
+                                                          input_message_injected());
         }
     }
     if (msg == WM_KEYUP || msg == WM_SYSKEYUP) {
@@ -727,10 +749,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ? MapVirtualKeyA(
                 (static_cast<UINT>(lp) >> 16u) & 0xffu,
                 MAPVK_VSC_TO_VK_EX) : 0u;
-        galaxy::host::publish_native_window_key_state(
-            galaxy::input::normalize_native_window_key(key, mapped_shift,
-                (static_cast<UINT>(lp) & (1u << 24u)) != 0u),
-            false);
+        const std::uint32_t normalized = galaxy::input::normalize_native_window_key(
+            key, mapped_shift, (static_cast<UINT>(lp) & (1u << 24u)) != 0u);
+        galaxy::host::publish_native_window_key_state(normalized, false);
+        galaxy::host::publish_native_window_key_event(normalized, static_cast<std::uintptr_t>(lp), false, false,
+                                                      input_message_injected());
     }
     if (msg == WM_SETCURSOR && LOWORD(lp) == HTCLIENT) {
         const bool focused =
@@ -877,6 +900,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_SETFOCUS) {
         s_pointer_focused.store(true, std::memory_order_relaxed);
         s_pointer_focus_valid.store(true, std::memory_order_release);
+        raw_mouse_attach(hwnd);
         seed_pointer_from_client(hwnd, false);
         maybe_hide_os_cursor();
         return 0;
@@ -889,6 +913,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_KILLFOCUS) {
         galaxy::host::clear_native_window_key_presses();
+        raw_mouse_detach(hwnd);
         s_pointer_focused.store(false, std::memory_order_relaxed);
         invalidate_pointer_focus_once();
         clear_pointer_window_state(hwnd);
@@ -900,10 +925,12 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         hold_display_on(wp != 0);
         if (wp != 0) {
             s_pointer_focus_valid.store(true, std::memory_order_release);
+            raw_mouse_attach(hwnd);
             seed_pointer_from_client(hwnd, false);
             maybe_hide_os_cursor();
         } else {
             galaxy::host::clear_native_window_key_presses();
+            raw_mouse_detach(hwnd);
             invalidate_pointer_focus_once();
             clear_pointer_window_state(hwnd);
             SetCursor(LoadCursorA(nullptr, IDC_ARROW));
@@ -921,6 +948,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         host_window::quit_request.store(true, std::memory_order_release);
         wake_main_thread();
         hold_display_on(false);
+        raw_mouse_detach(hwnd);
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
         host_window::pointer_hwnd.store(0u, std::memory_order_release);

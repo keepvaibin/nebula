@@ -10,6 +10,7 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#include "galaxy/windows_paths.h"
 #include "galaxy/run_options.h"
 #include <cwchar>
 #endif
@@ -23,10 +24,10 @@
 namespace galaxy::timeline {
 
 enum class Event : std::uint16_t {
-    SubmitBegin = 1,       // game: a frame's records handed to the renderer. a=bytes
-    SubmitEnd = 2,         // game: handed over. a=token value, b=token kind
-    RenderBegin = 4,       // render: chunk dequeued. a=token value, b=bytes
-    RenderSubmitted = 6,   // render: command list executed and fence signaled. a=token value, b=fence
+    SubmitBegin = 1,       // game: a frame's records handed to the renderer
+    SubmitEnd = 2,         // game: handed over
+    RenderBegin = 4,       // render: chunk dequeued
+    RenderSubmitted = 6,   // render: command list executed and fence signaled. b=fence
     GpuBegin = 7,          // GPU timestamp at command-list start (QPC domain). a=fence
     GpuEnd = 8,            // GPU timestamp at command-list end (QPC domain). a=fence
     PresentBegin = 14,     // render: IDXGISwapChain::Present call. a=present ordinal, b=sync interval
@@ -36,7 +37,7 @@ enum class Event : std::uint16_t {
     SlotWaitBegin = 22,    // render: waiting for a frame slot's fence. a=fence
     SlotWaitEnd = 23,
     VBlank = 24,           // render: DWM composition timing. qpc=last vblank, a=refresh period (QPC ticks)
-    DisplayPresented = 25, // render: display picture chosen for a present. a=key
+    DisplayPresented = 25, // render: display picture chosen for a present. a=slot, b=picture number
     GameFrame = 26,        // game: frame boundary marker. a=frame count
 };
 
@@ -104,7 +105,7 @@ inline void initialize_from_environment() noexcept {
          flag[0] == '0')) {
         return;
     }
-    std::uint64_t capacity = 2'000'000u;  // 64 MB, about 25 minutes at 60 frames/s
+    std::uint64_t capacity = 2'000'000u;  // events: 64 MB
     char count[32]{};
     if (::galaxy::run_option_read(&length, count, sizeof(count), ::galaxy::run_options().frame_timeline_events) == 0 && length > 1) {
         const unsigned long long parsed = std::strtoull(count, nullptr, 10);
@@ -124,24 +125,25 @@ inline void initialize_from_environment() noexcept {
 inline void dump() noexcept {
     if (!g_state.enabled) return;
     g_state.enabled = false;
-    wchar_t path[MAX_PATH]{};
-    const wchar_t* const named = ::galaxy::run_options().frame_timeline_path_w;
-    DWORD length = named != nullptr ? static_cast<DWORD>(std::wcslen(named)) : 0u;
-    if (length != 0u && length < MAX_PATH) {
-        std::wmemcpy(path, named, length + 1u);
+    std::wstring path;
+    try {
+        const wchar_t* const named = ::galaxy::run_options().frame_timeline_path_w;
+        if (named != nullptr && named[0] != L'\0') {
+            path = named;
+        } else {
+            const std::wstring base = ::galaxy::windows::environment_text(L"LOCALAPPDATA");
+            if (base.empty()) return;
+            path = base + L"\\Nebula";
+            (void)CreateDirectoryW(path.c_str(), nullptr);
+            path = base + L"\\Nebula\\timeline-" + std::to_wstring(GetCurrentProcessId()) + L".bin";
+        }
+    } catch (...) {
+        return;
     }
-    if (length == 0u || length >= MAX_PATH) {
-        wchar_t base[MAX_PATH]{};
-        const DWORD base_length = GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);
-        if (base_length == 0u || base_length >= MAX_PATH) return;
-        swprintf_s(path, L"%s\\Nebula", base);
-        (void)CreateDirectoryW(path, nullptr);
-        swprintf_s(path, L"%s\\Nebula\\timeline-%lu.bin", base, GetCurrentProcessId());
-    }
-    const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+    const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                                     FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
-        std::fprintf(stderr, "[frame-timeline] cannot create %ls error=%lu\n", path, GetLastError());
+        std::fprintf(stderr, "[frame-timeline] cannot create %ls error=%lu\n", path.c_str(), GetLastError());
         return;
     }
     LARGE_INTEGER frequency{};
@@ -168,7 +170,7 @@ inline void dump() noexcept {
     CloseHandle(file);
     std::fprintf(stderr, "[frame-timeline] wrote %llu of %llu events to %ls ok=%d\n",
                  static_cast<unsigned long long>(count),
-                 static_cast<unsigned long long>(written_count), path, ok ? 1 : 0);
+                 static_cast<unsigned long long>(written_count), path.c_str(), ok ? 1 : 0);
 }
 #else
 inline void initialize_from_environment() noexcept {}

@@ -115,9 +115,8 @@ namespace {
                     if (rCurrentLanguagePanes.isTrue(childIndex)) {
                         pName = pChild->mName;
                         length = strlen(pName) - 4;
-                        char name[17];
-                        nebula_snprintf(name, sizeof(name), "%.*s", static_cast< int >(length), pName);
-                        pChild->SetName(name);
+                        const MR::FormattedName name("%.*s", static_cast< int >(length), pName);
+                        pChild->SetName(name.c_str());
                     } else {
                         pPane->RemoveChild(pChild);
                     }
@@ -525,7 +524,7 @@ void LayoutManager::initGroupCtrlList() {
 void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength) {
     Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(pPane);
 
-    char userData[9];
+    char userData[9];  // the layout file's 8-byte user data field and the terminator
     LayoutCoreUtil::getPaneUserData(pPane, userData);
 
     if (!MR::isEqualString("", userData)) {

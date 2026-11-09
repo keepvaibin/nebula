@@ -1,4 +1,5 @@
 #include "Game/Demo/GrandStarReturnDemoStarter.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/ReturnDemoRailMove.hpp"
 #include "Game/LiveActor/Nerve.hpp"

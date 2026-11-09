@@ -25,7 +25,7 @@
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
-    // TODO: names
+    // Two colours for each of the four pad channels (setPortAndColor): the blur takes both, the command stream the first.
     static NebulaColor8 sColorA[] = {
         {0x00, 0x32, 0xFF, 0xFF},
         {0xFF, 0xFF, 0x00, 0xFF},

@@ -96,9 +96,6 @@ struct MaterialCoord {
     u8 mSource;
     u32 mMatrix;
 
-    u32 getMatrix() const {
-        return mMatrix;
-    }
     void setMatrix(u32 matrix) {
         mMatrix = matrix;
     }
@@ -185,9 +182,6 @@ public:
     }
     bool hasAmbient() const {
         return (mFile->flags & NEBULA_MATERIAL_HAS_AMBIENT) != 0;
-    }
-    u8 getAlphaRef(u32 index) const {
-        return index == 0 ? mFile->alpha_ref0 : mFile->alpha_ref1;
     }
 
     bool usesMap(u32 map) const {

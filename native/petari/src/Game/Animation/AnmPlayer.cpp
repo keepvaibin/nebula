@@ -5,7 +5,7 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
-AnmPlayerBase::AnmPlayerBase(const ResTable* pResTable) : mResTable(pResTable), mAnmRes(), mFrameCtrl() {
+AnmPlayerBase::AnmPlayerBase(const ResTable* pResTable) : mResTable(pResTable), mAnmRes(), mFrameCtrl(), mAnmName(nullptr) {
 }
 
 void AnmPlayerBase::update() {
@@ -21,7 +21,15 @@ void AnmPlayerBase::reflectFrame() {
 }
 
 void AnmPlayerBase::start(const char* pResName) {
-    Clip* pAnmRes = reinterpret_cast< Clip* >(mResTable->getRes(pResName));
+    // One table lookup per start: the clip and its table name are kept for isPlaying.
+    const ResFileInfo* pInfo = mResTable->findFileInfo(pResName);
+
+    if (pInfo == nullptr) {
+        return;
+    }
+
+    Clip* pAnmRes = reinterpret_cast< Clip* >(pInfo->mResource);
+    mAnmName = pInfo->mName;
 
     if (pAnmRes != mAnmRes) {
         changeAnimation(pAnmRes);
@@ -40,13 +48,7 @@ void AnmPlayerBase::stop() {
 }
 
 bool AnmPlayerBase::isPlaying(const char* pAnimName) const {
-    if (mAnmRes != nullptr) {
-        if (MR::isEqualStringCase(pAnimName, mResTable->getResName(mAnmRes))) {
-            return true;
-        }
-    }
-
-    return false;
+    return mAnmRes != nullptr && mAnmName != nullptr && MR::isEqualStringCase(pAnimName, mAnmName);
 }
 
 MaterialAnmPlayerBase::MaterialAnmPlayerBase(const ResTable* pResTable, ModelData* pModelData) : AnmPlayerBase(pResTable), mModelData(pModelData) {

@@ -3,7 +3,7 @@ import hashlib, os, re, sys
 def table(D):
     out = []
     for f in os.listdir(D):
-        if f.startswith('present_') and f.endswith('.ppm') and 'xfb' not in f and 'display' not in f:
+        if f.startswith('present_') and f.endswith('.ppm') and 'display' not in f:
             out.append((int(re.search(r'(\d+)', f).group(1)), hashlib.md5(open(os.path.join(D, f), 'rb').read()).hexdigest()))
     return sorted(out)
 a = table(sys.argv[1])
@@ -30,8 +30,8 @@ mapping = sorted(hit)
 order = [m[0] for m in mapping]
 import bisect
 worst = []
-names_a = {int(re.search(r'(\d+)', f).group(1)): f for f in os.listdir(sys.argv[1]) if f.startswith('present_') and f.endswith('.ppm') and 'xfb' not in f}
-names_b = {int(re.search(r'(\d+)', f).group(1)): f for f in os.listdir(sys.argv[2]) if f.startswith('present_') and f.endswith('.ppm') and 'xfb' not in f}
+names_a = {int(re.search(r'(\d+)', f).group(1)): f for f in os.listdir(sys.argv[1]) if f.startswith('present_') and f.endswith('.ppm') and 'display' not in f}
+names_b = {int(re.search(r'(\d+)', f).group(1)): f for f in os.listdir(sys.argv[2]) if f.startswith('present_') and f.endswith('.ppm') and 'display' not in f}
 for n in miss:
     i = bisect.bisect_left(order, n)
     shifts_near = {mapping[k][1] - mapping[k][0] for k in (i - 1, i) if 0 <= k < len(mapping)}

@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     const f32 hFarDistToPursuePlayer = 2000.0f;
@@ -944,7 +945,7 @@ void Hanachan::exeAngryEnd() {
 
     MR::startLevelSound(this, "SE_EM_LV_HANACHAN_BRAKE");
 
-    f32 speed = 1.0f - getNerveStep() / 60.0f;
+    f32 speed = 1.0f - NebulaFrameClock::secondsOfSteps(getNerveStep());
     speed *= ::hAngrySpeed;
     mBodyParts[0]->mRotationQuat.getZDir(mFrontDir);
     mBodyParts[0]->mPushVelocity.add(mFrontDir * speed);

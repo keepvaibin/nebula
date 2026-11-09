@@ -1,4 +1,5 @@
 #include "Game/Boss/SkeletalFishBoss.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Boss/SkeletalFishBossBattleDirector.hpp"
 #include "Game/Boss/SkeletalFishBossRail.hpp"
 #include "Game/Boss/SkeletalFishBossRailHolder.hpp"

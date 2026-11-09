@@ -356,7 +356,6 @@ namespace MR {
     f32 diffAngleAbsFast(const Vec3f& rA, const Vec3f& rB);
     f32 diffAngleAbs(const Vec3f& rA, const Vec3f& rB);
     f32 diffAngleAbs(const Vec2f& rA, const Vec2f& rB);
-    f32 diffAngleSigned(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis);
     f32 diffAngleAbsHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis);
     f32 diffAngleSignedHorizontal(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis);
     bool isNearAngleRadian(const Vec3f& rA, const Vec3f& rB, f32 angle);

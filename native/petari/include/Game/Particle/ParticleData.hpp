@@ -72,7 +72,7 @@ struct EmitterDynamicsData {
     u16 mVolumeSize;
     u16 mDivNumber;
     u8 mRateStep;
-    u8 mPad[3];
+    u8 mReserved[3];
 };
 static_assert(sizeof(EmitterDynamicsData) == 0x74);
 
@@ -119,7 +119,7 @@ struct ParticleShapeData {
     u8 mColorLoopMask;
     u8 mTexLoopMask;
     u8 mLoopValue;
-    u8 mPad;
+    u8 mReserved;
     s16 mColorAnmFrameMax;
     NebulaColor8 mPrm;
     NebulaColor8 mEnv;
@@ -139,10 +139,10 @@ struct ExtraShapeData {
     u8 mAlphaAnm;
     u8 mAlphaFlick;
     u8 mRotateAnm;
-    u8 mPad;
+    u8 mReserved;
     s16 mScaleAnmCycleX;
     s16 mScaleAnmCycleY;
-    u8 mPad2[2];
+    u8 mReserved2[2];
     f32 mScaleInTiming;
     f32 mScaleOutTiming;
     f32 mScaleInValueX;
@@ -185,7 +185,7 @@ struct ChildShapeData {
     u8 mScaleOutOn;
     u8 mAlphaOutOn;
     u8 mRotateOn;
-    u8 mPad;
+    u8 mReserved;
     f32 mPosRndm;
     f32 mBaseVel;
     f32 mBaseVelRndm;
@@ -214,7 +214,7 @@ struct ExTexShapeData {
     u8 mSecTexIdx;
     u8 mUseIndirect;
     u8 mUseSecTex;
-    u8 mPad[3];
+    u8 mReserved[3];
 };
 static_assert(sizeof(ExTexShapeData) == 0x20);
 
@@ -243,7 +243,7 @@ struct ParticleKeyData {
     u32 mId;  // which emitter value (ParticleResource::calcKey)
     u32 mKeyCount;
     u32 mLoop;
-    u32 mPad;
+    u32 mReserved;
     f32 mKeys[1][4];
 };
 

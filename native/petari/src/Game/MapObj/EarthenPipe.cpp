@@ -336,6 +336,7 @@ void EarthenPipe::exeShowUp() {
         MR::startSystemSE("SE_SY_ITEM_APPEAR");
     }
 
+    // A ratio over the 30-step rise (the isLessStep bound below), not a rate.
     f32 easeIn = MR::getEaseInValue(getNerveStep() / 30.0f, 0.0f, 1.0f, 1.0f);
     calcTrans(easeIn);
 

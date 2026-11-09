@@ -160,7 +160,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
     const Interpolation mode = interpolation_of(render);
-    // A display no faster than the game's 60 offers nothing between: no row with one choice.
+    // A display no faster than the game's step rate offers nothing between: no row with one choice.
     if (interpolation_modes(state.frame_rates).size() > 1u || mode != Interpolation::kOff) {
         std::string value = mode == Interpolation::kOff      ? "OFF"
                             : mode == Interpolation::kNative ? "NATIVE"
@@ -188,7 +188,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             if (next == current) return;
                             draft.frame_generation = next == Interpolation::kFrameGeneration ? 1u : next == Interpolation::kFsrGeneration ? 2u : 0u;
                             // Interpolation starts at the display's own rate.
-                            draft.max_fps = next == Interpolation::kOff ? 60.0f : 0.0f;
+                            draft.max_fps = next == Interpolation::kOff ? static_cast<float>(kStepRate) : 0.0f;
                             if (next == Interpolation::kFrameGeneration && draft.upscaler != 3u) {
                                 draft.upscaler = 3u;  // frame generation runs with DLSS
                             }
@@ -204,19 +204,22 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             }
                             normalize_interpolation(draft, host.query(draft).frame_rates);
                         },
-                        mode == Interpolation::kOff ? "THE GAME RUNS AT 60. INTERPOLATION ADDS FRAMES BETWEEN"
+                        mode == Interpolation::kOff ? "THE GAME RUNS AT " + std::to_string(kStepRate) + ". INTERPOLATION ADDS FRAMES BETWEEN"
                         : mode == Interpolation::kNative
-                            ? "NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION"
-                        : mode == Interpolation::kFsrGeneration ? "AMD GENERATES ONE FRAME BETWEEN EACH OF THE GAME'S 60"
-                            : "NVIDIA GENERATES THE FRAMES BETWEEN THE GAME'S 60"});
+                            ? std::string("NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION")
+                        : mode == Interpolation::kFsrGeneration
+                            ? "AMD GENERATES ONE FRAME BETWEEN EACH OF THE GAME'S " + std::to_string(kStepRate)
+                            : "NVIDIA GENERATES THE FRAMES BETWEEN THE GAME'S " + std::to_string(kStepRate)});
     }
     const double measured = state.measured_fps;
     char now[48]{};
     std::snprintf(now, sizeof(now), "SHOWING %.1f FPS", measured);
     if (mode == Interpolation::kOff) {
         const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-        rows.push_back({"FRAME RATE LIMIT", rate <= 30u ? "30 FPS" : "60 FPS",
-                        [&host](RenderConfig& draft, int delta) { draft.max_fps = delta < 0 ? 30.0f : 60.0f; },
+        rows.push_back({"FRAME RATE LIMIT", std::to_string(rate <= kHalfStepRate ? kHalfStepRate : kStepRate) + " FPS",
+                        [&host](RenderConfig& draft, int delta) {
+                            draft.max_fps = static_cast<float>(delta < 0 ? kHalfStepRate : kStepRate);
+                        },
                         now});
     } else {
         const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));

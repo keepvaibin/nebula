@@ -63,10 +63,6 @@ namespace Ui {
             return u8(mBits.magFilter);
         }
 
-        inline bool IsBiasClampEnable() const {
-            return 0 != mBits.biasClampEnable;
-        }
-
         inline bool IsEdgeLODEnable() const {
             return 0 != mBits.edgeLODEnable;
         }
@@ -85,10 +81,6 @@ namespace Ui {
 
         inline f32 GetMaxLOD() const {
             return mMaxLOD;
-        }
-
-        inline bool IsMipMap() const {
-            return 0 != mBits.mipmap;
         }
 
         void SetMipMap(bool mipmap) {

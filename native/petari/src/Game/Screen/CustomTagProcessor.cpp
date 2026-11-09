@@ -26,7 +26,7 @@ namespace {
 
     u8 clampU8(s32 value);
 
-    NebulaColor8 setGXColor(NebulaColor16 color) {
+    NebulaColor8 toColor8(NebulaColor16 color) {
         NebulaColor8 result;
         result.r = clampU8(color.r);
         result.g = clampU8(color.g);
@@ -282,8 +282,8 @@ namespace Ui {
 }  // namespace Ui
 
 CustomTagProcessor::CustomTagProcessor(Ui::TextBox* textBox)
-    : mAlphaCtrl(), mPlayedSounds(), mColorMappingMin(::setGXColor(textBox->GetMaterial()->GetStageColor(0))),
-      mColorMappingMax(::setGXColor(textBox->GetMaterial()->GetStageColor(1))) {
+    : mAlphaCtrl(), mPlayedSounds(), mColorMappingMin(::toColor8(textBox->GetMaterial()->GetStageColor(0))),
+      mColorMappingMax(::toColor8(textBox->GetMaterial()->GetStageColor(1))) {
     mRubyFontWidth = 0.5f * textBox->mFontSize.width;
     mRubyFontHeight = 0.5f * textBox->mFontSize.height;
     mFontWidth = textBox->mFontSize.width;
@@ -545,21 +545,27 @@ CustomTagProcessor::Operation CustomTagProcessor::exeLocalizeGroup(Ui::Rect* rec
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    char16_t string[16];
+    char16_t string[16];  // an s32 is at most 11 characters, "-2147483648", with the terminator
     s32 number = readBytes< s32 >(tag.getParamPtr(0));
     switch (tag.getTag()) {
     case 5:
-        MR::formatText(string, 256, u"%02d", number);
+        MR::formatText(string, ARRAY_SIZEU(string), u"%02d", number);
+        break;
     case 6:
-        MR::formatText(string, 256, u"%03d", number);
+        MR::formatText(string, ARRAY_SIZEU(string), u"%03d", number);
+        break;
     case 7:
-        MR::formatText(string, 256, u"%04d", number);
+        MR::formatText(string, ARRAY_SIZEU(string), u"%04d", number);
+        break;
     case 8:
-        MR::formatText(string, 256, u"%05d", number);
+        MR::formatText(string, ARRAY_SIZEU(string), u"%05d", number);
+        break;
     case 9:
-        MR::formatText(string, 256, u"%06d", number);
+        MR::formatText(string, ARRAY_SIZEU(string), u"%06d", number);
+        break;
     default:
-        MR::formatText(string, 256, u"%d", number);
+        MR::formatText(string, ARRAY_SIZEU(string), u"%d", number);
+        break;
     }
 
     writeString(rect, string, context);

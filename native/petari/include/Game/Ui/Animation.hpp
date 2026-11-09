@@ -25,9 +25,6 @@ namespace Ui {
 
         u16 GetFrameSize() const;
         bool IsLoopData() const;
-        const UiAnimationHeader* GetAnimResource() const {
-            return mpRes;
-        }
 
         UiLink< AnimTransform > mLink;
         const UiAnimationHeader* mpRes;

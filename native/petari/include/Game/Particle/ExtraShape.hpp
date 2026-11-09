@@ -22,12 +22,6 @@ public:
     f32 getScaleInValueY() const {
         return mpData->mScaleInValueY;
     }
-    f32 getScaleOutValueX() const {
-        return mpData->mScaleOutValueX;
-    }
-    f32 getScaleOutValueY() const {
-        return mpData->mScaleOutValueY;
-    }
     f32 getScaleRndm() const {
         return mpData->mScaleOutRandom;
     }
@@ -45,9 +39,6 @@ public:
     }
     f32 getAlphaInValue() const {
         return mpData->mAlphaInValue;
-    }
-    f32 getAlphaOutValue() const {
-        return mpData->mAlphaOutValue;
     }
     f32 getAlphaBaseValue() const {
         return mpData->mAlphaBaseValue;

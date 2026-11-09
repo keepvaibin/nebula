@@ -450,7 +450,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     controls::LiveControlsFrame controls_frame{config};
     controls_frame.pads = std::span<const controls::LivePad>(pads.data(), pad_count);
     controls_frame.keyboard_levels = state.keys;
-    controls_frame.vi = frame;
+    controls_frame.game_frame = frame;
     controls_frame.window_focused = state.window_focused;
     controls_frame.use_keyboard = use_keyboard;
     controls_frame.use_pads = pad_count != 0u;

@@ -747,6 +747,7 @@ namespace FileSelectItemSub {
 
     void ScaleController::exeToSmall() {
         if (MR::isLessEqualStep(this, 30)) {
+            // A ratio over the 30-step ease this nerve lasts, not a rate.
             f32 rate = (getNerveStep() / 30.0f);
             mScale += (rate * (1.0f - mScale));
         }
@@ -756,6 +757,7 @@ namespace FileSelectItemSub {
 
     void ScaleController::exeToBig() {
         if (MR::isLessEqualStep(this, 30)) {
+            // A ratio over the 30-step ease this nerve lasts, not a rate.
             f32 rate = (getNerveStep() / 30.0f);
             mScale += rate * (1.2f - mScale);
         }

@@ -34,11 +34,11 @@ struct RunOptions {
     const char* crash_dump_dir = nullptr;
     const char* d3d_debug = nullptr;
     const char* d3d12_test_no_feature = nullptr;
-    const char* gpu_draws = nullptr;
     const char* gpu_passes = nullptr;
     const char* gpu_preference = nullptr;
     const char* hide_window = nullptr;
     const char* test_window_off_desktop = nullptr;
+    const char* test_no_raw_mouse = nullptr;
     const char* log_to_console = nullptr;
     const char* movie_dir = nullptr;
     const char* inspect_dir = nullptr;
@@ -87,7 +87,6 @@ struct RunOptions {
     const char* trace_thread_cpu = nullptr;
     const char* vk_simulate_driver = nullptr;
     const char* vk_test_no_feature = nullptr;
-    const char* vk_test_refuse = nullptr;
     const char* vulkan_validation = nullptr;
     const char* xinput_require_focus = nullptr;
 #if defined(_WIN32)
@@ -134,12 +133,6 @@ void set_run_options_final(bool final_values) noexcept;
     return 0;
 }
 
-// As run_option_read, its length without the terminator, 0 when unset or when it does not fit.
-[[nodiscard]] inline unsigned long run_option_copy(const char* value, char* buffer, std::size_t size) noexcept {
-    std::size_t length = 0u;
-    return run_option_read(&length, buffer, size, value) == 0 && length != 0u ? static_cast<unsigned long>(length - 1u) : 0ul;
-}
-
 [[nodiscard]] inline std::uint64_t run_option_u64(const char* value, std::uint64_t fallback) noexcept {
     return value != nullptr && value[0] != '\0' ? std::strtoull(value, nullptr, 10) : fallback;
 }
@@ -150,10 +143,6 @@ void set_run_options_final(bool final_values) noexcept;
         return fallback;
     }
     return value[0] != '0' && value[0] != 'f' && value[0] != 'F' && value[0] != 'n' && value[0] != 'N';
-}
-
-[[nodiscard]] inline std::optional<std::string> run_option_string(const char* value) {
-    return value != nullptr && value[0] != '\0' ? std::optional<std::string>(value) : std::nullopt;
 }
 
 }  // namespace galaxy

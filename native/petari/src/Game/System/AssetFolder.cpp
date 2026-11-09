@@ -142,10 +142,6 @@ u32 AssetFolder::countFiles(s32 folder) const {
     return count;
 }
 
-u32 AssetFolder::countResource() const {
-    return countFiles(mEntry);
-}
-
 s32 AssetFolder::findFolder(const char* pDirectory) const {
     const s32 found = findPath(pDirectory);
     NebulaAssetEntry entry;

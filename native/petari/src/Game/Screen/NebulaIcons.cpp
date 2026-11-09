@@ -916,7 +916,7 @@ namespace {
         k.mLine[0].mScale = 1.0f;
         k.mLine[1].mCodes.clear();
         k.mLine[1].mScale = 0.0f;
-        char text[8] = {0};
+        char text[8] = {0};  // one key's letter, digit or F number
         if (slot >= cKeyNamed) {
             const char* pText = pName != nullptr ? pName : "";
             k.mShape = strlen(pText) > 2 ? KeyWide : KeySquare;
@@ -1490,11 +1490,11 @@ namespace {
         // One block that lasts the game (the permanent arena): the sheets, the glyphs, the pages
         // and their blocks.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
-        const u32 glyphBytes = (glyphs * sizeof(Ui::FontGlyph) + 31u) & ~31u;
+        const u32 glyphBytes = glyphs * static_cast< u32 >(sizeof(Ui::FontGlyph));
         const u32 pageBytes = 256u * sizeof(u16);
         const u32 blockNum = rOld.pageBlockNum + addedPages;
         const u32 bytes = sheetsBytes + glyphBytes + pageBytes + blockNum * pageBytes;
-        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, Arenas::permanent()));
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 16, Arenas::permanent()));
         memcpy(pBlock, rOld.pSheets, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {
@@ -2288,14 +2288,14 @@ namespace {
         }
     }
 
-    // Set `index` made ready for the density asked for, its pictures unpainted records (each 32-byte aligned).
+    // Set `index` made ready for the density asked for, its pictures unpainted records (each a multiple of 8 bytes, the texture record's widest member).
     void startJoyConSet(s32 index) {
         JoyConSet& rSet = sJoyConSets[index];
         // The pictures of the density before are given up once the new block is taken.
         u8* const pOld = rSet.mBlock;
         memset(&rSet, 0, sizeof(rSet));
-        const u32 bytes = (NEBULA_TEXTURE_HEADER + static_cast< u32 >(sJoyConWidth * sJoyConHeight * 4) + 31u) & ~31u;
-        rSet.mBlock = static_cast< u8* >(NebulaArena::alloc(bytes * cJcPictures, 32, NebulaArena::root()));
+        const u32 bytes = (NEBULA_TEXTURE_HEADER + static_cast< u32 >(sJoyConWidth * sJoyConHeight * 4) + 7u) & ~7u;
+        rSet.mBlock = static_cast< u8* >(NebulaArena::alloc(bytes * cJcPictures, 16, NebulaArena::root()));
         if (pOld != nullptr) {
             NebulaArena::free(pOld, NebulaArena::root());
         }

@@ -29,8 +29,4 @@ public:
     void getPrjMtx(Mtx pDst) const {
         NebulaMtxCopy(mPrjMtx, pDst);
     }
-
-    void setPrjMtx(const Mtx pSrc) {
-        NebulaMtxCopy(pSrc, mPrjMtx);
-    }
 };

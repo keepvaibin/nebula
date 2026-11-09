@@ -522,11 +522,6 @@ public:
         mBlockKnown = true;
         mEye = false;
     }
-    void setBlock(u32 block) {
-        finish();
-        mBlock = block;
-        mBlockKnown = true;
-    }
     // A registered site mesh of `indexCount` indices under the site's matrix.
     void drawSiteMesh(u32 mesh, u32 indexCount, u32 stride, const NebulaLayoutInput* pInputs, u32 inputCount, u32 flags);
     // `count` instanced particles from instance row `firstRow`, `vertices` each, through the particle material.

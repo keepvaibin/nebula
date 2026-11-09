@@ -3,6 +3,7 @@
 #include "Game/System/GalaxyCometState.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 

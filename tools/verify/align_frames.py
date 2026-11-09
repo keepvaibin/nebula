@@ -20,7 +20,7 @@ max_shift = int(sys.argv[5]) if len(sys.argv) > 5 else 8
 def frames(d):
     out = {}
     for f in os.listdir(d):
-        if f.startswith("present_") and f.endswith(".ppm") and ".xfb" not in f and ".display" not in f:
+        if f.startswith("present_") and f.endswith(".ppm") and ".display" not in f:
             n = int(f[len("present_"):-len(".ppm")])
             if (first is None or n >= first) and (last is None or n <= last):
                 out[n] = os.path.join(d, f)

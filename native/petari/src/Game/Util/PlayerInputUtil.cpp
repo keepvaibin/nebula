@@ -133,12 +133,6 @@ namespace MR {
         return MR::getPlayerInput(channel)->mButton->testTriggerMinus();
     }
 
-    bool isPressedAnyWithoutHome(s32 channel) {
-        return isPressedUp(channel) || isPressedDown(channel) || isPressedLeft(channel) ||
-               isPressedRight(channel) || isPressedJump(channel) || isPressedFire(channel) || testCorePadTrigger1(channel) ||
-               testCorePadTrigger2(channel) || isPressedPause(channel) || isPressedMap(channel);
-    }
-
     bool isPressedHome(s32 channel) {
         return MR::getPlayerInput(channel)->mButton->testTriggerHome();
     }

@@ -5,6 +5,7 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/mod_import.h"
@@ -59,6 +60,8 @@ constexpr std::uint32_t kLastNone = 0u;
 constexpr std::uint32_t kLastKeyboard = 1u;
 constexpr std::uint32_t kLastPad = 2u;
 std::atomic<std::uint32_t> g_last_input{kLastNone};
+// The icon model (input::ButtonIconModel) of the pad that gave input last.
+std::atomic<std::uint8_t> g_last_pad_icons{0};
 std::atomic<SDL_JoystickID> g_last_pad{0};
 
 namespace {
@@ -366,9 +369,14 @@ void set_key(int vk, bool down) {
 
 // The unified layout's scheme for an SDL gamepad, as the Windows host names the same controllers: Switch 2 controllers
 // by their product (SDL types the Pro Controller 2 as a standard pad), Nintendo's positional layout for Switch
-// controllers, PlayStation's for Sony's, Steam's, and the Xbox layout SDL's standard mapping follows for the rest.
+// controllers and the GameCube pad, PlayStation's for Sony's, Steam's for Valve's and SDL's Steam type, and the Xbox
+// layout SDL's standard mapping follows for the rest (Xbox 360, One and Series, Stadia, Luna, Shield, generic and
+// unknown pads).
 galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
     namespace sw = galaxy::input::switch_hid;
+    if (SDL_GetGamepadVendor(pad) == galaxy::input::steam::kValveVendorId) {
+        return galaxy::input::ControlScheme::Steam;
+    }
     if (SDL_GetGamepadVendor(pad) == sw::kNintendoVendorId) {
         switch (SDL_GetGamepadProduct(pad)) {
         case sw::kPro2ControllerProductId:
@@ -382,6 +390,8 @@ galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
         }
     }
     switch (SDL_GetGamepadType(pad)) {
+    case SDL_GAMEPAD_TYPE_GAMECUBE:
+        return galaxy::input::ControlScheme::SwitchPro2;
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
@@ -396,6 +406,21 @@ galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
     default:
         return galaxy::input::ControlScheme::Xbox;
     }
+}
+
+// The icon model of a gamepad whose buttons are not its family's: the DualShock 3 (Select and Start) and the GameCube
+// pad (analog L and R, ZL and Z, Start).
+galaxy::input::ButtonIconModel icon_model_of(SDL_Gamepad* pad) noexcept {
+    namespace sw = galaxy::input::switch_hid;
+    const SDL_GamepadType type = SDL_GetGamepadType(pad);
+    if (type == SDL_GAMEPAD_TYPE_PS3) {
+        return galaxy::input::ButtonIconModel::Sixaxis;
+    }
+    if (type == SDL_GAMEPAD_TYPE_GAMECUBE ||
+        (SDL_GetGamepadVendor(pad) == sw::kNintendoVendorId && SDL_GetGamepadProduct(pad) == sw::kGameCubeProductId)) {
+        return galaxy::input::ButtonIconModel::GameCube;
+    }
+    return galaxy::input::ButtonIconModel::Standard;
 }
 
 float axis(SDL_Gamepad* pad, SDL_GamepadAxis which) noexcept {
@@ -740,12 +765,14 @@ void sample_gamepads() {
         galaxy::input::PadSample& sample = g_input.pads[i];
         sample = {};
         g_input.pad_ids[i] = 0;
+        g_input.pad_icons[i] = galaxy::input::ButtonIconModel::Standard;
         if (gamepad == nullptr || !SDL_GamepadConnected(gamepad)) {
             continue;
         }
         g_input.pad_ids[i] = SDL_GetGamepadID(gamepad);
         sample.connected = true;
         sample.scheme = scheme_of(gamepad);
+        g_input.pad_icons[i] = icon_model_of(gamepad);
         const auto button = [gamepad](SDL_GamepadButton b) { return SDL_GetGamepadButton(gamepad, b); };
         std::uint32_t bits = 0;
         if (button(SDL_GAMEPAD_BUTTON_DPAD_UP)) bits |= pad::bit(pad::kDpadUpBit);
@@ -774,6 +801,7 @@ void sample_gamepads() {
         sample.axes[5] = std::max(0.0f, axis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
         if (bits != 0u || std::any_of(std::begin(sample.axes), std::end(sample.axes), [](float a) { return std::abs(a) > 0.5f; })) {
             g_last_input.store(kLastPad + static_cast<std::uint32_t>(sample.scheme), std::memory_order_relaxed);
+            g_last_pad_icons.store(static_cast<std::uint8_t>(g_input.pad_icons[i]), std::memory_order_relaxed);
             g_last_pad.store(g_input.pad_ids[i], std::memory_order_relaxed);
         }
         sample_pad_motion(i, gamepad);
@@ -1769,6 +1797,7 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
             input::ControllerInfo info;
             info.scheme = state.pads[i].scheme;
             info.slot = static_cast<std::uint8_t>(i);
+            info.icons = state.pad_icons[i];
             info.model = state.pads[i].scheme == input::ControlScheme::PlayStation ? "PlayStation controller"
                          : state.pads[i].scheme == input::ControlScheme::SwitchPro  ? "Switch controller"
                                                                                     : "Controller";
@@ -1853,10 +1882,6 @@ std::atomic<unsigned> g_touch_opacity{60};
 std::atomic<bool> g_touch_vibration{true};
 std::atomic<bool> g_touch_arranging{false};  // the on-screen controls' editor is open
 }  // namespace
-
-bool physical_keyboard_attached() noexcept {
-    return g_external_keyboard.load(std::memory_order_relaxed);
-}
 
 void arrange_touch_controls() noexcept {
     g_touch_arranging.store(true, std::memory_order_release);
@@ -1976,15 +2001,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     if (keyboard) {
         style = ButtonIconStyle::Keyboard;
     } else if (pad.has_value()) {
-        switch (*pad) {
-        case ControlScheme::Xbox:
-        case ControlScheme::Steam: style = ButtonIconStyle::Xbox; break;
-        case ControlScheme::SwitchPro:
-        case ControlScheme::SwitchPro2: style = ButtonIconStyle::Nintendo; break;
-        case ControlScheme::PlayStation: style = ButtonIconStyle::PlayStation; break;
-        case ControlScheme::Keyboard:
-        case ControlScheme::Generic: break;
-        }
+        style = input::button_icon_style(*pad);
     }
     switch (get_runtime_settings().button_icons) {
     case ButtonIcons::Auto: break;
@@ -2005,15 +2022,20 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     static std::uint64_t s_generation = ~std::uint64_t{0};
     static ButtonIconStyle s_style = ButtonIconStyle::Game;
     static ControlScheme s_scheme = ControlScheme::Keyboard;
+    static input::ButtonIconModel s_model = input::ButtonIconModel::Standard;
     static bool s_menu = false;
     static input::ButtonIconSpec s_spec;
+    const input::ButtonIconModel model =
+        pad.has_value() ? static_cast<input::ButtonIconModel>(galaxy::sdl::g_last_pad_icons.load(std::memory_order_relaxed))
+                        : input::ButtonIconModel::Standard;
     const std::uint64_t generation = input::controls_config_generation();
-    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu) {
+    if (generation != s_generation || style != s_style || scheme != s_scheme || model != s_model || menu != s_menu) {
         s_generation = generation;
         s_style = style;
         s_scheme = scheme;
+        s_model = model;
         s_menu = menu;
-        s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu);
+        s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu, model);
     }
     return s_spec;
 }

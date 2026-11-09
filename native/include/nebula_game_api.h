@@ -33,6 +33,10 @@ extern "C" {
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
 
+/* The height the game's 2D coordinates, effects and mip chains were authored for: the frame's height over it scales an
+   effect's reach and a texture's mip bias. The one definition (the game's NebulaFrameClock and the renderer use it). */
+#define NEBULA_AUTHORED_LINES 456
+
 /* A colour word, R << 24 | G << 16 | B << 8 | A. */
 #define NEBULA_RGBA(r, g, b, a) (((uint32_t)(r) << 24) | ((uint32_t)(g) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(a))
 
@@ -323,17 +327,17 @@ enum {
     NEBULA_INPUT_RESET,      /* a scene change: from rest */
 };
 
-/* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset.
-   The host keeps the menu (its keys and controllers' buttons) and the game draws it: NEBULA_HBM_VIEW returns -1 while
+/* The HOME Menu (services.home_menu). NEBULA_HOME_MENU_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset.
+   The host keeps the menu (its keys and controllers' buttons) and the game draws it: NEBULA_HOME_MENU_VIEW returns -1 while
    it is closed, else the selected answer in bits 0-7 and in bits 8-15 the choice it asks about (0 none: the list,
    whose rows are close, reset and leave; 1 leave or 2 reset: "are you sure?", whose answers are no and yes). */
 enum {
-    NEBULA_HBM_OPEN = 1, /* value: 1 on a 16:9 screen */
-    NEBULA_HBM_POLL,
-    NEBULA_HBM_CLOSE,    /* closed at once (a reset or power event) */
-    NEBULA_HBM_VIEW,
-    NEBULA_HBM_POINT,    /* value: the answer under the pointer, selected */
-    NEBULA_HBM_CHOOSE,   /* value: the answer clicked */
+    NEBULA_HOME_MENU_OPEN = 1, /* value: 1 on a 16:9 screen */
+    NEBULA_HOME_MENU_POLL,
+    NEBULA_HOME_MENU_CLOSE,    /* closed at once (a reset or power event) */
+    NEBULA_HOME_MENU_VIEW,
+    NEBULA_HOME_MENU_POINT,    /* value: the answer under the pointer, selected */
+    NEBULA_HOME_MENU_CHOOSE,   /* value: the answer clicked */
 };
 
 /* A hidden test run's request (test_scene_frame): tools/test_driver/test_actions.h, absent from a release. */
@@ -719,9 +723,9 @@ typedef struct NebulaHostServices {
     uint32_t size;
     void* user;
 
-    /* One line of the game's reports (OSReport) or the native layer's log, without a trailing newline. */
+    /* One line of the game's log, without a trailing newline. */
     void (*log)(void* user, const char* text);
-    /* The game cannot go on (an OSPanic, a JUTException panic, a native-layer error): the host reports `text` with
+    /* The game cannot go on (a failed load or check, a native-layer error): the host reports `text` with
        its own diagnostics and ends the process. Does not return. */
     void (*fatal)(void* user, const char* text);
     /* The module's own bookkeeping memory, outside its arenas. */
@@ -795,8 +799,8 @@ typedef struct NebulaHostServices {
     double (*movie_audio_position)(void* user);
     void (*sound_clock)(void* user, uint32_t what, uint32_t value);
 
-    /* The HOME Menu (NEBULA_HBM_*). */
-    int (*hbm)(void* user, uint32_t what, uint32_t value);
+    /* The HOME Menu (NEBULA_HOME_MENU_*). */
+    int (*home_menu)(void* user, uint32_t what, uint32_t value);
 
 
 

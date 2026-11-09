@@ -41,6 +41,16 @@ const char* test_data_paths_error(int argc, char** argv) {
             return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";
         }
     }
+    // Folders and files a run writes or downloads to when it names them: each is private too when set.
+    for (const auto* name : {nebula_switch::frame_timeline_path_wide_name(), nebula_switch::audio_wav_dump_wide_name(),
+                              nebula_switch::texture_dump_dir_wide_name(), nebula_switch::xess_dir_wide_name(),
+                              nebula_switch::streamline_dir_wide_name(), L"GALAXY_PRESENT_SNAPSHOT_DIR",
+                              L"GALAXY_INSPECT_DIR", L"GALAXY_PIPELINE_LIST_OUT"}) {
+        const auto path = get_env_path(name);
+        if (path && (!path_is_within(*path, *work) || path_is_within(*path, protected_root))) {
+            return "tests require output and download paths inside NEBULA_WORK";
+        }
+    }
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::strcmp(argv[i], "--saves") == 0) {
             int count = 0;

@@ -60,11 +60,11 @@ RunOptions read_options() {
     o.crash_dump_dir = nebula_switch::crash_dump_dir();
     o.d3d_debug = nebula_switch::d3d_debug();
     o.d3d12_test_no_feature = nebula_switch::d3d12_test_no_feature();
-    o.gpu_draws = nebula_switch::gpu_draws();
     o.gpu_passes = nebula_switch::gpu_passes();
     o.gpu_preference = nebula_switch::gpu_preference();
     o.hide_window = nebula_switch::hide_window();
     o.test_window_off_desktop = nebula_switch::test_window_off_desktop();
+    o.test_no_raw_mouse = nebula_switch::test_no_raw_mouse();
     o.log_to_console = nebula_switch::log_to_console();
     o.movie_dir = nebula_switch::movie_dir();
     o.inspect_dir = nebula_switch::inspect_dir();
@@ -113,7 +113,6 @@ RunOptions read_options() {
     o.vk_simulate_driver = nebula_switch::vk_simulate_driver();
     o.trace_interp_slots = nebula_switch::trace_interp_slots();
     o.vk_test_no_feature = nebula_switch::vk_test_no_feature();
-    o.vk_test_refuse = nebula_switch::vk_test_refuse();
     o.vulkan_validation = nebula_switch::vulkan_validation();
     o.xinput_require_focus = nebula_switch::xinput_require_focus();
 #if defined(_WIN32)

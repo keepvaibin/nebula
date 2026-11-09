@@ -89,7 +89,8 @@ if(NEBULA_AUDIT_FLOAT_CASTS AND Python3_Interpreter_FOUND)
 endif()
 
 # The game builds warning free: a new warning stops the build. The names turned off are style in code kept as
-# written (field order, packed comparisons) or layouts the compiler handles (offsetof on the intrusive lists).
+# written (field order, packed comparisons). offsetof is used on plain structs only (the intrusive lists link through a
+# base class), so its warning is on.
 # An audit build replaces all of it, e.g. -Wshorten-64-to-32 for tools/narrowing.py.
 set(NEBULA_AUDIT_FLAGS "" CACHE STRING "Diagnostics for an audit build")
 if(NEBULA_AUDIT_FLAGS)
@@ -97,7 +98,7 @@ if(NEBULA_AUDIT_FLAGS)
 else()
     set(diagnostics -Wall -Wextra -Werror -Wconditional-uninitialized
         -Wno-unused-parameter -Wno-unused-private-field -Wno-missing-field-initializers -Wno-sign-compare
-        -Wno-reorder-ctor -Wno-unknown-pragmas -Wno-ignored-qualifiers -Wno-microsoft-anon-tag -Wno-invalid-offsetof
+        -Wno-reorder-ctor -Wno-unknown-pragmas -Wno-ignored-qualifiers -Wno-microsoft-anon-tag
         -Wno-deprecated-copy-with-user-provided-copy -Wno-undefined-var-template -D_CRT_SECURE_NO_WARNINGS)
 endif()
 

@@ -1,12 +1,12 @@
 #!/bin/sh
-# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output), NEBULA_TEST_NAND (an empty saves folder to copy).
-: "${NEBULA_BINS:?NEBULA_BINS is not set}"; : "${NEBULA_RUNS:?NEBULA_RUNS is not set}"; : "${NEBULA_TEST_NAND:?NEBULA_TEST_NAND is not set}"
+# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output), NEBULA_TEST_SAVES (an empty saves folder to copy).
+: "${NEBULA_BINS:?NEBULA_BINS is not set}"; : "${NEBULA_RUNS:?NEBULA_RUNS is not set}"; : "${NEBULA_TEST_SAVES:?NEBULA_TEST_SAVES is not set}"
 # resize.sh BIN TAG GALAXY: one run, the window resized live every 240 presents through small, wide, tall, 4K and back,
 # with a picture 60 presents after each resize: the picture has the window's shape, the effects cover it, no crash.
 V=$(cd "$(dirname "$0")" && pwd)
 B=$NEBULA_BINS/$1; T=$2; G=${3:-HeavenlyBeachGalaxy}
 F=$(cygpath -w "$V/tours/tour_one_$G.txt")
-W0=$NEBULA_RUNS/rz_$T; rm -rf "$W0"; mkdir -p "$W0"; W=$(cygpath -w "$W0"); cp -r "$NEBULA_TEST_NAND" "$W0/saves"
+W0=$NEBULA_RUNS/rz_$T; rm -rf "$W0"; mkdir -p "$W0"; W=$(cygpath -w "$W0"); cp -r "$NEBULA_TEST_SAVES" "$W0/saves"
 SIZES=""; AT=1500
 for s in 640x480 1920x1080 800x600 3440x1440 1080x1350 3840x2160 1366x768 2560x1080 320x240 1280x720; do
   SIZES="$SIZES,$AT:$s"; AT=$((AT + 240))

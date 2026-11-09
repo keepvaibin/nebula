@@ -54,7 +54,6 @@ namespace MR {
     bool isStarPointerPointing(const Vec3f&, f32, s32, bool);
     MtxPtr getStarPointerViewMtx();
     Mtx44Ptr getStarPointerProjMtx();
-    f32 getStarPointerRadius(s32);
     Vec2f* getStarPointerScreenPosition(s32);
     Vec2f getStarPointerScreenPositionOrEdge(s32);
     f32 getStarPointerScreenSpeed(s32);

@@ -41,8 +41,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   every Android 12 device has it).
 - **Refusals** (`pipeline_cache_vk.h`): a refused pipeline is built again without each optional feature it uses,
   then with the other stage zero form; a feature whose removal fixed two pipelines is left out of all of them. A key
-  no form of which is accepted draws with its uber pipeline, else is skipped; the game never stops for a pipeline
-  (`GALAXY_STRICT_PIPELINES=1` makes it). A new driver build's first launch tests the uber pipelines of every
+  no form of which is accepted draws with its uber pipeline, else is skipped; the game never stops for a pipeline. A new driver build's first launch tests the uber pipelines of every
   variant and feature in the background. Results stay in `vk_compat.txt`, per driver build.
 - **Uber shaders a driver cannot compile** (Adreno 840, 512.842: the uber vertex shader's texture coordinates by
   dynamic array index; the self-test's half diagnosis and cut-down probes found it): the uber vertex shader reads and
@@ -58,11 +57,10 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   in progress into a file; the next launch on the same driver build never builds that pipeline again (another GPU's
   crash, as on a laptop with two, is not this one's).
 - **Reports.** The first refusal logs the VkResult, the pipeline's state, this process's driver log (Android's
-  logcat) and the shaders' HLSL. `GALAXY_VK_SHADER_DUMP=<dir>` writes every module.
+  logcat) and the shaders' HLSL.
 - **Checks** (development scripts, outside the repository): `vk_compat_runs.sh` runs a simulated driver
-  (`GALAXY_VK_SIMULATE_DRIVER=qualcomm:512.700.0`), forced refusals (`GALAXY_VK_TEST_REFUSE=dual-source,...`), device features switched off
-  (`GALAXY_VK_TEST_NO_FEATURE=dual-source,bc,geometry,anisotropy,tessellation,gather`) and a
-  forced crash (`GALAXY_VK_TEST_CRASH_AT=<n>`); `vk_profile_matrix.sh` runs the game under the validation layer with
+  (`GALAXY_VK_SIMULATE_DRIVER=qualcomm:512.700.0`) and device features switched off
+  (`GALAXY_VK_TEST_NO_FEATURE=dual-source,bc,geometry,anisotropy,tessellation,gather`); `vk_profile_matrix.sh` runs the game under the validation layer with
   each Android GPU's gpuinfo.org profile (`fetch_device_profiles.py`: Adreno 610-840, Turnip, Mali-G52-G715,
   PowerVR, Xclipse, Maleoon; newest and oldest driver each); `galaxy_vk_shader_tests <keys.bin>` compiles every
   captured shader in every form.

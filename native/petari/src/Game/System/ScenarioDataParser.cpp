@@ -14,8 +14,6 @@
 #include <cstring>
 #include "Game/System/GameAssets.hpp"
 
-template const bool Table::getValue< s32 >(int, const char*, s32*) const;
-
 namespace {
     struct GalaxyNameSortLt {
         bool operator()(const ScenarioData* pLhs, const ScenarioData* pRhs) const {

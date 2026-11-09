@@ -526,8 +526,11 @@ namespace NebulaAchievements {
         return index >= 0 && index < cEntryNum ? cEntries[index].mId : nullptr;
     }
 
-    s32 getName(char16_t* pDst, s32 capacity, const char* pId) {
-        return getEntryName(pDst, capacity, pId);
+    s32 getName(MR::Text16& rText, const char* pId) {
+        MR::FormattedName textId;
+        getEntryTextId(&textId, pId);
+        const s32 units = NebulaText::length(textId.c_str()) + 1;
+        return NebulaText::get(rText.room(units), units, textId.c_str());
     }
 
     s32 getGroup(s32 index) {

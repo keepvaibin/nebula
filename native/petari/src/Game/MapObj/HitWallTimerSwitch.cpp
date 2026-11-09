@@ -5,6 +5,7 @@
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvHitWallTimerSwitch {
     NEW_NERVE(HitWallTimerSwitchNrvOff, HitWallTimerSwitch, Off);
@@ -107,8 +108,8 @@ bool HitWallTimerSwitch::trySwitchUp() {
         if (!MR::isPlayerDead() && !MR::isPowerStarGetDemoActive()) {
             if (mTimer == getNerveStep()) {
                 MR::startSystemSE("SE_SY_TIMER_A_0");
-            } else if (!(getNerveStep() % 60)) {
-                if (getNerveStep() < mTimer - 120) {
+            } else if (!(getNerveStep() % NebulaFrameClock::stepsOfSeconds(1))) {
+                if (getNerveStep() < mTimer - NebulaFrameClock::stepsOfSeconds(2)) {
                     MR::startSystemSE("SE_SY_TIMER_A_2");
                 } else {
                     MR::startSystemSE("SE_SY_TIMER_A_1");

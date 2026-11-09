@@ -10,10 +10,6 @@
 extern "C" {
 #endif
 
-int nebula_memory_init(void);
-
-void nebula_memory_arena(void** pStart, void** pEnd);
-
 /* The host's services; NULL before nebula_game_attach. */
 const struct NebulaHostServices* nebula_host(void);
 

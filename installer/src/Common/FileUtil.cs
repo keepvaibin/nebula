@@ -172,6 +172,12 @@ namespace Nebula
                 if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), path);
                 var buffer = new StringBuilder(1024);
                 uint length = NativeMethods.GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+                if (length >= buffer.Capacity)
+                {
+                    // A longer path: the call said how many characters it needs.
+                    buffer = new StringBuilder((int)length + 1);
+                    length = NativeMethods.GetFinalPathNameByHandleW(handle, buffer, (uint)buffer.Capacity, 0);
+                }
                 if (length == 0 || length >= buffer.Capacity) throw new Win32Exception(Marshal.GetLastWin32Error(), path);
                 string result = buffer.ToString();
                 if (result.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + result.Substring(8);

@@ -128,8 +128,18 @@ s32 GameDataSomeGalaxyStorage::deserialize(const BinaryDataContentAccessor& rAcc
     // Past eight, if the save has them: a count, then that many missions' flags and coins. A save can have fewer or more than this mod now does.
     const u8* more = (const u8*)rAccessor.getPointer("mStarEx", (u8*)pData);
     if (more != nullptr) {
+        // The tables lie in the record or the save is damaged: the count is the file's, the room is the header's.
+        const u32 recordSize = rAccessor.getDataSize();
+        const u32 at = static_cast< u32 >(more - pData);
+        const u32 available = at <= recordSize ? recordSize - at : 0;
+        if (available < 2) {
+            return 1;
+        }
         const s32 extra = MR::loadSaveU16(more);
         const s32 bytes = (extra + 7) / 8;
+        if (2u + 2u * static_cast< u32 >(bytes) + 2u * static_cast< u32 >(extra) > available) {
+            return 1;
+        }
         for (s32 idx = 0; idx < extra; idx++) {
             const s32 scenarioNo = idx + 8;
             if (scenarioNo >= mSlots) {

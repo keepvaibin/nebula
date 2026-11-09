@@ -27,7 +27,6 @@ public:
     void exeWait();
     void endWait();
     void exeWait2();
-    void endWait2();
     void exeThrowWait();
     virtual void exeThrowing();
     void exeTakenReserve();

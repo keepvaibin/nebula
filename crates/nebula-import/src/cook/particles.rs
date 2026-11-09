@@ -170,7 +170,8 @@ impl Rec {
         self.0.extend_from_slice(v);
         self
     }
-    fn pad(&mut self, n: usize) -> &mut Self {
+    // `n` bytes of zero.
+    fn zeros(&mut self, n: usize) -> &mut Self {
         self.0.resize(self.0.len() + n, 0);
         self
     }
@@ -192,7 +193,7 @@ fn dynamics(s: &Src, at: usize) -> Result<Vec<u8>> {
     for o in [0x68, 0x6A, 0x6C, 0x6E, 0x70, 0x72] {
         r.i16(s.i16(at + o)?); // rotation, last frame, first frame, life
     }
-    r.u16(s.u16(at + 0x74)?).u16(s.u16(at + 0x76)?).u8(s.u8(at + 0x78)?).pad(3);
+    r.u16(s.u16(at + 0x74)?).u16(s.u16(at + 0x76)?).u8(s.u8(at + 0x78)?).zeros(3);
     debug_assert_eq!(r.0.len(), DYNAMICS);
     Ok(r.0)
 }
@@ -263,7 +264,7 @@ fn shape(s: &Src, at: usize) -> Result<Shape> {
     if tex_crd {
         floats(s, &mut r, at + 0x34, 10)?;
     } else {
-        r.pad(40);
+        r.zeros(40);
     }
     r.u8((flags & 0xF) as u8)
         .u8(((flags >> 4) & 7) as u8)
@@ -302,10 +303,10 @@ fn shape(s: &Src, at: usize) -> Result<Shape> {
         .u8(s.u8(at + 0x2F)?)
         .u8(s.u8(at + 0x30)?)
         .u8(s.u8(at + 0x2E)?)
-        .pad(1)
+        .zeros(1)
         .i16(last_frame)
         .raw(s.bytes(at + 0x26, 8)?) // primary and environment colours
-        .pad(12); // the table offsets
+        .zeros(12); // the table offsets
     debug_assert_eq!(r.0.len(), SHAPE);
     let table = |on: bool, offset_at: usize, keys_at: usize| -> Result<Option<Vec<u8>>> {
         if !on {
@@ -341,10 +342,10 @@ fn extra(s: &Src, at: usize) -> Result<Vec<u8>> {
         .bool(flags & 0x10000 != 0)
         .bool(flags & 0x20000 != 0)
         .bool(flags & 0x0100_0000 != 0)
-        .pad(1)
+        .zeros(1)
         .i16(s.i16(at + 0x28)?)
         .i16(s.i16(at + 0x2A)?)
-        .pad(2);
+        .zeros(2);
     floats(s, &mut r, at + 0xC, 7)?;
     floats(s, &mut r, at + 0x2C, 13)?;
     let alpha_inc = if alpha_in != 0.0 { (alpha_base - alpha_in_value) / alpha_in } else { 1.0 };
@@ -368,7 +369,7 @@ fn child(s: &Src, at: usize) -> Result<Vec<u8>> {
     for bit in [0x10000, 0x20000, 0x40000, 0x20_0000, 0x40_0000, 0x80_0000, 0x100_0000] {
         r.bool(flags & bit != 0);
     }
-    r.pad(1);
+    r.zeros(1);
     floats(s, &mut r, at + 0xC, 10)?;
     r.raw(s.bytes(at + 0x34, 8)?);
     r.f32(s.f32(at + 0x3C)?).i16(s.i16(at + 0x40)?).i16(s.i16(at + 0x42)?).u8(s.u8(at + 0x44)?).u8(s.u8(at + 0x45)?);
@@ -387,7 +388,7 @@ fn extex(s: &Src, at: usize) -> Result<Vec<u8>> {
         .u8(s.i8(at + 0x26)? as u8)
         .bool(flags & 1 != 0)
         .bool(flags & 0x100 != 0)
-        .pad(3);
+        .zeros(3);
     debug_assert_eq!(r.0.len(), EXTEX);
     Ok(r.0)
 }
@@ -434,7 +435,7 @@ fn texture(s: &Src, at: usize) -> Result<Texture> {
     info.f32(s.i8(h + 0x16)? as f32 * 0.125).f32(s.i8(h + 0x17)? as f32 * 0.125).f32(s.i16(h + 0x1A)? as f32 * 0.01);
     info.u8(s.u8(h)?).u8(s.u8(h + 1)?).u8(s.u8(h + 6)?).u8(s.u8(h + 7)?);
     info.u8(s.u8(h + 0x10)?).u8(1u8 << s.u8(h + 0x13)?.min(2)).u8(s.u8(h + 0x14)?).u8(s.u8(h + 0x15)?);
-    info.pad(20);
+    info.zeros(20);
     debug_assert_eq!(info.0.len(), TEXTURE_INFO);
     Ok(Texture { name, info: info.0, record })
 }
