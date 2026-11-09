@@ -184,7 +184,15 @@ int main() {
         }
         check(!parse_manifest(with_layer(R"("tunables":{"cWalkSpeed":2.0})")).has_value(), "a key without its file is refused");
         check(!parse_manifest(with_layer(R"("tunables":{"Kuribo.cWalkSpeed":"fast"})")).has_value(), "text is refused");
-        check(!parse_manifest(with_layer(R"("tunables":[1,2])")).has_value(), "a list is refused");
+        check(!parse_manifest(with_layer(R"("tunables":[1,2])")).has_value(), "tunables as a list is refused");
+        const std::optional<Manifest> listed = parse_manifest(with_layer(R"("tunables":{"Kuribo.cSteps":[4,null,9]})"));
+        check(listed && listed->layers.size() == 1u && listed->layers[0].tunables.size() == 2u &&
+              listed->layers[0].tunables[0].key == "Kuribo.cSteps[0]" && listed->layers[0].tunables[0].value == 4.0 &&
+              listed->layers[0].tunables[1].key == "Kuribo.cSteps[2]" && listed->layers[0].tunables[1].value == 9.0,
+              "a list sets its places, a null keeps one");
+        check(!parse_manifest(with_layer(R"("tunables":{"Kuribo.cSteps":[4,"x"]})")).has_value(), "text in a list is refused");
+        const std::optional<Manifest> needs = parse_manifest(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","requires":["tunables"],"layers":[]})");
+        check(needs && refusal(*needs, "RMGE01", "2.1.0", "windows").empty(), "a mod needing tunables is usable");
     }
     {
         // A range of choices: counted, so numbers too large for the step cannot loop for ever.

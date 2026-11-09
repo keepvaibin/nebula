@@ -37,14 +37,17 @@ namespace nebula {
         const char* mFile;  // __FILE_NAME__: "Kuribo.cpp"
         const char* mName;  // "cWalkSpeed"
         void* mAddress;
+        const void* mGameValues;  // the game's numbers, as compiled
         u32 mKind;
-        f64 mDefault;
+        u32 mCount;  // 1, or a list's length
     };
 
-    // By "<file stem>.<name>": every number of that name in that file. 0: set; -1: no such number.
+    // By "<file stem>.<name>", or "<file stem>.<name>[<i>]" for a list's place: every number of that name in that file.
+    // 0: set; -1: no such number.
     s32 setTunable(const char* pKey, f64 value);
-    // The index-th record past the section's padding: its key parts, kind, default and current value. false: past the end.
-    bool tunableAt(s32 index, const char** pFile, const char** pName, u32* pKind, f64* pDefault, f64* pValue);
+    // The index-th number (a list counts each place): file, name, its place in a list (-1 for one number), kind, the
+    // game's number and the number now. false: past the end.
+    bool tunableAt(s32 index, const char** pFile, const char** pName, s32* pPlace, u32* pKind, f64* pGameValue, f64* pValue);
 }  // namespace nebula
 
 #if defined(_WIN32)
@@ -65,5 +68,15 @@ namespace nebula {
 
 #define NEBULA_TUNABLE(type, name, value)                                                                                     \
     static type name = (value);                                                                                               \
+    static const type name##_nebula_game = (value);                                                                           \
     NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
-        __FILE_NAME__, #name, &name, ::nebula::TunableKindOf<type>::value, static_cast<f64>(value)}
+        __FILE_NAME__, #name, &name, &name##_nebula_game, ::nebula::TunableKindOf<type>::value, 1u}
+
+// A list: NEBULA_TUNABLE_LIST(f32, cSpeeds, 3, {1.0f, 2.0f, 4.0f}); for `const f32 cSpeeds[3] = {1.0f, 2.0f, 4.0f};`
+// (the size may be left empty, as the definition had it). luma.json sets it as a list, null keeping a place.
+#define NEBULA_TUNABLE_LIST(type, name, size, ...)                                                                            \
+    static type name[size] = __VA_ARGS__;                                                                                     \
+    static const type name##_nebula_game[size] = __VA_ARGS__;                                                                 \
+    NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
+        __FILE_NAME__, #name, name, name##_nebula_game, ::nebula::TunableKindOf<type>::value,                                 \
+        static_cast<u32>(sizeof(name) / sizeof(name[0]))}
