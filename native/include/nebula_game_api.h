@@ -340,12 +340,12 @@ enum {
     NEBULA_HOME_MENU_CHOOSE,   /* value: the answer clicked */
 };
 
-/* A hidden test run's request (test_scene_frame): tools/test_driver/test_actions.h, absent from a release. */
-#if !defined(NEBULA_DEV)
-typedef struct NebulaTestActionAbsent NebulaTestAction;
-#else
-#include "../../tools/test_driver/test_actions.h"
-#endif
+/* What the settings' galaxy select asks of the scene (galaxy_travel). */
+enum {
+    NEBULA_GALAXY_TRAVEL_NONE = 0,
+    NEBULA_GALAXY_TRAVEL_STAGE,       /* to `stage`, its star `star` */
+    NEBULA_GALAXY_TRAVEL_GRAND_STARS, /* the save's Grand Stars 1 to `star`, then to `stage` (the Observatory) */
+};
 
 /* The picture's shape as the game draws it (NebulaFrameClock::display), from the output's shape the host latches at
    each frame (display_extent): the camera, the 2D screen and the layouts widen with it. */
@@ -802,9 +802,9 @@ typedef struct NebulaHostServices {
     /* What the mods add to a folder the game has: asset_child doesn't list these. */
     int (*asset_added_child)(void* user, const char* path, uint32_t child, NebulaAssetEntry* out);
 
-    /* Tests: once per game scene frame (before its 3D), what a hidden run asks of the game (GALAXY_TEST_*): returns 1
-       with `action` filled, or 0. */
-    int (*test_scene_frame)(void* user, NebulaTestAction* action);
+    /* Once per game scene frame (before its 3D): a travel the player asked for in the settings' galaxy select
+       (NEBULA_GALAXY_TRAVEL_*), with `stage` (`capacity` bytes) and `star` filled, or NEBULA_GALAXY_TRAVEL_NONE. */
+    int (*galaxy_travel)(void* user, char* stage, uint32_t capacity, int32_t* star);
 
     /* The output's shape latched at this frame, after frame_begun: width << 16 | height (only the ratio counts), or 0
        for 16:9. */

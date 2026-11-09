@@ -79,6 +79,7 @@
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #endif
+#include "Game/System/NebulaModCalls.hpp"
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
@@ -113,12 +114,6 @@ namespace NrvGameScene {
     NEW_NERVE(GameSceneStaffRoll, GameScene, StaffRoll);
     NEW_NERVE(GameSceneNebulaBoard, GameScene, NebulaBoard);
 };  // namespace NrvGameScene
-
-namespace {
-#if defined(NEBULA_DEV)
-#include "../../../../../tools/test_driver/game_scene_walk.inc"
-#endif
-}  // namespace
 
 GameScene::GameScene()
     : Scene("GameScene"), mScenarioCamera(nullptr), mPauseCtrl(nullptr), mPauseSeq(nullptr), mStageClearSeq(nullptr), mDraw3D(true) {
@@ -248,9 +243,6 @@ namespace {
     // The achievement board asked for by the Achievement Luma: it opens once the scene is in plain play, not paused,
     // in a demo or behind a wipe; a scene that starts drops the request.
     bool sBoardRequested = false;
-    // Tests (GALAXY_TEST_EVENT_FLAGS=AchievementBoard): asked for in the first scene with a board, past the restart the
-    // test's Grand Stars cause.
-    bool sTestBoard = false;
 
     // Discord (__NebulaPresence): the galaxy and its star in the game's own words, and the Power Stars collected.
     void reportPresence() {
@@ -282,10 +274,7 @@ void GameScene::update() {
     updateNerve();
     NebulaLoadTrace::gameScene();
     NebulaAchievements::update();
-    if (sTestBoard && MR::isStageAstroLocation() && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
-        sTestBoard = false;
-        requestShowNebulaBoard();
-    }
+    NebulaModCalls::update(isNerve(GET_NERVE(GameScene, GameSceneAction)));
     if (sBoardRequested && isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isWipeOpen() && !MR::isWipeActive() &&
         !MR::isDemoActive()) {
         sBoardRequested = false;
@@ -315,9 +304,6 @@ void GameScene::draw() const {
         const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
         NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
     }
-#if defined(NEBULA_DEV)
-#include "../../../../../tools/test_driver/game_scene_draw_start.inc"
-#endif
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
     if (NebulaHost::galaxySelectNamesWanted() != 0) {
         MR::FormattedName id;
@@ -330,9 +316,18 @@ void GameScene::draw() const {
             }
         }
     }
-#if defined(NEBULA_DEV)
-#include "../../../../../tools/test_driver/game_scene_actions.inc"
-#endif
+    // A travel the player asked for in the settings' galaxy select, through the game's own stage change; with the Grand
+    // Stars, the Observatory they power.
+    {
+        char stage[64];
+        int32_t star = 0;
+        const int travel = NebulaHost::galaxyTravel(stage, sizeof(stage), &star);
+        if (travel == NEBULA_GALAXY_TRAVEL_STAGE) {
+            NebulaModCalls::changeStage(stage, star);
+        } else if (travel == NEBULA_GALAXY_TRAVEL_GRAND_STARS) {
+            NebulaModCalls::setGrandStars(star, stage);
+        }
+    }
     LightFunction::initLightRegisterAll();
     CategoryList::execute(MR::DrawType_MiiFaceIcon);
     CategoryList::execute(MR::DrawType_MiiFaceNew);

@@ -24,8 +24,8 @@ namespace NebulaHost {
         return host->input_players != nullptr ? host->input_players(host->user) : 1;
     }
 
-    inline int testSceneFrame(NebulaTestAction* pAction) {
-        return nebula_host()->test_scene_frame(nebula_host()->user, pAction);
+    inline int galaxyTravel(char* pStage, u32 capacity, s32* pStar) {
+        return nebula_host()->galaxy_travel(nebula_host()->user, pStage, capacity, pStar);
     }
 
     // Nanoseconds on a steady clock: durations a person feels (a hold, a press), the same at any frame rate.

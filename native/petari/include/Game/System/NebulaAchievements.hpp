@@ -62,7 +62,6 @@ namespace NebulaAchievements {
     bool isMoreWaiting();
 
     // Tests (GALAXY_TEST_EVENT_FLAGS=Achievement:<id>): its pop-up, whether unlocked or not.
-    void showForTest(const char* pId);
 
     // The catalogue: each achievement's id, group (0 story, 1 challenge, 2 extra, 3 a mod's) and icon. The running mods'
     // own come after the game's (their id is the host's key, "mod:<mod>/<id>").
