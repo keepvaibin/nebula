@@ -23,6 +23,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
 void MarioActor::init2D() {
@@ -245,12 +246,12 @@ const HitSensor* MarioActor::getCarrySensor() const {
 void MarioActor::changeSpecialModeAnimation(const char* pAnimName) {
     switch (mPlayerMode) {
     case 6:
-        if (!strcmp(pAnimName, "特殊ウエイト1A")) {
+        if (MR::isEqualString(pAnimName, "特殊ウエイト1A")) {
             changeTeresaAnimation("SleepStart", -1);
             return;
         }
 
-        if (strcmp(pAnimName, "特殊ウエイト1B")) {
+        if (!MR::isEqualString(pAnimName, "特殊ウエイト1B")) {
             return;
         }
 

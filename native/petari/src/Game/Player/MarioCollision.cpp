@@ -17,7 +17,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 #include <nebula_math.h>
 
 bool Mario::isIgnoreTriangle(const Triangle* pTriangle) {
@@ -1585,7 +1585,7 @@ bool Mario::updateBinderInfo() {
             Vec3f horizontal;
 
             if (firstCeiling && (MR::vecKillElement(mJumpVec, normal, &horizontal) < 0.0f || mPrevDrawStates.pressed) && calcAngleD(normal) > 100.0f) {
-                if (strcmp(triangle->mSensor->mHost->mName, "マンホールのふた(クッパ船)")) {
+                if (!MR::isEqualString(triangle->mSensor->mHost->mName, "マンホールのふた(クッパ船)")) {
                     mJumpVec = horizontal;
                 }
 

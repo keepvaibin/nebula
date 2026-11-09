@@ -35,7 +35,6 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Render/GameTexture.hpp"
-#include <cstring>
 #include "Game/Util/StringUtil.hpp"
 
 namespace MR {
@@ -534,6 +533,16 @@ bool MarioActor::isAllHidden() const {
     return hidden;
 }
 
+// The first of a model's four eyelid textures; texNo when it has none.
+static u32 findEyeLidTexture(ModelData* pModelData, u32 textureNum, u32 texNo) {
+    for (u32 i = 0; i < textureNum; i++) {
+        if (MR::isEqualString(pModelData->getTextureName(i), "mario_eyeLid.0")) {
+            return i;
+        }
+    }
+    return texNo;
+}
+
 void MarioActor::swapTextureInit() {
     ModelData* actorData = MR::getModelData(this);
     const u32 textureCount = actorData->getTextureCount();
@@ -546,15 +555,7 @@ void MarioActor::swapTextureInit() {
 
     mSwapImages = new const void*[12]();
 
-    u32 texNo = 0;
-    for (u32 i = 0; i < textureCount; i++) {
-        ModelData* modelData = MR::getModelData(this);
-        const char* texName = modelData->getTextureName(i);
-        if (strcmp(texName, "mario_eyeLid.0") == 0) {
-            texNo = i;
-            break;
-        }
-    }
+    u32 texNo = findEyeLidTexture(actorData, textureCount, 0);
 
     mEyeLidTexBase = texNo;
     mSwapImages[0] = mSwapTextures[texNo]->image();
@@ -566,14 +567,7 @@ void MarioActor::swapTextureInit() {
         ModelData* beeData = MR::getModelData(mBeeModel);
         const u32 textureNum = beeData->getTextureCount();
 
-        for (u32 i = 0; i < textureNum; i++) {
-            ModelData* modelData = MR::getModelData(mBeeModel);
-            const char* texName = modelData->getTextureName(i);
-            if (strcmp(texName, "mario_eyeLid.0") == 0) {
-                texNo = i;
-                break;
-            }
-        }
+        texNo = findEyeLidTexture(beeData, textureNum, texNo);
 
         for (u32 i = 0; i < textureNum; i++) {
             mSwapTextures[i] = MR::getResTIMG(mBeeModel, i);
@@ -589,14 +583,7 @@ void MarioActor::swapTextureInit() {
         ModelData* hopperData = MR::getModelData(mHopperModel);
         const u32 textureNum = hopperData->getTextureCount();
 
-        for (u32 i = 0; i < textureNum; i++) {
-            ModelData* modelData = MR::getModelData(mHopperModel);
-            const char* texName = modelData->getTextureName(i);
-            if (strcmp(texName, "mario_eyeLid.0") == 0) {
-                texNo = i;
-                break;
-            }
-        }
+        texNo = findEyeLidTexture(hopperData, textureNum, texNo);
 
         for (u32 i = 0; i < textureNum; i++) {
             mSwapTextures[i] = MR::getResTIMG(mHopperModel, i);

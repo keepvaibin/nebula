@@ -11,6 +11,7 @@
 #include "Game/Player/MarioMove.hpp"
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 
 namespace {
@@ -430,7 +431,7 @@ void Mario::decideWalkAnimation() {
     getAnimator()->getXanimePlayer()->changeSpeed(animationSpeed);
 
     if (!mActor->mInDemo && mTargetWalkSpeedIndex == 0 && mActor->mHealth == 1 && mActor->mMaxHealth > 2 &&
-        (mRunningBas == nullptr || strcmp(mRunningBas, "DamageWait"))) {
+        (mRunningBas == nullptr || !mRunningDamageWait)) {
         getAnimator()->getXanimePlayer()->changeTrackAnimation(3, "ダメージウエイト");
         startBas("DamageWait", false, 0.0f, 0.0f);
         mActor->setBlink("DamageWait");
@@ -596,8 +597,8 @@ void Mario::updateWalkSpeed() {
             }
         }
 
-        if (mMovementStates.onGround && (strstr(getGroundPolygon()->mSensor->mHost->mName, "TriPod") != nullptr ||
-                                   strstr(getGroundPolygon()->mSensor->mHost->mName, "Tripod") != nullptr)) {
+        if (mMovementStates.onGround && (MR::isEqualSubString(getGroundPolygon()->mSensor->mHost->mName, "TriPod") ||
+                                   MR::isEqualSubString(getGroundPolygon()->mSensor->mHost->mName, "Tripod"))) {
             press = false;
         }
 

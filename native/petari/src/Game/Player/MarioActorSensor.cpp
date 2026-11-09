@@ -14,7 +14,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 void MarioActor::setupSensors() {
     initHitSensor(4);
@@ -90,7 +90,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
         pSensor->mRadius = radius;
         mPunchSensorOn = false;
         mPunchTimerSensor = false;
-        if (strcmp(mMarioAnim->mXanimePlayer->getCurrentBckName(), "spin2nd") == 0) {
+        if (MR::isEqualString(mMarioAnim->mXanimePlayer->getCurrentBckName(), "spin2nd")) {
             mPunchSensorOn = true;
             mPunchTimerSensor = true;
             if (mPunchHitTimer <= 2) {
@@ -215,7 +215,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
         mMario->mJumpKind = 11;
         break;
     default:
-        if (strcmp(pSensor->mHost->mName, "砲弾") == 0) {
+        if (MR::isEqualString(pSensor->mHost->mName, "砲弾")) {
             mMario->playSoundTrampleCombo(mTrampleCombo);
             mTrampleCombo++;
             if (mTrampleCombo > 1 && mTrampleCombo < 5) {
@@ -230,7 +230,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
             }
         }
 
-        if (strcmp(pSensor->mHost->mName, "全滅用クリボー") == 0) {
+        if (MR::isEqualString(pSensor->mHost->mName, "全滅用クリボー")) {
             mMario->playSoundTrampleCombo(mTrampleCombo);
             mTrampleCombo++;
             if (mTrampleCombo > 1 && mTrampleCombo < 8) {
