@@ -376,6 +376,14 @@ private:
     std::vector<std::uint32_t> next_in_slot_;
     std::vector<std::uint8_t> used_;
     std::vector<std::uint32_t> next_item_;
+    // OTHER-role cameras pair by the nearest view matrix: every (now, before) candidate, closest first.
+    struct CameraCandidate {
+        float distance;
+        std::uint32_t now, before;
+    };
+    static constexpr std::uint64_t kNearestCameraPairs = 65536u;
+    std::vector<CameraCandidate> camera_pairs_;
+    std::vector<std::uint8_t> camera_used_;
     float camera_move_ = 0.0f;
     // GALAXY_TEST_PAIR_LOG (test builds): the ring draws that lost their pair, each drawer material and reason once.
     void log_lost_ring_pairs(const ListData& now, const NebulaFrameList& last);

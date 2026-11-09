@@ -11,46 +11,71 @@ ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("影描画[ボリュ�
     mToShadowController = 0;
     mFromWidth = 100.0f;
     mToWidth = 100.0f;
+    mLastFromSide.zero();
+    mLastToSide.zero();
+    mSideFlips = 0;
+    mHasSides = false;
+}
+
+// The ends of the line, their drop directions and the side vectors the quads stand on (drop x direction). False when
+// the line has no length or runs along a drop direction: nothing is drawn.
+bool ShadowVolumeLine::calcLine(Vec3f* pFrom, Vec3f* pTo, Vec3f* pFromDrop, Vec3f* pToDrop, Vec3f* pFromSide, Vec3f* pToSide) const {
+    const ShadowController* fromController = mFromShadowController;
+    const ShadowController* toController = mToShadowController;
+    calcBaseDropPosition(pFrom, fromController);
+    calcBaseDropPosition(pTo, toController);
+    Vec3f direction;
+    MR::normalizeOrZero(*pTo - *pFrom, &direction);
+    if (MR::isNearZero(direction)) {
+        return false;
+    }
+
+    fromController->getDropDir(pFromDrop);
+    toController->getDropDir(pToDrop);
+    pFromSide->cross(*pFromDrop, direction);
+    if (MR::isNearZero(*pFromSide)) {
+        return false;
+    }
+
+    MR::normalize(pFromSide);
+    pToSide->cross(*pToDrop, direction);
+    if (MR::isNearZero(*pToSide)) {
+        return false;
+    }
+
+    MR::normalize(pToSide);
+    return true;
 }
 
 void ShadowVolumeLine::loadModelDrawMtx(TypedDraw& rDraw) const {
     rDraw.setWorld(nullptr);
+    // A side vector is the cross product of the drop direction and the line: when the line swings through the drop
+    // direction it turns half a circle and the quads' corners trade places. Changing the sign would turn the quads
+    // inside out (the stencil counts front and back faces), so the shape stays as built and the draws of a flipped side
+    // take numbers of their own: a generated frame never blends a corner into its opposite.
+    Vec3f from, to, fromDrop, toDrop, fromSide, toSide;
+    if (!calcLine(&from, &to, &fromDrop, &toDrop, &fromSide, &toSide)) {
+        return;
+    }
+
+    if (mHasSides && (fromSide.dot(mLastFromSide) < 0.0f || toSide.dot(mLastToSide) < 0.0f)) {
+        mSideFlips++;
+    }
+
+    mLastFromSide = fromSide;
+    mLastToSide = toSide;
+    mHasSides = true;
 }
 
 void ShadowVolumeLine::drawShape(TypedDraw& rDraw) const {
-    const ShadowController* fromController = mFromShadowController;
-    const ShadowController* toController = mToShadowController;
     Vec3f points[8];
-    Vec3f from;
-    Vec3f to;
-    calcBaseDropPosition(&from, fromController);
-    calcBaseDropPosition(&to, toController);
-    Vec3f direction;
-    MR::normalizeOrZero(to - from, &direction);
-    if (MR::isNearZero(direction)) {
+    Vec3f from, to, fromDrop, toDrop, fromSide, toSide;
+    if (!calcLine(&from, &to, &fromDrop, &toDrop, &fromSide, &toSide)) {
         return;
     }
 
-    Vec3f fromDrop;
-    Vec3f toDrop;
-    fromController->getDropDir(&fromDrop);
-    toController->getDropDir(&toDrop);
-    Vec3f fromSide;
-    fromSide.cross(fromDrop, direction);
-    if (MR::isNearZero(fromSide)) {
-        return;
-    }
-
-    MR::normalize(&fromSide);
-    Vec3f toSide;
-    toSide.cross(toDrop, direction);
-    if (MR::isNearZero(toSide)) {
-        return;
-    }
-
-    MR::normalize(&toSide);
-    f32 fromLength = mFromWidth + calcBaseDropLength(fromController);
-    f32 toLength = mToWidth + calcBaseDropLength(toController);
+    f32 fromLength = mFromWidth + calcBaseDropLength(mFromShadowController);
+    f32 toLength = mToWidth + calcBaseDropLength(mToShadowController);
     points[0].scaleAdd(-mFromWidth, fromSide, from);
     points[1].scaleAdd(mFromWidth, fromSide, from);
     points[2].scaleAdd(fromLength, fromDrop, points[0]);

@@ -49,6 +49,8 @@ namespace MotionSignal {
     void died(LiveActor* pActor);
     // MarioAccess::setTrans and setBaseMtx: a jump far from where the player is starts a new life.
     void playerPlaced(LiveActor* pPlayer, const Vec3f& rTarget);
+    // The player's life count (0 without a player); it changes when playerPlaced found a jump or the player died.
+    u32 playerLife();
     // EmitterCore::init: a pooled emitter starts a new effect.
     void emitterInit(EmitterCore* pEmitter);
     // A camera cut: CameraViewInterpolator::reduceOscillation took its target without blending, or a camera animation

@@ -395,6 +395,7 @@ void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32
     TDDraw::setupNative(&material, 1, 1, 0);
     material.setShader(NEBULA_SHADER_TEX_VERTEX_ALPHA);
     material.constants[0] = 0.0f;
+    material.constants[1] = 1.0f;
     material.setDepth(true, NEBULA_COMPARE_GREATER, false);
     material.setTexture(0, mMaskTextures[mMaskIndex]);
     Mtx rotation;

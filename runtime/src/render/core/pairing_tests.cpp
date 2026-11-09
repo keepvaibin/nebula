@@ -78,6 +78,27 @@ int main() {
  if (ring_shape_matches(ring_new,ring_old)) return 16;
  ring_new.mesh=24;ring_old.flags=0u;
  if (ring_shape_matches(ring_new,ring_old)) return 17;
+ // OTHER-role cameras listed in another order pair by their view matrices; the game camera pairs by its role.
+ {
+  NebulaFrameCamera other_old[3]={ca,ca,ca},other_new[3]={ca,ca,ca};
+  other_old[0].role=NEBULA_CAMERA_SCENE;other_old[1].role=other_old[2].role=NEBULA_CAMERA_OTHER;
+  other_new[0].role=NEBULA_CAMERA_SCENE;other_new[1].role=other_new[2].role=NEBULA_CAMERA_OTHER;
+  other_old[1].view[0][3]=100.0f;other_old[2].view[0][3]=5000.0f;
+  other_new[1].view[0][3]=5000.5f;other_new[2].view[0][3]=100.5f;
+  la.cameras=other_old;la.camera_count=3;lb.cameras=other_new;lb.camera_count=3;
+  la.block_count=lb.block_count=la.item_count=lb.item_count=0;
+  ListData swapped_cameras{};swapped_cameras.list=&lb;Pairing swapped_pair;swapped_pair.pair(swapped_cameras,&da);
+  if (swapped_cameras.camera_before[0] != 0u || swapped_cameras.camera_before[1] != 2u || swapped_cameras.camera_before[2] != 1u) return 18;
+  // One view fewer: the one left pairs with the view it is nearest, the other old view stays unused.
+  lb.camera_count=2;other_new[1]=other_new[2];
+  ListData fewer_cameras{};fewer_cameras.list=&lb;Pairing fewer_pair;fewer_pair.pair(fewer_cameras,&da);
+  if (fewer_cameras.camera_before[0] != 0u || fewer_cameras.camera_before[1] != 1u) return 19;
+  // Identical views pair in list order.
+  other_old[1].view[0][3]=other_old[2].view[0][3]=100.0f;other_new[1].view[0][3]=other_new[2].view[0][3]=100.0f;lb.camera_count=3;
+  ListData same_cameras{};same_cameras.list=&lb;Pairing same_pair;same_pair.pair(same_cameras,&da);
+  if (same_cameras.camera_before[1] != 1u || same_cameras.camera_before[2] != 2u) return 20;
+ }
+ std::puts("PASS: other-role cameras pair by the nearest view matrix, the game camera by its role.");
  std::puts("PASS: ring items pair by part number and blend vertices only at an unchanged shape.");
  std::puts("PASS: explicit light camera survives camera reorder and rejects the wrong camera.");
  std::puts("PASS: shadow camera identity, discrete texture changes, and one-use draw pairing.");

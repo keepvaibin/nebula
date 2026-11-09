@@ -958,7 +958,8 @@ void MaterialDraw::draw(Model* pModel, Mesh* pMesh) {
     rItem.textures = tableOf(mForm, rForm);
     rItem.block = pModel->block(pMaterial);
     rItem.slot = pModel->getSlot();
-    rItem.generation = pModel->mMotionEpoch;
+    // The life, then the steps whose constants must not blend (MarioShadowProjmapMtxSetter): the pose pairs through the life alone.
+    rItem.generation = pModel->mMotionEpoch * 4099u + pModel->mItemJumps;
     rItem.part = pMesh->mIndex;
     rItem.source_hash = pMaterial->mSourceHash;
     rItem.matrix = pMesh->mFile->single_matrix != NEBULA_MODEL_NONE ? pMesh->mFile->single_matrix : 0;
@@ -1009,7 +1010,7 @@ void MaterialDraw::drawFlat(Model* pModel, Mesh* pMesh) {
     rItem.textures = 0;
     rItem.block = pModel->block(getMaterial());
     rItem.slot = pModel->getSlot();
-    rItem.generation = pModel->mMotionEpoch;
+    rItem.generation = pModel->mMotionEpoch * 4099u + pModel->mItemJumps;
     rItem.part = pMesh->mIndex;
     rItem.source_hash = getMaterial()->mSourceHash;
     rItem.matrix = pMesh->mFile->single_matrix != NEBULA_MODEL_NONE ? pMesh->mFile->single_matrix : 0;

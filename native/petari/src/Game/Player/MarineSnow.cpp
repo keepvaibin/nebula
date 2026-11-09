@@ -12,8 +12,9 @@
 #include "Game/Render/GameTexture.hpp"
 
 namespace {
-    void sendFlake(VertexPCT*& rVtx, const Vec3f& rPoint, u32 alpha, f32 s, f32 t) {
-        *rVtx++ = {rPoint.x, rPoint.y, rPoint.z, Rgba8(alpha), s, t};
+    // The cell's opacity is the draw's constant (flakes.constants[1]), not a vertex colour.
+    void sendFlake(VertexPCT*& rVtx, const Vec3f& rPoint, f32 s, f32 t) {
+        *rVtx++ = {rPoint.x, rPoint.y, rPoint.z, Rgba8(255), s, t};
     }
 
     // The draw object of the cell at world cell (x, y, z): the same cell is the same object from step to step, whichever
@@ -99,7 +100,8 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
     const u32 callerPart = Frame::nextPart();
 
     // runtime/src/render/materials/tex_vertex_alpha.hlsl: the flake texture, its alpha times the cell's opacity (the
-    // vertices' alpha); blended by alpha, depth tested.
+    // constant alpha scale, so a generated frame blends the fade of a cell between two steps); blended by alpha, depth
+    // tested. The vertices' alpha is 1.
     SiteMaterial flakes;
     TDDraw::setupNative(&flakes, 1, 1, 0);
     flakes.setShader(NEBULA_SHADER_TEX_VERTEX_ALPHA);
@@ -148,6 +150,7 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
                 }
 
                 Frame::setObject(callerSlot, ::cellObject(cellX + i, cellY + j, cellZ + k));
+                flakes.constants[1] = static_cast< f32 >(alpha) / 255.0f;
                 TypedDraw site(flakes, MR::tmpMtxTrans(cellOrigin), MR::getCameraViewMtx());
 
                 u16 lastParticle;
@@ -166,13 +169,13 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
                     site.setPart(point);
                     VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, 4);
                     {
-                        sendFlake(vtx, mParticlePositions[point] - diagonalDown, alpha, 0.0f, 0.0f);
+                        sendFlake(vtx, mParticlePositions[point] - diagonalDown, 0.0f, 0.0f);
 
-                        sendFlake(vtx, mParticlePositions[point] + diagonalUp, alpha, 1.0f, 0.0f);
+                        sendFlake(vtx, mParticlePositions[point] + diagonalUp, 1.0f, 0.0f);
 
-                        sendFlake(vtx, mParticlePositions[point] + diagonalDown, alpha, 1.0f, 1.0f);
+                        sendFlake(vtx, mParticlePositions[point] + diagonalDown, 1.0f, 1.0f);
 
-                        sendFlake(vtx, mParticlePositions[point] - diagonalUp, alpha, 0.0f, 1.0f);
+                        sendFlake(vtx, mParticlePositions[point] - diagonalUp, 0.0f, 1.0f);
                     }
                 }
             }
