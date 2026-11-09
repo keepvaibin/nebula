@@ -140,7 +140,12 @@ BigBubble* MR::generateBigBubble(LiveActor* pHost, const Vec3f& rPos, const Vec3
 }
 
 void MR::limitBigBubblePosition(Vec3f* pPos, f32 offset, s32 limitterID) {
-    ::getBigBubbleHolder()->getMoveLimitter(limitterID)->limitPosition(pPos, offset);
+    // A limitter number nothing registered (a bubble set to one a stage lacks) limits nothing.
+    BigBubbleMoveLimitter* pLimitter = ::getBigBubbleHolder()->getMoveLimitter(limitterID);
+
+    if (pLimitter != nullptr) {
+        pLimitter->limitPosition(pPos, offset);
+    }
 }
 
 void MR::addBigBubbleMoveLimitter(BigBubbleMoveLimitter* pLimitter) {
