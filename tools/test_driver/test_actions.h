@@ -26,4 +26,5 @@ enum {
     NEBULA_TEST_APPEAR_ACTOR,     /* the dead actors whose model is `stage` appear (a boss a stage switch holds back) */
     NEBULA_TEST_KILL_ACTOR,       /* the live actors whose model is `stage` killed (their kill(): what they leave behind) */
     NEBULA_TEST_CIRCLE_WIPE,      /* scenario 0 closes / 1 opens the real scene ring, over 60 frames */
+    NEBULA_TEST_DOME_LAUNCH,      /* the dome's launch demo (マリオ飛び出し) starts; each of its frames logs Mario and the camera */
 };

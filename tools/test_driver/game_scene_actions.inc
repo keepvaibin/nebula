@@ -155,6 +155,11 @@
                     pActor->kill();
                 }
             }
+        } else if (action.kind == NEBULA_TEST_DOME_LAUNCH) {
+            // What the galaxy selector's confirm asks (AstroDomeGalaxySelector::exeGalaxyConfirm), the player its requester.
+            const bool started = MR::requestStartTimeKeepDemoMarioPuppetable(MarioAccess::getPlayerActor(), "マリオ飛び出し", nullptr,
+                                                                             nullptr, nullptr);
+            nebula_log("test: dome launch %s\n", started ? "started" : "queued");
         } else if (action.kind == NEBULA_TEST_SHAKE_CAMERA) {
             // The shaker keeps its owner only to stop it; nothing stops this one.
             MR::shakeCameraInfinity(nullptr, 0.2f, 2.0f);
