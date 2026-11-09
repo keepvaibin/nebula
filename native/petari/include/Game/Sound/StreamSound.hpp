@@ -10,7 +10,7 @@ class StreamManager;
 // goes. Children name its channels.
 class StreamSound final : public Sound, public NebulaListLink< StreamSound > {
 public:
-    StreamSound(StreamManager* streamMgr, SoundStrategyMgr< StreamSound >* soundStrategyMgr);
+    explicit StreamSound(StreamManager* streamMgr);
     virtual ~StreamSound();
     void startID_(SoundID id, s32 streamFileEntry, const Vec3f* posPtr, SoundAudience* audience, int category);
     bool prepare_prepareStream_();
@@ -46,8 +46,6 @@ public:
     int mCategory;
     SoundChild* children[NUM_CHILDREN];
     StreamManager* streamMgr;
-    SoundStrategy< StreamSound >* soundStrategy;
-    SoundStrategyMgr< StreamSound >* soundStrategyMgr;
     bool mIsPaused;
 
 private:

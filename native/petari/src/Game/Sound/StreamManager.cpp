@@ -3,7 +3,6 @@
 #include "Game/Sound/StdSoundInfo.hpp"
 
 StreamManager::StreamManager(bool setInstance) : SoundGlobal< StreamManager >(setInstance) {
-    soundStrategyMgr = nullptr;
     mAudience = nullptr;
     mParams.init();
     mActivity.init();
@@ -88,7 +87,7 @@ void StreamManager::mixOut() {
 }
 
 StreamSound* StreamManager::newStream_() {
-    StreamSound* stream = new StreamSound(this, soundStrategyMgr);
+    StreamSound* stream = new StreamSound(this);
     if (stream == nullptr) {
         return nullptr;
     }

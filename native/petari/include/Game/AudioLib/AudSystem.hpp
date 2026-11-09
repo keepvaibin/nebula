@@ -14,7 +14,6 @@ class AudMeObject;
 class AudRemixMgr;
 class AudRhythmMeSystem;
 class AudSceneMgr;
-class AudSeStrategyMgr;
 class AudSoundObjHolder;
 class AudSoundObject;
 class AudSystemVolumeController;
@@ -141,7 +140,6 @@ public:
     AudRhythmMeSystem* mRhythmMeSystem;
     AudRemixMgr* mRemixMgr;
     AudEffector* mAudEffector;
-    AudSeStrategyMgr* mSeStrategyMgr;
     AudSystemVolumeController* mVolumeController;
     s32 mHomeButtonMenuState;
     s32 mHomeButtonToggleTime;

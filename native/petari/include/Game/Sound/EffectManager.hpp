@@ -82,7 +82,8 @@ public:
     void stopSoundID(SoundID id);
     void initParams();
     void setAudience(SoundAudience* audience);
-    void setStrategyMgr(SoundStrategyMgr< EffectSound >* soundStrategyMgr);
+    // The game's per-frame step for each playing effect (its effect send and low-pass).
+    void setSeCalc(void (*pCalc)(EffectSound*));
     void setSeqDataMgr(SeqSource* seqDataMgr);
     EffectSound* newSe_(int category, u32 priority);
     void calc();
@@ -109,7 +110,7 @@ public:
 
     SoundAudience* mAudience;
     SeqSource* mSeqDataMgr;
-    SoundStrategyMgr< EffectSound >* mStrategyMgr;
+    void (*mSeCalc)(EffectSound*);
     EffectCategory mCategoryMgrs[cEffectCategoryNum];
     SoundMove mParams;
 };

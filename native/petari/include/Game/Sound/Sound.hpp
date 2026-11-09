@@ -283,20 +283,6 @@ struct SoundFader {
     SoundTransition::Ramp mTransition;
 };
 
-template < typename T >
-struct SoundStrategy {
-    virtual ~SoundStrategy() {};
-    virtual void calc(T*);
-    virtual void mix(T*, SoundParams*);
-};
-
-template < typename T >
-struct SoundStrategyMgr {
-    virtual ~SoundStrategyMgr() {};
-    virtual SoundStrategy< T >* newStrategy(SoundID) = 0;
-    virtual bool deleteStrategy(SoundStrategy< T >*) = 0;
-};
-
 // A manager's mute and pause over all its sounds.
 class SoundActivity {
 public:

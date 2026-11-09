@@ -4,11 +4,9 @@
 #include "Game/Sound/SoundChild.hpp"
 #include "Game/Sound/SoundMemory.hpp"
 
-SequenceSound::SequenceSound(SequenceManager* seqMgr, SoundStrategyMgr< SequenceSound >* soundStrategyMgr) {
+SequenceSound::SequenceSound(SequenceManager* seqMgr) {
     mManager = seqMgr;
-    mStrategyMgr = soundStrategyMgr;
     mSoundParams.init();
-    mSoundStrategy = nullptr;
     for (int i = 0; i < cInlineChildren; i++) {
         mInlineChild[i] = nullptr;
     }
@@ -52,12 +50,6 @@ void SequenceSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* aud
     mNumChild = static_cast< s32 >(named * 16);
     growChildren(mNumChild);
     startSound_(id, posPtr, audience);
-
-    if (mStrategyMgr) {
-        mSoundStrategy = mStrategyMgr->newStrategy(id);
-    } else {
-        mSoundStrategy = nullptr;
-    }
 }
 
 void SequenceSound::playSeqData_(const SoundParams& params, SoundActivity activity) {
@@ -131,10 +123,6 @@ void SequenceSound::managerCalc_() {
                 mSoundChild[i]->calc();
             }
         }
-
-        if (mSoundStrategy) {
-            mSoundStrategy->calc(this);
-        }
     }
 }
 
@@ -142,11 +130,6 @@ void SequenceSound::die_() {
     for (s32 i = 0; i < mChildRoom; i++) {
         delete mSoundChild[i];
         mSoundChild[i] = nullptr;
-    }
-
-    if (mSoundStrategy) {
-        mStrategyMgr->deleteStrategy(mSoundStrategy);
-        mSoundStrategy = nullptr;
     }
 
     mPlayer.release();
@@ -173,10 +156,6 @@ void SequenceSound::mixOut_(const SoundParams& params, SoundActivity activity) {
 
     SoundParams outParams;
     mParams.mixOutAll(params, &outParams, mFader.getIntensity());
-
-    if (mSoundStrategy) {
-        mSoundStrategy->mix(this, &outParams);
-    }
 
     if (mAudible) {
         for (s32 i = 0; i < mAudible->getChannelCount(); i++) {
