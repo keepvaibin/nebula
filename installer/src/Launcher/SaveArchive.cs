@@ -455,7 +455,7 @@ namespace Nebula.Launcher
         }
 
         /// <summary>
-        /// A saves folder (also one level down as saves, save-data or nand), or a folder that holds GameData.bin itself:
+        /// A saves folder (also one level down as saves, save-data, or nand from earlier builds), or a folder that holds GameData.bin itself:
         /// the data folder, or a saves folder of earlier builds.
         /// </summary>
         private static List<SaveItem> ReadFolder(string root)

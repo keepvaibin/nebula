@@ -27,11 +27,11 @@ int main() {
 
         _putenv_s("GALAXY_HIDE_WINDOW", "1");
         _wputenv_s(L"NEBULA_WORK", root.c_str());
-        const wchar_t* names[] = {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_NAND",
+        const wchar_t* names[] = {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_SAVES",
                                   L"LOCALAPPDATA", L"GALAXY_RUNTIME_SETTINGS_PATH",
                                   L"GALAXY_RENDER_CONFIG_PATH", L"GALAXY_CRASH_DUMP_DIR"};
         for (const auto* name : names) _wputenv_s(name, (root / name).c_str());
-        char program[] = "path-tests", option[] = "--nand";
+        char program[] = "path-tests", option[] = "--saves";
         std::string saves = (root / "saves").string();
         char* argv[] = {program, option, saves.data()};
         check(!galaxy::host::test_data_paths_error(3, argv), "private run accepted");

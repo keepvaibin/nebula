@@ -33,7 +33,7 @@ The app's private storage (`NEBULA_DATA_DIR` for the native game):
 | Path | |
 | --- | --- |
 | `game/game.pak`, `game/install.properties` | the game, written by setup; the second last, so its presence means a complete game |
-| `nand/` | saves and the Mii database |
+| `saves/` | saves and the Mii database (earlier builds named it `nand/`; it is renamed on first use) |
 | `config.ini` | renderer settings (`runtime/src/render/render_config.cpp`); the launcher writes its keys only |
 | `logs/game.log`, `logs/game.previous.log` | the game's output, this run and the one before |
 | `last_error.txt` | a fatal error's message, shown by the launcher |

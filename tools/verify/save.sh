@@ -1,5 +1,5 @@
 #!/bin/sh
-# save.sh BASE_BIN NEW_BIN TAG: a save written and loaded by each build. In a copy of NEBULA_NAND with no save, the
+# save.sh BASE_BIN NEW_BIN TAG: a save written and loaded by each build. In a copy of NEBULA_SAVES with no save, the
 # build clears Egg Star Galaxy's star and answers Yes to the save prompt (the pointer on Yes, A every 90 frames); the
 # save must then be a Nebula.sav. The build then boots that save and presses A+B at the title: the
 # file select, which shows File 1 with Mario, is compared between the builds. The load runs are deterministic (game
@@ -18,26 +18,26 @@ done
 status=0
 i=0
 for bin in "$base" "$new"; do
-    nand="$NEBULA_WORK/nand_${tag}_$i"
-    rm -rf "$nand"
-    cp -r "$(cygpath -u "$NEBULA_NAND")" "$nand"
-    find "$nand" -name GameData.bin -delete
-    find "$nand" -name "Nebula.sav*" -delete
-    NEBULA_NAND="$(cygpath -w "$nand")" run_build "$bin" "s_${tag}_${i}_save" 140 \
+    saves="$NEBULA_WORK/saves_${tag}_$i"
+    rm -rf "$saves"
+    cp -r "$(cygpath -u "$NEBULA_SAVES")" "$saves"
+    find "$saves" -name GameData.bin -delete
+    find "$saves" -name "Nebula.sav*" -delete
+    NEBULA_SAVES="$(cygpath -w "$saves")" run_build "$bin" "s_${tag}_${i}_save" 140 \
         GALAXY_TEST_GALAXY_TOUR="$(tour_file tour_one_EggStarGalaxy.txt)" GALAXY_TEST_GALAXY_TOUR_FRAMES=900 \
         GALAXY_TEST_EVENTS=star@600/wait@8000 "GALAXY_INPUT_AUTOPRESS_SCRIPT=${presses%;}" \
         GALAXY_INPUT_POINTER_X=0.28 GALAXY_INPUT_POINTER_Y=0.6 GALAXY_PRESENT_SNAPSHOT_EVERY=1000000
-    save=$(find "$nand" -name Nebula.sav)
+    save=$(find "$saves" -name Nebula.sav)
     size=$( [ -n "$save" ] && wc -c < "$save" || echo 0)
     echo "$tag build $i: Nebula.sav $size bytes"
     [ "$size" -gt 0 ] || status=1
-    NEBULA_NAND="$(cygpath -w "$nand")" run_build "$bin" "s_${tag}_${i}_load" 45 \
+    NEBULA_SAVES="$(cygpath -w "$saves")" run_build "$bin" "s_${tag}_${i}_load" 45 \
         GALAXY_TEST_DETERMINISTIC=1 GALAXY_INPUT_AUTOPRESS_SCRIPT=760:30:A+B GALAXY_PRESENT_SNAPSHOT_EVERY=1 \
         GALAXY_PRESENT_SNAPSHOT_FIRST=2300 GALAXY_PRESENT_SNAPSHOT_LAST=2400
     grep -q "presence: Choosing a file" "$RUNS/s_${tag}_${i}_load/run.log" || { echo "$tag build $i: no file select"; status=1; }
     i=$((i + 1))
 done
-NEBULA_NAND="$(cygpath -w "$NEBULA_WORK/nand_${tag}_0")" run_build "$base" "s_${tag}_0_ctl" 45 \
+NEBULA_SAVES="$(cygpath -w "$NEBULA_WORK/saves_${tag}_0")" run_build "$base" "s_${tag}_0_ctl" 45 \
     GALAXY_TEST_DETERMINISTIC=1 GALAXY_INPUT_AUTOPRESS_SCRIPT=760:30:A+B GALAXY_PRESENT_SNAPSHOT_EVERY=1 \
     GALAXY_PRESENT_SNAPSHOT_FIRST=2300 GALAXY_PRESENT_SNAPSHOT_LAST=2400
 control=$(python -I "$VERIFY/align_tol.py" "$RUNS/s_${tag}_0_load" "$RUNS/s_${tag}_0_ctl" - - 40 | tail -1)

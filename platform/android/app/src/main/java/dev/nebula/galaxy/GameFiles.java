@@ -3,6 +3,7 @@ package dev.nebula.galaxy;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import java.io.File;
 
@@ -26,8 +27,26 @@ final class GameFiles {
         return new File(data(context), "game/install.properties");
     }
 
-    static File nand(Context context) {
-        return new File(data(context), "nand");
+    /** The saves and the Mii database. */
+    static File saves(Context context) {
+        return savesIn(data(context));
+    }
+
+    /**
+     * The saves folder under [dataDir]. Earlier builds called it "nand": it is renamed to "saves" the first time it is
+     * asked for. If the rename fails, the old folder is used for this run so no save is lost.
+     */
+    static File savesIn(File dataDir) {
+        final File saves = new File(dataDir, "saves");
+        final File old = new File(dataDir, "nand");
+        if (saves.exists() || !old.isDirectory()) {
+            return saves;
+        }
+        if (old.renameTo(saves)) {
+            return saves;
+        }
+        Log.e("GameFiles", "the saves folder could not be renamed from nand; using " + old.getPath());
+        return old;
     }
 
     static File log(Context context) {

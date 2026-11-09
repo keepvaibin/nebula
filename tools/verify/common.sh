@@ -1,6 +1,6 @@
 #!/bin/sh
 # Shared by the verify scripts: NEBULA_WORK (a work folder) holds runs/<tag> and appdata/<build>, one app-data folder
-# per build (its bin folder's name), so two builds' shader caches never mix. NEBULA_PAK, NEBULA_NAND and NEBULA_SETTINGS
+# per build (its bin folder's name), so two builds' shader caches never mix. NEBULA_PAK, NEBULA_SAVES and NEBULA_SETTINGS
 # as run.sh takes them.
 VERIFY=$(cd "$(dirname "$0")" && pwd)
 : "${NEBULA_WORK:?NEBULA_WORK is not set}"

@@ -80,16 +80,16 @@ object Storage {
 
     fun freeBytes(context: Context): Long = StatFs(GameFiles.data(context).path).availableBytes
 
-    fun saveBytes(context: Context): Long = GameFiles.nand(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    fun saveBytes(context: Context): Long = GameFiles.saves(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
-    /** The game's files, not the saves (nand/) or settings. */
+    /** The game's files, not the saves (saves/) or settings. */
     fun removeGame(context: Context) {
         GameFiles.install(context).delete()
         File(GameFiles.data(context), "game").deleteRecursively()
     }
 }
 
-/** The renderer's settings, config.ini in the data folder (runtime/src/gx/render_config.cpp reads it). */
+/** The renderer's settings, config.ini in the data folder (runtime/src/render/render_config.cpp reads it). */
 data class GraphicsSettings(
     val vsync: Boolean,
     val displayRate: Boolean,

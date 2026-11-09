@@ -3472,11 +3472,7 @@ int main(int argc, char** argv) {
         const std::string key = argv[i];
         if (key == "--pak") {
             pak = arg_path(i + 1);
-        } else if (key == "--saves"
-#if defined(NEBULA_DEV)
-                   || key == "--nand"
-#endif
-        ) {
+        } else if (key == "--saves") {
             saves = arg_path(i + 1);
         } else if (key == "--module") {
             module = arg_path(i + 1);
