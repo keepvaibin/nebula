@@ -594,10 +594,16 @@ struct HidCandidate {
     ProductInfo info{};
 };
 
-input::ButtonIconModel icon_model(simple::Layout layout, bool gamecube) noexcept {
-    return layout == simple::Layout::Sixaxis ? input::ButtonIconModel::Sixaxis
-           : gamecube                        ? input::ButtonIconModel::GameCube
-                                             : input::ButtonIconModel::Standard;
+// The icons a pad has of its own: the Sixaxis's, the GameCube pad's, every Steam controller's and the DualSense Edge's.
+input::ButtonIconModel icon_model(ControlScheme scheme, simple::Layout layout, bool gamecube,
+                                  ps::Model ps_model) noexcept {
+    if (layout == simple::Layout::Sixaxis) return input::ButtonIconModel::Sixaxis;
+    if (gamecube) return input::ButtonIconModel::GameCube;
+    if (scheme == ControlScheme::Steam) return input::ButtonIconModel::Steam;
+    if (scheme == ControlScheme::PlayStation && ps_model == ps::Model::DualSenseEdge) {
+        return input::ButtonIconModel::DualSenseEdge;
+    }
+    return input::ButtonIconModel::Standard;
 }
 
 // USB interface number from "&mi_NN" in a device path (-1: not a composite device).
@@ -1701,7 +1707,7 @@ private:
             published.info.sensors = !device.no_motion && (!playstation || device.ps_caps.sensors);
             published.info.gyro = published.info.sensors && simple::has_gyro(device.simple);
             published.info.touch = device.simple == simple::Layout::None && (!playstation || device.ps_caps.touchpad);
-            published.info.icons = icon_model(device.simple, device.gamecube);
+            published.info.icons = icon_model(device.scheme, device.simple, device.gamecube, device.ps_model);
             ReleaseSRWLockExclusive(&hub().lock);
         }
         if (device.scheme == ControlScheme::Steam && device.simple == simple::Layout::None) {
@@ -2624,8 +2630,9 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
             info.slot = static_cast<std::uint32_t>(count);
             info.link = link_of(candidate);
             info.model = candidate.info.name;
-            info.icons = icon_model(candidate.info.simple, candidate.vendor == sw::kNintendoVendorId &&
-                                                               candidate.product == sw::kGameCubeProductId);
+            info.icons = icon_model(candidate.info.scheme, candidate.info.simple,
+                                    candidate.vendor == sw::kNintendoVendorId && candidate.product == sw::kGameCubeProductId,
+                                    candidate.info.ps_model);
             ++count;
         }
     } catch (...) {

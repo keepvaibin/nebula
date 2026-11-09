@@ -1691,6 +1691,19 @@ void test_button_icons() {
                    ButtonIconModel::Standard &&
                button_icon_spec(ButtonIconStyle::Nintendo, pro2, false).model == ButtonIconModel::Standard,
            "not in another's, nor without one");
+    const BindingTable steam_pad = default_binding_table(ControlScheme::Steam);
+    const ButtonIconSpec steam_icons = button_icon_spec(ButtonIconStyle::Xbox, steam_pad, false, ButtonIconModel::Steam);
+    expect(steam_icons.model == ButtonIconModel::Steam &&
+               button_icon_spec(ButtonIconStyle::Nintendo, steam_pad, false, ButtonIconModel::Steam).model ==
+                   ButtonIconModel::Standard &&
+               button_icon_spec(ButtonIconStyle::PlayStation, playstation, false, ButtonIconModel::DualSenseEdge).model ==
+                   ButtonIconModel::DualSenseEdge &&
+               button_icon_spec(ButtonIconStyle::Xbox, playstation, false, ButtonIconModel::DualSenseEdge).model ==
+                   ButtonIconModel::Standard,
+           "the Steam and Edge models in their own styles only");
+    expect(icon(steam_icons, ButtonIcon::Home) == Glyph{ButtonGlyph::Home, 0u} &&
+               icon(button_icon_spec(ButtonIconStyle::Xbox, steam_pad, false), ButtonIcon::Home) == Glyph{ButtonGlyph::Keep, 0u},
+           "HOME is the Steam button on the Steam model alone");
 }
 
 // The keyboard's icons: every key and mouse button has one; each Wii button shows its input as it is reached for there.

@@ -111,8 +111,10 @@ namespace {
         return NebulaUi::clamp(0.5f - distance, 0.0f, 1.0f);
     }
 
-    // `rShape` ringed `ring` wide in `rRing`, its face from `rTop` at its top to `rBottom` at its foot.
-    void drawShape(Canvas& rCanvas, const Shape& rShape, const Rgba& rRing, f32 ring, const Rgba& rTop, const Rgba& rBottom) {
+    // `rShape` (a Shape, or a Bean: anything with mY, mHalfHeight and distance) ringed `ring` wide in `rRing`, its face
+    // from `rTop` at its top to `rBottom` at its foot.
+    template < typename Surface >
+    void drawShape(Canvas& rCanvas, const Surface& rShape, const Rgba& rRing, f32 ring, const Rgba& rTop, const Rgba& rBottom) {
         for (s32 y = rCanvas.top(); y < rCanvas.bottom(); y++) {
             const f32 t = NebulaUi::clamp((y + 0.5f - (rShape.mY - rShape.mHalfHeight)) / (rShape.mHalfHeight * 2.0f), 0.0f, 1.0f);
             const Rgba face = {rTop.r + (rBottom.r - rTop.r) * t, rTop.g + (rBottom.g - rTop.g) * t, rTop.b + (rBottom.b - rTop.b) * t,
@@ -675,11 +677,51 @@ namespace {
     const u32 cWhiteBottom = NEBULA_RGBA(0xD3, 0xD9, 0xE6, 0xFF);
     const u32 cInk = 0x2B3045FF;
     const u32 cWhite = 0xFFFFFFFF;
+    // The GameCube pad's face buttons: A green, B red, X and Y silver grey.
+    const u32 cGameCubeA = 0x2EA65CFF;
+    const u32 cGameCubeB = 0xCC3333FF;
+    const u32 cGameCubeXY = 0xC4C9D1FF;
+    const u32 cPadRim = 0x6A6E78FF;  // an inner ring on a dark button
 
     Rgba darkened(const Rgba& rColor) {
         const Rgba c = {rColor.r * 0.9f, rColor.g * 0.9f, rColor.b * 0.9f, rColor.a};
         return c;
     }
+
+    // `rColor` a quarter of the way to white: the top of a lit face.
+    Rgba lightened(const Rgba& rColor) {
+        const Rgba c = {rColor.r + (1.0f - rColor.r) * 0.25f, rColor.g + (1.0f - rColor.g) * 0.25f, rColor.b + (1.0f - rColor.b) * 0.25f, 1.0f};
+        return c;
+    }
+
+    // A kidney, the GameCube pad's X and Y: a bar with round ends (`mHalfWidth` x `mHalfHeight` its box, centred on (mX,
+    // mY), lying or `mUpright`) with one long side dented by a large circle, on the side `mDent` (+1: below a lying bar,
+    // right of an upright one; -1: the other). Negative inside, in pixels; the dent's edge is not an exact distance.
+    struct Bean {
+        f32 mX;
+        f32 mY;
+        f32 mHalfWidth;
+        f32 mHalfHeight;
+        f32 mDent;
+        bool mUpright;
+
+        f32 distance(f32 x, f32 y) const {
+            const f32 along = mUpright ? y - mY : x - mX;
+            const f32 across = mUpright ? x - mX : y - mY;
+            const f32 halfLength = mUpright ? mHalfHeight : mHalfWidth;
+            const f32 halfAcross = mUpright ? mHalfWidth : mHalfHeight;
+            const f32 tip = __builtin_fabsf(along) - (halfLength - halfAcross);
+            const f32 beyond = tip > 0.0f ? tip : 0.0f;
+            const f32 body = __builtin_sqrtf(beyond * beyond + across * across) - halfAcross;
+            // The dent: a circle whose edge reaches 0.7 of the bar's half width into it at the middle.
+            const f32 radius = halfLength * 1.2f;
+            const f32 centre = mDent * (halfAcross * 0.3f + radius);
+            const f32 dx = along;
+            const f32 dy = across - centre;
+            const f32 cut = radius - __builtin_sqrtf(dx * dx + dy * dy);
+            return body > cut ? body : cut;
+        }
+    };
 
     // How an icon is drawn: in text (its font cell), or as the A bubble's two frames:
     // the button up (a 39-pixel button at (4, 4) of 48, lit from above, its shadow down and right) and pressed (36 of
@@ -687,7 +729,8 @@ namespace {
     enum { LookText, LookUp, LookPressed };
 
     // The icon of `glyph` at `place` in `style`, of `model`'s where that has its own, on the canvas (cleared first); false
-    // when the game's own shows, or the model is another family's.
+    // when the game's own shows (HOME and the Control Pad, but for the Steam model's HOME), or the model is another
+    // family's.
     bool paint(Canvas& rCanvas, s32 style, s32 glyph, s32 place, s32 look, s32 model = NEBULA_ICON_MODEL_STANDARD) {
         static const char* const cNintendoFaces[4] = {"B", "A", "Y", "X"};
         static const char* const cXboxLetters[4] = {"A", "B", "X", "Y"};
@@ -703,7 +746,9 @@ namespace {
         const bool xbox = family == 0;
         const bool sixaxis = model == NEBULA_ICON_MODEL_SIXAXIS;
         const bool gameCube = model == NEBULA_ICON_MODEL_GAMECUBE;
-        if ((sixaxis && family != 2) || (gameCube && family != 1)) {
+        const bool steam = model == NEBULA_ICON_MODEL_STEAM;
+        const bool edge = model == NEBULA_ICON_MODEL_DUALSENSE_EDGE;
+        if ((sixaxis && family != 2) || (edge && family != 2) || (gameCube && family != 1) || (steam && family != 0)) {
             return false;
         }
         const s32 width = rCanvas.mWidth;
@@ -739,7 +784,29 @@ namespace {
         switch (glyph) {
         case NEBULA_ICON_FACE: {
             const s32 p = place & 3;
-            if (xbox) {
+            if (gameCube) {
+                // The pad's own shapes and colours by place (Nintendo's positional letters B, A, Y, X): A the large green round
+                // button, B the small red one, Y a grey kidney lying and X one upright, each dented toward A.
+                const Rgba fill = rgba(p == 1 ? cGameCubeA : p == 0 ? cGameCubeB : cGameCubeXY);
+                const Rgba top = lightened(fill);
+                const Rgba from = pressed ? darkened(fill) : top;
+                const Rgba to = pressed ? darkened(top) : fill;
+                const Rgba letter = rgba(p >= 2 ? cInk : cWhite);
+                if (p >= 2) {
+                    const bool upright = p == 3;
+                    const f32 length = diameter * 0.48f;
+                    const f32 across = diameter * 0.27f;
+                    const Bean kidney = {cx, cy, upright ? across : length, upright ? length : across, upright ? -1.0f : 1.0f, upright};
+                    drawShape(rCanvas, kidney, ringColor, ring, from, to);
+                    // The letter sits clear of the dent.
+                    drawText(rCanvas, cNintendoFaces[p], upright ? cx + diameter * 0.04f : cx, upright ? cy : cy - diameter * 0.04f, diameter * 0.36f, letter);
+                } else {
+                    const f32 radius = diameter * (p == 1 ? 0.5f : 0.4f);
+                    const Shape button = {cx, cy, radius, radius, radius};
+                    drawShape(rCanvas, button, ringColor, ring, from, to);
+                    drawText(rCanvas, cNintendoFaces[p], cx, cy, radius * 0.92f, letter);
+                }
+            } else if (xbox) {
                 // Y's letter dark on its yellow.
                 const Rgba fill = rgba(cXboxFaces[p]);
                 const Rgba top = {fill.r + (1.0f - fill.r) * 0.25f, fill.g + (1.0f - fill.g) * 0.25f, fill.b + (1.0f - fill.b) * 0.25f, 1.0f};
@@ -779,7 +846,11 @@ namespace {
                 return true;
             }
             if (family == 1) {
-                return false;  // Plus: the game's own
+                // Plus: a round button with a plus sign.
+                drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
+                drawBar(rCanvas, cx, cy, diameter * 0.24f, diameter * 0.05f, ink);
+                drawBar(rCanvas, cx, cy, diameter * 0.05f, diameter * 0.24f, ink);
+                return true;
             }
             drawShape(rCanvas, family == 2 ? pill : circle, ringColor, ring, faceTop, faceBottom);
             // Three lines (Menu, Options).
@@ -794,7 +865,10 @@ namespace {
                 return true;
             }
             if (family == 1) {
-                return false;  // Minus: the game's own
+                // Minus: a round button with a minus sign.
+                drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
+                drawBar(rCanvas, cx, cy, diameter * 0.24f, diameter * 0.05f, ink);
+                return true;
             }
             drawShape(rCanvas, family == 2 ? pill : circle, ringColor, ring, faceTop, faceBottom);
             if (xbox) {
@@ -812,6 +886,15 @@ namespace {
             return true;
         case NEBULA_ICON_CAPTURE: {
             static const char* const cCaptures[3] = {"SHARE", "CAP", "PAD"};
+            if (steam) {
+                // Quick access: a round button with three dots.
+                drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
+                for (s32 dot = -1; dot <= 1; dot++) {
+                    const Shape bead = {cx + dot * diameter * 0.2f, cy, diameter * 0.055f, diameter * 0.055f, diameter * 0.055f};
+                    drawShape(rCanvas, bead, ink, 0.0f, ink, ink);
+                }
+                return true;
+            }
             drawShape(rCanvas, pill, ringColor, ring, faceTop, faceBottom);
             drawText(rCanvas, cCaptures[family], cx, cy, diameter * (family == 0 ? 0.17f : 0.26f), ink);
             return true;
@@ -822,11 +905,48 @@ namespace {
             drawText(rCanvas, cChats[family], cx, cy, diameter * (family == 1 ? 0.44f : 0.2f), ink);
             return true;
         }
+        case NEBULA_ICON_HOME:
+            // Only the Steam model draws HOME: its Steam button, a round button named in letters.
+            if (!steam) {
+                return false;
+            }
+            drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
+            drawText(rCanvas, "STEAM", cx, cy, diameter * 0.16f, ink);
+            return true;
         case NEBULA_ICON_GRIP:
+            if (steam || edge) {
+                // A back button, tall and narrow: the Steam controllers' L4 R4 L5 R5, the Edge's paddles; the Edge's Fn buttons
+                // (4 left, 5 right) lie flat, FN over the side.
+                if (edge && place >= 4) {
+                    drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
+                    drawText(rCanvas, "FN", cx, cy - diameter * 0.1f, diameter * 0.3f, ink);
+                    drawText(rCanvas, (place & 1) != 0 ? "R" : "L", cx, cy + diameter * 0.22f, diameter * 0.18f, ink);
+                    return true;
+                }
+                const Shape paddle = {cx, cy, diameter * 0.26f, diameter * 0.5f, diameter * 0.22f};
+                drawShape(rCanvas, paddle, ringColor, ring, faceTop, faceBottom);
+                if (steam) {
+                    drawText(rCanvas, cGrips[0][place & 3], cx, cy, diameter * 0.26f, ink);
+                } else {
+                    // The Edge's paddle: the side, and two grooves.
+                    drawText(rCanvas, (place & 1) != 0 ? "R" : "L", cx, cy - diameter * 0.14f, diameter * 0.3f, ink);
+                    drawBar(rCanvas, cx, cy + diameter * 0.14f, diameter * 0.1f, diameter * 0.025f, ink);
+                    drawBar(rCanvas, cx, cy + diameter * 0.26f, diameter * 0.1f, diameter * 0.025f, ink);
+                }
+                return true;
+            }
             drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
             drawText(rCanvas, cGrips[family][place & 3], cx, cy, diameter * 0.26f, ink);
             return true;
         case NEBULA_ICON_TRACKPAD:
+            if (steam) {
+                // A round pad with an inner ring, the side in its middle.
+                drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
+                const Shape inner = {cx, cy, diameter * 0.34f, diameter * 0.34f, diameter * 0.34f};
+                drawShape(rCanvas, inner, rgba(cPadRim), ring * 0.7f, faceTop, faceBottom);
+                drawText(rCanvas, cTrackpads[place & 1], cx, cy, diameter * 0.26f, ink);
+                return true;
+            }
             drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
             drawText(rCanvas, cTrackpads[place & 1], cx, cy, diameter * 0.3f, ink);
             return true;
@@ -1322,6 +1442,22 @@ namespace {
         {NEBULA_ICON_TRIGGER, 1, "gamecube-r", NEBULA_ICON_MODEL_GAMECUBE},
         {NEBULA_ICON_START, 0, "gamecube-start", NEBULA_ICON_MODEL_GAMECUBE},
         {NEBULA_ICON_STICK, 1, "gamecube-c", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_FACE, 0, "gamecube-b", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_FACE, 1, "gamecube-a", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_FACE, 2, "gamecube-y", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_FACE, 3, "gamecube-x", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_HOME, 0, "steam-button", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_CAPTURE, 0, "steam-quick-access", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_GRIP, 0, "steam-l4", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_GRIP, 1, "steam-r4", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_GRIP, 2, "steam-l5", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_GRIP, 3, "steam-r5", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_TRACKPAD, 0, "steam-trackpad-left", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_TRACKPAD, 1, "steam-trackpad-right", NEBULA_ICON_MODEL_STEAM},
+        {NEBULA_ICON_GRIP, 0, "edge-paddle-left", NEBULA_ICON_MODEL_DUALSENSE_EDGE},
+        {NEBULA_ICON_GRIP, 1, "edge-paddle-right", NEBULA_ICON_MODEL_DUALSENSE_EDGE},
+        {NEBULA_ICON_GRIP, 4, "edge-fn-left", NEBULA_ICON_MODEL_DUALSENSE_EDGE},
+        {NEBULA_ICON_GRIP, 5, "edge-fn-right", NEBULA_ICON_MODEL_DUALSENSE_EDGE},
     };
     const s32 cAtlasIcons = sizeof(cAtlas) / sizeof(cAtlas[0]);
 

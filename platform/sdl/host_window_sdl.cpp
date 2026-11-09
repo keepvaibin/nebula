@@ -418,8 +418,9 @@ galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
     return galaxy::input::ControlScheme::Xbox;
 }
 
-// The icon model of a gamepad whose buttons are not its family's: the DualShock 3 (Select and Start) and the GameCube
-// pad (analog L and R, ZL and Z, Start).
+// The icon model of a gamepad whose buttons are not its family's: the DualShock 3 (Select and Start), the GameCube
+// pad (face buttons, analog L and R, ZL and Z, Start), any Steam controller (Steam button, quick access, back buttons,
+// trackpads) and the DualSense Edge (back paddles, Fn buttons).
 galaxy::input::ButtonIconModel icon_model_of(SDL_Gamepad* pad) noexcept {
     namespace sw = galaxy::input::switch_hid;
     const SDL_GamepadType type = SDL_GetGamepadType(pad);
@@ -429,6 +430,14 @@ galaxy::input::ButtonIconModel icon_model_of(SDL_Gamepad* pad) noexcept {
     if (type == SDL_GAMEPAD_TYPE_GAMECUBE ||
         (SDL_GetGamepadVendor(pad) == sw::kNintendoVendorId && SDL_GetGamepadProduct(pad) == sw::kGameCubeProductId)) {
         return galaxy::input::ButtonIconModel::GameCube;
+    }
+    // The same test scheme_of makes for the Steam family.
+    if (type == SDL_GAMEPAD_TYPE_STEAM || SDL_GetGamepadVendor(pad) == galaxy::input::steam::kValveVendorId) {
+        return galaxy::input::ButtonIconModel::Steam;
+    }
+    if (SDL_GetGamepadVendor(pad) == galaxy::input::playstation::kSonyVendorId &&
+        SDL_GetGamepadProduct(pad) == galaxy::input::playstation::kDualSenseEdgeProductId) {
+        return galaxy::input::ButtonIconModel::DualSenseEdge;
     }
     return galaxy::input::ButtonIconModel::Standard;
 }

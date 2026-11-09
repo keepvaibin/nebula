@@ -484,7 +484,9 @@ enum {
 enum {
     NEBULA_ICON_MODEL_STANDARD = 0,
     NEBULA_ICON_MODEL_SIXAXIS,  /* PLAYSTATION: Select and Start */
-    NEBULA_ICON_MODEL_GAMECUBE, /* NINTENDO: analog L and R, ZL and Z, Start */
+    NEBULA_ICON_MODEL_GAMECUBE, /* NINTENDO: face buttons, analog L and R, ZL and Z, Start */
+    NEBULA_ICON_MODEL_STEAM,    /* XBOX: Steam button (HOME), quick access (CAPTURE), back buttons, trackpads */
+    NEBULA_ICON_MODEL_DUALSENSE_EDGE, /* PLAYSTATION: back paddles and Fn buttons (GRIP) */
 };
 enum {
     NEBULA_ICON_KEEP = 0, /* the game's own icon */
@@ -499,7 +501,7 @@ enum {
     NEBULA_ICON_KEY,      /* place: NEBULA_KEY_* */
     NEBULA_ICON_CAPTURE,  /* Capture, the touchpad's click, Steam's quick access */
     NEBULA_ICON_CHAT,     /* Pro Controller 2 C, DualSense mute */
-    NEBULA_ICON_GRIP,     /* place: 0 left, 1 right, 2 and 3 the Steam Controller's second pair */
+    NEBULA_ICON_GRIP,     /* place: 0 left, 1 right, 2 and 3 the Steam Controller's second pair, 4 and 5 the Edge's Fn buttons */
     NEBULA_ICON_TRACKPAD, /* place: 0 left, 1 right */
     NEBULA_ICON_STICK_AXIS, /* place: 0 up, 1 down, 2 left, 3 right; 4 on the right stick's */
 };

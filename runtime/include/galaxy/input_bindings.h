@@ -433,15 +433,16 @@ enum class ButtonIconStyle : std::uint8_t { Game, Xbox, Nintendo, PlayStation, K
     return ButtonIconStyle::Game;
 }
 // A model whose buttons are not its family's (ControllerInfo::icons): the DualShock 3's Select and Start, the GameCube
-// pad's analog L and R, its ZL and Z shoulders and its Start.
-enum class ButtonIconModel : std::uint8_t { Standard, Sixaxis, GameCube };
+// pad's face buttons, analog L and R, ZL and Z shoulders and Start, the Steam controllers' Steam button, quick access,
+// back buttons and trackpads (Xbox style), the DualSense Edge's back paddles and Fn buttons (PlayStation style).
+enum class ButtonIconModel : std::uint8_t { Standard, Sixaxis, GameCube, Steam, DualSenseEdge };
 enum class ButtonIcon : std::uint8_t { A, B, C, Z, One, Two, Plus, Minus, Home, Pad };
 inline constexpr std::size_t kButtonIconCount = 10;
 // What an icon shows: the game's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
 // trigger or a stick's click (0 left, 1 right); Start (Xbox Menu, Plus, Options), Back (View, Minus, Share or Create),
 // Home; the D-pad (on a keyboard its four keys, ButtonIconSpec::pad_keys); a key or mouse button by its key icon;
 // Capture (Share, the touchpad's click, Steam's quick access); Chat (Pro Controller 2 C, DualSense mute); a grip (0 left,
-// 1 right, 2 and 3 the Steam Controller's second pair); a trackpad's click (0 left, 1 right); a stick's direction (0 up,
+// 1 right, 2 and 3 the Steam Controller's second pair, 4 and 5 the DualSense Edge's left and right Fn buttons); a trackpad's click (0 left, 1 right); a stick's direction (0 up,
 // 1 down, 2 left, 3 right; 4 on the right stick's).
 enum class ButtonGlyph : std::uint8_t {
     Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad, Key, Capture, Chat, Grip, Trackpad, StickAxis };
@@ -475,7 +476,8 @@ struct ButtonIconSpec {
 };
 // The icons in `style` for a controller's `table`: each game button's first controller input (the keyboard's: its first
 // key or mouse button). In menus B is the button that goes back there (JumpBack's), in play the game's B. HOME and the
-// Control Pad keep the game's own on a controller; the keyboard shows HOME's key and the Control Pad's four. `model`
+// Control Pad keep the game's own on a controller (the Steam model draws HOME as the Steam button); the keyboard shows
+// HOME's key and the Control Pad's four. `model`
 // counts only in its family's style.
 [[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu,
                                               ButtonIconModel model = ButtonIconModel::Standard) noexcept;
