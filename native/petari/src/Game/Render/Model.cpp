@@ -300,7 +300,7 @@ int ItemBuffer::entryMatSort(MaterialEntry* pEntry) {
         if (texNo != NEBULA_NONE32) {
             const ResTIMG* pTimg = pMaterial->getModelData()->getTexture(texNo);
             const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
-            image = pRecord != nullptr ? static_cast< u32 >(pRecord->pack_hash) : 0;
+            image = pRecord != nullptr ? static_cast< u32 >(pRecord->image_id) : 0;
         }
         for (u32 i = 0; i < mEntryCount; i++) {
             if (static_cast< u32 >(mEntries[i].mKey >> 32) == image && mEntries[i].mEntry->isSame(pEntry)) {

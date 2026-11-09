@@ -1835,7 +1835,7 @@ public:
         state.anti_aliasing_text = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         if (render.texture_packs) {
             const auto packs = TexturePacks::summary();
-            state.texture_packs = {packs.textures, packs.levels, packs.indexed, packs.unreadable};
+            state.texture_packs = {packs.textures, packs.levels, packs.indexed, packs.dolphin, packs.unknown};
         }
         return state;
     }

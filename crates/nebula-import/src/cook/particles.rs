@@ -82,6 +82,8 @@ pub struct Texture {
     pub name: Vec<u8>,
     pub info: Vec<u8>,
     pub record: Vec<u8>,
+    /// Its source's palette hash (texture::source_palette_hash), for its name; 0 once cooked.
+    pub palette: u64,
 }
 
 /// A shape: its record (table offsets unset) and its tables.
@@ -437,7 +439,7 @@ fn texture(s: &Src, at: usize) -> Result<Texture> {
     info.u8(s.u8(h + 0x10)?).u8(1u8 << s.u8(h + 0x13)?.min(2)).u8(s.u8(h + 0x14)?).u8(s.u8(h + 0x15)?);
     info.zeros(20);
     debug_assert_eq!(info.0.len(), TEXTURE_INFO);
-    Ok(Texture { name, info: info.0, record })
+    Ok(Texture { name, info: info.0, record, palette: 0 })
 }
 
 /// A disc particle file (version 2-10).
@@ -493,7 +495,26 @@ pub fn read_jpc(bytes: &[u8], stats: &mut Stats) -> Result<ParticleIr> {
         ir.textures.push(texture(&s, at)?);
         at += size;
     }
+    for (t, palette) in ir.textures.iter_mut().zip(formats::jpc_palettes(bytes)?) {
+        t.palette = palette;
+    }
     Ok(ir)
+}
+
+/// Names each texture's record `<file stem>/<texture>` (texture::name_record). Textures with one image keep sharing its
+/// record, named for the first of them.
+pub fn name_textures(ir: &mut ParticleIr, stem: &str) {
+    let mut named: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+    for t in &mut ir.textures {
+        if let Some(record) = named.get(&t.record) {
+            t.record = record.clone();
+            continue;
+        }
+        let source = t.record.clone();
+        let name = format!("{stem}/{}", String::from_utf8_lossy(&t.name));
+        super::texture::name_record(&mut t.record, &name, t.palette);
+        named.insert(source, t.record.clone());
+    }
 }
 
 fn align(out: &mut Vec<u8>, to: usize) {
@@ -672,7 +693,7 @@ pub fn read_nptc(bytes: &[u8]) -> Result<ParticleIr> {
         let record_at = info_at + s.u32(info_at + 20)? as usize;
         let size = s.u32(record_at + 12)? as usize;
         info[20..24].fill(0);
-        ir.textures.push(Texture { name, info, record: s.bytes(record_at, size)?.to_vec() });
+        ir.textures.push(Texture { name, info, record: s.bytes(record_at, size)?.to_vec(), palette: 0 });
     }
     Ok(ir)
 }
@@ -714,7 +735,7 @@ mod tests {
     fn texture(name: &str, fill: u8) -> Texture {
         let mut record = vec![fill; 80];
         record[12..16].copy_from_slice(&80u32.to_le_bytes());
-        Texture { name: name.as_bytes().to_vec(), info: vec![0; TEXTURE_INFO], record }
+        Texture { name: name.as_bytes().to_vec(), info: vec![0; TEXTURE_INFO], record, palette: 0 }
     }
 
     #[test]

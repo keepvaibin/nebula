@@ -811,11 +811,16 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     b.align(32);
     let geometry_size = b.at() - geometry_at;
     // Texture records.
+    // Each named for the first texture of the model that shows it, `<model stem>/<texture>` (texture::name_record).
     let mut record_at = Vec::with_capacity(ir.records.len());
-    for r in &ir.records {
+    for (i, r) in ir.records.iter().enumerate() {
         b.align(32);
         record_at.push(b.at());
+        let start = b.0.len();
         b.0.extend_from_slice(r);
+        if let (Some(&palette), Some(t)) = (ir.record_palettes.get(i), ir.textures.iter().find(|t| t.record == i)) {
+            super::texture::name_record(&mut b.0[start..], &format!("{stem}/{}", t.name), palette);
+        }
     }
     for (t, &slot) in ir.textures.iter().zip(&texture_slots) {
         let at = record_at[t.record];

@@ -144,10 +144,12 @@ private:
         std::array<std::uint64_t, NEBULA_TEXTURE_MAX_LEVELS> offsets{};
         std::array<std::uint32_t, NEBULA_TEXTURE_MAX_LEVELS> pitches{};
     };
+    // A texture's name in the game (its record's name_hash; texture packs and dumps go by it) and source format. Images
+    // the game makes (render targets, generated art) have none.
     struct PackName {
-        std::uint64_t hash = 0u, palette = 0u;
+        std::uint64_t hash = 0u;
         std::uint8_t format = 0u;
-        bool mipmapped = false, named = false;
+        bool named = false;
     };
     struct Op {
         enum class Kind : std::uint8_t { Create, Update, Free, FreeTarget, BuiltIn };
@@ -266,7 +268,7 @@ private:
     std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> pack_waiters_;
     std::vector<std::pair<std::uint32_t, TexturePackPixels>> pack_uploads_;
     std::vector<std::vector<TextureBackend::UploadChunk>> pack_staging_;
-    std::uint64_t pack_hashed_ = 0u, pack_bound_ = 0u, pack_swapped_ = 0u, pack_stats_frame_ = 0u;
+    std::uint64_t pack_named_ = 0u, pack_bound_ = 0u, pack_swapped_ = 0u, pack_stats_frame_ = 0u;
     std::uint64_t pack_apply_ns_ = 0u, pack_apply_max_ns_ = 0u;
 
     struct MoviePlane {

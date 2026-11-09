@@ -14,6 +14,8 @@
 #include "galaxy/atomic_file.h"
 #include "galaxy/asset_store.h"
 #include "galaxy/mod_xml.h"
+#include "galaxy/dolphin_pack.h"
+#include "galaxy/texture_categories.h"
 
 #include <algorithm>
 #include <cctype>
@@ -480,21 +482,67 @@ void list_files(const fs::path& dir, const std::string& prefix, std::set<std::st
     }
 }
 
-// The texture names of a pack folder (tex1_..., mip levels left out, _arb dropped).
-void list_textures(const fs::path& dir, std::set<std::string>& out) {
+// A pack's texture file (texture_pack.h): its name's key and its folder in the pack; nullopt for anything else (a
+// Dolphin pack's tex1_ file, a custom lower level, not an image).
+struct PackFile {
+    std::uint64_t key = 0;
+    std::string folder;
+};
+std::optional<PackFile> pack_file(const fs::path& file, const fs::path& root) {
+    const std::string extension = lower(utf8_name(file.extension()));
+    if (extension != ".png" && extension != ".dds") return std::nullopt;
+    PackFile out;
+    out.folder = galaxy::path_text(file.parent_path().lexically_relative(root));
+    const std::optional<galaxy::textures::PackFileName> name =
+        galaxy::textures::parse_pack_file(out.folder, utf8_name(file.stem()));
+    if (!name || name->level != 0u) return std::nullopt;
+    out.key = galaxy::textures::pack_file_key(*name);
+    return out;
+}
+
+// Each texture file of a pack folder, its converted Dolphin files (.dolphin/) left out.
+template <typename Visit>
+void each_pack_file(const fs::path& dir, Visit&& visit) {
     std::error_code error;
     for (auto it = fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied, error);
          !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
-        if (!it->is_regular_file(error)) continue;
-        std::string stem = lower(utf8_name(it->path().stem()));
-        if (!stem.starts_with("tex1_")) continue;
-        if (const std::size_t mip = stem.rfind("_mip"); mip != std::string::npos) continue;
-        if (stem.ends_with("_arb")) stem.resize(stem.size() - 4u);
-        out.insert(stem);
+        std::error_code kind;
+        if (it->is_directory(kind)) {
+            if (utf8_name(it->path()) == ".dolphin") it.disable_recursion_pending();
+            continue;
+        }
+        if (!it->is_regular_file(kind)) continue;
+        if (const std::optional<PackFile> file = pack_file(it->path(), dir)) visit(*file);
     }
 }
 
-// tex1_ files within a few folders of `dir`.
+// The texture names of a pack folder, by key (mip levels left out).
+void list_textures(const fs::path& dir, std::set<std::string>& out) {
+    each_pack_file(dir, [&out](const PackFile& file) {
+        char key[17]{};
+        std::snprintf(key, sizeof(key), "%016llx", static_cast<unsigned long long>(file.key));
+        out.insert(key);
+    });
+}
+
+// A Dolphin pack in `textures` converted to the game's names, once (dolphin_pack.h): needs the game's names.
+void convert_dolphin_textures(const fs::path& textures, const std::string& id) {
+    if (!galaxy::textures::has_dolphin_files(textures)) return;
+    if (!galaxy::textures::wait_for_index()) {
+        std::fprintf(stderr, "[mods] %s: a Dolphin texture pack; the game's texture names are not known yet, so it stays as it is\n",
+                     id.c_str());
+        return;
+    }
+    const galaxy::textures::DolphinConversion done = galaxy::textures::convert_dolphin_pack(textures, galaxy::textures::names());
+    std::fprintf(stderr, "[mods] %s: Dolphin pack converted: %llu files, %llu textures named, %llu taken, %zu for none of "
+                         "the game's textures, %zu failed\n",
+                 id.c_str(), static_cast<unsigned long long>(done.files), static_cast<unsigned long long>(done.textures),
+                 static_cast<unsigned long long>(done.taken), done.unmatched.size(), done.failed.size());
+    for (const std::string& file : done.failed) std::fprintf(stderr, "[mods] %s: not converted: %s\n", id.c_str(), file.c_str());
+}
+
+// A texture pack without a textures/ folder, within a few folders of `dir`: a tex1_ file, a game folder (RMGE01, RMG)
+// or a converted pack's .dolphin/ folder.
 bool has_pack_textures(const fs::path& dir) {
     std::error_code error;
     for (auto it = fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied, error);
@@ -504,6 +552,11 @@ bool has_pack_textures(const fs::path& dir) {
             continue;
         }
         const std::string name = lower(utf8_name(it->path()));
+        std::error_code kind;
+        if (it->is_directory(kind)) {
+            if (name == ".dolphin" || name == "rmg" || (name.size() == 6u && name.starts_with("rmg"))) return true;
+            continue;
+        }
         if (name.starts_with("tex1_") && (name.ends_with(".png") || name.ends_with(".dds"))) return true;
     }
     return false;
@@ -529,21 +582,14 @@ std::string json_string(const std::string& text, std::string_view field) {
 void read_pack(ModInfo& mod, const fs::path& textures) {
     auto list = std::make_shared<std::vector<PackTexture>>();
     std::error_code error;
-    for (auto it = fs::recursive_directory_iterator(textures, fs::directory_options::skip_permission_denied, error);
-         !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
-        if (!it->is_regular_file(error)) continue;
-        const std::string stem = lower(utf8_name(it->path().stem()));
-        if (stem.find("_mip") != std::string::npos) continue;
-        const std::optional<std::uint64_t> hash = galaxy::textures::hash_of_pack_name(stem);
-        if (!hash) continue;
+    each_pack_file(textures, [&list](const PackFile& file) {
         PackTexture texture;
-        texture.hash = *hash;
-        if (const auto named = galaxy::textures::category_of_pack_folder(galaxy::path_text(
-                it->path().parent_path().lexically_relative(textures)))) {
+        texture.hash = file.key;
+        if (const auto named = galaxy::textures::category_of_pack_folder(file.folder)) {
             texture.folder_category = static_cast<std::uint8_t>(*named);
         }
         list->push_back(texture);
-    }
+    });
     mod.pack_textures = std::move(list);
     // A resource pack's manifest, in the mod or one folder down.
     std::vector<fs::path> places{mod.path, textures};
@@ -743,7 +789,7 @@ void start_texture_sorting() {
     Settings& s = settings();
     const std::lock_guard<std::mutex> lock(s.mutex);
     if (!s.store.empty() && !s.file.empty()) {
-        galaxy::textures::start_index(s.store, s.file.parent_path() / "texture_index.bin");
+        galaxy::textures::start_index(s.store);
     }
 }
 
@@ -989,6 +1035,10 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.own_text = s == nullptr || s->own_text;
         mod.categories_off = s != nullptr ? s->categories_off : 0u;
         if (mod.textures) {
+            // The game's names, read once from the store: a pack's files are named by them.
+            start_texture_sorting();
+            convert_dolphin_textures(layout.textures, mod.id);
+            (void)galaxy::textures::wait_for_index();
             read_pack(mod, layout.textures);
             start_texture_sorting();
             update_pack_categories(mod);
@@ -1150,6 +1200,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         }
                     }
                     if (std::optional<fs::path> textures = child_any_case(place, "textures", true)) {
+                        start_texture_sorting();
+                        convert_dolphin_textures(*textures, mod.id);
+                        (void)galaxy::textures::wait_for_index();
                         mod.luma_textures.push_back(*textures);
                         list_textures(*textures, changed_textures[mod.id]);
                     }
@@ -1370,8 +1423,9 @@ bool update_pack_categories(ModInfo& mod) {
     galaxy::textures::CategoryCounts counts{};
     unsigned game_textures = 0;
     for (const PackTexture& texture : *mod.pack_textures) {
-        std::optional<galaxy::textures::Category> category = galaxy::textures::category_of_hash(texture.hash);
-        if (category) {
+        std::optional<galaxy::textures::Category> category;
+        if (const galaxy::textures::TextureName* const known = galaxy::textures::find_name(texture.hash)) {
+            category = known->category;
             ++game_textures;
         } else if (texture.folder_category < galaxy::textures::kCategoryCount) {
             category = static_cast<galaxy::textures::Category>(texture.folder_category);

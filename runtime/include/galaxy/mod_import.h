@@ -33,6 +33,11 @@ struct ImportResult {
     std::string kinds;          // what it holds, as the MODS page lists it ("RIIVOLUTION, TEXTURES")
     std::string title;          // its name as the MODS page shows it (its own, else its folder's)
     std::string message;        // shown to the player: what was imported, or why it failed
+    // A Dolphin texture pack converted to the game's names: its tex1_ files, the textures they now name, and the files
+    // naming none of them (another game or release).
+    std::uint64_t dolphin_files = 0;
+    std::uint64_t dolphin_textures = 0;
+    std::uint64_t dolphin_unmatched = 0;
 };
 
 // Whether `path` is an archive the importer reads (by its signature; a file named .zip that is not one is refused).

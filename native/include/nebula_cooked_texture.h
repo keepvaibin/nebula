@@ -83,11 +83,12 @@ typedef struct NebulaTexture {
     uint8_t source_format;  /* the pixel format the image was authored in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
     uint8_t flags;          /* NEBULA_TEXTURE_GENERATED_LEVELS */
-    /* Texture packs name a texture by these: xxh64 of the source image's level-0 bytes, and of the
-       palette entries a colour-indexed one used (0 for the others). 0 and 0 for an image the game makes. */
     uint8_t reserved_byte;
-    uint64_t pack_hash;
-    uint64_t pack_palette_hash;
+    /* image_id: the same for every record of one source image (a model groups its draws by it). name_hash: FNV-1a 64 of
+       the texture's name in lower case, "<model stem>/<texture>" or "<file stem>" (NebulaData/TextureNames.tsv), which
+       texture packs replace it by; 0 for one without a name (an image the game makes). */
+    uint64_t image_id;
+    uint64_t name_hash;
     uint8_t reserved[16];
 } NebulaTexture;
 

@@ -25,7 +25,7 @@ public:
         state.temporal_upscaling = temporal;
         state.folders_open = folders;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";
-        state.texture_packs = {7, 2, true, {}};
+        state.texture_packs = {7, 2, true, {}, {}};
         return state;
     }
     void open_folder(galaxy::ui::GraphicsFolder folder) const override { opened = static_cast<int>(folder); }

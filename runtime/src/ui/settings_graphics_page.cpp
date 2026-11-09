@@ -330,10 +330,13 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
         std::snprintf(value, sizeof(value), "%llu TEXTURES", static_cast<unsigned long long>(packs.textures));
         std::string help = "REPLACEMENT TEXTURES IN THE ENABLED MODS";
         if (packs.levels != 0u) help += ", WITH " + std::to_string(packs.levels) + " MIP LEVELS";
-        if (!packs.unreadable.empty()) {
-            help += ". " + std::to_string(packs.unreadable.size()) + " FILE NAME" +
-                    (packs.unreadable.size() == 1u ? " IS" : "S ARE") + " NOT TEXTURE NAMES: " +
-                    mods_ui_text(packs.unreadable.front(), 48u);
+        if (!packs.dolphin.empty()) {
+            help += ". " + std::to_string(packs.dolphin.size()) + " FILE" + (packs.dolphin.size() == 1u ? " HAS A" : "S HAVE") +
+                    " DOLPHIN NAME: IMPORT THE PACK AS A MOD TO USE " + (packs.dolphin.size() == 1u ? "IT" : "THEM");
+        }
+        if (!packs.unknown.empty()) {
+            help += ". " + std::to_string(packs.unknown.size()) + " FILE" + (packs.unknown.size() == 1u ? " NAMES" : "S NAME") +
+                    " NO TEXTURE OF THIS GAME: " + mods_ui_text(packs.unknown.front(), 48u);
         }
         rows.push_back({"  REPLACEMENTS", packs.indexed ? std::string(value) : std::string("READING"), nullptr, help});
     }

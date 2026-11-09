@@ -235,20 +235,23 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     if archive::is_archive(&bytes) {
         bail!("{name} is an archive");
     }
+    // A texture's name starts with its file's stem; the names table keeps the file too (texture::name_record).
+    let _naming = texture::NamingFile::set(name);
+    let stem = name.rsplit('/').next().unwrap_or(name);
+    let stem = stem.split('.').next().unwrap_or(stem);
     let cooked = if native_data::is_model_file(&bytes) {
         let source = model_ir::Source::of(&bytes);
         let ir = model_ir::read_file(&bytes, source, stats).with_context(|| format!("{name}: model"))?;
-        let stem = name.rsplit('/').next().unwrap_or(name);
-        let stem = stem.split('.').next().unwrap_or(stem);
         Some(model_write::write(&ir, stem, &programs::written_or_unknown()).with_context(|| format!("{name}: native model"))?)
     } else if native_data::is_animation_file(&bytes) {
         Some(clip::write(&clip::read(&bytes).with_context(|| format!("{name}: animation"))?))
     } else if bytes.starts_with(b"JPAC2-10") {
-        let ir = particles::read_jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
+        let mut ir = particles::read_jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
+        particles::name_textures(&mut ir, stem);
         pipeline_list::add_particles(&ir);
         Some(particles::write(&ir))
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
-        let textured = formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?;
+        let textured = formats::tpl(&bytes, stem, stats).with_context(|| format!("{name}: layout textures"))?;
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
     } else if bytes.starts_with(b"RLYT") {
         let ir = ui_layout::read_layout(&bytes).with_context(|| format!("{name}: layout"))?;
@@ -289,7 +292,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if fur::is_fur_text(name) {
         Some(fur::cook(&bytes).with_context(|| format!("{name}: fur"))?)
     } else if bytes.starts_with(b"RFNT") {
-        let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
+        let textured = formats::font(&bytes, stem, stats).with_context(|| format!("{name}: font"))?;
         Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)
     } else if mii_parts::is_source(name) {
         Some(mii_parts::cook(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?)
@@ -298,7 +301,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         let textured = if texture::is_record(bytes.get(0x20..).unwrap_or(&[])) {
             bytes.clone()
         } else {
-            formats::bti(&bytes, stats).with_context(|| format!("{name}: texture"))?
+            formats::bti(&bytes, stem, stats).with_context(|| format!("{name}: texture"))?
         };
         Some(native_data::bti_host(&textured).with_context(|| format!("{name}: texture (host order)"))?)
     } else {
@@ -387,6 +390,15 @@ pub fn write_cooked_pak(
     let files = pak_files(system.fst())?;
     programs::prepare_written_files(&files, read)?;
     pipeline_list::reset();
+    // Every named texture's row, for NebulaData/TextureNames.tsv; collecting ends with this cook, however it ends.
+    struct Collecting;
+    impl Drop for Collecting {
+        fn drop(&mut self) {
+            *texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    let _collecting = Collecting;
+    *texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()) = Some(Vec::new());
     let total: u64 = files.iter().map(|f| f.length).sum();
     let mut pak = File::create(output).with_context(|| format!("{} cannot be created", output.display()))?;
     pak.write_all(&[0u8; store::HEADER as usize])?;
@@ -447,6 +459,10 @@ pub fn write_cooked_pak(
     placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(pipeline_list::checked_bytes()?) };
     placed.extend(place(&mut pak, &mut at, pipeline_list::PATH, vec![item], stats)?);
+    // The textures' names: what mod import turns a Dolphin pack's files into, and what the dump names files by.
+    let mut rows = texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(texture::names_table(&mut rows)) };
+    placed.extend(place(&mut pak, &mut at, texture::NAMES_PATH, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;

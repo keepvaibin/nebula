@@ -272,9 +272,6 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
             return false;
         }
         op.staged = stage(first, width, height, 1u, layout);
-        op.name.format = format;
-        op.name.hash = texture_pack_hash(first, size);
-        op.name.named = true;
         return true;
     }
     const NebulaTexture* const record = nebula_texture_record(bytes);
@@ -299,16 +296,9 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
         return true;
     }
     op.staged = stage(texels, record->width, record->height, record->levels, record->layout);
-    if (record->source_format != NEBULA_TEXTURE_MADE) {
+    if (record->source_format != NEBULA_TEXTURE_MADE && record->name_hash != 0u) {
         op.name.format = record->source_format;
-        op.name.hash = record->pack_hash;
-        op.name.palette = record->pack_palette_hash;
-        op.name.mipmapped = record->levels > 1u && !op.generated;
-        op.name.named = true;
-    } else if (record->layout != NEBULA_TEXTURE_BLOCK4) {
-        // A record the game made is named by its own texels.
-        op.name.format = nebula_texture_linear_code(record->layout);
-        op.name.hash = texture_pack_hash(texels, nebula_texture_level_bytes(record->width, record->height, 1u, record->layout));
+        op.name.hash = record->name_hash;
         op.name.named = true;
     }
     return true;
@@ -603,7 +593,7 @@ void TextureStore::create_entry(Op& op) {
     entry->named = frame_;
     entry->name = op.name;
     if (op.name.named) {
-        ++pack_hashed_;
+        ++pack_named_;
         // Keeps the name only under GALAXY_RT_LOG_GLOWS; the RT tables load when RT first reads them, not here.
         note_rt_texture(op.id, op.name.hash, entry->own.width, entry->own.height, op.name.format);
         if (packs_.dumping()) {
@@ -630,7 +620,7 @@ void TextureStore::update_entry(Op& op) {
         backend_.record_upload(gpu::raw(entry.texture), true, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                                op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
         keep(op.staged.chunk);
-        if (entry.name.hash == op.name.hash && entry.name.palette == op.name.palette) {
+        if (entry.name.hash == op.name.hash) {
             return;
         }
     } else {
@@ -727,14 +717,7 @@ void TextureStore::dump_base_level(const Staged& staged, const PackName& name) {
         }
         detail::expand_record_level(staged.layout, packed.data(), width, height, pixels.data());
     }
-    TexturePackName pack_name{};
-    pack_name.width = width;
-    pack_name.height = height;
-    pack_name.format = name.format;
-    pack_name.mipmapped = name.mipmapped;
-    pack_name.hash = name.hash;
-    pack_name.palette = name.palette;
-    packs_.dump(pack_name, width, height, reinterpret_cast<const std::uint8_t*>(pixels.data()));
+    packs_.dump(name.hash, width, height, reinterpret_cast<const std::uint8_t*>(pixels.data()));
 }
 
 void TextureStore::stop_showing(Entry& entry) {
@@ -759,6 +742,11 @@ void TextureStore::show(Entry& entry, const TextureReplacement& replacement, std
     entry.current.srv_index = view;
     entry.current.mip_levels = static_cast<std::uint8_t>(std::min(replacement.levels, 255u));
     entry.current.lod_shift = replacement.lod_shift;
+    if (slot != TexturePacks::kNone && entry.own.width != 0u && replacement.width > entry.own.width) {
+        // A pack's: its scale over the game's texture (own.width stays the game's size) shifts the samplers' LOD range.
+        entry.current.lod_shift = static_cast<float>(
+            std::log2(static_cast<double>(replacement.width) / static_cast<double>(entry.own.width)));
+    }
     entry.current.lod_arbitrary = replacement.arbitrary;
     if (slot != TexturePacks::kNone) {
         entry.pack_slot = slot;
@@ -771,26 +759,22 @@ void TextureStore::look_up(std::uint32_t id, Entry& entry) {
     const bool was_own = entry.current.srv_index == entry.own.srv_index;
     stop_showing(entry);
     if (entry.name.named) {
-        const TexturePackFormat format = static_cast<TexturePackFormat>(entry.name.format);
-        if (packs_.may_match(entry.own.width, entry.own.height, format)) {
-            const std::uint32_t slot = packs_.find(entry.own.width, entry.own.height, format, entry.name.hash, entry.name.palette,
-                                                   entry.name.mipmapped);
-            if (const TextureReplacement* const replacement = packs_.resident(slot)) {
-                show(entry, *replacement, slot);
-                ++pack_bound_;
+        const std::uint32_t slot = packs_.find(entry.name.hash);
+        if (const TextureReplacement* const replacement = packs_.resident(slot)) {
+            show(entry, *replacement, slot);
+            ++pack_bound_;
+            ++revision_;
+            return;
+        }
+        if (slot != TexturePacks::kNone) {
+            entry.pack_slot = slot;
+            entry.pack_waiting = true;
+            packs_.add_user(slot);
+            pack_waiters_[slot].push_back(id);
+            if (!was_own) {
                 ++revision_;
-                return;
             }
-            if (slot != TexturePacks::kNone) {
-                entry.pack_slot = slot;
-                entry.pack_waiting = true;
-                packs_.add_user(slot);
-                pack_waiters_[slot].push_back(id);
-                if (!was_own) {
-                    ++revision_;
-                }
-                return;
-            }
+            return;
         }
     }
     // A dump wants the image itself.
@@ -1106,7 +1090,7 @@ void TextureStore::apply_texture_packs() {
     pack_apply_max_ns_ = std::max(pack_apply_max_ns_, apply_ns);
     if (++pack_stats_frame_ % 600u == 0u && (packs_.enabled() || packs_.dumping())) {
         const TexturePacks::Stats stats = packs_.stats();
-        std::cerr << "[texture-pack] names=" << stats.names << " hashed=" << pack_hashed_
+        std::cerr << "[texture-pack] names=" << stats.names << " named=" << pack_named_
                   << " apply-ms=" << static_cast<double>(pack_apply_ns_) / 1.0e6
                   << " apply-max-ms=" << static_cast<double>(pack_apply_max_ns_) / 1.0e6
                   << " bound=" << pack_bound_ << " swapped=" << pack_swapped_ << " loads=" << stats.loads

@@ -187,6 +187,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_plugins.cpp
     runtime/src/mods.cpp
     runtime/src/texture_categories.cpp
+    runtime/src/dolphin_pack.cpp
     runtime/src/mod_import.cpp
     runtime/src/vendor_download.cpp
     runtime/src/crash_report.cpp
@@ -578,7 +579,7 @@ galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii
     LIBS galaxy_atomic_file)
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/luma.cpp
-    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
+    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
 galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS galaxy_run_options shell32)

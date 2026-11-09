@@ -61,7 +61,8 @@ struct ModOverlap {
     unsigned textures = 0;
 };
 
-// A texture of a pack: its hash and what its folder's words say (kCategoryCount: nothing).
+// A texture of a pack: its name hash (galaxy::textures::pack_file_key) and what its folder's words say
+// (kCategoryCount: nothing).
 struct PackTexture {
     std::uint64_t hash = 0;
     std::uint8_t folder_category = galaxy::textures::kCategoryCount;

@@ -8,7 +8,8 @@ struct TexturePackSummary {
     std::uint64_t textures = 0;
     std::uint64_t levels = 0;
     bool indexed = false;
-    std::vector<std::string> unreadable;
+    std::vector<std::string> dolphin;  // tex1_ files outside the mods (not converted)
+    std::vector<std::string> unknown;  // files naming none of the game's textures
 };
 
 struct GraphicsPageState {
