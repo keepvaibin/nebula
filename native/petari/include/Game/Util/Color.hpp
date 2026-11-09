@@ -43,11 +43,11 @@ public:
         return *this;
     }
 
-    void set(u8 _r, u8 _g, u8 _b, u8 _a) {
-        r = _r;
-        g = _g;
-        b = _b;
-        a = _a;
+    void set(u8 red, u8 green, u8 blue, u8 alpha) {
+        r = red;
+        g = green;
+        b = blue;
+        a = alpha;
     }
 
     void set(NebulaColor8 color) {
