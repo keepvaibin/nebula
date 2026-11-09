@@ -27,9 +27,9 @@
 
 namespace {
     s32 countAnimNames(const char* pNames) {
-        s32 count = 0;
-        for (u32 i = 0; i <= strlen(pNames); i++) {
-            if (pNames[i] == ' ' || pNames[i] == '\0') {
+        s32 count = 1;
+        for (const char* p = pNames; *p != '\0'; p++) {
+            if (*p == ' ') {
                 count++;
             }
         }
@@ -155,7 +155,8 @@ namespace MR {
             } else {
                 const char* const pAnimNames = pInfo->mAnimName;
                 u32 start = 0;
-                for (u32 i = 0; i <= strlen(pAnimNames); i++) {
+                const u32 length = static_cast< u32 >(strlen(pAnimNames));
+                for (u32 i = 0; i <= length; i++) {
                     if (pAnimNames[i] == ' ' || pAnimNames[i] == '\0') {
                         const FormattedName name("%.*s", static_cast< int >(i - start), pAnimNames + start);
                         const char* pAnimName = nullptr;
