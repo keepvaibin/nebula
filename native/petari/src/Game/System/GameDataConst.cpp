@@ -66,27 +66,5 @@ u32 GameDataConst::getIncludedGrandGalaxyId(const char* pGalaxyName) {
 }
 
 bool GameDataConst::isPowerStarSpecial(const char* pGalaxyName, s32 starId, const char* pSpecialStarName) {
-    for (GameEventFlagIter iter = GameEventFlagTable::getBeginIter(); !iter.isEnd(); iter.goNext()) {
-        GameEventFlagAccessor accessor(iter.getFlag());
-
-        if (!accessor.isTypeSpecialStar()) {
-            continue;
-        }
-
-        if (accessor.getStarId() != starId) {
-            continue;
-        }
-
-        if (!MR::isEqualString(accessor.getGalaxyName(), pGalaxyName)) {
-            continue;
-        }
-
-        if (!MR::isEqualSubString(accessor.getName(), pSpecialStarName)) {
-            continue;
-        }
-
-        return true;
-    }
-
-    return false;
+    return GameEventFlagTable::findSpecialPowerStar(pGalaxyName, starId, pSpecialStarName) != nullptr;
 }

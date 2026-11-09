@@ -234,10 +234,14 @@ bool GameEventFlagIter::isValid() const {
     }
 }
 
-GameEventFlagTableInstance::GameEventFlagTableInstance() {
+GameEventFlagTableInstance::GameEventFlagTableInstance() : mNextSpecial(nullptr) {
     const s32 size = GameEventFlagTable::getTableSize();
     mNames.reset(static_cast< u32 >(size));
     mSaveHashes.reset(static_cast< u32 >(size));
+    mSpecialGalaxies.reset(static_cast< u32 >(size));
+    mNextSpecial = new u32[size > 0 ? size : 1];
+    // pLastSpecial[first]: the latest special star flag so far of the galaxy whose first one is first.
+    u32* pLastSpecial = new u32[size > 0 ? size : 1];
 
     for (s32 i = 0; i < size; i++) {
         const GameEventFlag* pFlag = GameEventFlagTable::getFlag(i);
@@ -245,7 +249,31 @@ GameEventFlagTableInstance::GameEventFlagTableInstance() {
         if ((pFlag->mSaveFlag & 0x1) == 0) {
             mSaveHashes.add(pFlag->mName, GameEventFlagTable::getSaveHash(pFlag->mName), static_cast< u32 >(i));
         }
+
+        mNextSpecial[i] = MR::NameIndex::cNoValue;
+        const GameEventFlagAccessor accessor(pFlag);
+        if (accessor.isTypeSpecialStar() && accessor.getGalaxyName() != nullptr) {
+            if (mSpecialGalaxies.add(accessor.getGalaxyName(), static_cast< u32 >(i))) {
+                pLastSpecial[i] = static_cast< u32 >(i);
+            } else {
+                const u32 first = mSpecialGalaxies.find(accessor.getGalaxyName());
+                mNextSpecial[pLastSpecial[first]] = static_cast< u32 >(i);
+                pLastSpecial[first] = static_cast< u32 >(i);
+            }
+        }
     }
+    delete[] pLastSpecial;
+}
+
+const GameEventFlag* GameEventFlagTableInstance::findSpecialStar(const char* pGalaxyName, s32 starId, const char* pNamePart) const {
+    for (u32 i = mSpecialGalaxies.find(pGalaxyName); i != MR::NameIndex::cNoValue; i = mNextSpecial[i]) {
+        const GameEventFlag* pFlag = GameEventFlagTable::getFlag(static_cast< int >(i));
+        const GameEventFlagAccessor accessor(pFlag);
+        if (accessor.getStarId() == starId && (pNamePart == nullptr || MR::isEqualSubString(accessor.getName(), pNamePart))) {
+            return pFlag;
+        }
+    }
+    return nullptr;
 }
 
 const GameEventFlag* GameEventFlagTableInstance::findFlag(const char* flagName) const {
@@ -394,11 +422,17 @@ namespace GameEventFlagTable {
         return SingletonHolder< GameEventFlagTableInstance >::get()->findFlag(pFlagName);
     }
 
-    const char* getEventFlagNameSpecialPowerStar(const char* pGalaxyName, s32 starId) {
+    const GameEventFlag* findSpecialPowerStar(const char* pGalaxyName, s32 starId, const char* pNamePart) {
+        const GameEventFlagTableInstance* pInstance = SingletonHolder< GameEventFlagTableInstance >::get();
+        if (pInstance != nullptr) {
+            return pInstance->findSpecialStar(pGalaxyName, starId, pNamePart);
+        }
+
+        // Before the game data exists: the table itself.
         for (GameEventFlagIter iter = getBeginIter(); !iter.isEnd(); iter.goNext()) {
             GameEventFlagAccessor accessor = GameEventFlagAccessor(iter.getFlag());
 
-            if (!accessor.isTypeSpecialStar()) {
+            if (!accessor.isTypeSpecialStar() || accessor.getGalaxyName() == nullptr) {
                 continue;
             }
 
@@ -410,10 +444,19 @@ namespace GameEventFlagTable {
                 continue;
             }
 
-            return accessor.getName();
+            if (pNamePart != nullptr && !MR::isEqualSubString(accessor.getName(), pNamePart)) {
+                continue;
+            }
+
+            return iter.getFlag();
         }
 
         return nullptr;
+    }
+
+    const char* getEventFlagNameSpecialPowerStar(const char* pGalaxyName, s32 starId) {
+        const GameEventFlag* pFlag = findSpecialPowerStar(pGalaxyName, starId, nullptr);
+        return pFlag != nullptr ? GameEventFlagAccessor(pFlag).getName() : nullptr;
     }
 
     bool isPowerStarType(const char* pGalaxyName, s32 starId, const char* pStarType) {
