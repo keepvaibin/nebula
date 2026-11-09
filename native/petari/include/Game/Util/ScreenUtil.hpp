@@ -97,6 +97,7 @@ namespace MR {
     void appearInformationMessage(const char*, bool);
     void appearInformationMessageCenter(const char*, bool);
     void appearInformationMessage(const char16_t*, bool);
+    void appearInformationMessageCenter(const char16_t*, bool);
     void setInformationMessageReplaceString(const char16_t*, s32);
     void disappearInformationMessage();
     bool isDeadInformationMessage();

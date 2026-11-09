@@ -52,8 +52,9 @@ public:
     s32 serialize(u8* pData, u32 maxBufferSize) const;
     s32 deserialize(const u8* pData, u32 maxBufferSize);
 
-    SpinDriverPathStorageScenario& getScenarioStorage(int scenarioNo) {
-        return mScenarioStorage[scenarioNo - 1];
+    // Scenario scenarioNo's storage, or nullptr for a number the galaxy's table doesn't have.
+    SpinDriverPathStorageScenario* getScenarioStorage(int scenarioNo) {
+        return scenarioNo >= 1 && scenarioNo <= mNumScenarios ? &mScenarioStorage[scenarioNo - 1] : nullptr;
     }
 
     SpinDriverPathStorageScenario* mScenarioStorage;

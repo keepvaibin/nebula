@@ -1878,17 +1878,8 @@ void MarioActor::calcAnim() {
 
         default:
             changeDisplayMode(0);
-            u32 frame = 0;
-            switch (val) {
-            case 7:
-                frame = 1;
-                break;
-            case 2:
-                frame = 2;
-            }
-
             MR::startBtp(this, "ColorChange");
-            MR::setBtpFrameAndStop(this, frame);
+            MR::setBtpFrameAndStop(this, static_cast< f32 >(NebulaMods::powerUpColorFrame(val)));
             break;
         }
 

@@ -1583,14 +1583,25 @@ namespace {
         return pName != nullptr && star > 0 && MR::isOnGameEventFlagPowerStarSuccess(pName, star) ? 1 : 0;
     }
 
+    // A message id the game or a mod has; else the words themselves (with the game's tags), held here while shown.
     void apiShowMessage(const char* pText, int32_t centre) {
         if (pText == nullptr || sStageFrames <= 0) {
             return;
         }
+        if (MR::isExistGameMessage(pText)) {
+            if (centre != 0) {
+                MR::appearInformationMessageCenter(pText, false);
+            } else {
+                MR::appearInformationMessage(pText, false);
+            }
+            return;
+        }
+        static char16_t sWords[512];
+        nebula_text::encode(pText, sWords, sizeof(sWords) / sizeof(sWords[0]));
         if (centre != 0) {
-            MR::appearInformationMessageCenter(pText, false);
+            MR::appearInformationMessageCenter(sWords, false);
         } else {
-            MR::appearInformationMessage(pText, false);
+            MR::appearInformationMessage(sWords, false);
         }
     }
 
@@ -1600,9 +1611,14 @@ namespace {
         }
     }
 
+    // A game sound's number not looked up yet (the sound names are read after plugins start).
+    const u32 cSoundNotLooked = 0xFFFFFFFEu;
+
     struct SoundEffect {
-        const char* mName;
-        u32 mId;
+        const char* mName;  // without "@luigi"
+        u32 mId;            // its track
+        u32 mGameId;        // the game's sound of that name: MR::NameIndex::cNoValue for a new name
+        bool mLuigi;        // only while Luigi plays
     };
     List< SoundEffect > sSoundEffects;
 
@@ -1615,7 +1631,12 @@ namespace {
         if (apiAddMusic(trackName.c_str(), pFile) != 0) {
             return -1;
         }
-        const SoundEffect effect = {copyText(pName), NebulaMods::trackId(trackName.c_str())};
+        static const char cLuigi[] = "@luigi";
+        const u32 length = static_cast< u32 >(strlen(pName));
+        const u32 suffix = sizeof(cLuigi) - 1;
+        const bool luigi = length > suffix && MR::isEqualString(pName + length - suffix, cLuigi);
+        MR::FormattedName name("%.*s", static_cast< int >(luigi ? length - suffix : length), pName);
+        const SoundEffect effect = {copyText(name.c_str()), NebulaMods::trackId(trackName.c_str()), cSoundNotLooked, luigi};
         sSoundEffects.add(effect);
         NebulaMods::sHasSoundEffects = true;
         return 0;
@@ -2455,6 +2476,20 @@ namespace NebulaMods {
         return pPower != nullptr ? static_cast< u16 >(pPower->looks_like) : mode;
     }
 
+    // The game's: Flying wears frame 1, Fire frame 2, every other his own (0). A mod's power-up: its colour frame, else its
+    // look's.
+    u32 powerUpColorFrame(u16 mode) {
+        const NebulaPowerUpClass* pPower = powerUpOf(mode);
+        if (pPower != nullptr && pPower->color_frame > 0) {
+            return static_cast< u32 >(pPower->color_frame);
+        }
+        switch (powerUpLook(mode)) {
+        case NEBULA_POWER_UP_FLYING: return 1;
+        case NEBULA_POWER_UP_FIRE: return 2;
+        default: return 0;
+        }
+    }
+
     const char16_t* text(const char* pId, const char** ppLike) {
         for (int i = sTexts.mCount - 1; i >= 0; i--) {
             if (MR::isEqualString(sTexts.mItems[i].mId, pId)) {
@@ -2561,13 +2596,38 @@ namespace NebulaMods {
         return sPlayerAnimations.mCount;
     }
 
+    // By name: the last mod's for all players (Luigi's own goes in by soundFor).
     u32 soundEffectSlow(const char* pName) {
         for (int i = sSoundEffects.mCount - 1; i >= 0; i--) {
-            if (MR::isEqualString(sSoundEffects.mItems[i].mName, pName)) {
+            if (!sSoundEffects.mItems[i].mLuigi && MR::isEqualString(sSoundEffects.mItems[i].mName, pName)) {
                 return sSoundEffects.mItems[i].mId;
             }
         }
         return static_cast< u32 >(-1);
+    }
+
+    u32 soundFor(u32 id, bool luigi) {
+        const AudSoundNameConverter* pNames = AudSingletonHolder< AudSoundNameConverter >::get();
+        for (int i = 0; i < sSoundEffects.mCount; i++) {
+            SoundEffect& rEffect = sSoundEffects.mItems[i];
+            if (rEffect.mGameId == cSoundNotLooked && pNames != nullptr) {
+                rEffect.mGameId = pNames->mIndex.find(rEffect.mName);
+            }
+        }
+        // Luigi's own first while he plays: in place of the game's sound, or of the mod's for every player.
+        for (int pass = luigi ? 0 : 1; pass < 2; pass++) {
+            const bool luigiPass = pass == 0;
+            for (int i = sSoundEffects.mCount - 1; i >= 0; i--) {
+                const SoundEffect& rEffect = sSoundEffects.mItems[i];
+                if (rEffect.mLuigi != luigiPass) {
+                    continue;
+                }
+                if (rEffect.mGameId == id || (luigiPass && soundEffectSlow(rEffect.mName) == id)) {
+                    return rEffect.mId;
+                }
+            }
+        }
+        return id;
     }
 
     s32 stageRuleSlow(const char* pStage, const char* pAskedName) {

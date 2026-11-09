@@ -188,8 +188,8 @@ s32 SpinDriverPathStorageScenario::calcMaxZoneId() const {
 }
 
 SpinDriverPathStorageGalaxy::SpinDriverPathStorageGalaxy(const GalaxyStatusAccessor& rAccessor)
-    : mScenarioStorage(nullptr), mNumScenarios(rAccessor.getScenarioNum()), mGalaxyName(rAccessor.getName()) {
-    mScenarioStorage = new SpinDriverPathStorageScenario[mNumScenarios];
+    : mScenarioStorage(nullptr), mNumScenarios(rAccessor.getScenarioNoMax()), mGalaxyName(rAccessor.getName()) {
+    mScenarioStorage = new SpinDriverPathStorageScenario[mNumScenarios > 0 ? mNumScenarios : 1];
 }
 
 void SpinDriverPathStorageGalaxy::resetAllData() {
@@ -199,7 +199,10 @@ void SpinDriverPathStorageGalaxy::resetAllData() {
 }
 
 void SpinDriverPathStorageGalaxy::updateValue(int scenarioNo, int spinDriverIndex, f32 drawRange) {
-    getScenarioStorage(scenarioNo).updateValue(spinDriverIndex, drawRange);
+    SpinDriverPathStorageScenario* pScenario = getScenarioStorage(scenarioNo);
+    if (pScenario != nullptr && spinDriverIndex >= 0 && spinDriverIndex < pScenario->mOneStorage.size()) {
+        pScenario->updateValue(spinDriverIndex, drawRange);
+    }
 }
 
 // u16 name hash, u16 block size, u8 scenario count, u8 pad, then each scenario's block.
@@ -224,13 +227,11 @@ s32 SpinDriverPathStorageGalaxy::deserialize(const u8* pData, u32 maxBufferSize)
         return blockSize;
     }
 
-    if (pData[4] != mNumScenarios) {
-        resetAllData();
-        return blockSize;
-    }
+    resetAllData();
+    const s32 savedScenarios = pData[4] < mNumScenarios ? pData[4] : mNumScenarios;
 
     s32 size = 0;
-    for (s32 idx = 0; idx < mNumScenarios; idx++) {
+    for (s32 idx = 0; idx < savedScenarios; idx++) {
         size += mScenarioStorage[idx].deserialize(pData + size + cGalaxyHeaderSize, maxBufferSize - size - cGalaxyHeaderSize);
     }
     return blockSize;
@@ -251,12 +252,22 @@ void SpinDriverPathStorage::initializeData() {
     }
 }
 
+// A galaxy or scenario the tables don't have keeps no path (-1: the launch star draws it from the start each time).
 s32 SpinDriverPathStorage::setup(const char* pGalaxyName, int scenarioNo, int zoneId, int spinDriverId, f32* pDrawRange) {
-    return findFromGalaxy(pGalaxyName)->getScenarioStorage(scenarioNo).setup(zoneId, spinDriverId, pDrawRange);
+    SpinDriverPathStorageGalaxy* pGalaxy = findFromGalaxy(pGalaxyName);
+    SpinDriverPathStorageScenario* pScenario = pGalaxy != nullptr ? pGalaxy->getScenarioStorage(scenarioNo) : nullptr;
+    if (pScenario == nullptr) {
+        *pDrawRange = 0.0f;
+        return -1;
+    }
+    return pScenario->setup(zoneId, spinDriverId, pDrawRange);
 }
 
 void SpinDriverPathStorage::updateValue(const char* pGalaxyName, int scenarioNo, int spinDriverIndex, f32 drawRange) {
-    findFromGalaxy(pGalaxyName)->updateValue(scenarioNo, spinDriverIndex, drawRange);
+    SpinDriverPathStorageGalaxy* pGalaxy = findFromGalaxy(pGalaxyName);
+    if (pGalaxy != nullptr) {
+        pGalaxy->updateValue(scenarioNo, spinDriverIndex, drawRange);
+    }
 }
 
 u32 SpinDriverPathStorage::makeHeaderHashCode() const {

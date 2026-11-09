@@ -1,4 +1,6 @@
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/NPC/TalkNodeCtrl.hpp"
@@ -57,15 +59,16 @@ namespace MR {
         pCtrl->setMessageArg(arg);
     }
 
+    // A mod's object made like a game's talks with its own lines: "<zone>_<its name><number>", as its model is its own.
     TalkMessageCtrl* createTalkCtrl(LiveActor* pActor, const TableIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = new TalkMessageCtrl(pActor, rOffset, pMtx);
-        pCtrl->createMessage(rIter, pMessageID);
+        pCtrl->createMessage(rIter, NebulaMods::modelFor(pActor != nullptr ? pActor->mName : nullptr, pMessageID));
         return pCtrl;
     }
 
     TalkMessageCtrl* createTalkCtrlDirect(LiveActor* pActor, const TableIter& rIter, const char* pMessageID, const Vec3f& rOffset, MtxPtr pMtx) {
         TalkMessageCtrl* pCtrl = new TalkMessageCtrl(pActor, rOffset, pMtx);
-        pCtrl->createMessageDirect(rIter, pMessageID);
+        pCtrl->createMessageDirect(rIter, NebulaMods::modelFor(pActor != nullptr ? pActor->mName : nullptr, pMessageID));
         return pCtrl;
     }
 

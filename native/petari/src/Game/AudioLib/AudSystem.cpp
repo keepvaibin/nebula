@@ -28,6 +28,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -194,6 +195,10 @@ void AudSystem::calc() {
 }
 
 bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
+    if (NebulaMods::sHasSoundEffects) {
+        soundID = NebulaMods::soundFor(soundID, mSceneMgr != nullptr && mSceneMgr->isPlayerModeLuigi());
+    }
+
     if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
     }
@@ -227,6 +232,10 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
 }
 
 bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
+    if (NebulaMods::sHasSoundEffects) {
+        soundID = NebulaMods::soundFor(soundID, mSceneMgr != nullptr && mSceneMgr->isPlayerModeLuigi());
+    }
+
     if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
     }

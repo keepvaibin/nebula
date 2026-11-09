@@ -482,6 +482,11 @@ namespace MR {
         ::appearInformationMessage(hasButtonLayout, false);
     }
 
+    void appearInformationMessageCenter(const char16_t* pMessage, bool hasButtonLayout) {
+        getGameSceneLayoutHolder()->mInformationMessage->setMessage(pMessage);
+        ::appearInformationMessage(hasButtonLayout, true);
+    }
+
     void setInformationMessageReplaceString(const char16_t* pMessage, s32 argIndex) {
         getGameSceneLayoutHolder()->mInformationMessage->setReplaceString(pMessage, argIndex);
     }
