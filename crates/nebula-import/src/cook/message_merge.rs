@@ -433,6 +433,8 @@ pub fn check_shape(json: &[u8], language: &str) -> Result<()> {
     }
     let mut game = Nmsg::default();
     let mut ids = TableIr::from_json(br#"{"columns":{"MessageId":"string","Index":"int"},"rows":[]}"#)?;
+    // The columns as the table has them (in name order), not as written.
+    let id_at = ids.columns.iter().position(|c| c.hash == column_hash("MessageId")).context("no MessageId")?;
     let mut seen = std::collections::HashSet::new();
     for id in named {
         let new_line = lines.is_some_and(|l| l.get(&id).is_some_and(|v| matches!(words_in(v, language), Ok(Some(_)))));
@@ -441,7 +443,9 @@ pub fn check_shape(json: &[u8], language: &str) -> Result<()> {
         }
         game.messages.push(Message { text: game.text.len() as u32, ..ordinary_talk() });
         game.text.push(0);
-        ids.rows.push(vec![Cell::Text(id.into_bytes()), Cell::Bits(game.messages.len() as u32 - 1)]);
+        let mut row = vec![Cell::Bits(game.messages.len() as u32 - 1); 2];
+        row[id_at] = Cell::Text(id.into_bytes());
+        ids.rows.push(row);
     }
     merge(&game.to_bytes(), &ids.to_ntbl(), json, language).map(|_| ())
 }
