@@ -174,7 +174,6 @@ public:
     void initEffect();
     void initMaterialEffect();
     void initCommonEffect();
-    void addSoundObjHolder();
 
     void initMember();
 
@@ -227,7 +226,6 @@ public:
     bool checkEffectWaterColumn();
 
     void bodyClap();
-    bool selectWaterInOut(const char*) const;
     void playEffectRT(const char*, const Vec3f&, const Vec3f&);
     void playEffectRTZ(const char*, const Vec3f&, const Vec3f&);
     void playEffectRTW(const char*, const Vec3f&, const Vec3f&);

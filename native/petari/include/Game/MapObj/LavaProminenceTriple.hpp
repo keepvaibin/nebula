@@ -19,8 +19,6 @@ public:
     void updateEffectClipping();
     void updateEffectClippingIndividual(bool*, const char*, const char*);
 
-    void calcAngle(f32*);
-
     PartsModel* mBloomModel;
     Pos3f mBloomMtx;
     Quat4f mBaseRot;

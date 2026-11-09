@@ -31,9 +31,6 @@ public:
     void exeDamageTailRunStart();
     void exeDamageTailRun();
     void exeDamageTailRunEnd();
-    void exeDamageTailRunStartFinal();
-    void exeDamageTailRunFinal();
-    void exeDamageTailRunEndFinal();
     void exeDown();
     void exeDownLand();
     void exeDownEnd();
