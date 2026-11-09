@@ -1,6 +1,7 @@
 // PlacedTextureAllocator (gpu_placed_textures.h): first-fit ranges in D3D12 heaps, committed fallback.
 
 #include "galaxy/render/gpu_placed_textures.h"
+#include "barriers_d3d12.h"
 
 #include <atomic>
 #include <map>
@@ -162,7 +163,7 @@ void PlacedTextureAllocator::shutdown() noexcept {
 }
 
 HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
-                                       D3D12_RESOURCE_STATES initial_state,
+                                       gpu::Use initial,
                                        const D3D12_CLEAR_VALUE* clear_value,
                                        ComPtr<ID3D12Resource>& resource,
                                        std::uint64_t& allocation_bytes,
@@ -206,9 +207,8 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
         }
         if (heap) {
             auto* owner = new RangeOwner(state_, heap_index, offset, info.SizeInBytes);
-            HRESULT hr = device->CreatePlacedResource(heap.Get(), offset, &placed_desc,
-                                                      initial_state, clear_value,
-                                                      IID_PPV_ARGS(&resource));
+            HRESULT hr = place_texture(device.Get(), heap.Get(), offset, &placed_desc, initial, clear_value,
+                                       IID_PPV_ARGS(&resource));
             if (SUCCEEDED(hr)) hr = resource->SetPrivateDataInterface(kRangeOwnerGuid, owner);
             if (SUCCEEDED(hr)) {
                 owner->Release();  // the resource holds the remaining reference
@@ -224,9 +224,8 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
 
     D3D12_HEAP_PROPERTIES properties{};
     properties.Type = D3D12_HEAP_TYPE_DEFAULT;
-    const HRESULT hr = device->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc,
-                                                       initial_state, clear_value,
-                                                       IID_PPV_ARGS(&resource));
+    const HRESULT hr = create_texture(device.Get(), &properties, D3D12_HEAP_FLAG_NONE, &desc, initial, clear_value,
+                                      IID_PPV_ARGS(&resource));
     if (SUCCEEDED(hr)) {
         std::lock_guard lock(state_->mutex);
         ++state_->committed;

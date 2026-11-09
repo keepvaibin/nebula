@@ -283,8 +283,7 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         rd.MipLevels = 1;
         rd.Format = format;
         rd.SampleDesc.Count = 1;
-        return SUCCEEDED(device_->CreateCommittedResource(
-            &heap, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
+        return SUCCEEDED(create_texture(device_, &heap, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::CopyDest,
             nullptr, IID_PPV_ARGS(&out)));
     };
     const bool lookup_textures =
@@ -376,8 +375,7 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
     clear.DepthStencil.Depth = 1.0f;
     clear.DepthStencil.Stencil = 0;
     const gpu::Use initial = depth ? gpu::Use::DepthWrite : gpu::Use::PixelRead;
-    if (FAILED(device_->CreateCommittedResource(
-            &heap, D3D12_HEAP_FLAG_NONE, &rd, legacy_state(initial), &clear,
+    if (FAILED(create_texture(device_, &heap, D3D12_HEAP_FLAG_NONE, &rd, initial, &clear,
             IID_PPV_ARGS(&target.resource)))) {
         return false;
     }
@@ -730,7 +728,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
     ComPtr<ID3D12Resource> source, upload, readback;
     unsigned char* mapped = nullptr;
     const D3D12_RANGE none{0, 0};
-    if (FAILED(device_->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td, D3D12_RESOURCE_STATE_COPY_DEST,
+    if (FAILED(create_texture(device_, &def, D3D12_HEAP_FLAG_NONE, &td, gpu::Use::CopyDest,
                                                 nullptr, IID_PPV_ARGS(&source))) ||
         FAILED(device_->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ,
                                                 nullptr, IID_PPV_ARGS(&upload))) ||

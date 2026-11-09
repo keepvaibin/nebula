@@ -8,6 +8,7 @@
 // releases it with the resource. Callers release a texture only after the GPU
 // has finished with it.
 
+#include "galaxy/render/gpu_use.h"
 #include "galaxy/windows_api.h"
 #include <d3d12.h>
 #include <wrl/client.h>
@@ -40,12 +41,12 @@ public:
     // Drops the allocator's heap references; live resources keep theirs.
     void shutdown() noexcept;
 
-    // Creates `desc` in `initial_state`. `allocation_bytes` receives the
+    // Creates `desc` in `initial` (its layout or legacy state: barriers_d3d12.h). `allocation_bytes` receives the
     // resource's allocation size for budgeting. A render-target texture is
     // placed over memory with undefined contents: the caller must clear,
     // discard or fully copy it before reading it (D3D12 placed-RT rule).
     HRESULT create(const D3D12_RESOURCE_DESC& desc,
-                   D3D12_RESOURCE_STATES initial_state,
+                   gpu::Use initial,
                    const D3D12_CLEAR_VALUE* clear_value,
                    Microsoft::WRL::ComPtr<ID3D12Resource>& resource,
                    std::uint64_t& allocation_bytes,

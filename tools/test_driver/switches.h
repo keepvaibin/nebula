@@ -694,6 +694,15 @@ inline constexpr const char* test_path_guard_name() noexcept { return ""; }
 inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* d3d12_test_no_feature() noexcept { return nullptr; }
+inline constexpr const char* d3d12_test_no_feature_name() noexcept { return ""; }
+inline constexpr const wchar_t* d3d12_test_no_feature_wide_name() noexcept { return L""; }
+#else
+inline const char* d3d12_test_no_feature() noexcept { return std::getenv("GALAXY_D3D12_TEST_NO_FEATURE"); }
+inline constexpr const char* d3d12_test_no_feature_name() noexcept { return "GALAXY_D3D12_TEST_NO_FEATURE"; }
+inline constexpr const wchar_t* d3d12_test_no_feature_wide_name() noexcept { return L"GALAXY_D3D12_TEST_NO_FEATURE"; }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* d3d_debug() noexcept { return nullptr; }
 inline constexpr const char* d3d_debug_name() noexcept { return ""; }
 inline constexpr const wchar_t* d3d_debug_wide_name() noexcept { return L""; }

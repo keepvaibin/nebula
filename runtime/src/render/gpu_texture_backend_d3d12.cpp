@@ -181,7 +181,7 @@ gpu::TextureRef TextureBackend::create_texture(
     rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     gpu::TextureRef resource;
     d3d_check(texture_heap_.create(
-        rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, resource, allocation_bytes),
+        rd, gpu::Use::CopyDest, nullptr, resource, allocation_bytes),
         "create default texture");
     return resource;
 }

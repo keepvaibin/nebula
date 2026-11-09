@@ -166,7 +166,7 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
     rd.SampleDesc.Count = 1;
     rd.Flags = unordered ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
     const gpu::Use use = unordered ? kRead : gpu::Use::CopyDest;
-    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd, legacy_state(use), nullptr,
+    if (FAILED(create_texture(device_, &heap, D3D12_HEAP_FLAG_NONE, &rd, use, nullptr,
                                                 IID_PPV_ARGS(&target.resource)))) {
         return false;
     }

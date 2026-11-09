@@ -81,9 +81,8 @@ bool SceneCamera::initialize(ID3D12Device* device) {
     rd.Format = kExposureFormat;
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd,
-                                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
-                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+    if (FAILED(create_texture(device_, &heap, D3D12_HEAP_FLAG_NONE, &rd,
+                                                gpu::Use::ShaderRead,
                                                 nullptr, IID_PPV_ARGS(&exposure_)))) {
         std::cerr << "[scene-camera] exposure target failed\n";
         return false;
