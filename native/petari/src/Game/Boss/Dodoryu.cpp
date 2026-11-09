@@ -444,7 +444,7 @@ void Dodoryu::endPlayerCenterCamera() {
 }
 
 void Dodoryu::getPlayerResetMtx(Pos3f* pMtx, u32 index) const {
-    MR::tryFindNamePos(MR::FormattedName("マリオ再セット%d", index + 1).c_str(), (MtxPtr)pMtx);
+    MR::tryFindNamePos(MR::FormattedName("マリオ再セット%d", index + 1).c_str(), pMtx->toMtxPtr());
 }
 
 bool Dodoryu::checkWallWithVelocity() {
@@ -795,7 +795,7 @@ void Dodoryu::updateCameraTarget() {
     mSpinOutCameraTarget->mMatrix.setInline(hipMtx);
 }
 
-DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", reinterpret_cast< MtxPtr >(&mBankMtx), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
+DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", mBankMtx.mMtx, MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
     mBankMtx.identity();
 }
 
@@ -812,7 +812,7 @@ void DodoryuBank::exeAppear() {
 }
 
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
-    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", reinterpret_cast< MtxPtr >(&mRabbitMtx), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost),
+    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", mRabbitMtx.mMtx, MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost),
       mRailCoord(), mTalkCtrl(), mTalkSwitchStep(::sRabbitTalkSwitchSteps), mTalkNode(), mTrampleRumbler(), mStarPieceRumbler(), mIsDisplayMessage() {
     mRabbitMtx.identity();
 

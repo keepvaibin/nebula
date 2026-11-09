@@ -151,7 +151,7 @@ void BegomanLauncher::exeLaunch() {
 
     if (MR::isGreaterStep(this, ::sLaunchTime)) {
         if (mLaunchType == 2) {
-            BegomanBase::launchBegomanBabyLauncher(this, reinterpret_cast< BegomanBaby** >(mBegomanArray), mBegomanCount, 100.0f, 10.0f, 30.0f,
+            BegomanBase::launchBegomanBabyLauncher(this, mBegomanArray, mBegomanCount, 100.0f, 10.0f, 30.0f,
                                                    nullptr);
             setNerve(GET_NERVE(BegomanLauncher, HostTypeNrvDisappear));
         } else {

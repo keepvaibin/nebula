@@ -305,7 +305,8 @@ bool CollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f
 
     pPoint->set(axisX * localPoint.x + axisY * localPoint.y + axisZ * localPoint.z + mCenter);
     MR::normalizeOrZero(pNormal);
-    if (mPolygon != nullptr && (mSurfaceMask & (1 << surface))) {
+    // -1 on an edge: no surface.
+    if (mPolygon != nullptr && surface >= 0 && (mSurfaceMask & (1 << surface))) {
         mPolygon->setSurfaceAndSync(surface);
     }
 

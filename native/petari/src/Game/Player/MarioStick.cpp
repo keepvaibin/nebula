@@ -41,7 +41,7 @@ bool MarioStick::startJump() {
 }
 
 bool MarioStick::postureCtrl(MtxPtr pMtx) {
-    MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMtx), mPoseFront, mPoseUp);
+    MR::makeMtxFrontUp(pMtx, mPoseFront, mPoseUp);
     return true;
 }
 

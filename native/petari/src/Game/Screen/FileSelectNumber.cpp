@@ -109,9 +109,9 @@ namespace FileSelectNumberSub {
         if (isNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut))) {
             setNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectInStart));
 
-            _C = nullptr;
+            mQueuedNerve = nullptr;
         } else if (isNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOutStart))) {
-            _C = GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectIn);
+            mQueuedNerve = GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectIn);
         }
     }
 
@@ -119,9 +119,9 @@ namespace FileSelectNumberSub {
         if (isNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectIn))) {
             setNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOutStart));
 
-            _C = nullptr;
+            mQueuedNerve = nullptr;
         } else if (isNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectInStart))) {
-            _C = GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut);
+            mQueuedNerve = GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut);
         }
     }
 
@@ -131,13 +131,13 @@ namespace FileSelectNumberSub {
         }
 
         if (MR::isAnimStopped(mHost, 0)) {
-            if (_C == GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut)) {
+            if (mQueuedNerve == GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut)) {
                 setNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOutStart));
             } else {
                 setNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectIn));
             }
 
-            _C = nullptr;
+            mQueuedNerve = nullptr;
         }
     }
 
@@ -150,13 +150,13 @@ namespace FileSelectNumberSub {
         }
 
         if (MR::isAnimStopped(mHost, 0)) {
-            if (_C == GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectIn)) {
+            if (mQueuedNerve == GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectIn)) {
                 setNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectInStart));
             } else {
                 setNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut));
             }
 
-            _C = nullptr;
+            mQueuedNerve = nullptr;
         }
     }
 

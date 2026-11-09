@@ -12,7 +12,7 @@ public:
 
     virtual void init(const TableIter&) override;
     virtual MtxPtr getBaseMtx() const override {
-        return (MtxPtr)&mBaseMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
 
     void updateGrowUp(const Vec3f&, const Vec3f&, f32, f32);

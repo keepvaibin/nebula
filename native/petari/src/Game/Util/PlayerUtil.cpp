@@ -155,12 +155,12 @@ namespace MR {
         return getPlayerGroundingPolygon()->getFaceNormal();
     }
 
-    void setPlayerFrontTargetVec(const Vec3f& rTarget, s32 param2) {
-        MarioAccess::setFrontVecTarget(rTarget, param2);
+    void setPlayerFrontTargetVec(const Vec3f& rTarget, s32 frontMode) {
+        MarioAccess::setFrontVecTarget(rTarget, frontMode);
     }
 
-    void setPlayerFrontVec(const Vec3f& rVec, s32 param2) {
-        MarioAccess::setFrontVecKeepUp(rVec, param2);
+    void setPlayerFrontVec(const Vec3f& rVec, s32 frontMode) {
+        MarioAccess::setFrontVecKeepUp(rVec, frontMode);
     }
 
     void setPlayerSwingInhibitTimer(u16 timer) {
@@ -747,8 +747,8 @@ namespace MR {
         return MarioAccess::stopFpView();
     }
 
-    void setRasterScroll(s32 param1, s32 param2, s32 param3) {
-        MarioAccess::getPlayerActor()->setRasterScroll(param1, param2, param3);
+    void setRasterScroll(s32 amp, s32 phase, s32 wave) {
+        MarioAccess::getPlayerActor()->setRasterScroll(amp, phase, wave);
     }
 
     void noticePlayerDashChance() {
@@ -862,8 +862,8 @@ namespace MR {
         return isPlayerElementMode(6);
     }
 
-    void calcPlayerWorldPadDir(Vec3f* pDir, f32 param2, f32 param3) {
-        MarioAccess::calcWorldPadDir(pDir, param2, param3);
+    void calcPlayerWorldPadDir(Vec3f* pDir, f32 stickX, f32 stickY) {
+        MarioAccess::calcWorldPadDir(pDir, stickX, stickY);
     }
 
     GameTexture* getFullScreenBlurTexture() {

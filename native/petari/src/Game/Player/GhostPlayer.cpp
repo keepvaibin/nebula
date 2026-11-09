@@ -395,14 +395,13 @@ void GhostPlayer::exePreStartDemo2() {
     Vec3f frontVec;
 
     bool isNormalized = MR::normalizeOrZero(&normalizedFrontVec);
-    Pos3f* baseMtx = reinterpret_cast< Pos3f* >(getBaseMtx());
-    baseMtx->getYDir(upVec);
+    MR::extractMtxYDir(getBaseMtx(), &upVec);
     if (!isNormalized) {
         MR::calcFrontVec(&frontVec, this);
         if (MR::vecBlendSphere(frontVec, normalizedFrontVec, &frontVec, 0.1f) == false) {
             frontVec = normalizedFrontVec;
         }
-        MR::makeMtxUpFront(reinterpret_cast< Pos3f* >(getBaseMtx()), upVec, frontVec);
+        MR::makeMtxUpFront(getBaseMtx(), upVec, frontVec);
         NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
         MR::extractMtxTrans(getBaseMtx(), &mPosition);
     }
@@ -593,7 +592,7 @@ void GhostPlayer::draw() const {
         return;
     }
 
-    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(this));
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(this));
     model->viewCalc2();
     model->mDrawPasses = 0;
     model->directDraw();
@@ -779,14 +778,3 @@ namespace MR {
         *pOutFloat = static_cast< f32 >(inS8) * factor;
     }
 };  // namespace MR
-
-// Unused; Unknown data structure
-struct BallData {
-    f32 value1;
-    u32 value2;
-};
-BallData ballData[] = {{0.0f, 0x00000000},  {0.0f, 0x00000000}, {0.0f, 0x00000000}, {0.0f, 0xFFFFFFFF},  {8.0f, 0x0000FFC0},  {0.0f, 0x0000FFC0},
-                       {10.0f, 0xFF00FFFF}, {8.0f, 0x0000FFC0}, {0.0f, 0x0000FFC0}, {10.0f, 0xFF00FFFF}, {10.0f, 0x000000FF}, {6.0f, 0x000000FF},
-                       {15.0f, 0xFFFF40FF}, {0.0f, 0x00000000}, {0.0f, 0x00000000}, {0.0f, 0x00000000},  {0.0f, 0x00000000},  {0.0f, 0x00000000},
-                       {0.0f, 0x00000000},  {0.0f, 0xFF0000C0}, {6.0f, 0xFF0000C0}, {6.0f, 0xFF0000C0},  {0.0f, 0xFF0000C0},  {10.0f, 0xFF0000FF},
-                       {0.0f, 0xFF0000C0},  {6.0f, 0xFF0000C0}, {6.0f, 0xFF0000C0}, {0.0f, 0xFF0000C0},  {10.0f, 0xFF0000FF}, {0.0f, 0x00000000}};

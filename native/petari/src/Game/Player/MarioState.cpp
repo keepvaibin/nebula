@@ -114,6 +114,10 @@ void Mario::closeStatus(MarioState* pState) {
             pCurr = pNext;
         }
 
+        if (pCurr == nullptr) {
+            return;  // not open
+        }
+
         pCurr->mNextState = pState->mNextState;
     }
 

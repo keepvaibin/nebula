@@ -25,15 +25,16 @@ public:
     virtual void notifyForceOff() {
     }
 
+    // On, or still fading out.
     bool isSomething() const {
-        return _C || _D;
+        return mIsOn || mIsShown;
     }
 
     f32 getFadeLevel() const {
         return mFadeLevel;
     }
 
-    bool _C;
-    bool _D;
+    bool mIsOn;     // turned on: fades in
+    bool mIsShown;  // drawn: set while on, cleared when the fade-out reaches 0
     f32 mFadeLevel;
 };

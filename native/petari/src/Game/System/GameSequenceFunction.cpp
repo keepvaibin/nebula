@@ -57,10 +57,6 @@ namespace GameSequenceFunction {
         return ::getGameSequenceProgress()->getGalaxyCometScheduler()->getEncounterCometName(pGalaxyName);
     }
 
-    s32 getGalaxyCometState(const char* pGalaxyName) {
-        return ::getGameSequenceProgress()->getGalaxyCometScheduler()->getStateValueIncluded(pGalaxyName);
-    }
-
     bool isNeedMoviePlayerForStorySequenceEvent() {
         return ::getGameSequenceProgress()->mStorySequenceExecutor->isNeedMoviePlayerExecutingEventEnum();
     }

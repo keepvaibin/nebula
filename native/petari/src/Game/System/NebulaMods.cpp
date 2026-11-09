@@ -71,15 +71,16 @@ namespace NebulaMods {
 }  // namespace NebulaMods
 
 namespace {
-    // A list lives where its owner does: a static's room is the root arena's (a scene's arena would be freed under it).
+    // A list grows in its owner's arena; a static one (outside every arena, it lasts the run) in the root arena,
+    // whichever arena a plugin's call finds current.
     template < typename T >
     class List {
     public:
         void add(const T& rItem) {
             if (mCount == mCapacity) {
                 const int capacity = mCapacity == 0 ? 8 : mCapacity * 2;
-                NebulaArena* const pHome = NebulaArena::findFromRoot(this);
-                T* pItems = new (pHome != nullptr ? pHome : NebulaArena::root(), 0) T[capacity];
+                NebulaArena* const pArena = NebulaArena::findFromRoot(this);
+                T* pItems = new (pArena != nullptr ? pArena : NebulaArena::root(), 0) T[capacity];
                 for (int i = 0; i < mCount; i++) {
                     pItems[i] = mItems[i];
                 }
@@ -142,25 +143,13 @@ namespace {
     List< NebulaPowerUpClass > sPowerUps;
     int sStageFrames = 0;
 
-    // The text in the arena that lasts as long as the process: what a mod registers, or asks the game to hold on to (a stage
-    // change's name), outlives the scene it was made in.
-    const char* copyText(const char* pText) {
+    // A plugin's text kept: for the run (the root arena: tables, and names the next scene reads), or with pArena.
+    const char* copyText(const char* pText, NebulaArena* pArena = NebulaArena::root()) {
         if (pText == nullptr) {
             return nullptr;
         }
         const size_t length = strlen(pText) + 1;
-        char* pCopy = new (NebulaArena::root(), 0) char[length];
-        memcpy(pCopy, pText, length);
-        return pCopy;
-    }
-
-    // The text in the current arena, for what only the scene it is made in uses.
-    const char* copySceneText(const char* pText) {
-        if (pText == nullptr) {
-            return nullptr;
-        }
-        const size_t length = strlen(pText) + 1;
-        char* pCopy = new char[length];
+        char* pCopy = new (pArena, 0) char[length];
         memcpy(pCopy, pText, length);
         return pCopy;
     }
@@ -605,8 +594,8 @@ namespace {
         }
     }
 
-    // The text as UTF-16, in `pArena`.
-    const char16_t* wordsOf(const char* pUtf8, NebulaArena* pArena) {
+    // UTF-8 as the game's UTF-16, kept as copyText keeps text.
+    const char16_t* wordsOf(const char* pUtf8, NebulaArena* pArena = NebulaArena::root()) {
         const size_t length = strlen(pUtf8);
         char16_t* pWords = new (pArena, 0) char16_t[length + 1];
         size_t out = 0;
@@ -986,7 +975,7 @@ namespace {
             if (pCreator == nullptr) {
                 return nullptr;
             }
-            pObject = pCreator(copySceneText(pName));
+            pObject = pCreator(copyText(pName, NebulaArena::current()));
         }
         if (pObject == nullptr) {
             return nullptr;
@@ -1756,7 +1745,7 @@ namespace {
         if (!MR::isExistObjectOrLayoutArchive(pName)) {
             return nullptr;
         }
-        PluginLayout* pLayout = new PluginLayout(copySceneText(pName));
+        PluginLayout* pLayout = new PluginLayout(copyText(pName, NebulaArena::current()));
         pLayout->initWithoutIter();
         return reinterpret_cast< NebulaLayout* >(pLayout);
     }
@@ -1769,11 +1758,9 @@ namespace {
         }
     }
 
-    const char16_t* wordsOf(const char* pUtf8, NebulaArena* pArena);
-
     void apiLayoutSetText(NebulaLayout* pLayout, const char* pPane, const char* pUtf8) {
         if (pPane != nullptr && pUtf8 != nullptr) {
-            MR::setTextBoxMessageRecursive(asLayout(pLayout), pPane, wordsOf(pUtf8, NebulaArena::current()));
+            MR::setTextBoxMessageRecursive(asLayout(pLayout), pPane, wordsOf(pUtf8, NebulaArena::findFromRoot(asLayout(pLayout))));
         }
     }
 
@@ -1805,8 +1792,9 @@ namespace {
                 return;
             }
         }
-        PluginLayout::Moved* pMoved = new PluginLayout::Moved;
-        pMoved->mPane = copySceneText(pPane);
+        NebulaArena* const pHostArena = NebulaArena::findFromRoot(pHost);
+        PluginLayout::Moved* pMoved = new (pHostArena) PluginLayout::Moved;
+        pMoved->mPane = copyText(pPane, pHostArena);
         pMoved->mAt.set(x, y);
         pHost->mMoved.add(pMoved);
         MR::createAndAddPaneCtrl(pHost, pMoved->mPane, 1);

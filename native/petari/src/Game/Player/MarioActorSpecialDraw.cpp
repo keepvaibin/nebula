@@ -460,10 +460,10 @@ void MarioActor::drawColdWaterDamage() const {
     drawFrameRipple(mRippleKey, 5.0f, mFrameCount, frequency, 0.0f);
 }
 
-void MarioActor::setRasterScroll(s32 i1, s32 i2, s32 i3) {
-    mRasterScrollPhase = i2;
-    mRasterScrollAmp = 0.9f * mRasterScrollAmp + 0.1f * i1;
-    mRasterScrollWave = i3;
+void MarioActor::setRasterScroll(s32 amp, s32 phase, s32 wave) {
+    mRasterScrollPhase = phase;
+    mRasterScrollAmp = 0.9f * mRasterScrollAmp + 0.1f * amp;
+    mRasterScrollWave = wave;
     mRasterScrollSet = 1;
 }
 

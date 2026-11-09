@@ -14,8 +14,8 @@ public:
         /// @brief Creates a new `Separator`.
         Separator();
 
-        f32 _0;
-        Vec2f _4;
+        f32 mHeight;    // the separator pane's height once shown
+        Vec2f mOffset;  // the pane's follow position: its offset in the list
     };
 
     /// @brief Creates a new `PowerStarList`.

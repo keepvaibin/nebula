@@ -282,14 +282,6 @@ namespace MR {
         return true;
     }
 
-    const Triangle* getSortedPoly(u32 sortIndex) {
-        if (sSortCount <= sortIndex) {
-            return nullptr;
-        }
-
-        return &sSortBuffer[sortIndex].mParentTriangle;
-    }
-
     bool isExistMapCollision(const Vec3f& rStart, const Vec3f& rDirection) {
         return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rStart, rDirection, 1, nullptr, nullptr) != 0;
     }
@@ -686,37 +678,6 @@ namespace MR {
         return ((getSoundCodeIndex(pTriangle) == CollisionSoundCode_Sand || getSoundCodeIndex(pTriangle) == CollisionSoundCode_Beach) ||
                 isGroundCodeSand(pTriangle)) ||
                isGroundCodeNoStampSand(pTriangle);
-    }
-
-    const Triangle* getCameraPolyFast(const Vec3f& rStart, const Vec3f& rDirection, const HitSensor* pSensor) {
-        Triangle triangle;
-        f32 remaining = rDirection.length();
-        // A line that is not a finite length would never reach its end.
-        if (!(remaining < 1.0e9f)) {
-            return nullptr;
-        }
-
-        Vec3f direction(rDirection);
-        direction.normalize();
-        Vec3f start(rStart);
-        Vec3f step(direction * 5000.0f);
-        do {
-            f32 length = 5000.0f;
-            if (remaining < length) {
-                length = remaining;
-                step = direction * remaining;
-            }
-
-            s32 count = getNearPolyOnLineSort(start, start, step, pSensor);
-            while (count != 0) {
-                return getSortedPoly(0);
-            }
-
-            remaining -= length;
-            start += step;
-        } while (!isNearZero(remaining));
-
-        return nullptr;
     }
 
     bool getFirstPolyOnLineBFast(const Vec3f& rStart, const Vec3f& rDirection, Vec3f* pPos, Triangle* pTriangle) {

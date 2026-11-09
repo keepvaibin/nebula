@@ -156,7 +156,8 @@ AreaFormBowl::AreaFormBowl() {
 void AreaFormBowl::init(const TableIter& rIter) {
     MR::getPlacementTrans(rIter, &mTranslation);
 
-    f32 scale_x;
+    // 1 for a table without the column.
+    f32 scale_x = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale_x);
     mRadius = scale_x;
     mRadius *= 500.0f;
@@ -180,7 +181,7 @@ void AreaFormBowl::calcUpVec(const Vec3f& rPos) {
 
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rPos.x, rPos.y, rPos.z);
-    NebulaMtxMultVec(mtx, (const Vec*)&up, (Vec*)&up);
+    NebulaMtxMultVec(mtx, &up, &up);
     mUp = up;
 }
 
@@ -240,18 +241,18 @@ void AreaFormCylinder::calcDir(const Vec3f& rRotation) {
     mUp.z = 0.0f;
 
     MtxPtr mtx_x = MR::tmpMtxRotXDeg(rRotation.x);
-    NebulaMtxMultVec(mtx_x, (const Vec*)&mUp, (Vec*)&mUp);
+    NebulaMtxMultVec(mtx_x, &mUp, &mUp);
     MtxPtr mtx_y = MR::tmpMtxRotYDeg(rRotation.y);
-    NebulaMtxMultVec(mtx_y, (const Vec*)&mUp, (Vec*)&mUp);
+    NebulaMtxMultVec(mtx_y, &mUp, &mUp);
     MtxPtr mtx_z = MR::tmpMtxRotZDeg(rRotation.z);
-    NebulaMtxMultVec(mtx_z, (const Vec*)&mUp, (Vec*)&mUp);
+    NebulaMtxMultVec(mtx_z, &mUp, &mUp);
     mUp.normalize();
 }
 
 void AreaFormSphere::init(const TableIter& rIter) {
     MR::getPlacementTrans(rIter, &mTranslation);
 
-    f32 scale_x;
+    f32 scale_x = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale_x);
 
     mRadius = scale_x;
@@ -264,7 +265,7 @@ void AreaFormSphere::init(const TableIter& rIter) {
 
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rotation.x, rotation.y, rotation.z);
-    NebulaMtxMultVec(mtx, (const Vec*)&up, (Vec*)&up);
+    NebulaMtxMultVec(mtx, &up, &up);
     mUp = up;
 }
 
@@ -275,7 +276,7 @@ void AreaFormCylinder::init(const TableIter& rIter) {
     MR::getPlacementRotate(rIter, &rotate);
     calcDir(rotate);
 
-    f32 scale;
+    f32 scale = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale);
 
     mRadius = scale;

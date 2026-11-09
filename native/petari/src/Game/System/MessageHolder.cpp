@@ -17,7 +17,7 @@ namespace {
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
     if (const char16_t* pWords = NebulaMods::text(pMessage)) {
-        pMessageInfo->mMessage = reinterpret_cast< u8* >(const_cast< char16_t* >(pWords));
+        pMessageInfo->mMessage = pWords;
         return true;
     }
 
@@ -30,24 +30,26 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
         if (pText == nullptr || templateIndex < 0 || static_cast< u32 >(templateIndex) >= getMessageNum()) {
             return false;
         }
-        getMessage(pMessageInfo, 0, templateIndex);
-        pMessageInfo->mMessage = reinterpret_cast< u8* >(const_cast< char16_t* >(pText));
+        getMessage(pMessageInfo, templateIndex);
+        pMessageInfo->mMessage = pText;
         return true;
     }
     s32 messageIndex = findMessageIndex(pMessage);
 
-    if (messageIndex >= 0 && static_cast< u32 >(messageIndex) < getMessageNum()) {
-        getMessage(pMessageInfo, 0, messageIndex);
-
-        return true;
+    if (messageIndex >= 0) {
+        return getMessage(pMessageInfo, messageIndex);
     }
 
     return false;
 }
 
-bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u32, u32 index) const {
+bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u32 index) const {
+    if (index >= getMessageNum()) {
+        return false;
+    }
+
     const MessageRecord& rRecord = mMessages[index];
-    pMessageInfo->mMessage = reinterpret_cast< u8* >(const_cast< char16_t* >(mText + rRecord.mText));
+    pMessageInfo->mMessage = mText + rRecord.mText;
     pMessageInfo->mCameraSetID = rRecord.mCameraSetID;
     pMessageInfo->mSoundId = rRecord.mSoundId;
     pMessageInfo->mCameraType = rRecord.mCameraType;
@@ -65,7 +67,7 @@ TalkNode* MessageData::findNode(const char* pMessage) const {
     for (u32 i = 0; i < mFile->mNodeNum; i++) {
         TalkNode* pNode = &mNodes[i];
 
-        if (pNode->mNodeType == 1 && static_cast< s32 >(pNode->mIndex) == messageIndex) {
+        if (pNode->mNodeType == TalkNodeType_Message && static_cast< s32 >(pNode->mIndex) == messageIndex) {
             return pNode;
         }
     }

@@ -228,7 +228,7 @@ CameraParamChunk* CameraManGame::tryToReplaceChunkToDefault(CameraParamChunk* pC
         return pChunk;
     }
 
-    CameraParamChunkGame* gameChunk = reinterpret_cast< CameraParamChunkGame* >(pChunk);
+    CameraParamChunkGame* gameChunk = static_cast< CameraParamChunkGame* >(pChunk);
 
     if (gameChunk->mThru != 1) {
         return pChunk;
@@ -247,7 +247,7 @@ void CameraManGame::requestResetIfNecessary(CameraParamChunk* pChunk) {
         if (isZoomCamera()) {
             mDirector->setInterpolation(mChunk->mExParam.mCamInt);
         } else if (isCurrentChunkEnableEndInterp()) {
-            CameraParamChunkGame* gameChunk = reinterpret_cast< CameraParamChunkGame* >(mChunk);
+            CameraParamChunkGame* gameChunk = static_cast< CameraParamChunkGame* >(mChunk);
             mDirector->setInterpolation(gameChunk->mCamEndInt);
         } else {
             mDirector->setInterpolation(pChunk->mExParam.mCamInt);
@@ -284,7 +284,7 @@ bool CameraManGame::isCurrentChunkEnableEndInterp() const {
         is = false;
 
         if (MR::isEqualString(mChunk->getClassName(), "Game")) {
-            CameraParamChunkGame* gameChunk = reinterpret_cast< CameraParamChunkGame* >(mChunk);
+            CameraParamChunkGame* gameChunk = static_cast< CameraParamChunkGame* >(mChunk);
 
             if (gameChunk->mEnableEndErpFrame != 0) {
                 is = true;
@@ -542,7 +542,7 @@ void CameraManGame::updateWaterSurface() {
 void CameraManGame::updateGCapture() {
     CubeCameraArea::setCurrentCategory(CubeCameraArea::ECategory_GCapture);
 
-    CubeCameraArea* area = reinterpret_cast< CubeCameraArea* >(MR::getAreaObj("CubeCamera", CameraLocalUtil::getTarget(this)->getPosition()));
+    CubeCameraArea* area = static_cast< CubeCameraArea* >(MR::getAreaObj("CubeCamera", CameraLocalUtil::getTarget(this)->getPosition()));
 
     if (area != nullptr) {
         CameraParamChunkID_Tmp chunkID = CameraParamChunkID_Tmp();

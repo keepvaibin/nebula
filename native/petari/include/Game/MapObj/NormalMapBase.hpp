@@ -42,7 +42,7 @@ public:
     GameTexture** mTextures;  // one for each texture of the model
     void* mImagePtr;
     s32 mGradTexMode;
-    Mtx mDrawMtx;
+    mutable Mtx mDrawMtx;  // the model-view matrix of the draw (const)
     u8 mBackLightMode;
     Color10 mStageColor0;
     Color10 mStageColor1;

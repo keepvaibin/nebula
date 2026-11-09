@@ -32,7 +32,7 @@ public:
     void setMtx(const Pos3f&);
     void setMtx();
     void updateMtx();
-    f32 makeEqualScale(MtxPtr);
+    f32 makeEqualScale(Pos3f&);
     void updateBoundingSphereRange();
     void updateBoundingSphereRange(Vec3f);
     void updateBoundingSphereRangePrivate(f32);
@@ -50,7 +50,7 @@ public:
     u32 createAreaPolygonListArray(Triangle*, u32, Vec3f*, u32);
     void calcForceMovePower(Vec3f*, const Vec3f&) const;
 
-    Pos3f* mFollowMtx;
+    MtxPtr mFollowMtx;  // the host's matrix the parts follow, or null
     Pos3f mMatrix;
     Pos3f mBaseMatrix;
     Pos3f mInvBaseMatrix;

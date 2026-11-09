@@ -17,9 +17,7 @@ public:
     void process();
     void dispose();
     SoundHandle* startSound(SoundID);
-    SoundHandle* startSoundIndex(SoundID, u8);
     SoundHandle* startLevelSound(SoundID);
-    SoundHandle* startLevelSoundIndex(SoundID, u8);
 
     void stopSound(SoundID, u32);
     SoundHandle* getLowPrioSound(SoundID);

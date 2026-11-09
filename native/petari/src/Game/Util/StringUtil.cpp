@@ -3,6 +3,7 @@
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#include "Game/Util/MessageTag.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cctype>
 #include <cstddef>
@@ -54,11 +55,6 @@ namespace MR {
         u8 mGroup;
         char16_t mBuffer[1];
     };
-
-    const u16 cTagEscape = 0x1A;
-    const u8 cTagGroupEditor = 1;
-    const u8 cTagGroupPictureFont = 3;
-    const char16_t cEditorTagNext = 1;
 
     struct TagHeader {
         u8 mDataSize;
@@ -180,9 +176,9 @@ namespace MR {
     char16_t* addPictureFontTag(char16_t* pDst, int tag) {
         Tag* pTag = reinterpret_cast< Tag* >(pDst);
 
-        pTag->mEscape = cTagEscape;
+        pTag->mEscape = cMessageTagEscape;
         pTag->mDataSize = sizeof(Tag);
-        pTag->mGroup = cTagGroupPictureFont;
+        pTag->mGroup = MessageTagGroup_Picture;
         pTag->mBuffer[0] = tag - '0';
         pTag->mBuffer[1] = '\0';
 
@@ -197,7 +193,7 @@ namespace MR {
     }
 
     char16_t* addNumberFontTag(char16_t* pDst, const char16_t* pFmt, ...) {
-        *pDst++ = 0x1A;
+        *pDst++ = cMessageTagEscape;
         TagHeader* pTag = reinterpret_cast< TagHeader* >(pDst);
         pDst += sizeof(TagHeader) / sizeof(char16_t);
 
@@ -208,7 +204,7 @@ namespace MR {
         va_end(args);
 
         pDst += num;
-        pTag->mGroup = 10;
+        pTag->mGroup = MessageTagGroup_Font;
         pTag->mTag = 0;
         pTag->mDataSize = num * sizeof(char16_t) + sizeof(TagHeader) + sizeof(char16_t);
         *pDst = '\0';
@@ -322,14 +318,14 @@ namespace MR {
     bool isMessageEditorNextTag(const char16_t* pStr) {
         const Tag* pTag = reinterpret_cast< const Tag* >(pStr);
 
-        return pTag->mGroup == cTagGroupEditor && pTag->mBuffer[0] == cEditorTagNext;
+        return pTag->mGroup == MessageTagGroup_Display && pTag->mBuffer[0] == cMessageTagNextPage;
     }
 
     int getStringLengthWithMessageTag(const char16_t* pMessage) {
         int length = 0;
 
         while (*pMessage != '\0') {
-            if (*pMessage == 0x1A) {
+            if (*pMessage == cMessageTagEscape) {
                 if (isMessageEditorNextTag(pMessage)) {
                     break;
                 }
@@ -402,14 +398,17 @@ namespace MR {
         if (!scanOpen(p)) {
             return;
         }
-        for (s32 i = 0; i < 4 && scanInt(p, &values[i]); i++) {
+        // Only the values read are written, as scani leaves pDst on a failed read.
+        s32 count = 0;
+        while (count < 4 && scanInt(p, &values[count])) {
+            count++;
             if (*p != ',') {
                 break;
             }
             p++;
         }
 
-        for (int i = 0; i < ARRAY_SIZE(values); i++) {
+        for (s32 i = 0; i < count; i++) {
             pDst[i] = values[i];
         }
     }

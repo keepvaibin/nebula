@@ -141,7 +141,7 @@ PlanetGravity* ConeGravityCreator::createInstance() {
 
 void ConeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     Pos3f localMtx;
-    MR::makeMtxTRS(reinterpret_cast< MtxPtr >(&localMtx), rTrans, rRotate, rScale * 500.0f);
+    MR::makeMtxTRS(localMtx.toMtxPtr(), rTrans, rRotate, rScale * 500.0f);
     mGravityInstance->setLocalMatrix(localMtx);
 }
 

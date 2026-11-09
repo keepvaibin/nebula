@@ -18,7 +18,6 @@
 #include "Game/System/GameSystemRestartProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/Arenas.hpp"
-#include "Game/System/HomeButtonStateNotifier.hpp"
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -67,7 +66,7 @@ extern "C" void nebula_game_main(void) {
 GameSystem::GameSystem()
     : NerveExecutor("GameSystem"), mSequenceDirector(nullptr), mErrorWatcher(nullptr), mFontHolder(nullptr),
       mObjHolder(nullptr), mSceneController(nullptr), mHomeButtonLayout(nullptr),
-      mSystemWipeHolder(nullptr), mHomeButtonStateNotifier(nullptr), mIsExecuteLoadSystemArchive(false) {
+      mSystemWipeHolder(nullptr), mIsExecuteLoadSystemArchive(false), mWasSceneHeld(false), mIsSceneResumed(false) {
 }
 
 void GameSystem::init() {
@@ -86,7 +85,6 @@ void GameSystem::init() {
     SingletonHolder< GameSystemRestartProcess >::init();
     SingletonHolder< GameSystemRestartProcess >::get()->initWithoutIter();
     mHomeButtonLayout = new HomeButtonLayout();
-    mHomeButtonStateNotifier = new HomeButtonStateNotifier();
     setNerve(GET_NERVE(GameSystem, GameSystemInitializeAudio));
 }
 
@@ -244,8 +242,9 @@ void GameSystem::updateSceneController() {
     if (isSkipPrompt || isSettingsMenu) {
         isSceneUpdate = false;
     }
-    mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning() ||
-                                     isSkipPrompt || isSettingsMenu);
+    const bool isSceneHeld = mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning() || isSkipPrompt || isSettingsMenu;
+    mIsSceneResumed = mWasSceneHeld && !isSceneHeld;
+    mWasSceneHeld = isSceneHeld;
 
     if (isSceneUpdate || isResetProcessing) {
         mSequenceDirector->update();

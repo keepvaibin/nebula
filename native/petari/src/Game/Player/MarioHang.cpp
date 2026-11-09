@@ -794,7 +794,7 @@ bool MarioHang::postureCtrl(MtxPtr pMatrix) {
             return false;
         }
 
-        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -mWallNormal, getPlayer()->mGroundNorm);
+        MR::makeMtxFrontUp(pMatrix, -mWallNormal, getPlayer()->mGroundNorm);
     } else {
         f32 blend = MR::clamp(mTimer / 30.0f, 0.0f, 1.0f);
         MR::vecBlendSphere(getPlayer()->mGroundNorm, getPlayer()->mHeadVec, &up, blend);
@@ -802,7 +802,7 @@ bool MarioHang::postureCtrl(MtxPtr pMatrix) {
             return false;
         }
 
-        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -mWallNormal, up);
+        MR::makeMtxFrontUp(pMatrix, -mWallNormal, up);
     }
 
     return true;

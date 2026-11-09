@@ -34,6 +34,9 @@ namespace NrvNPCActor {
 };  // namespace NrvNPCActor
 
 namespace {
+    // Steps since the pointer's sound last played, held here (past the 60 it waits).
+    const s32 cPointingSeStepMax = 0x400;
+
     class NPCParam : public AnimScaleParam {
     public:
         NPCParam() : AnimScaleParam() {
@@ -211,7 +214,7 @@ NPCActor::NPCActor(const char* pName) : LiveActor(pName) {
     mScaleController = nullptr;
     mDelegator = nullptr;
     mCurNerve = nullptr;
-    mPointingSeStep = 0x400;
+    mPointingSeStep = cPointingSeStepMax;
     mPoseQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
     mInitPoseQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
     mInitPos.zero();
@@ -465,12 +468,9 @@ void NPCActor::kill() {
 void NPCActor::control() {
     if (isPointingSe()) {
         mPointingSeStep = 0;
-    } else {
+    } else if (mPointingSeStep < cPointingSeStepMax) {
         mPointingSeStep++;
     }
-
-    const s32 count = mPointingSeStep;
-    mPointingSeStep = count < 0x400 ? count : 0x400;
 
     updateReaction();
 

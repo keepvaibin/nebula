@@ -146,7 +146,7 @@ namespace MR {
 
         Vec3f up;
         Vec3f across;
-        ((Rot3f*)pActor->getBaseMtx())->getYDir(up);
+        MR::extractMtxYDir(pActor->getBaseMtx(), &up);
         Vec3f fromPlayer = pActor->mPosition - *MR::getPlayerPos();
         f32 along = MR::abs(vecKillElement(fromPlayer, up, &across));
         if (height < along) {

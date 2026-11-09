@@ -14,11 +14,49 @@ public:
     s32 mMax;
 };
 
+enum TalkNodeType {
+    TalkNodeType_Message = 1,
+    TalkNodeType_Branch = 2,
+    TalkNodeType_Event = 3,
+};
+
+// A branch node's condition (TalkNode::mIndex). The flow data numbers them in this order: the galaxy result comes
+// before the time-keep demo and the read-message test.
+enum BranchKind {
+    // The player chooses; mNextIdx is the select's id (sSelectBranchID).
+    BranchKind_Select,
+    BranchKind_Func,
+    BranchKind_NearPlayer,
+    BranchKind_SwitchA,
+    BranchKind_SwitchB,
+    BranchKind_PlayerNormal,
+    BranchKind_PlayerBee,
+    BranchKind_PlayerTeresa,
+    BranchKind_PowerStarAppeared,
+    BranchKind_AlreadyDone,
+    BranchKind_PlayerLuigi,
+    BranchKind_GalaxyResult,
+    BranchKind_TimeKeepDemo,
+    BranchKind_MessageRead,
+};
+
+// An event node's kind (TalkNode::mGroupID).
+enum EventKind {
+    EventKind_Func,
+    EventKind_FuncStop,
+    EventKind_None,
+    EventKind_Skip,
+    EventKind_Anime,
+    EventKind_SwitchA,
+    EventKind_SwitchB,
+    EventKind_Kill,
+};
+
 // A flow node, read in place (NMSG, crates/nebula-import cook/message.rs).
 class TalkNode {
 public:
-    u8 mNodeType;  // 1 message, 2 branch, 3 event
-    u8 mGroupID;   // an event's kind
+    u8 mNodeType;  // TalkNodeType
+    u8 mGroupID;   // an event's kind (EventKind)
     u32 mIndex;  // a message's number, a branch's condition, an event's first branch
     union {
         u32 mNextIdx;  // a message's next node (MessageData::cNoNode at the end), a branch's parameter

@@ -9,6 +9,8 @@
 #include "Game/Util.hpp"
 
 namespace {
+    const s32 cCocoNutNum = 4;
+    const s32 cFireBallNum = 3;
     const Vec cSensorOffset = {0.0f, 180.0f, 0.0f};
     const f32 cSensorRadius = 300.0f;
     const s32 cWaitFrameMin = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -120,15 +122,15 @@ void OtaRock::initModel() {
     initModelManagerWithAnm("OtaRock", nullptr, false);
 
     if (!mNoThrowCocoNut) {
-        mCocoNutArray = new CocoNutBall[4];
-        for (int i = 0; i < 4; i++) {
+        mCocoNutArray = new CocoNutBall[::cCocoNutNum];
+        for (int i = 0; i < ::cCocoNutNum; i++) {
             mCocoNutArray[i].initWithoutIter();
             mCocoNutArray[i].mHost = this;
         }
     }
 
-    mFireBallArray = new FireBall[3];
-    for (int i = 0; i < 3; i++) {
+    mFireBallArray = new FireBall[::cFireBallNum];
+    for (int i = 0; i < ::cFireBallNum; i++) {
         mFireBallArray[i].initWithoutIter();
         mFireBallArray[i].mHost = this;
     }
@@ -158,7 +160,7 @@ void OtaRock::updateBaseMtx() {
 }
 
 CocoNutBall* OtaRock::getDisappearedCocoNut() {
-    for (s32 i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::cCocoNutNum; i++) {
         if (MR::isDead(&mCocoNutArray[i])) {
             return &mCocoNutArray[i];
         }
@@ -168,7 +170,7 @@ CocoNutBall* OtaRock::getDisappearedCocoNut() {
 }
 
 FireBall* OtaRock::getDisappearedFireBall() {
-    for (s32 i = 0; i < 3; i++) {
+    for (s32 i = 0; i < ::cFireBallNum; i++) {
         if (MR::isDead(&mFireBallArray[i])) {
             return &mFireBallArray[i];
         }
@@ -178,7 +180,7 @@ FireBall* OtaRock::getDisappearedFireBall() {
 
 s32 OtaRock::getDisappearedCocoNutNum() const {
     s32 num = 0;
-    for (s32 i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::cCocoNutNum; i++) {
         if (MR::isDead(&mCocoNutArray[i])) {
             num++;
         }
@@ -188,7 +190,7 @@ s32 OtaRock::getDisappearedCocoNutNum() const {
 
 s32 OtaRock::getDisappearedFireBallNum() const {
     s32 num = 0;
-    for (s32 i = 0; i < 3; i++) {
+    for (s32 i = 0; i < ::cFireBallNum; i++) {
         if (MR::isDead(&mFireBallArray[i])) {
             num++;
         }
@@ -300,12 +302,12 @@ void OtaRock::exeDown() {
         MR::tryRumblePadVeryStrong(this, PLAYER_1);
 
         if (!mNoThrowCocoNut) {
-            for (s32 i = 0; i < 4; i++) {
+            for (s32 i = 0; i < ::cCocoNutNum; i++) {
                 if (!MR::isDead(&mCocoNutArray[i]))
                     mCocoNutArray[i].kill();
             }
         }
-        for (s32 i = 0; i < 3; i++) {
+        for (s32 i = 0; i < ::cFireBallNum; i++) {
             if (!MR::isDead(&mFireBallArray[i]))
                 mFireBallArray[i].kill();
         }

@@ -14,7 +14,7 @@ public:
     virtual void kill() override;
     virtual void makeActorDead() override;
     virtual MtxPtr getBaseMtx() const override {
-        return (MtxPtr)mBaseMtx.mMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
     virtual void control() override;
     virtual void calcAndSetBaseMtx() override;

@@ -83,7 +83,8 @@ public:
     static void launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const Vec3f* pFront);
     static void launchBegomanBabyFromGuarder(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
                                              const Vec3f* pFront);
-    static void launchBegomanBabyLauncher(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+    // Every entry of pBabyArray is a BegomanBaby.
+    static void launchBegomanBabyLauncher(LiveActor* pActor, BegomanBase* const* pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
                                           const Vec3f* pFront);
 
     void updateTargetVec();

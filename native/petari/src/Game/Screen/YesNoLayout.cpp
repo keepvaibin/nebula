@@ -60,7 +60,7 @@ void YesNoLayout::exeSelecting() {
         MR::disappearInformationMessage();
     }
 
-    if (!mController->_C) {
+    if (!mController->mIsActive) {
         kill();
     }
 }

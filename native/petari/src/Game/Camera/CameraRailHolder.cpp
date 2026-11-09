@@ -38,7 +38,7 @@ CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails()
             s32 arg;
             if (::getCameraRail(&iter, &arg, railId, zoneId)) {
                 mRails[zoneId].mRails[railNum].mRailId = arg;
-                s32 linkId;
+                s32 linkId = -1;
                 iter.getValue("l_id", &linkId);
                 mRails[zoneId].mRails[railNum].mRailRider = new RailRider(linkId, zoneId);
                 railNum++;

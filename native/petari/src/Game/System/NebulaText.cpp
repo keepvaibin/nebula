@@ -7,6 +7,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#include "Game/Util/MessageTag.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <Game/Ui/TextBox.hpp>
@@ -302,7 +303,7 @@ namespace {
             // {player}: the game's own tag for the player's name (Mario or Luigi, as the file is played).
             if (startsWith(pText, cPlayer)) {
                 // Copied whole: a tag's parameters may be zero (the game's text is measured tag by tag).
-                static const char16_t cPlayerTag[] = {0x1A, 0x0508, 0x0000, 0x0000};
+                static const char16_t cPlayerTag[] = {cMessageTagEscape, makeMessageTagHead(MessageTagGroup_Localize, 8), 0x0000, 0x0000};
                 const s32 units = sizeof(cPlayerTag) / sizeof(cPlayerTag[0]);
                 if (pSink->fits(units)) {
                     for (s32 i = 0; i < units; i++) {
@@ -343,11 +344,11 @@ namespace {
             const bool galaxy = startsWith(pText, cGalaxy);
             const char16_t* pName = galaxy ? MR::getGalaxyNameOnCurrentLanguage(sTokenId) : MR::getGameMessageDirect(sTokenId);
             if (pName != nullptr) {
-                // The game's text without its tags (0x1A, then the tag's size in bytes in the next unit's low byte).
+                // The game's text without its tags.
                 for (const char16_t* p = pName; *p != 0 && pSink->fits(1);) {
-                    if (*p == 0x1A && p[1] != 0) {
+                    if (*p == cMessageTagEscape && p[1] != 0) {
                         // Its whole size: a tag's parameters may be zero.
-                        const s32 units = (p[1] & 0xFF) / 2;
+                        const s32 units = getMessageTagUnits(p[1]);
                         p += units > 0 ? units : 1;
                         continue;
                     }
@@ -457,9 +458,9 @@ namespace NebulaText {
         }
         s32 length = get(sTalk, sTalkRoom, "LumaGreeting");
         // The next page (the game's <1:1> tag).
-        sTalk[length++] = 0x1A;
-        sTalk[length++] = 0x0106;
-        sTalk[length++] = 0x0001;
+        sTalk[length++] = cMessageTagEscape;
+        sTalk[length++] = cMessageTagNextPageHead;
+        sTalk[length++] = cMessageTagNextPage;
         get(sTalk + length, sTalkRoom - length, "LumaBoard");
         sTalkFitted = false;
         return sTalk;
@@ -471,9 +472,9 @@ namespace NebulaText {
         s32 count = 0;
         for (s32 i = 0; i < length && count < max; i++) {
             const char16_t c = pText[i];
-            if (c == 0x1A && i + 1 < length && pText[i + 1] != 0) {
+            if (c == cMessageTagEscape && i + 1 < length && pText[i + 1] != 0) {
                 // A tag, skipped whole: its parameters are not text.
-                const s32 units = (pText[i + 1] & 0xFF) / 2;
+                const s32 units = getMessageTagUnits(pText[i + 1]);
                 i += (units > 0 ? units : 1) - 1;
                 continue;
             }
@@ -525,7 +526,7 @@ namespace NebulaText {
         // Its length: tags skipped whole (the player's name is a tag whose parameters are zero).
         s32 length = 0;
         while (sTalk[length] != 0) {
-            const s32 units = sTalk[length] == 0x1A && sTalk[length + 1] != 0 ? (sTalk[length + 1] & 0xFF) / 2 : 1;
+            const s32 units = sTalk[length] == cMessageTagEscape && sTalk[length + 1] != 0 ? getMessageTagUnits(sTalk[length + 1]) : 1;
             length += units > 0 ? units : 1;
         }
         // Paragraph by paragraph (a line break or a page ends one): as few lines as the box allows, and those as even
@@ -533,10 +534,10 @@ namespace NebulaText {
         s32 paragraph = 0;
         while (paragraph <= length) {
             s32 paragraphEnd = paragraph;
-            while (paragraphEnd < length && sTalk[paragraphEnd] != u'\n' && !(sTalk[paragraphEnd] == 0x1A && sTalk[paragraphEnd + 1] == 0x0106)) {
-                if (sTalk[paragraphEnd] == 0x1A && sTalk[paragraphEnd + 1] != 0) {
+            while (paragraphEnd < length && sTalk[paragraphEnd] != u'\n' && !(sTalk[paragraphEnd] == cMessageTagEscape && sTalk[paragraphEnd + 1] == cMessageTagNextPageHead)) {
+                if (sTalk[paragraphEnd] == cMessageTagEscape && sTalk[paragraphEnd + 1] != 0) {
                     // Its whole size: a tag's parameters may be zero.
-                    const s32 units = (sTalk[paragraphEnd + 1] & 0xFF) / 2;
+                    const s32 units = getMessageTagUnits(sTalk[paragraphEnd + 1]);
                     paragraphEnd += units > 0 ? units : 1;
                 } else {
                     paragraphEnd++;
@@ -587,7 +588,7 @@ namespace NebulaText {
             if (sTalk[paragraphEnd] == u'\n') {
                 paragraph = paragraphEnd + 1;
             } else {
-                const s32 units = (sTalk[paragraphEnd + 1] & 0xFF) / 2;
+                const s32 units = getMessageTagUnits(sTalk[paragraphEnd + 1]);
                 paragraph = paragraphEnd + (units > 0 ? units : 1);
             }
         }

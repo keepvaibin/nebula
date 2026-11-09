@@ -138,8 +138,6 @@ public:
     f32 calcDistToCeilHead();
     void fixTransBetweenWall(const Vec3f&, const Vec3f&);
     f32 calcDistWidth();
-    void updateCameraPolygon();
-    void setCameraPolygon(const Triangle*);
     void checkAllWall(const Vec3f&, f32);
     void calcFrontFloor();
     const Vec3f& getWallNorm() const;
@@ -792,7 +790,6 @@ public:
     Triangle* mShadowPolygon;  // the polygon the shadow ray hits (below along gravity)
     Triangle* mSlopeFloorPolygon;  // on a slope: the floor below a point ahead along the ground normal
     Triangle* mGroundPolygon;
-    Triangle* mCameraPolygon;  // the polygon the camera reads (setCameraPolygon; its two branches were the same copy)
     Triangle* mLastGroundPolygon;  // the ground when it was last recorded (recordLastGround)
     Triangle* mTmpPolygon;
     Triangle* mFrontFloorPolygon;  // the floor ahead (calcFrontFloor)

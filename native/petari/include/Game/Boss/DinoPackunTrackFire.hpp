@@ -10,7 +10,7 @@ public:
 
     virtual void init(const TableIter&) override;
     virtual MtxPtr getBaseMtx() const override {
-        return (MtxPtr)&mMtx;
+        return const_cast< MtxPtr >(mMtx.mMtx);
     };
     virtual void control() override;
     virtual void attackSensor(HitSensor*, HitSensor*) override;

@@ -36,7 +36,7 @@ namespace {
 
 namespace MR {
     inline f32 getLanguageRate() {
-        return getLanguage() == 0x10 ? 1.0f : 1.25f;
+        return getLanguage() == LanguageId_JpJapanese ? 1.0f : 1.25f;
     }
 
     void initTagProcessorRecursive(LayoutActor* pActor, const char* pPaneName, s32 mode) {
@@ -46,13 +46,13 @@ namespace MR {
             f32 rate = getLanguageRate();
 
             switch (mode) {
-            case 2:
+            case TalkTextForm_Whole:
                 pProcessor->initAlpha(0.0f, 0.0f, 0, 0);
                 break;
-            case 0:
+            case TalkTextForm_Talk:
                 pProcessor->initAlpha(0.8f * rate, 0.9f, 0, 0);
                 break;
-            case 1:
+            case TalkTextForm_Event:
                 pProcessor->initAlpha(0.35f * rate, 0.9f, 0, 0);
                 break;
             }
@@ -154,7 +154,7 @@ void TalkTextFormer::updateTalkingAtTextSpeed() {
 }
 
 bool TalkTextFormer::isTextAppearedAll() const {
-    if (mFormMode == 2) {
+    if (mFormMode == TalkTextForm_Whole) {
         return true;
     }
 

@@ -174,7 +174,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
         const char* className = pChunk->getClassName();
 
         if (MR::isEqualString(className, "Game")) {
-            CameraParamChunkGame* pGameChunk = reinterpret_cast< CameraParamChunkGame* >(pChunk);
+            CameraParamChunkGame* pGameChunk = static_cast< CameraParamChunkGame* >(pChunk);
             pGameChunk->mThru = 0;
         }
     }

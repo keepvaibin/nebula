@@ -188,7 +188,10 @@ void RunawayRabbitCollect::exeWait() {
 }
 
 void RunawayRabbitCollect::appearTico(RunawayTico* pTico, const Vec3f& rPos) {
-    mIsAppearTico[pTico->mDemoCastID] = true;
+    // The cast id is placement data: a stage may place more ticos than the comments.
+    if (pTico->mDemoCastID >= 0 && pTico->mDemoCastID < ARRAY_SIZE(mIsAppearTico)) {
+        mIsAppearTico[pTico->mDemoCastID] = true;
+    }
 
     for (s32 i = 0; i < ARRAY_SIZE(mIsAppearTico); i++) {
         if (!mIsAppearTico[i]) {

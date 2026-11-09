@@ -17,7 +17,7 @@ public:
     virtual void init(const TableIter& rIter) override;
     virtual void control() override;
     virtual MtxPtr getBaseMtx() const override {
-        return (MtxPtr)&mBaseMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
 
     void exeWait() {

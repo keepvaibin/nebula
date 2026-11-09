@@ -233,8 +233,8 @@ void ItemBubble::calcAndSetBaseMtx() {
     }
 
     MR::normalize(&camcross);
-    reinterpret_cast< Pos3f* >(getBaseMtx())->setXYZDir(camcross, YDir, camPos);
-    reinterpret_cast< Pos3f* >(getBaseMtx())->setTrans(mPosition);
+    MR::setMtxAxisXYZ(getBaseMtx(), camcross, YDir, camPos);
+    MR::setMtxTrans(getBaseMtx(), mPosition);
 }
 
 void ItemBubble::exeWait() {

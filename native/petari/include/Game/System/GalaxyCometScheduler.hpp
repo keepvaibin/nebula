@@ -32,7 +32,6 @@ public:
     void serializeStateToGameData(GalaxyCometSerializeInfo*);
     void deserializeStateFromGameData(const GalaxyCometSerializeInfo*);
     bool isLand() const;
-    bool isIncluded(const char*) const;
     s32 getCometCategory() const;
     // Moves to the next entry that can appear once the comet hides.
     void updateTimePaperPos();
@@ -76,7 +75,6 @@ public:
     GalaxyCometTimeTable* findFromGalaxy(const char*) const;
     bool isHideAll() const;
     // The packed state of the dome whose schedule has the galaxy, or -1.
-    s32 getStateValueIncluded(const char*);
 
 private:
     MR::AssignableArray< GalaxyCometTimeTable* > mTimeTables;

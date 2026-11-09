@@ -1,11 +1,11 @@
 #include "Game/Screen/ImageEffectBase.hpp"
 
-ImageEffectBase::ImageEffectBase(const char* pName) : NameObj(pName), _C(), _D(), mFadeLevel() {
+ImageEffectBase::ImageEffectBase(const char* pName) : NameObj(pName), mIsOn(), mIsShown(), mFadeLevel() {
 }
 
 void ImageEffectBase::calcAnim() {
-    if (_C) {
-        _D = true;
+    if (mIsOn) {
+        mIsShown = true;
         mFadeLevel += 1.0f / 15.0f;
 
         if (mFadeLevel > 1.0f) {
@@ -15,7 +15,7 @@ void ImageEffectBase::calcAnim() {
         mFadeLevel -= 1.0f / 15.0f;
 
         if (mFadeLevel < 0.0f) {
-            _D = false;
+            mIsShown = false;
             mFadeLevel = 0.0f;
         }
     }

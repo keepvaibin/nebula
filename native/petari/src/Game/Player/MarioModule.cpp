@@ -248,9 +248,8 @@ void MarioModule::stopAnimation(const char* pAnim, MarioIndexedAnime anime) {
 void MarioModule::setJointGlobalMtx(u32 jointIndex, MtxPtr mtx) {
     XjointTransform* pTransform = mActor->mMarioAnim->mXanimePlayer->mCore->mTransformList;
     if (pTransform != nullptr) {
-        pTransform += jointIndex;
+        pTransform[jointIndex].mBaseMtx = mtx;
     }
-    pTransform->mBaseMtx = mtx;
 }
 
 void MarioModule::setYangleOffset(f32 offset) {

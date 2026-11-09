@@ -211,10 +211,6 @@ GravityInfo* CameraTargetPlayer::getGravityInfo() const {
     return mActor->getGravityInfo();
 }
 
-Pos3f* CameraTargetPlayer::getMapBaseMtx() const {
-    return reinterpret_cast< Pos3f* >(mActor->getMapBaseMtx());
-}
-
 CameraTargetDemoActor::CameraTargetDemoActor(MtxPtr pMtx, const char* pName) : LiveActor(pName) {
     mMtx.set(pMtx);
 }

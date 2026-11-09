@@ -111,7 +111,6 @@ namespace MR {
     bool isGalaxyAnyCometAppearInCurrentStage();
     void startGalaxyCometEvent();
     void endGalaxyCometEvent();
-    s32 getGalaxyCometStateIndexInCurrentStage();
     void forceToNextStateGalaxyCometScheduler();
     bool isGalaxyCometLandInStage(const char*);
     s32 getEncounterGalaxyCometPowerStarId(const char*);

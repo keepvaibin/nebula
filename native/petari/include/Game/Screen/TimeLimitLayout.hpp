@@ -9,7 +9,7 @@ struct Timing {
     u32 mScaleKeepFrame;
     bool mIsScaleUp;
     bool mIsScaleDown;
-    bool _A;
+    bool mIsFadeOut;  // after the scale-down the counter fades out instead of staying
 };
 
 class TimeUpLayout : public LayoutActor {

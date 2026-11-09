@@ -361,13 +361,13 @@ bool PowerStar::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pR
             MR::startSystemSE("SE_SY_STAR_GET");
             MR::stopSoundPlayer("SE_PV_BURN_RUN", 0);
             MR::stopSoundPlayer("SE_PV_NEEDLE_DAMAGE_RUN", 0);
-            MR::makeMtxTR((MtxPtr)&mBaseMtx, *MR::getPlayerPos(), *MR::getPlayerRotate());
+            MR::makeMtxTR(mBaseMtx.toMtxPtr(), *MR::getPlayerPos(), *MR::getPlayerRotate());
             setNerve(GET_NERVE(PowerStar, PowerStarNrvStageClearDemo));
             return true;
         }
         break;
     case ACTMES_UPDATE_BASEMTX:
-        MR::setPlayerBaseMtx((MtxPtr)&mBaseMtx);
+        MR::setPlayerBaseMtx(mBaseMtx.toMtxPtr());
         return true;
     }
 
@@ -404,11 +404,11 @@ void PowerStar::initModel() {
 
     if (mIsGrandStar) {
         ::setupColorGrandStar(this, isCollected);
-        mPowerStarModelObj = MR::createModelObjIndirectMapObj("グランドスターデモモデル", getModelName(), (MtxPtr)&mBaseMtx);
+        mPowerStarModelObj = MR::createModelObjIndirectMapObj("グランドスターデモモデル", getModelName(), mBaseMtx.toMtxPtr());
         ::setupColorGrandStar(mPowerStarModelObj, isCollected);
     } else {
         ::setupColor(this, mColor);
-        mPowerStarModelObj = MR::createModelObjNoSilhouettedMapObj("パワースターデモモデル", getModelName(), (MtxPtr)&mBaseMtx);
+        mPowerStarModelObj = MR::createModelObjNoSilhouettedMapObj("パワースターデモモデル", getModelName(), mBaseMtx.toMtxPtr());
         ::setupColor(mPowerStarModelObj, mColor);
     }
 
@@ -416,7 +416,7 @@ void PowerStar::initModel() {
     mPowerStarModelObj->makeActorDead();
 
     if (MR::isPowerStarGetDemoWithLuigiCurrentGalaxy()) {
-        mLuigiNPC = MR::createModelObjNpc("ルイージデモモデル", "LuigiNPC", (MtxPtr)&mBaseMtx);
+        mLuigiNPC = MR::createModelObjNpc("ルイージデモモデル", "LuigiNPC", mBaseMtx.toMtxPtr());
 
         MR::initLightCtrl(mLuigiNPC);
         MR::invalidateClipping(mLuigiNPC);

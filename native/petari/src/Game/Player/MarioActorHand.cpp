@@ -169,8 +169,8 @@ void MarioActor::drawHand() const {
     }
 
     if (mPlayerMode == 1) {
-        reinterpret_cast< PlayerModel* >(MR::getModel(mInvincibleHandL))->directDraw();
-        reinterpret_cast< PlayerModel* >(MR::getModel(mInvincibleHandR))->directDraw();
+        static_cast< PlayerModel* >(MR::getModel(mInvincibleHandL))->directDraw();
+        static_cast< PlayerModel* >(MR::getModel(mInvincibleHandR))->directDraw();
 
         return;
     }
@@ -179,11 +179,11 @@ void MarioActor::drawHand() const {
         return;
     }
 
-    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(mHandL));
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mHandL));
     model->setDynamicList(&mLightTint);
     model->directDraw();
 
-    model = reinterpret_cast< PlayerModel* >(MR::getModel(mHandR));
+    model = static_cast< PlayerModel* >(MR::getModel(mHandR));
     model->setDynamicList(&mLightTint);
     model->directDraw();
 }
@@ -197,7 +197,7 @@ void MarioActor::drawIndirectHand() const {
         return;
     }
 
-    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(mIceHandL));
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mIceHandL));
 
     if (mPlayerMode != 3) {
         return;
@@ -206,7 +206,7 @@ void MarioActor::drawIndirectHand() const {
     model->setDynamicList(&mLightTint);
     model->directDraw();
 
-    model = reinterpret_cast< PlayerModel* >(MR::getModel(mIceHandR));
+    model = static_cast< PlayerModel* >(MR::getModel(mIceHandR));
     model->setDynamicList(&mLightTint);
     model->directDraw();
 }

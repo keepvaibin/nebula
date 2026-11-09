@@ -4,6 +4,7 @@
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
 #include "Game/System/MessageHolder.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MessageTag.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/ByteView.hpp"
@@ -14,7 +15,7 @@ namespace MR {
 
         MessageSystem::getSystemMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< char16_t* >(messageInfo.mMessage);
+        return messageInfo.mMessage;
     }
 
     const char16_t* getGameMessageDirect(const char* pMessageId) {
@@ -22,7 +23,7 @@ namespace MR {
 
         MessageSystem::getGameMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< char16_t* >(messageInfo.mMessage);
+        return messageInfo.mMessage;
     }
 
     const char16_t* getLayoutMessageDirect(const char* pMessageId) {
@@ -30,7 +31,7 @@ namespace MR {
 
         MessageSystem::getLayoutMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< char16_t* >(messageInfo.mMessage);
+        return messageInfo.mMessage;
     }
 
     const char16_t* getCurrentGalaxyNameOnCurrentLanguage() {
@@ -52,7 +53,7 @@ namespace MR {
         TalkMessageInfo messageInfo = TalkMessageInfo();
 
         return MessageSystem::getGameMessageDirect(&messageInfo, pMessageId) &&
-               getStringLengthWithMessageTag(reinterpret_cast< char16_t* >(messageInfo.mMessage)) != 0;
+               getStringLengthWithMessageTag(messageInfo.mMessage) != 0;
     }
 
     const char16_t* getMessageLine(char16_t* pDst, u32 capacity, const char16_t* pMessage, u32 line) {
@@ -63,12 +64,12 @@ namespace MR {
                 break;
             }
 
-            if (*pMessage == 0x1A) {
+            if (*pMessage == cMessageTagEscape) {
                 pMessage++;
                 MessageEditorMessageTag tag(pMessage);
                 pMessage += tag.getSkipLength();
 
-                if (tag.isGroupTagId(1, 1)) {
+                if (tag.isGroupTagId(MessageTagGroup_Display, cMessageTagNextPage)) {
                     break;
                 }
             } else {
@@ -81,7 +82,7 @@ namespace MR {
         }
 
         for (u32 count = 0; count < capacity; count++) {
-            if (*pMessage == 0x1A) {
+            if (*pMessage == cMessageTagEscape) {
                 *pDst++ = *pMessage++;
                 MessageEditorMessageTag tag(pMessage);
 
@@ -112,12 +113,12 @@ namespace MR {
         s32 count = 1;
 
         while (*pMessage != 0) {
-            if (*pMessage == 0x1A) {
+            if (*pMessage == cMessageTagEscape) {
                 pMessage++;
                 MessageEditorMessageTag tag(pMessage);
                 pMessage += tag.getSkipLength();
 
-                if (tag.isGroupTagId(1, 1)) {
+                if (tag.isGroupTagId(MessageTagGroup_Display, cMessageTagNextPage)) {
                     break;
                 }
             } else {
@@ -140,21 +141,20 @@ namespace MR {
         s32 count = 0;
 
         while (*pMessage != 0) {
-            if (*pMessage == 0x1A) {
+            if (*pMessage == cMessageTagEscape) {
                 pMessage++;
                 MessageEditorMessageTag tag(pMessage);
                 pMessage += tag.getSkipLength();
 
-                if (tag.getGroup() == 3) {
+                if (tag.getGroup() == MessageTagGroup_Picture) {
                     count++;
-                } else if (tag.getGroup() == 6) {
+                } else if (tag.getGroup() == MessageTagGroup_Number) {
                     count += countMessageFigure(readBytes< s32 >(tag.getParamPtr(0)));
-                } else if (tag.getGroup() == 5) {
+                } else if (tag.getGroup() == MessageTagGroup_Localize) {
                     count += 3;
-                }
-                else if (tag.getGroup() == 7) {
+                } else if (tag.getGroup() == MessageTagGroup_String) {
                     count += countMessageChar(tag.getParamString());
-                } else if (tag.isGroupTagId(1, 1)) {
+                } else if (tag.isGroupTagId(MessageTagGroup_Display, cMessageTagNextPage)) {
                     break;
                 }
             } else {
@@ -179,12 +179,12 @@ namespace MR {
 
     const char16_t* getNextMessagePage(const char16_t* pMessage) {
         while (*pMessage != 0) {
-            if (*pMessage == 0x1A) {
+            if (*pMessage == cMessageTagEscape) {
                 pMessage++;
                 MessageEditorMessageTag tag(pMessage);
                 pMessage += tag.getSkipLength();
 
-                if (tag.isGroupTagId(1, 1)) {
+                if (tag.isGroupTagId(MessageTagGroup_Display, cMessageTagNextPage)) {
                     if (*pMessage == u'\n') {
                         pMessage++;
                     }
