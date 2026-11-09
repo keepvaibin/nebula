@@ -363,9 +363,12 @@ void BossKameckStateBattle::exeAttack() {
     }
 
     if (MR::isStep(this, ::sShootTiming)) {
-        mBeam->requestShootToPlayerGround(::sBeamSpeed);
-        mHost->mActorList->addActor(mBeam);
-        mBeam = nullptr;
+        if (mBeam != nullptr) {
+            mBeam->requestShootToPlayerGround(::sBeamSpeed);
+            mHost->mActorList->addActor(mBeam);
+            mBeam = nullptr;
+        }
+
         MR::startSound(mHost, "SE_BM_KAMECK_STAFF_EFFECT");
     }
 
@@ -432,11 +435,22 @@ void BossKameckStateBattle::exeGuard() {
 }
 
 void BossKameckStateBattle::selectStoppablePosition() {
+    // A level with no move rail of this number keeps the boss where it is.
+    if (mMoveRail == nullptr) {
+        mMoveTarget.set(mHost->mPosition);
+        return;
+    }
+
     mMoveRailIndex = mMoveRail->calcRandomStoppableIndex(mMoveRailIndex);
     mMoveRail->calcMovePosition(&mMoveTarget, mMoveRailIndex);
 }
 
 void BossKameckStateBattle::selectPosition() {
+    if (mMoveRail == nullptr) {
+        mMoveTarget.set(mHost->mPosition);
+        return;
+    }
+
     mMoveRailIndex = mMoveRail->calcRandomIndex(mMoveRailIndex);
     mMoveRail->calcMovePosition(&mMoveTarget, mMoveRailIndex);
 }

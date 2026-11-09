@@ -65,7 +65,14 @@ void KoopaFunction::createKoopaRollBall(Koopa* pKoopa) {
 }
 
 s32 KoopaFunction::registerBattleMapStair(KoopaBattleMapStair* pMapStair) {
-    return BossAccess::getBossAccessorKoopa()->mSequencer->mBattleStairs->registerStair(pMapStair);
+    // A stair placed where no Koopa battle with stairs runs has no fire step (-1).
+    Koopa* pKoopa = BossAccess::getBossAccessorKoopa();
+
+    if (pKoopa == nullptr || pKoopa->mSequencer == nullptr || pKoopa->mSequencer->mBattleStairs == nullptr) {
+        return -1;
+    }
+
+    return pKoopa->mSequencer->mBattleStairs->registerStair(pMapStair);
 }
 
 void KoopaFunction::setKoopaPos(Koopa* pKoopa, const char* pDemoName) {
