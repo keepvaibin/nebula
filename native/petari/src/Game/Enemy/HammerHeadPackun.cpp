@@ -19,6 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -330,7 +331,7 @@ inline bool HammerHeadPackun::checkBlowAttack() const {
 
 void HammerHeadPackun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!checkBlowAttack() && MR::isSensor(pSender, "blow") && MR::getSensorHost(pReceiver) &&
-        !strcmp(MR::getSensorHost(pReceiver)->mName, "パンチングキノコ")) {
+        MR::isEqualString(MR::getSensorHost(pReceiver)->mName, "パンチングキノコ")) {
         f32 recvRadius = pReceiver->mRadius;
         f32 sendRadius = pSender->mRadius;
         f32 senderWeight = recvRadius / (sendRadius + recvRadius);

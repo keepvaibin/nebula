@@ -61,7 +61,7 @@ void TrampleStar::init(const TableIter& rIter) {
     for (u32 actorIndex = 0; actorIndex < MR::getAllLiveActorGroup()->getObjNum(); actorIndex++) {
         LiveActor* actor = MR::getAllLiveActorGroup()->getActor(actorIndex);
 
-        if (strcmp(actor->mName, "TrampleStarShare") == 0) {
+        if (MR::isEqualString(actor->mName, "TrampleStarShare")) {
             isShareStar = true;
             static_cast< TrampleStarShare* >(actor)->copy(this);
             break;

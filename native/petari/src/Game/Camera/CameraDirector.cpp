@@ -36,7 +36,6 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstring>
 #include <nebula_format.h>
 
 namespace {
@@ -720,7 +719,7 @@ void CameraDirector::removeEndEventAtLanding(s32 zoneID, const char* pName) {
     }
 
     for (s32 idx = 0; idx < mEventNum; idx++) {
-        if (mEvents[idx].mZoneID == zoneID && strcmp(mEvents[idx].mName, pName) == 0) {
+        if (mEvents[idx].mZoneID == zoneID && MR::isEqualString(mEvents[idx].mName, pName)) {
             if (mEventNum - 1 == idx) {
                 mEventNum = 0;
                 return;

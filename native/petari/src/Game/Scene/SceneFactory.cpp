@@ -2,12 +2,13 @@
 #include "Game/Scene/GameScene.hpp"
 #include "Game/Scene/IntermissionScene.hpp"
 #include "Game/Scene/BootScene.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 
 namespace {
     struct Name2CreateFunc {
         bool operator==(const char* pName) const {
-            return strcmp(mName, pName) == 0;
+            return MR::isEqualString(mName, pName);
         }
 
         const char* mName;

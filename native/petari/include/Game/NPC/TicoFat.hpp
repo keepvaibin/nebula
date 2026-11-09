@@ -27,7 +27,6 @@ public:
     virtual void appearInformation() const;
 
 
-    const char* getActionName(const char*);
     void setCameraParam();
     bool eventFunc(u32);
     f32 calcScale();

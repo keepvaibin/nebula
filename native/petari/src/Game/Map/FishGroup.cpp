@@ -9,6 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const s32 sDefaultFishNum = 10;
@@ -259,7 +260,7 @@ void FishGroup::init(const TableIter& rIter) {
     MR::getObjectName(&objName, rIter);
     int fishType = 0;
     for (u32 i = 0; i < ARRAY_SIZE(::sFishKinds); i++) {
-        if (strcmp(objName, ::sFishKinds[i].mGroupName) == 0) {
+        if (MR::isEqualString(objName, ::sFishKinds[i].mGroupName)) {
             fishType = static_cast< int >(i);
             break;
         }

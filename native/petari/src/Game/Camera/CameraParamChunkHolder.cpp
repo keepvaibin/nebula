@@ -8,7 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, const char* pName)
     : NameObj(pName), mCameraHolder(pCameraHolder), mChunkCapacity(cInitialCapacity), mNrChunks(),
@@ -173,7 +173,7 @@ void CameraParamChunkHolder::arrangeChunk(CameraParamChunk* pChunk) {
     if (mCameraVersion < 0x30003) {
         const char* className = pChunk->getClassName();
 
-        if (strcmp(className, "Game") == 0) {
+        if (MR::isEqualString(className, "Game")) {
             CameraParamChunkGame* pGameChunk = reinterpret_cast< CameraParamChunkGame* >(pChunk);
             pGameChunk->mThru = 0;
         }

@@ -2,6 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <nebula_geometry.hpp>
 
@@ -42,7 +43,7 @@ private:
         T get(const char* pName) const {
             if (pName != nullptr) {
                 for (u32 i = 0; i < mCount; i++) {
-                    if (strcmp(mNames[i], pName) == 0) {
+                    if (MR::isEqualString(mNames[i], pName)) {
                         return mValues[i];
                     }
                 }
