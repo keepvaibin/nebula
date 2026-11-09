@@ -29,11 +29,11 @@ public:
     s32 findLightSortIndex(const ActorLightCtrl*, bool*) const;
 
     MeshEntry* getMeshEntry(int index) const {
-        return mPackets[index]->mShapePacket;
+        return mPackets[index].mShapePacket;
     }
 
     ActorLightCtrl* getLightLoader(int index) const {
-        return mPackets[index]->mLightLoader;
+        return mPackets[index].mLightLoader;
     }
 
     Material* mMaterial;
@@ -41,7 +41,7 @@ public:
     s32 mNumShapes;
     s32 mMaxPackets;
     s32 mNumPackets;
-    PacketInfo** mPackets;
+    PacketInfo* mPackets;  // mNumPackets in draw order: same light runs together, the first of a run loads it
 };
 
 class DrawBuffer {

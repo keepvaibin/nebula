@@ -10,11 +10,6 @@
 DrawBufferGroup::DrawBufferGroup() : mExecutors(), mActiveExecutors(), mDrawCameraType(0), mLightType(-1), mLightLoadType(-1) {
 }
 
-void DrawBufferGroup::init(s32 count) {
-    mExecutors.init(count);
-    mActiveExecutors.init(count);
-}
-
 s32 DrawBufferGroup::registerDrawBuffer(LiveActor* pActor) {
     const char* pModelName = MR::getModelResName(pActor);
     s32 idx = findExecuterIndex(pModelName);
