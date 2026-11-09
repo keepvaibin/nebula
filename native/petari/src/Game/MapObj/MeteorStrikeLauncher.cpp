@@ -39,7 +39,9 @@ void MeteorStrikeLauncher::init(const TableIter& rIter) {
 
     if (mIsMeteorStrike && mIsValidMultiMeteor) {
         f32 speed = MeteorStrike::getSpeed(rIter);
-        mMeteorStrikeCount = static_cast< s32 >(MR::getRailTotalLength(this) / (speed * mIntervalStep)) + 2;
+        // A count that is not a number, or is 4096 and over, keeps the one meteor (the cast of such a float is undefined).
+        f32 count = MR::getRailTotalLength(this) / (speed * mIntervalStep);
+        mMeteorStrikeCount = (count > -1.0f && count < 4096.0f) ? static_cast< s32 >(count) + 2 : 1;
     } else if (mIsMeteorStrike || mIntervalStep < 0) {
         mMeteorStrikeCount = 1;
     } else {
@@ -131,9 +133,17 @@ bool MeteorStrikeLauncher::create() {
     }
 
     // Starts the meteor part way along its fall, at the latest step that is still out of view.
-    for (; mCreateStep >= 0; mCreateStep -= mIntervalStep) {
+    // With no interval (0 or less) the step counts up by 1 and ends past the meteor's last step.
+    for (; mCreateStep >= 0; mCreateStep -= (mIntervalStep != 0 ? mIntervalStep : -1)) {
         Vec3f movedPos;
-        if (!pUnusedStrike->getMovedPos(&movedPos, mCreateStep) || !MR::isJudgedToClipFrustum(movedPos, ::sClipRadius)) {
+        if (!pUnusedStrike->getMovedPos(&movedPos, mCreateStep)) {
+            if (mIntervalStep <= 0) {
+                break;
+            }
+            continue;
+        }
+
+        if (!MR::isJudgedToClipFrustum(movedPos, ::sClipRadius)) {
             continue;
         }
 

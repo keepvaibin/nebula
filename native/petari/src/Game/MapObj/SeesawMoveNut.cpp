@@ -9,7 +9,7 @@ namespace NrvSeesawMoveNut {
     NEW_NERVE(SeesawMoveNutNrvEdge, SeesawMoveNut, Edge);
 };  // namespace NrvSeesawMoveNut
 
-SeesawMoveNut::SeesawMoveNut(const char* pName) : MapObjActor(pName), mSpeed(100.0f), mPrevAngularSpeed() {
+SeesawMoveNut::SeesawMoveNut(const char* pName) : MapObjActor(pName), mSpeed(100.0f), mPrevAngularSpeed(), mBackHomeStep() {
 }
 
 void SeesawMoveNut::init(const TableIter& rIter) {
