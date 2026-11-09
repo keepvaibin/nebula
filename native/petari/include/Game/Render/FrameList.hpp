@@ -125,6 +125,10 @@ namespace Frame {
     u32 objectSlot();
     u32 objectGeneration();
     u32 nextPart();
+    // The number the object's next draw takes. A drawer whose parts come and go (a strip skipped, a piece that draws only
+    // some of the time) gives each part a number of its own, so a part is paired with itself from frame to frame and never
+    // with the part that drew in its place.
+    void setPart(u32 part);
     u32 newSlot();
 
     // Passes, in the order the game draws them. Keys name textures as RenderTexture does.

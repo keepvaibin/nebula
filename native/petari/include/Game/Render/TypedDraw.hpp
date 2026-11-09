@@ -501,6 +501,11 @@ public:
         mNormalsScaled = true;
         mBlockKnown = false;
     }
+    // The number the next draw takes among the object's draws (Frame::setPart); an empty draw (no vertices) keeps its number.
+    void setPart(u32 part) {
+        finish();
+        Frame::setPart(part);
+    }
     // Item flags for the draws after this.
     void setFlags(u32 flags) {
         mFlags = flags;

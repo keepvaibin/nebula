@@ -239,6 +239,9 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
 }
 
 namespace {
+    // The number of the first draw of the wipe box in CollisionShadow::draw3, past any count of polygon draws before it.
+    const u32 cWipeFirstPart = 1u << 16;
+
     // runtime/src/render/materials/color_tex_alpha.hlsl: black at the shadow texture's alpha where it passes `test`
     // (0 above, 1 equal to, 2 not equal to `ref`), blended by alpha unless the site changes it; no culling.
     void initShadowMaterial(SiteMaterial* pMaterial, const GameTexture* pTexture, u32 test, u8 ref) {
@@ -519,6 +522,10 @@ void CollisionShadow::draw3() const {
     wipe.mState.blend_op = NEBULA_BLEND_REPLACE;
     wipe.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     site.setMaterial(wipe);
+    // The wipe box is the volume box again and must cover the pixels it marked: it pairs with itself and blends as the
+    // volume box does, not as the polygons (rebuilt every frame, drawn at their newest) before it.
+    site.setFlags(0);
+    site.setPart(::cWipeFirstPart);
     Vec3f up(mVolumeUp);
     Vec3f side;
     side.cross(mDirection, up);

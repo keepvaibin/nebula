@@ -335,8 +335,8 @@ void Pairing::log_lost_ring_pairs(const ListData& now, const NebulaFrameList& la
         std::uint32_t was = 0u;
         if (pair != NEBULA_NONE32) {
             const NebulaFrameItem& other = last.items[pair];
-            if (other.ring_count != item.ring_count) {
-                why = "vertex count changed";
+            if (!ring_shape_matches(item, other)) {
+                why = "vertex or index count changed";
                 was = other.ring_count;
             }
         } else if (paired_objects.count(object(item)) != 0u) {

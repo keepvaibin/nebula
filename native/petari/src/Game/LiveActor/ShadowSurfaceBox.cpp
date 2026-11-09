@@ -62,6 +62,9 @@ void ShadowSurfaceBox::draw() const {
     sideDot = sideDot >= 0.0f ? 1.0f : -1.0f;
     upDot = upDot >= 0.0f ? 1.0f : -1.0f;
     frontDot = frontDot >= 0.0f ? 1.0f : -1.0f;
+    // The faces' corners flip to the far side when the normal crosses an axis: each of the eight arrangements has numbers of
+    // its own (three quads), so a flip shows the new faces at once and never blends the old corners into them.
+    rDraw.setPart(((sideDot > 0.0f ? 1u : 0u) | (upDot > 0.0f ? 2u : 0u) | (frontDot > 0.0f ? 4u : 0u)) * 3u);
 
     VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_QUADS, 4);
     *vtx++ = {sideDot, -sideDot, -1.0f, Rgba8(0x80)};
