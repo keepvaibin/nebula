@@ -19,6 +19,8 @@ namespace ReplaceTagProcessor {
     u32 getLocalizeGroupRoom(const MessageEditorMessageTag& rTag);
     u32 exeLocalizeGroupPlayerName(char16_t* pDst, u8 form);
     u32 exeRaceTimeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag);
+    // The code units exeRaceTimeGroup writes for the tag, without the terminator.
+    u32 getRaceTimeGroupRoom(const MessageEditorMessageTag& rTag);
 };  // namespace ReplaceTagProcessor
 
 namespace ReplaceTagFunction {

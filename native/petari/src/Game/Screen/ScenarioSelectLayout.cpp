@@ -375,9 +375,9 @@ void ScenarioSelectLayout::fadeInText() {
     MR::startPaneAnim(this, "BestTime", "SelectIn", 0);
 
     if (::isCurrentStageRaceComplete(mSelectedScenarioNo)) {
-        char16_t bestTime[16];
-        MR::makeRaceBestTimeString(bestTime, RaceManagerFunction::getRaceId(stageName, mSelectedScenarioNo));
-        MR::setTextBoxMessageRecursive(this, "ShaTime", bestTime);
+        MR::Text16 bestTime;
+        MR::setTextBoxMessageRecursive(this, "ShaTime",
+                                       MR::makeRaceBestTimeString(bestTime, RaceManagerFunction::getRaceId(stageName, mSelectedScenarioNo)));
     } else {
         MR::setPaneAnimFrameAndStop(this, "BestTime", 0.0f, 0);
         MR::clearTextBoxMessageRecursive(this, "ShaTime");

@@ -705,8 +705,8 @@ namespace {
 void FileSelector::setFileInfo(s32 id) {
     NebulaCalendar::Date date;
     u16 nameBuffer[Mii::NameLength + 1];
-    char16_t dateBuffer[32];
-    char16_t timeBuffer[32];
+    MR::Text16 dateText;
+    MR::Text16 timeText;
 
     if (static_cast< FileSelectItem* >(mItems->getActor(::getItemArrayIndex(id)))->mIsMiiBroken) {
         FileSelectFunc::copyMiiName(nameBuffer, FileSelectIconID());
@@ -716,8 +716,8 @@ void FileSelector::setFileInfo(s32 id) {
 
     date = NebulaCalendar::toDate(::getUserFileLastModified(this, id));
 
-    MR::makeDateString(dateBuffer, ARRAY_SIZE(dateBuffer), date.mYear, date.mMonth, date.mDay);
-    MR::makeTimeString(timeBuffer, ARRAY_SIZE(timeBuffer), date.mHour, date.mMinute);
+    MR::makeDateString(dateText, date.mYear, date.mMonth, date.mDay);
+    MR::makeTimeString(timeText, date.mHour, date.mMinute);
 
     bool isViewCompleteEnding = ::isUserFileViewCompleteEnding(this, id);
     bool isViewNormalEnding = ::isUserFileViewNormalEnding(this, id);
@@ -726,7 +726,7 @@ void FileSelector::setFileInfo(s32 id) {
     s32 missCount = getMissCount(id);
     bool isUserFileMario = !isUserFileLuigi(id);
 
-    mFileInfo->setInfo(nameBuffer, id, powerStarNum, starPieceNum, isUserFileMario, isViewNormalEnding, isViewCompleteEnding, dateBuffer, timeBuffer,
+    mFileInfo->setInfo(nameBuffer, id, powerStarNum, starPieceNum, isUserFileMario, isViewNormalEnding, isViewCompleteEnding, dateText.c_str(), timeText.c_str(),
                        missCount);
 }
 
