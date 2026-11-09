@@ -173,7 +173,6 @@ namespace MR {
     void copyPaneScale(Vec2f*, const LayoutActor*, const char*);
     void setPaneScale(const LayoutActor*, f32, f32, const char*);
     void setLayoutScaleAtPaneScale(LayoutActor*, const LayoutActor*, const char*);
-    void copyPaneRotate(Vec3f*, const LayoutActor*, const char*);
     void setPaneRotate(const LayoutActor*, f32, f32, f32, const char*);
     void setLayoutScalePosAtPaneScaleTrans(LayoutActor*, const LayoutActor*, const char*);
     void setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(LayoutActor*, const LayoutActor*, const char*);

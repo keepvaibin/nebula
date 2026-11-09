@@ -148,7 +148,6 @@ public:
     static void noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, ChannelMgr* pMgr);
 
     // Read by the game's snapshot and the rhythm parser.
-    u32 seqOffset() const;
     // A register as the program reads it: 0x00-0x3F the registers, 0x40-0x4F the ports, 0x60 and up the track's fields.
     u32 readReg(u32 reg) const;
     void writeRegister(u32 reg, u32 value);

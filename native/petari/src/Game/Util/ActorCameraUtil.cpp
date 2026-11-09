@@ -224,22 +224,6 @@ namespace MR {
         endGlobalEventCamera(pActor->getName(), frame, resetView);
     }
 
-    bool isActiveMultiActorCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
-        if (pInfo->mCameraSetID < 0) {
-            return false;
-        }
-
-        MR::FormattedName name;
-
-        if (pEventName != nullptr) {
-            ::createMultiActorCameraName(name, pActor, pInfo, pEventName);
-        } else {
-            ::createActorCameraName(name, pActor, pInfo);
-        }
-
-        return isEventCameraActive(pInfo, name.c_str());
-    }
-
     void setProgrammableCameraParam(const LiveActor* pActor, const Vec3f& rWPoint, const Vec3f& rPos, const Vec3f& rUpVec) {
         setProgrammableCameraParam(pActor->getName(), rWPoint, rPos, rUpVec, true);
     }

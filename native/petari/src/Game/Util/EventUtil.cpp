@@ -514,10 +514,6 @@ namespace MR {
         EventFunction::endCometEvent();
     }
 
-    s32 getGalaxyCometStateIndexInCurrentStage() {
-        return GameSequenceFunction::getGalaxyCometState(MR::getCurrentStageName());
-    }
-
     void forceToNextStateGalaxyCometScheduler() {
         GameSequenceFunction::forceToNextStateGalaxyCometScheduler();
     }
