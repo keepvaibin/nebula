@@ -117,7 +117,8 @@ void StarPieceMother::exeMoveOnRail() {
     MR::moveCoordAndFollowTrans(this, mRailSpeed);
 
     f32 railCoord = MR::getRailCoord(this);
-    if (mRailCoords[mNextPiece] <= railCoord) {
+    // Every piece out, the mother rides on to the rail's end: no piece is left to look up.
+    if (static_cast< s32 >(mNextPiece) < mNumPieces && mRailCoords[mNextPiece] <= railCoord) {
         mStarPieceArray[mNextPiece]->appear();
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         mNextPiece++;
@@ -129,6 +130,11 @@ void StarPieceMother::exeMoveOnRail() {
 }
 
 void StarPieceMother::placementPieceOnRail(f32 distance) {
+    // No pieces (placement arg 0 of 0 or less): nothing to place.
+    if (mNumPieces <= 0) {
+        return;
+    }
+
     Vec3f railPos;
     MR::calcRailPosAtCoord(&railPos, this, distance);
     mStarPieceArray[0]->mPosition.set(railPos);
