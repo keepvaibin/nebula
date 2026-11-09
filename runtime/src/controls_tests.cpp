@@ -1240,6 +1240,32 @@ void test_jump_back() {
     }
 }
 
+void test_covered_mode_hold() {
+    CoveredModeHold hold{};
+    expect(hold.game(25) == 25 && hold.covered(false) == 25, "uncovered: the game's mode at once");
+    // The dome's launch: the demo's mode under the closed white fade, the sphere selector's left as the demo ends,
+    // then none as the scene changes; the touch controls never see the selector.
+    expect(hold.game(12) == 12, "the demo's mode, uncovered");
+    expect(hold.covered(true) == 12, "covered: still the demo's");
+    expect(hold.game(17) == 12 && hold.holding(), "a menu mode arriving under the wipe is held");
+    expect(hold.game(-1) == 12, "so is none");
+    expect(hold.covered(true) == 12, "every covered frame keeps the hold");
+    expect(hold.covered(false) == -1 && !hold.holding(), "the first uncovered frame releases it");
+    // A partial fade is not covered (the game reports 0 until it is fully closed).
+    expect(hold.game(4) == 4, "the title, uncovered");
+    expect(hold.game(5) == 5, "a change on an uncovered frame passes");
+    // Screens seen over the wipe pass, opening and closing.
+    hold.covered(true);
+    expect(hold.game(2) == 2, "a pause the player opens is never held");
+    expect(hold.game(25) == 25, "nor its closing");
+    expect(hold.game(0) == 0 && hold.game(25) == 25, "the HOME menu, open and closed");
+    expect(hold.game(1) == 1, "the error window");
+    expect(hold.game(7) == 7, "the galaxy map's pause");
+    expect(hold.game(6) == 6, "leaving a screen seen over the wipe is not held");
+    expect(hold.game(16) == 6 && hold.holding(), "then the hold applies again");
+    expect(hold.covered(false) == 16, "released");
+}
+
 void test_defaults_and_migration() {
     const ControlsConfig config = default_controls_config();
     const BindingTable& sw = config.table(ControlScheme::SwitchPro);
@@ -1832,6 +1858,7 @@ int main(int argc, char** argv) {
     test_pointer_ownership();
     test_stick_pointer();
     test_jump_back();
+    test_covered_mode_hold();
     test_rest_hide();
     test_mouse_rest_hide();
     test_rest_hide_gyro();

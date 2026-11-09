@@ -127,6 +127,27 @@ inline constexpr std::uint32_t kStarPointerModeCount = 26;
 enum class PlayContext : std::uint8_t { Menu, Play };
 [[nodiscard]] PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept;
 
+// The pointer mode the controls follow (-1 none). While a closed wipe covers the screen (NEBULA_CONTEXT_SCREEN_COVERED)
+// the game's changes are held at the mode last seen uncovered: a scene ending under a wipe passes through modes nobody
+// sees, such as the dome's sphere selector after the launch demo, and the touch controls would flash a menu for them.
+// The screens the player opens or that draw over the wipe (HOME menu, error window, the two pause menus) are never
+// held, and the first uncovered frame releases the hold.
+class CoveredModeHold {
+public:
+    // The game's mode changed; returns the mode to follow.
+    std::int32_t game(std::int32_t mode) noexcept;
+    // Each frame; returns the mode to follow.
+    std::int32_t covered(bool covered) noexcept;
+    [[nodiscard]] std::int32_t mode() const noexcept { return shown_; }
+    [[nodiscard]] bool holding() const noexcept { return shown_ != game_; }
+
+private:
+    std::int32_t follow() noexcept;
+    std::int32_t game_ = -1;
+    std::int32_t shown_ = -1;
+    bool covered_ = false;
+};
+
 // The jump/back button: the game's A while the player controls Mario, its B in menus.
 // The choice is made when the button goes down and kept until it is released,
 // so a menu opening mid-press never turns a held jump into a back press.

@@ -38,6 +38,7 @@ namespace MR {
     bool isWipeActive();
     bool isWipeBlank();
     bool isWipeOpen();
+    bool isScreenCoveredByWipe();
     void closeSystemWipeCircle(s32 frame = -1);
     void openSystemWipeFade(s32 frame = -1);
     void closeSystemWipeFade(s32 frame = -1);

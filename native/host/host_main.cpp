@@ -2045,13 +2045,28 @@ uint32_t svc_art_export(void*, const NebulaArtExport*) {
 std::atomic<uint32_t> gTiltSection{0};
 std::atomic<uint8_t> gMotor{0};
 
+// The game's thread only: the pointer mode the controls follow, held while a closed wipe covers the screen.
+galaxy::input::CoveredModeHold gModeHold;
+
+void follow_star_pointer_mode(int32_t mode) {
+    char text[64];
+    if (gStarPointerMode.exchange(mode, std::memory_order_relaxed) != mode) {
+        std::snprintf(text, sizeof(text), "star pointer mode %d", static_cast<int>(mode));
+        log_line("context:", text);
+    }
+}
+
 void svc_game_context(void*, uint32_t what, int32_t value) {
     char text[64];
     if (what == NEBULA_CONTEXT_STAR_POINTER_MODE) {
-        if (gStarPointerMode.exchange(value, std::memory_order_relaxed) != value) {
-            std::snprintf(text, sizeof(text), "star pointer mode %d", static_cast<int>(value));
+        const bool was_holding = gModeHold.holding();
+        follow_star_pointer_mode(gModeHold.game(value));
+        if (gModeHold.holding() && !was_holding) {
+            std::snprintf(text, sizeof(text), "star pointer mode %d held under the wipe", static_cast<int>(value));
             log_line("context:", text);
         }
+    } else if (what == NEBULA_CONTEXT_SCREEN_COVERED) {
+        follow_star_pointer_mode(gModeHold.covered(value != 0));
     } else if (what == NEBULA_CONTEXT_TILT_SECTION) {
         if (gTiltSection.exchange(static_cast<uint32_t>(value), std::memory_order_relaxed) != static_cast<uint32_t>(value)) {
             std::snprintf(text, sizeof(text), "tilt section %d", static_cast<int>(value));

@@ -990,6 +990,8 @@ enum {
     NEBULA_CONTEXT_TOUCH_TARGET,          /* each frame, on a touch screen, for each thing in reach the pointer grabs (a pull
                                              star): its circle on the screen, bits 0-11 x and 12-23 y (0..4095 across), bits
                                              24-31 the radius (255: the screen's height) */
+    NEBULA_CONTEXT_SCREEN_COVERED,        /* each frame: 1 while a system or scene wipe is fully closed (MR::isScreenCoveredByWipe):
+                                             the host holds the controls' context through what changes under it */
 };
 
 #define NEBULA_MOVIE_AUDIO_QUEUE_FRAMES 20

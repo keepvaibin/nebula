@@ -21,6 +21,7 @@
 #include "Game/Screen/StarCounter.hpp"
 #include "Game/Screen/StarPieceCounter.hpp"
 #include "Game/Screen/SystemWipeHolder.hpp"
+#include "Game/Screen/WipeLayoutBase.hpp"
 #include "Game/Screen/YesNoController.hpp"
 #include "Game/Screen/YesNoLayout.hpp"
 #include "Game/System/GameSystem.hpp"
@@ -169,6 +170,20 @@ namespace MR {
 
     bool isWipeOpen() {
         return SceneWipeHolderFunction::getSceneWipeHolder()->isOpen();
+    }
+
+    // A system or scene wipe fully closed: every wipe closes opaque (a fade at full alpha, a ring shut), so the scene
+    // under it is not seen. One still closing or opening does not count.
+    bool isScreenCoveredByWipe() {
+        const SystemWipeHolder* pSystem = ::getSystemWipeHolder();
+        if (pSystem != nullptr && pSystem->getCurrent() != nullptr && !MR::isDead(pSystem->getCurrent()) && pSystem->isClose()) {
+            return true;
+        }
+        if (!MR::isExistSceneObj(SceneObj_SceneWipeHolder)) {
+            return false;
+        }
+        const SceneWipeHolder* pScene = SceneWipeHolderFunction::getSceneWipeHolder();
+        return pScene->getCurrent() != nullptr && !MR::isDead(pScene->getCurrent()) && pScene->isClose();
     }
 
     void closeSystemWipeCircle(s32 frame) {
