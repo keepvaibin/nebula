@@ -694,7 +694,7 @@ void Mario::updateOnSand() {
 
     if (mMovementStates.onGround) {
         if (mFloorCode == 27 || mFloorCode == 28) {
-            if (!strcmp(MR::getSoundCodeString(mShadowPolygon), "Sand") && mSinkTimer < 64) {
+            if (MR::getSoundCodeIndex(mShadowPolygon) == CollisionSoundCode_Sand && mSinkTimer < 64) {
                 mSinkTimer++;
             }
         } else if (isCurrentFloorSink()) {

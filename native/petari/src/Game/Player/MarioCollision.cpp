@@ -1298,9 +1298,7 @@ void Mario::checkHeadPoint() {
                 addVelocity(*triangle->getNormal(0), radius - (hit->mHitPos - center).length());
             }
 
-            const char* wallCode = MR::getWallCodeString(triangle);
-
-            if (wallCode != nullptr && !strcmp(wallCode, "Fur")) {
+            if (MR::getWallCodeIndex(triangle) == CollisionWallCode_Fur) {
                 mDrawStates.headHit = true;
             }
 
@@ -1610,9 +1608,7 @@ bool Mario::isThroughWall(const Triangle* pTriangle) const {
             return false;
         }
 
-        const char* code = MR::getWallCodeString(pTriangle);
-
-        if (code != nullptr && !strcmp(code, "GhostThroughCode")) {
+        if (MR::getWallCodeIndex(pTriangle) == CollisionWallCode_GhostThroughCode) {
             return true;
         }
     }
@@ -1788,9 +1784,7 @@ bool Mario::checkGround() {
                     recordLastGround();
                 }
 
-                const char* wallCode = MR::getWallCodeString(&triangles[i]);
-
-                if (wallCode != nullptr && !strcmp(wallCode, "Fur")) {
+                if (MR::getWallCodeIndex(&triangles[i]) == CollisionWallCode_Fur) {
                     mDrawStates.onFur = true;
                 }
             }

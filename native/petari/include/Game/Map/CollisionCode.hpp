@@ -92,10 +92,6 @@ class CollisionCode {
 public:
     CollisionCode();
 
-    const char* getFloorCodeString(const Triangle& rTriangle);
-    const char* getWallCodeString(const Triangle& rTriangle);
-    const char* getSoundCodeString(const Triangle& rTriangle);
-    const char* getSoundCodeString(const TableIter& rIter);
     u32 getCameraID(const Triangle& rTriangle);
     u32 getCode(const TableIter& rIter, CodeTable* pCodeTable, const char* pName);
     void createFloorTable();
@@ -119,10 +115,6 @@ public:
     CodeTable(u32 numMax);
 
     void add(const char* pName, u32 code);
-    const char* getString(u32 code);
 
-    u32 mCodeNum;
     MR::NameIndex mIndex;  // a code's name to the code
-    u32* mCodeTable;
-    const char** mNameTable;
 };

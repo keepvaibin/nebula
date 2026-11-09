@@ -554,7 +554,7 @@ public:
     }
 
     inline const bool isBeeMarioOnFur() const {
-        return mMario->getMovementStates().onGround && strcmp("Fur", MR::getWallCodeString(mMario->getGroundPolygon())) == 0 && mBeeWallWalk == 0;
+        return mMario->getMovementStates().onGround && MR::getWallCodeIndex(mMario->getGroundPolygon()) == CollisionWallCode_Fur && mBeeWallWalk == 0;
     }
 
     inline const bool isHidden() const {

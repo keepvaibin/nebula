@@ -1458,14 +1458,12 @@ void Mario::writeBackPhyisicalVector() {
                 }
 
                 if (isPlayerModeBee() && mActor->mBeeWallWalk == 0) {
-                    const char* wallCodeString = MR::getWallCodeString(&mTouchedWalls[i]);
-                    if (wallCodeString != nullptr && strcmp(wallCodeString, "Fur") == 0) {
+                    if (MR::getWallCodeIndex(&mTouchedWalls[i]) == CollisionWallCode_Fur) {
                         Triangle furTriangle = Triangle();
                         MarioActor* pActor = mActor;
                         Vec3f furHit;
                         if (MR::getFirstPolyOnLineToMap(&furHit, &furTriangle, pActor->mCenterPos, -(*mTouchedWalls[i].getNormal(0)) * 300.0f)) {
-                            wallCodeString = MR::getWallCodeString(&furTriangle);
-                            if (wallCodeString != nullptr && strcmp(wallCodeString, "Fur") == 0) {
+                            if (MR::getWallCodeIndex(&furTriangle) == CollisionWallCode_Fur) {
                                 MarioActor* pActor2 = getActor();
                                 pActor2->entryWallWalkMode(furHit, *furTriangle.getNormal(0));
                             }

@@ -290,23 +290,17 @@ bool Mario::isEnableHang() {
         return false;
     }
 
-    if (checkWallCode("NotGrab", false)) {
+    if (checkWallCode(CollisionWallCode_NotGrab, false)) {
         return false;
     }
 
-    if (checkWallCode("NoAction", false)) {
+    if (checkWallCode(CollisionWallCode_NoAction, false)) {
         return false;
     }
 
-    const char* pWallCode = MR::getWallCodeString(mFrontFloorPolygon);
-    if (pWallCode != nullptr) {
-        if (strcmp(pWallCode, "NotGrab") == 0) {
-            return false;
-        }
-
-        if (strcmp(pWallCode, "NoAction") == 0) {
-            return false;
-        }
+    const s32 wallCode = MR::getWallCodeIndex(mFrontFloorPolygon);
+    if (wallCode == CollisionWallCode_NotGrab || wallCode == CollisionWallCode_NoAction) {
+        return false;
     }
 
     Vec3f shadowPos(mShadowPos);
@@ -359,12 +353,11 @@ bool Mario::isEnableBackHang() {
         return false;
     }
 
-    if (checkWallCode("NotGrab", false)) {
+    if (checkWallCode(CollisionWallCode_NotGrab, false)) {
         return false;
     }
 
-    const char* pWallCode = MR::getWallCodeString(mLastGroundPolygon);
-    if (pWallCode != nullptr && strcmp(pWallCode, "NotGrab") == 0) {
+    if (MR::getWallCodeIndex(mLastGroundPolygon) == CollisionWallCode_NotGrab) {
         return false;
     }
 
@@ -424,23 +417,17 @@ bool Mario::isEnableSideHang() {
         return false;
     }
 
-    if (checkWallCode("NotGrab", false)) {
+    if (checkWallCode(CollisionWallCode_NotGrab, false)) {
         return false;
     }
 
-    if (checkWallCode("NoAction", false)) {
+    if (checkWallCode(CollisionWallCode_NoAction, false)) {
         return false;
     }
 
-    const char* pWallCode = MR::getWallCodeString(mLastGroundPolygon);
-    if (pWallCode != nullptr) {
-        if (strcmp(pWallCode, "NotGrab") == 0) {
-            return false;
-        }
-
-        if (strcmp(pWallCode, "NoAction") == 0) {
-            return false;
-        }
+    const s32 wallCode = MR::getWallCodeIndex(mLastGroundPolygon);
+    if (wallCode == CollisionWallCode_NotGrab || wallCode == CollisionWallCode_NoAction) {
+        return false;
     }
 
     if (isRising()) {

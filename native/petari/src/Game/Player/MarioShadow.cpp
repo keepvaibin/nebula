@@ -5,6 +5,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
+#include "Game/Map/CollisionCode.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -197,8 +198,8 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
             mEdgePolygons[mEdgePolygonCount] = i;
             mEdgePolygonCount++;
         } else {
-            const char* code = MR::getFloorCodeString(&mPolygons[i]);
-            if (code == nullptr || (strcmp(code, "PullBack") != 0 && strcmp(code, "Glass") != 0)) {
+            const s32 code = MR::getFloorCodeIndex(&mPolygons[i]);
+            if (code != CollisionFloorCode_PullBack && code != CollisionFloorCode_Glass) {
                 mPolygonIndices[polygonCount] = i;
                 polygonCount++;
             }
