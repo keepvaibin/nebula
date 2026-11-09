@@ -1,7 +1,6 @@
 #include "Game/System/ConfigDataMii.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/SaveBytes.hpp"
 
 ConfigDataMii::ConfigDataMii() {
     initializeData();
@@ -41,19 +40,19 @@ u32 ConfigDataMii::getSignature() const {
 }
 
 s32 ConfigDataMii::serialize(u8* pBuffer, u32 size) const {
-    JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
+    SaveWriter stream(pBuffer, static_cast< s32 >(size));
 
     stream.write(&mFlag, sizeof(mFlag));
     stream.write(&mMiiId, sizeof(mMiiId));
     stream.write(&mIconId, sizeof(mIconId));
 
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 ConfigDataMii::deserialize(const u8* pBuffer, u32 size) {
     initializeData();
 
-    JSUMemoryInputStream stream = JSUMemoryInputStream(pBuffer, size);
+    SaveReader stream(pBuffer, static_cast< s32 >(size));
 
     stream.read(&mFlag, sizeof(mFlag));
     stream.read(&mMiiId, sizeof(mMiiId));

@@ -1,5 +1,5 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
-#include "JSystem/JUtility/JUTNativeLog.hpp"
+#include "Game/System/GameLog.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"

@@ -9,7 +9,7 @@
         } else if (action.kind == NEBULA_TEST_CIRCLE_WIPE) {
             if (action.scenario != 0) MR::openWipeCircle(60);
             else MR::closeWipeCircle(60);
-            JUTNativeLog("test: circle %s, 60 frames\n", action.scenario != 0 ? "open" : "close");
+            GameLog("test: circle %s, 60 frames\n", action.scenario != 0 ? "open" : "close");
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER) {
             MR::setPlayerPos(Vec3f(action.position[0], action.position[1], action.position[2]));
         } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {
@@ -74,7 +74,7 @@
             } else if (const GameEventFlag* pFlag = GameEventFlagTable::findFlag(action.stage)) {
                 GameDataFunction::getCurrentGameDataHolder()->mEventFlagChecker->getChunk()->set(pFlag, true);
             } else {
-                JUTNativeLog("test: no event flag %s\n", action.stage);
+                GameLog("test: no event flag %s\n", action.stage);
             }
         } else if (action.kind == NEBULA_TEST_LIST_ACTORS) {
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
@@ -86,7 +86,7 @@
                 // With the animation it plays (none: no BCK started), its frame and rate; whether its model is shown;
                 // whether the game clips it.
                 const char* pBck = MR::getPlayingBckName(pActor);
-                JUTNativeLog("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d\n",
+                GameLog("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d\n",
                          MR::getModelResName(pActor), pActor->mPosition.x, pActor->mPosition.y, pActor->mPosition.z,
                          pBck != nullptr ? pBck : "none", pBck != nullptr ? MR::getBckFrame(pActor) : 0.0f,
                          pBck != nullptr ? MR::getBckRate(pActor) : 0.0f, pBck != nullptr && MR::isBckStopped(pActor) ? 1 : 0,
@@ -100,7 +100,7 @@
                 LiveActor* pActor = pGroup->getActor(i);
                 if (pActor != nullptr && pActor->mModelManager != nullptr && MR::isDead(pActor) &&
                     MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
-                    JUTNativeLog("test: appear %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
+                    GameLog("test: appear %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
                              pActor->mPosition.z);
                     // An actor a stage switch holds back follows that switch.
                     if (MR::isValidSwitchAppear(pActor)) {
@@ -119,11 +119,11 @@
                     ModelData* pData = MR::getModelData(pActor);
                     for (u16 m = 0; pData != nullptr && m < pData->getMaterialCount(); ++m) {
                         Material* pMaterial = pData->getMaterialAt(m);
-                        JUTNativeLog("test: material %s %u %s\n", action.stage, m, pData->getMaterialName(m));
+                        GameLog("test: material %s %u %s\n", action.stage, m, pData->getMaterialName(m));
                         for (u32 c = 0; c < pMaterial->getCoordCount(); ++c) {
                             MaterialCoord* pCoord = pMaterial->getCoord(c);
                             CoordMatrix* pMtx = pMaterial->getCoordMatrix(c);
-                            JUTNativeLog("test: coordinate %u %u type %u source %u matrix %u info %u projection %u used %u\n", m, c,
+                            GameLog("test: coordinate %u %u type %u source %u matrix %u info %u projection %u used %u\n", m, c,
                                          pCoord->mType, pCoord->mSource, pCoord->mMatrix,
                                          pMtx != nullptr ? pMtx->getInfo().mInfo : 255u,
                                          pMtx != nullptr ? pMtx->getInfo().mProjection : 255u,
@@ -150,7 +150,7 @@
                 LiveActor* pActor = pGroup->getActor(i);
                 if (pActor != nullptr && pActor->mModelManager != nullptr && !MR::isDead(pActor) &&
                     MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
-                    JUTNativeLog("test: kill %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
+                    GameLog("test: kill %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
                              pActor->mPosition.z);
                     pActor->kill();
                 }
@@ -163,7 +163,7 @@
                 MR::getSceneObj< MoviePlayingSequenceHolder >(SceneObj_MoviePlayingSequenceHolder)->getSequence(action.scenario) != nullptr) {
                 MR::startMovie(action.scenario);
             } else {
-                JUTNativeLog("test: no movie sequence in this stage\n");
+                GameLog("test: no movie sequence in this stage\n");
             }
         }
     }

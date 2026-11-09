@@ -4,13 +4,13 @@
 // (a scene's, say) gives all of it back at once, runs what is registered with it and destroys the arenas made under it. There
 // is no size to give and nothing to run out of but the machine's memory. A pointer's arena is found by its address.
 
-#include "JSystem/JKernel/JKRDisposer.hpp"
+#include "Game/System/ArenaOwned.hpp"
 #include "Game/System/NebulaList.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include <stddef.h>
 
-class NebulaArena : public JKRDisposer {
+class NebulaArena : public ArenaOwned {
 public:
     // A new arena under `pParent`, which destroys it when it goes. Only the root (null parent) changes the
     // system and current arenas.
@@ -66,7 +66,7 @@ public:
     static NebulaArena* sRootHeap;
     static NebulaArena* sSystemHeap;
 
-    NebulaList< JKRDisposer > mDisposerList;
+    NebulaList< ArenaOwned > mOwnedList;
 
 private:
     enum { cClasses = 160 };

@@ -1,7 +1,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 #include <new>
 #include <stdlib.h>
 #include <string.h>
@@ -89,7 +89,7 @@ namespace {
     }
 }  // namespace
 
-NebulaArena::NebulaArena() : JKRDisposer() {
+NebulaArena::NebulaArena() : ArenaOwned() {
     const NebulaHostServices* const host = nebula_host();
     mStart = static_cast< u8* >(host->memory_reserve(host->user, cSpan));
     if (mStart == nullptr) {
@@ -288,8 +288,8 @@ NebulaArena* NebulaArena::becomeCurrentHeap() {
 
 void NebulaArena::dispose() {
     // Each one's destructor takes it out of the list.
-    while (mDisposerList.getFirst() != mDisposerList.getEnd()) {
-        mDisposerList.getFirst()->getObject()->~JKRDisposer();
+    while (mOwnedList.getFirst() != mOwnedList.getEnd()) {
+        mOwnedList.getFirst()->getObject()->~ArenaOwned();
     }
 }
 

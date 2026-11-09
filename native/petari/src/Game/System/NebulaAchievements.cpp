@@ -1,5 +1,5 @@
 #include "Game/System/NebulaAchievements.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
@@ -203,7 +203,7 @@ namespace {
             return;
         }
         enqueue(*pEntry);
-        JUTNativeLog("achievement: %s\n", pId);
+        GameLog("achievement: %s\n", pId);
     }
 
     void tryUnlock(const char* pId) {
@@ -489,7 +489,7 @@ namespace NebulaAchievements {
         if (const Entry* pEntry = findEntry(pId)) {
             enqueue(*pEntry);
         } else {
-            JUTNativeLog("test: no achievement %s\n", pId);
+            GameLog("test: no achievement %s\n", pId);
         }
     }
 

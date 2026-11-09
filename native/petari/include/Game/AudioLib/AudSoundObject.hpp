@@ -3,7 +3,7 @@
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Sound/SoundObject.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
+#include "Game/System/ArenaOwned.hpp"
 
 class SoundID;
 class SoundHandle;
@@ -30,7 +30,7 @@ enum BGM_GROUP {
     MULTI_BGM = 0x01,
 };
 
-class AudSoundObject : public SoundObject, JKRDisposer {
+class AudSoundObject : public SoundObject, ArenaOwned {
 public:
     AudSoundObject(Vec3f*, u8, NebulaArena*);
 

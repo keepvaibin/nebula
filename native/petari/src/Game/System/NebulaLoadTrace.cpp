@@ -3,7 +3,7 @@
 #include "Game/System/NebulaLoadTrace.hpp"
 
 #if defined(NEBULA_DEV)
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/System/NebulaHost.hpp"
@@ -36,7 +36,7 @@ namespace {
     void change(const char* pName, bool value, bool& rLast) {
         if (value != rLast) {
             rLast = value;
-            JUTNativeLog("load: %s %d (%s)\n", pName, value ? 1 : 0, MR::getCurrentStageName());
+            GameLog("load: %s %d (%s)\n", pName, value ? 1 : 0, MR::getCurrentStageName());
         }
     }
 }  // namespace
@@ -46,11 +46,11 @@ namespace NebulaLoadTrace {
     Scope::~Scope() {
         if (!mStart) return;
         const auto elapsed = nebula_host()->clock_ns(nebula_host()->user) - mStart;
-        if (elapsed >= 1000000ull) JUTNativeLog("load-phase: %s %.3f ms\n", mName, elapsed / 1000000.0);
+        if (elapsed >= 1000000ull) GameLog("load-phase: %s %.3f ms\n", mName, elapsed / 1000000.0);
     }
     void frame() {
         if (enabled() && (MR::isPressedJump(0) || MR::isPressedFire(0))) {
-            JUTNativeLog("load: press\n");
+            GameLog("load: press\n");
         }
     }
 
@@ -72,19 +72,19 @@ namespace NebulaLoadTrace {
 
     void sorted(const char* pName, int priority, int count) {
         if (enabled()) {
-            JUTNativeLog("place-set: %s priority %d count %d\n", pName, priority, count);
+            GameLog("place-set: %s priority %d count %d\n", pName, priority, count);
         }
     }
 
     void placed(const char* pName, int zoneId) {
         if (enabled()) {
-            JUTNativeLog("place: %u %s zone %d\n", sPlaced++, pName, zoneId);
+            GameLog("place: %u %s zone %d\n", sPlaced++, pName, zoneId);
         }
     }
 
     void placementDone() {
         if (enabled()) {
-            JUTNativeLog("place-end: %s %u objects random %08x\n", MR::getCurrentStageName(), sPlaced,
+            GameLog("place-end: %s %u objects random %08x\n", MR::getCurrentStageName(), sPlaced,
                          SingletonHolder< GameSystem >::get()->mObjHolder->mRandom.mSeed);
         }
         sPlaced = 0;

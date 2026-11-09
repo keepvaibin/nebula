@@ -1,5 +1,5 @@
 #include "Game/Enemy/KuriboChief.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/ItemGenerator.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"

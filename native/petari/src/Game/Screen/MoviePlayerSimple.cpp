@@ -14,7 +14,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
+#include "Game/System/ArenaOwned.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 namespace {
@@ -27,7 +27,7 @@ namespace {
 };  // namespace
 
 MoviePlayerSimple::MoviePlayerSimple()
-    : LayoutActor("ムービープレイヤー", true), JKRDisposer(), mMovieName(""), mBuffer(nullptr), mArena(nullptr), mStream(nullptr),
+    : LayoutActor("ムービープレイヤー", true), ArenaOwned(), mMovieName(""), mBuffer(nullptr), mArena(nullptr), mStream(nullptr),
       mLoop(false), mInputCheckedBefore(false) {
 }
 
