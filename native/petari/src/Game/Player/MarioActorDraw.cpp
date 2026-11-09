@@ -34,7 +34,7 @@
 #include "Game/Render/Material.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <cstring>
 #include "Game/Util/StringUtil.hpp"
 
@@ -115,15 +115,11 @@ void MarioActor::initDrawAndModel() {
 
     {
         MR::CurrentHeapRestorer restorer(static_cast< NebulaArena* >(MR::getSceneHeap()));
-        mBlurTexture = JUTTexture::createTarget(0.2f, 0.14f);
+        mBlurTexture = GameTexture::createTarget(0.2f, 0.14f);
 
         for (u32 i = 0; i < 2; i++) {
-            mMaskTextures[i] = new JUTTexture(8, 8, NEBULA_TEXTURE_LINEAR_LA8);
-            mMaskTextures[i]->mWrapS = 1;
-            mMaskTextures[i]->mWrapT = 1;
-            mMaskTextures[i]->mMinType = 0;
-            mMaskTextures[i]->mMagType = 0;
-            mMaskTextures[i]->init();
+            mMaskTextures[i] = new GameTexture(8, 8, NEBULA_TEXTURE_LINEAR_LA8);
+            mMaskTextures[i]->setSampling(1, 1, 0, 0);
         }
 
         mMaskIndex = 0;

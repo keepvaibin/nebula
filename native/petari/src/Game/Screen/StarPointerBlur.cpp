@@ -7,7 +7,7 @@
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
 
 namespace {
@@ -20,7 +20,7 @@ namespace {
 StarPointerBlur::~StarPointerBlur() {
 }
 
-StarPointerBlur::StarPointerBlur(JUTTexture* pTexture)
+StarPointerBlur::StarPointerBlur(GameTexture* pTexture)
     : NameObj("スターポインタ用ブラー"), mTexture(pTexture), mPadChannel(PLAYER_1), mMainColor(nullptr), mSubColor(nullptr), mBlurPoints(nullptr),
       mBlurThicks(nullptr), mBlurTexCoords(nullptr), mNumHiddenPoints(0) {
     mBlurPoints = new BlurPoint[BLUR_POINT_NUM];

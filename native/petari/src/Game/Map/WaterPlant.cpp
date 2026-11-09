@@ -9,12 +9,12 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,
     // depth tested and written, no culling, fogged linearly toward the water's blue between `fogStart` and `fogEnd`.
-    SiteMaterial plantMaterial(JUTTexture* pTexture, f32 fogStart, f32 fogEnd) {
+    SiteMaterial plantMaterial(GameTexture* pTexture, f32 fogStart, f32 fogEnd) {
         SiteMaterial material;
         material.init(NEBULA_SHADER_WATER_PLANT, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                            NEBULA_CULL_NONE);
@@ -287,10 +287,10 @@ WaterPlantDrawInit::WaterPlantDrawInit()
       mPlantCTex(), mPlantDTex() {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, -1);
 
-    mPlantATex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantA.bti"));
-    mPlantBTex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantB.bti"));
-    mPlantCTex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantC.bti"));
-    mPlantDTex = new JUTTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantD.bti"));
+    mPlantATex = new GameTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantA.bti"));
+    mPlantBTex = new GameTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantB.bti"));
+    mPlantCTex = new GameTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantC.bti"));
+    mPlantDTex = new GameTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantD.bti"));
 
     mSwingPosTable = new f32[::cSwingPosTableSize];
     updateSwingPos();
@@ -309,7 +309,7 @@ void WaterPlantDrawInit::movement() {
 }
 
 SiteMaterial WaterPlantDrawInit::material(int tex) const {
-    JUTTexture* pTexture = tex == 1 ? mPlantBTex : tex == 2 ? mPlantCTex : tex == 3 ? mPlantDTex : mPlantATex;
+    GameTexture* pTexture = tex == 1 ? mPlantBTex : tex == 2 ? mPlantCTex : tex == 3 ? mPlantDTex : mPlantATex;
     return plantMaterial(pTexture, ::cFogStartZ, ::cFogEndZ);
 }
 

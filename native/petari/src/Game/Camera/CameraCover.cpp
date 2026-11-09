@@ -2,7 +2,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 CameraCover::CameraCover(const char* pName) : NameObj(pName), mActor(), mCoverFramesLeft(0), mIsCoverRequested(false), mCoverFrames(1) {
     mActor = new CaptureScreenActor(MR::DrawType_CaptureScreenCamera, "Camera");
@@ -27,7 +27,7 @@ void CameraCover::movement() {
 
 void CameraCover::draw() const {
     if (mCoverFramesLeft != 0) {
-        JUTTexture texture(MR::getScreenResTIMG());
+        GameTexture texture(MR::getScreenResTIMG());
 
         ImageEffectLocalUtil::setupDrawTexture();
         ImageEffectLocalUtil::drawTexture(&texture, 255, (ImageEffectLocalUtil::ETexDrawType)0);

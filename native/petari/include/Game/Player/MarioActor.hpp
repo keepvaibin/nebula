@@ -23,7 +23,7 @@ class Model;
 class ModelData;
 class PlayerModel;
 class SoundAudible;
-class JUTTexture;
+class GameTexture;
 class JetTurtleShadow;
 class MarioAnimator;
 class MarioConst;
@@ -815,8 +815,8 @@ public:
     u8 mBlinkFrame;  // frames left of the blink
     u16 mBlinkTimer;  // frames until the next blink
     Clip* mEyeRes;
-    JUTTexture* mBlurTexture; // the full-screen blur's target
-    JUTTexture* mMaskTextures[2];  // the mask's two buffers
+    GameTexture* mBlurTexture; // the full-screen blur's target
+    GameTexture* mMaskTextures[2];  // the mask's two buffers
     u16 mMaskIndex;  // the mask texture drawn (0 or 1)
     MarioNullBck* mNullAnimation;
     bool mAnimationFrozen;  // animation changes are ignored (game over, press, freeze, talk, demo)

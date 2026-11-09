@@ -6,7 +6,7 @@ class BackButton;
 class GalaxyMap;
 class GalaxyMapBackground;
 class GalaxyMapSelectButton;
-class JUTTexture;
+class GameTexture;
 class PowerStarList;
 struct ResTIMG;
 class WipeFade;
@@ -79,7 +79,7 @@ public:
     PowerStarList* mPowerStarList;
     BackButton* mBackButton;
     WipeFade* mWipe;
-    JUTTexture* mCaptureTexture;
+    GameTexture* mCaptureTexture;
     s32 mMode;
     s32 mWipeFrame;
 };

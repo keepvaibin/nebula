@@ -7,7 +7,7 @@ class TypedDraw;
 
 class PlayerModel;
 class Triangle;
-class JUTTexture;
+class GameTexture;
 
 class CollisionShadow : public NameObj {
 public:
@@ -57,7 +57,7 @@ public:
     s32* mSortOrder;  // the polygons by distance (doSortPolygons)
     f32* mSortDistances;
     Vec3f mCenter;  // the shadow's center (create)
-    JUTTexture* mCaptureTex;  // the captured shadow
+    GameTexture* mCaptureTex;  // the captured shadow
     u8 mUpdate;  // the capture is due (setUpdateFlag)
     bool mSnapDirection;  // the direction snaps instead of blending (the bee's wall stick)
     u8 mViewDone;  // calcView ran: the capture may draw

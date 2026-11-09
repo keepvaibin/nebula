@@ -5,7 +5,7 @@
 
 class PlantPoint;
 class PlantRailInfo;
-class JUTTexture;
+class GameTexture;
 
 class PlantStalk : public LiveActor {
 public:
@@ -39,5 +39,5 @@ public:
     // What its objects draw with.
     SiteMaterial mMaterial;
 
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
 };

@@ -3,6 +3,8 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Material.hpp"
 #include "Game/Render/RenderTexture.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_shader_rows.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -56,23 +58,8 @@ void SiteMaterial::setMatrix(u32 first, u32 index, const f32 (*pMtx)[4]) {
     }
 }
 
-void SiteMaterial::setTexture(u32 slot, const JUTTexture* pTexture) {
-    NebulaFrameTexture& rOut = mTextures[slot];
-    memset(&rOut, 0, sizeof(rOut));
-    rOut.texture = RenderTexture::idOf(pTexture->mImage);
-    rOut.wrap_s = pTexture->mWrapS;
-    rOut.wrap_t = pTexture->mWrapT;
-    const u8 minType = pTexture->mMinType;
-    rOut.mag_linear = pTexture->mMagType != 0 ? 1 : 0;
-    rOut.min_linear = minType == 1 || minType == 3 || minType == 5 ? 1 : 0;
-    rOut.mip_filter = minType < 2 ? 0 : minType < 4 ? 1 : 2;
-    rOut.anisotropy = pTexture->mTIMG->mMaxAnisotropy;
-    rOut.lod_bias = pTexture->mLodBias;
-    rOut.min_lod = pTexture->mMinLod;
-    rOut.max_lod = pTexture->mMaxLod;
-    if (mTextureCount <= slot) {
-        mTextureCount = slot + 1;
-    }
+void SiteMaterial::setTexture(u32 slot, const GameTexture* pTexture) {
+    setTexture(slot, pTexture->site());
 }
 
 void SiteTextures::toFrame(const SiteTexture& rTexture, NebulaFrameTexture* pOut) {
@@ -503,8 +490,8 @@ void TypedDraw::widen() {
     rItem.flags = static_cast< u32 >(mFlags | NEBULA_ITEM_RING | NEBULA_ITEM_INDEXED | NEBULA_ITEM_WIDE |
                                      (mState.spread_lines ? NEBULA_ITEM_SPREAD_LINES : 0) |
                                      (mState.spread_points ? NEBULA_ITEM_SPREAD_POINTS : 0));
-    rItem.line_width = mState.line_width * (1.0f / 456.0f);
-    rItem.point_size = mState.point_size * (1.0f / 456.0f);
+    rItem.line_width = mState.line_width * (1.0f / NebulaFrameClock::cScreenHeight);
+    rItem.point_size = mState.point_size * (1.0f / NebulaFrameClock::cScreenHeight);
 }
 
 void TypedDraw::finish() {

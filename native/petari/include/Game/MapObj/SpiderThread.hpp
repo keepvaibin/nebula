@@ -3,7 +3,7 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
-class JUTTexture;
+class GameTexture;
 class SpiderThreadHangInfo;
 class SpiderThreadMainPoint;
 class SpiderThreadPart;
@@ -75,8 +75,8 @@ public:
     Vec3f mFront;
     SpiderThreadWindCtrl* mWindCtrl;
     bool mIsBloomOn;
-    JUTTexture* mThreadTexture;
-    JUTTexture* mIndirectTexture;
+    GameTexture* mThreadTexture;
+    GameTexture* mIndirectTexture;
 };
 
 namespace MR {

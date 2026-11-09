@@ -10,7 +10,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     const f32 sTexRateU = 0.08f;
@@ -30,8 +30,8 @@ void OceanRingPipeOutside::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeOutside);
     initMesh();
     MR::invalidateClipping(this);
-    mWaterPipeIndirectTex = new JUTTexture(MR::loadTexFromArc("OceanRing", "WaterPipeIndirect.bti"));
-    mWaterPipeHighLightTex = new JUTTexture(MR::loadTexFromArc("OceanRing", "WaterPipeHighLight.bti"));
+    mWaterPipeIndirectTex = new GameTexture(MR::loadTexFromArc("OceanRing", "WaterPipeIndirect.bti"));
+    mWaterPipeHighLightTex = new GameTexture(MR::loadTexFromArc("OceanRing", "WaterPipeHighLight.bti"));
     makeActorAppeared();
 }
 

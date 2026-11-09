@@ -97,8 +97,8 @@ void MaterialUpdater::checkTexture() {
         }
 
         if (MR::isEqualString(name, "ShadowProjDummy")) {
-            const JUTTexture* texture = MR::getMarioShadowTex();
-            mModel->getModelData()->setTexture(i, *texture->getTexInfo());
+            const GameTexture* texture = MR::getMarioShadowTex();
+            mModel->getModelData()->setTexture(i, *texture->info());
 
             if (!hasShadowSetter) {
                 addMarioShadowProjmapMtxSetter();

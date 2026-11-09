@@ -62,96 +62,83 @@ struct ResTIMG {
     }
 };
 
-class JUTTexture {
+// A picture the game draws with: the renderer's texture for an image and how it is sampled. The image is a texture file's
+// (set), one the game writes (made with a size: its own pixels, black to start) or a share of the frame the game draws into
+// (a target: no pixels, its image is the key the frame passes name).
+class GameTexture {
 public:
-    /// @brief Creates a new `JUTTexture`.
-    JUTTexture() {
-        mFlag = 0;
-        mTIMG = NULL;
+    GameTexture() {}
+    explicit GameTexture(const ResTIMG* pInfo) {
+        set(pInfo);
     }
+    // An image the game writes: `layout` is how (NEBULA_TEXTURE_LINEAR_*).
+    GameTexture(u32 width, u32 height, u8 layout = NEBULA_TEXTURE_LINEAR_L8);
+    ~GameTexture();
+    GameTexture(const GameTexture&) = delete;
+    GameTexture& operator=(const GameTexture&) = delete;
 
-    /// @brief Creates a new `JUTTexture`.
-    /// @param width The width of the texture, in pixels.
-    /// @param height The height of the texture, in pixels.
-    /// @param layout How the game writes it (NEBULA_TEXTURE_LINEAR_*); a capture's buffer is only its key.
-    JUTTexture(int width, int height, u8 layout = NEBULA_TEXTURE_LINEAR_L8);
+    // A target `across` x `down` of the frame (sized in NebulaFrameClock's effect texels), or one of a size in pixels.
+    static GameTexture* createTarget(f32 across, f32 down);
+    static GameTexture* createPixelTarget(u32 width, u32 height);
 
-    /// @brief A texture a target pass draws: `across` x `down` of the frame. It holds no pixels of its own; its size says
-    /// what effects' texel offsets were authored for, a whole frame being this many texels.
-    static constexpr f32 cAuthoredAcross = 640.0f;
-    static constexpr f32 cAuthoredDown = 456.0f;
-    static JUTTexture* createTarget(f32 across, f32 down);
-    static JUTTexture* createPixelTarget(u32 width, u32 height);
-
-    /// @brief Creates a new `JUTTexture`.
-    /// @param pTIMG The image.
-    explicit JUTTexture(const ResTIMG* pTIMG) {
-        // storeTIMG hands the record to the renderer unless the capture bit says the buffer is its own.
-        mFlag = 0;
-        storeTIMG(pTIMG);
+    // A file's image, sampled as the file says.
+    void set(const ResTIMG* pInfo);
+    void set(const CookedResTIMG* pSource) {
+        mSourceInfo = ResTIMG::fromCooked(*pSource);
+        set(&mSourceInfo);
     }
+    // How it is sampled from now on (NEBULA_WRAP_*, NEBULA_FILTER_*).
+    void setSampling(u8 wrapS, u8 wrapT, u8 minFilter, u8 magFilter) {
+        mSite.mWrapS = wrapS;
+        mSite.mWrapT = wrapT;
+        mSite.mMinFilter = minFilter;
+        mSite.mMagFilter = magFilter;
+    }
+    void setFilter(u8 minFilter, u8 magFilter) {
+        mSite.mMinFilter = minFilter;
+        mSite.mMagFilter = magFilter;
+    }
+    // Its image moved (a copy the game made of it).
+    void setImage(u8* pImage) {
+        mImage = pImage;
+        mSite.mImage = pImage;
+    }
+    // The frame as drawn so far into an image the game writes.
+    void copyFrame();
 
-    /// @brief Destroys the `JUTTexture`.
-    ~JUTTexture();
+    const SiteTexture& site() const {
+        return mSite;
+    }
+    const ResTIMG* info() const {
+        return mInfo;
+    }
+    // The image: an image the game writes is its pixels; a target's is its key.
+    u8* image() const {
+        return mImage;
+    }
+    u32 getWidth() const {
+        return mSite.mWidth;
+    }
+    u32 getHeight() const {
+        return mSite.mHeight;
+    }
+    // A target's share of the frame (1 for any other).
+    f32 shareAcross() const {
+        return mShareAcross;
+    }
+    f32 shareDown() const {
+        return mShareDown;
+    }
 
 private:
-    struct TargetOnly {};
-    // Only createTarget's: a key whose id names a target, never an image.
-    explicit JUTTexture(TargetOnly);
-    void makeBuffer(int width, int height, u8 layout);
+    void makeImage(u32 width, u32 height, u8 layout);
 
-public:
-
-    void storeTIMG(const ResTIMG*);
-    void storeTIMG(const CookedResTIMG* pSource) {
-        mSourceInfo = ResTIMG::fromCooked(*pSource);
-        storeTIMG(&mSourceInfo);
-    }
-    void init();
-    SiteTexture getTexObj() const {
-        return mObj;
-    }
-    const SiteTexture* texObj() const {
-        return &mObj;
-    }
-
-    void initTexObj();
-    // The frame as drawn so far as this texture: its colour, alpha or depth; half: each texel averages 2x2.
-    void frameColor();
-
-    const ResTIMG* getTexInfo() const {
-        return mTIMG;
-    }
-    s32 getTransparency() const {
-        return mTIMG->mTransparency;
-    }
-    s32 getWidth() const {
-        return mTIMG->mWidth;
-    }
-    s32 getHeight() const {
-        return mTIMG->mHeight;
-    }
-    void setCaptureFlag(bool flag) {
-        mFlag = flag;
-    }
-    bool getCaptureFlag() const {
-        return mFlag & 1;
-    }
-
-    SiteTexture mObj;
+    SiteTexture mSite = {};
+    const ResTIMG* mInfo = nullptr;
+    u8* mImage = nullptr;
+    // The record and pixels this texture made (freed with it).
+    u8* mOwned = nullptr;
     f32 mShareAcross = 1.0f;
     f32 mShareDown = 1.0f;
-    const ResTIMG* mTIMG;
-    u8* mImage;
-    u8 mWrapS;
-    u8 mWrapT;
-    u8 mMinType;
-    u8 mMagType;
-    f32 mMinLod;
-    f32 mMaxLod;
-    f32 mLodBias;
-    u8 mFlag;
-    // The image and pixels makeBuffer allocated (freed with the texture; mFlag bit 0 says it is set).
-    ResTIMG* mOwnedImage;
-    ResTIMG mSourceInfo;
+    ResTIMG mSourceInfo = {};
 };

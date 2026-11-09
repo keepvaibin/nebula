@@ -21,7 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <Game/Ui/DrawInfo.hpp>
 
 namespace {
@@ -95,7 +95,7 @@ void GalaxyMapController::init(const TableIter& rIter) {
     {
         MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-        mCaptureTexture = JUTTexture::createTarget(0.5f, 0.5f);
+        mCaptureTexture = GameTexture::createTarget(0.5f, 0.5f);
     }
 
     capture();
@@ -621,10 +621,10 @@ void GalaxyMapController::capture() {
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
     f32 halfWidth = 304.0f;
     NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
-    Frame::targetBegin(mCaptureTexture->mImage, mCaptureTexture->mShareAcross, mCaptureTexture->mShareDown, 0);
+    Frame::targetBegin(mCaptureTexture->image(), mCaptureTexture->shareAcross(), mCaptureTexture->shareDown(), 0);
     Frame::setOrthographic(projectionMtx);
     drawForCapture();
-    Frame::targetEnd(mCaptureTexture->mImage, NEBULA_TARGET_RGB);
+    Frame::targetEnd(mCaptureTexture->image(), NEBULA_TARGET_RGB);
 }
 
 namespace MR {
@@ -668,6 +668,6 @@ namespace MR {
     }
 
     const ResTIMG* getGalaxyMapResTIMG() {
-        return ::getGalaxyMapController()->mCaptureTexture->mTIMG;
+        return ::getGalaxyMapController()->mCaptureTexture->info();
     }
 };  // namespace MR

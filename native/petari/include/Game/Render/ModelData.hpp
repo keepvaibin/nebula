@@ -3,7 +3,7 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/Material.hpp"
 #include <NebulaGpu.h>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include <nebula_model.h>
 

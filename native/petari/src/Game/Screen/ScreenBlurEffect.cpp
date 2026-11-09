@@ -10,14 +10,14 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 namespace {
     // runtime/src/render/materials/screen_blur.hlsl: the blurred picture (texture 0) at the effect's alpha where the
     // depth capture (texture 1) lies beyond 240 (of 255); depth tested, not written; blended by its alpha.
-    SiteMaterial blurMaterial(JUTTexture* pPicture, JUTTexture* pDepth, u8 alpha) {
+    SiteMaterial blurMaterial(GameTexture* pPicture, GameTexture* pDepth, u8 alpha) {
         SiteMaterial material;
         material.init(NEBULA_SHADER_SCREEN_BLUR, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                            NEBULA_CULL_NONE);
@@ -30,7 +30,7 @@ namespace {
     }
 }  // namespace
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     static const f32 sScale = 10000.0f;
@@ -91,7 +91,7 @@ void ScreenBlurEffect::drawBlur() const {
 }
 
 void ScreenBlurEffect::captureBlur() const {
-    mFullTexture->frameColor();
+    mFullTexture->copyFrame();
     ImageEffectLocalUtil::drawFrameDepth(mHalfTexture, mFrameDepthKey);
     MR::loadProjectionMtx();
     MR::loadViewMtx();

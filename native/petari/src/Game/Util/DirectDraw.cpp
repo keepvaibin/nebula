@@ -11,7 +11,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "math_types.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace TDDraw {
     void close() {
@@ -220,7 +220,7 @@ namespace TDDraw {
     }
 
     // The site's native material holds the texture (`pTexture` as it set it).
-    void drawTexture(TypedDraw& rDraw, const Vec2f& rPosition, JUTTexture* pTexture, const Vec2f& rSize) {
+    void drawTexture(TypedDraw& rDraw, const Vec2f& rPosition, GameTexture* pTexture, const Vec2f& rSize) {
 
         VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
         {
@@ -231,7 +231,7 @@ namespace TDDraw {
         }
     }
 
-    void drawTexture3D(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rUp, f32 width, f32 height, JUTTexture* pTexture, bool flipX,
+    void drawTexture3D(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rUp, f32 width, f32 height, GameTexture* pTexture, bool flipX,
                        bool flipY) {
         Vec3f p3;
         Vec3f p2;

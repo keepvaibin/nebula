@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Render/TypedDraw.hpp"
 
-class JUTTexture;
+class GameTexture;
 class OceanSpherePoint;
 class WaterInfo;
 
@@ -89,8 +89,8 @@ public:
     f32 mTexOffs0Y;
     f32 mTexOffs1X;
     f32 mTexOffs1Y;
-    JUTTexture* mWaterTex;
-    JUTTexture* mWaterEnvTex;
+    GameTexture* mWaterTex;
+    GameTexture* mWaterEnvTex;
     NebulaColor8 mStageColor1Front;
     NebulaColor8 mStageColor1Back;
     bool mUseMesh;

@@ -6,7 +6,7 @@
 
 class DynamicFurParam;
 class FurParam;
-class JUTTexture;
+class GameTexture;
 struct SiteMaterial;
 struct ResTIMG;
 
@@ -32,8 +32,8 @@ public:
     // The strand map from the param's density, thickness and length mix; makes the texture on first use.
     void createFurMap(const FurParam& rParam);
 
-    JUTTexture* mBodyTexture;
-    JUTTexture* mFurTexture;
+    GameTexture* mBodyTexture;
+    GameTexture* mFurTexture;
     s32 mNumLayers;
     CLayerParam mLength;
     f32* mShells;  // each layer's reach

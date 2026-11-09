@@ -4,7 +4,7 @@
 #include "Game/Render/TypedDraw.hpp"
 
 class OceanRingPipe;
-class JUTTexture;
+class GameTexture;
 
 class OceanRingPipeInside : public LiveActor {
 public:
@@ -23,7 +23,7 @@ public:
     f32 mTexV0;
     f32 mTexU1;
     f32 mTexV1;
-    JUTTexture* mWaterPipeInsideTex;
+    GameTexture* mWaterPipeInsideTex;
     // The pipe's surface as the renderer draws it.
     SiteMesh< VertexPT2 > mMesh;
 };

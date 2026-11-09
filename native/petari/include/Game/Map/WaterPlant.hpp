@@ -5,7 +5,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-class JUTTexture;
+class GameTexture;
 
 class WaterPlant : public LiveActor {
 public:
@@ -64,8 +64,8 @@ public:
     f32* mSwingPosTable;
     // The camera's X axis in world space, this frame.
     Vec3f mCameraSide;
-    JUTTexture* mPlantATex;
-    JUTTexture* mPlantBTex;
-    JUTTexture* mPlantCTex;
-    JUTTexture* mPlantDTex;
+    GameTexture* mPlantATex;
+    GameTexture* mPlantBTex;
+    GameTexture* mPlantCTex;
+    GameTexture* mPlantDTex;
 };

@@ -5,7 +5,7 @@
 
 class MarioActor;
 class AreaObj;
-class JUTTexture;
+class GameTexture;
 
 class MarioFoo : public MarioState {
 public:
@@ -65,5 +65,5 @@ public:
     Vec3f mTrailSide[64];  // each trail point's hand-to-hand direction
     u32 mTrailLength;  // points in the trail
     u32 mTrailIndex;  // the next trail point
-    JUTTexture* mTrailTexture;  // FooLine.bti
+    GameTexture* mTrailTexture;  // FooLine.bti
 };

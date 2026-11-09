@@ -8,7 +8,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace MR {
@@ -19,7 +19,7 @@ namespace MR {
     void drawFullScreenBlur(f32 param1, f32 param2, u8 param3, u8 param4) {
         f32 screenWidth = MR::getScreenWidth();
 
-        JUTTexture texture = JUTTexture(MR::getScreenResTIMG());
+        GameTexture texture = GameTexture(MR::getScreenResTIMG());
 
         // The two layers (runtime/src/render/materials/tex_const_alpha.hlsl): the screen and last frame's blur, each at
         // its constant alpha, blended by it over the 2D view (TDDraw's draw mode 1, blend 1, view 2).
@@ -36,14 +36,14 @@ namespace MR {
         TDDraw::drawTexture(site, Vec2f(-param2, -param2), MR::getFullScreenBlurTexture(), Vec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
 
         // The next frame's blur: the screen shrunk into the blur texture, a pass into its own target.
-        JUTTexture* pBlur = MR::getFullScreenBlurTexture();
-        Frame::targetBegin(pBlur->mImage, pBlur->mShareAcross, pBlur->mShareDown, 0);
+        GameTexture* pBlur = MR::getFullScreenBlurTexture();
+        Frame::targetBegin(pBlur->image(), pBlur->shareAcross(), pBlur->shareDown(), 0);
         SiteMaterial shrink;
         TDDraw::setupNative(&shrink, 1, 1, 2);
         shrink.setTexture(0, &texture);
         TypedDraw site2 = TDDraw::site(shrink, 2);
         TDDraw::drawTexture(site2, Vec2f(0.0f, 0.0f), &texture, Vec2f(screenWidth, static_cast< f32 >(MR::getScreenHeight())));
-        Frame::targetEnd(pBlur->mImage, NEBULA_TARGET_RGB);
+        Frame::targetEnd(pBlur->image(), NEBULA_TARGET_RGB);
         MR::loadProjectionMtx();
         MR::loadViewMtx();
     }

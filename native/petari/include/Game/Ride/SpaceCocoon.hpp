@@ -7,7 +7,7 @@
 
 class ActorCameraInfo;
 class CameraTargetMtx;
-class JUTTexture;
+class GameTexture;
 class PartsModel;
 class PlantPoint;
 
@@ -77,5 +77,5 @@ public:
     ActorCameraInfo* mCameraInfo;
     PartsModel* mCocoonModel;
     Pos3f mTopMtx;
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
 };

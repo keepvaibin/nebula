@@ -17,7 +17,7 @@
 #include "Game/Render/Material.hpp"
 #include "Game/Render/Transform.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <cmath>
 #include <cstring>
 #include <nebula_format.h>
@@ -91,16 +91,14 @@ void NormalMapBase::setupTexture() {
         if (strstr(pName, "Nswap_")) {
             MR::FormattedName fileName("%s.bti", pName + 6);
             pImage = MR::getTexFromArc(fileName.c_str(), this);
-            mNormalTex = new JUTTexture(pImage);
+            mNormalTex = new GameTexture(pImage);
             mTextures[i] = mNormalTex;
-            mTextures[i]->mMinType = NEBULA_FILTER_LINEAR;
-            mTextures[i]->mMagType = NEBULA_FILTER_LINEAR;
-            mTextures[i]->init();
+            mTextures[i]->setFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
         } else if (strstr(pName, "ormal") && !mNormalTex) {
-            mNormalTex = new JUTTexture(pImage);
+            mNormalTex = new GameTexture(pImage);
             mTextures[i] = mNormalTex;
         } else {
-            mTextures[i] = new JUTTexture(pImage);
+            mTextures[i] = new GameTexture(pImage);
         }
 
         if (strstr(pName, "Zormal")) {
@@ -303,9 +301,9 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
     sNormalMap.setTexture(slot, obj);
 }
 
-void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
+void NormalMapBase::loadNormalTex(const GameTexture* pTex, u32 slot) const {
     SiteTexture obj;
-    SiteTextures::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    SiteTextures::init(&obj, pTex->image(), pTex->info()->mWidth, pTex->info()->mHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     if ((mTexFlags & 2) != 0 && (mTexFlags & 0x4) != 0) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
     } else if ((mTexFlags & 0x2) != 0) {
@@ -497,8 +495,8 @@ void NormalMapBase::createGradTexture() {
     RenderTexture::linear(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, ::cGradTexWidth, ::cGradTexHeight, 1);
 }
 
-void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
-    const NebulaTexture* pRecord = nebula_texture_record(pTexture->mImage);
+void NormalMapBase::swapColorGB(GameTexture* pTexture) {
+    const NebulaTexture* pRecord = nebula_texture_record(pTexture->image());
     if (pRecord == nullptr || pRecord->layout != NEBULA_TEXTURE_RGBA8) {
         return;
     }
@@ -524,8 +522,7 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
         }
     }
 
-    pTexture->mImage = pCopy;
-    pTexture->mObj.mImage = pCopy;
+    pTexture->setImage(pCopy);
 }
 
 // One setting per line: the number leads the line and the name anywhere on it picks the setting. A line longer than the

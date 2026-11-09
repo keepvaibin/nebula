@@ -7,7 +7,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     const u16 sTextureSize = 32;
@@ -60,11 +60,11 @@ void SnowFloorTile::init(const TableIter& rIter) {
     }
 
     initLocalPoint(rIter);
-    mTextures[0] = new JUTTexture(mTextureSize, mTextureSize);
-    mTextures[1] = new JUTTexture(mTextureSize, mTextureSize);
+    mTextures[0] = new GameTexture(mTextureSize, mTextureSize);
+    mTextures[1] = new GameTexture(mTextureSize, mTextureSize);
     mTexture = mTextures[0];
     mTextureIndex = 0;
-    mImage = mTexture->mImage;
+    mImage = mTexture->image();
     mLastPointerPoint.zero();
     mLastPlayerPoint.zero();
 
@@ -374,7 +374,7 @@ void SnowFloorTile::doErase(Vec2f point, f32 radius, f32 amount) {
 void SnowFloorTile::createTexture() {
     mTextureIndex = 1 - mTextureIndex;
     mTexture = mTextures[mTextureIndex];
-    mImage = mTexture->mImage;
+    mImage = mTexture->image();
 
     if (mDirtyFrames != 0) {
         mDirtyFrames--;

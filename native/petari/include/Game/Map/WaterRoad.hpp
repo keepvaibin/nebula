@@ -5,7 +5,7 @@
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
 
-class JUTTexture;
+class GameTexture;
 class WaterRoadModelInfo;
 class AudSoundObject;
 class ActorCameraInfo;
@@ -45,9 +45,9 @@ public:
     Vec2f mTexUV0;
     Vec2f mTexUV1;
     Vec2f mTexUV2;
-    JUTTexture* mTexture;
-    JUTTexture* mIndirect;
-    JUTTexture* mEnvMap;
+    GameTexture* mTexture;
+    GameTexture* mIndirect;
+    GameTexture* mEnvMap;
     Box3f mBoundingBox;
     Vec3f mClippingCenter;
     Vec3f mCamRailNearestPos;

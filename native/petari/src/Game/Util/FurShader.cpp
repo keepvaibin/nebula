@@ -2,7 +2,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Render/Material.hpp"
 #include "Game/Render/ModelData.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
 #include <cstring>
 

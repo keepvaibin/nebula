@@ -19,7 +19,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
@@ -28,7 +28,7 @@ namespace {
     // runtime/src/render/materials/water_camera.hlsl: the screen (texture 1) warped by the filter texture (texture 0,
     // turned by `rFilterMtx`) 0.05 screen texels per indirect step, less the water's colour; blended by the filter's
     // alpha where above zero, depth neither tested nor written.
-    SiteMaterial filterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const Mtx34f& rFilterMtx, const Color8& rWater) {
+    SiteMaterial filterMaterial(GameTexture* pFilter, GameTexture* pScreen, const Mtx34f& rFilterMtx, const Color8& rWater) {
         SiteMaterial material;
         material.init(NEBULA_SHADER_WATER_CAMERA, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
@@ -66,14 +66,14 @@ void WaterCameraFilter::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvAir));
     initScreenTex();
-    JUTTexture* pFilterTex = new JUTTexture(MR::loadTexFromArc("WaterCameraFilter", "WaterCameraFilter.bti"));
+    GameTexture* pFilterTex = new GameTexture(MR::loadTexFromArc("WaterCameraFilter", "WaterCameraFilter.bti"));
     mFilterTex = pFilterTex;
     makeActorAppeared();
 }
 
 void WaterCameraFilter::initScreenTex() {
     MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-    mScreenTex = JUTTexture::createTarget(1.0f, 1.0f);
+    mScreenTex = GameTexture::createTarget(1.0f, 1.0f);
 }
 
 void WaterCameraFilter::exeAirToWater() {
@@ -121,7 +121,7 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    Frame::takeFrame(mScreenTex->mImage);
+    Frame::takeFrame(mScreenTex->image());
     const SiteMaterial material = loadMaterial();
     TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
     Vec2f pos;

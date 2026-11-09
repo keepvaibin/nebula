@@ -9,7 +9,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     const f32 sTexRateU0 = 0.08f;
@@ -34,7 +34,7 @@ void OceanRingPipeInside::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeInside);
     initMesh();
     MR::invalidateClipping(this);
-    mWaterPipeInsideTex = new JUTTexture(MR::loadTexFromArc("OceanRing", "WaterPipeInside.bti"));
+    mWaterPipeInsideTex = new GameTexture(MR::loadTexFromArc("OceanRing", "WaterPipeInside.bti"));
     makeActorAppeared();
 }
 

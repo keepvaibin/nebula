@@ -2,7 +2,7 @@
 
 #include <NebulaGpu.h>
 
-class JUTTexture;
+class GameTexture;
 
 class ImageEffectResource {
 public:
@@ -11,9 +11,9 @@ public:
 
     void createBlurTexture();
     void createDOFTexture();
-    JUTTexture* createTexture(f32);
+    GameTexture* createTexture(f32);
 
-    JUTTexture* _0;
-    JUTTexture* _8;
-    JUTTexture* _C;
+    GameTexture* _0;
+    GameTexture* _8;
+    GameTexture* _C;
 };

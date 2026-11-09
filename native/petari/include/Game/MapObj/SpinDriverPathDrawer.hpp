@@ -4,7 +4,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-class JUTTexture;
+class GameTexture;
 class SpinDriverShootPath;
 
 class SpinDriverPathDrawer : public LiveActor {
@@ -50,10 +50,10 @@ public:
 
     void initDraw();
 
-    JUTTexture* mOrangeTexture;
-    JUTTexture* mGreenTexture;
-    JUTTexture* mPinkTexture;
-    JUTTexture* mMaskTexture;
+    GameTexture* mOrangeTexture;
+    GameTexture* mGreenTexture;
+    GameTexture* mPinkTexture;
+    GameTexture* mMaskTexture;
     bool mIsPathAtOpa;
 };
 

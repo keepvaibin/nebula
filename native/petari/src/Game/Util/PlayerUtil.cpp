@@ -864,7 +864,7 @@ namespace MR {
         MarioAccess::calcWorldPadDir(pDir, param2, param3);
     }
 
-    JUTTexture* getFullScreenBlurTexture() {
+    GameTexture* getFullScreenBlurTexture() {
         return MarioAccess::getPlayerActor()->mBlurTexture;
     }
 

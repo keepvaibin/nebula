@@ -1,7 +1,7 @@
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 ImageEffectResource::ImageEffectResource()
@@ -32,16 +32,13 @@ void ImageEffectResource::createDOFTexture() {
     }
 }
 
-JUTTexture* ImageEffectResource::createTexture(f32 scale) {
-    JUTTexture* pTexture;
+GameTexture* ImageEffectResource::createTexture(f32 scale) {
+    GameTexture* pTexture;
 
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-    pTexture = JUTTexture::createTarget(scale, scale);
-    pTexture->mWrapS = NEBULA_WRAP_CLAMP;
-    pTexture->mWrapT = NEBULA_WRAP_CLAMP;
-    pTexture->mMinType = NEBULA_FILTER_LINEAR;
-    pTexture->mMagType = NEBULA_FILTER_LINEAR;
+    pTexture = GameTexture::createTarget(scale, scale);
+    pTexture->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
 
     return pTexture;
 }

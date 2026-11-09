@@ -6,7 +6,7 @@ class WarpPod;
 class ActorCameraInfo;
 class PlacementId;
 class LiveActorGroup;
-class JUTTexture;
+class GameTexture;
 
 class WarpPodMgr : public NameObj {
 public:
@@ -69,7 +69,7 @@ public:
     bool mIsPairCameraOn;
     bool mIsAppearDemoPending;
     WarpPod* mPairPod;
-    JUTTexture* mGlowTexture;
+    GameTexture* mGlowTexture;
 };
 
 namespace MR {

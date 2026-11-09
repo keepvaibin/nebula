@@ -1,4 +1,4 @@
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/Screen/SystemWipeHolder.hpp"
 #include "Game/Screen/WipeFade.hpp"
 #include "Game/Screen/WipeHolderBase.hpp"
@@ -62,7 +62,7 @@ void SystemWipeHolder::drawGameScreenCapture() const {
     }
 
     MR::setupScreen2D();
-    JUTTexture texture(MR::getScreenResTIMG());
+    GameTexture texture(MR::getScreenResTIMG());
     MR::drawScreenPicture(texture);
 }
 

@@ -23,7 +23,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
 
@@ -358,7 +358,7 @@ namespace {
     // runtime/src/render/materials/water_road.hlsl at high or low detail: blended by alpha where above zero, depth
     // tested and written, no culling.
     SiteMaterial roadMaterial(const WaterRoad* pRoad, bool high, u8 alpha) {
-        JUTTexture screen(MR::getScreenResTIMG());
+        GameTexture screen(MR::getScreenResTIMG());
         SiteMaterial material;
         material.init(NEBULA_SHADER_WATER_ROAD, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                            NEBULA_CULL_NONE);
@@ -440,9 +440,9 @@ void WaterRoad::init(const TableIter& rIter) {
     MR::setEffectHostMtx(this, "Top", mBaseMtx);
     MR::setEffectHostMtx(this, "End", mBaseMtx);
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
-    mIndirect = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
-    mEnvMap = new JUTTexture(MR::loadTexFromArc("WaterWave", "EnvMap.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mIndirect = new GameTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
+    mEnvMap = new GameTexture(MR::loadTexFromArc("WaterWave", "EnvMap.bti"));
 
     initSound(3, false);
     mSoundObj = new AudSoundObject(&mCamRailNearestPos, 4, MR::getCurrentHeap());

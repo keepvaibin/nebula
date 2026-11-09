@@ -175,8 +175,8 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     mWaterTex = nullptr;
     mWaterIndTex = nullptr;
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
-    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
+    mWaterTex = new GameTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mWaterIndTex = new GameTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
     initParts();
     initMesh();
 }
@@ -280,7 +280,7 @@ SiteMaterial OceanRingDrawer::loadMaterial() const {
     // the screen behind (texture 1, by texture matrix 3) tinted by color2 and warped by the indirect texture (2, the third
     // scroll) unless the camera is in the water; blended by the vertex alpha where above zero, depth tested and not
     // written, no culling.
-    JUTTexture screen(MR::getScreenResTIMG());
+    GameTexture screen(MR::getScreenResTIMG());
     SiteMaterial material;
     material.init(NEBULA_SHADER_OCEAN_RING, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_NONE);

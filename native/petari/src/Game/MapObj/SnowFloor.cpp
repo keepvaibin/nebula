@@ -7,7 +7,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     const u16 sTextureSize = 128;
@@ -58,11 +58,11 @@ void SnowFloor::init(const TableIter& rIter) {
 
     initLocalPoint(rIter);
     drawSetup();
-    mTextures[0] = new JUTTexture(::sTextureSize, ::sTextureSize);
-    mTextures[1] = new JUTTexture(::sTextureSize, ::sTextureSize);
+    mTextures[0] = new GameTexture(::sTextureSize, ::sTextureSize);
+    mTextures[1] = new GameTexture(::sTextureSize, ::sTextureSize);
     mTexture = mTextures[0];
     mTextureIndex = 0;
-    mImage = mTexture->mImage;
+    mImage = mTexture->image();
     mWalkingResist = 0.0f;
     mResistFrames = 0;
     mCheckCount = 0;
@@ -466,7 +466,7 @@ void SnowFloor::doErase(Vec2f point, f32 radius, f32 amount) {
 void SnowFloor::createTexture() {
     mTextureIndex = 1 - mTextureIndex;
     mTexture = mTextures[mTextureIndex];
-    mImage = mTexture->mImage;
+    mImage = mTexture->image();
 
     if (mDirtyFrames != 0) {
         mDirtyFrames--;

@@ -15,7 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     static const f32 sDefaultPointIntervalU = 40.0f;
@@ -154,9 +154,9 @@ void Flag::init(const TableIter& rIter) {
     }
 
     if (mObjName != nullptr) {
-        mTexture = new JUTTexture(MR::loadTexFromArc(mObjName));
+        mTexture = new GameTexture(MR::loadTexFromArc(mObjName));
     } else {
-        mTexture = new JUTTexture(MR::loadTexFromArc("Flag", "Flag.bti"));
+        mTexture = new GameTexture(MR::loadTexFromArc("Flag", "Flag.bti"));
     }
 
     initSound(4, false);

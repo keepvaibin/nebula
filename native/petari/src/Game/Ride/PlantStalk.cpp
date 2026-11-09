@@ -12,7 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     static const f32 sGrowSpeedMin = 15.0f;
@@ -202,7 +202,7 @@ void PlantStalk::drawGrowUp(TypedDraw& rDraw) const {
 
 PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("Plant", "PlantStalk.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("Plant", "PlantStalk.bti"));
 
     mMaterial = makeMaterial();
 }

@@ -5,7 +5,7 @@
 #include <nebula_geometry.hpp>
 
 class Color8;
-class JUTTexture;
+class GameTexture;
 class SwingRopePoint;
 
 class Flag : public LiveActor {
@@ -77,7 +77,7 @@ public:
     Color8* mColors;
     // Texture coordinates.
     f32* mTexST;
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
     bool mUseAlpha;
     u8 mAlpha;
     f32 mAlphaDistanceNear;

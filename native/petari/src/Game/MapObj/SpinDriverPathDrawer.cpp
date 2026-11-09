@@ -11,7 +11,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 
 namespace {
@@ -20,7 +20,7 @@ namespace {
     // culling.
     SiteMaterial sPathMaterial;
 
-    void sendPathMaterial(JUTTexture* pColor, JUTTexture* pMask) {
+    void sendPathMaterial(GameTexture* pColor, GameTexture* pMask) {
         SiteMaterial& material = sPathMaterial;
         material.init(NEBULA_SHADER_SPIN_DRIVER_PATH, SiteMaterial::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL,
                            false, NEBULA_CULL_NONE);
@@ -34,10 +34,10 @@ SpinDriverPathDrawInit::SpinDriverPathDrawInit()
     : NameObj("スピンドライバーレール描画初期化"), mOrangeTexture(), mGreenTexture(), mPinkTexture(), mMaskTexture(), mIsPathAtOpa() {
     MR::registerPreDrawFunction(MR::Functor(this, &SpinDriverPathDrawInit::initDraw), MR::DrawType_SpinDriverPathDrawer);
 
-    mOrangeTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "NormalColor.bti"));
-    mGreenTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "Green.bti"));
-    mPinkTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "Pink.bti"));
-    mMaskTexture = new JUTTexture(MR::loadTexFromArc("SpinDriverPath", "Mask.bti"));
+    mOrangeTexture = new GameTexture(MR::loadTexFromArc("SpinDriverPath", "NormalColor.bti"));
+    mGreenTexture = new GameTexture(MR::loadTexFromArc("SpinDriverPath", "Green.bti"));
+    mPinkTexture = new GameTexture(MR::loadTexFromArc("SpinDriverPath", "Pink.bti"));
+    mMaskTexture = new GameTexture(MR::loadTexFromArc("SpinDriverPath", "Mask.bti"));
 }
 
 SpinDriverPathDrawer::SpinDriverPathDrawer(SpinDriverShootPath* pShootPath)

@@ -3,7 +3,7 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
-class JUTTexture;
+class GameTexture;
 class OceanBowlBloomDrawer;
 class OceanBowlPoint;
 class WaterInfo;
@@ -61,9 +61,9 @@ public:
     f32* mVtxTex1Array;
     f32* mVtxTex2Array;
     f32* mVtxTex3Array;
-    JUTTexture* mWaterTex;
-    JUTTexture* mWaterIndirectTex;
-    JUTTexture* mMaskTex;
+    GameTexture* mWaterTex;
+    GameTexture* mWaterIndirectTex;
+    GameTexture* mMaskTex;
     OceanBowlBloomDrawer* mBloomDrawer;
     bool mIsClipped;  // the camera is in other water or the player is far
 };

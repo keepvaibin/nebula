@@ -3,7 +3,7 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
-class JUTTexture;
+class GameTexture;
 
 class WhirlPoolPoint;
 
@@ -32,7 +32,7 @@ public:
     f32 mTexOffsetV1;
     f32 mTexOffsetU2;
     f32 mTexOffsetV2;
-    JUTTexture* mTexture;
-    JUTTexture* mIndirectTexture;
+    GameTexture* mTexture;
+    GameTexture* mIndirectTexture;
     Vec3f mClippingCenter;
 };

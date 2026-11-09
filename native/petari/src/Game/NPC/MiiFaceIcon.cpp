@@ -2,7 +2,7 @@
 #include "Game/Mii/MiiHead.hpp"
 #include "Game/NPC/MiiFaceIconHolder.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
 
 MiiFaceIcon::MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName)

@@ -6,7 +6,7 @@
 #include <nebula_game_api.h>
 #include <NebulaGpu.h>
 
-class JUTTexture;
+class GameTexture;
 
 namespace TDDraw {
     void close();
@@ -26,8 +26,8 @@ namespace TDDraw {
     void drawSpherePart(TypedDraw&, const Pos3f&, f32, f32, f32, f32, f32, u32, u32, u32);
     void drawSphere(TypedDraw&, const Vec3f&, f32, u32, u32);
     void drawSphere3D(TypedDraw&, Vec3f, f32, u32, u32);
-    void drawTexture(TypedDraw&, const Vec2f&, JUTTexture*, const Vec2f&);
-    void drawTexture3D(TypedDraw&, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32, JUTTexture*, bool, bool);
+    void drawTexture(TypedDraw&, const Vec2f&, GameTexture*, const Vec2f&);
+    void drawTexture3D(TypedDraw&, const Vec3f&, const Vec3f&, const Vec3f&, f32, f32, GameTexture*, bool, bool);
     void drawFillBox(TypedDraw&, const Vec3f&, const Vec3f&, u32);
     void drawFillBox(TypedDraw&, const Vec2f&, const Vec2f&, u32);
     void drawFillBox3D(TypedDraw&, const Vec3f&, const Vec3f&, const Vec3f&, const Vec3f&, u32);

@@ -12,6 +12,9 @@ namespace NebulaFrameClock {
     // The same height as a float, and the width the layout files are authored for.
     const f32 cScreenHeight = 456.0f;
     const f32 cLayoutWidth = 608.0f;
+    // A whole frame in the texels effects' offsets were authored in (an effect target's share of the frame is sized in
+    // them): this many across, cScreenHeight down.
+    const f32 cEffectTexelsAcross = 640.0f;
     // getScreenWidth at 16:9.
     const s32 cWideScreenWidth = 832;
     // The game's fixed step: its simulation runs this many steps a second, whatever the display's rate (the host

@@ -5,7 +5,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Color.hpp"
 
-class JUTTexture;
+class GameTexture;
 
 class WaterCameraFilter : public LiveActor {
 public:
@@ -26,6 +26,6 @@ public:
     f32 mWaterAlpha;
     f32 mWavePhase;
     Color8 mWaterColor;
-    JUTTexture* mScreenTex;
-    JUTTexture* mFilterTex;
+    GameTexture* mScreenTex;
+    GameTexture* mFilterTex;
 };

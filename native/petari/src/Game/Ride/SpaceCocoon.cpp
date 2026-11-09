@@ -24,7 +24,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
@@ -174,7 +174,7 @@ void SpaceCocoon::init(const TableIter& rIter) {
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "狙い中");    // "aim"
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "攻撃中");    // "attack"
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("SpaceCocoon", "SpaceCocoon.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("SpaceCocoon", "SpaceCocoon.bti"));
     makeActorAppeared();
 }
 

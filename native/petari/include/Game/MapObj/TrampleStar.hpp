@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-class JUTTexture;
+class GameTexture;
 
 class TrampleStar : public LiveActor {
 public:
@@ -53,7 +53,7 @@ public:
     f32* mDeformSpeed;
     Surface* mSurfaces;
     Surface* mLodSurfaces;
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
     Vec2f* mTexST;
     s16* mVtxOverlap;
     u16 mNumDrawVtxs;

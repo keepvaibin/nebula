@@ -9,7 +9,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     void sendFlake(VertexPCT*& rVtx, const Vec3f& rPoint, u32 alpha, f32 s, f32 t) {
@@ -26,7 +26,7 @@ MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new Vec3f[mPar
 
     mFadeStep = 0;
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("MarineSnow"));
+    mTexture = new GameTexture(MR::loadTexFromArc("MarineSnow"));
 }
 
 void MarineSnow::view() {

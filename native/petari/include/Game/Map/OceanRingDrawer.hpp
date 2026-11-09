@@ -2,7 +2,7 @@
 
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -57,8 +57,8 @@ public:
     f32 mTex1U;
     f32 mTex1V;
     f32 mTex2V;
-    JUTTexture* mWaterTex;
-    JUTTexture* mWaterIndTex;
+    GameTexture* mWaterTex;
+    GameTexture* mWaterIndTex;
     // The ring's surface as the renderer draws it from far away.
     SiteMesh< VertexPCT3 > mMesh;
 };

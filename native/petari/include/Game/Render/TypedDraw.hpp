@@ -3,7 +3,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Util/Color.hpp"
 #include <NebulaGpu.h>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <cstddef>
 #include <string.h>
 
@@ -387,7 +387,7 @@ struct SiteMaterial {
 
     // Coordinate matrix `index` among the constants the shader declares from row `first` (three rows each).
     void setMatrix(u32 first, u32 index, const f32 (*pMtx)[4]);
-    void setTexture(u32 slot, const JUTTexture* pTexture);
+    void setTexture(u32 slot, const GameTexture* pTexture);
     void setTexture(u32 slot, const SiteTexture& rTexture);
     // Constants from float `at`: a colour as 0-1 values.
     void setColor(u32 at, u8 r, u8 g, u8 b, u8 a);
