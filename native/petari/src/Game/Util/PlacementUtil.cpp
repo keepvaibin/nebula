@@ -348,13 +348,6 @@ bool MR::isEqualObjectName(const TableIter& rIter, const char* pOtherName) {
     return isEqualStringCase(objName, pOtherName);
 }
 
-s32 MR::getDemoGroupID(const TableIter& rIter) {
-    s32 groupID = -1;
-    rIter.getValue< s32 >("DemoGroupId", &groupID);
-
-    return groupID;
-}
-
 s32 MR::getDemoGroupLinkID(const TableIter& rIter) {
     s32 linkID = -1;
     rIter.getValue< s32 >("l_id", &linkID);

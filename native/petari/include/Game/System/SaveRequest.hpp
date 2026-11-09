@@ -9,9 +9,9 @@ class SaveRequest {
 public:
     // What became of a request: the host's save statuses.
     enum Result {
-        Result_Done,       // read, written or deleted
+        Result_Done,       // read or written
         Result_Pending,    // still with the host
-        Result_NoFile,     // a read or a delete found no file
+        Result_NoFile,     // a read found no file
         Result_Corrupted,  // the file is larger than the game's save (not this game's save data)
         Result_Failed,     // the host could not read or write it
     };
@@ -26,12 +26,10 @@ public:
     // The name is held, not copied: it must last until the request is done.
     const char* setWriteSeq(const char*, const void*, u32);
     const char* setReadSeq(const char*, void*, u32, u32*);
-    SaveRequest* setDelete(const char*);
 
 private:
     enum Type {
         Type_None,
-        Type_Delete,
         Type_Write,
         Type_Read,
     };

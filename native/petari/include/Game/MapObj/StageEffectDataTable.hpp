@@ -15,8 +15,7 @@ namespace MR {
 
         static bool isExistStageEffectSeData(const char* pObjectName);
         static bool isExistStageEffectData(const char* pObjectName);
-    
-        static void shakeStartCamera(LiveActor* pActor, const char* pObjectName);
+
         static void shakeStopCamera(LiveActor* pActor, const char* pObjectName);
         static void shakeCameraMoving(NameObj* pActor, const char* pObjectName);
         static void stopShakingCameraMoving(NameObj* pActor, const char* pObjectName);

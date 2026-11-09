@@ -15,7 +15,6 @@ class StarPieceShooter;
 namespace MR {
     StarPieceDirector* getStarPieceDirector();
 
-    void createStarPiece();
     StarPiece* getDeadStarPiece();
 
     void resetChasingStarPiece();

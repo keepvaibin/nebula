@@ -17,7 +17,6 @@ public:
     InputStick(const PlayerInput*);
 
     void update();
-    bool isChanged() const;
 
     const PlayerInput* mPad;
     Vec2f mStick;
