@@ -69,5 +69,5 @@ void KoopaFigureBall::control() {
 }
 
 MtxPtr KoopaFigureBall::getBaseMtx() const {
-    return (MtxPtr)&mBaseMtx;
+    return const_cast< MtxPtr >(mBaseMtx.mMtx);
 }

@@ -14,7 +14,7 @@ public:
     virtual void kill();
     virtual void makeActorDead();
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)mBaseMtx.mMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
     virtual void control();
     virtual void calcAndSetBaseMtx();

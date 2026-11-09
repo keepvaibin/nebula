@@ -17,7 +17,7 @@ public:
     virtual void init(const TableIter& rIter);
     virtual void control();
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&mBaseMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
 
     void exeWait() {

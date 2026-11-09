@@ -8,7 +8,7 @@ namespace {
 
 CameraRegisterHolder::CameraRegisterHolder(const char* pName) : NameObj(pName) {
     mDummyMatrix.identity();
-    declareMtxReg(::cDummyMtxRegName, reinterpret_cast< MtxPtr >(&mDummyMatrix));
+    declareMtxReg(::cDummyMtxRegName, mDummyMatrix.toMtxPtr());
 
     mDummyVector.zero();
     declareVecReg(::cDummyVecRegName, &mDummyVector);

@@ -261,17 +261,13 @@ bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
-    Fxyz point;
-    point.x = localPos.x;
-    point.y = localPos.y;
-    point.z = localPos.z;
     f32 distance;
     KC_PrismData* prism = nullptr;
     u8 classification;
 
     if (1.0f < averageScale) {
         f32 radius = 20.0f * averageScale;
-        mServer->checkSphereWithThickness(&point, radius, averageScale, 1, &prism, &distance, &classification, 2.0f * radius);
+        mServer->checkSphereWithThickness(&localPos, radius, averageScale, 1, &prism, &distance, &classification, 2.0f * radius);
         if (prism == nullptr) {
             return false;
         }
@@ -281,7 +277,7 @@ bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
         Vec3f normal(*mServer->getFaceNormal(prism));
         distance = -offset.x * normal.x - offset.y * normal.y - offset.z * normal.z;
     } else {
-        prism = mServer->checkPoint(&point, averageScale, &distance);
+        prism = mServer->checkPoint(&localPos, averageScale, &distance);
         if (prism == nullptr) {
             return false;
         }
@@ -383,7 +379,7 @@ u32 CollisionParts::checkStrikeBallCore(HitInfo* pHitInfo, u32 maxHits, const Ve
                                         const TriangleFilterBase* pFilter, const Vec3f* pDirection) {
     const Vec3f* normal;
     u32 count =
-        mServer->checkSphere(reinterpret_cast< Fxyz* >(const_cast< Vec3f* >(&rPos)), radius, scale, maxHits, pPrisms, pDistances, pClassifications);
+        mServer->checkSphere(&rPos, radius, scale, maxHits, pPrisms, pDistances, pClassifications);
     u32 hitCount = 0;
 
     for (u32 i = 0; i < count; i++) {
@@ -423,12 +419,8 @@ u32 CollisionParts::checkStrikeBallWithThickness(HitInfo* pHitInfo, u32 maxHits,
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
-    Fxyz point;
-    point.x = localPos.x;
-    point.y = localPos.y;
-    point.z = localPos.z;
     f32 scaledRadius = radius * averageScale;
-    u32 count = mServer->checkSphereWithThickness(&point, scaledRadius, averageScale, maxHits, prisms, distances, classifications, thickness);
+    u32 count = mServer->checkSphereWithThickness(&localPos,scaledRadius, averageScale, maxHits, prisms, distances, classifications, thickness);
     f32 inverseScale = 1.0f / averageScale;
     u32 hitCount = 0;
 
@@ -548,7 +540,7 @@ u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles
     Vec3f max;
     mInvBaseMatrix.mult(rMin, min);
     mInvBaseMatrix.mult(rMax, max);
-    u32 count = mServer->checkArea3D(reinterpret_cast< Fxyz* >(&min), reinterpret_cast< Fxyz* >(&max), prisms, maxTriangles);
+    u32 count = mServer->checkArea3D(&min, &max, prisms, maxTriangles);
     if (count == 0) {
         return 0;
     }
@@ -583,7 +575,7 @@ u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTria
         max.y = local.y > max.y ? local.y : max.y;
         max.z = local.z > max.z ? local.z : max.z;
     }
-    u32 count = mServer->checkArea3D(reinterpret_cast< Fxyz* >(&min), reinterpret_cast< Fxyz* >(&max), prisms, maxTriangles);
+    u32 count = mServer->checkArea3D(&min, &max, prisms, maxTriangles);
     if (count == 0) {
         return 0;
     }

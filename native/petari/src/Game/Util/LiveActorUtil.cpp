@@ -724,18 +724,18 @@ namespace MR {
     }
 
     void setBaseTRMtx(LiveActor* pActor, MtxPtr pMtx) {
-        NebulaMtxCopy(pMtx, (MtxPtr)&getModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy(pMtx, getModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseTRMtx(LiveActor* pActor, const Pos3f& rMtx) {
-        NebulaMtxCopy((MtxPtr)rMtx.mMtx, (MtxPtr)&getModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy(rMtx.mMtx, getModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseTRMtx(LiveActor* pActor, const Quat4f& rQuat) {
         Pos3f mtx;
         mtx.setQT(rQuat, pActor->mPosition);
 
-        NebulaMtxCopy((MtxPtr)mtx.mMtx, (MtxPtr)&getModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy(mtx.mMtx, getModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseScale(LiveActor* pActor, const Vec3f& rScale) {
@@ -1129,7 +1129,7 @@ namespace MR {
     }
 
     LiveActorGroup* joinToGroup(LiveActor* pActor, const char* pGroupName) {
-        LiveActorGroup* pGroup = (LiveActorGroup*)NameObjFinder::find(pGroupName);
+        LiveActorGroup* pGroup = static_cast< LiveActorGroup* >(NameObjFinder::find(pGroupName));
         pGroup->registerActor(pActor);
         return pGroup;
     }
@@ -2189,7 +2189,7 @@ namespace MR {
         Pos3f mtx;
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pName, pSensor, mtx, scaleType, 0);
-        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = pMtx;
         return pParts;
     }
 
@@ -2213,7 +2213,7 @@ namespace MR {
         const char* pCollisionName = "MoveLimit";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Default, CollisionCategory_MoveLimit);
-        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = pMtx;
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2237,7 +2237,7 @@ namespace MR {
         const char* pCollisionName = "WaterSurface";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Default, CollisionCategory_WaterSurface);
-        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = pMtx;
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2261,7 +2261,7 @@ namespace MR {
         const char* pCollisionName = "Sunshade";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Default, CollisionCategory_Sunshade);
-        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = pMtx;
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);

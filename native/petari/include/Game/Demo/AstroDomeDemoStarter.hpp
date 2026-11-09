@@ -13,7 +13,7 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)mBaseMtx.mMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     };
     virtual void calcAndSetBaseMtx();
 

@@ -344,7 +344,7 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
             NebulaMtxCopy(pMtx, getBaseMtx());
 
             Vec3f yDir;
-            reinterpret_cast< Pos3f* >(getBaseMtx())->getYDir(yDir);
+            MR::extractMtxYDir(getBaseMtx(), &yDir);
             MR::addTransMtx(getBaseMtx(), yDir * -60.0f);
 
             pMtx = MR::tmpMtxScale(0.8f, 0.8f, 0.8f);
@@ -354,7 +354,7 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
             NebulaMtxCopy(pMtx, getBaseMtx());
 
             Vec3f yDir;
-            reinterpret_cast< Pos3f* >(getBaseMtx())->getYDir(yDir);
+            MR::extractMtxYDir(getBaseMtx(), &yDir);
             MR::addTransMtx(getBaseMtx(), yDir * -50.0f);
 
             pMtx = MR::tmpMtxScale(0.8f, 0.8f, 0.8f);

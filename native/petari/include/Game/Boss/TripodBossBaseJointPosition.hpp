@@ -11,7 +11,7 @@ public:
     virtual void initAfterPlacement();
 
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&mMtx;
+        return const_cast< MtxPtr >(mMtx.mMtx);
     }
 
     virtual void control();

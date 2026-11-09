@@ -33,7 +33,7 @@ void DinoPackunTailPart::control() {
 }
 
 JointController* DinoPackunTailPart::createJointControllerOwn(LiveActor* pActor, const char* pJointName) {
-    return MR::createJointDelegator((DinoPackunTailNode*)this, pActor, &DinoPackunTailNode::turnJointLocalXDir, &DinoPackunTailNode::calcJointScale,
+    return MR::createJointDelegator(static_cast< DinoPackunTailNode* >(this),pActor, &DinoPackunTailNode::turnJointLocalXDir, &DinoPackunTailNode::calcJointScale,
                                     pJointName);
 }
 

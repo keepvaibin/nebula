@@ -184,7 +184,7 @@ void KoopaJrShip::initKoopaJr(const TableIter& rIter) {
 
 void KoopaJrShip::initKameck(const TableIter& rIter) {
     for (s32 i = 0; i < 2; i++) {
-        Kameck* kameck = (Kameck*)MR::createFireBallBeamKameck("カメック[クッパＪｒシップ]");
+        Kameck* kameck = static_cast< Kameck* >(MR::createFireBallBeamKameck("カメック[クッパＪｒシップ]"));
         MR::initChildObj(kameck, rIter, i);
         kameck->makeActorDead();
         mKamecks.push_back(kameck);

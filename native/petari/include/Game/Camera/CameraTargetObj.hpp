@@ -166,7 +166,7 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const {
-        return (const MtxPtr)mMtx.mMtx;
+        return const_cast< MtxPtr >(mMtx.mMtx);
     }
 
     void setTargetMtx(MtxPtr);
