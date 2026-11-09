@@ -352,7 +352,7 @@ CameraParamChunkEvent* CameraDirector::getEventParameter(s32 zoneID, const char*
     CameraParamChunkID_Tmp chunkID = CameraParamChunkID_Tmp();
     chunkID.createEventID(zoneID, pName);
 
-    return reinterpret_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
+    return static_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 }
 
 void CameraDirector::requestToResetCameraMan() {

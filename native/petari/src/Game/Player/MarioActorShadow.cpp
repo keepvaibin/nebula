@@ -32,7 +32,7 @@ void MarioActor::initShadow() {
 
     mSimpleModelHolder->initWithoutIter();
 
-    mSimpleModel = reinterpret_cast< PlayerModel* >(MR::getModel(mSimpleModelHolder));
+    mSimpleModel = static_cast< PlayerModel* >(MR::getModel(mSimpleModelHolder));
     PlayerModel* pSource = mModels[0];
     PlayerModel* pShadow = mSimpleModel;
     pShadow->copyExtraPoses(pSource);

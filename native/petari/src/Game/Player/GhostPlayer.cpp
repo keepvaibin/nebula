@@ -593,7 +593,7 @@ void GhostPlayer::draw() const {
         return;
     }
 
-    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(this));
+    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(this));
     model->viewCalc2();
     model->mDrawPasses = 0;
     model->directDraw();
