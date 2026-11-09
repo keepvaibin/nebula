@@ -5,29 +5,32 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/Particle/ParticleResources.hpp"
-#include <cstring>
-
-namespace {
-    // Byte-wise order of two names: negative, zero or positive.
-    int compareNames(const char* pA, const char* pB) {
-        const u8* pFirst = reinterpret_cast< const u8* >(pA);
-        const u8* pSecond = reinterpret_cast< const u8* >(pB);
-        while (*pFirst != 0 && *pFirst == *pSecond) {
-            pFirst++;
-            pSecond++;
-        }
-        return static_cast< int >(*pFirst) - static_cast< int >(*pSecond);
-    }
-};  // namespace
+#include <nebula_module.h>
 
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mEffectNums(nullptr), mNumEffectNums(), mGroupIndex(),
-      mNextRows(nullptr) {
+      mNextRows(nullptr), mUserIndices() {
     AssetFolder* pArchive = MR::getArchive(pArchiveName);
     mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), NebulaArena::current());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
     mAutoEffectList->attach(pArchive->getResource("AutoEffectList.bcsv"));
     countAutoEffectNum();
+
+    // The game's names are sorted and unique; mods' rows follow them (cook/overlay.rs). A name held twice keeps its first row.
+    const s32 rows = mParticleNames->getNumEntries();
+    const s32 column = rows > 0 ? mParticleNames->searchItemInfo("name") : -1;
+    mUserIndices.reset(column >= 0 ? static_cast< u32 >(rows) : 0);
+    u32 heldTwice = 0;
+    for (s32 row = 0; column >= 0 && row < rows && row < 0xFFFF; row++) {
+        const char* pName = "";
+        mParticleNames->getValueFast(row, column, &pName);
+        if (!mUserIndices.add(pName, static_cast< u32 >(row))) {
+            heldTwice++;
+        }
+    }
+    if (heldTwice != 0) {
+        nebula_log("particle names: %u of %d held twice (the first row is used)\n", heldTwice, rows);
+    }
 }
 
 const char* ParticleResourceHolder::getParticleName(u32 index) const {
@@ -40,49 +43,8 @@ const char* ParticleResourceHolder::getParticleName(u32 index) const {
 }
 
 u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
-    const Table* pInfo = mParticleNames;
-    int first = 0;
-    int last = pInfo->getNumEntries() - 1;
-
-    while (first < last) {
-        const int middle = (first + last) / 2;
-        const char* pMiddleName = "";
-
-        if (!pInfo->getValue(middle, "name", &pMiddleName)) {
-            return 0xFFFF;
-        }
-
-        const int comparison = compareNames(pMiddleName, pName);
-
-        if (comparison == 0) {
-            return middle;
-        }
-
-        if (comparison < 0) {
-            first = middle + 1;
-        } else {
-            last = middle;
-        }
-    }
-
-    const char* pEntryName = "";
-
-    if (!pInfo->getValue(first, "name", &pEntryName)) {
-        return 0xFFFF;
-    }
-
-    if (MR::isEqualString(pEntryName, pName)) {
-        return first;
-    }
-
-    // Mods' particles come after the game's sorted names.
-    for (int row = pInfo->getNumEntries() - 1; row >= 0; row--) {
-        if (pInfo->getValue(row, "name", &pEntryName) && MR::isEqualString(pEntryName, pName)) {
-            return row;
-        }
-    }
-
-    return 0xFFFF;
+    const u32 row = mUserIndices.find(pName);
+    return row != MR::NameIndex::cNoValue ? static_cast< u16 >(row) : 0xFFFF;
 }
 
 // One pass: at most one group per row.

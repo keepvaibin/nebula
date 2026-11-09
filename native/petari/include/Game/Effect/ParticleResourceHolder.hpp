@@ -39,4 +39,5 @@ public:
     int mNumEffectNums;
     MR::NameIndexOf< MR::NameKeyCase > mGroupIndex;  // group name -> its EffectNum
     s32* mNextRows;                                  // per row: the next row of its group, -1 after the last
+    MR::NameIndex mUserIndices;                      // ParticleNames "name" -> its row (the user index), the first row of a name
 };
