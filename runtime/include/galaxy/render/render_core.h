@@ -7,7 +7,6 @@
 
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/frame_pass.h"
-#include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/movie_playback.h"
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/renderer_vk.h"
@@ -526,7 +525,6 @@ private:
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
     std::vector<std::uint32_t> texture_pack_mod_categories_off_;
     std::uint64_t frame_index_ = 0;
-    cadence::Session* cadence_diagnostics_ = nullptr;
     bool initialized_ = false;
     std::atomic<std::uint64_t> stat_pictures_made_{0};
 #if defined(NEBULA_DEV)

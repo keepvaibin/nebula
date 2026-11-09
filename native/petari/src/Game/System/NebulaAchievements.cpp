@@ -189,12 +189,6 @@ namespace {
         }
     }
 
-    s32 getEntryName(char16_t* pDst, s32 capacity, const char* pId) {
-        MR::FormattedName textId;
-        getEntryTextId(&textId, pId);
-        return NebulaText::get(pDst, capacity, textId.c_str());
-    }
-
     // Waits for its pop-up, with its name in the played language.
     void enqueue(const Entry& rEntry) {
         MR::FormattedName textId;

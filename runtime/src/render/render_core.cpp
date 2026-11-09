@@ -30,7 +30,6 @@
 #include "galaxy/host_env.h"
 #include "galaxy/render/host_window.h"
 
-#include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/render/render_config.h"
@@ -219,8 +218,6 @@ bool RenderCore::initialize(int w, int h) {
     if (initialized_) {
         return true;
     }
-
-    cadence_diagnostics_ = cadence::global_session_if_enabled();
 
     reset_session_state();
 
@@ -614,7 +611,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     chunk.black = black;
     const RenderTimingConfig& timing = get_frame_timing_config();
 
-    std::uint64_t diagnostic_queue_wait_ns = 0;
     const std::size_t queue_depth_limit = timing.render_queue_depth;
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -627,8 +623,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
                         return !queued.present_only;
                     }));
         };
-        const std::uint64_t diagnostic_queue_wait_start_ns =
-            cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
         const std::size_t stalled_depth_limit =
             std::max(queue_depth_limit, kStalledRenderQueueDepth);
         const GameWaitTimer game_wait{game_wait_qpc_};
@@ -653,15 +647,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
             }
             queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(stalled_at - now));
         }
-        if (cadence_diagnostics_ != nullptr) {
-            const std::uint64_t diagnostic_queue_wait_end_ns =
-                cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-            diagnostic_queue_wait_ns =
-                diagnostic_queue_wait_end_ns >= diagnostic_queue_wait_start_ns
-                ? diagnostic_queue_wait_end_ns -
-                      diagnostic_queue_wait_start_ns
-                : 0u;
-        }
         if (render_thread_error_ != nullptr) {
             // Rethrow the render thread's failure here rather than leave a frozen display.
             std::exception_ptr error = render_thread_error_;
@@ -684,11 +669,6 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
             return;
         }
         frame_queue_.push_back(std::move(chunk));
-    }
-    if (cadence_diagnostics_ != nullptr) {
-        cadence_diagnostics_->record_phase(
-            cadence::TimingPhase::ProducerQueueWait,
-            diagnostic_queue_wait_ns);
     }
     queue_cv_.notify_one();
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
@@ -2059,7 +2039,6 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
 }
 
 void RenderCore::begin_walk_frame(ListEntry& entry) {
-    const cadence::ScopedPhaseTimer render_begin_timer{cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
     const RenderConfig render = get_render_config();
     enhanced_lighting_ = render.enhanced_lighting;
     pixel_lit_ = render.per_pixel_lighting || render.enhanced_lighting;
@@ -2342,14 +2321,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     render_movie_content_ = entry.prerecorded_movie;
     render_movie_frame_ = entry.movie_frame;
     begin_walk_frame(entry);
-    const std::uint64_t diagnostic_parse_start_ns = cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, core::WalkTime{});
-    if (cadence_diagnostics_ != nullptr) {
-        const std::uint64_t diagnostic_parse_end_ns = cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-        cadence_diagnostics_->record_phase(cadence::TimingPhase::RenderRecords, diagnostic_parse_end_ns >= diagnostic_parse_start_ns
-                                                                                     ? diagnostic_parse_end_ns - diagnostic_parse_start_ns
-                                                                                     : 0u);
-    }
 
     const bool frame_end_present = !chunk.present_swap_chain && picture_made_in_chunk_ && frame_end_presents_.load(std::memory_order_relaxed) &&
                               !interp_on_ && !black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
