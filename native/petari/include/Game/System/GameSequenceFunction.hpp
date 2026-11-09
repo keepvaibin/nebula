@@ -12,7 +12,6 @@ namespace GameSequenceFunction {
     bool isGalaxyCometLand(const char*);
     s32 getEncounterGalaxyCometPowerStarId(const char*);
     const char* getEncounterGalaxyCometName(const char*);
-    s32 getGalaxyCometState(const char*);
     bool isNeedMoviePlayerForStorySequenceEvent();
     bool hasNextDemoForStorySequenceEvent();
     s32 getExecutingStorySequenceEventNum();
