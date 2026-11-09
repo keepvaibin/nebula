@@ -1463,8 +1463,7 @@ void add_layer_rows(ModPlan& plan, const ModInfo& mod, const std::string& langua
 }  // namespace
 
 ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::string& game_id,
-                           const std::string& language) {
-    std::vector<ModInfo> mods = scan_mods(game_id);
+                           const std::string& language, std::vector<ModInfo> mods) {
     g_mods_on.clear();
     for (const ModInfo& mod : mods) {
         if (mod.enabled) g_mods_on.push_back(mod.id);

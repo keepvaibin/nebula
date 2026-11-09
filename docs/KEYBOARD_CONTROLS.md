@@ -55,8 +55,7 @@ Switch and PlayStation show in the settings menu's hints too (with Wii and Auto 
 
 The icons are textures of Nebula's own beside the game's, which keep their content: a texture pack's replacements of the
 game's icons still show with the Wii style, and Nebula's show as drawn unless a pack names them. Nebula paints each of its
-sheets at eight times its size the first time it is drawn; `GALAXY_EXPORT_ART=<folder>` writes those paintings as a pack
-(`pack/`, with previews in `native/` and `hd/`).
+sheets at eight times its size the first time it is drawn.
 
 A tap of Plus or Minus pauses;
 a press made while A or B is held pauses once they are let go.

@@ -190,8 +190,9 @@ struct ModPlan {
 };
 // The language played, for a .luma's translated text: as language_folder takes it.
 void set_played_language(unsigned language) noexcept;
+// The plan over the list scan_mods(game_id) gave at the start (the played language set): the start scans once.
 [[nodiscard]] ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::string& game_id,
-                                         const std::string& language);
+                                         const std::string& language, std::vector<ModInfo> scanned);
 // The plan as the cooker reads it (its first line the game id), and what names this plan's result: the files' sizes
 // and times with it, so that a changed mod is cooked again.
 [[nodiscard]] std::string plan_text(const ModPlan& plan, const std::string& game_id);
