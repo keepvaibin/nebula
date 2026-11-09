@@ -54,6 +54,11 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
         let stem = &change.path[..lower.find(".kcl.").unwrap_or(change.path.len())];
         return Ok(vec![(format!("{stem}.kcl"), collision, false), (format!("{stem}.pa"), attributes, false)]);
     }
+    // Name.canm.glb: a cutscene's camera, from a glTF camera's animation.
+    if lower.ends_with(".canm.glb") || lower.ends_with(".canm.gltf") {
+        let stem = &change.path[..lower.rfind(".canm.").unwrap_or(change.path.len())];
+        return Ok(vec![(format!("{stem}.canm"), super::gltf::to_camera(bytes, change.source.parent())?, false)]);
+    }
     if lower.ends_with(".gltf") || lower.ends_with(".glb") {
         let file = change.path.rsplit('/').next().unwrap_or(&change.path);
         let stem = file.split('.').next().unwrap_or(file);
@@ -248,13 +253,21 @@ fn message_languages(path: &str, base: Option<&Path>, placed: &[store::Placed]) 
 fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, temporary: &Path, at: &mut u64, placed: &mut Vec<store::Placed>,
                 failed: &mut Vec<(String, String)>, stats: &mut Stats) -> Result<()> {
     let mut merges: Vec<&Change> = changes.iter().filter(|c| c.merge).collect();
-    merges.sort_by_key(|c| c.path.to_ascii_lowercase().ends_with(".jpc"));
+    merges.sort_by_key(|c| {
+        let path = c.path.to_ascii_lowercase();
+        path.ends_with(".jpc") || path.ends_with(".jpc.json")
+    });
     let mut merged: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut first_particle: BTreeMap<PathBuf, u16> = BTreeMap::new();
     let mut cased: BTreeMap<String, String> = BTreeMap::new();
     let lower = |text: &str| text.to_ascii_lowercase();
     for change in merges {
         let result = (|| -> Result<()> {
+            // A picture beside particles written as JSON is one of their textures: their cook reads it.
+            let path = lower(&change.path);
+            if [".png", ".jpg", ".jpeg"].iter().any(|ending| path.ends_with(ending)) {
+                return Ok(());
+            }
             let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
             if let Some(languages) = message_languages(&change.path, base, placed)? {
                 // Every language or none: a merge that fails in one is left out of all.
@@ -275,6 +288,25 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     merged.insert(lower(&path), bytes);
                     cased.insert(lower(&path), path);
                 }
+            } else if lower(&change.path).ends_with(".jpc.json") {
+                // Particles written as JSON: cooked over the game's particles (`like`, its textures by name), then added as a
+                // disc file's are.
+                let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
+                let first = *first_particle.get(&folder).context("new particles need their names: ParticleNames.bcsv.json beside them")?;
+                let jpc_path = change.path[..change.path.len() - ".json".len()].to_string();
+                let key = lower(&jpc_path);
+                let current = match merged.remove(&key) {
+                    Some(current) => current,
+                    None => merge_start(&jpc_path, base, temporary, pak, placed)?,
+                };
+                let names_path = format!("{}/ParticleNames.bcsv", jpc_path.rsplit_once('/').map_or("", |(folder, _)| folder));
+                let names = match merged.get(&lower(&names_path)) {
+                    Some(names) => names.clone(),
+                    None => merge_start(&names_path, base, temporary, pak, placed)?,
+                };
+                let game = super::particles::read_nptc(&current)?;
+                let mine = super::particle_json::read(&bytes, &folder, &game, &super::particle_json::names_index(&names)?)?;
+                merged.insert(key, super::merge::add_particles(&current, &super::particles::write(&mine), first)?);
             } else if let Some(table) = lower(&change.path).strip_suffix(".json") {
                 let table_key = table.to_string();
                 let path = change.path[..table.len()].to_string();
@@ -310,7 +342,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
                 merged.insert(key, super::merge::add_particles(&current, &cooked, first)?);
             } else {
-                bail!("only tables (.json), messages (message.bmg.json, messages.json) and particles (.jpc) can be added to");
+                bail!("only tables (.json), messages (message.bmg.json, messages.json) and particles (.jpc, .jpc.json) can be added to");
             }
             Ok(())
         })();

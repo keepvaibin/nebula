@@ -81,7 +81,17 @@ bool make_writable(void* target, std::size_t size) {
     // Copy on write: a signed library's pages can't simply be made writable.
     return vm_protect(mach_task_self(), start, length, FALSE, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY) == KERN_SUCCESS;
 #else
-    return mprotect(reinterpret_cast<void*>(start), length, PROT_READ | PROT_WRITE | PROT_EXEC) == 0;
+    void* const at = reinterpret_cast<void*>(start);
+    if (mprotect(at, length, PROT_READ | PROT_WRITE | PROT_EXEC) == 0) return true;
+    // Android doesn't let an app run a library's page once it is changed (SELinux: no execmod). The page becomes memory of
+    // its own instead, at the same address and with the same bytes, which may be changed and run. mremap puts it in place
+    // in one step: if it can't, the library's page stays as it was.
+    void* const copy = mmap(nullptr, length, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (copy == MAP_FAILED) return false;
+    std::memcpy(copy, at, length);
+    if (mremap(copy, length, length, MREMAP_MAYMOVE | MREMAP_FIXED, at) == at) return true;
+    munmap(copy, length);
+    return false;
 #endif
 }
 
