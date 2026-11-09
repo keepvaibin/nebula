@@ -67,7 +67,8 @@ void LightPointCtrl::updatePointLight() {
         return;
     }
 
-    f32 t = MR::getEaseInOutValue(static_cast< f32 >(mStep) / mBlendTime, 0.0f, 1.0f, 1.0f);
+    // A blend of no time is at its target at once (0 / 0 would load a NaN light for a frame).
+    f32 t = mBlendTime > 0 ? MR::getEaseInOutValue(static_cast< f32 >(mStep) / mBlendTime, 0.0f, 1.0f, 1.0f) : 1.0f;
     blendPointLight(mCurrentInfo, *mPreviousInfo, *mTargetInfo, t);
 
     if (mStep < mBlendTime) {
