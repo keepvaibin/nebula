@@ -47,16 +47,28 @@ namespace {
     }
 
     KoopaFireStairs* emitFireStairs(Koopa* pKoopa, const KoopaBattleMapStair* pStair) {
+        if (pStair == nullptr) {
+            return nullptr;
+        }
+
         Vec3f jointPos(0.0f, 0.0f, 0.0f);
         MR::copyJointPos(pKoopa, "Tongue2", &jointPos);
         return KoopaFunction::emitFireStairsToTarget(pKoopa, pStair, jointPos, false);
     }
 
     KoopaFireStairs* emitDemoFireStairs(Koopa* pKoopa, KoopaBattleMapStair* pStair) {
+        // A level without this demo stair, or a used-up fire pool, skips that part of the demo.
         KoopaFireStairs* pFire = emitFireStairs(pKoopa, pStair);
         MR::startSound(pKoopa, "SE_OJ_KOOPA_BULLET_SHOOT");
-        MR::requestMovementOn(pFire);
-        MR::requestMovementOn(pStair);
+
+        if (pFire != nullptr) {
+            MR::requestMovementOn(pFire);
+        }
+
+        if (pStair != nullptr) {
+            MR::requestMovementOn(pStair);
+        }
+
         return pFire;
     }
 }  // namespace
