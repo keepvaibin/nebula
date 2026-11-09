@@ -316,6 +316,7 @@ private:
     std::vector<core::StaticSlot> walk_constants_;
     std::vector<std::uint8_t> walk_constants_known_;
     std::vector<std::uint32_t> walk_material_at_;  // per entry: its rows' place in walk_lerped_, the list's, or not yet
+    std::vector<std::byte> walk_ring_stage_;        // the ring's vertices with positions moved at t, before they are copied out
     std::byte* walk_ring_cpu_ = nullptr;            // this walk's copies of the ring's vertices and indices
     std::uint32_t* walk_index_cpu_ = nullptr;
     std::uint64_t walk_view_stamp_ = 0u;

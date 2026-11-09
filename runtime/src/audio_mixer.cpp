@@ -294,7 +294,10 @@ std::span<const float> AudioMixer::end_frame() {
         const double at = origin + static_cast<double>(j) * step;
         const auto whole = static_cast<std::size_t>(at);
         const float* w = stream_kernel_.weights(at - static_cast<double>(whole));
-        const std::size_t first = whole - (taps / 2u - 1u);
+        // Under 32 kHz the carried remainder can be below -1 (a step over one sample), putting the first tap before the
+        // history: the taps then start at its first sample.
+        const std::size_t lead = taps / 2u - 1u;
+        const std::size_t first = whole >= lead ? whole - lead : 0u;
         float l = 0.0f;
         float r = 0.0f;
         for (std::size_t k = 0; k < taps; ++k) {
