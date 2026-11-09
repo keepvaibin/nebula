@@ -1,6 +1,6 @@
 //! A modern model in place of the game's own format: glTF 2.0 (`.gltf` with its files, or `.glb`) read straight into
-//! `ModelIr` and `ClipIr`, with a clip for each animation. Triangles, one texture and colour per material, skins and node
-//! animation. Lengths are metres in glTF: one metre is 100 of the game's units. A glTF triangle winds counter-clockwise;
+//! `ModelIr` and `ClipIr`, with a clip for each animation. Triangles, a colour and up to sixteen texture layers per
+//! material (the base colour texture, then `extras.nebula.textures`), skins and node animation. Lengths are metres in glTF: one metre is 100 of the game's units. A glTF triangle winds counter-clockwise;
 //! the game's wind clockwise (measured on Kuribo, Coin and Mario: 650 to 2, 268 to 0, 4514 to 363).
 
 use super::clip::{ClipIr, Track, KIND_JOINTS};

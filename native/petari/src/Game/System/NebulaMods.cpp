@@ -177,24 +177,18 @@ namespace {
     class PluginActor : public LiveActor {
     public:
         PluginActor(const char* pName, const NebulaObjectClass* pClass)
-            : LiveActor(pName), mClass(pClass), mState(0), mStateFrames(0), mUseFront(false), mFront(0.0f, 0.0f, 1.0f) {
-            for (int i = 0; i < 8; i++) {
-                mArgs[i] = -1;
-            }
+            : LiveActor(pName), mClass(pClass), mState(0), mStateFrames(0), mPlacementRow(-1), mUseFront(false),
+              mFront(0.0f, 0.0f, 1.0f) {
             sPluginActorTable = *reinterpret_cast< void** >(this);
         }
 
         virtual void init(const TableIter& rIter) {
             if (rIter.isValid()) {
                 MR::initDefaultPos(this, rIter);
-                MR::getPlacementArg0NoInit(rIter, &mArgs[0]);
-                MR::getPlacementArg1NoInit(rIter, &mArgs[1]);
-                MR::getPlacementArg2NoInit(rIter, &mArgs[2]);
-                MR::getPlacementArg3NoInit(rIter, &mArgs[3]);
-                MR::getPlacementArg4NoInit(rIter, &mArgs[4]);
-                MR::getPlacementArg5NoInit(rIter, &mArgs[5]);
-                MR::getPlacementArg6NoInit(rIter, &mArgs[6]);
-                MR::getPlacementArg7NoInit(rIter, &mArgs[7]);
+                // Its placement row, for placement_number and placement_text: the table's data lives as long as the stage.
+                mPlacement.mData = rIter.mInfo->mData;
+                mPlacement.mName = rIter.mInfo->mName;
+                mPlacementRow = rIter.mIndex;
                 MR::useStageSwitchWriteA(this, rIter);
                 MR::useStageSwitchWriteB(this, rIter);
                 MR::useStageSwitchWriteDead(this, rIter);
@@ -330,7 +324,8 @@ namespace {
         const NebulaObjectClass* mClass;
         s32 mState;
         s32 mStateFrames;
-        s32 mArgs[8];
+        Table mPlacement;
+        s32 mPlacementRow;
         bool mUseFront;
         Vec3f mFront;
         void* mData = nullptr;
@@ -1179,9 +1174,51 @@ namespace {
         }
     }
 
-    int32_t apiObjectArg(NebulaActor* pActor, int32_t index) {
+    // A column of the object's placement row by its name (Obj_arg0, CommonPath_ID, ShapeModelNo, ...): a number column
+    // as a number (its kind's width and sign), a text column as its words.
+    int32_t apiPlacementNumber(NebulaActor* pActor, const char* pColumn, double* pValue) {
         const PluginActor* pPlugin = asPluginActor(pActor);
-        return pPlugin != nullptr && index >= 0 && index < 8 ? pPlugin->mArgs[index] : -1;
+        if (pPlugin == nullptr || pColumn == nullptr || pValue == nullptr) {
+            return 0;
+        }
+        const TableIter row(&pPlugin->mPlacement, pPlugin->mPlacementRow);
+        switch (pPlugin->mPlacement.getColumnKind(pColumn)) {
+        case TableKind_Int: {
+            s32 value = 0;
+            if (!row.getValue(pColumn, &value)) {
+                return 0;
+            }
+            *pValue = value;
+            return 1;
+        }
+        case TableKind_Field: {
+            u32 value = 0;
+            if (!row.getValue(pColumn, &value)) {
+                return 0;
+            }
+            *pValue = value;
+            return 1;
+        }
+        case TableKind_Float: {
+            f32 value = 0.0f;
+            if (!row.getValue(pColumn, &value)) {
+                return 0;
+            }
+            *pValue = value;
+            return 1;
+        }
+        default:
+            return 0;
+        }
+    }
+
+    const char* apiPlacementText(NebulaActor* pActor, const char* pColumn) {
+        const PluginActor* pPlugin = asPluginActor(pActor);
+        if (pPlugin == nullptr || pColumn == nullptr || pPlugin->mPlacement.getColumnKind(pColumn) != TableKind_Text) {
+            return nullptr;
+        }
+        const char* pText = nullptr;
+        return TableIter(&pPlugin->mPlacement, pPlugin->mPlacementRow).getValue(pColumn, &pText) ? pText : nullptr;
     }
 
     int32_t apiHasSwitch(NebulaActor* pActor, NebulaSwitch which) {
@@ -1909,7 +1946,8 @@ namespace {
         apiTurnToPlayer,
         apiSetTouchable,
         apiHitPlayer,
-        apiObjectArg,
+        apiPlacementNumber,
+        apiPlacementText,
         apiHasSwitch,
         apiIsSwitchOn,
         apiSetSwitch,

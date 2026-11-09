@@ -154,6 +154,12 @@ static int32_t stage_frame(const NebulaModEventData* data, void* user) {
         say("object dead", game->is_dead(spawned), 0, 0);
         game->appear(spawned);
         say("object dead", game->is_dead(spawned), 0, 0);
+        {
+            /* A spawned object has no row in the level: no column of any name. */
+            double arg = 5.0;
+            say("a spawned object's placement (0 5 1)", game->placement_number(spawned, "Obj_arg0", &arg), (int)arg,
+                game->placement_text(spawned, "name") == 0);
+        }
     }
     if (frames == 470) {
         NebulaActor* with_model;

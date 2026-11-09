@@ -349,8 +349,10 @@ impl TableIr {
     }
 
     /// A mod's `remove` (drops the rows matching any of its sets of columns) and `change` (a list of
-    /// `{ "where": { columns }, "set": { columns } }`), in that order. A row matching nothing is not an error.
-    pub fn edit_rows(&mut self, root: &Value) -> Result<()> {
+    /// `{ "where": { columns }, "set": { columns } }`), in that order. A remove or change that matches no row is not an
+    /// error (another mod's rows may come later), but it is named: what it said, for the log and the Mods screen.
+    pub fn edit_rows(&mut self, root: &Value) -> Result<Vec<String>> {
+        let mut unmatched = Vec::new();
         let matches = |table: &TableIr, row: &[Cell], wanted: &serde_json::Map<String, Value>| -> Result<bool> {
             for (key, value) in wanted {
                 let c = table.column_of(key)?.with_context(|| format!("this table has no column {key}"))?;
@@ -363,11 +365,15 @@ impl TableIr {
         if let Some(remove) = root.get("remove").and_then(Value::as_array) {
             for wanted in remove {
                 let wanted = wanted.as_object().context("each row of remove is a set of columns")?;
-                let mut kept = Vec::with_capacity(self.rows.len());
+                let before = self.rows.len();
+                let mut kept = Vec::with_capacity(before);
                 for row in std::mem::take(&mut self.rows) {
                     if !matches(self, &row, wanted)? {
                         kept.push(row);
                     }
+                }
+                if kept.len() == before {
+                    unmatched.push(format!("remove {} matched no row", Value::Object(wanted.clone())));
                 }
                 self.rows = kept;
             }
@@ -381,16 +387,21 @@ impl TableIr {
                     let c = self.column_of(key)?.with_context(|| format!("this table has no column {key}"))?;
                     sets.push((c, Self::cell(&self.columns[c], key, value)?));
                 }
+                let mut changed = false;
                 for r in 0..self.rows.len() {
                     if matches(self, &self.rows[r], wanted)? {
+                        changed = true;
                         for (c, cell) in &sets {
                             self.rows[r][*c] = cell.clone();
                         }
                     }
                 }
+                if !changed {
+                    unmatched.push(format!("change where {} matched no row", Value::Object(wanted.clone())));
+                }
             }
         }
-        Ok(())
+        Ok(unmatched)
     }
 
     /// A whole table from JSON: `{ "rows": [ { "column": value } ], "columns": { "column": "float" } }`. A column's kind
@@ -485,13 +496,14 @@ pub fn read_rows(text: &[u8]) -> Result<Vec<Value>> {
     root.get("rows").and_then(Value::as_array).cloned().context("it has no rows")
 }
 
-/// A cooked table with a mod's `merge/` file applied: its remove and change, then its rows.
-pub fn merge(table: &[u8], text: &[u8], rows: &[Value]) -> Result<Vec<u8>> {
+/// A cooked table with a mod's `merge/` file applied: its remove and change, then its rows. With it, each remove or
+/// change that matched no row (edit_rows).
+pub fn merge(table: &[u8], text: &[u8], rows: &[Value]) -> Result<(Vec<u8>, Vec<String>)> {
     let root: Value = serde_json::from_slice(text).context("not JSON")?;
     let mut ir = TableIr::from_ntbl(table)?;
-    ir.edit_rows(&root)?;
+    let unmatched = ir.edit_rows(&root)?;
     ir.add_rows(rows)?;
-    Ok(ir.to_ntbl())
+    Ok((ir.to_ntbl(), unmatched))
 }
 
 /// The game's reads of a disc table, old (BCSV, as Game/Util/Table read it in host order) against new (NTBL, as it
@@ -667,13 +679,28 @@ mod tests {
         let cooked = cook(&bcsv(), true).unwrap().unwrap();
         let text = br#"{ "remove": [ { "name": "Kuribo" } ], "change": [ { "where": { "packed": 52 }, "set": { "scale": 3.0 } } ] }"#;
         let rows = vec![serde_json::json!({ "id": 9, "packed": 0x1FF, "name": "Teresa", "missing": 1 })];
-        let merged = TableIr::from_ntbl(&merge(&cooked, text, &rows).unwrap()).unwrap();
+        let (merged, unmatched) = merge(&cooked, text, &rows).unwrap();
+        assert!(unmatched.is_empty());
+        let merged = TableIr::from_ntbl(&merged).unwrap();
         assert_eq!(merged.rows.len(), 2);
         assert_eq!(merged.rows[0][2], Cell::Bits(3.0f32.to_bits()));
         assert_eq!(merged.rows[1][0], Cell::Bits(9));
         assert_eq!(merged.rows[1][3], Cell::Bits(0xFF));
         assert_eq!(merged.rows[1][1], Cell::Text("Teresa".into()));
         assert_eq!(merged.rows[1][2], Cell::Bits(0));
+    }
+
+    #[test]
+    fn a_change_or_remove_matching_no_row_is_named() {
+        let cooked = cook(&bcsv(), true).unwrap().unwrap();
+        let text = br#"{ "remove": [ { "name": "Nobody" } ], "change": [ { "where": { "id": 77 }, "set": { "scale": 3.0 } } ] }"#;
+        let (merged, unmatched) = merge(&cooked, text, &[]).unwrap();
+        assert_eq!(TableIr::from_ntbl(&merged).unwrap().rows.len(), 2);
+        assert_eq!(unmatched.len(), 2);
+        assert!(unmatched[0].starts_with("remove ") && unmatched[0].contains("Nobody"));
+        assert!(unmatched[1].starts_with("change where ") && unmatched[1].contains("77"));
+        // A column the table lacks is still an error.
+        assert!(merge(&cooked, br#"{ "change": [ { "where": { "nope": 1 }, "set": { "id": 1 } } ] }"#, &[]).is_err());
     }
 
     #[test]

@@ -120,7 +120,7 @@ int main() {
     later.plugins[0].api = kPluginApi + 1u;
     check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a plugin for a later game");
     later.plugins[0].api = kPluginApi - 1u;
-    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT, SETTING() IS NOW GET_TUNABLE()",
+    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H",
           "a plugin for plugin API 1 names the replacement");
 
     const std::optional<Manifest> newer = parse_manifest(R"({"format":2,"everything":"different"})");
