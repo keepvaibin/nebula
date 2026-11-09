@@ -656,7 +656,6 @@ public:
     bool mRemoteDemo;  // a remote demo drives him (pad reads stop; readyRemoteDemo)
     Vec3f mRushEndFront;  // the front a rush ends facing
     u16 mRushEndFrontMode;  // 0 keep the base's, 1 keep the up, more: the turn's frames
-    u16 mModelSet;  // a bit per model made (initDrawAndModel and the form inits)
     u16 mPlayerMode;
     u16 mPrevPlayerMode;  // the form before the morph (setPlayerMode)
     u16 mMorphTimer;  // frames left of the morph flash

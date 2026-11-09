@@ -47,7 +47,6 @@ public:
     Vec2f mBrightCenter;
     Vec2f mNowCenter;
     f32 mBrightness;
-    bool mIsNotVisible;
     Vec3f mDrawPos;
     f32 mDrawRadius;
 };

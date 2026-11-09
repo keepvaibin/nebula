@@ -17,8 +17,7 @@ public:
     virtual CameraTargetObj* calc();
     virtual void setParamFromChunk(const CameraParamChunk*);
 
-    void setParam(s32 cameraType, f32 dist, f32 angleXRange, f32 angleYRange, f32 angleX, f32 speedBlendRate, f32 blendFriction, bool isVertical,
-                  f32 angleYMin) {
+    void setParam(s32 cameraType, f32 dist, f32 angleXRange, f32 angleYRange, f32 angleX, f32 speedBlendRate, f32 blendFriction, f32 angleYMin) {
         mCameraType = cameraType;
         mDist = dist;
         mAngleXRange = angleXRange;
@@ -26,7 +25,6 @@ public:
         mAngleX = angleX;
         mSpeedBlendRate = speedBlendRate;
         mBlendFriction = blendFriction;
-        mIsVertical = isVertical;
         mAngleYMin = angleYMin;
     }
 
@@ -43,6 +41,5 @@ public:
     f32 mAngleX;
     f32 mSpeedBlendRate;
     f32 mBlendFriction;
-    bool mIsVertical;
     f32 mAngleYMin;
 };

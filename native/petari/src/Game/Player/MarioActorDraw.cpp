@@ -87,14 +87,11 @@ void MarioActor::initDrawAndModel() {
     mTornadoMario = nullptr;
     initFireBall();
 
-    mModelSet |= 0x4;
-
     initBeeMario();
     initIceMario();
     initInvincibleMario();
     initHopperMario();
     initTeresaMario();
-    mModelSet |= 0x80;
     initBoneMario();
     initTornadoMario();
     initModPowerUpModels();
@@ -166,7 +163,6 @@ void MarioActor::initBeeMario() {
     mBeeWing->makeActorDead();
 
     mBeeWingAnim = 0;
-    mModelSet |= 0x10;
 }
 
 void MarioActor::initHopperMario() {
@@ -196,7 +192,6 @@ void MarioActor::initHopperMario() {
     mHopperModel->kill();
     MR::hideModel(mHopperModel);
     MR::hideJoint(mHopperModel, "Face0");
-    mModelSet |= 0x20;
 }
 
 void MarioActor::initIceMario() {
@@ -235,7 +230,6 @@ void MarioActor::initIceMario() {
     }
 
     mIceStepIndex = 0;
-    mModelSet |= 0x8;
 }
 
 void MarioActor::initInvincibleMario() {
@@ -266,7 +260,6 @@ void MarioActor::initInvincibleMario() {
     mInvincibleModel->kill();
     MR::hideModel(mInvincibleModel);
     MR::startBrk(mInvincibleModel, "InvincibleMario");
-    mModelSet |= 0x2;
 }
 
 void MarioActor::initTeresaMario() {
@@ -286,7 +279,6 @@ void MarioActor::initTeresaMario() {
     mTeresaBlinkTimer = 0;
 
     MR::initShadowVolumeSphere(mTeresaModel, 90.0f);
-    mModelSet |= 0x40;
     initTeresaMarioAnimation();
 }
 
@@ -295,7 +287,6 @@ void MarioActor::initTornadoMario() {
     mTornadoMario = new TornadoMario(modelName);
     mTornadoMario->initWithoutIter();
     mTornadoEnd = 0;
-    mModelSet |= 0x200;
 }
 
 void MarioActor::initBoneMario() {
@@ -313,7 +304,6 @@ void MarioActor::initBoneMario() {
     mModels[1] = model;
     mBoneModel->kill();
     MR::hideModel(mBoneModel);
-    mModelSet |= 0x100;
 }
 
 void MarioActor::initModPowerUpModels() {

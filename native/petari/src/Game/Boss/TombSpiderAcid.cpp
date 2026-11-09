@@ -11,7 +11,7 @@ namespace {
     const s32 sStepToEndAcidGround = 30;
 };  // namespace
 
-TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsGlandReady(), mIsEmitOn(), mIsActive(), mStateChangeTimer() {
+TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsEmitOn(), mIsActive(), mStateChangeTimer() {
     mMouthEffectMtx.identity();
     mGlandFrontLEffectMtx.identity();
     mGlandFrontREffectMtx.identity();
@@ -26,7 +26,6 @@ TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsGland
 }
 
 void TombSpiderAcid::start() {
-    mIsGlandReady = true;
     mIsEmitOn = true;
     mStateChangeTimer = 0;
 }
@@ -37,7 +36,6 @@ void TombSpiderAcid::startGland() {
 }
 
 void TombSpiderAcid::end() {
-    mIsGlandReady = false;
     mIsEmitOn = false;
     mStateChangeTimer = 0;
 }

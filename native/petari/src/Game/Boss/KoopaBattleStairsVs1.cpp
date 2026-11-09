@@ -72,7 +72,7 @@ namespace NrvKoopaBattleStairsVs1 {
 
 // calcFireStartPos moves Koopa to each landing in turn; he is left on landing 2 until the demo places him.
 KoopaBattleStairsVs1::KoopaBattleStairsVs1(Koopa* pKoopa)
-    : KoopaBattleStairsBase(pKoopa), mFarBattleMapStair(), mNearBattleMapStair(), mFarFireStairs(), mNearFireStairs(), mFireStair(), mIsJumpRequested(),
+    : KoopaBattleStairsBase(pKoopa), mFarBattleMapStair(), mNearBattleMapStair(), mFireStair(), mIsJumpRequested(),
       mStairNum(), mAttackCount(), mLandingIndex(), mOldPosition(0.0f, 0.0f, 0.0f), mNewPosition(0.0f, 0.0f, 0.0f), mNewDirection(0.0f, 0.0f, 1.0f) {
     initNerve(GET_NERVE(KoopaBattleStairsVs1, KoopaBattleStairsVs1NrvWaitDemo));
 
@@ -117,11 +117,11 @@ void KoopaBattleStairsVs1::exeWaitDemo() {
 
 void KoopaBattleStairsVs1::exeDemo() {
     if (MR::isStep(this, ::cDemoFarFireStep)) {
-        mFarFireStairs = ::emitDemoFireStairs(mKoopa, mFarBattleMapStair);
+        ::emitDemoFireStairs(mKoopa, mFarBattleMapStair);
     }
 
     if (MR::isStep(this, ::cDemoNearFireStep)) {
-        mNearFireStairs = ::emitDemoFireStairs(mKoopa, mNearBattleMapStair);
+        ::emitDemoFireStairs(mKoopa, mNearBattleMapStair);
     }
 
     if (MR::isBckStopped(mKoopa)) {

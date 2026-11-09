@@ -37,7 +37,6 @@ namespace NrvFlipPanelObserver {
 
 FlipPanel::FlipPanel(const char* pName) : MapObjActor(pName) {
     mDelegator = 0;
-    mFlipPanelGroup = 0;
     mIsPlayerOn = 0;
     mIsFlipped = 0;
     mJumpCheckCount = 0;
@@ -57,7 +56,7 @@ void FlipPanel::init(const TableIter& rIter) {
     mDelegator = MR::createJointDelegatorWithNullChildFunc(this, &FlipPanel::calcJointMove, "Panel");
     u32 groupSize = 0x20;
     NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_GROUP, &groupSize);
-    mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, groupSize);
+    MR::joinToGroupArray(this, rIter, 0, groupSize);
     MR::invalidateClipping(this);
     MR::startBck(this, "PanelB");
     f32 frameMax = MR::getBckFrameMax(this);

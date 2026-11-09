@@ -104,7 +104,7 @@ void BrightInfo::reset() {
     }
 }
 
-BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f), mBrightness(), mIsNotVisible(true), mDrawPos(0.0f, 0.0f, 0.0f), mDrawRadius(0.0f) {
+BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f), mBrightness(), mDrawPos(0.0f, 0.0f, 0.0f), mDrawRadius(0.0f) {
     MR::addBrightObj(this);
 }
 
@@ -201,10 +201,8 @@ void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
         mBrightCenter.set(Vec2f(objCenter * (1.0f / bright)));
         mBrightness = ratio;
         mNowCenter.set(center);
-        mIsNotVisible = false;
     } else {
         mBrightness = ratio;
-        mIsNotVisible = true;
     }
 
     mInfo.write(mBrightCenter, center, mBrightness);
@@ -266,7 +264,6 @@ void BrightSun::calcBrightInfo(NebulaScreenProbe* pProbes) {
     if (MR::isDead(this)) {
         mInfo.reset();
         mBrightness = 0.0f;
-        mIsNotVisible = true;
         pProbes[0].x = cNoProbes;
         return;
     }

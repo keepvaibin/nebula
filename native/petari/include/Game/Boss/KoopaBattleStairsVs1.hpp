@@ -27,8 +27,6 @@ public:
 
     KoopaBattleMapStair* mFarBattleMapStair;
     KoopaBattleMapStair* mNearBattleMapStair;
-    KoopaFireStairs* mFarFireStairs;
-    KoopaFireStairs* mNearFireStairs;
     // The stair whose fire is still to be emitted this attack.
     KoopaBattleMapStair* mFireStair;
     bool mIsJumpRequested;

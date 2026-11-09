@@ -22,5 +22,4 @@ private:
     CometEventExecutorTimeLimit* mExecutorTimeLimit;
     GalaxyCometScreenFilter* mScreenFilter;
     const char* mCometName;
-    s32 mCometStateIndex;
 };

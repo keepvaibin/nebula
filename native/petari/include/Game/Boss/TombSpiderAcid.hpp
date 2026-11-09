@@ -19,7 +19,6 @@ public:
     void updateGlandGroundMtx(const TombSpiderGland* pGland, Pos3f* pDstMtx, MtxPtr pSrcMtx);
 
     TombSpider* mParent;
-    bool mIsGlandReady;
     bool mIsEmitOn;
     bool mIsActive;
     s32 mStateChangeTimer;

@@ -27,7 +27,6 @@ public:
     bool checkPlayerOnTop();
 
     JointControlDelegator< FlipPanel >* mDelegator;
-    MsgSharedGroup* mFlipPanelGroup;
     bool mIsPlayerOn;
     u8 mIsFlipped;
     s32 mJumpCheckCount;

@@ -78,5 +78,4 @@ public:
     u32* mBackupMaterialFirst;
     AssetFolder* mArchive;
     NebulaArena* mArena;
-    u32 mTotalResourceSize;
 };
