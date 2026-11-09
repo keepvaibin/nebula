@@ -171,15 +171,15 @@ void ElectricRailHolder::registerRail(const LiveActor* pActor, ElectricRailType 
     }
 
     RailItem* pItem = new RailItem();
-    (*mRailItems.end()) = pItem;
-    (*mRailItems.end())->mRailType = railType;
-    (*mRailItems.end())->mHost = static_cast< const ElectricRailDrawn* >(pActor);
+    pItem->mRailType = railType;
+    pItem->mHost = static_cast< const ElectricRailDrawn* >(pActor);
 
     Model* pModel = MR::getModel(mRailModels[railType]);
     MaterialEntry* pPacket = pModel->getMaterialEntry(MR::getMaterialNo(pModel, "SparkMat"));
-    (*mRailItems.end())->mMatPacket = pPacket;
+    pItem->mMatPacket = pPacket;
 
-    mRailItems.mCount++;
+    // push_back moves the list to a larger store past its 64 inline places (a stage with more electric rails).
+    mRailItems.push_back(pItem);
 }
 
 namespace {

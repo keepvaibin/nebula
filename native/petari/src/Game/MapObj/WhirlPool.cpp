@@ -47,6 +47,12 @@ void WhirlPool::movement() {
 
 void WhirlPool::initPoints() {
     mPointCount = static_cast< s32 >(mHeight / 50.0f) + 1;
+
+    // A height of zero or less (a scale of 0 or below in y) keeps the one point, not a negative array.
+    if (mPointCount < 1) {
+        mPointCount = 1;
+    }
+
     mPoints = new WhirlPoolPoint*[mPointCount];
     Pos3f rotation;
     rotation.identity();
