@@ -343,7 +343,7 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
                     continue;
                 }
                 const NebulaFrameItem& other = before->list->items[pair];
-                if ((other.flags & NEBULA_ITEM_RING) == 0u || other.ring_count != item.ring_count || other.mesh != item.mesh) {
+                if (!core::ring_shape_matches(item, other)) {
                     continue;
                 }
                 const auto* a = static_cast<const std::byte*>(before->list->ring_vertices) + other.ring_at;
@@ -1193,7 +1193,7 @@ gpu::Address RenderCore::ring_item_before(std::uint32_t index, gpu::Address own)
         return own;
     }
     const NebulaFrameItem& other = walk_.before->list->items[pair];
-    if ((other.flags & NEBULA_ITEM_RING) == 0u || other.ring_count != item.ring_count || other.mesh != item.mesh) {
+    if (!core::ring_shape_matches(item, other)) {
         return own;
     }
     return walk_ring_previous_ + other.ring_at;

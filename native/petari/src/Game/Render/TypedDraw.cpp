@@ -415,6 +415,8 @@ void* TypedDraw::begin(NebulaPrimitive primitive, u32 count, u32 stride, const N
     mLayoutCount = inputCount;
     void* pVertices = FrameRing::vertices(count * stride, &mRingAt);
     if (count == 0) {
+        // Nothing to draw, but the number stays used: the draws after it keep theirs from frame to frame.
+        Frame::nextPart();
         return pVertices;
     }
     // In the frame's order from here on, whatever else draws before the vertices are written.

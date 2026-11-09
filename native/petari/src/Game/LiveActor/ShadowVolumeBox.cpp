@@ -36,6 +36,7 @@ void ShadowVolumeBox::makeVertexBuffer() const {
     bool dirRight = dir.dot(side) >= 0.0f;
     bool dirUp = dir.dot(up) >= 0.0f;
     bool dirFront = dir.dot(front) >= 0.0f;
+    mVariant = (dirRight ? 1u : 0u) | (dirUp ? 2u : 0u) | (dirFront ? 4u : 0u);
 
     Vec3f size = mSize;
     if (controller->isFollowHostScale()) {

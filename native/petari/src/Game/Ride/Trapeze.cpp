@@ -135,16 +135,25 @@ void Trapeze::draw() const {
     swingLeft.add(mStickPoint->mPosition);
     swingRight.add(mStickPoint->mPosition);
 
+    // Which ropes draw changes with the rider and the grab; each rope has numbers of its own (three strips each), so a rope
+    // is paired with itself from frame to frame and a different rope that draws in its place is not blended from it.
+    enum { Rope_WholeLeft, Rope_WholeRight, Rope_HeldLeft, Rope_HeldRight, Rope_SwingLeft, Rope_SwingRight, cStripsPerRope = 3 };
     if (mRider != nullptr) {
+        site.setPart(Rope_HeldLeft * cStripsPerRope);
         drawRope(site, left, grabLeft, mHangPoint->mSide, mHangPoint->mFront, 0.0f, mGrabCoord * ::sTexRate);
+        site.setPart(Rope_HeldRight * cStripsPerRope);
         drawRope(site, right, grabRight, mHangPoint->mSide, mHangPoint->mFront, 0.0f, mGrabCoord * ::sTexRate);
 
         if (mGrabCoord < mRopeLength) {
+            site.setPart(Rope_SwingLeft * cStripsPerRope);
             drawRope(site, grabLeft, swingLeft, mStickPoint->mSide, mStickPoint->mFront, mGrabCoord * ::sTexRate, mRopeLength * ::sTexRate);
+            site.setPart(Rope_SwingRight * cStripsPerRope);
             drawRope(site, grabRight, swingRight, mStickPoint->mSide, mStickPoint->mFront, mGrabCoord * ::sTexRate, mRopeLength * ::sTexRate);
         }
     } else {
+        site.setPart(Rope_WholeLeft * cStripsPerRope);
         drawRope(site, left, swingLeft, mStickPoint->mSide, mStickPoint->mFront, 0.0f, mRopeLength * ::sTexRate);
+        site.setPart(Rope_WholeRight * cStripsPerRope);
         drawRope(site, right, swingRight, mStickPoint->mSide, mStickPoint->mFront, 0.0f, mRopeLength * ::sTexRate);
     }
 }

@@ -58,6 +58,27 @@ int main() {
  follow_new = 1u;
  ListData moved_light{};moved_light.list=&lb;Pairing moved_pair;moved_pair.pair(moved_light,&da);
  if (moved_light.light_set_before[0] != NEBULA_NONE32) return 10;
+ // A ring item pairs with the item of its own part number, never with the one that drew in its place.
+ NebulaFrameItem parted[2]={ia,ia};parted[1].part=2;ib.part=2;
+ la.items=parted;la.item_count=2;lb.items=&ib;lb.item_count=1;
+ ListData same_part{};same_part.list=&lb;Pairing part_pair;part_pair.pair(same_part,&da);
+ if (same_part.item_before[0] != 1u) return 11;
+ ib.part=1;
+ ListData other_part{};other_part.list=&lb;Pairing other_pair;other_pair.pair(other_part,&da);
+ if (other_part.item_before[0] != NEBULA_NONE32) return 12;
+ // Its vertices blend only when vertex count, index count and stride are the same.
+ NebulaFrameItem ring_old{},ring_new{};
+ ring_old.flags=ring_new.flags=NEBULA_ITEM_RING;ring_old.mesh=ring_new.mesh=24;ring_old.ring_count=ring_new.ring_count=8;ring_old.count=ring_new.count=18;
+ if (!ring_shape_matches(ring_new,ring_old)) return 13;
+ ring_new.ring_count=10;
+ if (ring_shape_matches(ring_new,ring_old)) return 14;
+ ring_new.ring_count=8;ring_new.count=12;
+ if (ring_shape_matches(ring_new,ring_old)) return 15;
+ ring_new.count=18;ring_new.mesh=32;
+ if (ring_shape_matches(ring_new,ring_old)) return 16;
+ ring_new.mesh=24;ring_old.flags=0u;
+ if (ring_shape_matches(ring_new,ring_old)) return 17;
+ std::puts("PASS: ring items pair by part number and blend vertices only at an unchanged shape.");
  std::puts("PASS: explicit light camera survives camera reorder and rejects the wrong camera.");
  std::puts("PASS: shadow camera identity, discrete texture changes, and one-use draw pairing.");
  std::puts("PASS: regenerated shadow topology stays discrete; its camera still pairs.");

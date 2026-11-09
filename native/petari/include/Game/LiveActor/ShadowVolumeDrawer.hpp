@@ -24,6 +24,11 @@ public:
     virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
     virtual void drawShape(TypedDraw& rDraw) const;
     virtual bool isDraw() const;
+    // Changes when the shape is built from a different arrangement of its points (a box whose drop direction crossed a
+    // face): the draws of each arrangement have numbers of their own, so two arrangements are never blended.
+    virtual u32 shapeVariant() const {
+        return 0;
+    }
 
     void setStartDrawShepeOffset(f32);
     void setEndDrawShepeOffset(f32);

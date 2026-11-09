@@ -35,6 +35,8 @@ namespace {
     static const s32 sHangActorNumMax = 8 * sMainRadialLinePointNum;
     static const f32 sIndirectScaleX = 0.035f;
     static const f32 sIndirectScaleY = 0.03f;
+    // The strips SpiderThreadPart::draw writes for one part (drawLine and drawPoints each write three).
+    static const s32 sStripsPerPart = 3;
 };  // namespace
 
 inline SpiderThreadPart* connectPoints(SpiderThreadPoint* pPointA, SpiderThreadPoint* pPointB) {
@@ -133,11 +135,15 @@ void SpiderThread::draw() const {
         const SiteMaterial material = loadMaterial();
         TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
+        // A free (cut) part draws nothing; each part owns its three strips' numbers so the parts after it keep theirs and
+        // pair with themselves from frame to frame.
         for (s32 idx = 0; idx < mNumRadialParts; idx++) {
+            site.setPart(static_cast< u32 >(idx * ::sStripsPerPart));
             getRadialPart(idx)->draw(site);
         }
 
         for (s32 idx = 0; idx < mNumCircleParts; idx++) {
+            site.setPart(static_cast< u32 >((mNumRadialParts + idx) * ::sStripsPerPart));
             getCirclePart(idx)->draw(site);
         }
     }

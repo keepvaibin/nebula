@@ -154,6 +154,8 @@ void FootPrint::draw() const {
         printPos += mPrints[i].mNormal * 5.0f;
 
         TypedDraw site = TDDraw::site(material, 0);
+        // An expired print draws nothing; each print keeps its own number so the prints after it pair with themselves.
+        site.setPart(static_cast< u32 >(i));
         TDDraw::drawTexture3D(site, printPos, mPrints[i].mNormal, mPrints[i].mUp, mWidth, mHeight, nullptr, mPrints[i].mIsFlipX, false);
     }
 

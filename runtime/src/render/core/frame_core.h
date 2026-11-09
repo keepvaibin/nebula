@@ -351,6 +351,14 @@ private:
 #endif
 };
 
+// Whether ring item `now` has the shape of its pair `before`: the same vertex count, index count and vertex stride. Only
+// then are the pair's vertices blended and read as the frame before's; an item whose shape changed (a strip that grew, a
+// polygon clipped to fewer corners) shows its newest vertices, as a teleport does.
+inline bool ring_shape_matches(const NebulaFrameItem& now, const NebulaFrameItem& before) noexcept {
+    return (before.flags & NEBULA_ITEM_RING) != 0u && before.ring_count == now.ring_count && before.count == now.count &&
+           before.mesh == now.mesh;
+}
+
 // Pairing: Pairing::pair fills `now`'s before-tables from `before`. No GPU, no Windows: tested offline.
 class Pairing {
 public:

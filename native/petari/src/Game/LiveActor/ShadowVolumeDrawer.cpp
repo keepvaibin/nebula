@@ -9,6 +9,9 @@
 
 namespace {
     static Color8 sShapeColor(0xC0, 0xC0, 0, 4);
+    // Room for the draws of one pass of one shape (a model file's meshes); the front pass, the back pass and each variant
+    // start a range of their own.
+    static const u32 cPartsPerPass = 256;
 };  // namespace
 
 ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("シャドウボリューム描画初期化") {
@@ -88,10 +91,15 @@ void ShadowVolumeDrawer::draw() const {
         material.mState.cull = NEBULA_CULL_FRONT;
         TypedDraw site(material, nullptr, MR::getCameraViewMtx());
         loadModelDrawMtx(site);
+        // The two passes draw one shape: each pass pairs with its own pass of the frame before, whatever the shape wrote
+        // (its draw count can change), and both pair or neither does.
+        const u32 first = shapeVariant() * 2 * ::cPartsPerPass;
+        site.setPart(first);
         drawShape(site);
         material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
         material.mState.cull = NEBULA_CULL_BACK;
         site.setMaterial(material);
+        site.setPart(first + ::cPartsPerPass);
         drawShape(site);
     }
 }

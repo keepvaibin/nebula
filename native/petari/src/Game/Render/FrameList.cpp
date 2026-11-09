@@ -911,6 +911,10 @@ namespace Frame {
         return sPart++;
     }
 
+    void setPart(u32 part) {
+        sPart = part;
+    }
+
     u32 newSlot() {
         return sNextSlot++;
     }
