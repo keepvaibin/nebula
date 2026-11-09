@@ -153,6 +153,10 @@ bool TalkMessageCtrl::rootNodeEve() {
         break;
 
     case EventKind_Kill:
+        if (mKillFunc == nullptr) {
+            return true;
+        }
+
         if (!(*mKillFunc)(pEvent->mArg)) {
             return false;
         }
