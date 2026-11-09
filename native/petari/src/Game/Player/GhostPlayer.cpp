@@ -395,14 +395,13 @@ void GhostPlayer::exePreStartDemo2() {
     Vec3f frontVec;
 
     bool isNormalized = MR::normalizeOrZero(&normalizedFrontVec);
-    Pos3f* baseMtx = reinterpret_cast< Pos3f* >(getBaseMtx());
-    baseMtx->getYDir(upVec);
+    MR::extractMtxYDir(getBaseMtx(), &upVec);
     if (!isNormalized) {
         MR::calcFrontVec(&frontVec, this);
         if (MR::vecBlendSphere(frontVec, normalizedFrontVec, &frontVec, 0.1f) == false) {
             frontVec = normalizedFrontVec;
         }
-        MR::makeMtxUpFront(reinterpret_cast< Pos3f* >(getBaseMtx()), upVec, frontVec);
+        MR::makeMtxUpFront(getBaseMtx(), upVec, frontVec);
         NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
         MR::extractMtxTrans(getBaseMtx(), &mPosition);
     }
