@@ -38,7 +38,17 @@ SnowFloorTile::SnowFloorTile(const char* pName) : LiveActor(pName) {
 
 void SnowFloorTile::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    mTextureSize = ::sTextureSize * mScale.x;
+    // A tile with no scale takes scale 1; its sheet holds 1 to 4096 cells a side (a scale of 128; a mod's absurd scale
+    // asked for billions).
+    const f32 tileScale = mScale.x > 0.0f ? mScale.x : 1.0f;
+    f32 sizeValue = ::sTextureSize * tileScale;
+    if (sizeValue > 4096.0f) {
+        sizeValue = 4096.0f;
+    } else if (sizeValue < 1.0f) {
+        sizeValue = 1.0f;
+    }
+
+    mTextureSize = static_cast< s32 >(sizeValue);
     mTextureShift = 0;
     u32 size = mTextureSize;
 
@@ -50,8 +60,7 @@ void SnowFloorTile::init(const TableIter& rIter) {
         mTextureShift++;
     }
 
-    // A tile placed with no scale takes scale 1 (a cell size of 0 divided the dig maps).
-    mCellSize = 128.0f * (mScale.x > 0.0f ? mScale.x : 1.0f) / ::sTextureSize;
+    mCellSize = 128.0f * tileScale / ::sTextureSize;
     initHitSensor(1);
     MR::addHitSensorEye(this, "eye", 16, 1.4142f * (mTextureSize * mCellSize), Vec3f(0.0f, 0.0f, 0.0f));
     mSnowDepth = new f32[mTextureSize * mTextureSize];
@@ -77,7 +86,13 @@ void SnowFloorTile::init(const TableIter& rIter) {
     MR::useStageSwitchWriteDead(this, rIter);
     initSound(4, false);
     makeActorAppeared();
-    createReduceMap((s32)(800.0f / mCellSize));
+    // The reduce map holds at most 1024 cells a side (a tiny scale made a cell size near 0).
+    f32 reduceSize = 800.0f / mCellSize;
+    if (!(reduceSize < 1024.0f)) {
+        reduceSize = 1024.0f;
+    }
+
+    createReduceMap(static_cast< u16 >(reduceSize));
     mDirtyFrames = 2;
 }
 

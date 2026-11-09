@@ -23,6 +23,10 @@ namespace {
 
     // The frame count is 0 until the bloom animation starts: the step itself is then the frame.
     void syncBloomFrame(ModelObj* pBloomModel) {
+        if (pBloomModel == nullptr) {
+            return;
+        }
+
         u32 frameMax = MR::getBrkFrameMax(pBloomModel);
         u32 cycles = frameMax != 0 ? sBloomSyncStep / frameMax : 0;
         MR::setBrkFrame(pBloomModel, sBloomSyncStep - cycles * frameMax);
@@ -172,7 +176,7 @@ void FlipPanel::appear() {
 void FlipPanel::endClipped() {
     MapObjActor::endClipped();
 
-    if (MR::getBrkCtrl(mBloomModel)) {
+    if (mBloomModel != nullptr && MR::getBrkCtrl(mBloomModel)) {
         syncBloomFrame(mBloomModel);
     }
 }

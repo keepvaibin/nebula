@@ -41,6 +41,11 @@ MeteorStrike::MeteorStrike(const char* pName)
 }
 
 inline void MeteorStrike::initRailDirection() {
+    // A rail of one point has no direction: the meteor keeps its straight-down default.
+    if (MR::getRailPointNum(this) < 2) {
+        return;
+    }
+
     Vec3f pos0;
     MR::calcRailPointPos(&pos0, this, 0);
 
@@ -85,6 +90,11 @@ void MeteorStrike::init(const TableIter& rIter) {
 }
 
 void MeteorStrike::initAfterPlacement() {
+    if (MR::getRailPointNum(this) < 2) {
+        mTotalSteps = 1;
+        return;
+    }
+
     Vec3f pos0, pos1;
     MR::calcRailPointPos(&pos0, this, 0);
 
@@ -148,7 +158,7 @@ void MeteorStrike::appear(s32 step) {
 void MeteorStrike::kill() {
     LiveActor::kill();
 
-    if (mType != MeteorStrikeType_Environment) {
+    if (mBrokenModel != nullptr) {
         mBrokenModel->kill();
     }
 
@@ -383,13 +393,16 @@ void MeteorStrike::exeBreak() {
 
         startRumble();
 
-        mBrokenModel->appear();
-        MR::invalidateClipping(mBrokenModel);
-        MR::startBck(mBrokenModel, "Break");
-        MR::startBrk(mBrokenModel, "Break");
+        // The environment kind has no broken model (one set on solid ground just ends).
+        if (mBrokenModel != nullptr) {
+            mBrokenModel->appear();
+            MR::invalidateClipping(mBrokenModel);
+            MR::startBck(mBrokenModel, "Break");
+            MR::startBrk(mBrokenModel, "Break");
+        }
     }
 
-    if (MR::isBckStopped(mBrokenModel)) {
+    if (mBrokenModel == nullptr || MR::isBckStopped(mBrokenModel)) {
         kill();
     }
 }

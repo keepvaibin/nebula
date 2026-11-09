@@ -126,7 +126,11 @@ void RainCloud::exeAppear() {
         MR::startBck(this, "Appear");
         MR::startBpk(this, "Appear");
         MR::validateCollisionParts(this);
-        mCloudCylinder->appear();
+        // A cloud with no rain (arg 3) has no cylinder.
+        if (mCloudCylinder != nullptr) {
+            mCloudCylinder->appear();
+        }
+
         MR::startSound(this, "SE_OJ_RAIN_CLOUD_APPEAR");
     }
 
@@ -160,7 +164,10 @@ void RainCloud::exeDisappear() {
     }
 
     if (MR::isBckStopped(this)) {
-        mCloudCylinder->kill();
+        if (mCloudCylinder != nullptr) {
+            mCloudCylinder->kill();
+        }
+
         mIsOnPlayer = false;
     }
 

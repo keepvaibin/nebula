@@ -119,8 +119,12 @@ void TripodBoss::init(const TableIter& rIter) {
     MR::addTransMtxLocal(mDummyModelMtx, mDummyModelOffset);
 
     mDummyModel = MR::createDummyDisplayModel(this, rIter, mDummyModelMtx, DummyDisplayModelId_GrandStar, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
-    MR::startBrk(mDummyModel, "Recover");
-    MR::setBrkFrameAndStop(mDummyModel, 0.0f);
+
+    // A mod may have removed the star's display model.
+    if (mDummyModel != nullptr) {
+        MR::startBrk(mDummyModel, "Recover");
+        MR::setBrkFrameAndStop(mDummyModel, 0.0f);
+    }
 
     makeActorAppeared();
     MR::startBck(this, "StartDemo");
@@ -268,7 +272,10 @@ void TripodBoss::kill() {
 void TripodBoss::control() {
     mDummyModelMtx.set(mBodyMtx);
     MR::addTransMtxLocal(mDummyModelMtx, mDummyModelOffset);
-    mDummyModel->mRotation.y = MR::repeatDegree(mDummyModel->mRotation.y - mDummyModelSpinSpeed);
+
+    if (mDummyModel != nullptr) {
+        mDummyModel->mRotation.y = MR::repeatDegree(mDummyModel->mRotation.y - mDummyModelSpinSpeed);
+    }
 
     if (isNerve(GET_NERVE(TripodBoss, TripodBossNrvNonActive))) {
         clippingModel();
@@ -629,7 +636,9 @@ void TripodBoss::exePainDemo() {
             MR::startBckPlayer("BattleWait");
         }
 
-        MR::startBrk(mDummyModel, "Recover");
+        if (mDummyModel != nullptr) {
+            MR::startBrk(mDummyModel, "Recover");
+        }
 
         mDummyModelSpinSpeed = 5.0f;
         mDemoBlendRate = 0.0f;
@@ -665,7 +674,10 @@ void TripodBoss::exePainDemo() {
         }
 
         if (MR::isBckStopped(this)) {
-            mDummyModel->kill();
+            if (mDummyModel != nullptr) {
+                mDummyModel->kill();
+            }
+
             setNerve(GET_NERVE(TripodBoss, TripodBossNrvBreakDownDemo));
         }
     }
@@ -942,7 +954,10 @@ void TripodBoss::clippingModel() {
 void TripodBoss::startDemo() {
     MR::onCalcAnim(this);
     mDemoStartMtx.set(mBodyMtx);
-    MR::requestMovementOn(mDummyModel);
+    if (mDummyModel != nullptr) {
+        MR::requestMovementOn(mDummyModel);
+    }
+
     MR::requestMovementTripodBossParts();
 
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
