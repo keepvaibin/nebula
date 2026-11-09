@@ -467,4 +467,41 @@ namespace MR {
             delete[] mText;
         }
     }
+
+    char16_t* Text16::room(u32 units) {
+        if (units > mRoom) {
+            if (mText != mInline) {
+                delete[] mText;
+            }
+            mText = new char16_t[units];
+            mRoom = units;
+        }
+        mText[0] = u'\0';
+        return mText;
+    }
+
+    char16_t* Text16::grow(u32 used, u32 units) {
+        if (units > mRoom) {
+            u32 room = mRoom * 2;
+            if (room < units) {
+                room = units;
+            }
+            char16_t* const pNew = new char16_t[room];
+            for (u32 i = 0; i < used && i < mRoom; i++) {
+                pNew[i] = mText[i];
+            }
+            if (mText != mInline) {
+                delete[] mText;
+            }
+            mText = pNew;
+            mRoom = room;
+        }
+        return mText;
+    }
+
+    Text16::~Text16() {
+        if (mText != mInline) {
+            delete[] mText;
+        }
+    }
 };  // namespace MR

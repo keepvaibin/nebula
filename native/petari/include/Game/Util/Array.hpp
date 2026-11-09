@@ -5,6 +5,40 @@
 #include "Game/System/NebulaArena.hpp"
 
 namespace MR {
+    /// @brief Room for a list with no limit that can also be a static: no constructor (zero-initialised), it grows in
+    /// the root arena to at least `count` (doubling, from 16), keeps what it held, and never shrinks. Pointers into it do
+    /// not survive a call that grows it.
+    template < class T >
+    struct GrowBuffer {
+        T* mItems;
+        u32 mRoom;
+
+        T* room(u32 count) {
+            if (count > mRoom) {
+                u32 room = mRoom != 0 ? mRoom : 16;
+                while (room < count) {
+                    room *= 2;
+                }
+                T* const pNew = new (NebulaArena::root(), 0) T[room];
+                for (u32 i = 0; i < mRoom; i++) {
+                    pNew[i] = mItems[i];
+                }
+                delete[] mItems;
+                mItems = pNew;
+                mRoom = room;
+            }
+            return mItems;
+        }
+
+        T& operator[](u32 index) {
+            return mItems[index];
+        }
+
+        const T& operator[](u32 index) const {
+            return mItems[index];
+        }
+    };
+
     /// @brief A full table: twice the room, in the arena it lies in, and the old one goes. Pointers into it do not survive this.
     template < class T >
     T* growArray(T* pOld, s32 num) {
