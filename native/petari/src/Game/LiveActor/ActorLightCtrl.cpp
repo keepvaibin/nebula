@@ -53,12 +53,15 @@ void ActorLightCtrl::reset() {
     }
 }
 
+// Packets share a light run (one load for all) only when both lights load the same thing: a blending light loads its
+// own mix, so neither side may be blending (a packet joining a blending head took its mix and popped when the blend
+// ended), and the area light's entry is picked by the type.
 bool ActorLightCtrl::isSameLight(const ActorLightCtrl* pLight) const {
-    if (mBlendFrom) {
+    if (mBlendFrom || pLight->mBlendFrom) {
         return false;
     }
 
-    return mAreaLightInf == pLight->mAreaLightInf;
+    return mAreaLightInf == pLight->mAreaLightInf && mLightType == pLight->mLightType;
 }
 
 const ActorLightInfo* ActorLightCtrl::getActorLight() const {
