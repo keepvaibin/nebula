@@ -212,7 +212,7 @@ namespace {
     }
 };  // namespace
 
-PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetMapData() {
+PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetMapData(), mIndex() {
     Table* pIter = MR::createCsvParser(::sArcName, ::sFileName);
 
     mTableCount = MR::getCsvDataElementNum(pIter);
@@ -241,11 +241,15 @@ void PlanetMapCreator::createPlanetMapDataTable(Table* pInfo) {
         forceNum++;
     }
 
+    mIndex.reset(static_cast< u32 >(mTableCount));
     for (int i = 0; i < mTableCount; i++) {
         mPlanetMapData[i] = new PlanetMapData();
         mPlanetMapData[i]->mForceScenarioNum = forceNum;
 
         addTableData(pInfo, i);
+        if (mPlanetMapData[i]->mPlanetName != nullptr) {
+            mIndex.add(mPlanetMapData[i]->mPlanetName, static_cast< u32 >(i));
+        }
     }
 }
 
@@ -273,13 +277,8 @@ void PlanetMapCreator::addTableData(const Table* pInfo, s32 idx) {
 }
 
 PlanetMapData* PlanetMapCreator::getTableData(const char* pName) const {
-    for (int i = 0; i < mTableCount; i++) {
-        if (MR::isEqualString(pName, mPlanetMapData[i]->mPlanetName)) {
-            return mPlanetMapData[i];
-        }
-    }
-
-    return nullptr;
+    const u32 row = mIndex.find(pName);
+    return row != MR::NameIndex::cNoValue ? mPlanetMapData[row] : nullptr;
 }
 
 bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {

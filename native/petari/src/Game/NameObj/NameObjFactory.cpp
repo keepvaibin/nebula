@@ -4778,6 +4778,43 @@ namespace {
         "Hopper",          "BenefitItemInvincible", "MorphItemNeoBee", "MorphItemNeoFire",
         "MorphItemNeoFoo", "MorphItemNeoHopper",    "MorphItemNeoIce", "MorphItemNeoTeresa",
     };
+
+    // cCreateTable by name, ASCII case folded as isEqualStringCase compares: open addressing, a slot holds its entry's
+    // number + 1 (0 empty). A name listed twice keeps its first entry, the one a scan of the table found.
+    const u32 cCreateIndexRoom = 4096;
+    static_assert(ARRAY_SIZEU(cCreateTable) * 2 <= cCreateIndexRoom, "the index stays at most half full");
+    u16 sCreateIndex[cCreateIndexRoom];
+    bool sCreateIndexBuilt = false;
+
+    u32 hashNameCase(const char* pName) {
+        u32 hash = 2166136261u;
+        for (const char* p = pName; *p != '\0'; p++) {
+            u32 c = static_cast< u8 >(*p);
+            if (c >= 'A' && c <= 'Z') {
+                c += 'a' - 'A';
+            }
+            hash = (hash ^ c) * 16777619u;
+        }
+        return hash;
+    }
+
+    void buildCreateIndex() {
+        for (u32 i = 0; i < ARRAY_SIZEU(cCreateTable); i++) {
+            const char* const pName = cCreateTable[i].mName;
+            if (pName == nullptr) {
+                continue;
+            }
+
+            u32 slot = hashNameCase(pName) & (cCreateIndexRoom - 1);
+            while (sCreateIndex[slot] != 0 && !MR::isEqualStringCase(cCreateTable[sCreateIndex[slot] - 1].mName, pName)) {
+                slot = (slot + 1) & (cCreateIndexRoom - 1);
+            }
+            if (sCreateIndex[slot] == 0) {
+                sCreateIndex[slot] = static_cast< u16 >(i + 1);
+            }
+        }
+        sCreateIndexBuilt = true;
+    }
 };  // namespace
 
 namespace NameObjFactory {
@@ -4796,7 +4833,7 @@ namespace NameObjFactory {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
         }
 
-        const Name2CreateFunc* pName2CreateFunc = getName2CreateFunc(pName, nullptr);
+        const Name2CreateFunc* pName2CreateFunc = getName2CreateFunc(pName);
 
         if (pName2CreateFunc == nullptr) {
             return nullptr;
@@ -4815,21 +4852,16 @@ namespace NameObjFactory {
         return false;
     }
 
-    const Name2CreateFunc* getName2CreateFunc(const char* pName, const Name2CreateFunc* pTable) {
-        if (pTable == nullptr) {
-            pTable = ::cCreateTable;
+    const Name2CreateFunc* getName2CreateFunc(const char* pName) {
+        if (!::sCreateIndexBuilt) {
+            ::buildCreateIndex();
         }
 
-        for (const Name2CreateFunc* pName2CreateFunc = pTable; pName2CreateFunc != ::cCreateTable + ARRAY_SIZE(::cCreateTable); pName2CreateFunc++) {
-            if (pName2CreateFunc->mName == nullptr) {
-                continue;
+        for (u32 slot = ::hashNameCase(pName) & (::cCreateIndexRoom - 1); ::sCreateIndex[slot] != 0; slot = (slot + 1) & (::cCreateIndexRoom - 1)) {
+            const Name2CreateFunc* const pName2CreateFunc = &::cCreateTable[::sCreateIndex[slot] - 1];
+            if (MR::isEqualStringCase(pName2CreateFunc->mName, pName)) {
+                return pName2CreateFunc;
             }
-
-            if (!MR::isEqualStringCase(pName2CreateFunc->mName, pName)) {
-                continue;
-            }
-
-            return pName2CreateFunc;
         }
 
         return nullptr;
