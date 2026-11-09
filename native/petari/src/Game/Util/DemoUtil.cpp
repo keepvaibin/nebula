@@ -225,6 +225,11 @@ namespace MR {
 
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
 
+        // A demo with no sheet in this stage does not start.
+        if (executor == nullptr) {
+            return false;
+        }
+
         if (pPartName != nullptr) {
             executor->startDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
         } else {
@@ -243,6 +248,10 @@ namespace MR {
         }
 
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
+
+        if (executor == nullptr) {
+            return false;
+        }
 
         if (pPartName != nullptr) {
             executor->startDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
@@ -407,7 +416,11 @@ namespace MR {
 
     void startTimeKeepDemo(NameObj* pObj, const char* pName, const char* pPartName) {
         if (pPartName != nullptr) {
-            DemoFunction::findDemoExecutor(pName)->startDemoSystemPart(pPartName, MR::MovementControlType_Demo);
+            DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
+
+            if (executor != nullptr) {
+                executor->startDemoSystemPart(pPartName, MR::MovementControlType_Demo);
+            }
         } else {
             DemoStartRequestUtil::startDemoSystem(pObj, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                   DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
@@ -416,6 +429,10 @@ namespace MR {
 
     void startTimeKeepDemoMarioPuppetable(NameObj* pObj, const char* pName, const char* pPartName) {
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
+
+        if (executor == nullptr) {
+            return;
+        }
 
         if (pPartName != nullptr) {
             executor->startDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
@@ -550,7 +567,9 @@ namespace MR {
     }
 
     f32 calcDemoPartStepRate(const char* pName) {
-        return static_cast< f32 >(getDemoPartStep(pName)) / getDemoPartTotalStep(pName);
+        const s32 total = getDemoPartTotalStep(pName);
+
+        return total > 0 ? static_cast< f32 >(getDemoPartStep(pName)) / total : 0.0f;
     }
 
     s32 getDemoPartStep(const char* pName) {
