@@ -238,6 +238,9 @@ void fill_inputs(const PipelineEntry& entry, bool motion, InputList& list) {
     }
     for (const NebulaLayoutInput& input : entry.inputs) {
         const UINT slot = input.stream == NEBULA_STREAM_ZERO ? UINT{gpu::kStreamZero} : UINT{input.stream};
+        if (slot >= gpu::kStreamCount) {
+            continue;  // no such buffer slot: the input is left out
+        }
         const DXGI_FORMAT format = input_format(input.format);
         switch (input.semantic) {
         case NEBULA_INPUT_NORMAL: list.add("NORMAL", 0u, format, slot, input.offset); break;

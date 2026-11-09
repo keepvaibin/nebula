@@ -51,18 +51,26 @@ std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, co
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
     DWORD exit_code = 1;
+    bool timed_out = false;
     if (CreateProcessW(compiler.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
-        WaitForSingleObject(process.hProcess, INFINITE);
-        GetExitCodeProcess(process.hProcess, &exit_code);
+        // A compiler that hangs ends here, not the conversion with it.
+        constexpr DWORD kCompileMs = 120000u;
+        if (WaitForSingleObject(process.hProcess, kCompileMs) == WAIT_OBJECT_0) {
+            GetExitCodeProcess(process.hProcess, &exit_code);
+        } else {
+            timed_out = true;
+            TerminateProcess(process.hProcess, 1u);
+            WaitForSingleObject(process.hProcess, 5000u);
+        }
         CloseHandle(process.hThread);
         CloseHandle(process.hProcess);
     }
     std::vector<std::uint8_t> bytes;
-    if (exit_code == 0u) {
+    if (exit_code == 0u && !timed_out) {
         std::ifstream in(output, std::ios::binary);
         bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     } else {
-        problem = "a program didn't compile";
+        problem = timed_out ? "a program took too long to compile" : "a program didn't compile";
     }
     fs::remove(input, error);
     fs::remove(output, error);

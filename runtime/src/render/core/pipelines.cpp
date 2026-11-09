@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/pipelines.h"
 
+#include "galaxy/atomic_file.h"
 #include "galaxy/cpu_count.h"
 #if defined(_WIN32)
 #include "galaxy/windows_power.h"
@@ -324,21 +325,31 @@ void Pipelines::worker() {
             job = jobs_.front();
             jobs_.pop_front();
         }
-        std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
-        if (job.optimize) {
-            // The draw's pipeline was linked quickly: the optimised link takes its place for the draws after it (frames in flight
-            // keep the first, which lives until shutdown).
-            if (at != nullptr && !pair_refused(job.entry)) {
-                if (gpu::Pipeline* better = build(job.entry, job.variant, job.aux); better != nullptr) {
-                    at->store(better, std::memory_order_release);
+        try {
+            std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
+            if (job.optimize) {
+                // The draw's pipeline was linked quickly: the optimised link takes its place for the draws after it (frames in
+                // flight keep the first, which lives until shutdown).
+                if (at != nullptr && !pair_refused(job.entry)) {
+                    if (gpu::Pipeline* better = build(job.entry, job.variant, job.aux); better != nullptr) {
+                        at->store(better, std::memory_order_release);
+                    }
+                }
+            } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
+                gpu::Pipeline* built = build(job.entry, job.variant, job.aux);
+                if (built != nullptr) {
+                    publish(*at, built);
+                } else {
+                    refuse(job.id, job.entry, job.variant, job.aux);
                 }
             }
-        } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
-            gpu::Pipeline* built = build(job.entry, job.variant, job.aux);
-            if (built != nullptr) {
-                publish(*at, built);
-            } else {
-                refuse(job.id, job.entry, job.variant, job.aux);
+        } catch (...) {
+            // A build that throws (out of memory) is a refusal of that pipeline; an exception out of a worker would end the process.
+            try {
+                if (!job.optimize) {
+                    refuse(job.id, job.entry, job.variant, job.aux);
+                }
+            } catch (...) {
             }
         }
         if (pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
@@ -369,17 +380,7 @@ void Pipelines::drained() noexcept {
 bool replace_file(const std::filesystem::path& file, const char* bytes, std::size_t size) noexcept {
     std::error_code error;
     std::filesystem::create_directories(file.parent_path(), error);
-    std::filesystem::path temp = file;
-    temp += ".tmp";
-    {
-        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-        out.write(bytes, static_cast<std::streamsize>(size));
-        if (!out) {
-            return false;
-        }
-    }
-    std::filesystem::rename(temp, file, error);
-    return !error;
+    return io::write_file_atomically(file, std::string_view(bytes, size));
 }
 
 }  // namespace galaxy::render::core

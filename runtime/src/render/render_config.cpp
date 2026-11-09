@@ -8,6 +8,7 @@
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <atomic>
 #include <chrono>
@@ -28,6 +29,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 #if defined(_WIN32)
 #pragma comment(lib, "Shell32.lib")
@@ -347,8 +349,8 @@ RenderConfig get_render_config() {
 
 namespace {
 std::atomic<bool> s_frame_generation_running{false};
-// The game's latest frame generation report and when it came (steady clock, ms; 0 none yet).
 std::atomic<bool> s_frame_generation_allowed{false};
+// When the game's latest frame generation report came (steady clock, ms; 0 none yet).
 std::atomic<std::int64_t> s_frame_generation_report_ms{0};
 constexpr std::int64_t kFrameGenerationReportMs = 100;
 

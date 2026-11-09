@@ -90,9 +90,13 @@ std::vector<bool> input_locations(const ProgramBytes& program) {
     std::vector<std::uint32_t> inputs;
     for (std::size_t at = 5u; at < words && (spirv[at] >> 16u) != 0u; at += spirv[at] >> 16u) {
         const std::uint32_t op = spirv[at] & 0xFFFFu;
-        if (op == kOpDecorate && spirv[at + 2u] == kDecorationLocation) {
+        const std::size_t length = spirv[at] >> 16u;
+        if (length > words - at) {
+            break;  // a cut instruction: nothing past it is read
+        }
+        if (op == kOpDecorate && length >= 4u && spirv[at + 2u] == kDecorationLocation) {
             locations[spirv[at + 1u]] = spirv[at + 3u];
-        } else if (op == kOpVariable && spirv[at + 3u] == kStorageInput) {
+        } else if (op == kOpVariable && length >= 4u && spirv[at + 3u] == kStorageInput) {
             inputs.push_back(spirv[at + 2u]);
         }
     }
@@ -387,6 +391,9 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     for (const NebulaLayoutInput& input : entry.inputs) {
         const bool zero = input.stream == NEBULA_STREAM_ZERO;
         const std::uint32_t slot = zero ? std::uint32_t{gpu::kStreamZero} : std::uint32_t{input.stream};
+        if (slot >= gpu::kStreamCount) {
+            continue;  // no such buffer slot: the input reads zero like one a program names without a list entry
+        }
         add(input_location(input.semantic), input_format(input.format), slot, zero ? 0u : input.stride, input.offset);
     }
     for (std::uint32_t location = 0; location < reads.size(); ++location) {

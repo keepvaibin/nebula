@@ -52,9 +52,6 @@ std::FILE* open_for_writing(const char* path) {
 #endif
 }
 
-}  // namespace
-namespace {
-
 constexpr std::uint64_t kShowPipelines = std::uint64_t{1} << 32u;
 constexpr std::uint64_t kShowProgram = NEBULA_PROGRAM_SITE | (std::uint64_t{NEBULA_SHADER_INSPECT_SHOW} << 1u);
 constexpr std::uint64_t kStageProgram = 1ull << 62u;
@@ -418,30 +415,13 @@ struct Access {
         const std::byte* positions = ring ? static_cast<const std::byte*>(list.ring_vertices) + item.ring_at
                                           : core.registries_.mesh_cpu(*mesh, mesh->positions);
         const std::uint32_t stride = ring ? item.mesh : mesh->site_stride != 0u ? mesh->site_stride : 12u;
-        const std::uint32_t count = ring ? item.ring_count : mesh->vertex_count;
+        // A mesh whose positions are not readable (no CPU copy of its page) has no vertex to compare.
+        const std::uint32_t count = positions == nullptr ? 0u : ring ? item.ring_count : mesh->vertex_count;
         const auto* matrices = !ring && mesh->matrices != 0u && (item.flags & NEBULA_ITEM_ONE_MATRIX) == 0u
                                    ? reinterpret_cast<const std::uint32_t*>(core.registries_.mesh_cpu(*mesh, mesh->matrices))
                                    : nullptr;
         const NebulaFrameView& view = list.views[item.view];
         const ScaledViewport vp = viewport_pixels(view.viewport, core.renderer_.frame_map());
-        const auto project = [&](const float (*rows)[4], const std::array<float, 6>& terms, const float* p, float* out) {
-            float eye[3];
-            for (unsigned r = 0u; r < 3u; ++r) {
-                eye[r] = rows[r][0] * p[0] + rows[r][1] * p[1] + rows[r][2] * p[2] + rows[r][3];
-            }
-            float x, y, w;
-            if (view.orthographic != 0u) {
-                x = terms[0] * eye[0] + terms[1];
-                y = terms[2] * eye[1] + terms[3];
-                w = 1.0f;
-            } else {
-                x = terms[0] * eye[0] + terms[1] * eye[2];
-                y = terms[2] * eye[1] + terms[3] * eye[2];
-                w = -eye[2];
-            }
-            out[0] = vp.x + (x / w * 0.5f + 0.5f) * vp.width;
-            out[1] = vp.y + (0.5f - y / w * 0.5f) * vp.height;
-        };
         const auto* ring_rows = reinterpret_cast<const float (*)[4]>(core.renderer_.matrix_ring().cpu_base());
         float best = 1e30f, computed[2]{};
         std::uint32_t best_vertex = NEBULA_NONE32;
@@ -452,12 +432,12 @@ struct Access {
             const float (*now)[4] = core.walk_rows_cpu_ + core.walk_block_rows_[item.block] + matrix * core::kRowsPerMatrix;
             const float (*before)[4] = ring_rows + core.walk_previous_[item.block] + matrix * core::kRowsPerMatrix;
             float here[2], was[2];
-            project(now, core.walk_view_terms_[item.view], p, here);
+            project_point(view, vp, now, core.walk_view_terms_[item.view], p, here);
             const float dx = here[0] - static_cast<float>(c.x), dy = here[1] - static_cast<float>(c.y);
             if (dx * dx + dy * dy < best) {
                 best = dx * dx + dy * dy;
                 best_vertex = v;
-                project(before, core.walk_view_previous_[item.view], p, was);
+                project_point(view, vp, before, core.walk_view_previous_[item.view], p, was);
                 computed[0] = was[0] - here[0];
                 computed[1] = was[1] - here[1];
             }
@@ -603,7 +583,6 @@ struct Access {
                 const ScaledViewport vp = viewport_pixels(view.viewport, core.renderer_.frame_map());
                 ProbeTotals& total = totals[kind];
                 ++total.items;
-                unsigned item_samples = 0u;
                 for (const Point& point : points) {
                     const float (*now_rows)[4] = core.walk_rows_cpu_ + core.walk_block_rows_[item.block] + point.matrix * core::kRowsPerMatrix;
                     const float (*before_rows)[4] = ring_rows + core.walk_previous_[item.block] + point.matrix * core::kRowsPerMatrix;
@@ -638,7 +617,6 @@ struct Access {
                     if (!read_any) {
                         continue;
                     }
-                    ++item_samples;
                     if (!written && expected_size >= 0.01f) {
                         ++total.skipped;  // nothing was drawn there: the sample says nothing about the vector
                         continue;
@@ -649,7 +627,6 @@ struct Access {
                         total.worst_source = item.source_hash;
                     }
                 }
-                static_cast<void>(item_samples);
             }
         }
         s.probe_item = NEBULA_NONE32;
@@ -789,8 +766,6 @@ struct Access {
                 core.renderer_.wait_for_gpu_idle();
                 s.probing = false;
                 s.replaying = false;
-                const auto* ring_rows = reinterpret_cast<const float (*)[4]>(core.renderer_.matrix_ring().cpu_base());
-                static_cast<void>(ring_rows);
                 unsigned read[2] = {0u, 0u}, written[2] = {0u, 0u};
                 constexpr unsigned kSamples = 16u;
                 for (unsigned n = 0u; n < kSamples; ++n) {

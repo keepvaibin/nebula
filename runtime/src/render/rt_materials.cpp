@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -212,7 +213,6 @@ void apply_class(const std::string& text, RtMaterial& m) {
 }
 
 std::vector<std::string> table_paths() {
-    std::vector<std::string> paths;
     const std::filesystem::path dir = program_directory();
     return {galaxy::path_text(dir / "rt-materials.tsv"), galaxy::path_text(dir / "rt-materials-lights.tsv")};
 }
