@@ -847,7 +847,8 @@ const u32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& 
     s32 xyShift = file->mBlockXYShift;
     s32 xShift = file->mBlockXShift;
     u32 slot = 0;
-    if (xyShift != -1 || xShift != -1) {
+    // -1 for both: one root block (DynamicCollisionObj).
+    if (xyShift >= 0 && xShift >= 0) {
         slot = ((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift);
     }
 

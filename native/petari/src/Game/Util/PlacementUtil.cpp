@@ -343,7 +343,9 @@ bool MR::getPlacementArg7NoInit(const TableIter& rIter, bool* pOut) {
 
 bool MR::isEqualObjectName(const TableIter& rIter, const char* pOtherName) {
     const char* objName;
-    getObjectName(&objName, rIter);
+    if (!getObjectName(&objName, rIter)) {
+        return false;
+    }
 
     return isEqualStringCase(objName, pOtherName);
 }
