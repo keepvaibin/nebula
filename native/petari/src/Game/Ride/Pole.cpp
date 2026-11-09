@@ -18,7 +18,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
-#include <cstring>
 
 namespace {
     static const f32 sSensorOffsetY = 50.0f;
@@ -92,23 +91,17 @@ void Pole::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &mInvertStick);
     s32 use9mCollision = -1;
     MR::getPlacementArg2NoInit(rIter, &use9mCollision);
-
-    if (use9mCollision == 1) {
-        mUsePole9mCollision = true;
-    }
+    mUsePole9mCollision = use9mCollision == 1;
 
     const char* name = nullptr;
     MR::getObjectName(&name, rIter);
-    if (strstr(name, "NoModel") != nullptr) {
-        mNoModel = true;
-    }
-    if (strstr(name, "Square") != nullptr) {
+    mNoModel = MR::isEqualSubString(name, "NoModel");
+    if (MR::isEqualSubString(name, "Square")) {
         mIsSquare = true;
         mDisableHandstand = true;
     }
 
     Pos3f mtx;
-    mtx.identity();
     MR::makeMtxTR(mtx.toMtxPtr(), this);
 
     mtx.getXDir(mSide);
@@ -148,7 +141,7 @@ void Pole::init(const TableIter& rIter) {
         if (MR::isEqualString(name, "Pole") && !mDisableHandstand) {
             MR::hideMaterial(this, "PoleTopStopMat_v");
         }
-        Pole::updateTopPos(mHeight);
+        updateTopPos(mHeight);
     } else {
         if (MR::isEqualString(name, "TreeCube")) {
             mHeight = 800.0f;
@@ -215,7 +208,7 @@ void Pole::exeDemoAppear() {
     }
 
     if (MR::isStep(this, ::sStepDemoAppear)) {
-        Pole::updateTopPos(mHeight);
+        updateTopPos(mHeight);
         MR::validateCollisionParts(this);
         MR::validateHitSensors(this);
         setNerve(GET_NERVE(Pole, PoleNrvFree));
@@ -339,8 +332,6 @@ void Pole::exeBindTurn() {
 
             MR::startBckPlayer("SquarePoleWait", "SquarePoleTurnEnd");
             setNerve(GET_NERVE(Pole, PoleNrvBindTurnEnd));
-        } else {
-            return;
         }
     } else if (!isEnableTurn()) {
         setNerve(GET_NERVE(Pole, PoleNrvBindWait));
@@ -449,17 +440,11 @@ void Pole::exeBindHandstandStart() {
         MR::startSound(mRider, "SE_PV_LIFT_UP");
     }
 
-    if (MR::isLessStep(this, ::sStepJumpReverseHandstandStart)) {
-        if (Pole::tryJump(false, 0.0f)) {
-            return;
-        }
-    } else {
-        if (Pole::tryJump(true, 0.0f)) {
-            return;
-        }
+    if (tryJump(!MR::isLessStep(this, ::sStepJumpReverseHandstandStart), 0.0f)) {
+        return;
     }
 
-    if (!Pole::tryHandstandTurn()) {
+    if (!tryHandstandTurn()) {
         if (MR::isBckStopped(mRider)) {
             setNerve(GET_NERVE(Pole, PoleNrvBindHandstandWait));
         }
@@ -471,7 +456,7 @@ void Pole::exeBindHandstandWait() {
         MR::startBckPlayer("TreeHandstandWait");
     }
 
-    if (!Pole::tryJump(true, 0.0f) && !Pole::tryHandstandTurn()) {
+    if (!tryJump(true, 0.0f) && !tryHandstandTurn()) {
         if (getPoleMoveStickY() < ::sEndHandstandStickY) {
             setNerve(GET_NERVE(Pole, PoleNrvBindHandstandEnd));
         }
@@ -483,11 +468,7 @@ void Pole::exeBindHandstandEnd() {
         MR::startBckPlayer("TreeHandstandEnd");
     }
 
-    if (MR::isLessStep(this, ::sStepJumpReverseHandstandEnd)) {
-        if (tryJump(true, 0.0f)) {
-            return;
-        }
-    } else if (tryJump(false, 0.0f)) {
+    if (tryJump(MR::isLessStep(this, ::sStepJumpReverseHandstandEnd), 0.0f)) {
         return;
     }
 
@@ -584,17 +565,11 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         Vec3f climbProj = mPosition;
         climbProj.sub(mBasePos);
         mClimbCoord = climbProj.dot(mUp);
-        f32 poleTop = mHeight;
-        f32 clamped;
         if (mClimbCoord < 120.0f) {
-            clamped = 120.0f;
-        } else if (mClimbCoord > poleTop) {
-            clamped = poleTop;
-        } else {
-            clamped = mClimbCoord;
+            mClimbCoord = 120.0f;
+        } else if (mClimbCoord > mHeight) {
+            mClimbCoord = mHeight;
         }
-
-        mClimbCoord = clamped;
         mClimbSpeed = 0.0f;
         updateBindTrans();
 
@@ -730,10 +705,7 @@ bool Pole::tryHandstandTurn() {
 }
 
 bool Pole::isEnableTurn() const {
-    if (MR::abs(getPoleMoveStickX()) > ::sTurnStickMin) {
-        return true;
-    }
-    return false;
+    return MR::abs(getPoleMoveStickX()) > ::sTurnStickMin;
 }
 
 void Pole::updateBindTrans() {

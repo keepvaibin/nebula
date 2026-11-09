@@ -8,7 +8,6 @@
 class AudTamakoroBgmCtrl;
 class JointController;
 struct JointControllerInfo;
-class SphereAccelSensorController;
 class TamakoroTutorial;
 
 class Tamakoro : public LiveActor {
@@ -103,7 +102,6 @@ public:
     }
 
 private:
-    SphereAccelSensorController* mAccelSensorCtrl;
     TamakoroTutorial* mTutorial;
     JointController* mJointCtrl;
     Quat4f mBallRotateQuat;

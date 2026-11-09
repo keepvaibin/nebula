@@ -13,6 +13,9 @@ public:
     SurfRayTutorial(LiveActor*, TalkMessageCtrl*, const TableIter&);
 
     bool update();
+    void updateLessonStart(s32, void (SurfingGuidance::*)());
+    void updateLessonFailure(bool (SurfRayTutorial::*)() const);
+    void updateLessonUpkeep(bool (SurfRayTutorial::*)() const, void (SurfingGuidance::*)(), void (SurfingGuidance::*)(), const char*);
     void exeTutorialAllStart();
     void exeTutorialStraightStart();
     void exeTutorialStraightFailure();
