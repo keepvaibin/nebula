@@ -96,7 +96,8 @@ namespace {
     const f32 cHomeButtonWidth = 250.0f;
     const f32 cHomeGap = 12.0f;
     const s32 cDropFrames = 16;  // the window's drop from above, and its rise away
-    const s32 cRowsMax = NEBULA_SETTINGS_ROWS;
+    const s32 cRowsFirst = 96;  // the rows made with the screen; more when a page has more
+    const s32 cTabsFirst = 8;   // the page buttons made with the screen; more when there are more pages
     const s32 cHintsMax = 3;
     const s32 cRowButtonsFirst = 6;  // the launcher's buttons made with the screen; more when a row has more
     const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
@@ -757,9 +758,87 @@ namespace {
         }
     }
 
-    // The page's row `row` (counted from its first), or null outside the part of the page the host sent.
+    // The host's view kept by the game: its strings, page names and rows are copies in this view's own storage, valid
+    // until the next copyFrom.
+    struct ShownView : NebulaSettingsView {
+        MR::GrowBuffer< char > mTextStore;
+        MR::GrowBuffer< NebulaSettingsRow > mRowStore;
+        MR::GrowBuffer< const char* > mPageStore;
+
+        // Closed and empty, holding no storage yet: made with the screen.
+        void reset() {
+            memset(static_cast< void* >(static_cast< NebulaSettingsView* >(this)), 0, sizeof(NebulaSettingsView));
+            mTextStore.mItems = nullptr;
+            mTextStore.mRoom = 0;
+            mRowStore.mItems = nullptr;
+            mRowStore.mRoom = 0;
+            mPageStore.mItems = nullptr;
+            mPageStore.mRoom = 0;
+        }
+
+        void copyFrom(const NebulaSettingsView& rFrom);
+    };
+
+    // The characters a string takes with its terminator; a missing string is empty.
+    u32 textUnits(const char* pText) {
+        return pText != nullptr ? static_cast< u32 >(strlen(pText)) + 1 : 1;
+    }
+
+    // `pText` (empty when missing) at *ppAt, which moves past it; the copy.
+    const char* putText(char** ppAt, const char* pText) {
+        char* const pStart = *ppAt;
+        const u32 units = textUnits(pText);
+        if (pText != nullptr) {
+            memcpy(pStart, pText, units);
+        } else {
+            pStart[0] = '\0';
+        }
+        *ppAt += units;
+        return pStart;
+    }
+
+    void ShownView::copyFrom(const NebulaSettingsView& rFrom) {
+        const u32 pageCount = rFrom.pages != nullptr ? rFrom.page_count : 0;
+        const u32 rowCount = rFrom.rows != nullptr ? rFrom.total_rows : 0;
+        u32 units = textUnits(rFrom.help) + textUnits(rFrom.status_text) + textUnits(rFrom.long_text);
+        for (u32 i = 0; i < pageCount; i++) {
+            units += textUnits(rFrom.pages[i]);
+        }
+        for (u32 i = 0; i < rowCount; i++) {
+            units += textUnits(rFrom.rows[i].label) + textUnits(rFrom.rows[i].value);
+        }
+        char* pAt = mTextStore.room(units);
+        NebulaSettingsRow* const pRows = mRowStore.room(rowCount);
+        const char** const pPages = mPageStore.room(pageCount);
+        static_cast< NebulaSettingsView& >(*this) = rFrom;
+        page_count = pageCount;
+        total_rows = rowCount;
+        pages = pPages;
+        rows = pRows;
+        for (u32 i = 0; i < pageCount; i++) {
+            pPages[i] = putText(&pAt, rFrom.pages[i]);
+        }
+        for (u32 i = 0; i < rowCount; i++) {
+            pRows[i].label = putText(&pAt, rFrom.rows[i].label);
+            pRows[i].value = putText(&pAt, rFrom.rows[i].value);
+            pRows[i].flags = rFrom.rows[i].flags;
+            pRows[i].slider_steps = rFrom.rows[i].slider_steps;
+            pRows[i].slider_at = rFrom.rows[i].slider_at;
+        }
+        help = putText(&pAt, rFrom.help);
+        status_text = putText(&pAt, rFrom.status_text);
+        long_text = putText(&pAt, rFrom.long_text);
+    }
+
+    // Two rows of the host's view that look alike.
+    bool isSameRow(const NebulaSettingsRow& rA, const NebulaSettingsRow& rB) {
+        return rA.flags == rB.flags && rA.slider_steps == rB.slider_steps && rA.slider_at == rB.slider_at &&
+               MR::isEqualString(rA.label, rB.label) && MR::isEqualString(rA.value, rB.value);
+    }
+
+    // The page's row `row` (counted from its first), or null past its last.
     const NebulaSettingsRow* rowAt(const NebulaSettingsView& rView, u32 row) {
-        return row >= rView.first_row && row - rView.first_row < rView.row_count ? &rView.rows[row - rView.first_row] : nullptr;
+        return row < rView.total_rows ? &rView.rows[row] : nullptr;
     }
 
     bool hasButtons(const NebulaSettingsRow* pRow) {
@@ -788,7 +867,7 @@ namespace {
 
     // The MODS page's two lists show.
     bool hasModLists(const NebulaSettingsView& rView) {
-        for (u32 i = 0; i < rView.row_count; i++) {
+        for (u32 i = 0; i < rView.total_rows; i++) {
             if (modList(rView.rows[i]) >= 0) {
                 return true;
             }
@@ -846,6 +925,10 @@ private:
     bool makeButton(Pane* pParent, Button* pButton, const char* pName);
     bool addRowChip();
     bool addModButtons(s32 count);
+    bool addTab();
+    bool addRow();
+    void ensureTabs(s32 count);
+    void ensureRows(s32 count);
     void arrange();
     void fillTexts(const NebulaSettingsView& rView, const NebulaSettingsView* pShown);
     void fillButton(Button& rButton, const char* pWordId);
@@ -885,11 +968,13 @@ private:
     Window* mShadow;
     Window* mPanel;
     TextBox* mTitle;
-    Chip mTabs[NEBULA_SETTINGS_PAGES];
-    f32 mTabWordWidths[NEBULA_SETTINGS_PAGES];
+    MR::GrowBuffer< Chip > mTabs;  // the page buttons, made as the pages need them
+    MR::GrowBuffer< f32 > mTabWordWidths;
+    s32 mTabsMade;
     Pane* mList;
     Window* mHighlight;
-    Row mRows[cRowsMax];
+    MR::GrowBuffer< Row > mRows;  // one per row of the page, made as the pages need them
+    s32 mRowsMade;
     MR::GrowBuffer< RowChip > mRowChips;  // the rows' buttons, made as the rows in sight need them
     s32 mRowChipCount;
     // The MODS page: its two lists (the mods off, the mods on) with their titles and what an empty one says, a line
@@ -903,8 +988,8 @@ private:
     u32 mModButtonsVersion;  // the words they show (Row::mButtonsVersion)
     s32 mModButtonCount;
     s32 mModButtonsRow;  // the buttons' row; -1 none
-    s32 mItemList[cRowsMax];   // each row's list (-1 none) and place in it
-    s32 mItemPlace[cRowsMax];
+    MR::GrowBuffer< s32 > mItemList;   // each row's list (-1 none) and place in it, room for every row
+    MR::GrowBuffer< s32 > mItemPlace;
     s32 mModCounts[2];
     f32 mModScroll[2];
     f32 mModLeft[2];  // each list's left edge
@@ -956,7 +1041,7 @@ private:
     f32 mQuestionInk;    // the question text's height from its first capitals' tops to its last baseline
 
     NebulaSettingsView mRead;   // the host's view this step
-    NebulaSettingsView mShown;  // the host's view as drawn
+    ShownView mShown;           // the host's view as drawn, copied
     f32 mOpen;                  // 0 away, 1 in place
     bool mClosing;
     s32 mQuestionShown;  // cQuestions' index; -1 none
@@ -1033,10 +1118,12 @@ NebulaSettingsScreen::NebulaSettingsScreen()
       mHoverSlider(false), mHeldArrow(0), mHeldFrames(0), mSliderRow(-1), mHoverRowButton(-1), mHoverButton(nullptr), mScaleX(1.0f), mWidth(0.0f), mHeight(0.0f), mPanelWidth(0.0f),
       mPanelHeight(0.0f), mLeft(0.0f), mRight(0.0f), mTitleY(0.0f), mTabY(0.0f), mListTop(0.0f), mListBottom(0.0f), mStatusY(0.0f),
       mHintsY(0.0f), mFooterY(0.0f), mValueRight(0.0f) {
-    memset(mTabs, 0, sizeof(mTabs));
+    memset(&mTabs, 0, sizeof(mTabs));
+    mTabsMade = 0;
     memset(mHalves, 0, sizeof(mHalves));
-    memset(mTabWordWidths, 0, sizeof(mTabWordWidths));
-    memset(mRows, 0, sizeof(mRows));
+    memset(&mTabWordWidths, 0, sizeof(mTabWordWidths));
+    memset(&mRows, 0, sizeof(mRows));
+    mRowsMade = 0;
     memset(&mRowChips, 0, sizeof(mRowChips));
     mRowChipCount = 0;
     memset(mModPanels, 0, sizeof(mModPanels));
@@ -1044,8 +1131,8 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     memset(mModEmpty, 0, sizeof(mModEmpty));
     memset(&mModButtons, 0, sizeof(mModButtons));
     mModButtonsMade = 0;
-    memset(mItemList, 0, sizeof(mItemList));
-    memset(mItemPlace, 0, sizeof(mItemPlace));
+    memset(&mItemList, 0, sizeof(mItemList));
+    memset(&mItemPlace, 0, sizeof(mItemPlace));
     memset(mModCounts, 0, sizeof(mModCounts));
     memset(mModScroll, 0, sizeof(mModScroll));
     memset(mModLeft, 0, sizeof(mModLeft));
@@ -1078,7 +1165,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     memset(mHints, 0, sizeof(mHints));
     memset(mFooter, 0, sizeof(mFooter));
     memset(mChoices, 0, sizeof(mChoices));
-    memset(&mShown, 0, sizeof(mShown));
+    mShown.reset();
     mKits.mText = &mTextKit;
     mKits.mWindow = &mWindowKit;
     mKits.mButton = &mButtonKit;
@@ -1147,6 +1234,106 @@ bool NebulaSettingsScreen::addModButtons(s32 count) {
     return true;
 }
 
+// The next page button, hidden until a page needs it.
+bool NebulaSettingsScreen::addTab() {
+    const s32 i = mTabsMade;
+    Chip& rTab = mTabs.room(static_cast< u32 >(i) + 1)[i];
+    memset(static_cast< void* >(&rTab), 0, sizeof(rTab));
+    mTabWordWidths.room(static_cast< u32 >(i) + 1)[i] = 0.0f;
+    char name[16];
+    nebula_snprintf(name, sizeof(name), "NsTab%d", static_cast< int >(i));
+    if (!makeChip(mKits, mPage, &rTab, name, false, cTabSize, cButtonText)) {
+        return false;
+    }
+    setInfluencedAlphaRecursive(rTab.mRoot, 0);
+    mTabsMade++;
+    return true;
+}
+
+// The next row's panes, hidden until a page shows a row there.
+bool NebulaSettingsScreen::addRow() {
+    const s32 i = mRowsMade;
+    char name[16];
+    Row& rRow = mRows.room(static_cast< u32 >(i) + 1)[i];
+    memset(static_cast< void* >(&rRow), 0, sizeof(rRow));
+    nebula_snprintf(name, sizeof(name), "NsRow%d", static_cast< int >(i));
+    rRow.mRoot = makeGroup(mList, name);
+    if (rRow.mRoot == nullptr) {
+        return false;
+    }
+    nebula_snprintf(name, sizeof(name), "NsFrame%d", static_cast< int >(i));
+    rRow.mFrame = makeWindow(mKits, rRow.mRoot, name);
+    nebula_snprintf(name, sizeof(name), "NsRule%d", static_cast< int >(i));
+    rRow.mRule = makeWindow(mKits, rRow.mRoot, name);
+    nebula_snprintf(name, sizeof(name), "NsLabel%d", static_cast< int >(i));
+    rRow.mLabel = makeText(mKits, rRow.mRoot, name, 96);
+    nebula_snprintf(name, sizeof(name), "NsValue%d", static_cast< int >(i));
+    rRow.mValue = makeText(mKits, rRow.mRoot, name, 128);
+    nebula_snprintf(name, sizeof(name), "NsTrack%d", static_cast< int >(i));
+    rRow.mSliderTrack = makeWindow(mKits, rRow.mRoot, name);
+    nebula_snprintf(name, sizeof(name), "NsFill%d", static_cast< int >(i));
+    rRow.mSliderFill = makeWindow(mKits, rRow.mRoot, name);
+    if (rRow.mFrame == nullptr || rRow.mRule == nullptr || rRow.mLabel == nullptr || rRow.mValue == nullptr ||
+        rRow.mSliderTrack == nullptr || rRow.mSliderFill == nullptr) {
+        return false;
+    }
+    paint(rRow.mRule, cRule, cRule);
+    paint(rRow.mSliderTrack, cSliderTrack, cSliderTrack);
+    paint(rRow.mSliderFill, cSliderFill, cSliderFill);
+    setInfluencedAlphaRecursive(rRow.mRoot, 0);
+    mRowsMade++;
+    return true;
+}
+
+// Page buttons for `count` pages. A button that cannot be made leaves the menu unbuilt.
+void NebulaSettingsScreen::ensureTabs(s32 count) {
+    while (mTabsMade < count) {
+        if (!addTab()) {
+            GameLog("NebulaSettingsMenu: a page button could not be made\n");
+            mBuilt = false;
+            return;
+        }
+    }
+}
+
+// Room for `count` rows: their panes, and each row's list and place. Panes made after the first batch go in front of
+// the row buttons and the drop line, as the first ones are. A row that cannot be made leaves the menu unbuilt.
+void NebulaSettingsScreen::ensureRows(s32 count) {
+    const u32 want = count > 0 ? static_cast< u32 >(count) : 0;
+    const u32 hadList = mItemList.mRoom;
+    s32* const pList = mItemList.room(want);
+    for (u32 i = hadList; i < mItemList.mRoom; i++) {
+        pList[i] = 0;
+    }
+    const u32 hadPlace = mItemPlace.mRoom;
+    s32* const pPlace = mItemPlace.room(want);
+    for (u32 i = hadPlace; i < mItemPlace.mRoom; i++) {
+        pPlace[i] = 0;
+    }
+    if (mRowsMade >= count) {
+        return;
+    }
+    while (mRowsMade < count) {
+        if (!addRow()) {
+            GameLog("NebulaSettingsMenu: a row could not be made\n");
+            mBuilt = false;
+            return;
+        }
+    }
+    if (mDropLine != nullptr) {
+        for (s32 k = 0; k < mRowChipCount && k < cRowChipsFirst; k++) {
+            mList->RemoveChild(mRowChips[k].mChip.mRoot);
+            mList->AppendChild(mRowChips[k].mChip.mRoot);
+        }
+        mList->RemoveChild(mDropLine);
+        mList->AppendChild(mDropLine);
+        for (s32 k = cRowChipsFirst; k < mRowChipCount; k++) {
+            mList->RemoveChild(mRowChips[k].mChip.mRoot);
+            mList->AppendChild(mRowChips[k].mChip.mRoot);
+        }
+    }
+}
+
 bool NebulaSettingsScreen::build() {
     LayoutManager* pManager = getLayoutManager();
     Pane* pRoot = pManager->mLayout->mpRootPane;
@@ -1183,10 +1370,8 @@ bool NebulaSettingsScreen::build() {
         return false;
     }
     setTextStyle(mTitle, cTitleSize, cText, cText, 3);
-    for (s32 i = 0; i < NEBULA_SETTINGS_PAGES; i++) {
-        char name[16];
-        nebula_snprintf(name, sizeof(name), "NsTab%d", static_cast< int >(i));
-        if (!makeChip(mKits, mPage, &mTabs[i], name, false, cTabSize, cButtonText)) {
+    while (mTabsMade < cTabsFirst) {
+        if (!addTab()) {
             return false;
         }
     }
@@ -1212,33 +1397,10 @@ bool NebulaSettingsScreen::build() {
         return false;
     }
     paint(mHighlight, cHighlightFill, cHighlightRing);
-    for (s32 i = 0; i < cRowsMax; i++) {
-        char name[16];
-        Row& rRow = mRows[i];
-        nebula_snprintf(name, sizeof(name), "NsRow%d", static_cast< int >(i));
-        rRow.mRoot = makeGroup(mList, name);
-        if (rRow.mRoot == nullptr) {
+    while (mRowsMade < cRowsFirst) {
+        if (!addRow()) {
             return false;
         }
-        nebula_snprintf(name, sizeof(name), "NsFrame%d", static_cast< int >(i));
-        rRow.mFrame = makeWindow(mKits, rRow.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NsRule%d", static_cast< int >(i));
-        rRow.mRule = makeWindow(mKits, rRow.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NsLabel%d", static_cast< int >(i));
-        rRow.mLabel = makeText(mKits, rRow.mRoot, name, 96);
-        nebula_snprintf(name, sizeof(name), "NsValue%d", static_cast< int >(i));
-        rRow.mValue = makeText(mKits, rRow.mRoot, name, 128);
-        nebula_snprintf(name, sizeof(name), "NsTrack%d", static_cast< int >(i));
-        rRow.mSliderTrack = makeWindow(mKits, rRow.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NsFill%d", static_cast< int >(i));
-        rRow.mSliderFill = makeWindow(mKits, rRow.mRoot, name);
-        if (rRow.mFrame == nullptr || rRow.mRule == nullptr || rRow.mLabel == nullptr || rRow.mValue == nullptr ||
-            rRow.mSliderTrack == nullptr || rRow.mSliderFill == nullptr) {
-            return false;
-        }
-        paint(rRow.mRule, cRule, cRule);
-        paint(rRow.mSliderTrack, cSliderTrack, cSliderTrack);
-        paint(rRow.mSliderFill, cSliderFill, cSliderFill);
     }
     while (mRowChipCount < cRowChipsFirst) {
         if (!addRowChip()) {
@@ -1414,10 +1576,22 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         getText(text, "SettingsTitle");
         setText(mTitle, text.c_str());
         measure(mTitle, 4000.0f, &width, &height);
-        for (u32 i = 0; i < NEBULA_SETTINGS_PAGES; i++) {
+    }
+    ensureTabs(static_cast< s32 >(rView.page_count));
+    ensureRows(static_cast< s32 >(rView.total_rows));
+    if (!mBuilt) {
+        return;
+    }
+    // The page names, when they are new.
+    bool samePages = pShown != nullptr && pShown->page_count == rView.page_count;
+    for (u32 i = 0; samePages && i < rView.page_count; i++) {
+        samePages = MR::isEqualString(pShown->pages[i], rView.pages[i]);
+    }
+    if (!samePages) {
+        for (s32 i = 0; i < mTabsMade; i++) {
             Chip& rTab = mTabs[i];
-            rTab.mRoot->SetVisible(i < rView.page_count);
-            if (i >= rView.page_count) {
+            rTab.mRoot->SetVisible(i < static_cast< s32 >(rView.page_count));
+            if (i >= static_cast< s32 >(rView.page_count)) {
                 continue;
             }
             translateLine(text, rView.pages[i], false);
@@ -1425,20 +1599,19 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
             measure(rTab.mText, 4000.0f, &mTabWordWidths[i], &height);
         }
     }
-    const bool samePage = pShown != nullptr && pShown->page == rView.page && pShown->first_row == rView.first_row &&
-                          pShown->input == rView.input;
+    const bool samePage = pShown != nullptr && pShown->page == rView.page && pShown->input == rView.input;
     s32 onPlace = 0;  // the mods on, counted
-    for (s32 i = 0; i < cRowsMax; i++) {
+    for (s32 i = 0; i < mRowsMade; i++) {
         Row& rRow = mRows[i];
-        const bool modOn = i < static_cast< s32 >(rView.row_count) && modList(rView.rows[i]) == 1 &&
+        const bool modOn = i < static_cast< s32 >(rView.total_rows) && modList(rView.rows[i]) == 1 &&
                            (rView.rows[i].flags & NEBULA_SETTINGS_ROW_HEADING) == 0;
         onPlace += modOn ? 1 : 0;
         const s32 place = modOn ? onPlace : 0;
-        const bool shown = i < static_cast< s32 >(rView.row_count);
+        const bool shown = i < static_cast< s32 >(rView.total_rows);
         rRow.mRoot->SetVisible(shown);
         // A row whose data is unchanged keeps its text unless its number moved (a mod above it left the list).
-        if (!shown || (samePage && rRow.mOnPlace == place && i < static_cast< s32 >(pShown->row_count) &&
-                       memcmp(&rView.rows[i], &pShown->rows[i], sizeof(NebulaSettingsRow)) == 0)) {
+        if (!shown || (samePage && rRow.mOnPlace == place && i < static_cast< s32 >(pShown->total_rows) &&
+                       isSameRow(rView.rows[i], pShown->rows[i]))) {
             continue;
         }
         const NebulaSettingsRow& rData = rView.rows[i];
@@ -1900,7 +2073,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
             const NebulaSettingsRow* pData = row >= 0 ? rowAt(rView, static_cast< u32 >(row)) : nullptr;
             if (pData != nullptr && (pData->flags & NEBULA_SETTINGS_ROW_HEADING) == 0) {
                 mHoverRow = row;
-                const Row& rRow = mRows[row - static_cast< s32 >(rView.first_row)];
+                const Row& rRow = mRows[row];
                 // A row's buttons and arrows reach the whole row's height, and half the room to what is beside them.
                 for (s32 i = 0; i < rRow.mButtonCount; i++) {
                     if (__builtin_fabsf(x - rRow.mButtons[i].mX) <= (rRow.mButtons[i].mWidth + cRowButtonGap) * 0.5f) {
@@ -2020,7 +2193,7 @@ void NebulaSettingsScreen::clickRow(const NebulaSettingsView& rView, s32 row) {
     if (pData == nullptr) {
         return;
     }
-    const Row& rRow = mRows[row - static_cast< s32 >(rView.first_row)];
+    const Row& rRow = mRows[row];
     mPointerMode = true;
     mPointerRow = row;
     if (hasButtons(pData) && (mHoverRowButton >= 0 || rRow.mButtonCount == 1)) {
@@ -2039,7 +2212,7 @@ void NebulaSettingsScreen::dragSlider(const NebulaSettingsView& rView, f32 x) {
         mSliderRow = -1;
         return;
     }
-    const Row& rRow = mRows[mSliderRow - static_cast< s32 >(rView.first_row)];
+    const Row& rRow = mRows[mSliderRow];
     const f32 length = rRow.mSliderRight - rRow.mSliderLeft;
     if (length <= 0.0f) {
         return;
@@ -2059,7 +2232,7 @@ void NebulaSettingsScreen::dragSlider(const NebulaSettingsView& rView, f32 x) {
 // or bottom edge, the list scrolls under it. Held down on a list's free space and moved, the list scrolls; a click on a
 // button presses it.
 void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y) {
-    const Row* const pButtonsRow = mModButtonsRow >= 0 ? &mRows[mModButtonsRow - static_cast< s32 >(rView.first_row)] : nullptr;
+    const Row* const pButtonsRow = mModButtonsRow >= 0 ? &mRows[mModButtonsRow] : nullptr;
     for (s32 i = 0; i < mModButtonCount; i++) {
         if (!(pButtonsRow != nullptr && pButtonsRow->mButtons[i].mOff) && isOnButton(x, y, mModButtons[i].mX, mModButtonsY, mModButtons[i].mWidth, cButtonHeight, 8.0f)) {
             mHoverModButton = i;
@@ -2076,9 +2249,9 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
     s32 hovered = -1;
     if (overList >= 0 && y <= mModItemsTop && y >= mModItemsBottom) {
         const s32 place = static_cast< s32 >((mModItemsTop - y + mModScroll[overList]) / cModHeight);
-        for (s32 i = 0; i < static_cast< s32 >(rView.row_count) && i < cRowsMax; i++) {
+        for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
             if (mItemList[i] == overList && mItemPlace[i] == place) {
-                hovered = static_cast< s32 >(rView.first_row) + i;
+                hovered = i;
             }
         }
     }
@@ -2096,7 +2269,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         return;
     }
     if (mDragRow >= 0) {
-        const s32 index = mDragRow - static_cast< s32 >(rView.first_row);
+        const s32 index = mDragRow;
         const bool moved = __builtin_fabsf(x - mDragFromX) > cDragStart || __builtin_fabsf(y - mDragFromY) > cDragStart;
         if (!mDragging && moved) {
             mDragging = true;
@@ -2115,7 +2288,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         }
         if (!MR::isHeldJump(PLAYER_1)) {
             // Let go: into the list under the pointer at the line's place (counted without the mod itself).
-            if (mDragging && mDropList >= 0 && index >= 0 && index < cRowsMax) {
+            if (mDragging && mDropList >= 0 && index >= 0 && index < static_cast< s32 >(rView.total_rows)) {
                 s32 place = mDropPlace;
                 if (mDropList == mItemList[index] && place > mItemPlace[index]) {
                     place--;
@@ -2331,8 +2504,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     mClipBottom = mModItemsBottom;
     const f32 inner = mModItemsTop - mModItemsBottom;
 
-    // Each row's list and place (in the whole list: the host sends a long page's rows around the selection); the
-    // selection's.
+    // Each row's list and place (in the whole list); the selection's.
     mModCounts[0] = static_cast< s32 >(rView.mod_list_count[0]);
     mModCounts[1] = static_cast< s32 >(rView.mod_list_count[1]);
     s32 seen[2] = {0, 0};
@@ -2340,9 +2512,9 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     s32 selectedList = -1;
     s32 selectedPlace = 0;
     bool held = false;
-    for (s32 i = 0; i < static_cast< s32 >(rView.row_count) && i < cRowsMax; i++) {
+    for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
         const NebulaSettingsRow& rData = rView.rows[i];
-        const s32 row = static_cast< s32 >(rView.first_row) + i;
+        const s32 row = i;
         mItemList[i] = (rData.flags & NEBULA_SETTINGS_ROW_HEADING) != 0 ? -1 : modList(rData);
         if (hasButtons(&rData)) {
             mModButtonsRow = row;
@@ -2351,7 +2523,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
             mRows[i].mRoot->SetVisible(false);
             continue;
         }
-        mItemPlace[i] = static_cast< s32 >(rView.mod_list_first[mItemList[i]]) + seen[mItemList[i]]++;
+        mItemPlace[i] = seen[mItemList[i]]++;
         if (row == static_cast< s32 >(rView.selected)) {
             selectedList = mItemList[i];
             selectedPlace = mItemPlace[i];
@@ -2383,12 +2555,12 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     // The mods in their lists; the dragged one under the pointer.
     f32 highlightX = 0.0f;
     f32 highlightY = 0.0f;
-    for (s32 i = 0; i < static_cast< s32 >(rView.row_count) && i < cRowsMax; i++) {
+    for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
         if (mItemList[i] < 0) {
             continue;
         }
         Row& rRow = mRows[i];
-        const s32 row = static_cast< s32 >(rView.first_row) + i;
+        const s32 row = i;
         const s32 list = mItemList[i];
         f32 x = mModLeft[list];
         f32 y = mModItemsTop - mItemPlace[i] * cModHeight - cModHeight * 0.5f + mModScroll[list];
@@ -2417,7 +2589,15 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
             y += 2.0f;  // picked up
         }
         rRow.mRoot->mTranslate = Vec3f(x, y, 0.0f);
-        rRow.mRoot->SetVisible(dragged || (y < mModItemsTop + cModHeight && y > mModItemsBottom - cModHeight));
+        const bool inView = dragged || (y < mModItemsTop + cModHeight && y > mModItemsBottom - cModHeight);
+        rRow.mRoot->SetVisible(inView);
+        if (row == static_cast< s32 >(rView.selected)) {
+            highlightX = x + mModWidth * 0.5f;
+            highlightY = y;
+        }
+        if (!inView) {
+            continue;  // out of sight: nothing of it is laid out until it scrolls in
+        }
         const f32 room = mModWidth - 28.0f;
         rRow.mLabel->mScale = Vec2f(rRow.mLabelWidth > room && rRow.mLabelWidth > 0.0f ? clamp(room / rRow.mLabelWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
         rRow.mLabel->mTranslate = Vec3f(14.0f, textCentre(0.0f, cTextSize), 0.0f);
@@ -2426,10 +2606,6 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         rRow.mRule->SetVisible(false);
         rRow.mSliderTrack->SetVisible(false);
         rRow.mSliderFill->SetVisible(false);
-        if (row == static_cast< s32 >(rView.selected)) {
-            highlightX = x + mModWidth * 0.5f;
-            highlightY = y;
-        }
     }
 
     // A few frames on from the drop, the dropped mod is drawn as the view has it whatever it holds.
@@ -2443,10 +2619,10 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     paint(mHighlight, cHighlightFill, lifted ? cAccent : cHighlightRing);
     shape(mHighlight, highlightX, mHighlightY, mModWidth - 8.0f, cModHeight - 2.0f, 9.0f);
     mHighlight->SetVisible(selectedList >= 0 && mQuestionShown < 0);
-    for (s32 i = 0; i < static_cast< s32 >(rView.row_count) && i < cRowsMax; i++) {
-        if (mItemList[i] >= 0) {
-            setTextColor(mRows[i].mLabel, lifted && static_cast< s32 >(rView.first_row) + i == static_cast< s32 >(rView.selected) ? cAccent : cText,
-                         lifted && static_cast< s32 >(rView.first_row) + i == static_cast< s32 >(rView.selected) ? cAccent : cText);
+    for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
+        if (mItemList[i] >= 0 && mRows[i].mRoot->IsVisible()) {
+            setTextColor(mRows[i].mLabel, lifted && i == static_cast< s32 >(rView.selected) ? cAccent : cText,
+                         lifted && i == static_cast< s32 >(rView.selected) ? cAccent : cText);
         }
     }
 
@@ -2476,7 +2652,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     }
 
     // The buttons, the window's width shared, words narrowed to fit.
-    const Row* pButtons = mModButtonsRow >= 0 ? &mRows[mModButtonsRow - static_cast< s32 >(rView.first_row)] : nullptr;
+    const Row* pButtons = mModButtonsRow >= 0 ? &mRows[mModButtonsRow] : nullptr;
     mModButtonCount = pButtons != nullptr ? pButtons->mButtonCount : 0;
     if (!addModButtons(mModButtonCount) && mModButtonCount > mModButtonsMade) {
         mModButtonCount = mModButtonsMade;
@@ -2551,13 +2727,13 @@ RowChip& NebulaSettingsScreen::useRowChip(s32 index, s32 row, s32 button, u32 ve
 void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
     const bool asking = mQuestionShown >= 0;
     s32 next = 0;
-    for (s32 i = 0; i < static_cast< s32 >(rView.row_count) && i < cRowsMax; i++) {
+    for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
         Row& rRow = mRows[i];
         const f32 y = rRow.mRoot->mTranslate.y;
         if (!rRow.mRoot->IsVisible()) {
             continue;
         }
-        const s32 row = static_cast< s32 >(rView.first_row) + i;
+        const s32 row = i;
         const NebulaSettingsRow& rData = rView.rows[i];
         for (s32 a = 0; a < 2 && rRow.mArrows; a++) {
             // The ▲ turned to point back or on, its ink centred on the button whatever the glyph's own margins: turned
@@ -2628,14 +2804,18 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
     }
     mScrollTarget = clamp(mScrollTarget, 0.0f, maxScroll);
     mScroll = mFrame <= 1 || mScrollDrag ? mScrollTarget : mScroll + (mScrollTarget - mScroll) * 0.35f;
-    for (s32 i = 0; i < static_cast< s32 >(rView.row_count) && i < cRowsMax; i++) {
+    for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
         Row& rRow = mRows[i];
         const NebulaSettingsRow& rData = rView.rows[i];
         const bool heading = (rData.flags & NEBULA_SETTINGS_ROW_HEADING) != 0;
-        const s32 row = static_cast< s32 >(rView.first_row) + i;
+        const s32 row = i;
         const f32 y = mListTop - row * cRowHeight - cRowHeight * 0.5f + mScroll;
         rRow.mRoot->mTranslate = Vec3f(0.0f, y, 0.0f);
-        rRow.mRoot->SetVisible(y < mListTop + cRowHeight && y > mListBottom - cRowHeight);
+        const bool inView = y < mListTop + cRowHeight && y > mListBottom - cRowHeight;
+        rRow.mRoot->SetVisible(inView);
+        if (!inView) {
+            continue;  // out of sight: nothing of it is laid out until it scrolls in
+        }
         const f32 labelX = mLeft + (rRow.mIndented ? 30.0f : heading ? 2.0f : 16.0f);
         rRow.mLabel->mScale = Vec2f(1.0f, 1.0f);
         rRow.mLabel->mTranslate = Vec3f(labelX, textCentre(heading ? -2.0f : 0.0f, heading ? cHeadingSize : cTextSize), 0.0f);
@@ -2986,17 +3166,20 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
             mHoverTab = -1;
             mQuestionShown = -1;
             mQuestion->SetVisible(false);
-            for (s32 i = 0; i < NEBULA_SETTINGS_PAGES; i++) {
+            for (s32 i = 0; i < mTabsMade; i++) {
                 mTabs[i].mFocusLevel = 0.0f;
             }
             mFooter[FooterApply].mChip.mFocusLevel = 0.0f;
             mFooter[FooterBack].mChip.mFocusLevel = 0.0f;
             arrange();
-            memcpy(&mShown, &rView, sizeof(rView));
+            mShown.copyFrom(rView);
             if (home) {
                 fillHome(homeView);
             } else {
                 fillTexts(mShown, nullptr);
+                if (!mBuilt) {
+                    return;
+                }
             }
         }
         mClosing = false;
@@ -3048,7 +3231,7 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
         if (homeView >= 0 && homeView != mHomeView) {
             fillHome(homeView);
         }
-    } else if (view.open && memcmp(&view, &mShown, sizeof(view)) != 0) {
+    } else if (view.open && (view.open != mShown.open || view.revision != mShown.revision)) {
         // What changed, as the game's menus sound it.
         if (rView.page != mShown.page) {
             MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
@@ -3078,7 +3261,10 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
             MR::startSystemSE("SE_SY_TALK_OK");
         }
         fillTexts(view, &mShown);
-        memcpy(&mShown, &view, sizeof(view));
+        if (!mBuilt) {
+            return;
+        }
+        mShown.copyFrom(view);
     }
     if (wanted && !mClosing) {
         readPointer(mShown);
