@@ -229,7 +229,11 @@ struct State {
     HANDLE changed = nullptr;
     std::deque<std::pair<std::uint64_t, std::uint16_t>> waiting;
     std::map<std::wstring, Entry> connected;
+    // A controller whose set-up failed is not tried again before this time: its advertisements would otherwise queue it
+    // again at once, and every try is a full GATT discovery.
+    std::map<std::uint64_t, std::chrono::steady_clock::time_point> retry_after;
 };
+constexpr std::chrono::seconds kRetryAfterFailure{5};
 State& state() {
     static State s;
     return s;
@@ -260,6 +264,10 @@ void run() {
             if (!advert) continue;
             const std::lock_guard lock(s.lock);
             if (s.connected.count(path_of(args.BluetoothAddress())) != 0u) continue;
+            if (const auto retry = s.retry_after.find(args.BluetoothAddress());
+                retry != s.retry_after.end() && std::chrono::steady_clock::now() < retry->second) {
+                continue;
+            }
             bool queued = false;
             for (const auto& waiting : s.waiting) queued = queued || waiting.first == args.BluetoothAddress();
             if (!queued) {
@@ -299,8 +307,11 @@ void run() {
         lock.lock();
         s.waiting.pop_front();
         if (link) {
+            s.retry_after.erase(address);
             s.connected[path_of(address)] = Entry{address, product, link};
             SetEvent(s.changed);
+        } else {
+            s.retry_after[address] = std::chrono::steady_clock::now() + kRetryAfterFailure;
         }
     }
     lock.unlock();

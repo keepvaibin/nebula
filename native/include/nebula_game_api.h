@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 147u
+#define NEBULA_GAME_API_VERSION 148u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -573,21 +573,6 @@ typedef struct NebulaButtonIcons {
     char other[NEBULA_BUTTON_ICONS][NEBULA_KEY_NAME_CHARS];
 } NebulaButtonIcons;
 
-/* A picture of Nebula's own (its button icons) for a host that exports them: `texels` the texture the game draws, which names
-   it in a texture pack (none for a preview alone), `rgba` the same as RGBA8 and `hd` the picture `hd_width` x
-   `hd_height` (both straight alpha), `name` its preview's path ("PlayStation/face-south"). */
-typedef struct NebulaArtExport {
-    const char* name;
-    const void* texels;
-    uint32_t width;
-    uint32_t height;
-    uint32_t format; /* the image file's format number */
-    const uint8_t* rgba;
-    const uint8_t* hd;
-    uint32_t hd_width;
-    uint32_t hd_height;
-} NebulaArtExport;
-
 /* What the line under the page says (with `status_number` or `status_text` where it has one). */
 enum {
     NEBULA_SETTINGS_STATUS_HELP = 0,         /* the selected row's description (`help`) */
@@ -872,9 +857,6 @@ typedef struct NebulaHostServices {
     void (*sharp_2d)(void* user, uint32_t on);
     /* The button icons as the player's controller and the setting have them now (NebulaButtonIcons). */
     void (*button_icons)(void* user, NebulaButtonIcons* icons);
-    /* Nebula's own pictures handed to the host to write (NebulaArtExport). NULL asks whether an export is on: 1, else 0
-       (the game then paints nothing for it). The Nebula hosts answer 0. */
-    uint32_t (*art_export)(void* user, const NebulaArtExport* art);
     /* The lines of the 2D layer as last drawn (the window's while sharp_2d is on); 0 before the first frame. */
     uint32_t (*layer_2d_lines)(void* user);
     /* The mouse wheel's turn since the last call, in 120ths of a notch (positive away from the player), while no screen

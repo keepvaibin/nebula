@@ -2043,11 +2043,6 @@ int32_t svc_pointer_wheel(void*) {
 #endif
 }
 
-// Nebula's own pictures as a texture pack: this host writes none; 0 tells the game that no export is on, so it paints
-// nothing for one.
-uint32_t svc_art_export(void*, const NebulaArtExport*) {
-    return 0u;
-}
 std::atomic<uint32_t> gTiltSection{0};
 std::atomic<uint8_t> gMotor{0};
 
@@ -3796,7 +3791,6 @@ int main(int argc, char** argv) {
     services.settings_input = svc_settings_input;
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
-    services.art_export = svc_art_export;
     services.layer_2d_lines = svc_layer_2d_lines;
     services.pointer_wheel = svc_pointer_wheel;
     services.galaxy_select_stage = svc_galaxy_select_stage;
