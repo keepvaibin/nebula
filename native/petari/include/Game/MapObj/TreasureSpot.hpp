@@ -20,4 +20,5 @@ private:
 
 public:
     bool mIsCoinFlower;
+    bool mIsGlowNear = false;  // the player was within the glow's range last step (leaving takes a margin more)
 };

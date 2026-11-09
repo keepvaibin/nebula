@@ -23,6 +23,8 @@ namespace {
     static const s32 sDefaultTimeWait = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sTimeSign = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const f32 sDefaultMoveSpeed = 20.0f;
+    // Distance the body's sphere must pass beyond the view before the drop effect is deleted (it is made at the view's edge).
+    static const f32 sDropClipLeaveMargin = 150.0f;
 };  // namespace
 
 namespace NrvLavaProminence {
@@ -151,12 +153,15 @@ void LavaProminence::moveOnRail() {
 }
 
 void LavaProminence::updateEffectClipping(bool isMoving) {
+    // The drops go when the body is a margin outside the view and come back at its edge: one test for both deleted and
+    // made the effect again at every crossing of a camera or body at the edge, restarting its particles.
+    const f32 radius = getSensor("body")->getRadius();
     if (!mEmitDropEffect) {
-        if (!isMoving || MR::isJudgedToClipFrustum(mPosition, getSensor("body")->getRadius())) {
+        if (!isMoving || MR::isJudgedToClipFrustum(mPosition, radius + ::sDropClipLeaveMargin)) {
             MR::deleteEffect(this, "DropEffect");
             mEmitDropEffect = true;
         }
-    } else if (isMoving && !MR::isJudgedToClipFrustum(mPosition, getSensor("body")->getRadius())) {
+    } else if (isMoving && !MR::isJudgedToClipFrustum(mPosition, radius)) {
         MR::emitEffect(this, "DropEffect");
         mEmitDropEffect = false;
     }

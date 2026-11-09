@@ -11,6 +11,7 @@
 
 namespace {
     const u32 sAllLodCtrlNumMax = 0x100;
+    const s32 sInsideHoldSteps = 30;  // half a second
 };  // namespace
 
 // Only the first mViewCtrlCount slots are read.
@@ -78,6 +79,21 @@ void ViewGroupCtrl::update() {
                 entry->mIsPlayerInside = false;
                 entry->mIsHidden = true;
             }
+        }
+    }
+
+    // A player on a cube's edge (or a platform carrying it across) leaves and re-enters every few steps; each time the
+    // whole group switched between the camera's far plane and its own far level, stopping and starting every actor in
+    // it. Staying "inside" a while after leaving only keeps those actors running a little longer. A hiding cube is not held.
+    for (s32 i = 0; i < mMaxViewGroupId; i++) {
+        ViewGroupCtrlDataEntry& rEntry = mViewGroupData[i];
+        if (rEntry.mIsPlayerInside) {
+            rEntry.mInsideHold = ::sInsideHoldSteps;
+        } else if (!rEntry.mIsHidden && rEntry.mInsideHold > 0) {
+            rEntry.mInsideHold--;
+            rEntry.mIsPlayerInside = true;
+        } else {
+            rEntry.mInsideHold = 0;
         }
     }
 }

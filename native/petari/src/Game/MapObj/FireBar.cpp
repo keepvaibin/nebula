@@ -5,6 +5,11 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 
+namespace {
+    // Distance the player must pass beyond the 5000 range before the ball's flame is deleted.
+    const f32 sEffectLeaveMargin = 500.0f;
+};  // namespace
+
 namespace NrvFireBar {
     NEW_NERVE(FireBarNrvWait, FireBar, Wait);
 };  // namespace NrvFireBar
@@ -53,6 +58,7 @@ void FireBarBall::control() {
 }
 
 void FireBarBall::startClipped() {
+    mIsEffectNear = false;
     MR::deleteEffect(this, "FireBarBall");
     LiveActor::startClipped();
 }
@@ -62,7 +68,10 @@ void FireBarBall::endClipped() {
 }
 
 void FireBarBall::controlEmitEffect() {
-    if (MR::isNearPlayerAnyTime(this, 5000.0f)) {
+    // Emit inside 5000, delete only past 5000 plus a margin: a player walking back and forth over the line deleted and
+    // made the flame again every few steps, restarting its particles each time.
+    mIsEffectNear = MR::isNearPlayerAnyTime(this, mIsEffectNear ? 5000.0f + ::sEffectLeaveMargin : 5000.0f);
+    if (mIsEffectNear) {
         MR::emitEffect(this, "FireBarBall");
     } else {
         MR::deleteEffect(this, "FireBarBall");

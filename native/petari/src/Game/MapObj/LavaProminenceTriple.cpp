@@ -13,6 +13,8 @@ namespace {
     };
 
     static const f32 sInitRotateVel = 100.0f;
+    // Distance a head must pass beyond the view before its drop effect is deleted (it is made at the view's edge).
+    static const f32 sDropClipLeaveMargin = 150.0f;
     static const f32 sToSensorRadius = 1900.0f;
     static const f32 sEnvironmentRadius = 2100.0f;
 };  // namespace
@@ -189,8 +191,10 @@ void LavaProminenceTriple::updateEffectClippingIndividual(bool* pIsAppear, const
     Vec3f jointPos;
     MR::copyJointPos(this, pJointName, &jointPos);
 
+    // The drop goes when the head is a margin outside the view and comes back at its edge: with a 1 unit sphere and one
+    // test for both, the animated head crossing the edge deleted and made the effect again, restarting its particles.
     if (*pIsAppear) {
-        if (MR::isJudgedToClipFrustum(jointPos, 1.0f)) {
+        if (MR::isJudgedToClipFrustum(jointPos, 1.0f + ::sDropClipLeaveMargin)) {
             MR::deleteEffect(this, pEffectName);
             *pIsAppear = false;
         }

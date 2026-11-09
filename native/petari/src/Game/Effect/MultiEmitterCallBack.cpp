@@ -15,6 +15,21 @@ namespace {
         return Color8(r, g, b, 255);
     }
 
+    // The light colour a light-affected effect sits in. The game feeds none, so white: the effect keeps its own colours.
+    // A source (the blended ambient of the actor's light, ActorLightCtrl mLightInfo.mColor) goes here, not into setColor.
+    Color8 getEffectLight(const MultiEmitter* /*pEmitter*/) {
+        return Color8(255, 255, 255, 255);
+    }
+
+    // Per channel from white (affect 0) to the light colour (affect 1); LightAffectValue in the effect table.
+    Color8 getLightTint(const Color8& rLight, f32 affect) {
+        const f32 t = MR::clamp(affect, 0.0f, 1.0f);
+        const u8 r = static_cast< u8 >(255.0f + (static_cast< f32 >(rLight.r) - 255.0f) * t + 0.5f);
+        const u8 g = static_cast< u8 >(255.0f + (static_cast< f32 >(rLight.g) - 255.0f) * t + 0.5f);
+        const u8 b = static_cast< u8 >(255.0f + (static_cast< f32 >(rLight.b) - 255.0f) * t + 0.5f);
+        return Color8(r, g, b, 255);
+    }
+
     s16 toS16(f32 deg) {
         return (s32)(DEGREE_TO_S16 * deg);
     }
@@ -206,10 +221,12 @@ void MultiEmitterCallBack::setColor(EmitterCore* pEmitter) {
         return;
     }
 
-    NebulaColor8 prmColor;
-    prmColor = pEmitter->mGlobalPrmClr;
-    Color8 syntheticPrm = ::getSyntheticColor(prmColor, mPrmColor);
+    // The tint is the light mixed by the effect's light affect value times the effect's own colours, which are kept in
+    // mPrmColor/mEnvColor. It must not be read back from the emitter: that product was written there last step, so a
+    // tint of 200 went 200, 156, 122, ... black in 19 steps.
+    const Color8 tint = ::getLightTint(::getEffectLight(mEmitter), mEmitter->mLightAffect);
+    Color8 syntheticPrm = ::getSyntheticColor(tint, mPrmColor);
     pEmitter->setGlobalPrmColor(syntheticPrm.r, syntheticPrm.g, syntheticPrm.b);
-    Color8 syntheticEnv = ::getSyntheticColor(prmColor, mEnvColor);
+    Color8 syntheticEnv = ::getSyntheticColor(tint, mEnvColor);
     pEmitter->setGlobalEnvColor(syntheticEnv.r, syntheticEnv.g, syntheticEnv.b);
 }
