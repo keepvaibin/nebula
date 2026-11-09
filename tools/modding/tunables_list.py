@@ -2,7 +2,7 @@
 
 Every tunable of the game, from its source (NEBULA_TUNABLE and NEBULA_TUNABLE_LIST in native/petari/src): the key a
 mod sets it by (luma.json "tunables", set_tunable), its type and the game's value as written, grouped by the game's
-folders. The game's own list at runtime (GALAXY_DUMP_TUNABLES) holds the same keys.
+folders. The game's own list at runtime (--dump-tunables <file>) holds the same keys.
 """
 import pathlib
 import re

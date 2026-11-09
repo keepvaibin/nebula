@@ -251,23 +251,10 @@ void* api_find_function(const char* symbol) {
 
 }  // namespace
 
-namespace {
-// GALAXY_DUMP_TUNABLES=<file>: every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each (a list's
-// places as <key>[i]), for the mod docs.
-void dump_tunables(const NebulaModApi* game_api) {
-    if (game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return;
-#if defined(_WIN32)
-    wchar_t text[1024];
-    const DWORD length = GetEnvironmentVariableW(L"GALAXY_DUMP_TUNABLES", text, 1024);
-    if (length == 0 || length >= 1024) return;
-    const std::filesystem::path path(std::wstring(text, length));
-#else
-    const char* text = std::getenv("GALAXY_DUMP_TUNABLES");
-    if (text == nullptr || *text == '\0') return;
-    const std::filesystem::path path(text);
-#endif
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    if (!out) return;
+bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file) {
+    if (game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return false;
+    std::ofstream out(list_file, std::ios::binary | std::ios::trunc);
+    if (!out) return false;
     static constexpr const char* kKinds[] = {"?", "f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"};
     const char* file = nullptr;
     const char* name = nullptr;
@@ -284,15 +271,14 @@ void dump_tunables(const NebulaModApi* game_api) {
         if (place >= 0) out << '[' << place << ']';
         out << '\t' << kKinds[(kind >= 1 && kind <= 9) ? kind : 0] << '\t' << number << '\n';
     }
+    return static_cast<bool>(out.flush());
 }
-}  // namespace
 
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*)) {
     g_log = log;
     g_find_symbol = find_symbol;
-    dump_tunables(game_api);
     if (plugins.empty() && rows.empty()) return 0;
     if (game_api == nullptr || game_api->size < sizeof(NebulaModApi)) {
         say("the game module has no plugin interface");
