@@ -32,7 +32,7 @@ void MarioActor::initShadow() {
 
     mSimpleModelHolder->initWithoutIter();
 
-    mSimpleModel = reinterpret_cast< PlayerModel* >(MR::getModel(mSimpleModelHolder));
+    mSimpleModel = static_cast< PlayerModel* >(MR::getModel(mSimpleModelHolder));
     PlayerModel* pSource = mModels[0];
     PlayerModel* pShadow = mSimpleModel;
     pShadow->copyExtraPoses(pSource);
@@ -259,24 +259,22 @@ void MarioActor::calcViewWallShadowModel() {
     PlayerModel* pModel = getModel();
     PlayerModel* pSimple = getSimpleModel();
     NebulaMtxCopy(pModel->getBaseTRMtx(), pSimple->getBaseTRMtx());
-    Pos3f& matrix = *reinterpret_cast< Pos3f* >(pSimple->getBaseTRMtx());
+    MtxPtr matrix = pSimple->getBaseTRMtx();
     Vec3f x;
-    matrix.getXDir(x);
+    MR::extractMtxXDir(matrix, &x);
     MR::vecKillElement(x, normal, &x);
     Vec3f y;
-    matrix.getYDir(y);
+    MR::extractMtxYDir(matrix, &y);
     MR::vecKillElement(y, normal, &y);
     Vec3f z;
-    matrix.getZDir(z);
+    MR::extractMtxZDir(matrix, &z);
     MR::vecKillElement(z, normal, &z);
-    matrix.setXDir(x);
-    matrix.setYDir(y);
-    matrix.setZDir(z);
+    MR::setMtxAxisXYZ(matrix, x, y, z);
     Vec3f horizontal;
     MR::vecKillElement(mPosition - position, getGravityVec(), &horizontal);
     Vec3f translation = mPosition + normal * (10.0f + horizontal.length());
-    MR::setMtxTrans(matrix.toMtxPtr(), translation.x, translation.y, translation.z);
-    NebulaMtxConcat(matrix.toMtxPtr(), mModelUnbaseMtx.mMtx, matrix.toMtxPtr());
+    MR::setMtxTrans(matrix, translation.x, translation.y, translation.z);
+    NebulaMtxConcat(matrix, mModelUnbaseMtx.mMtx, matrix);
     pSimple->viewCalcRef(3, pModel);
     mWallShadeOn = 1;
 }
@@ -407,19 +405,17 @@ void MarioActor::calcViewSilhouetteModel() {
     Vec3f direction(mPosition - mCamPos);
     MR::normalizeOrZero(&direction);
     NebulaMtxCopy(pModel->getBaseTRMtx(), pSimple->getBaseTRMtx());
-    Pos3f& matrix = *reinterpret_cast< Pos3f* >(pSimple->getBaseTRMtx());
+    MtxPtr matrix = pSimple->getBaseTRMtx();
     Vec3f x;
-    matrix.getXDir(x);
+    MR::extractMtxXDir(matrix, &x);
     MR::vecKillElement(x, direction, &x);
     Vec3f y;
-    matrix.getYDir(y);
+    MR::extractMtxYDir(matrix, &y);
     MR::vecKillElement(y, direction, &y);
     Vec3f z;
-    matrix.getZDir(z);
+    MR::extractMtxZDir(matrix, &z);
     MR::vecKillElement(z, direction, &z);
-    matrix.setXDir(x);
-    matrix.setYDir(y);
-    matrix.setZDir(z);
+    MR::setMtxAxisXYZ(matrix, x, y, z);
     Vec3f root;
     Vec3f translation;
     if (mInDemo) {
@@ -429,8 +425,8 @@ void MarioActor::calcViewSilhouetteModel() {
         translation = mPosition;
     }
 
-    MR::setMtxTrans(matrix.toMtxPtr(), translation.x, translation.y, translation.z);
-    NebulaMtxConcat(matrix.toMtxPtr(), mModelUnbaseMtx.mMtx, matrix.toMtxPtr());
+    MR::setMtxTrans(matrix, translation.x, translation.y, translation.z);
+    NebulaMtxConcat(matrix, mModelUnbaseMtx.mMtx, matrix);
     pSimple->viewCalcRef(1, pModel);
 }
 

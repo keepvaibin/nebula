@@ -54,10 +54,11 @@ void MarioActor::initDrawAndModel() {
     }
 
     mShadowDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawShadow), MR::DrawType_AlphaShadow);
-    mSilhouetteDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawSilhouette), MR::DrawType_PlayerSilhouette);
-    mPreWipeDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
-    mScreenBlendDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
-    mIndirectDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_PlayerIndirect);
+    // The scene holds each drawer (a NameObj).
+    new DrawAdaptor(MR::Functor(this, &MarioActor::drawSilhouette), MR::DrawType_PlayerSilhouette);
+    new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
+    new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
+    new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_PlayerIndirect);
 
     // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the archive first
     // or the other player's did before a restart of the same stage.
@@ -222,8 +223,8 @@ void MarioActor::initIceMario() {
     mIceModel->kill();
     MR::hideModel(mIceModel);
 
-    mIceSteps = new IceStep*[20];
-    for (u32 i = 0; i < 20; i++) {
+    mIceSteps = new IceStep*[cIceStepNum];
+    for (u32 i = 0; i < cIceStepNum; i++) {
         mIceSteps[i] = new IceStep("アイス床");
         mIceSteps[i]->initWithoutIter();
         mIceSteps[i]->kill();

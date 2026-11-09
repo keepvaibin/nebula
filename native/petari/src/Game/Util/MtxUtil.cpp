@@ -336,13 +336,13 @@ namespace MR {
     }
 
     void makeRTFromMtxPtr(Vec3f* pOutTrans, Vec3f* pOutRot, MtxPtr pSrc, bool toDegree) {
-        Pos3f* pMtx = reinterpret_cast< Pos3f* >(pSrc);
+        const Pos3f mtx(pSrc);
         if (pOutTrans != nullptr) {
-            pMtx->getTrans(*pOutTrans);
+            mtx.getTrans(*pOutTrans);
         }
 
         if (pOutRot != nullptr) {
-            pMtx->getEuler(*pOutRot);
+            mtx.getEuler(*pOutRot);
 
             if (toDegree) {
                 pOutRot->set(*pOutRot * _180_PI);
@@ -379,7 +379,7 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxUpSide(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide) {
+    void makeMtxUpSide(MtxPtr pDst, const Vec3f& rUp, const Vec3f& rSide) {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
@@ -388,7 +388,11 @@ namespace MR {
 
         axisX.cross(axisY, axisZ);
 
-        pDst->setXYZDir(axisX, axisY, axisZ);
+        setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
+    }
+
+    void makeMtxUpSide(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide) {
+        makeMtxUpSide(pDst->toMtxPtr(), rUp, rSide);
     }
 
     void makeMtxUpSidePos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide, const Vec3f& rPos) {
@@ -396,7 +400,7 @@ namespace MR {
         pDst->setTrans(rPos);
     }
 
-    void makeMtxUpFront(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront) {
+    void makeMtxUpFront(MtxPtr pDst, const Vec3f& rUp, const Vec3f& rFront) {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
@@ -405,7 +409,11 @@ namespace MR {
 
         axisZ.cross(axisX, axisY);
 
-        pDst->setXYZDir(axisX, axisY, axisZ);
+        setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
+    }
+
+    void makeMtxUpFront(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront) {
+        makeMtxUpFront(pDst->toMtxPtr(), rUp, rFront);
     }
 
     void makeMtxUpFrontPos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos) {
@@ -426,7 +434,7 @@ namespace MR {
         pDst->setTrans(rPos);
     }
 
-    void makeMtxFrontUp(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp) {
+    void makeMtxFrontUp(MtxPtr pDst, const Vec3f& rFront, const Vec3f& rUp) {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rFront, &axisZ);
 
@@ -435,7 +443,11 @@ namespace MR {
 
         axisY.cross(axisZ, axisX);
 
-        pDst->setXYZDir(axisX, axisY, axisZ);
+        setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
+    }
+
+    void makeMtxFrontUp(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp) {
+        makeMtxFrontUp(pDst->toMtxPtr(), rFront, rUp);
     }
 
     void makeMtxFrontUpPos(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rPos) {
@@ -693,32 +705,25 @@ namespace MR {
     }
 
     bool isSameMtx(MtxPtr pMtxA, MtxPtr pMtxB) {
-        f32* pA = (f32*)pMtxA;
-        f32* pB = (f32*)pMtxB;
-        for (int i = 0; i < 12; i++) {
-            if (*pA != *pB) {
-                return false;
+        for (s32 row = 0; row < 3; row++) {
+            for (s32 column = 0; column < 4; column++) {
+                if (pMtxA[row][column] != pMtxB[row][column]) {
+                    return false;
+                }
             }
-
-            pA++;
-            pB++;
         }
 
         return true;
     }
 
+    // The translation column is not compared.
     bool isSameMtxRot(MtxPtr pMtxA, MtxPtr pMtxB) {
-        f32* pA = (f32*)pMtxA;
-        f32* pB = (f32*)pMtxB;
-        for (u32 i = 0; i < 12; i++) {
-            if ((i & 3) != 3) {
-                if (*pA != *pB) {
+        for (s32 row = 0; row < 3; row++) {
+            for (s32 column = 0; column < 3; column++) {
+                if (pMtxA[row][column] != pMtxB[row][column]) {
                     return false;
                 }
             }
-
-            pA++;
-            pB++;
         }
 
         return true;
@@ -726,8 +731,8 @@ namespace MR {
 
     bool isRotAxisY(MtxPtr pMtxA, MtxPtr pMtxB) {
         Vec3f yDirA, yDirB;
-        ((Rot3f*)pMtxA)->getYDir(yDirA);
-        ((Rot3f*)pMtxB)->getYDir(yDirB);
+        extractMtxYDir(pMtxA, &yDirA);
+        extractMtxYDir(pMtxB, &yDirB);
         return FloatUtil::epsilonEquals(yDirA.x, yDirB.x, FloatUtil::epsilon()) &&
                FloatUtil::epsilonEquals(yDirA.y, yDirB.y, FloatUtil::epsilon()) &&
                FloatUtil::epsilonEquals(yDirA.z, yDirB.z, FloatUtil::epsilon());

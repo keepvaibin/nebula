@@ -17,6 +17,16 @@
 
 namespace {
     static const f32 sTalkBalloonOffset = 950.0f;
+
+    struct CollisionPartInfo {
+        const char* mCollisionName;
+        const char* mJointName;
+    };
+
+    const CollisionPartInfo sCollisionPartInfo[] = {{"Center", "Center"}, {"CenterFur", "Center"}, {"Face", "Face"},
+                                                    {"LArm01", "LArm01"}, {"LArm02", "LArm02"},    {"LFoot001", "LFoot001"},
+                                                    {"RArm01", "RArm01"}, {"RArm02", "RArm02"},    {"RFoot001", "RFoot001"},
+                                                    {"Tactile", "Tactile"}};
 };  // namespace
 
 namespace NrvHoneyQueen {
@@ -46,26 +56,12 @@ void HoneyQueen::init(const TableIter& rIter) {
     caps.mSensorMax = 2;
     NPCActor::initialize(rIter, caps);
 
-    mCollisionParts[0] =
-        MR::createCollisionPartsFromLiveActor(this, "Center", getSensor("Body"), MR::getJointMtx(this, "Center"), MR::CollisionScaleType_Default);
-    mCollisionParts[1] =
-        MR::createCollisionPartsFromLiveActor(this, "CenterFur", getSensor("Body"), MR::getJointMtx(this, "Center"), MR::CollisionScaleType_Default);
-    mCollisionParts[2] =
-        MR::createCollisionPartsFromLiveActor(this, "Face", getSensor("Body"), MR::getJointMtx(this, "Face"), MR::CollisionScaleType_Default);
-    mCollisionParts[3] =
-        MR::createCollisionPartsFromLiveActor(this, "LArm01", getSensor("Body"), MR::getJointMtx(this, "LArm01"), MR::CollisionScaleType_Default);
-    mCollisionParts[4] =
-        MR::createCollisionPartsFromLiveActor(this, "LArm02", getSensor("Body"), MR::getJointMtx(this, "LArm02"), MR::CollisionScaleType_Default);
-    mCollisionParts[5] =
-        MR::createCollisionPartsFromLiveActor(this, "LFoot001", getSensor("Body"), MR::getJointMtx(this, "LFoot001"), MR::CollisionScaleType_Default);
-    mCollisionParts[6] =
-        MR::createCollisionPartsFromLiveActor(this, "RArm01", getSensor("Body"), MR::getJointMtx(this, "RArm01"), MR::CollisionScaleType_Default);
-    mCollisionParts[7] =
-        MR::createCollisionPartsFromLiveActor(this, "RArm02", getSensor("Body"), MR::getJointMtx(this, "RArm02"), MR::CollisionScaleType_Default);
-    mCollisionParts[8] =
-        MR::createCollisionPartsFromLiveActor(this, "RFoot001", getSensor("Body"), MR::getJointMtx(this, "RFoot001"), MR::CollisionScaleType_Default);
-    mCollisionParts[9] =
-        MR::createCollisionPartsFromLiveActor(this, "Tactile", getSensor("Body"), MR::getJointMtx(this, "Tactile"), MR::CollisionScaleType_Default);
+    static_assert(ARRAY_SIZEU(::sCollisionPartInfo) == ARRAY_SIZEU(mCollisionParts));
+    for (s32 i = 0; i < ARRAY_SIZE(mCollisionParts); i++) {
+        mCollisionParts[i] = MR::createCollisionPartsFromLiveActor(this, ::sCollisionPartInfo[i].mCollisionName, getSensor("Body"),
+                                                                   MR::getJointMtx(this, ::sCollisionPartInfo[i].mJointName),
+                                                                   MR::CollisionScaleType_Default);
+    }
 
     MR::excludeCalcShadowToActorAll(this, this);
 

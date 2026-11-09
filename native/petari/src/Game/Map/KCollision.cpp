@@ -92,7 +92,7 @@ bool KCollisionServer::calcFarthestVertexDistance() {
     return isAllAttributed;
 }
 
-KC_PrismData* KCollisionServer::checkPoint(Fxyz* pPoint, f32 param, f32* pDist) {
+KC_PrismData* KCollisionServer::checkPoint(const Vec3f* pPoint, f32 param, f32* pDist) {
     f32 maxDist = mFile->mThickness * param;
     u32 x = (s32)(pPoint->x - mFile->mMin.x);
 
@@ -125,7 +125,7 @@ KC_PrismData* KCollisionServer::checkPoint(Fxyz* pPoint, f32 param, f32* pDist) 
 
         Vec3f* vtx = &mFile->mPos[prism->mPositionIndex];
 
-        Fxyz dir;
+        Vec3f dir;
         dir.x = pPoint->x - vtx->x;
         dir.y = pPoint->y - vtx->y;
         dir.z = pPoint->z - vtx->z;
@@ -230,18 +230,16 @@ void KCollisionServer::visitPrismsInBlocks(const V3u& rPointMin, const V3u& rPoi
     } while (z <= rPointMax.z);
 }
 
-u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u32 maxCount) {
+u32 KCollisionServer::checkArea3D(const Vec3f* pMin, const Vec3f* pMax, KC_PrismData** pOut, u32 maxCount) {
     u32 foundCount = 0;
 
-    Fxyz box[2];
-    box[0] = *pMin;
-    box[1] = *pMax;
+    const Vec3f box[2] = {*pMin, *pMax};
 
     V3u pointMin;
     V3u pointMax;
     Vec3f queryMax;
     Vec3f queryMin;
-    MR::createBoundingBox((Vec3f*)box, 2, &queryMin, &queryMax);
+    MR::createBoundingBox(box, 2, &queryMin, &queryMax);
 
     if (queryMin.x == queryMax.x) {
         queryMin.x -= 1.0f;
@@ -291,16 +289,16 @@ u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u
     return foundCount;
 }
 
-u32 KCollisionServer::checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts) {
+u32 KCollisionServer::checkSphere(const Vec3f* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts) {
     return checkSpherePrisms(pCenter, radius, mFile->mThickness * param, false, maxCount, pOut, pDists, pHitParts);
 }
 
-u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts,
+u32 KCollisionServer::checkSphereWithThickness(const Vec3f* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts,
                                                f32 thickness) {
     return checkSpherePrisms(pCenter, radius, thickness * param, true, maxCount, pOut, pDists, pHitParts);
 }
 
-u32 KCollisionServer::checkSpherePrisms(Fxyz* pCenter, f32 radius, f32 threshold, bool isThick, u32 maxCount, KC_PrismData** pOut, f32* pDists,
+u32 KCollisionServer::checkSpherePrisms(const Vec3f* pCenter, f32 radius, f32 threshold, bool isThick, u32 maxCount, KC_PrismData** pOut, f32* pDists,
                                         u8* pHitParts) {
     V3u pointMin;
     V3u pointMax;
@@ -566,14 +564,14 @@ KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rD
 // distances: 0 the face plane, 1-3 the three edge planes (the third offset by the prism height). A one-sided test also
 // misses when the centre is nearer the face plane than the edge or corner; a thick one misses only when the sphere is wholly
 // behind the face.
-bool KCollisionServer::hitSpherePrism(KC_PrismData* pPrism, Fxyz* pCenter, f32 radius, f32 threshold, f32* pDist, u8* pHitPart,
+bool KCollisionServer::hitSpherePrism(KC_PrismData* pPrism, const Vec3f* pCenter, f32 radius, f32 threshold, f32* pDist, u8* pHitPart,
                                       bool isThick) {
     f32 radiusSq = radius * radius;
     *pHitPart = 0;
 
     Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
 
-    Fxyz dir;
+    Vec3f dir;
     f32 distances[4];
     dir.x = pCenter->x - pCorner->x;
     dir.y = pCenter->y - pCorner->y;
@@ -786,7 +784,7 @@ Vec3f* KCollisionServer::getNormal(u32 index) const {
     return &mFile->mNorms[index];
 }
 
-void KCollisionServer::calXvec(const Fxyz* pVecA, const Fxyz* pVecB, Fxyz* pDst) const {
+void KCollisionServer::calXvec(const Vec3f* pVecA, const Vec3f* pVecB, Vec3f* pDst) const {
     pDst->x = pVecA->z * pVecB->y - pVecA->y * pVecB->z;
     pDst->y = pVecA->x * pVecB->z - pVecA->z * pVecB->x;
     pDst->z = pVecA->y * pVecB->x - pVecA->x * pVecB->y;
@@ -802,16 +800,16 @@ Vec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) cons
     // From vertex 0 along edge plane 1's edge (vertex 1) or edge plane 0's (vertex 2) to edge plane 2, mHeight out.
     case 1:
     case 2: {
-        Fxyz* pos = reinterpret_cast< Fxyz* >(&mFile->mPos[pPrism->mPositionIndex]);
-        Fxyz* edge2 = reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[2]]);
-        Fxyz* face = reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mNormalIndex]);
+        const Vec3f* pos = &mFile->mPos[pPrism->mPositionIndex];
+        const Vec3f* edge2 = &mFile->mNorms[pPrism->mEdgeIndices[2]];
+        const Vec3f* face = &mFile->mNorms[pPrism->mNormalIndex];
 
-        Fxyz finalPos;
+        Vec3f finalPos;
 
         if (vertexIndex == 1) {
-            calXvec(reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[1]]), face, &finalPos);
+            calXvec(&mFile->mNorms[pPrism->mEdgeIndices[1]], face, &finalPos);
         } else {
-            calXvec(face, reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[0]]), &finalPos);
+            calXvec(face, &mFile->mNorms[pPrism->mEdgeIndices[0]], &finalPos);
         }
 
         f32 sideLength = pPrism->mHeight / (finalPos.x * edge2->x + finalPos.y * edge2->y + finalPos.z * edge2->z);
@@ -849,7 +847,8 @@ const u32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& 
     s32 xyShift = file->mBlockXYShift;
     s32 xShift = file->mBlockXShift;
     u32 slot = 0;
-    if (xyShift != -1 || xShift != -1) {
+    // -1 for both: one root block (DynamicCollisionObj).
+    if (xyShift >= 0 && xShift >= 0) {
         slot = ((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift);
     }
 
@@ -869,12 +868,4 @@ void KCollisionServer::V3u::setUsingCast(const Vec3f& rPos) {
     x = static_cast< s32 >(rPos.x);
     y = static_cast< s32 >(rPos.y);
     z = static_cast< s32 >(rPos.z);
-}
-
-Fxyz& Fxyz::operator=(const Fxyz& rOther) {
-    x = rOther.x;
-    y = rOther.y;
-    z = rOther.z;
-
-    return *this;
 }

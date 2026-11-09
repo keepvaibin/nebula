@@ -27,38 +27,6 @@
 #include <nebula_math.h>
 
 namespace {
-    // A branch node's condition (TalkNode::mIndex). The flow data numbers them in this order: the galaxy result comes
-    // before the time-keep demo and the read-message test.
-    enum BranchKind {
-        // The player chooses; mNextIdx is the select's id (sSelectBranchID).
-        BranchKind_Select,
-        BranchKind_Func,
-        BranchKind_NearPlayer,
-        BranchKind_SwitchA,
-        BranchKind_SwitchB,
-        BranchKind_PlayerNormal,
-        BranchKind_PlayerBee,
-        BranchKind_PlayerTeresa,
-        BranchKind_PowerStarAppeared,
-        BranchKind_AlreadyDone,
-        BranchKind_PlayerLuigi,
-        BranchKind_GalaxyResult,
-        BranchKind_TimeKeepDemo,
-        BranchKind_MessageRead,
-    };
-
-    // An event node's kind (TalkNode::mGroupID).
-    enum EventKind {
-        EventKind_Func,
-        EventKind_FuncStop,
-        EventKind_None,
-        EventKind_Skip,
-        EventKind_Anime,
-        EventKind_SwitchA,
-        EventKind_SwitchB,
-        EventKind_Kill,
-    };
-
     // Indexed by a select branch's mNextIdx.
     const char* const sSelectBranchID[] = {
         "PenguinRace",       "SwimmingSchool",    "PenguinRace",       "BombTimeAttackLv1",         "PhantomTeresaRacer",
@@ -185,6 +153,10 @@ bool TalkMessageCtrl::rootNodeEve() {
         break;
 
     case EventKind_Kill:
+        if (mKillFunc == nullptr) {
+            return true;
+        }
+
         if (!(*mKillFunc)(pEvent->mArg)) {
             return false;
         }
@@ -422,11 +394,11 @@ TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
 }
 
 const char16_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
-    return reinterpret_cast< const char16_t* >(pCtrl->mNodeCtrl->mMessageInfo.mMessage);
+    return pCtrl->mNodeCtrl->mMessageInfo.mMessage;
 }
 
 const char16_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
-    return reinterpret_cast< const char16_t* >(pCtrl->mNodeCtrl->getSubMessage());
+    return pCtrl->mNodeCtrl->getSubMessage();
 }
 
 bool TalkMessageCtrl::isNearPlayer(f32 distance) const {

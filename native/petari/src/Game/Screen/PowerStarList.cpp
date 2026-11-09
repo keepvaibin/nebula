@@ -220,7 +220,7 @@ void PowerStarList::init(const TableIter& /*rIter*/) {
     for (u32 i = 0; i < ARRAY_SIZE(::cSeparatorPaneTable); i++) {
         pPaneName = ::cSeparatorPaneTable[i];
         MR::createAndAddPaneCtrl(this, pPaneName, 1);
-        MR::setFollowPos(&mSeparatorArray[i]._4, this, pPaneName);
+        MR::setFollowPos(&mSeparatorArray[i].mOffset, this, pPaneName);
         MR::setFollowTypeAdd(this, pPaneName);
     }
 
@@ -450,7 +450,7 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
                     tryShowSeparator(prevSeparator, ::cSeparatorOffset * separatorRows);
                 }
 
-                Vec2f& rOffset = mSeparatorArray[separator]._4;
+                Vec2f& rOffset = mSeparatorArray[separator].mOffset;
                 rOffset.x = 0.0f;
                 rOffset.y = ::cSeparatorOffset * row;
                 prevSeparator = separator;
@@ -469,7 +469,7 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
             crownBuffer.addNewLine(row);
 
             if (tryShowSeparator(3, ::cTimePaneDefaultHeight + ::cSeparatorOffset * (bestTimeNum - 1))) {
-                Vec2f& rOffset = mSeparatorArray[3]._4;
+                Vec2f& rOffset = mSeparatorArray[3].mOffset;
                 rOffset.x = 0.0f;
                 rOffset.y = ::cSeparatorOffset * row;
             }
@@ -638,7 +638,7 @@ bool PowerStarList::tryShowSeparator(s32 separatorIdx, f32 myFloat) {
 
     if (MR::isHiddenPane(this, pPaneName)) {
         MR::showPaneRecursive(this, pPaneName);
-        mSeparatorArray[separatorIdx]._0 = myFloat;
+        mSeparatorArray[separatorIdx].mHeight = myFloat;
 
         return true;
     }
@@ -657,7 +657,7 @@ void PowerStarList::setSeparatorPaneSize() {
 
         Ui::Pane* pPane = MR::getPane(this, pPaneName);
         Ui::Size size = pPane->mSize;
-        size.height = mSeparatorArray[idx]._0;
+        size.height = mSeparatorArray[idx].mHeight;
         pPane->mSize = size;
     }
 }

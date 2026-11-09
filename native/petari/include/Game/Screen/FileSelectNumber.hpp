@@ -20,7 +20,7 @@ namespace FileSelectNumberSub {
 
     private:
         LayoutActor* mHost;
-        Nerve* _C;
+        Nerve* mQueuedNerve;  // the select nerve asked for while the other one's start animation plays
     };
 };  // namespace FileSelectNumberSub
 

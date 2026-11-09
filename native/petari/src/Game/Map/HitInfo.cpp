@@ -90,7 +90,7 @@ const Vec3f* Triangle::calcAndGetNormal(int index) {
         KCollisionServer* server = mParts->mServer;
         KC_PrismData* prism = server->getPrismData(mIdx);
         mNormals[index].set(*server->getNormal(index == 0 ? prism->mNormalIndex : prism->mEdgeIndices[index - 1]));
-        NebulaMtxMultVecSR(reinterpret_cast< MtxPtr >(&mParts->mBaseMatrix), &mNormals[index], &mNormals[index]);
+        NebulaMtxMultVecSR(mParts->mBaseMatrix.mMtx, &mNormals[index], &mNormals[index]);
         MR::normalize(&mNormals[index]);
     }
 

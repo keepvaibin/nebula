@@ -59,7 +59,7 @@ namespace NrvWaterBazooka {
 namespace {
     static const f32 sElectricBulletSpeed = 12.0f;
     const char* const sDropPointStringTable[] = {"落下点1", "落下点2", "落下点3", "落下点4"};
-
+    const s32 sElectricBulletNum = 5;
 };  // namespace
 
 WaterBazooka::WaterBazooka(const char* pName)
@@ -907,9 +907,9 @@ void WaterBazooka::initCameraTarget() {
 
 void WaterBazooka::initBullet(const TableIter& rIter) {
     if (mIsElectric) {
-        mBullets = new ElectricPressureBullet*[5];
+        mBullets = new ElectricPressureBullet*[::sElectricBulletNum];
 
-        for (s32 idx = 0; idx < 5; idx++) {
+        for (s32 idx = 0; idx < ::sElectricBulletNum; idx++) {
             mBullets[idx] = new ElectricPressureBullet("エレクトリックバズーカの弾");
             mBullets[idx]->initWithoutIter();
             MR::tryRegisterDemoCast(mBullets[idx], rIter);
@@ -945,7 +945,7 @@ bool WaterBazooka::tryShotBullet() {
 }
 
 ElectricPressureBullet* WaterBazooka::selectBulletElectric() {
-    for (s32 idx = 0; idx < 5; idx++) {
+    for (s32 idx = 0; idx < ::sElectricBulletNum; idx++) {
         if (MR::isDead(mBullets[idx])) {
             return mBullets[idx];
         }
@@ -978,7 +978,7 @@ bool WaterBazooka::tryJumpBackPlayerFromBazooka() const {
 void WaterBazooka::calcNearDropPoint(Vec3f* pPos) const {
     f32 nearestDistance = FLOAT_MAX;
     Vec3f nearestPoint;
-    for (u32 idx = 0; idx < 4; idx++) {
+    for (u32 idx = 0; idx < ARRAY_SIZEU(::sDropPointStringTable); idx++) {
         Vec3f pos;
         if (MR::tryFindNamePos(::sDropPointStringTable[idx], &pos, nullptr) && MR::isNearPlayer(pos, nearestDistance)) {
             nearestPoint.set(pos);

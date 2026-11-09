@@ -70,11 +70,11 @@ void AudSystemWrapper::prepareReset() {
     }
 }
 
-void AudSystemWrapper::requestReset(bool stopThreads) {
+void AudSystemWrapper::requestReset(bool stopClock) {
     if (mAudSystem == nullptr) {
         mIsResetDone = true;
     } else {
-        mAudSystem->resetAudio(10, stopThreads);
+        mAudSystem->resetAudio(10, stopClock);
         mAudSystem->stop(10);
     }
 }

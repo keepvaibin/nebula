@@ -9,6 +9,8 @@ namespace GameSystemFunction {
     void activateScreenPreserver();
     void deactivateScreenPreserver();
     bool isOccurredSystemWarning();
+    // True for the one frame the scene goes on after the HOME Menu, a warning, the skip's question or the settings menu held it.
+    bool isSceneResumed();
     bool isResetProcessing();
     void setResetOperationApplicationReset();
     void setResetOperationQuit();

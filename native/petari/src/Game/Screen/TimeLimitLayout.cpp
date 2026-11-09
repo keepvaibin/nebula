@@ -173,7 +173,7 @@ void TimeLimitLayout::exeScaleDown() {
     }
 
     if (mScaleControl->mFrame == mScaleControl->mMaxFrame) {
-        if (mCurrentTiming->_A && !mIsNormalDisplay) {
+        if (mCurrentTiming->mIsFadeOut &&!mIsNormalDisplay) {
             setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutFadeout));
         } else {
             setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutCountDown));

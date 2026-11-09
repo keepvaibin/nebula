@@ -83,10 +83,6 @@ public:
         return nullptr;
     }
 
-    virtual Pos3f* getMapBaseMtx() const {
-        return nullptr;
-    }
-
     virtual void resetStatus() {
     }
 };
@@ -146,7 +142,6 @@ public:
     virtual CubeCameraArea* getCubeCameraArea() const override;
     virtual Triangle* getGroundTriangle() const override;
     virtual GravityInfo* getGravityInfo() const override;
-    virtual Pos3f* getMapBaseMtx() const override;
 
     const MarioActor* mActor;
     Vec3f mSide;
@@ -166,7 +161,7 @@ public:
 
     virtual void init(const TableIter& rIter) override;
     virtual MtxPtr getBaseMtx() const override {
-        return (const MtxPtr)mMtx.mMtx;
+        return const_cast< MtxPtr >(mMtx.mMtx);
     }
 
     void setTargetMtx(MtxPtr);

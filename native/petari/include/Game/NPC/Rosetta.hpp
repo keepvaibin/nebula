@@ -29,7 +29,6 @@ public:
 private:
     FadeStarter mFadeStarter;
     NerveExecutor* mDemoExecutor;
-    NerveExecutor* mTalkDemoExecutor;
     TurnJointCtrl* mTurnJointCtrl;
     s32 mObjArg0;
 };

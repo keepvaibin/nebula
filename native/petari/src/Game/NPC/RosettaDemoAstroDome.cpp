@@ -59,7 +59,7 @@ void RosettaMonologue::appear() {
     MR::startAnim(this, "FadeIn", 0);
     MR::startPaneAnim(this, "TalkBalloon", "WinFadeIn", 0);
 
-    mTextFormer.formMessage(MR::getGameMessageDirect(MR::FormattedName("RosettaMonologue%03d", mMessageNo).c_str()), 1);
+    mTextFormer.formMessage(MR::getGameMessageDirect(MR::FormattedName("RosettaMonologue%03d", mMessageNo).c_str()), TalkTextForm_Event);
 }
 
 void RosettaMonologue::calcAnim() {
@@ -114,7 +114,7 @@ void RosettaMonologue::control() {
     } else {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
 
-        mTextFormer.formMessage(MR::getGameMessageDirect(MR::FormattedName("RosettaMonologue%03d", mMessageNo).c_str()), 1);
+        mTextFormer.formMessage(MR::getGameMessageDirect(MR::FormattedName("RosettaMonologue%03d", mMessageNo).c_str()), TalkTextForm_Event);
     }
 
     switch (mMessageNo) {

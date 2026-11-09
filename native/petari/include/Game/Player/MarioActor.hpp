@@ -270,7 +270,6 @@ public:
     void doFreezeAttack();
 
     // Defined in MarioActorCamera
-    MtxPtr getMapBaseMtx() const;
     bool isFastRise() const;
     bool isLongDrop() const;
     bool isFastDrop() const;
@@ -597,11 +596,6 @@ public:
     u8 mWallShadeAreaKind;  // 0 cube, 1 cylinder
     CollisionShadow* mCollisionShadow;  // the collision shadow
     DrawAdaptor* mShadowDrawer;  // draws drawShadow
-    DrawAdaptor* mSilhouetteDrawer;  // draws drawSilhouette
-    DrawAdaptor* mPreWipeDrawer;  // draws drawPreWipe
-    DrawAdaptor* mDrawSearchLight;
-    DrawAdaptor* mScreenBlendDrawer;  // draws drawScreenBlend
-    DrawAdaptor* mIndirectDrawer;  // draws drawIndirect
     Mario* mMario;
     MarioAnimator* mMarioAnim;
     MarioEffect* mMarioEffect;
@@ -791,7 +785,8 @@ public:
     Vec2f mScreenBoxSize;
     void* mScreenBoxKey;  // the frame read's key
     FootPrint* mFootPrint;  // the footprints
-    IceStep** mIceSteps;  // the ice form's steps (20)
+    static const u32 cIceStepNum = 20;
+    IceStep** mIceSteps;  // the ice form's steps, reused in turn
     u16 mIceStepIndex;  // the next ice step
     FireMarioBall* mFireBalls[3];  // the fire form's balls
     ResTIMG** mSwapTextures;  // the model's textures (swapTextureInit)

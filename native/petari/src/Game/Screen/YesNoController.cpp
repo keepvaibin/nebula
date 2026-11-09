@@ -21,7 +21,7 @@ namespace NrvYesNoController {
 };  // namespace NrvYesNoController
 
 YesNoController::YesNoController(LayoutActor* pHost)
-    : NerveExecutor("はい／いいえ選択制御"), mHost(pHost), _C(), mButtonYesPaneCtrl(), mButtonNoPaneCtrl(), mCursorSE(), mYesSE(), mNoSE() {
+    : NerveExecutor("はい／いいえ選択制御"), mHost(pHost), mIsActive(),mButtonYesPaneCtrl(), mButtonNoPaneCtrl(), mCursorSE(), mYesSE(), mNoSE() {
     mButtonYesPaneCtrl = new ButtonPaneController(mHost, "Right", "BoxRight", 0, true);
     mButtonYesPaneCtrl->mDisappearsAfterDecide = false;
 
@@ -32,19 +32,19 @@ YesNoController::YesNoController(LayoutActor* pHost)
 }
 
 void YesNoController::appear() {
-    _C = true;
+    mIsActive = true;
 
     setNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelecting));
 }
 
 void YesNoController::kill() {
-    _C = false;
+    mIsActive = false;
 
     setNerve(GET_NERVE(YesNoController, YesNoControllerNrvNotSelected));
 }
 
 void YesNoController::update() {
-    if (_C) {
+    if (mIsActive) {
         updateNerve();
         mButtonYesPaneCtrl->update();
         mButtonNoPaneCtrl->update();
@@ -189,9 +189,9 @@ void YesNoController::exeDisappear() {
 }
 
 void YesNoController::exeSelected() {
-    _C = false;
+    mIsActive = false;
 }
 
 void YesNoController::exeNotSelected() {
-    _C = false;
+    mIsActive = false;
 }

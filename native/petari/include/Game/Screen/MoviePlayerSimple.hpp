@@ -13,6 +13,7 @@ public:
 
     virtual void init(const TableIter&);
     virtual void draw() const;
+    virtual void movement();
 
     void startMovie(const char* pName, bool loop);
     void stopMovie();
@@ -22,7 +23,6 @@ public:
     s32 getCurrentFrame() const;
     s32 getTotalFrame() const;
     void setVolume(f32, s32);
-    void setUnpauseHomeButtonFlag();
     void exeSimpleOff();
     void exeOpen();
     void exePlaying();

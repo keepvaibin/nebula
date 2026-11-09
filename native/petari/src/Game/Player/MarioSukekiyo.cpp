@@ -19,7 +19,7 @@ bool MarioSukekiyo::notice() {
 }
 
 bool MarioSukekiyo::postureCtrl(MtxPtr pMtx) {
-    MR::makeMtxUpSide(reinterpret_cast< Pos3f* >(pMtx), mPoseUp, mPoseSide);
+    MR::makeMtxUpSide(pMtx, mPoseUp, mPoseSide);
     return true;
 }
 

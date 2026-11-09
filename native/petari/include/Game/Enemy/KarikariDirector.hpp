@@ -22,7 +22,7 @@ public:
     bool unregistCling(Karikari*);
 
     inline MtxPtr getClingMtx(int idx) const {
-        return (MtxPtr)&mClingJointMtxs[idx];
+        return mClingJointMtxs[idx].toMtxPtr();
     }
 
     s32 mClingNum;

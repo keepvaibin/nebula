@@ -63,7 +63,7 @@ namespace ImageEffectStateImpl {
         void setIntensity2Default();
 
     private:
-        bool _8;
+        bool mIsSnap;  // the next update jumps to the set values instead of easing toward them
         f32 mBloomIntensityNow;
         u8 mBloomIntensity;
         f32 mThresholdNow;

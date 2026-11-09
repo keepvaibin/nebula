@@ -8,7 +8,6 @@ struct ResTIMG;
 struct TimingInfo {
     const char* mName;
     s32 mTiming;
-    bool _8;
     u32 mRequestOnly;
 };
 

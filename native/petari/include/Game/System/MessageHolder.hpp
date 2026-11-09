@@ -39,7 +39,8 @@ public:
     MessageData(const char*);
 
     bool getMessageDirect(TalkMessageInfo*, const char*) const;
-    bool getMessage(TalkMessageInfo*, u32, u32) const;
+    // False for an index past the messages.
+    bool getMessage(TalkMessageInfo*, u32 index) const;
     TalkNode* findNode(const char*) const;
     TalkNode* getNode(u32) const;
     TalkNode* getBranchNode(u32) const;

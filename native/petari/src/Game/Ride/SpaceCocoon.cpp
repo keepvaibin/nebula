@@ -136,6 +136,10 @@ void SpaceCocoon::init(const TableIter& rIter) {
     initNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvStop));
 
     mNumPoints = mHeight / ::sPointInterval;
+    // At least one: the top point is read every frame (an arg1 height below the interval would leave none).
+    if (mNumPoints < 1) {
+        mNumPoints = 1;
+    }
     mPlantPoints = new PlantPoint*[mNumPoints];
 
     f32 delta = mHeight / (mNumPoints + 1);

@@ -8,7 +8,6 @@ class GameSystemFontHolder;
 class GameSystemObjHolder;
 class GameSystemSceneController;
 class HomeButtonLayout;
-class HomeButtonStateNotifier;
 class SystemWipeHolder;
 
 
@@ -41,6 +40,7 @@ public:
     GameSystemSceneController* mSceneController;
     HomeButtonLayout* mHomeButtonLayout;
     SystemWipeHolder* mSystemWipeHolder;
-    HomeButtonStateNotifier* mHomeButtonStateNotifier;
     bool mIsExecuteLoadSystemArchive;
+    bool mWasSceneHeld;  // last frame, the HOME Menu, a warning, the skip's question or the settings menu held the scene
+    bool mIsSceneResumed;  // this frame the scene goes on after such a hold
 };

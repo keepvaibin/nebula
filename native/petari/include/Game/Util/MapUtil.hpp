@@ -31,7 +31,6 @@ namespace MR {
     bool getFirstPolyNormalOnLineToMap(Vec3f*, const Vec3f&, const Vec3f&, Vec3f*, const HitSensor*);
     u32 getNearPolyOnLineSort(const Vec3f&, const Vec3f&, const Vec3f&, const HitSensor*);
     bool getSortedPoly(Vec3f*, Triangle*, u32);
-    const Triangle* getSortedPoly(u32);
     bool isExistMapCollision(const Vec3f&, const Vec3f&);
     bool isExistMoveLimitCollision(const Vec3f&, const Vec3f&);
     bool isExistMapCollisionExceptActor(const Vec3f&, const Vec3f&, const LiveActor*);
@@ -87,7 +86,6 @@ namespace MR {
     bool isWallCodeNoAction(const Triangle*);
     bool isCameraCodeThrough(const Triangle*);
     bool isCodeSand(const Triangle*);
-    const Triangle* getCameraPolyFast(const Vec3f&, const Vec3f&, const HitSensor*);
     bool getFirstPolyOnLineBFast(const Vec3f&, const Vec3f&, Vec3f*, Triangle*);
 };  // namespace MR
 

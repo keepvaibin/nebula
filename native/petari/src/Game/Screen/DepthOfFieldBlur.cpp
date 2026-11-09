@@ -68,8 +68,8 @@ DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     MR::getImageEffectResource()->createDOFTexture();
     mFrameKey = ImageEffectLocalUtil::createFrameKey();
     mFrameDepthKey = ImageEffectLocalUtil::createFrameKey();
-    mHalfTexture = MR::getImageEffectResource()->_8;
-    mQuarterTexture = MR::getImageEffectResource()->_C;
+    mHalfTexture = MR::getImageEffectResource()->mHalfTexture;
+    mQuarterTexture = MR::getImageEffectResource()->mQuarterTexture;
     mDepthRampTexture = GameTexture::createPixelTarget(128, 2);
     mDepthRampTexture->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
     mQuarter = GameTexture::createTarget(mQuarterTexture->shareAcross(), mQuarterTexture->shareDown());

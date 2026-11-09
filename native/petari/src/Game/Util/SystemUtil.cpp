@@ -106,8 +106,8 @@ namespace MR {
         GameSystemFunction::resetAllControllerRumble();
     }
 
-    void stopAllSound(u32 param1) {
-        getGameSystemObjHolder()->mAudioSystem->stopAllSound(param1);
+    void stopAllSound(u32 time) {
+        getGameSystemObjHolder()->mAudioSystem->stopAllSound(time);
     }
 
     PlacementId* getPlayerRestartIdInfo() {

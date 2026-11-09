@@ -6,15 +6,6 @@
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-MtxPtr MarioActor::getMapBaseMtx() const {
-    HitSensor* pSensor = mMario->mCameraPolygon->mSensor;
-    if (pSensor == nullptr) {
-        return nullptr;
-    }
-
-    return pSensor->mHost->getBaseMtx();
-}
-
 bool MarioActor::isFastRise() const {
     if (mInRush) {
         if (mRushMove.dot(getGravityVec()) < -60.0f) {

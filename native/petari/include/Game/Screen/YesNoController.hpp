@@ -30,7 +30,7 @@ public:
     void exeNotSelected();
 
     LayoutActor* mHost;
-    bool _C;
+    bool mIsActive;  // shown and taking input: set by appear, cleared by kill and once a choice is made
     ButtonPaneController* mButtonYesPaneCtrl;
     ButtonPaneController* mButtonNoPaneCtrl;
     const char* mCursorSE;

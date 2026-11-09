@@ -137,8 +137,8 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mAttacking = false;
     mTrampling = false;
 
-    NebulaMtxIdentity((MtxPtr)&mForcedBaseMtx);
-    NebulaMtxIdentity((MtxPtr)&mBaseMtx);
+    NebulaMtxIdentity(mForcedBaseMtx.mMtx);
+    NebulaMtxIdentity(mBaseMtx.mMtx);
 
     mWallShadePos.zero();
     mWallShadeNormal.zero();
@@ -204,8 +204,8 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mThrowAimSensor = 0;
     mThrowAimHold = 0;
 
-    NebulaMtxIdentity((MtxPtr)&mFootRMtx);
-    NebulaMtxIdentity((MtxPtr)&mCapMtx);
+    NebulaMtxIdentity(mFootRMtx.mMtx);
+    NebulaMtxIdentity(mCapMtx.mMtx);
 
     mBlueFireDamage = 0;
     mDarkMaskOn = false;
@@ -1601,11 +1601,8 @@ bool MarioActor::doStun() {
 
 void MarioActor::scaleMtx(MtxPtr pRawMtx) {
     Vec3f i, j, k;
-    const Rot3f* pMtx = (Rot3f*)pRawMtx;
     f32 scalar = 0.35f * (1.0f - mPressScale) + 1.0f;
-    pMtx->getXDir(i);
-    pMtx->getYDir(j);
-    pMtx->getZDir(k);
+    MR::extractMtxXYZDir(pRawMtx, &i, &j, &k);
     f32 elementX = MR::vecKillElement(i, mPressAxis, &i);
     f32 elementY = MR::vecKillElement(j, mPressAxis, &j);
     f32 elementZ = MR::vecKillElement(k, mPressAxis, &k);
@@ -1638,7 +1635,7 @@ void MarioActor::updateBaseScaleMtx() {
 }
 
 void MarioActor::getRealMtx(MtxPtr pMtx, const char* pName) const {
-    MR::multMtx(pMtx, (MtxPtr)&mBaseScaleMtx, MR::getJointMtx(this, pName));
+    MR::multMtx(pMtx, mBaseScaleMtx.mMtx, MR::getJointMtx(this, pName));
     Vec3f lookOfs(mMario->mLookOfs);
     MR::addTransMtx(pMtx, lookOfs);
 }
@@ -1810,9 +1807,9 @@ void MarioActor::forceSetBaseMtx(MtxPtr pMtx) {
         MR::extractMtxTrans(pMtx, &mPosition);
     }
 
-    ((Rot3f*)pMtx)->getZDir(mCameraFrontVec);
-    ((Rot3f*)pMtx)->getYDir(mUpVec);
-    ((Rot3f*)pMtx)->getXDir(mCameraSideVec);
+    MR::extractMtxZDir(pMtx, &mCameraFrontVec);
+    MR::extractMtxYDir(pMtx, &mUpVec);
+    MR::extractMtxXDir(pMtx, &mCameraSideVec);
     MR::updateHitSensorsAll(this);
     mMario->invalidateRelativePosition();
     mMario->mSlopeMoveVec.zero();
@@ -2061,11 +2058,11 @@ void MarioActor::calcAndSetBaseMtx() {
         if (hostSetBase) {
             Vec3f frontVec;
             Vec3f headVec;
-            reinterpret_cast< Rot3f* >(getBaseMtx())->getYDir(headVec);
+            MR::extractMtxYDir(getBaseMtx(), &headVec);
             MR::normalizeOrZero(&headVec);
             mMario->setHeadVec(headVec);
 
-            reinterpret_cast< Rot3f* >(getBaseMtx())->getZDir(frontVec);
+            MR::extractMtxZDir(getBaseMtx(), &frontVec);
             MR::normalizeOrZero(&frontVec);
             mMario->setFrontVecKeepUp(frontVec);
             mMario->mPrevMoveFrontVec = frontVec;
@@ -2078,10 +2075,10 @@ void MarioActor::calcAndSetBaseMtx() {
 
             Vec3f frontVec;
             Vec3f headVec;
-            reinterpret_cast< Rot3f* >(getBaseMtx())->getYDir(headVec);
+            MR::extractMtxYDir(getBaseMtx(), &headVec);
             mMario->setHeadVec(headVec);
 
-            reinterpret_cast< Rot3f* >(getBaseMtx())->getZDir(frontVec);
+            MR::extractMtxZDir(getBaseMtx(), &frontVec);
             mMario->setFrontVecKeepUp(frontVec);
 
             mMario->mWalkSpeed = 0.0f;

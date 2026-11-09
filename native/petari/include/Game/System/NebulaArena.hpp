@@ -47,8 +47,6 @@ public:
 
     void* alloc(u32 size, int alignment);
     void free(void* pData);
-    // Everything in it goes; the arena stays.
-    void freeAll();
 
     // Returns the arena that was current.
     NebulaArena* makeCurrent();

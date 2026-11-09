@@ -25,9 +25,9 @@ namespace {
 
 KarikariDirector::KarikariDirector(const char* pName)
     : LiveActorGroup(pName, 128), mClingNum(0), mClingJointMtxs(nullptr), mClingPositions(nullptr), mClingingKarikari(nullptr),
-      mReleaseKarikari(nullptr), mReleaseVel(0.0f, 0.0f), mLowestReleaseDist(999999.0f), mNoReleaseTime(0) {
+      mReleaseKarikari(nullptr), mReleaseVel(0.0f, 0.0f), mLowestReleaseDist(999999.0f), mNoReleaseTime(0), mRumbleTime(1) {
     MR::connectToSceneEnemyMovement(this);
-    mClingJointMtxs = new Pos3f[5];
+    mClingJointMtxs = new Pos3f[::hKarikariHoldingMax];
     mClingPositions = new FixedPosition*[::hKarikariHoldingMax];
     mClingingKarikari = new Karikari*[::hKarikariHoldingMax];
 

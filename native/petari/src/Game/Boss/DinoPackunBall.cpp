@@ -96,7 +96,8 @@ void DinoPackunBall::setWeakSensor(HitSensor* pSensor) {
 typedef bool (DinoPackunTailNode::*calcFunc)(Pos3f*, const JointControllerInfo&);
 
 JointController* DinoPackunBall::createJointControllerOwn(LiveActor* pActor, const char* pJointName) {
-    return MR::createJointDelegator((DinoPackunTailNode*)this, pActor, &DinoPackunTailNode::turnJointLocalXDir, (calcFunc) nullptr, pJointName);
+    return MR::createJointDelegator(static_cast< DinoPackunTailNode* >(this), pActor, &DinoPackunTailNode::turnJointLocalXDir,
+                                    static_cast< calcFunc >(nullptr), pJointName);
 }
 
 void DinoPackunBall::requestLockPosition() {

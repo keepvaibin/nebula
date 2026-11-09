@@ -17,7 +17,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
     virtual MtxPtr getBaseMtx() const override {
         if (mNoModel) {
-            return (MtxPtr)&mBaseMtx;
+            return const_cast< MtxPtr >(mBaseMtx.mMtx);
         } else {
             return LiveActor::getBaseMtx();
         }

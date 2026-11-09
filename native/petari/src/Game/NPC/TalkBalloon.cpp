@@ -77,13 +77,18 @@ void TalkBalloon::close() {
     MR::startAnim(this, "End", 0);
 }
 
-inline f32 smaller(f32 a, f32 b) {
-    return b >= a ? a : b;
-}
+namespace {
+    f32 smaller(f32 a, f32 b) {
+        return b >= a ? a : b;
+    }
 
-inline f32 larger(f32 a, f32 b) {
-    return b >= a ? b : a;
-}
+    f32 larger(f32 a, f32 b) {
+        return b >= a ? b : a;
+    }
+
+    // Short balloons are reused in turn.
+    const s32 sBalloonShortNum = 4;
+}  // namespace
 
 void TalkBalloon::updateBalloon() {
     mMessageCtrl->updateBalloonPos();
@@ -177,7 +182,7 @@ void TalkBalloonShort::open(TalkMessageCtrl* pCtrl) {
         message = TalkFunction::getMessage(pCtrl);
     }
 
-    tempFormer->formMessage(message, 0);
+    tempFormer->formMessage(message, TalkTextForm_Talk);
     tempFormer->setArg(pCtrl->mTagArg, 0);
 
     s32 numLine = MR::countMessageLine(message);
@@ -245,7 +250,7 @@ void TalkBalloonShort::exeOpen() {
     }
 }
 
-TalkBalloonEvent::TalkBalloonEvent(const char* pName) : TalkBalloon(pName), mFormMode(1), mAButton() {
+TalkBalloonEvent::TalkBalloonEvent(const char* pName) : TalkBalloon(pName), mFormMode(TalkTextForm_Event), mAButton() {
     initNerve(GET_NERVE(TalkBalloonEvent, TalkBalloonEventNrvWait));
 }
 
@@ -258,7 +263,7 @@ void TalkBalloonEvent::open(TalkMessageCtrl* pCtrl) {
     mMessageCtrl = pCtrl;
     LayoutActor::appear();
     TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
-    mTextFormer->formMessage(reinterpret_cast< const char16_t* >(info->mMessage), mFormMode);
+    mTextFormer->formMessage(info->mMessage, mFormMode);
     mTextFormer->setArg(pCtrl->mTagArg, 0);
     mAButton->kill();
     mAButton->setFollowActorPane(this, "AButtonPosition");
@@ -370,7 +375,7 @@ void TalkBalloonEvent::exeClose() {
 }
 
 TalkBalloonSign::TalkBalloonSign(const char* pName) : TalkBalloonEvent(pName) {
-    mFormMode = 2;
+    mFormMode = TalkTextForm_Whole;
 }
 
 void TalkBalloonSign::init(const TableIter& rIter) {
@@ -383,7 +388,7 @@ TalkBalloonInfo::TalkBalloonInfo(const char* pName) : TalkBalloon(pName) {
 
 void TalkBalloonInfo::open(TalkMessageCtrl* pCtrl) {
     TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
-    MR::appearInformationMessage(reinterpret_cast< const char16_t* >(info->mMessage), true);
+    MR::appearInformationMessage(info->mMessage, true);
 }
 
 void TalkBalloonInfo::close() {
@@ -406,15 +411,15 @@ void TalkBalloonIcon::open(TalkMessageCtrl* pCtrl) {
     const char16_t* message = TalkFunction::getMessage(pCtrl);
     TalkTextFormer* former = mTextFormer;
 
-    former->formMessage(message, 2);
+    former->formMessage(message, TalkTextForm_Whole);
     former->setArg(pCtrl->mTagArg, 0);
     LayoutActor::setNerve(GET_NERVE(TalkBalloonShort, TalkBalloonShortNrvOpen));
 }
 
 TalkBalloonHolder::TalkBalloonHolder() : mShortIndex() {
-    mBalloonShortArray = new TalkBalloonShort*[4];
+    mBalloonShortArray = new TalkBalloonShort*[::sBalloonShortNum];
 
-    for (u32 i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::sBalloonShortNum; i++) {
         mBalloonShortArray[i] = new TalkBalloonShort("会話吹き出し[簡易会話]");
         mBalloonShortArray[i]->initWithoutIter();
         mBalloonShortArray[i]->kill();
@@ -472,7 +477,7 @@ TalkBalloon* TalkBalloonHolder::getBalloon(const TalkMessageCtrl* pArg) {
     }
 
     if (balloon == mBalloonShortArray[mShortIndex]) {
-        mShortIndex = (mShortIndex + 1) % 4;
+        mShortIndex = (mShortIndex + 1) % ::sBalloonShortNum;
     }
 
     return balloon;
@@ -484,7 +489,7 @@ void TalkBalloonHolder::pauseOff() {
     mBalloonSign->pauseOff();
     mBalloonIcon->pauseOff();
 
-    for (int i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::sBalloonShortNum; i++) {
         mBalloonShortArray[i]->pauseOff();
     }
 
@@ -499,7 +504,7 @@ void TalkBalloonHolder::update() {
 }
 
 bool TalkBalloonHolder::isActiveBalloonShort() const {
-    for (int i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::sBalloonShortNum; i++) {
         if (!MR::isDead(mBalloonShortArray[i])) {
             return true;
         }

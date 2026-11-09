@@ -23,7 +23,7 @@ void BlackHole::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorEye(this, "body", 16, mRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr);
-    MR::setEffectHostMtx(this, "BlackHoleSuction", (MtxPtr)&mSuctionEffectMtx);
+    MR::setEffectHostMtx(this, "BlackHoleSuction", mSuctionEffectMtx.toMtxPtr());
     f32 radius = mRadius;
     f32 modelRadius = 500.0f * mModelScale;
 
