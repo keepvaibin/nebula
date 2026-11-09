@@ -110,8 +110,13 @@ namespace {
     static const char* sDefaultCamera = "CAM_TYPE_XZ_PARA";
 };  // namespace
 
-CameraHolder::CameraHolder(const char* pName) : NameObj(pName) {
+CameraHolder::CameraHolder(const char* pName) : NameObj(pName), mIndex() {
     createCameras();
+
+    mIndex.reset(static_cast< u32 >(getNum()));
+    for (s32 i = 0; i < getNum(); i++) {
+        mIndex.add(getNameStrOf(i), static_cast< u32 >(i));
+    }
 
     mDefaultCameraIndex = getIndexOf(getNameStrOfDefault());
 }
@@ -121,13 +126,8 @@ s32 CameraHolder::getNum() const {
 }
 
 s32 CameraHolder::getIndexOf(const char* pName) const {
-    for (s32 i = 0; i < getNum(); i++) {
-        if (MR::isEqualString(pName, getNameStrOf(i))) {
-            return i;
-        }
-    }
-
-    return -1;
+    const u32 index = mIndex.find(pName);
+    return index == MR::NameIndex::cNoValue ? -1 : static_cast< s32 >(index);
 }
 
 const char* CameraHolder::getNameStrOf(s32 index) const {
