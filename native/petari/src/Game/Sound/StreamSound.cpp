@@ -18,6 +18,9 @@ StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSoun
         mSentKnown[i] = false;
     }
     mStream = new (SoundMemory::alloc(sizeof(StreamPlayer))) StreamPlayer();
+    mRoom = nullptr;
+    mMessageRoom = StreamPlayer::cInlineMessages;
+    mPosted = 0;
     mLoaded = false;
     mFinishBase = 0;
     mCanceled = false;
@@ -27,11 +30,33 @@ StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSoun
 StreamSound::~StreamSound() {
     next(SOUND_STREAM_RELEASE);
     send();
+    if (mRoom != nullptr) {
+        SoundMemory::retire(mRoom, mRoom->mReleased);
+    }
     SoundMemory::retire(mStream, mStream->mReleased);
 }
 
 SoundCommand& StreamSound::next(u16 kind) {
     return SoundEngine::get()->ring().next(kind, mStream);
+}
+
+// The audio thread's queue holds at most the messages sent less those it has taken (a count it only raises).
+SoundCommand& StreamSound::nextMessage(u16 kind) {
+    if (mPosted - static_cast< u32 >(mStream->mConsumed) >= mMessageRoom) {
+        const u32 capacity = mMessageRoom * 2;
+        StreamPlayer::MessageRoom* pRoom =
+            new (SoundMemory::alloc(StreamPlayer::MessageRoom::bytes(capacity))) StreamPlayer::MessageRoom();
+        pRoom->mCapacity = capacity;
+        next(SOUND_STREAM_ROOM).payload< StreamPlayer::MessageRoom* >() = pRoom;
+        send();
+        if (mRoom != nullptr) {
+            SoundMemory::retire(mRoom, mRoom->mReleased);
+        }
+        mRoom = pRoom;
+        mMessageRoom = capacity;
+    }
+    mPosted++;
+    return next(kind);
 }
 
 u64 StreamSound::send() {
@@ -181,7 +206,7 @@ void StreamSound::prepare_() {
 }
 
 void StreamSound::prepare_startStream_() {
-    next(SOUND_STREAM_START);
+    nextMessage(SOUND_STREAM_START);
     send();
     mFinishBase = mStream->mFinishes;
     mCanceled = false;
@@ -231,7 +256,7 @@ void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity acti
     if (mPrepareState == 4) {
         const bool isPaused = mStatus.isPaused() || activity.isPaused();
         if (isPaused != mIsPaused) {
-            SoundCommand& rCommand = next(SOUND_STREAM_PAUSE);
+            SoundCommand& rCommand = nextMessage(SOUND_STREAM_PAUSE);
             rCommand.mArg = isPaused ? 1 : 0;
             send();
             mIsPaused = isPaused;
@@ -275,7 +300,7 @@ bool StreamSound::tryDie_() {
         break;
     case 4: {
         mPrepareState = 6;
-        SoundCommand& rCommand = next(SOUND_STREAM_STOP);
+        SoundCommand& rCommand = nextMessage(SOUND_STREAM_STOP);
         rCommand.mArg = 10;
         send();
         break;

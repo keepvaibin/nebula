@@ -345,6 +345,9 @@ void SoundEngine::apply(const SoundCommand& rCommand) {
         mRhythm.forgetStream(static_cast< StreamPlayer* >(rCommand.mTarget));
         static_cast< StreamPlayer* >(rCommand.mTarget)->release(this);
         break;
+    case SOUND_STREAM_ROOM:
+        static_cast< StreamPlayer* >(rCommand.mTarget)->grow(rCommand.payload< StreamPlayer::MessageRoom* >());
+        break;
     case SOUND_ME_START:
     case SOUND_ME_PARAMS:
     case SOUND_ME_STOP_AT_NOTE_END:
