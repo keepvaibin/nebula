@@ -219,7 +219,7 @@ add_executable(nebula_native_host host/host_main.cpp ../tools/test_driver/run_op
     ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/texture_categories.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
-    ../runtime/src/mii_formats.cpp)
+    ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp)
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/minhook/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)

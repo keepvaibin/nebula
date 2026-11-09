@@ -37,6 +37,7 @@
 #include "galaxy/mod_plugins.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/program_table.h"
+#include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
@@ -57,7 +58,6 @@
 #include "galaxy/windows_power.h"
 #endif
 #include "galaxy/platform_time.h"
-#include "galaxy/pointer_control.h"
 #include "galaxy/input/wiimote_motion.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
