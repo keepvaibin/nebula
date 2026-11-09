@@ -397,6 +397,9 @@ private:
         std::uint32_t light_count[2]{}, row_count[2]{};
         std::uint64_t light[2][kFlickerSlots]{};  // [0] the list before, [1] the one before that
         std::uint64_t row[2][kFlickerSlots]{};
+        // The list before's lights and colour rows themselves, so a flicker prints its B beside its A.
+        NebulaFrameLight light_before[kFlickerSlots]{};
+        float row_before[kFlickerSlots][4]{};
     };
     void log_flicker(const ListData& now);
     std::unordered_map<std::uint64_t, FlickerEntry> flicker_;
