@@ -13,6 +13,7 @@
 #include "Game/Util/Tunable.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util.hpp"
@@ -1096,6 +1097,82 @@ namespace {
         return pPlugin != nullptr ? pPlugin->mStateFrames : 0;
     }
 
+    // The game's nerves (Nerve.hpp, NerveRegistry.cpp): a hooked nerve's mNebulaHook is its list's place + 1 here.
+    struct NerveHook {
+        NebulaNerveCallback mCallback;
+        void* mUser;
+    };
+    struct HookedNerve {
+        const Nerve* mNerve;
+        List< NerveHook > mHooks;
+    };
+    List< HookedNerve > sHookedNerves;
+
+    bool runNerveHooks(Spine* pSpine, const Nerve* pNerve, s32 phase) {
+        const HookedNerve& rHooked = sHookedNerves.mItems[pNerve->mNebulaHook - 1];
+        const nebula::NerveRecord* const pRecord = nebula::nerveRecordOf(pNerve);
+        NebulaActor* const pActor = pRecord != nullptr ? asHandle(pRecord->mActorOf(pSpine->mExecutor)) : nullptr;
+        const char* const pKey = nebula::nerveKeyOf(pNerve);
+        bool runGame = true;
+        for (int i = 0; i < rHooked.mHooks.mCount; i++) {
+            const NerveHook& rHook = rHooked.mHooks.mItems[i];
+            if (rHook.mCallback(pActor, pKey, static_cast< NebulaNervePhase >(phase), pSpine->mStep, rHook.mUser) == 0 &&
+                phase == nebula::NervePhase_Frame) {
+                runGame = false;
+            }
+        }
+        return runGame;
+    }
+
+    Spine* spineOf(NebulaActor* pActor) {
+        LiveActor* const pLive = asActor(pActor);
+        return pLive != nullptr ? pLive->mSpine : nullptr;
+    }
+
+    const char* apiNerve(NebulaActor* pActor) {
+        const Spine* const pSpine = spineOf(pActor);
+        return pSpine != nullptr ? nebula::nerveKeyOf(pSpine->getCurrentNerve()) : nullptr;
+    }
+
+    int32_t apiNerveFrames(NebulaActor* pActor) {
+        const Spine* const pSpine = spineOf(pActor);
+        return pSpine != nullptr && pSpine->mStep > 0 ? pSpine->mStep : 0;
+    }
+
+    // Only to a nerve of the class whose nerve it runs now: that nerve's code calls that class's functions on it.
+    int32_t apiSetNerve(NebulaActor* pActor, const char* pName) {
+        Spine* const pSpine = spineOf(pActor);
+        const nebula::NerveRecord* const pTo = nebula::findNerve(pName);
+        const nebula::NerveRecord* const pNow = pSpine != nullptr ? nebula::nerveRecordOf(pSpine->getCurrentNerve()) : nullptr;
+        if (pTo == nullptr || pNow == nullptr || strcmp(pTo->mClass, pNow->mClass) != 0) {
+            return -1;
+        }
+        pSpine->setNerve(pTo->mNerve);
+        return 0;
+    }
+
+    int32_t apiHookNerve(const char* pName, NebulaNerveCallback callback, void* user) {
+        const nebula::NerveRecord* const pRecord = nebula::findNerve(pName);
+        if (pRecord == nullptr || callback == nullptr) {
+            return -1;
+        }
+        const Nerve* const pNerve = pRecord->mNerve;
+        if (pNerve->mNebulaHook == 0) {
+            HookedNerve hooked;
+            hooked.mNerve = pNerve;
+            sHookedNerves.add(hooked);
+            pNerve->mNebulaHook = static_cast< u16 >(sHookedNerves.mCount);
+        }
+        NerveHook hook = {callback, user};
+        sHookedNerves.mItems[pNerve->mNebulaHook - 1].mHooks.add(hook);
+        nebula::gNerveHook = runNerveHooks;
+        return 0;
+    }
+
+    const char* apiNerveAt(int32_t index) {
+        return nebula::nerveKeyAt(index);
+    }
+
     void apiGetRotation(NebulaActor* pActor, float* pOut) {
         const Vec3f& rIn = asActor(pActor)->mRotation;
         pOut[0] = rIn.x;
@@ -1937,6 +2014,11 @@ namespace {
         apiSetState,
         apiState,
         apiStateFrames,
+        apiNerve,
+        apiNerveFrames,
+        apiSetNerve,
+        apiHookNerve,
+        apiNerveAt,
         apiGetRotation,
         apiSetRotation,
         apiGetScale,

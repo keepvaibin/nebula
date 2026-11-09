@@ -76,6 +76,32 @@ static void power_end(void* user) {
     say("power-up end, frames", power_frames, game->value(NEBULA_VALUE_POWER_UP), 0);
 }
 
+/* Every nerve hooked: how often each phase ran, and whether a hook saw its own nerve's name. */
+static int nerve_phases[3];
+static int nerve_names_right = 1;
+
+static int same_text(const char* a, const char* b) {
+    while (*a != 0 && *a == *b) {
+        ++a;
+        ++b;
+    }
+    return *a == *b;
+}
+
+static int32_t any_nerve(NebulaActor* actor, const char* nerve, NebulaNervePhase phase, int32_t frames, void* user) {
+    (void)actor;
+    if (phase >= NEBULA_NERVE_ENTER && phase <= NEBULA_NERVE_LEAVE) {
+        ++nerve_phases[phase];
+    }
+    if (phase == NEBULA_NERVE_ENTER && frames != 0) {
+        nerve_names_right = 0;
+    }
+    if (nerve == 0 || (user != 0 && !same_text(nerve, (const char*)user))) {
+        nerve_names_right = 0;
+    }
+    return 1;
+}
+
 static int32_t stage_frame(const NebulaModEventData* data, void* user) {
     NebulaActor* player = game->player();
     float at[3] = {0, 0, 0}, velocity[3] = {0, 0, 0}, x = 0, y = 0;
@@ -176,6 +202,18 @@ static int32_t stage_frame(const NebulaModEventData* data, void* user) {
         game->set_value(NEBULA_SET_POWER_UP, new_power);
         say("the new power-up", game->value(NEBULA_VALUE_POWER_UP), new_power, 0);
     }
+    if (frames == 478) {
+        /* Nerves by name: the player's, set again to itself; one of another class refused; every hook phase ran. */
+        const char* own = game->nerve(player);
+        game->log(me, own != 0 ? own : "the player has no nerve");
+        if (own != 0) {
+            say("set the player's own nerve (0), another class's (-1)", game->set_nerve(player, own),
+                game->set_nerve(player, "Kuribo.Walk"), game->nerve_frames(player) >= 0);
+        }
+        say("nerve enters frames leaves", nerve_phases[NEBULA_NERVE_ENTER] > 0, nerve_phases[NEBULA_NERVE_FRAME] > 0,
+            nerve_phases[NEBULA_NERVE_LEAVE] > 0);
+        say("hooks saw their own nerves", nerve_names_right, 0, 0);
+    }
     if (frames == 480) {
         game->play(player, NEBULA_PLAY_PLAYER_ANIMATION, "Wait");
         game->log(me, "done");
@@ -207,6 +245,17 @@ NEBULA_PLUGIN_ENTRY(api, self) {
     }
     if (game->subscribe(NEBULA_MOD_EVENT_COUNT, any_event, 0) == 0) {
         game->log(me, "a bad event was taken");
+    }
+    {
+        /* Every nerve the game has, each hooked with its own name as `user`. */
+        int count = 0;
+        int hooked = 0;
+        const char* nerve;
+        while ((nerve = game->nerve_at(count)) != 0) {
+            hooked += game->hook_nerve(nerve, any_nerve, (void*)nerve) == 0;
+            ++count;
+        }
+        say("nerves hooked (3630 3630), a wrong name (-1)", count, hooked, game->hook_nerve("NotA.Nerve", any_nerve, 0));
     }
     if (game->find_function("nebula_game_run") == 0) {
         game->log(me, "find_function failed");

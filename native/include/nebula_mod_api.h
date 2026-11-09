@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /* 2: setting() and setting_by_number() gave way to get_tunable(), and object_arg(index) to placement_number(column) and
-   placement_text(column); a plugin built for 1 is not started. */
+   placement_text(column), and the game's nerves came in after state_frames; a plugin built for 1 is not started. */
 #define NEBULA_MOD_API_VERSION 2u
 
 #if defined(_WIN32)
@@ -260,6 +260,18 @@ typedef struct NebulaPowerUpClass {
     int32_t looks_like;   /* with no model: the look of one of the game's (NEBULA_POWER_UP_*) */
 } NebulaPowerUpClass;
 
+/* When hook_nerve's callback runs. */
+typedef enum NebulaNervePhase {
+    NEBULA_NERVE_ENTER = 0, /* frames is 0 */
+    NEBULA_NERVE_FRAME,     /* before the game's frame of it: return 0 and the game's is not run (yours stands in) */
+    NEBULA_NERVE_LEAVE      /* another nerve was set; the game's own end of this one has run */
+} NebulaNervePhase;
+
+/* actor: the object, or the object a state works for; null for what is no object (a screen, the scene's control).
+   nerve: its name. frames: as nerve_frames. On the thread the object runs on. What's returned counts only for
+   NEBULA_NERVE_FRAME; several plugins hooking one nerve all run, and any 0 stops the game's frame. */
+typedef int32_t (*NebulaNerveCallback)(NebulaActor* actor, const char* nerve, NebulaNervePhase phase, int32_t frames, void* user);
+
 typedef struct NebulaModApi {
     uint32_t size;
     uint32_t version;
@@ -365,6 +377,20 @@ typedef struct NebulaModApi {
     void (*set_state)(NebulaActor* actor, int32_t state);
     int32_t (*state)(NebulaActor* actor);
     int32_t (*state_frames)(NebulaActor* actor);
+
+    /* The game's own objects (and screens, and the states objects hand their work to) run one nerve at a time: Kuribo
+       walks in "Kuribo.Walk". A nerve's name is "<class>.<nerve>", as docs/modding/NERVES.md lists every one.
+       nerve: the object's now; null for one without nerves (register_object's objects have set_state). nerve_frames:
+       its frames in it, from 0. set_nerve: it goes to another nerve of the class its nerve now is of, from its next frame
+       (the game's code of that nerve runs, as when the game sets it). 0: done; -1: no such nerve of its class. */
+    const char* (*nerve)(NebulaActor* actor);
+    int32_t (*nerve_frames)(NebulaActor* actor);
+    int32_t (*set_nerve)(NebulaActor* actor, const char* nerve);
+    /* Only in nebula_plugin_start. `callback` runs for every object in the nerve: as it enters, every frame of it, and as
+       it leaves. 0: done; -1: no such nerve. */
+    int32_t (*hook_nerve)(const char* nerve, NebulaNerveCallback callback, void* user);
+    /* The index-th nerve's name, for listing them all. Null: past the last. */
+    const char* (*nerve_at)(int32_t index);
 
     void (*get_rotation)(NebulaActor* actor, float* xyz);
     void (*set_rotation)(NebulaActor* actor, const float* xyz);
