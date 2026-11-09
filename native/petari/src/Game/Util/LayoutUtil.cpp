@@ -241,17 +241,13 @@ void MR::setTextBoxHorizontalPositionCenterRecursive(LayoutActor* pActor, const 
 }
 
 void MR::updateClearTimeTextBox(LayoutActor* pActor, const char* pPaneName, u32 step) {
-    char16_t clearTimeText[16];
-
-    makeClearTimeString(clearTimeText, step);
-    setTextBoxMessageRecursive(pActor, pPaneName, clearTimeText);
+    Text16 text;
+    setTextBoxMessageRecursive(pActor, pPaneName, makeClearTimeString(text, step));
 }
 
 void MR::updateMinuteAndSecondTextBox(LayoutActor* pActor, const char* pPaneName, u32 step) {
-    char16_t minuteAndSecondText[16];
-
-    makeMinuteAndSecondString(minuteAndSecondText, step);
-    setTextBoxMessageRecursive(pActor, pPaneName, minuteAndSecondText);
+    Text16 text;
+    setTextBoxMessageRecursive(pActor, pPaneName, makeMinuteAndSecondString(text, step));
 }
 
 void MR::setTextBoxFontRecursive(LayoutActor* pActor, const char* pPaneName, Ui::Font* pFont) {

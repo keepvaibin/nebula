@@ -56,7 +56,7 @@ namespace ReplaceTagProcessor {
                 if (tag.getGroup() == 5) {
                     room += getLocalizeGroupRoom(tag);
                 } else if (tag.getGroup() == 9) {
-                    room += 9;
+                    room += getRaceTimeGroupRoom(tag);
                 } else {
                     room += skip;
                 }
@@ -254,14 +254,28 @@ namespace ReplaceTagProcessor {
         return length;
     }
 
-    u32 exeRaceTimeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag) {
-        if (rTag.getTag() == 5) {
-            MR::makeRaceCurrentTimeString(pDst);
-        } else {
-            MR::makeRaceBestTimeString(pDst, rTag.getTag());
+    namespace {
+        // Tag 5 is the race being run, any other the best time of the race it numbers.
+        const char16_t* makeRaceTime(MR::Text16& rText, const MessageEditorMessageTag& rTag) {
+            return rTag.getTag() == 5 ? MR::makeRaceCurrentTimeString(rText) : MR::makeRaceBestTimeString(rText, rTag.getTag());
         }
+    }  // namespace
 
-        return 8;
+    u32 getRaceTimeGroupRoom(const MessageEditorMessageTag& rTag) {
+        MR::Text16 text;
+        return stringUnits(makeRaceTime(text, rTag));
+    }
+
+    // The whole time, however the language writes it.
+    u32 exeRaceTimeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag) {
+        MR::Text16 text;
+        const char16_t* pTime = makeRaceTime(text, rTag);
+        const u32 units = stringUnits(pTime);
+        for (u32 i = 0; i < units; i++) {
+            pDst[i] = pTime[i];
+        }
+        pDst[units] = 0;
+        return units;
     }
 };  // namespace ReplaceTagProcessor
 

@@ -609,10 +609,8 @@ u32 PowerStarList::makeRaceNameText(MR::Text16& rBuffer, int raceId, bool isFirs
 }
 
 u32 PowerStarList::makeRaceTimeText(MR::Text16& rBuffer, int raceId, bool isFirstLine) const {
-    char16_t raceBest[10];
-    MR::makeRaceBestTimeString(raceBest, raceId);
-
-    return addLine(rBuffer, raceBest, isFirstLine);
+    MR::Text16 raceBest;
+    return addLine(rBuffer, MR::makeRaceBestTimeString(raceBest, raceId), isFirstLine);
 }
 
 void PowerStarList::startScrollAnimNext(bool set) {

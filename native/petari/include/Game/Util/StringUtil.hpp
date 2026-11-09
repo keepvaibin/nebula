@@ -10,16 +10,16 @@ namespace MR {
     // pParent/pChild.
     void addFilePrefix(FormattedName& rDst, const char* pChild, const char* pParent);
 
-    // Localized; size in bytes.
-    // The date or time in the played language, into pDst (size units with the terminator, cut to fit). Returns the
-    // whole text's units without the terminator; a null pDst only measures.
-    u32 makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day);
-    u32 makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute);
-    // Minutes, seconds and centiseconds of a frame count.
-    void makeClearTimeString(char16_t* pDst, u32 frame);
-    void makeMinuteAndSecondString(char16_t* pDst, u32 frame);
-    void makeRaceBestTimeString(char16_t* pDst, int raceId);
-    void makeRaceCurrentTimeString(char16_t* pDst);
+    class Text16;
+
+    // The date or time in the played language, whole, into rDst; returns its text.
+    const char16_t* makeDateString(Text16& rDst, s32 year, s32 month, s32 day);
+    const char16_t* makeTimeString(Text16& rDst, s32 hour, s32 minute);
+    // Minutes, seconds and centiseconds of a step count, whole, into rDst; each returns its text.
+    const char16_t* makeClearTimeString(Text16& rDst, u32 frame);
+    const char16_t* makeMinuteAndSecondString(Text16& rDst, u32 frame);
+    const char16_t* makeRaceBestTimeString(Text16& rDst, int raceId);
+    const char16_t* makeRaceCurrentTimeString(Text16& rDst);
 
     char16_t* addNumberFontTag(char16_t* pDst, int tag);
     char16_t* addNumberFontTag(char16_t* pDst, const char16_t* pFmt, ...);

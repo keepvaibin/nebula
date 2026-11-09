@@ -74,19 +74,29 @@ namespace MR {
         rDst.format("%s/%s", pParent, pChild);
     }
 
-    u32 makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day) {
-        const char16_t* pMessage = MR::getGameMessageDirect("System_Date000");
+    namespace {
+        // The message with its number tags replaced, whole: ReplaceArgs gives the whole length even when it cut the
+        // text, so a text past the room is made again in room for it.
+        template < class... Numbers >
+        const char16_t* replaceWhole(Text16& rDst, const char* pMessageId, Numbers... numbers) {
+            const char16_t* pMessage = MR::getGameMessageDirect(pMessageId);
+            const u32 units = ReplaceTagFunction::ReplaceArgs(rDst.data(), static_cast< s32 >(rDst.capacity()), pMessage, numbers...);
+            if (units >= rDst.capacity()) {
+                ReplaceTagFunction::ReplaceArgs(rDst.room(units + 1), static_cast< s32 >(units + 1), pMessage, numbers...);
+            }
+            return rDst.c_str();
+        }
+    }  // namespace
 
-        return ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, year, month, day);
+    const char16_t* makeDateString(Text16& rDst, s32 year, s32 month, s32 day) {
+        return replaceWhole(rDst, "System_Date000", year, month, day);
     }
 
-    u32 makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute) {
-        const char16_t* pMessage = MR::getGameMessageDirect("System_Time002");
-
-        return ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, hour, minute);
+    const char16_t* makeTimeString(Text16& rDst, s32 hour, s32 minute) {
+        return replaceWhole(rDst, "System_Time002", hour, minute);
     }
 
-    void makeClearTimeString(char16_t* pDst, u32 frame) {
+    const char16_t* makeClearTimeString(Text16& rDst, u32 frame) {
         s32 minute;
         s32 second;
         s32 centisecond;
@@ -103,12 +113,10 @@ namespace MR {
             centisecond = ((signedFrame % ::cFramePerSec) * ::cCentisecPerSec) / ::cFramePerSec;
         }
 
-        const char16_t* pMessage = MR::getGameMessageDirect("System_Time000");
-
-        ReplaceTagFunction::ReplaceArgs(pDst, 9, pMessage, 0, minute, second, centisecond);
+        return replaceWhole(rDst, "System_Time000", 0, minute, second, centisecond);
     }
 
-    void makeMinuteAndSecondString(char16_t* pDst, u32 frame) {
+    const char16_t* makeMinuteAndSecondString(Text16& rDst, u32 frame) {
         s32 minute;
         s32 second;
 
@@ -120,9 +128,7 @@ namespace MR {
             second = (frame % static_cast< u32 >(::cFramePerMin)) / static_cast< u32 >(::cFramePerSec);
         }
 
-        const char16_t* pMessage = MR::getGameMessageDirect("System_Time001");
-
-        ReplaceTagFunction::ReplaceArgs(pDst, 16, pMessage, 0, minute, second);
+        return replaceWhole(rDst, "System_Time001", 0, minute, second);
     }
 
     char16_t* addNumberFontTag(char16_t* pDst, int tag) {
@@ -142,12 +148,12 @@ namespace MR {
         rDst.format("%.*s", static_cast< int >(pExtSeparator - pPath), pPath);
     }
 
-    void makeRaceBestTimeString(char16_t* pDst, int raceId) {
-        MR::makeClearTimeString(pDst, getRaceBestTime(raceId));
+    const char16_t* makeRaceBestTimeString(Text16& rDst, int raceId) {
+        return MR::makeClearTimeString(rDst, getRaceBestTime(raceId));
     }
 
-    void makeRaceCurrentTimeString(char16_t* pDst) {
-        MR::makeClearTimeString(pDst, getRaceCurrentTime());
+    const char16_t* makeRaceCurrentTimeString(Text16& rDst) {
+        return MR::makeClearTimeString(rDst, getRaceCurrentTime());
     }
 
     // num is the buffer size: the copy is cut to fit and always terminated.
