@@ -1,6 +1,8 @@
 #include "Game/Effect/AutoEffectGroup.hpp"
 #include "Game/Effect/AutoEffectInfo.hpp"
 #include "Game/Effect/EffectSystemUtil.hpp"
+#include "Game/Effect/ParticleResourceHolder.hpp"
+#include "Game/Util/SystemUtil.hpp"
 #include "Game/Util/Table.hpp"
 
 AutoEffectGroup::AutoEffectGroup(const char* pName, int capacity) : mName(pName), mEffects(), mCount() {
@@ -35,17 +37,17 @@ namespace MR {
         }
 
         AutoEffectGroup* createAutoEffectGroup(const char* pName) {
-            TableIter iter = findTableElementNoCase(getAutoEffectListBinary(), "GroupName", pName, 0);
+            const ParticleResourceHolder* pHolder = getParticleResourceHolder();
+            s32 row = pHolder->getAutoEffectFirstRow(pName);
 
-            if (!iter.isValid()) {
+            if (row < 0) {
                 return nullptr;
             }
 
-            AutoEffectGroup* pGroup = new AutoEffectGroup(pName, getAutoEffectNum(pName));
+            AutoEffectGroup* pGroup = new AutoEffectGroup(pName, pHolder->getAutoEffectNum(pName));
 
-            while (iter != getAutoEffectListBinary()->end()) {
-                pGroup->add(iter);
-                iter = findTableElementNoCase(getAutoEffectListBinary(), "GroupName", pName, iter.mIndex + 1);
+            for (; row >= 0; row = pHolder->getAutoEffectNextRow(row)) {
+                pGroup->add(TableIter(pHolder->getAutoEffectListBinary(), row));
             }
 
             return pGroup;

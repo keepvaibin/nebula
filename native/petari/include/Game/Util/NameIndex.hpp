@@ -6,6 +6,7 @@
 
 namespace MR {
     u32 getHashCode(const char*);
+    u32 getHashCodeLower(const char*);
 
     // A name's key in a NameIndex: its hash and whether two names are the same. Exact: the whole name.
     struct NameKeyExact {
@@ -14,6 +15,16 @@ namespace MR {
         }
         static bool equal(const char* pA, const char* pB) {
             return isEqualString(pA, pB);
+        }
+    };
+
+    // ASCII case folded, as isEqualStringCase compares (names it calls equal hash alike).
+    struct NameKeyCase {
+        static u32 hash(const char* pName) {
+            return getHashCodeLower(pName);
+        }
+        static bool equal(const char* pA, const char* pB) {
+            return isEqualStringCase(pA, pB);
         }
     };
 
