@@ -132,6 +132,10 @@ void Poihana::init(const TableIter& rIter) {
 
     s32 launchIntensity = ::sDefaultShootHeight;
     MR::getPlacementArg0NoInit(rIter, &launchIntensity);
+    // A negative height would launch it into the ground.
+    if (launchIntensity < 0) {
+        launchIntensity = 0;
+    }
     mLaunchIntensity = NebulaSqrt(::sGravity * launchIntensity);
 
     MR::getPlacementArg3NoInit(rIter, &mBehavior);

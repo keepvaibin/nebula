@@ -5,6 +5,7 @@
 #include "Game/Boss/TombSpiderGland.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
 
 namespace {
     const s32 sStepToStartAcidGround = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -99,8 +100,10 @@ void TombSpiderAcid::updateDeleteAcid() {
 
 void TombSpiderAcid::updateGroundMtx(Pos3f* pDstMtx, MtxPtr pSrcMtx) {
     Vec3f up(-pSrcMtx[0][2], -pSrcMtx[1][2], -pSrcMtx[2][2]);
-    Vec3f side(up.y, -up.x, 0.0f);
     Vec3f front(0.0f, 0.0f, 1.0f);
+    // Up crossed with front; a joint facing along front gets a perpendicular instead of a zero side.
+    Vec3f side;
+    MR::crossOrPerpendicular(&side, up, front);
 
     Vec3f checkLine(up);
     checkLine.scale(-::sDistanceCheckMap);
