@@ -123,9 +123,33 @@ pub fn cooks(name: &str) -> bool {
         || fur::is_fur_text(name)
 }
 
+/// Each file of the player's disc as imported: path, size and XXH64 of its bytes, and main.dol's as `sys/main.dol`. A
+/// whole-disc mod is read against it, so only what the mod changed is taken, with no second copy of the game.
+pub const DISC_FILES_PATH: &str = "NebulaData/DiscFiles.tsv";
+
+/// The disc record's text: a line per file, `path<TAB>size<TAB>hash` (16 hex digits), in disc order.
+pub fn disc_files_table(rows: &[(String, u64, u64)]) -> Vec<u8> {
+    let mut text = String::with_capacity(rows.len() * 64);
+    for (path, size, hash) in rows {
+        text.push_str(&format!("{path}\t{size}\t{hash:016x}\n"));
+    }
+    text.into_bytes()
+}
+
+/// The disc record by lower-case path: (size, hash).
+pub fn read_disc_files(text: &str) -> std::collections::HashMap<String, (u64, u64)> {
+    text.lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let (path, size, hash) = (parts.next()?, parts.next()?.parse().ok()?, u64::from_str_radix(parts.next()?, 16).ok()?);
+            Some((path.to_ascii_lowercase(), (size, hash)))
+        })
+        .collect()
+}
+
 /// A disc file only a console reads: the channel banner, the HOME menu (its module, its library's files and each
 /// language's layout), the module list, and the save data's banner and icon for the console's data manager.
-fn console_only(path: &str) -> bool {
+pub fn console_only(path: &str) -> bool {
     path == "opening.bnr"
         || path.starts_with("ModuleData/")
         || path.starts_with("HomeButton2/")
@@ -416,6 +440,7 @@ pub fn write_cooked_pak(
     // In disc order, so a reader of the source reads forwards.
     let mut order: Vec<&PakFile> = files.iter().collect();
     order.sort_by_key(|f| f.offset);
+    let mut disc_rows = Vec::with_capacity(files.len() + 1);
     for file in order {
         if console_only(&file.path) {
             stats.left_out += 1;
@@ -426,6 +451,7 @@ pub fn write_cooked_pak(
         if bytes.len() as u64 != file.length {
             bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
         }
+        disc_rows.push((file.path.clone(), file.length, texture::xxh64(&bytes)));
         stats.bytes_in += file.length;
         // Whatever its name, a compressed file is expanded here: the game has no decompressor.
         let items = if cooks(&file.path) || archive::is_compressed(&bytes) {
@@ -448,6 +474,9 @@ pub fn write_cooked_pak(
     let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();
     // The tables main.dol holds, as files of their own folder (B-05).
     let dol = system_dol(system)?;
+    disc_rows.push(("sys/main.dol".to_string(), dol.len() as u64, texture::xxh64(dol)));
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(disc_files_table(&disc_rows)) };
+    placed.extend(place(&mut pak, &mut at, DISC_FILES_PATH, vec![item], stats)?);
     let game_id = String::from_utf8_lossy(&system.bytes[..6]).into_owned();
     let extra = dol::tables(dol, &game_id, stats)?;
     for (name, items) in extra {
@@ -545,4 +574,17 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
         return Err(error);
     }
     Ok(stats)
+}
+
+#[cfg(test)]
+mod disc_record_tests {
+    #[test]
+    fn the_disc_record_reads_back_by_path() {
+        let rows = vec![("StageData/A.arc".to_string(), 12u64, 0x0123_4567_89ab_cdefu64), ("sys/main.dol".to_string(), 4, 7)];
+        let text = String::from_utf8(super::disc_files_table(&rows)).unwrap();
+        let read = super::read_disc_files(&text);
+        assert_eq!(read.len(), 2);
+        assert_eq!(read["stagedata/a.arc"], (12, 0x0123_4567_89ab_cdef));
+        assert_eq!(read["sys/main.dol"], (4, 7));
+    }
 }

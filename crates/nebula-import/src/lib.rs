@@ -665,6 +665,59 @@ impl Source {
     }
 }
 
+/// A changed copy of the game, as a whole-disc mod is: its program and files read as they are. Partition refuses a
+/// main.dol that is not a release's as damage; a mod's program is changed on purpose.
+pub struct ChangedGame {
+    /// The id its boot header gives.
+    pub game_id: String,
+    /// Its program, as it is.
+    pub dol: Vec<u8>,
+    files: Vec<GameFile>,
+    source: Source,
+}
+
+impl ChangedGame {
+    /// A disc image, or an extracted game folder.
+    pub fn open(input: &Path) -> Result<ChangedGame> {
+        let (boot, dol, fst, source) = if input.is_dir() {
+            let data = data_root(input)?;
+            let read = |relative: &str| fs::read(data.join(relative)).with_context(|| format!("{relative} cannot be read"));
+            (read("sys/boot.bin")?, read("sys/main.dol")?, read("sys/fst.bin")?, Source::Folder(data.clone()))
+        } else {
+            let file = File::open(input).with_context(|| format!("{} cannot be opened", input.display()))?;
+            let disc = open_disc_checked(DiscFile::new(file), false)?;
+            if !disc.header().is_wii() {
+                bail!("this is a GameCube disc, not Super Mario Galaxy");
+            }
+            let mut partition = disc.open_partition_kind(PartitionKind::Data).context("the disc's game partition cannot be opened")?;
+            let meta = *partition.meta().context("the game partition cannot be read")?;
+            (meta.raw_boot.to_vec(), meta.raw_dol.to_vec(), meta.raw_fst.to_vec(), Source::Disc(partition))
+        };
+        let game_id = String::from_utf8_lossy(boot.get(..6).context("the boot header is short")?).into_owned();
+        if game_id.starts_with("SB4") || game_id.starts_with("SB5") {
+            bail!("this is Super Mario Galaxy 2 ({game_id}); Nebula is Super Mario Galaxy");
+        }
+        if !game_id.starts_with("RMG") {
+            bail!("this is not Super Mario Galaxy (its id is {game_id})");
+        }
+        let files = file_table(&fst)?;
+        Ok(ChangedGame { game_id, dol, files, source })
+    }
+
+    /// Each file's path and bytes, in the order they lie on the disc.
+    pub fn visit_files(&mut self, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
+        let mut order: Vec<usize> = (0..self.files.len()).collect();
+        order.sort_by_key(|&i| self.files[i].offset);
+        for i in order {
+            let file = &self.files[i];
+            let mut bytes = vec![0u8; file.length as usize];
+            self.source.open(file)?.read_exact(&mut bytes).with_context(|| format!("{} cannot be read", file.path))?;
+            visit(&file.path, bytes)?;
+        }
+        Ok(())
+    }
+}
+
 /// A release's game partition (RELEASES), checked: its system files at their offsets, the files of its file table, and
 /// where to read them.
 pub struct Partition {
