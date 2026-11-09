@@ -11,17 +11,19 @@ ResFileInfo::ResFileInfo() {
     mSize = 0;
 }
 
-ResTable::ResTable() : mFileInfoTable(0), mCount(0) {
+ResTable::ResTable() : mFileInfoTable(0), mCount(0), mIndex() {
 }
 
 void ResTable::newFileInfoTable(u32 count) {
     mFileInfoTable = new ResFileInfo[count];
+    mIndex.reset(count);
 }
 
 ResFileInfo* ResTable::add(const char* pName, void* pRes, bool stripExt) {
     ResFileInfo* curInfo = &mFileInfoTable[mCount];
     curInfo->mResource = pRes;
     curInfo->setName(pName, stripExt);
+    mIndex.add(curInfo->mName, curInfo->mHashCode, mCount);
     mCount++;
     return curInfo;
 }
@@ -66,17 +68,8 @@ void* ResTable::findRes(const char* pName) const {
 }
 
 int ResTable::getResIndex(const char* pName) const {
-    u32 hash = MR::getHashCodeLower(pName);
-
-    for (int i = 0; i < mCount; i++) {
-        u32 curHash = mFileInfoTable[i].mHashCode;
-
-        if (curHash == hash) {
-            return i;
-        }
-    }
-
-    return -1;
+    const u32 index = mIndex.findHash(MR::getHashCodeLower(pName));
+    return index == MR::NameIndexOf< MR::NameKeyCase >::cNoValue ? -1 : static_cast< int >(index);
 }
 
 const char* ResTable::findResName(const void* pRes) const {
