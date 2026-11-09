@@ -219,6 +219,31 @@ namespace MR {
         ::getSystemWipeHolder()->forceClose(::sWipeWhiteFade);
     }
 
+    void forceCloseSystemWipeFade() {
+        ::getSystemWipeHolder()->forceClose(::sWipeFade);
+    }
+
+    // A scene's wipe is its own: it goes with the scene, and the intermission scene that follows draws black. A wipe left
+    // fully closed (a dead one counts as open: a fade that was never used reads closed) is handed to the system wipe.
+    void holdClosedSceneWipeOnSystemWipe() {
+        if (!isExistSceneObj(SceneObj_SceneWipeHolder) || ::getSystemWipeHolder() == nullptr) {
+            return;
+        }
+
+        const SceneWipeHolder* const pHolder = SceneWipeHolderFunction::getSceneWipeHolder();
+        const WipeLayoutBase* const pWipe = pHolder->getCurrent();
+
+        if (pWipe == nullptr || isDead(pWipe) || !pWipe->isClose()) {
+            return;
+        }
+
+        if (pHolder->isCurrent(::sWipeWhiteFade)) {
+            forceCloseSystemWipeWhiteFade();
+        } else {
+            forceCloseSystemWipeFade();
+        }
+    }
+
     bool isSystemWipeActive() {
         return ::getSystemWipeHolder()->isWipeIn() || ::getSystemWipeHolder()->isWipeOut();
     }

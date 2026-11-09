@@ -52,4 +52,6 @@ public:
     bool mIsPlayTicoSound;
     bool mIsCancelScenarioSelect;
     bool mIsForceWipe;
+    // Updates left before the system wipe a scene start opens (startScene): it opens with the scene's first frame.
+    s32 mOpenWipeDelay;
 };
