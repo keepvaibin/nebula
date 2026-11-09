@@ -3,6 +3,7 @@
 #include <nebula_geometry.hpp>
 
 class EmitterCore;
+class ParticleEmitterHolder;
 
 class ParticleEmitter {
 public:
@@ -25,4 +26,6 @@ public:
     EmitterCore* mEmitter;
     bool mPaused;
     bool mUpdated;  // set by its first holder update, which starts a linked emitter's callback
+    ParticleEmitterHolder* mHolder;  // the pool this record lies in, whichever effect system deletes it
+    u32 mPlace;                      // its place in that pool, counted across chunks
 };
