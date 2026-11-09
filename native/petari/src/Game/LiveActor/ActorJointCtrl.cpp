@@ -32,15 +32,22 @@ void ActorJointCtrl::endFaceCtrl(s32 time) {
 }
 
 void ActorJointCtrl::setIKEndPosition(const char* pName, const Vec3f& rPos, f32 rate) {
-    mJointCtrlHolder->setEndPosition(pName, rPos, rate);
+    // An actor with no IK table has nothing to bend.
+    if (mJointCtrlHolder != nullptr) {
+        mJointCtrlHolder->setEndPosition(pName, rPos, rate);
+    }
 }
 
 void ActorJointCtrl::setIKEndDirection(const char* pName, const Vec3f& rDirection, f32 rate) {
-    mJointCtrlHolder->setEndDirection(pName, rDirection, rate);
+    if (mJointCtrlHolder != nullptr) {
+        mJointCtrlHolder->setEndDirection(pName, rDirection, rate);
+    }
 }
 
 void ActorJointCtrl::endIKCtrlAll() {
-    mJointCtrlHolder->endCtrlAll();
+    if (mJointCtrlHolder != nullptr) {
+        mJointCtrlHolder->endCtrlAll();
+    }
 }
 
 void ActorJointCtrl::update() {

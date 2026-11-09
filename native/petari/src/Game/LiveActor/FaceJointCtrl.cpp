@@ -21,6 +21,11 @@ void FaceJointCtrl::init() {
         const char* jointName = nullptr;
         csv->getValue(0, "JointName", &jointName);
         csv->getValue(0, "DegreeMax", &mDegreeMax);
+        // A table with no joint name has no joint to turn.
+        if (jointName == nullptr) {
+            return;
+        }
+
         mJointController = MR::createJointDelegator< FaceJointCtrl >(this, mHostActor, &FaceJointCtrl::updateJointMtxCallBack, nullptr, jointName);
     }
 }

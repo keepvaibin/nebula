@@ -18,4 +18,6 @@ public:
 
 private:
     u16* mValueArray;
+    // The slots the array was made with; an index outside them reads 0 and adds nothing.
+    s32 mValueNum;
 };

@@ -21,15 +21,12 @@
 namespace {
     u32 sPlaced = 0;
 
+    // The option read once (this block is built only under NEBULA_DEV).
     bool enabled() {
-#if !defined(NEBULA_DEV)
-        static const bool sEnabled = false;
-#else
         static s32 sEnabled = -1;
         if (sEnabled < 0) {
             sEnabled = nebula_host()->option(nebula_host()->user, NEBULA_OPTION_TEST_TRACE_LOADS) != 0 ? 1 : 0;
         }
-#endif
         return sEnabled != 0;
     }
 

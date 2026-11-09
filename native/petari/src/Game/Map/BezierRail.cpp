@@ -15,7 +15,7 @@ namespace {
     const f32 cNearestSampleStep = 100.0f; // length between getNearestParam samples
 
     int getNextIndex(int index, int pointNum) {
-        return (index + 1) % pointNum;
+        return pointNum > 0 ? (index + 1) % pointNum : 0;
     }
 
     void calcRailDirection(Vec3f* pOut, const RailPart* pRailPart, f32 t) {
@@ -127,6 +127,11 @@ f32 BezierRailPart::getLength(f32 t1, f32 t2, int segments) const {
 
 // Newton steps from the uniform guess; param stays clamped to 0..1.
 f32 BezierRailPart::getParam(f32 targetLength) const {
+    // A part of no length (two points on one place) has only its start.
+    if (!(mLength > 0.0f)) {
+        return 0.0f;
+    }
+
     f32 param = targetLength / mLength;
     f32 length = getLength(0.0f, param, cLengthSegments);
 
@@ -335,6 +340,11 @@ BezierRail::BezierRail(const TableIter& rIter, const Table* pInfo) {
     mNumRailParts = mPointNum - 1;
     if (mIsClosed) {
         mNumRailParts++;
+    }
+
+    // A rail of one point (bad placement data) is one part from that point to itself; the length reads need a part.
+    if (mNumRailParts < 1) {
+        mNumRailParts = 1;
     }
 
     mRailParts = new RailPart[mNumRailParts];

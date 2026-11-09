@@ -341,7 +341,9 @@ u32 CollisionParts::checkStrikeBall(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
         Vec3f localMovement(localPos - prevPos);
         Vec3f worldMovement(localMovement);
         mBaseMatrix.mult33(worldMovement, worldMovement);
-        s32 steps = static_cast< s32 >((1.0f / 35.0f) * localMovement.length()) + 1;
+        // One check per 35 units the part moved; 35000 or more, or not a number, takes 1000 (it would not end).
+        const f32 movedLength = localMovement.length();
+        s32 steps = movedLength < 35000.0f ? static_cast< s32 >((1.0f / 35.0f) * movedLength) + 1 : 1000;
         Vec3f step(localMovement);
 
         if (steps > 1) {

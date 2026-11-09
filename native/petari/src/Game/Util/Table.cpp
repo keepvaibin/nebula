@@ -57,10 +57,14 @@ TableIter Table::findElementBinary(const char* key, const char* value) const {
     int low = 0;
     int high = getNumEntries();
 
-    const char* nextVal;
+    const char* nextVal = nullptr;
     while (low < high) {
         int mid = (low + high) / 2;
-        getValue< const char* >(mid, key, &nextVal);
+        // A table without the key column has no such row.
+        if (!getValue< const char* >(mid, key, &nextVal)) {
+            return end();
+        }
+
         const u8* pA = reinterpret_cast< const u8* >(nextVal);
         const u8* pB = reinterpret_cast< const u8* >(value);
         while (*pA != 0 && *pA == *pB) {

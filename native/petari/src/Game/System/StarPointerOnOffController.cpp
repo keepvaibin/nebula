@@ -248,7 +248,8 @@ void StarPointerOnOffController::incModeCounter(void* pRequester, s32 mode) {
 
 void StarPointerOnOffController::decModeCounter(void* pRequester) {
     for (RequestInfo** request = mRequests.end() - 1; request >= mRequests.begin(); request--) {
-        if ((*request)->mRequester == pRequester) {
+        // A free slot (mode -1) is never a request to end, even for a null requester.
+        if ((*request)->mRequester == pRequester && (*request)->mMode >= 0) {
             mModeCounter[(*request)->mMode]--;
             for (; request < mRequests.end() - 1; request++) {
                 *(*request) = *(*(request + 1));

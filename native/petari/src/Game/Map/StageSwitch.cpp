@@ -12,6 +12,11 @@ bool ZoneSwitch::get(int index) const {
 }
 
 void ZoneSwitch::set(int index, bool isOn) {
+    // A switch number past a million bits (a placement with a wild number) is not stored.
+    if (index < 0 || index >= (1 << 20)) {
+        return;
+    }
+
     const u32 word = static_cast< u32 >(index) / 32;
     if (word >= mWords) {
         if (!isOn) {

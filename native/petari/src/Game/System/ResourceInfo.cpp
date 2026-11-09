@@ -50,6 +50,11 @@ ResFileInfo* ResTable::findFileInfo(const char* pName) const {
 }
 
 ResFileInfo* ResTable::getFileInfo(u32 idx) const {
+    // A file number past the table (a layout naming a file it lacks) has no info.
+    if (idx >= mCount) {
+        return nullptr;
+    }
+
     return &mFileInfoTable[idx];
 }
 

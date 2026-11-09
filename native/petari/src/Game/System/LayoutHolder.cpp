@@ -64,7 +64,8 @@ Ui::Font* LayoutHolder::GetFont(const char* pName) {
 }
 
 bool LayoutHolder::isAnimationHashEqual(u32 hash, u32 fileID) const {
-    return mAnimRes.getFileInfo(fileID)->isEqualHashCode(hash);
+    const ResFileInfo* const pInfo = mAnimRes.getFileInfo(fileID);
+    return pInfo != nullptr && pInfo->isEqualHashCode(hash);
 }
 
 void LayoutHolder::initializeArc() {

@@ -5,6 +5,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
 #include "Game/Util/StringUtil.hpp"
+#include <cmath>
 #include <cstring>
 
 namespace {
@@ -202,6 +203,11 @@ f32 FurLengthMap::refer(f32 u, f32 v) const {
 }
 
 u32 FurLengthMap::getTexelOrder(u32 size, f32 coord, u8 wrap) const {
+    // A coordinate that is not a number (a mesh with no coordinate span) reads the first texel.
+    if (coord != coord) {
+        coord = 0.0f;
+    }
+
     if (coord > 1.0f) {
         switch (wrap) {
         case NEBULA_WRAP_CLAMP:
@@ -209,6 +215,10 @@ u32 FurLengthMap::getTexelOrder(u32 size, f32 coord, u8 wrap) const {
             break;
         case NEBULA_WRAP_REPEAT:
         case NEBULA_WRAP_MIRROR:
+            // Past 65536 or infinite, one subtraction of 1 at a time never ends; the fraction is taken at once.
+            if (!(coord < 65536.0f)) {
+                coord = std::isinf(coord) ? 0.0f : std::fmod(coord, 1.0f);
+            }
             while (coord > 1.0f) {
                 coord -= 1.0f;
             }

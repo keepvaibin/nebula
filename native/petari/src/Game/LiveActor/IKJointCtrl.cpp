@@ -92,6 +92,13 @@ void IKJointCtrlHolder::addCtrl(const IKJointCtrlParam& rParam) {
         mCapacity *= 2;
     }
 
+    // A joint without two parents (a bad name in the table) has no chain to bend: no control is made for it.
+    Joint* const pEndJoint = MR::getJoint(mActor, rParam.mName);
+    Joint* const pMiddleJoint = MR::getParentJoint(mActor, pEndJoint);
+    if (pMiddleJoint == nullptr || MR::getParentJoint(mActor, pMiddleJoint) == nullptr) {
+        return;
+    }
+
     IKJointCtrl* ctrl = new IKJointCtrl(mActor);
     ctrl->init(rParam);
     mControls[mNumControls++] = ctrl;
@@ -105,11 +112,15 @@ void IKJointCtrlHolder::startUpdate() {
 }
 
 void IKJointCtrlHolder::setEndPosition(const char* pName, const Vec3f& rPos, f32 rate) {
-    findIKJointCtrl(pName)->setEndPosition(rPos, rate);
+    if (IKJointCtrl* const pCtrl = findIKJointCtrl(pName)) {
+        pCtrl->setEndPosition(rPos, rate);
+    }
 }
 
 void IKJointCtrlHolder::setEndDirection(const char* pName, const Vec3f& rDirection, f32 rate) {
-    findIKJointCtrl(pName)->setEndDirection(rDirection, rate);
+    if (IKJointCtrl* const pCtrl = findIKJointCtrl(pName)) {
+        pCtrl->setEndDirection(rDirection, rate);
+    }
 }
 
 void IKJointCtrlHolder::endUpdate() {

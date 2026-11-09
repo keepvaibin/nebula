@@ -27,6 +27,11 @@ namespace {
     }
 
     s32 findByHash(const u8* pEntries, u32 count, u32 stride, u32 hashAt, const char* pName) {
+        // No name (CrystalCageMoving asks for the joint matrix of nullptr) finds nothing; the caller takes its fallback.
+        if (pName == nullptr) {
+            return -1;
+        }
+
         const u32 hash = nebula_name_hash(pName);
         for (u32 i = 0; i < count; i++) {
             u32 entryHash;

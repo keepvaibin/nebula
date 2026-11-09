@@ -49,10 +49,13 @@ namespace MR {
         bool hasRail = true;
         getRailInfo(&railIter, &pRailPoints, rIter);
 
+        // A chain visits each rail of the zone once at most; links that come back round (bad placement data) end it there.
+        s32 railsLeft = getPlacedRailNum(getPlacedZoneId(rIter));
+
         while (hasRail) {
             ::addRailToGraph(pGraph, railIter, pRailPoints);
 
-            hasRail = getNextLinkRailInfo(&railIter, &pRailPoints, railIter);
+            hasRail = getNextLinkRailInfo(&railIter, &pRailPoints, railIter) && --railsLeft > 0;
         }
 
         return pGraph;
