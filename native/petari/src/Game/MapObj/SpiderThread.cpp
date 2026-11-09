@@ -386,6 +386,9 @@ SiteMaterial SpiderThread::loadMaterial() const {
 }
 
 namespace {
+    // The bloom pass's drawing of the web has a draw slot of its own.
+    u32 sBloomSlot;
+
     SpiderThread* getSpiderThread() {
         return MR::getSceneObj< SpiderThread >(SceneObj_SpiderThread);
     }
@@ -454,6 +457,11 @@ void MR::drawSpiderThreadBloom() {
     }
 
     if (::getSpiderThread()->mIsBloomOn) {
+        // Called outside the object lists: without this the web would draw under the object drawn last, on its numbers.
+        if (::sBloomSlot == 0) {
+            ::sBloomSlot = Frame::newSlot();
+        }
+        Frame::setObject(::sBloomSlot, ::getSpiderThread()->mMotionEpoch);
         ::getSpiderThread()->draw();
         CategoryList::drawOpa(MR::DrawBufferType_Ride);
     }

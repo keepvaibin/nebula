@@ -45,6 +45,21 @@ namespace NrvGameSystem {
     NEW_NERVE(GameSystemNormal, GameSystem, Normal);
 };  // namespace NrvGameSystem
 
+namespace {
+    // The drawers GameSystem::draw calls itself, outside the object lists, each under a draw slot of its own: they pair from
+    // frame to frame by it, not by the numbers of whichever object drew before them (a full-screen fill would take a pane's
+    // matrix when that pane's draw count changed).
+    enum { Own_Sequence, Own_CutsceneSkip, Own_ScreenPreserver, Own_SystemWipe, Own_ErrorWatcher, Own_Overlay, Own_Prepare, Own_Settings, Own_Restart, Own_Count };
+    u32 sOwnSlots[Own_Count];
+
+    void drawOwn(u32 which) {
+        if (sOwnSlots[which] == 0) {
+            sOwnSlots[which] = Frame::newSlot();
+        }
+        Frame::setObject(sOwnSlots[which], 0);
+    }
+}  // namespace
+
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
     NebulaArena::create(nullptr);
@@ -174,26 +189,35 @@ void GameSystem::drawFrame() {
 
 void GameSystem::draw() {
     mSceneController->drawScene();
+    drawOwn(Own_Sequence);
     mSequenceDirector->draw();
+    drawOwn(Own_CutsceneSkip);
     NebulaCutsceneSkip::draw();
     // The settings menu covers everything, the wipes too; the pointer is drawn over it.
     const bool isSettingsShown = NebulaSettingsMenu::isShown();
     if (!isSettingsShown) {
         mObjHolder->drawStarPointer();
     }
+    drawOwn(Own_ScreenPreserver);
     mObjHolder->drawBeforeEndRender();
 
     if (mSystemWipeHolder != nullptr) {
+        drawOwn(Own_SystemWipe);
         mSystemWipeHolder->draw();
     }
 
+    drawOwn(Own_ErrorWatcher);
     mErrorWatcher->draw();
+    drawOwn(Own_Overlay);
     mSceneController->drawSceneOverlay();
+    drawOwn(Own_Prepare);
     NebulaPrepare::draw();
     if (isSettingsShown) {
+        drawOwn(Own_Settings);
         NebulaSettingsMenu::draw();
         mObjHolder->drawStarPointer();
     }
+    drawOwn(Own_Restart);
     SingletonHolder< GameSystemRestartProcess >::get()->draw();
 }
 

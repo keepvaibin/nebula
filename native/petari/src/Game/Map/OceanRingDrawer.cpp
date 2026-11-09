@@ -24,6 +24,9 @@ namespace {
     const f32 sBloomCameraOffsetZ = 3000.0f;
     const f32 sDistancePartDrawBloom = 4000.0f;
 
+    // Draw numbers a part keeps for itself: one strip per segment of the part, a part has fewer segments than this.
+    const u32 cPartsPerDrawer = 256;
+
     // Material colours 0 and 4.
     const NebulaColor8 cBaseColor = {0x28, 0x28, 0x28, 0x14};
     const NebulaColor8 cWaterColor = {0x76, 0xD7, 0xFF, 0xFF};
@@ -197,6 +200,9 @@ void OceanRingDrawer::draw() const {
         mMesh.draw(site);
     } else {
         for (s32 i = 0; i < mDrawerCount; i++) {
+            // Each part numbers its draws from its own range: one switching between its sent mesh and its strips leaves the
+            // parts after it on their numbers.
+            site.setPart(static_cast< u32 >(i) * cPartsPerDrawer);
             getDrawer(i)->draw(site);
         }
     }
@@ -215,6 +221,7 @@ void OceanRingDrawer::drawBloom() const {
             OceanRingPartDrawer* drwr = getDrawer(i);
 
             if (drwr->mPosition.distance(zDir) < ::sDistancePartDrawBloom) {
+                site.setPart(static_cast< u32 >(i) * cPartsPerDrawer);
                 drwr->drawDynamicBloom(site);
             }
         }

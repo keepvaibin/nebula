@@ -432,6 +432,8 @@ namespace Frame {
     void begin() {
         store();
         sPixelLit = host()->option(host()->user, NEBULA_OPTION_PIXEL_LIT) != 0;
+        // Draws before the first object's take no object's identity (not the last frame's last object, with its count).
+        setObject(0, 0);
     }
 
     void end() {
@@ -1124,6 +1126,7 @@ namespace Frame {
 
     void scene2D(bool) {
         sOpenDraw = -1;
+        setObject(0, 0);
     }
 
     void mirror(bool begin) {
@@ -1132,11 +1135,15 @@ namespace Frame {
             sLayer = sMainLayer;
         }
         sOpenDraw = -1;
+        setObject(0, 0);
     }
 
+    // A phase's draws made outside any object (the silhouette fill, the mirror's fill) start from no object, so their
+    // numbers do not depend on how many draws the object drawn last made.
     void phase(u8 phase) {
         sPhase = phase;
         sOpenDraw = -1;
+        setObject(0, 0);
     }
 
     void bloom(u32 kind, u32 arg0, u32 arg1) {
