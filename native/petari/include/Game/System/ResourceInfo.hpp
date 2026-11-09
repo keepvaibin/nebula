@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/NameIndex.hpp"
 
 class ResFileInfo {
 public:
@@ -38,5 +39,8 @@ public:
     u32 mCount;
 
 private:
+    // Keyed by each entry's case-folded name hash; a lookup by name takes the first entry of its hash.
+    MR::NameIndexOf< MR::NameKeyCase > mIndex;
+
     void* findRes(const char*) const;
 };
