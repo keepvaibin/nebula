@@ -35,7 +35,7 @@ NativeOut program_ps(Varyings i) {
     i.color = lit0;
     float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     {
-        const float4 t = tex[0].Sample(samp[0], i.uv0).rgba;
+        const float4 t = TEX(0).Sample(SAMP(0), i.uv0).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = (t.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)) + 128.0 / 255.0);
         const float ra = (0.0 + lerp(0.0, t.a, ras.a)) * 4.0;
@@ -44,7 +44,7 @@ NativeOut program_ps(Varyings i) {
         NATIVE_STAGE(0, float4(rc, ra))
     }
     {
-        const float4 t = tex[1].Sample(samp[1], i.uv1).rgba;
+        const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;
         const float3 rc = (float3(1.0, 1.0, 1.0) - lerp(float3(0.0, 0.0, 0.0), low8(prev.rgb), t.rgb)) * 4.0;
         const float ra = (0.0 + lerp(0.0, low8(prev.a), t.a));
         prev.rgb = rc;

@@ -4,6 +4,7 @@
 #include "galaxy/render/gpu_texture_backend.h"
 #include "barriers_d3d12.h"
 
+#include <algorithm>
 #include <bit>
 #include <sstream>
 #include <stdexcept>
@@ -63,10 +64,14 @@ void TextureBackend::shutdown() {
     srv_cpu_base_ = {};
     srv_stride_ = 0u;
     null_srv_ = {};
+    mirror_ = {};
+    mirror_count_ = 0u;
+    views_made_ = 0u;
     device_.Reset();
 }
 
 void TextureBackend::ensure_view(std::uint32_t index) {
+    views_made_ = std::max(views_made_, index + 1u);
     const std::size_t page = index / views_per_page_;
     while (page > srv_pages_.size()) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
@@ -101,6 +106,27 @@ void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, un
     ensure_view(index);
     const auto cpu = srv_cpu(index);
     device_->CreateShaderResourceView(texture, &srv_desc, cpu);
+    publish_view(index);
+}
+
+void TextureBackend::mirror_into(D3D12_CPU_DESCRIPTOR_HANDLE slots, std::uint32_t count) {
+    mirror_ = slots;
+    mirror_count_ = count;
+    for (std::uint32_t i = 0; i < views_made_; ++i) {
+        publish_view(i);
+    }
+}
+
+void TextureBackend::publish_view(std::uint32_t index) const {
+    if (mirror_.ptr == 0u) {
+        return;
+    }
+    if (index >= mirror_count_) {
+        throw std::runtime_error("[textures] more texture views than the shader-visible heap holds");
+    }
+    D3D12_CPU_DESCRIPTOR_HANDLE slot = mirror_;
+    slot.ptr += static_cast<SIZE_T>(index) * srv_stride_;
+    device_->CopyDescriptorsSimple(1u, slot, srv_cpu(index), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 }
 
 TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t size) {

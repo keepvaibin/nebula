@@ -15,7 +15,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float a = tex[0].Sample(samp[0], i.uv[0].xy).a;
+    const float a = TEX(0).Sample(SAMP(0), i.uv[0].xy).a;
     const float a8 = round(a * 255.0);
     const uint test = uint(material.params.y);
     const bool shown = test == 1u ? a8 == material.params.x : test == 2u ? a8 != material.params.x : a8 > material.params.x;

@@ -17,6 +17,6 @@ float4 material_color(NativeVaryings i) {
     if (round(i.color.a * 255.0) <= 0.0) {
         discard;
     }
-    const float3 t = tex[0].Sample(samp[0], i.uv[0].xy).rgb;
+    const float3 t = TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb;
     return float4(lerp(material.low.rgb, material.high.rgb, t), i.color.a);
 }

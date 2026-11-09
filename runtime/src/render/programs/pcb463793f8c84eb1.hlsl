@@ -12,7 +12,7 @@ NativeOut program_ps(Varyings i) {
     float4 r0 = m[0];
     float4 r1 = m[1];
     {
-        const float4 t = tex[0].Sample(samp[0], (i.uv0.z != 0.0 ? i.uv0.xy / i.uv0.z : i.uv0.xy)).rgba;
+        const float4 t = TEX(0).Sample(SAMP(0), (i.uv0.z != 0.0 ? i.uv0.xy / i.uv0.z : i.uv0.xy)).rgba;
         const float ka = 1.0;
         const float3 rc = saturate((r0.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, r1.rgb)));
         const float ra = saturate((r0.a + lerp(0.0, t.a, ka)));

@@ -33,7 +33,11 @@ struct DrawRoot {
     std::uint32_t flags = 0u;
     float half_line = 0.0f;
     float half_point = 0.0f;
+    std::uint32_t table = 0u;  // the draw's first entry in the frame's texture lists (draw_tables)
 };
+
+inline constexpr unsigned kDrawRootWords = sizeof(DrawRoot) / 4u;
+static_assert(sizeof(DrawRoot) == 20u);
 
 struct ViewportRect {
     float x = 0.0f, y = 0.0f, width = 0.0f, height = 0.0f, min_depth = 0.0f, max_depth = 1.0f;
@@ -56,7 +60,7 @@ public:
     // Other code bound things: nothing is taken as bound any more.
     void reset() noexcept {
         pipeline_ = nullptr;
-        view_ = vertex_rows_ = pixel_rows_ = rows_ = instances_ = 0u;
+        view_ = vertex_rows_ = pixel_rows_ = rows_ = instances_ = lists_ = 0u;
         textures_ = samplers_ = 0u;
         texture_heap_ = sampler_heap_ = nullptr;
         root_valid_ = scissor_valid_ = viewport_valid_ = topology_set_ = index_valid_ = false;
@@ -88,8 +92,8 @@ public:
     }
     void set_root(const DrawRoot& root) noexcept {
         if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
-            root.half_line != root_.half_line || root.half_point != root_.half_point) {
-            list_->SetGraphicsRoot32BitConstants(3u, 4u, &root, 0u);
+            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+            list_->SetGraphicsRoot32BitConstants(3u, kDrawRootWords, &root, 0u);
             root_ = root;
             root_valid_ = true;
         }
@@ -102,7 +106,9 @@ public:
             textures_ = samplers_ = 0u;
         }
     }
-    void set_tables(Table textures, Table samplers) noexcept {
+    // Every texture and every sampler (the heaps' starts) and the frame's texture lists: bound once per list, read
+    // through each draw's DrawRoot::table.
+    void set_texture_arrays(Table textures, Table samplers, Address lists) noexcept {
         if (textures.ptr != textures_) {
             list_->SetGraphicsRootDescriptorTable(4u, textures);
             textures_ = textures.ptr;
@@ -110,6 +116,10 @@ public:
         if (samplers.ptr != samplers_) {
             list_->SetGraphicsRootDescriptorTable(5u, samplers);
             samplers_ = samplers.ptr;
+        }
+        if (lists != lists_) {
+            list_->SetGraphicsRootShaderResourceView(8u, lists);
+            lists_ = lists;
         }
     }
     void set_rows(Address rows, Address instances) noexcept {
@@ -176,7 +186,7 @@ private:
     ID3D12DescriptorHeap* sampler_heap_ = nullptr;
     ID3D12GraphicsCommandList* list_ = nullptr;
     Pipeline* pipeline_ = nullptr;
-    Address view_ = 0u, vertex_rows_ = 0u, pixel_rows_ = 0u, rows_ = 0u, instances_ = 0u;
+    Address view_ = 0u, vertex_rows_ = 0u, pixel_rows_ = 0u, rows_ = 0u, instances_ = 0u, lists_ = 0u;
     std::uint64_t textures_ = 0u, samplers_ = 0u;
     DrawRoot root_{};
     Rect scissor_{};
@@ -245,7 +255,7 @@ public:
     }
     void set_root(const DrawRoot& root) noexcept {
         if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
-            root.half_line != root_.half_line || root.half_point != root_.half_point) {
+            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
             vkCmdPushConstants(commands_, layout_.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0u,
                                sizeof(DrawRoot), &root);
             root_ = root;

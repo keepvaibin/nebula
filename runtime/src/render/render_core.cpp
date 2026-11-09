@@ -2165,9 +2165,12 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
         retired_tables_.clear();
         registries_.forget_textures(freed_textures_, retired_tables_);
+#if defined(NEBULA_GPU_VULKAN)
+        // Direct3D 12 draws keep no tables: their lists are written each walk.
         for (const gpu::Table table : retired_tables_) {
             renderer_.retire_texture_table(table);
         }
+#endif
         for (const std::uint32_t id : freed_textures_) {
             if (TextureStore::is_target(id)) {
                 renderer_.free_target(id, texture_store_);

@@ -38,16 +38,16 @@ float4 material_color(NativeVaryings i) {
         discard;
     }
     const bool high = material.params.x != 0.0;
-    float3 c8 = tex[0].Sample(samp[0], i.uv[0].xy).rgb * tex[0].Sample(samp[0], i.uv[0].zw).rgb * 127.5;
+    float3 c8 = TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb * TEX(0).Sample(SAMP(0), i.uv[0].zw).rgb * 127.5;
     if (high) {
         c8 += material.highlight.rgb * 255.0 * level_line(c8.r, material.highlight.a * 255.0);
     }
     float2 screen = i.uv[2].z != 0.0 ? i.uv[2].xy / i.uv[2].z : i.uv[2].xy;
     if (high) {
-        const float2 step = round(tex[1].Sample(samp[1], i.uv[1].xy).ab * 255.0) - 128.0;
+        const float2 step = round(TEX(1).Sample(SAMP(1), i.uv[1].xy).ab * 255.0) - 128.0;
         screen += step * material.params.y / material.screen.xy;
     }
-    float3 c = saturate(c8 / 255.0 + tex[2].Sample(samp[2], screen).rgb * material.tint.rgb);
-    c = saturate(c + tex[3].Sample(samp[3], i.uv[1].zw).rgb);
+    float3 c = saturate(c8 / 255.0 + TEX(2).Sample(SAMP(2), screen).rgb * material.tint.rgb);
+    c = saturate(c + TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb);
     return float4(c, i.color.a);
 }

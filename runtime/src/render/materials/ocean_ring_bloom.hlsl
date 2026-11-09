@@ -19,8 +19,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float4 t0 = tex[0].Sample(samp[0], i.uv[0].xy);
-    const float4 t1 = tex[0].Sample(samp[0], i.uv[0].zw);
+    const float4 t0 = TEX(0).Sample(SAMP(0), i.uv[0].xy);
+    const float4 t1 = TEX(0).Sample(SAMP(0), i.uv[0].zw);
     float3 c = saturate(material.base.rgb + t0.rgb * material.scale.rgb);
     float a = saturate(t0.a * material.scale.a);
     c = saturate(c + t1.rgb * material.scale.rgb);

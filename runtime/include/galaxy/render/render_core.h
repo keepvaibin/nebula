@@ -231,7 +231,14 @@ private:
     // The ring draws from `first` that are one draw with it; their indices in `index_count`.
     [[nodiscard]] std::uint32_t merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at,
                                                std::uint32_t& index_count);
+#if defined(NEBULA_GPU_VULKAN)
     void walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
+#else
+    // The table's texture list for this walk: the buffer and its first pair (DrawRoot::table).
+    void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
+    std::vector<TextureHandle> walk_handles_;
+    std::vector<std::uint32_t> walk_pairs_;
+#endif
     [[nodiscard]] bool item_culled(const NebulaFrameItem& item, const NebulaFramePass& pass, std::uint32_t state,
                                    const core::GpuMesh* mesh) noexcept;
     [[nodiscard]] gpu::Address ring_item_before(std::uint32_t index, gpu::Address own) const noexcept;

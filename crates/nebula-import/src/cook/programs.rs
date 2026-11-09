@@ -172,7 +172,7 @@ pub struct Text {
     /// What each constant row of the stage holds.
     pub vertex_rows: Vec<u32>,
     pub pixel_rows: Vec<u32>,
-    /// The material's texture numbers, in the order of the pixel stage's tex[] and samp[].
+    /// The material's texture numbers, in the order the pixel stage reads them (TEX(n), SAMP(n): program.hlsli).
     pub textures: Vec<u8>,
     /// What each vertex attribute after position and matrix reads, in order: COLOR, NORMAL by name, UVn for coordinates.
     pub inputs: Vec<Input>,
@@ -393,7 +393,7 @@ impl Pixel<'_> {
     }
     fn sample(&mut self, map: u8, coord: &str) -> String {
         let n = self.maps.at(map);
-        format!("tex[{n}].Sample(samp[{n}], {coord})")
+        format!("TEX({n}).Sample(SAMP({n}), {coord})")
     }
     fn raster(&mut self, channel: u8) -> Result<&'static str> {
         Ok(match channel {

@@ -32,9 +32,9 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float2 step = round(tex[0].Sample(samp[0], i.uv[0].xy).ab * 255.0) - 128.0;
+    const float2 step = round(TEX(0).Sample(SAMP(0), i.uv[0].xy).ab * 255.0) - 128.0;
     const float2 texel = i.uv[0].zw * material.warp.zw + step * material.warp.x;
-    const float3 c = saturate(material.color.rgb + tex[1].Sample(samp[1], texel / material.warp.zw).rgb);
+    const float3 c = saturate(material.color.rgb + TEX(1).Sample(SAMP(1), texel / material.warp.zw).rgb);
     const float a = saturate((material.color.a * (1.0 - i.color.a) - 0.5) * 2.0);
     return float4(saturate(c + a), 1.0);
 }

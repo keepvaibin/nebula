@@ -461,7 +461,6 @@ void Registries::write_pipeline_list(const char* path) {
 }
 
 std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uint32_t count) {
-    count = std::min(count, kTableTextures);
     const std::uint64_t hash = hash_bytes(list, count * sizeof(NebulaFrameTexture), count);
     const std::lock_guard guard(lock_);
     auto& bucket = table_by_hash_[hash];
@@ -474,10 +473,10 @@ std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uin
     TableKey& key = bucket.emplace_back();
     key.id = id;
     key.count = count;
-    std::copy_n(list, count, key.list.begin());
+    key.list.assign(list, list + count);
     TextureTable& table = incoming_.tables.emplace_back();
     table.count = count;
-    std::copy_n(list, count, table.list.begin());
+    table.list = key.list;
     return id;
 }
 

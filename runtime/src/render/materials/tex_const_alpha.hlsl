@@ -12,5 +12,5 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    return float4(tex[0].Sample(samp[0], i.uv[0].xy).rgb, i.color.a);
+    return float4(TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb, i.color.a);
 }

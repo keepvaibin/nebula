@@ -13,9 +13,9 @@ struct Varyings {
 NativeOut program_ps(Varyings i) {
     float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     float2 tevcoord = float2(0.0, 0.0);
-    const float3 ind0 = round(tex[0].Sample(samp[0], i.uv0 / float2(1.0, 1.0)).abg * 255.0);
+    const float3 ind0 = round(TEX(0).Sample(SAMP(0), i.uv0 / float2(1.0, 1.0)).abg * 255.0);
     {
-        const float4 t = tex[1].Sample(samp[1], i.uv1).rgba;
+        const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), t.rgb, ras.rgb)) * 2.0);
         const float ra = saturate((0.0 + lerp(0.0, t.a, ras.a)));
@@ -31,7 +31,7 @@ NativeOut program_ps(Varyings i) {
         sv.z += -128.0;
         const float2 off = float2(dot(m[1].xyz, sv), dot(m[2].xyz, sv));
         tevcoord = texel + off;
-        const float4 t = tex[2].Sample(samp[2], tevcoord / m[0].zw).rgba;
+        const float4 t = TEX(2).Sample(SAMP(2), tevcoord / m[0].zw).rgba;
         const float3 k = m[3].rgb;
         const float3 rc = saturate(prev.rgb + ((round((k.rgb).r * 255.0)) > (round((t.aaa).r * 255.0)) ? k.rgb : float3(0.0, 0.0, 0.0)));
         const float ra = (0.0 + lerp(t.a, 0.0, 0.0));

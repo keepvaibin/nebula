@@ -11,7 +11,7 @@ struct Varyings {
 NativeOut program_ps(Varyings i) {
     float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     {
-        const float4 t = tex[0].Sample(samp[0], (i.uv0.z != 0.0 ? i.uv0.xy / i.uv0.z : i.uv0.xy)).rgba;
+        const float4 t = TEX(0).Sample(SAMP(0), (i.uv0.z != 0.0 ? i.uv0.xy / i.uv0.z : i.uv0.xy)).rgba;
         const float4 ras = i.color.rgba;
         const float3 k = m[0].rgb;
         const float3 rc = saturate(ras.rgb + ((round((k.rgb).r * 255.0)) > (round((t.rgb).r * 255.0)) ? k.rgb : float3(0.0, 0.0, 0.0)));

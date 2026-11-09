@@ -211,7 +211,7 @@ SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTa
     }
     // A descriptor table never straddles a physical heap. Further pages grow
     // without substituting a default sampler for a requested material.
-    if (cursor_ % kSamplerHeapSlots + kSamplerTableSlots > kSamplerHeapSlots) {
+    if (cursor_ % kSamplerHeapSlots + key.count > kSamplerHeapSlots) {
         cursor_ += kSamplerHeapSlots - cursor_ % kSamplerHeapSlots;
     }
     const unsigned index = cursor_;

@@ -120,12 +120,15 @@ class DescriptorRing {
 public:
     // Caller must have retired all GPU references to this heap.
     void reset() noexcept;
+    // The heap: `texture_slots` first (every texture view at its index, TextureBackend::mirror_into), the persistent
+    // descriptors, then one segment per frame in flight.
     bool initialize(
         ID3D12Device* device,
         D3D12_DESCRIPTOR_HEAP_TYPE type,
         unsigned descriptors_per_frame,
         unsigned frames_in_flight,
-        unsigned persistent_descriptors = 0);
+        unsigned persistent_descriptors = 0,
+        unsigned texture_slots = 0);
     void begin_frame(unsigned frame_slot);
 
     struct Table {
@@ -141,6 +144,9 @@ public:
     Table allocate_persistent(unsigned count);
 
     [[nodiscard]] ID3D12DescriptorHeap* heap() const { return heap_.Get(); }
+    // The texture slots: the first, and how many.
+    [[nodiscard]] Table texture_slots() const noexcept { return {cpu_base_, gpu_base_}; }
+    [[nodiscard]] unsigned texture_slot_count() const noexcept { return texture_slots_; }
     [[nodiscard]] ID3D12DescriptorHeap* heap_for(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept;
     [[nodiscard]] Table table_at(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept;
     [[nodiscard]] std::uint32_t index_of(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept;
@@ -157,6 +163,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE cpu_base_{};
     D3D12_GPU_DESCRIPTOR_HANDLE gpu_base_{};
     bool frame_ready_ = false;
+    unsigned texture_slots_ = 0;
     unsigned persistent_descriptors_ = 0;
     unsigned persistent_cursor_ = 0;
     unsigned descriptors_per_frame_ = 0;
@@ -208,8 +215,14 @@ public:
     void shutdown();                // full GPU drain, then release
     // A persistently mapped upload buffer; empty when it cannot be created.
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
-    // The frame's table of `count` texture descriptors for the draw's maps (null SRVs where a handle is empty).
-    [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache);
+    // A texture's place in the draws' texture array: its view's index; the null view's place for an empty handle.
+    [[nodiscard]] std::uint32_t texture_slot(const TextureHandle& handle) const noexcept;
+    // A sampler's place in the sampler heap, made the first time it is asked for (until the heap starts again:
+    // sampler_generation changes).
+    [[nodiscard]] std::uint32_t sampler_slot(const SamplerKey& key);
+    // `count` pairs {texture slot, sampler slot} into this frame's texture lists: the buffer they went to and the first
+    // pair's place in it (DrawRoot::table).
+    void write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists, std::uint32_t& first);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureStore& cache);
     // The upload rings' sizes and the most one frame took (GALAXY_TRACE_MEMORY).
@@ -410,10 +423,6 @@ public:
     [[nodiscard]] gpu::TextureRef take_frame_picture(gpu::TextureRef fresh);
     // What presents with `dest` when frame generation wants the scene without its 2D layer.
     void copy_fg_hudless_display(const DisplayTexture& dest);
-    // A table that lives until replaced: `old` is given back once the GPU is past it.
-    [[nodiscard]] gpu::Table persistent_texture_table(const TextureHandle* handles, unsigned count, const TextureStore& cache, gpu::Table old);
-    // A persistent table nothing names any more.
-    void retire_texture_table(gpu::Table table);
     // A target whose id is freed: every picture it has goes.
     void free_target(std::uint32_t id, TextureStore& textures);
     // Moves when every sampler table is written again.
@@ -483,11 +492,8 @@ public:
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
-    // The table for per-map sampler keys (make_sampler_key in render_core.cpp), built on first use and valid
-    // until sampler_generation moves.
-    void bind_draw_tables(gpu::Table textures, gpu::Table samplers);
-    [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_for(const std::array<SamplerKey, kSamplerTableSlots>& keys,
-                                                                unsigned count);
+    // The draw heaps, every texture and sampler, and the texture lists in `lists`.
+    void bind_draw_textures(gpu::Address lists);
 
 private:
     void invalidate_draw_bindings();
@@ -890,17 +896,26 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
-    std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> sampler_pages_;
-    D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
     std::uint32_t sampler_config_ = ~0u;
     std::uint32_t sampler_generation_ = 1u;
     SamplerTableCache sampler_tables_;
-    struct RetiredTable {
-        DescriptorRing::Table table;
+    // The texture slots' last place holds the null view (an empty map).
+    std::uint32_t null_texture_slot_ = 0u;
+    const void* mirrored_backend_ = nullptr;
+    // The texture lists (t18): one upload buffer per frame in flight, written from the start each frame; a full one is
+    // replaced by one twice its size, the old kept until the GPU is past it.
+    struct TextureListBuffer {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        std::uint32_t* mapped = nullptr;
+        std::uint32_t capacity = 0u;  // pairs
+    };
+    std::array<TextureListBuffer, kFramesInFlight> texture_lists_{};
+    std::uint32_t texture_lists_used_ = 0u;
+    struct RetiredBuffer {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         std::uint64_t fence = 0u;
     };
-    std::vector<RetiredTable> retired_tables_;
-    std::vector<DescriptorRing::Table> free_tables_;
+    std::vector<RetiredBuffer> retired_texture_lists_;
     gpu::Encoder encoder_;
     gpu::UploadMemory zero_stream_{};
     std::uint32_t zero_stream_bytes_ = 0u;

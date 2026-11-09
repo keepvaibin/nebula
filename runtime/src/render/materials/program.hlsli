@@ -2,8 +2,9 @@
 // What every program shares: the view, the composed rows, the instance table, lights, fog's forms and the output variants.
 // A program is one stage: programs/v*.hlsl and p*.hlsl (crates/nebula-import/src/cook/programs.rs) and the written ones
 // beside this file. Bindings: b0 the view, b1 a generated vertex stage's material constants, b2 a generated pixel stage's
-// and both stages' of a written program, b3 the draw's
-// root constants, t0-t15 and s0-s15 the material's textures, t16 the composed rows, t17 the instance table.
+// and both stages' of a written program, b3 the draw's root constants, t16 the composed rows, t17 the instance table;
+// the textures and samplers: TEX/SAMP below (every texture at t0 and every sampler at s0 in space1, the draws' lists at
+// t18; or, under NEBULA_BOUND_TABLES, the draw's own table at t0-t15 and s0-s15).
 //
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
 // effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
@@ -29,13 +30,28 @@ cbuffer Draw : register(b3) {
     uint draw_flags;
     float draw_half_line;   // a widened line's half width in pixels
     float draw_half_point;  // a widened point's half size in pixels
+    uint draw_table;        // the draw's first entry in draw_tables
 };
 
 StructuredBuffer<float4> rows : register(t16);
 StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's row base, light base, world row base
 
+// The draw's textures: TEX(n) and SAMP(n) are its n-th map and that map's sampler.
+#if NEBULA_BOUND_TABLES
+// Devices without descriptor indexing: the draw's own table of NEBULA_MATERIAL_SLOTS, bound per draw.
 Texture2D tex[NEBULA_MATERIAL_SLOTS] : register(t0);
 SamplerState samp[NEBULA_MATERIAL_SLOTS] : register(s0);
+#define TEX(n) tex[n]
+#define SAMP(n) samp[n]
+#else
+// Every texture and sampler in one array each, bound once; the draw's list holds each map's places in them (x the
+// texture, y the sampler), the same for every pixel of the draw.
+Texture2D gTextures[] : register(t0, space1);
+SamplerState gSamplers[] : register(s0, space1);
+StructuredBuffer<uint2> draw_tables : register(t18);
+#define TEX(n) gTextures[draw_tables[draw_table + (n)].x]
+#define SAMP(n) gSamplers[draw_tables[draw_table + (n)].y]
+#endif
 
 // A draw matrix is six rows: three of its place, three of its normal.
 struct Place {

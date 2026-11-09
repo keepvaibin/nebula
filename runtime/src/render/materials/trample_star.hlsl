@@ -31,11 +31,11 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 
 float4 material_color(NativeVaryings i) {
     const float shade = saturate(2.0 * material.params.x * (1.0 - i.color.a));
-    const float4 t = tex[0].Sample(samp[0], i.uv[0].xy);
+    const float4 t = TEX(0).Sample(SAMP(0), i.uv[0].xy);
     float3 c = saturate(i.color.rgb * t.rgb + shade);
     if (material.params.y != 0.0) {
         const float3 s = i.uv[1].xyz;
-        c *= 1.0 - tex[1].Sample(samp[1], s.z != 0.0 ? s.xy / s.z : s.xy).rgb;
+        c *= 1.0 - TEX(1).Sample(SAMP(1), s.z != 0.0 ? s.xy / s.z : s.xy).rgb;
     }
     return float4(c, t.a);
 }

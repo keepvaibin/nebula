@@ -10,7 +10,7 @@ struct Varyings {
 NativeOut program_ps(Varyings i) {
     float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     {
-        const float4 t = tex[0].Sample(samp[0], i.uv0).rgba;
+        const float4 t = TEX(0).Sample(SAMP(0), i.uv0).rgba;
         const float ka = m[0].a;
         const float3 rc = saturate((t.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
         const float ra = saturate((0.0 + lerp(0.0, ka, t.a)));
