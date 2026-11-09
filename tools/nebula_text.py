@@ -2,6 +2,9 @@
 
     python tools/nebula_text.py            writes native/petari/src/Game/System/NebulaTextTable.inc
     python tools/nebula_text.py --check    exits 1 when the .inc does not match the table, or a text has no row
+    python tools/nebula_text.py --fonts <LayoutData/Font.arc>
+                                           exits 1 when a game row of a disc's language has a character the disc's
+                                           message font lacks (it would draw as the font's alternate, '?')
 
 The table: UTF-8, tab-separated, one row per string id, one column per language folder (the header names them). An
 empty cell uses the language's fallback (NebulaText.cpp). In a cell, \\n is a line break and \\\\ a backslash. "L." rows
@@ -214,7 +217,108 @@ def coverage():
     return sorted(missing)
 
 
+# The columns a disc carries, and the font every game text box can draw in (the others hold fewer characters).
+DISC_COLUMNS = {'UsEnglish', 'EuEnglish', 'UsFrench', 'EuFrench', 'UsSpanish', 'EuSpanish', 'EuGerman', 'EuItalian',
+                'EuDutch', 'JpJapanese'}
+MESSAGE_FONT = 'messagefont26.brfnt'
+# Drawn as the font's space where it has none (Game/Ui/ResFontBase.cpp GetGlyphIndex).
+AS_SPACE = {0xA0, 0x202F}
+
+
+def yaz0(data):
+    if data[:4] != b'Yaz0':
+        return data
+    size = int.from_bytes(data[4:8], 'big')
+    out = bytearray()
+    i = 16
+    while len(out) < size:
+        code = data[i]
+        i += 1
+        for bit in range(8):
+            if len(out) >= size:
+                break
+            if code & (0x80 >> bit):
+                out.append(data[i])
+                i += 1
+                continue
+            back = ((data[i] & 0xF) << 8 | data[i + 1]) + 1
+            count = data[i] >> 4
+            i += 2
+            if count == 0:
+                count = data[i] + 0x12
+                i += 1
+            else:
+                count += 2
+            for _ in range(count):
+                out.append(out[-back])
+    return bytes(out)
+
+
+def archive_files(data):
+    """An RARC archive's files: name -> bytes."""
+    def be(at, n=4):
+        return int.from_bytes(data[at:at + n], 'big')
+    data_at = be(12) + 0x20
+    nodes_at, entries_at, names_at = be(0x24) + 0x20, be(0x2C) + 0x20, be(0x34) + 0x20
+    files = {}
+    for k in range(be(0x20)):
+        count, first = be(nodes_at + k * 16 + 10, 2), be(nodes_at + k * 16 + 12)
+        for e in range(first, first + count):
+            at = entries_at + e * 20
+            if be(at + 4, 2) & 0x0200:
+                continue
+            name_at = names_at + be(at + 6, 2)
+            name = data[name_at:data.index(b'\x00', name_at)].decode('ascii', 'replace')
+            files[name] = data[data_at + be(at + 8):data_at + be(at + 8) + be(at + 12)]
+    return files
+
+
+def font_codes(font):
+    """The codes a BRFNT font has a glyph for (its CMAP blocks)."""
+    def be(at, n=4):
+        return int.from_bytes(font[at:at + n], 'big')
+    codes = set()
+    at = be(0x0C, 2)
+    for _ in range(be(0x0E, 2)):
+        kind, size = font[at:at + 4], be(at + 4)
+        if kind == b'CMAP':
+            first, last, method, info = be(at + 8, 2), be(at + 10, 2), be(at + 12, 2), at + 20
+            if method == 0:
+                codes.update(range(first, last + 1))
+            elif method == 1:
+                codes.update(c for c in range(first, last + 1) if be(info + 2 * (c - first), 2) != 0xFFFF)
+            else:
+                codes.update(be(info + 2 + 4 * k, 2) for k in range(be(info, 2)))
+        at += size
+    return codes
+
+
+def font_gaps(font_arc):
+    """Each game row's characters, in the columns a disc carries, that the message font lacks."""
+    with open(font_arc, 'rb') as f:
+        codes = font_codes(archive_files(yaz0(f.read()))[MESSAGE_FONT]) | AS_SPACE
+    with open(TABLE, encoding='utf-8') as f:
+        header = f.readline().rstrip('\r\n').split('\t')
+    gaps = []
+    for cells in table_rows():
+        if cells[0].startswith(('L.', 'C.')):
+            continue
+        for name, cell in zip(header[1:], cells[1:]):
+            if name not in DISC_COLUMNS:
+                continue
+            text = re.sub(r'\{[^}]*\}', '', unescape(cell))
+            lacking = sorted({ch for ch in text if ord(ch) >= 0x20 and ord(ch) not in codes})
+            if lacking:
+                gaps.append('%s %s: %s' % (cells[0], name, ' '.join('U+%04X' % ord(ch) for ch in lacking)))
+    return gaps
+
+
 def main():
+    if '--fonts' in sys.argv:
+        gaps = font_gaps(sys.argv[sys.argv.index('--fonts') + 1])
+        for line in gaps:
+            print(line)
+        return 1 if gaps else 0
     text = generate()
     if '--check' in sys.argv:
         with open(OUTPUT, encoding='utf-8') as f:

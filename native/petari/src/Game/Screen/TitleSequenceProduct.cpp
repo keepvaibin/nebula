@@ -1,5 +1,4 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
-#include "Game/System/NebulaRegion.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <Game/Ui/TextBox.hpp>
 #include "Game/LiveActor/Nerve.hpp"
