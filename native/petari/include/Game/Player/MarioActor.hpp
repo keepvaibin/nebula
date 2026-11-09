@@ -65,12 +65,6 @@ enum PlayerMode {
     PlayerMode_Tornado = 9,  // no mode is 8
 };
 
-template < int SIZE, class T, class U >
-class AudGenericAudible;
-class SoundDopplerChannel;
-class SoundDopplerAbsPos;
-typedef AudGenericAudible< 4, SoundDopplerChannel, SoundDopplerAbsPos > AudGeneric;
-
 extern bool gIsLuigi;  // set by MarioActor::init2 from MR::isPlayerLuigi
 
 class MarioActor : public LiveActor {

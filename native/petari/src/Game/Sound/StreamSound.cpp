@@ -150,8 +150,8 @@ bool StreamSound::prepare_prepareStream_() {
         break;
     case 1:
         if (mAudible != nullptr) {
-            const SoundParams* soundParams = mAudible->getOuterParams(0);
-            sendChannel(0xff, *soundParams, soundParams->mPitch);
+            const SoundParams& rSoundParams = mAudible->getOuterParams(0);
+            sendChannel(0xff, rSoundParams, rSoundParams.mPitch);
         }
 
         mLoaded = false;
@@ -222,16 +222,11 @@ void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity acti
         soundStrategy->mix(this, &outParams);
     }
 
+    // A stream is heard from the first listener only.
     const SoundParams* mixParams = &outParams;
     if (mAudible != nullptr && mAudience != nullptr) {
-        for (int i = 0; i < mAudience->getMaxChannels(); i++) {
-            const SoundParams* outerParams = mAudible->getOuterParams(i);
-            if (outerParams != nullptr) {
-                mAudience->mixChannelOut(outParams, mAudible, i);
-                mixParams = outerParams;
-                break;
-            }
-        }
+        mAudience->mixChannelOut(outParams, mAudible, 0);
+        mixParams = &mAudible->getOuterParams(0);
     }
 
     for (int i = 0; i < NUM_CHILDREN; i++) {

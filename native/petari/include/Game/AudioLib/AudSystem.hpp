@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Game/AudioLib/AudAudience.hpp"
 #include "Game/AudioLib/AudBgmMgr.hpp"
 #include "Game/AudioLib/AudLimitedSound.hpp"
 #include "Game/Sound/SoundAudible.hpp"
@@ -132,8 +131,7 @@ public:
     bool mIsLevelSeBlocked;  // blocks startLevelSound
     s32 mSeMuteFrames;
     SoundArchive* mSoundArchive;
-    AudAudience< 4 > mAudience;
-    AudDopplerAudible< 4 >* mAudible;
+    SoundAudience mAudience;
     AudSoundObject* mSystemSeObject;
     AudSoundObject* mAtmosphereSeObject;
     AudMeObject* mSystemMeObject;

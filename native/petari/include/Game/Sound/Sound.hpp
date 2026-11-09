@@ -535,7 +535,8 @@ public:
     }
 
     SoundHandle* mHandle;
-    SoundAudible* mAudible;
+    SoundAudible* mAudible;  // &mAudibleData while the sound is positional
+    SoundAudible mAudibleData;
     SoundAudience* mAudience;
     u32 mLifeTime;
     s32 mPrepareCount;

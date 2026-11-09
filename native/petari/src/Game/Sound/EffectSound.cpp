@@ -25,8 +25,7 @@ void EffectSound::mixOut_(const SoundParams& params) {
     }
 
     if (mAudible != nullptr) {
-        int maxChannels = mAudience->getMaxChannels();
-        for (int i = 0; i < maxChannels; i++) {
+        for (s32 i = 0; i < mAudible->getChannelCount(); i++) {
             mAudience->mixChannelOut(mixParams, mAudible, i);
         }
         if (mTrackStarted) {
@@ -143,7 +142,7 @@ bool EffectSound::tryDie_() {
 void EffectSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* audience) {
     startSound_(id, posPtr, audience);
     const SeqFile* pFile = mManager->getSeqDataMgr() != nullptr ? mManager->getSeqDataMgr()->program() : nullptr;
-    mPlayer.create(pFile != nullptr ? pFile->mTrackBound : 1, mAudible != nullptr ? mAudience->getMaxChannels() : 1,
+    mPlayer.create(pFile != nullptr ? pFile->mTrackBound : 1, mAudible != nullptr ? mAudible->getChannelCount() : 1,
                    TrackRoom::of(pFile), 2, (u32)id, 1);
     mTrackStarted = false;
     if (mSoundStrategyMgr != nullptr) {

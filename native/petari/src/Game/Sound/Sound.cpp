@@ -70,8 +70,8 @@ void Sound::startSound_(SoundID id, const Vec3f* posPtr, SoundAudience* audience
     mPrepareCount = 0;
     mCount = 0;
 
-    if (posPtr != nullptr && mAudience != nullptr) {
-        mAudible = mAudience->newAudible(*posPtr, mSoundID, nullptr, 0);
+    if (posPtr != nullptr && mAudience != nullptr && mAudience->startAudible(&mAudibleData, *posPtr, mSoundID)) {
+        mAudible = &mAudibleData;
     } else {
         mAudible = nullptr;
     }
@@ -109,7 +109,6 @@ StreamSound* Sound::asStream() {
 
 void Sound::dieSound_() {
     if (mAudible != nullptr) {
-        mAudience->deleteAudible(mAudible);
         mAudible = nullptr;
         mAudience = nullptr;
     }
@@ -174,24 +173,14 @@ bool Sound::calcSound_() {
 }
 
 void Sound::initGroups_(PlayerLink* pLink) {
-    u32 count = 0;
-    for (int i = 0; i < mAudience->getMaxChannels(); i++) {
-        if (mAudible->getOuterParams(i) != nullptr) {
-            count++;
-        }
-    }
-    pLink->setMgrCount(count);
+    pLink->setMgrCount(static_cast< u32 >(mAudible->getChannelCount()));
     sendGroups_(pLink);
 }
 
 // The audible's channel values as the audience mixed them this frame, a group each in channel order.
 void Sound::sendGroups_(PlayerLink* pLink) {
-    u32 group = 0;
-    for (int i = 0; i < mAudience->getMaxChannels(); i++) {
-        const SoundParams* pParams = mAudible->getOuterParams(i);
-        if (pParams != nullptr) {
-            pLink->setMgrSound(group++, pParams);
-        }
+    for (s32 i = 0; i < mAudible->getChannelCount(); i++) {
+        pLink->setMgrSound(static_cast< u32 >(i), &mAudible->getOuterParams(i));
     }
 }
 
