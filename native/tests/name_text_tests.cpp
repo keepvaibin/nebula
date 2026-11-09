@@ -10,8 +10,7 @@ namespace {
 
     void check(bool ok, const char* pWhat) {
         if (!ok) {
-            printf("FAIL %s
-", pWhat);
+            printf("FAIL %s\n", pWhat);
             sFailures++;
         }
     }
@@ -48,11 +47,9 @@ int main() {
     check(same(name, "456789"), "set from its own inline text");
 
     if (sFailures != 0) {
-        printf("%d name text test failures
-", sFailures);
+        printf("%d name text test failures\n", sFailures);
         return 1;
     }
-    printf("name text tests passed
-");
+    printf("name text tests passed\n");
     return 0;
 }
