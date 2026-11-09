@@ -758,5 +758,6 @@ runtime/src/render/host_window_win32.cpp
 
     # The Vulkan pipeline cache file name (device_quirks_vk.cpp driver_key).
     galaxy_test(galaxy_vk_driver_key_tests SOURCES runtime/src/render/vk/driver_key_tests.cpp
-        runtime/src/render/vk/device_quirks_vk.cpp LIBS nebula_vulkan_deps galaxy_run_options)
+        runtime/src/render/vk/device_quirks_vk.cpp runtime/src/render/vk/vk_libraries.cpp
+        LIBS nebula_vulkan_deps galaxy_run_options)
 endif()

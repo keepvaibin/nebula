@@ -276,7 +276,7 @@ gpu::TextureRef TextureBackend::create_texture(
         // Born in the shader-resource state, where every uploaded texture rests (a texture is promoted from the common state
         // only with simultaneous access); the levels are written from the CPU by record_upload. A heap that refuses it falls
         // back to the copy path below.
-        if (SUCCEEDED(direct_heap_.create(rd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr, resource, allocation_bytes))) {
+        if (SUCCEEDED(direct_heap_.create(rd, gpu::Use::PixelRead, nullptr, resource, allocation_bytes))) {
             return resource;
         }
         resource.Reset();
