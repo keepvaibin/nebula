@@ -17,7 +17,7 @@ pub const KIND_PATTERN: u8 = 4;
 pub const KIND_VISIBILITY: u8 = 5;
 pub const KIND_UNPLAYED: u8 = 6;
 
-const STEP: u8 = 1;
+pub const STEP: u8 = 1;
 const STEP_NEAREST: u8 = 2;
 
 #[derive(Clone, Copy, Default)]

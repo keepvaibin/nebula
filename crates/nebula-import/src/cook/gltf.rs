@@ -3,12 +3,12 @@
 //! material (the base colour texture, then `extras.nebula.textures`), skins and node animation. Lengths are metres in glTF: one metre is 100 of the game's units. A glTF triangle winds counter-clockwise;
 //! the game's wind clockwise (measured on Kuribo, Coin and Mario: 650 to 2, 268 to 0, 4514 to 363).
 
-use super::clip::{ClipIr, Track, KIND_JOINTS};
-use super::model_ir::CoordIr;
+use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_TEXTURE_MATRICES, STEP};
+use super::model_ir::{CoordIr, CoordMatrixIr};
 use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, ModelIr, ShapeIr, ATTR_MATRIX, ATTR_NORMAL, NONE};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 const UNITS_PER_METRE: f32 = 100.0;
@@ -115,32 +115,76 @@ impl Document {
         let normalized = accessor["normalized"].as_bool().unwrap_or(false);
         let (size, read): (usize, fn(&[u8]) -> f32) = match kind {
             5126 => (4, |b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])),
+            5120 => (1, |b| f32::from(b[0] as i8)),
             5121 => (1, |b| f32::from(b[0])),
+            5122 => (2, |b| f32::from(i16::from_le_bytes([b[0], b[1]]))),
             5123 => (2, |b| f32::from(u16::from_le_bytes([b[0], b[1]]))),
             5125 => (4, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as f32),
             other => bail!("numbers of type {other}"),
         };
-        let view = self.view(accessor["bufferView"].as_u64().context("a sparse or empty accessor")? as usize)?;
-        let start = accessor["byteOffset"].as_u64().unwrap_or(0) as usize;
-        let stride = self.root["bufferViews"][accessor["bufferView"].as_u64().unwrap_or(0) as usize]["byteStride"]
-            .as_u64()
-            .map_or(size * width, |s| s as usize);
-        let mut out = Vec::with_capacity(count * width);
-        for element in 0..count {
+        // Normalized integers as glTF reads them: unsigned to 0..1, signed to -1..1.
+        let scale = |value: f32| match (normalized, kind) {
+            (true, 5120) => (value / 127.0).max(-1.0),
+            (true, 5121) => value / 255.0,
+            (true, 5122) => (value / 32767.0).max(-1.0),
+            (true, 5123) => value / 65535.0,
+            _ => value,
+        };
+        // No buffer view: all zero, unless sparse values say otherwise.
+        let mut out = match accessor["bufferView"].as_u64() {
+            Some(view_index) => {
+                let view = self.view(view_index as usize)?;
+                let start = accessor["byteOffset"].as_u64().unwrap_or(0) as usize;
+                let stride = self.root["bufferViews"][view_index as usize]["byteStride"].as_u64().map_or(size * width, |s| s as usize);
+                let mut out = Vec::with_capacity(count * width);
+                for element in 0..count {
+                    for c in 0..width {
+                        let at = start + element * stride + c * size;
+                        out.push(scale(read(view.get(at..at + size).context("an accessor past its buffer view")?)));
+                    }
+                }
+                out
+            }
+            None => vec![0.0; count * width],
+        };
+        self.sparse_into(accessor, &mut out, width, size, read, scale)?;
+        Ok(out)
+    }
+
+    /// An accessor's sparse values over its others.
+    fn sparse_into(&self, accessor: &Value, out: &mut [f32], width: usize, size: usize, read: fn(&[u8]) -> f32, scale: impl Fn(f32) -> f32) -> Result<()> {
+        let sparse = &accessor["sparse"];
+        if sparse.is_null() {
+            return Ok(());
+        }
+        let count = sparse["count"].as_u64().context("sparse values with no count")? as usize;
+        let indices = &sparse["indices"];
+        let index_view = self.view(indices["bufferView"].as_u64().context("sparse values with no indices")? as usize)?;
+        let index_start = indices["byteOffset"].as_u64().unwrap_or(0) as usize;
+        let index_size = match indices["componentType"].as_u64() {
+            Some(5121) => 1,
+            Some(5123) => 2,
+            Some(5125) => 4,
+            _ => bail!("sparse indices that aren't whole numbers"),
+        };
+        let values = &sparse["values"];
+        let value_view = self.view(values["bufferView"].as_u64().context("sparse values with no values")? as usize)?;
+        let value_start = values["byteOffset"].as_u64().unwrap_or(0) as usize;
+        for k in 0..count {
+            let at = index_start + k * index_size;
+            let b = index_view.get(at..at + index_size).context("sparse indices past their buffer view")?;
+            let element = match index_size {
+                1 => usize::from(b[0]),
+                2 => usize::from(u16::from_le_bytes([b[0], b[1]])),
+                _ => u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize,
+            };
             for c in 0..width {
-                let at = start + element * stride + c * size;
-                let bytes = view.get(at..at + size).context("an accessor past its buffer view")?;
-                let value = read(bytes);
-                out.push(if normalized && kind == 5121 {
-                    value / 255.0
-                } else if normalized && kind == 5123 {
-                    value / 65535.0
-                } else {
-                    value
-                });
+                let at = value_start + (k * width + c) * size;
+                let value = scale(read(value_view.get(at..at + size).context("sparse values past their buffer view")?));
+                *out.get_mut(element * width + c).context("a sparse value past its accessor")? = value;
             }
         }
-        Ok(out)
+        Ok(())
     }
 
     fn indices(&self, primitive: &Value, vertices: usize) -> Result<Vec<u32>> {
@@ -173,6 +217,19 @@ impl Document {
         };
         decode_image(&bytes)
     }
+}
+
+/// The extensions a file can require and still be read as made: anything else would cook into something it isn't.
+const EXTENSIONS_READ: [&str; 3] = ["KHR_texture_transform", "KHR_animation_pointer", "KHR_mesh_quantization"];
+
+fn required_extensions(root: &Value) -> Result<()> {
+    for name in root["extensionsRequired"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        let name = name.as_str().unwrap_or("");
+        if !EXTENSIONS_READ.contains(&name) {
+            bail!("the file needs {name}, which Nebula doesn't read: export without it (it reads {})", EXTENSIONS_READ.join(", "));
+        }
+    }
+    Ok(())
 }
 
 /// A model as solid ground: its triangles in the game's units, and a table of attributes with one row per material.
@@ -228,8 +285,11 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
 
 /// A PNG as RGBA, top row first.
 pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return decode_jpeg(bytes);
+    }
     if !bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
-        bail!("images have to be PNG");
+        bail!("images have to be PNG or JPEG");
     }
     let mut decoder = png::Decoder::new(bytes);
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16 | png::Transformations::ALPHA);
@@ -247,6 +307,20 @@ pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
         other => bail!("a PNG of {other:?}"),
     }
     Ok((info.width, info.height, rgba))
+}
+
+/// A JPEG as RGBA, top row first.
+fn decode_jpeg(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+    use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
+    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA).set_max_width(1 << 16).set_max_height(1 << 16);
+    let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
+    let rgba = decoder.decode().map_err(|e| anyhow::anyhow!("the JPEG can't be read: {e:?}"))?;
+    let info = decoder.info().context("the JPEG can't be read")?;
+    let (width, height) = (u32::from(info.width), u32::from(info.height));
+    if rgba.len() != width as usize * height as usize * 4 {
+        bail!("the JPEG can't be read: {} bytes for {width} by {height}", rgba.len());
+    }
+    Ok((width, height, rgba))
 }
 
 /// A BTI-format image: RGBA8, in the console's 4x4 tiles, in big-endian order. `header` is ResTIMG's 32 bytes before
@@ -448,6 +522,70 @@ struct SourceMaterial {
     blend: bool,
     cutoff: Option<u8>,
     two_sided: bool,
+    /// Its base colour texture's KHR_texture_transform, still or animated: scale x, y, rotation, offset x, y.
+    transform: Option<[f32; 5]>,
+}
+
+/// The texture transform no KHR_texture_transform gives.
+const NO_TRANSFORM: [f32; 5] = [1.0, 1.0, 0.0, 0.0, 0.0];
+
+/// A texture transform as the game's texture matrix (the classic one, about no centre): glTF's turns the other way, and
+/// scales before it turns where the game scales after, which is the same only when both scales are equal.
+fn texture_transform(t: &[f32; 5], material: &str) -> Result<[f32; 5]> {
+    if t[2].abs() > 1e-6 && (t[0] - t[1]).abs() > 1e-5 * t[0].abs().max(t[1].abs()).max(1.0) {
+        bail!("material {material}: a texture turned with unequal scales ({} and {}): scale it evenly, or not turn it", t[0], t[1]);
+    }
+    Ok([t[0], t[1], -t[2], t[3], t[4]])
+}
+
+/// A KHR_animation_pointer channel's pointer, if it is one.
+fn pointer_of(channel: &Value) -> Option<&str> {
+    (channel["target"]["path"].as_str() == Some("pointer")).then(|| channel["target"]["extensions"]["KHR_animation_pointer"]["pointer"].as_str()).flatten()
+}
+
+/// "/materials/<n>/<rest>" as (n, rest).
+fn material_pointer(pointer: &str) -> Option<(usize, &str)> {
+    let rest = pointer.strip_prefix("/materials/")?;
+    let (number, rest) = rest.split_once('/')?;
+    Some((number.parse().ok()?, rest))
+}
+
+const BASE_COLOR: &str = "pbrMetallicRoughness/baseColorFactor";
+const TEXTURE_TRANSFORM: &str = "pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/";
+
+/// The materials whose texture transform an animation moves, and the textures (glTF texture numbers) animations swap in.
+fn animated_materials(root: &Value) -> (BTreeSet<usize>, BTreeSet<usize>) {
+    let (mut moved, mut swapped) = (BTreeSet::new(), BTreeSet::new());
+    for animation in root["animations"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            if let Some((material, rest)) = pointer_of(channel).and_then(material_pointer) {
+                if rest.starts_with(TEXTURE_TRANSFORM) {
+                    moved.insert(material);
+                }
+            }
+        }
+        for swap in animation["extras"]["nebula"]["texture_swaps"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            for key in swap["keys"].as_array().map(Vec::as_slice).unwrap_or_default() {
+                if let Some(texture) = key[1].as_u64() {
+                    swapped.insert(texture as usize);
+                }
+            }
+        }
+    }
+    (moved, swapped)
+}
+
+/// The model's texture number of a glTF image, cooked into the model the first time it is wanted.
+fn texture_number(document: &Document, ir: &mut ModelIr, image_of: &mut BTreeMap<usize, u32>, image: usize) -> Result<u32> {
+    if let Some(number) = image_of.get(&image) {
+        return Ok(*number);
+    }
+    let (width, height, rgba) = document.image(image)?;
+    let number = ir.textures.len() as u32;
+    ir.records.push(super::texture::cook_rgba(width, height, &rgba)?);
+    ir.textures.push(plain_texture(format!("image{image}"), width, height, ir.records.len() - 1));
+    image_of.insert(image, number);
+    Ok(number)
 }
 
 fn bounds_radius(low: &[f32; 3], high: &[f32; 3]) -> f32 {
@@ -467,6 +605,7 @@ fn widen(low: &mut [f32; 3], high: &mut [f32; 3], at: [f32; 3]) {
 pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(String, ClipIr)>)> {
     let document = Document::parse(bytes, folder)?;
     let root = &document.root;
+    required_extensions(root)?;
     let scene = &root["scenes"][root["scene"].as_u64().unwrap_or(0) as usize];
     let nodes = root["nodes"].as_array().map(Vec::as_slice).unwrap_or_default();
 
@@ -528,14 +667,24 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
     }
 
     // Materials.
+    let (moved, swapped) = animated_materials(root);
     let mut materials: Vec<SourceMaterial> = Vec::new();
     for (i, material) in root["materials"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
         let pbr = &material["pbrMetallicRoughness"];
         let factor: [f32; 4] = numbers(&pbr["baseColorFactor"], [1.0; 4]);
         let image = pbr["baseColorTexture"]["index"].as_u64().and_then(|t| root["textures"][t as usize]["source"].as_u64()).map(|s| s as usize);
+        let still = &pbr["baseColorTexture"]["extensions"]["KHR_texture_transform"];
+        let transform = (still.is_object() || moved.contains(&i)).then(|| {
+            let [sx, sy]: [f32; 2] = numbers(&still["scale"], [1.0; 2]);
+            let [ox, oy]: [f32; 2] = numbers(&still["offset"], [0.0; 2]);
+            [sx, sy, still["rotation"].as_f64().unwrap_or(0.0) as f32, ox, oy]
+        });
         let mut images = Vec::new();
         if let Some(image) = image {
-            images.push((image, pbr["baseColorTexture"]["texCoord"].as_u64().unwrap_or(0)));
+            let coordinates = still["texCoord"].as_u64().or(pbr["baseColorTexture"]["texCoord"].as_u64()).unwrap_or(0);
+            images.push((image, coordinates));
+        } else if transform.is_some() {
+            bail!("material {i}: a texture transform with no base colour texture");
         }
         // Additional authored multiply layers use ordinary glTF texture indices
         // and UV sets, through the same material programs as the game's models.
@@ -556,10 +705,11 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             blend: material["alphaMode"].as_str() == Some("BLEND"),
             cutoff: (material["alphaMode"].as_str() == Some("MASK")).then(|| (material["alphaCutoff"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0) * 255.0) as u8),
             two_sided: material["doubleSided"].as_bool().unwrap_or(false),
+            transform,
         });
     }
     let default_material = materials.len();
-    materials.push(SourceMaterial { name: "material".to_string(), color: [255; 4], images: Vec::new(), blend: false, cutoff: None, two_sided: false });
+    materials.push(SourceMaterial { name: "material".to_string(), color: [255; 4], images: Vec::new(), blend: false, cutoff: None, two_sided: false, transform: None });
 
     let mut ir = ModelIr::default();
     let mut positions = Pool::<3>::new();
@@ -729,18 +879,7 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             }
             let mut texture_ids = Vec::new();
             for &(image, _) in &source.images {
-                let number = match image_of.get(&image) {
-                    Some(number) => *number,
-                    None => {
-                        let (width, height, rgba) = document.image(image)?;
-                        let number = ir.textures.len() as u32;
-                        ir.records.push(super::texture::cook_rgba(width, height, &rgba)?);
-                        ir.textures.push(plain_texture(format!("image{image}"), width, height, ir.records.len() - 1));
-                        image_of.insert(image, number);
-                        number
-                    }
-                };
-                texture_ids.push(number);
+                texture_ids.push(texture_number(&document, &mut ir, &mut image_of, image)?);
             }
             let texture = texture_ids.first().copied();
             let same_as = *first_of_material.entry(material).or_insert(shape);
@@ -759,6 +898,16 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                     made.stages.push(stage);
                 }
                 made.pixel_stage_count = made.stages.len() as u32;
+            }
+            // Its base texture's transform: texture matrix 0 on its first coordinates.
+            if let Some(t) = source.transform {
+                let [sx, sy, rotation, tx, ty] = texture_transform(&t, &source.name)?;
+                made.coords[0].matrix = 0;
+                let mut effect = [[0.0f32; 4]; 4];
+                for (k, row) in effect.iter_mut().enumerate() {
+                    row[k] = 1.0;
+                }
+                made.matrices.push(CoordMatrixIr { slot: 0, projection: 1, info: 0, center: [0.0; 3], scale: [sx, sy], rotation, translation: [tx, ty], effect });
             }
             made.same_as = same_as;
             made.mesh = shape;
@@ -783,6 +932,11 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
     }
     if ir.shapes.is_empty() {
         bail!("the model has no triangles");
+    }
+    // Textures an animation swaps in, which no material shows to begin with.
+    for texture in &swapped {
+        let image = root["textures"][*texture]["source"].as_u64().with_context(|| format!("an animation swaps in texture {texture}, which has no image"))?;
+        texture_number(&document, &mut ir, &mut image_of, image as usize)?;
     }
 
     ir.arrays = ArraysIr { normal_floats: 3, ..Default::default() };
@@ -835,19 +989,222 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             .collect();
     }
 
+    // Each animation: what moves the skeleton (.bck), a material's colour (.bpk), its texture's transform (.btk), its
+    // texture swaps (.btp), each by the animation's name; one moving nothing is a still .bck.
     let mut clips = Vec::new();
     for (i, animation) in root["animations"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
         let name = animation["name"].as_str().map_or_else(|| format!("animation{i}"), str::to_string);
-        clips.push((name, clip_of(&document, animation, &joints, &joint_of_node)?));
+        let timing = Timing::of(&document, animation)?;
+        let of_materials = material_clips(&document, animation, &materials, &first_of_material, &image_of, &timing)?;
+        let moves_joints = animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default().iter().any(|c| {
+            c["target"]["node"].as_u64().is_some_and(|n| joint_of_node.contains_key(&(n as usize)))
+                && matches!(c["target"]["path"].as_str(), Some("translation" | "rotation" | "scale"))
+        });
+        if moves_joints || of_materials.is_empty() {
+            clips.push((name.clone(), clip_of(&document, animation, &joints, &joint_of_node, &timing)?));
+        }
+        clips.extend(of_materials.into_iter().map(|clip| (name.clone(), clip)));
     }
     Ok((ir, clips))
+}
+
+/// An animation's length and how it plays, the same for each of its files.
+struct Timing {
+    frames: usize,
+    /// The frames sampled: every other one, and the last.
+    samples: Vec<usize>,
+    loop_mode: u8,
+}
+
+impl Timing {
+    fn of(document: &Document, animation: &Value) -> Result<Timing> {
+        let samplers = animation["samplers"].as_array().map(Vec::as_slice).unwrap_or_default();
+        let mut length = 0.0f32;
+        for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).context("a channel naming a sampler it doesn't have")?;
+            let times = document.floats(sampler["input"].as_u64().context("a sampler with no times")? as usize, 1)?;
+            length = length.max(times.last().copied().unwrap_or(0.0));
+        }
+        for swap in animation["extras"]["nebula"]["texture_swaps"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            for key in swap["keys"].as_array().map(Vec::as_slice).unwrap_or_default() {
+                length = length.max(key[0].as_f64().unwrap_or(0.0) as f32);
+            }
+        }
+        // How it plays: `extras.nebula.play` once, once_then_first (back to its first frame), loop, there_and_back (once
+        // each way) or loop_there_and_back; left out, loop. One standing for a game class's animation of the same name
+        // (a mod's class made like it) plays as that one does, as the class's code waits for it (the game sets it).
+        let loop_mode = match animation["extras"]["nebula"]["play"].as_str() {
+            None | Some("loop") => 2,
+            Some("once") => 0,
+            Some("once_then_first") => 1,
+            Some("there_and_back") => 3,
+            Some("loop_there_and_back") => 4,
+            Some(other) => bail!("an animation plays {other:?}: once, once_then_first, loop, there_and_back or loop_there_and_back"),
+        };
+        let frames = ((length * FRAMES_PER_SECOND).ceil() as usize).max(1);
+        let samples = (0..=frames).step_by(2).chain(std::iter::once(frames)).collect::<BTreeSet<_>>().into_iter().collect();
+        Ok(Timing { frames, samples, loop_mode })
+    }
+}
+
+/// The file a cooked animation is, by what it moves.
+fn clip_extension(kind: u8) -> &'static str {
+    match kind {
+        KIND_COLORS => "bpk",
+        KIND_TEXTURE_MATRICES => "btk",
+        KIND_PATTERN => "btp",
+        _ => "bck",
+    }
+}
+
+/// A material's curve read from a pointer channel.
+fn pointer_curve(document: &Document, samplers: &[Value], channel: &Value, width: usize) -> Result<Curve> {
+    let sampler = samplers.get(channel["sampler"].as_u64().unwrap_or(0) as usize).context("a channel naming a sampler it doesn't have")?;
+    let times = document.floats(sampler["input"].as_u64().context("a sampler with no times")? as usize, 1)?;
+    let values = document.floats(sampler["output"].as_u64().context("a sampler with no values")? as usize, width)?;
+    if times.is_empty() {
+        bail!("an animation channel with no times");
+    }
+    let mode = sampler["interpolation"].as_str().unwrap_or("LINEAR");
+    Ok(Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE", turns: false })
+}
+
+/// What an animation does to materials: their colours, their textures' transforms, their texture swaps.
+fn material_clips(
+    document: &Document,
+    animation: &Value,
+    materials: &[SourceMaterial],
+    first_of_material: &BTreeMap<usize, u32>,
+    image_of: &BTreeMap<usize, u32>,
+    timing: &Timing,
+) -> Result<Vec<ClipIr>> {
+    let samplers = animation["samplers"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let mut colours: BTreeMap<usize, Curve> = BTreeMap::new();
+    let mut moves: BTreeMap<usize, BTreeMap<&str, Curve>> = BTreeMap::new();
+    for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        if channel["target"]["path"].as_str() != Some("pointer") {
+            continue;
+        }
+        let pointer = pointer_of(channel).context("an animation channel with a pointer path and no KHR_animation_pointer pointer")?;
+        let animates = "Nebula animates a material's baseColorFactor and its base colour texture's KHR_texture_transform offset, scale and rotation";
+        let Some((material, rest)) = material_pointer(pointer) else { bail!("an animation moves {pointer}: {animates}") };
+        if material + 1 >= materials.len() {
+            bail!("an animation moves {pointer}, a material the file doesn't have");
+        }
+        if rest == BASE_COLOR {
+            colours.insert(material, pointer_curve(document, samplers, channel, 4)?);
+        } else if let Some(part @ ("offset" | "scale" | "rotation")) = rest.strip_prefix(TEXTURE_TRANSFORM) {
+            let width = if part == "rotation" { 1 } else { 2 };
+            moves.entry(material).or_default().insert(part, pointer_curve(document, samplers, channel, width)?);
+        } else {
+            bail!("an animation moves {pointer}: {animates}");
+        }
+    }
+    let drawn = |material: usize| {
+        first_of_material.get(&material).copied().with_context(|| format!("an animation changes material {}, which no mesh draws", materials[material].name))
+    };
+    let target = |material: usize, number: u32| Target { name: materials[material].name.as_bytes().to_vec(), material: number, slot: 0, center: [0.0; 3] };
+    let clip = |kind: u8, count: usize| ClipIr { kind, loop_mode: timing.loop_mode, frames: timing.frames as i32, first_count: count as u32, ..ClipIr::default() };
+    let mut out = Vec::new();
+
+    if !colours.is_empty() {
+        let mut c = clip(KIND_COLORS, colours.len());
+        for (&material, curve) in &colours {
+            let number = drawn(material)?;
+            let mut channels: [Vec<f32>; 4] = Default::default();
+            for frame in &timing.samples {
+                let value = curve.at(*frame as f32 / FRAMES_PER_SECOND);
+                for (k, channel) in channels.iter_mut().enumerate() {
+                    channel.push(value[k].clamp(0.0, 1.0) * 255.0);
+                }
+            }
+            for channel in &channels {
+                let track = axis_track(&mut c.values, &timing.samples, channel)?;
+                c.tracks.push(track);
+            }
+            c.targets.push(target(material, number));
+        }
+        out.push(c);
+    }
+
+    if !moves.is_empty() {
+        let mut c = clip(KIND_TEXTURE_MATRICES, moves.len());
+        for (&material, curves) in &moves {
+            let number = drawn(material)?;
+            let rest = materials[material].transform.unwrap_or(NO_TRANSFORM);
+            let mut parts: [Vec<f32>; 5] = Default::default();
+            for frame in &timing.samples {
+                let time = *frame as f32 / FRAMES_PER_SECOND;
+                let mut t = rest;
+                if let Some(curve) = curves.get("scale") {
+                    let v = curve.at(time);
+                    t[0] = v[0];
+                    t[1] = v[1];
+                }
+                if let Some(curve) = curves.get("rotation") {
+                    t[2] = curve.at(time)[0];
+                }
+                if let Some(curve) = curves.get("offset") {
+                    let v = curve.at(time);
+                    t[3] = v[0];
+                    t[4] = v[1];
+                }
+                for (part, value) in parts.iter_mut().zip(texture_transform(&t, &materials[material].name)?) {
+                    part.push(value);
+                }
+            }
+            for part in &parts {
+                let track = axis_track(&mut c.values, &timing.samples, part)?;
+                c.tracks.push(track);
+            }
+            c.targets.push(target(material, number));
+        }
+        out.push(c);
+    }
+
+    // Texture swaps: `extras.nebula.texture_swaps`, each { "material": <n>, "keys": [[<second>, <texture>], ...] }, the
+    // texture shown from that second on (before the first key, the first key's).
+    let swaps = animation["extras"]["nebula"]["texture_swaps"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if !swaps.is_empty() {
+        let mut c = clip(KIND_PATTERN, swaps.len());
+        for swap in swaps {
+            let material = swap["material"].as_u64().context("a texture swap with no material number")? as usize;
+            if material + 1 >= materials.len() {
+                bail!("a texture swap of material {material}, which the file doesn't have");
+            }
+            if materials[material].images.is_empty() {
+                bail!("material {}: texture swaps with no base colour texture to swap", materials[material].name);
+            }
+            let number = drawn(material)?;
+            let mut keys: Vec<(f32, u32)> = Vec::new();
+            for key in swap["keys"].as_array().map(Vec::as_slice).unwrap_or_default() {
+                let second = key[0].as_f64().context("a texture swap's key is [second, texture]")? as f32;
+                let texture = key[1].as_u64().context("a texture swap's key is [second, texture]")? as usize;
+                let image = document.root["textures"][texture]["source"].as_u64().with_context(|| format!("texture {texture} has no image"))?;
+                keys.push((second * FRAMES_PER_SECOND, *image_of.get(&(image as usize)).context("a swapped texture the model lacks")?));
+            }
+            if keys.is_empty() {
+                bail!("material {}: a texture swap with no keys", materials[material].name);
+            }
+            keys.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let at = c.indices.len() as u32;
+            for frame in 0..=timing.frames {
+                let shown = keys.iter().rev().find(|(from, _)| *from <= frame as f32 + 1e-3).unwrap_or(&keys[0]);
+                c.indices.push(shown.1);
+            }
+            c.tracks.push(Track { count: (timing.frames + 1) as u32, stride: STEP, integer_keys: false, at });
+            c.targets.push(target(material, number));
+        }
+        out.push(c);
+    }
+    Ok(out)
 }
 
 /// A glTF document as the store's blocks: the model, and each animation by its name.
 pub fn to_files(bytes: &[u8], folder: Option<&Path>, stem: &str) -> Result<(Vec<u8>, Vec<(String, Vec<u8>)>)> {
     let (ir, clips) = to_ir(bytes, folder)?;
     let model = super::model_write::write(&ir, stem, &super::programs::written_or_unknown())?;
-    Ok((model, clips.iter().map(|(name, c)| (name.clone(), super::clip::write(c))).collect()))
+    Ok((model, clips.iter().map(|(name, c)| (format!("{name}.{}", clip_extension(c.kind)), super::clip::write(c))).collect()))
 }
 
 /// The game counts animation frames at 60 a second.
@@ -860,6 +1217,8 @@ struct Curve {
     width: usize,
     step: bool,
     cubic: bool,
+    /// A rotation (a quaternion): blended the shorter way, and kept a rotation.
+    turns: bool,
 }
 
 impl Curve {
@@ -881,9 +1240,9 @@ impl Curve {
         let f = (time - self.times[k]) / (self.times[k + 1] - self.times[k]).max(1e-6);
         let (a, b) = (value(k), value(k + 1));
         // Rotations by the shorter way, then renormalized.
-        let flip = if self.width == 4 && a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>() < 0.0 { -1.0 } else { 1.0 };
+        let flip = if self.turns && a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>() < 0.0 { -1.0 } else { 1.0 };
         let mut out: Vec<f32> = a.iter().zip(b).map(|(x, y)| x + (y * flip - x) * f).collect();
-        if self.width == 4 {
+        if self.turns {
             let length = out.iter().map(|v| v * v).sum::<f32>().sqrt().max(1e-6);
             out.iter_mut().for_each(|v| *v /= length);
         }
@@ -909,10 +1268,9 @@ fn axis_track(out: &mut Vec<f32>, frames: &[usize], values: &[f32]) -> Result<Tr
     Ok(Track { count, stride: 3, integer_keys: false, at })
 }
 
-fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_node: &BTreeMap<usize, usize>) -> Result<ClipIr> {
+fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_node: &BTreeMap<usize, usize>, timing: &Timing) -> Result<ClipIr> {
     let samplers = animation["samplers"].as_array().context("an animation with no samplers")?;
     let mut curves: BTreeMap<(usize, &str), Curve> = BTreeMap::new();
-    let mut length = 0.0f32;
     for channel in animation["channels"].as_array().map(Vec::as_slice).unwrap_or_default() {
         let Some(node) = channel["target"]["node"].as_u64() else { continue };
         let Some(&joint) = joint_of_node.get(&(node as usize)) else { continue };
@@ -929,19 +1287,16 @@ fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_no
         if times.is_empty() {
             continue;
         }
-        length = length.max(*times.last().unwrap());
         let mode = sampler["interpolation"].as_str().unwrap_or("LINEAR");
-        curves.insert((joint, key), Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE" });
+        curves.insert((joint, key), Curve { times, values, width, step: mode == "STEP", cubic: mode == "CUBICSPLINE", turns: width == 4 });
     }
-    let frames = ((length * FRAMES_PER_SECOND).ceil() as usize).max(1);
-    let samples: Vec<usize> = (0..=frames).step_by(2).chain(std::iter::once(frames)).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
-
-    let mut clip = ClipIr { kind: KIND_JOINTS, loop_mode: 2, frames: frames as i32, first_count: joints.len() as u32, ..ClipIr::default() };
+    let samples = &timing.samples;
+    let mut clip = ClipIr { kind: KIND_JOINTS, loop_mode: timing.loop_mode, frames: timing.frames as i32, first_count: joints.len() as u32, ..ClipIr::default() };
     for (index, joint) in joints.iter().enumerate() {
         let mut scale_values = [vec![], vec![], vec![]];
         let mut angle_values: [Vec<f32>; 3] = [vec![], vec![], vec![]];
         let mut translate_values = [vec![], vec![], vec![]];
-        for frame in &samples {
+        for frame in samples {
             let time = *frame as f32 / FRAMES_PER_SECOND;
             let s = curves.get(&(index, "s")).map_or(joint.trs.scale.to_vec(), |c| c.at(time));
             let r = curves.get(&(index, "r")).map_or(joint.trs.rotation.to_vec(), |c| c.at(time));
@@ -967,9 +1322,9 @@ fn clip_of(document: &Document, animation: &Value, joints: &[Joint], joint_of_no
             }
         }
         for axis in 0..3 {
-            let scale = axis_track(&mut clip.values, &samples, &scale_values[axis])?;
-            let rotation = axis_track(&mut clip.values, &samples, &angle_values[axis])?;
-            let translation = axis_track(&mut clip.values, &samples, &translate_values[axis])?;
+            let scale = axis_track(&mut clip.values, samples, &scale_values[axis])?;
+            let rotation = axis_track(&mut clip.values, samples, &angle_values[axis])?;
+            let translation = axis_track(&mut clip.values, samples, &translate_values[axis])?;
             clip.tracks.extend_from_slice(&[scale, rotation, translation]);
         }
     }
@@ -1085,6 +1440,41 @@ mod tests {
     }
 
     #[test]
+    fn an_animation_plays_as_its_extras_say() {
+        let mut keys = Vec::new();
+        for v in [0.0f32, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0] {
+            keys.extend_from_slice(&v.to_le_bytes());
+        }
+        let mut document: serde_json::Value = serde_json::from_slice(&triangle(1)).unwrap();
+        document["buffers"].as_array_mut().unwrap().push(serde_json::json!({
+            "byteLength": 32, "uri": format!("data:application/octet-stream;base64,{}", encode(&keys)) }));
+        document["bufferViews"].as_array_mut().unwrap().extend([
+            serde_json::json!({ "buffer": 1, "byteLength": 8 }),
+            serde_json::json!({ "buffer": 1, "byteOffset": 8, "byteLength": 24 }),
+        ]);
+        document["accessors"].as_array_mut().unwrap().extend([
+            serde_json::json!({ "bufferView": 2, "componentType": 5126, "count": 2, "type": "SCALAR" }),
+            serde_json::json!({ "bufferView": 3, "componentType": 5126, "count": 2, "type": "VEC3" }),
+        ]);
+        let animation = |name: &str, play: Option<&str>| {
+            let mut a = serde_json::json!({ "name": name, "samplers": [ { "input": 2, "output": 3 } ],
+                "channels": [ { "sampler": 0, "target": { "node": 0, "path": "translation" } } ] });
+            if let Some(play) = play {
+                a["extras"] = serde_json::json!({ "nebula": { "play": play } });
+            }
+            a
+        };
+        document["animations"] = serde_json::json!([animation("Plain", None), animation("Once", Some("once")),
+            animation("Back", Some("once_then_first")), animation("Mirror", Some("loop_there_and_back"))]);
+        let (_, clips) = to_ir(&serde_json::to_vec(&document).unwrap(), None).unwrap();
+        let modes: Vec<(String, u8)> = clips.iter().map(|(name, clip)| (name.clone(), clip.loop_mode)).collect();
+        assert_eq!(modes, [("Plain".to_string(), 2), ("Once".to_string(), 0), ("Back".to_string(), 1), ("Mirror".to_string(), 4)]);
+        document["animations"] = serde_json::json!([animation("Odd", Some("sideways"))]);
+        let Err(error) = to_ir(&serde_json::to_vec(&document).unwrap(), None) else { panic!("an unknown play mode cooked") };
+        assert!(format!("{error:#}").contains("sideways"), "{error:#}");
+    }
+
+    #[test]
     fn triangles_wind_as_the_games_do() {
         let (ir, _) = to_ir(&triangle(1), None).unwrap();
         assert_eq!(ir.shapes[0].groups[0].indices, vec![0, 2, 1]);
@@ -1144,5 +1534,151 @@ mod tests {
         assert!(format!("{:#}", to_ir(b"nope", None).err().unwrap()).contains("JSON"));
         let old = br#"{"asset":{"version":"1.0"}}"#;
         assert!(format!("{:#}", to_ir(old, None).err().unwrap()).contains("glTF 2"));
+    }
+
+    /// One more buffer of little-endian floats, its views and accessors (`(count, type, floats)`), numbered after the
+    /// document's; the accessors' numbers.
+    fn add_floats(document: &mut Value, accessors: &[(usize, &str, Vec<f32>)]) -> Vec<usize> {
+        let buffer = document["buffers"].as_array().unwrap().len();
+        let mut data = Vec::new();
+        let mut numbers = Vec::new();
+        for (count, kind, floats) in accessors {
+            let view = document["bufferViews"].as_array().unwrap().len();
+            document["bufferViews"].as_array_mut().unwrap().push(serde_json::json!({ "buffer": buffer, "byteOffset": data.len(), "byteLength": floats.len() * 4 }));
+            numbers.push(document["accessors"].as_array().unwrap().len());
+            document["accessors"].as_array_mut().unwrap().push(serde_json::json!({ "bufferView": view, "componentType": 5126, "count": count, "type": kind }));
+            for v in floats {
+                data.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        document["buffers"].as_array_mut().unwrap().push(serde_json::json!({
+            "byteLength": data.len(), "uri": format!("data:application/octet-stream;base64,{}", encode(&data)) }));
+        numbers
+    }
+
+    const PIXEL: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=";
+
+    /// The triangle with a texture of two images to choose from, and a texture transform.
+    fn textured(transform: Value) -> Value {
+        let mut document: Value = serde_json::from_slice(&triangle(1)).unwrap();
+        document["images"] = serde_json::json!([{ "uri": PIXEL }, { "uri": PIXEL }]);
+        document["textures"] = serde_json::json!([{ "source": 0 }, { "source": 1 }]);
+        document["materials"] = serde_json::json!([{ "name": "Face", "pbrMetallicRoughness": {
+            "baseColorTexture": { "index": 0, "extensions": { "KHR_texture_transform": transform } } } }]);
+        document
+    }
+
+    #[test]
+    fn a_material_s_colour_scroll_and_swaps_cook_as_the_games() {
+        let mut document = textured(serde_json::json!({ "scale": [2.0, 2.0], "rotation": 0.5, "offset": [0.25, 0.0] }));
+        let a = add_floats(&mut document, &[
+            (2, "SCALAR", vec![0.0, 1.0]),
+            (2, "VEC4", vec![1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.0, 1.0]),
+            (2, "VEC2", vec![0.0, 0.0, 1.0, 0.0]),
+        ]);
+        let pointer = |sampler: usize, to: &str| serde_json::json!({ "sampler": sampler,
+            "target": { "path": "pointer", "extensions": { "KHR_animation_pointer": { "pointer": to } } } });
+        document["animations"] = serde_json::json!([
+            { "name": "Glow", "samplers": [{ "input": a[0], "output": a[1] }],
+              "channels": [pointer(0, "/materials/0/pbrMetallicRoughness/baseColorFactor")] },
+            { "name": "Scroll", "extras": { "nebula": { "play": "once" } }, "samplers": [{ "input": a[0], "output": a[2] }],
+              "channels": [pointer(0, "/materials/0/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset")] },
+            { "name": "Blink", "extras": { "nebula": { "texture_swaps": [{ "material": 0, "keys": [[0.0, 0], [0.5, 1]] }] } } },
+        ]);
+        let bytes = serde_json::to_vec(&document).unwrap();
+        let (ir, clips) = to_ir(&bytes, None).unwrap();
+
+        // The still transform: texture matrix 0 on the base texture, turned the game's way.
+        let material = &ir.materials[0];
+        assert_eq!(material.coords[0].matrix, 0);
+        let m = &material.matrices[0];
+        assert_eq!((m.slot, m.info, m.scale, m.rotation, m.translation), (0, 0, [2.0, 2.0], -0.5, [0.25, 0.0]));
+        // The swapped-in image is a texture of the model's too.
+        assert_eq!(ir.textures.len(), 2);
+
+        let kinds: Vec<(&str, u8)> = clips.iter().map(|(name, c)| (name.as_str(), c.kind)).collect();
+        assert_eq!(kinds, [("Glow", KIND_COLORS), ("Scroll", KIND_TEXTURE_MATRICES), ("Blink", KIND_PATTERN)]);
+        let glow = &clips[0].1;
+        assert_eq!((glow.frames, glow.loop_mode, glow.tracks.len(), glow.targets[0].name.as_slice()), (60, 2, 4, b"Face".as_slice()));
+        // Red stays 255; green falls from 255 to half by the end.
+        assert_eq!((glow.tracks[0].count, glow.values[glow.tracks[0].at as usize]), (1, 255.0));
+        let green = &glow.tracks[1];
+        let last = green.at as usize + (green.count as usize - 1) * 3;
+        assert_eq!((glow.values[last], glow.values[last + 1]), (60.0, 127.5));
+        let scroll = &clips[1].1;
+        assert_eq!((scroll.loop_mode, scroll.tracks.len()), (0, 5));
+        // Scale and turn stay as the material has them; the offset moves.
+        assert_eq!(scroll.values[scroll.tracks[0].at as usize], 2.0);
+        assert_eq!(scroll.values[scroll.tracks[2].at as usize], -0.5);
+        assert!(scroll.tracks[3].count > 1);
+        let blink = &clips[2].1;
+        assert_eq!((blink.frames, blink.tracks[0].stride, blink.tracks[0].count), (30, STEP, 31));
+        assert_eq!((blink.indices[0], blink.indices[29], blink.indices[30]), (0, 0, 1));
+
+        // Each a file of its kind, by the animation's name.
+        let (_, files) = to_files(&bytes, None, "Swap").unwrap();
+        let names: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["Glow.bpk", "Scroll.btk", "Blink.btp"]);
+        for (_, file) in &files {
+            assert_eq!(&file[0..4], b"NCLP");
+        }
+    }
+
+    #[test]
+    fn what_a_material_animation_cannot_be_says_so() {
+        let error = |document: &Value| format!("{:#}", to_ir(&serde_json::to_vec(document).unwrap(), None).err().expect("it cooked"));
+        // Turned with uneven scales: glTF and the game scale and turn in different orders.
+        let uneven = textured(serde_json::json!({ "scale": [2.0, 1.0], "rotation": 0.5 }));
+        assert!(error(&uneven).contains("unequal"), "{}", error(&uneven));
+        // Something else of a material.
+        let mut other = textured(serde_json::json!({}));
+        let a = add_floats(&mut other, &[(1, "SCALAR", vec![0.0]), (1, "VEC3", vec![1.0, 0.0, 0.0])]);
+        other["animations"] = serde_json::json!([{ "name": "Shine", "samplers": [{ "input": a[0], "output": a[1] }],
+            "channels": [{ "sampler": 0, "target": { "path": "pointer",
+                "extensions": { "KHR_animation_pointer": { "pointer": "/materials/0/emissiveFactor" } } } }] }]);
+        assert!(error(&other).contains("baseColorFactor"), "{}", error(&other));
+        // A swap of a material that isn't there.
+        let mut missing = textured(serde_json::json!({}));
+        missing["animations"] = serde_json::json!([{ "name": "Blink", "extras": { "nebula": { "texture_swaps": [{ "material": 3, "keys": [[0.0, 1]] }] } } }]);
+        assert!(error(&missing).contains("material 3"), "{}", error(&missing));
+        // An extension the file needs and Nebula doesn't read.
+        let mut draco = textured(serde_json::json!({}));
+        draco["extensionsRequired"] = serde_json::json!(["KHR_draco_mesh_compression"]);
+        assert!(error(&draco).contains("KHR_draco_mesh_compression"), "{}", error(&draco));
+        draco["extensionsRequired"] = serde_json::json!(["KHR_texture_transform"]);
+        to_ir(&serde_json::to_vec(&draco).unwrap(), None).unwrap();
+    }
+
+    #[test]
+    fn signed_and_sparse_numbers_read_as_gltf_says() {
+        // Two signed normalized shorts, then sparse: element 1 of a three-float accessor with no view is 7.
+        let mut data = Vec::new();
+        for v in [32767i16, -32768] {
+            data.extend_from_slice(&v.to_le_bytes());
+        }
+        data.extend_from_slice(&1u16.to_le_bytes());
+        data.extend_from_slice(&[0, 0]);
+        data.extend_from_slice(&7.0f32.to_le_bytes());
+        let json = serde_json::json!({ "asset": { "version": "2.0" },
+            "buffers": [{ "byteLength": data.len(), "uri": format!("data:application/octet-stream;base64,{}", encode(&data)) }],
+            "bufferViews": [{ "buffer": 0, "byteLength": 4 }, { "buffer": 0, "byteOffset": 4, "byteLength": 2 }, { "buffer": 0, "byteOffset": 8, "byteLength": 4 }],
+            "accessors": [
+                { "bufferView": 0, "componentType": 5122, "normalized": true, "count": 2, "type": "SCALAR" },
+                { "componentType": 5126, "count": 3, "type": "SCALAR", "sparse": { "count": 1,
+                    "indices": { "bufferView": 1, "componentType": 5123 }, "values": { "bufferView": 2 } } },
+            ] });
+        let document = Document::parse(&serde_json::to_vec(&json).unwrap(), None).unwrap();
+        assert_eq!(document.floats(0, 1).unwrap(), [1.0, -1.0]);
+        assert_eq!(document.floats(1, 1).unwrap(), [0.0, 7.0, 0.0]);
+    }
+
+    #[test]
+    fn a_jpeg_is_an_image() {
+        // A 2 by 1 baseline JPEG of orange (200, 100, 50).
+        let jpeg = base64("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoKCgoKBggLDAsKDAkKCgr/2wBDAQICAgICAgUDAwUKBwYHCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgr/wAARCAABAAIDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDPooor+Vz+2D//2Q==").unwrap();
+        let (width, height, rgba) = decode_image(&jpeg).unwrap();
+        assert_eq!((width, height, rgba.len()), (2, 1, 8));
+        assert!(rgba[0].abs_diff(200) < 8 && rgba[1].abs_diff(100) < 8 && rgba[2].abs_diff(50) < 8 && rgba[3] == 255, "{rgba:?}");
+        assert!(format!("{:#}", decode_image(b"GIF89a").err().unwrap()).contains("PNG or JPEG"));
     }
 }
