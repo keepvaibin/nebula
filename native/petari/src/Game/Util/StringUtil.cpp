@@ -251,7 +251,24 @@ namespace MR {
     }
 
     bool isEqualString(const char* pStr1, const char* pStr2) {
-        return strcmp(pStr1, pStr2) == 0;
+        if (pStr1 == nullptr || pStr2 == nullptr) {
+            return pStr1 == pStr2;
+        }
+        for (; *pStr1 == *pStr2; pStr1++, pStr2++) {
+            if (*pStr1 == '\0') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool isEqualStringPrefix(const char* pStr, const char* pPrefix) {
+        for (; *pPrefix != '\0'; pStr++, pPrefix++) {
+            if (*pStr != *pPrefix) {
+                return false;
+            }
+        }
+        return true;
     }
 
     bool isEqualStringCase(const char* pStr1, const char* pStr2) {
@@ -411,7 +428,7 @@ namespace MR {
             hash = (hash ^ static_cast< u8 >(pName[length])) * 16777619u;
         }
         for (InternedName* p = sInterned; p != nullptr; p = p->mNext) {
-            if (p->mHash == hash && strcmp(p->mText, pName) == 0) {
+            if (p->mHash == hash && isEqualString(p->mText, pName)) {
                 return p->mText;
             }
         }

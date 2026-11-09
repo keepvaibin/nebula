@@ -233,7 +233,7 @@ bool XanimeResourceTable::search(XanimeBckTable** ppTable, const char* pName, u3
         return false;
     }
 
-    while (strcmp((*ppTable)->mAnimationName, pName) != 0) {
+    while (!MR::isEqualString((*ppTable)->mAnimationName, pName)) {
         if ((*ppTable)->mAnimationName[0] == '\0') {
             return false;
         }

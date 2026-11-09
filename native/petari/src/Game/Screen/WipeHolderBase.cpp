@@ -1,5 +1,6 @@
 #include "Game/Screen/WipeHolderBase.hpp"
 #include "Game/Screen/WipeLayoutBase.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 
 WipeHolderBase::WipeHolderBase(u32 num, const char* pName)
@@ -55,7 +56,7 @@ bool WipeHolderBase::isWipeOut() const {
 }
 
 bool WipeHolderBase::isCurrent(const char* pWipeName) const {
-    return strcmp(mCurrentWipeLayout->getWipeName(), pWipeName) == 0;
+    return MR::isEqualString(mCurrentWipeLayout->getWipeName(), pWipeName);
 }
 
 void WipeHolderBase::addWipeLayout(WipeLayoutBase* pWipeLayout) {
@@ -87,7 +88,7 @@ WipeLayoutBase* WipeHolderBase::findWipe(const char* pWipeName) const {
     }
 
     for (u32 i = 0; i < mWipeLayoutCount; i++) {
-        if (strcmp(pWipeName, mWipeLayoutArray[i]->getWipeName()) == 0) {
+        if (MR::isEqualString(pWipeName, mWipeLayoutArray[i]->getWipeName())) {
             return mWipeLayoutArray[i];
         }
     }

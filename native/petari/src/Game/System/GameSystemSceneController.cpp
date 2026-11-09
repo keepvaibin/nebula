@@ -48,7 +48,7 @@ namespace NrvGameSystemSceneController {
     NEW_NERVE(GameSystemSceneControllerDestroyed, GameSystemSceneController, Destroyed);
 };  // namespace NrvGameSystemSceneController
 
-SceneControlInfo::SceneControlInfo() : mScene(""), mStage(""), mStartIdInfo() {
+SceneControlInfo::SceneControlInfo() : mScene(""), mIsGameScene(false), mStage(""), mStartIdInfo() {
     mScenarioNo = 1;
     mSelectedScenarioNo = 1;
     mStartIdInfo = new PlacementId(MR::getInitializeStartIdInfo());
@@ -56,6 +56,7 @@ SceneControlInfo::SceneControlInfo() : mScene(""), mStage(""), mStartIdInfo() {
 
 void SceneControlInfo::setScene(const char* pSceneName) {
     mScene = MR::internName(pSceneName);
+    mIsGameScene = MR::isEqualString(mScene, "Game");
 }
 
 void SceneControlInfo::setStage(const char* pStageName) {
@@ -473,12 +474,14 @@ bool GameSystemSceneController::isSameAtNextSceneAndStage() const {
 
 void GameSystemSceneController::updateSceneControlInfo() {
     mCurrSceneControlInfo.mScene = mNextSceneControlInfo.mScene;
+    mCurrSceneControlInfo.mIsGameScene = mNextSceneControlInfo.mIsGameScene;
     mCurrSceneControlInfo.mStage = mNextSceneControlInfo.mStage;
     mCurrSceneControlInfo.mScenarioNo = mNextSceneControlInfo.mScenarioNo;
     mCurrSceneControlInfo.mSelectedScenarioNo = mNextSceneControlInfo.mSelectedScenarioNo;
     mCurrSceneControlInfo.setStartIdInfo(*mNextSceneControlInfo.mStartIdInfo);
 
     mNextSceneControlInfo.mScene = "";
+    mNextSceneControlInfo.mIsGameScene = false;
     mNextSceneControlInfo.mStage = "";
     mNextSceneControlInfo.mScenarioNo = -1;
     mNextSceneControlInfo.mSelectedScenarioNo = -1;

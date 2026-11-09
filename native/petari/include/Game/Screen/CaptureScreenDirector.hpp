@@ -31,6 +31,9 @@ private:
     const char* mTimingType;
     GameTexture* mTexture;
     bool mIsCaptureRequested;
+    // The entries mRequestedTiming and mTimingType name, found when those are set.
+    const TimingInfo* mRequestedInfo;
+    const TimingInfo* mTimingInfo;
 };
 
 class CaptureScreenActor : public NameObj {

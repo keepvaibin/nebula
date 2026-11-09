@@ -2,6 +2,7 @@
 
 #include <nebula_types.h>
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 namespace MR {
     u32 getHashCode(const char*);
@@ -12,7 +13,7 @@ namespace MR {
             return getHashCode(pName);
         }
         static bool equal(const char* pA, const char* pB) {
-            return strcmp(pA, pB) == 0;
+            return isEqualString(pA, pB);
         }
     };
 

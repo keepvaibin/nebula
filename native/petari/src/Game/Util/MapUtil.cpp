@@ -140,40 +140,14 @@ namespace MR {
         return true;
     }
 
-    bool isWaterPolygon(const Triangle* pTriangle) {
-        const char* pFloorCodeString = getFloorCodeString(pTriangle);
-
-        if (pFloorCodeString != nullptr) {
-            if (strcmp(pFloorCodeString, "Water") == 0) {
-                return true;
-            }
-
-            if (strcmp(pFloorCodeString, "Shallow") == 0) {
-                return true;
-            }
-        }
-
+    bool isWaterPolygon(const Triangle*) {
+        // A floor code string is always a name from the floor table or "NoIter", and none of them is "Water" or "Shallow".
         return false;
     }
 
     bool isThroughPolygon(const Triangle* pTriangle) {
-        const char* pFloorCodeString = getFloorCodeString(pTriangle);
-
-        if (pFloorCodeString != nullptr) {
-            if (strcmp(pFloorCodeString, "Water") == 0) {
-                return true;
-            }
-
-            if (strcmp(pFloorCodeString, "Shallow") == 0) {
-                return true;
-            }
-
-            if (strcmp(pFloorCodeString, "PullBack") == 0) {
-                return true;
-            }
-        }
-
-        return false;
+        // The floor code string is "PullBack" exactly when the floor code is the PullBack one.
+        return getFloorCodeIndex(pTriangle) == static_cast< s32 >(CollisionFloorCode_PullBack);
     }
 
     bool getFirstPolyOnLineToMap(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection) {

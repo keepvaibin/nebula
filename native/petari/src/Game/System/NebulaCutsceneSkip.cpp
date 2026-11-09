@@ -22,6 +22,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include "Game/System/NebulaClock.hpp"
 
@@ -89,7 +90,7 @@ namespace {
         }
         GameSystemSceneController* pController = pSystem->mSceneController;
         return pController->isExistSceneObjHolder() && pController->isSceneInitializeState(SceneInitializeState_End) &&
-               strcmp(pController->mCurrSceneControlInfo.mScene, "Game") == 0;
+               pController->mCurrSceneControlInfo.mIsGameScene;
     }
 
     const DemoDirector* getActiveDemo() {
@@ -115,10 +116,10 @@ namespace {
             return false;
         }
         for (u32 i = 0; i < sizeof(cSkippableSheets) / sizeof(cSkippableSheets[0]); i++) {
-            if (strcmp(pSheet, cSkippableSheets[i]) != 0) {
+            if (!MR::isEqualString(pSheet, cSkippableSheets[i])) {
                 continue;
             }
-            if (strcmp(pSheet, "EscapeDriverApr") != 0) {
+            if (!MR::isEqualString(pSheet, "EscapeDriverApr")) {
                 return true;
             }
             // Its lesson (MarioLancherLecture3Zone), not a level's launch star appearing.
@@ -134,7 +135,7 @@ namespace {
             return false;
         }
         for (u32 i = 0; i < sizeof(cSkippableStarters) / sizeof(cSkippableStarters[0]); i++) {
-            if (strcmp(pStarter->mName, MR::getJapaneseObjectName(cSkippableStarters[i])) == 0) {
+            if (MR::isEqualString(pStarter->mName, MR::getJapaneseObjectName(cSkippableStarters[i]))) {
                 return true;
             }
         }

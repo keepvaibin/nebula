@@ -4,6 +4,7 @@
 #include "Game/Gravity/PlanetGravityManager.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 
 namespace {
@@ -154,11 +155,11 @@ namespace MR {
         const char* pType = nullptr;
 
         if (rIter.getValue(::cGravityType, &pType)) {
-            if (strcmp(pType, ::cNormal) == 0) {
+            if (MR::isEqualString(pType, ::cNormal)) {
                 pGravity->mGravityType = GravityType_Normal;
-            } else if (strcmp(pType, ::cShadow) == 0) {
+            } else if (MR::isEqualString(pType, ::cShadow)) {
                 pGravity->mGravityType = GravityType_Shadow;
-            } else if (strcmp(pType, ::cMagnet) == 0) {
+            } else if (MR::isEqualString(pType, ::cMagnet)) {
                 pGravity->mGravityType = GravityType_Magnet;
             }
         }
@@ -168,11 +169,11 @@ namespace MR {
         const char* pPower = nullptr;
 
         if (rIter.getValue(::cPower, &pPower)) {
-            if (strcmp(pPower, ::cLight) == 0) {
+            if (MR::isEqualString(pPower, ::cLight)) {
                 pGravity->mGravityPower = GravityPower_Light;
-            } else if (strcmp(pPower, ::cNormal) == 0) {
+            } else if (MR::isEqualString(pPower, ::cNormal)) {
                 pGravity->mGravityPower = GravityPower_Normal;
-            } else if (strcmp(pPower, ::cHeavy) == 0) {
+            } else if (MR::isEqualString(pPower, ::cHeavy)) {
                 pGravity->mGravityPower = GravityPower_Heavy;
             }
         }

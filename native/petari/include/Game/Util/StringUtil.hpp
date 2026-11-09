@@ -39,6 +39,8 @@ namespace MR {
 
     int strcasecmp(const char* pStr1, const char* pStr2);
     bool isEqualString(const char* pStr1, const char* pStr2);
+    // Whether pStr starts with all of pPrefix.
+    bool isEqualStringPrefix(const char* pStr, const char* pPrefix);
     bool isEqualStringCase(const char* pStr1, const char* pStr2);
     // Whether pStr contains pSubStr.
     bool isEqualSubString(const char* pStr, const char* pSubStr);

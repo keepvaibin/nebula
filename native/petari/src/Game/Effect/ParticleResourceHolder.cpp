@@ -7,6 +7,19 @@
 #include "Game/Particle/ParticleResources.hpp"
 #include <cstring>
 
+namespace {
+    // Byte-wise order of two names: negative, zero or positive.
+    int compareNames(const char* pA, const char* pB) {
+        const u8* pFirst = reinterpret_cast< const u8* >(pA);
+        const u8* pSecond = reinterpret_cast< const u8* >(pB);
+        while (*pFirst != 0 && *pFirst == *pSecond) {
+            pFirst++;
+            pSecond++;
+        }
+        return static_cast< int >(*pFirst) - static_cast< int >(*pSecond);
+    }
+};  // namespace
+
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mNumEffectNums() {
     AssetFolder* pArchive = MR::getArchive(pArchiveName);
@@ -42,7 +55,7 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
             return 0xFFFF;
         }
 
-        const int comparison = strcmp(pEntryName, pName);
+        const int comparison = compareNames(pEntryName, pName);
 
         if (comparison == 0) {
             return middle;
@@ -63,13 +76,13 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
         return 0xFFFF;
     }
 
-    if (strcmp(pEntryName, pName) == 0) {
+    if (MR::isEqualString(pEntryName, pName)) {
         return first;
     }
 
     // Mods' particles come after the game's sorted names.
     for (int row = pInfo->getNumEntries() - 1; row >= 0; row--) {
-        if (pInfo->getValue(row, "name", &pEntryName) && strcmp(pEntryName, pName) == 0) {
+        if (pInfo->getValue(row, "name", &pEntryName) && MR::isEqualString(pEntryName, pName)) {
             return row;
         }
     }

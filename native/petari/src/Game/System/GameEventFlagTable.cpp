@@ -551,7 +551,7 @@ namespace GameEventFlagTable {
         for (const char* p = pName; *p != '\0'; p++) {
             if (static_cast< u8 >(*p) >= 0x80) {
                 for (const SavedName& rName : cJapanese) {
-                    if (strcmp(rName.mName, pName) == 0) {
+                    if (MR::isEqualString(rName.mName, pName)) {
                         return rName.mHash;
                     }
                 }

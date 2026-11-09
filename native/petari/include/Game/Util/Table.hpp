@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include "Game/Util/StringUtil.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -53,7 +54,7 @@ inline bool compareValues(const T a, const T b) {
 
 template <>
 inline bool compareValues< const char* >(const char* pA, const char* pB) {
-    return strcmp(pA, pB) == 0;
+    return MR::isEqualString(pA, pB);
 }
 
 class Table {

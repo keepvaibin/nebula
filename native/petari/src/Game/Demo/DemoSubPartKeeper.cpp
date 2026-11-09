@@ -1,6 +1,7 @@
 #include "Game/Demo/DemoSubPartKeeper.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 
 DemoSubPartKeeper::DemoSubPartKeeper(const DemoExecutor* pExecutor) : mExecutor(pExecutor), mNumSubPartInfos(), mSubPartInfos() {
@@ -63,7 +64,7 @@ DemoSubPartInfo* DemoSubPartKeeper::findSubPart(const char* pSubPartName) const 
     s32 count = mNumSubPartInfos;
     for (int i = 0; i < count; i++) {
         subpart = &mSubPartInfos[i];
-        if (!strcmp(subpart->mSubPartName, pSubPartName)) {
+        if (MR::isEqualString(subpart->mSubPartName, pSubPartName)) {
             return subpart;
         }
     }

@@ -37,19 +37,19 @@ namespace LayoutCoreUtil {
     void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize) {
         CustomTagProcessor* processor = new CustomTagProcessor(pTextBox);
 
-        if (strncmp(pTextBox->mName, "Sha", 3) == 0) {
+        if (MR::isEqualStringPrefix(pTextBox->mName, "Sha")) {
             processor->mIsShadow = true;
         } else {
             processor->mIsShadow = false;
         }
 
-        if (strncmp(pTextBox->mName, "Txt", 3) == 0) {
+        if (MR::isEqualStringPrefix(pTextBox->mName, "Txt")) {
             processor->mIsText = true;
         } else {
             processor->mIsText = false;
         }
 
-        if (strncmp(pTextBox->mName, "Inf", 3) == 0) {
+        if (MR::isEqualStringPrefix(pTextBox->mName, "Inf")) {
             processor->mIsInfo = true;
         } else {
             processor->mIsInfo = false;

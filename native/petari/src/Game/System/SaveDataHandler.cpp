@@ -36,7 +36,7 @@ namespace {
     bool parseFileName(const char* pName, SaveFileId* pFile) {
         for (u32 kind = 0; kind < cKindNum; kind++) {
             const u32 length = static_cast< u32 >(strlen(cKinds[kind]));
-            if (strncmp(pName, cKinds[kind], length) != 0 || pName[length] == '\0' || pName[length + 1] != '\0') {
+            if (!MR::isEqualStringPrefix(pName, cKinds[kind]) || pName[length] == '\0' || pName[length + 1] != '\0') {
                 continue;
             }
             const u32 user = static_cast< u32 >(pName[length] - '0');
