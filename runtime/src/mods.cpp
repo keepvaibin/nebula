@@ -62,12 +62,23 @@ std::string read_text(const fs::path& path) {
     return text;
 }
 
+// The entries of `dir`, empty when it cannot be read. A folder that changes or goes while it is read (the player
+// moves a mod in Explorer) ends the list; the range-for form of directory_iterator throws there.
+std::vector<fs::directory_entry> entries_of(const fs::path& dir) {
+    std::vector<fs::directory_entry> entries;
+    std::error_code error;
+    for (auto it = fs::directory_iterator(dir, error); !error && it != fs::directory_iterator(); it.increment(error)) {
+        entries.push_back(*it);
+    }
+    return entries;
+}
+
 // A child of `dir` named `name` whatever its case (Riivolution assumes an SD card's case-insensitive names).
 std::optional<fs::path> child_any_case(const fs::path& dir, std::string_view name, bool want_directory) {
     std::error_code error;
     const fs::path exact = dir / from_utf8(name);
     if (fs::exists(exact, error) && fs::is_directory(exact, error) == want_directory) return exact;
-    for (const auto& entry : fs::directory_iterator(dir, error)) {
+    for (const auto& entry : entries_of(dir)) {
         if (same_name(utf8_name(entry.path()), name) && entry.is_directory(error) == want_directory) return entry.path();
     }
     return std::nullopt;
@@ -317,7 +328,7 @@ struct Loader {
                 continue;
             }
             bool found = false;
-            for (const auto& entry : fs::directory_iterator(result, error)) {
+            for (const auto& entry : entries_of(result)) {
                 if (same_name(utf8_name(entry.path()), element)) {
                     result = entry.path();
                     found = true;
@@ -522,18 +533,16 @@ void read_pack(ModInfo& mod, const fs::path& textures) {
         if (!hash) continue;
         PackTexture texture;
         texture.hash = *hash;
-        const std::string folder = utf8_name(it->path().parent_path().lexically_relative(textures));
         if (const auto named = galaxy::textures::category_of_pack_folder(galaxy::path_text(
                 it->path().parent_path().lexically_relative(textures)))) {
             texture.folder_category = static_cast<std::uint8_t>(*named);
         }
-        (void)folder;
         list->push_back(texture);
     }
     mod.pack_textures = std::move(list);
     // A resource pack's manifest, in the mod or one folder down.
     std::vector<fs::path> places{mod.path, textures};
-    for (const auto& entry : fs::directory_iterator(mod.path, error)) {
+    for (const auto& entry : entries_of(mod.path)) {
         if (entry.is_directory(error)) places.push_back(entry.path());
     }
     for (const fs::path& place : places) {
@@ -611,14 +620,14 @@ ModLayout layout_of(const fs::path& mod) {
     }
     // riivolution/ in the mod, or one folder down (an archive's own top folder).
     std::vector<fs::path> roots{mod};
-    for (const auto& entry : fs::directory_iterator(mod, error)) {
+    for (const auto& entry : entries_of(mod)) {
         if (entry.is_directory(error)) roots.push_back(entry.path());
     }
     for (const fs::path& root : roots) {
         if (std::optional<fs::path> riiv = child_any_case(root, "riivolution", true)) {
             layout.sd_root = root;
             layout.riivolution_dir = *riiv;
-            for (const auto& entry : fs::directory_iterator(*riiv, error)) {
+            for (const auto& entry : entries_of(*riiv)) {
                 if (entry.is_regular_file(error) && lower(galaxy::path_text(entry.path().extension())) == ".xml") {
                     layout.xmls.push_back(entry.path());
                 }
@@ -634,7 +643,7 @@ ModLayout layout_of(const fs::path& mod) {
     } else if (layout.xmls.empty()) {
         // The disc's folders one folder down (an archive's own top folder): that folder, when only one has them.
         std::vector<fs::path> with;
-        for (const auto& entry : fs::directory_iterator(mod, error)) {
+        for (const auto& entry : entries_of(mod)) {
             if (entry.is_directory(error) && has_disc_folder(entry.path())) with.push_back(entry.path());
         }
         if (with.size() == 1u) layout.files_root = with.front();
@@ -643,7 +652,7 @@ ModLayout layout_of(const fs::path& mod) {
     if (std::optional<fs::path> movies = child_any_case(mod, "movies", true)) layout.movies = *movies;
     if (layout.xmls.empty() && layout.files_root.empty()) {
         // Loose files beside nothing else: each goes where the disc has a file of its name.
-        for (const auto& entry : fs::directory_iterator(mod, error)) {
+        for (const auto& entry : entries_of(mod)) {
             if (entry.is_regular_file(error) && !mod_note(entry.path()) &&
                 !lower(utf8_name(entry.path())).starts_with("tex1_")) {
                 layout.loose.push_back(entry.path());
@@ -944,7 +953,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
     if (folder.empty() || !fs::is_directory(folder, error)) return mods;
     const std::map<std::string, SavedMod> saved = read_saved(file);
     std::vector<fs::path> dirs;
-    for (const auto& entry : fs::directory_iterator(folder, error)) {
+    for (const auto& entry : entries_of(folder)) {
         // Hidden folders: imports in progress (mod_import.cpp) and the system's own.
         if (entry.is_directory(error) && !utf8_name(entry.path()).starts_with('.')) dirs.push_back(entry.path());
     }
@@ -1415,30 +1424,31 @@ void find_names(const galaxy::assets::AssetStore& store, std::int32_t folder, co
     }
 }
 
-}  // namespace
-
+// A layer's (or the manifest's own) rows into the plan.
 void add_layer_rows(ModPlan& plan, const ModInfo& mod, const std::string& language, const luma::Rows& rows) {
-            for (const auto& [key, value] : rows.story) {
-                plan.rows.story[key] = value;
-            }
-            for (const auto& [id, words] : rows.text) {
-                plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
-            }
-            for (const luma::Galaxy& galaxy : rows.galaxies) {
-                plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
-            }
-            for (const luma::Music& track : rows.music) {
-                MusicToAdd row{mod.id, track.name, track.file, {}};
-                for (const luma::MusicPlace& place : track.places) row.places.push_back({place.stage, place.scenario, place.change_area});
-                plan.rows.music.push_back(std::move(row));
-            }
-            for (const luma::EventFlag& flag : rows.event_flags) {
-                plan.rows.event_flags.push_back({mod.id, flag.name, flag.kind, flag.a, flag.b, flag.first, flag.second});
-            }
-            for (const luma::CometSchedule& dome : rows.comet_schedule) {
-                plan.rows.comets.push_back({mod.id, dome.dome, dome.comets});
-            }
+    for (const auto& [key, value] : rows.story) {
+        plan.rows.story[key] = value;
+    }
+    for (const auto& [id, words] : rows.text) {
+        plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
+    }
+    for (const luma::Galaxy& galaxy : rows.galaxies) {
+        plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
+    }
+    for (const luma::Music& track : rows.music) {
+        MusicToAdd row{mod.id, track.name, track.file, {}};
+        for (const luma::MusicPlace& place : track.places) row.places.push_back({place.stage, place.scenario, place.change_area});
+        plan.rows.music.push_back(std::move(row));
+    }
+    for (const luma::EventFlag& flag : rows.event_flags) {
+        plan.rows.event_flags.push_back({mod.id, flag.name, flag.kind, flag.a, flag.b, flag.first, flag.second});
+    }
+    for (const luma::CometSchedule& dome : rows.comet_schedule) {
+        plan.rows.comets.push_back({mod.id, dome.dome, dome.comets});
+    }
 }
+
+}  // namespace
 
 ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::string& game_id,
                            const std::string& language) {
@@ -1471,29 +1481,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         }
         if (mod.package) plan.luma_folders.push_back(mod.path);
         if (mod.package && mod.luma) {
-            const auto add_rows = [&](const luma::Rows& rows) {
-            for (const auto& [key, value] : rows.story) {
-                plan.rows.story[key] = value;
-            }
-            for (const auto& [id, words] : rows.text) {
-                plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
-            }
-            for (const luma::Galaxy& galaxy : rows.galaxies) {
-                plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
-            }
-            for (const luma::Music& track : rows.music) {
-                MusicToAdd row{mod.id, track.name, track.file, {}};
-                for (const luma::MusicPlace& place : track.places) row.places.push_back({place.stage, place.scenario, place.change_area});
-                plan.rows.music.push_back(std::move(row));
-            }
-            for (const luma::EventFlag& flag : rows.event_flags) {
-                plan.rows.event_flags.push_back({mod.id, flag.name, flag.kind, flag.a, flag.b, flag.first, flag.second});
-            }
-            for (const luma::CometSchedule& dome : rows.comet_schedule) {
-                plan.rows.comets.push_back({mod.id, dome.dome, dome.comets});
-            }
-            };
-            add_rows(*mod.luma);
+            add_layer_rows(plan, mod, language, *mod.luma);
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Plugin& plugin : mod.luma->plugins) {
                 if (!luma::when_holds(plugin.when, situation)) continue;
@@ -1562,8 +1550,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 note(external + ": no such folder in the mod");
                 return;
             }
-            std::vector<fs::directory_entry> entries;
-            for (const auto& entry : fs::directory_iterator(*dir, ec)) entries.push_back(entry);
+            std::vector<fs::directory_entry> entries = entries_of(*dir);
             std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.path() < b.path(); });
             for (const auto& entry : entries) {
                 const std::string name = utf8_name(entry.path());
@@ -1584,9 +1571,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Layer& layer : mod.luma->layers) {
                 if (!luma::layer_used(layer, situation)) continue;
-                if (mod.package && mod.luma) {
-                    add_layer_rows(plan, mod, language, layer.rows);
-                }
+                add_layer_rows(plan, mod, language, layer.rows);
                 for (const luma::ObjectChange& change : layer.object_changes) {
                     plan.rows.object_changes.push_back({mod.id, change.where, change.object, change.becomes});
                 }
@@ -1632,8 +1617,10 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 if (const std::optional<fs::path> merge = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "merge", true)) {
                     std::error_code walk_error;
                     std::vector<fs::path> found;
-                    for (const auto& entry : fs::recursive_directory_iterator(*merge, walk_error)) {
-                        if (entry.is_regular_file(walk_error)) found.push_back(entry.path());
+                    std::error_code status_error;
+                    for (auto walk = fs::recursive_directory_iterator(*merge, walk_error);
+                         !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
+                        if (walk->is_regular_file(status_error)) found.push_back(walk->path());
                     }
                     std::sort(found.begin(), found.end());
                     for (const fs::path& file : found) {
@@ -1645,7 +1632,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 const Loader loader{*files, *files};
                 const FolderPatch whole{"/", "/", true, true, true, 0};
                 std::error_code ec;
-                for (const auto& entry : fs::directory_iterator(*files, ec)) {
+                for (const auto& entry : entries_of(*files)) {
                     const std::string name = utf8_name(entry.path());
                     if (entry.is_directory(ec)) {
                         patch_folder(patch_folder, loader, whole, "/" + name, "/" + name);
@@ -1684,7 +1671,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             const Loader loader{layout.files_root, layout.files_root};
             const FolderPatch whole{"/", "/", true, true, true, 0};
             std::error_code ec;
-            for (const auto& entry : fs::directory_iterator(layout.files_root, ec)) {
+            for (const auto& entry : entries_of(layout.files_root)) {
                 const std::string name = utf8_name(entry.path());
                 if (entry.is_directory(ec)) {
                     // Beside the game's folders a mod keeps its notes and pictures: only what the game has counts.

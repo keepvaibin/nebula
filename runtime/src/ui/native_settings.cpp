@@ -3582,14 +3582,26 @@ bool native_settings_wheel(int delta) {
     return true;
 }
 
-// Dropped files go to the Mii import.
+// Dropped files: mod archives and folders into the mods folder (the MODS page opens on the import), anything else to
+// the Mii import.
 void native_settings_files_dropped(std::vector<std::filesystem::path> files) {
+    std::vector<std::filesystem::path> mods;
     std::vector<std::filesystem::path> miis;
     for (std::filesystem::path& path : files) {
         std::error_code error;
-        if (!std::filesystem::is_directory(path, error)) {
+        if (std::filesystem::is_directory(path, error) || galaxy::mods::is_mod_archive(path)) {
+            mods.push_back(std::move(path));
+        } else {
             miis.push_back(std::move(path));
         }
+    }
+    if (!mods.empty()) {
+        run_mod_imports(std::move(mods));
+        const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+        s_native_settings_tab.store(kModsTab, std::memory_order_relaxed);
+        s_native_settings_row.store(1u, std::memory_order_relaxed);
+        s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
+        set_native_settings_visible(true);
     }
     if (!miis.empty()) {
         std::thread([miis = std::move(miis)] {
