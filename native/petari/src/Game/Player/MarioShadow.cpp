@@ -60,9 +60,7 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャ
     mCheckOffset = 0.0f;
     mDrawOffset = 0.0f;
     mPolygons = nullptr;
-    mFoundCount = 0;
     mDrawFlags = 0;
-    mMaxRadius = radius;
     mVolumeHeight = 0.0f;
     mVolumeWidth = 0.0f;
     mDirection.zero();
@@ -78,7 +76,6 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャ
     mVertsPerPolygon = 3;
     makePolygonLists(128);
     mVertexCount = 0;
-    mFoundCount = 0;
     mEdgePolygonCount = 0;
     mViewDone = 0;
     mUpdate = 0;
@@ -174,10 +171,8 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
         count = MR::createAreaPolygonListArray(mPolygons, mListCapacity, corners, 8);
     }
 
-    mFoundCount = count;
     mPolygonCount = 0;
     if (!count) {
-        mRadius = mMaxRadius;
         return;
     }
 
@@ -241,18 +236,6 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
         mTexCoords[i].x = 0.5f + s * texScale;
         mTexCoords[i].y = 0.5f + t * texScale;
     }
-
-    if (mFoundCount > 40) {
-        mRadius -= 10.0f;
-    } else if (mFoundCount > 10) {
-        mRadius -= 1.0f;
-    } else if (mFoundCount > 20) {
-        mRadius -= 4.0f;
-    } else {
-        mRadius += 1.0f;
-    }
-
-    MR::clampBoth(&mRadius, 1.0f, mMaxRadius);
 }
 
 namespace {
