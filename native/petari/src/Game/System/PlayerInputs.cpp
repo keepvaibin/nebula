@@ -7,7 +7,24 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <math.h>
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
+
+namespace {
+    // PlayerInputs::mPad's players.
+    const u32 cGamePlayers = 2;
+    static_assert(sizeof(PlayerInputs::mPad) / sizeof(PlayerInput*) == cGamePlayers, "the game's pads");
+    // NebulaInputPlayers::count once asked (0: not yet).
+    u32 sPlayers;
+}  // namespace
+
+u32 NebulaInputPlayers::count() {
+    if (sPlayers == 0) {
+        const u32 host = NebulaHost::inputPlayers();
+        sPlayers = host > cGamePlayers ? host : cGamePlayers;
+    }
+    return sPlayers;
+}
 
 PlayerInputReader::PlayerInputReader() : mDevice(), mState(), mValid(false), mResetRequested(true) {
     mSpinPresses[0] = mSpinPresses[1] = 0;
@@ -116,7 +133,7 @@ void PlayerInputReader::read(s32 chan) {
 }
 
 PlayerInputs::PlayerInputs() : mReadDataInfoArray(), mMode(INPUT_MODE_GAME) {
-    mReadDataInfoArray = new PlayerInputReader[PLAYER_MAX];
+    mReadDataInfoArray = new PlayerInputReader[NebulaInputPlayers::count()];
 
     for (u32 i = 0; i < ARRAY_SIZE(mPad); i++) {
         mPad[i] = new PlayerInput(i, &mReadDataInfoArray[i]);
@@ -124,7 +141,7 @@ PlayerInputs::PlayerInputs() : mReadDataInfoArray(), mMode(INPUT_MODE_GAME) {
 }
 
 void PlayerInputs::updateReadDataOnly() {
-    for (s32 chan = PLAYER_1; chan < PLAYER_MAX; chan++) {
+    for (s32 chan = PLAYER_1; chan < static_cast< s32 >(NebulaInputPlayers::count()); chan++) {
         mReadDataInfoArray[chan].read(chan);
     }
 }
@@ -135,10 +152,10 @@ void PlayerInputs::updateProjectPadData() {
     }
 }
 
-// In play, a third or fourth controller is let go.
+// In play, a controller past the game's two is let go.
 void PlayerInputs::updateInGame() {
     const NebulaHostServices* const host = nebula_host();
-    for (s32 chan = PLAYER_3; chan < PLAYER_MAX; chan++) {
+    for (s32 chan = PLAYER_3; chan < static_cast< s32 >(NebulaInputPlayers::count()); chan++) {
         if (mReadDataInfoArray[chan].getSample() != nullptr) {
             host->input_control(host->user, static_cast< u32 >(chan), NEBULA_INPUT_RELEASE, 0);
         }
@@ -160,7 +177,7 @@ void PlayerInputs::update() {
 
 // A scene change: each controller's motor stops, and its next read starts from rest.
 void PlayerInputs::resetPad() {
-    for (s32 chan = PLAYER_MAX - 1; chan >= 0; chan--) {
+    for (s32 chan = static_cast< s32 >(NebulaInputPlayers::count()) - 1; chan >= 0; chan--) {
         MR::setInputRumble(chan, 0);
         mReadDataInfoArray[chan].requestReset();
     }

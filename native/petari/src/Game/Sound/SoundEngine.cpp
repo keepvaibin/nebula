@@ -1,5 +1,6 @@
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/Sound/MeTrack.hpp"
+#include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StreamPlayer.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
@@ -73,6 +74,14 @@ SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, const 
     player->mRoot->mOwnerSound = ownerSound;
     player->mRoot->mOwnerRoute = ownerRoute;
     return player;
+}
+
+void SoundEngine::setupSpeaker(u32 pads) {
+    SoundCommand& rCommand = mRing.next(SOUND_SPEAKER_SETUP, nullptr);
+    SpeakerSetupCommand& rSetup = rCommand.payload< SpeakerSetupCommand >();
+    rSetup.mMemory = SoundMemory::alloc(SpeakerMixer::bytes(pads));
+    rSetup.mPads = pads;
+    mRing.send();
 }
 
 SoundEngine* SoundEngine::create(NebulaArena* pArena) {
@@ -397,12 +406,15 @@ void SoundEngine::apply(const SoundCommand& rCommand) {
     case SOUND_CHORD_INVALIDATE:
         mRhythm.apply(rCommand);
         break;
-    case SOUND_SPEAKER_SETUP:
+    case SOUND_SPEAKER_SETUP: {
+        const SpeakerSetupCommand& rSetup = rCommand.payload< SpeakerSetupCommand >();
+        mSpeaker.setup(rSetup.mMemory, rSetup.mPads);
         mSpeakerJob.mKind = SoundJob::JOB_CALL;
         mSpeakerJob.mCall = SpeakerMixer::job;
         mSpeakerJob.mData = &mSpeaker;
         addJob(&mSpeakerJob);
         break;
+    }
     case SOUND_SPEAKER_PAD:
     case SOUND_SPEAKER_START:
     case SOUND_SPEAKER_STATE:

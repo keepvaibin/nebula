@@ -115,7 +115,7 @@ enum SoundCommandKind : u16 {
     SOUND_TEMPO_REJECT,     // mValue parser
     SOUND_CHORD_LOAD,       // const void* table, mArg 1: keep the chord and scale numbers
     SOUND_CHORD_INVALIDATE,
-    SOUND_SPEAKER_SETUP,    // the speaker's job listed
+    SOUND_SPEAKER_SETUP,    // SpeakerSetupCommand: the speaker's memory, and its job listed
     SOUND_SPEAKER_PAD,      // mArg controller, mValue 1: connected
     SOUND_SPEAKER_START,    // speaker voice, mArg controller, SpeakerStartCommand
     SOUND_SPEAKER_STATE,    // speaker voice, mValue SpeakerVoice::State
@@ -220,6 +220,8 @@ public:
     SoundRing& ring() {
         return mRing;
     }
+    // Game thread: the remote speakers' mix for `pads` controllers (SpkSpeakerCtrl::setup), in memory sent with the command.
+    void setupSpeaker(u32 pads);
     // The commands run, and the reset's end (read by the game thread).
     u64 applied() const {
         return mRing.applied();
