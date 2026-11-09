@@ -94,6 +94,13 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
     if super::console_only(change.path.trim_start_matches('/')) {
         bail!("only the console reads this file (its banner, HOME menu or module list); Nebula has none");
     }
+    // A mod's file named as an archive that isn't one would fail only where the game opens it.
+    if change.path.to_ascii_lowercase().ends_with(".arc") {
+        let expanded = if archive::is_compressed(&bytes) { archive::expand(&bytes).context("its compression")? } else { bytes.clone() };
+        if !archive::is_archive(&expanded) {
+            bail!("it is named as an archive but isn't one");
+        }
+    }
     if cooks(&change.path) || archive::is_compressed(&bytes) || super::sound::is_sequence_path(&change.path) {
         return cook_entry(&change.path, bytes, stats);
     }
