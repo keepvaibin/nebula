@@ -201,7 +201,7 @@ void CocoNut::updateRotate(f32 rate) {
     Vec3f dir;
     Vec3f up = -mGravity;
 
-    if (!MR::normalizeOrZero(mVelocity, &dir) && !MR::isSameDirection(dir, up)) {
+    if (mRadius > 0.0f && !MR::normalizeOrZero(mVelocity, &dir) && !MR::isSameDirection(dir, up)) {
         Vec3f axis = dir.cross(up);
 
         f32 angle = (mVelocity.length() * -180.0f * rate) / (mRadius * MR::pi());
