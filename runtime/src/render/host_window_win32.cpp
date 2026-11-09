@@ -643,9 +643,8 @@ double display_refresh_hz(NativeWindow window) noexcept {
 }
 
 // Raw relative mouse motion (WM_INPUT) for the window while it is in front: no input sink and no legacy suppression, so
-// the cursor and the settings menu work as without it. GALAXY_TEST_NO_RAW_MOUSE=1 (NEBULA_DEV) leaves it off.
+// the cursor and the settings menu work as without it.
 static void raw_mouse_attach(HWND hwnd) noexcept {
-    if (::galaxy::run_option_flag(::galaxy::run_options().test_no_raw_mouse, false)) return;
     (void)galaxy::host::install_native_raw_mouse(reinterpret_cast<std::uintptr_t>(hwnd));
 }
 

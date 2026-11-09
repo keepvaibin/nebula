@@ -262,11 +262,10 @@ fs::path crash_folder() {
     return fs::path("crashes");
 }
 
-// The player sees the report; hidden test runs (GALAXY_HIDE_WINDOW) and the headless host keep it in its file.
+// The player sees the report; a hidden start (a test) and the headless host keep it in its file.
 bool crash_dialog_wanted() {
 #if defined(NEBULA_HOST_RENDERER) || defined(NEBULA_HOST_SDL)
-    const char* hidden = ::galaxy::run_options().hide_window;
-    return !(hidden != nullptr && hidden[0] != 0 && hidden[0] != '0');
+    return !::galaxy::launch_args().started_hidden;
 #else
     return false;
 #endif
@@ -549,7 +548,7 @@ bool open_pak(const fs::path& path) {
     if (!gPak.store.open(path)) {
         log_line("import:", "The game files need importing again. Open Nebula Setup and import the game.");
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-        if (::galaxy::run_options().hide_window == nullptr) {
+        if (!::galaxy::launch_args().started_hidden) {
             MessageBoxW(nullptr, L"Open Nebula Setup and import the game again.", L"Nebula", MB_OK | MB_ICONINFORMATION);
         }
 #endif
@@ -2151,19 +2150,11 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
     return asset_entry_out(asset_table().child(folder, child), out);
 }
 
-// The game's memory. GALAXY_TEST_MEMORY_AT places the first arena (the next follow), far from the file views and across a 4 GB
-// line, so an address squeezed through 32 bits fails in every run.
+// The game's memory. An arena is reserved from the top of the address space down, far above 4 GB and the file views, so an
+// address squeezed through 32 bits fails at once, in every run.
 void* svc_memory_reserve(void*, uint64_t size) {
 #if defined(_WIN32)
-    static uintptr_t at = [] {
-        const char* value = ::galaxy::run_options().test_memory_at;
-        return value != nullptr ? static_cast<uintptr_t>(std::strtoull(value, nullptr, 16)) : uintptr_t{0};
-    }();
-    void* const block = VirtualAlloc(reinterpret_cast<void*>(at), static_cast<SIZE_T>(size), MEM_RESERVE, PAGE_NOACCESS);
-    if (at != 0u) {
-        at += static_cast<uintptr_t>(size);
-    }
-    return block;
+    return VirtualAlloc(nullptr, static_cast<SIZE_T>(size), MEM_RESERVE | MEM_TOP_DOWN, PAGE_NOACCESS);
 #else
     void* const block = mmap(nullptr, static_cast<size_t>(size), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     return block != MAP_FAILED ? block : nullptr;
@@ -3099,15 +3090,11 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 // other power events close the game.
 // Every way out of the game: pending saves written (bounded: a dead drive does not hold the game), counters flushed.
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
-// One game per data folder, so two never write the same saves. A second start brings the first's window forward and ends. Hidden test
-// runs have their own folders and may run side by side; GALAXY_TEST_ONE_GAME=1 tests this.
+// One game per settings folder, so two never write the same saves. A second start brings the first's window forward and
+// ends. Test runs have their own folders, so they run side by side.
 HANDLE gOneGame = nullptr;
 
 bool one_game_at_a_time() {
-    if (::galaxy::run_option_flag(::galaxy::run_options().hide_window, false) &&
-        !::galaxy::run_option_flag(::galaxy::run_options().test_one_game, false)) {
-        return false;
-    }
     std::wstring name = L"Local\\NebulaGame-";
     for (const wchar_t c : galaxy::runtime_settings_folder().wstring()) {
         name += c == L'\\' || c == L':' ? L'_' : c;
@@ -3442,7 +3429,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 #if defined(NEBULA_HOST_RENDERER)
         // The game's own screen while they cook; then it starts again with them, so that they are there from its first file.
         // A hidden test run cooks first, as its measurements start from the game with its mods.
-        if (::galaxy::run_options().hide_window == nullptr || ::galaxy::run_options().test_mods_screen != nullptr) {
+        if (!::galaxy::launch_args().started_hidden || ::galaxy::run_options().test_mods_screen != nullptr) {
             gModsProgressFile = overlay;
             gModsProgressFile.replace_extension("progress");
             gModsPreparing.store(2u, std::memory_order_release);
@@ -3627,6 +3614,10 @@ void read_launch_args(int argc, char** argv) {
     if (wide != nullptr) {
         LocalFree(wide);
     }
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    GetStartupInfoW(&startup);
+    args.started_hidden = (startup.dwFlags & STARTF_USESHOWWINDOW) != 0u && startup.wShowWindow == SW_HIDE;
 #endif
 }
 
@@ -3687,11 +3678,6 @@ int main(int argc, char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX | SEM_NOGPFAULTERRORBOX);
 #endif
 #if defined(_WIN32)
-    // GALAXY_TEST_CPU_AFFINITY: the logical processors the process may use (hex mask; 0xF = two cores with SMT, a
-    // 2C/4T laptop's shape).
-    if (const char* mask = ::galaxy::run_options().test_cpu_affinity) {
-        SetProcessAffinityMask(GetCurrentProcess(), static_cast<DWORD_PTR>(std::strtoull(mask, nullptr, 16)));
-    }
     install_crash_reporter();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
@@ -3700,6 +3686,9 @@ int main(int argc, char** argv) {
         return run_mods_tool();
     }
 #endif
+    if (::galaxy::launch_args().started_hidden) {
+        log_line("host:", "started hidden");
+    }
     boot_mark("main");
     fs::path pak, saves, module;
     // A path in the command line: argv is in the system's code page, which cannot hold every folder name.
@@ -3930,8 +3919,8 @@ int main(int argc, char** argv) {
     } catch (const std::exception& failure) {
         die("the settings did not load: %s", failure.what());
     }
-    // Discord: never from a hidden test run, which must leave the player's status alone.
-    if (const char* hidden = ::galaxy::run_options().hide_window; hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
+    // Discord: never from a hidden start (a test), which must leave the player's status alone.
+    if (!::galaxy::launch_args().started_hidden) {
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
         galaxy::discord::start(kDiscordClientId);
     }

@@ -2,7 +2,6 @@
 // TextureStore's D3D12 side (gpu_texture_backend.h): the view heap, upload staging, placed textures and upload copies.
 
 #include "galaxy/render/gpu_texture_backend.h"
-#include "galaxy/run_options.h"
 #include "barriers_d3d12.h"
 
 #include <algorithm>
@@ -37,15 +36,10 @@ bool TextureBackend::initialize(gpu::Device* device, std::uint32_t view_capacity
     srv_pages_.clear();
     texture_heap_.initialize(device);
     // Direct host writes: only where the CPU and the GPU share one cache-coherent memory (write-back custom heaps are valid
-    // there and nowhere else). GALAXY_D3D12_TEST_NO_FEATURE=uma_writes keeps the copy path on such an adapter.
+    // there and nowhere else).
     direct_ = false;
-    bool test_off = false;
-    if (const char* const names = ::galaxy::run_options().d3d12_test_no_feature) {
-        const std::string list = std::string(",") + names + ",";
-        test_off = list.find(",uma_writes,") != std::string::npos;
-    }
     D3D12_FEATURE_DATA_ARCHITECTURE architecture{};
-    if (!test_off && SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture))) &&
+    if (SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture))) &&
         architecture.UMA == TRUE && architecture.CacheCoherentUMA == TRUE) {
         direct_heap_.initialize(device);
         direct_ = true;
@@ -57,8 +51,7 @@ bool TextureBackend::initialize(gpu::Device* device, std::uint32_t view_capacity
         if (logged.exchange(path) != path) {
             std::fprintf(stderr, "[textures] uploads: %s\n",
                          direct_ ? "direct host writes (WriteToSubresource into write-back memory, no copy command)"
-                                 : test_off ? "staged copies (uma_writes switched off by GALAXY_D3D12_TEST_NO_FEATURE)"
-                                            : "staged copies");
+                                 : "staged copies");
         }
     }
 

@@ -1,4 +1,5 @@
 #include "galaxy/controller_hid.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/run_options.h"
 #include "galaxy/input/rumble_route.h"
 #include "galaxy/content_viewport.h"
@@ -2539,8 +2540,7 @@ std::uint64_t controller_hid_now_us() noexcept {
 }
 
 bool hidden_test_session() noexcept {
-    static const bool hidden = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
-    return hidden;
+    return ::galaxy::launch_args().started_hidden;
 }
 
 bool rumble_output_disabled() noexcept {

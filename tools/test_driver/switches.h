@@ -49,18 +49,6 @@ inline const char* boot_fast() noexcept { return nullptr; }
 inline const char* boot_fast() noexcept { return std::getenv("GALAXY_BOOT_FAST"); }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_no_raw_mouse() noexcept { return nullptr; }
-#else
-inline const char* test_no_raw_mouse() noexcept { return std::getenv("GALAXY_TEST_NO_RAW_MOUSE"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* hide_window() noexcept { return nullptr; }
-inline constexpr const char* hide_window_name() noexcept { return ""; }
-#else
-inline const char* hide_window() noexcept { return std::getenv("GALAXY_HIDE_WINDOW"); }
-inline constexpr const char* hide_window_name() noexcept { return "GALAXY_HIDE_WINDOW"; }
-#endif
-#if !defined(NEBULA_DEV)
 inline constexpr const char* input_autopress_script_name() noexcept { return ""; }
 #else
 inline constexpr const char* input_autopress_script_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_SCRIPT"; }
@@ -159,11 +147,6 @@ inline const char* test_() noexcept { return std::getenv("GALAXY_TEST_"); }
 inline constexpr const wchar_t* test__wide_name() noexcept { return L"GALAXY_TEST_"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_cpu_affinity() noexcept { return nullptr; }
-#else
-inline const char* test_cpu_affinity() noexcept { return std::getenv("GALAXY_TEST_CPU_AFFINITY"); }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* test_deterministic() noexcept { return nullptr; }
 #else
 inline const char* test_deterministic() noexcept { return std::getenv("GALAXY_TEST_DETERMINISTIC"); }
@@ -213,15 +196,6 @@ inline constexpr const char* test_device_lost_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* test_device_lost_wide_name() noexcept { return L"GALAXY_TEST_DEVICE_LOST"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_small_heaps() noexcept { return nullptr; }
-inline constexpr const char* test_small_heaps_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L""; }
-#else
-inline const char* test_small_heaps() noexcept { return std::getenv("GALAXY_TEST_SMALL_HEAPS"); }
-inline constexpr const char* test_small_heaps_name() noexcept { return "GALAXY_TEST_SMALL_HEAPS"; }
-inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L"GALAXY_TEST_SMALL_HEAPS"; }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* test_vram_budget_mb() noexcept { return nullptr; }
 inline constexpr const char* test_vram_budget_mb_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_vram_budget_mb_wide_name() noexcept { return L""; }
@@ -249,23 +223,6 @@ inline const char* test_grand_stars() noexcept { return std::getenv("GALAXY_TEST
 inline const char* test_home_row() noexcept { return nullptr; }
 #else
 inline const char* test_home_row() noexcept { return std::getenv("GALAXY_TEST_HOME_ROW"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_memory_at() noexcept { return nullptr; }
-#else
-inline const char* test_memory_at() noexcept { return std::getenv("GALAXY_TEST_MEMORY_AT"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_one_game() noexcept { return nullptr; }
-#else
-inline const char* test_one_game() noexcept { return std::getenv("GALAXY_TEST_ONE_GAME"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_post_fault() noexcept { return nullptr; }
-inline constexpr const char* test_post_fault_name() noexcept { return ""; }
-#else
-inline const char* test_post_fault() noexcept { return std::getenv("GALAXY_TEST_POST_FAULT"); }
-inline constexpr const char* test_post_fault_name() noexcept { return "GALAXY_TEST_POST_FAULT"; }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* test_script_clock() noexcept { return nullptr; }
@@ -305,21 +262,6 @@ inline const char* test_mods_screen() noexcept { return std::getenv("GALAXY_TEST
 inline const char* test_mods_changed() noexcept { return std::getenv("GALAXY_TEST_MODS_CHANGED"); }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* vk_simulate_driver() noexcept { return nullptr; }
-#else
-inline const char* vk_simulate_driver() noexcept { return std::getenv("GALAXY_VK_SIMULATE_DRIVER"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* vk_test_no_feature() noexcept { return nullptr; }
-#else
-inline const char* vk_test_no_feature() noexcept { return std::getenv("GALAXY_VK_TEST_NO_FEATURE"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* d3d12_test_no_feature() noexcept { return nullptr; }
-#else
-inline const char* d3d12_test_no_feature() noexcept { return std::getenv("GALAXY_D3D12_TEST_NO_FEATURE"); }
-#endif
-#if !defined(NEBULA_DEV)
 inline constexpr const char* test_path_guard_name() noexcept { return ""; }
 #else
 inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
@@ -328,11 +270,6 @@ inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TE
 inline const char* rt_log_glows() noexcept { return nullptr; }
 #else
 inline const char* rt_log_glows() noexcept { return std::getenv("GALAXY_RT_LOG_GLOWS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* xinput_require_focus() noexcept { return nullptr; }
-#else
-inline const char* xinput_require_focus() noexcept { return std::getenv("GALAXY_XINPUT_REQUIRE_FOCUS"); }
 #endif
 }  // namespace nebula_switch
 

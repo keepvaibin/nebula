@@ -2,6 +2,7 @@
 // The guard that keeps a test run off a player's data (host_env.h). Not in a release.
 #if defined(NEBULA_DEV) && defined(_WIN32)
 #include "galaxy/host_env.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/test_data_paths.h"
 #include "switches.h"
 
@@ -15,7 +16,7 @@
 
 namespace galaxy::host {
 const char* test_data_paths_error(int argc, char** argv) {
-    bool test = read_env_flag_uncached(nebula_switch::hide_window_name(), false);
+    bool test = ::galaxy::launch_args().started_hidden;
     wchar_t* environment = GetEnvironmentStringsW();
     if (!environment) return "cannot inspect the test environment";
     for (const wchar_t* entry = environment; *entry; entry += std::wcslen(entry) + 1) {

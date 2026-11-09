@@ -47,8 +47,7 @@ public:
         TexelFormat format = TexelFormat::Rgba8, bool writable = false);
     // True on an adapter with one memory shared by the CPU and the GPU and cache coherence between them
     // (D3D12_FEATURE_DATA_ARCHITECTURE UMA and CacheCoherentUMA): textures are written from the CPU (WriteToSubresource) into
-    // custom write-back heap memory, and staging chunks are write-back memory the CPU also reads. GALAXY_D3D12_TEST_NO_FEATURE
-    // names uma_writes to force the copy path.
+    // custom write-back heap memory, and staging chunks are write-back memory the CPU also reads.
     [[nodiscard]] bool direct_writes() const noexcept { return direct_; }
     // A texture create_texture made in CPU-visible memory: it is never uploaded again in place.
     [[nodiscard]] static bool direct_written(ID3D12Resource* texture) noexcept;

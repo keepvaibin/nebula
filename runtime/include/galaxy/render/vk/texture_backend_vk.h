@@ -69,7 +69,7 @@ public:
     [[nodiscard]] gpu::TextureRef create_texture(
         std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
         TexelFormat format = TexelFormat::Rgba8, bool writable = false);
-    // VK_EXT_host_image_copy is in use for some formats (GALAXY_VK_TEST_NO_FEATURE names host_image_copy to force copies).
+    // VK_EXT_host_image_copy is in use for some formats.
     [[nodiscard]] bool host_writes() const noexcept { return host_formats_ != 0u; }
     // A texture create_texture made for host copies: it is never uploaded again in place.
     [[nodiscard]] static bool direct_written(const vk::Texture* texture) noexcept {

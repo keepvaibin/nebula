@@ -3,6 +3,7 @@
 // interface in host_window.h (host_window_win32.cpp, the SDL host).
 
 #include "galaxy/render/host_window.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/run_options.h"
 #include "galaxy/virtual_keys.h"
 #include "galaxy/path_text.h"
@@ -3210,8 +3211,7 @@ bool gpu_change_pending(const RenderConfig& render, const RenderFeatureCaps& cap
 }
 
 bool hidden_window_mode_enabled() {
-    static const bool enabled = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
-    return enabled;
+    return ::galaxy::launch_args().started_hidden;
 }
 
 NativeSettingsView build_native_settings_view();

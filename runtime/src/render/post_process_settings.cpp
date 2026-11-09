@@ -132,6 +132,15 @@ PostSelfTestResult check_post_self_test(const std::uint8_t* pattern, const std::
     return out;
 }
 
+AaAvailability aa_availability(bool smaa_pipelines, bool lookup_textures, bool fxaa_pipeline) noexcept {
+    AaAvailability out{};
+    out.smaa_ok = smaa_pipelines && lookup_textures;
+    out.fxaa_ok = fxaa_pipeline;
+    out.smaa_reason = !smaa_pipelines ? "PIPELINES" : !lookup_textures ? "LOOKUP" : "";
+    out.fxaa_reason = fxaa_pipeline ? "" : "PIPELINES";
+    return out;
+}
+
 PostProcessPlan plan_post_process(
     unsigned source_width, unsigned source_height,
     unsigned target_width, unsigned target_height,

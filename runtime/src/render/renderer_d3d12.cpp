@@ -690,19 +690,17 @@ bool g_selected_adapter_valid = false;
 // A frame's segment of the descriptor ring: its tables are the renderer's own passes' (a few hundred descriptors at most, by
 // design, not by content: draws read the texture region). It starts at this size and doubles if a frame ever fills it
 // (DescriptorRing::grow_frames); frame_high_water() reports use.
-static constexpr unsigned    kSrvPerFrame = 32768u;  // the first size of a frame's segment; it doubles when a frame fills it
+static constexpr unsigned    kSrvPerFrame = 1024u;  // the first size of a frame's segment; it doubles when a frame fills it
 // The descriptor ring's persistent descriptors, outside the rewound frame segments: the scene target conversion sources
 // (the scene target's views, the output scene target's, the MSAA depth's, then the wide scene's).
-static constexpr unsigned    kPersistentSrvDescriptors = 64u * 1024u;  // the first size: the region doubles when it is full
+static constexpr unsigned    kPersistentSrvDescriptors = 4u;  // the first size: the region doubles when it is full
 // The texture region of the shader-visible heap (the draws' `Texture2D gTextures[]`): every texture view at its
-// TextureStore index, the last slot the null view. It starts with at least kTextureSlotsMin slots (twice the views made
+// TextureStore index, the last slot the null view. It starts with at least kTextureSlotsFirst slots (twice the views made
 // so far when that is more) and the heap is replaced by one with twice as many when a view index reaches the null slot, up
 // to the device's heap limit less the ring's part (one million descriptors on resource binding tiers 1 and 2; tier 3 names none,
 // and a heap the device refuses is told once and the region keeps its size).
-static constexpr unsigned    kTextureSlotsMin = 16u * 1024u;
-// The texture region's first size (tiny under GALAXY_TEST_SMALL_HEAPS) and its room: what the device's heap limit leaves beside
-// the descriptor ring's part.
-static unsigned texture_slots_first() noexcept { return test_small_heaps() ? 64u : kTextureSlotsMin; }
+static constexpr unsigned    kTextureSlotsFirst = 64u;
+// The texture region's room: what the device's heap limit leaves beside the descriptor ring's part.
 static unsigned texture_slots_room(const DescriptorRing& ring) noexcept { return ring.heap_limit() - ring.ring_descriptors(); }
 // The texture region's room is what the device's heap limit (srv_ring_.heap_limit(): tier 1 and 2 one million, tier 3 more) leaves
 // beside the ring's part: RendererD3D12::texture_slots_max().
@@ -1999,11 +1997,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         }
         {
             // Enhanced barriers when the runtime and the driver have them (OPTIONS12), legacy transitions otherwise.
-            // GALAXY_D3D12_TEST_NO_FEATURE=enhanced_barriers makes this GPU act without them.
-            const char* const refused = ::galaxy::run_options().d3d12_test_no_feature;
             D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12{};
-            if ((refused == nullptr || std::strstr(refused, "enhanced_barriers") == nullptr) &&
-                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))) &&
+            if (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))) &&
                 options12.EnhancedBarriersSupported && SUCCEEDED(device_.As(&barrier_device_))) {
                 BarrierPath::device = barrier_device_.Get();
             } else {
@@ -2299,8 +2294,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // The vertex, index and constant rings take a request past their segment and spill in a chunk; the matrix ring's rows are
         // indexed from its base, so it only grows between frames.
         const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments, bool chunks) {
-            bytes = first_ring_bytes(bytes);
-            return target.initialize(device_.Get(), name, UploadRing::budget(bytes, segments), segments, bytes, chunks);
+            (void)bytes;
+            return target.initialize(device_.Get(), name, UploadRing::budget(kFirstRingBytes, segments), segments, kFirstRingBytes, chunks);
         };
         // The vertex and constant rings are read by the GPU every frame and written once, in order: video memory the CPU maps,
         // where the adapter has it (gpu_upload_ring.cpp); the others stay in upload heaps.
@@ -2325,10 +2320,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                       << (heap_limit == DescriptorRing::kMaxHeapDescriptors ? ", at most 1000000 descriptors\n"
                                                                             : ", no named limit\n");
         }
-        const bool small_heaps = test_small_heaps();
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, small_heaps ? 1024u : kSrvPerFrame,
-                                  kFramesInFlight, small_heaps ? 4u : kPersistentSrvDescriptors,
-                                  small_heaps ? 64u : kTextureSlotsMin, heap_limit)) {
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight,
+                                  kPersistentSrvDescriptors, kTextureSlotsFirst, heap_limit)) {
             return false;
         }
         srv_ring_.set_sampler_heap(sampler_heap_.Get());
@@ -2372,8 +2365,8 @@ void RendererD3D12::attach_texture_uploads(TextureStore& cache) {
         // New textures are written on the copy queue where the adapter has memory of its own (gpu_texture_backend.h).
         cache.backend().enable_async_uploads(kFramesInFlight, frame_slot_);
         // Every view goes into the texture region from now on: room for twice the views made so far (at least
-        // kTextureSlotsMin), the null view in its last slot.
-        const std::uint64_t wanted = std::max<std::uint64_t>(texture_slots_first(), 2u * std::uint64_t{cache.backend().views_made()} + 1u);
+        // kTextureSlotsFirst), the null view in its last slot.
+        const std::uint64_t wanted = std::max<std::uint64_t>(kTextureSlotsFirst, 2u * std::uint64_t{cache.backend().views_made()} + 1u);
         mirrored_store_ = &cache;
         mirrored_backend_ = &cache.backend();
         install_texture_heap(cache, static_cast<std::uint32_t>(std::min<std::uint64_t>(wanted, texture_slots_room(srv_ring_))));
@@ -2429,7 +2422,7 @@ void RendererD3D12::grow_texture_heap(std::uint32_t index) {
         return;
     }
     const std::uint64_t needed = std::max<std::uint64_t>(std::uint64_t{index} + 2u, std::uint64_t{mirrored_store_->backend().views_made()} + 1u);
-    std::uint64_t slots = std::max<std::uint64_t>(srv_ring_.texture_slots(), texture_slots_first());
+    std::uint64_t slots = std::max<std::uint64_t>(srv_ring_.texture_slots(), kTextureSlotsFirst);
     while (slots < needed) {
         slots *= 2u;
     }

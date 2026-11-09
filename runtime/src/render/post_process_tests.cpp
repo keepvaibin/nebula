@@ -1,7 +1,5 @@
 // plan_post_process, the AA status texts, the start-up self-test and the scene
 // anti-aliasing on the WARP software device (no GPU or window needed).
-#include "galaxy/run_options.h"
-#include "../../../tools/test_driver/switches.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/renderer_d3d12.h"
 
@@ -238,6 +236,35 @@ void texts() {
     expect(anti_aliasing_row_text(2, 2, off).size() <= 39u, "not-running row fits the panel");
 }
 
+// The start's rules for a pass that cannot run, and the self-test's judge on pictures that must fail.
+void fallbacks() {
+    using galaxy::render::aa_availability;
+    const auto all = aa_availability(true, true, true);
+    expect(all.smaa_ok && all.fxaa_ok && all.smaa_reason[0] == '\0' && all.fxaa_reason[0] == '\0', "both passes");
+    const auto no_smaa = aa_availability(false, true, true);
+    expect(!no_smaa.smaa_ok && no_smaa.fxaa_ok && std::strcmp(no_smaa.smaa_reason, "PIPELINES") == 0,
+           "smaa pipelines missing: reported, fxaa kept");
+    const auto no_lookup = aa_availability(true, false, true);
+    expect(!no_lookup.smaa_ok && std::strcmp(no_lookup.smaa_reason, "LOOKUP") == 0, "lookup textures missing");
+    const auto none = aa_availability(false, true, false);
+    expect(!none.smaa_ok && !none.fxaa_ok && std::strcmp(none.fxaa_reason, "PIPELINES") == 0, "no aa pipelines");
+    using galaxy::render::kPostSelfTestSize;
+    constexpr unsigned kPitch = kPostSelfTestSize * 4u;
+    std::array<std::uint8_t, kPitch * kPostSelfTestSize> pattern{};
+    galaxy::render::write_post_self_test_pattern(pattern.data(), kPitch);
+    expect(!galaxy::render::check_post_self_test(pattern.data(), pattern.data(), kPitch).passed,
+           "a pass that changes nothing fails the self-test");
+    std::array<std::uint8_t, kPitch * kPostSelfTestSize> stray = pattern;
+    for (unsigned y = 0; y < kPostSelfTestSize; ++y) {
+        for (unsigned x = 0; x < kPostSelfTestSize; ++x) {
+            std::uint8_t* p = stray.data() + y * kPitch + x * 4u;
+            p[0] = p[1] = p[2] = static_cast<std::uint8_t>(255u - p[0]);
+        }
+    }
+    expect(!galaxy::render::check_post_self_test(pattern.data(), stray.data(), kPitch).passed,
+           "a pass that changes flat areas fails the self-test");
+}
+
 void self_test_on_warp() {
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
@@ -259,20 +286,6 @@ void self_test_on_warp() {
     expect(s.smaa_ok, "smaa self-test passes");
     expect(s.fxaa_ok, "fxaa self-test passes");
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after self-test");
-    // Injected failures: each AA pass is replaced or reported, the chain stays up.
-    _putenv_s(nebula_switch::test_post_fault_name(), "selftest");
-    galaxy::render::PostProcessor no_smaa;
-    expect(no_smaa.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "initialize with a failing smaa self-test");
-    expect(!no_smaa.status().smaa_ok && no_smaa.status().fxaa_ok &&
-               std::strcmp(no_smaa.status().smaa_reason.data(), "SELF-TEST") == 0,
-           "smaa self-test failure reported, fxaa kept");
-    _putenv_s(nebula_switch::test_post_fault_name(), "smaa,fxaa");
-    galaxy::render::PostProcessor no_aa;
-    expect(no_aa.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "scaling survives failed aa pipelines");
-    expect(!no_aa.status().smaa_ok && !no_aa.status().fxaa_ok &&
-               std::strcmp(no_aa.status().smaa_reason.data(), "PIPELINES") == 0,
-           "aa pipeline failures reported");
-    _putenv_s(nebula_switch::test_post_fault_name(), "");
     galaxy::render::PostProcessor nothing;
     expect(!nothing.initialize(nullptr, nullptr, PostProcessSettings{}), "no device: initialize fails");
     expect(!nothing.status().initialized && !nothing.status().smaa_ok, "no device: nothing available");
@@ -442,6 +455,7 @@ int main() {
     hdr_output();
     plans();
     texts();
+    fallbacks();
     self_test_on_warp();
     scene_aa_on_warp();
     if (failures != 0) {

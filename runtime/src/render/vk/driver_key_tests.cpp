@@ -12,7 +12,9 @@
 namespace {
 
 using galaxy::render::vk::DeviceIdentity;
+using galaxy::render::vk::DriverKind;
 using galaxy::render::vk::driver_key;
+using galaxy::render::vk::quirks_for;
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -61,8 +63,37 @@ bool the_key_is_safe_in_a_file_name() {
 
 }  // namespace
 
+// The workaround table (quirks_for) by driver and version: each mobile driver's, and none on desktop drivers.
+bool quirks_follow_the_driver() {
+    const auto with = [](DriverKind kind, std::uint32_t major, std::uint32_t minor, std::uint32_t patch) {
+        DeviceIdentity id;
+        id.driver = kind;
+        id.driver_version = {major, minor, patch};
+        return quirks_for(id);
+    };
+    bool ok = true;
+    const auto old_adreno = with(DriverKind::QualcommProprietary, 512u, 700u, 0u);
+    ok &= expect(old_adreno.clear_with_draw && old_adreno.coherent_readback && old_adreno.depth_d24 &&
+                     !old_adreno.clear_by_command,
+                 "Qualcomm before 512.762.12: drawn clears, coherent readback, D24S8");
+    const auto new_adreno = with(DriverKind::QualcommProprietary, 512u, 762u, 12u);
+    ok &= expect(!new_adreno.clear_with_draw && new_adreno.depth_d24, "Qualcomm 512.762.12: vkCmdClearAttachments again");
+    const auto mali = with(DriverKind::ArmProprietary, 47u, 0u, 0u);
+    ok &= expect(mali.coherent_readback && !mali.clear_with_draw && !mali.depth_d24, "ARM: coherent readback only");
+    const auto powervr = with(DriverKind::ImaginationProprietary, 1u, 0u, 0u);
+    ok &= expect(powervr.clear_by_command && !powervr.coherent_readback, "Imagination: clears by command");
+    for (const DriverKind desktop : {DriverKind::NvidiaProprietary, DriverKind::AmdProprietary, DriverKind::IntelProprietary,
+                                     DriverKind::MesaTurnip, DriverKind::SwiftShader}) {
+        const auto q = with(desktop, 1u, 0u, 0u);
+        ok &= expect(!q.clear_with_draw && !q.coherent_readback && !q.clear_by_command && !q.depth_d24,
+                     "no workaround on another driver");
+    }
+    return ok;
+}
+
 int main() {
     bool ok = true;
+    ok &= quirks_follow_the_driver();
     ok &= the_key_holds_every_part();
     ok &= different_devices_and_drivers_have_different_keys();
     ok &= the_key_is_safe_in_a_file_name();

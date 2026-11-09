@@ -1,6 +1,7 @@
 // The host's controls: keyboard and mouse, controllers, the pointer and its sources, binding capture, button
 // icons, vibration, and the scripted and replayed test input, as the input the game reads.
 #include "galaxy/game_paths.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/run_options.h"
 #include "galaxy/host_env.h"
 
@@ -59,15 +60,6 @@
 
 namespace galaxy::host {
 using namespace controls;
-namespace {
-
-bool xinput_requires_focus() {
-    static const bool requires_focus =
-        ::galaxy::run_option_flag(::galaxy::run_options().xinput_require_focus, true);
-    return requires_focus;
-}
-
-}  // namespace
 
 static std::atomic<HostPointerProvider> g_host_pointer_provider{nullptr};
 static std::atomic<HostPointerTransitionProvider>
@@ -1131,10 +1123,9 @@ galaxy::input::PlayerInput build_live_input(
             active_native_input_replay_log());
     }
 
-    // A hidden test window (GALAXY_HIDE_WINDOW) is no keyboard or mouse source: no focus, key or cursor calls are
-    // made, while controllers, replay and scripts still work.
-    static const bool host_window_input_enabled =
-        !::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
+    // A hidden start (a test) is no keyboard or mouse source: no focus, key or cursor calls are made, while controllers,
+    // replay and scripts still work.
+    const bool host_window_input_enabled = !::galaxy::launch_args().started_hidden;
     HWND focused_window = nullptr;
     const bool window_focused =
         host_window_input_enabled &&
@@ -1168,7 +1159,7 @@ galaxy::input::PlayerInput build_live_input(
     const bool controller_mode_polls =
         (input_mode == galaxy::RuntimeInputMode::Controller ||
          input_mode == galaxy::RuntimeInputMode::Auto) &&
-        (!xinput_requires_focus() || window_focused);
+        window_focused;
     const bool poll_controller =
         controller_mode_polls || (capturing && capture_scheme == galaxy::input::ControlScheme::Xbox);
     const galaxy::input::SchemeTuning& xbox_tuning =
@@ -1249,7 +1240,6 @@ galaxy::input::PlayerInput build_live_input(
     frame.window_focused = window_focused;
     frame.use_keyboard = use_keyboard;
     frame.use_pads = use_pads;
-    frame.allow_background_device_input = !xinput_requires_focus();
     frame.allow_absolute_pointer = allow_absolute_pointer;
     frame.drop_injected = drop_injected;
     frame.context = play_context;
