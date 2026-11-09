@@ -3,7 +3,7 @@
 #include "Game/Camera/CameraParamChunkID.hpp"
 #include "Game/Camera/DotCamParams.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const char* const sFlagName[] = {"flag.noreset",     "flag.nofovy",       "flag.lofserpoff",
@@ -135,7 +135,7 @@ void CameraParamChunk::load(DotCamReader* pReader, CameraHolder* pHolder) {
 
     arrangeCamTypeName(pReader->getVersion(), &camType);
 
-    bool isPlanet = strcmp(camType, "CAM_TYPE_PLANET") == 0;
+    bool isPlanet = MR::isEqualString(camType, "CAM_TYPE_PLANET");
 
     s32 index = pHolder->getIndexOf(camType);
 
@@ -200,19 +200,19 @@ void CameraParamChunk::arrangeCamTypeName(u32 version, const char** ppType) {
     const char*& type = *ppType;
 
     if (version < 0x30004) {
-        if (strcmp(type, "CAM_TYPE_DONKETSU_TEST") == 0) {
+        if (MR::isEqualString(type, "CAM_TYPE_DONKETSU_TEST")) {
             type = "CAM_TYPE_BOSS_DONKETSU";
         }
     } else if (version < 0x30006) {
-        if (strcmp(type, "CAM_TYPE_BEHIND_DEBUG") == 0) {
+        if (MR::isEqualString(type, "CAM_TYPE_BEHIND_DEBUG")) {
             type = "CAM_TYPE_SLIDER";
-        } else if (strcmp(type, "CAM_TYPE_INWARD_TOWER_TEST") == 0) {
+        } else if (MR::isEqualString(type, "CAM_TYPE_INWARD_TOWER_TEST")) {
             type = "CAM_TYPE_INWARD_TOWER";
-        } else if (strcmp(type, "CAM_TYPE_EYE_FIXED_THERE_TEST") == 0) {
+        } else if (MR::isEqualString(type, "CAM_TYPE_EYE_FIXED_THERE_TEST")) {
             type = "CAM_TYPE_EYEPOS_FIX_THERE";
         }
     } else if (version < 0x30009) {
-        if (strcmp(type, "CAM_TYPE_ICECUBE_PLANET") == 0) {
+        if (MR::isEqualString(type, "CAM_TYPE_ICECUBE_PLANET")) {
             type = "CAM_TYPE_CUBE_PLANET";
         }
     }

@@ -45,7 +45,7 @@
 #include "Game/Camera/CameraWaterPlanet.hpp"
 #include "Game/Camera/CameraWaterPlanetBoss.hpp"
 #include "Game/Camera/CameraWonderPlanet.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 struct CameraTableEntry {
     const char* mName;
@@ -122,7 +122,7 @@ s32 CameraHolder::getNum() const {
 
 s32 CameraHolder::getIndexOf(const char* pName) const {
     for (s32 i = 0; i < getNum(); i++) {
-        if (strcmp(pName, getNameStrOf(i)) == 0) {
+        if (MR::isEqualString(pName, getNameStrOf(i))) {
             return i;
         }
     }

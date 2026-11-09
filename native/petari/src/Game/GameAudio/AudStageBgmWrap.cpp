@@ -134,7 +134,7 @@ SoundID AudStageBgmWrap::changeStageNameToSoundID(const char* pSceneName, const 
 
     u32 idx = 0;
     while (sMAStageBgmData[idx].mStageName != nullptr) {
-        if (MR::strcasecmp(sMAStageBgmData[idx].mSceneName, pSceneName) == 0 && MR::strcasecmp(sMAStageBgmData[idx].mStageName, pStageName) == 0) {
+        if (MR::isEqualStringCase(sMAStageBgmData[idx].mSceneName, pSceneName) && MR::isEqualStringCase(sMAStageBgmData[idx].mStageName, pStageName)) {
             if (sMAStageBgmData[idx].mScenarioGroup >= 0) {
                 soundID = getScenarioBgmData(sMAStageBgmData[idx].mScenarioGroup, scenarioNo - 1);
             } else {

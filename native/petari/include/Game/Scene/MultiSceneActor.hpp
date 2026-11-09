@@ -38,6 +38,8 @@ public:
     EffectSystem* mEffectSystem;
     MultiSceneEffectKeeper* mEffectKeeper;
     Spine* mSpine;
+    // Set once in the constructor: this actor is the star-select sky.
+    bool mIsScenarioSelectSky;
 };
 
 namespace MultiScene {

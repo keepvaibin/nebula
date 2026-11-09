@@ -7,6 +7,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 // Not entirely sure if the createSceneObj would've been here or not. There's no evidence for or against it being here.
 namespace {
@@ -34,9 +35,9 @@ void OceanHomeMapCtrl::entryMapRing(PlanetMap* pPlanet) {
 }
 
 void OceanHomeMapFunction::tryEntryOceanHomeMap(PlanetMap* pPlanet) {
-    if (strcmp(pPlanet->mName, "海洋ホーム惑星") == 0) {
+    if (MR::isEqualString(pPlanet->mName, "海洋ホーム惑星")) {
         ::getOceanHomeMapCtrl()->mOceanHomePlanet = pPlanet;
-    } else if (strcmp(pPlanet->mName, "オーシャンリング惑星") == 0) {
+    } else if (MR::isEqualString(pPlanet->mName, "オーシャンリング惑星")) {
         ::getOceanHomeMapCtrl()->entryMapRing(pPlanet);
     }
 }

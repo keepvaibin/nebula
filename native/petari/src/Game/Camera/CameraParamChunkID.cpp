@@ -26,7 +26,15 @@ bool CameraParamChunkID::operator>(const CameraParamChunkID& other) const {
         return mZoneID > other.mZoneID;
     }
 
-    return strcmp(mName, other.mName) > 0;
+    const char* pLhs = mName;
+    const char* pRhs = other.mName;
+
+    while (*pLhs != '\0' && *pLhs == *pRhs) {
+        pLhs++;
+        pRhs++;
+    }
+
+    return static_cast< u8 >(*pLhs) > static_cast< u8 >(*pRhs);
 }
 
 bool CameraParamChunkID::operator==(const CameraParamChunkID& other) const {
@@ -38,12 +46,12 @@ bool CameraParamChunkID::operator==(const CameraParamChunkID& other) const {
         return false;
     }
 
-    return mZoneID == other.mZoneID && strcmp(mName, other.mName) == 0;
+    return mZoneID == other.mZoneID && MR::isEqualString(mName, other.mName);
 }
 
 bool CameraParamChunkID::equals(s32 zoneID, const char* pName) const {
     if (mName != nullptr) {
-        return zoneID == mZoneID && strcmp(mName, pName) == 0;
+        return zoneID == mZoneID && MR::isEqualString(mName, pName);
     }
 
     return false;

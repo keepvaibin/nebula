@@ -18,7 +18,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     static const f32 sMinDistance = 300.0f;
@@ -224,7 +224,7 @@ void CameraManGame::setNullCamera() {
 }
 
 CameraParamChunk* CameraManGame::tryToReplaceChunkToDefault(CameraParamChunk* pChunk) {
-    if (strcmp(pChunk->getClassName(), "Game") != 0) {
+    if (!MR::isEqualString(pChunk->getClassName(), "Game")) {
         return pChunk;
     }
 
@@ -283,7 +283,7 @@ bool CameraManGame::isCurrentChunkEnableEndInterp() const {
     if (mChunk != nullptr) {
         is = false;
 
-        if (strcmp(mChunk->getClassName(), "Game") == 0) {
+        if (MR::isEqualString(mChunk->getClassName(), "Game")) {
             CameraParamChunkGame* gameChunk = reinterpret_cast< CameraParamChunkGame* >(mChunk);
 
             if (gameChunk->mEnableEndErpFrame != 0) {
