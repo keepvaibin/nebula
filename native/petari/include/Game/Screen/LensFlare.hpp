@@ -82,6 +82,8 @@ public:
     // The picture where the drawing has reached, as this frame's readback; the bright objects measure their
     // visibility in it.
     void setDrawSyncToken();
+    void readAnswers();
+    void reserveProbes();
     s32 checkArea();
     bool checkBrightObj(bool);
     void controlFlare(s32, bool);
