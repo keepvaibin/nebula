@@ -298,10 +298,6 @@ bool LensFlareDirector::checkBrightObj(bool b1) {
             mObjCenter.set(*mBrightObjArray[index]->getCenter());
             mBrightObjArray[index]->getNowCenter(&mNowCenter);
         }
-
-        for (u32 i = 0; i < mBrightObjCount; i++) {
-            mBrightObjArray[i]->endRead();
-        }
     }
 
     return ret;
