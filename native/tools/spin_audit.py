@@ -1,15 +1,15 @@
 """Lists loops that may spin on another thread's work: empty bodies, and short loops whose condition polls state
-(a call or member read) with no OS call in the body. Natively such a loop never takes the interrupt that would
-preempt it on the console; each listed site is reviewed (docs/NATIVE_PORT.md).
+(a call or member read) with no wait in the body. Such a loop holds a core at full use until the other thread is done;
+each listed site waits on the event it polls instead, or is shown to end on its own thread's work (docs/NATIVE_PORT.md).
     spin_audit.py [native dir]"""
 import os
 import re
 import sys
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..")
-DIRS = ["petari/src", "petari/libs", "sdk", "host"]
-BLOCKING = re.compile(r"OSYieldThread|OSSleep|VIWaitForRetrace|OSReceiveMessage|OSWaitCond|OSJamMessage|OSLockMutex|"
-                      r"Sync\(|OSSuspendThread|waitForRetrace|__NebulaPoll|OSWaitSemaphore|waitTime|OSSendMessage|sleep")
+DIRS = ["petari/src", "host"]
+BLOCKING = re.compile(r"\.wait(_for|_until)?\(|\.join\(|\.acquire\(|sleep_for|sleep_until|\bSleep\(|WaitFor\w*\(|"
+                      r"SwitchToThread|\byield\(|nebula_\w*wait\w*\(")
 POLLED = re.compile(r"\b(is\w*(Done|End|Load|Finish|Ready|Busy|Active|Wait|Complete|Exec|Run)\w*|"
                     r"\w*(Status|Busy|Done|Finished|Ready|Flag|flag|Count)\w*)")
 SHORT = 250
