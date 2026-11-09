@@ -176,7 +176,7 @@ namespace MR {
     }
 
     bool isUseTex(Material* pMaterial, u32 textureIndex) {
-        for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
+        for (u32 idx = 0; idx < pMaterial->getSlotCount(); idx++) {
             if (pMaterial->getTextureIndex(idx) == textureIndex && pMaterial->usesMap(idx)) {
                 return true;
             }
@@ -186,7 +186,7 @@ namespace MR {
     }
 
     bool isNormalTexMtx(Material* pMaterial) {
-        for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
+        for (u32 idx = 0; idx < pMaterial->getSlotCount(); idx++) {
             CoordMatrix* texMtx = pMaterial->getCoordMatrix(idx);
 
             if (texMtx != nullptr && texMtx->getMode() != CoordMatrixMode_None && isUseTexMtx(pMaterial, idx)) {

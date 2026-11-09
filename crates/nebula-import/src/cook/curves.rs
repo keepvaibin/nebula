@@ -904,13 +904,14 @@ const OF_EXTENT: f32 = 1.0 / 800.0;
 pub const TOLERANCE: f32 = 0.4;
 
 /// A corner as refinement mixes it.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct Vertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub tangent: [f32; 3],
     pub binormal: [f32; 3],
-    pub uv: [[f32; 2]; super::limits::MATERIAL_SLOTS],
+    /// By coordinate number; refinement mixes corners of one group, which carry as many.
+    pub uv: Vec<[f32; 2]>,
     pub color0: u32,
     pub color1: u32,
     pub matrix: u32,
@@ -964,15 +965,16 @@ fn mix_colour(a: u32, b: u32, c: u32, w: &[f32; 3]) -> u32 {
 }
 
 fn refine_point(t: &[&Vertex; 3], w: &[f32; 3]) -> Vertex {
-    let mut v = *t[if w[0] > 0.0 { 0 } else { 1 }];
+    let mut v = t[if w[0] > 0.0 { 0 } else { 1 }].clone();
     let mix3 = |a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]| [a[0] * w[0] + b[0] * w[1] + c[0] * w[2], a[1] * w[0] + b[1] * w[1] + c[1] * w[2], a[2] * w[0] + b[2] * w[1] + c[2] * w[2]];
     v.position = mix3(&t[0].position, &t[1].position, &t[2].position);
     v.normal = mix3(&t[0].normal, &t[1].normal, &t[2].normal);
     v.tangent = mix3(&t[0].tangent, &t[1].tangent, &t[2].tangent);
     v.binormal = mix3(&t[0].binormal, &t[1].binormal, &t[2].binormal);
-    for k in 0..super::limits::MATERIAL_SLOTS {
+    for k in 0..v.uv.len() {
+        let at = |n: usize| t[n].uv.get(k).copied().unwrap_or([0.0; 2]);
         for a in 0..2 {
-            v.uv[k][a] = t[0].uv[k][a] * w[0] + t[1].uv[k][a] * w[1] + t[2].uv[k][a] * w[2];
+            v.uv[k][a] = at(0)[a] * w[0] + at(1)[a] * w[1] + at(2)[a] * w[2];
         }
     }
     let length2 = v.normal[0] * v.normal[0] + v.normal[1] * v.normal[1] + v.normal[2] * v.normal[2];
