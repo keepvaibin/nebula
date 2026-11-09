@@ -138,7 +138,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         }
         return new String[] {
             "--pak", GameFiles.pak(this).getPath(),
-            "--saves", new File(nativeData(), "nand").getPath(),
+            "--saves", GameFiles.savesIn(nativeData()).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
             "--diagnostics", record ? "1" : "0",
         };

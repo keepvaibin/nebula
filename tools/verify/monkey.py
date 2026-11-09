@@ -41,8 +41,8 @@ def run(index, stops):
 V={VERIFY}
 export VERIFY_DIR=$V NEBULA_WORK="{out}" NEBULA_PAK="$(cat {BINDIR}/pak.path)"
 W=$(cygpath -w "{out}")
-export NEBULA_SETTINGS="$W\\\\settings" NEBULA_NAND="$W\\\\nand"
-cp -r /d/NebulaWork/port/nand-test3 "{out}/nand"
+export NEBULA_SETTINGS="$W\\\\settings" NEBULA_SAVES="$W\\\\saves"
+cp -r /d/NebulaWork/port/nand-test3 "{out}/saves"
 . $V/common.sh; VERIFY=$V
 run_build "{BINDIR}" r {int(total / 60) + 120} {extra} GALAXY_TEST_GALAXY_TOUR="$(cygpath -w "{tour}")" GALAXY_TEST_GALAXY_TOUR_FRAMES={FRAMES} GALAXY_MAX_FPS=60 GALAXY_TEST_EVENT_FLAGS=SpinAndStarPointer GALAXY_PRESENT_SNAPSHOT_EVERY=1000000 \\
   "GALAXY_INPUT_AUTOPRESS_SCRIPT={';'.join(presses)}" "GALAXY_INPUT_STICK_SCRIPT={';'.join(sticks)}" "GALAXY_INPUT_SHAKE_SCRIPT={';'.join(shakes)}" >/dev/null 2>&1

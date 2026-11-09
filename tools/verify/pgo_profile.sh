@@ -18,8 +18,8 @@ cp "$H"/tables/* "$B/tables/"
 cp "$W/build/smg_game.dll" "$B/"
 printf '%s' "$P" > "$B/pak.path"
 WW=$(cygpath -w "$W")
-[ -d "$W/nand" ] || { echo "WORK/nand: give a test save folder"; exit 1; }
-NEBULA_WORK="$W" NEBULA_PAK="$P" NEBULA_SETTINGS="$WW\\settings" NEBULA_NAND="$WW\\nand" LLVM_PROFILE_FILE="$WW\\raw\\game-%p.profraw" \
+[ -d "$W/saves" ] || { echo "WORK/saves: give a test save folder"; exit 1; }
+NEBULA_WORK="$W" NEBULA_PAK="$P" NEBULA_SETTINGS="$WW\\settings" NEBULA_SAVES="$WW\\saves" LLVM_PROFILE_FILE="$WW\\raw\\game-%p.profraw" \
     sh "$V/tour.sh" "$B" t GALAXY_TEST_GALAXY_TOUR_FRAMES=300
 mkdir -p "$T/native/pgo"
 "$LLVM/llvm-profdata.exe" merge -o "$T/native/pgo/game.profdata" "$W"/raw/*.profraw

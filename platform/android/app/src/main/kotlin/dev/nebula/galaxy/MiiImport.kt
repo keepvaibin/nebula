@@ -31,7 +31,7 @@ object MiiImport {
 
     /** The Miis the game's icon picker shows (host_main.cpp: the save folder's nebula-miis.txt); null before any. */
     fun count(context: Context): Int? =
-        libraryCount(File(GameFiles.nand(context), "nebula-miis.txt").path.toByteArray(Charsets.UTF_8)).takeIf { it >= 0 }
+        libraryCount(File(GameFiles.saves(context), "nebula-miis.txt").path.toByteArray(Charsets.UTF_8)).takeIf { it >= 0 }
 
     fun import(context: Context, uris: List<Uri>): TransferResult {
         val folder = folder(context)

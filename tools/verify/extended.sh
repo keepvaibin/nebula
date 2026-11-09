@@ -1,5 +1,5 @@
 #!/bin/sh
-# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output), NEBULA_TEST_NAND (an empty NAND folder to copy).
+# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output), NEBULA_TEST_NAND (an empty saves folder to copy).
 : "${NEBULA_BINS:?NEBULA_BINS is not set}"; : "${NEBULA_RUNS:?NEBULA_RUNS is not set}"; : "${NEBULA_TEST_NAND:?NEBULA_TEST_NAND is not set}"
 # extended.sh BIN TAG: what the gate does not cover: the ending to its save prompt, Luigi, a slow drive through the stops. Crash lines, loss counters, and how far each got.
 V=$(cd "$(dirname "$0")" && pwd)
@@ -8,8 +8,8 @@ OUT=$NEBULA_RUNS/ext_$T; mkdir -p "$OUT"
 one() { # name seconds env...
   N=$1; S=$2; shift 2
   (
-    W0="$OUT/$N"; rm -rf "$W0"; mkdir -p "$W0"; W=$(cygpath -w "$W0"); cp -r $NEBULA_TEST_NAND "$W0/nand"
-    export VERIFY_DIR=$V NEBULA_WORK="$W0" NEBULA_PAK="$(cat $B/pak.path)" NEBULA_SETTINGS="$W\settings" NEBULA_NAND="$W\nand"
+    W0="$OUT/$N"; rm -rf "$W0"; mkdir -p "$W0"; W=$(cygpath -w "$W0"); cp -r $NEBULA_TEST_NAND "$W0/saves"
+    export VERIFY_DIR=$V NEBULA_WORK="$W0" NEBULA_PAK="$(cat $B/pak.path)" NEBULA_SETTINGS="$W\settings" NEBULA_SAVES="$W\saves"
     . $V/common.sh; VERIFY=$V
     run_build "$B" r $S "$@" GALAXY_PRESENT_SNAPSHOT_EVERY=1000000 >/dev/null 2>&1
     L="$RUNS/r/run.log"

@@ -33,7 +33,7 @@ const char* test_data_paths_error(int argc, char** argv) {
     if (path_is_within(*work, protected_root) || path_is_within(protected_root, *work)) {
         return "NEBULA_WORK overlaps the user data folder";
     }
-    for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_NAND",
+    for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_SAVES",
                               L"LOCALAPPDATA", nebula_switch::runtime_settings_path_wide_name(),
                               nebula_switch::render_config_path_wide_name(), nebula_switch::crash_dump_dir_wide_name()}) {
         const auto path = get_env_path(name);
@@ -42,7 +42,7 @@ const char* test_data_paths_error(int argc, char** argv) {
         }
     }
     for (int i = 1; i + 1 < argc; ++i) {
-        if (std::strcmp(argv[i], "--saves") == 0 || std::strcmp(argv[i], "--nand") == 0) {
+        if (std::strcmp(argv[i], "--saves") == 0) {
             int count = 0;
             LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count);
             const std::filesystem::path saves = wide != nullptr && i + 1 < count ? std::filesystem::path(wide[i + 1])

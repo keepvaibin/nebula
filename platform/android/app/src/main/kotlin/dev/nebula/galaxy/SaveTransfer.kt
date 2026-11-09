@@ -17,7 +17,7 @@ import java.util.zip.ZipOutputStream
 data class TransferResult(val ok: Boolean, val title: String, val message: String)
 
 /**
- * The game's saves (GameFiles.nand: each release's save folder, the Mii database, the Wii save layout) to and from
+ * The game's saves (GameFiles.saves: each release's save folder, the Mii database, the Wii save layout) to and from
  * one .zip the player keeps; and single save files from elsewhere: Nebula.sav (Nebula on another device) or
  * GameData.bin (a Wii, Dolphin or the Switch release), checked as the game checks them (SaveFileFormat.hpp).
  * The saves in place are zipped into save-backups/ before anything replaces them.
@@ -34,7 +34,7 @@ object SaveTransfer {
 
     /** Every save file as one .zip at [uri]. */
     fun export(context: Context, uri: Uri): TransferResult {
-        val files = saveFiles(GameFiles.nand(context))
+        val files = saveFiles(GameFiles.saves(context))
         if (files.none { SAVE_NAMES.matches(it.second.name) }) {
             return TransferResult(false, "No saves yet", "Play and save in the game first.")
         }
@@ -104,10 +104,10 @@ object SaveTransfer {
             if (miis != null && !String(miis.second, Charsets.UTF_8).startsWith(MII_LIBRARY_FORMAT)) {
                 return TransferResult(false, "That save is damaged", "$MII_LIBRARY is not a Mii library.")
             }
-            val staged = File(incoming, "nand")
-            stage(GameFiles.nand(context), staged, files)
+            val staged = File(incoming, "saves")
+            stage(GameFiles.saves(context), staged, files)
             val backedUp = backUp(context)
-            replaceSaves(GameFiles.nand(context), staged)
+            replaceSaves(GameFiles.saves(context), staged)
             return TransferResult(
                 true, "Saves imported",
                 "${saves.joinToString(", ") { it.first.substringAfterLast('/') }}${if (miis != null) " and your Miis" else ""} in place." +
@@ -150,8 +150,8 @@ object SaveTransfer {
     // The saves in place, copied to [staged], with [files] over them. Each imported save file replaces its group in its
     // folder (Nebula.sav and its .1/.2, or GameData.bin and its copies); a GameData.bin in a release's Wii folder also
     // retires that release's Nebula.sav unless one comes with it, as the game reads Nebula.sav first. The rest stays.
-    private fun stage(nand: File, staged: File, files: List<Pair<String, ByteArray>>) {
-        if (nand.isDirectory) nand.copyRecursively(staged, overwrite = true) else staged.mkdirs()
+    private fun stage(saveFolder: File, staged: File, files: List<Pair<String, ByteArray>>) {
+        if (saveFolder.isDirectory) saveFolder.copyRecursively(staged, overwrite = true) else staged.mkdirs()
         val wiiData = Regex("^title/00010000/([0-9a-f]{8})/data/GameData\\.bin")
         val nativeReleases = files.map { it.first }.filter { it.substringAfterLast('/').startsWith("Nebula.sav") }
             .map { it.substringBefore('/') }.toSet()
@@ -174,7 +174,7 @@ object SaveTransfer {
         }
     }
 
-    // The .zip's files under the save folder's own top folders, with one shared outer folder (a zipped "nand") taken
+    // The .zip's files under the save folder's own top folders, with one shared outer folder (a zipped "saves", or "nand" from earlier builds) taken
     // off. Paths that leave the folder, and sizes past any save's, refuse the whole file.
     private fun unzipSaves(bytes: ByteArray): List<Pair<String, ByteArray>> {
         val entries = ArrayList<Pair<String, ByteArray>>()
@@ -271,7 +271,7 @@ object SaveTransfer {
 
     // The saves in place as save-backups/Saves before import <time>.zip; the newest five are kept. False: none to keep.
     private fun backUp(context: Context): Boolean {
-        val files = saveFiles(GameFiles.nand(context))
+        val files = saveFiles(GameFiles.saves(context))
         if (files.isEmpty()) return false
         val folder = File(GameFiles.data(context), "save-backups")
         folder.mkdirs()
@@ -286,11 +286,11 @@ object SaveTransfer {
     }
 
     // The staged folder becomes the save folder: renames, so a failure leaves the old saves whole.
-    private fun replaceSaves(nand: File, staged: File) {
-        val old = File(nand.parentFile, ".nand-replaced-${System.nanoTime()}")
-        if (nand.exists() && !nand.renameTo(old)) throw IOException("The save folder could not be replaced")
-        if (!staged.renameTo(nand)) {
-            old.renameTo(nand)
+    private fun replaceSaves(saveFolder: File, staged: File) {
+        val old = File(saveFolder.parentFile, ".saves-replaced-${System.nanoTime()}")
+        if (saveFolder.exists() && !saveFolder.renameTo(old)) throw IOException("The save folder could not be replaced")
+        if (!staged.renameTo(saveFolder)) {
+            old.renameTo(saveFolder)
             throw IOException("The save folder could not be replaced")
         }
         old.deleteRecursively()

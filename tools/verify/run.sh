@@ -5,7 +5,7 @@
 #   NEBULA_BIN       folder with NebulaNative.exe and smg_game.dll (and tables/*.tsv when the build has them)
 #   NEBULA_PAK       the game content (game.pak); a build whose folder holds pak.path runs that file's game.pak
 #                    instead (a cooked candidate beside a base on content packed before cooking)
-#   NEBULA_NAND      a test NAND folder (never a player's)
+#   NEBULA_SAVES     a test saves folder (never a player's)
 #   NEBULA_APPDATA   a test app-data folder (shader caches; one per build when builds are compared)
 #   NEBULA_SETTINGS  a test settings folder (config.ini, runtime_settings.ini)
 # The run's own copy of the binaries goes to OUT/bin and is removed afterwards unless the run left a crash dump.
@@ -13,7 +13,7 @@ set -e
 seconds=$1
 out=$2
 shift 2
-for v in NEBULA_BIN NEBULA_PAK NEBULA_NAND NEBULA_APPDATA NEBULA_SETTINGS; do
+for v in NEBULA_BIN NEBULA_PAK NEBULA_SAVES NEBULA_APPDATA NEBULA_SETTINGS; do
     eval "value=\${$v:-}"
     if [ -z "$value" ]; then
         echo "run.sh: $v is not set" >&2
@@ -39,7 +39,7 @@ env GALAXY_HIDE_WINDOW=1 GALAXY_XINPUT_REQUIRE_FOCUS=1 \
     GALAXY_AUDIO_WAV_DUMP_ONLY=1 GALAXY_AUDIO_WAV_DUMP="$(cygpath -w "$out")\\audio.wav" \
     GALAXY_MODULE_PATH="$(cygpath -w "$out/bin/smg_game.dll")" \
     "$@" \
-    "$out/bin/NebulaNative.exe" --pak "$NEBULA_PAK" --nand "$NEBULA_NAND" --seconds "$seconds" \
+    "$out/bin/NebulaNative.exe" --pak "$NEBULA_PAK" --saves "$NEBULA_SAVES" --seconds "$seconds" \
     > "$out/run.log" 2>&1 || echo "exit $?" >> "$out/run.log"
 if ! ls "$out"/*.dmp >/dev/null 2>&1; then
     rm -f "$out"/bin/*.exe "$out"/bin/*.dll "$out"/bin/*.pdb
