@@ -1,6 +1,7 @@
-# nebula_file_details(TARGET FILE DESCRIPTION [ICON path]): a Windows program's file details, and its icon (resource 1,
-# the game window's). The version is the root CMakeLists.txt project's, read here so the game's module has the same one.
+# nebula_file_details(TARGET FILE DESCRIPTION [ICON path] [DPI_MANIFEST]): a Windows program's file details, its icon (resource 1,
+# the game window's) and, with DPI_MANIFEST, a manifest making the process per-monitor DPI aware (v2) from its start. The version is the root CMakeLists.txt project's, read here so the game's module has the same one.
 set(NEBULA_RC_TEMPLATE "${CMAKE_CURRENT_LIST_DIR}/nebula_file_details.rc.in")
+set(NEBULA_DPI_MANIFEST "${CMAKE_CURRENT_LIST_DIR}/nebula_game.manifest")
 file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt" nebula_project_line REGEX "^project\\(Nebula VERSION ")
 string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" nebula_project_version "${nebula_project_line}")
 set(NEBULA_RC_MAJOR ${CMAKE_MATCH_1})
@@ -11,7 +12,7 @@ function(nebula_file_details target file description)
     if(NOT WIN32)
         return()
     endif()
-    cmake_parse_arguments(arg "" "ICON" "" ${ARGN})
+    cmake_parse_arguments(arg "DPI_MANIFEST" "ICON" "" ${ARGN})
     set(NEBULA_RC_FILE "${file}")
     set(NEBULA_RC_DESCRIPTION "${description}")
     set(NEBULA_RC_ICON "")
@@ -20,4 +21,8 @@ function(nebula_file_details target file description)
     endif()
     configure_file("${NEBULA_RC_TEMPLATE}" "${CMAKE_CURRENT_BINARY_DIR}/${target}_details.rc" @ONLY)
     target_sources(${target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/${target}_details.rc")
+    if(arg_DPI_MANIFEST AND MSVC)
+        # A .manifest source is merged into the linker's own manifest (/MANIFESTINPUT).
+        target_sources(${target} PRIVATE "${NEBULA_DPI_MANIFEST}")
+    endif()
 endfunction()

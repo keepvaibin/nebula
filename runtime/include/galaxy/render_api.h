@@ -160,6 +160,13 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 void pump_messages();
 [[nodiscard]] bool quit_requested() noexcept;
 
+// The window is out of sight (minimised, or covered so the OS shows none of it): the renderer presents nothing of its own
+// (no repeated pictures, no generated frames) and waits for work without polling. The host sets it with the game's own
+// suspension. `window_occluded` is the OS's own word that the whole window is covered (Direct3D 12's present status; Vulkan on
+// Windows reports none, so false there).
+void set_window_hidden(bool hidden) noexcept;
+[[nodiscard]] bool window_occluded() noexcept;
+
 // The latest pointer state of the native window, from its client-area mouse messages and the OS cursor position.
 [[nodiscard]] HostPointerState poll_host_pointer_state() noexcept;
 [[nodiscard]] host::HostPointerTransitionPoll poll_host_pointer_transition(

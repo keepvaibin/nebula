@@ -89,6 +89,22 @@ public:
     [[nodiscard]] TextureHandle handle(std::uint32_t id);
     // Bumps whenever `handle` of a live id changes.
     [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
+    // A list that keeps its texture handles from walk to walk (Vulkan's bound tables) names texture `id` again by this.
+    void touch(std::uint32_t id) noexcept {
+        if (id < entries_.size() && entries_[id] != nullptr) entries_[id]->named = frame_;
+    }
+    // At a frame boundary, with the adapter's video memory `usage` and its `budget` (0: not known): past the budget, textures
+    // that no frame in flight names are given back, the least recently named first, at most kEvictBytesPerFrame a call. An
+    // evicted texture draws blank when a list names it and is made again from the game's image (the next list's first walk
+    // has it). Memory comes back as the frames that may read it finish (and, on Direct3D 12, when a whole heap empties).
+    void enforce_budget(std::uint64_t usage, std::uint64_t budget);
+    static constexpr std::uint64_t kEvictBytesPerFrame = 64ull << 20u;
+    struct BudgetStats {
+        std::uint32_t resident = 0, evicted = 0;  // ids with a texture, ids given back now
+        std::uint64_t resident_bytes = 0;
+        std::uint64_t evictions = 0, evicted_bytes = 0, rebuilds = 0, blank_draws = 0;  // since the start
+    };
+    [[nodiscard]] BudgetStats budget_stats() const;
 #if defined(NEBULA_DEV)
     [[nodiscard]] std::uint64_t name_hash(std::uint32_t id) const noexcept {
         return id < entries_.size() && entries_[id] != nullptr ? entries_[id]->name.hash : 0u;
@@ -136,6 +152,7 @@ private:
         Staged staged;
         PackName name;
         bool generated = false;
+        bool rebuild = false;  // a Create for an evicted id: dropped if the id is not evicted any more
     };
     struct Entry {
         gpu::TextureRef texture;
@@ -147,10 +164,16 @@ private:
         std::uint32_t pack_slot = TexturePacks::kNone;
         bool pack_waiting = false;
         TextureReplacement built_in;
+        // The frame a walk last named it, the bytes its own texture holds, and whether it was given back (budget).
+        std::uint64_t named = 0u;
+        std::uint64_t bytes = 0u;
+        std::uint64_t asked_at = ~std::uint64_t{0};  // when it was last asked for again
+        bool evicted = false;
     };
     struct Retired {
         gpu::TextureRef texture;
         std::uint32_t view = ~0u;
+        std::uint64_t evicted_bytes = 0u;  // an eviction's: counted in evicting_bytes_ until it is released
     };
     struct LinearImage {
         std::uint32_t width = 0u, height = 0u;
@@ -171,7 +194,9 @@ private:
                      std::uint8_t format);
     void queue_built_in(std::uint32_t id, const void* record);
     void create_entry(Op& op);
-    void make_own(Entry& entry, const Op& op);
+    // `once`: the texture's levels are written once (a new id), so it may be a direct-write texture; an id that is updated
+    // keeps a texture the GPU copies into.
+    void make_own(Entry& entry, const Op& op, bool once);
     void update_entry(Op& op);
     void free_entry(std::uint32_t id);
     void apply_built_in(Op& op);
@@ -180,7 +205,8 @@ private:
     void look_up(std::uint32_t id, Entry& entry);
     void show(Entry& entry, const TextureReplacement& replacement, std::uint32_t slot);
     void stop_showing(Entry& entry);
-    void retire(gpu::TextureRef texture, std::uint32_t view);
+    void retire(gpu::TextureRef texture, std::uint32_t view, std::uint64_t evicted_bytes = 0u);
+    void evict(Entry& entry);
     [[nodiscard]] std::uint32_t allocate_srv_index();
 
     // Calling threads, under lock_.
@@ -190,6 +216,7 @@ private:
     std::unordered_map<std::uint32_t, LinearImage> linear_images_;
     std::unordered_map<std::uint32_t, Source> sources_;
     std::unordered_map<std::uint32_t, const void*> built_ins_;
+    std::vector<std::uint32_t> rebuild_ids_;  // evicted ids a list named: staged again by the next take_ops
     DeviceGate* gate_ = nullptr;
     ChunkRef arena_chunk_;
     std::uint64_t arena_used_ = 0u;
@@ -198,6 +225,10 @@ private:
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
+    // Budget: frames begun, bytes of evicted textures still held by frames in flight, and the counts since the start.
+    std::uint64_t frame_ = 0u;
+    std::uint64_t evicting_bytes_ = 0u;
+    std::uint64_t evictions_ = 0u, evicted_bytes_total_ = 0u, rebuilds_ = 0u, evicted_draws_ = 0u;
     std::unordered_set<std::uint32_t> blank_images_;
     // The frees the list walking now came with.
     std::vector<std::uint32_t> held_frees_;

@@ -15,5 +15,9 @@ void perf_hint_add_current_thread() noexcept;
 // Once per game step: the step's work since the last call, reported to the hints and returned (nanoseconds; 0 where
 // threads' CPU times cannot be read).
 std::int64_t perf_hint_frame_done() noexcept;
+// Windows: the machine runs on its battery, looked at every two seconds from perf_hint_frame_done (a change is logged once).
+// Background threads that start on battery ask the OS for efficiency (windows_power.h lower_current_thread_priority); the
+// game and render threads never do. False elsewhere.
+[[nodiscard]] bool perf_hint_on_battery() noexcept;
 
 }  // namespace galaxy::host

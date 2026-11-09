@@ -62,10 +62,18 @@ public:
     void release_view(std::uint32_t index);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
-    // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
+    // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane). `writable`: the levels are
+    // uploaded once and never rewritten while the GPU may read them; with host image copy (host_writes()) and a format the
+    // device copies to at full speed, the image is made for host copies and record_upload writes it with no command.
     [[nodiscard]] gpu::TextureRef create_texture(
         std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
-        TexelFormat format = TexelFormat::Rgba8);
+        TexelFormat format = TexelFormat::Rgba8, bool writable = false);
+    // VK_EXT_host_image_copy is in use for some formats (GALAXY_VK_TEST_NO_FEATURE names host_image_copy to force copies).
+    [[nodiscard]] bool host_writes() const noexcept { return host_formats_ != 0u; }
+    // A texture create_texture made for host copies: it is never uploaded again in place.
+    [[nodiscard]] static bool direct_written(const vk::Texture* texture) noexcept {
+        return texture != nullptr && (texture->usage & VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT) != 0u;
+    }
     [[nodiscard]] static bool supports_bc1();
     [[nodiscard]] static bool poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
@@ -85,6 +93,7 @@ public:
 private:
     std::vector<VkImageView> views_;
     std::shared_ptr<vk::Texture> null_texture_;
+    std::uint32_t host_formats_ = 0u;  // bit per TexelFormat the device host-copies to at full speed
     VkDescriptorSet mirror_ = VK_NULL_HANDLE;
     std::uint32_t mirror_count_ = 0;
     GrowFn mirror_grow_ = nullptr;

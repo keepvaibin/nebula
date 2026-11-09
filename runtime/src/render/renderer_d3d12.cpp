@@ -330,11 +330,12 @@ bool DescriptorRing::initialize(
     unsigned descriptors_per_frame,
     unsigned frames_in_flight,
     unsigned persistent_descriptors,
-    unsigned texture_descriptors) {
+    unsigned texture_descriptors,
+    unsigned heap_limit) {
     const std::uint64_t ring = static_cast<std::uint64_t>(persistent_descriptors) +
         static_cast<std::uint64_t>(descriptors_per_frame) * frames_in_flight;
     const std::uint64_t total = ring + texture_descriptors;
-    if (device == nullptr || frames_in_flight == 0u || ring == 0u || total > kMaxHeapDescriptors) {
+    if (device == nullptr || frames_in_flight == 0u || ring == 0u || total > heap_limit) {
         return false;
     }
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
@@ -345,17 +346,27 @@ bool DescriptorRing::initialize(
     // initialization must not pair an old heap with new cursor limits.
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadow;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> persistent_shadow;
     if (FAILED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&heap)))) {
         return false;
     }
-    dhd.NumDescriptors = static_cast<UINT>(ring + kNullBlock);
+    dhd.NumDescriptors = static_cast<UINT>(ring - persistent_descriptors + kNullBlock);
     dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     if (FAILED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&shadow)))) {
+        return false;
+    }
+    dhd.NumDescriptors = std::max(persistent_descriptors, 1u);
+    if (FAILED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&persistent_shadow)))) {
         return false;
     }
     const auto increment = device->GetDescriptorHandleIncrementSize(type);
     heap_ = std::move(heap);
     shadow_ = std::move(shadow);
+    persistent_shadow_ = std::move(persistent_shadow);
+    replaced_.clear();
+    heap_limit_ = heap_limit;
+    frame_slot_ = 0u;
+    frame_high_water_ = 0u;
     device_ = device;
     type_ = type;
     increment_ = increment;
@@ -380,10 +391,16 @@ bool DescriptorRing::initialize(
     return true;
 }
 
+// A ring index in the CPU shadow: the persistent region's own heap, then the frame segments and the null block.
 D3D12_CPU_DESCRIPTOR_HANDLE DescriptorRing::shadow_at(unsigned index) const noexcept {
-    auto cpu = shadow_->GetCPUDescriptorHandleForHeapStart();
-    cpu.ptr += static_cast<SIZE_T>(index) * increment_;
+    const bool persistent = index < persistent_descriptors_;
+    auto cpu = (persistent ? persistent_shadow_ : shadow_)->GetCPUDescriptorHandleForHeapStart();
+    cpu.ptr += static_cast<SIZE_T>(persistent ? index : index - persistent_descriptors_) * increment_;
     return cpu;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorRing::persistent_cpu(std::uint32_t index) const noexcept {
+    return shadow_at(index);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DescriptorRing::heap_cpu_at(unsigned index) const noexcept {
@@ -430,6 +447,7 @@ void DescriptorRing::begin_frame(unsigned frame_slot) {
     if (!heap_ || frame_slot >= frames_in_flight_) {
         throw std::runtime_error("DescriptorRing invalid frame slot");
     }
+    frame_slot_ = frame_slot;
     frame_base_ = persistent_descriptors_ + frame_slot * descriptors_per_frame_;
     cursor_     = frame_base_;
     frame_ready_ = true;
@@ -437,13 +455,70 @@ void DescriptorRing::begin_frame(unsigned frame_slot) {
 }
 
 DescriptorRing::Persistent DescriptorRing::allocate_persistent(unsigned count) {
-    if (!heap_ || count > persistent_descriptors_ - persistent_cursor_) {
-        throw std::runtime_error("DescriptorRing persistent descriptors exhausted");
+    if (!heap_) {
+        throw std::runtime_error("DescriptorRing persistent descriptors before the heap");
+    }
+    if (count > persistent_descriptors_ - persistent_cursor_) {
+        // Doubled (at least to what is needed): the persistent region never refuses a descriptor below the device's heap limit.
+        const std::uint64_t needed = std::uint64_t{persistent_cursor_} + count;
+        std::uint64_t grown = std::max<std::uint64_t>(std::uint64_t{persistent_descriptors_} * 2u, 16u);
+        while (grown < needed) {
+            grown *= 2u;
+        }
+        const std::uint64_t other = std::uint64_t{texture_descriptors_} + std::uint64_t{descriptors_per_frame_} * frames_in_flight_;
+        const std::uint64_t room = heap_limit_ > other ? heap_limit_ - other : 0u;
+        if (needed > room) {
+            throw std::runtime_error("DescriptorRing persistent descriptors past the shader-visible heap limit");
+        }
+        grow_persistent(static_cast<unsigned>(std::min(grown, room)));
     }
     Persistent table{shadow_at(persistent_cursor_), persistent_cursor_};
     fill_null(persistent_cursor_, count);
     persistent_cursor_ += count;
     return table;
+}
+
+// A larger persistent region: a new heap (the textures, then `persistent` descriptors, then the frame segments) and a new
+// persistent shadow holding the old one's descriptors. Commands already recorded read the old heap, which gets this frame's tables
+// first and then goes to replaced_; the frame's tables so far (their shadow places do not move) are copied into the new heap
+// at their new indices.
+void DescriptorRing::grow_persistent(unsigned persistent) {
+    D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+    dhd.Type           = type_;
+    dhd.NumDescriptors = texture_descriptors_ + persistent + descriptors_per_frame_ * frames_in_flight_;
+    dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next;
+    if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&next)))) {
+        // Nothing was replaced: the old heap stays whole (told once); the descriptor asked for cannot be given.
+        static std::atomic<bool> told{false};
+        if (!told.exchange(true)) {
+            std::cerr << "[gpu] a descriptor heap of " << dhd.NumDescriptors << " descriptors could not be made; the heap keeps its size\n";
+        }
+        throw std::runtime_error("DescriptorRing persistent descriptors: the device refused a larger heap");
+    }
+    dhd.NumDescriptors = persistent;
+    dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next_shadow;
+    d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&next_shadow)), "CreateDescriptorHeap persistent shadow");
+    flush();  // what the replaced heap's commands read
+    if (persistent_cursor_ != 0u) {
+        // CPU-only to CPU-only: the persistent descriptors keep their indices.
+        device_->CopyDescriptorsSimple(persistent_cursor_, next_shadow->GetCPUDescriptorHandleForHeapStart(),
+                                       persistent_shadow_->GetCPUDescriptorHandleForHeapStart(), type_);
+    }
+    const unsigned used = frame_ready_ ? cursor_ - frame_base_ : 0u;
+    replaced_.push_back(std::move(heap_));
+    heap_ = std::move(next);
+    persistent_shadow_ = std::move(next_shadow);
+    persistent_descriptors_ = persistent;
+    if (frame_ready_) {
+        frame_base_ = persistent_descriptors_ + frame_slot_ * descriptors_per_frame_;
+        cursor_ = frame_base_ + used;
+    }
+    copy_in(0u, persistent_cursor_);
+    flush();
+    bound_list_ = nullptr;
+    bound_heap_ = nullptr;
 }
 
 void DescriptorRing::commit(const Persistent& table, unsigned count) {
@@ -457,6 +532,7 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
     if (!frame_ready_ || count > descriptors_per_frame_ - (cursor_ - frame_base_)) {
         throw std::runtime_error("DescriptorRing frame segment exhausted or no frame begun");
     }
+    frame_high_water_ = std::max(frame_high_water_, cursor_ - frame_base_ + count);
     Table table{shadow_at(cursor_), heap_->GetGPUDescriptorHandleForHeapStart()};
     table.gpu.ptr += static_cast<UINT64>(texture_descriptors_ + cursor_) * increment_;
     fill_null(cursor_, count);
@@ -475,7 +551,7 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorRing::resize_textures(uns
         return {};
     }
     const std::uint64_t total = std::uint64_t{texture_descriptors} + ring_descriptors();
-    if (total > kMaxHeapDescriptors) {
+    if (total > heap_limit_) {
         throw std::runtime_error("DescriptorRing texture region past the shader-visible heap limit");
     }
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
@@ -483,7 +559,14 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DescriptorRing::resize_textures(uns
     dhd.NumDescriptors = static_cast<UINT>(total);
     dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next;
-    d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&next)), "CreateDescriptorHeap resize");
+    if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&next)))) {
+        // The device refuses a larger heap: the old one stays, and the texture region keeps its size (told once).
+        static std::atomic<bool> told{false};
+        if (!told.exchange(true)) {
+            std::cerr << "[gpu] a descriptor heap of " << total << " descriptors could not be made; the heap keeps its size\n";
+        }
+        return {};
+    }
     // Commands already recorded read the replaced heap: it gets this frame's tables first.
     flush();
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> old = std::move(heap_);
@@ -539,17 +622,24 @@ bool g_selected_adapter_valid = false;
 // The upload rings' first buffers. A segmentation gives each frame an equal share and keeps one more share as
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
 // boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
+// A frame's segment of the descriptor ring: its tables are the renderer's own passes' (a few hundred descriptors at most, by
+// design, not by content: draws read the texture region), so the segment is sized, not grown; frame_high_water() reports use.
 static constexpr unsigned    kSrvPerFrame = 32768u;
 // The descriptor ring's persistent descriptors, outside the rewound frame segments: the scene target conversion sources
 // (the scene target's views, the output scene target's, the MSAA depth's, then the wide scene's).
-static constexpr unsigned    kPersistentSrvDescriptors = 64u * 1024u;
+static constexpr unsigned    kPersistentSrvDescriptors = 64u * 1024u;  // the first size: the region doubles when it is full
 // The texture region of the shader-visible heap (the draws' `Texture2D gTextures[]`): every texture view at its
 // TextureStore index, the last slot the null view. It starts with at least kTextureSlotsMin slots (twice the views made
 // so far when that is more) and the heap is replaced by one with twice as many when a view index reaches the null slot, up
-// to kTextureSlotsMax: what a shader-visible CBV/SRV/UAV heap holds on every resource binding tier, less the ring's part.
+// to the device's heap limit less the ring's part (one million descriptors on resource binding tiers 1 and 2; tier 3 names none,
+// and a heap the device refuses is told once and the region keeps its size).
 static constexpr unsigned    kTextureSlotsMin = 16u * 1024u;
-static constexpr unsigned    kTextureSlotsMax =
-    DescriptorRing::kMaxHeapDescriptors - kPersistentSrvDescriptors - kSrvPerFrame * kFramesInFlight;
+// The texture region's first size (tiny under GALAXY_TEST_SMALL_HEAPS) and its room: what the device's heap limit leaves beside
+// the descriptor ring's part.
+static unsigned texture_slots_first() noexcept { return test_small_heaps() ? 64u : kTextureSlotsMin; }
+static unsigned texture_slots_room(const DescriptorRing& ring) noexcept { return ring.heap_limit() - ring.ring_descriptors(); }
+// The texture region's room is what the device's heap limit (srv_ring_.heap_limit(): tier 1 and 2 one million, tier 3 more) leaves
+// beside the ring's part: RendererD3D12::texture_slots_max().
 // Sampler slots a frame may add: the heap starts again between frames when fewer than this are free.
 static constexpr unsigned    kSamplerFrameRoom = 512u;
 
@@ -791,13 +881,13 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID
 // the descriptor ring).
 void RendererD3D12::write_msaa_depth_view(SceneMsaa& msaa) {
     if (!msaa.depth_srv) {
-        msaa.depth_srv = srv_ring_.allocate_persistent(1u);
+        msaa.depth_srv = allocate_persistent_descriptors(1u);
     }
     D3D12_SHADER_RESOURCE_VIEW_DESC view{};
     view.Format = kSceneDepthSrvFormat;
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    device_->CreateShaderResourceView(msaa.depth.Get(), &view, msaa.depth_srv->cpu);
+    device_->CreateShaderResourceView(msaa.depth.Get(), &view, srv_ring_.persistent_cpu(msaa.depth_srv->index));
     srv_ring_.commit(*msaa.depth_srv, 1u);
 }
 
@@ -1208,7 +1298,7 @@ void RendererD3D12::refresh_scene_conversion_source_views() {
         throw std::runtime_error("scene target conversion source resource unavailable");
     }
     if (!conv_scene_source_table_) {
-        conv_scene_source_table_ = srv_ring_.allocate_persistent(2u);
+        conv_scene_source_table_ = allocate_persistent_descriptors(2u);
     }
     write_scene_conversion_views(*conv_scene_source_table_);
 }
@@ -1221,8 +1311,9 @@ void RendererD3D12::write_scene_conversion_views(const DescriptorRing::Persisten
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
     view.Format = scene_color_->GetDesc().Format;
-    device_->CreateShaderResourceView(scene_color_.Get(), &view, table.cpu);
-    auto depth_cpu = table.cpu;
+    const D3D12_CPU_DESCRIPTOR_HANDLE color_cpu = srv_ring_.persistent_cpu(table.index);
+    device_->CreateShaderResourceView(scene_color_.Get(), &view, color_cpu);
+    auto depth_cpu = color_cpu;
     depth_cpu.ptr += stride;
     view.Format = kSceneDepthSrvFormat;
     device_->CreateShaderResourceView(scene_depth_.Get(), &view, depth_cpu);
@@ -1340,7 +1431,7 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
         ++table;
     }
     if (table == conv_scene_tables_.size()) {
-        conv_scene_tables_.push_back({srv_ring_.allocate_persistent(2u)});
+        conv_scene_tables_.push_back({allocate_persistent_descriptors(2u)});
     }
     conv_scene_table_ = table;
     write_scene_conversion_views(conv_scene_tables_[table].table);
@@ -1439,6 +1530,31 @@ bool RendererD3D12::scene_fits_memory(const FrameMap& map) const {
     const double needed = bytes(map) - bytes(frame_);
     return static_cast<double>(info.CurrentUsage) + needed <=
            0.9 * static_cast<double>(info.Budget);
+}
+
+void RendererD3D12::probe_occlusion() {
+    if (!swap_chain_ || !occluded_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    // A test present draws nothing and moves no buffer: S_OK once the window shows, DXGI_STATUS_OCCLUDED while it does not.
+    const HRESULT hr = swap_chain_->Present(0u, DXGI_PRESENT_TEST);
+    if (hr != DXGI_STATUS_OCCLUDED) {
+        occluded_.store(false, std::memory_order_relaxed);
+    }
+}
+
+bool RendererD3D12::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+    usage = budget = 0u;
+    if (!adapter3_) {
+        return false;
+    }
+    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+    if (FAILED(adapter3_->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
+        return false;
+    }
+    usage = info.CurrentUsage;
+    budget = info.Budget;
+    return true;
 }
 
 bool RendererD3D12::create_clear_pipeline() {
@@ -2080,15 +2196,34 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
 
         if (!create_sampler_heap()) return false;
 
-        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments) {
-            return target.initialize(device_.Get(), name, UploadRing::budget(bytes, segments), segments, bytes);
+        // The vertex, index and constant rings take a request past their segment and spill in a chunk; the matrix ring's rows are
+        // indexed from its base, so it only grows between frames.
+        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments, bool chunks) {
+            bytes = first_ring_bytes(bytes);
+            return target.initialize(device_.Get(), name, UploadRing::budget(bytes, segments), segments, bytes, chunks);
         };
-        if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments) || !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight) ||
-            !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight) || !ring(matrix_ring_, "matrix", kMatrixRingBytes, kRingSegments)) {
+        if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments, true) ||
+            !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight, true) ||
+            !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight, true) ||
+            !ring(matrix_ring_, "matrix", kMatrixRingBytes, kRingSegments, false)) {
             return false;
         }
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight,
-                                  kPersistentSrvDescriptors, kTextureSlotsMin)) {
+        // The shader-visible heap's limit from the device: resource binding tiers 1 and 2 hold one million descriptors, tier 3
+        // names no limit (D3D12_FEATURE_DATA_D3D12_OPTIONS::ResourceBindingTier).
+        unsigned heap_limit = DescriptorRing::kMaxHeapDescriptors;
+        {
+            D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+            if (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3) {
+                heap_limit = std::numeric_limits<unsigned>::max();  // no named limit: heaps double until the device refuses one
+            }
+            std::cerr << "[gpu] descriptor heap: resource binding tier " << static_cast<int>(options.ResourceBindingTier)
+                      << (heap_limit == DescriptorRing::kMaxHeapDescriptors ? ", at most 1000000 descriptors\n"
+                                                                            : ", no named limit\n");
+        }
+        const bool small = test_small_heaps();
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, small ? 1024u : kSrvPerFrame, kFramesInFlight,
+                                  small ? 4u : kPersistentSrvDescriptors, small ? 64u : kTextureSlotsMin, heap_limit)) {
             return false;
         }
         srv_ring_.set_sampler_heap(sampler_heap_.Get());
@@ -2129,10 +2264,10 @@ void RendererD3D12::attach_texture_uploads(TextureStore& cache) {
     if (mirrored_backend_ != &cache.backend()) {
         // Every view goes into the texture region from now on: room for twice the views made so far (at least
         // kTextureSlotsMin), the null view in its last slot.
-        const std::uint64_t wanted = std::max<std::uint64_t>(kTextureSlotsMin, 2u * std::uint64_t{cache.backend().views_made()} + 1u);
+        const std::uint64_t wanted = std::max<std::uint64_t>(texture_slots_first(), 2u * std::uint64_t{cache.backend().views_made()} + 1u);
         mirrored_store_ = &cache;
         mirrored_backend_ = &cache.backend();
-        install_texture_heap(cache, static_cast<std::uint32_t>(std::min<std::uint64_t>(wanted, kTextureSlotsMax)));
+        install_texture_heap(cache, static_cast<std::uint32_t>(std::min<std::uint64_t>(wanted, texture_slots_room(srv_ring_))));
     }
 }
 
@@ -2144,7 +2279,10 @@ void RendererD3D12::attach_texture_uploads(TextureStore& cache) {
 void RendererD3D12::install_texture_heap(TextureStore& cache, std::uint32_t slots) {
     const bool grown = slots > srv_ring_.texture_slots();
     if (grown) {
-        retired_heaps_.push_back({srv_ring_.resize_textures(slots), next_fence_value_ + 1u});
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replaced = srv_ring_.resize_textures(slots);
+        if (replaced) {
+            retired_heaps_.push_back({std::move(replaced), next_fence_value_ + 1u});
+        }
     }
     const std::uint32_t count = srv_ring_.texture_slots();
     device_->CopyDescriptorsSimple(1u, srv_ring_.texture_cpu(count - 1u), cache.backend().null_srv(),
@@ -2159,18 +2297,34 @@ void RendererD3D12::install_texture_heap(TextureStore& cache, std::uint32_t slot
     null_texture_slot_ = count - 1u;
 }
 
+// Persistent descriptors from the ring, which doubles its region when it is full: the heap it builds has an empty texture
+// region, so the views made so far are copied into it from the texture backend's CPU views (install_texture_heap) and the
+// encoder takes nothing as bound.
+DescriptorRing::Persistent RendererD3D12::allocate_persistent_descriptors(unsigned count) {
+    ID3D12DescriptorHeap* const before = srv_ring_.heap();
+    DescriptorRing::Persistent table = srv_ring_.allocate_persistent(count);
+    if (srv_ring_.heap() != before) {
+        if (mirrored_store_ != nullptr) {
+            install_texture_heap(*mirrored_store_, srv_ring_.texture_slots());
+        }
+        ++sampler_generation_;
+        invalidate_draw_bindings();
+    }
+    return table;
+}
+
 // A view index reached the null slot (TextureBackend::publish_view): a heap twice as large, or as large as the views
-// need, up to kTextureSlotsMax.
+// need, up to the device's heap limit less the ring's part.
 void RendererD3D12::grow_texture_heap(std::uint32_t index) {
     if (mirrored_store_ == nullptr) {
         return;
     }
     const std::uint64_t needed = std::max<std::uint64_t>(std::uint64_t{index} + 2u, std::uint64_t{mirrored_store_->backend().views_made()} + 1u);
-    std::uint64_t slots = std::max<std::uint64_t>(srv_ring_.texture_slots(), kTextureSlotsMin);
+    std::uint64_t slots = std::max<std::uint64_t>(srv_ring_.texture_slots(), texture_slots_first());
     while (slots < needed) {
         slots *= 2u;
     }
-    slots = std::min<std::uint64_t>(slots, kTextureSlotsMax);
+    slots = std::min<std::uint64_t>(slots, texture_slots_room(srv_ring_));
     if (slots < needed || slots <= srv_ring_.texture_slots()) {
         return;  // publish_view reports the limit
     }
@@ -2408,6 +2562,7 @@ void RendererD3D12::shutdown() {
     retired_heaps_.clear();
     mirrored_backend_ = nullptr;
     mirrored_store_ = nullptr;
+    release_latency_wait();
     swap_chain_.Reset(); command_list_.Reset();
     for (auto& a : allocators_) a.Reset();
     vertex_ring_.reset();
@@ -2494,7 +2649,16 @@ bool RendererD3D12::create_swap_chain(bool fsr) {
     ComPtr<IDXGISwapChain2> swap_chain2;
     d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
     d3d_check(swap_chain2->SetMaximumFrameLatency(1u), "SetMaximumFrameLatency");
+    release_latency_wait();
+    latency_wait_ = swap_chain2->GetFrameLatencyWaitableObject();
     return true;
+}
+
+void RendererD3D12::release_latency_wait() noexcept {
+    if (latency_wait_ != nullptr) {
+        CloseHandle(latency_wait_);
+        latency_wait_ = nullptr;
+    }
 }
 
 // The swap chain made again when frame generation changes it (RenderConfig::frame_generation, applied between frames).
@@ -2511,6 +2675,7 @@ void RendererD3D12::recreate_swap_chain(bool fsr) {
     for (auto& buffer : backbuffers_) {
         buffer.Reset();
     }
+    release_latency_wait();
     swap_chain_.Reset();
     create_swap_chain(fsr);
     const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -2741,31 +2906,33 @@ void RendererD3D12::begin_frame() {
         // A ring whose frames took over half their budget (or spilled) grows before the next frame.
         if (!ring_growth_failed_ && (vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
                                      matrix_ring_.wants_growth())) {
-            wait_for_gpu();
-            const auto place = [&](UploadRing& ring, const char* name, unsigned count) {
+            // No wait for the GPU: a ring grows into a new buffer (the same size when only its segments change), and the old
+            // one and its chunks go to the newest frame in flight's retired list, released after that frame's fence, which is
+            // past every earlier frame's.
+            std::vector<gpu::BufferRef>& old = retired_targets_[(frame_index_ + kFramesInFlight - 1u) % kFramesInFlight];
+            const auto place = [&](UploadRing& ring, const char* name, unsigned count, bool chunks) {
                 const std::size_t had = ring.capacity();
                 std::size_t capacity = ring_growth_failed_ ? had : ring.grown_capacity(count);
                 if (capacity == 0u) {
                     ring_growth_failed_ = true;
                     capacity = had;
                 }
-                if (capacity == had) {
-                    return ring.resegment(UploadRing::budget(capacity, count), count);
+                if (capacity != had) {
+                    std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
+                              << " budget-kb=" << (ring.bytes_per_frame() >> 10u) << " mb=" << (had >> 20u) << "->"
+                              << (capacity >> 20u) << '\n';
                 }
-                std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
-                          << " budget-kb=" << (ring.bytes_per_frame() >> 10u) << " mb=" << (had >> 20u) << "->"
-                          << (capacity >> 20u) << '\n';
-                ring.reset();
-                if (ring.initialize(device_.Get(), name, UploadRing::budget(capacity, count), count, capacity)) {
+                ring.release_into(old);
+                if (ring.initialize(device_.Get(), name, UploadRing::budget(capacity, count), count, capacity, chunks)) {
                     return true;
                 }
-                // Out of upload memory: the buffer it had, and no further attempts.
+                // Out of upload memory: the size it had, and no further attempts.
                 ring_growth_failed_ = true;
                 std::cerr << "[gpu-rings] grow " << name << " failed\n";
-                return ring.initialize(device_.Get(), name, UploadRing::budget(had, count), count, had);
+                return ring.initialize(device_.Get(), name, UploadRing::budget(had, count), count, had, chunks);
             };
-            if (!place(vertex_ring_, "vertex", kRingSegments) || !place(index_ring_, "index", kFramesInFlight) ||
-                !place(constant_ring_, "constant", kFramesInFlight) || !place(matrix_ring_, "matrix", kRingSegments)) {
+            if (!place(vertex_ring_, "vertex", kRingSegments, true) || !place(index_ring_, "index", kFramesInFlight, true) ||
+                !place(constant_ring_, "constant", kFramesInFlight, true) || !place(matrix_ring_, "matrix", kRingSegments, false)) {
                 throw std::runtime_error("ring resize failed");
             }
             history_segment_ = 0u;
@@ -3012,7 +3179,8 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
 
 void RendererD3D12::present_to_swap_chain() {
     // Automatic-rate interpolation needs the display clock even with VSync and diagnostics off.
-    if (display_refresh_presents_++ % 120u == 0u) {
+    // Also at once when the window has moved to another monitor, whose rate may differ.
+    if (host_window::monitor_changed.exchange(false, std::memory_order_acq_rel) || display_refresh_presents_++ % 120u == 0u) {
         refresh_display_rate();
     }
     const RenderConfig cfg = get_render_config();
@@ -3061,6 +3229,13 @@ void RendererD3D12::present_to_swap_chain() {
         fg_hudless_ready_ = false;
     }
     streamline::marker(streamline::Marker::kPresentStart);
+    // The display's own signal that a frame may be queued, awaited asleep (never a poll) and bounded, so a display that stopped
+    // never holds the render thread. Not when presenting at once with no wait for the display (vsync off), and not on a chain
+    // that frame generation replaced.
+    if (latency_wait_ != nullptr && vsync != 0u && !generating && !fsr_swap_chain_ &&
+        WaitForSingleObjectEx(latency_wait_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
+        std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
+    }
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
     if (generating && collect_present_telemetry) {
         // What frame generation sends to the display per frame here.
@@ -3077,6 +3252,7 @@ void RendererD3D12::present_to_swap_chain() {
     }
     streamline::marker(streamline::Marker::kPresentEnd);
     streamline_frame_open_ = false;
+    occluded_.store(present_hr == DXGI_STATUS_OCCLUDED, std::memory_order_relaxed);
     if (timeline_present) {
         galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
                              timeline_present_ordinal);
@@ -3334,6 +3510,10 @@ std::uint64_t RendererD3D12::end_frame(
     }
     // The frame's tables go into the heap before the GPU can read them.
     srv_ring_.flush();
+    // Heaps the descriptor ring replaced while it grew: freed once this frame's submission has completed.
+    for (Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& replaced : srv_ring_.take_replaced()) {
+        retired_heaps_.push_back({std::move(replaced), next_fence_value_ + 1u});
+    }
     const HRESULT close_hr = command_list_->Close();
     if (FAILED(close_hr)) {
         dump_device_removal(device_.Get());
@@ -4078,7 +4258,7 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
     dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     device_->CreateDepthStencilView(alt_scene_.depth.Get(), &dsv, alt_scene_.dsv);
     if (!alt_scene_.conv_table) {
-        alt_scene_.conv_table = srv_ring_.allocate_persistent(2u);
+        alt_scene_.conv_table = allocate_persistent_descriptors(2u);
     }
     const UINT stride = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -4087,9 +4267,9 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
     view.Format = kSceneColorFormat;
-    device_->CreateShaderResourceView(
-        alt_scene_.color.Get(), &view, alt_scene_.conv_table->cpu);
-    auto depth_cpu = alt_scene_.conv_table->cpu;
+    const D3D12_CPU_DESCRIPTOR_HANDLE color_cpu = srv_ring_.persistent_cpu(alt_scene_.conv_table->index);
+    device_->CreateShaderResourceView(alt_scene_.color.Get(), &view, color_cpu);
+    auto depth_cpu = color_cpu;
     depth_cpu.ptr += stride;
     view.Format = kSceneDepthSrvFormat;
     device_->CreateShaderResourceView(alt_scene_.depth.Get(), &view, depth_cpu);
@@ -4108,8 +4288,9 @@ void RendererD3D12::write_scene_set_views(SceneTargetSet& set, const DescriptorR
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
     view.Format = set.color->GetDesc().Format;
-    device_->CreateShaderResourceView(set.color.Get(), &view, table.cpu);
-    auto depth_cpu = table.cpu;
+    const D3D12_CPU_DESCRIPTOR_HANDLE color_cpu = srv_ring_.persistent_cpu(table.index);
+    device_->CreateShaderResourceView(set.color.Get(), &view, color_cpu);
+    auto depth_cpu = color_cpu;
     depth_cpu.ptr += stride;
     view.Format = kSceneDepthSrvFormat;
     device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
@@ -4183,7 +4364,7 @@ bool RendererD3D12::create_scene_set(
     }
     if (persistent_views) {
         write_scene_set_views(set, set.conv_table ? *set.conv_table
-                                                : srv_ring_.allocate_persistent(2u));
+                                                : allocate_persistent_descriptors(2u));
     } else {
         // The caller writes views into the frame's descriptor segment per use.
         set.conv_table.reset();
@@ -4591,7 +4772,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
     set.msaa.depth_dirty = scene_msaa_.depth_dirty;
     if (set.depth != scene_depth_) {
         set.depth = scene_depth_;
-        write_scene_set_views(set, set.conv_table ? *set.conv_table : srv_ring_.allocate_persistent(2u));
+        write_scene_set_views(set, set.conv_table ? *set.conv_table : allocate_persistent_descriptors(2u));
     }
     return true;
 }

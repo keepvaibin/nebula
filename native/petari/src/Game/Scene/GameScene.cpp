@@ -74,6 +74,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Material.hpp"
+#include "Game/Render/NebulaWideProbe.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Map/StageSwitch.hpp"
@@ -564,6 +565,9 @@ void GameScene::draw3D() const {
     MR::loadProjectionMtx();
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_PlayerIndirect);
+#if defined(NEBULA_DEV)
+    NebulaWideProbe::draw();
+#endif
     Frame::sceneEnd();
     MR::clearZBuffer();
 }

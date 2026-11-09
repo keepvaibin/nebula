@@ -15,8 +15,8 @@
 
 namespace galaxy::render {
 
-using core::kLightRows;
 using core::kParticleRows;
+using core::kRowsPerLight;
 using core::kRowsPerMatrix;
 using core::ListData;
 using core::WalkTime;
@@ -151,8 +151,15 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         walk_block_world_[b] = now.block_world_wanted[b] != 0u ? total : walk_block_rows_[b];
         total += now.block_world_wanted[b] != 0u ? matrices * kRowsPerMatrix : 0u;
     }
+    // The light sets: an empty one first (a draw without a light set reads it), then each set as its own count of lights
+    // makes it.
     const std::uint32_t lights_first = total;
-    total += list.light_set_count * kLightRows;
+    total += core::light_set_rows(0u);
+    walk_light_rows_.resize(list.light_set_count);
+    for (std::uint32_t s = 0; s < list.light_set_count; ++s) {
+        walk_light_rows_[s] = total;
+        total += core::light_set_rows(list.light_sets[s].count);
+    }
     const std::uint32_t instances_first = total;
     total += list.instance_row_count;
     walk_rows_.resize(std::size_t{instances_first} * 4u + 4u);
@@ -212,22 +219,32 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         }
     }
 
+    // Each set's header row holds its light count as a float; its lights follow, four rows each.
+    std::memset(rows + lights_first, 0, core::kLightSetHeaderRows * sizeof(float[4]));
     for (std::uint32_t s = 0; s < list.light_set_count; ++s) {
         const NebulaFrameLightSet& set = list.light_sets[s];
-        float (*out)[4] = rows + lights_first + s * kLightRows;
+        float (*header)[4] = rows + walk_light_rows_[s];
+        float (*out)[4] = header + core::kLightSetHeaderRows;
+        header[0][0] = static_cast<float>(set.count);
+        header[0][1] = header[0][2] = header[0][3] = 0.0f;
+        const NebulaFrameLight* lights = list.lights + set.first;
         const std::uint32_t pair = now.light_set_before.empty() ? NEBULA_NONE32 : now.light_set_before[s];
         if (!between || !now.motion_ready) {
-            std::memcpy(out, set.lights, sizeof(set.lights));
+            if (set.count != 0u) {
+                std::memcpy(out, lights, std::size_t{set.count} * sizeof(NebulaFrameLight));
+            }
             continue;
         }
         const std::uint32_t camera = now.light_camera[s];
         static const CameraMotion kNoCamera{};
         const CameraMotion& motion = camera != NEBULA_NONE32 ? now.camera_motion[camera] : kNoCamera;
         const Affine34 camera_t = camera != NEBULA_NONE32 ? walk_cameras_[camera] : Affine34{};
-        for (unsigned l = 0; l < NEBULA_LIGHTS_PER_SET; ++l) {
-            const NebulaFrameLight* a = pair != NEBULA_NONE32 ? &before->list->light_sets[pair].lights[l] : nullptr;
-            const bool split = (set.follows_camera >> l & 1u) == 0u;
-            light_rows_at(a, set.lights[l], motion, camera_t, time.t, split, out + 4u * l);
+        // The set the light was in before: its lights of the same number (a paired set holds the same follow words).
+        const NebulaFrameLightSet* paired = pair != NEBULA_NONE32 ? &before->list->light_sets[pair] : nullptr;
+        for (std::uint32_t l = 0; l < set.count; ++l) {
+            const NebulaFrameLight* a = paired != nullptr && l < paired->count ? before->list->lights + paired->first + l : nullptr;
+            const bool split = (list.light_follow[set.follow_first + l / 32u] >> (l % 32u) & 1u) == 0u;
+            light_rows_at(a, lights[l], motion, camera_t, time.t, split, out + std::size_t{kRowsPerLight} * l);
         }
     }
 
@@ -276,8 +293,8 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
             out[0] = base + walk_block_rows_[item.block] + add;
             out[1] = walk_previous_[item.block] + add;
             out[2] = instanced                         ? base + instances_first + item.ring_at
-                     : item.light_set != NEBULA_NONE32 ? base + lights_first + item.light_set * kLightRows
-                                                       : 0u;
+                     : item.light_set != NEBULA_NONE32 ? base + walk_light_rows_[item.light_set]
+                                                       : base + lights_first;
             out[3] = base + walk_block_world_[item.block] + add;
             out += 4u;
         }
@@ -599,6 +616,8 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
 
 void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first) {
     core::TextureTable& table = registries_.table(id);
+    table.last_frame = frame_index_;
+    table.retired = false;
     // A list written earlier in this walk stands unless the generation moved since (the sampler array started again, or
     // the Vulkan image array grew and its null slot moved): then it is written again.
     const auto generation = renderer_.sampler_generation();
@@ -608,11 +627,16 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         return;
     }
     const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
-    const std::uint32_t count = table.count;
+    // The run is as long as the list: no count caps it (GALAXY_TEST_WIDE_TABLES pads it, entry_of repeats the last map).
+    const std::uint32_t count = walked_textures(table.count);
+    const NebulaFrameTexture none{};
+    const auto entry_of = [&](std::uint32_t i) -> const NebulaFrameTexture& {
+        return table.count == 0u ? none : table.list[std::min(i, table.count - 1u)];
+    };
     walk_handles_.assign(count, TextureHandle{});
     bool has_target = false;
     for (std::uint32_t i = 0; i < count; ++i) {
-        const std::uint32_t texture = table.list[i].texture;
+        const std::uint32_t texture = entry_of(i).texture;
         if (texture == 0u) {
             continue;
         }
@@ -631,7 +655,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         table.samplers_scene_bias != scene_mip_bias_) {
         table.sampler_slots.resize(count);
         for (std::uint32_t i = 0; i < count; ++i) {
-            const NebulaFrameTexture& t = table.list[i];
+            const NebulaFrameTexture& t = entry_of(i);
             TextureSampler mode;
             mode.wrap_s = static_cast<TexWrap>(t.wrap_s);
             mode.wrap_t = static_cast<TexWrap>(t.wrap_t);
@@ -662,6 +686,11 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         walk_pairs_[2u * i + 1u] = table.sampler_slots[i];
     }
     renderer_.write_texture_list(walk_pairs_.data(), count, table.lists, table.list_first);
+    if (count > table.count && !table.clamp_logged) {
+        table.clamp_logged = true;
+        std::fprintf(stderr, "[textures] test: a list of %u maps walked as a run of %u (first entry %u)\n", table.count, count,
+                     table.list_first);
+    }
     table.walk_stamp = walk_.serial;
     lists = table.lists;
     first = table.list_first;
@@ -672,12 +701,20 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
 // (renderer_.table_slots(); program.hlsli NEBULA_BOUND_TABLES). A longer list draws with its first maps.
 void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
     core::TextureTable& table = registries_.table(id);
-    const std::uint32_t count = std::min(table.count, renderer_.table_slots());
-    if (count < table.count && !table.clamp_logged) {
+    table.last_frame = frame_index_;
+    table.retired = false;
+    // The list as walked (GALAXY_TEST_WIDE_TABLES pads it), cut to the bound table's compile-time size; told once per list.
+    const std::uint32_t listed = walked_textures(table.count);
+    const std::uint32_t count = std::min(listed, renderer_.table_slots());
+    if (count < listed && !table.clamp_logged) {
         table.clamp_logged = true;
         std::fprintf(stderr, "[textures] a list of %u maps: this device's bound tables hold %u, the first are drawn\n",
-                     table.count, count);
+                     listed, count);
     }
+    const NebulaFrameTexture none{};
+    const auto entry_of = [&](std::uint32_t i) -> const NebulaFrameTexture& {
+        return table.count == 0u ? none : table.list[std::min(i, table.count - 1u)];
+    };
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
     const bool per_walk = table.has_target && table.walk_stamp != walk_.serial;
     const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
@@ -689,7 +726,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
         std::vector<TextureHandle>& handles = walk_handles_;
         bool has_target = false;
         for (std::uint32_t i = 0; i < count; ++i) {
-            const std::uint32_t texture = table.list[i].texture;
+            const std::uint32_t texture = entry_of(i).texture;
             if (texture == 0u) {
                 continue;
             }
@@ -716,7 +753,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
             std::vector<SamplerKey>& keys = walk_keys_;
             keys.assign(count, SamplerKey{});
             for (std::uint32_t i = 0; i < count; ++i) {
-                const NebulaFrameTexture& t = table.list[i];
+                const NebulaFrameTexture& t = entry_of(i);
                 TextureSampler mode;
                 mode.wrap_s = static_cast<TexWrap>(t.wrap_s);
                 mode.wrap_t = static_cast<TexWrap>(t.wrap_t);
@@ -740,6 +777,11 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
             table.samplers_generation = generation;
             table.samplers_mip_lines = mip_lines;
             table.samplers_scene_bias = scene_mip_bias_;
+        }
+    } else {
+        // The table stands as it was built: its textures are named again all the same (the budget evicts the unnamed ones).
+        for (std::uint32_t i = 0; i < count; ++i) {
+            texture_store_.touch(entry_of(i).texture);
         }
     }
     textures = table.textures;

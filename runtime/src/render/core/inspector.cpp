@@ -9,6 +9,8 @@
 #include "galaxy/render/render_core.h"
 #include "galaxy/run_options.h"
 
+#include <nebula_game_api.h>
+
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -53,7 +55,7 @@ std::FILE* open_for_writing(const char* path) {
 namespace {
 
 constexpr std::uint64_t kShowPipelines = std::uint64_t{1} << 32u;
-constexpr std::uint64_t kShowProgram = NEBULA_PROGRAM_SITE | (std::uint64_t{42u} << 1u);
+constexpr std::uint64_t kShowProgram = NEBULA_PROGRAM_SITE | (std::uint64_t{NEBULA_SHADER_INSPECT_SHOW} << 1u);
 constexpr std::uint64_t kStageProgram = 1ull << 62u;
 
 std::string text(const char* value) { return value != nullptr ? std::string(value) : std::string{}; }
@@ -210,7 +212,10 @@ struct Access {
             put_floats(f, "world", &core.walk_rows_cpu_[world_at + item.matrix * core::kRowsPerMatrix][0], 24u);
         }
         if (item.light_set != NEBULA_NONE32) {
-            put_floats(f, "lights", &list.light_sets[item.light_set].lights[0].color[0], 16u * NEBULA_LIGHTS_PER_SET);
+            const NebulaFrameLightSet& set = list.light_sets[item.light_set];
+            if (set.count != 0u) {
+                put_floats(f, "lights", &list.lights[set.first].color[0], std::size_t{16u} * set.count);
+            }
         }
         const NebulaFrameConstants& constants = list.constants[item.constants];
         const float* rows = constants.slot != NEBULA_NONE32 ? core.registries_.slot_rows(constants.slot) : &constants.rows[0][0];

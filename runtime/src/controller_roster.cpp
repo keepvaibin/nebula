@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace galaxy::input {
 
@@ -38,33 +39,32 @@ void write_label(DeviceEntry& entry, const char* model, unsigned ordinal, const 
 }  // namespace
 
 void build_device_list(std::span<const ControllerInfo> connected, std::optional<DeviceKey> active,
-                       DeviceList& out, bool keyboard, bool phone) noexcept {
+                       DeviceList& out, bool keyboard, bool phone) {
     out = DeviceList{};
+    out.entries.reserve(connected.size() + 2u);
     if (phone) {
-        DeviceEntry& entry = out.entries[out.count++];
+        DeviceEntry& entry = out.entries.emplace_back();
         entry.key = DeviceKey{ControlScheme::Keyboard, kPhoneSlot};
         write_label(entry, "Phone", 0u, nullptr, nullptr);
         entry.active = !active.has_value() || is_phone(*active);
     }
     if (keyboard) {
-        DeviceEntry& entry = out.entries[out.count++];
+        DeviceEntry& entry = out.entries.emplace_back();
         entry.key = DeviceKey{ControlScheme::Keyboard, kKeyboardSlot};
         write_label(entry, "Keyboard and mouse", 0u, nullptr, nullptr);
         entry.active = active && *active == entry.key;
     }
 
-    std::array<const ControllerInfo*, kMaxControllers * 2> sorted{};
-    std::size_t sorted_count = 0;
+    std::vector<const ControllerInfo*> sorted;
+    sorted.reserve(connected.size());
     for (const ControllerInfo& info : connected) {
-        if (info.scheme == ControlScheme::Keyboard || sorted_count == sorted.size()) continue;
-        sorted[sorted_count++] = &info;
+        if (info.scheme != ControlScheme::Keyboard) sorted.push_back(&info);
     }
-    std::sort(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(sorted_count),
-              [](const ControllerInfo* a, const ControllerInfo* b) {
-                  if (a->scheme != b->scheme) return a->scheme < b->scheme;
-                  return a->slot < b->slot;
-              });
-    const std::size_t listed = std::min(sorted_count, kMaxControllers);
+    std::sort(sorted.begin(), sorted.end(), [](const ControllerInfo* a, const ControllerInfo* b) {
+        if (a->scheme != b->scheme) return a->scheme < b->scheme;
+        return a->slot < b->slot;
+    });
+    const std::size_t listed = sorted.size();
     for (std::size_t i = 0; i < listed; ++i) {
         const ControllerInfo& info = *sorted[i];
         unsigned same_model = 0;
@@ -74,11 +74,12 @@ void build_device_list(std::span<const ControllerInfo> connected, std::optional<
             ++same_model;
             if (j <= i) ordinal = same_model;
         }
-        DeviceEntry& entry = out.entries[out.count++];
+        DeviceEntry& entry = out.entries.emplace_back();
         entry.key = DeviceKey{info.scheme, info.slot};
         write_label(entry, info.model, same_model > 1u ? ordinal : 0u, link_name(info.link), info.note);
         entry.active = active && *active == entry.key;
     }
+    out.count = out.entries.size();
 }
 
 std::size_t resolve_device(const DeviceList& list, DeviceKey previous) noexcept {

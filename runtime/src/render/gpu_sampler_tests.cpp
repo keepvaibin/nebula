@@ -113,14 +113,15 @@ int main() {
         ring.begin_frame(0);
         const auto t0 = ring.allocate(16u);
         passed &= expect(t0.gpu.ptr == ring.gpu_at(32u).ptr, "a frame segment follows the persistent region");
+        // A full persistent region doubles: the earlier descriptors keep their indices and the frame segments move up.
+        const auto heap_before = ring.heap();
+        const auto p2 = ring.allocate_persistent(1u);
+        passed &= expect(p2.index == 32u && ring.persistent_capacity() >= 33u && ring.heap() != heap_before,
+                         "a full persistent region grows into a new heap");
+        passed &= expect(p0.index == 0u && ring.persistent_cpu(p0.index).ptr != 0u && ring.persistent_cpu(p1.index).ptr != 0u,
+                         "the earlier persistent descriptors keep their indices");
+        passed &= expect(ring.take_replaced().size() == 1u, "the replaced heap is handed back");
         bool refused = false;
-        try {
-            static_cast<void>(ring.allocate_persistent(1u));
-        } catch (const std::runtime_error&) {
-            refused = true;
-        }
-        passed &= expect(refused, "a full persistent region refuses instead of opening another heap");
-        refused = false;
         try {
             static_cast<void>(ring.allocate(1u));
         } catch (const std::runtime_error&) {

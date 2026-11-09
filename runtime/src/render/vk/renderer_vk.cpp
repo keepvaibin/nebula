@@ -39,7 +39,7 @@
 namespace galaxy::render {
 
 void RendererVk::test_lose_device() {
-    throw std::runtime_error("[RendererVk] VK_ERROR_DEVICE_LOST (test)");
+    vk::Context::get().simulate_device_loss();
 }
 
 namespace {
@@ -156,7 +156,9 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             vk::check(vkAllocateCommandBuffers(device, &alloc, buffers), "vkAllocateCommandBuffers");
             frame.uploads = buffers[0];
             frame.commands = buffers[1];
-            frame.descriptors = create_pool(device, kFrameSets, vk_detail::frame_pool(!bindless_));
+            frame.descriptors = test_small_heaps()
+                ? create_pool(device, vk_detail::kSmallFrameSets, vk_detail::frame_pool(!bindless_, vk_detail::kSmallFrameSets))
+                : create_pool(device, kFrameSets, vk_detail::frame_pool(!bindless_));
             VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.acquired), "vkCreateSemaphore");
         }
@@ -169,11 +171,16 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         }
         // The rings are Vulkan buffers with GPU addresses; their sizes follow the D3D12 renderer's. The vertex and row rings
         // keep the last frame readable for motion.
-        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments) {
-            return target.initialize(device, name, UploadRing::budget(bytes, segments), segments, bytes);
+        // The vertex, index and constant rings take a request past their segment and spill in a chunk; the matrix ring's rows are
+        // indexed from its base, so it only grows between frames.
+        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments, bool chunks) {
+            bytes = first_ring_bytes(bytes);
+            return target.initialize(device, name, UploadRing::budget(bytes, segments), segments, bytes, chunks);
         };
-        if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments) || !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight) ||
-            !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight) || !ring(matrix_ring_, "matrix", kMatrixRingBytes, kRingSegments)) {
+        if (!ring(vertex_ring_, "vertex", kVertexRingBytes, kRingSegments, true) ||
+            !ring(index_ring_, "index", kIndexRingBytes, kFramesInFlight, true) ||
+            !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight, true) ||
+            !ring(matrix_ring_, "matrix", kMatrixRingBytes, kRingSegments, false)) {
             std::cerr << "[Renderer] upload rings unavailable\n";
             shutdown();
             return false;
@@ -558,11 +565,26 @@ bool RendererVk::create_layouts() {
                                                          : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
+    // The effects layer needs its format drawn and blended, and four colour attachments with independent blending.
+    {
+        VkFormatProperties layer_format{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), vk::kLayerFormat, &layer_format);
+        constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT |
+                                                 VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_SRC_BIT |
+                                                 VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+        VkPhysicalDeviceFeatures features{};
+        vkGetPhysicalDeviceFeatures(context.physical_device(), &features);
+        layer_targets_ok_ = (layer_format.optimalTilingFeatures & kNeeded) == kNeeded &&
+                            context.properties().limits.maxColorAttachments >= 4u &&
+                            context.properties().limits.maxFragmentOutputAttachments >= 4u && features.independentBlend == VK_TRUE;
+    }
     // A temporal scene's passes: as the single-sample scene pass, with the motion vectors or the reactive mask next to the
-    // scene target (RendererD3D12 binds them as render target 1).
+    // scene target (RendererD3D12 binds them as render target 1); aux 2 index 2 adds the effects layer's colour and
+    // transmittance as render targets 2 and 3 (attachments 3 and 4).
     for (const bool wide : {false, true})
-    for (unsigned aux = 0u; aux < 2u; ++aux) {
-        VkAttachmentDescription attachments[3]{};
+    for (unsigned aux = 0u; aux < (layer_targets_ok_ ? 3u : 2u); ++aux) {
+        const bool layer = aux == 2u;
+        VkAttachmentDescription attachments[5]{};
         attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : vk::kSceneColorFormat;
         attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -579,12 +601,17 @@ bool RendererVk::create_layouts() {
         attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[2] = attachments[0];
         attachments[2].format = aux == 0u ? VK_FORMAT_R16G16_SFLOAT : VK_FORMAT_R8_UNORM;
-        const VkAttachmentReference colors[2] = {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-                                                 {2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}};
+        attachments[3] = attachments[0];
+        attachments[3].format = vk::kLayerFormat;
+        attachments[4] = attachments[3];
+        const VkAttachmentReference colors[4] = {{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 {2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 {3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 {4, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}};
         const VkAttachmentReference depth{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 2;
+        subpass.colorAttachmentCount = layer ? 4u : 2u;
         subpass.pColorAttachments = colors;
         subpass.pDepthStencilAttachment = &depth;
         // As the scene target's passes: the compute passes that read or write these targets change their layouts with
@@ -603,7 +630,7 @@ bool RendererVk::create_layouts() {
         dependencies[1].srcSubpass = 0;
         dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
         VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-        info.attachmentCount = 3;
+        info.attachmentCount = layer ? 5u : 3u;
         info.pAttachments = attachments;
         info.subpassCount = 1;
         info.pSubpasses = &subpass;
@@ -611,8 +638,9 @@ bool RendererVk::create_layouts() {
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes[wide ? 1u : 0u][aux]),
                   "temporal scene render pass");
-        for (VkAttachmentDescription& attachment : attachments) {
-            attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // The clearing form clears the scene's targets; the layer's two keep what begin_layer_window cleared them to.
+        for (unsigned i = 0u; i < 3u; ++i) {
+            attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         }
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes_clear[wide ? 1u : 0u][aux]),
@@ -666,7 +694,11 @@ bool RendererVk::create_layouts() {
                                    std::memory_order_relaxed);
     draw_layout_.depth_clamp = context.depth_clamp();
     draw_layout_.depth_clip_enable = context.depth_clip_enable();
-    persistent_pool_ = create_pool(device, kPersistentSets, kPersistentPool);
+    persistent_pool_ = test_small_heaps()
+        ? create_pool(device, vk_detail::kSmallPersistentSets,
+                      vk_detail::constants_sets(2u, {.images = vk_detail::kSmallPersistentSets * vk::kBoundTableSlots,
+                                                     .samplers = vk_detail::kSmallPersistentSets * vk::kBoundTableSlots}))
+        : create_pool(device, kPersistentSets, kPersistentPool);
     return true;
 }
 
@@ -726,7 +758,13 @@ bool RendererVk::create_swapchain() {
             : supported(VK_PRESENT_MODE_MAILBOX_KHR) ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
     }
 
-    std::uint32_t images = std::max(caps.minImageCount, 2u);
+    // The image count, one rule on every platform from the surface's own limits: MAILBOX and IMMEDIATE take 3 (clamped to the
+    // surface's minimum and maximum); FIFO takes the minimum plus one, or just the minimum where the device has
+    // VK_KHR_present_wait (the wait bounds the queue instead of a spare image). The pacing (present_pacer_, the present
+    // times) reads timestamps, not this count.
+    const bool present_wait = context.device_extension_enabled("VK_KHR_present_wait");
+    std::uint32_t images = mode == VK_PRESENT_MODE_FIFO_KHR ? caps.minImageCount + (present_wait ? 0u : 1u) : 3u;
+    images = std::max(images, caps.minImageCount);
     if (caps.maxImageCount != 0u) {
         images = std::min(images, caps.maxImageCount);
     }
@@ -820,6 +858,15 @@ bool RendererVk::create_swapchain() {
     swapchain_calls_.get_images(device, handle, &count, swapchain_.images.data());
     std::fprintf(stderr, "[vulkan] swapchain %ux%u transform=%u images=%u\n", extent.width, extent.height,
                  static_cast<unsigned>(transform), count);
+    if (count != logged_swap_images_ || mode != logged_swap_mode_) {
+        // Once, and again only when the count or the mode changes (VSync toggled).
+        logged_swap_images_ = count;
+        logged_swap_mode_ = mode;
+        const char* const name = mode == VK_PRESENT_MODE_IMMEDIATE_KHR ? "IMMEDIATE"
+            : mode == VK_PRESENT_MODE_MAILBOX_KHR ? "MAILBOX"
+            : mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? "FIFO_RELAXED" : "FIFO";
+        std::fprintf(stderr, "[vk] swap chain: %u images, %s\n", count, name);
+    }
 
     if (present_pass_ == VK_NULL_HANDLE || swapchain_.format != format.format) {
         if (present_pass_ != VK_NULL_HANDLE) {
@@ -1100,7 +1147,7 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
 
 VkPipeline RendererVk::probe_test_pipeline() {
     const unsigned aux = scene_pass_aux_;
-    if (target_pass_active_ || aux > 2u) {
+    if (target_pass_active_ || aux > 3u || (aux == 3u && draw_layout_.aux_pass_for(scene_variant(), 3u) == VK_NULL_HANDLE)) {
         return VK_NULL_HANDLE;
     }
     VkPipeline& pipeline = probe_test_pipelines_[aux][scene_variant()];
@@ -1137,9 +1184,9 @@ VkPipeline RendererVk::probe_test_pipeline() {
     depth.depthTestEnable = VK_TRUE;
     depth.depthWriteEnable = VK_FALSE;
     depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
-    VkPipelineColorBlendAttachmentState targets[2]{};  // write masks 0
+    VkPipelineColorBlendAttachmentState targets[4]{};  // write masks 0
     VkPipelineColorBlendStateCreateInfo blend_info{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend_info.attachmentCount = aux != 0u ? 2u : 1u;
+    blend_info.attachmentCount = aux == 3u ? 4u : aux != 0u ? 2u : 1u;
     blend_info.pAttachments = targets;
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
@@ -1224,6 +1271,10 @@ void RendererVk::shutdown() {
                 if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
                 pipeline = VK_NULL_HANDLE;
             }
+        }
+        for (VkPipeline& pipeline : motion_debug_pipelines_) {
+            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+            pipeline = VK_NULL_HANDLE;
         }
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
@@ -1360,30 +1411,31 @@ void RendererVk::grow_rings() {
                                 !matrix_ring_.wants_growth())) {
         return;
     }
-    wait_for_gpu_idle();
+    // No wait for the GPU: a ring grows into a new buffer (the same size when only its segments change). The old buffer and its
+    // chunks are released here, which hands them to the context to destroy once the work submitted so far has completed.
     const VkDevice device = vk::Context::get().device();
-    const auto place = [&](UploadRing& ring, const char* name, unsigned segments) {
+    std::vector<gpu::BufferRef> old;
+    const auto place = [&](UploadRing& ring, const char* name, unsigned segments, bool chunks) {
         const std::size_t had = ring.capacity();
         std::size_t capacity = ring.grown_capacity(segments);
         if (capacity == 0u) {
             ring_growth_failed_ = true;
             capacity = had;
         }
-        if (capacity == had) {
-            return ring.resegment(UploadRing::budget(capacity, segments), segments);
+        if (capacity != had) {
+            std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
+                      << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
         }
-        std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
-                  << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
-        ring.reset();
-        if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity)) {
+        ring.release_into(old);
+        if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity, chunks)) {
             return true;
         }
         ring_growth_failed_ = true;
         std::cerr << "[gpu-rings] grow " << name << " failed\n";
-        return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had);
+        return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had, chunks);
     };
-    if (!place(vertex_ring_, "vertex", kRingSegments) || !place(index_ring_, "index", kFramesInFlight) ||
-        !place(constant_ring_, "constant", kFramesInFlight) || !place(matrix_ring_, "matrix", kRingSegments)) {
+    if (!place(vertex_ring_, "vertex", kRingSegments, true) || !place(index_ring_, "index", kFramesInFlight, true) ||
+        !place(constant_ring_, "constant", kFramesInFlight, true) || !place(matrix_ring_, "matrix", kRingSegments, false)) {
         throw std::runtime_error("upload ring resize failed");
     }
     history_segment_ = 0u;
@@ -2133,7 +2185,12 @@ void RendererVk::follow_window_and_resize() {
         vkDeviceWaitIdle(vk::Context::get().device());
         create_swapchain();
     }
-    if (display_refresh_checks_++ % 120u == 0u) {
+    bool monitor_moved = false;
+#if defined(_WIN32)
+    // The window moved to another monitor, whose rate may differ: measured at once, not at the next periodic check.
+    monitor_moved = host_window::monitor_changed.exchange(false, std::memory_order_acq_rel);
+#endif
+    if (monitor_moved || display_refresh_checks_++ % 120u == 0u) {
         refresh_display_rate();
     }
 }

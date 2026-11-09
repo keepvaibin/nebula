@@ -277,6 +277,10 @@ void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record
     }
 }
 
+bool RendererVk::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+    return vk::Context::get().device_memory_budget(usage, budget);
+}
+
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
 // rule): scene target colour (4 bytes per pixel) and depth (4 for D24S8; D32F with stencil counted at 8, as drivers pad
 // it) and, at most, the display picture pair plus one full-picture copy (12 bytes per pixel of the picture).
@@ -873,6 +877,10 @@ bool RendererVk::ensure_motion_targets() {
     destroy_motion_framebuffers();
     retire(std::move(motion_.motion));
     retire(std::move(motion_.reactive));
+    retire(std::move(motion_.layer_color));
+    retire(std::move(motion_.layer_trans));
+    layer_window_ = false;
+    reactive_scene_ = false;
     motion_.map = FrameMap{};
     vk::Context& context = vk::Context::get();
     const std::uint32_t width = scene_.color->width;
@@ -885,8 +893,23 @@ bool RendererVk::ensure_motion_targets() {
         std::cerr << "[Renderer] motion targets " << width << 'x' << height << " allocation failed\n";
         return false;
     }
+    // The effects layer's two targets, at the scene target's size and, as the Direct3D 12 renderer's, in its own encoding;
+    // without them the scene runs as before (begin_layer_window does nothing).
+    gpu::TextureRef layer_color, layer_trans;
+    if (layer_targets_ok_) {
+        layer_color = context.create_texture(width, height, 1u, vk::kLayerFormat, usage, true, "effects layer colour");
+        layer_trans = context.create_texture(width, height, 1u, vk::kLayerFormat, usage, true, "effects layer transmittance");
+        if (!layer_color || !layer_trans) {
+            std::cerr << "[Renderer] effects layer targets " << width << 'x' << height << " allocation failed\n";
+            layer_color.reset();
+            layer_trans.reset();
+        }
+    }
     run_one_time([&](VkCommandBuffer commands) {
-        for (const vk::Texture* target : {motion.get(), reactive.get()}) {
+        for (const vk::Texture* target : {motion.get(), reactive.get(), layer_color.get(), layer_trans.get()}) {
+            if (target == nullptr) {
+                continue;
+            }
             image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -895,6 +918,8 @@ bool RendererVk::ensure_motion_targets() {
     });
     motion_.motion = std::move(motion);
     motion_.reactive = std::move(reactive);
+    motion_.layer_color = std::move(layer_color);
+    motion_.layer_trans = std::move(layer_trans);
     motion_.map = scene_map_;
     return true;
 }
@@ -909,10 +934,13 @@ VkFramebuffer RendererVk::motion_framebuffer(unsigned aux) {
     }
     VkFramebuffer& framebuffer = motion_.framebuffers[aux - 1u];
     if (framebuffer == VK_NULL_HANDLE) {
-        const VkImageView views[3] = {color, depth, aux == 1u ? motion_.motion->target_view : motion_.reactive->target_view};
+        // Aux 3: the reactive mask, then the effects layer's colour and transmittance (attachments 2, 3 and 4).
+        const VkImageView views[5] = {color, depth, aux == 1u ? motion_.motion->target_view : motion_.reactive->target_view,
+                                      aux == 3u ? motion_.layer_color->target_view : VK_NULL_HANDLE,
+                                      aux == 3u ? motion_.layer_trans->target_view : VK_NULL_HANDLE};
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
         info.renderPass = draw_layout_.aux_pass_for(scene_variant(), aux);
-        info.attachmentCount = 3;
+        info.attachmentCount = aux == 3u ? 5u : 3u;
         info.pAttachments = views;
         info.width = scene_.color->width;
         info.height = scene_.color->height;
@@ -924,13 +952,46 @@ VkFramebuffer RendererVk::motion_framebuffer(unsigned aux) {
 
 bool RendererVk::begin_motion_scene() {
     const bool cleared = std::exchange(motion_cleared_, false);
+    reactive_scene_ = false;
+    layer_window_ = false;
     if (!scene_motion_ || !ensure_motion_targets()) {
         return false;
     }
     if (!cleared) {
         clear_motion_targets();
     }
+    reactive_scene_ = !motion_pass_only();
     return true;
+}
+
+// The layer opens when a scene writes the reactive mask and both targets exist: it is cleared (nothing added, everything
+// let through) and the scene's blended draws that never read the scene write it too until the next scene.
+void RendererVk::begin_layer_window() {
+    if (!reactive_scene_ || layer_window_ || !motion_.layer_color || !motion_.layer_trans ||
+        draw_layout_.aux_pass_for(scene_variant(), 3u) == VK_NULL_HANDLE) {
+        return;
+    }
+    clear_layer_targets();
+    layer_window_ = true;
+}
+
+void RendererVk::clear_layer_targets() {
+    end_scene_pass("clear_layer_targets");
+    const vk::Texture* targets[2] = {motion_.layer_color.get(), motion_.layer_trans.get()};
+    vk::BarriersVk uses(commands_);
+    for (const vk::Texture* target : targets) {
+        uses.image(target->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopyDest);
+    }
+    uses.issue();
+    const VkClearColorValue nothing{};
+    VkClearColorValue through{};
+    for (float& channel : through.float32) {
+        channel = 1.0f;
+    }
+    const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    vkCmdClearColorImage(commands_, targets[0]->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &nothing, 1u, &range);
+    vkCmdClearColorImage(commands_, targets[1]->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &through, 1u, &range);
+    uses.undo();
 }
 
 // In the open scene pass (aux 0): the depth clear's draw keeps the stencil; without it, vkCmdClearAttachments clears both.
@@ -957,6 +1018,45 @@ void RendererVk::clear_depth_in_pass(float reversed_depth, const VkRect2D& rect)
         const VkClearRect clear_rect{rect, 0, 1};
         vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
     }
+}
+
+// Test builds: the motion vectors as colour (0.5 + motion / 16 in red and green) over the 8-bit single-sample scene target, as
+// RendererD3D12's. The motion target is sampled between two passes and goes back to its attachment layout; the scene pass
+// begins again with the next draw.
+void RendererVk::record_motion_debug_view() {
+#if defined(NEBULA_DEV)
+    if (!motion_.motion || scene_.wide || scene_.samples != 1u || target_pass_active_ || !scene_.color) {
+        return;
+    }
+    VkPipeline& pipeline = motion_debug_pipelines_[scene_variant()];
+    if (pipeline == VK_NULL_HANDLE) {
+        constexpr VkColorComponentFlags kAll = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+                                               VK_COLOR_COMPONENT_A_BIT;
+        pipeline = create_utility_pipeline(draw_layout_.pass_for(scene_variant(), false), utility_layout_, vk::UtilitySpirv::BlitVs,
+                                           vk::UtilitySpirv::MotionDebugPs, kAll, false, false, false, VK_SAMPLE_COUNT_1_BIT);
+    }
+    end_scene_pass("record_motion_debug_view");
+    vk::BarriersVk uses(commands_);
+    uses.image(motion_.motion->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::PixelRead);
+    uses.issue();
+    begin_scene_pass_with(0u, nullptr, false, "record_motion_debug_view");
+    const VkCommandBuffer commands = commands_;
+    const VkDescriptorSet source = allocate_frame_set(utility_set_layout_);
+    write_conversion_input(source, motion_.motion->view);
+    const float width = static_cast<float>(scene_.color->width);
+    const float height = static_cast<float>(scene_.color->height);
+    const VkViewport viewport{0.0f, height, width, -height, 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {scene_.color->width, scene_.color->height}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    end_scene_pass("record_motion_debug_view");
+    uses.undo();
+    reset_draw_bindings();
+    bind_scene();
+#endif
 }
 
 bool RendererVk::defer_scene_depth_clear(std::uint32_t clear_rgba) {
@@ -1740,7 +1840,8 @@ void RendererVk::attach_texture_uploads(TextureStore& cache) {
     if (bindless_ && mirrored_backend_ != &cache.backend() && cache.backend().ready()) {
         // Every view goes to the image array at its index from now on: a set for twice the views made so far (at least
         // kBindlessTextureSlotsMin), the null view in its last slot.
-        const std::uint64_t wanted = std::max<std::uint64_t>(vk::kBindlessTextureSlotsMin, 2u * std::uint64_t{cache.backend().live_views()});
+        const std::uint64_t wanted = std::max<std::uint64_t>(test_small_heaps() ? 64u : vk::kBindlessTextureSlotsMin,
+                                                             2u * std::uint64_t{cache.backend().live_views()});
         install_texture_array(cache, static_cast<std::uint32_t>(std::min<std::uint64_t>(wanted, texture_array_limit_)));
     }
 }
@@ -1996,8 +2097,9 @@ gpu::TextureRef RendererVk::take_frame_picture(gpu::TextureRef fresh) {
 }
 
 void RendererVk::set_draw_aux(unsigned aux) {
-    // The effects layer is not on this renderer: a layer draw writes the reactive mask. Aux 4 draws in the motion pass.
-    const unsigned wanted = aux == 4u ? 1u : aux > 2u ? 2u : aux;
+    // Aux 3 needs the layer's window open (the walker asks for it only then); otherwise it is a reactive draw. Aux 4 draws in
+    // the motion pass.
+    const unsigned wanted = aux == 4u ? 1u : aux == 3u ? (layer_window_ ? 3u : 2u) : aux;
     if (scene_pass_open_ && scene_pass_aux_ == wanted) {
         return;
     }
@@ -2137,8 +2239,10 @@ void RendererVk::reset_sampler_frame() {
 }
 
 namespace {
-// A material's constants as a binding sees them: the most any program declares.
-constexpr VkDeviceSize kMaterialConstantBytes = 1024u;
+// A material's constants as a binding sees them: vk::kMaterialConstantRange, cut to the device's limit.
+[[nodiscard]] VkDeviceSize material_constant_bytes() {
+    return std::min<VkDeviceSize>(vk::kMaterialConstantRange, vk::Context::get().properties().limits.maxUniformBufferRange);
+}
 }  // namespace
 
 VkDescriptorSet RendererVk::constants_set(const VkBuffer* buffers, gpu::Address rows, gpu::Address instances,
@@ -2158,8 +2262,8 @@ VkDescriptorSet RendererVk::constants_set(const VkBuffer* buffers, gpu::Address 
     const vk::Context::BufferOffset lists_at = lists != 0u ? vk::Context::get().resolve(lists) : instances_at;
     const VkDescriptorBufferInfo infos[6] = {
         {buffers[0], 0u, sizeof(core::ViewRows)},
-        {buffers[1], 0u, kMaterialConstantBytes},
-        {buffers[2], 0u, kMaterialConstantBytes},
+        {buffers[1], 0u, material_constant_bytes()},
+        {buffers[2], 0u, material_constant_bytes()},
         {rows_at.buffer, rows_at.offset, VK_WHOLE_SIZE},
         {instances_at.buffer, instances_at.offset, VK_WHOLE_SIZE},
         {lists_at.buffer, lists_at.offset, VK_WHOLE_SIZE},

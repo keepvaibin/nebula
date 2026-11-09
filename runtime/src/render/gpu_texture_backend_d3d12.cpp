@@ -2,12 +2,16 @@
 // TextureStore's D3D12 side (gpu_texture_backend.h): the view heap, upload staging, placed textures and upload copies.
 
 #include "galaxy/render/gpu_texture_backend.h"
+#include "galaxy/run_options.h"
 #include "barriers_d3d12.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
+#include <cstdio>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 namespace galaxy::render {
 
@@ -32,6 +36,31 @@ bool TextureBackend::initialize(gpu::Device* device, std::uint32_t view_capacity
     views_per_page_ = view_capacity;
     srv_pages_.clear();
     texture_heap_.initialize(device);
+    // Direct host writes: only where the CPU and the GPU share one cache-coherent memory (write-back custom heaps are valid
+    // there and nowhere else). GALAXY_D3D12_TEST_NO_FEATURE=uma_writes keeps the copy path on such an adapter.
+    direct_ = false;
+    bool test_off = false;
+    if (const char* const names = ::galaxy::run_options().d3d12_test_no_feature) {
+        const std::string list = std::string(",") + names + ",";
+        test_off = list.find(",uma_writes,") != std::string::npos;
+    }
+    D3D12_FEATURE_DATA_ARCHITECTURE architecture{};
+    if (!test_off && SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture))) &&
+        architecture.UMA == TRUE && architecture.CacheCoherentUMA == TRUE) {
+        direct_heap_.initialize(device);
+        direct_ = true;
+    }
+    {
+        // The path, once (again only if a new device chooses another).
+        static std::atomic<int> logged{-1};
+        const int path = direct_ ? 1 : 0;
+        if (logged.exchange(path) != path) {
+            std::fprintf(stderr, "[textures] uploads: %s\n",
+                         direct_ ? "direct host writes (WriteToSubresource into write-back memory, no copy command)"
+                                 : test_off ? "staged copies (uma_writes switched off by GALAXY_D3D12_TEST_NO_FEATURE)"
+                                            : "staged copies");
+        }
+    }
 
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -82,6 +111,8 @@ void TextureBackend::release_view(std::uint32_t index) {
 
 void TextureBackend::shutdown() {
     texture_heap_.shutdown();
+    direct_heap_.shutdown();
+    direct_ = false;
     srv_heap_.Reset();
     srv_pages_.clear();
     views_per_page_ = 0;
@@ -175,6 +206,8 @@ TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t si
     UploadChunk chunk{};
     chunk.size = size;
 
+    // Direct mode: write-back system memory the CPU reads back quickly (the texture upload writes from it) and the GPU reads
+    // coherently (movie planes still copy from it); an UPLOAD heap is write-combined, which the CPU reads slowly.
     D3D12_HEAP_PROPERTIES hp{};
     hp.Type = D3D12_HEAP_TYPE_UPLOAD;
     D3D12_RESOURCE_DESC rd{};
@@ -186,15 +219,24 @@ TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t si
     rd.Format           = DXGI_FORMAT_UNKNOWN;
     rd.SampleDesc.Count = 1;
     rd.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    d3d_check(device_->CreateCommittedResource(
-        &hp, D3D12_HEAP_FLAG_NONE, &rd,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr, IID_PPV_ARGS(&chunk.resource)),
-        "create texture upload arena");
+    bool cached = false;
+    if (direct_) {
+        // The adapter that refuses it here keeps the UPLOAD heap: the levels are still read from it, only slower.
+        cached = SUCCEEDED(device_->CreateCommittedResource(
+            &kDirectProperties, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&chunk.resource)));
+    }
+    if (!cached) {
+        d3d_check(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr, IID_PPV_ARGS(&chunk.resource)),
+            "create texture upload arena");
+    }
     D3D12_RANGE no_read{0, 0};
     void* mapped = nullptr;
     d3d_check(
-        chunk.resource->Map(0, &no_read, &mapped),
+        chunk.resource->Map(0, cached ? nullptr : &no_read, &mapped),
         "map texture upload arena");
     chunk.cpu_base = static_cast<std::uint8_t*>(mapped);
     return chunk;
@@ -207,8 +249,16 @@ void TextureBackend::release_upload_chunk(UploadChunk& chunk) noexcept {
     }
 }
 
+bool TextureBackend::direct_written(ID3D12Resource* texture) noexcept {
+    D3D12_HEAP_PROPERTIES properties{};
+    D3D12_HEAP_FLAGS flags{};
+    return texture != nullptr && SUCCEEDED(texture->GetHeapProperties(&properties, &flags)) &&
+           properties.Type == D3D12_HEAP_TYPE_CUSTOM && properties.CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+}
+
 gpu::TextureRef TextureBackend::create_texture(
-    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format) {
+    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format,
+    bool writable) {
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     rd.Width            = width;
@@ -222,6 +272,15 @@ gpu::TextureRef TextureBackend::create_texture(
     rd.SampleDesc.Count = 1;
     rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     gpu::TextureRef resource;
+    if (writable && direct_) {
+        // Born in the shader-resource state, where every uploaded texture rests (a texture is promoted from the common state
+        // only with simultaneous access); the levels are written from the CPU by record_upload. A heap that refuses it falls
+        // back to the copy path below.
+        if (SUCCEEDED(direct_heap_.create(rd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr, resource, allocation_bytes))) {
+            return resource;
+        }
+        resource.Reset();
+    }
     d3d_check(texture_heap_.create(
         rd, gpu::Use::CopyDest, nullptr, resource, allocation_bytes),
         "create default texture");
@@ -246,6 +305,19 @@ bool TextureBackend::poolable(ID3D12Resource* texture, std::uint32_t& width, std
 void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const UploadChunk& staging,
                                    std::uint64_t offset, std::uint32_t width, std::uint32_t height, unsigned levels,
                                    const std::uint64_t* offsets, const std::uint32_t* pitches) {
+    if (direct_ && direct_written(texture)) {
+        // Written from the staged levels by the CPU, no command and no state change (a new texture, which no frame reads yet).
+        const DXGI_FORMAT format = texture->GetDesc().Format;
+        const bool blocks = format == DXGI_FORMAT_BC1_UNORM;
+        for (unsigned l = 0; l < levels; ++l) {
+            const std::uint32_t lh = std::max<std::uint32_t>(1u, height >> l);
+            const std::uint32_t rows = blocks ? (lh + 3u) / 4u : lh;
+            d3d_check(texture->WriteToSubresource(l, nullptr, staging.cpu_base + offset + offsets[l], pitches[l],
+                                                  pitches[l] * rows),
+                      "write texture level");
+        }
+        return;
+    }
     if (reused) {
         // A retired texture rests in the shader-resource state; the copies need copy-destination.
         BarriersD3D12 uses{upload_list_};

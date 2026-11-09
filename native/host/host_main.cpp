@@ -88,6 +88,7 @@ namespace galaxy::host {
 // The headless host gives the platform no performance hints.
 inline void perf_hint_add_current_thread() noexcept {}
 inline int64_t perf_hint_frame_done() noexcept { return 0; }
+inline bool perf_hint_on_battery() noexcept { return false; }
 }  // namespace galaxy::host
 #endif
 #if defined(NEBULA_HOST_SDL)
@@ -2347,6 +2348,8 @@ uint32_t svc_option(void*, uint32_t what) {
     }
     case NEBULA_OPTION_TEST_TRACE_LOADS:
         return ::galaxy::run_options().trace_loads != nullptr ? 1u : 0u;
+    case NEBULA_OPTION_TEST_WIDE_TABLES:
+        return ::galaxy::run_option_flag(::galaxy::run_options().test_wide_tables, false) ? 1u : 0u;
     case NEBULA_OPTION_TOUCH_POINTER:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::host::touch_pointer_state();
@@ -2949,13 +2952,19 @@ bool one_game_at_a_time() {
         name += c == L'\\' || c == L':' ? L'_' : c;
     }
     gOneGame = CreateMutexW(nullptr, TRUE, name.c_str());
+    // The folder's key: the first game's window carries it, and a second start finds that window by it.
+    std::uint64_t key = 1469598103934665603ull;
+    for (const wchar_t c : name) {
+        key = (key ^ static_cast<std::uint64_t>(c)) * 1099511628211ull;
+    }
+    galaxy::render::host_window::set_instance_key(key != 0u ? key : 1u);
     if (gOneGame == nullptr || GetLastError() != ERROR_ALREADY_EXISTS) {
         return false;
     }
     log_line("host:", "the game is already running");
-    if (HWND window = FindWindowW(galaxy::render::host_window::kWindowClass, nullptr)) {
-        ShowWindow(window, IsIconic(window) ? SW_RESTORE : SW_SHOW);
-        SetForegroundWindow(window);
+    // Up to 3 s: the first start may be opening its window still.
+    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u)) {
+        log_line("host:", "the running game has no window to bring forward");
     }
     return true;
 }
@@ -3824,21 +3833,29 @@ int main(int argc, char** argv) {
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
         }
 #else
-        // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.
+        // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report. Out of sight, at most
+        // 100 ms: a window the OS shows again is noticed by then (a covered window sends no message).
+        static bool out_of_sight = false;
         {
             const auto until = std::chrono::duration_cast<std::chrono::milliseconds>(next_report - Clock::now()).count();
             const DWORD wait = first_frame ? static_cast<DWORD>(std::clamp<long long>(until + 1, 0, 1000)) : 5u;
-            MsgWaitForMultipleObjects(1, &gHostWake, FALSE, wait, QS_ALLINPUT);
+            MsgWaitForMultipleObjects(1, &gHostWake, FALSE, out_of_sight ? std::min<DWORD>(wait, 100u) : wait, QS_ALLINPUT);
         }
-        // Minimised, the game and its sound stop, as on the platforms that suspend.
-        if (const bool away = galaxy::render::host_window::is_minimized(); away != gSuspended) {
+        // Minimised, or covered so that the OS shows none of it (a hidden test window is not): the game and its sound stop, as
+        // on the platforms that suspend, and the renderer presents nothing of its own. The game's clock starts again from the
+        // return (svc_frame_wait: no step is owed), and the device is kept, so showing the window again rebuilds nothing.
+        static const bool test_window = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
+        const bool minimised = galaxy::render::host_window::is_minimized();
+        if (const bool away = minimised || (!test_window && galaxy::render::window_occluded()); away != gSuspended) {
+            out_of_sight = away;
+            galaxy::render::set_window_hidden(away);
             {
                 std::lock_guard<std::mutex> lock(gSuspendLock);
                 gSuspended = away;
             }
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
-            log_line("host:", away ? "suspended (minimised)" : "resumed");
+            log_line("host:", away ? (minimised ? "suspended (minimised)" : "suspended (covered)") : "resumed");
         }
 #endif
         galaxy::render::pump_messages();

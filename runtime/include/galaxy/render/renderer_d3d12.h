@@ -125,20 +125,24 @@ inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // current heap. A transient table's handle belongs to the heap that was current when it was allocated.
 class DescriptorRing {
 public:
-    // The most descriptors one shader-visible CBV/SRV/UAV heap holds on every resource binding tier.
+    // The most descriptors one shader-visible CBV/SRV/UAV heap holds on every resource binding tier. Tiers 1 and 2 stop there; tier 3
+    // names no limit (the renderer passes a larger heap_limit and the heap doubles until the device refuses one).
     static constexpr unsigned kMaxHeapDescriptors = 1000000u;
 
     // Caller must have retired all GPU references to this heap.
     void reset() noexcept;
     // `texture_descriptors` slots first (the last one the caller's null view), then the persistent descriptors, then one
     // segment of `descriptors_per_frame` per frame in flight.
+    // `heap_limit`: the most descriptors the device's shader-visible heap takes (see kMaxHeapDescriptors).
     bool initialize(
         ID3D12Device* device,
         D3D12_DESCRIPTOR_HEAP_TYPE type,
         unsigned descriptors_per_frame,
         unsigned frames_in_flight,
         unsigned persistent_descriptors = 0,
-        unsigned texture_descriptors = 0);
+        unsigned texture_descriptors = 0,
+        unsigned heap_limit = kMaxHeapDescriptors);
+    [[nodiscard]] unsigned heap_limit() const noexcept { return heap_limit_; }
     // The sampler heap that goes with this heap in bind().
     void set_sampler_heap(ID3D12DescriptorHeap* heap) noexcept { sampler_heap_ = heap; }
     void begin_frame(unsigned frame_slot);
@@ -161,7 +165,19 @@ public:
         std::uint32_t index = 0u;  // in the persistent region
     };
     static constexpr std::uint32_t kNoPersistent = ~0u;
+    // `count` consecutive persistent descriptors. When the region is full it doubles: a new heap and a new persistent shadow
+    // replace the old (the descriptors keep their indices; the frame segments move up, and this frame's tables so far are
+    // copied into the new heap). Hold the index, not `cpu`: persistent_cpu(index) is the current place in the shadow. The replaced
+    // heap goes to take_replaced().
     Persistent allocate_persistent(unsigned count);
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE persistent_cpu(std::uint32_t index) const noexcept;
+    // The heaps growth replaced, for the renderer to free once the GPU is past the commands that may read them.
+    [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::move(replaced_); }
+    // The most a frame's segment and the persistent region have held (diagnostics; the frame segment is sized by design, see
+    // kSrvPerFrame).
+    [[nodiscard]] unsigned frame_high_water() const noexcept { return frame_high_water_; }
+    [[nodiscard]] unsigned persistent_used() const noexcept { return persistent_cursor_; }
+    [[nodiscard]] unsigned persistent_capacity() const noexcept { return persistent_descriptors_; }
     // Copies `count` descriptors from `table` into the heap.
     void commit(const Persistent& table, unsigned count);
     // The handle of persistent descriptor `index` in the current heap.
@@ -188,6 +204,7 @@ public:
     void forget_bound() noexcept { bound_list_ = nullptr; }
 
 private:
+    void grow_persistent(unsigned persistent);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_at(unsigned index) const noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE heap_cpu_at(unsigned index) const noexcept;  // a ring index, past the textures
     void fill_null(unsigned index, unsigned count);
@@ -195,7 +212,12 @@ private:
     ID3D12Device* device_ = nullptr;
     D3D12_DESCRIPTOR_HEAP_TYPE type_{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadow_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> shadow_;             // CPU only: [frame segments][null block]
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> persistent_shadow_;  // CPU only: [persistent]; replaced when it grows
+    std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> replaced_;
+    unsigned heap_limit_ = kMaxHeapDescriptors;
+    unsigned frame_slot_ = 0;
+    unsigned frame_high_water_ = 0;
     ID3D12DescriptorHeap* sampler_heap_ = nullptr;
     ID3D12GraphicsCommandList* bound_list_ = nullptr;
     ID3D12DescriptorHeap* bound_heap_ = nullptr;
@@ -250,17 +272,24 @@ public:
     void write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists, std::uint32_t& first);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureStore& cache);
+    // The adapter's local video memory in use by this process and the OS's budget for it (DXGI QueryVideoMemoryInfo), read at
+    // a frame boundary. False: not known.
+    [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
     // The upload rings' sizes and the most one frame took (GALAXY_TRACE_MEMORY).
     void trace_rings() const;
     void pump_messages();           // no-op: window_owner_ pumps the window's messages
     [[nodiscard]] bool quit_requested() const noexcept;
+    // The last present said the whole window is covered (DXGI_STATUS_OCCLUDED); probe_occlusion asks again without drawing
+    // (a test present) and clears it when the window shows. Render thread for the probe, any thread for the flag.
+    [[nodiscard]] bool occluded() const noexcept { return occluded_.load(std::memory_order_relaxed); }
+    void probe_occlusion();
 
     // Advances the frame ring: waits on the fence of frame N-kFramesInFlight
     // only, resets that slot's command allocator, opens the command list,
     // and rewinds the slot's ring segments. Swap-chain latency is waited in
     // present(), after scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
-    // Test only (GALAXY_TEST_GPU_LOST_FRAME): the device removed, as a driver reset leaves it.
+    // Test only (GALAXY_TEST_DEVICE_LOST): the device removed, as a driver reset leaves it.
     void test_lose_device();
     void begin_frame();
     // Called after the queue signal, before pacing and Present; the context is not retained.
@@ -644,6 +673,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Device10> barrier_device_;
     // The selected adapter, for video-memory budget queries.
     Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
+    std::atomic<bool> occluded_{false};
+    // The swap chain's frame latency waitable object (create_swap_chain): a present waits on it, bounded, so a frame is queued
+    // when the display can take it. Owned (closed with the chain); null where the chain has none.
+    HANDLE latency_wait_ = nullptr;
+    unsigned latency_timeouts_ = 0u;
+    void release_latency_wait() noexcept;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain_;
     Microsoft::WRL::ComPtr<IDXGIFactory4> dxgi_factory_;
@@ -941,6 +976,7 @@ private:
     };
     std::vector<RetiredHeap> retired_heaps_;
     void install_texture_heap(TextureStore& cache, std::uint32_t slots);
+    [[nodiscard]] DescriptorRing::Persistent allocate_persistent_descriptors(unsigned count);
     void fill_sampler_heap(const RenderConfig& cfg);
     void grow_texture_heap(std::uint32_t index);
     const void* mirrored_backend_ = nullptr;

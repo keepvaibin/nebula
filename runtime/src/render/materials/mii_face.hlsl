@@ -38,7 +38,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const uint diffuse = uint(material.lights.y);
     const uint atten = uint(material.lights.z);
     float3 sum = float3(0.0, 0.0, 0.0);
-    [unroll] for (uint n = 0u; n < 8u; ++n) {
+    for (uint n = 0u; n < min(native_light_count(), 24u); ++n) {
         if ((mask & (1u << n)) != 0u) {
             sum += channel_light(n, atten, diffuse, v.eye, nrm).rgb;
         }

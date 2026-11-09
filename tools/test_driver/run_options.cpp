@@ -89,6 +89,7 @@ RunOptions read_options() {
     o.test_cpu_affinity = nebula_switch::test_cpu_affinity();
     o.test_deterministic = nebula_switch::test_deterministic();
     o.test_disc_delay_us = nebula_switch::test_disc_delay_us();
+    o.test_device_lost = nebula_switch::test_device_lost();
     o.test_gpu_lost_frame = nebula_switch::test_gpu_lost_frame();
     o.test_gpu_lost_times = nebula_switch::test_gpu_lost_times();
     o.test_home_row = nebula_switch::test_home_row();
@@ -96,9 +97,12 @@ RunOptions read_options() {
     o.test_one_game = nebula_switch::test_one_game();
     o.test_post_fault = nebula_switch::test_post_fault();
     o.test_script_clock = nebula_switch::test_script_clock();
+    o.test_small_heaps = nebula_switch::test_small_heaps();
     o.test_settings_keys = nebula_switch::test_settings_keys();
     o.test_motion_dump = nebula_switch::test_motion_dump();
     o.test_settings_open = nebula_switch::test_settings_open();
+    o.test_vram_budget_mb = nebula_switch::test_vram_budget_mb();
+    o.test_wide_tables = nebula_switch::test_wide_tables();
     o.test_window_sizes = nebula_switch::test_window_sizes();
     o.texture_dump_dir = nebula_switch::texture_dump_dir();
     o.texture_pack_dir = nebula_switch::texture_pack_dir();
