@@ -271,6 +271,11 @@ namespace MR {
             return scenarioNo;
         }
 
+        // A star id outside the 32-bit active-star mask (a placement with a bad id) falls back to scenario 1.
+        if (starId < 1 || starId > 32) {
+            return 1;
+        }
+
         s32 mask;
         s32 i = 1;
         mask = 1 << (starId - 1);
@@ -291,7 +296,8 @@ namespace MR {
     }
 
     bool getNextLinkRailInfo(TableIter* pRailIter, const Table** ppPointInfo, const TableIter& rIter) {
-        s32 railId;
+        // A rail row with no link column has no next rail.
+        s32 railId = -1;
         getNextLinkRailID(rIter, &railId);
         if (railId == -1) {
             return false;

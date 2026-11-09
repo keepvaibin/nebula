@@ -140,6 +140,11 @@ public:
 
 template < typename T >
 bool Table::getValue(int entryIndex, const char* pKey, T* pValueOut) const {
+    // A row outside the table (a bad zone or entry number) has no value.
+    if (static_cast< u32 >(entryIndex) >= static_cast< u32 >(getNumEntries())) {
+        return false;
+    }
+
     s32 itemIndex = searchItemInfo(pKey);
     if (itemIndex < 0) {
         return false;

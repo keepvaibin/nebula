@@ -16,6 +16,11 @@ namespace {
 }  // namespace
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
+    // No id (a placement without a message name) finds no message, as an unknown id does.
+    if (pMessage == nullptr) {
+        return false;
+    }
+
     if (const char16_t* pWords = NebulaMods::text(pMessage)) {
         pMessageInfo->mMessage = pWords;
         return true;

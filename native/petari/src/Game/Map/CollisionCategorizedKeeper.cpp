@@ -536,7 +536,8 @@ CollisionZone* CollisionCategorizedKeeper::getZone(int zone) {
         mZonesInitialized = true;
     }
 
-    return mZones[zone];
+    // A part made outside any placement (zone -1, e.g. spawned by a mod) or past the zone list belongs to the global zone.
+    return mZones[zone >= 0 && zone < mZones.size() ? zone : 0];
 }
 
 CollisionZone::CollisionZone(s32 zoneID) : mZoneID(zoneID), mCenter(0, 0, 0), mRadius(), mMin(0, 0, 0), mMax(0, 0, 0) {

@@ -107,7 +107,8 @@ namespace MR {
             f32 radius = pArea->getForm< AreaFormSphere >()->mRadius;
             Vec3f radial = rPos - center;
             f32 height = MR::vecKillElement(radial, -rGravity, &radial);
-            f32 distanceRate = radial.length() / radius;
+            // A sphere area of no size (a placement scaled to 0) counts its rim as the edge instead of dividing by 0.
+            f32 distanceRate = radius > 0.0f ? radial.length() / radius : 1.0f;
             f32 angle = distanceRate;
             angle *= PI;
             f32 theta = angle;

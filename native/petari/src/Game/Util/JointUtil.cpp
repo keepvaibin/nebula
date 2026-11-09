@@ -6,8 +6,10 @@
 #include <nebula_geometry.hpp>
 
 namespace MR {
+    // A joint name the model lacks (a bad name in a shadow or effect table) is the root joint.
     Joint* getJoint(Model* pModel, const char* pName) {
-        return pModel->mModelData->getJointAt((u32)pModel->mModelData->findJoint(pName));
+        const s32 idx = pModel->mModelData->findJoint(pName);
+        return pModel->mModelData->getJointAt(idx >= 0 ? static_cast< u32 >(idx) : 0);
     }
 
     Joint* getJoint(const LiveActor* pActor, const char* pName) {
@@ -19,12 +21,13 @@ namespace MR {
     }
 
     MtxPtr getJointMtx(Model* pModel, const char* pName) {
-        s32 idx = pModel->mModelData->findJoint(pName);
-        return pModel->getAnmMtx(idx);
+        const s32 idx = pModel->mModelData->findJoint(pName);
+        return pModel->getAnmMtx(idx >= 0 ? idx : 0);
     }
 
     MtxPtr getJointMtx(const LiveActor* pActor, const char* pName) {
-        return getJointMtx(pActor, getJointIndex(pActor, pName));
+        const s32 idx = MR::getModelData(pActor)->findJoint(pName);
+        return getJointMtx(pActor, idx >= 0 ? idx : 0);
     }
 
     MtxPtr getJointMtx(const LiveActor* pActor, int idx) {

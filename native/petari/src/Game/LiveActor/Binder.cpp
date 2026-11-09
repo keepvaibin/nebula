@@ -196,7 +196,9 @@ void Binder::moveAlongHittedPlanes(Vec3f* pMovement, Vec3f* pPosition, Vec3f* pR
 }
 
 u32 Binder::findBindedPos(Vec3f* pPosition, Vec3f* pMovement, bool* pHasRemainingMovement, bool skipInitial, bool stopAtFirstHit) {
-    s32 steps = static_cast< s32 >((1.0f / 35.0f) * pMovement->length()) + 1;
+    // One check per 35 units of movement; a movement of 35000 or more, or not a number, takes 1000 (it would not end).
+    const f32 movementLength = pMovement->length();
+    s32 steps = movementLength < 35000.0f ? static_cast< s32 >((1.0f / 35.0f) * movementLength) + 1 : 1000;
     Vec3f step(*pMovement);
     if (steps > 1) {
         step /= steps;

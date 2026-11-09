@@ -330,7 +330,11 @@ namespace MR {
                     break;
                 }
 
+                // A tag of size 0 or 1 unit still moves on one unit, so a bad message cannot loop forever.
                 u16 dataSize = reinterpret_cast< const Tag* >(pMessage)->mDataSize;
+                if (dataSize < sizeof(u16)) {
+                    dataSize = static_cast< u16 >(sizeof(u16));
+                }
 
                 pMessage += dataSize / sizeof(u16);
                 length += dataSize / sizeof(u16);
@@ -388,12 +392,12 @@ namespace MR {
     }
 
     void scans16x4(const char* pSrc, const char* pSubStr, s16* pDst) {
-        int values[4];
-
         if (strstr(pSrc, pSubStr) == nullptr) {
             return;
         }
 
+        // Values the text does not give keep what the destination held.
+        int values[4] = {pDst[0], pDst[1], pDst[2], pDst[3]};
         const char* p = pSrc;
         if (!scanOpen(p)) {
             return;

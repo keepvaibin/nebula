@@ -148,7 +148,9 @@ InputRumble* InputRumble::getRumbleInstance() const {
 }
 
 bool InputRumble::vibratePatternIfNotExist(const void* pOwner, const char* pPatternName) {
-    return setRumblePatternIfNotExist(pOwner, *RumbleData::getPattern(pPatternName), false);
+    // A pattern name the table lacks plays nothing.
+    const RumblePattern* const pPattern = RumbleData::getPattern(pPatternName);
+    return pPattern != nullptr && setRumblePatternIfNotExist(pOwner, *pPattern, false);
 }
 
 // A pattern already playing is left alone; a new one takes a free channel, else a new one.

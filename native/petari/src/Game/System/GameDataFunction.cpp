@@ -150,6 +150,8 @@ namespace GameDataFunction {
             *pPastSecond = 0;
             return;
         }
+        // The save keeps no seconds of a comet's state, so the past seconds start at 0 (they were left unset).
+        *pPastSecond = 0;
         *pCometStatus = getCurrentGameDataHolder()->getGameEventValue(MR::FormattedName("Comet%1dStatus", cometId).c_str());
     }
 

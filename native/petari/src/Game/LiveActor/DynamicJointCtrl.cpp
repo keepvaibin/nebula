@@ -150,10 +150,16 @@ DynamicJointCtrl::DynamicJointCtrl(LiveActor* pActor, const char* pName, const D
 void DynamicJointCtrl::init() {
     MR::getJointMtx(mActor, mName);
     Joint* joint = MR::getJoint(mActor, mName);
+    // The joint chain below the first joint gives one node a joint plus the free end: a count from the file past it (or under
+    // the two the chain needs) is held to that.
+    const s32 chainNodeNum = ::calcJointChildNum(joint) + 2;
     if (mParams->mCtrlJointNumMax > 0) {
-        mNodeNum = mParams->mCtrlJointNumMax;
+        mNodeNum = mParams->mCtrlJointNumMax < 2 ? 2 : mParams->mCtrlJointNumMax;
+        if (mNodeNum > chainNodeNum) {
+            mNodeNum = chainNodeNum;
+        }
     } else {
-        mNodeNum = ::calcJointChildNum(joint) + 2;
+        mNodeNum = chainNodeNum;
     }
 
     mCtrlNodes = new DynamicJointCtrlNode*[mNodeNum];
@@ -253,11 +259,15 @@ void DynamicJointCtrlKeeper::setCallBackFunction() {
 }
 
 void DynamicJointCtrlKeeper::startCtrl(const char* pName, s32 time) {
-    findJointCtrl(pName)->mControlRate->startCtrl(time);
+    if (DynamicJointCtrl* const pCtrl = findJointCtrl(pName)) {
+        pCtrl->mControlRate->startCtrl(time);
+    }
 }
 
 void DynamicJointCtrlKeeper::endCtrl(const char* pName, s32 time) {
-    findJointCtrl(pName)->mControlRate->endCtrl(time);
+    if (DynamicJointCtrl* const pCtrl = findJointCtrl(pName)) {
+        pCtrl->mControlRate->endCtrl(time);
+    }
 }
 
 void DynamicJointCtrlKeeper::reset() {
@@ -273,5 +283,6 @@ DynamicJointCtrl* DynamicJointCtrlKeeper::findJointCtrl(const char* pName) {
         }
     }
 
-    return mControls[0];
+    // An unknown name takes the first control; with none (no table) there is nothing to find.
+    return mControlNum > 0 ? mControls[0] : nullptr;
 }

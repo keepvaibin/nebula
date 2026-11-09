@@ -4,11 +4,20 @@ namespace MR {
     BitArray::BitArray(int bitNum) : mArray(new u8[(bitNum + 7) / 8]()), mArraySize(bitNum) {
     }
 
+    // A bit past the array (a flag a mod added after the array was made) reads off and is never stored.
     bool BitArray::isOn(int bitIdx) const {
+        if (static_cast< u32 >(bitIdx) >= static_cast< u32 >(mArraySize)) {
+            return false;
+        }
+
         return (mArray[bitIdx / 8] & (1 << (bitIdx & 7))) != 0;
     }
 
     void BitArray::set(int bitIdx, bool isOn) {
+        if (static_cast< u32 >(bitIdx) >= static_cast< u32 >(mArraySize)) {
+            return;
+        }
+
         const u8 mask = static_cast< u8 >(1 << (bitIdx & 7));
 
         if (isOn) {
