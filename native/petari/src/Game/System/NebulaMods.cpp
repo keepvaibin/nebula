@@ -2630,6 +2630,11 @@ namespace NebulaMods {
         return id;
     }
 
+    const char* soundName(u32 id) {
+        const AudSoundNameConverter* pNames = AudSingletonHolder< AudSoundNameConverter >::get();
+        return pNames != nullptr ? pNames->mIndex.nameOf(id) : nullptr;
+    }
+
     s32 stageRuleSlow(const char* pStage, const char* pAskedName) {
         s32 scenario = -1;
         bool notOwn = false;

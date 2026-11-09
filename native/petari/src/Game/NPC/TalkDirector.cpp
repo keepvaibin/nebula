@@ -1,4 +1,5 @@
 #include "Game/NPC/TalkDirector.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -493,6 +494,10 @@ void TalkDirector::exeWait() {
 
 void TalkDirector::exeTalk() {
     TalkMessageCtrl* pCtrl = mTalkState->mMsgCtrl;
+    // Each line enters this nerve: its first step is the line opening.
+    if (MR::isFirstStep(this) && NebulaMods::sWanted[NEBULA_MOD_EVENT_TALK_LINE]) {
+        NebulaMods::dispatch(NEBULA_MOD_EVENT_TALK_LINE, 0, pCtrl->mHostActor, TalkFunction::getMessageName(pCtrl));
+    }
     TalkFunction::onTalkStateTalking(pCtrl);
 
     // Without a demo, a talk whose host is no longer the nearest request moves on unread.
@@ -534,6 +539,11 @@ void TalkDirector::exeSlct() {
 
     if (!MR::isYesNoSelected()) {
         return;
+    }
+
+    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_TALK_CHOICE]) {
+        NebulaMods::dispatch(NEBULA_MOD_EVENT_TALK_CHOICE, MR::isYesNoSelectedYes() ? 1 : 0, pCtrl->mHostActor,
+                             TalkFunction::getMessageName(pCtrl));
     }
 
     MR::resetYesNoSelectorSE();

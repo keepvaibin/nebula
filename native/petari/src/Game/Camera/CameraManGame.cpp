@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraManGame.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/AreaObj/CubeCamera.hpp"
 #include "Game/Boss/SkeletalFishGuard.hpp"
 #include "Game/Camera/CamHeliEffector.hpp"
@@ -202,8 +203,13 @@ void CameraManGame::setChunk(const CameraParamChunkID& rChunk) {
     } else {
         chunk = tryToReplaceChunkToDefault(chunk);
         requestResetIfNecessary(chunk);
+        const bool isChange = chunk != mChunk;
         replaceCurrentChunkAndCamera(chunk);
         applyParameter();
+        if (isChange && NebulaMods::sWanted[NEBULA_MOD_EVENT_CAMERA_CHANGE]) {
+            NebulaMods::dispatch(NEBULA_MOD_EVENT_CAMERA_CHANGE, 0, nullptr,
+                                 chunk->mParamChunkID != nullptr ? chunk->mParamChunkID->mName : nullptr);
+        }
     }
 }
 

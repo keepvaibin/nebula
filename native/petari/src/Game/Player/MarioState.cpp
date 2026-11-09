@@ -1,4 +1,5 @@
 #include "Game/Player/MarioState.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioActor.hpp"
 
@@ -72,6 +73,8 @@ void Mario::changeStatus(MarioState* pState) {
     if (isStatusActive(pState->mStatusId)) {
         return;
     }
+
+    NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_ACTION, static_cast< s32 >(pState->mStatusId));
 
     mNoticedState = pState;
 

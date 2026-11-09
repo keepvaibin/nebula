@@ -1,4 +1,5 @@
 #include "Game/Util/EffectUtil.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Effect/EffectSystemUtil.hpp"
 #include "Game/Effect/MultiEmitter.hpp"
 #include "Game/Effect/MultiEmitterParticleCallBack.hpp"
@@ -51,6 +52,7 @@ namespace MR {
     }
 
     MultiEmitter* emitEffect(LiveActor* pActor, const char* pEffectName) {
+        NebulaMods::fire(NEBULA_MOD_EVENT_EFFECT_START, 0, pActor, pEffectName);
         return ::getEffectKeeper(pActor)->createEmitter(pEffectName);
     }
 
@@ -66,6 +68,7 @@ namespace MR {
     MultiEmitter* emitEffectWithEmitterCallBack(LiveActor* pActor, const char* pEffectName, MultiEmitterCallBackBase* pCallBack) {
         MultiEmitter* pEmitter;
 
+        NebulaMods::fire(NEBULA_MOD_EVENT_EFFECT_START, 0, pActor, pEffectName);
         pEmitter = getEffect(pActor, pEffectName);
         pEmitter->createEmitterWithCallBack(pCallBack);
 

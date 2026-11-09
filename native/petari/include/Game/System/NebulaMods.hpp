@@ -15,6 +15,8 @@ namespace NebulaMods {
     bool hasCode();
 
     s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName);
+    // A sound effect's name by its number (NEBULA_MOD_EVENT_SOUND_START), or null.
+    const char* soundName(u32 id);
 
     inline s32 fire(NebulaModEvent event, s32 value = 0, void* pActor = nullptr, const char* pName = nullptr) {
         return sWanted[event] ? dispatch(event, value, pActor, pName) : value;
