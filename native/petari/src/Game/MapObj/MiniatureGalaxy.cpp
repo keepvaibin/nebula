@@ -155,7 +155,7 @@ void MiniatureGalaxy::initAfterPlacement() {
 }
 
 void MiniatureGalaxy::appear() {
-    mRotation.set< f32 >(0.0f, ::cInitialRotateY[MiniatureGalaxyFunction::calcMiniatureGalaxyIndex(this)], 0.0f);
+    mRotation.set< f32 >(0.0f, ::cInitialRotateY[MR::clamp(MiniatureGalaxyFunction::calcMiniatureGalaxyIndex(this), 0, ARRAY_SIZE(::cInitialRotateY) - 1)], 0.0f);
 
     mIsZoomOut = true;
     mZoomStep = ::cZoomFrame;

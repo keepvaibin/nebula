@@ -332,7 +332,14 @@ void SpinningBox::endPointed() {
 }
 
 void SpinningBox::calcPlanarProjectedVec(Vec3f* pProj, const Vec3f& rNorm, const Vec3f& rGrav) {
-    pProj->add(rGrav * (-rNorm.dot(*pProj) / rNorm.dot(rGrav)));
+    // No gravity (or none along the ground) leaves the direction as it is.
+    const f32 along = rNorm.dot(rGrav);
+
+    if (MR::isNearZero(along, 0.0001f)) {
+        return;
+    }
+
+    pProj->add(rGrav * (-rNorm.dot(*pProj) / along));
 }
 
 void SpinningBox::calcHitDirection(const Vec3f& rPos) {
