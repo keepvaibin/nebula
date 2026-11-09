@@ -20,5 +20,5 @@ namespace NameObjFactory {
 
     CreatorFuncPtr getCreator(const char*);
     bool isPlayerArchiveLoaderObj(const char*);
-    const Name2CreateFunc* getName2CreateFunc(const char*, const Name2CreateFunc*);
+    const Name2CreateFunc* getName2CreateFunc(const char* pName);
 };  // namespace NameObjFactory
