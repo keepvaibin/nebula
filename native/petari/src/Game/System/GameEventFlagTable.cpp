@@ -589,7 +589,7 @@ namespace GameEventFlagTable {
                 continue;
             }
 
-            if (strstr(accessor.getName(), pPowerStarType) == nullptr) {
+            if (!MR::isEqualSubString(accessor.getName(), pPowerStarType)) {
                 continue;
             }
 

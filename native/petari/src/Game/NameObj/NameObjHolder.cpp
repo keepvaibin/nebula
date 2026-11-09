@@ -3,7 +3,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
-#include <cstring>
 
 namespace {
     struct equal_fullname {
