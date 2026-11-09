@@ -49,10 +49,32 @@ NEBULA_GAME_API void nebula_game_run(void) {
     nebula_fatal("the game's main returned");
 }
 
+/* The text `format` makes, of any length: in `stack` when it fits, else in the host's heap (never an arena, so an arena can
+   log its own state; the caller frees it when it is not `stack`); cut to `stack` only when there is no heap. */
+static char* format_text(char* stack, size_t size, size_t* pLength, const char* format, va_list args) {
+    va_list again;
+    va_copy(again, args);
+    const int n = nebula_vsnprintf(stack, size, format, args);
+    char* text = stack;
+    size_t length = n < 0 ? 0 : (size_t)n;
+    if (length >= size) {
+        const NebulaHostServices* host = nebula_host();
+        text = host != NULL && host->heap_alloc != NULL ? (char*)host->heap_alloc(host->user, length + 1) : NULL;
+        if (text != NULL) {
+            nebula_vsnprintf(text, length + 1, format, again);
+        } else {
+            text = stack;
+            length = size - 1;
+        }
+    }
+    va_end(again);
+    *pLength = length;
+    return text;
+}
+
 /* Each line goes to the host in one call, which writes it whole from any thread; nothing is shared between calls (dropped
    before the host attaches). Every caller ends its text with a newline; a last piece without one is a line of its own.
-   Text of any length: up to 1023 characters on the stack, longer in the host's heap (never an arena, so an arena can log
-   its own state). */
+   Text of any length (format_text). */
 void nebula_vlog(const char* format, va_list args) {
     const NebulaHostServices* host = nebula_host();
     if (host == NULL || host->log == NULL) {
@@ -60,21 +82,8 @@ void nebula_vlog(const char* format, va_list args) {
     }
 
     char stack_text[1024];
-    va_list again;
-    va_copy(again, args);
-    const int n = nebula_vsnprintf(stack_text, sizeof(stack_text), format, args);
-    char* text = stack_text;
-    size_t length = n < 0 ? 0 : (size_t)n;
-    if (length >= sizeof(stack_text)) {
-        text = host->heap_alloc != NULL ? (char*)host->heap_alloc(host->user, length + 1) : NULL;
-        if (text != NULL) {
-            nebula_vsnprintf(text, length + 1, format, again);
-        } else {
-            text = stack_text;
-            length = sizeof(stack_text) - 1;
-        }
-    }
-    va_end(again);
+    size_t length = 0;
+    char* text = format_text(stack_text, sizeof(stack_text), &length, format, args);
 
     size_t start = 0;
     for (size_t i = 0; i < length; i++) {
@@ -109,20 +118,23 @@ static void __attribute__((noreturn)) fatal_text(const char* text) {
     __builtin_trap();
 }
 
+/* Neither returns, so a message in the heap is never freed. */
 void nebula_panic(const char* file, int line, const char* format, ...) {
-    char message[1024];
+    char stack_message[1024];
+    size_t length = 0;
     va_list args;
     va_start(args, format);
-    nebula_vsnprintf(message, sizeof(message), format, args);
+    const char* message = format_text(stack_message, sizeof(stack_message), &length, format, args);
     va_end(args);
     nebula_fatal("%s:%d: %s", file, line, message);
 }
 
 void nebula_fatal(const char* format, ...) {
-    char text[1024];
+    char stack_text[1024];
+    size_t length = 0;
     va_list args;
     va_start(args, format);
-    nebula_vsnprintf(text, sizeof(text), format, args);
+    const char* text = format_text(stack_text, sizeof(stack_text), &length, format, args);
     va_end(args);
     fatal_text(text);
 }
