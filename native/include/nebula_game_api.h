@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 145u
+#define NEBULA_GAME_API_VERSION 146u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -914,6 +914,8 @@ typedef struct NebulaHostServices {
     /* `channel`'s latest finished probes with their values, at most `capacity`; how many (0 before any has finished).
        Never waits for the GPU. */
     uint32_t (*probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
+    /* The players input_read serves (0 to this - 1), fixed for the session. */
+    uint32_t (*input_players)(void* user);
 } NebulaHostServices;
 
 

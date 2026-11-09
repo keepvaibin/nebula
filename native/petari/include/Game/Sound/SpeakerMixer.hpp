@@ -59,9 +59,11 @@ public:
 // and the blocks to the host (speaker_samples), which plays them where the speaker is.
 class SpeakerMixer {
 public:
-    static const u32 cPads = 4;
     static const u32 cBlockSamples = 40;
 
+    // The pads' state, in memory the game makes (SoundEngine::setupSpeaker) and sends with SOUND_SPEAKER_SETUP.
+    static u32 bytes(u32 pads);
+    void setup(void* pMemory, u32 pads);
     void apply(const SoundCommand& rCommand);
     // Each tick, as the engine's job (SOUND_SPEAKER_SETUP lists it).
     static void job(void* pSelf);
@@ -74,8 +76,15 @@ private:
 
     // 6 kHz on the 400 Hz clock: 15 samples a tick, a block each 40.
     u32 mSamplesDue = 0;
-    bool mConnected[cPads] = {};
-    // Each controller's sounds in the order they started (the mix clamps after each).
-    SpeakerVoice* mFirst[cPads] = {};
-    s16 mSamples[cPads][cBlockSamples] = {};
+    // Per controller (mPads, 0 before setup): connected, its sounds in the order they started (the mix clamps after each),
+    // and its block.
+    u32 mPads = 0;
+    bool* mConnected = nullptr;
+    SpeakerVoice** mFirst = nullptr;
+    s16 (*mSamples)[cBlockSamples] = nullptr;
+};
+
+struct SpeakerSetupCommand {
+    void* mMemory;
+    u32 mPads;
 };

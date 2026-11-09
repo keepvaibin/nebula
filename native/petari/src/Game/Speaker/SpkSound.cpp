@@ -135,6 +135,8 @@ void SpkSound::kill() {
 }
 
 SpkSoundHolder::SpkSoundHolder(NebulaArena* pArena) : SoundGlobal(true), mArena(pArena) {
+    mSoundList = new (pArena, 0) NebulaList< SpkSound >[NebulaInputPlayers::count()];
+    mPadHandles = new (pArena, 0) SpkSoundHandle[NebulaInputPlayers::count()];
 }
 
 bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHandle) {
@@ -185,7 +187,7 @@ void SpkSoundHolder::freeDeadSound(s32 padChannel) {
 
 // Each frame: last frame's sounds are heard from now, and the ended ones go.
 void SpkSoundHolder::framework() {
-    for (s32 i = 0; i < PLAYER_MAX; i++) {
+    for (s32 i = 0; i < static_cast< s32 >(NebulaInputPlayers::count()); i++) {
         for (NebulaListLink< SpkSound >* sound = mSoundList[i].getFirst(); sound != mSoundList[i].getEnd(); sound = sound->getNext()) {
             if (sound->getObject()->getState() == SpkSound::State_LOCK) {
                 sound->getObject()->unlock();
