@@ -13,6 +13,7 @@ SKIP = (
     "crates/nebula-import/src/cook/formats.rs",
     "crates/nebula-import/src/cook/native_data.rs",
     "crates/nebula-import/src/cook/mii_parts.rs",
+    "crates/nebula-import/src/cook/sound.rs",
     "runtime/include/galaxy/mii_formats.h",
     "runtime/src/mii_formats.cpp",
     "docs/",
