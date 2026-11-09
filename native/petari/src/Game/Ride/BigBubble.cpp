@@ -370,8 +370,10 @@ bool BigBubble::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
                 MR::normalizeOrZero(&dir);
             }
 
-            if (pushMoveRate > 0.0f) {
-                Vec3f moveRate = dir * (pushMoveRate / getSize());
+            // A bubble shrunk to nothing has no size to divide by.
+            const f32 size = getSize();
+            if (pushMoveRate > 0.0f && size > 0.0f) {
+                Vec3f moveRate = dir * (pushMoveRate / size);
                 mVelocity.add(moveRate * ::sPushedAccel);
             }
 
@@ -1073,6 +1075,9 @@ void BigBubble::calcMergePosition(Vec3f* pPos, Vec3f* pDir, const BigBubble* pBu
     }
 
     if (mergeIndex < 0 || mergeIndex >= 6) {
+        // Not a merge partner: leave the position and direction defined.
+        pPos->set(mPosition);
+        pDir->zero();
         return;
     }
 

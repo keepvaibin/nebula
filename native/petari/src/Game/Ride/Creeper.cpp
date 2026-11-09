@@ -450,6 +450,14 @@ void Creeper::calcAndGetCurrentInfo(Vec3f* pPosition, Vec3f* pUp) const {
         *pPosition = mPoints[i]->mPosition * (1.0f - t) + mPoints[nextIdx]->mPosition * t;
         *pUp = mPoints[nextIdx]->mPosition - mPoints[i]->mPosition;
     } else {
+        // A chain of one point has no segment: keep the caller's up.
+        if (mNumPoints < 2) {
+            pPosition->set(mPoints[0]->mPosition);
+            return;
+        }
+        if (i > mNumPoints - 1) {
+            i = mNumPoints - 1;
+        }
         s32 prevIdx = i - 1;
         pPosition->set(mPoints[i]->mPosition);
         *pUp = mPoints[i]->mPosition - mPoints[prevIdx]->mPosition;
