@@ -30,12 +30,6 @@
 // their texels too (GALAXY_EXPORT_ART writes one, eight times their size). Each of ours drawn is also painted at that
 // size and replaces itself (NebulaHostServices::texture_hd), so it stays sharp at any window size.
 namespace {
-    // Glyph sheets (texture records) handed to the renderer after they are painted, one image each.
-    void handOverSheets(const u8* pFirst, s32 count, s32 sheetBytes, s32 width, s32 height) {
-        for (s32 i = 0; i < count; i++) {
-        }
-    }
-
     // The picture font's code of each icon, in NEBULA_BUTTON_ICONS' order (A, B, C, Z, 1, 2, Plus, Minus, HOME, Control
     // Pad); the code map we put first covers them all.
     const u16 cCodes[NEBULA_BUTTON_ICONS] = {0x30, 0x31, 0x32, 0x49, 0x35, 0x36, 0x48, 0x47, 0x46, 0x43};
@@ -1541,7 +1535,6 @@ namespace {
         tables.pPages = pPages;
         tables.pPageBlocks = pPageBlocks;
         tables.pageBlockNum = blockNum;
-        handOverSheets(static_cast< const u8* >(pBlock), sheets, f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
         pFont->SetTables(tables);
         // The keys' codes (the menu's own keys) and the icons' (their own glyphs until a family shows).
         for (s32 slot = 0; slot < cKeyCells; slot++) {
@@ -1577,8 +1570,6 @@ namespace {
                 paintInto(canvas, pSheet, sFont.mSheetWidth, x, y);
             }
         }
-        handOverSheets(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets) * sFont.mSheetBytes, sFont.mFamilySheets,
-                       sFont.mSheetBytes, sFont.mSheetWidth, sFont.mSheetHeight);
         sFont.mFamilyDrawn[family] = true;
     }
 
@@ -1657,11 +1648,12 @@ namespace {
         }
     }
 
-    void paintHdBand() {
+    // One band of the sheet being painted large: false when no sheet waits.
+    bool paintHdBand() {
         const s32 width = sFont.mSheetWidth * cHdScale;
         const s32 height = sFont.mSheetHeight * cHdScale;
         if (width > cHdSheetMax || height > cHdSheetMax) {
-            return;
+            return false;
         }
         if (sHd.mSheet < 0) {
             const s32 sheets = sFont.mKeyFirstSheet + sFont.mKeySheets;
@@ -1671,7 +1663,7 @@ namespace {
                 }
             }
             if (sHd.mSheet < 0) {
-                return;
+                return false;
             }
             if (sHd.mRecord == nullptr) {
                 const size_t bytes = NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, cHdLevels, NEBULA_TEXTURE_RGBA8);
@@ -1699,16 +1691,17 @@ namespace {
             sHd.mRow = cellHeight;
         }
         if (sHd.mRow < cellHeight) {
-            return;
+            return true;
         }
         sHd.mRow = 0;
         if (++sHd.mCell < sFont.mCells) {
-            return;
+            return true;
         }
         makeHdLevels(sHd.mRecord, width, height);
         NebulaHost::textureHd(RenderTexture::idOf(sFont.mSheets + sHd.mSheet * sFont.mSheetBytes), sHd.mRecord);
         sHdDone[sHd.mSheet] = true;
         sHd.mSheet = -1;
+        return true;
     }
 
     // The keyboard's cells: its fixed keys the first time they show; the keys that follow the layout, the Control Pad
@@ -1727,8 +1720,6 @@ namespace {
                 paintInto(canvas, pSheet, sFont.mSheetWidth, x, y);
             }
             sFont.mKeysDrawn = true;
-            handOverSheets(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, sFont.mKeySheets, sFont.mSheetBytes, sFont.mSheetWidth,
-                           sFont.mSheetHeight);
         }
         static const u8 cArrows[4] = {NEBULA_KEY_UP, NEBULA_KEY_DOWN, NEBULA_KEY_LEFT, NEBULA_KEY_RIGHT};
         static const u16 cNoLayout[NEBULA_KEY_LAYOUT_KEYS] = {0};
@@ -1761,8 +1752,6 @@ namespace {
         memcpy(sFont.mKeyPad, pShownPad, sizeof(sFont.mKeyPad));
         memcpy(sFont.mKeyNames, pShownNames, sizeof(sFont.mKeyNames));
         sFont.mKeysFollowing = true;
-        handOverSheets(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, sFont.mKeySheets, sFont.mSheetBytes, sFont.mSheetWidth,
-                       sFont.mSheetHeight);
     }
 
     bool paintKeyCell(Canvas& rCanvas, s32 cell) {
@@ -1833,18 +1822,88 @@ namespace {
         }
     }
 
-    // The A bubble's picture `k` of the icon at A's code (a keyboard's key: family cFamilies).
-    void drawPicture(s32 k, s32 family, s32 glyph, s32 place, s32 model) {
-        Canvas canvas = {canvasPixels(cPictureSizes[k], cPictureSizes[k]), cPictureSizes[k], cPictureSizes[k], 1.0f};
-        if (family == cFamilies) {
-            const bool named = !keyHasCell(place);
-            paintKey(canvas, named ? cKeyNamed : place, cPictureLooks[k], sFont.mKeyLayout, sFont.mKeyPad,
+    // The icon at A's code the pictures show (a keyboard's key: family cFamilies).
+    struct PictureSource {
+        s32 mFamily;
+        s32 mGlyph;
+        s32 mPlace;
+        s32 mModel;
+    };
+    PictureSource sPictureSource = {-1, 0, 0, NEBULA_ICON_MODEL_STANDARD};
+
+    // Picture `k` into `rCanvas` (whole, or the band it names): false when the style has no picture of its own, the
+    // game's glyph scaled standing in.
+    bool paintPicture(Canvas& rCanvas, s32 k) {
+        const PictureSource& rSource = sPictureSource;
+        if (rSource.mFamily == cFamilies) {
+            const bool named = !keyHasCell(rSource.mPlace);
+            paintKey(rCanvas, named ? cKeyNamed : rSource.mPlace, cPictureLooks[k], sFont.mKeyLayout, sFont.mKeyPad,
                      named ? sFont.mKeyNames[0] : nullptr);
-        } else if (!paint(canvas, family + 1, glyph, place, cPictureLooks[k], model)) {
-            paintFromGlyph(canvas, shownGlyph(family, 0, glyph, place, model));
+            return true;
+        }
+        return paint(rCanvas, rSource.mFamily + 1, rSource.mGlyph, rSource.mPlace, cPictureLooks[k], rSource.mModel);
+    }
+
+    // Each picture painted eight times larger with mip levels, a band of rows per update once no sheet waits, and handed
+    // over to stand in for it as a sheet's is. A picture painted again loses its large one until that is painted again.
+    struct HdPicture {
+        u8* mRecord;
+        Rgba* mBand;
+        s32 mRow;  // the next row; -1: nothing to paint
+        bool mDone;
+    };
+    HdPicture sHdPictures[2] = {{nullptr, nullptr, -1, false}, {nullptr, nullptr, -1, false}};
+
+    void drawPicture(s32 k) {
+        Canvas canvas = {canvasPixels(cPictureSizes[k], cPictureSizes[k]), cPictureSizes[k], cPictureSizes[k], 1.0f};
+        if (!paintPicture(canvas, k)) {
+            const PictureSource& rSource = sPictureSource;
+            paintFromGlyph(canvas, shownGlyph(rSource.mFamily, 0, rSource.mGlyph, rSource.mPlace, rSource.mModel));
         }
         initRecord(sPictures[k].mRecord, cPictureSizes[k], cPictureSizes[k]);
         paintInto(canvas, sPictures[k].mRecord, cPictureSizes[k], 0, 0);
+        HdPicture& rHd = sHdPictures[k];
+        if (rHd.mDone) {
+            NebulaHost::textureHd(RenderTexture::idOf(sPictures[k].mRecord), nullptr);
+            rHd.mDone = false;
+        }
+        rHd.mRow = 0;
+    }
+
+    // One band of a picture waiting to be painted large.
+    void paintHdPictureBand() {
+        for (s32 k = 0; k < 2; k++) {
+            HdPicture& rHd = sHdPictures[k];
+            if (rHd.mRow < 0) {
+                continue;
+            }
+            const s32 size = cPictureSizes[k] * cHdScale;
+            if (rHd.mRecord == nullptr) {
+                rHd.mRecord = static_cast< u8* >(
+                    malloc(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(size, size, cHdLevels, NEBULA_TEXTURE_RGBA8)));
+                rHd.mBand = static_cast< Rgba* >(malloc(sizeof(Rgba) * size * cHdBandRows));
+            }
+            if (rHd.mRow == 0) {
+                nebula_texture_init(rHd.mRecord, static_cast< u16 >(size), static_cast< u16 >(size), cHdLevels, NEBULA_TEXTURE_RGBA8, 0);
+                memset(rHd.mRecord + NEBULA_TEXTURE_HEADER, 0, nebula_texture_level_bytes(size, size, cHdLevels, NEBULA_TEXTURE_RGBA8));
+            }
+            Canvas canvas = {rHd.mBand, size, size, static_cast< f32 >(cHdScale), rHd.mRow,
+                             size - rHd.mRow < cHdBandRows ? size - rHd.mRow : cHdBandRows};
+            if (!paintPicture(canvas, k)) {
+                rHd.mRow = -1;
+                return;
+            }
+            Canvas band = {rHd.mBand, size, canvas.mBandRows, canvas.mScale};
+            paintInto(band, rHd.mRecord, size, 0, rHd.mRow);
+            rHd.mRow += canvas.mBandRows;
+            if (rHd.mRow >= size) {
+                makeHdLevels(rHd.mRecord, size, size);
+                NebulaHost::textureHd(RenderTexture::idOf(sPictures[k].mRecord), rHd.mRecord);
+                rHd.mDone = true;
+                rHd.mRow = -1;
+            }
+            return;
+        }
     }
 
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
@@ -2333,8 +2392,8 @@ namespace NebulaIcons {
         NebulaHost::buttonIcons(&now);
         // The Wii Remote's pictures follow the remote even when the icons cannot be drawn.
         sShown.wii_remote = now.wii_remote;
-        if (sFontState == FontReady) {
-            paintHdBand();
+        if (sFontState == FontReady && !paintHdBand()) {
+            paintHdPictureBand();
         }
         if (sFontState != FontReady || memcmp(&now, &sShown, sizeof(now)) == 0) {
             return;
@@ -2353,8 +2412,9 @@ namespace NebulaIcons {
         }
         // The A bubble's two frames, as the font's A.
         sPicturesShown = family >= 0 && (keyboard ? now.glyphs[0] == NEBULA_ICON_KEY : now.glyphs[0] != NEBULA_ICON_KEEP);
+        sPictureSource = {family, now.glyphs[0], now.places[0], now.model};
         for (s32 k = 0; k < 2 && sPicturesShown; k++) {
-            drawPicture(k, family, now.glyphs[0], now.places[0], now.model);
+            drawPicture(k);
         }
         sShown = now;
     }
