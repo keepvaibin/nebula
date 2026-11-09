@@ -20,12 +20,14 @@ public:
     BigBubbleMoveLimitter* getMoveLimitter(s32) const;
     void sortDrawOrder();
 
-    // A pool, as authored: how many bubbles exist at once is part of the stages' design; a full pool skips the spawn.
+    BigBubble* createBubble();
+
+    // Made at init; when all are out, generate makes one more.
     static const s32 cBubbleCount = 16;
 
     BigBubbleDrawer* mDrawer;
-    BigBubble* mBubbles[cBubbleCount];
-    BigBubble* mDrawBubbles[cBubbleCount];
+    MR::Vector< MR::AssignableArray< BigBubble* > > mBubbles;
+    MR::Vector< MR::AssignableArray< BigBubble* > > mDrawBubbles;  // the drawn ones in order (sortDrawOrder), as much room as mBubbles
     MR::GrowTable< BigBubbleMoveLimitter*, 64 > mLimitters;
     s32 mNumLimitters;
     s32 mNumBubbles;

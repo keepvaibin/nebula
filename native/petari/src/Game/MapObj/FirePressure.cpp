@@ -20,9 +20,6 @@ void FirePressure::initBullet(const TableIter& rIter) {
 
 bool FirePressure::shotBullet(f32 speed) {
     FirePressureBullet* pBullet = MR::getSceneObj< FirePressureBulletHolder >(SceneObj_FirePressureBulletHolder)->callEmptyBullet();
-    if (pBullet == nullptr) {
-        return false;
-    }
 
     Pos3f gunPoint;
     calcGunPointFromCannon(&gunPoint);
