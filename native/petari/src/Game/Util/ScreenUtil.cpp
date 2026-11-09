@@ -244,6 +244,32 @@ namespace MR {
         }
     }
 
+    bool coverScreenForSceneChange() {
+        if (!isExistSceneObj(SceneObj_SceneWipeHolder) || ::getSystemWipeHolder() == nullptr) {
+            return true;
+        }
+
+        const WipeLayoutBase* const pSceneWipe = SceneWipeHolderFunction::getSceneWipeHolder()->getCurrent();
+
+        if (pSceneWipe != nullptr && !isDead(pSceneWipe)) {
+            if (pSceneWipe->isWipeOut()) {
+                return false;
+            }
+
+            if (pSceneWipe->isClose()) {
+                return true;
+            }
+        }
+
+        const WipeLayoutBase* const pSystemWipe = ::getSystemWipeHolder()->getCurrent();
+
+        if (pSystemWipe == nullptr || isDead(pSystemWipe) || !(pSystemWipe->isClose() || pSystemWipe->isWipeOut())) {
+            forceCloseSystemWipeWhiteFade();
+        }
+
+        return true;
+    }
+
     bool isSystemWipeActive() {
         return ::getSystemWipeHolder()->isWipeIn() || ::getSystemWipeHolder()->isWipeOut();
     }

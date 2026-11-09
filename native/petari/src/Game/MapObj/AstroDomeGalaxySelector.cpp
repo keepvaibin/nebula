@@ -7,6 +7,7 @@
 #include "Game/Screen/GalaxyConfirmLayout.hpp"
 #include "Game/Screen/GalaxySelectBackButton.hpp"
 #include "Game/Screen/GalaxySelectInfo.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
@@ -249,7 +250,15 @@ void AstroDomeGalaxySelector::exeDemoJumpOut() {
         MR::requestMovementOn(mInfo);
     }
 
+    // The scene is left on the demo's last step: the step after it would draw the dome with the HUD up, the letterbox
+    // leaving and the demo camera released, once, before the screen goes black.
     if (MR::isDemoActive(::cDemoNameJumpOut)) {
+        if (!MR::isDemoLastStep() || !MR::coverScreenForSceneChange()) {
+            return;
+        }
+
+        NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_END, 0, nullptr, ::cDemoNameJumpOut);
+    } else if (!MR::coverScreenForSceneChange()) {
         return;
     }
 
