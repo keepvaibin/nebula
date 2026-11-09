@@ -1,10 +1,75 @@
 #include "Game/Render/RenderTexture.hpp"
+#include "Game/System/GameAssets.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <nebula_cooked_texture.h>
 #include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
+    void release(const void* pImage);
+
+    // The images whose bytes an arena holds, in its memory or in a file view mapped for it: their ids go with the arena.
+    class TextureList : public ArenaOwned {
+    public:
+        explicit TextureList(NebulaArena* pArena) : mArena(pArena), mImages(nullptr), mCount(0), mRoom(0), mNext(sFirst) {
+            sFirst = this;
+        }
+
+        ~TextureList() override {
+            for (u32 i = 0; i < mCount; i++) {
+                release(mImages[i]);
+            }
+            delete[] mImages;
+            TextureList** ppAt = &sFirst;
+            while (*ppAt != this) {
+                ppAt = &(*ppAt)->mNext;
+            }
+            *ppAt = mNext;
+        }
+
+        void add(const void* pImage) {
+            if (mCount == mRoom) {
+                const u32 room = mRoom != 0 ? mRoom * 2 : 64;
+                const void** pImages = new (mArena, 0) const void*[room];
+                for (u32 i = 0; i < mCount; i++) {
+                    pImages[i] = mImages[i];
+                }
+                delete[] mImages;
+                mImages = pImages;
+                mRoom = room;
+            }
+            mImages[mCount++] = pImage;
+        }
+
+        // The list of the arena that holds pImage's bytes; null for bytes no arena holds (statics, shared views).
+        static TextureList* of(const void* pImage) {
+            NebulaArena* pArena = NebulaArena::findFromRoot(const_cast< void* >(pImage));
+            if (pArena == nullptr) {
+                pArena = GameAssets::viewArena(pImage);
+            }
+            if (pArena == nullptr) {
+                return nullptr;
+            }
+            for (TextureList* pList = sFirst; pList != nullptr; pList = pList->mNext) {
+                if (pList->mArena == pArena) {
+                    return pList;
+                }
+            }
+            return new (pArena, 0) TextureList(pArena);
+        }
+
+    private:
+        NebulaArena* mArena;
+        const void** mImages;
+        u32 mCount;
+        u32 mRoom;
+        TextureList* mNext;
+        static TextureList* sFirst;
+    };
+
+    TextureList* TextureList::sFirst = nullptr;
+
     // Open addressing by the image's address; an empty slot ends a search, a forgotten one is a tombstone.
     struct Entry {
         const void* mImage;
@@ -74,7 +139,23 @@ namespace {
         pFree->mStale = false;
         pFree->mTarget = false;
         pFree->mSize = 0;
+        // A list is made in its arena, not in the table, so pFree stays where it is.
+        if (TextureList* pList = TextureList::of(pImage)) {
+            pList->add(pImage);
+        }
         return pFree;
+    }
+
+    void release(const void* pImage) {
+        Entry* pEntry = find(pImage, false);
+        if (pEntry == nullptr) {
+            return;
+        }
+        if (pEntry->mId != 0) {
+            const NebulaHostServices* pHost = nebula_host();
+            pHost->texture_free(pHost->user, pEntry->mId);
+        }
+        pEntry->mImage = cGone;
     }
 
     u32 registerRecord(const NebulaTexture* pRecord) {
