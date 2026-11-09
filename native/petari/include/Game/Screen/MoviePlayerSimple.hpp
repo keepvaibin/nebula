@@ -1,13 +1,13 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
+#include "Game/System/ArenaOwned.hpp"
 #include "Game/Screen/MovieStream.hpp"
 class NebulaArena;
 
 // The scene's movie: as large as the screen holds it at its own shape, centred, black around it; its time is its
 // sound's, or the game's steps for a movie with none.
-class MoviePlayerSimple : public LayoutActor, public JKRDisposer {
+class MoviePlayerSimple : public LayoutActor, public ArenaOwned {
 public:
     MoviePlayerSimple();
     virtual ~MoviePlayerSimple();

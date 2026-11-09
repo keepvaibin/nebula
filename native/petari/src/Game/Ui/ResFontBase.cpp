@@ -1,5 +1,5 @@
 #include "Game/Ui/ResFontBase.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 
 namespace Ui {
     namespace detail {
@@ -160,7 +160,7 @@ namespace Ui {
             const u32 bit = 1u << (ch & 31u);
             if (ch >= 0x20 && (bits & bit) == 0) {
                 bits |= bit;
-                JUTNativeLog("[font] no glyph U+%04X in the %ux%u font\n", static_cast< unsigned >(ch),
+                GameLog("[font] no glyph U+%04X in the %ux%u font\n", static_cast< unsigned >(ch),
                              static_cast< unsigned >(mFile->cellWidth), static_cast< unsigned >(mFile->cellHeight));
             }
             return mFile->alterGlyph;

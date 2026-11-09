@@ -1,4 +1,4 @@
-#include "JSystem/JUtility/JUTNativeLog.hpp"
+#include "Game/System/GameLog.hpp"
 #include <nebula_game_api.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -6,7 +6,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 // Each line goes to the host in one call, which writes it whole from any thread; nothing is shared between calls. Every
 // caller ends its text with a newline; a last piece without one is a line of its own. Text of any length: up to 1023
 // characters on the stack, longer in the host's heap (never the game's, so the arena can log its own state).
-void JUTNativeLogV(const char* pFormat, va_list args) {
+void GameLogV(const char* pFormat, va_list args) {
     const NebulaHostServices* pHost = nebula_host();
     if (pHost == nullptr || pHost->log == nullptr) {
         return;
@@ -46,9 +46,9 @@ void JUTNativeLogV(const char* pFormat, va_list args) {
     }
 }
 
-void JUTNativeLog(const char* pFormat, ...) {
+void GameLog(const char* pFormat, ...) {
     va_list args;
     va_start(args, pFormat);
-    JUTNativeLogV(pFormat, args);
+    GameLogV(pFormat, args);
     va_end(args);
 }

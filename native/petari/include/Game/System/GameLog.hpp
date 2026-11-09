@@ -6,8 +6,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-void JUTNativeLog(const char* pFormat, ...);
-void JUTNativeLogV(const char* pFormat, va_list args);
+void GameLog(const char* pFormat, ...);
+void GameLogV(const char* pFormat, va_list args);
 #ifdef __cplusplus
 }
 #endif

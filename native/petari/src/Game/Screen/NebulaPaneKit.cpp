@@ -3,7 +3,7 @@
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
@@ -46,7 +46,7 @@ bool NebulaPaneKit::init(LayoutHolder* pHolder, const char* pArchive, Ui::Layout
         if (mBlocks.pLayout == nullptr) {
             return false;
         }
-        JUTNativeLog("%s: a mod's copy has no usable layout; the game's own is used\n", pArchive);
+        GameLog("%s: a mod's copy has no usable layout; the game's own is used\n", pArchive);
     }
     return true;
 }
@@ -76,7 +76,7 @@ Ui::Pane* NebulaPaneKit::build(const char* pName, const char* pNewName, s32 kind
         if (idx == cUiNone16) {
             return nullptr;
         }
-        JUTNativeLog("%s: a mod's copy has no pane %s of its kind; the game's own is used\n", mpArchive, pName);
+        GameLog("%s: a mod's copy has no pane %s of its kind; the game's own is used\n", mpArchive, pName);
     }
     Ui::Pane* pPane = mpInto->BuildPaneObj(pBlocks->PaneAt(idx), *pBlocks);
     if (pPane != nullptr) {

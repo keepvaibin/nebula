@@ -36,7 +36,7 @@ void AudSeKeeperBox::updateJointPos() {
     mPos.z = MR::getJointTransZ(mJoint);
 }
 
-AudSeKeeper::AudSeKeeper(LiveActor* pActor, int boxNumHint) : JKRDisposer(), mActor(pActor) {
+AudSeKeeper::AudSeKeeper(LiveActor* pActor, int boxNumHint) : ArenaOwned(), mActor(pActor) {
     mBoxes.init(boxNumHint > 0 ? boxNumHint : 1);
 }
 

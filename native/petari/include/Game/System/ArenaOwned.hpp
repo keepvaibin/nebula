@@ -5,10 +5,10 @@
 class NebulaArena;
 
 // An object the arena holding its memory destroys when that arena is disposed of.
-class JKRDisposer : public NebulaListLink< JKRDisposer > {
+class ArenaOwned : public NebulaListLink< ArenaOwned > {
 public:
-    JKRDisposer();
-    virtual ~JKRDisposer();
+    ArenaOwned();
+    virtual ~ArenaOwned();
 
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
 };

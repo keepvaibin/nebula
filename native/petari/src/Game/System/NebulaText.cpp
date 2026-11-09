@@ -1,5 +1,5 @@
 #include "Game/System/NebulaText.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include "Game/System/GameLog.hpp"
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -171,7 +171,7 @@ namespace {
                 if (column >= 0) {
                     sColumn = column;
                 } else {
-                    JUTNativeLog("NebulaText: unknown language in NebulaText.txt\n");
+                    GameLog("NebulaText: unknown language in NebulaText.txt\n");
                 }
                 continue;
             }
@@ -187,7 +187,7 @@ namespace {
         const char* pPrefix = MR::getCurrentLanguagePrefix();
         const s32 column = findColumn(pPrefix, lengthOf(pPrefix));
         sColumn = column >= 0 ? column : 0;
-        JUTNativeLog("NebulaText: %s\n", pPrefix);
+        GameLog("NebulaText: %s\n", pPrefix);
 
         MR::FormattedName path("/%s/MessageData/NebulaText.txt", pPrefix);
         GameAssets::File file;
@@ -212,7 +212,7 @@ namespace {
         sTokenId = reinterpret_cast< char* >(sFile + length);
         if (length > 0 && GameAssets::read(&file, sFile, static_cast< s32 >(length), 0) >= 0) {
             parse(sFile, static_cast< s32 >(length));
-            JUTNativeLog("NebulaText: %s (%d texts)\n", path.c_str(), sOverrideNum);
+            GameLog("NebulaText: %s (%d texts)\n", path.c_str(), sOverrideNum);
         }
     }
 

@@ -21,11 +21,10 @@ set_property(CACHE NEBULA_GAME_VERSION PROPERTY STRINGS RMGE01)
 
 set(petari "${NEBULA_PETARI_DIR}")
 file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
-    "${petari}/src/Game/*.cpp" "${petari}/src/Game/*.c"
-    "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c")
+    "${petari}/src/Game/*.cpp" "${petari}/src/Game/*.c")
 
 # What a plugin built with the game's headers must match: any change to them may move a field or a virtual function.
-file(GLOB_RECURSE nebula_game_headers "${petari}/include/*" "${petari}/libs/*.h" "${petari}/libs/*.hpp"
+file(GLOB_RECURSE nebula_game_headers "${petari}/include/*"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include/*" "${CMAKE_CURRENT_SOURCE_DIR}/include/nebula_prelude.h")
 list(SORT nebula_game_headers)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${nebula_game_headers})
@@ -57,7 +56,6 @@ endif()
 target_include_directories(smg_game BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
-    "${petari}/libs/JSystem/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(version_ids RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3)
