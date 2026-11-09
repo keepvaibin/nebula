@@ -420,7 +420,7 @@ void SysInfoWindow::exeDisappear() {
     }
 
     if (MR::isPaneAnimStopped(this, mTextParentPaneName, 0)) {
-        if (mType == Type_Key || mType == Type_Blocking || (mYesNoSelector != nullptr && !mYesNoSelector->_C)) {
+        if (mType == Type_Key || mType == Type_Blocking || (mYesNoSelector != nullptr && !mYesNoSelector->mIsActive)) {
             kill();
         }
     }

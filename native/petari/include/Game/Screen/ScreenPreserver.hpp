@@ -14,5 +14,4 @@ public:
     void deactivate();
 
     bool mIsActive;
-    u8 _D[3];
 };
