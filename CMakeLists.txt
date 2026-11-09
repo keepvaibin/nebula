@@ -2,13 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.1 LANGUAGES C CXX)
 add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
 
-# A build for players: the test switches' names are left out (tools/test_driver/switches.h; tools/release_check.ps1 checks the build).
-option(NEBULA_RELEASE "Leave the test hooks out" OFF)
-if(NEBULA_RELEASE)
-    add_compile_definitions(NEBULA_RELEASE=1)
-else()
-    add_compile_definitions(NEBULA_DEV=1)
-endif()
+# One build: a release and a test run use the same binaries (tools/release_check.ps1 checks the sources and the release).
 # The standard library's bounds checks (array, vector, span, string_view subscripts and the like) in every host build: an
 # index past the end stops the program at once, never reading or writing a neighbouring member.
 if(MSVC)
@@ -131,8 +125,9 @@ target_link_libraries(galaxy_host_extension PUBLIC galaxy_runtime_abi)
 galaxy_host_options(galaxy_host_extension)
 # The test runs' extension (run.sh: --extension): scripted controls, pictures, sound, menus and device losses from the
 # run's GALAXY_* environment. Never in an install.
-add_library(nebula_test_extension MODULE tools/test_driver/extension/test_extension.cpp)
-target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi)
+add_library(nebula_test_extension MODULE tools/test_driver/extension/test_extension.cpp
+    tools/test_driver/extension/data_guard.cpp runtime/src/hidden_start.cpp)
+target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi shell32)
 target_compile_features(nebula_test_extension PRIVATE cxx_std_20)
 if(MSVC)
     target_compile_options(nebula_test_extension PRIVATE /W4 /WX /permissive- /EHsc)
@@ -178,10 +173,9 @@ galaxy_host_options(galaxy_audio_mixer)
 
 add_library(galaxy_native_host STATIC
     runtime/src/game_paths.cpp
-    runtime/src/host_env.cpp
+    runtime/src/hidden_start.cpp
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
-    tools/test_driver/data_guard.cpp
     runtime/src/input/live_controls_engine.cpp
     runtime/src/input/key_positions_win32.cpp
     runtime/src/input/raw_mouse_win32.cpp
@@ -450,7 +444,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/registries.cpp
     runtime/src/render/core/world_lights.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
-    $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
+    runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
 )
 target_include_directories(galaxy_render PUBLIC runtime/src)
@@ -584,8 +578,11 @@ galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_wiimote_speaker_tests SOURCES ${rt}/wiimote_speaker_tests.cpp LIBS galaxy_native_input)
-galaxy_test(galaxy_player_input_tests SOURCES ${rt}/input/player_input_tests.cpp LIBS galaxy_render)
-target_compile_definitions(galaxy_player_input_tests PRIVATE NEBULA_TEST_EXTENSION_FILE="$<TARGET_FILE:nebula_test_extension>")
+# The extension's work-folder policy holds for this test too: its folders are in the build's test-work.
+galaxy_test(galaxy_player_input_tests SOURCES ${rt}/input/player_input_tests.cpp LIBS galaxy_render
+    ARGS --settings "${CMAKE_CURRENT_BINARY_DIR}/test-work/settings" --crash-dumps "${CMAKE_CURRENT_BINARY_DIR}/test-work/crashes")
+target_compile_definitions(galaxy_player_input_tests PRIVATE NEBULA_TEST_EXTENSION_FILE="$<TARGET_FILE:nebula_test_extension>"
+    NEBULA_TEST_WORK="${CMAKE_CURRENT_BINARY_DIR}/test-work")
 add_dependencies(galaxy_player_input_tests nebula_test_extension)
 galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_tests.cpp
     LIBS galaxy_host_pointer_events)
@@ -604,7 +601,9 @@ galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${r
 target_compile_definitions(galaxy_mods_tests PRIVATE MODS_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/runtime/tests")
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
-galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS shell32)
+galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/hidden_start.cpp
+    tools/test_driver/extension/data_guard.cpp LIBS shell32)
+target_include_directories(galaxy_test_data_paths_tests PRIVATE tools/test_driver/extension)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
 
@@ -731,7 +730,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/rt/rt_geometry.cpp
         runtime/src/render/rt/rt_scene.cpp
         runtime/src/render/streamline_bridge.cpp
-        $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
+        runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
         runtime/src/render/vk/vk_context.cpp
         runtime/src/render/vk/device_quirks_vk.cpp

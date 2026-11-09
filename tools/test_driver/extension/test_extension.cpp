@@ -31,6 +31,10 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shellapi.h>
+
+#include "data_guard.h"
+#include "galaxy/hidden_start.h"
 #define NEBULA_EXTENSION_EXPORT extern "C" __declspec(dllexport)
 #else
 #include <time.h>
@@ -87,6 +91,34 @@ std::optional<std::string> env(const char* name) {
     return std::string(value);
 #endif
 }
+
+#if defined(_WIN32)
+std::wstring wide_env(const wchar_t* name) {
+    std::wstring value(256u, L'\0');
+    DWORD length = GetEnvironmentVariableW(name, value.data(), static_cast<DWORD>(value.size()));
+    if (length >= value.size()) {
+        value.resize(length);
+        length = GetEnvironmentVariableW(name, value.data(), static_cast<DWORD>(value.size()));
+    }
+    if (length == 0u || length >= value.size()) {
+        return {};
+    }
+    value.resize(length);
+    return value;
+}
+
+// The work-folder policy (data_guard.h) over this process's arguments; null when the run may go on.
+const char* guard() {
+    int count = 0;
+    LPWSTR* const args = CommandLineToArgvW(GetCommandLineW(), &count);
+    if (args == nullptr) {
+        return "cannot read the command line";
+    }
+    const char* const refusal = test_guard::error(count, args, wide_env, galaxy::host::player_data_folder().wstring());
+    LocalFree(args);
+    return refusal;
+}
+#endif
 
 // Set and not starting with 0, f or n.
 bool env_flag(const char* name) {
@@ -668,6 +700,13 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         return nullptr;
     }
     g_host = host;
+#if defined(_WIN32)
+    // Before anything is read or written: a test run keeps to its work folder, or the host stops.
+    if (const char* const refusal = guard()) {
+        log(std::string("test extension: ") + refusal);
+        return nullptr;
+    }
+#endif
     read_script();
     read_menus();
     read_pictures();

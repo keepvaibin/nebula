@@ -1000,9 +1000,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         }
         const WalkView& view = walk_view(item.view, pass);
         if (view.empty || (mesh != nullptr && mesh->positions == 0u) || item_culled(item, pass, state, mesh)) {
-#if defined(NEBULA_DEV)
             ++stat_items_culled_;
-#endif
             ++i;
             continue;
         }
@@ -1014,9 +1012,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
-#if defined(NEBULA_DEV)
             ++stat_draws_no_pipeline_;
-#endif
             ++i;
             continue;
         }

@@ -8,7 +8,6 @@
 #include "galaxy/path_text.h"
 #include "galaxy/ui/settings_save_model.h"
 #include "galaxy/windows_power.h"
-#include "../../../tools/test_driver/switches.h"
 #include "galaxy/controller_hid.h"
 
 #include "galaxy/render/display_modes.h"

@@ -21,9 +21,7 @@
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/frame_interpolation.h"
 #include "galaxy/render_api.h"
-#if defined(NEBULA_DEV)
 #include "galaxy/frame_telemetry.h"
-#endif
 #include "render/core/draw_record.h"
 #include "render/core/frame_core.h"
 #include "render/core/pipelines.h"
@@ -382,9 +380,7 @@ private:
     float sky_up_[3]{0.0f, 1.0f, 0.0f};
     std::uint32_t view_flags_ = 0u;  // ViewRows::view_flags
     bool target_open_ = false;
-#if defined(NEBULA_DEV)
     std::uint64_t stat_items_culled_ = 0u, stat_draws_no_pipeline_ = 0u;
-#endif
 
     // Render thread: the chunk being rendered ended a game frame (a new picture).
     bool picture_made_in_chunk_ = false;
@@ -619,14 +615,10 @@ private:
     std::uint64_t frame_index_ = 0;
     bool initialized_ = false;
     std::atomic<std::uint64_t> stat_pictures_made_{0};
-#if defined(NEBULA_DEV)
-    std::unique_ptr<galaxy::telemetry::Publisher> frame_telemetry_;
-#endif
+    std::unique_ptr<galaxy::telemetry::Publisher> frame_telemetry_;  // --diagnostics telemetry
     std::atomic<std::uint64_t> stat_new_pictures_shown_{0};
-#if defined(NEBULA_DEV)
     std::atomic<std::uint64_t> stat_presents_{0};
     std::atomic<std::uint64_t> stat_pictures_shown_again_{0};
-#endif
 
 };
 

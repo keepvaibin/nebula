@@ -276,10 +276,8 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
-#if !defined(NEBULA_DEV)
-    // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
-    cfg.ray_tracing_enabled = false;
-#endif
+    // Ray tracing follows its setting in every build; Nebula Settings offers its row once it is finished
+    // (rt_caps.h kRayTracingRowOffered).
 }
 
 static void sanitize_feature_status(RenderFeatureStatus& status) {

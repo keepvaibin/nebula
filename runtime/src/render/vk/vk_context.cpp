@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
 #include "galaxy/render/vk/vk_context.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt/rt_shaders.h"
-#if defined(NEBULA_DEV)
 #include "galaxy/runtime_settings.h"
-#endif
 
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 #if defined(_WIN32)
@@ -668,7 +667,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         features.pNext = &fault;
         vkGetPhysicalDeviceFeatures2(physical_, &features);
         device_fault_ = fault.deviceFault == VK_TRUE;
-        device_fault_binary_ = device_fault_ && fault.deviceFaultVendorBinary == VK_TRUE;
+        device_fault_binary_ = device_fault_ && fault.deviceFaultVendorBinary == VK_TRUE &&
+                               ::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults);
         if (device_fault_) {
             device_extensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
             fault.pNext = nullptr;
@@ -1295,7 +1295,7 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
     const std::int64_t cpu_start = thread_cpu_ns();
     VkResult result = VK_ERROR_DEVICE_LOST;
     if (simulated_loss_.exchange(false, std::memory_order_acq_rel)) {
-        loss_was_simulated_ = true;  // GALAXY_TEST_DEVICE_LOST: the commands are not submitted
+        loss_was_simulated_ = true;  // a host extension's lose_gpu_device: the commands are not submitted
     } else {
         result = vkQueueSubmit(queue_, 1, &submit, fence);
     }
@@ -1497,15 +1497,13 @@ void Context::report_device_fault(const char* where) noexcept {
         std::fprintf(stderr, "[vulkan] device fault after %s: %u address infos, %u vendor infos, %llu bytes of vendor binary\n",
                      where, counts.addressInfoCount, counts.vendorInfoCount, static_cast<unsigned long long>(counts.vendorBinarySize));
         constexpr std::uint32_t kMaxInfos = 256u;
-        [[maybe_unused]] constexpr VkDeviceSize kMaxBinary = VkDeviceSize{64} << 20u;
+        constexpr VkDeviceSize kMaxBinary = VkDeviceSize{64} << 20u;
         std::vector<VkDeviceFaultAddressInfoEXT> addresses(std::min(counts.addressInfoCount, kMaxInfos));
         std::vector<VkDeviceFaultVendorInfoEXT> vendors(std::min(counts.vendorInfoCount, kMaxInfos));
         std::vector<unsigned char> binary;
-#if defined(NEBULA_DEV)
         if (device_fault_binary_ && counts.vendorBinarySize != 0u && counts.vendorBinarySize <= kMaxBinary) {
             binary.resize(static_cast<std::size_t>(counts.vendorBinarySize));
         }
-#endif
         VkDeviceFaultCountsEXT sizes{VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT};
         sizes.addressInfoCount = static_cast<std::uint32_t>(addresses.size());
         sizes.vendorInfoCount = static_cast<std::uint32_t>(vendors.size());
@@ -1538,7 +1536,6 @@ void Context::report_device_fault(const char* where) noexcept {
             std::fprintf(stderr, "[vulkan] device fault vendor %u: %s code=0x%llx data=0x%llx\n", i, vendor.description,
                          static_cast<unsigned long long>(vendor.vendorFaultCode), static_cast<unsigned long long>(vendor.vendorFaultData));
         }
-#if defined(NEBULA_DEV)
         // The vendor's own binary, for its tools: beside the run log (the settings folder's logs).
         if (!binary.empty() && sizes.vendorBinarySize != 0u && sizes.vendorBinarySize <= binary.size()) {
             const std::filesystem::path folder = ::galaxy::runtime_settings_folder() / "logs";
@@ -1553,7 +1550,6 @@ void Context::report_device_fault(const char* where) noexcept {
                              static_cast<unsigned long long>(sizes.vendorBinarySize), file.string().c_str());
             }
         }
-#endif
     } catch (...) {
     }
 }

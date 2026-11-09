@@ -1,7 +1,6 @@
 // Where the game's store is. (Its includes are what the host's files take from here.)
 #pragma once
 
-#include "galaxy/host_env.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/controller_roster.h"
 #include "galaxy/host_pointer_events.h"

@@ -25,6 +25,8 @@ Files go to `diagnostics` in the data folder (COMMAND_LINE.md `--data`), named w
 | `rt-inputs` | What ray tracing reads of each frame list, checked against its rules and counted every 300 lists: the world's lights (`[rt-inputs] lights` lines) and, with ray tracing on, the traced scene (`[rt-inputs] scene` lines) and each frame's builds (`[rt]` lines) |
 | `rt-view` | With ray tracing on: the traced scene drawn over the game's opaque scene, each instance in its own colour (a scene without multisampling) |
 | `rt-check` | With ray tracing on: a camera ray a pixel against the depth the game drew, coloured by class (green: the same surface; blue: drawn but not traced; orange: traced behind; red: traced in front; magenta: traced where nothing was drawn) and counted every 300 frames (`[rt-check]` lines) |
+| `device-faults` | For a lost graphics device: Direct3D 12's breadcrumbs and page faults (DRED), Vulkan's vendor fault data into `logs/device_fault_<vendor>_<device>.bin` beside the settings |
+| `telemetry` | Frame counts in shared memory each second, for `tools/telemetry` |
 
 Sets: `frames` (timeline, frame-tails, pointer-latency, present-stats, frame-times), `gpu` (gpu-passes), `threads`
 (thread-cpu, profile), `loads` (scene-loads, file-reads), `1` (the launcher's recording: timeline, frame-tails,
