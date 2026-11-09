@@ -193,6 +193,8 @@ void LensFlareDirector::init(const TableIter& /*rIter*/) {
 }
 
 void LensFlareDirector::movement() {
+    // The newest answers go to the objects right before the flare reads them: answered in the draw, they waited a frame.
+    readAnswers();
     s32 area = checkArea();
     controlFlare(area, checkBrightObj(area != 0));
 
@@ -205,14 +207,19 @@ void LensFlareDirector::pauseOff() {
     MR::requestMovementOn(mLine);
 }
 
-void LensFlareDirector::setDrawSyncToken() {
-    // What the last finished probes saw; then this picture's points.
+void LensFlareDirector::reserveProbes() {
     const u32 count = mBrightObjCount * BrightObjBase::cProbeCount;
     if (count > mProbeCapacity) {
         delete[] mProbes;
         mProbes = new NebulaScreenProbe[count];
         mProbeCapacity = count;
     }
+}
+
+// What the last finished probes saw, for each object.
+void LensFlareDirector::readAnswers() {
+    reserveProbes();
+    const u32 count = mBrightObjCount * BrightObjBase::cProbeCount;
     NebulaScreenProbe* const probes = mProbes;
     const u32 done = Frame::screenProbeResults(BrightObjBase::cReadbackChannel, mAsker, probes, count);
     for (u32 i = 0; i < mBrightObjCount && (i + 1) * BrightObjBase::cProbeCount <= done; i++) {
@@ -242,7 +249,13 @@ void LensFlareDirector::setDrawSyncToken() {
         nebula_log("[flare] no answers\n");
     }
 #endif
+}
 
+// This picture's points, asked with the camera it is drawn with.
+void LensFlareDirector::setDrawSyncToken() {
+    reserveProbes();
+    const u32 count = mBrightObjCount * BrightObjBase::cProbeCount;
+    NebulaScreenProbe* const probes = mProbes;
     for (u32 i = 0; i < mBrightObjCount; i++) {
         mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);
     }
