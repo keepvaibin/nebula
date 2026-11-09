@@ -8,6 +8,10 @@ class LayoutActor;
 class LiveActor;
 class StarPointerOnOffController;
 
+namespace Ui {
+    class Pane;
+}  // namespace Ui
+
 namespace MR {
     void initStarPointerGameScene();
     void createStarPointerLayout();
@@ -24,6 +28,8 @@ namespace MR {
     bool tryStarPointerCheck(const LiveActor*, bool, const char*);
     bool tryStarPointerCheckWithoutRumble(LiveActor*, bool);
     bool isStarPointerPointingPane(const LayoutActor*, const char*, s32, bool, const char*);
+    // The same for a pane already found; pName (the pane's name) keys the pointer's reaction.
+    bool isStarPointerPointingPane(const LayoutActor*, const Ui::Pane* pPane, const char* pName, s32, bool, const char*);
     bool isStarPointerPointingPaneForMeterLayout(const LayoutActor*, const char*, s32, bool, const char*);
     bool isStarPointerPointingTarget(const LayoutActor*, const char*, s32, bool, const char*);
     bool isStarPointerPointing1P(const LiveActor*, const char*, bool, bool);

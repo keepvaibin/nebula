@@ -5,6 +5,10 @@
 class LayoutActor;
 class Nerve;
 
+namespace Ui {
+    class Pane;
+}  // namespace Ui
+
 class ButtonPaneController : public NerveExecutor {
 public:
     /// @brief Creates a new `ButtonPaneController`.
@@ -51,6 +55,7 @@ public:
     LayoutActor* mHost;
     const char* mPaneName;
     const char* mBoundingPaneName;
+    const Ui::Pane* mBoundingPane;  // found once: the pane the pointer and the menu focus test
     u32 mAnimIndex;
     bool mReleaseOnDecide;
     f32 mPointingAnimStartFrame;
