@@ -6,8 +6,14 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
+
+// NameObjExecuteInfo keeps each list type in an s8.
+static_assert(MR::MovementType_ShadowControllerHolder <= 127 && MR::CalcAnimType_AnimParticleIgnorePause <= 127 && MR::DrawType_CameraCover <= 127 &&
+                  MR::DrawBufferType_MirrorMapObj <= 127,
+              "list types fit an s8");
 
 namespace {
     NameObjExecuteHolder* getNameObjExecuteHolder() {
@@ -207,10 +213,11 @@ void NameObjExecuteHolder::initConnectting() {
     }
 }
 
+// The lists grow in the holder's arena: a request made in a frame (the permanent arena current) stays the scene's.
 void NameObjExecuteHolder::push(PendingList* pList, s32 index) {
     if (pList->mCount >= pList->mCapacity) {
         const s32 grown = pList->mCapacity > 0 ? pList->mCapacity * 2 : 64;
-        s32* pIndices = new s32[grown];
+        s32* pIndices = new (NebulaArena::findFromRoot(this), 0) s32[grown];
         for (s32 i = 0; i < pList->mCount; i++) {
             pIndices[i] = pList->mIndices[i];
         }
