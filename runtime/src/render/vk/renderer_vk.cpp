@@ -938,13 +938,17 @@ bool RendererVk::create_swapchain() {
         // Once, and again only when the count or the mode changes (VSync toggled).
         logged_swap_images_ = count;
         logged_swap_mode_ = mode;
-        const char* const name = mode == VK_PRESENT_MODE_IMMEDIATE_KHR ? "IMMEDIATE"
-            : mode == VK_PRESENT_MODE_MAILBOX_KHR ? "MAILBOX"
-            : mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? "FIFO_RELAXED" : "FIFO";
+        // The modes by their Vulkan names.
+        const char* const name = mode == VK_PRESENT_MODE_IMMEDIATE_KHR ? "PRESENT_MODE_IMMEDIATE"
+            : mode == VK_PRESENT_MODE_MAILBOX_KHR ? "PRESENT_MODE_MAILBOX"
+            : mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? "PRESENT_MODE_FIFO_RELAXED" : "PRESENT_MODE_FIFO";
         std::string offered;
         for (const VkPresentModeKHR offer : modes) {
-            offered += offer == VK_PRESENT_MODE_IMMEDIATE_KHR ? " IMMEDIATE" : offer == VK_PRESENT_MODE_MAILBOX_KHR ? " MAILBOX"
-                : offer == VK_PRESENT_MODE_FIFO_KHR ? " FIFO" : offer == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? " FIFO_RELAXED" : " other";
+            offered += offer == VK_PRESENT_MODE_IMMEDIATE_KHR  ? " PRESENT_MODE_IMMEDIATE"
+                       : offer == VK_PRESENT_MODE_MAILBOX_KHR      ? " PRESENT_MODE_MAILBOX"
+                       : offer == VK_PRESENT_MODE_FIFO_KHR         ? " PRESENT_MODE_FIFO"
+                       : offer == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? " PRESENT_MODE_FIFO_RELAXED"
+                                                                   : " other";
         }
         const bool waits = context.present_wait() && mode == VK_PRESENT_MODE_FIFO_KHR && !amd;
         std::fprintf(stderr, "[vk] swap chain: %u images, %s (offered:%s); late frames %s; frame latency by %s\n", count, name,
