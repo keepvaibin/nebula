@@ -225,6 +225,10 @@ void SwingRope::exeBindLoose() {
 
 void SwingRope::initPoints() {
     mNumPoints = mRopeLength / ::sPointInterval;
+    // At least two: the head is read every frame and friction divides by mNumPoints - 1.
+    if (mNumPoints < 2) {
+        mNumPoints = 2;
+    }
     mPoints = new SwingRopePoint*[mNumPoints];
 
     for (s32 idx = 0; idx < mNumPoints; idx++) {
@@ -638,7 +642,7 @@ void SwingRope::updateHangLowerPoints() {
         restrictPointToTail(nextIndex + 1, &mFootPos);
         updateHangLowerPointPos(nextIndex + 1);
 
-        s32 nextNextIndex = nextIndex + 1;
+        s32 nextNextIndex = nextIndex + 1 < mNumPoints ? nextIndex + 1 : nextIndex;
         MR::vecBlend(mSledPoint->mUp, mPoints[nextNextIndex]->mUp, &up, ::sPointBlendRateAxisZ);
         MR::vecBlend(mSledPoint->mFront, mPoints[nextNextIndex]->mFront, &front, ::sPointBlendRateAxisZ);
         MR::normalize(&up);
