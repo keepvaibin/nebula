@@ -24,6 +24,11 @@ NamePosHolder::NamePosHolder() : NameObj("位置テーブル保持"), mPosNum(),
             pLastSame[i] = i;
         } else {
             const s32 first = static_cast< s32 >(mIndex.find(curInf->mName));
+            // A row with no name is not chained.
+            if (first < 0) {
+                pLastSame[i] = i;
+                continue;
+            }
             mNextSame[pLastSame[first]] = i;
             pLastSame[first] = i;
         }

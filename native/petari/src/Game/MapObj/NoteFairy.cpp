@@ -144,6 +144,11 @@ void NoteFairy::init(const TableIter& rIter) {
         }
     }
 
+    // A negative count (a note spacing under zero) is no notes.
+    if (mMelodyNoteNum < 0) {
+        mMelodyNoteNum = 0;
+    }
+
     mNoteArray = new Note*[mMelodyNoteNum];
 
     for (s32 i = 0; i < mMelodyNoteNum; i++) {

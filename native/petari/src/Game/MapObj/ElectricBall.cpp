@@ -145,6 +145,11 @@ void ElectricBall::initBalls(const TableIter& rIter) {
     s32 numBalls = ::sNumBallsDefault;
     MR::getPlacementArg0NoInit(rIter, &numBalls);
 
+    // At least one ball: the nearest ball is asked for every step.
+    if (numBalls < 1) {
+        numBalls = 1;
+    }
+
     mBalls.init(numBalls);
 
     for (auto& item : mBalls) {

@@ -54,6 +54,11 @@ s32 Table::getColumnKind(const char* pKey) const {
 }
 
 TableIter Table::findElementBinary(const char* key, const char* value) const {
+    // A null name is in no row.
+    if (key == nullptr || value == nullptr) {
+        return end();
+    }
+
     int low = 0;
     int high = getNumEntries();
 

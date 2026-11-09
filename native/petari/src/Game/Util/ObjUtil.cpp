@@ -585,7 +585,8 @@ void MR::getCsvDataStr(const char** pOut, const Table* pMapInfo, const char* pKe
 void MR::getCsvDataStrOrNULL(const char** pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     getCsvDataStr(pOut, pMapInfo, pKey, idx);
 
-    if (*pOut[0] == 0) {
+    // A column the table lacks leaves the caller's null as it was.
+    if (*pOut != nullptr && (*pOut)[0] == 0) {
         *pOut = nullptr;
     }
 }

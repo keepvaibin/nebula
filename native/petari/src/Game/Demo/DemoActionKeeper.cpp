@@ -23,6 +23,10 @@ namespace {
 
     void setTalkAnimCtrlInterpole(LiveActor* pActor, s32 interpole) {
         DemoExecutor* executor = DemoFunction::findDemoExecutorActive(pActor);
+        // No active demo for the actor: nothing to set.
+        if (executor == nullptr) {
+            return;
+        }
         for (s32 i = 0; i < executor->mTalkAnimCtrl.size(); i++) {
             executor->mTalkAnimCtrl[i]->mInterpole = interpole;
         }

@@ -49,11 +49,18 @@ bool DemoSubPartKeeper::isDemoPartActive(const char* pSubPartName) const {
 
 s32 DemoSubPartKeeper::getDemoPartStep(const char* pSubPartName) const {
     DemoSubPartInfo* subpart = findSubPart(pSubPartName);
+    // A part the sheet lacks has no steps.
+    if (subpart == nullptr) {
+        return 0;
+    }
     return subpart->mSubPartTotalStep - subpart->mRestStep;
 }
 
 s32 DemoSubPartKeeper::getDemoPartTotalStep(const char* pSubPartName) const {
     DemoSubPartInfo* subpart = findSubPart(pSubPartName);
+    if (subpart == nullptr) {
+        return 0;
+    }
     return subpart->mSubPartTotalStep;
 }
 

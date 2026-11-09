@@ -43,7 +43,9 @@ void AstroDomeSky::init(const TableIter& rIter) {
     s32 domeId = -1;
     MR::getPlacementArg0NoInit(rIter, &domeId);
 
-    const char* pSkyName = ::cAstroDomeSkyTable[domeId - 1];
+    // A dome past the six (a mod's) takes the skies round again; no dome number takes the first.
+    const s32 skyCount = static_cast< s32 >(ARRAY_SIZE(::cAstroDomeSkyTable));
+    const char* pSkyName = ::cAstroDomeSkyTable[domeId >= 1 ? (domeId - 1) % skyCount : 0];
     initModelManagerWithAnm(pSkyName, nullptr, true);
 
     mProjmap = MR::initMaterialProjmapEffectMtxSetter(this);

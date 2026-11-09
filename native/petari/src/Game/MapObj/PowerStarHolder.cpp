@@ -24,6 +24,10 @@ void PowerStarHolder::registerPowerStar(PowerStar* pStar, int starNum) {
 void PowerStarHolder::requestAppearPowerStar(int starNum, const Vec3f* pPos, bool forceAppear) {
     NebulaMods::fire(NEBULA_MOD_EVENT_POWER_STAR_APPEAR, starNum);
     PowerStarRequestInfo* info = findPowerStarRequestInfo(starNum);
+    // A star number no star is placed for (a scenario list longer than the stars) appears nothing.
+    if (info == nullptr) {
+        return;
+    }
     info->mIsAppear = true;
     PowerStar* star = info->mStar;
 
@@ -41,6 +45,9 @@ void PowerStarHolder::requestAppearPowerStar(int starNum, const Vec3f* pPos, boo
 
 void PowerStarHolder::appearPowerStarWithoutDemo(int starNum) {
     PowerStarRequestInfo* info = findPowerStarRequestInfo(starNum);
+    if (info == nullptr) {
+        return;
+    }
     info->mIsAppear = true;
     PowerStar* star = info->mStar;
     star->offAppearDemo();
@@ -78,9 +85,12 @@ namespace MR {
 };  // namespace MR
 
 bool PowerStarFunction::isEndPowerStarAppearDemo(int starNum) {
-    return EventFunction::getPowerStarHolder()->getAppearedPowerStar(starNum)->isEndAppearDemo();
+    // A star that has not appeared has no demo to end.
+    PowerStar* const pStar = EventFunction::getPowerStarHolder()->getAppearedPowerStar(starNum);
+    return pStar != nullptr && pStar->isEndAppearDemo();
 }
 
 PowerStar* PowerStarFunction::findPowerStar(int starNum) {
-    return EventFunction::getPowerStarHolder()->findPowerStarRequestInfo(starNum)->mStar;
+    const PowerStarRequestInfo* const pInfo = EventFunction::getPowerStarHolder()->findPowerStarRequestInfo(starNum);
+    return pInfo != nullptr ? pInfo->mStar : nullptr;
 }

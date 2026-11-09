@@ -63,6 +63,14 @@ namespace MR {
     };
 
     void addFilePrefix(FormattedName& rDst, const char* pChild, const char* pParent) {
+        // A null name is the empty name.
+        if (pChild == nullptr) {
+            pChild = "";
+        }
+        if (pParent == nullptr) {
+            pParent = "";
+        }
+
         if (*pChild == '/') {
             pChild++;
         }
@@ -132,6 +140,11 @@ namespace MR {
     }
 
     void removeExtensionString(FormattedName& rDst, const char* pPath) {
+        // A null path is the empty name.
+        if (pPath == nullptr) {
+            pPath = "";
+        }
+
         const char* const pExtSeparator = strrchr(pPath, '.');
         const char* const pDirSeparator = strrchr(pPath, '/');
 
@@ -156,6 +169,11 @@ namespace MR {
     void copyString(char* pDst, const char* pSrc, u32 num) {
         if (num == 0) {
             return;
+        }
+
+        // A null source copies as the empty name.
+        if (pSrc == nullptr) {
+            pSrc = "";
         }
 
         strncpy(pDst, pSrc, num - 1);
@@ -213,6 +231,11 @@ namespace MR {
     }
 
     const char* getBasename(const char* pPath) {
+        // A null path has the empty name.
+        if (pPath == nullptr) {
+            return "";
+        }
+
         const char* pBasename = strrchr(pPath, '/');
 
         if (pBasename == nullptr) {
@@ -257,6 +280,10 @@ namespace MR {
     }
 
     bool isEqualStringPrefix(const char* pStr, const char* pPrefix) {
+        // A null name has no prefix; a null prefix is none.
+        if (pStr == nullptr || pPrefix == nullptr) {
+            return pPrefix != nullptr && *pPrefix == '\0';
+        }
         for (; *pPrefix != '\0'; pStr++, pPrefix++) {
             if (*pStr != *pPrefix) {
                 return false;
@@ -266,14 +293,25 @@ namespace MR {
     }
 
     bool isEqualStringCase(const char* pStr1, const char* pStr2) {
+        // A null name equals only a null name, as in isEqualString.
+        if (pStr1 == nullptr || pStr2 == nullptr) {
+            return pStr1 == pStr2;
+        }
         return ::nebula_stricmp(pStr1, pStr2) == 0;
     }
 
     bool isEqualSubString(const char* pStr, const char* pSubStr) {
+        if (pStr == nullptr || pSubStr == nullptr) {
+            return false;
+        }
         return strstr(pStr, pSubStr) != nullptr;
     }
 
     bool isHeadString(const char* pStr, const char* pHead) {
+        // Null names as in isEqualStringPrefix.
+        if (pStr == nullptr || pHead == nullptr) {
+            return pHead != nullptr && *pHead == '\0';
+        }
         for (; *pHead != '\0'; pStr++, pHead++) {
             if (*pStr != *pHead) {
                 return false;
@@ -283,10 +321,13 @@ namespace MR {
     }
 
     bool hasStringSpace(const char* pStr) {
-        return strchr(pStr, ' ') != nullptr;
+        return pStr != nullptr && strchr(pStr, ' ') != nullptr;
     }
 
     bool isDigitStringTail(const char* pStr, int digitNum) {
+        if (pStr == nullptr) {
+            return false;
+        }
         const size_t length = strlen(pStr);
         if (digitNum > 0 && length < static_cast< size_t >(digitNum)) {
             return false;

@@ -31,6 +31,9 @@ void MapPartsRailGuideDrawer::init(const TableIter& rIter) {
             initNerve(GET_NERVE(MapPartsRailGuideDrawer, HostTypeDrawAll));
         } else if (mGuideType == 2) {
             initNerve(GET_NERVE(MapPartsRailGuideDrawer, HostTypeDrawForward));
+        } else {
+            // A guide type past 3 (a mod's) draws all points.
+            initNerve(GET_NERVE(MapPartsRailGuideDrawer, HostTypeDrawAll));
         }
     }
 }

@@ -54,7 +54,12 @@ void ExterminationChecker::init(const TableIter& rIter) {
     for (s32 i = 0; i < objNum; i++) {
         const char* objName = nullptr;
         MR::getChildObjName(&objName, rIter, i);
-        LiveActor* actor = ::findEntry(objName)(MR::getJapaneseObjectName(objName));
+        // A child of a kind the table lacks (a mod's row) is not made.
+        CreationFunc pCreate = ::findEntry(objName);
+        if (pCreate == nullptr) {
+            continue;
+        }
+        LiveActor* actor = pCreate(MR::getJapaneseObjectName(objName));
         MR::initChildObj(actor, rIter, i);
         mGroup->registerActor(actor);
     }

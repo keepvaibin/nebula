@@ -278,6 +278,7 @@ void MapPartsRailMover::calcMoveSpeedTime(f32* pTime) const {
     s32 moveTime = -1;
     MR::getMapPartsArgMoveTimeToNextPoint(&moveTime, mHost);
 
+    // A time of 0 steps crosses the whole part in one step (it divided by 0).
     if (moveTime >= 0) {
         s32 curPnt = MR::getCurrentRailPointNo(mHost);
 
@@ -285,7 +286,7 @@ void MapPartsRailMover::calcMoveSpeedTime(f32* pTime) const {
             curPnt--;
         }
 
-        *pTime = MR::getRailPartLength(mHost, curPnt) / moveTime;
+        *pTime = MR::getRailPartLength(mHost, curPnt) / (moveTime > 0 ? moveTime : 1);
     }
 }
 

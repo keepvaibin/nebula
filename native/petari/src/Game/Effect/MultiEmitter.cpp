@@ -142,6 +142,10 @@ void MultiEmitter::setBaseScale(f32 scale) {
 }
 
 void MultiEmitter::setName(const char* pName) {
+    // A null name is the empty name.
+    if (pName == nullptr) {
+        pName = "";
+    }
     mHash = MR::getHashCode(pName);
     const u32 size = static_cast< u32 >(strlen(pName)) + 1;
     char* pCopy = new (NebulaArena::findFromRoot(this), 0) char[size];
@@ -278,6 +282,10 @@ void MultiEmitter::setGlobalRotationDegree(const Vec3f& rRotation, s32 idx) {
 }
 
 void MultiEmitter::allocateEmitter(const char* pName) {
+    // A null name is the empty name.
+    if (pName == nullptr) {
+        pName = "";
+    }
     MR::InlineVector< u16, 32 > indices;
     bool numbered = !MR::hasStringSpace(pName) && !MR::isDigitStringTail(pName, 2);
     if (numbered) {

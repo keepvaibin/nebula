@@ -73,6 +73,10 @@ namespace MR {
         }
 
         bool add(const char* pName, u32 hash, u32 value) {
+            // A null name is the end of a probe run, so it can not be held.
+            if (pName == nullptr) {
+                return false;
+            }
             if (2 * (mCount + 1) > mMask + 1) {
                 grow();
             }

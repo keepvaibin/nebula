@@ -77,8 +77,13 @@ void SandUpDownEffectObj::init(const TableIter& rIter) {
 
     MR::listenStageSwitchOnB(this, MR::Functor(this, &SandUpDownEffectObj::startMoveUp));
 
-    mLineOffset = ::findLineCheckParamData(objName)->mLineOffset;
-    mLineLength = ::findLineCheckParamData(objName)->mLineLength;
+    // An object name the table lacks (a mod's) takes the first row.
+    const LineCheckParam* pLineParam = ::findLineCheckParamData(objName);
+    if (pLineParam == nullptr) {
+        pLineParam = &::sLineCheckParamTable[0];
+    }
+    mLineOffset = pLineParam->mLineOffset;
+    mLineLength = pLineParam->mLineLength;
     mTriFilter = MR::createTriangleFilterFunc(&::isNotGroundCodeNoStampSand);
     mClippingCenter.scaleAdd(mLineOffset - mLineLength * 0.5f, yDir, mPosition);
 

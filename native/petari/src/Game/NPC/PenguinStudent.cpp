@@ -82,6 +82,11 @@ void PenguinStudent::initAfterPlacement() {
 
     LiveActorGroup* group = MR::getGroupFromArray(this);
 
+    // A student placed without a group follows no one.
+    if (group == nullptr) {
+        return;
+    }
+
     for (s32 i = 0; i < group->getObjNum(); i++) {
         LiveActor* actor = group->getActor(i);
 
@@ -95,7 +100,7 @@ void PenguinStudent::initAfterPlacement() {
 }
 
 bool PenguinStudent::branchFunc(u32 /*msg*/) {
-    return mActor->isNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvLead));
+    return mActor != nullptr && mActor->isNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvLead));
 }
 
 bool PenguinStudent::tryReleaseTurtle() {
@@ -110,6 +115,10 @@ void PenguinStudent::exeSwim() {
     if (MR::isFirstStep(this)) {
         MR::tryStartAction(this, "Swim");
         MR::setBckFrameAtRandom(this);
+    }
+    // A student with no leader (no group) stays where it is.
+    if (mActor == nullptr) {
+        return;
     }
     f32 speed = ((200.0f * MR::getRailCoordSpeed(mActor)) / 7.0f);
     MR::setRailCoord(this, MR::getRailCoord(mActor) - mRailOffset);

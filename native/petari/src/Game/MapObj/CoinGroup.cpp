@@ -23,7 +23,8 @@ CoinGroup::CoinGroup(const char* pName) : LiveActor(pName), mCoinArray(), mCamer
 void CoinGroup::init(const TableIter& rIter) {
     s32 count = 0;
     MR::getPlacementArg0NoInit(rIter, &count);
-    mCoinCount = count;
+    // A count under zero is no coins (the count is unsigned).
+    mCoinCount = count > 0 ? count : 0;
     mTimeLimit = -1;
     MR::getPlacementArg1NoInit(rIter, &mTimeLimit);
     mCoinArray = new Coin*[mCoinCount];

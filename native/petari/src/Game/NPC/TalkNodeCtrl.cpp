@@ -48,6 +48,10 @@ TalkNodeCtrl::TalkNodeCtrl() : mFlowName(), mCurrentNodeIdx(-1), mMessageInfo() 
 }
 
 void TalkNodeCtrl::createFlowNodeDirect(TalkMessageCtrl* pMsgCtrl, const TableIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
+    // A null flow name is the empty name, which no node has.
+    if (pName == nullptr) {
+        pName = "";
+    }
     TalkNode* node = MessageSystem::getSceneMessageData()->findNode(pName);
     mStartNode = node;
     mCurrentNode = node;

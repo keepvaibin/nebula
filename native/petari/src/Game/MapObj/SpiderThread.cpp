@@ -284,7 +284,10 @@ bool SpiderThread::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pRe
     }
 
     if (msg == ACTMES_SLING_SHOOT_ACTOR_HANG_END) {
-        mShootHangInfo->endHang(false);
+        // An end with no hang started ends nothing.
+        if (mShootHangInfo != nullptr) {
+            mShootHangInfo->endHang(false);
+        }
         mShootHangInfo = nullptr;
         return true;
     }

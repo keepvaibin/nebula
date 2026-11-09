@@ -39,6 +39,10 @@ void CameraManEvent::calc() {
 
 void CameraManEvent::start(s32 zoneID, const char* pName, const CameraTargetArg& rTargetArg, s32 frame) {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
+    // An event camera name the zone's camera data lacks starts nothing.
+    if (chunk == nullptr) {
+        return;
+    }
     request(chunk, chunk->mEvPriority, rTargetArg, frame);
     rTargetArg.setTarget();
 }
@@ -46,7 +50,7 @@ void CameraManEvent::start(s32 zoneID, const char* pName, const CameraTargetArg&
 void CameraManEvent::end(s32 zoneID, const char* pName, s32 frame) {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
-    if (removeRequest(chunk)) {
+    if (removeRequest(chunk) && chunk != nullptr) {
         sendFinishInterpolateFrame(chunk, frame);
     }
 
@@ -63,8 +67,8 @@ bool CameraManEvent::isEventActive(s32 zoneID, const char* pName) const {
 
         CameraParamChunkEvent* chunk = static_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 
-        // i++ walks up past the last slot when it holds no request (logged in NATIVE-STATE-Q).
-        for (s32 i = cPriorityNum - 1; i >= 0; i++) {
+        // From the highest priority down. The loop counted up (i++) and read past the slots when the top one was empty.
+        for (s32 i = cPriorityNum - 1; i >= 0; i--) {
             if (mSlots[i].mRequested.mChunk != nullptr) {
                 return mSlots[i].mRequested.mChunk == chunk;
             }
@@ -140,7 +144,12 @@ bool CameraManEvent::isCorrectingErpPositionOff() const {
 }
 
 u32 CameraManEvent::getAnimCameraFrame(s32 zoneID, const char* pName) const {
-    return CameraAnim::getAnimFrame(findChunk(zoneID, pName)->mGeneralParam->mAnimData);
+    const CameraParamChunkEvent* const pChunk = findChunk(zoneID, pName);
+    // An event camera name the zone's camera data lacks has no frames.
+    if (pChunk == nullptr) {
+        return 0;
+    }
+    return CameraAnim::getAnimFrame(pChunk->mGeneralParam->mAnimData);
 }
 
 void CameraManEvent::pauseOnAnimCamera(s32 zoneID, const char* pName) {

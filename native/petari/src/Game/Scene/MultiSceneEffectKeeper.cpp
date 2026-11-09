@@ -39,6 +39,10 @@ void MultiSceneEffectKeeper::add(const char* pName, MtxPtr pMtx, const char* pEm
 
 MultiEmitter* MultiSceneEffectKeeper::create(const char* pName, EffectSystem* pSystem) {
     MultiEmitter* pEmitter = find(pName);
+    // An emitter name never registered makes nothing.
+    if (pEmitter == nullptr) {
+        return nullptr;
+    }
     pEmitter->create(pSystem);
     return pEmitter;
 }
