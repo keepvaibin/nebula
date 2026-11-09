@@ -187,6 +187,11 @@ void SpiderThread::stopAllPartsPoint() {
 }
 
 void SpiderThread::cutSpiderThread() {
+    // The web is cut once: its cut points are all used (a second cut would take points past the buffer).
+    if (mNumCutPoints != 0) {
+        return;
+    }
+
     mMainPoint->cutNearPoints(&mNumCutPoints, mCutPoints);
 
     for (s32 idx = 0; idx < ARRAY_SIZE(::sCutPointNoTable); idx++) {
