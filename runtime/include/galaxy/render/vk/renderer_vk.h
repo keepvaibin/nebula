@@ -214,7 +214,6 @@ public:
                             void* submission_context = nullptr, bool generated = false);
     [[nodiscard]] std::uint64_t completed_fence_value() const;
     [[nodiscard]] std::uint64_t submitted_fence_value() const noexcept { return last_submitted_; }
-#if defined(NEBULA_DEV)
     // What the render core holds that the breakdown line (log_video_memory) adds to the renderer's own figures; bytes unless noted.
     struct VideoMemoryOutside {
         std::uint64_t staging_bytes = 0u;                       // TextureStore's staging chunks
@@ -232,7 +231,6 @@ public:
     [[nodiscard]] static std::uint64_t allocation_bytes(const vk::Texture* texture) noexcept {
         return texture != nullptr ? texture->allocation_bytes : 0u;
     }
-#endif
     // GPU time by pass (render_api.h GpuPassTime): any thread. Off: no query is recorded or read.
     void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
     [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
@@ -1050,7 +1048,7 @@ private:
     VkQueryPool timestamps_ = VK_NULL_HANDLE;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
     double timestamp_period_ns_ = 0.0;
-    // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms (RendererD3D12's). A mark starts a pass in
+    // --diagnostics gpu-passes: GPU time by pass for present-stats' gpu-pass-ms (RendererD3D12's). A mark starts a pass in
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {

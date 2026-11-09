@@ -62,7 +62,7 @@ The game thread waits 92 % of the time at four heavy stops (real time, 900 frame
 ## GPU
 
 The stand-in's 2-CU iGPU at Battlerock Galaxy's first stop: a 1280x720 window, 60 fps, default settings. GPU time per
-frame from the frame's timestamps; by pass with `GALAXY_GPU_PASSES=1` (present-stats' `gpu-pass-ms`, with the
+frame from the frame's timestamps; by pass with `--diagnostics gpu-passes` (present-stats' `gpu-pass-ms`, with the
 pipeline statistics in `gpu-stats`); the same on
 Vulkan, whose log also lists the device's memory heaps and types (`[vulkan] memory`).
 
@@ -262,7 +262,7 @@ the game's 60):
   240 fps at 4x needs the engine under about 4 ms.
 - The neighbour taps (a-trous, spatial reuse, upsampling, shadow blurs) read a 12-byte guide the G-buffer pass copies
   from its records, bit for bit (`gb_guide`): 4x 9.77 -> 9.44 ms (denoise 2.95 -> 2.73, shadow 0.90 -> 0.80).
-- GPU timers serialise the work: with `GALAXY_GPU_PASSES` and the ray tracing dispatch timing on, 3x fell from 240 to 120 fps.
+- GPU timers serialise the work: with `--diagnostics gpu-passes` and the ray tracing dispatch timing on, 3x fell from 240 to 120 fps.
 - By dispatch, 4x: G-buffer 0.92 ms, direct 1.05 and its spatial
   reuse 1.03 (up to 25 target evaluations a pixel: the generalized balance heuristic over five samples), the sun
   shadow's blur, post and stabilisation 0.30, 0.31 and 0.19, indirect 1.75 and its spatial reuse 0.30, specular 0.47,
@@ -288,7 +288,7 @@ Pictures 399 of 399 and audio identical to the plain build in deterministic mode
 
 ## Memory (M)
 
-`GALAXY_TRACE_MEMORY=1` prints what the renderer holds every 600 frames, `=2` adds the process's heaps by block size; `memws`-style
+`--diagnostics memory` prints what the renderer holds every 600 frames, `heaps` adds the process's heaps by block size; `memws`-style
 readings below are the 102-stop tour at stop 30, real time, 1x, NVIDIA. The store is mapped, not copied: waves and streams play from
 it (`asset_map`), and its pages are the file's: no commit, and the system can drop them.
 

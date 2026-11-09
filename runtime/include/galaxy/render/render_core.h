@@ -479,9 +479,7 @@ private:
     };
     std::uint64_t frame_tail_report_ns_{};
     void report_frame_tail_window() noexcept;
-#if defined(NEBULA_DEV)
     void trace_memory();
-#endif
     static void record_monotonic_cadence_sample(
         MonotonicCadenceAccumulator& accumulator) noexcept;
     static void reset_monotonic_cadence(

@@ -126,13 +126,7 @@ void copy_adapter_description(
 }
 
 bool trace_present_stats_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().trace_present_stats) == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
+    return ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
 }
 
 // Installed physical memory in MiB (0 if it cannot be queried). Logged with the
@@ -2152,12 +2146,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                     D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                     IID_PPV_ARGS(&timestamp_readback_)),
                 "Create timestamp readback");
-            const bool passes = ::galaxy::diagnostics_recording() || [] {
-                char value[8]{};
-                std::size_t length = 0u;
-                return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_passes) == 0 && length > 1u &&
-                       value[0] == '1';
-            }();
+            const bool passes = ::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses);
             diagnostic_passes_ = passes;
             if (passes) {
                 qhd.Count = kFramesInFlight * kGpuPassSlots;
@@ -2534,7 +2523,6 @@ void RendererD3D12::free_target(std::uint32_t id, TextureStore& textures) {
     }
 }
 
-#if defined(NEBULA_DEV)
 std::uint64_t RendererD3D12::allocation_bytes(ID3D12Resource* resource) const {
     if (resource == nullptr || !device_) {
         return 0u;
@@ -2543,7 +2531,7 @@ std::uint64_t RendererD3D12::allocation_bytes(ID3D12Resource* resource) const {
     return device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
 }
 
-// `[vram] breakdown`: every 600 frames (RenderCore's table log), the OS's reading of the process's local video memory and what the
+// `[vram] breakdown`: every 600 frames with --diagnostics memory (RenderCore's table log), the OS's reading of the process's local video memory and what the
 // renderer holds of it by kind, each figure a resource's allocation size or a heap's size. Memory in upload heaps (host
 // memory on a discrete adapter, video memory for a ring that got a GPU upload heap) is listed apart: `rings local` and the
 // device-local kinds are subtracted from the OS figure to leave `other` (pipelines, the post chain's, ambient occlusion's
@@ -2624,6 +2612,7 @@ void RendererD3D12::log_video_memory(const VideoMemoryOutside& outside) {
                  static_cast<unsigned long long>(outside.pipelines));
 }
 
+#if defined(NEBULA_DEV)
 void RendererD3D12::list_live_objects(Kept& kept) {
     if (kept.debug_device) {
         s_listing_live_objects = true;

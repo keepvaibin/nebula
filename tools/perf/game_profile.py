@@ -1,4 +1,4 @@
-"""Where the game thread spends its time: a GALAXY_PROFILE_GAME run's game-profile.txt, named from the game module's
+"""Where the game thread spends its time: a --diagnostics profile run's game-profile-<pid>.txt, named from the game module's
 link map (lld-link /MAP, e.g. cmake -DCMAKE_SHARED_LINKER_FLAGS="-Xlinker /MAP:<dir>/smg_game.map").
 
 usage: python game_profile.py <game-profile.txt> <smg_game.map> [--from-ms N] [--to-ms N] [--top N]

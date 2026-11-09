@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Frame pipeline timeline, enabled by GALAXY_FRAME_TIMELINE=1. Any thread appends a 32-byte
+// Frame pipeline timeline, recorded with --diagnostics timeline. Any thread appends a 32-byte
 // record with one relaxed atomic increment and one QueryPerformanceCounter read. Nothing is
-// formatted during the run. At exit the records go to GALAXY_FRAME_TIMELINE_PATH (default
-// %LOCALAPPDATA%\Nebula\timeline-<pid>.bin), analysed offline by tools/perf/timeline_digest.py.
+// formatted during the run. At exit the records go to --timeline's file (default the diagnostics
+// folder's timeline-<pid>.bin), analysed offline by tools/perf/timeline_digest.py.
 // All timestamps are QPC ticks, including GPU timestamps (via GetClockCalibration) and vblank
 // times (DXGI frame statistics, DWM timing).
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
-#include "galaxy/windows_paths.h"
-#include "galaxy/run_options.h"
+#include "galaxy/platform_paths.h"
 #include <cwchar>
+#include <string>
 #endif
 
 #include <atomic>
@@ -96,25 +96,12 @@ inline void record(Event event, std::uint64_t a = 0u, std::uint64_t b = 0u) noex
 }
 
 #if defined(_WIN32)
-// The file the records go to at exit: `--timeline <file>` (the launcher's recording session), else the test switch's
-// GALAXY_FRAME_TIMELINE_PATH, else %LOCALAPPDATA%\Nebula\timeline-<process id>.bin.
-inline std::wstring g_path;
-
 // Called once on the main thread before any worker thread starts.
-inline void initialize_from_environment() noexcept {
-    char flag[8]{};
-    std::size_t length = 0;
-    if (!::galaxy::diagnostics_recording() &&
-        (::galaxy::run_option_read(&length, flag, sizeof(flag), ::galaxy::run_options().frame_timeline) != 0 || length < 2 ||
-         flag[0] == '0')) {
+inline void initialize() noexcept {
+    if (!::galaxy::diagnosing(::galaxy::kDiagnoseTimeline)) {
         return;
     }
-    std::uint64_t capacity = 2'000'000u;  // events: 64 MB
-    char count[32]{};
-    if (::galaxy::run_option_read(&length, count, sizeof(count), ::galaxy::run_options().frame_timeline_events) == 0 && length > 1) {
-        const unsigned long long parsed = std::strtoull(count, nullptr, 10);
-        if (parsed >= 1000u && parsed <= 50'000'000u) capacity = parsed;
-    }
+    constexpr std::uint64_t capacity = 2'000'000u;  // events: 64 MB
     void* memory = VirtualAlloc(nullptr, static_cast<SIZE_T>(capacity * sizeof(Record)),
                                 MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (memory == nullptr) return;
@@ -131,17 +118,12 @@ inline void dump() noexcept {
     g_state.enabled = false;
     std::wstring path;
     try {
-        const wchar_t* const named = ::galaxy::run_options().frame_timeline_path_w;
-        if (!g_path.empty()) {
-            path = g_path;
-        } else if (named != nullptr && named[0] != L'\0') {
-            path = named;
+        if (!::galaxy::launch_args().timeline.empty()) {
+            path = ::galaxy::launch_args().timeline.wstring();
         } else {
-            const std::wstring base = ::galaxy::windows::environment_text(L"LOCALAPPDATA");
-            if (base.empty()) return;
-            path = base + L"\\Nebula";
-            (void)CreateDirectoryW(path.c_str(), nullptr);
-            path = base + L"\\Nebula\\timeline-" + std::to_wstring(GetCurrentProcessId()) + L".bin";
+            const std::filesystem::path folder = ::galaxy::nebula_diagnostics_directory();
+            if (folder.empty()) return;
+            path = (folder / (L"timeline-" + std::to_wstring(GetCurrentProcessId()) + L".bin")).wstring();
         }
     } catch (...) {
         return;
@@ -179,7 +161,7 @@ inline void dump() noexcept {
                  static_cast<unsigned long long>(written_count), path.c_str(), ok ? 1 : 0);
 }
 #else
-inline void initialize_from_environment() noexcept {}
+inline void initialize() noexcept {}
 inline void dump() noexcept {}
 #endif
 

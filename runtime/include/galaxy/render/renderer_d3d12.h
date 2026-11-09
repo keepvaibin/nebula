@@ -280,9 +280,8 @@ public:
     // The adapter's local video memory in use by this process and the OS's budget for it (DXGI QueryVideoMemoryInfo), read at
     // a frame boundary. False: not known.
     [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
-    // The upload rings' sizes and the most one frame took (GALAXY_TRACE_MEMORY).
+    // The upload rings' sizes and the most one frame took (--diagnostics memory).
     void trace_rings() const;
-#if defined(NEBULA_DEV)
     // What the render core holds that the breakdown line (log_video_memory) adds to the renderer's own figures; bytes unless noted.
     struct VideoMemoryOutside {
         std::uint64_t texture_heap_bytes = 0u, texture_used_bytes = 0u, texture_heaps = 0u, texture_committed = 0u;
@@ -300,7 +299,6 @@ public:
     void log_video_memory(const VideoMemoryOutside& outside);
     // The size of `resource`'s allocation (GetResourceAllocationInfo); zero for none.
     [[nodiscard]] std::uint64_t allocation_bytes(ID3D12Resource* resource) const;
-#endif
     void pump_messages();           // no-op: window_owner_ pumps the window's messages
     [[nodiscard]] bool quit_requested() const noexcept;
     // The last present said the whole window is covered (DXGI_STATUS_OCCLUDED); probe_occlusion asks again without drawing
@@ -766,7 +764,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> timestamp_readback_;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
     std::uint64_t timestamp_frequency_ = 0;
-    // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
+    // --diagnostics gpu-passes: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
     // list; the time to the next mark (or the list's end) is that pass's.
     enum class GpuPass : std::uint8_t {
         Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera, Count
@@ -799,7 +797,7 @@ private:
     bool pass_timing_on_ = false;
     std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
     void ensure_pass_queries();
-    // GALAXY_GPU_PASSES=1 also counts each command list's pipeline statistics (shader invocations, primitives) for
+    // --diagnostics gpu-passes also counts each command list's pipeline statistics (shader invocations, primitives) for
     // present-stats' gpu-stats.
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> stats_query_heap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_readback_;

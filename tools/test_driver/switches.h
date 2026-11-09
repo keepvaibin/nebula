@@ -12,31 +12,6 @@
 
 namespace nebula_switch {
 #if !defined(NEBULA_DEV)
-inline const char* frame_timeline() noexcept { return nullptr; }
-#else
-inline const char* frame_timeline() noexcept { return std::getenv("GALAXY_FRAME_TIMELINE"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* frame_timeline_events() noexcept { return nullptr; }
-#else
-inline const char* frame_timeline_events() noexcept { return std::getenv("GALAXY_FRAME_TIMELINE_EVENTS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* monitor_frame_tails() noexcept { return nullptr; }
-#else
-inline const char* monitor_frame_tails() noexcept { return std::getenv("GALAXY_MONITOR_FRAME_TAILS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* monitor_pointer_latency() noexcept { return nullptr; }
-#else
-inline const char* monitor_pointer_latency() noexcept { return std::getenv("GALAXY_MONITOR_POINTER_LATENCY"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline constexpr const wchar_t* frame_timeline_path_wide_name() noexcept { return L""; }
-#else
-inline constexpr const wchar_t* frame_timeline_path_wide_name() noexcept { return L"GALAXY_FRAME_TIMELINE_PATH"; }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* audio_wav_dump() noexcept { return nullptr; }
 inline constexpr const wchar_t* audio_wav_dump_wide_name() noexcept { return L""; }
 #else
@@ -175,11 +150,6 @@ inline constexpr const wchar_t* present_snapshot_game_only_wide_name() noexcept 
 inline const char* present_snapshot_game_only() noexcept { return std::getenv("GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"); }
 inline constexpr const char* present_snapshot_game_only_name() noexcept { return "GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"; }
 inline constexpr const wchar_t* present_snapshot_game_only_wide_name() noexcept { return L"GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* profile_game() noexcept { return nullptr; }
-#else
-inline const char* profile_game() noexcept { return std::getenv("GALAXY_PROFILE_GAME"); }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* test_() noexcept { return nullptr; }
@@ -328,48 +298,16 @@ inline const char* test_window_sizes() noexcept { return nullptr; }
 inline const char* test_window_sizes() noexcept { return std::getenv("GALAXY_TEST_WINDOW_SIZES"); }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* trace_file_reads() noexcept { return nullptr; }
-#else
-inline const char* trace_file_reads() noexcept { return std::getenv("GALAXY_TRACE_FILE_READS"); }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* test_mods_screen() noexcept { return nullptr; }
 inline const char* test_mods_changed() noexcept { return nullptr; }
-inline const char* trace_loads() noexcept { return nullptr; }
 #else
 inline const char* test_mods_screen() noexcept { return std::getenv("GALAXY_TEST_MODS_SCREEN"); }
 inline const char* test_mods_changed() noexcept { return std::getenv("GALAXY_TEST_MODS_CHANGED"); }
-inline const char* trace_loads() noexcept { return std::getenv("GALAXY_TRACE_LOADS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* trace_memory() noexcept { return nullptr; }
-#else
-inline const char* trace_memory() noexcept { return std::getenv("GALAXY_TRACE_MEMORY"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* trace_present_stats() noexcept { return nullptr; }
-#else
-inline const char* trace_present_stats() noexcept { return std::getenv("GALAXY_TRACE_PRESENT_STATS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* trace_thread_cpu() noexcept { return nullptr; }
-#else
-inline const char* trace_thread_cpu() noexcept { return std::getenv("GALAXY_TRACE_THREAD_CPU"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* trace_frame_times() noexcept { return nullptr; }
-#else
-inline const char* trace_frame_times() noexcept { return std::getenv("GALAXY_TRACE_FRAME_TIMES"); }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* vk_simulate_driver() noexcept { return nullptr; }
 #else
 inline const char* vk_simulate_driver() noexcept { return std::getenv("GALAXY_VK_SIMULATE_DRIVER"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* trace_interp_slots() noexcept { return nullptr; }
-#else
-inline const char* trace_interp_slots() noexcept { return std::getenv("GALAXY_TRACE_INTERP_SLOTS"); }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* vk_test_no_feature() noexcept { return nullptr; }
@@ -387,26 +325,9 @@ inline constexpr const char* test_path_guard_name() noexcept { return ""; }
 inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* gpu_passes() noexcept { return nullptr; }
-#else
-inline const char* gpu_passes() noexcept { return std::getenv("GALAXY_GPU_PASSES"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* pipeline_list_out() noexcept { return nullptr; }
-#else
-inline const char* pipeline_list_out() noexcept { return std::getenv("GALAXY_PIPELINE_LIST_OUT"); }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* rt_log_glows() noexcept { return nullptr; }
 #else
 inline const char* rt_log_glows() noexcept { return std::getenv("GALAXY_RT_LOG_GLOWS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* texture_dump_dir() noexcept { return nullptr; }
-inline constexpr const wchar_t* texture_dump_dir_wide_name() noexcept { return L""; }
-#else
-inline const char* texture_dump_dir() noexcept { return std::getenv("GALAXY_TEXTURE_DUMP_DIR"); }
-inline constexpr const wchar_t* texture_dump_dir_wide_name() noexcept { return L"GALAXY_TEXTURE_DUMP_DIR"; }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* xinput_require_focus() noexcept { return nullptr; }

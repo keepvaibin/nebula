@@ -1,8 +1,7 @@
-// GALAXY_TRACE_LOADS=1: a line at each press and each change of who has the screen, the times the load measurements read
-// (tools/verify/loads.py). Not in a release.
+// --diagnostics scene-loads: a line at each press and each change of who has the screen, the times the load measurements
+// read (tools/verify/loads.py).
 #include "Game/System/NebulaLoadTrace.hpp"
 
-#if defined(NEBULA_DEV)
 #include <nebula_module.h>
 
 #include "Game/Player/MarioAccess.hpp"
@@ -21,11 +20,11 @@
 namespace {
     u32 sPlaced = 0;
 
-    // The option read once (this block is built only under NEBULA_DEV).
+    // The option read once.
     bool enabled() {
         static s32 sEnabled = -1;
         if (sEnabled < 0) {
-            sEnabled = nebula_host()->option(nebula_host()->user, NEBULA_OPTION_TEST_TRACE_LOADS) != 0 ? 1 : 0;
+            sEnabled = nebula_host()->option(nebula_host()->user, NEBULA_OPTION_DIAGNOSE_SCENE_LOADS) != 0 ? 1 : 0;
         }
         return sEnabled != 0;
     }
@@ -87,21 +86,3 @@ namespace NebulaLoadTrace {
         sPlaced = 0;
     }
 }  // namespace NebulaLoadTrace
-#else
-namespace NebulaLoadTrace {
-    void frame() {
-    }
-
-    void gameScene() {
-    }
-
-    void sorted(const char*, int, int) {
-    }
-
-    void placed(const char*, int) {
-    }
-
-    void placementDone() {
-    }
-}  // namespace NebulaLoadTrace
-#endif

@@ -153,7 +153,7 @@ public:
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
     [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
-    // pipelineStatisticsQuery: GALAXY_GPU_PASSES' shader invocation counts.
+    // pipelineStatisticsQuery: --diagnostics gpu-passes' shader invocation counts.
     [[nodiscard]] bool pipeline_statistics() const noexcept { return pipeline_statistics_; }
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
     // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).

@@ -13,8 +13,8 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--crash-dumps <folder>` | Crash dumps and reports; default `crashes` in the data folder. |
 | `--gpu-validation 1\|2` | The graphics API's validation layer: 1 the Direct3D 12 debug layer or the Khronos validation layer (when installed), 2 also Direct3D 12's GPU-based validation. Slow. |
 | `--console-log 1` | The log stays on the console instead of `logs/latest.log` in the settings folder (a start with its output in a pipe or a file keeps it there anyway). |
-| `--diagnostics 1` | Record this run: the frame and pointer monitors and the frame timeline. |
-| `--timeline <file>` | Where the recorded timeline goes. |
+| `--diagnostics <what>[,<what>]` | What this run records, into the log and `diagnostics` in the data folder (DIAGNOSTICS.md). `1` is the launcher's recording: the frame timeline, the frame and pointer monitors, present statistics and GPU time by pass. |
+| `--timeline <file>` | Where the recorded timeline goes; default `diagnostics/timeline-<process id>.bin` in the data folder. |
 | `--seconds <n>` | End the game after n seconds. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
 

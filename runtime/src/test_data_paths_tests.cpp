@@ -42,8 +42,7 @@ int main() {
             _wputenv_s(name, (root / name).c_str());
         }
         check(galaxy::host::test_data_paths_error(5, argv), "a run without --crash-dumps rejected");
-        const wchar_t* outputs[] = {L"GALAXY_FRAME_TIMELINE_PATH", L"GALAXY_AUDIO_WAV_DUMP", L"GALAXY_TEXTURE_DUMP_DIR",
-                                    L"GALAXY_PRESENT_SNAPSHOT_DIR", L"GALAXY_PIPELINE_LIST_OUT"};
+        const wchar_t* outputs[] = {L"GALAXY_AUDIO_WAV_DUMP", L"GALAXY_PRESENT_SNAPSHOT_DIR"};
         for (const auto* name : outputs) {
             _wputenv_s(name, (root / "out" / name).c_str());
             check(!galaxy::host::test_data_paths_error(9, argv), "private output path accepted");

@@ -297,7 +297,7 @@ void RenderCore::record_monotonic_cadence_sample(
             ? now_ns - accumulator.last_sample_ns
             : 0u;
     accumulator.last_sample_ns = now_ns;
-    static const bool monitor=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
+    const bool monitor=::galaxy::diagnosing(::galaxy::kDiagnoseFrameTails);
     if(monitor) {
         ++accumulator.monitor_intervals; accumulator.monitor_total_ns+=interval_ns;
         accumulator.monitor_max_ns=std::max(accumulator.monitor_max_ns,interval_ns);
@@ -352,10 +352,9 @@ void RenderCore::reset_monotonic_cadence(
     accumulator.published_last_sample_ns.store(0, std::memory_order_relaxed);
 }
 
-#if defined(NEBULA_DEV)
-// GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
+// --diagnostics memory: every 600 presented frames, what the renderer holds, in MB.
 void RenderCore::trace_memory() {
-    static const bool enabled = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) != 0u;
+    const bool enabled = ::galaxy::diagnosing(::galaxy::kDiagnoseMemory);
     static std::uint64_t frames = 0u;
     if (!enabled || ++frames % 600u != 0u) {
         return;
@@ -364,8 +363,8 @@ void RenderCore::trace_memory() {
     std::fprintf(stderr, "[memory] meshes and slots %.1f, textures %.1f\n", mb(registries_.memory_bytes()),
                  mb(texture_store_.backend().heap_stats().used_bytes));
 #if defined(_WIN32)
-    // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
-    static const bool heaps = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) == 2u;
+    // --diagnostics heaps: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
+    const bool heaps = ::galaxy::diagnosing(::galaxy::kDiagnoseHeaps);
     if (heaps) {
         std::vector<HANDLE> list(GetProcessHeaps(0, nullptr));  // as many as the process has
         const DWORD count = list.empty() ? 0u : std::min<DWORD>(GetProcessHeaps(static_cast<DWORD>(list.size()), list.data()), static_cast<DWORD>(list.size()));
@@ -403,10 +402,9 @@ void RenderCore::trace_memory() {
         }
     }(renderer_);
 }
-#endif
 
 void RenderCore::report_frame_tail_window() noexcept {
-    static const bool enabled=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
+    const bool enabled=::galaxy::diagnosing(::galaxy::kDiagnoseFrameTails);
     if(!enabled) return;
     const auto now=new_picture_shown_cadence_.last_sample_ns;
     if(!frame_tail_report_ns_) { frame_tail_report_ns_=now; return; }
@@ -443,7 +441,7 @@ void RenderCore::report_frame_tail_window() noexcept {
 }
 
 void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept {
-    static const bool enabled=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_pointer_latency, 0u)!=0u;
+    const bool enabled=::galaxy::diagnosing(::galaxy::kDiagnosePointerLatency);
     if (!enabled) return;
     const auto& stamp=texture.pointer_response;
     if (!stamp.serial || !stamp.selected_ns || !stamp.drawn_ns ||
@@ -521,9 +519,7 @@ void RenderCore::note_picture_shown(
     ++stat_new_pictures_shown_;
     record_monotonic_cadence_sample(new_picture_shown_cadence_);
     report_frame_tail_window();
-#if defined(NEBULA_DEV)
     trace_memory();
-#endif
 }
 
 // Producer (simulation thread): copies the frame and hands it to the render thread. Blocks only
@@ -873,7 +869,7 @@ void RenderCore::restart_interp_governors() {
 
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
+    const bool trace = ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
     // The game frame period the arrivals follow (start_interp_sequence's smoothed estimate), else the game step.
     const std::int64_t period = interp_frame_period_qpc_ != 0 ? interp_frame_period_qpc_ : frequency / galaxy::kGameStepsPerSecond;
     // Since the frame before: the game's waits on the render thread, and the render thread's generated frame time.
@@ -1109,55 +1105,6 @@ void RenderCore::interp_sleep_us(std::int64_t us) {
     std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
-namespace {
-// GALAXY_TRACE_INTERP_SLOTS=<file>: each present slot, kept in memory and written once after 30 s, so the timing measured is the
-// timing played. tools/verify/interp_slots.py reads it.
-struct InterpSlotRecord {
-    std::int64_t slot;
-    std::int64_t began;
-    std::int64_t ended;
-    double t;
-    std::uint32_t sequence;
-    std::uint32_t kind;  // 0 a generated frame, 1 the game frame itself
-};
-std::vector<InterpSlotRecord> g_interp_slots;
-
-void write_interp_slots() {
-    const char* const path = ::galaxy::run_options().trace_interp_slots;
-    if (path == nullptr) {
-        return;
-    }
-    if (std::FILE* const file = ::galaxy::open_file(path, "w")) {
-        std::fprintf(file, "frequency %lld\n", static_cast<long long>(galaxy::qpc_frequency()));
-        for (const InterpSlotRecord& r : g_interp_slots) {
-            std::fprintf(file, "%lld %lld %lld %.6f %u %u\n", static_cast<long long>(r.slot), static_cast<long long>(r.began),
-                         static_cast<long long>(r.ended), r.t, r.sequence, r.kind);
-        }
-        std::fclose(file);
-    }
-}
-
-void note_interp_slot(std::int64_t slot, std::int64_t began, double t, std::uint32_t sequence, std::uint32_t kind) {
-    static bool trace = [] {
-        if (::galaxy::run_options().trace_interp_slots == nullptr) {
-            return false;
-        }
-        g_interp_slots.reserve(4'000'000u);
-        return true;
-    }();
-    if (!trace) {
-        return;
-    }
-    g_interp_slots.push_back({slot, began, galaxy::qpc_now(), t, sequence, kind});
-    // 30 s of slots, then the one stall of writing them, after anything measured.
-    if (g_interp_slots.size() == g_interp_slots.capacity() ||
-        began - g_interp_slots.front().began > 30 * galaxy::qpc_frequency()) {
-        write_interp_slots();
-        trace = false;
-    }
-}
-}  // namespace
-
 void RenderCore::advance_interp_sequence(bool flush) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     flush = flush || interp_sequence_.flush_requested;
@@ -1187,7 +1134,6 @@ void RenderCore::advance_interp_sequence(bool flush) {
             const std::int64_t generated_start = galaxy::qpc_now();
             const bool presented = render_generated_frame(static_cast<float>(t));
             interp_generated_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - generated_start);
-            note_interp_slot(slot, generated_start, t, static_cast<std::uint32_t>(interp_sequence_serial_), 0u);
             interp_cpu_ms_ += std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start).count();
             if (presented) {
@@ -1203,9 +1149,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
         }
         sequence.active = false;
         interp_presenting_real_ = true;
-        const std::int64_t real_start = galaxy::qpc_now();
         render_generated_frame(1.0f);
-        note_interp_slot(slot, real_start, 1.0, static_cast<std::uint32_t>(interp_sequence_serial_), 1u);
         note_present_vblank(slot);
         interp_presenting_real_ = false;
         ++interp_sequences_;
@@ -1219,7 +1163,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
 void RenderCore::note_present_vblank(std::int64_t slot) {
-    const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
+    const bool trace = ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
     std::int64_t vblank = 0;
     std::int64_t period = 0;
     if (!trace || !renderer_.vblank_grid(vblank, period)) {
@@ -1253,7 +1197,7 @@ void RenderCore::note_interp_real_present() {
 }
 
 void RenderCore::report_interp_stats() {
-    const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
+    const bool trace = ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
     if (!trace) {
         return;
     }
@@ -2189,8 +2133,8 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             }
 #endif
         }
-#if defined(NEBULA_DEV)
-        if (frame_index_ >= table_log_at_) {
+        // --diagnostics memory: every 600 frames, the texture tables and where the video memory is.
+        if (frame_index_ >= table_log_at_ && ::galaxy::diagnosing(::galaxy::kDiagnoseMemory)) {
             table_log_at_ = frame_index_ + 600u;
             const core::Registries::TableCounts tables = registries_.table_counts();
             std::fprintf(stderr, "[render] texture tables: %u live, %u retired (%llu released since the start)\n", tables.live,
@@ -2238,7 +2182,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             renderer_.log_video_memory(outside);
 #endif
         }
-#endif
     }
     registries_.reclaim(renderer_.completed_fence_value());
     // Finished replacements upload here and take the place of their originals.

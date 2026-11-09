@@ -404,9 +404,9 @@ void* find_symbol(void* module, const char* name) {
 }
 
 #if defined(_WIN32)
-// GALAXY_PROFILE_GAME=<seconds>: the game thread (every game thread runs on it) sampled each millisecond from its
-// start for that long, with its callers, into game-profile.txt beside the crash dumps: the modules loaded
-// ("module <base> <size> <name>"), then a line a sample (return addresses, the innermost first).
+// --diagnostics profile: the game thread (every game thread runs on it) sampled each millisecond from its start to the
+// run's end (at most 10 minutes), with its callers, into the diagnostics folder's game-profile-<pid>.txt at exit: the
+// modules loaded ("module <base> <size> <name>"), then a line a sample (return addresses, the innermost first).
 // tools/perf/game_profile.py names them from the game module's link map.
 namespace game_profile {
 
@@ -436,12 +436,16 @@ int walk(CONTEXT context, Frames& frames) noexcept {
     return depth;
 }
 
-void run(HANDLE thread, double seconds) {
+constexpr std::size_t kMostSamples = 600'000u;  // 10 minutes, 115 MB
+std::thread g_sampler;
+std::atomic<bool> g_stop{false};
+
+void run(HANDLE thread) {
     std::vector<std::pair<int, Frames>> samples;
-    samples.reserve(static_cast<std::size_t>(seconds * 1200.0) + 16u);
-    const auto until = Clock::now() + std::chrono::duration<double>(seconds);
+    samples.reserve(60'000u);
     auto next = Clock::now();
-    while (Clock::now() < until && samples.size() < samples.capacity()) {
+    // Samples are added after the thread resumes: a vector's growth never waits on a heap lock the thread holds.
+    while (!g_stop.load(std::memory_order_relaxed) && samples.size() < kMostSamples) {
         if (SuspendThread(thread) != static_cast<DWORD>(-1)) {
             CONTEXT context{};
             context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
@@ -453,7 +457,9 @@ void run(HANDLE thread, double seconds) {
         next += std::chrono::milliseconds(1);
         sleep_until_precise(next);
     }
-    std::FILE* file = _wfopen((crash_folder() / L"game-profile.txt").c_str(), L"wb");
+    const fs::path folder = galaxy::nebula_diagnostics_directory();
+    const fs::path name = folder / ("game-profile-" + std::to_string(galaxy::current_process_id()) + ".txt");
+    std::FILE* file = folder.empty() ? nullptr : _wfopen(name.c_str(), L"wb");
     if (file == nullptr) return;
     std::array<HMODULE, 512> modules{};
     DWORD needed = 0;
@@ -475,8 +481,27 @@ void run(HANDLE thread, double seconds) {
     }
     std::fclose(file);
     char text[96];
-    std::snprintf(text, sizeof(text), "%zu samples in game-profile.txt", samples.size());
+    std::snprintf(text, sizeof(text), "%zu samples in game-profile-%lu.txt", samples.size(), galaxy::current_process_id());
     log_line("profile:", text);
+}
+
+void start(DWORD thread_id) {
+    const HANDLE sampled = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, thread_id);
+    if (sampled == nullptr) {
+        return;
+    }
+    g_sampler = std::thread([sampled] {
+        run(sampled);
+        CloseHandle(sampled);
+    });
+}
+
+// At exit: the samples so far, written.
+void finish() {
+    if (g_sampler.joinable()) {
+        g_stop.store(true, std::memory_order_relaxed);
+        g_sampler.join();
+    }
 }
 
 }  // namespace game_profile
@@ -896,7 +921,7 @@ void svc_log(void*, const char* text) {
 }
 
 #if defined(_WIN32)
-// GALAXY_TRACE_THREAD_CPU=1: each thread's CPU time and context switches over the last second, by name (or,
+// --diagnostics thread-cpu: each thread's CPU time and context switches over the last second, by name (or,
 // unnamed, the module and offset it started at), busiest first; threads under 0.5 ms/s are counted in the total only.
 // The report's own cost (a snapshot of every thread in the system) is left out of the reporting thread's figure.
 void report_thread_cpu(double tsc_hz) {
@@ -2198,7 +2223,7 @@ void* svc_asset_map_private(void*, int32_t file) {
         return nullptr;
     }
     void* const data = gPak.store.map_private(entry->position, static_cast<std::size_t>(entry->length));
-    static const bool trace_reads = ::galaxy::run_options().trace_file_reads != nullptr;
+    const bool trace_reads = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d mapped size %llu %s at %p\n", static_cast<unsigned long long>(gDeterministicFrames.load()), file,
                      static_cast<unsigned long long>(entry->length), entry->name != nullptr ? entry->name : "?", data);
@@ -2207,7 +2232,7 @@ void* svc_asset_map_private(void*, int32_t file) {
 }
 
 void svc_asset_unmap(void*, void* data, uint64_t size) {
-    static const bool trace_reads = ::galaxy::run_options().trace_file_reads != nullptr;
+    const bool trace_reads = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu unmapped %p size %llu\n", static_cast<unsigned long long>(gDeterministicFrames.load()), data, static_cast<unsigned long long>(size));
     }
@@ -2217,8 +2242,8 @@ void svc_asset_unmap(void*, void* data, uint64_t size) {
 int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst) {
     test_drive_delay();
     gFileReads.fetch_add(1, std::memory_order_relaxed);
-    // GALAXY_TRACE_FILE_READS=1: each read with the frame it came on: two runs of deterministic mode compare by it.
-    static const bool trace_reads = ::galaxy::run_options().trace_file_reads != nullptr;
+    // --diagnostics file-reads: each read with the frame it came on: two runs of deterministic mode compare by it.
+    const bool trace_reads = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
     const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
@@ -2243,12 +2268,8 @@ std::atomic<uint64_t> gStopFrames{kNoStopFrames};
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
-    // GALAXY_TRACE_FRAME_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
-    static const bool trace_frames = [] {
-        const char* value = ::galaxy::run_options().trace_frame_times;
-        return value != nullptr && value[0] != '\0' && value[0] != '0';
-    }();
-    if (trace_frames) std::fprintf(stderr, "[latency] frame=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
+    // --diagnostics frame-times: each frame's time, where a scripted press begins (press-to-present measurements).
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseFrameTimes)) std::fprintf(stderr, "[latency] frame=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
 #endif
 #if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)
@@ -2444,8 +2465,8 @@ uint32_t svc_option(void*, uint32_t what) {
         in >> done >> total;
         return total != 0u ? static_cast<uint32_t>(done * 10000u / total) : 0u;
     }
-    case NEBULA_OPTION_TEST_TRACE_LOADS:
-        return ::galaxy::run_options().trace_loads != nullptr ? 1u : 0u;
+    case NEBULA_OPTION_DIAGNOSE_SCENE_LOADS:
+        return ::galaxy::diagnosing(::galaxy::kDiagnoseSceneLoads) ? 1u : 0u;
     case NEBULA_OPTION_TOUCH_POINTER:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::host::touch_pointer_state();
@@ -2929,8 +2950,7 @@ void svc_audio_mix(void*, float gain, uint32_t used) {
 }
 
 void svc_audio_frame(void*) {
-    static const bool trace_frames = ::galaxy::run_options().trace_file_reads != nullptr;
-    if (trace_frames) {
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseFileReads)) {
         std::fprintf(stderr, "[read] sound frame %llu at frame %llu\n", static_cast<unsigned long long>(gSoundBlocks.load(std::memory_order_relaxed)),
                      static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)));
     }
@@ -2967,7 +2987,7 @@ void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t millis
 }
 
 void svc_audio_control(void*, uint32_t what, uint32_t value) {
-    if (::galaxy::run_options().trace_file_reads != nullptr) {
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseFileReads)) {
         std::fprintf(stderr, "[read] sound clock %u at frame %llu\n", what, static_cast<unsigned long long>(gDeterministicFrames.load()));
     }
     {
@@ -3125,9 +3145,16 @@ void hold_runtime_lease() {
 #endif
 
 [[noreturn]] void finish_and_exit(bool restart) {
-#if defined(NEBULA_DEV)
-    if (const char* list = ::galaxy::run_options().pipeline_list_out; list != nullptr && list[0] != 0) {
-        galaxy::render::registries().write_pipeline_list(list);
+#if defined(_WIN32)
+    game_profile::finish();
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+    // --diagnostics pipelines: the pipelines this run created (tools/dev/site_pipelines.py merges them).
+    if (::galaxy::diagnosing(::galaxy::kDiagnosePipelines)) {
+        if (const fs::path folder = galaxy::nebula_diagnostics_directory(); !folder.empty()) {
+            galaxy::render::registries().write_pipeline_list(
+                folder / ("pipelines-" + std::to_string(galaxy::current_process_id()) + ".bin"));
+        }
     }
 #endif
     log_line("host:", restart ? "restart" : "the game ended");
@@ -3585,6 +3612,15 @@ void read_launch_args(int argc, char** argv) {
             args.console_log = argv[i + 1][0] == '1';
         } else if (key == "--gpu-start-retry") {
             args.gpu_start_retry = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--timeline") {
+            args.timeline = path_at(i + 1);
+        } else if (key == "--diagnostics") {
+            std::string_view unknown;
+            unsigned what = 0u;
+            if (!galaxy::diagnostics_from_text(argv[i + 1], what, unknown)) {
+                die("--diagnostics: no diagnostic is named %.*s (docs/DIAGNOSTICS.md)", static_cast<int>(unknown.size()), unknown.data());
+            }
+            args.diagnostics |= what;
         }
     }
 #if defined(_WIN32)
@@ -3635,26 +3671,9 @@ int main(int argc, char** argv) {
         }
     }
 #endif
-    for (int i = 1; i + 1 < argc; i += 2) {
-        if (std::strcmp(argv[i], "--diagnostics") == 0) {
-            galaxy::g_diagnostics_recording = argv[i + 1][0] == '1';
-        }
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-        // The timeline's file, in UTF-16 (argv is in the system's code page).
-        if (std::strcmp(argv[i], "--timeline") == 0) {
-            int count = 0;
-            if (LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count)) {
-                if (i + 1 < count) {
-                    galaxy::timeline::g_path = wide[i + 1];
-                }
-                LocalFree(wide);
-            }
-        }
-#endif
-    }
-#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-    // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), written at exit.
-    galaxy::timeline::initialize_from_environment();
+    // --diagnostics timeline: the frame pipeline's events (frame_timeline.h), written at exit.
+    galaxy::timeline::initialize();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // Physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and CRT assertion and
@@ -3978,23 +3997,15 @@ int main(int argc, char** argv) {
         gModule.run();
     });
 #if defined(_WIN32)
-    if (const char* profile = ::galaxy::run_options().profile_game; profile != nullptr && std::atof(profile) > 0.0) {
-        const HANDLE sampled = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
-                                          GetThreadId(static_cast<HANDLE>(game.native_handle())));
-        if (sampled != nullptr) {
-            std::thread([sampled, seconds = std::atof(profile)] {
-                game_profile::run(sampled, seconds);
-                CloseHandle(sampled);
-            }).detach();
-        }
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseProfile)) {
+        game_profile::start(GetThreadId(static_cast<HANDLE>(game.native_handle())));
     }
     // The simulation thread's CPU time, reported each second (the game and everything it calls on that thread).
     HANDLE game_thread = nullptr;  // its own handle: detach() closes the thread object's
     DuplicateHandle(GetCurrentProcess(), static_cast<HANDLE>(game.native_handle()), GetCurrentProcess(), &game_thread,
                     THREAD_QUERY_LIMITED_INFORMATION, FALSE, 0);
     uint64_t game_cycles_last = 0;
-    const char* trace_env = ::galaxy::run_options().trace_thread_cpu;
-    const bool trace_thread_cpu = trace_env != nullptr && trace_env[0] == '1';
+    const bool trace_thread_cpu = ::galaxy::diagnosing(::galaxy::kDiagnoseThreadCpu);
     // Thread cycles count at the time-stamp counter's rate, measured here against the performance counter.
     const double tsc_hz = !trace_thread_cpu ? 0.0 : [] {
         LARGE_INTEGER f, a, b;

@@ -280,8 +280,7 @@ bool RendererVk::video_memory(std::uint64_t& usage, std::uint64_t& budget) const
     return vk::Context::get().device_memory_budget(usage, budget);
 }
 
-#if defined(NEBULA_DEV)
-// `[vram] breakdown`: every 600 frames (RenderCore's table log). The allocator's blocks and used bytes are the device-local
+// `[vram] breakdown`: every 600 frames with --diagnostics memory (RenderCore's table log). The allocator's blocks and used bytes are the device-local
 // heap's (images and buffers together); the images listed are each texture's allocation size. Textures of the store, the post
 // chain's, ambient occlusion's and bloom's targets and the rings are in `used`, not in `accounted`, so the rest is `unlisted`.
 // Upload rings in video memory (a CPU-mapped one) are counted in `rings local`.
@@ -351,7 +350,6 @@ void RendererVk::log_video_memory(const VideoMemoryOutside& outside) {
                  mb(outside.slot_bytes), mb(ring_host), mb(chunk_host), mb(retired_buffers),
                  static_cast<unsigned long long>(outside.pipelines));
 }
-#endif
 
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
 // rule): scene target colour (4 bytes per pixel) and depth (4 for D24S8; D32F with stencil counted at 8, as drivers pad

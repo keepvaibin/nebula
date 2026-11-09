@@ -1,6 +1,7 @@
 // The game's sound on every host (native_audio.h): the native mixer's frames at the master volume with the remote speaker
 // added, pulled by the output device (audio_device.h), and the WAV dump the tests record.
 #include "galaxy/native_audio.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/run_options.h"
 
 #include "galaxy/audio_device.h"
@@ -528,7 +529,7 @@ void NativeGameAudio::frame() {
             out[i * 2u + 1u] = both;
         }
     }
-    static const bool trace_first = ::galaxy::run_options().trace_file_reads != nullptr;
+    const bool trace_first = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
     static bool first_sound = false;
     if (trace_first && !first_sound && std::any_of(out.begin(), out.end(), [](float value) { return value != 0.0f; })) {
         first_sound = true;

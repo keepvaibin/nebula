@@ -534,6 +534,7 @@ set(rt runtime/src)
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
+galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
 galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp LIBS galaxy_asset_store)
 # D-07: an older install's store and saves under the current layout.

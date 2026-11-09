@@ -1,4 +1,4 @@
-"""perf_summary.py RUN_LOG TAG: perf.sh's numbers from a run's log (GALAXY_TRACE_PRESENT_STATS, GALAXY_TRACE_THREAD_CPU):
+"""perf_summary.py RUN_LOG TAG: perf.sh's numbers from a run's log (--diagnostics present-stats,thread-cpu):
 the median GPU busy time per second (present-stats gpu-total-ms, two per second) and per frame, the frame rate, and
 the render and game threads' CPU per second from 8 s after the tour reached its stop."""
 import re

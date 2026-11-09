@@ -10,6 +10,7 @@
 #   NEBULA_APPDATA   a test app-data folder (shader caches; one per build when builds are compared)
 #   NEBULA_SETTINGS  a test settings folder (config.ini, runtime_settings.ini)
 #   NEBULA_GPU       optional: the GPU to run on, as config.ini's gpu= names it (render_config.h gpu_identity)
+#   NEBULA_DIAGNOSTICS optional: what the run records (--diagnostics, docs/DIAGNOSTICS.md)
 # The run's own copy of the binaries goes to OUT/bin and is removed afterwards unless the run left a crash dump.
 set -e
 seconds=$1
@@ -56,6 +57,7 @@ env GALAXY_HIDE_WINDOW=1 GALAXY_XINPUT_REQUIRE_FOCUS=1 \
     GALAXY_AUDIO_WAV_DUMP_ONLY=1 GALAXY_AUDIO_WAV_DUMP="$(cygpath -w "$out")\\audio.wav" \
     "$@" \
     "$out/bin/$exe" --pak "$NEBULA_PAK" --saves "$NEBULA_SAVES" --seconds "$seconds" $folders \
+    ${NEBULA_DIAGNOSTICS:+--diagnostics "$NEBULA_DIAGNOSTICS"} \
     > "$out/run.log" 2>&1 || echo "exit $?" >> "$out/run.log"
 if ! ls "$out"/*.dmp >/dev/null 2>&1; then
     rm -f "$out"/bin/*.exe "$out"/bin/*.dll "$out"/bin/*.pdb

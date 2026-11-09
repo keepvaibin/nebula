@@ -655,17 +655,6 @@ std::filesystem::path data_folder(const char* folder) {
     return config.empty() ? std::filesystem::path{} : config.parent_path() / folder;
 }
 
-// The test's dump folder (an empty one: none).
-#if defined(_WIN32)
-const wchar_t* run_folder_texture_dump_dir() {
-    return ::galaxy::run_options().texture_dump_dir_w;
-}
-#else
-const char* run_folder_texture_dump_dir() {
-    return ::galaxy::run_options().texture_dump_dir;
-}
-#endif
-
 std::mutex s_mod_folders_mutex;
 std::vector<std::filesystem::path> s_mod_folders;
 std::vector<std::uint32_t> s_mod_categories_off;
@@ -677,9 +666,6 @@ std::string s_texture_pack_game_id = "RMGE01";  // TexturePacks::kGameId until t
 }  // namespace
 
 std::filesystem::path texture_dump_directory() {
-    if (const auto* named = run_folder_texture_dump_dir(); named != nullptr) {
-        return named[0] != 0 ? std::filesystem::path(named) : std::filesystem::path{};
-    }
     return data_folder("TextureDumps");
 }
 

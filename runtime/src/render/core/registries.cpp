@@ -596,7 +596,7 @@ std::uint32_t Registries::pipeline_register(const NebulaPipelineDesc& desc, cons
 }
 
 // Pipelines.bin's format (nebula_frame_list.h NEBULA_PIPELINE_FILE_MAGIC).
-void Registries::write_pipeline_list(const char* path) {
+void Registries::write_pipeline_list(const std::filesystem::path& path) {
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     const std::lock_guard guard(lock_);
     const auto put = [&out](const void* bytes, std::size_t size) { out.write(static_cast<const char*>(bytes), static_cast<std::streamsize>(size)); };

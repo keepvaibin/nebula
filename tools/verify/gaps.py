@@ -1,4 +1,4 @@
-"""gaps.py run.log: game frames over 25 ms from the [latency] lines (GALAXY_TRACE_FRAME_TIMES), each with the last scene state seen."""
+"""gaps.py run.log: game frames over 25 ms from the [latency] lines (--diagnostics frame-times), each with the last scene state seen."""
 import re
 import sys
 
