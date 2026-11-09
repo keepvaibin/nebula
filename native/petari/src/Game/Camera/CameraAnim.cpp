@@ -3,6 +3,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MotionSignal.hpp"
 
 namespace {
     // The cooked camera tracks store a key's slopes per authored frame of 30 a second (the cooker reads them the same way);
@@ -67,7 +68,7 @@ void CameraAnim::getWatchPos(Vec3f* pWatchPos, f32 key) const {
 }
 
 CameraAnim::CameraAnim(const char* pName)
-    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mIsPaused() {
+    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mIsPaused(), mShownFrame(-1.0f) {
 }
 
 void CameraAnim::reset() {
@@ -77,6 +78,25 @@ void CameraAnim::reset() {
     CameraLocalUtil::setUpVec(this, CameraLocalUtil::getUpVec(mCameraMan));
     mIsPaused = false;
     mCurrentFrame = 0.0f;
+    mShownFrame = -1.0f;
+}
+
+bool CameraAnim::isCutTo(f32 key) const {
+    if (mShownFrame < 0.0f) {
+        return false;
+    }
+    if (key < mShownFrame) {
+        return true;
+    }
+    // The shot before holds the frames up to a cut's step; the next one starts after it.
+    const u32* pCuts = mClip->cuts();
+    for (u32 i = 0; i < mClip->cutCount(); i++) {
+        const f32 step = static_cast< f32 >(pCuts[i]);
+        if (mShownFrame <= step && step < key) {
+            return true;
+        }
+    }
+    return false;
 }
 
 CameraTargetObj* CameraAnim::calc() {
@@ -105,6 +125,11 @@ CameraTargetObj* CameraAnim::calc() {
 
         CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, mCurrentFrame) * MR::pi() / 180.0f);
         CameraLocalUtil::setFovy(this, getTrack(CamAnmTrack_Fovy, mCurrentFrame));
+
+        if (isCutTo(mCurrentFrame)) {
+            MotionSignal::cameraCut();
+        }
+        mShownFrame = mCurrentFrame;
 
         if (!mIsPaused) {
             mCurrentFrame += mSpeed;
