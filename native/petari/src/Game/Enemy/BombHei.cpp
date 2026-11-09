@@ -24,6 +24,22 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_endCountdown_setBrkRate_1, "endCountdown.setBrkRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_reboundVelocityFromCollision_1, "exeLaunch.reboundVelocityFromCollision.1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_reboundVelocityFromCollision_2, "exeLaunch.reboundVelocityFromCollision.2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_reboundVelocityFromCollision_3, "exeLaunch.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_reboundVelocityFromCollision_1, "exePhysics.reboundVelocityFromCollision.1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_reboundVelocityFromCollision_2, "exePhysics.reboundVelocityFromCollision.2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_reboundVelocityFromCollision_3, "exePhysics.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_reboundVelocityFromCollision_1, "exeStop.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_reboundVelocityFromCollision_2, "exeStop.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_reboundVelocityFromCollision_3, "exeStop.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_attenuateVelocity_1, "exeStop.attenuateVelocity.1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrown_reboundVelocityFromCollision_1, "exeThrown.reboundVelocityFromCollision.1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrown_reboundVelocityFromCollision_2, "exeThrown.reboundVelocityFromCollision.2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrown_reboundVelocityFromCollision_3, "exeThrown.reboundVelocityFromCollision.3", 1.0f);
+
 namespace {
     static const s32 hStartBrkTime = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 hBrkRateUpTime = NebulaFrameClock::stepsOfSeconds(2);
@@ -207,7 +223,7 @@ void BombHei::startCountdown() {
 void BombHei::endCountdown() {
     mCountdown = -1;
     MR::startBrk(this, "Wait");
-    MR::setBrkRate(this, 1.0f);
+    MR::setBrkRate(this, cNum_endCountdown_setBrkRate_1);
     MR::deleteEffect(this, "Ignite");
     MR::validateClipping(this);
 }
@@ -248,7 +264,7 @@ void BombHei::exeLaunch() {
         }
     }
 
-    MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeLaunch_reboundVelocityFromCollision_1, cNum_exeLaunch_reboundVelocityFromCollision_2, cNum_exeLaunch_reboundVelocityFromCollision_3);
 }
 
 void BombHei::exeStarting() {
@@ -443,7 +459,7 @@ void BombHei::exePhysics() {
         mBinder->mIsStopAtFirstHit = 1;
     }
 
-    MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exePhysics_reboundVelocityFromCollision_1, cNum_exePhysics_reboundVelocityFromCollision_2, cNum_exePhysics_reboundVelocityFromCollision_3);
     MR::killVelocityOnGroundCosH(this, ::hGroundCosine);
 }
 
@@ -453,14 +469,14 @@ void BombHei::exeStop() {
     }
 
     MR::addVelocityToGravityOrGround(this, ::hGravity);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeStop_reboundVelocityFromCollision_1, cNum_exeStop_reboundVelocityFromCollision_2, cNum_exeStop_reboundVelocityFromCollision_3);
 
     if (MR::isOnGround(this)) {
         MR::attenuateVelocity(this, ::hStopDampValue);
         f32 radius = getSensor("body")->mRadius;
         MR::rotateQuatRollBall(&mRotQuat, mVelocity, *MR::getGroundNormal(this), radius);
     } else {
-        MR::attenuateVelocity(this, 0.98f);
+        MR::attenuateVelocity(this, cNum_exeStop_attenuateVelocity_1);
         f32 radius = getSensor("body")->mRadius;
         MR::rotateQuatRollBall(&mRotQuat, mVelocity, -mGravity, radius);
     }
@@ -503,7 +519,7 @@ void BombHei::exeThrown() {
         return;
     }
 
-    MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeThrown_reboundVelocityFromCollision_1, cNum_exeThrown_reboundVelocityFromCollision_2, cNum_exeThrown_reboundVelocityFromCollision_3);
 }
 
 void BombHei::endThrown() {

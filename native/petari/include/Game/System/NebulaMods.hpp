@@ -115,6 +115,11 @@ namespace NebulaMods {
     inline u32 cameraPose(f32* pPosition, f32* pTarget) {
         return sCameraSet ? cameraPoseSlow(pPosition, pTarget) : 0;
     }
+    // The near plane: a plugin's, else the game's.
+    extern f32 sCameraNear;
+    inline f32 cameraNear(f32 nearZ) {
+        return sCameraNear > 0.0f ? sCameraNear : nearZ;
+    }
     // The angle of view: a plugin's, else the game's `fovy`. Kept as the last drawn.
     f32 cameraFov(f32 fovy);
     // The HUD parts plugins hide (NEBULA_HUD_*).

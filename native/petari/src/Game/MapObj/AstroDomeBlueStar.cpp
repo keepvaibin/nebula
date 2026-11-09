@@ -20,6 +20,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_setBckRate_1, "exeWait.setBckRate.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointing_setBckRate_1, "exePointing.setBckRate.1", 1.0f);
+
 namespace {
     const Vec cZoomInOffset = {400.0f, 2550.0f, -7600.0f};
     NEBULA_TUNABLE(s32, cTryStartBindFrame, 30);
@@ -282,7 +286,7 @@ void AstroDomeBlueStar::exeWait() {
         MR::showModel(this);
 
         MR::tryStartBck(this, "Wait");
-        MR::setBckRate(this, 0.5f);
+        MR::setBckRate(this, cNum_exeWait_setBckRate_1);
 
         MR::deleteEffect(this, "Target");
         MR::deleteEffect(this, "Active");
@@ -314,7 +318,7 @@ void AstroDomeBlueStar::exeWait() {
 
 void AstroDomeBlueStar::exePointing() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exePointing_setBckRate_1);
 
         MR::emitEffect(this, "Target");
 

@@ -6,6 +6,10 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_controlEmitEffect_isNearPlayerAnyTime_1, "controlEmitEffect.isNearPlayerAnyTime.1", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlEmitEffect_isNearPlayerAnyTime_2, "controlEmitEffect.isNearPlayerAnyTime.2", 5000.0f);
+
 namespace {
     // Distance the player must pass beyond the 5000 range before the ball's flame is deleted.
     NEBULA_TUNABLE(f32, sEffectLeaveMargin, 500.0f);
@@ -71,7 +75,7 @@ void FireBarBall::endClipped() {
 void FireBarBall::controlEmitEffect() {
     // Emit inside 5000, delete only past 5000 plus a margin: a player walking back and forth over the line deleted and
     // made the flame again every few steps, restarting its particles each time.
-    mIsEffectNear = MR::isNearPlayerAnyTime(this, mIsEffectNear ? 5000.0f + ::sEffectLeaveMargin : 5000.0f);
+    mIsEffectNear = MR::isNearPlayerAnyTime(this, mIsEffectNear ? cNum_controlEmitEffect_isNearPlayerAnyTime_1 + ::sEffectLeaveMargin : cNum_controlEmitEffect_isNearPlayerAnyTime_2);
     if (mIsEffectNear) {
         MR::emitEffect(this, "FireBarBall");
     } else {

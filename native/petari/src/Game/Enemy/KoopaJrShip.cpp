@@ -24,6 +24,9 @@
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_init_setBckRate_1, "init.setBckRate.1", 0.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 1);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeShootMain_1, "exeShootMain.1", 15);
@@ -100,7 +103,7 @@ void KoopaJrShip::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KoopaJrShip", nullptr, false);
     MR::startBck(this, "KoopaJrShip");
-    MR::setBckRate(this, 0.0f);
+    MR::setBckRate(this, cNum_init_setBckRate_1);
     MR::initJointTransform(this);
     MR::setJointTransformLocalMtx(this, ::cJointNamePropellerTop, mPropellerMtx);
     MR::setJointTransformLocalMtx(this, ::cJointNamePropellerBack0, mScrew00Mtx);

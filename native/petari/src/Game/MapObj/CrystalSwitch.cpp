@@ -2,6 +2,10 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOn_setBckRate_1, "exeOn.setBckRate.1", 10.0f);
 
 /* Note -- this file was compiled super early on in the game's life, so it was compiled under -O2 where the release build is -O4,p. Keep this in mind!
  */
@@ -108,7 +112,7 @@ void CrystalSwitch::exeOn() {
         MR::shakeCameraNormal();
         MR::startSound(this, "SE_OJ_CRYSTAL_SWITCH_ON");
         mRotateSpeed = 10.0f;
-        MR::setBckRate(this, 10.0f);
+        MR::setBckRate(this, cNum_exeOn_setBckRate_1);
     }
 }
 

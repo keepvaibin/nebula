@@ -4,6 +4,11 @@
 #include "Game/MapObj/MapObjActor.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_isNearPlayer_1, "updateResetToInitPosCheck.isNearPlayer.1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_isNearPlayer_2, "updateResetToInitPosCheck.isNearPlayer.2", 1000.0f);
 
 namespace NrvSpaceShipStep {
     NEW_NERVE(SpaceShipStepNrvWait, SpaceShipStep, Wait);
@@ -101,12 +106,12 @@ void SpaceShipStep::updateResetToInitPosCheck() {
             } else {
                 MapObjActorUtil::resetRailMoverToInitPos(this);
 
-                if (!MR::isJudgedToClipFrustum(mPosition, 700.0f) && MR::isNearPlayer(this, 3000.0f)) {
+                if (!MR::isJudgedToClipFrustum(mPosition, 700.0f) && MR::isNearPlayer(this, cNum_updateResetToInitPosCheck_isNearPlayer_1)) {
                     MR::emitEffect(this, "Appear");
                     MR::startSound(this, "SE_OJ_SPACE_SHIP_STEP_RESET");
                 }
 
-                if (MR::isNearPlayer(this, 1000.0f)) {
+                if (MR::isNearPlayer(this, cNum_updateResetToInitPosCheck_isNearPlayer_2)) {
                     setNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvWait));
                 } else {
                     setNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvMove));

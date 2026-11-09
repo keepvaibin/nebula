@@ -18,6 +18,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGotoSleepingMario_checkPassBckFrame_1, "exeGotoSleepingMario.checkPassBckFrame.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReadyToPerchOnSleepingMario_checkPassBckFrame_1, "exeReadyToPerchOnSleepingMario.checkPassBckFrame.1", 0.0f);
+
 namespace NrvButterfly {
     NEW_NERVE(HostTypeWait, Butterfly, Wait);
     NEW_NERVE(HostTypeRunAway, Butterfly, RunAway);
@@ -428,7 +432,7 @@ void Butterfly::exeGotoSleepingMario() {
         mVelocity.setLength(::sGotoSleepingMarioSpeedMax);
     }
 
-    if (mPosition.distance(posOffset) < ::sPerchOnNearDistance && MR::checkPassBckFrame(this, 0.0f)) {
+    if (mPosition.distance(posOffset) < ::sPerchOnNearDistance && MR::checkPassBckFrame(this, cNum_exeGotoSleepingMario_checkPassBckFrame_1)) {
         mVelocity.zero();
         setNerve(GET_NERVE(Butterfly, HostTypeReadyToPerchOnSleepingMario));
     }
@@ -443,7 +447,7 @@ void Butterfly::exeReadyToPerchOnSleepingMario() {
     MR::vecBlend(mPosition, posOffset, &mPosition, ::sTransBlendRatio);
 
     MR::setBckRate(this, MR::converge(MR::getBckRate(this), ::sReadyToPerchOnAnimRate, ::sAnimInterpolateRate));
-    if (MR::checkPassBckFrame(this, 0.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeReadyToPerchOnSleepingMario_checkPassBckFrame_1)) {
         setNerve(GET_NERVE(Butterfly, HostTypePerchOnSleepingMario));
     }
 }

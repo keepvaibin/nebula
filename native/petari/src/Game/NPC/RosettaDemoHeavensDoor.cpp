@@ -6,6 +6,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_exeWait_isNearPlayer_1, "RosettaDemoHeavensDoor1_exeWait.isNearPlayer.1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor2_exeWait_isNearPlayer_1, "RosettaDemoHeavensDoor2_exeWait.isNearPlayer.1", 400.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sRosettaSwingVoiceFrame, 70);
     NEBULA_TUNABLE(s32, sRosettaSwingFrame, 80);
@@ -88,7 +92,7 @@ void RosettaDemoHeavensDoor1::exeWait() {
         MR::startAction(mHost, "DemoGetPowerStartWait");
     }
 
-    if (MR::isNearPlayer(mHost->mMsgCtrl, 500.0f) && !MR::isTimeKeepDemoActive()) {
+    if (MR::isNearPlayer(mHost->mMsgCtrl, cNum_RosettaDemoHeavensDoor1_exeWait_isNearPlayer_1) && !MR::isTimeKeepDemoActive()) {
         MR::offPlayerControl();
         MR::timeKeepDemoFadeOut();
         MR::startBrk(mLightHaloModel, "Disappear");
@@ -166,7 +170,7 @@ void RosettaDemoHeavensDoor2::exeWait() {
         MR::startAction(mHost, "WaitB");
     }
 
-    if (MR::isNearPlayer(mHost, 400.0f)) {
+    if (MR::isNearPlayer(mHost, cNum_RosettaDemoHeavensDoor2_exeWait_isNearPlayer_1)) {
         mDemoStarter.start();
     }
 

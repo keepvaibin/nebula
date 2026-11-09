@@ -252,7 +252,7 @@ void MarioActor::updateLightList(const Color8& rAmbient, const Color8& rMaterial
     mLightTint.color1 = rMaterial.mRGBA;
     mLightTint.hasFog = !MR::isNearZero(strength);
     if (mLightTint.hasFog) {
-        mLightTint.fogNear = MR::getNearZ();
+        mLightTint.fogNear = MR::getRenderNearZ();
         mLightTint.fogFar = MR::getFarZ();
         mLightTint.fogColor = rFog.mRGBA;
         MR::calcFogStartEnd(mPosition, strength, &mLightTint.fogStart, &mLightTint.fogEnd);

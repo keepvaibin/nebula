@@ -11,6 +11,32 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_applyVelocityDampAndGravity_1, "exeWait.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_applyVelocityDampAndGravity_1, "exeSearch.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeSearch_applyVelocityDampAndGravity_1, "exeEscapeSearch.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreEscape_applyVelocityDampAndGravity_1, "exePreEscape.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyStart_applyVelocityDampAndGravity_1, "exeFlyStart.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyPursue_applyVelocityDampAndGravity_1, "exeFlyPursue.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyPursue_addVelocityKeepHeightUseShadow_1, "exeFlyPursue.addVelocityKeepHeightUseShadow.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyPursueLast_applyVelocityDampAndGravity_1, "exeFlyPursueLast.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyPursueLast_addVelocityKeepHeightUseShadow_1, "exeFlyPursueLast.addVelocityKeepHeightUseShadow.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOverturnFall_applyVelocityDampAndGravity_1, "exeOverturnFall.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOverturn_applyVelocityDampAndGravity_1, "exeOverturn.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_reboundVelocityFromCollision_1, "exePreRecover.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_reboundVelocityFromCollision_2, "exePreRecover.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_reboundVelocityFromCollision_3, "exePreRecover.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_applyVelocityDampAndGravity_1, "exePreRecover.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_reboundVelocityFromCollision_1, "exeRecover.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_reboundVelocityFromCollision_2, "exeRecover.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_reboundVelocityFromCollision_3, "exeRecover.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_applyVelocityDampAndGravity_1, "exeRecover.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_1, "exeHitToPlayer.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_2, "exeHitToPlayer.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_3, "exeHitToPlayer.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_1, "exeHitToPlayer.applyVelocityDampAndGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStampDeath_setBinderRadius_1, "exeStampDeath.setBinderRadius.1", 10.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, hCommonGravity, 1.5f);
     NEBULA_TUNABLE(f32, hGroundDamp, 0.8f);
@@ -199,7 +225,7 @@ void KoteBug::exeWait() {
     } else if (MR::isOnGround(this)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvNoCalcWait));
     } else {
-        MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+        MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeWait_applyVelocityDampAndGravity_1);
     }
 }
 
@@ -218,7 +244,7 @@ void KoteBug::exeSearch() {
     } else if (::hSearchDistance < MR::calcDistanceToPlayer(this)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvWait));
     } else {
-        MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+        MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeSearch_applyVelocityDampAndGravity_1);
     }
 }
 
@@ -238,7 +264,7 @@ void KoteBug::exeEscapeSearch() {
     } else if (::hSearchDistance < MR::calcDistanceToPlayer(this)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvWait));
     } else {
-        MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+        MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeEscapeSearch_applyVelocityDampAndGravity_1);
     }
 }
 
@@ -248,7 +274,7 @@ void KoteBug::exePreEscape() {
         MR::startSound(this, "SE_EM_KOTEBUG_FIND");
     }
 
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exePreEscape_applyVelocityDampAndGravity_1);
     MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, ::hPreEscapeTurnLimitDegree);
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvFlyEscape));
@@ -261,7 +287,7 @@ void KoteBug::exeFlyStart() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_KOTEBUG_FLY");
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeFlyStart_applyVelocityDampAndGravity_1);
     MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, ::hFlyTurnLimitDegree);
     if (MR::isGreaterStep(this, ::hFlyStartTime)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvFlyPursue));
@@ -278,7 +304,7 @@ void KoteBug::exeFlyPursue() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_KOTEBUG_FLY");
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeFlyPursue_applyVelocityDampAndGravity_1);
     if (isNerve(GET_NERVE(KoteBug, HostTypeNrvFlyEscape))) {
         MR::turnDirectionFromPlayerDegreeHorizon(this, &mFront, ::hFlyEscapeTurnLimitDegree);
     } else {
@@ -287,7 +313,7 @@ void KoteBug::exeFlyPursue() {
 
     mVelocity.add(mFront * ::hFlyPursueVel);
     if (MR::isShadowProjected(this, nullptr)) {
-        MR::addVelocityKeepHeightUseShadow(this, ::hFlyHeight, 0.0f, ::hKeepAcc, ::hFreqRange, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, ::hFlyHeight, cNum_exeFlyPursue_addVelocityKeepHeightUseShadow_1, ::hKeepAcc, ::hFreqRange, nullptr);
     }
 
     bool escape = !MR::isPlayerElementModeBee();
@@ -314,12 +340,12 @@ void KoteBug::exeFlyPursueLast() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_KOTEBUG_PURSUE_LAST");
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeFlyPursueLast_applyVelocityDampAndGravity_1);
     f32 rate = getNerveStep() / f32(::hFlyPursueLastTime);
     MR::setBckRate(this, ::hFlyPursueLastAddRate + rate);
     mVelocity.add(mFront * (::hFlyPursueVel - ::hFlyPursueLastSubVel * rate));
     if (MR::isShadowProjected(this, nullptr)) {
-        MR::addVelocityKeepHeightUseShadow(this, ::hFlyJitabataHeightBase + ::hFlyJitabataHeight * rate, 0.0f, ::hKeepAcc, ::hFreqRange, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, ::hFlyJitabataHeightBase + ::hFlyJitabataHeight * rate, cNum_exeFlyPursueLast_addVelocityKeepHeightUseShadow_1, ::hKeepAcc, ::hFreqRange, nullptr);
     }
 
     if (::hFlyDistance < MR::calcDistanceToPlayer(this)) {
@@ -336,7 +362,7 @@ void KoteBug::exeOverturnFall() {
         MR::addVelocityJump(this, ::hOverturnFallJumpVelV);
     }
 
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeOverturnFall_applyVelocityDampAndGravity_1);
     if (MR::isOnGroundCos(this, 0.75f)) {
         mScaleController->startAndAddScaleVelocityY(::hHitScaleYSpeed);
         mScaleController->startAnim();
@@ -352,7 +378,7 @@ void KoteBug::exeOverturn() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_KOTEBUG_OVERTURN");
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeOverturn_applyVelocityDampAndGravity_1);
     MR::killVelocityOnGroundH(this);
     mBinder->mIsStopAtFirstHit = true;
     if (MR::isGreaterStep(this, ::hOverturnTime)) {
@@ -365,8 +391,8 @@ void KoteBug::exePreRecover() {
         MR::startAction(this, "Gu");
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exePreRecover_reboundVelocityFromCollision_1, cNum_exePreRecover_reboundVelocityFromCollision_2, cNum_exePreRecover_reboundVelocityFromCollision_3);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exePreRecover_applyVelocityDampAndGravity_1);
     MR::killVelocityOnGroundH(this);
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvRecover));
@@ -380,8 +406,8 @@ void KoteBug::exeRecover() {
         MR::addVelocityJump(this, ::hRecoverJumpVelV);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeRecover_reboundVelocityFromCollision_1, cNum_exeRecover_reboundVelocityFromCollision_2, cNum_exeRecover_reboundVelocityFromCollision_3);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeRecover_applyVelocityDampAndGravity_1);
     if (MR::isOnGround(this)) {
         MR::startSound(this, "SE_EM_KOTEBUG_LAND");
         mScaleController->startAndAddScaleVelocityY(::hHitScaleYSpeed);
@@ -399,8 +425,8 @@ void KoteBug::exeHitToPlayer() {
         mVelocity.add(mFront * ::hHitToPlayerJumpVelH);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
-    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeHitToPlayer_reboundVelocityFromCollision_1, cNum_exeHitToPlayer_reboundVelocityFromCollision_2, cNum_exeHitToPlayer_reboundVelocityFromCollision_3);
+    MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeHitToPlayer_applyVelocityDampAndGravity_1);
     if (MR::isOnGround(this)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvFlyStart));
     }
@@ -430,7 +456,7 @@ void KoteBug::exeStampDeath() {
         MR::invalidateClipping(this);
         mVelocity.zero();
         mStampController->startAnim(mGravity);
-        MR::setBinderRadius(this, 10.0f);
+        MR::setBinderRadius(this, cNum_exeStampDeath_setBinderRadius_1);
         MR::forceBindOnGround(this, 0.0f, 1.0f);
     }
 

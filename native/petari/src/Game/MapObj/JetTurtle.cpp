@@ -6,6 +6,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDrop_addVelocityToGravity_1, "exeDrop.addVelocityToGravity.1", 1.0f);
+
 namespace {
     // By mSpeedType.
     NEBULA_TUNABLE_LIST(f32, sThrowSpdStraight, , {30.0f, 20.0f, 30.0f});
@@ -685,7 +688,7 @@ void JetTurtle::exeDrop() {
     }
 
     boundDrop();
-    MR::addVelocityToGravity(this, 1.0f);
+    MR::addVelocityToGravity(this, cNum_exeDrop_addVelocityToGravity_1);
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         mVelocity.zero();

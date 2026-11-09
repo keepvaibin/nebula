@@ -12,6 +12,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 3000.0f);
 
 namespace {
     const s32 sBeamNum = 12;
@@ -111,7 +115,7 @@ void BallBeamer::exeWait() {
         MR::startAction(this, "Wait");
     }
 
-    if (MR::isNearPlayer(this, 3000.0f)) {
+    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1)) {
         BallBeamer::setupAttack();
     }
 }

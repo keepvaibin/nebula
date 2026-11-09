@@ -3,6 +3,11 @@
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_init_moveCoord_1, "init.moveCoord.1", 1080.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_moveCoord_1, "control.moveCoord.1", 1080.0f);
 
 namespace {
     static const s32 hWhistleStepMin = NebulaFrameClock::stepsOfSeconds(3);
@@ -80,7 +85,7 @@ void ChooChooTrain::init(const TableIter& rIter) {
     MR::reverseRailDirection(this);
 
     for (i = 0; i < defTrainParts; i++) {
-        MR::moveCoord(this, 1080.0f * mScale.y);
+        MR::moveCoord(this, cNum_init_moveCoord_1 * mScale.y);
         MR::moveTransToOtherActorRailPos(mModelArray[i], this);
         MR::onCalcGravity(mModelArray[i]);
         mModelArray[i]->makeActorAppeared();
@@ -106,7 +111,7 @@ void ChooChooTrain::control() {
     MR::reverseRailDirection(this);
 
     for (int i = 0; i < mModelArray.size(); i++) {
-        MR::moveCoord(this, 1080.0f * mScale.y);
+        MR::moveCoord(this, cNum_control_moveCoord_1 * mScale.y);
         MR::moveTransToOtherActorRailPos(mModelArray[i], this);
         dir = coupling - mModelArray[i]->mPosition;
         MR::turnDirectionAndGravityH(mModelArray[i], dir, 0.5f, 1.0f);

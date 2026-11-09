@@ -26,6 +26,10 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_moveCoord_1, "exeMove.moveCoord.1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNear_moveCoord_1, "exeNear.moveCoord.1", 20.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, cJumpSpeed, 20.0f);
     NEBULA_TUNABLE(f32, cProgressSpeed, 18.0f);
@@ -405,7 +409,7 @@ void Rabbit::exeMove() {
 
         mMoveSpeed *= hopStrengh;
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::moveCoord(this, 20.0f * mMoveSpeed);
+        MR::moveCoord(this, cNum_exeMove_moveCoord_1 * mMoveSpeed);
         Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
         mMoveDir = railPos - mPosition;
@@ -456,7 +460,7 @@ void Rabbit::exeNear() {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
         mMoveSpeed = ::cProgressSpeed;
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::moveCoord(this, 20.0f * mMoveSpeed);
+        MR::moveCoord(this, cNum_exeNear_moveCoord_1 * mMoveSpeed);
         Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
         mMoveDir = railPos - mPosition;

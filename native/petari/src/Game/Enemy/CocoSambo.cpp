@@ -10,6 +10,18 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_2, "exeWait.isNearPlayer.2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_checkPassBckFrame_1, "exeAttack.checkPassBckFrame.1", 115.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecoverWait_setBckRate_1, "exeRecoverWait.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_setBckRate_1, "exeRecover.setBckRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePressY_setBckRate_1, "exePressY.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerAiming_setBckRate_1, "exePointerAiming.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerAiming_setBckRate_2, "exePointerAiming.setBckRate.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endPointerAiming_setBckRate_1, "endPointerAiming.setBckRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endPointerAiming_setBckRate_2, "endPointerAiming.setBckRate.2", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHide_1, "exeHide.1", 65);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFallHead_1, "exeFallHead.1", 2);
@@ -565,9 +577,9 @@ void CocoSambo::exeWait() {
         return;
     }
 
-    if (MR::isNearPlayer(this, 700.0f)) {
+    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1)) {
         setNerve(GET_NERVE(CocoSambo, CocoSamboNrvAttack));
-    } else if (!MR::isNearPlayer(this, mPlayerSearchDistance + 100.0f)) {
+    } else if (!MR::isNearPlayer(this, mPlayerSearchDistance + cNum_exeWait_isNearPlayer_2)) {
         setNerve(GET_NERVE(CocoSambo, CocoSamboNrvHide));
     }
 }
@@ -598,7 +610,7 @@ void CocoSambo::exeAttack() {
     }
 
     if (!tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvAttack))) {
-        if (MR::checkPassBckFrame(this, 115.0f)) {
+        if (MR::checkPassBckFrame(this, cNum_exeAttack_checkPassBckFrame_1)) {
             MR::emitEffect(mHead, "CocoSamboAttack");
             MR::tryRumblePadStrong(this, PLAYER_1);
             MR::shakeCameraNormal();
@@ -660,7 +672,7 @@ void CocoSambo::exeFallHeadHide() {
 void CocoSambo::exeRecoverWait() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Recover");
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_exeRecoverWait_setBckRate_1);
         MR::invalidateHitSensors(mHead);
     }
 
@@ -669,7 +681,7 @@ void CocoSambo::exeRecoverWait() {
 
 void CocoSambo::exeRecover() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeRecover_setBckRate_1);
         MR::startBck(mHead, "Recover");
         mHead->mIsCalcOwnMtx = true;
         MR::showMaterial(mHead, "SanboNeedleMat_v");
@@ -681,7 +693,7 @@ void CocoSambo::exeRecover() {
 
 void CocoSambo::exePressY() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_exePressY_setBckRate_1);
         MR::startBck(mHead, "PressY");
         MR::startSound(this, "SE_EM_STOMPED_S");
         MR::tryRumblePadMiddle(this, PLAYER_1);
@@ -715,8 +727,8 @@ void CocoSambo::exeBlow() {
 
 void CocoSambo::exePointerAiming() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 0.0f);
-        MR::setBckRate(mHead, 0.0f);
+        MR::setBckRate(this, cNum_exePointerAiming_setBckRate_1);
+        MR::setBckRate(mHead, cNum_exePointerAiming_setBckRate_2);
         MR::emitEffect(this, "Touch1");
         MR::emitEffect(this, "Touch2");
         MR::emitEffect(this, "Touch3");
@@ -732,8 +744,8 @@ void CocoSambo::exePointerAiming() {
 }
 
 void CocoSambo::endPointerAiming() {
-    MR::setBckRate(this, 1.0f);
-    MR::setBckRate(mHead, 1.0f);
+    MR::setBckRate(this, cNum_endPointerAiming_setBckRate_1);
+    MR::setBckRate(mHead, cNum_endPointerAiming_setBckRate_2);
     MR::deleteEffect(this, "Touch1");
     MR::deleteEffect(this, "Touch2");
     MR::deleteEffect(this, "Touch3");

@@ -8,6 +8,14 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.88f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_3, "exeWait.reboundVelocityFromCollision.3", 1.0f);
 
 namespace NrvDinoPackunTailPart {
     NEW_NERVE(DinoPackunTailPartNrvWait, DinoPackunTailPart, Wait);
@@ -83,7 +91,7 @@ void DinoPackunTailPart::exeLockPosition() {
 }
 
 void DinoPackunTailPart::exeWait() {
-    MR::addVelocityToGravity(this, 0.7f);
-    MR::attenuateVelocity(this, 0.88f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::addVelocityToGravity(this, cNum_exeWait_addVelocityToGravity_1);
+    MR::attenuateVelocity(this, cNum_exeWait_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3);
 }

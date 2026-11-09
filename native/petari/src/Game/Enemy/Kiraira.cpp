@@ -20,6 +20,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_turnDirectionToTargetDegree_1, "attackSensor.turnDirectionToTargetDegree.1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_turnDirectionToTargetDegree_1, "receiveOtherMsg.turnDirectionToTargetDegree.1", 20.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sTurnRate, 2.8f);
     NEBULA_TUNABLE(s32, sStepToStare, 5);
@@ -233,7 +237,7 @@ bool Kiraira::isDown() const {
 
 void Kiraira::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!isDown() && (pSender == getSensor("mind_eye")) && pReceiver->mType == ATYPE_JET_TURTLE) {
-        MR::turnDirectionToTargetDegree(this, &mFront, pReceiver->mPosition, 20.0f);
+        MR::turnDirectionToTargetDegree(this, &mFront, pReceiver->mPosition, cNum_attackSensor_turnDirectionToTargetDegree_1);
         openEyes();
     }
     if (!isDown() && MR::isSensorEnemy(pSender) && MR::isSensorPlayerOrRide(pReceiver)) {
@@ -285,7 +289,7 @@ bool Kiraira::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceive
         return false;
     }
     if (msg == ACTMES_GROUP_ATTACK) {
-        MR::turnDirectionToTargetDegree(this, &mFront, pSender->mPosition, 20.0f);
+        MR::turnDirectionToTargetDegree(this, &mFront, pSender->mPosition, cNum_receiveOtherMsg_turnDirectionToTargetDegree_1);
         openEyes();
         return true;
     }

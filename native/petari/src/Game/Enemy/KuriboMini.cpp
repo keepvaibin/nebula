@@ -28,6 +28,11 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackSuccess_turnDirectionToPlayerDegree_1, "exeAttackSuccess.turnDirectionToPlayerDegree.1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_addVelocityToGravity_1, "calcPassiveMovement.addVelocityToGravity.1", 1.5f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropDown_1, "exeHipDropDown.1", 40);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFlatDown_1, "exeFlatDown.1", 20);
@@ -255,7 +260,7 @@ bool KuriboMini::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
     if ((MR::isSensorEnemy(pSender) || MR::isSensorRide(pSender) || (!isEnableAttack() && MR::isSensorPlayer(pSender)))) {
         if (!isDown()) {
-            MR::addVelocityFromPush(this, 1.5f, pSender, pReceiver);
+            MR::addVelocityFromPush(this, cNum_receiveMsgPush_addVelocityFromPush_1, pSender, pReceiver);
             return true;
         }
     }
@@ -451,7 +456,7 @@ void KuriboMini::exeAttackSuccess() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Hit");
     }
-    MR::turnDirectionToPlayerDegree(this, &mFront, 5.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeAttackSuccess_turnDirectionToPlayerDegree_1);
     calcPassiveMovement();
 
     if (tryDeadMap() || tryPointBind()) {
@@ -513,7 +518,7 @@ void KuriboMini::exeBlowDown() {
 
 void KuriboMini::calcPassiveMovement() {
     if (!MR::isOnGround(this)) {
-        MR::addVelocityToGravity(this, 1.5f);
+        MR::addVelocityToGravity(this, cNum_calcPassiveMovement_addVelocityToGravity_1);
     }
 
     f32 velocity;

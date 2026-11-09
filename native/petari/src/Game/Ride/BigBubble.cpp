@@ -18,6 +18,16 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_control_setBinderRadius_1, "control.setBinderRadius.1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_setBinderRadius_2, "control.setBinderRadius.2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_generate_setBinderRadius_1, "generate.setBinderRadius.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setScale_setBinderRadius_1, "setScale.setBinderRadius.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_1, "updateNormalVelocity.reboundVelocityFromEachCollision.1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_2, "updateNormalVelocity.reboundVelocityFromEachCollision.2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_3, "updateNormalVelocity.reboundVelocityFromEachCollision.3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_4, "updateNormalVelocity.reboundVelocityFromEachCollision.4", 0.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sNormalFric, 0.992f);
     NEBULA_TUNABLE(f32, sBuoyancyAccel, 0.03f);
@@ -181,7 +191,7 @@ void BigBubble::control() {
     }
 
     f32 radius = MR::getBinderRadius(this);
-    MR::setBinderRadius(this, 0.1f * mBinderRadius + 0.9f * radius);
+    MR::setBinderRadius(this, cNum_control_setBinderRadius_1 * mBinderRadius + cNum_control_setBinderRadius_2 * radius);
 }
 
 void BigBubble::calcAnim() {
@@ -236,7 +246,7 @@ void BigBubble::generate(const Vec3f& rPos, const Vec3f& rUp, f32 volume, bool i
 
     resetDeformVelocity();
     setScale(0.0f);
-    MR::setBinderRadius(this, 0.0f);
+    MR::setBinderRadius(this, cNum_generate_setBinderRadius_1);
     mVolume = volume;
 
     MR::invalidateHitSensors(this);
@@ -306,7 +316,7 @@ void BigBubble::setScale(f32 scale) {
     MR::setStarPointerTargetRadius3d(this, radius * scale);
     MR::setShadowVolumeSphereRadius(this, nullptr, 0.8f * radius * scale);
     mBinderRadius = radius * scale * 0.95f;
-    MR::setBinderRadius(this, radius * scale * 0.9f);
+    MR::setBinderRadius(this, radius * scale * cNum_setScale_setBinderRadius_1);
     MR::setSensorRadius(this, "body", radius * scale);
     MR::setSensorRadius(this, "bind", radius * scale);
     MR::setSensorRadius(this, "ride", radius * scale);
@@ -987,7 +997,7 @@ void BigBubble::updateNormalVelocity() {
     windDistance = MR::normalize(windDistance, ::sWindMinDistance, ::sWindMaxDistance);
     mVelocity.add(windDir * ::sWindAccel * windDistance);
     mMoment.mult(::sSpinFreq);
-    MR::reboundVelocityFromEachCollision(this, 0.1f, 0.1f, 0.1f, 0.0f);
+    MR::reboundVelocityFromEachCollision(this, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_1, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_2, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_3, cNum_updateNormalVelocity_reboundVelocityFromEachCollision_4);
 }
 
 void BigBubble::resetDeformVelocity() {

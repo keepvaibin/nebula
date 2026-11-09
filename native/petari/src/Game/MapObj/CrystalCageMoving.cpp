@@ -9,6 +9,10 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoTicoStop_setBckRate_1, "exeDemoTicoStop.setBckRate.1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoTicoChange_setBckRate_1, "exeDemoTicoChange.setBckRate.1", 1.5f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakBig_1, "exeBreakBig.1", 10);
 
@@ -125,7 +129,7 @@ void CrystalCageMoving::exeDemoTicoStop() {
     if (MR::isFirstStep(this)) {
         mDummyModelMtx.set(getBaseMtx());
         mDummyModelMtx.setTrans(mStartPos);
-        MR::setBckRate(mTicoModel, 1.5f);
+        MR::setBckRate(mTicoModel, cNum_exeDemoTicoStop_setBckRate_1);
     }
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
@@ -137,7 +141,7 @@ void CrystalCageMoving::exeDemoTicoChange() {
     if (MR::isFirstStep(this)) {
         MR::startBck(mTicoModel, "Metamorphosis");
         MR::startSound(mTicoModel, "SE_SM_TICO_METAMORPHOSE");
-        MR::setBckRate(mTicoModel, 1.5f);
+        MR::setBckRate(mTicoModel, cNum_exeDemoTicoChange_setBckRate_1);
     }
 
     if (MR::isBckStopped(mTicoModel)) {

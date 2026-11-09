@@ -26,6 +26,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_startSwoon_turnDirectionToPlayerDegree_1, "startSwoon.turnDirectionToPlayerDegree.1", 180.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, cSpeedMax, 30.0f);
     NEBULA_TUNABLE(f32, cReceivePushPower, 1.5f);
@@ -559,7 +562,7 @@ void Metbo::startSwoon(bool isFromPlayer) {
     if (isFromPlayer) {
         MR::turnDirectionFromPlayerDegree(this, &mFront, 180.0f);
     } else {
-        MR::turnDirectionToPlayerDegree(this, &mFront, 180.0f);
+        MR::turnDirectionToPlayerDegree(this, &mFront, cNum_startSwoon_turnDirectionToPlayerDegree_1);
     }
     setNerve(GET_NERVE(Metbo, MetboNrvSwoonStart));
 }

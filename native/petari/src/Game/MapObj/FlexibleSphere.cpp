@@ -21,6 +21,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_startQuake_shakeCameraInfinity_1, "startQuake.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startQuake_shakeCameraInfinity_2, "startQuake.shakeCameraInfinity.2", 3.0f);
+
 namespace {
     // Placement args 0-2 are scales in ten-thousandths.
     NEBULA_TUNABLE(f32, cArgScaleUnit, 10000.0f);
@@ -233,7 +237,7 @@ void FlexibleSphere::startQuake() {
     mShakeTimer = cQuakeFrames;
 
     if (MR::calcDistanceToPlayer(mPosition) < cQuakeHearDistance) {
-        MR::shakeCameraInfinity(this, 0.2f, 3.0f);
+        MR::shakeCameraInfinity(this, cNum_startQuake_shakeCameraInfinity_1, cNum_startQuake_shakeCameraInfinity_2);
         MR::invalidateClipping(this);
     }
 

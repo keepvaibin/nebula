@@ -31,6 +31,39 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_addVelocityKeepHeightUseShadow_1, "updateNormalVelocity.addVelocityKeepHeightUseShadow.1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_addVelocityKeepHeightUseShadow_2, "updateNormalVelocity.addVelocityKeepHeightUseShadow.2", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_addVelocityKeepHeightUseShadow_3, "updateNormalVelocity.addVelocityKeepHeightUseShadow.3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_attenuateVelocity_1, "updateNormalVelocity.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, "updateNormalVelocity.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_3, "updateNormalVelocity.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_addVelocityKeepHeightUseShadow_1, "updateDriftReleaseVelocity.addVelocityKeepHeightUseShadow.1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_addVelocityKeepHeightUseShadow_2, "updateDriftReleaseVelocity.addVelocityKeepHeightUseShadow.2", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_addVelocityKeepHeightUseShadow_3, "updateDriftReleaseVelocity.addVelocityKeepHeightUseShadow.3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_attenuateVelocity_1, "updateDriftReleaseVelocity.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_reboundVelocityFromCollision_1, "updateDriftReleaseVelocity.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_reboundVelocityFromCollision_2, "updateDriftReleaseVelocity.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftReleaseVelocity_reboundVelocityFromCollision_3, "updateDriftReleaseVelocity.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryDirectTackle_isNearPlayer_1, "tryDirectTackle.isNearPlayer.1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShadowAppear_addVelocityToGravity_1, "exeShadowAppear.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShadowAppear_turnDirectionToPlayerDegree_1, "exeShadowAppear.turnDirectionToPlayerDegree.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBallAppear_addVelocityToGravity_1, "exeBallAppear.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBallAppear_reboundVelocityFromCollision_1, "exeBallAppear.reboundVelocityFromCollision.1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBallAppear_reboundVelocityFromCollision_2, "exeBallAppear.reboundVelocityFromCollision.2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBallAppear_reboundVelocityFromCollision_3, "exeBallAppear.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBallAppear_attenuateVelocity_1, "exeBallAppear.attenuateVelocity.1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayerAnyTime_1, "exeWait.isNearPlayerAnyTime.1", 1800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWander_isNearPlayerAnyTime_1, "exeWander.isNearPlayerAnyTime.1", 1800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_turnDirectionToPlayerDegree_1, "exeChase.turnDirectionToPlayerDegree.1", 1.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDirectTackleSign_turnDirectionToPlayerDegree_1, "exeDirectTackleSign.turnDirectionToPlayerDegree.1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDirectTackle_turnDirectionToPlayerDegree_1, "exeDirectTackle.turnDirectionToPlayerDegree.1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShock_attenuateVelocity_1, "exeShock.attenuateVelocity.1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaSpinPullVelocity_addVelocityMoveToTarget_1, "addTeresaSpinPullVelocity.addVelocityMoveToTarget.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaSpinPullVelocity_addVelocityMoveToTarget_2, "addTeresaSpinPullVelocity.addVelocityMoveToTarget.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addTeresaSpinPullVelocity_addVelocityMoveToTarget_3, "addTeresaSpinPullVelocity.addVelocityMoveToTarget.3", 150.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeShadowAppear_1, "exeShadowAppear.1", 130);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBallAppear_1, "exeBallAppear.1", 160);
@@ -164,16 +197,16 @@ void BombTeresa::calcAndSetBaseMtx() {
 }
 
 void BombTeresa::updateNormalVelocity() {
-    MR::addVelocityKeepHeightUseShadow(this, 150.0f, 0.4f, 40.0f, nullptr);
-    MR::attenuateVelocity(this, 0.9f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::addVelocityKeepHeightUseShadow(this, cNum_updateNormalVelocity_addVelocityKeepHeightUseShadow_1, cNum_updateNormalVelocity_addVelocityKeepHeightUseShadow_2, cNum_updateNormalVelocity_addVelocityKeepHeightUseShadow_3, nullptr);
+    MR::attenuateVelocity(this, cNum_updateNormalVelocity_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, cNum_updateNormalVelocity_reboundVelocityFromCollision_3);
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
 }
 
 void BombTeresa::updateDriftReleaseVelocity() {
-    MR::addVelocityKeepHeightUseShadow(this, 150.0f, 0.4f, 40.0f, nullptr);
-    MR::attenuateVelocity(this, 0.9f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::addVelocityKeepHeightUseShadow(this, cNum_updateDriftReleaseVelocity_addVelocityKeepHeightUseShadow_1, cNum_updateDriftReleaseVelocity_addVelocityKeepHeightUseShadow_2, cNum_updateDriftReleaseVelocity_addVelocityKeepHeightUseShadow_3, nullptr);
+    MR::attenuateVelocity(this, cNum_updateDriftReleaseVelocity_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_updateDriftReleaseVelocity_reboundVelocityFromCollision_1, cNum_updateDriftReleaseVelocity_reboundVelocityFromCollision_2, cNum_updateDriftReleaseVelocity_reboundVelocityFromCollision_3);
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
 }
 
@@ -349,7 +382,7 @@ bool BombTeresa::tryChaseEnd() {
 }
 
 bool BombTeresa::tryDirectTackle() {
-    if (!MR::isPlayerDamaging() && MR::isNearPlayer(this, 900.0f) && MR::isFaceToPlayerHorizontalDegree(this, mFront, 30.0f)) {
+    if (!MR::isPlayerDamaging() && MR::isNearPlayer(this, cNum_tryDirectTackle_isNearPlayer_1) && MR::isFaceToPlayerHorizontalDegree(this, mFront, 30.0f)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvDirectTackleSign));
         return true;
     }
@@ -436,11 +469,11 @@ void BombTeresa::exeShadowAppear() {
     }
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_exeShadowAppear_addVelocityToGravity_1);
     }
 
     MR::attenuateVelocity(this, MR::isLessStep(this, cStep_exeShadowAppear_1) ? 0.995f : 0.8f);
-    MR::turnDirectionToPlayerDegree(this, &mFront, 3.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeShadowAppear_turnDirectionToPlayerDegree_1);
     mTonguePos = mPosition;
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
@@ -460,9 +493,9 @@ void BombTeresa::exeBallAppear() {
     }
 
     mTonguePos = mPosition;
-    MR::addVelocityToGravity(this, 1.0f);
-    bool isBounced = MR::reboundVelocityFromCollision(this, 0.95f, 2.0f, 1.0f);
-    MR::attenuateVelocity(this, 0.99f);
+    MR::addVelocityToGravity(this, cNum_exeBallAppear_addVelocityToGravity_1);
+    bool isBounced = MR::reboundVelocityFromCollision(this, cNum_exeBallAppear_reboundVelocityFromCollision_1, cNum_exeBallAppear_reboundVelocityFromCollision_2, cNum_exeBallAppear_reboundVelocityFromCollision_3);
+    MR::attenuateVelocity(this, cNum_exeBallAppear_attenuateVelocity_1);
     if (isBounced) {
         MR::startSound(this, "SE_EM_BOMBTERE_BOUND");
     }
@@ -500,7 +533,7 @@ void BombTeresa::exeWait() {
     updateNormalVelocity();
     if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         tryRevival();
-    } else if (MR::isNearPlayerAnyTime(this, 1800.0f)) {
+    } else if (MR::isNearPlayerAnyTime(this, cNum_exeWait_isNearPlayerAnyTime_1)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase));
     } else if (mIsWanderAfterWait) {
         if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
@@ -523,7 +556,7 @@ void BombTeresa::exeWander() {
     updateNormalVelocity();
     if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         tryRevival();
-    } else if (MR::isNearPlayerAnyTime(this, 1800.0f)) {
+    } else if (MR::isNearPlayerAnyTime(this, cNum_exeWander_isNearPlayerAnyTime_1)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase));
     }
 }
@@ -535,7 +568,7 @@ void BombTeresa::exeChase() {
         mTongueRate = 0.0f;
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFront, 1.4f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeChase_turnDirectionToPlayerDegree_1);
     MR::addVelocityMoveToDirection(this, mFront, (0.9f * MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1))));
     mTonguePos = mPosition;
     updateNormalVelocity();
@@ -564,7 +597,7 @@ void BombTeresa::exeDirectTackleSign() {
         mTongueRate = 0.0f;
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFront, 10.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeDirectTackleSign_turnDirectionToPlayerDegree_1);
     MR::addVelocityKeepHeight(this, *MR::getPlayerCenterPos(), 100.0f, 0.6f, 100.0f);
     updateNormalVelocity();
     mTonguePos = mPosition;
@@ -580,7 +613,7 @@ void BombTeresa::exeDirectTackle() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_BOMBTERE_TACKLE");
-    MR::turnDirectionToPlayerDegree(this, &mFront, 0.8f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeDirectTackle_turnDirectionToPlayerDegree_1);
     MR::addVelocityMoveToDirection(this, mFront, (1.5f * MR::calcNerveRate(this, 50)));
     MR::addVelocityKeepHeight(this, *MR::getPlayerCenterPos(), 100.0f, 0.6f, 100.0f);
     updateNormalVelocity();
@@ -724,7 +757,7 @@ void BombTeresa::exeShock() {
     }
 
     mTonguePos = mPosition;
-    MR::attenuateVelocity(this, 0.98f);
+    MR::attenuateVelocity(this, cNum_exeShock_attenuateVelocity_1);
     if (MR::isGreaterStep(this, cStep_exeShock_1)) {
         MR::deleteEffect(this, "SpinBlur");
         MR::emitEffect(this, "MisFire");
@@ -875,7 +908,7 @@ bool BombTeresa::appearShadow(const Vec3f& rPosition, const Vec3f& rVelocity) {
 void BombTeresa::addTeresaSpinPullVelocity(f32 height) {
     Vec3f centerPos(*MR::getPlayerCenterPos());
     MR::addVelocityClockwiseToTarget(this, centerPos, mDriftPullSpeed);
-    MR::addVelocityMoveToTarget(this, centerPos, 0.0f, mDriftSpinSpeed, 0.0f, 150.0f);
+    MR::addVelocityMoveToTarget(this, centerPos, cNum_addTeresaSpinPullVelocity_addVelocityMoveToTarget_1, mDriftSpinSpeed, cNum_addTeresaSpinPullVelocity_addVelocityMoveToTarget_2, cNum_addTeresaSpinPullVelocity_addVelocityMoveToTarget_3);
     MR::addVelocityKeepHeight(this, centerPos, height, 3.0f, 100.0f);
 }
 

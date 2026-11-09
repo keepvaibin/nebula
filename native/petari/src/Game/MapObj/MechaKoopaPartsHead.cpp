@@ -3,6 +3,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoBreak_shakeCameraInfinity_1, "exeDemoBreak.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoBreak_shakeCameraInfinity_2, "exeDemoBreak.shakeCameraInfinity.2", 2.0f);
 
 namespace {
     const s32 sStepForWhiteFadeOut = NebulaFrameClock::stepsOfSeconds(1);
@@ -54,7 +59,7 @@ void MechaKoopaPartsHead::exeDemoBreak() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_BM_MECHA_KOOPA_DOWN");
         MR::moveVolumeStageBGM(0.0f, 30);
-        MR::shakeCameraInfinity(this, 0.2f, 2.0f);
+        MR::shakeCameraInfinity(this, cNum_exeDemoBreak_shakeCameraInfinity_1, cNum_exeDemoBreak_shakeCameraInfinity_2);
     }
 
     MR::tryRumblePadMiddle(this, PLAYER_1);

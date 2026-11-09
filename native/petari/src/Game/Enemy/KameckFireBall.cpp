@@ -15,6 +15,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sFireRadius, 58.0f);
     NEBULA_TUNABLE(s32, sLife, 180);
@@ -142,7 +146,7 @@ void KameckFireBall::exeWait() {
     MR::addVelocityToGravity(this, ::sGravityAccel);
     MR::attenuateVelocity(this, ::sFreqRate);
 
-    if (MR::reboundVelocityFromCollision(this, ::sReboundRate, 0.0f, 1.0f)) {
+    if (MR::reboundVelocityFromCollision(this, ::sReboundRate, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2)) {
         if (mVelocity.dot(-mGravity) >= 1.0f) {
             MR::startSound(this, "SE_BM_KAMECK_FIRE_BOUND");
         }

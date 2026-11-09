@@ -4,6 +4,11 @@
 #include "Game/MapObj/MapPartsFunction.hpp"
 #include "Game/MapObj/MapPartsRailPointPassChecker.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_setStateStopAtEndBeforeRotate_setRailCoordSpeed_1, "setStateStopAtEndBeforeRotate.setRailCoordSpeed.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStopAtPoint_setRailCoordSpeed_1, "exeStopAtPoint.setRailCoordSpeed.1", 0.0f);
 
 namespace NrvMapPartsRailMover {
     NEW_NERVE(HostTypeWait, MapPartsRailMover, Wait);
@@ -202,7 +207,7 @@ bool MapPartsRailMover::isDone() const {
 void MapPartsRailMover::setStateStopAtEndBeforeRotate() {
     mSpeed = 0.0f;
     mAcceleration = 0.0f;
-    MR::setRailCoordSpeed(mHost, 0.0f);
+    MR::setRailCoordSpeed(mHost, cNum_setStateStopAtEndBeforeRotate_setRailCoordSpeed_1);
     mStopTime = 0;
     MR::getMapPartsArgStopTime(&mStopTime, mHost);
 
@@ -426,7 +431,7 @@ void MapPartsRailMover::exeStopAtPoint() {
     if (isFirstStep()) {
         mSpeed = 0.0f;
         mAcceleration = 0.0f;
-        MR::setRailCoordSpeed(mHost, 0.0f);
+        MR::setRailCoordSpeed(mHost, cNum_exeStopAtPoint_setRailCoordSpeed_1);
     }
 
     if (isStep(mStopTime)) {

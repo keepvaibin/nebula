@@ -6,6 +6,10 @@
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinDriverStart_setBckRate_1, "exeSpinDriverStart.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinDriverShoot_setBckRate_1, "exeSpinDriverShoot.setBckRate.1", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeSpinDriverStart_1, "exeSpinDriverStart.1", 43);
 
@@ -163,7 +167,7 @@ void AstroDomeDemoStarter::exeSpinDriverStart() {
     if (MR::isLessStep(this, cStep_exeSpinDriverStart_1)) {
         MR::tryRumblePadMiddle(this, PLAYER_1);
     } else {
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_exeSpinDriverStart_setBckRate_1);
         MR::setBckRate(MR::getPlayerDemoActor(), 0.0f);
     }
 
@@ -172,7 +176,7 @@ void AstroDomeDemoStarter::exeSpinDriverStart() {
 
 void AstroDomeDemoStarter::exeSpinDriverShoot() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeSpinDriverShoot_setBckRate_1);
         MR::startBckPlayer("SpaceFlyStart");
         MR::emitEffect(MR::getPlayerDemoActor(), "SuperSpinDriverFlyGlow");
         MR::shakeCameraNormal();

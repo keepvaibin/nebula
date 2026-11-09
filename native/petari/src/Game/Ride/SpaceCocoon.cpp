@@ -29,6 +29,9 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_addVelocitySeparateHV_1, "receiveMsgPlayerAttack.addVelocitySeparateHV.1", 0.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sAimAnimInterpole, 10);
     NEBULA_TUNABLE(f32, sAimDistanceToStretch, 300.0f);
@@ -395,7 +398,7 @@ bool SpaceCocoon::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     if (isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvFree)) || isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvFreeInvalid))) {
-        MR::addVelocitySeparateHV(this, pSender, pReceiver, ::sStarPieceAccel, 0.0f);
+        MR::addVelocitySeparateHV(this, pSender, pReceiver, ::sStarPieceAccel, cNum_receiveMsgPlayerAttack_addVelocitySeparateHV_1);
         mSpringVel.add(mVelocity);
         MR::zeroVelocity(this);
     }

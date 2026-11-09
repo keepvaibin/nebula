@@ -10,6 +10,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveSign_shakeCameraInfinity_1, "exeMoveSign.shakeCameraInfinity.1", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveSign_shakeCameraInfinity_2, "exeMoveSign.shakeCameraInfinity.2", 1.2f);
 
 namespace {
     static const char* cDemoName = "砂漠ＵＦＯ上昇";
@@ -172,7 +177,7 @@ void DesertMovingLand::exeMoveSign() {
         if (MR::isDemoActive("砂ＵＦＯ下降"))
             MR::stopStageBGM(60);
 
-        MR::shakeCameraInfinity(this, 0.15f, 1.2f);
+        MR::shakeCameraInfinity(this, cNum_exeMoveSign_shakeCameraInfinity_1, cNum_exeMoveSign_shakeCameraInfinity_2);
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_DESERT_LAND_SIGN");

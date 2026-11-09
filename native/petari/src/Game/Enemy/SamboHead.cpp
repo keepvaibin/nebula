@@ -9,6 +9,11 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_1, "updateBounceFall.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_2, "updateBounceFall.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_3, "updateBounceFall.reboundVelocityFromCollision.3", 1.0f);
+
 namespace NrvSamboHead {
     NEW_NERVE(HostTypeNrvWaitUnderGround, SamboHead, WaitUnderGround);
     NEW_NERVE(HostTypeNrvHide, SamboHead, Hide);
@@ -521,7 +526,7 @@ void SamboHead::updateFall() {
 }
 
 void SamboHead::updateBounceFall() {
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_updateBounceFall_reboundVelocityFromCollision_1, cNum_updateBounceFall_reboundVelocityFromCollision_2, cNum_updateBounceFall_reboundVelocityFromCollision_3);
     updateFall();
 }
 

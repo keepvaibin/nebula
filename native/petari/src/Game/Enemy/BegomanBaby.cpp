@@ -18,6 +18,19 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_1, "exeAfterLaunch.applyVelocityDampAndGravity.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_2, "exeAfterLaunch.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_3, "exeAfterLaunch.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_4, "exeAfterLaunch.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunch_applyVelocityDampAndGravity_5, "exeAfterLaunch.applyVelocityDampAndGravity.5", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_1, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_2, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_3, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_4, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_5, "exeAfterLaunchOnGround.applyVelocityDampAndGravity.5", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_addVelocityLimit_1, "receiveMsgEnemyAttack.addVelocityLimit.1", 4.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 20);
@@ -326,7 +339,7 @@ void BegomanBaby::exeAfterLaunch() {
     } else if (MR::isLessStep(this, cStep_exeAfterLaunch_2)) {
         mVelocity.zero();
     } else {
-        MR::applyVelocityDampAndGravity(this, 3.0f, 0.8f, 0.98f, 0.98f, 1.0f);
+        MR::applyVelocityDampAndGravity(this, cNum_exeAfterLaunch_applyVelocityDampAndGravity_1, cNum_exeAfterLaunch_applyVelocityDampAndGravity_2, cNum_exeAfterLaunch_applyVelocityDampAndGravity_3, cNum_exeAfterLaunch_applyVelocityDampAndGravity_4, cNum_exeAfterLaunch_applyVelocityDampAndGravity_5);
     }
 
     if (MR::isOnGround(this)) {
@@ -340,7 +353,7 @@ void BegomanBaby::exeAfterLaunchOnGround() {
     }
 
     reboundWallAndGround(&mFaceVec, false);
-    MR::applyVelocityDampAndGravity(this, 3.0f, 0.8f, 0.98f, 0.98f, 1.0f);
+    MR::applyVelocityDampAndGravity(this, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_1, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_2, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_3, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_4, cNum_exeAfterLaunchOnGround_applyVelocityDampAndGravity_5);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait));
@@ -479,7 +492,7 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
         const f32 senderRadius = pSender->mRadius;
         f32 sizeRatio = senderRadius / bodyRadius;
 
-        MR::addVelocityLimit(this, dirFromReceiverToSender * 4.0f * sizeRatio);
+        MR::addVelocityLimit(this, dirFromReceiverToSender * cNum_receiveMsgEnemyAttack_addVelocityLimit_1 * sizeRatio);
 
         if (reflected) {
             MR::startSound(this, "SE_EM_BABYBEGO_COLLI_BEGOMAN");

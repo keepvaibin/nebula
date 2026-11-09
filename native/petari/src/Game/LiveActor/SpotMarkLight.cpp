@@ -2,6 +2,10 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_control_isNearPlayerAnyTime_1, "control.isNearPlayerAnyTime.1", 1000.0f);
 
 SpotMarkLight::SpotMarkLight(LiveActor* pHost, f32 radius, f32 height, MtxPtr pMtx)
     : PartsModel(pHost, "マーク光柱", "SpotMarkLight", pMtx, -1, false), mIsDisappeared(false) {
@@ -17,7 +21,7 @@ SpotMarkLight::SpotMarkLight(LiveActor* pHost, f32 radius, f32 height, MtxPtr pM
 }
 
 void SpotMarkLight::control() {
-    if (MR::isNearPlayerAnyTime(this, 1000.0f)) {
+    if (MR::isNearPlayerAnyTime(this, cNum_control_isNearPlayerAnyTime_1)) {
         if (!mIsDisappeared && MR::isBrkStopped(this)) {
             MR::startBrk(this, "Disappear");
             mIsDisappeared = true;

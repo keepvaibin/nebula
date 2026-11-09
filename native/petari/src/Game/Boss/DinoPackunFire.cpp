@@ -12,6 +12,13 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_addVelocityToGravity_1, "exeShot.addVelocityToGravity.1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_attenuateVelocity_1, "exeShot.attenuateVelocity.1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_reboundVelocityFromCollision_1, "exeShot.reboundVelocityFromCollision.1", 0.80f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_reboundVelocityFromCollision_2, "exeShot.reboundVelocityFromCollision.2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_reboundVelocityFromCollision_3, "exeShot.reboundVelocityFromCollision.3", 0.40f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeGround_1, "exeGround.1", 20);
 
@@ -93,9 +100,9 @@ void DinoPackunFire::exeShot() {
     }
 
     MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, (150.0f * mScale.x));
-    MR::addVelocityToGravity(this, 2.0f);
-    MR::attenuateVelocity(this, 0.98f);
-    MR::reboundVelocityFromCollision(this, 0.80f, 15.0f, 0.40f);
+    MR::addVelocityToGravity(this, cNum_exeShot_addVelocityToGravity_1);
+    MR::attenuateVelocity(this, cNum_exeShot_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_exeShot_reboundVelocityFromCollision_1, cNum_exeShot_reboundVelocityFromCollision_2, cNum_exeShot_reboundVelocityFromCollision_3);
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(DinoPackunFire, DinoPackunFireNrvGround));
         MR::zeroVelocity(this);

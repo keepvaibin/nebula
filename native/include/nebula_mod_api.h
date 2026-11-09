@@ -724,6 +724,9 @@ typedef struct NebulaModApi {
     /* printf's formatting into `buffer` of `size` bytes, always ended with a 0 when size is above 0: what snprintf
        returns (the length the whole text needs; below 0 for a bad format). */
     int32_t (*format)(char* buffer, uint64_t size, const char* format, ...);
+    /* The camera's near plane in units: nothing closer to the camera is drawn. 0: the game's (100; 10 in its own
+       first-person view). Kept until set again. */
+    void (*set_camera_near)(float distance);
 } NebulaModApi;
 
 /* The HUD's parts, for show_hud: any together. */

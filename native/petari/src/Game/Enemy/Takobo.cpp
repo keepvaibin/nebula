@@ -22,6 +22,10 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_setBckRate_1, "exeAttack.setBckRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStunStart_setBckRate_1, "exeStunStart.setBckRate.1", 2.0f);
+
 namespace NrvTakobo {
     NEW_NERVE_ONEND(HostTypeNrvWait, Takobo, Wait, Wait);
     NEW_NERVE_ONEND(HostTypeNrvMove, Takobo, Move, Move);
@@ -311,7 +315,7 @@ void Takobo::exeAttack() {
     mVelocity.zero();
 
     if (MR::isStep(this, sAttackHitStart)) {
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeAttack_setBckRate_1);
         getSensor("attack")->validate();
     }
 
@@ -327,7 +331,7 @@ void Takobo::exeAttack() {
 void Takobo::exeStunStart() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "StunStart");
-        MR::setBckRate(this, 2.0f);
+        MR::setBckRate(this, cNum_exeStunStart_setBckRate_1);
         MR::emitEffect(this, "Hit");
         MR::startSound(this, "SE_EM_TAKOBO_STARPIECE_HIT");
         mVelocity.zero();

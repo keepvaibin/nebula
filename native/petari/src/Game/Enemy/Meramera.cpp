@@ -23,6 +23,19 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_1, "exeDamage.reboundVelocityFromEachCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_2, "exeDamage.reboundVelocityFromEachCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_3, "exeDamage.reboundVelocityFromEachCollision.3", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_4, "exeDamage.reboundVelocityFromEachCollision.4", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_1, "exeRunaway.reboundVelocityFromEachCollision.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_2, "exeRunaway.reboundVelocityFromEachCollision.2", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_3, "exeRunaway.reboundVelocityFromEachCollision.3", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_4, "exeRunaway.reboundVelocityFromEachCollision.4", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStartDiving_setBckRate_1, "exeStartDiving.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDiving_setBckRate_1, "exeDiving.setBckRate.1", 1.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_reboundVelocityFromEachCollision_1, "exeDown.reboundVelocityFromEachCollision.1", 0.0f);
+
 namespace {
     enum { ElementType_Fire, ElementType_Ice };
     enum { EffectType_Null, EffectType_Wait, EffectType_Chase, EffectType_Escape };
@@ -915,7 +928,7 @@ void Meramera::exeDamage() {
 
     ::keepHeight(this, ::sDamageHeight);
     MR::attenuateVelocity(this, ::sDamageAttenuate);
-    MR::reboundVelocityFromEachCollision(this, 0.0f, 0.0f, 0.0f, 0.0f);
+    MR::reboundVelocityFromEachCollision(this, cNum_exeDamage_reboundVelocityFromEachCollision_1, cNum_exeDamage_reboundVelocityFromEachCollision_2, cNum_exeDamage_reboundVelocityFromEachCollision_3, cNum_exeDamage_reboundVelocityFromEachCollision_4);
 
     tryRunaway();
 }
@@ -986,7 +999,7 @@ void Meramera::exeRunaway() {
     }
 
     MR::attenuateVelocity(this, MR::isBindedGround(this) ? ::sRunawayGroundAttenuate : ::sRunawayAirAttenuate);
-    MR::reboundVelocityFromEachCollision(this, 0.5f, 0.3f, 0.0f, 10.0f);
+    MR::reboundVelocityFromEachCollision(this, cNum_exeRunaway_reboundVelocityFromEachCollision_1, cNum_exeRunaway_reboundVelocityFromEachCollision_2, cNum_exeRunaway_reboundVelocityFromEachCollision_3, cNum_exeRunaway_reboundVelocityFromEachCollision_4);
 
     tryRecovery();
 }
@@ -999,7 +1012,7 @@ void Meramera::exeStartDiving() {
         deleteEffectHead(false);
         emitEffectColdBody();
 
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_exeStartDiving_setBckRate_1);
     }
 
     if (MR::isLessStep(this, ::sDivingDelayTime)) {
@@ -1020,7 +1033,7 @@ void Meramera::exeDiving() {
 
         MR::invalidateClipping(this);
 
-        MR::setBckRate(this, 1.4f);
+        MR::setBckRate(this, cNum_exeDiving_setBckRate_1);
         MR::emitEffect(this, "EscapeRock");
         MR::startSound(this, "SE_EM_MERAMERA_JUMP");
     }
@@ -1157,7 +1170,7 @@ void Meramera::exeDown() {
     }
 
     MR::attenuateVelocity(this, ::sDownAttenuate);
-    MR::reboundVelocityFromEachCollision(this, ::sDownRebound, ::sDownRebound, ::sDownRebound, 0.0f);
+    MR::reboundVelocityFromEachCollision(this, ::sDownRebound, ::sDownRebound, ::sDownRebound, cNum_exeDown_reboundVelocityFromEachCollision_1);
 
     if (MR::isGreaterStep(this, 0)) {
         MR::startSound(this, "SE_EM_MERAMERA_EXPLODE");

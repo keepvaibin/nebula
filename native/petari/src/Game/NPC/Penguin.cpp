@@ -18,6 +18,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_isPullRange_isNearPlayer_1, "isPullRange.isNearPlayer.1", 450.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sDistanceCall, 350.0f);
     NEBULA_TUNABLE(f32, sSpeedWalk, 1.5f);
@@ -57,7 +60,7 @@ RemovableTurtle::RemovableTurtle(LiveActor* pHost, bool isGolden) {
 }
 
 bool RemovableTurtle::isPullRange() const {
-    return MR::isNearPlayer(mShellModel, 450.0f);
+    return MR::isNearPlayer(mShellModel, cNum_isPullRange_isNearPlayer_1);
 }
 
 bool RemovableTurtle::tryRemove() {

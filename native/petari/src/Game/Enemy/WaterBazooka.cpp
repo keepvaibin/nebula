@@ -37,6 +37,9 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_control_isNearPlayer_1, "control.isNearPlayer.1", 5000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAim_1, "exeAim.1", 10);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoCrackCapsule_1, "exeDemoCrackCapsule.1", 27);
@@ -659,7 +662,7 @@ void WaterBazooka::control() {
                 MR::playLevelMarioPinchBGM(mIsPinchBGMStarted);
                 mIsPinchBGMStarted = true;
             } else {
-                if (MR::isNearPlayer(this, 5000.0f)) {
+                if (MR::isNearPlayer(this, cNum_control_isNearPlayer_1)) {
                     MR::playLevelMarioPinchBGM(mIsPinchBGMStarted);
                     mIsPinchBGMStarted = true;
                 }

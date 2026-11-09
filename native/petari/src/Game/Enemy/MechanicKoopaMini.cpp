@@ -26,6 +26,15 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isFaceToPlayerDegree_1, "exeWait.isFaceToPlayerDegree.1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalkOnRail_moveAndTurnAlongRail_1, "exeWalkOnRail.moveAndTurnAlongRail.1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalkOnRail_isFaceToPlayerDegree_1, "exeWalkOnRail.isFaceToPlayerDegree.1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalkOnRail_moveAndTurnAlongRail_2, "exeWalkOnRail.moveAndTurnAlongRail.2", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpStart_addVelocityJump_1, "exeJumpStart.addVelocityJump.1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFind_addVelocityJump_1, "exeFind.addVelocityJump.1", 26.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 3.0f);
+
 namespace NrvMechanicKoopaMini {
     NEW_NERVE(HostTypeNrvWait, MechanicKoopaMini, Wait);
     NEW_NERVE(HostTypeNrvWalkOnRail, MechanicKoopaMini, WalkOnRail);
@@ -163,7 +172,7 @@ void MechanicKoopaMini::exeWait() {
 
     MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
 
-    if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, 120.0f)) {
+    if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, cNum_exeWait_isFaceToPlayerDegree_1)) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFind));
     } else if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
@@ -177,7 +186,7 @@ void MechanicKoopaMini::exeWalkOnRail() {
 
     bool canTurn = false;
     if (MR::isOnGround(this)) {
-        MR::moveAndTurnAlongRail(this, 600.0f, ::hWalkParam, &canTurn);
+        MR::moveAndTurnAlongRail(this, cNum_exeWalkOnRail_moveAndTurnAlongRail_1, ::hWalkParam, &canTurn);
         Vec3f frontVec;
         MR::calcFrontVec(&frontVec, this);
         if (MR::isBindedWallOfMap(this)) {
@@ -188,12 +197,12 @@ void MechanicKoopaMini::exeWalkOnRail() {
             }
         }
 
-        if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, 120.0f)) {
+        if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, cNum_exeWalkOnRail_isFaceToPlayerDegree_1)) {
             setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFind));
             return;
         }
     } else {
-        MR::moveAndTurnAlongRail(this, 600.0f, ::hOnAirMoveParam, &canTurn);
+        MR::moveAndTurnAlongRail(this, cNum_exeWalkOnRail_moveAndTurnAlongRail_2, ::hOnAirMoveParam, &canTurn);
     }
 
     if (canTurn) {
@@ -234,7 +243,7 @@ void MechanicKoopaMini::exeJumpStart() {
     }
 
     if (MR::isStep(this, (s32)MR::getBckFrameMax(this) - 3)) {
-        MR::addVelocityJump(this, 45.0f);
+        MR::addVelocityJump(this, cNum_exeJumpStart_addVelocityJump_1);
         MR::startSound(this, "SE_EM_MKOOPAMINI_JUMP");
     }
 
@@ -262,7 +271,7 @@ void MechanicKoopaMini::exeJumpEnd() {
 void MechanicKoopaMini::exeFind() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Find");
-        MR::addVelocityJump(this, 26.0f);
+        MR::addVelocityJump(this, cNum_exeFind_addVelocityJump_1);
         MR::startSound(this, "SE_EM_MKOOPAMINI_JUMP");
     }
 
@@ -552,7 +561,7 @@ bool MechanicKoopaMini::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSens
 
 bool MechanicKoopaMini::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (!MR::isSensorPlayer(pSender)) {
-        MR::addVelocityFromPush(this, 3.0f, pSender, pReceiver);
+        MR::addVelocityFromPush(this, cNum_receiveMsgPush_addVelocityFromPush_1, pSender, pReceiver);
         return true;
     }
 

@@ -3,6 +3,10 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWriggle_moveCoordAndFollowTrans_1, "exeWriggle.moveCoordAndFollowTrans.1", 50.0f);
 
 namespace NrvGreenCaterpillarBig {
     NEW_NERVE(GreenCaterpillarBigNrvHide, GreenCaterpillarBig, Hide);
@@ -117,7 +121,7 @@ void GreenCaterpillarBig::exeWriggle() {
         MR::startBck(this, "Eat");
     }
 
-    MR::moveCoordAndFollowTrans(this, 50.0f);
+    MR::moveCoordAndFollowTrans(this, cNum_exeWriggle_moveCoordAndFollowTrans_1);
     MR::startLevelSound(this, "SE_OJ_LV_GRN_CATERP_MOVE");
 
     if (MR::isRailReachedGoal(this)) {

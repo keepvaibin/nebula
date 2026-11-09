@@ -17,6 +17,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exePanic_setBckRate_1, "exePanic.setBckRate.1", 2.0f);
+
 namespace {
     static const s32 sStepForLaugh = NebulaFrameClock::stepsOfSeconds(2);
     NEBULA_TUNABLE(s32, sStepToAngerBlur, 40);
@@ -199,7 +202,7 @@ void MogucchiShooter::exePanic() {
         MR::startAction(this, "Panic");
 
         if (bazooka->isBazookaLifeOut()) {
-            MR::setBckRate(this, 2.0f);
+            MR::setBckRate(this, cNum_exePanic_setBckRate_1);
         }
     }
 

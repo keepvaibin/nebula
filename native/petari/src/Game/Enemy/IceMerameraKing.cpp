@@ -28,6 +28,38 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_addVelocityKeepHeightUseShadow_1, "exeSearch.addVelocityKeepHeightUseShadow.1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_addVelocityKeepHeightUseShadow_2, "exeSearch.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_addVelocityKeepHeightUseShadow_3, "exeSearch.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_addVelocityKeepHeightUseShadow_1, "exeThrow.addVelocityKeepHeightUseShadow.1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_addVelocityKeepHeightUseShadow_2, "exeThrow.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_addVelocityKeepHeightUseShadow_3, "exeThrow.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExtinguish_addVelocityKeepHeightUseShadow_1, "exeExtinguish.addVelocityKeepHeightUseShadow.1", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExtinguish_addVelocityKeepHeightUseShadow_2, "exeExtinguish.addVelocityKeepHeightUseShadow.2", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_addVelocitySeparateHV_1, "exeEscapeJump.addVelocitySeparateHV.1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_addVelocitySeparateHV_2, "exeEscapeJump.addVelocitySeparateHV.2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_setVelocityJump_1, "exeDamage.setVelocityJump.1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_addVelocityKeepHeightUseShadow_1, "exeDamage.addVelocityKeepHeightUseShadow.1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_addVelocityKeepHeightUseShadow_2, "exeDamage.addVelocityKeepHeightUseShadow.2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_addVelocityKeepHeightUseShadow_3, "exeDamage.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_setVelocityJump_1, "exePreRecover.setVelocityJump.1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_addVelocityKeepHeightUseShadow_1, "exePreRecover.addVelocityKeepHeightUseShadow.1", 750.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_addVelocityKeepHeightUseShadow_2, "exePreRecover.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreRecover_addVelocityKeepHeightUseShadow_3, "exePreRecover.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_addVelocityKeepHeightUseShadow_1, "exeRecover.addVelocityKeepHeightUseShadow.1", 750.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_addVelocityKeepHeightUseShadow_2, "exeRecover.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_addVelocityKeepHeightUseShadow_3, "exeRecover.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreAttack_addVelocityKeepHeightUseShadow_1, "exePreAttack.addVelocityKeepHeightUseShadow.1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreAttack_addVelocityKeepHeightUseShadow_2, "exePreAttack.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreAttack_addVelocityKeepHeightUseShadow_3, "exePreAttack.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_addVelocityKeepHeightUseShadow_1, "exeAttack.addVelocityKeepHeightUseShadow.1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_addVelocityKeepHeightUseShadow_2, "exeAttack.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_addVelocityKeepHeightUseShadow_3, "exeAttack.addVelocityKeepHeightUseShadow.3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryDemo_addVelocityKeepHeightUseShadow_1, "exeAngryDemo.addVelocityKeepHeightUseShadow.1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryDemo_addVelocityKeepHeightUseShadow_2, "exeAngryDemo.addVelocityKeepHeightUseShadow.2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryDemo_addVelocityKeepHeightUseShadow_3, "exeAngryDemo.addVelocityKeepHeightUseShadow.3", 300.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeSearch_1, "exeSearch.1", 100);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeSearch_2, "exeSearch.2", 200);
@@ -244,7 +276,7 @@ void IceMerameraKing::exeSearch() {
     }
     addVelocityToInitPos();
     MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
-    MR::addVelocityKeepHeightUseShadow(this, 400.0f, 1.5f, 300.0f, nullptr);
+    MR::addVelocityKeepHeightUseShadow(this, cNum_exeSearch_addVelocityKeepHeightUseShadow_1, cNum_exeSearch_addVelocityKeepHeightUseShadow_2, cNum_exeSearch_addVelocityKeepHeightUseShadow_3, nullptr);
     f32 playerDist = MR::calcDistanceToPlayer(this);
 
     if (sSearchDistance < playerDist) {
@@ -278,7 +310,7 @@ void IceMerameraKing::exeThrow() {
         }
     }
     MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
-    MR::addVelocityKeepHeightUseShadow(this, 400.0f, 1.5f, 300.0f, nullptr);
+    MR::addVelocityKeepHeightUseShadow(this, cNum_exeThrow_addVelocityKeepHeightUseShadow_1, cNum_exeThrow_addVelocityKeepHeightUseShadow_2, cNum_exeThrow_addVelocityKeepHeightUseShadow_3, nullptr);
     addVelocityToInitPos();
 
     if (MR::isStep(this, cStep_exeThrow_1)) {
@@ -345,7 +377,7 @@ void IceMerameraKing::exeExtinguish() {
     }
 
     if (MR::isLessStep(this, cStep_exeExtinguish_1)) {
-        MR::addVelocityKeepHeightUseShadow(this, mExtinguishHeight, 1.3f, 700.0f, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, mExtinguishHeight, cNum_exeExtinguish_addVelocityKeepHeightUseShadow_1, cNum_exeExtinguish_addVelocityKeepHeightUseShadow_2, nullptr);
         MR::moveAndTurnToPlayer(this, &mFront, ::hExtinguishOnAirParam);
     } else if (MR::isOnGround(this) && MR::isActionEnd(this)) {
         MR::moveAndTurnToPlayer(this, &mFront, ::hOnGroundParam);
@@ -392,7 +424,7 @@ void IceMerameraKing::endEscape() {
 
 void IceMerameraKing::exeEscapeJump() {
     if (MR::isStep(this, cStep_exeEscapeJump_1)) {
-        MR::addVelocitySeparateHV(this, mFront, 20.0f, 90.0f);
+        MR::addVelocitySeparateHV(this, mFront, cNum_exeEscapeJump_addVelocitySeparateHV_1, cNum_exeEscapeJump_addVelocitySeparateHV_2);
         MR::startSound(this, "SE_BM_ICEMERAKING_JUMP");
     }
     mEscapeStep++;
@@ -420,12 +452,12 @@ void IceMerameraKing::exeDamage() {
         MR::emitEffect(this, "Damage");
         MR::startBlowHitSound(this);
         MR::startSound(this, "SE_BM_ICEMERAKING_DAMAGE");
-        MR::setVelocityJump(this, 80.0f);
+        MR::setVelocityJump(this, cNum_exeDamage_setVelocityJump_1);
         MR::stopSceneForDefaultHit(4);
     }
 
     if (MR::isGreaterStep(this, cStep_exeDamage_1)) {
-        MR::addVelocityKeepHeightUseShadow(this, 900.0f, 3.0f, 300.0f, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, cNum_exeDamage_addVelocityKeepHeightUseShadow_1, cNum_exeDamage_addVelocityKeepHeightUseShadow_2, cNum_exeDamage_addVelocityKeepHeightUseShadow_3, nullptr);
     }
 
     if (MR::isOnGround(this)) {
@@ -447,7 +479,7 @@ void IceMerameraKing::exeDamage() {
 
 void IceMerameraKing::exePreRecover() {
     if (MR::isFirstStep(this)) {
-        MR::setVelocityJump(this, 70.0f);
+        MR::setVelocityJump(this, cNum_exePreRecover_setVelocityJump_1);
         MR::startSound(this, "SE_BM_ICEMERAKING_JUMP");
     }
     addVelocityToInitPos();
@@ -461,7 +493,7 @@ void IceMerameraKing::exePreRecover() {
         MR::setShadowVolumeSphereRadius(this, nullptr, sBodyRadius);
         MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
     } else if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
-        MR::addVelocityKeepHeightUseShadow(this, 750.0f, 1.5f, 300.0f, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, cNum_exePreRecover_addVelocityKeepHeightUseShadow_1, cNum_exePreRecover_addVelocityKeepHeightUseShadow_2, cNum_exePreRecover_addVelocityKeepHeightUseShadow_3, nullptr);
         MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
     } else {
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvRecover));
@@ -480,7 +512,7 @@ void IceMerameraKing::exeRecover() {
     }
     addVelocityToInitPos();
     MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
-    MR::addVelocityKeepHeightUseShadow(this, 750.0f, 1.5f, 300.0f, nullptr);
+    MR::addVelocityKeepHeightUseShadow(this, cNum_exeRecover_addVelocityKeepHeightUseShadow_1, cNum_exeRecover_addVelocityKeepHeightUseShadow_2, cNum_exeRecover_addVelocityKeepHeightUseShadow_3, nullptr);
 
     if (MR::isGreaterStep(this, cStep_exeRecover_2)) {
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
@@ -490,7 +522,7 @@ void IceMerameraKing::exeRecover() {
 // Hovers for 120 steps, then drops onto the player once the last shock wave is gone.
 void IceMerameraKing::exePreAttack() {
     if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
-        MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, cNum_exePreAttack_addVelocityKeepHeightUseShadow_1, cNum_exePreAttack_addVelocityKeepHeightUseShadow_2, cNum_exePreAttack_addVelocityKeepHeightUseShadow_3, nullptr);
     } else if (MR::isDead(mShockWave)) {
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAttack));
         return;
@@ -506,7 +538,7 @@ void IceMerameraKing::exeAttack() {
     }
 
     if (!MR::isActionEnd(this)) {
-        MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
+        MR::addVelocityKeepHeightUseShadow(this, cNum_exeAttack_addVelocityKeepHeightUseShadow_1, cNum_exeAttack_addVelocityKeepHeightUseShadow_2, cNum_exeAttack_addVelocityKeepHeightUseShadow_3, nullptr);
         MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
     } else {
         MR::moveAndTurnToPlayer(this, &mFront, ::hAttackParam);
@@ -550,7 +582,7 @@ void IceMerameraKing::exeAngryDemo() {
         MR::resetPosition(this, mInitPos);
     }
     MR::moveAndTurnToPlayer(this, &mFront, ::hAngryDemoParam);
-    MR::addVelocityKeepHeightUseShadow(this, 400.0f, 1.5f, 300.0f, nullptr);
+    MR::addVelocityKeepHeightUseShadow(this, cNum_exeAngryDemo_addVelocityKeepHeightUseShadow_1, cNum_exeAngryDemo_addVelocityKeepHeightUseShadow_2, cNum_exeAngryDemo_addVelocityKeepHeightUseShadow_3, nullptr);
 
     if (isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd)) && MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         for (int i = 0; i < mWeaponNum; i++) {

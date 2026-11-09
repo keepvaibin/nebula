@@ -10,6 +10,20 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReadyAppear_shakeCameraInfinity_1, "exeReadyAppear.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReadyAppear_shakeCameraInfinity_2, "exeReadyAppear.shakeCameraInfinity.2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChaseMore_shakeCameraInfinity_1, "exeChaseMore.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChaseMore_shakeCameraInfinity_2, "exeChaseMore.shakeCameraInfinity.2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateReadyChaseShake_shakeCameraInfinity_1, "updateReadyChaseShake.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateReadyChaseShake_shakeCameraInfinity_2, "updateReadyChaseShake.shakeCameraInfinity.2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChaseHideShake_shakeCameraInfinity_1, "updateChaseHideShake.shakeCameraInfinity.1", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChaseHideShake_shakeCameraInfinity_2, "updateChaseHideShake.shakeCameraInfinity.2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHideShake_shakeCameraInfinity_1, "updateHideShake.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHideShake_shakeCameraInfinity_2, "updateHideShake.shakeCameraInfinity.2", 2.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDiveShake_shakeCameraInfinity_1, "updateDiveShake.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDiveShake_shakeCameraInfinity_2, "updateDiveShake.shakeCameraInfinity.2", 2.2f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeEscapeJump_1, "exeEscapeJump.1", 49);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFindPos_1, "exeFindPos.1", 1);
@@ -150,7 +164,7 @@ void DodoryuStateLv2::endChaseHide() {
 
 void DodoryuStateLv2::exeReadyAppear() {
     if (MR::isFirstStep(this)) {
-        MR::shakeCameraInfinity(this, 0.2f, 2.0f);
+        MR::shakeCameraInfinity(this, cNum_exeReadyAppear_shakeCameraInfinity_1, cNum_exeReadyAppear_shakeCameraInfinity_2);
         mHost->startHill();
         mReadyAppearStep = MR::getRandom(mChaseParam->mReadyAppearStepMin, mChaseParam->mReadyAppearStepMax);
         shiftChaseExposingHead();
@@ -531,7 +545,7 @@ void DodoryuStateLv2::exeChaseMore() {
 
         mHost->startHill();
         shiftChaseInAnger();
-        MR::shakeCameraInfinity(this, 0.2f, 2.0f);
+        MR::shakeCameraInfinity(this, cNum_exeChaseMore_shakeCameraInfinity_1, cNum_exeChaseMore_shakeCameraInfinity_2);
         MR::startSound(mHost, "SE_BM_DODORYU_APPEAR_HEAD");
     }
 
@@ -775,7 +789,7 @@ bool DodoryuStateLv2::isEscapeEnd() const {
 
 void DodoryuStateLv2::updateReadyChaseShake() {
     if (MR::isStep(this, ::sReadyChaseShakeStart)) {
-        MR::shakeCameraInfinity(this, 0.2f, 2.0f);
+        MR::shakeCameraInfinity(this, cNum_updateReadyChaseShake_shakeCameraInfinity_1, cNum_updateReadyChaseShake_shakeCameraInfinity_2);
     }
 
     if (MR::isGreaterEqualStep(this, ::sReadyChaseShakeStart)) {
@@ -785,7 +799,7 @@ void DodoryuStateLv2::updateReadyChaseShake() {
 
 void DodoryuStateLv2::updateChaseHideShake() {
     if (MR::isStep(this, ::sChaseShakeStart)) {
-        MR::shakeCameraInfinity(this, 0.15f, 2.0f);
+        MR::shakeCameraInfinity(this, cNum_updateChaseHideShake_shakeCameraInfinity_1, cNum_updateChaseHideShake_shakeCameraInfinity_2);
     }
 
     if (MR::isGreaterEqualStep(this, ::sChaseShakeStart)) {
@@ -799,7 +813,7 @@ void DodoryuStateLv2::updateChaseHideShake() {
 
 void DodoryuStateLv2::updateHideShake() {
     if (MR::isStep(this, ::sHideShakeStartStep)) {
-        MR::shakeCameraInfinity(this, 0.2f, 2.2f);
+        MR::shakeCameraInfinity(this, cNum_updateHideShake_shakeCameraInfinity_1, cNum_updateHideShake_shakeCameraInfinity_2);
     }
 
     if (MR::isGreaterEqualStep(this, ::sHideShakeStartStep)) {
@@ -809,7 +823,7 @@ void DodoryuStateLv2::updateHideShake() {
 
 void DodoryuStateLv2::updateDiveShake() {
     if (MR::isStep(this, ::sDiveShakeStartFrame)) {
-        MR::shakeCameraInfinity(this, 0.2f, 2.2f);
+        MR::shakeCameraInfinity(this, cNum_updateDiveShake_shakeCameraInfinity_1, cNum_updateDiveShake_shakeCameraInfinity_2);
     }
 
     if (MR::isGreaterEqualStep(this, ::sDiveShakeStartFrame)) {

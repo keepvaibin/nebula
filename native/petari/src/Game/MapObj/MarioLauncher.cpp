@@ -30,6 +30,9 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_doFlight_reboundVelocityFromEachCollision_1, "doFlight.reboundVelocityFromEachCollision.1", 0.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sEjectSpeed, 40.0f);
     NEBULA_TUNABLE(f32, sGravityScale, 0.8f);
@@ -592,7 +595,7 @@ bool MarioLauncher::doFlight() {
     }
 
     if (testHitCollision()) {
-        MR::reboundVelocityFromEachCollision(mShell, ::sReboundScale0, ::sReboundScale1, ::sReboundScale2, 0.0f);
+        MR::reboundVelocityFromEachCollision(mShell, ::sReboundScale0, ::sReboundScale1, ::sReboundScale2, cNum_doFlight_reboundVelocityFromEachCollision_1);
         return MR::isGreaterEqualStep(this, ::sInvalidCollideFrame);
     }
 

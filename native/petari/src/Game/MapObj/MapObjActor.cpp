@@ -17,6 +17,10 @@
 #include "Game/Util/FurMulti.hpp"
 
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_tryDeleteWaitEffect_isNearPlayer_1, "tryDeleteWaitEffect.isNearPlayer.1", 4000.0f);
 
 namespace NrvMapObjActor {
     NEW_NERVE(HostTypeWait, MapObjActor, Wait);
@@ -610,7 +614,7 @@ bool MapObjActor::tryDeleteWaitEffect() {
         return false;
     }
 
-    if (MR::isNearPlayer(this, 4000.0f)) {
+    if (MR::isNearPlayer(this, cNum_tryDeleteWaitEffect_isNearPlayer_1)) {
         return false;
     }
 

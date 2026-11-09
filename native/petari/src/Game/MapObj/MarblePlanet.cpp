@@ -7,6 +7,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_attenuateVelocity_1, "exeMove.attenuateVelocity.1", 0.99f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakCore_1, "exeBreakCore.1", 1);
 
@@ -228,7 +231,7 @@ void MarblePlanetElectron::init(const TableIter& /*rIter*/) {
 
 void MarblePlanetElectron::exeMove() {
     MR::turnDirectionToGround(this, &mFront);
-    MR::attenuateVelocity(this, 0.99f);
+    MR::attenuateVelocity(this, cNum_exeMove_attenuateVelocity_1);
     f32 mag = mVelocity.length();
     f32 scale = (mag >= 13.0f ? mag : 13.0f);
     mVelocity.scale(scale, mFront);

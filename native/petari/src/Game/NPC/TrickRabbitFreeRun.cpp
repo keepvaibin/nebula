@@ -10,6 +10,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunawayStart_checkPassBckFrame_1, "exeRunawayStart.checkPassBckFrame.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
+
 namespace {
     static MR::ActorMoveParam sStartAwayParam = {1.4f, 1.0f, 0.9f, 4.0f};
     NEBULA_TUNABLE(f32, sBodyRadius, 70.0f);
@@ -210,7 +214,7 @@ void TrickRabbitFreeRun::exeRunawayStart() {
 
     MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam);
 
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeRunawayStart_checkPassBckFrame_1)) {
         startJumpSound();
     }
 
@@ -223,7 +227,7 @@ void TrickRabbitFreeRun::exeRunawayStart() {
 void TrickRabbitFreeRun::exeRunaway() {
     MR::updateActorState(this, mStateRunaway);
 
-    if (mStateRunaway->isRunning() && MR::checkPassBckFrame(this, 3.0f)) {
+    if (mStateRunaway->isRunning() && MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
         startJumpSound();
     }
 

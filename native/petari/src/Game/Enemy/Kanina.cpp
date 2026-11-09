@@ -9,6 +9,11 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_1, "tryHitWall.reboundVelocityFromCollision.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_2, "tryHitWall.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_3, "tryHitWall.reboundVelocityFromCollision.3", 1.0f);
+
 namespace NrvKanina {
     NEW_NERVE(HostTypeAppear, Kanina, Appear);
     NEW_NERVE(HostTypeWait, Kanina, Wait);
@@ -620,7 +625,7 @@ bool Kanina::tryHitWall() {
         return false;
     }
 
-    if (!MR::reboundVelocityFromCollision(this, 1.0f, 0.0f, 1.0f)) {
+    if (!MR::reboundVelocityFromCollision(this, cNum_tryHitWall_reboundVelocityFromCollision_1, cNum_tryHitWall_reboundVelocityFromCollision_2, cNum_tryHitWall_reboundVelocityFromCollision_3)) {
         return false;
     }
 

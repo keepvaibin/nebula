@@ -8,6 +8,9 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_disappear_setAnimRate_1, "disappear.setAnimRate.1", 0.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeToLuigi_1, "exeToLuigi.1", 10);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeToMario_1, "exeToMario.1", 10);
@@ -90,7 +93,7 @@ void FileSelectInfo::disappear() {
 
         MR::startAnim(this, "Appear", 0);
         MR::setAnimFrame(this, animFrame, 0);
-        MR::setAnimRate(this, 0.0f, 0);
+        MR::setAnimRate(this, cNum_disappear_setAnimRate_1, 0);
         setNerve(GET_NERVE_ANON(FileSelectInfoNrvDisappear));
     }
 }

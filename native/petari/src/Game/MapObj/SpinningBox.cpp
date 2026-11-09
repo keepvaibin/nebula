@@ -18,6 +18,22 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_2, "exeFall.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_3, "exeFall.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_3, "exeWait.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_applyVelocityDampAndGravity_1, "exeWait.applyVelocityDampAndGravity.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_applyVelocityDampAndGravity_2, "exeWait.applyVelocityDampAndGravity.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_reboundVelocityFromCollision_1, "exeSliding.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_reboundVelocityFromCollision_2, "exeSliding.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_reboundVelocityFromCollision_3, "exeSliding.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_reboundVelocityFromCollision_1, "exeSpinning.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_reboundVelocityFromCollision_2, "exeSpinning.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_reboundVelocityFromCollision_3, "exeSpinning.reboundVelocityFromCollision.3", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, hForceBindOffset, 65.0f);
     NEBULA_TUNABLE(f32, hForceBindMul, 0.5f);
@@ -169,7 +185,7 @@ void SpinningBox::exeFall() {
         MR::invalidateClipping(this);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeFall_reboundVelocityFromCollision_1, cNum_exeFall_reboundVelocityFromCollision_2, cNum_exeFall_reboundVelocityFromCollision_3);
     MR::applyVelocityDampAndGravity(this, ::hGravityVel, ::hDampVelHWait, ::hDampVelHWait, ::hDampVelVWait, ::hVelHMin);
 
     if (MR::isOnGround(this) && MR::isGreaterStep(this, ::hWaitTime)) {
@@ -195,10 +211,10 @@ void SpinningBox::exeWait() {
         mGravity.set(-*MR::getGroundNormal(this));
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3);
 
     if (mIsOnGround) {
-        MR::applyVelocityDampAndGravity(this, ::hGravityVel, 0.0f, 0.0f, ::hDampVelVWait, ::hVelHMin);
+        MR::applyVelocityDampAndGravity(this, ::hGravityVel, cNum_exeWait_applyVelocityDampAndGravity_1, cNum_exeWait_applyVelocityDampAndGravity_2, ::hDampVelVWait, ::hVelHMin);
     } else {
         MR::applyVelocityDampAndGravity(this, ::hGravityVel, ::hDampVelHWait, ::hDampVelHWait, ::hDampVelVWait, ::hVelHMin);
     }
@@ -233,7 +249,7 @@ void SpinningBox::exeSliding() {
         return;
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeSliding_reboundVelocityFromCollision_1, cNum_exeSliding_reboundVelocityFromCollision_2, cNum_exeSliding_reboundVelocityFromCollision_3);
 
     MR::vecKillElement(mVelocity, mSlideDir, &mVelocity);
     mVelocity = mSlideDir * mSlideSpeed;
@@ -294,7 +310,7 @@ void SpinningBox::exeSpinning() {
         return;
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeSpinning_reboundVelocityFromCollision_1, cNum_exeSpinning_reboundVelocityFromCollision_2, cNum_exeSpinning_reboundVelocityFromCollision_3);
 
     MR::vecKillElement(mVelocity, mSlideDir, &mVelocity);
     mVelocity = mSlideDir * mSlideSpeed;

@@ -14,6 +14,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStart_shakeCameraInfinity_1, "exeMoveStart.shakeCameraInfinity.1", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStart_shakeCameraInfinity_2, "exeMoveStart.shakeCameraInfinity.2", 1.5f);
 
 namespace {
     static const s32 sStepForMove = NebulaFrameClock::stepsOfSeconds(20);
@@ -72,7 +77,7 @@ void SandCapsulePressGround::exeWait() {
 void SandCapsulePressGround::exeMoveStart() {
     if (MR::isFirstStep(this)) {
         MR::onSwitchA(this);
-        MR::shakeCameraInfinity(this, 0.15f, 1.5f);
+        MR::shakeCameraInfinity(this, cNum_exeMoveStart_shakeCameraInfinity_1, cNum_exeMoveStart_shakeCameraInfinity_2);
         MR::makeMtxUpNoSupport(&mEffectMtx, -mGravity);
         MR::emitEffect(this, "FallSand");
     }

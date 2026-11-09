@@ -20,6 +20,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_emitFireMouth_addVelocityJump_1, "emitFireMouth.addVelocityJump.1", 30.0f);
+
 namespace {
     const Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
 
@@ -377,7 +380,7 @@ bool DinoPackunBattleVs2Lv1::emitFireMouth() {
     mouthMtx.getXDir(shotDir);
     MR::normalizeOrZero(&shotDir);
     pFire->appearShot(shotPos, shotDir * 50.0f);
-    MR::addVelocityJump(pFire, 30.0f);
+    MR::addVelocityJump(pFire, cNum_emitFireMouth_addVelocityJump_1);
     MR::addVelocity(pFire, getHost()->mVelocity);
     return true;
 }

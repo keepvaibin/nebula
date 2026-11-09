@@ -12,6 +12,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sGroundFric, 1.0f);
     NEBULA_TUNABLE(f32, sMomentFric, 0.96f);
@@ -141,7 +144,7 @@ void BombBirdBomb::exeWait() {
     } else {
         MR::addVelocityToGravity(this, ::sGravityAccel);
 
-        if (MR::reboundVelocityFromCollision(this, ::sReboundRate, ::sReboundSpeedMin, 1.0f) && dotP >= 5.5f) {
+        if (MR::reboundVelocityFromCollision(this, ::sReboundRate, ::sReboundSpeedMin, cNum_exeWait_reboundVelocityFromCollision_1) && dotP >= 5.5f) {
             MR::startSound(this, "SE_EM_BOMBBIRDBOMB_LAND");
         }
     }

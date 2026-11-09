@@ -68,7 +68,7 @@ void ScreenBlurEffect::drawBlur() const {
     }
 
     Proj3f projectionMtx;
-    projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
+    projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getRenderNearZ(), MR::getFarZ());
     Frame::setPerspective(projectionMtx);
 
     const SiteMaterial material = blurMaterial(mFullTexture, mHalfTexture, static_cast< u8 >(static_cast< s32 >(getFadeLevel() * 220.0f * mIntensity)));

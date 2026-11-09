@@ -29,6 +29,10 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_2, "exeFall.reboundVelocityFromCollision.2", 1.0f);
+
 namespace {
     // Indexed by the star pointer port that pulled the piece.
     const NebulaColor8 cTouchColors[] = {{0x00, 0x55, 0xff, 0xFF}, {0xFF, 0xFF, 0x00, 0xFF}, {0x55, 0xFF, 0x00, 0xFF}, {0x7F, 0x7F, 0x00, 0xFF}};
@@ -419,7 +423,7 @@ void StarPiece::exeFall() {
     mVelocity += mGravity * (mFlags.InWater ? cWaterFallGravity : cFallGravity);
     spin();
 
-    if (MR::reboundVelocityFromCollision(this, cReboundBounce, 0.0f, 1.0f)) {
+    if (MR::reboundVelocityFromCollision(this, cReboundBounce, cNum_exeFall_reboundVelocityFromCollision_1, cNum_exeFall_reboundVelocityFromCollision_2)) {
         if (MR::isBindedGround(this) && !MR::isBindedWall(this) && !MR::isBindedRoof(this)) {
             mVelocity.scale(mGravity.dot(mVelocity), mGravity);
         }

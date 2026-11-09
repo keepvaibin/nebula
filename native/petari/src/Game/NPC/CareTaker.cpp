@@ -9,6 +9,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_setRailCoordSpeed_1, "exeWait.setRailCoordSpeed.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreWipeOut_setRailCoordSpeed_1, "exePreWipeOut.setRailCoordSpeed.1", 0.0f);
+
 namespace {
     static const s32 sTidyTimeLimit = NebulaFrameClock::stepsOfSeconds(30);
     NEBULA_TUNABLE(s32, sBgmStartStep, 166);
@@ -322,7 +326,7 @@ void Caretaker::exeTalk() {
 void Caretaker::exeWait() {
     if (MR::tryTalkNearPlayerAndStartMoveTalkAction(this)) {
         MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), 1.3f, -1);
-        MR::setRailCoordSpeed(this, 0.0f);
+        MR::setRailCoordSpeed(this, cNum_exeWait_setRailCoordSpeed_1);
         setNerve(GET_NERVE(Caretaker, CaretakerNrvPreTalk));
     } else if (MR::tryStartReactionAndPushNerve(this, GET_NERVE(Caretaker, CaretakerNrvReaction))) {
         return;
@@ -358,7 +362,7 @@ void Caretaker::exePreWipeOut() {
         return;
     }
 
-    MR::setRailCoordSpeed(this, 0.0f);
+    MR::setRailCoordSpeed(this, cNum_exePreWipeOut_setRailCoordSpeed_1);
     MR::setRailCoord(this, 0.0f);
     MR::setDefaultPose(this);
     MR::setPlayerPosOnGroundAndWait("バトルシップ・タイムアタック前位置");

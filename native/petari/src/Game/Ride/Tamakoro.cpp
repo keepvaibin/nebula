@@ -26,6 +26,15 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_reboundVelocityFromCollision_1, "tryBumpWall.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryBumpWall_reboundVelocityFromCollision_2, "tryBumpWall.reboundVelocityFromCollision.2", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryLand_reboundVelocityFromCollision_1, "tryLand.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryLand_reboundVelocityFromCollision_2, "tryLand.reboundVelocityFromCollision.2", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_reboundVelocityFromCollision_1, "updateVelocityNormal.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_reboundVelocityFromCollision_2, "updateVelocityNormal.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocityNormal_reboundVelocityFromCollision_3, "updateVelocityNormal.reboundVelocityFromCollision.3", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBumpWall_1, "exeBumpWall.1", 15);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeLand_1, "exeLand.1", 15);
@@ -548,7 +557,7 @@ bool Tamakoro::tryBumpWall() {
                 rebound = 0.3f;
             }
         }
-        MR::reboundVelocityFromCollision(this, rebound, 0.0f, 1.0f);
+        MR::reboundVelocityFromCollision(this, rebound, cNum_tryBumpWall_reboundVelocityFromCollision_1, cNum_tryBumpWall_reboundVelocityFromCollision_2);
         mMarioOffsetVelocity = 2.0f;
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvBumpWall));
         return true;
@@ -568,7 +577,7 @@ bool Tamakoro::tryLand() {
         }
         mMarioOffsetVelocity = -power;
         mMarioOffset -= power;
-        MR::reboundVelocityFromCollision(this, rebound, 0.0f, 1.0f);
+        MR::reboundVelocityFromCollision(this, rebound, cNum_tryLand_reboundVelocityFromCollision_1, cNum_tryLand_reboundVelocityFromCollision_2);
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvLand));
         return true;
     }
@@ -993,7 +1002,7 @@ f32 Tamakoro::updateRideRail() {
 }
 
 void Tamakoro::updateVelocityNormal(f32 friction) {
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_updateVelocityNormal_reboundVelocityFromCollision_1, cNum_updateVelocityNormal_reboundVelocityFromCollision_2, cNum_updateVelocityNormal_reboundVelocityFromCollision_3);
     MR::addVelocityToGravity(this, ::sGravityAccel);
     MR::attenuateVelocity(this, MR::isBindedGround(this) ? friction : 0.995f);
 }

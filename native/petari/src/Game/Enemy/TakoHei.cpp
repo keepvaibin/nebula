@@ -8,6 +8,15 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_isNearPlayer_1, "exePursue.isNearPlayer.1", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, "updateNormalVelocity.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_3, "updateNormalVelocity.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateSwoonVelocity_reboundVelocityFromCollision_1, "updateSwoonVelocity.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateSwoonVelocity_reboundVelocityFromCollision_2, "updateSwoonVelocity.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateSwoonVelocity_reboundVelocityFromCollision_3, "updateSwoonVelocity.reboundVelocityFromCollision.3", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exePunchDown_1, "exePunchDown.1", 5);
 
@@ -604,7 +613,7 @@ void TakoHei::exePursue() {
 
     bool isFarPlayer = false;
 
-    if (MR::isNearPlayer(this, 700.0f)) {
+    if (MR::isNearPlayer(this, cNum_exePursue_isNearPlayer_1)) {
         MR::addVelocityAwayFromTarget(this, *MR::getPlayerPos(), ::sPursueAccel);
     } else {
         MR::addVelocityMoveToTarget(this, *MR::getPlayerPos(), ::sPursueAccel);
@@ -817,7 +826,7 @@ void TakoHei::updateNormalVelocity() {
         MR::attenuateVelocity(this, ::sNormalAirFrec);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, cNum_updateNormalVelocity_reboundVelocityFromCollision_3);
 }
 
 void TakoHei::updateSwoonVelocity() {
@@ -828,7 +837,7 @@ void TakoHei::updateSwoonVelocity() {
         MR::attenuateVelocity(this, ::sNormalAirFrec);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_updateSwoonVelocity_reboundVelocityFromCollision_1, cNum_updateSwoonVelocity_reboundVelocityFromCollision_2, cNum_updateSwoonVelocity_reboundVelocityFromCollision_3);
 }
 
 void TakoHei::decideNextTargetPos() {

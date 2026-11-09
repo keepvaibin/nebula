@@ -30,6 +30,13 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_1, "updateInfluence.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_2, "updateInfluence.reboundVelocityFromCollision.2", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_3, "updateInfluence.reboundVelocityFromCollision.3", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_4, "updateInfluence.reboundVelocityFromCollision.4", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_5, "updateInfluence.reboundVelocityFromCollision.5", 1.0f);
+
 namespace {
     // rQuat = Z * X * Y of the half-angle axis turns in rRot (radians).
     inline void setQuatXYZ(Quat4f& rQuat, const Vec3f& rRot) {
@@ -493,9 +500,9 @@ void Unizo::updateInfluence() {
     bool rebound;
     if (mJumpCount != 0) {
         MR::addVelocityToGravity(this, mGravityRate);
-        rebound = MR::reboundVelocityFromCollision(this, sReboundFloor, 0.0f, 1.0f);
+        rebound = MR::reboundVelocityFromCollision(this, sReboundFloor, cNum_updateInfluence_reboundVelocityFromCollision_1, cNum_updateInfluence_reboundVelocityFromCollision_2);
     } else {
-        rebound = MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+        rebound = MR::reboundVelocityFromCollision(this, cNum_updateInfluence_reboundVelocityFromCollision_3, cNum_updateInfluence_reboundVelocityFromCollision_4, cNum_updateInfluence_reboundVelocityFromCollision_5);
         if (MR::isBindedGround(this)) {
             MR::addVelocityToGravity(this, sGravityRateGround0);
         } else {

@@ -2062,6 +2062,10 @@ namespace {
         NebulaMods::sCameraSet = sCameraPosition || sCameraTarget || sCameraFov > 0.0f;
     }
 
+    void apiSetCameraNear(float distance) {
+        NebulaMods::sCameraNear = distance > 0.0f ? (distance < 1.0f ? 1.0f : distance) : 0.0f;
+    }
+
     float apiCameraFov() {
         return sLastFov;
     }
@@ -2292,6 +2296,10 @@ namespace {
         apiDrawText,
         apiAddTextLike,
         apiAddPlayerAnimation,
+        nullptr,  // alloc, release and format: the host's
+        nullptr,
+        nullptr,
+        apiSetCameraNear,
     };
 }  // namespace
 
@@ -2338,6 +2346,7 @@ namespace NebulaMods {
     f32 sGravityScale = 1.0f;
     bool sSceneStep = true;
     bool sCameraSet = false;
+    f32 sCameraNear = 0.0f;
     u32 sHudHidden = 0;
     bool sCountdownHeld = false;
 

@@ -13,6 +13,12 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_enableGroupAttack_1, "exeWait.enableGroupAttack.1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_enableGroupAttack_2, "exeWait.enableGroupAttack.2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_enableGroupAttack_1, "exeAttack.enableGroupAttack.1", 3200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_enableGroupAttack_2, "exeAttack.enableGroupAttack.2", 500.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeInter_1, "exeInter.1", 80);
 
@@ -78,7 +84,7 @@ void RingBeamer::exeWait() {
         MR::validateClipping(this);
     }
 
-    if (MR::enableGroupAttack(this, 3000.0f, 500.0f)) {
+    if (MR::enableGroupAttack(this, cNum_exeWait_enableGroupAttack_1, cNum_exeWait_enableGroupAttack_2)) {
         MR::sendMsgToGroupMember(ACTMES_GROUP_ATTACK, this, getSensor("Body"), "Body");
     }
 }
@@ -104,7 +110,7 @@ void RingBeamer::exeAttack() {
     if (getNerveStep() % ::sBeamInterval == ::sBeamInterval - 1) {
         MR::deleteEffect(this, "Charge");
 
-        if (!MR::enableGroupAttack(this, 3200.0f, 500.0f)) {
+        if (!MR::enableGroupAttack(this, cNum_exeAttack_enableGroupAttack_1, cNum_exeAttack_enableGroupAttack_2)) {
             MR::sendMsgToGroupMember(ACTMES_GROUP_HIDE, this, getSensor("Body"), "Body");
         } else {
             mBeams[getNerveStep() / ::sBeamInterval]->appear();

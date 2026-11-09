@@ -25,6 +25,10 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBack_turnDirectionToPlayerDegree_1, "exeHitBack.turnDirectionToPlayerDegree.1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRailType_moveCoord_1, "updateRailType.moveCoord.1", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_1, "exeChaseStart.1", 50);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeChaseStart_2, "exeChaseStart.2", 15);
@@ -368,7 +372,7 @@ void BasaBasa::exeHitBack() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Reaction");
         MR::onBind(this);
-        MR::turnDirectionToPlayerDegree(this, &mFront, 180.0f);
+        MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeHitBack_turnDirectionToPlayerDegree_1);
         MR::startSound(this, "SE_EM_ICEBASA_SPIN_BLOW");
     }
 
@@ -712,7 +716,7 @@ bool BasaBasa::tryComeHome() {
 
 void BasaBasa::updateRailType() {
     if (MR::isExistRail(this) && mTarget == &MR::getRailPos(this)) {
-        MR::moveCoord(this, 1.0f);
+        MR::moveCoord(this, cNum_updateRailType_moveCoord_1);
         if (MR::isNearPlayer(mHomePos, mChaseDistance)) {
             mTarget = MR::getPlayerPos();
         }

@@ -24,6 +24,13 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_1, "addVelocityBase.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_2, "addVelocityBase.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_3, "addVelocityBase.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitAttacked_turnDirectionToPlayerDegree_1, "exeHitAttacked.turnDirectionToPlayerDegree.1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitAttacked_reboundVelocityFromCollision_1, "exeHitAttacked.reboundVelocityFromCollision.1", 0.9f);
+
 namespace {
     NEBULA_TUNABLE(f32, sBodyHitRadius, 100.0f);
     NEBULA_TUNABLE(f32, sBodyHitYOffset, 100.0f);
@@ -171,7 +178,7 @@ void Kabokuri::addVelocityBase() {
         MR::attenuateVelocity(this, ::sNormalFreq);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_addVelocityBase_reboundVelocityFromCollision_1, cNum_addVelocityBase_reboundVelocityFromCollision_2, cNum_addVelocityBase_reboundVelocityFromCollision_3);
 }
 
 void Kabokuri::addVelocityHitAttacked() {
@@ -388,13 +395,13 @@ void Kabokuri::exeHitAttacked() {
         MR::startAction(this, "Wait");
 
         for (int i = 0; i < 6; i++) {
-            MR::turnDirectionToPlayerDegree(this, &mFrontVec, 160.0f);
+            MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeHitAttacked_turnDirectionToPlayerDegree_1);
             updatePose();
         }
     }
 
     addVelocityHitAttacked();
-    MR::reboundVelocityFromCollision(this, 0.9f);
+    MR::reboundVelocityFromCollision(this, cNum_exeHitAttacked_reboundVelocityFromCollision_1);
 
     if (MR::isGreaterStep(this, ::sHitAttackedMaxTime) || (MR::isGreaterStep(this, ::sHitAttackedMinTime) && MR::isBinded(this))) {
         mKuribo->appearBlowed(mPosition, mRotationQuat, mVelocity);
