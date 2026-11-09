@@ -233,11 +233,15 @@ s32 StageDataHolder::getChildObjNum(const TableIter& rIter) const {
     s32 count = 0;
     MR::getPlacementLinkID(rIter, &linkID);
 
+    // A table without the column has no children.
     for (const Table* pInfo = mChildObjs.begin(); pInfo != mChildObjs.end(); pInfo++) {
+        const s32 column = pInfo->searchItemInfo("ParentID");
+        if (column < 0) {
+            continue;
+        }
         for (s32 i = 0; i < pInfo->getNumEntries(); i++) {
             s32 parentID;
-            pInfo->getValue(i, "ParentID", &parentID);
-            if (parentID == linkID) {
+            if (pInfo->getValueFast(i, column, &parentID) && parentID == linkID) {
                 count++;
             }
         }
@@ -252,10 +256,13 @@ TableIter StageDataHolder::getChildObjInfoFromDataIndex(const TableIter& rIter, 
     MR::getPlacementLinkID(rIter, &linkID);
 
     for (const Table* pInfo = mChildObjs.begin(); pInfo != mChildObjs.end(); pInfo++) {
+        const s32 column = pInfo->searchItemInfo("ParentID");
+        if (column < 0) {
+            continue;
+        }
         for (s32 i = 0; i < pInfo->getNumEntries(); i++) {
             s32 parentID;
-            pInfo->getValue(i, "ParentID", &parentID);
-            if (parentID == linkID) {
+            if (pInfo->getValueFast(i, column, &parentID) && parentID == linkID) {
                 if (count == index) {
                     return TableIter(pInfo, i);
                 }
