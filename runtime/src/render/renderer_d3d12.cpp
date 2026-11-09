@@ -556,9 +556,8 @@ bool RendererD3D12::create_scene_targets(const FrameMap& map) {
         D3D12_CLEAR_VALUE cv{};
         cv.Format   = kSceneColorFormat;
         cv.Color[3] = 1.0f;
-        const HRESULT hr = device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd,
-            D3D12_RESOURCE_STATE_RENDER_TARGET, &cv, IID_PPV_ARGS(&color));
+        const HRESULT hr = create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd,
+            gpu::Use::ColorWrite, &cv, IID_PPV_ARGS(&color));
         if (FAILED(hr)) {
             std::cerr << "[Renderer] scene target color " << w << 'x' << scene_h
                       << " allocation failed hr=0x" << std::hex
@@ -580,9 +579,8 @@ bool RendererD3D12::create_scene_targets(const FrameMap& map) {
         D3D12_CLEAR_VALUE dcv{};
         dcv.Format               = kSceneDepthFormat;
         dcv.DepthStencil.Depth   = 1.0f;
-        const HRESULT hr = device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &drd,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE, &dcv, IID_PPV_ARGS(&depth));
+        const HRESULT hr = create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &drd,
+            gpu::Use::DepthWrite, &dcv, IID_PPV_ARGS(&depth));
         if (FAILED(hr)) {
             std::cerr << "[Renderer] scene target depth " << w << 'x' << scene_h
                       << " allocation failed hr=0x" << std::hex
@@ -684,7 +682,7 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID
     D3D12_CLEAR_VALUE cv{};
     cv.Format = color_format;
     cv.Color[3] = 1.0f;
-    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
                                                 &cv, IID_PPV_ARGS(&msaa.color)))) {
         return false;
     }
@@ -693,7 +691,7 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID
     D3D12_CLEAR_VALUE dcv{};
     dcv.Format = kSceneDepthFormat;
     dcv.DepthStencil.Depth = 1.0f;
-    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::DepthWrite,
                                                 &dcv, IID_PPV_ARGS(&msaa.depth)))) {
         msaa.color.Reset();
         return false;
@@ -1250,8 +1248,8 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
         D3D12_CLEAR_VALUE clear{};
         clear.Format = kSceneColorFormat;
         clear.Color[3] = 1.0f;
-        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
-                                                   D3D12_RESOURCE_STATE_RENDER_TARGET, &clear, IID_PPV_ARGS(&fresh)),
+        d3d_check(create_texture(device_.Get(), &heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                   gpu::Use::ColorWrite, &clear, IID_PPV_ARGS(&fresh)),
                   "Create scene target colour");
     }
     // The picture becomes an display picture: a shader resource, as presentation reads pictures.
@@ -1719,6 +1717,21 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 &feature_levels,
                 sizeof(feature_levels)))) {
             feature_levels.MaxSupportedFeatureLevel = D3D_FEATURE_LEVEL_11_0;
+        }
+        {
+            // Enhanced barriers when the runtime and the driver have them (OPTIONS12), legacy transitions otherwise.
+            // GALAXY_D3D12_TEST_NO_FEATURE=enhanced_barriers makes this GPU act without them.
+            const char* const refused = ::galaxy::run_options().d3d12_test_no_feature;
+            D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12{};
+            if ((refused == nullptr || std::strstr(refused, "enhanced_barriers") == nullptr) &&
+                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))) &&
+                options12.EnhancedBarriersSupported && SUCCEEDED(device_.As(&barrier_device_))) {
+                BarrierPath::device = barrier_device_.Get();
+            } else {
+                barrier_device_.Reset();
+                BarrierPath::device = nullptr;
+            }
+            std::cerr << "[d3d12] barriers: " << (BarrierPath::enhanced() ? "enhanced" : "legacy") << '\n';
         }
         ComPtr<ID3D12Device5> device5;
         const bool dxr_device5_supported = SUCCEEDED(device_.As(&device5));
@@ -2320,6 +2333,8 @@ void RendererD3D12::shutdown() {
         (void)device_.As(&debug_device_);
     }
 #endif
+    BarrierPath::device = nullptr;
+    barrier_device_.Reset();
     fence_.Reset(); queue_.Reset(); device_.Reset();
     if (!keep_window_) {
         host_window::close_game_window(*window_owner_);
@@ -3384,24 +3399,22 @@ bool RendererD3D12::ensure_motion_target() {
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     D3D12_CLEAR_VALUE cv{};
     cv.Format = kMotionVectorFormat;
-    if (FAILED(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&motion_target_)))) {
         return false;
     }
     rd.Format = kReactiveMaskFormat;
     cv.Format = kReactiveMaskFormat;
-    if (FAILED(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&reactive_target_)))) {
         motion_target_.Reset();
         return false;
     }
     rd.Format = kLayerFormat;
     cv.Format = kLayerFormat;
-    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
                                                 &cv, IID_PPV_ARGS(&layer_color_))) ||
-        FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+        FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
                                                 &cv, IID_PPV_ARGS(&layer_trans_)))) {
         motion_target_.Reset();
         reactive_target_.Reset();
@@ -3935,8 +3948,7 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
     D3D12_CLEAR_VALUE cv{};
     cv.Format = kSceneColorFormat;
     cv.Color[3] = 1.0f;
-    if (FAILED(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&alt_scene_.color)))) {
         return false;
     }
@@ -3945,8 +3957,7 @@ bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
     D3D12_CLEAR_VALUE dcv{};
     dcv.Format = kSceneDepthFormat;
     dcv.DepthStencil.Depth = 1.0f;
-    if (FAILED(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::DepthWrite,
             &dcv, IID_PPV_ARGS(&alt_scene_.depth)))) {
         alt_scene_.color.Reset();
         return false;
@@ -4035,8 +4046,7 @@ bool RendererD3D12::create_scene_set(
     D3D12_CLEAR_VALUE cv{};
     cv.Format = rd.Format;
     cv.Color[3] = 1.0f;
-    if (FAILED(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&set.color)))) {
         return false;
     }
@@ -4046,8 +4056,7 @@ bool RendererD3D12::create_scene_set(
     D3D12_CLEAR_VALUE dcv{};
     dcv.Format = kSceneDepthFormat;
     dcv.DepthStencil.Depth = 1.0f;
-    if (FAILED(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+    if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::DepthWrite,
             &dcv, IID_PPV_ARGS(&set.depth)))) {
         set.color.Reset();
         return false;
@@ -4267,8 +4276,8 @@ void RendererD3D12::copy_fg_hudless_display(const DisplayTexture& dest) {
         fg_hudless_display_.texture.Reset();
         D3D12_HEAP_PROPERTIES hp{};
         hp.Type = D3D12_HEAP_TYPE_DEFAULT;
-        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &desc,
-                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &desc,
+                                                    gpu::Use::PixelRead, nullptr,
                                                     IID_PPV_ARGS(&fg_hudless_display_.texture)))) {
             return;
         }
@@ -4332,8 +4341,8 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
         D3D12_CLEAR_VALUE cv{};
         cv.Format = kBackbufferFormat;
         cv.Color[3] = 1.0f;
-        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
-                                                    D3D12_RESOURCE_STATE_RENDER_TARGET, &cv,
+        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd,
+                                                    gpu::Use::ColorWrite, &cv,
                                                     IID_PPV_ARGS(&fg_hudless_target_)))) {
             streamline::tag_hudless(command_list_.Get(), nullptr, 0u, 0u);
             return;
@@ -4439,7 +4448,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
         D3D12_CLEAR_VALUE cv{};
         cv.Format = kSceneHdrColorFormat;
         cv.Color[3] = 1.0f;
-        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET, &cv,
+        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite, &cv,
                                                     IID_PPV_ARGS(&set.color)))) {
             return false;
         }
@@ -4448,7 +4457,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
         set.rtv = rtv;
         if (samples > 1u) {
             rd.SampleDesc.Count = samples;
-            if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
                                                         &cv, IID_PPV_ARGS(&set.msaa.color)))) {
                 set.color.Reset();
                 return false;
@@ -4982,7 +4991,7 @@ bool RendererD3D12::draw_frame_pass(
         rd.Flags            = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         std::uint64_t allocation_bytes = 0u;
         const HRESULT create_hr = frame_pass_heap_.create(
-            rd, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, dest.texture,
+            rd, gpu::Use::ColorWrite, nullptr, dest.texture,
             allocation_bytes);
         if (SUCCEEDED(create_hr)) {
             // A placed render target starts with undefined contents and must

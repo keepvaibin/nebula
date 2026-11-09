@@ -59,6 +59,7 @@ RunOptions read_options() {
     o.boot_fast = nebula_switch::boot_fast();
     o.crash_dump_dir = nebula_switch::crash_dump_dir();
     o.d3d_debug = nebula_switch::d3d_debug();
+    o.d3d12_test_no_feature = nebula_switch::d3d12_test_no_feature();
     o.gpu_draws = nebula_switch::gpu_draws();
     o.gpu_passes = nebula_switch::gpu_passes();
     o.gpu_preference = nebula_switch::gpu_preference();

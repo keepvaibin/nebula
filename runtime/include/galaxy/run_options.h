@@ -33,6 +33,7 @@ struct RunOptions {
     const char* boot_fast = nullptr;
     const char* crash_dump_dir = nullptr;
     const char* d3d_debug = nullptr;
+    const char* d3d12_test_no_feature = nullptr;
     const char* gpu_draws = nullptr;
     const char* gpu_passes = nullptr;
     const char* gpu_preference = nullptr;

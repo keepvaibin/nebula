@@ -2,6 +2,7 @@
 // helpers.
 
 #include "galaxy/render/frame_pass.h"
+#include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
 #if !defined(NEBULA_GPU_VULKAN)
@@ -243,7 +244,7 @@ TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint3
     // A frame's last pass writes into it.
     desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     // Starts readable: a present can come before the first frame writes it.
-    const D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    const gpu::Use initial_use = gpu::Use::PixelRead;
     // An optimized clear value avoids debug-layer warnings on the first RTV clear.
     D3D12_CLEAR_VALUE clear_val{};
     clear_val.Format   = kSceneColorFormat;
@@ -252,8 +253,8 @@ TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint3
     clear_val.Color[2] = 0.0f;
     clear_val.Color[3] = 1.0f;
     TextureRef texture;
-    if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, initial_state, &clear_val,
-                                               IID_PPV_ARGS(texture.ReleaseAndGetAddressOf())))) {
+    if (FAILED(create_texture(device, &heap_props, D3D12_HEAP_FLAG_NONE, &desc, initial_use, &clear_val,
+                              IID_PPV_ARGS(texture.ReleaseAndGetAddressOf())))) {
         return {};
     }
     return texture;

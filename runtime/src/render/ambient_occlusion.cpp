@@ -180,8 +180,8 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
     rd.Format = format;
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd,
-                                                legacy_state(gpu::Use::ComputeRead), nullptr,
+    if (FAILED(create_texture(device_, &heap, D3D12_HEAP_FLAG_NONE, &rd,
+                                                gpu::Use::ComputeRead, nullptr,
                                                 IID_PPV_ARGS(&target.resource)))) {
         return false;
     }

@@ -615,6 +615,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DebugDevice> debug_device_;
 #endif
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    // The device's enhanced-barrier interface when it has them (BarrierPath::device points at it).
+    Microsoft::WRL::ComPtr<ID3D12Device10> barrier_device_;
     // The selected adapter, for video-memory budget queries.
     Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue_;
