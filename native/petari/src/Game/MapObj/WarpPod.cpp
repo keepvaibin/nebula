@@ -45,6 +45,11 @@ namespace {
 
     // After a warp the far pod rests (closed) for a while before it takes the player back.
     void startRest(WarpPod* pPod) {
+        // A pod placed without a partner (a mod's) has none to rest.
+        if (pPod == nullptr) {
+            return;
+        }
+
         pPod->mDelay = cRestDelay;
         MR::startBck(pPod, "Wait");
         MR::startBrk(pPod, "Wait");
@@ -327,7 +332,7 @@ void WarpPod::initPair() {
 
 // Opening: the drawing end opens with its camera time (the other end follows when it ends).
 void WarpPod::appear() {
-    if (mIsInactive && mPairPod->mIsInactive && !mDrawsPath) {
+    if (mIsInactive && mPairPod != nullptr && mPairPod->mIsInactive && !mDrawsPath) {
         mPairPod->appear();
         mIsInactive = false;
         return;
@@ -350,7 +355,7 @@ void WarpPod::appearWithDemo() {
             MR::setWarpPodPathFlag(mPathFlagIndex, true);
         }
 
-        if (mPairPod->mIsInactive && !mDrawsPath) {
+        if (mPairPod != nullptr && mPairPod->mIsInactive && !mDrawsPath) {
             mPairPod->appearWithDemo();
             mIsInactive = false;
             return;
@@ -395,9 +400,11 @@ void WarpPod::movement() {
                 MR::endDemo(this, "出現");
             }
 
-            mPairPod->glowEffect();
-            MR::startBck(mPairPod, "Active");
-            MR::startBrk(mPairPod, "Active");
+            if (mPairPod != nullptr) {
+                mPairPod->glowEffect();
+                MR::startBck(mPairPod, "Active");
+                MR::startBrk(mPairPod, "Active");
+            }
         }
 
         return;
@@ -425,7 +432,7 @@ void WarpPod::movement() {
 }
 
 void WarpPod::startEventCamera() const {
-    if (mIsPairCameraOn || mPairPod->mIsPairCameraOn) {
+    if (mIsPairCameraOn || (mPairPod != nullptr && mPairPod->mIsPairCameraOn)) {
         return;
     }
 
@@ -436,7 +443,7 @@ void WarpPod::endEventCamera() {
     if (mIsPairCameraOn) {
         MR::endEventCamera(mCamInfo, mPairCameraName, true);
         mIsPairCameraOn = false;
-    } else if (mPairPod->mIsPairCameraOn) {
+    } else if (mPairPod != nullptr && mPairPod->mIsPairCameraOn) {
         mPairPod->endEventCamera();
     } else {
         MR::endEventCamera(mCamInfo, mEventCameraName, true);
@@ -445,7 +452,7 @@ void WarpPod::endEventCamera() {
 
 // An open pod takes the player: opening a closed pair first, holding its rest a little longer while touched.
 void WarpPod::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (mIsInactive || !MR::isSensorPlayer(pReceiver)) {
+    if (mIsInactive || mPairPod == nullptr || !MR::isSensorPlayer(pReceiver)) {
         return;
     }
 
@@ -514,7 +521,7 @@ void WarpPod::initDraw() {
 // A tube of two crossed ribbons along the path, facing the view, its texture's v running 1 at the ends to 0 midway.
 // While a pod of the pair opens, the tube grows from this end with the opening.
 void WarpPod::drawCylinder(u32 firstPart) const {
-    if (!mDrawsPath || mPairPod->mIsInactive || mIsInactive || mVisibilityState != 1) {
+    if (!mDrawsPath || mPairPod == nullptr || mPairPod->mIsInactive || mIsInactive || mVisibilityState != 1) {
         return;
     }
 

@@ -279,7 +279,7 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
 
     MR::tryStartAllAnim(this, mObjectName);
 
-    if (rInfo.mColorChangeArg > -1) {
+    if (rInfo.mColorChangeArg > -1 && MR::isExistBrk(this, ::cBrkNameColorChange)) {
         MR::startBrk(this, ::cBrkNameColorChange);
         MR::setBrkFrameAndStop(this, rInfo.mColorChangeArg);
     }

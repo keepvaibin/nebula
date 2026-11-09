@@ -87,10 +87,15 @@ void GameDataHolder::setGameEventValue(const char* pName, u16 value) {
 bool GameDataHolder::isOnGameEventValueForBit(const char* pName, int bit) const {
     u16 value = mEventValueChecker->getValue(pName);
 
-    return value & 1 << bit;
+    // The value is 16 bits: a bit outside it (a mod's stage with more pods or Tico than bits) is off.
+    return bit >= 0 && bit < 16 && (value & 1 << bit) != 0;
 }
 
 void GameDataHolder::setGameEventValueForBit(const char* pName, int bit, bool reset) {
+    if (bit < 0 || bit >= 16) {
+        return;
+    }
+
     u32 mask;
     u16 value = mEventValueChecker->getValue(pName);
     mask = 1 << bit;

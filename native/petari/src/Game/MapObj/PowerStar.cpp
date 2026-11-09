@@ -252,8 +252,11 @@ void PowerStar::requestAppear() {
 
 void PowerStar::setDemoAppearPos(const Vec3f& rPos) {
     if (MR::getGroupFromArray(this) != nullptr) {
+        // A group with no appear point (a mod's) leaves the star appearing where it stands.
         mCameraActor = getNearestAppearPoint(rPos);
-        mAppearPosition.set(mCameraActor->mPosition);
+        if (mCameraActor != nullptr) {
+            mAppearPosition.set(mCameraActor->mPosition);
+        }
     }
 
     mPosition.set(rPos);
@@ -796,7 +799,7 @@ void PowerStar::exeStageClearDemo() {
     }
 
     if (MR::isStep(this, 1)) {
-        if (mIsCameraActorPose) {
+        if (mIsCameraActorPose && mCameraActor != nullptr) {
             MR::makeMtxTR(mBaseMtx, mCameraActor);
             mBaseMtx.zeroTrans();
         } else {
@@ -810,7 +813,7 @@ void PowerStar::exeStageClearDemo() {
         mPowerStarModelObj->makeActorAppeared();
         MR::startBck(mPowerStarModelObj, getGetDemoName());
 
-        if (MR::isPowerStarGetDemoWithLuigiCurrentGalaxyAndScenario(mPowerStarId)) {
+        if (mLuigiNPC != nullptr && MR::isPowerStarGetDemoWithLuigiCurrentGalaxyAndScenario(mPowerStarId)) {
             mLuigiNPC->makeActorAppeared();
 
             MR::startBck(mLuigiNPC, "PowerStarGet");
