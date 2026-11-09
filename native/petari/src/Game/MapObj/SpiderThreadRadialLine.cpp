@@ -4,10 +4,14 @@
 #include "Game/Util.hpp"
 
 SpiderThreadRadialLine::SpiderThreadRadialLine(s32 bufferSize)
-    : mNumPoints(), mPoints(new SpiderThreadMainPoint*[bufferSize]()) {
+    : mNumPoints(), mPoints(new SpiderThreadMainPoint*[bufferSize > 0 ? bufferSize : 0]()), mBufferSize(bufferSize > 0 ? bufferSize : 0) {
 }
 
 void SpiderThreadRadialLine::addPoint(SpiderThreadMainPoint* pPoint) {
+    if (mNumPoints >= mBufferSize) {
+        return;
+    }
+
     mPoints[mNumPoints++] = pPoint;
 }
 

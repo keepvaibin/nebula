@@ -135,26 +135,53 @@ namespace MR {
         }
     }
 
+    void crossOrPerpendicular(Vec3f* pDst, const Vec3f& rA, const Vec3f& rB) {
+        const Vec3f a(rA);
+        const Vec3f b(rB);
+        pDst->cross(a, b);
+        const f32 crossSq = pDst->dot(*pDst);
+        if (!(crossSq <= 1.0e-12f * a.dot(a) * b.dot(b))) {
+            return;
+        }
+
+        const f32 ax = a.x < 0.0f ? -a.x : a.x;
+        const f32 ay = a.y < 0.0f ? -a.y : a.y;
+        const f32 az = a.z < 0.0f ? -a.z : a.z;
+        Vec3f axis(0.0f, 0.0f, 0.0f);
+        if (ax <= ay && ax <= az) {
+            axis.x = 1.0f;
+        } else if (ay <= az) {
+            axis.y = 1.0f;
+        } else {
+            axis.z = 1.0f;
+        }
+
+        pDst->cross(a, axis);
+        if (!(pDst->dot(*pDst) > 0.0f)) {
+            pDst->set(axis);
+        }
+    }
+
     void makeAxisFrontUp(Vec3f* pSide, Vec3f* pUp, const Vec3f& rFront, const Vec3f& rUp) {
-        pSide->cross(rUp, rFront);
+        crossOrPerpendicular(pSide, rUp, rFront);
         normalize(pSide);
         pUp->cross(rFront, *pSide);
     }
 
     void makeAxisFrontSide(Vec3f* pUp, Vec3f* pSide, const Vec3f& rFront, const Vec3f& rSide) {
-        pUp->cross(rFront, rSide);
+        crossOrPerpendicular(pUp, rFront, rSide);
         normalize(pUp);
         pSide->cross(*pUp, rFront);
     }
 
     void makeAxisUpFront(Vec3f* pSide, Vec3f* pFront, const Vec3f& rUp, const Vec3f& rFront) {
-        pSide->cross(rUp, rFront);
+        crossOrPerpendicular(pSide, rUp, rFront);
         normalize(pSide);
         pFront->cross(*pSide, rUp);
     }
 
     void makeAxisUpSide(Vec3f* pFront, Vec3f* pSide, const Vec3f& rUp, const Vec3f& rSide) {
-        pFront->cross(rSide, rUp);
+        crossOrPerpendicular(pFront, rSide, rUp);
         normalize(pFront);
         pSide->cross(rUp, *pFront);
     }

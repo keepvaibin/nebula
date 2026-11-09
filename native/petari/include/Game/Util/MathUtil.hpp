@@ -118,6 +118,8 @@ namespace MR {
     f32 getScaleWithReactionValueZeroToOne(f32 x, f32 rate, f32 amplitude);
     f32 getConvergeVibrationValue(f32 x, f32 start, f32 end, f32 dampScale, f32 rate);
     f32 getReduceVibrationValue(f32 x, f32 time, f32 base, f32 amplitude, f32 freq);
+    /// @brief Cross product of rA and rB; when they are parallel (or rA or rB is zero), a vector across rA instead.
+    void crossOrPerpendicular(Vec3f* pDst, const Vec3f& rA, const Vec3f& rB);
     void makeAxisFrontUp(Vec3f* pSide, Vec3f* pUp, const Vec3f& rFront, const Vec3f& rUp);
     void makeAxisFrontSide(Vec3f* pUp, Vec3f* pSide, const Vec3f& rFront, const Vec3f& rSide);
     void makeAxisUpFront(Vec3f* pSide, Vec3f* pFront, const Vec3f& rUp, const Vec3f& rFront);

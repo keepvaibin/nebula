@@ -407,10 +407,16 @@ void SurfRay::control() {
 }
 
 void SurfRay::calcAndSetBaseMtx() {
-    mBaseSide.cross(mBaseUp, mFront);
-    MR::normalize(&mBaseSide);
-    mBaseUp.cross(mFront, mBaseSide);
-    MR::normalize(&mBaseUp);
+    // A base up along the front keeps the last base axes.
+    Vec3f baseSide;
+    baseSide.cross(mBaseUp, mFront);
+    if (!MR::isNearZero(baseSide)) {
+        MR::normalize(&baseSide);
+        mBaseSide.set(baseSide);
+        mBaseUp.cross(mFront, mBaseSide);
+        MR::normalize(&mBaseUp);
+    }
+
     mUp.set(mBaseUp);
     MR::rotateVecDegree(&mUp, mFront, mRotation.z);
     mSide.cross(mUp, mFront);
@@ -665,8 +671,12 @@ void SurfRay::updateToMap() {
         MR::vecBlendSphere(mBaseUp, mGravity * -1.0f, &mBaseUp, ::sBlendRatioAxisUpAir);
     }
 
-    mFront.cross(mBaseSide, mBaseUp);
-    MR::normalize(&mFront);
+    Vec3f front;
+    front.cross(mBaseSide, mBaseUp);
+    if (!MR::isNearZero(front)) {
+        MR::normalize(&front);
+        mFront.set(front);
+    }
 }
 
 void SurfRay::updateToWater() {
