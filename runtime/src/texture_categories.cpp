@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/texture_categories.h"
 
-#include "galaxy/atomic_file.h"
 #include "galaxy/asset_store.h"
 
 #include <algorithm>
@@ -12,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -92,16 +92,8 @@ bool has_word(const std::string& text, std::string_view word) noexcept {
     return false;
 }
 
-// The record's words (nebula_cooked_texture.h).
-constexpr char kRecordMagic[8] = {'N', 'b', 'T', 'e', 'x', 't', 'u', 'r'};
-constexpr std::size_t kRecordHeader = 64u;
-constexpr std::size_t kRecordSizeAt = 12u;
-constexpr std::size_t kRecordFormatAt = 22u;
-constexpr std::size_t kRecordHashAt = 24u;
-constexpr std::uint8_t kRecordMade = 0xFFu;
-
-constexpr char kCacheMagic[8] = {'N', 'b', 'T', 'e', 'x', 'I', 'd', 'x'};
-constexpr std::uint32_t kCacheVersion = 1u;
+// Where the store lists its textures' names (nebula-import texture::NAMES_PATH).
+constexpr std::string_view kNamesPath = "NebulaData/TextureNames.tsv";
 
 struct Index {
     std::mutex mutex;
@@ -109,7 +101,7 @@ struct Index {
     bool started = false;
     std::atomic<bool> ready{false};
     bool ok = false;
-    std::vector<std::pair<std::uint64_t, std::uint8_t>> entries;  // sorted by hash
+    std::vector<TextureName> rows;  // sorted by hash
 };
 
 Index& index() {
@@ -117,133 +109,58 @@ Index& index() {
     return *value;
 }
 
-void finish(std::vector<std::pair<std::uint64_t, std::uint8_t>> entries, bool ok) {
+void finish(std::vector<TextureName> rows, bool ok) {
     Index& i = index();
     {
         const std::lock_guard<std::mutex> lock(i.mutex);
-        i.entries = std::move(entries);
+        i.rows = std::move(rows);
         i.ok = ok;
         i.ready.store(true, std::memory_order_release);
     }
     i.done.notify_all();
 }
 
-bool read_cache(const std::filesystem::path& file, std::uint64_t store_size,
-                std::vector<std::pair<std::uint64_t, std::uint8_t>>& out) {
-    std::ifstream in(file, std::ios::binary);
-    char magic[8];
-    std::uint32_t version = 0;
-    std::uint64_t size = 0;
-    std::uint64_t count = 0;
-    if (!in.read(magic, 8) || std::memcmp(magic, kCacheMagic, 8) != 0 ||
-        !in.read(reinterpret_cast<char*>(&version), sizeof(version)) || version != kCacheVersion ||
-        !in.read(reinterpret_cast<char*>(&size), sizeof(size)) || size != store_size ||
-        !in.read(reinterpret_cast<char*>(&count), sizeof(count)) || count > (1u << 24)) {
-        return false;
+bool parse_hex(std::string_view text, std::uint64_t& out) noexcept {
+    if (text.empty() || text.size() > 16u) return false;
+    std::uint64_t value = 0;
+    for (const char c : text) {
+        const int digit = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+        if (digit < 0) return false;
+        value = (value << 4u) | static_cast<std::uint64_t>(digit);
     }
-    out.resize(static_cast<std::size_t>(count));
-    for (auto& [hash, category] : out) {
-        if (!in.read(reinterpret_cast<char*>(&hash), sizeof(hash)) ||
-            !in.read(reinterpret_cast<char*>(&category), sizeof(category)) ||
-            category >= kCategoryCount) {
-            out.clear();
-            return false;
-        }
-    }
+    out = value;
     return true;
 }
 
-void write_cache(const std::filesystem::path& file, std::uint64_t store_size,
-                 const std::vector<std::pair<std::uint64_t, std::uint8_t>>& entries) {
-    std::string bytes(kCacheMagic, 8);
-    const auto put = [&bytes](const auto& value) {
-        bytes.append(reinterpret_cast<const char*>(&value), sizeof(value));
-    };
-    put(kCacheVersion);
-    put(store_size);
-    put(static_cast<std::uint64_t>(entries.size()));
-    for (const auto& [hash, category] : entries) {
-        put(hash);
-        put(category);
+bool parse_number(std::string_view text, std::uint32_t& out) noexcept {
+    if (text.empty() || text.size() > 9u) return false;
+    std::uint32_t value = 0;
+    for (const char c : text) {
+        if (c < '0' || c > '9') return false;
+        value = value * 10u + static_cast<std::uint32_t>(c - '0');
     }
-    if (!galaxy::io::write_file_atomically(file, bytes)) {
-        std::cerr << "[textures] the index could not be kept\n";
-    }
+    out = value;
+    return true;
 }
 
-// Every record in a file's bytes.
-void note_records(const std::vector<std::uint8_t>& bytes, Category category,
-                  std::vector<std::pair<std::uint64_t, std::uint8_t>>& out) {
-    if (bytes.size() < kRecordHeader) return;
-    const std::uint8_t* const data = bytes.data();
-    const std::size_t last = bytes.size() - kRecordHeader;
-    for (std::size_t at = 0; at <= last;) {
-        const auto* found = static_cast<const std::uint8_t*>(std::memchr(data + at, kRecordMagic[0], last + 1u - at));
-        if (found == nullptr) return;
-        at = static_cast<std::size_t>(found - data);
-        if (std::memcmp(found, kRecordMagic, sizeof(kRecordMagic)) != 0) {
-            ++at;
-            continue;
-        }
-        std::uint32_t size = 0;
-        std::memcpy(&size, found + kRecordSizeAt, sizeof(size));
-        if (found[kRecordFormatAt] != kRecordMade) {
-            std::uint64_t hash = 0;
-            std::memcpy(&hash, found + kRecordHashAt, sizeof(hash));
-            out.emplace_back(hash, static_cast<std::uint8_t>(category));
-        }
-        at += size >= kRecordHeader && size <= bytes.size() - at ? size : kRecordHeader;
-    }
-}
-
-void scan_folder(const galaxy::assets::AssetStore& store, std::int32_t folder, const std::string& path,
-                 std::vector<std::uint8_t>& buffer, std::vector<std::pair<std::uint64_t, std::uint8_t>>& out) {
-    const std::optional<galaxy::assets::Entry> self = store.entry(folder);
-    if (!self) return;
-    for (std::uint32_t c = 0; c < self->children; ++c) {
-        const std::optional<galaxy::assets::Entry> child = store.child(folder, c);
-        if (!child) continue;
-        const std::string name = path.empty() ? std::string(child->name) : path + "/" + child->name;
-        if (path.empty() && (name == "AudioRes" || name == "MovieData")) continue;
-        if (child->folder) {
-            scan_folder(store, child->index, name, buffer, out);
-            continue;
-        }
-        constexpr std::uint64_t kLargest = 256u * 1024u * 1024u;
-        if (child->length < kRecordHeader || child->length > kLargest) continue;
-        buffer.resize(static_cast<std::size_t>(child->length));
-        if (store.read(child->position, buffer.size(), buffer.data())) {
-            note_records(buffer, category_of_path(name), out);
-        }
-    }
-}
-
-void build(const std::filesystem::path& store_file, const std::filesystem::path& cache_file) {
-    std::error_code error;
-    const std::uint64_t store_size = std::filesystem::file_size(store_file, error);
-    std::vector<std::pair<std::uint64_t, std::uint8_t>> entries;
-    if (!error && read_cache(cache_file, store_size, entries)) {
-        finish(std::move(entries), true);
-        return;
-    }
+void build(const std::filesystem::path& store_file) {
     // A store of its own: the game's may be closed while this runs.
     galaxy::assets::AssetStore store;
-    if (error || !store.open(store_file)) {
-        std::cerr << "[textures] the game's files could not be read to sort textures\n";
+    std::optional<galaxy::assets::Entry> entry;
+    if (store.open(store_file)) entry = store.find(kNamesPath);
+    std::string text;
+    if (entry && !entry->folder) {
+        text.resize(static_cast<std::size_t>(entry->length));
+        if (!store.read(entry->position, text.size(), text.data())) text.clear();
+    }
+    if (text.empty()) {
+        std::cerr << "[textures] the game's texture names could not be read: import the game again\n";
         finish({}, false);
         return;
     }
-    std::vector<std::uint8_t> buffer;
-    scan_folder(store, 0, {}, buffer, entries);
-    // One texture in several files keeps the first: stable by hash.
-    std::stable_sort(entries.begin(), entries.end(),
-                     [](const auto& a, const auto& b) { return a.first < b.first; });
-    entries.erase(std::unique(entries.begin(), entries.end(),
-                              [](const auto& a, const auto& b) { return a.first == b.first; }),
-                  entries.end());
-    std::cerr << "[textures] " << entries.size() << " game textures sorted\n";
-    write_cache(cache_file, store_size, entries);
-    finish(std::move(entries), true);
+    std::vector<TextureName> rows = parse_names(text);
+    std::cerr << "[textures] " << rows.size() << " game textures by name\n";
+    finish(std::move(rows), true);
 }
 
 }  // namespace
@@ -266,6 +183,27 @@ const char* category_name(Category category) noexcept {
     case Category::Fonts: return "FONTS";
     case Category::Story: return "STORY ART";
     default: return "OTHER";
+    }
+}
+
+const char* category_folder(Category category) noexcept {
+    switch (category) {
+    case Category::MarioLuigi: return "Mario and Luigi";
+    case Category::Characters: return "Characters";
+    case Category::Enemies: return "Enemies";
+    case Category::Bosses: return "Bosses";
+    case Category::Items: return "Items";
+    case Category::Planets: return "Planets";
+    case Category::Objects: return "Objects";
+    case Category::Skies: return "Skies";
+    case Category::Particles: return "Particles";
+    case Category::Hud: return "HUD";
+    case Category::Menus: return "Menus";
+    case Category::GalaxyMap: return "Galaxy Map";
+    case Category::Icons: return "Icons";
+    case Category::Fonts: return "Fonts";
+    case Category::Story: return "Story";
+    default: return "Other";
     }
 }
 
@@ -335,7 +273,7 @@ std::optional<Category> category_of_pack_folder(std::string_view folder) noexcep
         {"font", Category::Fonts},         {"text", Category::Fonts},         {"icon", Category::Icons},
         {"button", Category::Icons},       {"prompt", Category::Icons},       {"hud", Category::Hud},          {"fade", Category::Hud},
         {"menu", Category::Menus},         {"ui", Category::Menus},           {"gui", Category::Menus},
-        {"layout", Category::Menus},       {"map", Category::GalaxyMap},      {"sky", Category::Skies},
+        {"layout", Category::Menus},       {"map", Category::GalaxyMap},      {"sky", Category::Skies},       {"skies", Category::Skies},
         {"skybox", Category::Skies},       {"background", Category::Skies},   {"boss", Category::Bosses},
         {"bosse", Category::Bosses},       {"enemy", Category::Enemies},      {"enemies", Category::Enemies},
         {"npc", Category::Characters},     {"character", Category::Characters}, {"rosalina", Category::Characters},
@@ -351,39 +289,62 @@ std::optional<Category> category_of_pack_folder(std::string_view folder) noexcep
     return std::nullopt;
 }
 
-std::optional<std::uint64_t> hash_of_pack_name(std::string_view stem) noexcept {
-    if (!starts_with(stem, "tex1_")) return std::nullopt;
-    // tex1_<w>x<h>[_m]_<hash>...: the first part of sixteen hexadecimal digits.
-    std::size_t at = 5u;
-    while (at < stem.size()) {
-        std::size_t end = stem.find('_', at);
-        if (end == std::string_view::npos) end = stem.size();
-        const std::string_view part = stem.substr(at, end - at);
-        if (part.size() == 16u && std::all_of(part.begin(), part.end(), [](char c) {
-                return std::isxdigit(static_cast<unsigned char>(c)) != 0;
-            })) {
-            std::uint64_t value = 0;
-            for (const char c : part) {
-                const int digit = std::isdigit(static_cast<unsigned char>(c)) != 0
-                                      ? c - '0'
-                                      : std::tolower(static_cast<unsigned char>(c)) - 'a' + 10;
-                value = (value << 4u) | static_cast<std::uint64_t>(digit);
-            }
-            return value;
-        }
-        at = end + 1u;
+std::uint64_t name_hash(std::string_view name) noexcept {
+    std::uint64_t h = 0xCBF29CE484222325ull;
+    for (const char c : name) {
+        const auto byte = static_cast<unsigned char>(c);
+        h ^= static_cast<std::uint64_t>(byte >= 'A' && byte <= 'Z' ? byte - 'A' + 'a' : byte);
+        h *= 0x100000001B3ull;
     }
-    return std::nullopt;
+    return h;
 }
 
-void start_index(const std::filesystem::path& store_file, const std::filesystem::path& cache_file) {
+std::vector<TextureName> parse_names(std::string_view text) {
+    std::vector<TextureName> rows;
+    bool header = true;
+    while (!text.empty()) {
+        const std::size_t end = text.find('\n');
+        std::string_view line = text.substr(0, end);
+        text = end == std::string_view::npos ? std::string_view{} : text.substr(end + 1u);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1u);
+        if (header) {
+            header = false;
+            continue;
+        }
+        std::array<std::string_view, 7> parts{};
+        std::size_t count = 0;
+        while (count < parts.size()) {
+            const std::size_t cut = line.find('\t');
+            parts[count++] = line.substr(0, cut);
+            if (cut == std::string_view::npos) break;
+            line = line.substr(cut + 1u);
+        }
+        TextureName row;
+        std::uint32_t format = 0;
+        if (count != parts.size() || parts[0].empty() || !parse_hex(parts[1], row.image) || !parse_hex(parts[2], row.palette) ||
+            !parse_number(parts[3], row.width) || !parse_number(parts[4], row.height) || !parse_number(parts[5], format) ||
+            format > 255u) {
+            continue;
+        }
+        row.name = std::string(parts[0]);
+        row.hash = name_hash(row.name);
+        row.format = static_cast<std::uint8_t>(format);
+        row.category = category_of_path(parts[6]);
+        rows.push_back(std::move(row));
+    }
+    // One name in several files (a texture of one name in two models of one stem) keeps the first.
+    std::stable_sort(rows.begin(), rows.end(), [](const TextureName& a, const TextureName& b) { return a.hash < b.hash; });
+    return rows;
+}
+
+void start_index(const std::filesystem::path& store_file) {
     Index& i = index();
     {
         const std::lock_guard<std::mutex> lock(i.mutex);
         if (i.started) return;
         i.started = true;
     }
-    std::thread([store_file, cache_file] { build(store_file, cache_file); }).detach();
+    std::thread([store_file] { build(store_file); }).detach();
 }
 
 bool index_ready() noexcept {
@@ -398,30 +359,71 @@ bool wait_for_index() {
     return i.ok;
 }
 
-std::optional<Category> category_of_hash(std::uint64_t hash) noexcept {
+std::span<const TextureName> names() noexcept {
     Index& i = index();
-    if (!i.ready.load(std::memory_order_acquire)) return std::nullopt;
-    const auto it = std::lower_bound(i.entries.begin(), i.entries.end(), hash,
-                                     [](const auto& entry, std::uint64_t value) { return entry.first < value; });
-    if (it == i.entries.end() || it->first != hash) return std::nullopt;
-    return static_cast<Category>(it->second);
+    if (!i.ready.load(std::memory_order_acquire)) return {};
+    return i.rows;
+}
+
+const TextureName* find_name(std::uint64_t hash) noexcept {
+    const std::span<const TextureName> rows = names();
+    const auto it = std::lower_bound(rows.begin(), rows.end(), hash,
+                                     [](const TextureName& row, std::uint64_t value) { return row.hash < value; });
+    return it != rows.end() && it->hash == hash ? &*it : nullptr;
+}
+
+bool is_dolphin_pack_name(std::string_view stem) noexcept {
+    return stem.size() > 5u && (stem.substr(0, 5u) == "tex1_" || stem.substr(0, 5u) == "TEX1_");
+}
+
+std::optional<PackFileName> parse_pack_file(std::string_view folder, std::string_view stem) noexcept {
+    if (stem.empty() || is_dolphin_pack_name(stem)) return std::nullopt;
+    PackFileName out;
+    // _mip<n> last, _arb before it.
+    if (const std::size_t at = stem.rfind("_mip"); at != std::string_view::npos && at + 4u < stem.size()) {
+        std::uint32_t level = 0;
+        if (parse_number(stem.substr(at + 4u), level) && level != 0u && level < 32u) {
+            out.level = static_cast<std::uint8_t>(level);
+            stem = stem.substr(0, at);
+        }
+    }
+    if (stem.size() > 4u && stem.substr(stem.size() - 4u) == "_arb") {
+        out.arbitrary = true;
+        stem.remove_suffix(4u);
+    }
+    if (stem.empty()) return std::nullopt;
+    const std::size_t slash = folder.find_last_of("/\\");
+    const std::string_view last = slash == std::string_view::npos ? folder : folder.substr(slash + 1u);
+    std::string with_folder;
+    if (!last.empty() && last != ".") {
+        with_folder.reserve(last.size() + 1u + stem.size());
+        with_folder.append(last).append(1u, '/').append(stem);
+    }
+    out.keys[0] = with_folder.empty() ? name_hash(stem) : name_hash(with_folder);
+    out.keys[1] = name_hash(stem);
+    return out;
+}
+
+std::uint64_t pack_file_key(const PackFileName& name) noexcept {
+    for (const std::uint64_t key : name.keys) {
+        if (find_name(key) != nullptr) return key;
+    }
+    return name.keys[0];
 }
 
 Category category_of_pack_texture(std::uint64_t hash, std::string_view folder) noexcept {
-    if (const std::optional<Category> known = category_of_hash(hash)) return *known;
+    if (const TextureName* const known = find_name(hash)) return known->category;
     if (const std::optional<Category> named = category_of_pack_folder(folder)) return *named;
     return Category::Other;
 }
 
-void set_index_for_tests(std::initializer_list<std::pair<std::uint64_t, Category>> entries) {
-    std::vector<std::pair<std::uint64_t, std::uint8_t>> sorted;
-    for (const auto& [hash, category] : entries) sorted.emplace_back(hash, static_cast<std::uint8_t>(category));
-    std::sort(sorted.begin(), sorted.end());
+void set_index_for_tests(std::vector<TextureName> rows) {
+    std::stable_sort(rows.begin(), rows.end(), [](const TextureName& a, const TextureName& b) { return a.hash < b.hash; });
     {
         const std::lock_guard<std::mutex> lock(index().mutex);
         index().started = true;
     }
-    finish(std::move(sorted), true);
+    finish(std::move(rows), true);
 }
 
 }  // namespace galaxy::textures

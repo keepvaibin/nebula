@@ -257,6 +257,9 @@ pub struct ModelIr {
     pub materials: Vec<MaterialIr>,
     pub textures: Vec<TextureIr>,
     pub records: Vec<Vec<u8>>,
+    /// By record of a disc model: its source's palette hash (texture::source_palette_hash), for its name. Empty for a
+    /// model never on the disc (a mod's glTF).
+    pub record_palettes: Vec<u64>,
 }
 
 fn be16(b: &[u8], at: usize) -> Result<u32> {
@@ -1097,6 +1100,7 @@ fn read_textures(b: &[u8], ir: &mut ModelIr, stats: &mut Stats) -> Result<()> {
             None => {
                 let bytes = formats::timg_record(b, h, stats)?;
                 ir.records.push(bytes);
+                ir.record_palettes.push(formats::timg_palette_hash(b, h)?);
                 cooked.insert(key, ir.records.len() - 1);
                 ir.records.len() - 1
             }

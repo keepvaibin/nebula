@@ -7,7 +7,6 @@
 #include "galaxy/windows_api.h"
 
 #include "galaxy/render/render_core.h"
-#include "galaxy/render/rt_materials.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/texture_pack.h"
 #include "nebula_cooked_texture.h"
@@ -32,14 +31,6 @@ using namespace galaxy::render;
 
 namespace {
 
-// An image as these tests describe it before handing its record over.
-struct TestImage {
-    std::uint16_t width;
-    std::uint16_t height;
-    galaxy::render::TexturePackFormat format;
-    std::uint64_t address;
-};
-
 int failures = 0;
 
 void expect(bool condition, const char* message) {
@@ -49,76 +40,23 @@ void expect(bool condition, const char* message) {
     }
 }
 
-std::uint64_t hash_of(const char* text) {
-    return texture_pack_hash(reinterpret_cast<const std::uint8_t*>(text), std::strlen(text));
-}
+using galaxy::textures::Category;
+using galaxy::textures::name_hash;
 
-std::uint64_t hash_of(const std::uint8_t* data, std::size_t bytes) { return texture_pack_hash(data, bytes); }
-
-void test_hash() {
-    // Reference values: python-xxhash 3.x, xxh64(data, seed=0).
-    expect(hash_of("") == 0xef46db3751d8e999ull, "xxh64 of the empty input");
-    expect(hash_of("abc") == 0x44bc2cf5ad770999ull, "xxh64 of abc");
-    expect(hash_of("Nobody inspects the spammish repetition") == 0xfbcea83c8a378bf1ull, "xxh64 of a 39-byte input");
-    std::vector<std::uint8_t> bytes(768);
-    for (std::size_t i = 0; i < bytes.size(); ++i) bytes[i] = static_cast<std::uint8_t>(i);
-    expect(hash_of(bytes.data(), bytes.size()) == 0x8e03c838c596036full, "xxh64 of 768 bytes (stripes and tail)");
-}
-
-void test_names() {
-    const char* valid[] = {
-        "tex1_256x256_m_123c307fab917b99_1",
-        "tex1_200x40_63f3408997969cd6_9a81ceb434acb873_8",
-        "tex1_48x51_53403146169829a2_$_9",
-        "tex1_36x36_4653193aaa14d048_14_mip2",
-        "tex1_64x64_0123456789abcdef_14_arb",
-        "tex1_128x128_m_02b5073505a48fb4_0_arb_mip1",
-        "tex1_64x128_d4a37bf6901674f2_14v",
-        "tex1_1024x8_ffffffffffffffff_0123456789abcdef_10",
-        "tex1_70000x3_0123456789abcdef_14_mip31",
+// The game's names these tests use (the store's names table).
+void set_names() {
+    const auto row = [](const char* name, Category category) {
+        galaxy::textures::TextureName out;
+        out.name = name;
+        out.hash = name_hash(name);
+        out.category = category;
+        return out;
     };
-    for (const char* stem : valid) {
-        const auto name = parse_texture_pack_name(stem);
-        expect(name.has_value(), stem);
-        if (name && std::string_view(stem).back() != 'v') expect(texture_pack_name(*name) == stem, "name round trip");
-    }
-    const auto slip = parse_texture_pack_name("tex1_64x128_d4a37bf6901674f2_14v");
-    expect(slip && slip->format == 14u && texture_pack_name(*slip) == "tex1_64x128_d4a37bf6901674f2_14",
-           "a letter after the format number is a slip");
-    expect(!parse_texture_pack_name("tex1_128x128_cf175626cca47369_142").has_value(), "format 142 does not exist");
-    const auto m = parse_texture_pack_name("tex1_256x256_m_123c307fab917b99_1");
-    expect(m && m->width == 256u && m->height == 256u && m->mipmapped && m->format == 1u &&
-               m->hash == 0x123c307fab917b99ull && m->palette == 0u && !m->any_palette,
-           "fields of a mipmapped I8 name");
-    const auto c4 = parse_texture_pack_name("tex1_200x40_63f3408997969cd6_9a81ceb434acb873_8");
-    expect(c4 && c4->format == 8u && c4->palette == 0x9a81ceb434acb873ull, "palette hash of a C4 name");
-    const auto any = parse_texture_pack_name("tex1_48x51_53403146169829a2_$_9");
-    expect(any && any->any_palette && any->width == 48u && any->height == 51u, "palette wildcard");
-    const auto mip = parse_texture_pack_name("tex1_36x36_4653193aaa14d048_14_mip2");
-    expect(mip && mip->level == 2u && mip->format == 14u, "custom level suffix");
-    const auto arb = parse_texture_pack_name("tex1_128x128_m_02b5073505a48fb4_0_arb_mip7");
-    expect(arb && arb->arbitrary && arb->level == 7u && arb->mipmapped, "arbitrary level suffix");
-    const auto wide = parse_texture_pack_name("tex1_70000x3_0123456789abcdef_14_mip31");
-    expect(wide && wide->width == 70000u && wide->level == 31u, "native dimensions and the full mip chain in pack names");
-    const TexturePacks::SizeKey x{1u, 16777217u, 14u}, y{1u, 1u, 14u};
-    std::unordered_map<TexturePacks::SizeKey, int, TexturePacks::SizeHash> dimensions;
-    dimensions.emplace(x, 1); dimensions.emplace(y, 2);
-    expect(dimensions.size() == 2u, "dimension identity does not pack overlapping width and height bits");
-    const char* invalid[] = {
-        "tex1_64x64_0123456789abcde_14",                    // 15 hex digits
-        "tex1_64x64_0123456789abcdef_7",                    // no format 7
-        "tex1_64x64_0123456789abcdef_1234567890abcdef_14",  // palette hash on a direct format
-        "target1_n000007_160x120_6",                        // scene target copies are never replaced
-        "tex1_0x64_0123456789abcdef_14",
-        "tex1_64x64_0123456789abcdef_14_mip0",
-        "tex1_64x64_0123456789abcdef_14_mip2_arb",
-        "tex1_64x64_0123456789abcdef_14_extra",
-        "tex1_4294967296x1_0123456789abcdef_14",
-        "tex1_64x64_m",
-    };
-    for (const char* stem : invalid) {
-        expect(!parse_texture_pack_name(stem).has_value(), stem);
-    }
+    galaxy::textures::set_index_for_tests({row("Model/Body", Category::Planets), row("IconCmpr", Category::Icons),
+                                           row("ModTex", Category::Objects), row("Coin", Category::Items),
+                                           row("Shared", Category::Hud), row("OnlyA", Category::Hud),
+                                           row("CacheTex", Category::Objects), row("Mario/Body", Category::MarioLuigi),
+                                           row("Misc/Thing", Category::Other)});
 }
 
 void put32(std::vector<std::uint8_t>& v, std::size_t at, std::uint32_t value) { std::memcpy(v.data() + at, &value, 4u); }
@@ -306,50 +244,31 @@ bool pump_until(TexturePacks& packs, std::vector<std::pair<std::uint32_t, Textur
 }
 
 void test_packs(Gpu& gpu, const std::filesystem::path& root) {
-    const std::filesystem::path game = root / "My Pack" / TexturePacks::kGameId / "sub";
-    std::filesystem::create_directories(game);
-    // A 32x32 RGBA8 game texture replaced by a 128x128 PNG.
-    std::vector<std::uint8_t> texels(32u * 32u * 4u, 0x5Au);
-    TexturePackName png{};
-    png.width = 32u;
-    png.height = 32u;
-    png.format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
-    png.hash = hash_of(texels.data(), texels.size());
+    // Files by the game's names: <model>/<texture> under any folders of the pack's own, <texture> for a texture file's.
+    const std::filesystem::path game = root / "My Pack" / TexturePacks::kGameId;
+    std::filesystem::create_directories(game / "Planets" / "Model");
+    // A 32x32 game texture replaced by a 128x128 PNG, with its custom level 1 (64x64, all 7s) beside it.
     std::vector<std::uint8_t> big(128u * 128u * 4u);
     for (std::size_t i = 0; i < big.size(); ++i) big[i] = static_cast<std::uint8_t>(i * 13u);
-    expect(write_png(game / (texture_pack_name(png) + ".png"), 128u, 128u, big.data()), "pack PNG written");
-    // Its custom level 1 (64x64, all 7s) beside it.
-    TexturePackName level1 = png;
-    level1.level = 1u;
+    expect(write_png(game / "Planets" / "Model" / "Body.png", 128u, 128u, big.data()), "pack PNG written");
     std::vector<std::uint8_t> sevens(64u * 64u * 4u, 7u);
-    expect(write_png(game / (texture_pack_name(level1) + ".png"), 64u, 64u, sevens.data()), "custom level written");
-    // The same texture as the game samples it with its own mipmaps (_m): another file, kept beside the first.
-    TexturePackName png_m = png;
-    png_m.mipmapped = true;
-    expect(write_png(game / (texture_pack_name(png_m) + ".png"), 64u, 64u, sevens.data()), "_m variant written");
-    // A 16x16 CMPR game texture replaced by a 64x64 BC1 DDS with its 7 levels.
-    TexturePackName dds{};
-    dds.width = 16u;
-    dds.height = 16u;
-    dds.format = static_cast<std::uint8_t>(TexturePackFormat::Block4);
-    dds.hash = 0x0123456789abcdefull;
+    expect(write_png(game / "Planets" / "Model" / "Body_mip1.png", 64u, 64u, sevens.data()), "custom level written");
+    // A texture file's replacement as a 64x64 BC1 DDS with its 7 levels; a PNG of its name loses to it.
     std::vector<std::uint8_t> bc1 = dds_header(64u, 64u, 7u, fourcc("DXT1"), 0u);
     bc1.resize(bc1.size() + 2048u + 512u + 128u + 32u + 8u + 8u + 8u, 0x11u);
-    write_file(game / (texture_pack_name(dds) + ".dds"), bc1);
-    // A PNG of the DDS's name in the same folder loses to the DDS.
-    write_png(game / (texture_pack_name(dds) + ".png"), 64u, 64u, sevens.data());
-    // Not a texture name: counted as a file, not indexed.
+    write_file(game / "IconCmpr.dds", bc1);
+    write_png(game / "IconCmpr.png", 64u, 64u, sevens.data());
+    // A name the game has no texture of, and a Dolphin name: counted and listed, not indexed.
     { std::ofstream out(game / "readme.png"); out << "x"; }
+    { std::ofstream out(game / "tex1_8x8_0123456789abcdef_14.png"); out << "x"; }
+    // A converted pack's originals are never read.
+    std::filesystem::create_directories(game / ".dolphin");
+    { std::ofstream out(game / ".dolphin" / "Coin.png"); out << "x"; }
     // A mod's textures/ folder without a game folder: indexed itself, after (winning over) the pack.
     const std::filesystem::path mod = root / "mod" / "textures";
     std::filesystem::create_directories(mod);
-    TexturePackName mod_name{};
-    mod_name.width = 8u;
-    mod_name.height = 8u;
-    mod_name.format = static_cast<std::uint8_t>(TexturePackFormat::Gray8);
-    mod_name.hash = 0x1111222233334444ull;
     std::vector<std::uint8_t> mod_pixels(16u * 16u * 4u, 0x22u);
-    expect(write_png(mod / (texture_pack_name(mod_name) + ".png"), 16u, 16u, mod_pixels.data()), "mod PNG written");
+    expect(write_png(mod / "ModTex.png", 16u, 16u, mod_pixels.data()), "mod PNG written");
 
     TexturePacks packs;
     TexturePackSettings settings{};
@@ -361,22 +280,23 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     bool changed = false;
     expect(pump_until(packs, uploads, [&] { return packs.stats().names != 0u; }, &changed) && changed,
            "index published");
-    expect(packs.stats().names == 4u && packs.stats().files == 7u && packs.stats().folders == 2u &&
-               packs.stats().levels == 1u,
-           "four textures (one custom level) among seven files in two folders");
-    expect(packs.may_match(32u, 32u, TexturePackFormat::Rgba8) && !packs.may_match(32u, 32u, TexturePackFormat::Rgb565),
-           "size and format prefilter");
-    const std::uint32_t png_slot = packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash, 0u);
-    const std::uint32_t dds_slot = packs.find(16u, 16u, TexturePackFormat::Block4, dds.hash, 0u);
-    const std::uint32_t mod_slot = packs.find(8u, 8u, TexturePackFormat::Gray8, mod_name.hash, 0u);
+    const TexturePacks::Stats stats = packs.stats();
+    expect(stats.names == 3u && stats.files == 7u && stats.folders == 2u && stats.levels == 1u && stats.dolphin == 1u &&
+               stats.unknown == 1u,
+           "three textures (one custom level) among seven files in two folders; one Dolphin name, one unknown");
+    const TexturePacks::Summary summary = TexturePacks::summary();
+    expect(summary.dolphin == std::vector<std::string>{"tex1_8x8_0123456789abcdef_14.png"} &&
+               summary.unknown == std::vector<std::string>{"readme.png"},
+           "the summary names the files left out");
+    const std::uint32_t png_slot = packs.find(name_hash("Model/Body"));
+    const std::uint32_t dds_slot = packs.find(name_hash("IconCmpr"));
+    const std::uint32_t mod_slot = packs.find(name_hash("ModTex"));
     expect(png_slot != TexturePacks::kNone && dds_slot != TexturePacks::kNone && mod_slot != TexturePacks::kNone,
            "every name found");
+    expect(packs.find(name_hash("model/BODY")) == png_slot, "names without case");
     expect(packs.file(dds_slot).extension() == ".dds", "a DDS wins over a PNG of the same name");
-    const std::uint32_t png_m_slot = packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash, 0u, true);
-    expect(png_m_slot != TexturePacks::kNone && png_m_slot != png_slot, "the _m variant is its own texture");
-    expect(packs.find(8u, 8u, TexturePackFormat::Gray8, mod_name.hash, 0u, true) == mod_slot,
-           "a texture used with mipmaps finds the pack's file named without");
-    expect(packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash ^ 1u, 0u) == TexturePacks::kNone, "other hash misses");
+    expect(packs.find(name_hash("Coin")) == TexturePacks::kNone && packs.find(0u) == TexturePacks::kNone,
+           "a texture no pack names misses");
     packs.add_user(png_slot);
     packs.add_user(dds_slot);
     std::vector<std::pair<std::uint32_t, TexturePackPixels>> loaded;
@@ -405,8 +325,8 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     }
     const TextureReplacement* a = packs.resident(png_slot);
     const TextureReplacement* b = packs.resident(dds_slot);
-    expect(a != nullptr && a->lod_shift == 2.0f && b != nullptr && b->lod_shift == 2.0f,
-           "4x replacements shift the LOD by 2");
+    expect(a != nullptr && a->lod_shift == 0.0f && b != nullptr && b->lod_shift == 0.0f,
+           "resident (the texture store sets the LOD shift as it binds them)");
     expect(packs.stats().resident == 2u && packs.stats().resident_bytes == 2u << 20, "two resident");
 
     // Budget: both unbound, then a budget below their sum evicts the least recently used one.
@@ -419,25 +339,23 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     expect(packs.stats().evictions == 1u && packs.resident(png_slot) == nullptr && packs.resident(dds_slot) != nullptr,
            "budget evicts the least recently used unbound replacement");
 
-    // Dump: a 4x4 texture written once as a PNG under its name.
+    // Dump: a 4x4 texture written once as a PNG under its category and name; a hash the game does not name is counted.
     settings.dump = true;
     packs.configure(settings);
     expect(packs.dumping(), "dump mode on");
-    TexturePackName dumped{};
-    dumped.width = 4u;
-    dumped.height = 4u;
-    dumped.format = static_cast<std::uint8_t>(TexturePackFormat::GrayAlpha8);
-    dumped.hash = 0xfedcba9876543210ull;
     std::vector<std::uint8_t> pixels(64u);
     for (std::size_t i = 0; i < pixels.size(); ++i) pixels[i] = static_cast<std::uint8_t>(i * 4u);
-    packs.dump(dumped, 4u, 4u, pixels.data());
-    packs.dump(dumped, 4u, 4u, pixels.data());
-    const std::filesystem::path file = settings.dumps / TexturePacks::kGameId / (texture_pack_name(dumped) + ".png");
-    for (int i = 0; i < 2000 && packs.stats().dumped == 0u; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    packs.dump(name_hash("Coin"), 4u, 4u, pixels.data());
+    packs.dump(name_hash("Coin"), 4u, 4u, pixels.data());
+    packs.dump(name_hash("NotAName"), 4u, 4u, pixels.data());
+    const std::filesystem::path file = settings.dumps / TexturePacks::kGameId / "Items" / "Coin.png";
+    for (int i = 0; i < 2000 && (packs.stats().dumped == 0u || packs.stats().unnamed_dumps == 0u); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
     TexturePackPixels back;
-    expect(packs.stats().dumped == 1u && load_texture_pack_image(file, false, back, nullptr) && back.width == 4u &&
-               back.levels[0] == pixels,
-           "dumped PNG holds the texture once");
+    expect(packs.stats().dumped == 1u && packs.stats().unnamed_dumps == 1u &&
+               load_texture_pack_image(file, false, back, nullptr) && back.width == 4u && back.levels[0] == pixels,
+           "dumped PNG holds the texture once, under its category");
     packs.begin_frame();
     expect(packs.pump(uploads) && !packs.pump(uploads), "toggling the dump asks for one look-up");
 
@@ -445,7 +363,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     settings.packs = {root / "My Pack" / TexturePacks::kGameId};
     packs.configure(settings);
     changed = false;
-    expect(pump_until(packs, uploads, [&] { return changed && packs.stats().names == 3u; }, &changed),
+    expect(pump_until(packs, uploads, [&] { return changed && packs.stats().names == 2u; }, &changed),
            "a game folder given directly is indexed");
 
     // Off: the index goes and lookups stop.
@@ -453,7 +371,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     packs.configure(settings);
     packs.begin_frame();
     expect(packs.pump(uploads) && !packs.enabled() &&
-               packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash, 0u) == TexturePacks::kNone,
+               packs.find(name_hash("Model/Body")) == TexturePacks::kNone,
            "turning packs off drops the index");
     packs.shutdown();
 }
@@ -461,37 +379,28 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
 // Priority: packs side by side in the TexturePacks folder by name (a later one wins a texture), then each mod's
 // textures/ folder in load order (later wins); textures only one pack names come from it whatever its place.
 void test_priority(const std::filesystem::path& root) {
-    TexturePackName shared{};
-    shared.width = 16u;
-    shared.height = 16u;
-    shared.format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
-    shared.hash = 0x5555aaaa5555aaaaull;
-    TexturePackName only_a = shared;
-    only_a.hash = 0x1234ull;
     std::vector<std::uint8_t> pixels(32u * 32u * 4u, 9u);
     const std::filesystem::path packs = root / "priority" / "TexturePacks";
     for (const char* pack : {"A HD pack", "B buttons"}) {
         std::filesystem::create_directories(packs / pack / "RMGE01");
-        write_png(packs / pack / "RMGE01" / (texture_pack_name(shared) + ".png"), 32u, 32u, pixels.data());
+        write_png(packs / pack / "RMGE01" / "Shared.png", 32u, 32u, pixels.data());
     }
-    write_png(packs / "A HD pack" / "RMGE01" / (texture_pack_name(only_a) + ".png"), 32u, 32u, pixels.data());
+    write_png(packs / "A HD pack" / "RMGE01" / "OnlyA.png", 32u, 32u, pixels.data());
     const std::vector<std::filesystem::path> folders{packs};
     const auto index = TexturePacks::build_index(folders, {}, 1u);
-    const auto file_of = [&](const std::shared_ptr<TexturePacks::Index>& in, std::uint64_t hash) {
-        for (const auto& record : in->records) {
-            if (record.name.hash == hash) return record.file;
-        }
-        return std::filesystem::path{};
+    const auto file_of = [](const std::shared_ptr<TexturePacks::Index>& in, const char* name) {
+        const auto it = in->names.find(name_hash(name));
+        return it != in->names.end() ? in->records[it->second].file : std::filesystem::path{};
     };
-    expect(file_of(index, shared.hash).parent_path().parent_path().filename() == "B buttons",
+    expect(file_of(index, "Shared").parent_path().parent_path().filename() == "B buttons",
            "packs side by side: the later by name wins a texture");
-    expect(file_of(index, only_a.hash).parent_path().parent_path().filename() == "A HD pack",
+    expect(file_of(index, "OnlyA").parent_path().parent_path().filename() == "A HD pack",
            "a texture one pack names comes from it");
     const std::filesystem::path mod = root / "priority" / "mods" / "Switch prompts" / "textures";
     std::filesystem::create_directories(mod);
-    write_png(mod / (texture_pack_name(shared) + ".png"), 32u, 32u, pixels.data());
+    write_png(mod / "Shared.png", 32u, 32u, pixels.data());
     const std::vector<std::filesystem::path> with_mod{packs, mod};
-    expect(file_of(TexturePacks::build_index(with_mod, {}, 2u), shared.hash).parent_path() == mod,
+    expect(file_of(TexturePacks::build_index(with_mod, {}, 2u), "Shared").parent_path() == mod,
            "a mod's textures win over the TexturePacks folder");
 }
 
@@ -503,20 +412,13 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     std::vector<std::byte> texels(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(32u, 32u, 1u, NEBULA_TEXTURE_RGBA8));
     nebula_texture_init(texels.data(), 32u, 32u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
     for (std::size_t i = NEBULA_TEXTURE_HEADER; i < texels.size(); ++i) texels[i] = static_cast<std::byte>(i * 31u + 7u);
-    TexturePackName name{};
-    name.width = 32u;
-    name.height = 32u;
-    name.format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
-    name.hash = hash_of(reinterpret_cast<const std::uint8_t*>(texels.data()) + NEBULA_TEXTURE_HEADER,
-                        texels.size() - NEBULA_TEXTURE_HEADER);
     {
         auto* const record = reinterpret_cast<NebulaTexture*>(texels.data());
-        record->source_format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
-        record->pack_hash = name.hash;
+        record->source_format = 6u;  // RGBA8 on the disc
+        record->name_hash = name_hash("CacheTex");
     }
     std::vector<std::uint8_t> big(96u * 96u * 4u, 0x80u);
-    expect(write_png(root / "cache" / TexturePacks::kGameId / (texture_pack_name(name) + ".png"), 96u, 96u, big.data()),
-           "cache test PNG written");
+    expect(write_png(root / "cache" / TexturePacks::kGameId / "CacheTex.png", 96u, 96u, big.data()), "cache test PNG written");
 
     const auto owner = std::make_unique<TextureStore>();
     TextureStore& cache = *owner;
@@ -584,14 +486,13 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     // Images are dumped as they load; the store keeps no copy of those already on the GPU.
     (void)cache.register_image(made);
     next_frame();
-    const std::filesystem::path dumped =
-        settings.dumps / TexturePacks::kGameId / (texture_pack_name(name) + ".png");
+    const std::filesystem::path dumped = settings.dumps / TexturePacks::kGameId / "Objects" / "CacheTex.png";
     for (int i = 0; i < 2000 && !std::filesystem::exists(dumped); ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     TexturePackPixels pixels;
     expect(load_texture_pack_image(dumped, false, pixels, nullptr) && pixels.width == 32u && pixels.height == 32u,
-           "dump writes the texture under its pack name");
+           "dump writes the texture under its name");
     next_frame();
     gpu.run();
     cache.backend().set_upload_list(nullptr);
@@ -602,14 +503,11 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
 
 // A category off leaves its textures out of a pack's index; the others stay.
 void test_categories_off() {
-    using galaxy::textures::Category;
-    galaxy::textures::set_index_for_tests({{0x1111111111111111ull, Category::MarioLuigi}, {0x2222222222222222ull, Category::Items}});
     const std::filesystem::path root = galaxy::test_temp_path("nebula_pack_categories");
     std::error_code error;
     std::filesystem::remove_all(root, error);
-    std::filesystem::create_directories(root / "Misc", error);
-    for (const char* name : {"tex1_8x8_1111111111111111_14.png", "tex1_8x8_2222222222222222_14.png",
-                             "Misc/tex1_8x8_3333333333333333_14.png"}) {
+    for (const char* folder : {"Mario", "Misc", "Other"}) std::filesystem::create_directories(root / folder, error);
+    for (const char* name : {"Mario/Body.png", "Coin.png", "Misc/Thing.png", "Other/Unknown.png"}) {
         std::ofstream(root / name, std::ios::binary) << "x";
     }
     const std::vector<std::filesystem::path> packs{root};
@@ -617,21 +515,20 @@ void test_categories_off() {
         const std::vector<std::uint32_t> categories_off{off};
         return TexturePacks::build_index(packs, categories_off, 1u)->records.size();
     };
-    expect(count(0u) == 3u, "every texture with nothing off");
+    expect(count(0u) == 3u, "every texture the game names with nothing off");
     expect(count(galaxy::textures::category_bit(Category::MarioLuigi)) == 2u, "a category off leaves its texture out");
     expect(count(galaxy::textures::category_bit(Category::MarioLuigi) | galaxy::textures::category_bit(Category::Items)) == 1u,
-          "two categories off");
-    expect(count(galaxy::textures::category_bit(Category::Other)) == 2u, "a texture the game does not hold is Other");
+           "two categories off");
+    expect(count(galaxy::textures::category_bit(Category::Other)) == 2u, "the game's Other textures off");
     std::filesystem::remove_all(root, error);
 }
 
 int main() {
+    set_names();
     test_categories_off();
     const std::filesystem::path root = galaxy::test_temp_path("nebula-texture-pack-test");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
-    test_hash();
-    test_names();
     test_dds(root);
     test_png(root);
     test_sampler_shift();

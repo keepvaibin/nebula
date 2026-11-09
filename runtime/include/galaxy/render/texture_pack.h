@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Texture packs: higher-resolution replacements for the game's textures, found by the community naming convention
-// (a data convention, implemented from its public description):
-//   <pack>/[<GameID or its 3-letter prefix>/]**/tex1_<w>x<h>[_m]_<hash>[_<palette hash>|_$]_<fmt>[_mip<n>|_arb].png|.dds
-// <w>x<h> and <fmt> are the game texture's size and format; <hash> the source bytes of its base level, <palette hash>
-// the palette entries a palette texture uses ($: any palette). A replacement is sampled with the game texture's
-// normalized coordinates at any size; its sampler LOD range shifts by log2 of the scale (TextureHandle::lod_shift).
+// Texture packs: higher-resolution replacements for the game's textures, by the game's own texture names (the store's
+// names table, galaxy/texture_categories.h):
+//   <pack>/[<GameID or its 3-letter prefix>/]**/<model>/<texture>[_arb][_mip<n>].png|.dds   a model's texture
+//   <pack>/[<GameID or its 3-letter prefix>/]**/<file>[_arb][_mip<n>].png|.dds              a texture file's (bti, tpl)
+// The folders above are the pack's own (dumps sort them by category). _mip<n>: a custom lower level; _arb: levels with
+// content of their own. A replacement is sampled with the game texture's normalized coordinates at any size; its sampler
+// LOD range shifts by log2 of the scale (TextureHandle::lod_shift). A Dolphin pack (tex1_ names) is converted to these
+// names once, when its mod is imported or first found (galaxy/dolphin_pack.h); the index leaves tex1_ files out.
 //
 // TexturePacks owns the index of every pack folder (the player's pack and the mods' textures/ folders, a later folder
 // winning a name; built on a loader thread), the loaders (PNG through stb_image, DDS BC1-BC7 through bcdec or 32-bit
@@ -39,33 +41,10 @@
 
 namespace galaxy::render {
 
-// Texture pack file names carry a format code (tex1_WxH_<hash>_<code>).
-enum class TexturePackFormat : std::uint8_t {
-    Gray8 = 0x1, GrayAlpha8 = 0x3, Rgb565 = 0x4, Packed16 = 0x5, Rgba8 = 0x6,
-    Palette4 = 0x8, Palette8 = 0x9, Palette14 = 0xA, Block4 = 0xE,
-};
-
 // A block record's third and fourth colours (nebula_cooked_texture.h NEBULA_TEXTURE_BLOCK4): 5/8 and 3/8.
 [[nodiscard]] constexpr std::uint8_t block4_interpolated_channel(std::uint8_t primary, std::uint8_t secondary) {
     return static_cast<std::uint8_t>((5u * primary + 3u * secondary) >> 3u);
 }
-
-struct TexturePackName {
-    std::uint32_t width = 0;
-    std::uint32_t height = 0;
-    std::uint8_t format = 0;
-    std::uint8_t level = 0;   // _mip<n>
-    bool mipmapped = false;   // _m
-    bool any_palette = false;    // _$
-    bool arbitrary = false;   // _arb: levels with their own content, each shown where the game shows that level
-    std::uint64_t hash = 0;
-    std::uint64_t palette = 0;
-};
-// A file name's stem (no folder, no extension); nullopt when it is not a texture name.
-[[nodiscard]] std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) noexcept;
-// The stem a texture is dumped under (level 0; `level` adds _mip<n>).
-[[nodiscard]] std::string texture_pack_name(const TexturePackName& name);
-[[nodiscard]] bool texture_format_palettized(TexturePackFormat format) noexcept;
 
 // A DDS file's layout: levels are contiguous after the header(s).
 enum class DdsFormat : std::uint8_t { Unknown, BC1, BC2, BC3, BC4, BC5, BC7, RGBA8, BGRA8 };
@@ -121,7 +100,7 @@ struct TextureReplacement {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::uint32_t levels = 0;
-    float lod_shift = 0.0f;  // log2(replacement width / game width)
+    float lod_shift = 0.0f;  // log2(replacement width / game width); a pack's is set by the texture store as it binds one
     bool arbitrary = false;          // _arb: its level n shows where the game shows its level n
     std::uint64_t bytes = 0;
 };
@@ -146,11 +125,8 @@ public:
 
     [[nodiscard]] bool enabled() const noexcept { return settings_.enabled && index_ != nullptr; }
     [[nodiscard]] bool dumping() const noexcept { return settings_.dump && !settings_.dumps.empty(); }
-    // The index has names for this source size and format (hashing is needed only then).
-    [[nodiscard]] bool may_match(std::uint32_t width, std::uint32_t height, TexturePackFormat format) const noexcept;
-    // The replacement slot for a texture's names, or kNone.
-    [[nodiscard]] std::uint32_t find(std::uint32_t width, std::uint32_t height, TexturePackFormat format, std::uint64_t hash,
-                                     std::uint64_t palette, bool mipmapped = false) const;
+    // The replacement slot for a texture by its name hash (a record's name_hash), or kNone.
+    [[nodiscard]] std::uint32_t find(std::uint64_t name) const noexcept;
     // Null until the slot's texture is on the GPU.
     [[nodiscard]] const TextureReplacement* resident(std::uint32_t slot) const noexcept;
     // The file a slot loads from (traces).
@@ -171,15 +147,17 @@ public:
     // The uploaded replacement of a slot pump handed out.
     void make_resident(std::uint32_t slot, TextureReplacement&& replacement);
 
-    // Dump mode: writes a texture's base level once as <dumps>/<GameID>/<name>.png (on a loader thread).
-    void dump(const TexturePackName& name, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba);
+    // Dump mode: writes a texture's base level once, by its name hash, as <dumps>/<GameID>/<category folder>/<name>.png
+    // (on a loader thread; a hash the names table lacks is counted, not written).
+    void dump(std::uint64_t name, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba);
 
     struct Stats {
         std::uint64_t names = 0;
         std::uint64_t files = 0;
         std::uint64_t folders = 0;
         std::uint64_t levels = 0;
-        std::uint64_t unreadable = 0;
+        std::uint64_t dolphin = 0;
+        std::uint64_t unknown = 0;
         std::uint64_t loads = 0;
         std::uint64_t load_failures = 0;
         std::uint64_t uploads = 0;
@@ -189,62 +167,40 @@ public:
         std::uint64_t evictions = 0;
         std::uint64_t deferred = 0;
         std::uint64_t dumped = 0;
+        std::uint64_t unnamed_dumps = 0;
         double index_ms = 0.0;
         double load_ms = 0.0;  // loader thread time of finished loads
     };
     [[nodiscard]] Stats stats() const noexcept;
 
-    // The last index's census for the settings menu (any thread): textures, custom levels, names not understood.
+    // The last index's census for the settings menu (any thread): textures, custom levels, files left out.
     struct Summary {
         bool indexed = false;
         std::uint64_t textures = 0;
         std::uint64_t levels = 0;
         std::uint64_t folders = 0;
-        std::vector<std::string> unreadable;
+        std::vector<std::string> dolphin;  // tex1_ files not converted (a pack outside the mods)
+        std::vector<std::string> unknown;  // files naming none of the game's textures
     };
     [[nodiscard]] static Summary summary();
 
     // The index of these folders (tests: synchronous).
     struct Record {
-        TexturePackName name;
         std::filesystem::path file;
         bool dds = false;
+        bool arbitrary = false;                   // _arb
         std::vector<std::filesystem::path> mips;  // custom lower levels (_mip<n>) by level; empty where absent
-    };
-    struct SizeKey {
-        std::uint32_t width, height, format;
-        bool operator==(const SizeKey&) const = default;
-    };
-    struct SizeHash {
-        std::size_t operator()(const SizeKey& key) const noexcept {
-            return static_cast<std::size_t>((std::uint64_t{key.width} * 0x100000001B3ull ^ key.height) * 0x100000001B3ull ^ key.format);
-        }
-    };
-    struct NameKey {
-        SizeKey size;
-        std::uint64_t hash, palette;
-        bool mipmapped;
-        bool operator==(const NameKey&) const = default;
-    };
-    struct NameHash {
-        std::size_t operator()(const NameKey& key) const noexcept {
-            std::uint64_t h = SizeHash{}(key.size);
-            h = (h ^ key.hash) * 0x100000001B3ull;
-            h = (h ^ key.palette) * 0x100000001B3ull;
-            return static_cast<std::size_t>(h ^ static_cast<std::uint64_t>(key.mipmapped));
-        }
     };
     struct Index {
         std::vector<Record> records;
-        std::unordered_set<SizeKey, SizeHash> sizes;                  // (w, h, fmt) with any name
-        std::unordered_map<NameKey, std::uint32_t, NameHash> exact;   // name key -> record
-        std::unordered_map<NameKey, std::uint32_t, NameHash> any_palette;
+        std::unordered_map<std::uint64_t, std::uint32_t> names;  // name hash -> record
         std::uint64_t files = 0;
         std::uint64_t folders = 0;
         std::uint64_t levels = 0;     // custom lower levels (_mip<n>) of the textures
         std::uint64_t shadowed = 0;   // names an earlier pack also has (the later pack's file is used)
-        std::uint64_t corrected = 0;  // names read past a slip ("_14v")
-        std::vector<std::string> unreadable;  // tex1_ files whose names are not texture names
+        bool named = false;           // the game's names were known: each file has one name, unknown ones are listed
+        std::vector<std::string> dolphin;  // tex1_ files (not converted)
+        std::vector<std::string> unknown;  // files naming none of the game's textures
         double ms = 0.0;
         std::uint64_t generation = 0;
     };
@@ -269,8 +225,6 @@ private:
         std::unique_ptr<Load> ready;
     };
 
-    static SizeKey size_key(std::uint32_t width, std::uint32_t height, std::uint32_t format) noexcept;
-    static NameKey name_key(SizeKey size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept;
     std::unique_ptr<Load> load(const Record& record, std::uint32_t slot, std::uint64_t generation);
     void request(std::uint32_t slot);
     void evict_to_budget(std::uint64_t incoming);
@@ -305,7 +259,7 @@ private:
     std::uint64_t loads_ = 0;
     std::uint64_t load_failures_ = 0;
     double load_ms_ = 0.0;
-    std::unordered_set<std::string> dumped_;
+    std::unordered_set<std::uint64_t> dumped_;
 
     // Shared with the loader threads (mutex_).
     mutable std::mutex mutex_;
@@ -314,6 +268,7 @@ private:
     std::vector<std::unique_ptr<Load>> finished_;
     std::shared_ptr<Index> built_;
     std::uint64_t dumped_count_ = 0;
+    std::uint64_t unnamed_dumps_ = 0;
     bool stopping_ = false;
     std::vector<std::thread> workers_;
 };

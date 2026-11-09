@@ -8,7 +8,6 @@
 #include "galaxy/crash_report.h"
 
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/rt_materials.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/windows_power.h"
 
@@ -22,140 +21,6 @@
 #include <system_error>
 
 namespace galaxy::render {
-
-bool texture_format_palettized(TexturePackFormat format) noexcept {
-    return format == TexturePackFormat::Palette4 || format == TexturePackFormat::Palette8 || format == TexturePackFormat::Palette14;
-}
-
-namespace {
-
-bool parse_hex64(std::string_view text, std::uint64_t& out) noexcept {
-    if (text.size() != 16u) return false;
-    std::uint64_t value = 0;
-    for (const char c : text) {
-        value <<= 4u;
-        if (c >= '0' && c <= '9') value |= static_cast<std::uint64_t>(c - '0');
-        else if (c >= 'a' && c <= 'f') value |= static_cast<std::uint64_t>(c - 'a' + 10);
-        else if (c >= 'A' && c <= 'F') value |= static_cast<std::uint64_t>(c - 'A' + 10);
-        else return false;
-    }
-    out = value;
-    return true;
-}
-
-bool parse_uint(std::string_view text, std::uint32_t limit, std::uint32_t& out) noexcept {
-    if (text.empty()) return false;
-    std::uint32_t value = 0;
-    for (const char c : text) {
-        if (c < '0' || c > '9') return false;
-        const auto digit = static_cast<std::uint32_t>(c - '0');
-        if (digit > limit || value > (limit - digit) / 10u) { return false; }
-        value = value * 10u + digit;
-    }
-    if (value > limit) return false;
-    out = value;
-    return true;
-}
-
-bool known_format(std::uint32_t format) noexcept {
-    return format <= 6u || format == 8u || format == 9u || format == 10u || format == 14u;
-}
-
-}  // namespace
-
-std::optional<TexturePackName> parse_texture_pack_name(std::string_view stem) noexcept {
-    constexpr std::string_view kPrefix = "tex1_";
-    if (stem.size() < kPrefix.size() || stem.substr(0, kPrefix.size()) != kPrefix) return std::nullopt;
-    std::string_view rest = stem.substr(kPrefix.size());
-    std::array<std::string_view, 8> parts{};
-    std::size_t count = 0;
-    while (!rest.empty()) {
-        if (count == parts.size()) return std::nullopt;
-        const std::size_t cut = rest.find('_');
-        parts[count++] = rest.substr(0, cut);
-        if (cut == std::string_view::npos) break;
-        rest = rest.substr(cut + 1u);
-    }
-    if (count == 0u) return std::nullopt;
-    TexturePackName name{};
-    std::size_t at = 0;
-    {
-        const std::string_view size = parts[at++];
-        const std::size_t x = size.find('x');
-        std::uint32_t w = 0, h = 0;
-        if (x == std::string_view::npos || !parse_uint(size.substr(0, x), UINT32_MAX, w) ||
-            !parse_uint(size.substr(x + 1u), UINT32_MAX, h) || w == 0u || h == 0u) {
-            return std::nullopt;
-        }
-        name.width = static_cast<std::uint32_t>(w);
-        name.height = static_cast<std::uint32_t>(h);
-    }
-    if (at < count && parts[at] == "m") {
-        name.mipmapped = true;
-        ++at;
-    }
-    if (at >= count || !parse_hex64(parts[at++], name.hash)) return std::nullopt;
-    if (at < count && parts[at] == "$") {
-        name.any_palette = true;
-        ++at;
-    } else if (at < count && parts[at].size() == 16u) {
-        if (!parse_hex64(parts[at++], name.palette)) return std::nullopt;
-    }
-    std::uint32_t format = 0;
-    if (at >= count) return std::nullopt;
-    if (const std::string_view token = parts[at++]; !parse_uint(token, 255u, format)) {
-        // A letter typed after the format number ("_14v", a slip in some packs): the number before it. The hash still
-        // has to match the game's texture.
-        std::size_t digits = 0;
-        while (digits < token.size() && token[digits] >= '0' && token[digits] <= '9') ++digits;
-        bool letters = digits != 0u && digits < token.size();
-        for (std::size_t i = digits; letters && i < token.size(); ++i) {
-            const char c = token[i];
-            letters = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-        }
-        if (!letters || !parse_uint(token.substr(0, digits), 255u, format)) return std::nullopt;
-    }
-    if (!known_format(format)) return std::nullopt;
-    name.format = static_cast<std::uint8_t>(format);
-    if (!texture_format_palettized(static_cast<TexturePackFormat>(format)) && (name.any_palette || name.palette != 0u)) {
-        return std::nullopt;
-    }
-    if (at < count && parts[at] == "arb") {
-        name.arbitrary = true;
-        ++at;
-    }
-    if (at < count) {
-        const std::string_view tail = parts[at++];
-        std::uint32_t level = 0;
-        if (tail.size() > 3u && tail.substr(0, 3u) == "mip" && parse_uint(tail.substr(3u), NEBULA_TEXTURE_MAX_LEVELS - 1u, level) &&
-            level != 0u) {
-            name.level = static_cast<std::uint8_t>(level);
-        } else {
-            return std::nullopt;
-        }
-    }
-    if (at != count) return std::nullopt;
-    return name;
-}
-
-std::string texture_pack_name(const TexturePackName& name) {
-    char text[96]{};
-    int length = std::snprintf(text, sizeof(text), "tex1_%ux%u%s_%016llx", name.width, name.height,
-                               name.mipmapped ? "_m" : "", static_cast<unsigned long long>(name.hash));
-    if (texture_format_palettized(static_cast<TexturePackFormat>(name.format))) {
-        length += name.any_palette ? std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_$")
-                                : std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length),
-                                                "_%016llx", static_cast<unsigned long long>(name.palette));
-    }
-    length += std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_%u", name.format);
-    if (name.arbitrary) {
-        length += std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_arb");
-    }
-    if (name.level != 0u) {
-        std::snprintf(text + length, sizeof(text) - static_cast<std::size_t>(length), "_mip%u", name.level);
-    }
-    return text;
-}
 
 namespace {
 
@@ -275,6 +140,8 @@ namespace {
 
 constexpr std::uint64_t kUploadBytesPerFrame = 48ull << 20;
 constexpr std::uint32_t kPreloadOutstanding = 8u;
+// Where a converted Dolphin pack keeps its own files (galaxy/dolphin_pack.h).
+constexpr std::string_view kDolphinKept = ".dolphin";
 
 // A name in lower case if it is ASCII (pack names are), else empty.
 std::string ascii_lower(const std::filesystem::path& name) {
@@ -287,30 +154,19 @@ std::string ascii_lower(const std::filesystem::path& name) {
     return out;
 }
 
-std::string ascii_name(const std::filesystem::path& name) {
-    const std::u8string text = name.u8string();
-    std::string out;
-    for (const char8_t c : text) {
-        if (c == 0 || c > 0x7F) return {};
-        out.push_back(static_cast<char>(c));
-    }
-    return out;
-}
-
-std::string display(const std::filesystem::path& path) {
-    const std::u8string text = path.u8string();
+std::string display(const std::u8string& text) {
     return std::string(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
+std::string display(const std::filesystem::path& path) {
+    return display(path.u8string());
+}
+
+std::filesystem::path from_utf8(std::string_view text) {
+    return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size()));
+}
+
 }  // namespace
-
-TexturePacks::SizeKey TexturePacks::size_key(std::uint32_t width, std::uint32_t height, std::uint32_t format) noexcept {
-    return {width, height, format};
-}
-
-TexturePacks::NameKey TexturePacks::name_key(SizeKey size, std::uint64_t hash, std::uint64_t palette, bool mipmapped) noexcept {
-    return {size, hash, palette, mipmapped};
-}
 
 void TexturePacks::start_workers() {
     if (!workers_.empty()) return;
@@ -474,11 +330,16 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     const auto start = std::chrono::steady_clock::now();
     auto index = std::make_shared<Index>();
     index->generation = generation;
+    // A file's name is the game's texture its folder and stem name (galaxy::textures::pack_file_key); without the
+    // game's names (an old store) it answers to both of its names.
+    index->named = galaxy::textures::wait_for_index();
     const std::string id = ascii_lower(texture_pack_game_id());
     const std::string region_free = id.substr(0, 3);
     struct Found {
         std::filesystem::path path;
-        TexturePackName name;
+        std::array<std::uint64_t, 2> keys;  // keys[1] == keys[0]: one name
+        std::uint8_t level;
+        bool arbitrary;
         bool dds;
         std::pair<std::size_t, std::size_t> folder;  // priority: a later folder (and within one, a later pack by name) wins a name
     };
@@ -486,9 +347,6 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     for (std::size_t f = 0; f < packs.size(); ++f) {
         const std::filesystem::path& root = packs[f];
         const std::uint32_t off = f < categories_off.size() ? categories_off[f] : 0u;
-        if (off != 0u) {
-            (void)galaxy::textures::wait_for_index();  // what is off is decided by the game's own sorting
-        }
         std::error_code error;
         if (!std::filesystem::is_directory(root, error)) continue;
         ++index->folders;
@@ -508,7 +366,9 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
                 }
                 if (!it->is_directory(error)) continue;
                 const std::string name = ascii_lower(it->path().filename());
-                if (name == id || name == region_free) {
+                if (name == kDolphinKept) {
+                    it.disable_recursion_pending();
+                } else if (name == id || name == region_free) {
                     games.push_back(it->path());
                     it.disable_recursion_pending();
                 }
@@ -523,26 +383,40 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
             for (auto it = std::filesystem::recursive_directory_iterator(
                      game, std::filesystem::directory_options::skip_permission_denied, error);
                  !error && it != std::filesystem::recursive_directory_iterator(); it.increment(error)) {
-                if (!it->is_regular_file(error)) continue;
+                std::error_code kind;
+                if (it->is_directory(kind)) {
+                    // A converted Dolphin pack's own files.
+                    if (ascii_lower(it->path().filename()) == kDolphinKept) it.disable_recursion_pending();
+                    continue;
+                }
+                if (!it->is_regular_file(kind)) continue;
                 const std::string ext = ascii_lower(it->path().extension());
                 const bool dds = ext == ".dds";
                 if (!dds && ext != ".png") continue;
                 ++index->files;
-                const std::string stem = ascii_name(it->path().stem());
-                const auto name = parse_texture_pack_name(stem);
-                if (name && off != 0u) {
-                    const std::string folder = it->path().parent_path().lexically_relative(game).generic_string();
-                    if ((off & galaxy::textures::category_bit(
-                                   galaxy::textures::category_of_pack_texture(name->hash, folder))) != 0u) {
+                const std::string stem = display(it->path().stem());
+                const std::filesystem::path relative = it->path().lexically_relative(game);
+                if (galaxy::textures::is_dolphin_pack_name(stem)) {
+                    index->dolphin.push_back(display(relative.generic_u8string()));
+                    continue;
+                }
+                const std::string folder = display(relative.parent_path().generic_u8string());
+                const std::optional<galaxy::textures::PackFileName> name = galaxy::textures::parse_pack_file(folder, stem);
+                if (!name) continue;
+                std::array<std::uint64_t, 2> keys = name->keys;
+                if (index->named) {
+                    const std::uint64_t key = galaxy::textures::pack_file_key(*name);
+                    if (galaxy::textures::find_name(key) == nullptr) {
+                        if (name->level == 0u) index->unknown.push_back(display(relative.generic_u8string()));
                         continue;
                     }
+                    keys = {key, key};
                 }
-                if (name) {
-                    found.push_back({it->path(), *name, dds, priority});
-                    if (texture_pack_name(*name) != stem) ++index->corrected;
-                } else if (stem.rfind("tex1_", 0) == 0) {
-                    index->unreadable.push_back(display(it->path().filename()));
+                if (off != 0u && (off & galaxy::textures::category_bit(
+                                            galaxy::textures::category_of_pack_texture(keys[0], folder))) != 0u) {
+                    continue;
                 }
+                found.push_back({it->path(), keys, name->level, name->arbitrary, dds, priority});
             }
         }
     }
@@ -553,34 +427,35 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
         return a.path < b.path;
     });
     for (const Found& f : found) {
-        if (f.name.level != 0u) continue;
-        const auto size = size_key(f.name.width, f.name.height, f.name.format);
-        auto& map = f.name.any_palette ? index->any_palette : index->exact;
-        const auto key = name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped);
-        if (map.find(key) != map.end()) {
-            ++index->shadowed;
-            continue;
+        if (f.level != 0u) continue;
+        bool added = false;
+        for (std::size_t k = 0; k < f.keys.size(); ++k) {
+            if (k != 0u && f.keys[k] == f.keys[0]) break;
+            if (index->names.count(f.keys[k]) != 0u) {
+                if (k == 0u) ++index->shadowed;
+                continue;
+            }
+            if (!added) {
+                Record record{};
+                record.file = f.path;
+                record.dds = f.dds;
+                record.arbitrary = f.arbitrary;
+                index->records.push_back(std::move(record));
+                added = true;
+            }
+            index->names.emplace(f.keys[k], static_cast<std::uint32_t>(index->records.size() - 1u));
         }
-        map.emplace(key, static_cast<std::uint32_t>(index->records.size()));
-        index->sizes.insert(size);
-        Record record{};
-        record.name = f.name;
-        record.file = f.path;
-        record.dds = f.dds;
-        index->records.push_back(std::move(record));
     }
     // Custom lower levels (PNG): _mip<n> beside a PNG base of the same folder.
     for (const Found& f : found) {
-        if (f.name.level == 0u || f.dds) continue;
-        const auto size = size_key(f.name.width, f.name.height, f.name.format);
-        auto& map = f.name.any_palette ? index->any_palette : index->exact;
-        const auto it = map.find(name_key(size, f.name.hash, f.name.any_palette ? 0u : f.name.palette, f.name.mipmapped));
-        if (it == map.end()) continue;
+        if (f.level == 0u || f.dds) continue;
+        const auto it = index->names.find(f.keys[0]);
+        if (it == index->names.end()) continue;
         Record& record = index->records[it->second];
         if (record.dds || record.file.parent_path() != f.path.parent_path()) continue;
-        if (record.mips.size() <= f.name.level) record.mips.resize(f.name.level + 1u);
-        if (record.mips[f.name.level].empty()) {
-            record.mips[f.name.level] = f.path;
+        if (record.mips.size() <= f.level) record.mips.resize(f.level + 1u);
+        if (record.mips[f.level].empty()) {
+            record.mips[f.level] = f.path;
             ++index->levels;
         }
     }
@@ -588,35 +463,10 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     return index;
 }
 
-bool TexturePacks::may_match(std::uint32_t width, std::uint32_t height, TexturePackFormat format) const noexcept {
-    return index_ != nullptr && settings_.enabled &&
-           index_->sizes.count(size_key(width, height, static_cast<std::uint32_t>(format))) != 0u;
-}
-
-std::uint32_t TexturePacks::find(std::uint32_t width, std::uint32_t height, TexturePackFormat format, std::uint64_t hash,
-                                 std::uint64_t palette, bool mipmapped) const {
-    if (!may_match(width, height, format)) return kNone;
-    const auto size = size_key(width, height, static_cast<std::uint32_t>(format));
-    const auto matches = [&](std::uint32_t slot, bool any, bool mip) {
-        const TexturePackName& name = index_->records[slot].name;
-        return name.width == width && name.height == height && name.format == static_cast<std::uint8_t>(format) &&
-               name.hash == hash && name.mipmapped == mip && (any || name.palette == palette);
-    };
-    // The name as the game uses the texture (with or without its mipmaps) first, then the other: a pack made where
-    // the texture was used the other way still replaces it.
-    for (const bool mip : {mipmapped, !mipmapped}) {
-        if (const auto it = index_->exact.find(name_key(size, hash, palette, mip));
-            it != index_->exact.end() && matches(it->second, false, mip)) {
-            return it->second;
-        }
-        if (texture_format_palettized(format)) {
-            if (const auto it = index_->any_palette.find(name_key(size, hash, 0u, mip));
-                it != index_->any_palette.end() && matches(it->second, true, mip)) {
-                return it->second;
-            }
-        }
-    }
-    return kNone;
+std::uint32_t TexturePacks::find(std::uint64_t name) const noexcept {
+    if (!enabled() || name == 0u) return kNone;
+    const auto it = index_->names.find(name);
+    return it != index_->names.end() ? it->second : kNone;
 }
 
 const TextureReplacement* TexturePacks::resident(std::uint32_t slot) const noexcept {
@@ -764,7 +614,8 @@ void TexturePacks::publish_summary() const {
         summary.textures = index_->records.size();
         summary.levels = index_->levels;
         summary.folders = index_->folders;
-        summary.unreadable = index_->unreadable;
+        summary.dolphin = index_->dolphin;
+        summary.unknown = index_->unknown;
     }
     const std::lock_guard<std::mutex> lock(s_summary_mutex);
     s_summary = std::move(summary);
@@ -793,10 +644,13 @@ bool TexturePacks::pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>
                 std::chrono::steady_clock::now().time_since_epoch() / std::chrono::nanoseconds(1));
             std::cerr << "[texture-pack] index folders=" << index_->folders << " files=" << index_->files
                       << " textures=" << index_->records.size() << " levels=" << index_->levels
-                      << " shadowed=" << index_->shadowed << " corrected=" << index_->corrected
-                      << " unreadable=" << index_->unreadable.size() << " ms=" << index_->ms << '\n';
-            for (const std::string& name : index_->unreadable) {
-                std::cerr << "[texture-pack] not a texture name: " << name << '\n';
+                      << " shadowed=" << index_->shadowed << " dolphin=" << index_->dolphin.size()
+                      << " unknown=" << index_->unknown.size() << " named=" << index_->named << " ms=" << index_->ms << '\n';
+            for (const std::string& name : index_->dolphin) {
+                std::cerr << "[texture-pack] a Dolphin name, left out (import the pack as a mod to convert it): " << name << '\n';
+            }
+            for (const std::string& name : index_->unknown) {
+                std::cerr << "[texture-pack] names none of the game's textures: " << name << '\n';
             }
             publish_summary();
         }
@@ -877,14 +731,9 @@ void TexturePacks::make_resident(std::uint32_t slot, TextureReplacement&& replac
         return;
     }
     s.replacement = std::move(replacement);
-    // The scale over the source size the name gives: the samplers' LOD shift (make_sampler_key).
-    const std::uint32_t source_width = index_ && slot < index_->records.size() ? index_->records[slot].name.width : 0u;
-    s.replacement.lod_shift = 0u;
-    s.replacement.arbitrary = index_ && slot < index_->records.size() && index_->records[slot].name.arbitrary;
-    if (source_width != 0u && s.replacement.width > source_width) {
-        const double scale = static_cast<double>(s.replacement.width) / static_cast<double>(source_width);
-        s.replacement.lod_shift = static_cast<float>(std::max(0.0, std::log2(scale)));
-    }
+    // The LOD shift is the texture store's: it knows the size of each game texture a replacement stands for.
+    s.replacement.lod_shift = 0.0f;
+    s.replacement.arbitrary = index_ && slot < index_->records.size() && index_->records[slot].arbitrary;
     s.state = SlotState::Resident;
     s.last_use = frame_;
     resident_bytes_ += s.replacement.bytes;
@@ -893,20 +742,28 @@ void TexturePacks::make_resident(std::uint32_t slot, TextureReplacement&& replac
     upload_bytes_ += s.replacement.bytes;
 }
 
-void TexturePacks::dump(const TexturePackName& name, std::uint32_t width, std::uint32_t height,
-                        const std::uint8_t* rgba) {
-    if (!dumping() || rgba == nullptr || width == 0u || height == 0u) return;
-    std::string stem = texture_pack_name(name);
-    if (!dumped_.insert(stem).second) return;
+void TexturePacks::dump(std::uint64_t name, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba) {
+    if (!dumping() || rgba == nullptr || width == 0u || height == 0u || name == 0u) return;
+    if (!dumped_.insert(name).second) return;
     const std::filesystem::path folder = settings_.dumps / texture_pack_game_id();
     std::vector<std::uint8_t> pixels(rgba, rgba + static_cast<std::size_t>(width) * height * 4u);
-    submit([this, folder, stem = std::move(stem), width, height, pixels = std::move(pixels)]() mutable {
+    submit([this, folder, name, width, height, pixels = std::move(pixels)]() mutable {
+        (void)galaxy::textures::wait_for_index();
+        const galaxy::textures::TextureName* const known = galaxy::textures::find_name(name);
+        if (known == nullptr) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            ++unnamed_dumps_;
+            return;
+        }
+        // Where a pack puts it: <category>/<model>/<texture>.png or <category>/<file>.png.
+        const std::filesystem::path path =
+            folder / from_utf8(std::string(galaxy::textures::category_folder(known->category)) + "/" + known->name + ".png");
         std::error_code error;
-        std::filesystem::create_directories(folder, error);
-        const std::filesystem::path path = folder / (stem + ".png");
+        std::filesystem::create_directories(path.parent_path(), error);
         if (std::filesystem::exists(path, error)) return;
         // Written beside and renamed: a reader never sees a partial file.
-        const std::filesystem::path partial = folder / (stem + ".png.part");
+        std::filesystem::path partial = path;
+        partial += ".part";
         if (write_png(partial, width, height, pixels.data())) {
             std::filesystem::rename(partial, path, error);
             if (!error) {
@@ -926,7 +783,8 @@ TexturePacks::Stats TexturePacks::stats() const noexcept {
         stats.files = index_->files;
         stats.folders = index_->folders;
         stats.levels = index_->levels;
-        stats.unreadable = index_->unreadable.size();
+        stats.dolphin = index_->dolphin.size();
+        stats.unknown = index_->unknown.size();
         stats.index_ms = index_->ms;
     }
     stats.loads = loads_;
@@ -940,6 +798,7 @@ TexturePacks::Stats TexturePacks::stats() const noexcept {
     stats.load_ms = load_ms_;
     std::lock_guard<std::mutex> lock(mutex_);
     stats.dumped = dumped_count_;
+    stats.unnamed_dumps = unnamed_dumps_;
     return stats;
 }
 

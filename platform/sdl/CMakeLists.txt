@@ -156,6 +156,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_plugins.cpp
     ${rt}/mods.cpp
     ${rt}/texture_categories.cpp
+    ${rt}/dolphin_pack.cpp
     ${rt}/crash_report.cpp
     ${rt}/discord_presence.cpp
     ${rt}/controller_roster.cpp
@@ -244,6 +245,7 @@ if(ANDROID)
         ${rt}/mod_xml.cpp
         ${rt}/luma.cpp
         ${rt}/texture_categories.cpp
+        ${rt}/dolphin_pack.cpp
         ${rt}/asset_store.cpp
         ${rt}/atomic_file.cpp)
     target_include_directories(nebula_mods PRIVATE "${nebula_root}/runtime/include" "${nebula_root}/native/include")

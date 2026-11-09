@@ -456,11 +456,102 @@ fn cook_with(image: &Image, wider: u8, minified: bool) -> Result<Vec<u8>> {
         fits
     };
     let flags = if generate { GENERATED_LEVELS } else { 0 };
-    let level0 = &image.data[..image.format.level_bytes(image.width, image.height)];
-    let pack_hash = xxh64(level0);
-    let pack_palette_hash = image.palette.map_or(0, |(bytes, _)| palette_hash(image.format, level0, bytes));
+    // Its image id groups a model's draws by image (Model.cpp); its name, which packs replace it by, comes from what holds
+    // it (name_record).
+    let image_id = xxh64(&image.data[..image.format.level_bytes(image.width, image.height)]);
+    record_of(image.width, image.height, image.format as u8, flags, layout, [image_id, 0], &blocks, &texels)
+}
 
-    record_of(image.width, image.height, image.format as u8, flags, layout, [pack_hash, pack_palette_hash], &blocks, &texels)
+/// Where a record keeps its image id and its name's hash (nebula_cooked_texture.h).
+const IMAGE_ID_AT: usize = 32;
+const NAME_HASH_AT: usize = 40;
+
+/// A texture's name as packs and the dump name it, hashed: FNV-1a 64 of its bytes in ASCII lower case (the game's
+/// galaxy::textures::name_hash).
+pub fn name_hash(name: &str) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325u64;
+    for b in name.bytes() {
+        h ^= u64::from(b.to_ascii_lowercase());
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+/// A row of the store's texture names (NebulaData/TextureNames.tsv): the name, the image id, the hash of the palette
+/// entries the source image used (0 for one without a palette: how a Dolphin pack's file names one), its size and source
+/// format.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct NameRow {
+    pub name: String,
+    /// The file that holds it, as the store names it (the category of a pack's texture comes from it).
+    pub file: String,
+    pub image_id: u64,
+    pub palette: u64,
+    pub width: u32,
+    pub height: u32,
+    pub format: u8,
+}
+
+/// Where the store keeps the names table.
+pub const NAMES_PATH: &str = "NebulaData/TextureNames.tsv";
+
+thread_local! {
+    static NAMING_FILE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// While it lives, the file being cooked on this thread, for the names table (a member of an archive inside its own).
+pub struct NamingFile(String);
+
+impl NamingFile {
+    pub fn set(path: &str) -> NamingFile {
+        NamingFile(NAMING_FILE.with(|f| std::mem::replace(&mut *f.borrow_mut(), path.to_string())))
+    }
+}
+
+impl Drop for NamingFile {
+    fn drop(&mut self) {
+        NAMING_FILE.with(|f| *f.borrow_mut() = std::mem::take(&mut self.0));
+    }
+}
+
+/// Set while a store is cooked: every named record's row.
+pub static NAMES: std::sync::Mutex<Option<Vec<NameRow>>> = std::sync::Mutex::new(None);
+
+/// Names a record by what holds it: `<model stem>/<texture>` for a model's texture, `<file stem>` for a texture file.
+/// `palette`: source_palette_hash of its source. A record the game makes (no source) keeps no name.
+pub fn name_record(record: &mut [u8], name: &str, palette: u64) {
+    if !is_record(record) || record[29] == MADE || name.is_empty() {
+        return;
+    }
+    record[NAME_HASH_AT..NAME_HASH_AT + 8].copy_from_slice(&name_hash(name).to_le_bytes());
+    if let Some(rows) = NAMES.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        rows.push(NameRow {
+            name: name.to_string(),
+            file: NAMING_FILE.with(|f| f.borrow().clone()),
+            image_id: u64::from_le_bytes(record[IMAGE_ID_AT..IMAGE_ID_AT + 8].try_into().unwrap()),
+            palette,
+            width: u32::from_le_bytes(record[16..20].try_into().unwrap()),
+            height: u32::from_le_bytes(record[20..24].try_into().unwrap()),
+            format: record[29],
+        });
+    }
+}
+
+/// The hash of the palette entries a colour-indexed image uses, as a Dolphin pack's file names it; 0 for the others.
+pub fn source_palette_hash(image: &Image) -> u64 {
+    let level0 = &image.data[..image.format.level_bytes(image.width, image.height).min(image.data.len())];
+    image.palette.map_or(0, |(bytes, _)| palette_hash(image.format, level0, bytes))
+}
+
+/// The names table as the store keeps it: sorted, one row a line.
+pub fn names_table(rows: &mut Vec<NameRow>) -> Vec<u8> {
+    rows.sort();
+    rows.dedup();
+    let mut out = String::from("name\timage\tpalette\twidth\theight\tformat\tfile\n");
+    for r in rows.iter() {
+        out.push_str(&format!("{}\t{:016x}\t{:016x}\t{}\t{}\t{}\t{}\n", r.name, r.image_id, r.palette, r.width, r.height, r.format, r.file));
+    }
+    out.into_bytes()
 }
 
 /// The record of an image that was never in a disc format (a mod's PNG): its levels as they are.
@@ -833,6 +924,49 @@ mod tests {
     }
 
     #[test]
+    fn names_hash_without_case() {
+        assert_eq!(name_hash(""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(name_hash("a"), 0xaf63_dc4c_8601_ec8c);
+        assert_eq!(name_hash("Kuribo/KuriboBody"), name_hash("kuribo/kuribobody"));
+        assert_ne!(name_hash("Kuribo/KuriboBody"), name_hash("Kuribo/KuriboBody2"));
+    }
+
+    #[test]
+    fn a_named_record_holds_its_hash_and_gives_a_row() {
+        let data: Vec<u8> = (0..32).collect();
+        let image = Image { format: Format::I8, width: 8, height: 4, levels: 1, data: &data, palette: None };
+        let mut record = cook(&image).unwrap();
+        let image_id = u64::from_le_bytes(record[IMAGE_ID_AT..IMAGE_ID_AT + 8].try_into().unwrap());
+        assert_eq!(image_id, xxh64(&data), "the image id is the source's level 0");
+        *NAMES.lock().unwrap_or_else(|e| e.into_inner()) = Some(Vec::new());
+        {
+            let _file = NamingFile::set("ObjectData/NameTest.arc");
+            name_record(&mut record, "NameTest/Body", 0);
+        }
+        let rows = NAMES.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
+        assert_eq!(u64::from_le_bytes(record[NAME_HASH_AT..NAME_HASH_AT + 8].try_into().unwrap()), name_hash("NameTest/Body"));
+        // Other tests may cook at the same time: only this one's row is looked at.
+        let mut mine: Vec<NameRow> = rows.into_iter().filter(|r| r.name == "NameTest/Body").collect();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0], NameRow {
+            name: "NameTest/Body".into(),
+            file: "ObjectData/NameTest.arc".into(),
+            image_id,
+            palette: 0,
+            width: 8,
+            height: 4,
+            format: Format::I8 as u8,
+        });
+        mine.push(mine[0].clone());
+        let table = String::from_utf8(names_table(&mut mine)).unwrap();
+        assert_eq!(
+            table,
+            format!("name\timage\tpalette\twidth\theight\tformat\tfile\nNameTest/Body\t{image_id:016x}\t0000000000000000\t8\t4\t{}\tObjectData/NameTest.arc\n", Format::I8 as u8),
+            "one row (duplicates go), tab separated, the header first"
+        );
+    }
+
+    #[test]
     fn xxh64_matches_the_reference_values() {
         // python-xxhash 3.x, xxh64(data, seed=0) (texture_pack_tests.cpp).
         assert_eq!(xxh64(b""), 0xef46db3751d8e999);
@@ -884,7 +1018,8 @@ mod tests {
         let record = cook(&image).unwrap();
         let (_, _, t) = record_level0(&record).unwrap();
         assert_eq!(t[0], [255, 0, 0, 255]);
-        assert_eq!(u64::from_le_bytes(record[40..48].try_into().unwrap()), xxh64(&palette[6..12]));
+        assert_eq!(source_palette_hash(&image), xxh64(&palette[6..12]), "the names table's palette: entries 3..5 used");
+        assert_eq!(&record[NAME_HASH_AT..NAME_HASH_AT + 8], &[0u8; 8], "no name until what holds it names it");
     }
 
     #[test]

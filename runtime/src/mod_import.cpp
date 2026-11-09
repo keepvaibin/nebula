@@ -9,6 +9,8 @@
 
 #include "galaxy/luma.h"
 #include "galaxy/mods.h"
+#include "galaxy/dolphin_pack.h"
+#include "galaxy/texture_categories.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -484,6 +486,14 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
     if (!folder) lift_top_folder(writer.staging);
     if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging); manifest && !manifest->id.empty()) {
         result.id = folder_name(manifest->id);
+    }
+    // A Dolphin texture pack takes the game's texture names here, once (dolphin_pack.h); compared and kept converted.
+    if (galaxy::textures::has_dolphin_files(writer.staging) && galaxy::textures::wait_for_index()) {
+        const galaxy::textures::DolphinConversion converted =
+            galaxy::textures::convert_dolphin_pack(writer.staging, galaxy::textures::names());
+        result.dolphin_files = converted.files;
+        result.dolphin_textures = converted.textures;
+        result.dolphin_unmatched = converted.unmatched.size();
     }
     // The same pack again (under any file name, as a browser's "(1)" copy, or the folder it came from): nothing is
     // added or replaced, and the player is told where it is.
