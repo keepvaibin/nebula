@@ -1320,7 +1320,7 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
             // A picture: the player's face (Mario's or Luigi's, chosen when the board opens), the storybook's cover.
             const char* pTexture = i == StatChapters ? "PictureBookCoverFront.bti" : "mymiimario.tpl";
             for (s32 t = 0; t < textureNum; t++) {
-                if (strcmp(NebulaAchievements::getIconTexture(t)->mTexture, pTexture) == 0 && p->mTextures[t] != nullptr) {
+                if (MR::isEqualString(NebulaAchievements::getIconTexture(t)->mTexture, pTexture) && p->mTextures[t] != nullptr) {
                     nebula_snprintf(name, sizeof(name), "NbS%02dP", i);
                     rTile.mPicture = makePicture(rTile.mRoot, name, p->mTextures[t]);
                 }
@@ -1506,9 +1506,9 @@ void NebulaAchievementBoard::open() {
     const NebulaAchievementIcon* pBook = nullptr;
     for (s32 i = 0; i < NebulaAchievements::getIconTextureNum(); i++) {
         const NebulaAchievementIcon* pIcon = NebulaAchievements::getIconTexture(i);
-        if (strcmp(pIcon->mTexture, file.mMario ? "mymiimario.tpl" : "mymiiluigi.tpl") == 0) {
+        if (MR::isEqualString(pIcon->mTexture, file.mMario ? "mymiimario.tpl" : "mymiiluigi.tpl")) {
             pFace = pIcon;
-        } else if (strcmp(pIcon->mTexture, "PictureBookCoverFront.bti") == 0) {
+        } else if (MR::isEqualString(pIcon->mTexture, "PictureBookCoverFront.bti")) {
             pBook = pIcon;
         }
     }

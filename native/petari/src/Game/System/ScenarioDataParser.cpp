@@ -43,7 +43,7 @@ namespace {
     u32 getGalaxyNameLength(const GameAssets::FolderEntry& rEntry) {
         const u32 suffixLength = sizeof(cScenarioSuffix) - 1;
         const u32 length = static_cast< u32 >(strlen(rEntry.mName));
-        if (!rEntry.mIsFolder || length <= suffixLength || strcmp(rEntry.mName + length - suffixLength, cScenarioSuffix) != 0) {
+        if (!rEntry.mIsFolder || length <= suffixLength || !MR::isEqualString(rEntry.mName + length - suffixLength, cScenarioSuffix)) {
             return 0;
         }
         return length - suffixLength;

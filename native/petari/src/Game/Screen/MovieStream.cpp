@@ -6,6 +6,7 @@
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MemoryUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
@@ -55,7 +56,7 @@ bool MovieStream::open(const char* pName) {
     }
 
     memcpy(&mHeader, mData, sizeof(mHeader));
-    if (strncmp(mHeader.mMagic, "NMOV", 4) != 0) {
+    if (!MR::isEqualStringPrefix(mHeader.mMagic, "NMOV")) {
         NEBULA_PANIC("%s: a movie not cooked (the importer rewrites THP files)", pMovieName);
     }
     if (!(mHeader.mDisplayAspect > 0.0f) || mHeader.mWidth == 0 || mHeader.mHeight == 0) {

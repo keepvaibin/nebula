@@ -2,6 +2,7 @@
 #include "Game/AreaObj/AreaObj.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 #include <cstring>
 
@@ -16,7 +17,7 @@ void CubeCameraArea::init(const TableIter& rIter) {
     const char* valid;
 
     if (rIter.getValue("Validity", &valid)) {
-        if (strcmp(valid, "Invalid") == 0) {
+        if (MR::isEqualString(valid, "Invalid")) {
             mIsValid = false;
         }
     }

@@ -9,6 +9,7 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
@@ -97,7 +98,7 @@ void NebulaQuitButton::layOut() {
     Ui::TextBox* pLabel = nullptr;
     for (Ui::Pane* pChild : pTextParent->GetChildList()) {
         Ui::TextBox* pText = asTextBox(pChild);
-        if (pText != nullptr && strncmp(pText->mName, "Txt", 3) == 0) {
+        if (pText != nullptr && MR::isEqualStringPrefix(pText->mName, "Txt")) {
             pLabel = pText;
         }
     }

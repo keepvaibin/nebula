@@ -1522,8 +1522,8 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
 
     const s32 hint = firstHint(rView);
     if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number &&
-        strcmp(pShown->help, rView.help) == 0 && strcmp(pShown->status_text, rView.status_text) == 0 &&
-        strcmp(pShown->long_text, rView.long_text) == 0 && pShown->page == rView.page && pShown->input == rView.input && firstHint(*pShown) == hint) {
+        MR::isEqualString(pShown->help, rView.help) && MR::isEqualString(pShown->status_text, rView.status_text) &&
+        MR::isEqualString(pShown->long_text, rView.long_text) && pShown->page == rView.page && pShown->input == rView.input && firstHint(*pShown) == hint) {
         return;
     }
 
@@ -3070,7 +3070,7 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
         } else {
             const NebulaSettingsRow* pNow = rowAt(rView, rView.selected);
             const NebulaSettingsRow* pBefore = rowAt(mShown, rView.selected);
-            if (pNow != nullptr && pBefore != nullptr && strcmp(pNow->value, pBefore->value) != 0) {
+            if (pNow != nullptr && pBefore != nullptr && !MR::isEqualString(pNow->value, pBefore->value)) {
                 MR::startSystemSE("SE_SY_SELECT_PAUSE_ITEM");
             }
         }

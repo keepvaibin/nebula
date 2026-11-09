@@ -888,7 +888,7 @@ void MR::stopShakingCamera(NameObj* pObj) {
 }
 
 bool MR::isName(const NameObj* pObj, const char* pName) {
-    return strcmp(pObj->getName(), pName) == 0;
+    return MR::isEqualString(pObj->getName(), pName);
 }
 
 bool MR::isSame(const NameObj* pObj1, const NameObj* pObj2) {

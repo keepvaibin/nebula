@@ -11,6 +11,7 @@
 #include "Game/MapObj/MercatorRotateParts.hpp"
 #include "Game/MapObj/SimpleNormalMapObj.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 
 namespace {
@@ -81,8 +82,8 @@ namespace {
         for (u32 i = 0; i < ARRAY_SIZE(cModelChangableObjCreatorTable); i++) {
             const Model2CreateFunc* pModel2CreateFunc = &cModelChangableObjCreatorTable[i];
             const bool isMatch = pModel2CreateFunc->mNamePrefix != nullptr
-                                     ? strncmp(pName, pModel2CreateFunc->mNamePrefix, strlen(pModel2CreateFunc->mNamePrefix)) == 0
-                                     : strcmp(pName, pModel2CreateFunc->mArchiveName) == 0;
+                                     ? MR::isEqualStringPrefix(pName, pModel2CreateFunc->mNamePrefix)
+                                     : MR::isEqualString(pName, pModel2CreateFunc->mArchiveName);
 
             if (isMatch) {
                 return pModel2CreateFunc;

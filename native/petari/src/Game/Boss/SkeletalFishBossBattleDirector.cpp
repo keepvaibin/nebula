@@ -33,13 +33,13 @@ void SkeletalFishBossBattleDirector::initiate() {
     LiveActorGroup* group = MR::getGroupFromArray(mFishBoss);
 
     for (s32 i = 0; i < group->getObjNum(); i++) {
-        if (strcmp(group->getActor(i)->getName(), "海底火山巨大石柱") == 0 || strcmp(group->getActor(i)->getName(), "海底火山石柱（小）") == 0) {
+        if (MR::isEqualString(group->getActor(i)->getName(), "海底火山巨大石柱") || MR::isEqualString(group->getActor(i)->getName(), "海底火山石柱（小）")) {
             mColumns.at(mColumnNum) = static_cast< SubmarineVolcanoBigColumn* >(group->getActor(i));
             mColumnNum++;
         }
 
-        if (strcmp(group->getActor(i)->getName(), "羽虫Ｓ")) {
-            if (strcmp(group->getActor(i)->getName(), "羽虫Ｌ")) {
+        if (!MR::isEqualString(group->getActor(i)->getName(), "羽虫Ｓ")) {
+            if (!MR::isEqualString(group->getActor(i)->getName(), "羽虫Ｌ")) {
                 continue;
             }
         }

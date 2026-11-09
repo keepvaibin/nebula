@@ -3,6 +3,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
 #include <Game/Ui/Layout.hpp>
@@ -137,7 +138,7 @@ namespace {
     };
 
     bool isNamed(const Pane* pPane, const char* pName) {
-        return strcmp(pPane->mName, pName) == 0;
+        return MR::isEqualString(pPane->mName, pName);
     }
 
     void add(LayoutManager* pManager, Pane* pPane, u32 fit, f32 width, f32 height) {
@@ -192,7 +193,7 @@ namespace {
         }
         for (u32 i = 0; pManager->mLayoutName != nullptr && i < sizeof(cFitRules) / sizeof(cFitRules[0]); i++) {
             const FitRule& rRule = cFitRules[i];
-            if (strcmp(rRule.mLayout, pManager->mLayoutName) == 0) {
+            if (MR::isEqualString(rRule.mLayout, pManager->mLayoutName)) {
                 add(pManager, pRoot->FindPaneByName(rRule.mPane, true), rRule.mFit, rRule.mWidth, rRule.mHeight);
             }
         }

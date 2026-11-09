@@ -22,6 +22,7 @@ public:
     void setStartIdInfo(const PlacementId&);
 
     const char* mScene;  // MR::internName
+    bool mIsGameScene;   // mScene is "Game"; set with mScene
     const char* mStage;
     s32 mScenarioNo;
     s32 mSelectedScenarioNo;

@@ -4,6 +4,7 @@
 #include "Game/Render/Model.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <nebula_format.h>
 #include <string.h>
 
@@ -179,7 +180,7 @@ s32 ModelData::findMaterial(const char* pName) const {
 
 s32 ModelData::findTexture(const char* pName) const {
     for (u32 i = 0; i < getTextureCount(); i++) {
-        if (strcmp(getTextureName(i), pName) == 0) {
+        if (MR::isEqualString(getTextureName(i), pName)) {
             return static_cast< s32 >(i);
         }
     }

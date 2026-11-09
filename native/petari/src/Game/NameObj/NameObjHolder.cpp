@@ -1,6 +1,7 @@
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -10,7 +11,7 @@ namespace {
         }
 
         bool operator()(const NameObj* pObj) const {
-            return strcmp(pObj->getName(), mName) == 0;
+            return MR::isEqualString(pObj->getName(), mName);
         }
 
         const char* mName;

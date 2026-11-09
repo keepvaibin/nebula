@@ -67,6 +67,19 @@ namespace {
 
 namespace {
     namespace Local {
+        // Whether the first four characters of two names match (a name shorter than four ends the compare).
+        inline bool isSameFirstFour(const char* pA, const char* pB) {
+            for (u32 i = 0; i < 4; i++) {
+                if (pA[i] != pB[i]) {
+                    return false;
+                }
+                if (pA[i] == '\0') {
+                    return true;
+                }
+            }
+            return true;
+        }
+
         inline void collectLanguagePanes(Ui::Pane* pPane, BitFlagBase& rLanguagePanes, BitFlagBase& rCurrentLanguagePanes) {
             Ui::PaneList& rPaneList = pPane->mChildList;
             s32 index = -1;
@@ -80,9 +93,9 @@ namespace {
 
                 const char* pSuffix = pName + (length - 4);
                 for (u32 i = 0; i < MR::getLanguageNum(); i++) {
-                    if (strncmp(pSuffix, MR::getLanguagePrefixByIndex(i), 4) == 0) {
+                    if (isSameFirstFour(pSuffix, MR::getLanguagePrefixByIndex(i))) {
                         rLanguagePanes.onBit(index);
-                        if (strncmp(pSuffix, MR::getCurrentLanguagePrefix(), 4) == 0) {
+                        if (isSameFirstFour(pSuffix, MR::getCurrentLanguagePrefix())) {
                             rCurrentLanguagePanes.onBit(index);
                         }
 
@@ -357,7 +370,7 @@ s32 LayoutManager::getIndexOfGroupCtrl(const char* pName) const {
     u32 index = 0;
     Ui::GroupList& rGroupList = mLayout->mpGroupContainer->mGroupList;
     for (Ui::Group* pGroup : rGroupList) {
-        if (strcmp(pGroup->mName, pName) == 0) {
+        if (MR::isEqualString(pGroup->mName, pName)) {
             return index;
         }
 
@@ -462,7 +475,7 @@ void LayoutManager::copyPaneMtxRefs() {
 
 Ui::Group* LayoutManager::getGroup(const char* pName) const {
     for (Ui::Group* pGroup : mLayout->mpGroupContainer->mGroupList) {
-        if (strcmp(pGroup->mName, pName) == 0) {
+        if (MR::isEqualString(pGroup->mName, pName)) {
             return pGroup;
         }
     }
@@ -559,7 +572,7 @@ Ui::Pane* LayoutManager::getPane(const char* pName) const {
 
 Ui::Pane* LayoutManager::findPaneByName(const char* pName) const {
     Ui::Pane* const pPane = mLayout->FindPane(pName);
-    return pPane != nullptr && strcmp(pPane->mName, pName) == 0 ? pPane : nullptr;
+    return pPane != nullptr && MR::isEqualString(pPane->mName, pName) ? pPane : nullptr;
 }
 
 void LayoutManager::replaceIndDummyTexture() {

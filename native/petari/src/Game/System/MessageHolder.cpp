@@ -4,6 +4,7 @@
 #include "Game/NPC/TalkNodeCtrl.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <cstring>
@@ -23,7 +24,7 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
     // Nebula's own talk (Nebula_<id>: the Achievement Luma's): an Observatory Luma's talk settings (a normal talk in
     // its balloon, with its voice and camera) and Nebula's words in the played language.
     static const char cNebula[] = "Nebula_";
-    if (strncmp(pMessage, cNebula, sizeof(cNebula) - 1) == 0) {
+    if (MR::isEqualStringPrefix(pMessage, cNebula)) {
         const char16_t* pText = NebulaText::getTalk(pMessage + sizeof(cNebula) - 1);
         const s32 templateIndex = findMessageIndex("AstroGalaxy_Tico034");
         if (pText == nullptr || templateIndex < 0 || static_cast< u32 >(templateIndex) >= getMessageNum()) {

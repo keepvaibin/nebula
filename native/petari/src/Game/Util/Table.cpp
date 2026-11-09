@@ -74,7 +74,13 @@ TableIter Table::findElementBinary(const char* key, const char* value) const {
     while (low < high) {
         int mid = (low + high) / 2;
         getValue< const char* >(mid, key, &nextVal);
-        int comparison = strcmp(nextVal, value);
+        const u8* pA = reinterpret_cast< const u8* >(nextVal);
+        const u8* pB = reinterpret_cast< const u8* >(value);
+        while (*pA != 0 && *pA == *pB) {
+            pA++;
+            pB++;
+        }
+        int comparison = static_cast< int >(*pA) - static_cast< int >(*pB);
         if (comparison == 0) {
             return TableIter(this, mid);
         } else if (comparison < 0) {

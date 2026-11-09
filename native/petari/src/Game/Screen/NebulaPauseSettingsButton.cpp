@@ -7,6 +7,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Pane.hpp>
@@ -34,7 +35,7 @@ void NebulaPauseSettingsButton::init(const TableIter& rIter) {
     // The menu's lower button alone, moved down into the band.
     Ui::Pane* pRoot = pManager->mLayout->mpRootPane;
     for (Ui::Pane* pChild : pRoot->GetChildList()) {
-        pChild->SetVisible(strcmp(pChild->mName, "BackButton") == 0);
+        pChild->SetVisible(MR::isEqualString(pChild->mName, "BackButton"));
     }
     MR::hidePane(this, "NBackUp");
     Ui::Pane* pGroup = MR::getPane(this, "BackButton");
