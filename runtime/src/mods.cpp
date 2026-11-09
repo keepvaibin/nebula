@@ -1125,8 +1125,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 const luma::Situation situation = situation_of(mod, region_id, playing);
                 for (const luma::Layer& layer : manifest->layers) {
                     if (!luma::layer_used(layer, situation)) continue;
-                    mod.native_patches += static_cast<unsigned>(layer.switches.size());
-                    mod.luma_changes_game = mod.luma_changes_game || !layer.switches.empty() || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty();
+                    mod.luma_changes_game = mod.luma_changes_game || !layer.tunables.empty() ||!layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty();
                     if (layer.path.empty()) continue;
                     const fs::path place = dir / fs::path(from_utf8(layer.path));
                     std::error_code place_error;
@@ -1613,25 +1612,11 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     }
                     plan.rows.tunables.push_back({mod.id, tunable.key, value});
                 }
-                for (const auto& [name, option] : layer.switch_options) {
-                    const auto choice = situation.options.find(option);
-                    const std::uint32_t number = luma::switch_number(name);
-                    if (choice != situation.options.end() && number != 0u) {
-                        plan.native_patches[number] = static_cast<std::uint32_t>(std::strtol(choice->second.c_str(), nullptr, 10));
-                    }
-                }
                 for (const luma::SoundEffect& sound : layer.sound_effects) {
                     plan.rows.sound_effects.push_back({mod.id, sound.name, sound.file});
                 }
                 for (const luma::ObjectClass& object : layer.object_classes) {
                     plan.rows.object_classes.push_back({mod.id, object.name, object.like});
-                }
-                for (const auto& [name, value] : layer.switches) {
-                    if (const std::uint32_t number = luma::switch_number(name); number != 0u) {
-                        plan.native_patches[number] = value;
-                    } else {
-                        note(name + ": a switch this game doesn't know");
-                    }
                 }
                 for (const auto& [material, file] : layer.materials) {
                     plan.materials.push_back({material, mod.path / fs::path(from_utf8(file))});

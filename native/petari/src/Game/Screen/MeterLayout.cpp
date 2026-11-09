@@ -3,7 +3,7 @@
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/CountUpPaneRumbler.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -61,7 +61,7 @@ namespace {
 
     // The meter steps aside when the player has what they start with, unless that is the last.
     bool isStartingHealth(s32 count) {
-        const s32 starting = NebulaHost::setting(NEBULA_PATCH_PLAYER_HEALTH, 3);
+        const s32 starting = GameRules::playerHealth();
         return count == starting && count != 1;
     }
 };  // namespace

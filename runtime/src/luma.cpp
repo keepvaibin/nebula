@@ -668,10 +668,14 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.object_classes.push_back(std::move(object));
             }
         }
-        if (const Value* switches = entry.get("switches"); switches != nullptr && switches->object() != nullptr) {
-            for (const auto& [name, value] : *switches->object()) {
-                if (const double* number = value.number()) layer.switches[name] = whole_u32(*number);
-                else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) layer.switch_options[name] = *option->string();
+        // "switches" gave way to "tunables": the mod is refused, naming the tunable for its first switch.
+        if (const Value* switches = entry.get("switches"); switches != nullptr && out.retired.empty()) {
+            out.retired = "\"SWITCHES\" ARE NOW \"TUNABLES\"";
+            if (switches->object() != nullptr && !switches->object()->empty()) {
+                const std::string& name = switches->object()->begin()->first;
+                if (const SwitchTunable tunable = switch_tunable(name); !tunable.key.empty()) {
+                    out.retired += ": " + name + " IS " + std::string(tunable.key) + (tunable.opposite ? " (THE OPPOSITE SENSE)" : "");
+                }
             }
         }
         if (const Value* materials = entry.get("materials"); materials != nullptr && materials->object() != nullptr) {
@@ -746,6 +750,7 @@ int compare_versions(std::string_view a, std::string_view b) {
 
 std::string refusal(const Manifest& manifest, const std::string& game_id, std::string_view nebula_version, std::string_view) {
     if (manifest.format > kFormat) return "THIS MOD NEEDS A NEWER NEBULA";
+    if (!manifest.retired.empty()) return manifest.retired;
     // The features this Nebula has; any other is one it lacks. "tunables": the game's tuning numbers by "<file>.<name>".
     for (const std::string& feature : manifest.requires_features) {
         if (feature != "custom-shaders" && feature != "tunables") return "THIS MOD NEEDS A NEWER NEBULA";
@@ -758,6 +763,7 @@ std::string refusal(const Manifest& manifest, const std::string& game_id, std::s
     }
     for (const Plugin& plugin : manifest.plugins) {
         if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
+        if (plugin.api != 0u && plugin.api < kPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT, SETTING() IS NOW GET_TUNABLE()";
         if (plugin.binaries.find(std::string(plugin_target())) == plugin.binaries.end()) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
     }
     return {};
@@ -831,41 +837,40 @@ std::string_view this_platform() noexcept {
 #endif
 }
 
-std::uint32_t switch_number(std::string_view name) noexcept {
-    // Numbered as NEBULA_PATCH_* is: the host checks them against each other.
-    static constexpr std::pair<std::string_view, std::uint32_t> kSwitches[] = {
-        {"flip_panel_group", 1u},
-        {"flip_panel_observer_group", 2u},
-        {"water_bazooka_shot_flag", 3u},
-        {"kamek_barrier_offset_y", 4u},
-        {"skeletal_fish_baby_no_bubble", 5u},
-        {"dodoryu_shell_only", 6u},
-        {"miss_star_pieces", 7u},
-        {"no_hidden_star_table", 8u},
-        {"no_sudden_death_dodoryu", 9u},
-        {"begoman_fire_proof", 10u},
-        {"messenger_always_ex", 11u},
-        {"messenger_ex_one_ups", 12u},
-        {"player_health", 13u},
-        {"player_health_fixed", 14u},
-        {"hit_takes_all", 15u},
-        {"life_up_health", 16u},
-        {"no_low_health_warning", 17u},
-        {"no_dark_comet_rules", 18u},
-        {"max_lives", 19u},
-        {"max_star_bits", 20u},
-        {"max_carried_star_bits", 21u},
-        {"max_coins", 22u},
-        {"coins_per_one_up", 23u},
-        {"star_bits_per_one_up", 24u},
-        {"starting_lives", 25u},
-        {"purple_coins_for_star", 26u},
-        {"water_air", 27u},
+SwitchTunable switch_tunable(std::string_view name) noexcept {
+    static constexpr std::pair<std::string_view, SwitchTunable> kSwitches[] = {
+        {"flip_panel_group", {"FlipPanel.cPanelGroupSize"}},
+        {"flip_panel_observer_group", {"FlipPanel.cObserverGroupSize"}},
+        {"water_bazooka_shot_flag", {"WaterBazooka.cShotInvalidSpinKill"}},
+        {"kamek_barrier_offset_y", {"BossKameckBarrier.cOffsetY"}},
+        {"skeletal_fish_baby_no_bubble", {"SkeletalFishBaby.cBreakAirBubble", true}},
+        {"dodoryu_shell_only", {"GameRules.cDodoryuShellOnly"}},
+        {"miss_star_pieces", {"SequenceUtil.cMissStarPieceNum"}},
+        {"no_hidden_star_table", {"SceneUtil.cHiddenStarTable", true}},
+        {"no_sudden_death_dodoryu", {"SceneUtil.cSuddenDeathDodoryu", true}},
+        {"begoman_fire_proof", {"GameRules.cBegomanFireProof"}},
+        {"messenger_always_ex", {"KinopioAstro.cMessangerAlwaysEx"}},
+        {"messenger_ex_one_ups", {"KinopioAstro.sMessangerOneUpExNum"}},
+        {"player_health", {"GameRules.cPlayerHealth"}},
+        {"player_health_fixed", {"MarioActor.cDarkCometOneHealth", true}},
+        {"hit_takes_all", {"MarioActor.cHitTakesAll"}},
+        {"life_up_health", {"GameRules.cLifeUpHealth"}},
+        {"no_low_health_warning", {"MarioEffect.cLowHealthWarning", true}},
+        {"no_dark_comet_rules", {"EventUtil.cDarkCometRules", true}},
+        {"max_lives", {"GameDataPlayerStatus.cMaxPlayerLeft"}},
+        {"max_star_bits", {"GameRules.cMaxStarBits"}},
+        {"max_carried_star_bits", {"GameDataTemporaryInGalaxy.cMaxCarriedStarPieceNum"}},
+        {"max_coins", {"GameRules.cMaxCoins"}},
+        {"coins_per_one_up", {"ScenePlayingResult.cCoinStepNum"}},
+        {"star_bits_per_one_up", {"ScenePlayingResult.cStarPieceStepNum"}},
+        {"starting_lives", {"GameDataPlayerStatus.cStartingPlayerLeft"}},
+        {"purple_coins_for_star", {"ScenePlayingResult.cPurpleCoinPowerStarAppearNum"}},
+        {"water_air", {"MarioActor.cWaterAir"}},
     };
-    for (const auto& [known, number] : kSwitches) {
-        if (known == name) return number;
+    for (const auto& [known, tunable] : kSwitches) {
+        if (known == name) return tunable;
     }
-    return 0u;
+    return {};
 }
 
 }  // namespace galaxy::luma

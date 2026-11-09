@@ -35,7 +35,6 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
-#include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace NrvWaterBazooka {
@@ -58,6 +57,8 @@ namespace NrvWaterBazooka {
 };  // namespace NrvWaterBazooka
 
 namespace {
+    // A water shot is not broken by a spin.
+    NEBULA_TUNABLE(bool, cShotInvalidSpinKill, false);
     NEBULA_TUNABLE(f32, sElectricBulletSpeed, 12.0f);
     const char* const sDropPointStringTable[] = {"落下点1", "落下点2", "落下点3", "落下点4"};
     const s32 sElectricBulletNum = 5;
@@ -938,8 +939,7 @@ bool WaterBazooka::tryShotBullet() {
         static_cast< ElectricPressureBullet* >(bullet)->shotElectricBullet(this, posMtx, ::sElectricBulletSpeed);
     } else {
         static_cast< WaterPressureBullet* >(bullet)->shotWaterBullet(
-            this, posMtx, 40.0f, true, true, NebulaHost::codePatch(NEBULA_PATCH_WATER_BAZOOKA_SHOT_FLAG, nullptr) != 0,
-            &mCameraInfo);
+            this, posMtx, 40.0f, true, true, ::cShotInvalidSpinKill, &mCameraInfo);
     }
 
     return true;

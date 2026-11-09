@@ -12,7 +12,12 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
+
+namespace {
+    // Star bits given after a miss (0).
+    NEBULA_TUNABLE(s32, cMissStarPieceNum, 0);
+};  // namespace
 
 namespace MR {
     void requestChangeScene(SceneKind kind) {
@@ -45,8 +50,8 @@ namespace MR {
         argument.mSelectedScenarioNo = pSceneController->getCurrentSelectedScenarioNo();
 
         GameSequenceFunction::requestGalaxyMove(argument);
-        if (u32 pieces = 0; NebulaHost::codePatch(NEBULA_PATCH_MISS_STAR_PIECES, &pieces)) {
-            GameDataFunction::addStarPiece(static_cast< s32 >(pieces));
+        if (::cMissStarPieceNum != 0) {
+            GameDataFunction::addStarPiece(::cMissStarPieceNum);
         }
     }
 

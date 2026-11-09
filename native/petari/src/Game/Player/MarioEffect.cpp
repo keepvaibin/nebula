@@ -18,7 +18,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleMath.hpp"
 #include <cstdio>
@@ -81,6 +81,8 @@ MaterialEffectEntry cMaterialEffectTable[] = {
     {nullptr, 0, {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}, nullptr, nullptr}};
 
 namespace {
+    // The sound when health or air is low.
+    NEBULA_TUNABLE(bool, cLowHealthWarning, true);
 
     void addMarioEffectAtJoint(LiveActor* pActor, const char* pEffectName, const char* pJointName, const char* pGroupName) {
         MtxPtr mtx = pJointName != nullptr ? MR::getJointMtx(pActor, pJointName) : pActor->getBaseMtx();
@@ -1134,7 +1136,7 @@ void MarioActor::updateEffect() {
     mEffectFlags.mSlopeSlip = effectA;
 
     if ((mHealth <= 1 || mWaterLife <= 1) && !MR::isDemoActive() && !MR::isPowerStarGetDemoActive() && !MR::isGalaxyDarkCometAppearInCurrentStage() &&
-        MR::isPermitSE() && isEnableNerveChange() && !NebulaHost::codePatch(NEBULA_PATCH_NO_LOW_HEALTH_WARNING, nullptr)) {
+        MR::isPermitSE() && isEnableNerveChange() && ::cLowHealthWarning) {
         playSound("ライフ警告", -1);
     }
 

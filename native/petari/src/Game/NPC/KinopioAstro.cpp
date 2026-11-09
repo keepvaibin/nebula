@@ -20,19 +20,13 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sMessangerOneUpNum, 5);
     NEBULA_TUNABLE(s32, sMessangerOneUpExNum, 20);
-
-    // The larger supply's 1-ups (a mod may change them: NEBULA_PATCH_MESSENGER_EX_ONE_UPS).
-    s32 messengerOneUpExNum() {
-        u32 count = ::sMessangerOneUpExNum;
-        NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
-        return static_cast< s32 >(count);
-    }
+    // The messenger always gives the larger supply; the game: only for Luigi.
+    NEBULA_TUNABLE(bool, cMessangerAlwaysEx, false);
     NEBULA_TUNABLE(f32, sMessangerTalkDistance, 3000.0f);
     NEBULA_TUNABLE(f32, sGotMailSePlayAreaRadius, 1500.0f);
 };  // namespace
@@ -86,11 +80,11 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
         return false;
     } else if (letterEvent == LetterEvent_PeachLetter1Ups) {
         if (mIsPlayerLuigi) {
-            for (s32 i = 0; i < messengerOneUpExNum(); i++) {
+            for (s32 i = 0; i < ::sMessangerOneUpExNum; i++) {
                 MR::incPlayerLeft();
             }
 
-            MR::getGameSceneLayoutHolder()->requestOneUp(messengerOneUpExNum());
+            MR::getGameSceneLayoutHolder()->requestOneUp(::sMessangerOneUpExNum);
             MR::startSystemSE("SE_SY_5UP");
         } else {
             for (s32 i = 0; i < ::sMessangerOneUpNum; i++) {
@@ -150,12 +144,12 @@ void KinopioAstro::init(const TableIter& rIter) {
             if (MR::isLuigiLeftSupply()) {
                 mIsPlayerLuigi = true;
             }
-            if (NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_ALWAYS_EX, nullptr)) {
+            if (::cMessangerAlwaysEx) {
                 mIsPlayerLuigi = true;
             }
 
             if (mIsPlayerLuigi) {
-                MR::setMessageArg(mMsgCtrl, messengerOneUpExNum());
+                MR::setMessageArg(mMsgCtrl, ::sMessangerOneUpExNum);
             } else {
                 MR::setMessageArg(mMsgCtrl, ::sMessangerOneUpNum);
             }

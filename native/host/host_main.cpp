@@ -626,20 +626,6 @@ fs::path gSaveRoot;
 // save (title/00010000/<the code in hex>/data), read once; a mod's clone copies it too).
 std::string gSaveDataPath;
 std::string gOldSaveDataPath;
-// The native switches the enabled mods' code patches set (NEBULA_PATCH_*), for the session.
-std::map<std::uint32_t, std::uint32_t> gModPatches;
-
-int svc_code_patch(void*, uint32_t id, uint32_t* value) {
-    const auto it = gModPatches.find(id);
-    if (it == gModPatches.end()) {
-        return 0;
-    }
-    if (value != nullptr) {
-        *value = it->second;
-    }
-    return 1;
-}
-
 // A mod's own save folder (Riivolution's savegame): the game's save files go there instead.
 fs::path gModSaveRoot;
 
@@ -3202,9 +3188,6 @@ void svc_app_exit(void*) {
     finish_and_exit(false);
 }
 
-static_assert(NEBULA_PATCH_FLIP_PANEL_GROUP == 1 && NEBULA_PATCH_MISS_STAR_PIECES == 7 && NEBULA_PATCH_MESSENGER_EX_ONE_UPS == 12 && NEBULA_PATCH_NO_DARK_COMET_RULES == 18 && NEBULA_PATCH_WATER_AIR == 27 && NEBULA_PATCH_COUNT == 28,
-              "galaxy::luma::switch_number numbers the switches as these do");
-
 void svc_mods_start(void*) {
     const fs::path crashed = galaxy::mods::mods_folder() / ".code_crashed";
     std::error_code crash_error;
@@ -3274,10 +3257,9 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
-    gModPatches = plan.native_patches;
     gPlugins = plan.plugins;
     gModRows = plan.rows;
-    gModsChangeGame = !plan.files.empty() || !plan.merges.empty() || !plan.materials.empty() || !plan.plugins.empty() || !plan.rows.empty() || !plan.native_patches.empty();
+    gModsChangeGame = !plan.files.empty() || !plan.merges.empty() || !plan.materials.empty() || !plan.plugins.empty() || !plan.rows.empty();
     if (!plan.save_folder.empty() && !gSaveDataPath.empty()) {
         // A clone starts from the player's save the first time, the rest starts new; the player's stays as it is.
         const fs::path mine = gSaveRoot / gSaveDataPath.substr(1);
@@ -3519,8 +3501,8 @@ int run_mods_tool() {
                    ",\"order\":" + std::to_string(mod.order) + ",\"riivolution\":" + (mod.riivolution ? "true" : "false") +
                    ",\"files\":" + ((mod.files || mod.loose) ? "true" : "false") + ",\"textures\":" +
                    (mod.textures ? "true" : "false") + ",\"movies\":" + (mod.movies ? "true" : "false") +
-                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"native_patches\":" +
-                   std::to_string(mod.native_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
+                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"problem\":" + json_text(mod.problem) +
+                   ",\"languages\":[";
             for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
             out += "],\"options\":[";
             for (std::size_t o = 0; o < mod.options.size(); ++o) {
@@ -3871,7 +3853,6 @@ int main(int argc, char** argv) {
     services.mii_record = svc_mii_record;
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;
-    services.code_patch = svc_code_patch;
     services.asset_find = svc_asset_find;
     services.asset_find_game = svc_asset_find_game;
     services.asset_entry = svc_asset_entry;

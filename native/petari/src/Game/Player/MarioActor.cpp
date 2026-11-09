@@ -46,8 +46,17 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaAchievements.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
+#include "Game/Util/Tunable.hpp"
 
+namespace {
+    // The air the player has under water (8).
+    NEBULA_TUNABLE(s32, cWaterAir, 8);
+    // A hit takes all the player's health.
+    NEBULA_TUNABLE(bool, cHitTakesAll, false);
+    // A Daredevil comet leaves the player one health.
+    NEBULA_TUNABLE(bool, cDarkCometOneHealth, true);
+};  // namespace
 
 bool gIsLuigi;
 
@@ -56,18 +65,17 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mMario = new Mario(this);
     mRushSensorCount = 0;
     mTakeCount = 0;
-    u32 startingHealth = 3;
-    NebulaHost::codePatch(NEBULA_PATCH_PLAYER_HEALTH, &startingHealth);
+    const u32 startingHealth = static_cast< u32 >(GameRules::playerHealth());
     mMaxHealth = startingHealth;
     mHealth = startingHealth;
-    mWaterLife = NebulaHost::setting(NEBULA_PATCH_WATER_AIR, 8);
+    mWaterLife = ::cWaterAir;
 
     if (MR::isPlayerLuigi()) {
         mMaxHealth = startingHealth;
         mHealth = startingHealth;
     }
 
-    if (MR::isGalaxyDarkCometAppearInCurrentStage() && !NebulaHost::codePatch(NEBULA_PATCH_PLAYER_HEALTH_FIXED, nullptr)) {
+    if (MR::isGalaxyDarkCometAppearInCurrentStage() && ::cDarkCometOneHealth) {
         mMaxHealth = 1;
         mHealth = 1;
     }
@@ -835,10 +843,9 @@ void MarioActor::control() {
     if (mSuperKinokoCollected) {
         if (MR::tryStartDemoWithoutCinemaFrame(this, "マリオスーパー化")) {  // 6-up camera
             mSuperKinokoCollected = false;
-            u32 lifeUpHealth = 6;
-            NebulaHost::codePatch(NEBULA_PATCH_LIFE_UP_HEALTH, &lifeUpHealth);
+            const s32 lifeUpHealth = GameRules::lifeUpHealth();
             if (lifeUpHealth != 0) {
-                changeMaxLife(static_cast< s32 >(lifeUpHealth));
+                changeMaxLife(lifeUpHealth);
             }
             MR::stopAnimFrame(this);
             MR::requestPowerUpHPMeter();
@@ -1089,7 +1096,7 @@ bool MarioActor::doRush() {
                 }
 
                 if (initial == 2) {
-                    mWaterLife = NebulaHost::setting(NEBULA_PATCH_WATER_AIR, 8);
+                    mWaterLife = ::cWaterAir;
                     MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
                     mMario->forceExitSwim();
                 } else if (initial == 0) {
@@ -1419,12 +1426,12 @@ void MarioActor::decLife(u16 amt) {
     }
 
     if (mHealth) {
-        mHealth = NebulaHost::codePatch(NEBULA_PATCH_HIT_TAKES_ALL, nullptr) ? 0 : mHealth - 1;
+        mHealth = ::cHitTakesAll ? 0 : mHealth - 1;
     }
 
     mLifeDamageQueue = 0;
     // A Life Up's extra health gone, the most falls back to what the player starts with.
-    const u32 startingHealth = NebulaHost::setting(NEBULA_PATCH_PLAYER_HEALTH, 3);
+    const u32 startingHealth = static_cast< u32 >(GameRules::playerHealth());
     if (mMaxHealth <= startingHealth || mHealth > startingHealth) {
         return;
     }
@@ -1445,7 +1452,7 @@ void MarioActor::decLifeSmall() {
 }
 
 void MarioActor::resetWaterLife() {
-    mWaterLife = NebulaHost::setting(NEBULA_PATCH_WATER_AIR, 8);
+    mWaterLife = ::cWaterAir;
 }
 
 void MarioActor::updateLife() {
@@ -1461,7 +1468,7 @@ void MarioActor::updateLife() {
         return;
     }
 
-    mHealth = NebulaHost::codePatch(NEBULA_PATCH_HIT_TAKES_ALL, nullptr) ? 0 : mHealth - 1;
+    mHealth = ::cHitTakesAll ? 0 : mHealth - 1;
 }
 
 void MarioActor::incLife(u32 amt) {

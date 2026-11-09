@@ -150,8 +150,6 @@ struct Rows {
 struct Layer {
     std::string path;
     Rows rows;
-    std::map<std::string, std::uint32_t> switches;
-    std::map<std::string, std::string> switch_options;  // a setting whose number is the choice of an option
     std::map<std::string, std::string> materials;  // a material's name: the shader written for it
     std::vector<ObjectChange> object_changes;
     std::vector<CometLimit> comet_time_limits;
@@ -206,12 +204,14 @@ struct Manifest : Rows {
     std::string save_path;  // starting files in the mod
     bool save_player_can_change = false;
     std::vector<Plugin> plugins;
+    // A form this game no longer reads (a layer's "switches"): what to write instead. The mod is refused with it.
+    std::string retired;
 };
 
 // What this game reads.
 inline constexpr std::uint32_t kFormat = 1;
 // The plugin interface this game has: NEBULA_MOD_API_VERSION.
-inline constexpr std::uint32_t kPluginApi = 1;
+inline constexpr std::uint32_t kPluginApi = 2;
 
 [[nodiscard]] std::optional<Manifest> parse_manifest(std::string_view text);
 [[nodiscard]] std::optional<Manifest> read_manifest(const std::filesystem::path& folder);
@@ -243,7 +243,12 @@ struct Situation {
 // The device this game is built for, as luma.json names it.
 [[nodiscard]] std::string_view this_platform() noexcept;
 
-// A switch's number (NEBULA_PATCH_*) by its name; 0: none of that name.
-[[nodiscard]] std::uint32_t switch_number(std::string_view name) noexcept;
+// The tunable that took the place of a switch ("player_health": "GameRules.cPlayerHealth"), and whether its sense is
+// the switch's opposite ("no_low_health_warning" 1 is "MarioEffect.cLowHealthWarning" false). Empty: no such switch.
+struct SwitchTunable {
+    std::string_view key;
+    bool opposite = false;
+};
+[[nodiscard]] SwitchTunable switch_tunable(std::string_view name) noexcept;
 
 }  // namespace galaxy::luma

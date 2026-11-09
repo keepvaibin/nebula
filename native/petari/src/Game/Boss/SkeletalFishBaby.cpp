@@ -20,11 +20,12 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Render/ModelData.hpp"
-#include "Game/System/NebulaHost.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace {
+    // A broken baby skeletal fish leaves an air bubble.
+    NEBULA_TUNABLE(bool, cBreakAirBubble, true);
     const char* const sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
     static const Vec sStarPointerTargetOffset[] = {{
                                                        0.0f,
@@ -262,8 +263,9 @@ bool SkeletalFishBaby::damage(const Vec3f& rAirBubblePos, bool shakeCameraNormal
             MR::shakeCameraWeak();
         }
 
-        if (!NebulaHost::codePatch(NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, nullptr))
-        MR::appearAirBubble(rAirBubblePos, -1);
+        if (::cBreakAirBubble) {
+            MR::appearAirBubble(rAirBubblePos, -1);
+        }
         setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));
         return true;
     }

@@ -21,9 +21,13 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
+    // Dodoryu's one-hit run in CosmosGardenGalaxy scenario 4.
+    NEBULA_TUNABLE(bool, cSuddenDeathDodoryu, true);
+    // Hidden stars take their scenario from the game's table.
+    NEBULA_TUNABLE(bool, cHiddenStarTable, true);
     const PlacementId cInitializeStartIdInfo(0, 0);
 
     void getRailInfoFromRailId(TableIter* pIter, const Table** ppInfo, const StageDataHolder* pHolder, int railId) {
@@ -146,7 +150,7 @@ namespace MR {
     }
 
     bool isStageSuddenDeathDodoryu() {
-        if (NebulaHost::codePatch(NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU, nullptr)) {
+        if (!::cSuddenDeathDodoryu) {
             return false;
         }
         return isEqualStageName("CosmosGardenGalaxy") && getCurrentScenarioNo() == 4;
@@ -264,9 +268,7 @@ namespace MR {
 
     s32 getPlacedHiddenStarScenarioNo(const char* pStageName, s32 starId) {
         GalaxyStatusAccessor accessor = makeGalaxyStatusAccessor(pStageName);
-        s32 scenarioNo = NebulaHost::codePatch(NEBULA_PATCH_NO_HIDDEN_STAR_TABLE, nullptr)
-                             ? 0
-                             : getPlacedHiddenStarScenarioNoFromTable(pStageName, starId);
+        s32 scenarioNo = ::cHiddenStarTable ? getPlacedHiddenStarScenarioNoFromTable(pStageName, starId) : 0;
         if (scenarioNo > 0) {
             return scenarioNo;
         }

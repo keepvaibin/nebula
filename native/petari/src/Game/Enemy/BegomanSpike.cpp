@@ -19,7 +19,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace NrvBegomanSpike {
@@ -169,7 +169,7 @@ void BegomanSpike::control() {
         return;
     }
 
-    if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
+    if (!GameRules::begomanFireProof() &&MR::isBindedGroundDamageFire(this)) {
         kill();
         MR::emitEffect(this, "Fall");
         return;

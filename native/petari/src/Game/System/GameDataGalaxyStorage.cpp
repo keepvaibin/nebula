@@ -1,6 +1,6 @@
 #include "Game/System/GameDataGalaxyStorage.hpp"
 #include "Game/System/SaveBinary.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/System/BinaryDataContentAccessor.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -35,7 +35,7 @@ bool GameDataSomeScenarioAccessor::isAlreadyVisited() const {
 }
 
 s32 GameDataSomeScenarioAccessor::getMaxCoinNum() const {
-    return MR::clamp(mSomeGalaxyStorage->getMaxCoinNum(mScenarioNum - 1), 0, NebulaHost::setting(NEBULA_PATCH_MAX_COINS, 999));
+    return MR::clamp(mSomeGalaxyStorage->getMaxCoinNum(mScenarioNum - 1), 0, GameRules::maxCoins());
 }
 
 void GameDataSomeScenarioAccessor::setPowerStarFlag(bool isOwned) {
@@ -49,7 +49,7 @@ void GameDataSomeScenarioAccessor::setFlagAlreadyVisited(bool isVisited) {
 void GameDataSomeScenarioAccessor::updateMaxCoinNum(int coinNum) {
     if (getMaxCoinNum() < coinNum) {
         s32 scenarioNo = mScenarioNum - 1;
-        u16 maxCoins = MR::clamp(coinNum, 0, NebulaHost::setting(NEBULA_PATCH_MAX_COINS, 999));
+        u16 maxCoins = MR::clamp(coinNum, 0, GameRules::maxCoins());
         mSomeGalaxyStorage->setMaxCoinNum(scenarioNo, maxCoins);
     }
 }

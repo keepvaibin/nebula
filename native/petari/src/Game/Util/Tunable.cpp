@@ -124,14 +124,18 @@ namespace {
             return 0.0;
         }
     }
-}  // namespace
+    // "<stem>.<name>" or "<stem>.<name>[<place>]": the stem ends at the last dot before any bracket.
+    struct Key {
+        const char* mText;
+        s32 mDot;
+        s32 mNameEnd;
+        s32 mPlace;  // -1: no bracket
+    };
 
-namespace nebula {
-    s32 setTunable(const char* pKey, f64 value) {
+    bool parseKey(const char* pKey, Key* pOut) {
         if (pKey == nullptr) {
-            return -1;
+            return false;
         }
-        // "<stem>.<name>" or "<stem>.<name>[<place>]": the stem ends at the last dot before any bracket.
         s32 length = 0;
         s32 dot = -1;
         s32 bracket = -1;
@@ -144,39 +148,80 @@ namespace nebula {
         }
         const s32 nameEnd = bracket >= 0 ? bracket : length;
         if (dot <= 0 || nameEnd <= dot + 1) {
-            return -1;
+            return false;
         }
         s32 place = -1;
         if (bracket >= 0) {
             place = 0;
             s32 i = bracket + 1;
             if (pKey[i] < '0' || pKey[i] > '9') {
-                return -1;
+                return false;
             }
             for (; pKey[i] >= '0' && pKey[i] <= '9'; ++i) {
                 place = place * 10 + (pKey[i] - '0');
                 if (place > 0xFFFF) {
-                    return -1;
+                    return false;
                 }
             }
             if (pKey[i] != ']' || pKey[i + 1] != '\0') {
-                return -1;
+                return false;
             }
         }
+        *pOut = {pKey, dot, nameEnd, place};
+        return true;
+    }
+
+    // The next record at or after pFrom the key names, and the place in it; end() when none is left. A list takes its
+    // places; one number takes its own name, or place 0.
+    const nebula::Tunable* findFrom(const nebula::Tunable* pFrom, const Key& rKey, u32* pAt) {
+        const s32 at = rKey.mPlace < 0 ? 0 : rKey.mPlace;
+        for (const nebula::Tunable* pTunable = pFrom; pTunable < end(); ++pTunable) {
+            if (pTunable->mName == nullptr || !isFile(pTunable->mFile, rKey.mText, rKey.mDot) ||
+                !isName(pTunable->mName, rKey.mText + rKey.mDot + 1, rKey.mNameEnd - rKey.mDot - 1)) {
+                continue;
+            }
+            if ((rKey.mPlace < 0 && pTunable->mCount != 1u) || static_cast<u32>(at) >= pTunable->mCount) {
+                continue;
+            }
+            *pAt = static_cast<u32>(at);
+            return pTunable;
+        }
+        return end();
+    }
+}  // namespace
+
+namespace nebula {
+    s32 setTunable(const char* pKey, f64 value) {
+        Key key;
+        if (!parseKey(pKey, &key)) {
+            return -1;
+        }
         s32 result = -1;
-        for (const Tunable* pTunable = begin(); pTunable < end(); ++pTunable) {
-            if (pTunable->mName == nullptr || !isFile(pTunable->mFile, pKey, dot) || !isName(pTunable->mName, pKey + dot + 1, nameEnd - dot - 1)) {
-                continue;
-            }
-            // A list takes its places; one number takes its own name, or place 0.
-            const s32 at = place < 0 ? 0 : place;
-            if ((place < 0 && pTunable->mCount != 1u) || static_cast<u32>(at) >= pTunable->mCount) {
-                continue;
-            }
-            store(pTunable->mAddress, pTunable->mKind, static_cast<u32>(at), value);
+        u32 at = 0;
+        for (const Tunable* pTunable = findFrom(begin(), key, &at); pTunable < end(); pTunable = findFrom(pTunable + 1, key, &at)) {
+            store(pTunable->mAddress, pTunable->mKind, at, value);
             result = 0;
         }
         return result;
+    }
+
+    bool getTunable(const char* pKey, f64* pValue, f64* pGameValue) {
+        Key key;
+        if (!parseKey(pKey, &key)) {
+            return false;
+        }
+        u32 at = 0;
+        const Tunable* const pTunable = findFrom(begin(), key, &at);
+        if (pTunable >= end()) {
+            return false;
+        }
+        if (pValue != nullptr) {
+            *pValue = load(pTunable->mAddress, pTunable->mKind, at);
+        }
+        if (pGameValue != nullptr) {
+            *pGameValue = load(pTunable->mGameValues, pTunable->mKind, at);
+        }
+        return true;
     }
 
     bool tunableAt(s32 index, const char** pFile, const char** pName, s32* pPlace, u32* pKind, f64* pGameValue, f64* pValue) {

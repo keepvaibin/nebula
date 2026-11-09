@@ -821,9 +821,6 @@ typedef struct NebulaHostServices {
        video's frame of the same time) into the planes NEBULA_TEXTURE_MOVIE_Y, _U and _V the movie quad samples. */
     void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, const void* data, uint64_t size,
                         uint32_t width, uint32_t height);
-    /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
-       else 0. Fixed for the session. */
-    int (*code_patch)(void* user, uint32_t id, uint32_t* value);
     /* What the player is doing, for Discord: the galaxy and the star (UTF-16, the game's own text in the played
        language; either may be NULL) and the Power Stars collected (-1: not in a file). Reported when it changes. */
     void (*presence)(void* user, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars);
@@ -919,39 +916,6 @@ enum {
 #define NEBULA_TEXTURE_MOVIE_Y 0x7FFFFF00u
 #define NEBULA_TEXTURE_MOVIE_U 0x7FFFFF01u
 #define NEBULA_TEXTURE_MOVIE_V 0x7FFFFF02u
-
-/* Native equivalents of mods' code patches: the host's mods
-   layer recognises each by its exact bytes for this disc and the game asks code_patch for it. */
-enum {
-    NEBULA_PATCH_FLIP_PANEL_GROUP = 1,       /* value: a FlipPanel group's size (joinToGroupArray's 0x20) */
-    NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP,  /* value: the same for FlipPanelObserver */
-    NEBULA_PATCH_WATER_BAZOOKA_SHOT_FLAG,    /* WaterBazooka::tryShotBullet: shotWaterBullet's last flag set */
-    NEBULA_PATCH_KAMECK_BARRIER_OFFSET_Y,    /* value: float bits added to BossKameckBarrier's height at init */
-    NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, /* SkeletalFishBaby::damage releases no air bubble */
-    NEBULA_PATCH_DODORYU_SHELL_ONLY,         /* Dodoryu (Lv1, Lv2) is hurt by a shell alone (isMsgJetTurtleAttack) */
-    NEBULA_PATCH_MISS_STAR_PIECES,           /* value: star bits added after a miss (s32; -999: all lost) */
-    NEBULA_PATCH_NO_HIDDEN_STAR_TABLE,       /* getPlacedHiddenStarScenarioNo skips its table */
-    NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU,    /* isStageSuddenDeathDodoryu is false */
-    NEBULA_PATCH_BEGOMAN_FIRE_PROOF,         /* Begoman Baby, Spike and Spring survive fire ground */
-    NEBULA_PATCH_MESSENGER_ALWAYS_EX,        /* KinopioAstro (the 1-up messenger) gives its larger supply */
-    NEBULA_PATCH_MESSENGER_EX_ONE_UPS,       /* value: that supply's 1-ups (20) */
-    NEBULA_PATCH_PLAYER_HEALTH,              /* value: the health and most health a player starts with (3) */
-    NEBULA_PATCH_PLAYER_HEALTH_FIXED,        /* the Daredevil comet doesn't change the player's health */
-    NEBULA_PATCH_HIT_TAKES_ALL,              /* a hit takes all the player's health */
-    NEBULA_PATCH_LIFE_UP_HEALTH,             /* value: the most health a Life Up gives (6); 0: it gives none */
-    NEBULA_PATCH_NO_LOW_HEALTH_WARNING,      /* no warning sound at low health */
-    NEBULA_PATCH_NO_DARK_COMET_RULES,        /* a Daredevil comet is a comet like any other */
-    NEBULA_PATCH_MAX_LIVES,                  /* value: the most lives (99) */
-    NEBULA_PATCH_MAX_STAR_BITS,              /* value: the most star bits kept in the save (9999) */
-    NEBULA_PATCH_MAX_CARRIED_STAR_BITS,      /* value: the most star bits carried in a stage (999) */
-    NEBULA_PATCH_MAX_COINS,                  /* value: the most coins in a stage (999) */
-    NEBULA_PATCH_COINS_PER_ONE_UP,           /* value: coins for a 1-up (50); 0: none */
-    NEBULA_PATCH_STAR_BITS_PER_ONE_UP,       /* value: star bits for a 1-up (50); 0: none */
-    NEBULA_PATCH_STARTING_LIVES,             /* value: the lives a file starts or loads with (4) */
-    NEBULA_PATCH_PURPLE_COINS_FOR_STAR,      /* value: purple coins that bring the star (100) */
-    NEBULA_PATCH_WATER_AIR,                  /* value: the air the player has under water (8) */
-    NEBULA_PATCH_COUNT
-};
 
 enum {
     NEBULA_CONTEXT_STAR_POINTER_MODE = 1, /* StarPointerOnOffController's mode (-1 none): menus and play */
