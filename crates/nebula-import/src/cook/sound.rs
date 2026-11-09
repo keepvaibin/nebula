@@ -16,7 +16,7 @@ use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 const SEQ_MAGIC: &[u8; 4] = b"NSEQ";
-const SEQ_VERSION: u32 = 1;
+const SEQ_VERSION: u32 = 2;
 const BANK_MAGIC: &[u8; 4] = b"NBNK";
 const BANK_VERSION: u32 = 1;
 const WAVE_BANK_MAGIC: &[u8; 4] = b"NWBK";
@@ -24,7 +24,7 @@ const WAVE_BANK_VERSION: u32 = 1;
 const ARCHIVE_MAGIC: &[u8; 4] = b"NSND";
 const ARCHIVE_VERSION: u32 = 1;
 const ME_MAGIC: &[u8; 4] = b"NMES";
-const ME_VERSION: u32 = 1;
+const ME_VERSION: u32 = 2;
 
 /// Where the game finds a wave system's AW files.
 const WAVE_FOLDER: &str = "/AudioRes/Waves/";
@@ -549,6 +549,68 @@ fn track_bound(program: &Program, entry: u32, memo: &mut HashMap<u32, u32>, open
     Ok(total)
 }
 
+/// Past this many nested calls and loops a program is taken to nest without end.
+const STACK_LIMIT: u32 = 4096;
+
+/// The most call and loop entries a track started at operation `entry` holds at once. A call goes on at the next
+/// operation once it returns, so a return ends its path; a loop's end goes on one entry shallower. A child track has its
+/// own stack (its entry is counted where the file's entries are).
+fn stack_bound(program: &Program, entry: u32) -> Result<u32> {
+    let mut seen: HashSet<(u32, u32)> = HashSet::new();
+    let mut work = vec![(entry, 0u32)];
+    let mut most = 0;
+    while let Some((i, depth)) = work.pop() {
+        if !seen.insert((i, depth)) {
+            continue;
+        }
+        most = most.max(depth);
+        let op = &program.ops[i as usize];
+        let at = op.at;
+        let deeper = || -> Result<u32> {
+            if depth >= STACK_LIMIT {
+                bail!("calls or loops that nest without end (at {at:#x})");
+            }
+            Ok(depth + 1)
+        };
+        match op.code {
+            Code::Call | Code::CallIf => work.push((op.args[branch_args(op.code)[0]], deeper()?)),
+            Code::CallTable => {
+                let d = deeper()?;
+                work.extend(program.tables[&(i as usize)].iter().map(|t| (*t, d)));
+            }
+            Code::Jump | Code::JumpIf => work.push((op.args[branch_args(op.code)[0]], depth)),
+            Code::JumpTable => work.extend(program.tables[&(i as usize)].iter().map(|t| (*t, depth))),
+            _ => {}
+        }
+        if falls(op.code) {
+            let next = match op.code {
+                Code::LoopStart => deeper()?,
+                Code::LoopEnd => depth.saturating_sub(1),
+                _ => depth,
+            };
+            work.push((i + 1, next));
+        }
+    }
+    Ok(most)
+}
+
+/// The points of the envelope an envelope operation names (6 bytes each), through the first whose mode (0xD, 0xE, 0xF) ends it.
+fn envelope_points(data: &[u8], op: &Op) -> Result<u32> {
+    if op.registers & 2 != 0 {
+        bail!("an envelope at an address in a register at {:#x}", op.at);
+    }
+    let start = op.args[1] as usize;
+    let mut points = 0u32;
+    loop {
+        let mode = be16(data, start + 6 * points as usize).with_context(|| format!("the envelope of {:#x} at {start:#x}", op.at))? as i16;
+        be16(data, start + 6 * points as usize + 4).with_context(|| format!("the envelope of {:#x} at {start:#x}", op.at))?;
+        points += 1;
+        if mode >= 0xd {
+            return Ok(points);
+        }
+    }
+}
+
 /// A program as NSEQ: its bytes `data`, entered at the byte offsets of `groups`.
 fn program_file(data: &[u8], groups: &[Vec<usize>]) -> Result<Vec<u8>> {
     let roots: Vec<usize> = groups.iter().flatten().copied().collect();
@@ -561,9 +623,20 @@ fn program_file(data: &[u8], groups: &[Vec<usize>]) -> Result<Vec<u8>> {
         tracks = tracks.max(track_bound(&program, *e, &mut memo, &mut open)?);
     }
     let mut slots = 1;
+    let mut stack = 0;
+    let mut envelope = 0;
+    for e in &entries {
+        stack = stack.max(stack_bound(&program, *e)?);
+    }
     for op in &program.ops {
         if op.code == Code::NoteOn {
             slots = slots.max(if op.registers & 1 != 0 { NOTE_SLOTS } else { op.args[0] + 1 });
+        }
+        if op.code == Code::OpenTrack {
+            stack = stack.max(stack_bound(&program, op.args[1])?);
+        }
+        if op.code == Code::EnvSet {
+            envelope = envelope.max(envelope_points(data, op)?);
         }
     }
     let mut out = Vec::new();
@@ -575,7 +648,9 @@ fn program_file(data: &[u8], groups: &[Vec<usize>]) -> Result<Vec<u8>> {
     put32(&mut out, size32(entries.len(), "entries")?);
     put32(&mut out, tracks);
     put32(&mut out, slots);
-    out.extend_from_slice(&[0; 16]);
+    put32(&mut out, stack);
+    put32(&mut out, envelope);
+    out.extend_from_slice(&[0; 8]);
     let mut first = 0;
     put32(&mut out, 0);
     for g in groups {
@@ -629,6 +704,7 @@ pub fn is_sequence_path(name: &str) -> bool {
 
 /// A Me operation: where the next one starts, whether the program goes on to it, where it can branch, a track it opens.
 struct MeOp {
+    code: u32,
     end: usize,
     goes_on: bool,
     targets: Vec<usize>,
@@ -643,7 +719,7 @@ const ME_REGISTERS: u32 = 64;
 fn me_op(b: &[u8], at: usize) -> Result<MeOp> {
     let code = be8(b, at)?;
     let arg = |o: usize, width: usize| be(b, at + o, width);
-    let mut op = MeOp { end: at + 1, goes_on: true, targets: Vec::new(), open: None };
+    let mut op = MeOp { code, end: at + 1, goes_on: true, targets: Vec::new(), open: None };
     let operands = match code {
         0x00 | 0x01 | 0x11 | 0x20 | 0x2A | 0x50..=0x54 | 0x58 | 0x59 | 0x5C | 0x60 | 0x84 | 0x86 | 0x87 => 1,
         0x02 | 0x03 | 0x33 | 0x5A | 0x5B | 0x5D | 0x68 | 0x69 | 0x8A => 2,
@@ -720,6 +796,55 @@ fn me_bound(b: &[u8], start: usize, memo: &mut HashMap<usize, u32>, open: &mut H
     Ok(total)
 }
 
+/// The most call and loop entries a Me track started at `start` holds at once, as stack_bound: calls 0x31, 0x3A, 0x3B and a
+/// note's definition 0x40; loop start 0x33, loop end 0x34. A child track (0x10) has its own stack.
+fn me_stack_bound(b: &[u8], start: usize, memo: &mut HashMap<usize, u32>) -> Result<u32> {
+    if let Some(bound) = memo.get(&start) {
+        return Ok(*bound);
+    }
+    let mut seen: HashSet<(usize, u32)> = HashSet::new();
+    let mut children: BTreeSet<usize> = BTreeSet::new();
+    let mut work = vec![(start, 0u32)];
+    let mut most = 0;
+    while let Some((at, depth)) = work.pop() {
+        if !seen.insert((at, depth)) {
+            continue;
+        }
+        most = most.max(depth);
+        let op = me_op(b, at).with_context(|| format!("the Me operation at {at:#x}"))?;
+        let deeper = || -> Result<u32> {
+            if depth >= STACK_LIMIT {
+                bail!("Me calls or loops that nest without end (at {at:#x})");
+            }
+            Ok(depth + 1)
+        };
+        let into = if matches!(op.code, 0x31 | 0x3A | 0x3B | 0x40) { deeper()? } else { depth };
+        work.extend(op.targets.iter().map(|t| (*t, into)));
+        if let Some((_, target)) = op.open {
+            children.insert(target);
+        }
+        if op.goes_on {
+            let next = match op.code {
+                0x33 => deeper()?,
+                0x34 => depth.saturating_sub(1),
+                _ => depth,
+            };
+            work.push((op.end, next));
+        }
+    }
+    memo.insert(start, most);
+    for c in children {
+        if !memo.contains_key(&c) {
+            memo.insert(c, 0);
+            let child = me_stack_bound(b, c, memo)?;
+            memo.insert(c, child);
+        }
+        most = most.max(memo[&c]);
+    }
+    memo.insert(start, most);
+    Ok(most)
+}
+
 /// A BME (count, start offsets, the program; its addresses from the file's start) as NMES.
 pub fn me_program(bytes: &[u8]) -> Result<Vec<u8>> {
     if cooked(bytes, ME_MAGIC, ME_VERSION)? {
@@ -728,20 +853,23 @@ pub fn me_program(bytes: &[u8]) -> Result<Vec<u8>> {
     let count = be32(bytes, 0)? as usize;
     let mut memo = HashMap::new();
     let mut open = HashSet::new();
+    let mut stacks = HashMap::new();
     let mut entries = Vec::new();
     for i in 0..count {
         let start = be32(bytes, 4 + 4 * i)? as usize;
         let bound = me_bound(bytes, start, &mut memo, &mut open).with_context(|| format!("Me entry {i}"))?;
-        entries.push((size32(start, "a Me program")?, bound));
+        let stack = me_stack_bound(bytes, start, &mut stacks).with_context(|| format!("Me entry {i}"))?;
+        entries.push((size32(start, "a Me program")?, bound, stack));
     }
     let mut out = Vec::new();
     out.extend_from_slice(ME_MAGIC);
     put32(&mut out, ME_VERSION);
     put32(&mut out, size32(count, "Me entries")?);
     put32(&mut out, size32(bytes.len(), "a Me program")?);
-    for (start, bound) in entries {
+    for (start, bound, stack) in entries {
         put32(&mut out, start);
         put32(&mut out, bound);
+        put32(&mut out, stack);
     }
     out.extend_from_slice(bytes);
     Ok(out)

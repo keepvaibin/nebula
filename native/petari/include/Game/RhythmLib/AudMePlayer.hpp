@@ -61,7 +61,7 @@ public:
     AudMe();
     ~AudMe();
 
-    void requestStart(u32 trackBound, u32 place);
+    void requestStart(u32 trackBound, u32 stackBound, u32 place);
     void start();
     void stop(s32);
     void release();
@@ -99,6 +99,7 @@ public:
     };
     bool mStartRequested;
     u32 mTrackBound;
+    u32 mStackBound;
     u32 mPlace;
     f32 mMgrVolume;
     f32 mVolume;

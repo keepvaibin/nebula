@@ -23,7 +23,7 @@ void SequenceSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* aud
     const SeqFile* pFile = rData.mFile;
     const u32 reserved = 2 + static_cast< u32 >(numTracks < 0 ? 0 : numTracks > 32 ? 32 : numTracks);
     const u32 mgrCount = posPtr != nullptr && audience != nullptr ? static_cast< u32 >(audience->getMaxChannels()) : 1;
-    mPlayer.create((pFile != nullptr ? pFile->mTrackBound : 1) + reserved, mgrCount, pFile != nullptr ? pFile->mNoteSlots : 1, (u32)id, 2);
+    mPlayer.create((pFile != nullptr ? pFile->mTrackBound : 1) + reserved, mgrCount, TrackRoom::of(pFile), (u32)id, 2);
     mPlayer.reserve(static_cast< u32 >(numTracks));
     startSound_(id, posPtr, audience);
 
