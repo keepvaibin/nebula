@@ -582,6 +582,12 @@ typedef struct NebulaModApi {
        null or "": add_text. The words may hold the game's message tags in brackets ([wait 30], [color 1], [player]...:
        nebula_text_tags.h), as add_text's may. */
     int32_t (*add_text_like)(const char* id, const char* utf8, const char* like_id);
+    /* A player animation: `name` plays the bck `file` of the player's animations (ObjectData/MarioAnime.arc: the game's
+       or one the mod adds there, a .bck or an animation in a .glb), at `rate` (1: the bck's own speed), blended in over
+       `blend_frames` frames (0: the game's 6). Played by name (NEBULA_PLAY_PLAYER_ANIMATION), and where the game plays
+       that name: a name the game has (its own animation table's) is played from the mod's bck. Called from the plugin's
+       entry, before the first stage: 0 done; -1 a bad name or file, or too late. */
+    int32_t (*add_player_animation)(const char* name, const char* file, float rate, int32_t blend_frames);
 } NebulaModApi;
 
 /* The HUD's parts, for show_hud: any together. */

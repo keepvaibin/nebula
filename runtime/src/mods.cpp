@@ -1680,6 +1680,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 for (const luma::SoundEffect& sound : layer.sound_effects) {
                     plan.rows.sound_effects.push_back({mod.id, sound.name, sound.file});
                 }
+                for (const luma::PlayerAnimation& animation : layer.player_animations) {
+                    plan.rows.player_animations.push_back({mod.id, animation.name, animation.file, animation.rate, animation.blend_frames});
+                }
                 for (const luma::ObjectClass& object : layer.object_classes) {
                     plan.rows.object_classes.push_back({mod.id, object.name, object.like});
                 }

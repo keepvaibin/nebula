@@ -17,6 +17,8 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioAnimator.hpp"
+#include "Game/Animation/XanimeResource.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -925,7 +927,9 @@ namespace {
             MR::startBpk(pLive, pName);
             return 1;
         case NEBULA_PLAY_PLAYER_ANIMATION:
-            if (playingPlayer() == nullptr) {
+            // One of the player's animations (its table's, with the mods'): any other name would play nothing.
+            if (playingPlayer() == nullptr || playingPlayer()->mMarioAnim == nullptr ||
+                playingPlayer()->mMarioAnim->mResourceTable->getGroupInfo(pName) == nullptr) {
                 return 0;
             }
             playingPlayer()->changeAnimationNonStop(pName);
@@ -1617,6 +1621,29 @@ namespace {
         return 0;
     }
 
+    List< NebulaMods::PlayerAnimation > sPlayerAnimations;
+    // The player's tables are built: an animation added now would not be in them.
+    bool sPlayerAnimationsTaken = false;
+
+    int32_t apiAddPlayerAnimation(const char* pName, const char* pFile, float rate, int32_t blendFrames) {
+        if (sPlayerAnimationsTaken || pName == nullptr || pFile == nullptr || pName[0] == '\0' || pFile[0] == '\0' ||
+            !(rate > 0.0f && rate <= 100.0f) || blendFrames < 0 || blendFrames > 600) {
+            return -1;
+        }
+        // Another of the same name gives way: the last added is the one.
+        for (int i = 0; i < sPlayerAnimations.mCount; i++) {
+            if (MR::isEqualString(sPlayerAnimations.mItems[i].mName, pName)) {
+                sPlayerAnimations.mItems[i].mFile = copyText(pFile);
+                sPlayerAnimations.mItems[i].mRate = rate;
+                sPlayerAnimations.mItems[i].mBlendFrames = static_cast< u32 >(blendFrames);
+                return 0;
+            }
+        }
+        const NebulaMods::PlayerAnimation animation = {copyText(pName), copyText(pFile), rate, static_cast< u32 >(blendFrames)};
+        sPlayerAnimations.add(animation);
+        return 0;
+    }
+
     struct StageRule {
         const char* mStage;
         s32 mScenario;  // 0: all its missions
@@ -2243,6 +2270,7 @@ namespace {
         apiStepGame,
         apiDrawText,
         apiAddTextLike,
+        apiAddPlayerAnimation,
     };
 }  // namespace
 
@@ -2525,6 +2553,12 @@ namespace NebulaMods {
 
     bool noStoryScenes() {
         return sNoStoryScenes;
+    }
+
+    s32 takePlayerAnimations(const PlayerAnimation** ppAnimations) {
+        sPlayerAnimationsTaken = true;
+        *ppAnimations = sPlayerAnimations.mItems;
+        return sPlayerAnimations.mCount;
     }
 
     u32 soundEffectSlow(const char* pName) {

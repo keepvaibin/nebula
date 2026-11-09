@@ -394,6 +394,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(sound.mod_id + ": the sound " + sound.name + " can't be added");
         }
     }
+    for (const PlayerAnimationToAdd& animation : rows.player_animations) {
+        if (g_api.add_player_animation(animation.name.c_str(), animation.file.c_str(), static_cast<float>(animation.rate), animation.blend_frames) != 0) {
+            say(animation.mod_id + ": the player animation " + animation.name + " can't be added");
+        }
+    }
     for (const ObjectClassToSet& object : rows.object_classes) {
         if (g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
             say(object.mod_id + ": the object " + object.name + " can't be added");

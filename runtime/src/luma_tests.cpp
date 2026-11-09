@@ -203,6 +203,21 @@ int main() {
         check(!parse_manifest(with_layer(R"("tunables":{"Kuribo.cSteps":[4,"x"]})")).has_value(), "text in a list is refused");
         const std::optional<Manifest> needs = parse_manifest(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","requires":["tunables"],"layers":[]})");
         check(needs && refusal(*needs, "RMGE01", "2.1.0", "windows").empty(), "a mod needing tunables is usable");
+        // Player animations: name and file, a rate over 0 up to 100, whole blend frames up to 600.
+        const std::optional<Manifest> moves = parse_manifest(with_layer(
+            R"("player_animations":[{"name":"GoldSpin","file":"GoldSpin","rate":0.5,"blend_frames":4},{"name":"Jump","file":"MyJump"}])"));
+        check(moves && moves->layers.size() == 1u && moves->layers[0].player_animations.size() == 2u &&
+              moves->layers[0].player_animations[0].name == "GoldSpin" && moves->layers[0].player_animations[0].rate == 0.5 &&
+              moves->layers[0].player_animations[0].blend_frames == 4 && moves->layers[0].player_animations[1].file == "MyJump" &&
+              moves->layers[0].player_animations[1].rate == 1.0 && moves->layers[0].player_animations[1].blend_frames == 0,
+              "player animations read");
+        for (const char* bad : {R"("player_animations":[{"name":"A"}])", R"("player_animations":[{"name":"A","file":"B","rate":0}])",
+                                R"("player_animations":[{"name":"A","file":"B","rate":"fast"}])", R"("player_animations":[{"name":"A","file":"B","blend_frames":2.5}])",
+                                R"("player_animations":[{"name":"A","file":"B","blend_frames":601}])", R"("player_animations":{"name":"A"})"}) {
+            check(!parse_manifest(with_layer(bad)).has_value(), bad);
+        }
+        const std::optional<Manifest> animated = parse_manifest(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","requires":["player-animations"],"layers":[]})");
+        check(animated && refusal(*animated, "RMGE01", "2.1.0", "windows").empty(), "a mod needing player animations is usable");
     }
     {
         // A range of choices: counted, so numbers too large for the step cannot loop for ever.

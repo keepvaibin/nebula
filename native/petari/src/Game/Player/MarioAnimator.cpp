@@ -9,6 +9,11 @@
 #include "Game/Player/MarioAnimatorData.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioState.hpp"
+#include "Game/System/NebulaArena.hpp"
+#include "Game/System/NebulaMods.hpp"
+#include "Game/System/ResourceHolder.hpp"
+#include "Game/System/ResourceInfo.hpp"
+#include <nebula_module.h>
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
@@ -20,6 +25,86 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 
+namespace {
+    // The player's animation tables with the mods' animations (NebulaMods::takePlayerAnimations) in them: the game's
+    // own when no mod adds one. Built the first time the player is, from the clips pHolder has (the player's archive is
+    // the same in every stage); kept for the run.
+    void getAnimationTables(const ResourceHolder* pHolder, XanimeGroupInfo** ppGroups, XanimeBckTable1** ppSingles) {
+        static bool sBuilt = false;
+        static XanimeGroupInfo* sGroups = marioAnimeTable;
+        static XanimeBckTable1* sSingles = singleAnimeTable;
+        if (!sBuilt) {
+            sBuilt = true;
+            const NebulaMods::PlayerAnimation* pAnimations = nullptr;
+            const s32 count = NebulaMods::takePlayerAnimations(&pAnimations);
+            const NebulaMods::PlayerAnimation** ppKept =
+                count > 0 ? new (NebulaArena::root(), 0) const NebulaMods::PlayerAnimation*[count] : nullptr;
+            s32 kept = 0;
+            for (s32 i = 0; i < count; i++) {
+                if (pHolder == nullptr || pHolder->mMotionResTable == nullptr || !pHolder->mMotionResTable->isExistRes(pAnimations[i].mFile)) {
+                    nebula_log("mods: left out: player animation %s: the player's animations have no %s\n", pAnimations[i].mName,
+                               pAnimations[i].mFile);
+                    continue;
+                }
+                ppKept[kept++] = &pAnimations[i];
+            }
+            if (kept > 0) {
+                s32 groups = 0;
+                while (marioAnimeTable[groups].mParent.mAnimationName[0] != '\0') {
+                    groups++;
+                }
+                s32 singles = 0;
+                while (singleAnimeTable[singles].mParent.mAnimationName[0] != '\0') {
+                    singles++;
+                }
+
+                // A mod's clip plays alone: its single entry comes before the game's, so it is found before the game's
+                // single or blend of that name.
+                XanimeBckTable1* pSingles = new (NebulaArena::root(), 0) XanimeBckTable1[kept + singles + 1];
+                for (s32 i = 0; i < kept; i++) {
+                    pSingles[i].mParent.mAnimationName = ppKept[i]->mName;
+                    pSingles[i].mFileName = ppKept[i]->mFile;
+                    pSingles[i].mAnimationHash = 0;
+                    pSingles[i].mFileHash = 0;
+                }
+                for (s32 i = 0; i <= singles; i++) {
+                    pSingles[kept + i] = singleAnimeTable[i];
+                }
+
+                // A name the game has keeps its group, at the mod's rate and blend; a new name is a group after the game's.
+                XanimeGroupInfo* pGroups = new (NebulaArena::root(), 0) XanimeGroupInfo[groups + kept + 1];
+                for (s32 i = 0; i < groups; i++) {
+                    pGroups[i] = marioAnimeTable[i];
+                }
+                s32 total = groups;
+                for (s32 i = 0; i < kept; i++) {
+                    XanimeGroupInfo* pGroup = nullptr;
+                    for (s32 j = 0; j < groups && pGroup == nullptr; j++) {
+                        if (MR::isEqualString(pGroups[j].mParent.mAnimationName, ppKept[i]->mName)) {
+                            pGroup = &pGroups[j];
+                        }
+                    }
+                    if (pGroup == nullptr) {
+                        pGroup = &pGroups[total++];
+                        pGroup->init();
+                        pGroup->mParent.mAnimationName = ppKept[i]->mName;
+                        pGroup->mInterpoleFrame = 6;
+                    }
+                    pGroup->mRate = ppKept[i]->mRate;
+                    if (ppKept[i]->mBlendFrames != 0) {
+                        pGroup->mInterpoleFrame = ppKept[i]->mBlendFrames;
+                    }
+                }
+                pGroups[total] = marioAnimeTable[groups];
+                sGroups = pGroups;
+                sSingles = pSingles;
+            }
+        }
+        *ppGroups = sGroups;
+        *ppSingles = sSingles;
+    }
+}  // namespace
+
 MarioAnimator::MarioAnimator(MarioActor* pActor) : MarioModule(pActor) {
     init();
 }
@@ -30,8 +115,12 @@ void MarioAnimator::init() {
         luigiAnimations = luigiAnimeSwapTable;
     }
 
-    mResourceTable = new XanimeResourceTable(MR::getResourceHolder(mActor), marioAnimeTable, marioAnimeAuxTable, marioAnimeOfsTable,
-                                             reinterpret_cast< XanimeBckTable* >(singleAnimeTable), doubleAnimeTable, tripleAnimeTable,
+    ResourceHolder* const pHolder = MR::getResourceHolder(mActor);
+    XanimeGroupInfo* pGroups = nullptr;
+    XanimeBckTable1* pSingles = nullptr;
+    getAnimationTables(pHolder, &pGroups, &pSingles);
+    mResourceTable = new XanimeResourceTable(pHolder, pGroups, marioAnimeAuxTable, marioAnimeOfsTable,
+                                             reinterpret_cast< XanimeBckTable* >(pSingles), doubleAnimeTable, tripleAnimeTable,
                                              quadAnimeTable, luigiAnimations);
 
     mWalkState = 0;

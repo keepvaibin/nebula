@@ -95,6 +95,15 @@ struct SoundEffect {
     std::string file;
 };
 
+// A player animation: `name` plays the player's bck `file` (ObjectData/MarioAnime.arc) at `rate`, blended in over
+// `blend_frames` (0: the game's); a name the game has is played from it.
+struct PlayerAnimation {
+    std::string name;
+    std::string file;
+    double rate = 1.0;
+    int blend_frames = 0;
+};
+
 // A galaxy beside the game's, and the hungry Luma that opens it.
 struct Galaxy {
     std::string name;
@@ -161,6 +170,7 @@ struct Layer {
     std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
     std::vector<SoundEffect> sound_effects;
+    std::vector<PlayerAnimation> player_animations;
     When when;
 };
 
