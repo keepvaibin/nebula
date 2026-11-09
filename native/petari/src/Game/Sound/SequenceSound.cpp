@@ -46,7 +46,7 @@ void SequenceSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* aud
     const SeqFile* pFile = rData.mFile;
     const u32 tracks = static_cast< u32 >(numTracks < 0 ? 0 : numTracks);
     const u32 named = (tracks + 15) / 16 > 2 ? (tracks + 15) / 16 : 2;
-    const u32 mgrCount = posPtr != nullptr && audience != nullptr ? static_cast< u32 >(audience->getMaxChannels()) : 1;
+    const u32 mgrCount = posPtr != nullptr && audience != nullptr ? static_cast< u32 >(audience->getListenerCount()) : 1;
     mPlayer.create((pFile != nullptr ? pFile->mTrackBound : 1) + named + tracks, mgrCount, TrackRoom::of(pFile), named, (u32)id, 2);
     mPlayer.reserve(static_cast< u32 >(numTracks));
     mNumChild = static_cast< s32 >(named * 16);
@@ -179,8 +179,7 @@ void SequenceSound::mixOut_(const SoundParams& params, SoundActivity activity) {
     }
 
     if (mAudible) {
-        int maxChannels = mAudience->getMaxChannels();
-        for (int i = 0; i < maxChannels; i++) {
+        for (s32 i = 0; i < mAudible->getChannelCount(); i++) {
             mAudience->mixChannelOut(outParams, mAudible, i);
         }
         sendGroups_(&mPlayer);

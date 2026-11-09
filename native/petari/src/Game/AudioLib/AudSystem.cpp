@@ -45,7 +45,7 @@ static const u32 cRhythmParsers = 3;
 
 AudSystem* AudNewAudSystem_(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
     AudSystem* system = new AudSystem(pSoundArchive, pChordArchive, pMeArchive, pRemixArchive);
-    system->mAudience.mMaxChannels = maxChannels;
+    system->mAudience.setListenerCount(maxChannels);
     return system;
 }
 
@@ -84,7 +84,7 @@ AudSystem* AudNewAudSystem(NebulaArena* pArena, AssetFolder* pSeqArchive, AssetF
 
 AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
     : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundArchive(pSoundArchive),
-      mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
+      mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
@@ -609,11 +609,11 @@ u32 AudSystem::getPlayCountMin(SoundID soundID) {
 }
 
 void AudSystem::setMicMtx(MtxPtr pMtx, s32 mic) {
-    mAudience.mStates[mic].setMtx(pMtx);
+    mAudience.getListener(mic).setMtx(pMtx);
 }
 
 const Vec3f& AudSystem::getMicPos(s32 mic) {
-    return mAudience.mStates[mic].getPos();
+    return mAudience.getListener(mic).getPos();
 }
 
 void AudSystem::setFarCamera(bool isFar) {

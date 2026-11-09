@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nebula_types.h>
 
 class SoundAudience3DSetting {
 public:
