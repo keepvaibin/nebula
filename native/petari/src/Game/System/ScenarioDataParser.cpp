@@ -14,27 +14,12 @@
 #include <cstring>
 #include "Game/System/GameAssets.hpp"
 
-template const bool Table::getValue< s32 >(int, const char*, s32*) const;
-
 namespace {
     struct GalaxyNameSortLt {
         bool operator()(const ScenarioData* pLhs, const ScenarioData* pRhs) const {
             return pLhs->mSortKey < pRhs->mSortKey;
         }
     };
-
-    // FNV-1a over the name folded as MR::isEqualStringCase folds it (ASCII letters only).
-    u32 hashGalaxyName(const char* pName) {
-        u32 hash = 2166136261u;
-        for (; *pName != '\0'; pName++) {
-            u32 c = static_cast< u8 >(*pName);
-            if (c >= 'A' && c <= 'Z') {
-                c += 'a' - 'A';
-            }
-            hash = (hash ^ c) * 16777619u;
-        }
-        return hash;
-    }
 
     // A galaxy's scenario archive is named for it and ends in this.
     const char cScenarioSuffix[] = "Scenario";
@@ -189,25 +174,10 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
 
     MR::sort(mScenarioData, mScenarioData + mScenarioDataNum, GalaxyNameSortLt());
 
-    // The name index: the first galaxy of each name in sorted order, as a scan of the list finds it.
-    u32 slotNum = 4;
-    while (slotNum < static_cast< u32 >(mScenarioDataNum) * 2) {
-        slotNum <<= 1;
-    }
-    mNameSlots = new u32[slotNum];
-    mNameSlotMask = slotNum - 1;
-    for (u32 i = 0; i < slotNum; i++) {
-        mNameSlots[i] = cNoSlot;
-    }
+    // The first galaxy of each name in sorted order, as a scan of the list finds it.
+    mNames.reset(static_cast< u32 >(mScenarioDataNum));
     for (s32 i = 0; i < mScenarioDataNum; i++) {
-        const char* pGalaxyName = mScenarioData[i]->mGalaxyName;
-        u32 slot = hashGalaxyName(pGalaxyName) & mNameSlotMask;
-        while (mNameSlots[slot] != cNoSlot && !MR::isEqualStringCase(mScenarioData[mNameSlots[slot]]->mGalaxyName, pGalaxyName)) {
-            slot = (slot + 1) & mNameSlotMask;
-        }
-        if (mNameSlots[slot] == cNoSlot) {
-            mNameSlots[slot] = static_cast< u32 >(i);
-        }
+        mNames.add(mScenarioData[i]->mGalaxyName, static_cast< u32 >(i));
     }
 }
 
@@ -216,14 +186,8 @@ const ScenarioData* ScenarioDataParser::getScenarioData(const char* pGalaxyName)
         return nullptr;
     }
 
-    for (u32 slot = hashGalaxyName(pGalaxyName) & mNameSlotMask; mNameSlots[slot] != cNoSlot; slot = (slot + 1) & mNameSlotMask) {
-        const ScenarioData* pScenarioData = mScenarioData[mNameSlots[slot]];
-        if (MR::isEqualStringCase(pScenarioData->mGalaxyName, pGalaxyName)) {
-            return pScenarioData;
-        }
-    }
-
-    return nullptr;
+    const u32 index = mNames.find(pGalaxyName);
+    return index == MR::NameIndexOf< MR::NameKeyCase >::cNoValue ? nullptr : mScenarioData[index];
 }
 
 const ScenarioData* ScenarioDataParser::getScenarioData(s32 index) const {
