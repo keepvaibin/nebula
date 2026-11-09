@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Map/CollisionCode.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Player/MarioModule.hpp"
 #include "Game/Util/Array.hpp"
@@ -351,7 +352,7 @@ public:
     void fixWallingDir(bool);
     bool fixWallingTop();
     bool checkWallFloorCode(u16) const;
-    bool checkWallCode(const char*, bool) const;
+    bool checkWallCode(u16 code, bool frontBackOnly) const;
     bool checkWallCodeNorm(u16, Vec3f*, bool) const;
     void setWallCancel();
     void keepDistFrontWall();

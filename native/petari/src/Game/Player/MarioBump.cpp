@@ -13,9 +13,9 @@ void Mario::checkBump() {
                 if (isStickOn()) {
                     if (!mCorrectionEaseTimer && (mMovementStates.slopeSlide == 0)) {
                         if (mBumpPolygon->isValid()) {
-                            const char* floor = MR::getFloorCodeString(mBumpPolygon);
+                            const s32 floor = MR::getFloorCodeIndex(mBumpPolygon);
 
-                            if (!isSlipPolygon(mBumpPolygon) || !strcmp(floor, "NoSlip") || !strcmp(floor, "Sand")) {
+                            if (!isSlipPolygon(mBumpPolygon) || floor == CollisionFloorCode_NoSlip || floor == CollisionFloorCode_Sand) {
                                 startBump(mBumpHitPos);
                             }
                         }

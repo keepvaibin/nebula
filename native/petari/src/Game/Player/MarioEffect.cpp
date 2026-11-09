@@ -271,14 +271,14 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
         break;
     case 0x20:
         materialIndex = 5;
-        if (strcmp(MR::getSoundCodeString(mMario->mShadowPolygon), "Honey") == 0) {
+        if (MR::getSoundCodeIndex(mMario->mShadowPolygon) == CollisionSoundCode_Honey) {
             materialIndex = 6;
         }
 
         break;
     case 0x1B:
     case 0x1C:
-        if (strcmp(MR::getSoundCodeString(mMario->mShadowPolygon), "Sand") == 0) {
+        if (MR::getSoundCodeIndex(mMario->mShadowPolygon) == CollisionSoundCode_Sand) {
             materialIndex = 3;
         }
 

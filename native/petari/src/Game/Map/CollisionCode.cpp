@@ -9,16 +9,10 @@ CollisionCode::CollisionCode() : mFloorTable(), mWallTable(), mSoundTable(), mCa
 }
 
 CodeTable::CodeTable(u32 numMax) : mIndex(numMax) {
-    mCodeNum = 0;
-    mCodeTable = new u32[numMax];
-    mNameTable = new const char*[numMax];
 }
 
 void CodeTable::add(const char* pName, u32 code) {
     mIndex.add(pName, code);
-    mCodeTable[mCodeNum] = code;
-    mNameTable[mCodeNum] = pName;
-    mCodeNum++;
 }
 
 void CollisionCode::createFloorTable() {
@@ -99,44 +93,6 @@ void CollisionCode::createCameraTable() {
     mCameraTable->add("Through", CollisionCameraCode_Through);
 }
 
-const char* CollisionCode::getFloorCodeString(const Triangle& rTriangle) {
-    u32 code = getCode(rTriangle.getAttributes(), mFloorTable, "Floor_code");
-
-    return mFloorTable->getString(code);
-}
-
-const char* CollisionCode::getWallCodeString(const Triangle& rTriangle) {
-    u32 code = getCode(rTriangle.getAttributes(), mWallTable, "Wall_code");
-
-    return mWallTable->getString(code);
-}
-
-const char* CollisionCode::getSoundCodeString(const Triangle& rTriangle) {
-    return getSoundCodeString(rTriangle.getAttributes());
-}
-
-const char* CollisionCode::getSoundCodeString(const TableIter& rIter) {
-    if (!rIter.isValid()) {
-        return "null";
-    }
-
-    if (rIter.mInfo->getColumnKind("Sound_code") != TableKind_Text) {
-        u32 code = 0;
-
-        if (rIter.getValue< u32 >("Sound_code", &code)) {
-            return mSoundTable->getString(code);
-        }
-    } else {
-        const char* pCode = nullptr;
-
-        if (rIter.getValue< const char* >("Sound_code", &pCode)) {
-            return pCode;
-        }
-    }
-
-    return "null";
-}
-
 u32 CollisionCode::getCameraID(const Triangle& rTriangle) {
     return getCameraID(rTriangle.getAttributes());
 }
@@ -191,12 +147,3 @@ u32 CollisionCode::getCameraID(const TableIter& rIter) {
     return id;
 }
 
-const char* CodeTable::getString(u32 code) {
-    for (s32 i = 0; i < mCodeNum; i++) {
-        if (code == mCodeTable[i]) {
-            return mNameTable[i];
-        }
-    }
-
-    return "NoIter";
-}

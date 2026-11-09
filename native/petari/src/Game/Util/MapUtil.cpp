@@ -142,13 +142,12 @@ namespace MR {
         return true;
     }
 
+    // The floor codes name no Water or Shallow (Shallow is a sound code), so no polygon is water by its floor code.
     bool isWaterPolygon(const Triangle*) {
-        // A floor code string is always a name from the floor table or "NoIter", and none of them is "Water" or "Shallow".
         return false;
     }
 
     bool isThroughPolygon(const Triangle* pTriangle) {
-        // The floor code string is "PullBack" exactly when the floor code is the PullBack one.
         return getFloorCodeIndex(pTriangle) == static_cast< s32 >(CollisionFloorCode_PullBack);
     }
 
@@ -574,18 +573,6 @@ namespace MR {
 
     u32 getCameraID(const Triangle* pTriangle) {
         return getCollisionDirector()->mCode->getCameraID(*pTriangle);
-    }
-
-    const char* getFloorCodeString(const Triangle* pTriangle) {
-        return getCollisionDirector()->mCode->getFloorCodeString(*pTriangle);
-    }
-
-    const char* getWallCodeString(const Triangle* pTriangle) {
-        return getCollisionDirector()->mCode->getWallCodeString(*pTriangle);
-    }
-
-    const char* getSoundCodeString(const Triangle* pTriangle) {
-        return getCollisionDirector()->mCode->getSoundCodeString(*pTriangle);
     }
 
     s32 getFloorCodeIndex(const TableIter& rIter) {
