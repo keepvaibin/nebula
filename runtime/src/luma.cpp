@@ -522,7 +522,8 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                     if (!read.id.empty()) option.choices.push_back(std::move(read));
                 }
             }
-            // A choice for each number of a range: { "from": 1, "to": 20, "step": 1 }. Its id is the number.
+            // A choice for each number of a range: { "from": 1, "to": 20, "step": 1 }. Its id is the number; a range from
+            // a larger number to a smaller one counts down.
             if (const Value* range = entry.get("range"); range != nullptr && range->object() != nullptr) {
                 const auto number = [range](const char* key, double missing) {
                     const Value* value = range->get(key);
@@ -531,11 +532,13 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 const double from = number("from", 0.0);
                 const double to = number("to", from);
                 const double step = number("step", 1.0);
-                if (step > 0.0 && to >= from && (to - from) / step <= 10000.0) {
+                const double span = to >= from ? to - from : from - to;
+                const double toward = to >= from ? step : -step;
+                if (step > 0.0 && span / step <= 10000.0) {
                     // Counted, so that a step too small for the numbers' size (1e300 + 1) cannot loop for ever.
-                    const std::size_t count = static_cast<std::size_t>((to - from) / step + 0.001) + 1u;
+                    const std::size_t count = static_cast<std::size_t>(span / step + 0.001) + 1u;
                     for (std::size_t i = 0; i < count; ++i) {
-                        const double at = from + static_cast<double>(i) * step;
+                        const double at = from + static_cast<double>(i) * toward;
                         char id[32];
                         std::snprintf(id, sizeof(id), "%g", at);
                         Choice choice;

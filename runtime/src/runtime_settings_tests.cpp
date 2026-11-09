@@ -540,20 +540,16 @@ int main() {
             galaxy::save_runtime_settings_to_file(),
         "wide settings override preserves the actual Unicode destination");
 
-    const std::wstring too_long_override(300u, L'x');
-    _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", too_long_override.c_str());
-    bool override_rejected = false;
+    // No fixed path length: a name past the old 260-character limit is a path like any other.
+    const auto long_override = root / std::wstring(300u, L'x');
+    _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", long_override.c_str());
+    bool long_override_read = true;
     try {
         galaxy::load_runtime_settings_from_file();
     } catch (const std::exception&) {
-        override_rejected = true;
+        long_override_read = false;
     }
-    passed &= expect(override_rejected, "unsupported override length fails explicitly");
-    // Saves only when the override was rejected; otherwise the save could write the real settings file.
-    if (override_rejected) {
-        passed &= expect(!galaxy::save_runtime_settings_to_file(),
-            "invalid override save fails without selecting a fallback destination");
-    }
+    passed &= expect(long_override_read, "a settings path past 260 characters is read");
     _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", settings_path.c_str());
 
     {

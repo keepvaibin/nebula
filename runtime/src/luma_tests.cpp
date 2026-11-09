@@ -170,7 +170,9 @@ int main() {
         if (ranged && ranged->options.size() == 4u) {
             check(ranged->options[0].choices.size() == 5u && ranged->options[0].choices[4].id == "5", "1 to 5 gives five choices");
             check(ranged->options[1].choices.size() == 1u, "a range of one huge number gives one choice and ends");
-            check(ranged->options[2].choices.empty(), "a range that runs backwards gives none");
+            check(ranged->options[2].choices.size() == 5u && ranged->options[2].choices[0].id == "5" &&
+                      ranged->options[2].choices[4].id == "1",
+                  "a range from a larger number to a smaller one counts down");
             check(ranged->options[3].choices.size() == 5u && ranged->options[3].choices[1].id == "0.25", "fractional steps");
         }
     }

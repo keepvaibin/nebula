@@ -2221,9 +2221,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                       << (heap_limit == DescriptorRing::kMaxHeapDescriptors ? ", at most 1000000 descriptors\n"
                                                                             : ", no named limit\n");
         }
-        const bool small = test_small_heaps();
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, small ? 1024u : kSrvPerFrame, kFramesInFlight,
-                                  small ? 4u : kPersistentSrvDescriptors, small ? 64u : kTextureSlotsMin, heap_limit)) {
+        const bool small_heaps = test_small_heaps();
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, small_heaps ? 1024u : kSrvPerFrame,
+                                  kFramesInFlight, small_heaps ? 4u : kPersistentSrvDescriptors,
+                                  small_heaps ? 64u : kTextureSlotsMin, heap_limit)) {
             return false;
         }
         srv_ring_.set_sampler_heap(sampler_heap_.Get());
