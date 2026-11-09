@@ -261,7 +261,8 @@ void* api_find_function(const char* symbol) {
 }  // namespace
 
 namespace {
-// GALAXY_DUMP_TUNABLES=<file>: every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each, for the mod docs.
+// GALAXY_DUMP_TUNABLES=<file>: every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each (a list's
+// places as <key>[i]), for the mod docs.
 void dump_tunables(const NebulaModApi* game_api) {
     const char* path = std::getenv("GALAXY_DUMP_TUNABLES");
     if (path == nullptr || *path == '\0' || game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return;
@@ -270,15 +271,18 @@ void dump_tunables(const NebulaModApi* game_api) {
     static constexpr const char* kKinds[] = {"?", "f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"};
     const char* file = nullptr;
     const char* name = nullptr;
+    int32_t place = -1;
     int32_t kind = 0;
     double game_value = 0.0;
     double value = 0.0;
-    for (int32_t i = 0; game_api->tunable_at(i, &file, &name, &kind, &game_value, &value) == 0; ++i) {
+    for (int32_t i = 0; game_api->tunable_at(i, &file, &name, &place, &kind, &game_value, &value) == 0; ++i) {
         std::string stem = file != nullptr ? file : "";
         if (const std::size_t dot = stem.rfind('.'); dot != std::string::npos) stem.resize(dot);
         char number[64];
         std::snprintf(number, sizeof(number), "%.9g", game_value);
-        out << stem << '.' << (name != nullptr ? name : "") << '\t' << kKinds[(kind >= 1 && kind <= 9) ? kind : 0] << '\t' << number << '\n';
+        out << stem << '.' << (name != nullptr ? name : "");
+        if (place >= 0) out << '[' << place << ']';
+        out << '\t' << kKinds[(kind >= 1 && kind <= 9) ? kind : 0] << '\t' << number << '\n';
     }
 }
 }  // namespace

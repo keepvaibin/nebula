@@ -45,12 +45,13 @@ namespace {
         return pFile[stemLength] == '.';
     }
 
-    bool isName(const char* pName, const char* pKeyName) {
-        while (*pName != '\0' && *pName == *pKeyName) {
-            ++pName;
-            ++pKeyName;
+    bool isName(const char* pName, const char* pKeyName, s32 nameLength) {
+        for (s32 i = 0; i < nameLength; ++i) {
+            if (pName[i] != pKeyName[i]) {
+                return false;
+            }
         }
-        return *pName == *pKeyName;
+        return pName[nameLength] == '\0';
     }
 
     template <typename T>
@@ -65,60 +66,60 @@ namespace {
         return static_cast<T>(value < 0.0 ? value - 0.5 : value + 0.5);
     }
 
-    void store(const nebula::Tunable& rTunable, f64 value) {
-        switch (rTunable.mKind) {
+    void store(void* pAddress, u32 kind, u32 place, f64 value) {
+        switch (kind) {
         case nebula::TunableKind_F32:
-            *static_cast<f32*>(rTunable.mAddress) = static_cast<f32>(value);
+            static_cast<f32*>(pAddress)[place] = static_cast<f32>(value);
             break;
         case nebula::TunableKind_F64:
-            *static_cast<f64*>(rTunable.mAddress) = value;
+            static_cast<f64*>(pAddress)[place] = value;
             break;
         case nebula::TunableKind_S32:
-            *static_cast<s32*>(rTunable.mAddress) = clampTo<s32>(value, -2147483648.0, 2147483647.0);
+            static_cast<s32*>(pAddress)[place] = clampTo<s32>(value, -2147483648.0, 2147483647.0);
             break;
         case nebula::TunableKind_U32:
-            *static_cast<u32*>(rTunable.mAddress) = clampTo<u32>(value, 0.0, 4294967295.0);
+            static_cast<u32*>(pAddress)[place] = clampTo<u32>(value, 0.0, 4294967295.0);
             break;
         case nebula::TunableKind_S16:
-            *static_cast<s16*>(rTunable.mAddress) = clampTo<s16>(value, -32768.0, 32767.0);
+            static_cast<s16*>(pAddress)[place] = clampTo<s16>(value, -32768.0, 32767.0);
             break;
         case nebula::TunableKind_U16:
-            *static_cast<u16*>(rTunable.mAddress) = clampTo<u16>(value, 0.0, 65535.0);
+            static_cast<u16*>(pAddress)[place] = clampTo<u16>(value, 0.0, 65535.0);
             break;
         case nebula::TunableKind_S8:
-            *static_cast<s8*>(rTunable.mAddress) = clampTo<s8>(value, -128.0, 127.0);
+            static_cast<s8*>(pAddress)[place] = clampTo<s8>(value, -128.0, 127.0);
             break;
         case nebula::TunableKind_U8:
-            *static_cast<u8*>(rTunable.mAddress) = clampTo<u8>(value, 0.0, 255.0);
+            static_cast<u8*>(pAddress)[place] = clampTo<u8>(value, 0.0, 255.0);
             break;
         case nebula::TunableKind_Bool:
-            *static_cast<bool*>(rTunable.mAddress) = value != 0.0;
+            static_cast<bool*>(pAddress)[place] = value != 0.0;
             break;
         default:
             break;
         }
     }
 
-    f64 load(const nebula::Tunable& rTunable) {
-        switch (rTunable.mKind) {
+    f64 load(const void* pAddress, u32 kind, u32 place) {
+        switch (kind) {
         case nebula::TunableKind_F32:
-            return *static_cast<const f32*>(rTunable.mAddress);
+            return static_cast<const f32*>(pAddress)[place];
         case nebula::TunableKind_F64:
-            return *static_cast<const f64*>(rTunable.mAddress);
+            return static_cast<const f64*>(pAddress)[place];
         case nebula::TunableKind_S32:
-            return *static_cast<const s32*>(rTunable.mAddress);
+            return static_cast<const s32*>(pAddress)[place];
         case nebula::TunableKind_U32:
-            return *static_cast<const u32*>(rTunable.mAddress);
+            return static_cast<const u32*>(pAddress)[place];
         case nebula::TunableKind_S16:
-            return *static_cast<const s16*>(rTunable.mAddress);
+            return static_cast<const s16*>(pAddress)[place];
         case nebula::TunableKind_U16:
-            return *static_cast<const u16*>(rTunable.mAddress);
+            return static_cast<const u16*>(pAddress)[place];
         case nebula::TunableKind_S8:
-            return *static_cast<const s8*>(rTunable.mAddress);
+            return static_cast<const s8*>(pAddress)[place];
         case nebula::TunableKind_U8:
-            return *static_cast<const u8*>(rTunable.mAddress);
+            return static_cast<const u8*>(pAddress)[place];
         case nebula::TunableKind_Bool:
-            return *static_cast<const bool*>(rTunable.mAddress) ? 1.0 : 0.0;
+            return static_cast<const bool*>(pAddress)[place] ? 1.0 : 0.0;
         default:
             return 0.0;
         }
@@ -130,26 +131,55 @@ namespace nebula {
         if (pKey == nullptr) {
             return -1;
         }
+        // "<stem>.<name>" or "<stem>.<name>[<place>]": the stem ends at the last dot before any bracket.
+        s32 length = 0;
         s32 dot = -1;
-        for (s32 i = 0; pKey[i] != '\0'; ++i) {
-            if (pKey[i] == '.') {
-                dot = i;
+        s32 bracket = -1;
+        for (; pKey[length] != '\0'; ++length) {
+            if (pKey[length] == '[' && bracket < 0) {
+                bracket = length;
+            } else if (pKey[length] == '.' && bracket < 0) {
+                dot = length;
             }
         }
-        if (dot <= 0 || pKey[dot + 1] == '\0') {
+        const s32 nameEnd = bracket >= 0 ? bracket : length;
+        if (dot <= 0 || nameEnd <= dot + 1) {
             return -1;
+        }
+        s32 place = -1;
+        if (bracket >= 0) {
+            place = 0;
+            s32 i = bracket + 1;
+            if (pKey[i] < '0' || pKey[i] > '9') {
+                return -1;
+            }
+            for (; pKey[i] >= '0' && pKey[i] <= '9'; ++i) {
+                place = place * 10 + (pKey[i] - '0');
+                if (place > 0xFFFF) {
+                    return -1;
+                }
+            }
+            if (pKey[i] != ']' || pKey[i + 1] != '\0') {
+                return -1;
+            }
         }
         s32 result = -1;
         for (const Tunable* pTunable = begin(); pTunable < end(); ++pTunable) {
-            if (pTunable->mName != nullptr && isFile(pTunable->mFile, pKey, dot) && isName(pTunable->mName, pKey + dot + 1)) {
-                store(*pTunable, value);
-                result = 0;
+            if (pTunable->mName == nullptr || !isFile(pTunable->mFile, pKey, dot) || !isName(pTunable->mName, pKey + dot + 1, nameEnd - dot - 1)) {
+                continue;
             }
+            // A list takes its places; one number takes its own name, or place 0.
+            const s32 at = place < 0 ? 0 : place;
+            if ((place < 0 && pTunable->mCount != 1u) || static_cast<u32>(at) >= pTunable->mCount) {
+                continue;
+            }
+            store(pTunable->mAddress, pTunable->mKind, static_cast<u32>(at), value);
+            result = 0;
         }
         return result;
     }
 
-    bool tunableAt(s32 index, const char** pFile, const char** pName, u32* pKind, f64* pDefault, f64* pValue) {
+    bool tunableAt(s32 index, const char** pFile, const char** pName, s32* pPlace, u32* pKind, f64* pGameValue, f64* pValue) {
         if (index < 0) {
             return false;
         }
@@ -157,14 +187,17 @@ namespace nebula {
             if (pTunable->mName == nullptr) {
                 continue;
             }
-            if (index-- == 0) {
-                *pFile = pTunable->mFile;
-                *pName = pTunable->mName;
-                *pKind = pTunable->mKind;
-                *pDefault = pTunable->mDefault;
-                *pValue = load(*pTunable);
-                return true;
+            if (static_cast<u32>(index) >= pTunable->mCount) {
+                index -= static_cast<s32>(pTunable->mCount);
+                continue;
             }
+            *pFile = pTunable->mFile;
+            *pName = pTunable->mName;
+            *pPlace = pTunable->mCount == 1u ? -1 : index;
+            *pKind = pTunable->mKind;
+            *pGameValue = load(pTunable->mGameValues, pTunable->mKind, static_cast<u32>(index));
+            *pValue = load(pTunable->mAddress, pTunable->mKind, static_cast<u32>(index));
+            return true;
         }
         return false;
     }

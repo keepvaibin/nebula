@@ -628,7 +628,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
             }
         }
         if (const Value* tunables = entry.get("tunables"); tunables != nullptr) {
-            // { "Kuribo.cWalkSpeed": 2.0, "Kuribo.cIsDead": true, "Kuribo.cTurn": {"option": "turn"} }
+            // { "Kuribo.cWalkSpeed": 2.0, "Kuribo.cIsDead": true, "Kuribo.cTurn": {"option": "turn"}, "Kuribo.cSteps": [4, null, 9] }
             if (tunables->object() == nullptr) return std::nullopt;
             for (const auto& [key, value] : *tunables->object()) {
                 if (key.find('.') == std::string::npos) return std::nullopt;
@@ -638,6 +638,17 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                     layer.tunables.push_back({key, *flag ? 1.0 : 0.0, {}});
                 } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
                     layer.tunables.push_back({key, 0.0, *option->string()});
+                } else if (const Array* list = value.array()) {
+                    // A list's places; a null keeps the game's number there.
+                    for (std::size_t i = 0; i < list->size(); ++i) {
+                        if (const double* item = (*list)[i].number()) {
+                            layer.tunables.push_back({key + "[" + std::to_string(i) + "]", *item, {}});
+                        } else if (const bool* item_flag = std::get_if<bool>(&(*list)[i].data)) {
+                            layer.tunables.push_back({key + "[" + std::to_string(i) + "]", *item_flag ? 1.0 : 0.0, {}});
+                        } else if (!std::holds_alternative<std::monostate>((*list)[i].data)) {
+                            return std::nullopt;
+                        }
+                    }
                 } else {
                     return std::nullopt;
                 }
@@ -735,9 +746,9 @@ int compare_versions(std::string_view a, std::string_view b) {
 
 std::string refusal(const Manifest& manifest, const std::string& game_id, std::string_view nebula_version, std::string_view) {
     if (manifest.format > kFormat) return "THIS MOD NEEDS A NEWER NEBULA";
-    // No feature names exist yet beyond the format itself: any is one this game lacks.
+    // The features this Nebula has; any other is one it lacks. "tunables": the game's tuning numbers by "<file>.<name>".
     for (const std::string& feature : manifest.requires_features) {
-        if (feature != "custom-shaders") return "THIS MOD NEEDS A NEWER NEBULA";
+        if (feature != "custom-shaders" && feature != "tunables") return "THIS MOD NEEDS A NEWER NEBULA";
     }
     if (!manifest.nebula.empty() && compare_versions(nebula_version, manifest.nebula) < 0) return "THIS MOD NEEDS A NEWER NEBULA";
     if (manifest.game.starts_with("SB4") || manifest.game.starts_with("SB5")) return "THIS MOD IS FOR SUPER MARIO GALAXY 2";

@@ -666,17 +666,19 @@ namespace {
         return nebula::setTunable(pKey, value);
     }
 
-    int32_t apiTunableAt(int32_t index, const char** pFile, const char** pName, int32_t* pKind, double* pGameValue, double* pValue) {
+    int32_t apiTunableAt(int32_t index, const char** pFile, const char** pName, int32_t* pPlace, int32_t* pKind, double* pGameValue, double* pValue) {
         u32 kind = 0;
+        s32 place = -1;
         const char* pFileOut = nullptr;
         const char* pNameOut = nullptr;
         f64 gameValue = 0.0;
         f64 value = 0.0;
-        if (!nebula::tunableAt(index, &pFileOut, &pNameOut, &kind, &gameValue, &value)) {
+        if (!nebula::tunableAt(index, &pFileOut, &pNameOut, &place, &kind, &gameValue, &value)) {
             return -1;
         }
         if (pFile != nullptr) *pFile = pFileOut;
         if (pName != nullptr) *pName = pNameOut;
+        if (pPlace != nullptr) *pPlace = place;
         if (pKind != nullptr) *pKind = static_cast<int32_t>(kind);
         if (pGameValue != nullptr) *pGameValue = gameValue;
         if (pValue != nullptr) *pValue = value;
