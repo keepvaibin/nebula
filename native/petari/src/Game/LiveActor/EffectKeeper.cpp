@@ -37,7 +37,7 @@ namespace {
 
 EffectKeeper::EffectKeeper(const char* pName, ResourceHolder* pResourceHolder, int extraEmitterNum, const char* pResourceName)
     : mName(pName), mResourceHolder(pResourceHolder), mResourceName(pResourceName), mEmitters(), mSyncBckChecker(), mBinder(), mFloorCode(),
-      mPrevFloorCode(), mHasAttributeEffect() {
+      mEffectFloorCode(), mFloorCodeSteps(), mHasAttributeEffect() {
     if (mResourceName == nullptr && mResourceHolder != nullptr) {
         mResourceName = mResourceHolder->getModelName();
     }
@@ -85,7 +85,7 @@ void EffectKeeper::initAfterPlacementForAttributeEffect(MtxPtr pMtx) {
         s32 code = ::getFloorCodeBelow(pMtx, 100.0f);
         if (code >= 0) {
             mFloorCode = code;
-            mPrevFloorCode = code;
+            mEffectFloorCode = code;
         }
     }
 }
@@ -270,7 +270,14 @@ void EffectKeeper::updateAttributeEffect() {
         return;
     }
 
-    if (mPrevFloorCode != mFloorCode) {
+    // The forever effects follow the ground's code once it has held cFloorCodeHoldSteps steps: a seam between two floors,
+    // or a ground ray that alternates between them, keeps one effect instead of re-making it every step.
+    const s32 cFloorCodeHoldSteps = 4;
+    if (mFloorCode == mEffectFloorCode) {
+        mFloorCodeSteps = 0;
+    } else if (++mFloorCodeSteps >= cFloorCodeHoldSteps) {
+        mEffectFloorCode = mFloorCode;
+        mFloorCodeSteps = 0;
         for (MultiEmitter* const* it = mEmitters.begin(); it != mEmitters.end(); it++) {
             if (!(*it)->isValid()) {
                 continue;
@@ -284,12 +291,17 @@ void EffectKeeper::updateAttributeEffect() {
                 continue;
             }
 
-            (*it)->deleteForeverEmitter();
-
             MR::FormattedName buf;
             ::makeAttibuteEffectBaseName(buf, ::getMultiEmitterName(*it));
 
-            getEmitter(buf.c_str())->createEmitter();
+            // Two codes with one effect (both the default, say): the running one stays.
+            MultiEmitter* pNext = getEmitter(buf.c_str());
+            if (pNext == *it) {
+                continue;
+            }
+
+            (*it)->deleteForeverEmitter();
+            pNext->createEmitter();
         }
     }
 
@@ -366,7 +378,6 @@ void EffectKeeper::updateFloorCode() {
         return;
     }
 
-    mPrevFloorCode = mFloorCode;
     if (::isBinded(mBinder)) {
         updateFloorCode(&mBinder->mGroundInfo.mParentTriangle);
     }
@@ -377,7 +388,6 @@ void EffectKeeper::updateFloorCode(const Triangle* pTriangle) {
         return;
     }
 
-    mPrevFloorCode = mFloorCode;
     mFloorCode = MR::getFloorCodeIndex(pTriangle->getAttributes());
 }
 

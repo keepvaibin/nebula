@@ -60,7 +60,8 @@ public:
     MR::NameIndex mNames;
     SyncBckEffectChecker* mSyncBckChecker;
     const Binder* mBinder;
-    s32 mFloorCode;  // of the ground below, for the effects that change with it
-    s32 mPrevFloorCode;
+    s32 mFloorCode;        // of the ground below, for the effects that change with it
+    s32 mEffectFloorCode;  // the code the running forever effects were made for
+    s32 mFloorCodeSteps;   // the steps in a row mFloorCode has differed from it
     bool mHasAttributeEffect;
 };
