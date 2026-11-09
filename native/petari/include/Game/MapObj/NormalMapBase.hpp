@@ -39,7 +39,7 @@ public:
     void loadNormalTex(const JUTTexture*, u32 slot) const;
 
     JUTTexture* mNormalTex;
-    JUTTexture* mTextures[16];
+    JUTTexture** mTextures;  // one per model texture
     void* mImagePtr;
     s32 mGradTexMode;
     Mtx mDrawMtx;

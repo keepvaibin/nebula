@@ -66,7 +66,7 @@ MarioFoo::MarioFoo(MarioActor* pActor) : MarioState(pActor, MarioStatus_Foo) {
     mBrakeTimer = 0;
     mBraking = 0;
 
-    for (u32 i = 0; i < 64; i++) {
+    for (u32 i = 0; i < cTrailNum; i++) {
         mTrailPos[i].zero();
         mTrailSide[i].zero();
     }
@@ -147,11 +147,11 @@ bool MarioFoo::update() {
         handDirection = rightHand - leftHand;
         MR::normalizeOrZero(&handDirection);
         mTrailSide[mTrailIndex] = handDirection;
-        if (mTrailLength < 64) {
+        if (mTrailLength < cTrailNum) {
             mTrailLength++;
         }
 
-        mTrailIndex = (mTrailIndex + 1) % 64;
+        mTrailIndex = (mTrailIndex + 1) % cTrailNum;
     }
 
     f32 speedRatio = 1.0f - MR::clamp(mSpeed / mActor->getConst().getTable()->mSwimFrontMaxSpeed, 0.0f, 1.0f);
@@ -648,7 +648,7 @@ void MarioFoo::draw3D() const {
         up.cross(back, side);
         MR::normalizeOrZero(&up);
         Vec3f front = -back;
-        f32 length = (64 - mTrailLength) / 64.0f;
+        f32 length = (cTrailNum - mTrailLength) / static_cast< f32 >(cTrailNum);
 
         beamVertices[0] = center - side * 70.0f;
         beamVertices[1] = center - side * 70.0f + front * 2000.0f * length;
@@ -699,11 +699,11 @@ void MarioFoo::draw3D() const {
             material.setColor(4, color2.r, color2.g, color2.b, color2.a);
             TypedDraw site(material, nullptr, MR::getCameraViewMtx());
             VertexPT* vtx;
-            u32 index = (mTrailIndex + 127 - i) % 64;
+            u32 index = (mTrailIndex + cTrailNum * 2 - 1 - i) % cTrailNum;
             if (i == 0) {
                 u32 j;
                 for (j = 1; j < count; j++) {
-                    Vec3f direction = mTrailPos[(mTrailIndex + 127 - j) % 64] - mTrailPos[index];
+                    Vec3f direction = mTrailPos[(mTrailIndex + cTrailNum * 2 - 1 - j) % cTrailNum] - mTrailPos[index];
                     Vec3f horizontal;
                     MR::vecKillElement(direction, MR::getCamZdir(), &horizontal);
                     if (!MR::normalizeOrZero(&horizontal)) {

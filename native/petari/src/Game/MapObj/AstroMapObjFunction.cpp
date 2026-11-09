@@ -3,6 +3,7 @@
 #include "Game/Screen/GalaxyNamePlate.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
@@ -204,9 +205,11 @@ const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) 
     }
     // A dome past the game's six: its model is named by its number.
     if (nameTable != nullptr) {
-        static char sName[64];
-        nebula_snprintf(sName, sizeof(sName), "%s%d", pObjName, domeId);
-        return sName;
+        static MR::GrowBuffer< char > sName;  // zero-initialised: the last name made
+        const MR::FormattedName name("%s%d", pObjName, domeId);
+        const u32 size = strlen(name.c_str()) + 1;
+        memcpy(sName.room(size), name.c_str(), size);
+        return sName.mItems;
     }
 
     return pObjName;
@@ -232,22 +235,18 @@ bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, co
         return false;
     }
 
-    char offsetYId[16];
-    s32 areaArg = MR::getAreaObjArg(astroOverlookAreaObj, 0);
-    nebula_snprintf(offsetYId, sizeof(offsetYId), "OffsetY%d", areaArg);
-
-    char upperFlagId[16];
-    areaArg = MR::getAreaObjArg(astroOverlookAreaObj, 0);
-    nebula_snprintf(upperFlagId, sizeof(upperFlagId), "UpperFlag%d", areaArg);
+    const s32 areaArg = MR::getAreaObjArg(astroOverlookAreaObj, 0);
+    const MR::FormattedName offsetYId("OffsetY%d", areaArg);
+    const MR::FormattedName upperFlagId("UpperFlag%d", areaArg);
 
     const char* modelName = getModelName(pObjName, domeId);
     s32 i = ::findModelName(pInfo, modelName);
 
     f32 offsetY;
-    MR::getCsvDataF32(&offsetY, pInfo, offsetYId, i);
+    MR::getCsvDataF32(&offsetY, pInfo, offsetYId.c_str(), i);
 
     bool upperFlag;
-    MR::getCsvDataBool(&upperFlag, pInfo, upperFlagId, i);
+    MR::getCsvDataBool(&upperFlag, pInfo, upperFlagId.c_str(), i);
 
     Vec3f pos = rPos;
     pos.y += offsetY;

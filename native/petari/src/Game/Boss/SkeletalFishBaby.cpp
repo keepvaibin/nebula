@@ -20,6 +20,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const char* const sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
@@ -297,10 +298,9 @@ void SkeletalFishBaby::initJoint() {
     }
 
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
-        char jointName[16];
-        nebula_snprintf(jointName, sizeof(jointName), "Joint%02d", i);
-        mControllers[i] = MR::createJointDelegatorWithNullMtxFunc(this, &SkeletalFishBaby::calcJoint, jointName);
-        mJointIndicies[MR::getJointIndex(this, jointName)] = i;
+        const MR::FormattedName jointName("Joint%02d", i);
+        mControllers[i] = MR::createJointDelegatorWithNullMtxFunc(this, &SkeletalFishBaby::calcJoint, jointName.c_str());
+        mJointIndicies[MR::getJointIndex(this, jointName.c_str())] = i;
     }
 }
 

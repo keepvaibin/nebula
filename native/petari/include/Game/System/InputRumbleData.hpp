@@ -2,8 +2,8 @@
 
 struct RumblePattern {
     const char* mName;
-    s32 mFrame;
-    u8 mPattern[180];  // RUMBLE_ON / RUMBLE_OFF per frame, mFrame of them
+    s32 mFrame;  // steps (the game's 60 updates a second)
+    const u8* mPattern;  // RUMBLE_ON / RUMBLE_OFF per step, mFrame of them
 };
 
 namespace RumbleData {

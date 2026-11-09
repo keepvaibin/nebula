@@ -980,5 +980,5 @@ public:
     Vec3f mHipDropSlideSide;  // the hip-drop slide's side
     f32 mHipDropSlideSpeed;  // the hip-drop slide's speed
     HitSensor* mHipDropSlideSensor;  // what the hip-drop slide follows
-    u8 mIndexedAnimeOn[0x20];  // which indexed animations count as running (MarioModule::isAnimationRun(name, index)); nothing sets one: find, listed
+    u8 mIndexedAnimeOn[MarioIndexedAnime_Count];  // set by MarioModule::changeAnimation(name, anime), cleared once it stops
 };

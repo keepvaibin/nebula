@@ -5,6 +5,7 @@
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
@@ -374,6 +375,16 @@ namespace NebulaText {
         expand(&sink, pId);
         pDst[sink.mLength] = 0;
         return sink.mLength;
+    }
+
+    s32 length(const char* pId) {
+        return measure(pId);
+    }
+
+    const char16_t* get(MR::GrowBuffer< char16_t >* pText, const char* pId) {
+        const s32 units = measure(pId) + 1;
+        get(pText->room(units), units, pId);
+        return pText->mItems;
     }
 
     // Japanese and Chinese lines may break between characters (Korean, as English, at spaces): before a wide character

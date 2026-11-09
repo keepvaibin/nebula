@@ -259,8 +259,8 @@ void MarioActor::updateLightList(const Color8& rAmbient, const Color8& rMaterial
 }
 
 void MarioActor::createRainbowMesh() {
-    for (u32 alpha = 0; alpha < 8; alpha++) {
-        for (u32 index = 0; index < 8; index++) {
+    for (u32 alpha = 0; alpha < cBlurPoseNum; alpha++) {
+        for (u32 index = 0; index < cBlurPoseNum; index++) {
             NebulaColor8 color = {0, 0, 0, 0};
 
             if (index & 1) {
@@ -282,8 +282,8 @@ void MarioActor::createRainbowMesh() {
             }
 
             color.a = 16 + (alpha + 1) * 24;
-            mGhostTints[alpha * 8 + index].kind = MarioModelTint::Kind_Ghost;
-            mGhostTints[alpha * 8 + index].color0 = color;
+            mGhostTints[alpha * cBlurPoseNum + index].kind = MarioModelTint::Kind_Ghost;
+            mGhostTints[alpha * cBlurPoseNum + index].color0 = color;
         }
     }
 }

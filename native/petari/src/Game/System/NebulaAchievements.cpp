@@ -6,11 +6,14 @@
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaText.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/Table.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include <cstring>
 
 namespace {
     // Glyphs of the picture font (MR::addPictureFontTag's codes).
@@ -103,17 +106,22 @@ namespace {
     };
     const s32 cEntryNum = sizeof(cEntries) / sizeof(cEntries[0]);
 
-    const s32 cQueueMax = 40;
     const s32 cBatchMin = 3;  // this many unlocked together show as one pop-up
-    const s32 cNameLength = 64;
 
     struct Waiting {
-        char16_t mName[cNameLength];
+        char16_t* mName;  // in the root arena: it waits across scenes
         const NebulaAchievementIcon* mIcon;
     };
 
-    Waiting sQueue[cQueueMax];
+    MR::GrowBuffer< Waiting > sQueue;
     s32 sQueued = 0;
+
+    Waiting& pushWaiting(u32 nameUnits) {
+        sQueue.room(sQueued + 1);
+        Waiting& rWaiting = sQueue[sQueued++];
+        rWaiting.mName = new (NebulaArena::root(), 0) char16_t[nameUnits];
+        return rWaiting;
+    }
     s32 sUpdateFrames = 0;
 
     // galaxy::stats' names, in NebulaStat's order.
@@ -157,9 +165,7 @@ namespace {
         static const char* const cGrandStarGalaxies[] = {"HeavensDoorGalaxy",    "TriLegLv1Galaxy",      "KoopaBattleVs1Galaxy",
                                                          "KoopaJrShipLv1Galaxy", "KoopaBattleVs2Galaxy", "FloaterOtaKingGalaxy",
                                                          "KoopaBattleVs3Galaxy"};
-        char flag[24];
-        nebula_snprintf(flag, sizeof(flag), "SpecialStarGrand%d", n);
-        return GameDataFunction::isOnGameEventFlag(flag) || hasStar(cGrandStarGalaxies[n - 1], 1);
+        return GameDataFunction::isOnGameEventFlag(MR::FormattedName("SpecialStarGrand%d", n).c_str()) || hasStar(cGrandStarGalaxies[n - 1], 1);
     }
 
     s32 countStars() {
@@ -176,21 +182,26 @@ namespace {
     }
 
     // Its name in the played language: NebulaText's Achievement.<id>, or Achievement.<id>.Luigi on a Luigi file.
-    s32 getEntryName(char16_t* pDst, s32 capacity, const char* pId) {
-        MR::FormattedName textId("Achievement.%s.Luigi", pId);
-        if (GameDataFunction::isDataMario() || !NebulaText::has(textId.c_str())) {
-            textId.format("Achievement.%s", pId);
+    void getEntryTextId(MR::FormattedName* pTextId, const char* pId) {
+        pTextId->format("Achievement.%s.Luigi", pId);
+        if (GameDataFunction::isDataMario() || !NebulaText::has(pTextId->c_str())) {
+            pTextId->format("Achievement.%s", pId);
         }
+    }
+
+    s32 getEntryName(char16_t* pDst, s32 capacity, const char* pId) {
+        MR::FormattedName textId;
+        getEntryTextId(&textId, pId);
         return NebulaText::get(pDst, capacity, textId.c_str());
     }
 
     // Waits for its pop-up, with its name in the played language.
     void enqueue(const Entry& rEntry) {
-        if (sQueued >= cQueueMax) {
-            return;
-        }
-        Waiting& rWaiting = sQueue[sQueued++];
-        getEntryName(rWaiting.mName, cNameLength, rEntry.mId);
+        MR::FormattedName textId;
+        getEntryTextId(&textId, rEntry.mId);
+        const s32 units = NebulaText::length(textId.c_str()) + 1;
+        Waiting& rWaiting = pushWaiting(units);
+        NebulaText::get(rWaiting.mName, units, textId.c_str());
         rWaiting.mIcon = rEntry.mIcon;
     }
 
@@ -199,7 +210,7 @@ namespace {
     // Asks the host to unlock what is met; a new one waits for its pop-up.
     void tryUnlock(bool met, const char* pId) {
         const Entry* pEntry = met ? findEntry(pId) : nullptr;
-        if (pEntry == nullptr || sQueued >= cQueueMax || NebulaHost::achievement(pId, nullptr, 0) == 0) {
+        if (pEntry == nullptr || NebulaHost::achievement(pId, nullptr, 0) == 0) {
             return;
         }
         enqueue(*pEntry);
@@ -328,9 +339,7 @@ namespace {
     s32 countGreenStars() {
         s32 count = 0;
         for (s32 i = 1; i <= 3; i++) {
-            char flag[32];
-            nebula_snprintf(flag, sizeof(flag), "SpecialStarGreen%d", i);
-            count += GameDataFunction::isOnGameEventFlag(flag) ? 1 : 0;
+            count += GameDataFunction::isOnGameEventFlag(MR::FormattedName("SpecialStarGreen%d", i).c_str()) ? 1 : 0;
         }
         return count;
     }
@@ -416,16 +425,31 @@ namespace NebulaAchievements {
         // Several at once (a save from before Nebula's achievements, imported or updated): one pop-up for them all.
         const s32 unlocked = sQueued - queuedBefore;
         if (unlocked >= cBatchMin) {
+            for (s32 i = queuedBefore; i < sQueued; i++) {
+                delete[] sQueue[i].mName;
+            }
             sQueued = queuedBefore;
-            Waiting& rWaiting = sQueue[sQueued++];
-            char16_t pattern[cNameLength];
-            NebulaText::get(pattern, cNameLength, "AchievementsUnlocked");
-            char digits[8];
+            const s32 patternUnits = NebulaText::length("AchievementsUnlocked") + 1;
+            MR::Text16 pattern;
+            NebulaText::get(pattern.room(patternUnits), patternUnits, "AchievementsUnlocked");
+            char digits[12];  // any s32
             nebula_snprintf(digits, sizeof(digits), "%d", unlocked);
-            s32 length = 0;
-            for (const char16_t* q = pattern; *q != 0 && length + 1 < cNameLength; q++) {
+            const s32 digitCount = static_cast< s32 >(strlen(digits));
+            // {n} is the count.
+            s32 units = 1;
+            for (const char16_t* q = pattern.c_str(); *q != 0; q++) {
                 if (q[0] == u'{' && q[1] == u'n' && q[2] == u'}') {
-                    for (const char* d = digits; *d != 0 && length + 1 < cNameLength; d++) {
+                    units += digitCount;
+                    q += 2;
+                } else {
+                    units++;
+                }
+            }
+            Waiting& rWaiting = pushWaiting(units);
+            s32 length = 0;
+            for (const char16_t* q = pattern.c_str(); *q != 0; q++) {
+                if (q[0] == u'{' && q[1] == u'n' && q[2] == u'}') {
+                    for (const char* d = digits; *d != 0; d++) {
                         rWaiting.mName[length++] = static_cast< char16_t >(*d);
                     }
                     q += 2;
@@ -475,6 +499,7 @@ namespace NebulaAchievements {
         if (sQueued == 0) {
             return;
         }
+        delete[] sQueue[0].mName;
         for (s32 i = 1; i < sQueued; i++) {
             sQueue[i - 1] = sQueue[i];
         }

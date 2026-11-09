@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 
 class PlayerInput;
 struct RumblePattern;
@@ -32,12 +33,13 @@ public:
     InputRumble* getRumbleInstance() const;
     bool vibratePatternIfNotExist(const void* pOwner, const char* pPatternName);
     bool setRumblePatternIfNotExist(const void* pOwner, const RumblePattern&, bool isLoop);
-    bool findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern&);
+    bool findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, const RumblePattern&);
 
     PlayerInput* mPad;
     u8 mStrength;
     u32 mSerial;
-    RumbleChannel mChannel[8];
+    // One per pattern playing at once: a channel whose pattern ended is used again, and more are added past these.
+    MR::InlineVector< RumbleChannel, 8 > mChannels;
     s32 mStopTimer;
 
 private:
