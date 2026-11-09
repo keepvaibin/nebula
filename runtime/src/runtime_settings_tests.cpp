@@ -1,4 +1,5 @@
 #include "galaxy/runtime_settings.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/input_bindings.h"
 
@@ -16,6 +17,20 @@
 #include <string_view>
 
 namespace {
+
+// The run's --settings folder for one scope.
+class ScopedSettingsFolder {
+public:
+    explicit ScopedSettingsFolder(const std::filesystem::path& folder) : old_(galaxy::g_launch_args.settings) {
+        galaxy::g_launch_args.settings = folder;
+    }
+    ~ScopedSettingsFolder() { galaxy::g_launch_args.settings = old_; }
+    ScopedSettingsFolder(const ScopedSettingsFolder&) = delete;
+    ScopedSettingsFolder& operator=(const ScopedSettingsFolder&) = delete;
+
+private:
+    std::filesystem::path old_;
+};
 
 class ScopedEnv {
 public:
@@ -128,7 +143,6 @@ std::string read_text(const std::filesystem::path& path) {
 int main() {
     bool passed = true;
 
-    const ScopedWideEnv scoped_path(L"GALAXY_RUNTIME_SETTINGS_PATH");
     const ScopedEnv scoped_input("GALAXY_INPUT_MODE");
     const ScopedEnv scoped_master("GALAXY_AUDIO_MASTER_GAIN");
     const ScopedEnv scoped_music("GALAXY_AUDIO_MUSIC_GAIN");
@@ -144,7 +158,7 @@ int main() {
         std::cerr << "FAILED: fixture directory was not newly created\n";
         return 1;
     }
-    _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", settings_path.c_str());
+    const ScopedSettingsFolder settings_folder(root);
 
     _putenv_s("GALAXY_INPUT_MODE", "");
     _putenv_s("GALAXY_AUDIO_MASTER_GAIN", "");
@@ -555,26 +569,30 @@ int main() {
         passed &= expect(false, "fractional settings fixture saves");
     }
 
-    const auto unicode_path = root / L"\u6e38\u620f-settings.ini";
-    write_text(unicode_path, "audio_master_gain=0.375\n");
-    _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", unicode_path.c_str());
-    galaxy::load_runtime_settings_from_file();
-    passed &= expect(
-        galaxy::get_runtime_settings().audio.master == 0.375f &&
-            galaxy::save_runtime_settings_to_file(),
-        "wide settings override preserves the actual Unicode destination");
-
-    // No fixed path length: a name past the old 260-character limit is a path like any other.
-    const auto long_override = root / std::wstring(300u, L'x');
-    _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", long_override.c_str());
-    bool long_override_read = true;
-    try {
+    {
+        const auto unicode_folder = root / L"\u6e38\u620f";
+        std::filesystem::create_directories(unicode_folder);
+        const auto unicode_path = unicode_folder / "runtime_settings.ini";
+        write_text(unicode_path, "audio_master_gain=0.375\n");
+        const ScopedSettingsFolder unicode_settings(unicode_folder);
         galaxy::load_runtime_settings_from_file();
-    } catch (const std::exception&) {
-        long_override_read = false;
+        passed &= expect(
+            galaxy::get_runtime_settings().audio.master == 0.375f &&
+                galaxy::save_runtime_settings_to_file() && std::filesystem::exists(unicode_path),
+            "a Unicode settings folder keeps the actual destination");
     }
-    passed &= expect(long_override_read, "a settings path past 260 characters is read");
-    _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", settings_path.c_str());
+
+    {
+        // No fixed path length: a folder past the old 260-character limit is a path like any other.
+        const ScopedSettingsFolder long_settings(root / std::wstring(300u, L'x'));
+        bool long_override_read = true;
+        try {
+            galaxy::load_runtime_settings_from_file();
+        } catch (const std::exception&) {
+            long_override_read = false;
+        }
+        passed &= expect(long_override_read, "a settings path past 260 characters is read");
+    }
 
     {
         write_text(settings_path, "input_mode=controller\n");

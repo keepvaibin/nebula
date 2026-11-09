@@ -9,6 +9,7 @@
 #   NEBULA_SAVES     a test saves folder (never a player's)
 #   NEBULA_APPDATA   a test app-data folder (shader caches; one per build when builds are compared)
 #   NEBULA_SETTINGS  a test settings folder (config.ini, runtime_settings.ini)
+#   NEBULA_GPU       optional: the GPU to run on, as config.ini's gpu= names it (render_config.h gpu_identity)
 # The run's own copy of the binaries goes to OUT/bin and is removed afterwards unless the run left a crash dump.
 set -e
 seconds=$1
@@ -32,6 +33,20 @@ if [ -d "$NEBULA_BIN/tables" ]; then
     cp "$NEBULA_BIN"/tables/*.tsv "$out/bin/"
 fi
 settings=$(cygpath -w "$NEBULA_SETTINGS")
+# The GPU: the settings' own choice (config.ini gpu=), which the game keeps.
+if [ -n "${NEBULA_GPU:-}" ]; then
+    config="$(cygpath -u "$NEBULA_SETTINGS")/config.ini"
+    if [ -f "$config" ] && grep -q '^gpu=' "$config"; then
+        sed -i "s/^gpu=.*/gpu=$NEBULA_GPU/" "$config"
+    else
+        echo "gpu=$NEBULA_GPU" >> "$config"
+    fi
+fi
+# The run's folders are arguments (docs/COMMAND_LINE.md); a build from before them reads the environment names below.
+folders=""
+if grep -qa -- "--crash-dumps" "$out/bin/$exe"; then
+    folders="--settings $settings --crash-dumps $(cygpath -w "$out")"
+fi
 env GALAXY_HIDE_WINDOW=1 GALAXY_XINPUT_REQUIRE_FOCUS=1 \
     GALAXY_RENDER_CONFIG_PATH="$settings\\config.ini" \
     GALAXY_RUNTIME_SETTINGS_PATH="$settings\\runtime_settings.ini" \
@@ -40,7 +55,7 @@ env GALAXY_HIDE_WINDOW=1 GALAXY_XINPUT_REQUIRE_FOCUS=1 \
     GALAXY_PRESENT_SNAPSHOT_DIR="$(cygpath -w "$out")" GALAXY_PRESENT_SNAPSHOT_EVERY=60 \
     GALAXY_AUDIO_WAV_DUMP_ONLY=1 GALAXY_AUDIO_WAV_DUMP="$(cygpath -w "$out")\\audio.wav" \
     "$@" \
-    "$out/bin/$exe" --pak "$NEBULA_PAK" --saves "$NEBULA_SAVES" --seconds "$seconds" \
+    "$out/bin/$exe" --pak "$NEBULA_PAK" --saves "$NEBULA_SAVES" --seconds "$seconds" $folders \
     > "$out/run.log" 2>&1 || echo "exit $?" >> "$out/run.log"
 if ! ls "$out"/*.dmp >/dev/null 2>&1; then
     rm -f "$out"/bin/*.exe "$out"/bin/*.dll "$out"/bin/*.pdb

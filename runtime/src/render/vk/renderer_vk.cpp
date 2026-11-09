@@ -4,6 +4,7 @@
 
 #include "renderer_vk_internal.h"
 #include "galaxy/run_options.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
@@ -242,11 +243,7 @@ void RendererVk::report_adapter() {
     const VkPhysicalDeviceProperties& properties = context.properties();
     const bool rtx = properties.vendorID == 0x10DEu && std::strstr(properties.deviceName, "RTX") != nullptr;
     host_window::rtx_adapter.store(rtx, std::memory_order_relaxed);
-    const char* const preference = ::galaxy::run_options().gpu_preference;
-    record_render_adapter(properties.deviceName, properties.vendorID, properties.deviceID, context.subsys_id(),
-                          preference != nullptr && (preference[0] == 'l' || preference[0] == 'L' || preference[0] == 'm' ||
-                                                    preference[0] == 'M'),
-                          false);
+    record_render_adapter(properties.deviceName, properties.vendorID, properties.deviceID, context.subsys_id(), false);
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = properties.vendorID;
     caps.adapter_device_id = properties.deviceID;
@@ -279,16 +276,12 @@ void RendererVk::report_adapter() {
 }
 
 bool RendererVk::create_surface_and_device() {
-    const bool prefer_integrated = [] {
-        const char* value = ::galaxy::run_options().gpu_preference;
-        return value != nullptr && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M');
-    }();
-    const bool validation = ::galaxy::run_option_flag(::galaxy::run_options().vulkan_validation, false);
+    const bool validation = ::galaxy::launch_args().gpu_validation >= 1u;
     const host_window::NativeWindow window = window_;
     const auto make_surface = [window](VkInstance instance) {
         return host_window::create_vulkan_surface(instance, window);
     };
-    if (!vk::Context::get().initialize(get_render_config().gpu.data(), prefer_integrated, validation,
+    if (!vk::Context::get().initialize(get_render_config().gpu.data(), validation,
                                        host_window::vulkan_instance_extensions(), make_surface, &surface_)) {
         return false;
     }

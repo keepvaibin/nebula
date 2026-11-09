@@ -1,6 +1,7 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/run_options.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/host_window_win32.h"
@@ -122,17 +123,6 @@ void copy_adapter_description(
     if (written <= 0) {
         std::snprintf(out.data(), out.size(), "unknown");
     }
-}
-
-// GALAXY_GPU_PREFERENCE=low selects the minimum-power (integrated) adapter first.
-DXGI_GPU_PREFERENCE adapter_preference() {
-    char value[16]{};
-    std::size_t length = 0;
-    if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_preference) == 0 &&
-        length > 1 && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M')) {
-        return DXGI_GPU_PREFERENCE_MINIMUM_POWER;
-    }
-    return DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
 }
 
 bool trace_present_stats_enabled() {
@@ -1737,17 +1727,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         window_shown_ = opened.shown;
     }
 
-    // GALAXY_D3D_DEBUG: 1 enables the D3D12 debug layer, 2 also GPU-based validation.
-    unsigned d3d_debug_level = 0;
-    {
-        char buf[16]{};
-        std::size_t len = 0;
-        if (::galaxy::run_option_read(&len, buf, sizeof(buf), ::galaxy::run_options().d3d_debug) == 0 &&
-            len > 0) {
-            d3d_debug_level =
-                static_cast<unsigned>(std::strtoul(buf, nullptr, 10));
-        }
-    }
+    // --gpu-validation: 1 enables the D3D12 debug layer, 2 also GPU-based validation.
+    const unsigned d3d_debug_level = ::galaxy::launch_args().gpu_validation;
     try {
         if (d3d_debug_level >= 1) {
             ComPtr<ID3D12Debug> d;
@@ -1821,7 +1802,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         const bool preference_order = SUCCEEDED(factory.As(&preferred_factory));
         const auto enumerate = [&](UINT index, ComPtr<IDXGIAdapter1>& candidate) {
             return preference_order
-                ? preferred_factory->EnumAdapterByGpuPreference(index, adapter_preference(), IID_PPV_ARGS(&candidate))
+                ? preferred_factory->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&candidate))
                 : factory->EnumAdapters1(index, &candidate);
         };
         const std::string chosen_gpu = get_render_config().gpu.data();
@@ -1883,7 +1864,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             for (UINT index = 0u;; ++index) {
                 ComPtr<IDXGIAdapter1> candidate;
                 const HRESULT result = preferred_factory->EnumAdapterByGpuPreference(
-                    index, adapter_preference(),
+                    index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
                     IID_PPV_ARGS(&candidate));
                 if (result == DXGI_ERROR_NOT_FOUND) {
                     break;
@@ -2064,8 +2045,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             std::array<char, 128> description{};
             copy_adapter_description(adapter_desc, description);
             record_render_adapter(description.data(), adapter_desc.VendorId, adapter_desc.DeviceId,
-                                  adapter_desc.SubSysId, adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER,
-                                  offered);
+                                  adapter_desc.SubSysId, offered);
         }
         RenderFeatureCaps caps{};
         caps.d3d12_device_created = true;

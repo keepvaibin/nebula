@@ -1,4 +1,5 @@
 #include "galaxy/render/render_config.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 
@@ -25,6 +26,20 @@ bool expect(bool condition, const char* message) {
     }
     return condition;
 }
+
+// The run's --settings folder for one scope.
+class ScopedSettingsFolder {
+public:
+    explicit ScopedSettingsFolder(const std::filesystem::path& folder) : old_(galaxy::g_launch_args.settings) {
+        galaxy::g_launch_args.settings = folder;
+    }
+    ~ScopedSettingsFolder() { galaxy::g_launch_args.settings = old_; }
+    ScopedSettingsFolder(const ScopedSettingsFolder&) = delete;
+    ScopedSettingsFolder& operator=(const ScopedSettingsFolder&) = delete;
+
+private:
+    std::filesystem::path old_;
+};
 
 class ScopedEnv {
 public:
@@ -137,7 +152,7 @@ int main() {
         const auto root = galaxy::test_temp_path("galaxy_config_validation");
         const auto path = root / "config.ini";
         std::filesystem::create_directories(root);
-        ScopedEnv config_path("GALAXY_RENDER_CONFIG_PATH", path.string().c_str());
+        const ScopedSettingsFolder config_folder(root);
         for (const char* text : {"nan", "inf", "-1", "60junk", "0.00001", "10000000", "1e100"}) {
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
             ScopedEnv fps("GALAXY_MAX_FPS", text);
@@ -277,8 +292,10 @@ int main() {
         passed &= expect(galaxy::render::get_render_config().max_fps == 60.0f,
             "an oversized value cannot hide a malformed suffix beyond the parser buffer");
         {
-            const auto unicode_path = root / L"\u03a9-\u65e5-settings.ini";
-            ScopedWideEnv unicode_override(L"GALAXY_RENDER_CONFIG_PATH", unicode_path.c_str());
+            const auto unicode_folder = root / L"\u03a9-\u65e5";
+            std::filesystem::create_directories(unicode_folder);
+            const auto unicode_path = unicode_folder / "config.ini";
+            const ScopedSettingsFolder unicode_settings(unicode_folder);
             galaxy::render::RenderConfig value{};
             value.max_fps = 59.940002f;
             galaxy::render::set_render_config(value);
@@ -370,9 +387,7 @@ int main() {
         const std::filesystem::path root = galaxy::test_temp_path("galaxy_render_config_tests");
         const std::filesystem::path path = root / "config.ini";
         std::filesystem::remove_all(root);
-        const ScopedEnv config_path(
-            "GALAXY_RENDER_CONFIG_PATH",
-            path.string().c_str());
+        const ScopedSettingsFolder config_folder(root);
         const auto stage_bloom = [](unsigned bloom) {
             galaxy::render::RenderConfig staged = galaxy::render::get_render_config();
             staged.bloom = bloom;
@@ -432,8 +447,7 @@ int main() {
         const std::filesystem::path root = galaxy::test_temp_path("galaxy_custom_window_size_tests");
         const std::filesystem::path path = root / "config.ini";
         std::filesystem::remove_all(root);
-        const ScopedEnv config_path(
-            "GALAXY_RENDER_CONFIG_PATH", path.string().c_str());
+        const ScopedSettingsFolder config_folder(root);
         const ScopedEnv width_env("GALAXY_WINDOW_WIDTH", "");
         const ScopedEnv height_env("GALAXY_WINDOW_HEIGHT", "");
         galaxy::render::RenderConfig custom{};

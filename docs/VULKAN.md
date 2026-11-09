@@ -104,11 +104,11 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   workers build specialised pipelines; SPIR-V, keys and the driver cache on disk; as on D3D12) and the
   texture backend build into `NebulaNativeVk`. The title over 40 s matches D3D12 within 1/255 at presents 600, 1200,
   1800 and 2280 (0 pixels differ by more than 8); the Khronos validation layer (built from vulkan-sdk-1.4.350.1 into
-  deps/vvl, `GALAXY_VULKAN_VALIDATION=1 VK_LAYER_PATH=...\vvl\bin`) reports nothing.
+  deps/vvl, `--gpu-validation 1` with `VK_LAYER_PATH=...\vvl\bin`) reports nothing.
 - What D3D12 gives implicitly and Vulkan sets explicitly: stage variables at their HLSL semantics' locations
   (`compile_hlsl`); constant-buffer matrices row-major (the D3D12 compile's `D3DCOMPILE_PACK_MATRIX_ROW_MAJOR`;
   glslang's default is the transpose, which drew every 2D layout off-screen); fragment depth clamped to the viewport's
   range while primitives are still clipped (depth clamp with VK_EXT_depth_clip_enable); destruction of released
   objects after the frame's own submission, not the next one.
-- Next: the 102-stop tour and Battlerock against D3D12, the iGPU (`GALAXY_GPU_PREFERENCE=low`), CPU and GPU cost; then
+- Next: the 102-stop tour and Battlerock against D3D12, the iGPU (its `gpu=` in config.ini), CPU and GPU cost; then
   V5 (Linux host on SDL3).

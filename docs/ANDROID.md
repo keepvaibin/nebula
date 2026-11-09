@@ -28,7 +28,7 @@ has the same key as the installed one.
 
 ## On the device
 
-The app's private storage (`NEBULA_DATA_DIR` for the native game):
+The app's private storage (`--data` for the native game):
 
 | Path | |
 | --- | --- |

@@ -8,7 +8,7 @@ import android.util.Log;
 import java.io.File;
 
 /**
- * Where everything lives, in the app's private storage (NEBULA_DATA_DIR for the native game), and the settings both
+ * Where everything lives, in the app's private storage (--data for the native game), and the settings both
  * processes read.
  */
 final class GameFiles {

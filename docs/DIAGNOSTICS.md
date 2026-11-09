@@ -1,6 +1,7 @@
 # Diagnostics
 
-Environment variables for testing and debugging the runtime. None of them is needed to play.
+Environment variables for testing and debugging the runtime. None of them is needed to play. The command line's
+arguments (settings and data folders, crash dumps, GPU validation, the console log) are in COMMAND_LINE.md.
 
 ## Test sessions
 
@@ -8,11 +9,9 @@ Environment variables for testing and debugging the runtime. None of them is nee
 |---|---|
 | `GALAXY_HIDE_WINDOW=1` | Runs without showing the game window; controllers never vibrate |
 | `GALAXY_TEST_NO_RAW_MOUSE=1` | Leaves raw mouse motion (WM_INPUT) unregistered, so only the cursor position moves the pointer |
-| `GALAXY_RENDER_CONFIG_PATH`, `GALAXY_RUNTIME_SETTINGS_PATH` | Use these settings files instead of the ones in `%LOCALAPPDATA%\Nebula` |
 | `GALAXY_AUDIO_WAV_DUMP=<path>`, `GALAXY_AUDIO_WAV_DUMP_ONLY=1` | Write the mixed audio to a WAV file, optionally without opening the sound device |
 | `GALAXY_PRESENT_SNAPSHOT_DIR`, `GALAXY_PRESENT_SNAPSHOT_EVERY`, `_FIRST`, `_LAST` | Save every Nth presented frame as a PPM image |
 | `GALAXY_TRACE_PRESENT_STATS=1` | Log presented and new frames per second |
-| `GALAXY_D3D_DEBUG=1` | Enable the Direct3D 12 debug layer |
 
 ## The start and the game thread
 

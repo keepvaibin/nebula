@@ -2117,10 +2117,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         settings.preload = render.texture_pack_preload;
         settings.dump = render.texture_dump;
         // Each mod's pack, the lowest in the mods list first (the last wins a texture).
-        if (std::filesystem::path packs = texture_pack_test_directory(); !packs.empty()) {
-            settings.packs.push_back(std::move(packs));
-            settings.pack_categories_off.push_back(0u);
-        }
         settings.packs.insert(settings.packs.end(), texture_pack_mod_folders_.begin(), texture_pack_mod_folders_.end());
         settings.pack_categories_off.insert(settings.pack_categories_off.end(), texture_pack_mod_categories_off_.begin(),
                                             texture_pack_mod_categories_off_.end());

@@ -9,7 +9,7 @@
 
 namespace galaxy::render::xess_library {
 
-// GALAXY_XESS_DIR, else %LOCALAPPDATA%\Nebula\vendor\xess-3.0.2.
+// vendor\xess-3.0.2 in Nebula's data folder (platform_paths.h).
 [[nodiscard]] std::wstring directory();
 // libxess.dll, once its signature is checked; null when it is absent or unsigned.
 [[nodiscard]] HMODULE module() noexcept;

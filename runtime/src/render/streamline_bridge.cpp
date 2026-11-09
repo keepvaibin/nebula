@@ -5,7 +5,6 @@
 #include "galaxy/render/temporal_upscaler.h"
 #include "galaxy/render_api.h"
 #include "galaxy/platform_paths.h"
-#include "galaxy/run_options.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,9 +30,6 @@ namespace galaxy::render {
 namespace streamline {
 
 std::wstring default_directory() {
-    if (const wchar_t* const test = ::galaxy::run_options().streamline_dir_w; test != nullptr && test[0] != L'\0') {
-        return test;
-    }
     const std::filesystem::path data = galaxy::nebula_data_directory();
     return data.empty() ? std::wstring{} : (data / L"vendor" / L"streamline-2.14.1").wstring();
 }

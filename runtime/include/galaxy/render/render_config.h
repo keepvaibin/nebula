@@ -129,7 +129,7 @@ struct RenderConfig {
     unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
     bool     rt_ao_enabled       = false;
 
-    // Texture packs (texture_pack.h): replacements from texture_pack_directory() and the mods'
+    // Texture packs (texture_pack.h): replacements from the mods'
     // textures/ folders. preload loads the whole pack at start instead of each texture at its first
     // use; dump writes every newly decoded texture once, as a PNG under its pack name, to
     // texture_dump_directory(). The replacements on the GPU stay within texture_pack_budget_mb
@@ -150,7 +150,7 @@ struct RenderConfig {
     // GDI device name of the monitor (UTF-8, e.g. \\.\DISPLAY2); empty or unknown selects the primary monitor.
     std::array<char, 64> monitor{};
     // The GPU this session renders on, as gpu_identity() writes it ("10de:2b85:89ef1043"); empty, or a
-    // GPU that is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Set at start-up from
+    // GPU that is not present, picks one automatically (the high-performance GPU first). Set at start-up from
     // config.ini (GALAXY_GPU overrides) and kept for the session; see next_start_gpu().
     std::array<char, 32> gpu{};
     // Game picture aspect, an index of kAspectRatios (0 follows the window's shape). Applied at the next video
@@ -318,7 +318,7 @@ void set_render_feature_caps(const RenderFeatureCaps& caps);
 [[nodiscard]] RenderTimingConfig resolve_frame_timing_config_from_environment();
 [[nodiscard]] const RenderTimingConfig& get_frame_timing_config();
 
-// Reads config.ini (in the data folder, or GALAXY_RENDER_CONFIG_PATH) if present, then the GALAXY_<KEY> overrides;
+// Reads config.ini (in the settings folder: --settings, else the data folder) if present, then the GALAXY_<KEY> overrides;
 // missing keys keep their defaults. Called once by the host before initialize().
 void load_render_config_from_file();
 
@@ -335,18 +335,16 @@ std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys
 std::string next_start_gpu();
 
 // Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher, which offers DLSS only
-// on an NVIDIA RTX adapter: description (UTF-8), PCI vendor and device id, its gpu_identity(), the GPU preference the
-// runtime started with (low: integrated first) and whether it runs Nebula's ray tracing.
+// on an NVIDIA RTX adapter: description (UTF-8), PCI vendor and device id, its gpu_identity() and whether it runs
+// Nebula's ray tracing.
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
-                           unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept;
+                           unsigned subsys_id, bool ray_tracing) noexcept;
 // When config.ini changed on disk since this process last read or wrote it (Nebula Settings saved it while the game
 // runs), reads it over the live settings, as the in-game menu would apply them, and returns true.
 bool reload_render_config_if_changed();
 
 // Texture packs are mods (mods.h). TextureDumps beside config.ini takes dumps (GALAXY_TEXTURE_DUMP_DIR replaces it);
-// GALAXY_TEXTURE_PACK_DIR names a pack folder for tests, below every mod. Empty when unknown or unset.
-[[nodiscard]] std::filesystem::path texture_pack_directory();
-[[nodiscard]] std::filesystem::path texture_pack_test_directory();
+// empty when unknown.
 [[nodiscard]] std::filesystem::path texture_dump_directory();
 // The enabled mods' textures/ folders in load order (the host sets them at start); the generation changes with each
 // set.
@@ -359,10 +357,10 @@ void set_texture_pack_game_id(std::string id);
 // The categories (galaxy::textures::category_bit) off in each of them.
 [[nodiscard]] std::vector<std::uint32_t> texture_pack_mod_categories_off();
 [[nodiscard]] std::uint64_t texture_pack_mod_folders_generation() noexcept;
-// HD movie replacements (movie_playback.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and
+// HD movie replacements (movie_playback.h): the Movies folder beside config.ini, and
 // the enabled mods' movies/ folders in load order (the host sets them at start).
 [[nodiscard]] std::filesystem::path movie_directory();
-// config.ini (GALAXY_RENDER_CONFIG_PATH replaces it); empty when unknown.
+// config.ini in the settings folder; empty when unknown.
 [[nodiscard]] std::filesystem::path render_config_path();
 // The shader caches' folder (Nebula\shadercache\RMGE01 in the local app data).
 [[nodiscard]] std::filesystem::path shader_cache_directory();

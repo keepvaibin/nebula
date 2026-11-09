@@ -13,8 +13,6 @@ import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.os.Process;
-import android.system.ErrnoException;
-import android.system.Os;
 import android.util.Log;
 import android.view.Display;
 import android.view.InputDevice;
@@ -136,7 +134,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         if (record && !isProfileRun()) {
             prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
         }
+        // The native game's settings, saves and log: the app's private storage.
         return new String[] {
+            "--data", nativeData().getPath(),
             "--pak", GameFiles.pak(this).getPath(),
             "--saves", GameFiles.savesIn(nativeData()).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
@@ -217,12 +217,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        // The native game's settings, saves and log: the app's private storage.
-        try {
-            Os.setenv("NEBULA_DATA_DIR", nativeData().getPath(), true);
-        } catch (ErrnoException e) {
-            Log.e(TAG, "NEBULA_DATA_DIR not set", e);
-        }
         GameFiles.lastError(this).delete();
         // The last run's picked copies were imported then.
         deleteTree(pickedFolder());

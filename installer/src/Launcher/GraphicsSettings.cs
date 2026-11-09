@@ -73,7 +73,7 @@ namespace Nebula.Launcher
         {
             GpuAdapter target = TargetAdapter(gpu);
             if (target != null) return target.IsNvidiaRtx;
-            var values = AdapterRecord(true);
+            var values = AdapterRecord();
             string vendor, description;
             if (values != null && values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
             {
@@ -93,18 +93,17 @@ namespace Nebula.Launcher
             string rt, id;
             if (target != null)
             {
-                var record = AdapterRecord(false);
+                var record = AdapterRecord();
                 if (record != null && record.TryGetValue("id", out id) && id == target.Id)
                     return record.TryGetValue("ray_tracing", out rt) && rt == "1";
                 return target.IsNvidiaRtx;
             }
-            var values = AdapterRecord(true);
+            var values = AdapterRecord();
             return values != null && values.TryGetValue("ray_tracing", out rt) && rt == "1";
         }
 
-        // adapter.ini; with highPerformanceOnly, only when the game wrote it running with the high-performance GPU
-        // preference (its default). Null otherwise.
-        private static Dictionary<string, string> AdapterRecord(bool highPerformanceOnly)
+        // adapter.ini, null when there is none.
+        private static Dictionary<string, string> AdapterRecord()
         {
             string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
             try
@@ -116,9 +115,7 @@ namespace Nebula.Launcher
                     int equals = line.IndexOf('=');
                     if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
                 }
-                string preference;
-                return !highPerformanceOnly || (values.TryGetValue("gpu_preference", out preference) && preference != "low")
-                    ? values : null;
+                return values;
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

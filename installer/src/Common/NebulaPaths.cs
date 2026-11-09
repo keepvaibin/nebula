@@ -12,9 +12,36 @@ namespace Nebula
     {
         public const string ProductName = "Nebula";
 
+        /// <summary>%LOCALAPPDATA%: the variable, as the game reads it (a sandboxed or test run names its own
+        /// folder), else the user's folder.</summary>
         public static string LocalAppData
         {
+            get
+            {
+                string named = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+                return !string.IsNullOrEmpty(named) && Path.IsPathRooted(named) ? named : UserLocalAppData;
+            }
+        }
+
+        private static string UserLocalAppData
+        {
             get { return Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData); }
+        }
+
+        /// <summary>%LOCALAPPDATA% names another folder than the user's own: a sandboxed or test run.</summary>
+        public static bool LocalAppDataRedirected
+        {
+            get
+            {
+                try
+                {
+                    return !string.Equals(Path.GetFullPath(LocalAppData).TrimEnd('\\', '/'),
+                        Path.GetFullPath(UserLocalAppData).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+                }
+                catch (ArgumentException) { return true; }
+                catch (NotSupportedException) { return true; }
+                catch (IOException) { return true; }
+            }
         }
 
         /// <summary>Default install root: %LOCALAPPDATA%\Programs\Nebula.</summary>
@@ -24,15 +51,10 @@ namespace Nebula
         }
 
         /// <summary>User data root: %LOCALAPPDATA%\Nebula. The runtime keeps its
-        /// shader cache and config.ini here as well. NEBULA_DATA_ROOT replaces it
-        /// for automated tests, which must never touch the user's files.</summary>
+        /// shader cache and config.ini here as well.</summary>
         public static string DataRoot
         {
-            get
-            {
-                string overridden = Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT");
-                return string.IsNullOrEmpty(overridden) ? Path.Combine(LocalAppData, ProductName) : overridden;
-            }
+            get { return Path.Combine(LocalAppData, ProductName); }
         }
 
         public static string Saves { get { return Path.Combine(DataRoot, "saves"); } }

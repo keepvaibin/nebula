@@ -14,7 +14,7 @@ Measurements:
 ## The start
 
 Launch to the title screen (`boot:` lines, a start with no shader cache; stand-in: the 2-CU iGPU and two
-cores with SMT of the machine above, `GALAXY_GPU_PREFERENCE=low GALAXY_TEST_CPU_AFFINITY=F`):
+cores with SMT of the machine above, `gpu=1002:13c0:7e491462` in config.ini and `GALAXY_TEST_CPU_AFFINITY=F`):
 
 | | before | after | evidence |
 |---|---|---|---|
