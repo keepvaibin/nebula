@@ -125,19 +125,19 @@ namespace MR {
         }
 
         T* begin() {
-            return &mArr[0];
+            return mArr;
         }
 
         const T* begin() const {
-            return &mArr[0];
+            return mArr;
         }
 
         T* rbegin() {
-            return &mArr[mMaxSize - 1];
+            return mArr + mMaxSize - 1;
         }
 
         const T* rbegin() const {
-            return &mArr[mMaxSize - 1];
+            return mArr + mMaxSize - 1;
         }
 
         T* end() {
@@ -245,11 +245,11 @@ namespace MR {
         }
 
         T* begin() {
-            return &(*this)[0];
+            return mMoved != nullptr ? mMoved : mArr;
         }
 
         const T* begin() const {
-            return &(*this)[0];
+            return mMoved != nullptr ? mMoved : mArr;
         }
 
         T* end() {
@@ -340,11 +340,11 @@ namespace MR {
         }
 
         Item* begin() {
-            return &mArray[0];
+            return mArray.begin();
         }
 
         const Item* begin() const {
-            return &mArray[0];
+            return mArray.begin();
         }
 
         Item* rbegin() {
@@ -356,11 +356,11 @@ namespace MR {
         }
 
         Item* end() {
-            return &mArray[mCount];
+            return mArray.begin() + mCount;
         }
 
         const Item* end() const {
-            return &mArray[mCount];
+            return mArray.begin() + mCount;
         }
 
         Item* rend() {
