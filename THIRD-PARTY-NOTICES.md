@@ -148,7 +148,7 @@ Setup's game importer, `nebula-import.exe` (`crates/nebula-import`), reads disc 
 `nod` crate 1.4.4 by Luke Street (<https://github.com/encounter/nod>, MIT OR Apache-2.0). `nod`
 contains the Wii common keys needed to read a Wii disc partition.
 
-`nebula-import.exe` links 62 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
+`nebula-import.exe` links 64 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
 BSD-3-Clause, Zlib or 0BSD terms, and the C libraries zstd (BSD-3-Clause), liblzma (0BSD) and
 bzip2 (bzip2 license). Their license texts are in
 [docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt). The `nod` crate ships
@@ -189,7 +189,7 @@ game activity. Copyright (C) 1997-2026 Sam Lantinga. License: Zlib, its `LICENSE
   <https://github.com/Kotlin/kotlinx.coroutines>: Apache-2.0. Copyright JetBrains s.r.o. and
   Kotlin Programming Language contributors.
 - `libnebula_import.so` (`crates/nebula-import`, setup from the player's disc image) links `nod`
-  and 41 other crates; their license texts are in
+  and 60 other crates; their license texts are in
   [docs/licenses/rust-dependencies-android.txt](docs/licenses/rust-dependencies-android.txt)
   (`tools/rust_licenses.py`), which the app shows under Open source licenses.
 

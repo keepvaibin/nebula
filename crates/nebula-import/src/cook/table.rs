@@ -61,6 +61,15 @@ pub fn column_hash(name: &str) -> u32 {
     name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(u32::from(byte)))
 }
 
+/// A column a mod's JSON names: by its name, or by its hash ("0x0a3b36a3") for one whose name nobody knows, as
+/// `lumalink extract` writes those.
+fn key_hash(key: &str) -> Result<u32> {
+    match key.strip_prefix("0x") {
+        Some(hex) => u32::from_str_radix(hex, 16).with_context(|| format!("column {key}")),
+        None => Ok(column_hash(key)),
+    }
+}
+
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
     let b = bytes.get(at..at + 4).context("past the table's end")?;
     Ok(u32::from_be_bytes([b[0], b[1], b[2], b[3]]))
@@ -306,10 +315,7 @@ impl TableIr {
     }
 
     fn column_of(&self, key: &str) -> Result<Option<usize>> {
-        let hash = match key.strip_prefix("0x") {
-            Some(hex) => u32::from_str_radix(hex, 16).with_context(|| format!("column {key}"))?,
-            None => column_hash(key),
-        };
+        let hash = key_hash(key)?;
         Ok(self.columns.iter().position(|c| c.hash == hash))
     }
 
@@ -448,8 +454,10 @@ impl TableIr {
                 }
             }
         }
-        let columns: Vec<Column> =
-            names.iter().map(|name| Column { hash: column_hash(name), mask: u32::MAX, kind: kinds[name], width: 32 }).collect();
+        let columns = names
+            .iter()
+            .map(|name| Ok(Column { hash: key_hash(name)?, mask: u32::MAX, kind: kinds[name], width: 32 }))
+            .collect::<Result<Vec<Column>>>()?;
         let mut table = TableIr { columns, rows: Vec::with_capacity(rows.len()) };
         table.add_rows(rows)?;
         Ok(table)
@@ -712,5 +720,11 @@ mod tests {
         assert!(TableIr::from_json(br#"{ "rows": [ { "A": 1 }, { "A": "x" } ] }"#).is_err());
         assert!(TableIr::from_json(br#"{ "rows": [ { "A": [] } ] }"#).is_err());
         assert_eq!(table.to_ntbl().len() % 32, 0);
+        // A column named by its hash is that column, with its value.
+        let hashed = TableIr::from_json(br#"{ "rows": [ { "0xe4ef3738": "Normal", "Material": "Normal" } ] }"#).unwrap();
+        assert_eq!(hashed.columns[0].hash, 0xe4ef_3738);
+        assert_eq!(hashed.rows[0][0], Cell::Text(b"Normal".to_vec()));
+        assert_eq!(hashed.columns[1].hash, column_hash("Material"));
+        assert!(TableIr::from_json(br#"{ "rows": [ { "0xnothex": 1 } ] }"#).is_err());
     }
 }

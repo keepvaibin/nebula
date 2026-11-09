@@ -67,10 +67,12 @@ fn modern_files(change: &Change, bytes: &[u8]) -> Result<Vec<(String, Vec<u8>, b
             renamed(".bmd")
         };
         let mut out = vec![(native_path, model, true)];
-        out.extend(animations.into_iter().map(|(name, clip)| (format!("{folder}{name}.bck"), clip, true)));
+        out.extend(animations.into_iter().map(|(file, clip)| (format!("{folder}{file}"), clip, true)));
         return Ok(out);
     }
-    if lower.ends_with(".bcsv.json") {
+    // A table as JSON: X.bcsv.json, a camera table X.bcam.json, or a stage's placement table (its name has no ending:
+    // StageData/MyGalaxy.arc/jmp/placement/common/objinfo.json), as `lumalink extract` writes them.
+    if lower.ends_with(".bcsv.json") || lower.ends_with(".bcam.json") || (lower.ends_with(".json") && lower.contains(".arc/jmp/")) {
         return Ok(vec![(change.path[..change.path.len() - ".json".len()].to_string(), super::table::TableIr::from_json(bytes)?.to_ntbl(), true)]);
     }
     if lower.ends_with(".png") {
@@ -574,6 +576,29 @@ mod tests {
         assert!(failed[0].1.contains("console"));
         let cooked = store::read_file(&output, placement).unwrap();
         assert_eq!(&cooked[..4], super::super::table::MAGIC);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_new_stage_s_tables_can_be_json() {
+        let dir = std::env::temp_dir().join(format!("nebula_overlay_stage_json_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let objinfo = dir.join("objinfo.json");
+        fs::write(&objinfo, br#"{ "columns": { "pos_x": "float" }, "rows": [ { "name": "Kuribo", "l_id": 1, "pos_x": 100 } ] }"#).unwrap();
+        let camera = dir.join("cameraparam.bcam.json");
+        fs::write(&camera, br#"{ "rows": [ { "id": "c:0000", "num1": 0 } ] }"#).unwrap();
+        let changes = vec![
+            Change { path: "StageData/NewGalaxy.arc/jmp/placement/common/objinfo.json".into(), source: objinfo, merge: false },
+            Change { path: "StageData/NewGalaxy.arc/camera/cameraparam.bcam.json".into(), source: camera, merge: false },
+        ];
+        let output = dir.join("mods.pak");
+        let mut stats = Stats::default();
+        let failed = write_overlay("RMGE01", &changes, None, &output, &mut stats).unwrap();
+        assert!(failed.is_empty(), "{failed:?}");
+        for path in ["StageData/NewGalaxy.arc/jmp/placement/common/objinfo", "StageData/NewGalaxy.arc/camera/cameraparam.bcam"] {
+            let cooked = store::read_file(&output, path).unwrap();
+            assert_eq!(&cooked[..4], super::super::table::MAGIC, "{path}");
+        }
         let _ = fs::remove_dir_all(&dir);
     }
 }
