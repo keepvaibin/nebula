@@ -6,19 +6,18 @@
 
 class Sun;
 
+// What an object's latest answered probes saw. Written and read on the game thread in order (the answers are read before the
+// flare reads them), so one value is always the newest.
 class BrightInfo {
 public:
     BrightInfo();
 
     void write(const Vec2f&, const Vec2f&, f32);
-    void endRead();
     void reset();
 
-    u32 mIndex;
-    u32 mCurrIndex;
-    Vec2f mBrightnessCenter[3];
-    Vec2f mRealCenter[3];
-    f32 mBright[3];
+    Vec2f mBrightnessCenter;
+    Vec2f mRealCenter;
+    f32 mBright;
 };
 
 class BrightObjBase {
@@ -36,7 +35,6 @@ public:
     virtual f32 getBright() const;
     virtual const Vec2f* getBrightCenter() const;
     virtual const Vec2f* getCenter() const;
-    virtual void endRead();
     virtual void getNowCenter(Vec2f*) const;
 
     void checkVisibilityOfSphere(NebulaScreenProbe*);

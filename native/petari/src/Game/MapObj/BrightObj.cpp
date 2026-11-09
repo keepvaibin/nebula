@@ -69,45 +69,15 @@ BrightInfo::BrightInfo() {
 }
 
 void BrightInfo::write(const Vec2f& rBrightnessCenter, const Vec2f& rRealCenter, f32 brightness) {
-    mBrightnessCenter[mIndex].set(rBrightnessCenter);
-    mRealCenter[mIndex].set(rRealCenter);
-    mBright[mIndex] = brightness;
-
-    // Three slots: the write moves on unless that would land on the slot being read.
-    u32 next = mIndex;
-
-    next++;
-
-    if (next > 2) {
-        next = 0;
-    }
-
-    if (next != mCurrIndex) {
-        mIndex = next;
-    }
-}
-
-void BrightInfo::endRead() {
-    if (mCurrIndex == mIndex) {
-        return;
-    }
-
-    mCurrIndex++;
-
-    if (mCurrIndex > 2) {
-        mCurrIndex = 0;
-    }
+    mBrightnessCenter.set(rBrightnessCenter);
+    mRealCenter.set(rRealCenter);
+    mBright = brightness;
 }
 
 void BrightInfo::reset() {
-    mIndex = 0;
-    mCurrIndex = 0;
-
-    for (u32 i = 0; i < 3; i++) {
-        mBrightnessCenter[i].zero();
-        mRealCenter[i].zero();
-        mBright[i] = 0.0f;
-    }
+    mBrightnessCenter.zero();
+    mRealCenter.zero();
+    mBright = 0.0f;
 }
 
 BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f), mBrightness(), mDrawPos(0.0f, 0.0f, 0.0f), mDrawRadius(0.0f) {
@@ -308,20 +278,16 @@ void BrightSun::controlSunModel() {
 BrightObjBase::~BrightObjBase() {
 }
 
-void BrightObjBase::endRead() {
-    mInfo.endRead();
-}
-
 const Vec2f* BrightObjBase::getCenter() const {
-    return &mInfo.mRealCenter[mInfo.mCurrIndex];
+    return &mInfo.mRealCenter;
 }
 
 const Vec2f* BrightObjBase::getBrightCenter() const {
-    return &mInfo.mBrightnessCenter[mInfo.mCurrIndex];
+    return &mInfo.mBrightnessCenter;
 }
 
 f32 BrightObjBase::getBright() const {
-    return mInfo.mBright[mInfo.mCurrIndex];
+    return mInfo.mBright;
 }
 
 void BrightObjBase::getNowCenter(Vec2f* pDst) const {
