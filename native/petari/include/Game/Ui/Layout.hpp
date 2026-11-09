@@ -142,6 +142,9 @@ namespace Ui {
         Size mLayoutSize;
         // Where the layout's panes are measured from (ORIGINTYPE_*).
         u8 mOriginType;
+        // The owning actor's life (LayoutActor::draw): every pane's draws carry it, so a layout killed and brought back
+        // elsewhere starts at its new place on generated frames instead of sliding there from the old one.
+        u32 mDrawGeneration;
 
     private:
         struct ArenaObject {

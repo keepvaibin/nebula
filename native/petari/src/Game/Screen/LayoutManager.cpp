@@ -221,6 +221,10 @@ void LayoutManager::draw() const {
     mLayout->Draw(mDrawInfo);
 }
 
+void LayoutManager::setDrawGeneration(u32 generation) const {
+    mLayout->mDrawGeneration = generation;
+}
+
 void LayoutManager::addPaneCtrl(LayoutPaneCtrl* pPaneCtrl) {
     Ui::Pane* const pPane = findPaneOrRoot(pPaneCtrl->mPane->mName);
     LayoutPaneState& rState = stateOf(pPane);

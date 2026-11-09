@@ -38,6 +38,8 @@ public:
     void movement();
     void calcAnim();
     void draw() const;
+    // The life the layout's panes draw under (LayoutActor::draw passes its own).
+    void setDrawGeneration(u32 generation) const;
     void addPaneCtrl(LayoutPaneCtrl*);
     LayoutPaneCtrl* createAndAddRootPaneCtrl(u32);
     LayoutPaneCtrl* createAndAddPaneCtrl(const char*, u32);
