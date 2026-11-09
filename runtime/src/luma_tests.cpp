@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // luma.json as docs/format.md has it: every field, every refusal, and what a person might get wrong.
 #include "galaxy/luma.h"
+#include "galaxy/test_temp.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -190,7 +191,7 @@ int main() {
     }
     {
         // The manifest file is read only when it is a sensible size.
-        const std::filesystem::path folder = std::filesystem::temp_directory_path() / "nebula-luma-test-manifest";
+        const std::filesystem::path folder = galaxy::test_temp_path("nebula_luma_test_manifest");
         std::error_code error;
         std::filesystem::create_directories(folder, error);
         {

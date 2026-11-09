@@ -4,12 +4,33 @@
 #include <array>
 #include <filesystem>
 #include <stdexcept>
+#include <string_view>
 
 namespace galaxy::host {
 
+namespace {
+
+// Windows compares file names without case; elsewhere the name must match exactly.
+bool is_game_pak(const std::filesystem::path& name) {
+#ifdef _WIN32
+    constexpr std::wstring_view kName = L"game.pak";
+    const std::wstring& text = name.native();
+    if (text.size() != kName.size()) return false;
+    for (std::size_t i = 0; i < kName.size(); ++i) {
+        const wchar_t c = text[i];
+        if ((c >= L'A' && c <= L'Z' ? static_cast<wchar_t>(c + (L'a' - L'A')) : c) != kName[i]) return false;
+    }
+    return true;
+#else
+    return name == "game.pak";
+#endif
+}
+
+}  // namespace
+
 GamePaths locate_game(const std::filesystem::path& input) {
     if (std::filesystem::is_regular_file(input)) {
-        if (input.filename() == L"game.pak") {
+        if (is_game_pak(input.filename())) {
             return {input.parent_path()};
         }
         throw std::runtime_error(

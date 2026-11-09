@@ -1598,8 +1598,6 @@ void test_playstation_and_steam_schemes() {
            "Cross is Wii A and L1 is Wii B");
 }
 
-}  // namespace
-
 // The game's button icons: each Wii button's first controller input in the style asked; B in menus the button that
 // goes back there; the Wii's own icons where nothing on the controller is bound.
 void test_button_icons() {
@@ -1877,6 +1875,8 @@ void test_touch_tuning() {
     expect(owner.update(gyro, 3000u) == PointerSource::Touch, "the gyro waits for the touchpad's handoff");
     expect(std::string(pointer_source_name(PointerSource::Touch)) == "touch", "the touch source's name");
 }
+
+}  // namespace
 
 int main(int argc, char** argv) {
     // The launcher's ControlsSettings mirrors these defaults; this prints them

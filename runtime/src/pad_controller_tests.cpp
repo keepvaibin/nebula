@@ -884,8 +884,6 @@ void test_device_list() {
     expect(label_of(list, 1) == "Switch 2 Pro Controller (USB) - needs WinUSB", "a note follows the name");
 }
 
-}  // namespace
-
 // A two-stick pad as cheap USB controllers describe it: X/Y/Z/Rz 0..255,
 // hat 0..7 (8 = centred), 12 buttons.
 gh::Layout usb_pad_layout() {
@@ -994,7 +992,7 @@ void test_generic() {
            "generic pads: HID, no motion");
 }
 
-// The trackpads: where a finger is (0 to 1 across, 0 to 1 down), and when it is lifted.
+// Joy-Con 2 sides, the C button, the GameCube triggers and the three Switch 2 rumble reports.
 void test_switch2_family() {
     namespace sw = galaxy::input::switch_hid;
     namespace rb = galaxy::input::rumble;
@@ -1424,6 +1422,7 @@ void test_licensed_playstation() {
            "a licensed DualSense's finger at its own offset");
 }
 
+// The trackpads: where a finger is (0 to 1 across, 0 to 1 down), and when it is lifted.
 void test_touch() {
     // DualSense USB: the first finger at packet byte 32 (report byte 33): x 960 of 1920, y 535 of 1070.
     Bytes r = ds5_usb();
@@ -1546,6 +1545,8 @@ void test_report_mode_watch() {
         expect(asks >= 90u, "one that answered before is asked every second");
     }
 }
+
+}  // namespace
 
 int main() {
     test_report_mode_watch();

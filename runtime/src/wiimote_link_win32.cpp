@@ -48,13 +48,14 @@ public:
     Remote() : read_event_(CreateEventW(nullptr, TRUE, FALSE, nullptr)), write_event_(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
     ~Remote() override {
         close();
-        CloseHandle(read_event_);
-        CloseHandle(write_event_);
+        if (read_event_ != nullptr) CloseHandle(read_event_);
+        if (write_event_ != nullptr) CloseHandle(write_event_);
     }
     Remote(const Remote&) = delete;
     Remote& operator=(const Remote&) = delete;
 
     bool open(const std::wstring& path) {
+        if (read_event_ == nullptr || write_event_ == nullptr) return false;  // no event, no overlapped I/O
         handle_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                               OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
         if (handle_ == INVALID_HANDLE_VALUE) return false;
@@ -135,7 +136,8 @@ public:
             pending_ = true;
         }
         const HANDLE waits[2] = {read_event_, events().control};
-        if (WaitForMultipleObjects(wakeable ? 2 : 1, waits, FALSE, timeout_ms) != WAIT_OBJECT_0) return 0;
+        const DWORD count = wakeable && waits[1] != nullptr ? 2u : 1u;
+        if (WaitForMultipleObjects(count, waits, FALSE, timeout_ms) != WAIT_OBJECT_0) return 0;
         pending_ = false;
         DWORD got = 0;
         if (!GetOverlappedResult(handle_, &read_ov_, &got, FALSE)) return -1;
@@ -168,6 +170,7 @@ void start() {
     filter.cbSize = sizeof(filter);
     filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;
     HidD_GetHidGuid(&filter.u.DeviceInterface.ClassGuid);
+    if (e.arrival == nullptr) return;  // no event to signal: scans stay on the worker's timer
     if (CM_Register_Notification(&filter, e.arrival, on_hid_arrival, &e.notification) != CR_SUCCESS) e.notification = nullptr;
 }
 
@@ -181,6 +184,10 @@ void each_remote(const std::function<bool(Link&)>& use) {
 }
 
 bool wait_arrival(std::uint32_t timeout_ms) {
+    if (events().arrival == nullptr) {  // a wait on no handle returns at once; keep the caller's pace
+        Sleep(timeout_ms);
+        return false;
+    }
     return WaitForSingleObject(events().arrival, timeout_ms) == WAIT_OBJECT_0;
 }
 
