@@ -33,8 +33,9 @@ GROUPS = {
     "rfl": r"\bRFL[A-Z_]|\brfl[A-Z_]|MiiLib",
     # Batch 7 (N-63): archives are found or loaded when asked for, so the loaders, archive lists and mounts are gone.
     "loading": r"\bStationed|makeArchiveList|mountArchive|\bFileLoader\b|\bStageFileLoader|\bArchiveHolder\b|\bFileHolder\b|\brequestMount|\bisLoadedFile|\breceiveFile|ArchiveListCollector|\bmountAsync|\bloadToMainRAM|\bisReadResourceFromStore",
-    # GX/GP calls and the command FIFO; not "GPU" or Vulkan's FIFO present mode.
-    "fifo": r"\bGX[A-Z]\w+|\bGP(?!US?\b|Us\b)[A-Z]\w+|\b(?:GX|gx|cmd|Cmd|command|Command)_?(?:FIFO|[Ff]ifo)\b|\b[Ff]ifo\b|DisplayList",
+    # GX/GP calls and the command FIFO; not a name that starts with "GPU" (D3D12's GPUUploadHeapSupported) or Vulkan's
+    # FIFO present mode.
+    "fifo": r"\bGX[A-Z]\w+|\bGP(?!U)[A-Z]\w+|\b(?:GX|gx|cmd|Cmd|command|Command)_?(?:FIFO|[Ff]ifo)\b|\b[Ff]ifo\b|DisplayList",
     "sjis": r'"(?:\\[0-7]{3}){2,}',
     "offsets": r"\bfield_0x|\b_[0-9A-Fa-f]{2,3}\b(?!\w)",
     # Batch 5: the audio thread's lock and the console's sound pools.

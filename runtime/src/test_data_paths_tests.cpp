@@ -40,9 +40,8 @@ int main() {
             check(galaxy::host::test_data_paths_error(3, argv), "missing path rejected");
             _wputenv_s(name, (root / name).c_str());
         }
-        const wchar_t* outputs[] = {nebula_switch::frame_timeline_path_wide_name(), nebula_switch::audio_wav_dump_wide_name(),
-                                    nebula_switch::texture_dump_dir_wide_name(), nebula_switch::xess_dir_wide_name(),
-                                    nebula_switch::streamline_dir_wide_name(), L"GALAXY_PRESENT_SNAPSHOT_DIR",
+        const wchar_t* outputs[] = {L"GALAXY_FRAME_TIMELINE_PATH", L"GALAXY_AUDIO_WAV_DUMP", L"GALAXY_TEXTURE_DUMP_DIR",
+                                    L"GALAXY_XESS_DIR", L"GALAXY_STREAMLINE_DIR", L"GALAXY_PRESENT_SNAPSHOT_DIR",
                                     L"GALAXY_INSPECT_DIR", L"GALAXY_PIPELINE_LIST_OUT"};
         for (const auto* name : outputs) {
             _wputenv_s(name, (root / "out" / name).c_str());
