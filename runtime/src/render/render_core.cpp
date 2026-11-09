@@ -205,8 +205,7 @@ bool RenderCore::initialize(int w, int h) {
     render_chunks_in_flight_ = 0;
     present_chunks_in_flight_ = 0;
     render_thread_ = std::thread(&RenderCore::render_thread_main, this);
-#if defined(NEBULA_DEV)
-    {
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseTelemetry)) {
         try {
             frame_telemetry_ = std::make_unique<galaxy::telemetry::Publisher>([this] {
                 const auto stats = display_present_stats();
@@ -220,7 +219,6 @@ bool RenderCore::initialize(int w, int h) {
                renderer_.frame_map().height);
         } catch (...) { /* Optional startup allocation cannot fail gameplay. */ }
     }
-#endif
     return true;
 }
 
@@ -248,11 +246,9 @@ DisplayPresentStats RenderCore::display_present_stats() const noexcept {
     stats.last_presented_frame_stamp = last_stamp == ~std::uint64_t{0} ? 0u : last_stamp;
     stats.last_presented_picture = last_serial == ~std::uint64_t{0} ? 0u : last_serial;
     stats.last_presented_slot = last_presented_slot_.load(std::memory_order_relaxed);
-#if defined(NEBULA_DEV)
     stats.presented = stat_presents_.load(std::memory_order_relaxed);
     stats.pictures_shown_again =
         stat_pictures_shown_again_.load(std::memory_order_relaxed);
-#endif
     return stats;
 }
 
@@ -492,13 +488,9 @@ void RenderCore::note_picture_shown(
         texture.frame_stamp, std::memory_order_relaxed);
     last_presented_picture_.store(
         texture.picture_number, std::memory_order_relaxed);
-#if defined(NEBULA_DEV)
     ++stat_presents_;
-#endif
     if (texture.last_shown_number == texture.picture_number) {
-#if defined(NEBULA_DEV)
         ++stat_pictures_shown_again_;
-#endif
         return;
     }
     texture.last_shown_number = texture.picture_number;
@@ -1226,10 +1218,8 @@ void RenderCore::report_interp_stats() {
             << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
             << " generated-gpu-ema-ms=" << renderer_.generated_gpu_ema_ms()
             << " scene-gpu-ema-ms=" << renderer_.interpolation_gpu_cost_ms()
-#if defined(NEBULA_DEV)
             << " items-culled=" << std::exchange(stat_items_culled_, 0u)
             << " draws-no-pipeline=" << std::exchange(stat_draws_no_pipeline_, 0u)
-#endif
             << " pipelines(made/pending/missed/failed)=" << pipelines_.created() << '/' << pipelines_.pending() << '/'
             << pipelines_.misses() << '/' << pipelines_.failures()
             << " ring-peak-kb(v/i/c/m)="
@@ -1462,7 +1452,7 @@ void RenderCore::drop_device_state() {
 bool RenderCore::restart_renderer(const FrameMap& frame, bool same_card) {
     Renderer::Kept kept = renderer_.take_apart_lost_device();
     std::destroy_at(&renderer_);
-#if defined(NEBULA_DEV) && !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
     Renderer::list_live_objects(kept);
 #endif
     std::construct_at(&renderer_);
@@ -1959,7 +1949,7 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
 // Video memory: no size of it is assumed anywhere. The adapter's own figures (DXGI's local segment budget, told by the OS when it
 // moves; Vulkan's device-local heap budget) are read at each frame boundary; past the budget the store leaves the top levels out
 // of the textures no frame in flight names, and puts them back when they are named again and there is room (TextureStore
-// enforce_budget). GALAXY_TEST_VRAM_BUDGET_MB=N (test builds) replaces the budget with N megabytes of the same reading.
+// enforce_budget). A host extension's vram_budget_mb replaces the budget with that many megabytes of the same reading.
 // One line when the budget or what is left out changes (looked at once a second), and one an hour (at 60 frames a second) whatever
 // changed.
 void RenderCore::enforce_video_memory() {

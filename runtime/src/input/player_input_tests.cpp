@@ -43,6 +43,16 @@ bool attach_scripts() {
     static const NebulaHostForExtension host{NEBULA_HOST_EXTENSION_VERSION, sizeof(NebulaHostForExtension)};
     const std::filesystem::path file = NEBULA_TEST_EXTENSION_FILE;
     std::string error;
+    // Without a work folder the extension declines (its data guard); with this test's folders in it, it attaches.
+    _putenv_s("NEBULA_WORK", "");
+    expect(!galaxy::extensions::attach({&file, 1u}, host, error) && error.find("declined") != std::string::npos,
+           "the extension declines a run with no work folder");
+    const std::filesystem::path work = NEBULA_TEST_WORK;
+    _putenv_s("NEBULA_WORK", work.string().c_str());
+    for (const char* name : {"NEBULA_SETTINGS", "NEBULA_APPDATA", "NEBULA_SAVES", "LOCALAPPDATA"}) {
+        _putenv_s(name, (work / name).string().c_str());
+    }
+    error.clear();
     if (!galaxy::extensions::attach({&file, 1u}, host, error)) {
         std::cerr << "FAILED: the test extension: " << error << '\n';
         return false;

@@ -163,13 +163,6 @@ endif()
 
 # A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, tools/verify/pgo_profile.sh): the game's CPU falls about
 # 17 % (docs/NATIVE_PERFORMANCE.md). A profile older than the code still applies to what has not changed.
-option(NEBULA_RELEASE "Leave the test hooks out" OFF)
-if(NEBULA_RELEASE)
-    target_compile_definitions(smg_game PRIVATE NEBULA_RELEASE=1)
-else()
-    target_compile_definitions(smg_game PRIVATE NEBULA_DEV=1)
-endif()
-
 option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)
 if(NEBULA_PGO)
     set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")

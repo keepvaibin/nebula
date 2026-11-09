@@ -103,6 +103,6 @@ glass, emissive (glowing things light nothing), lamps, particles, metals, glitte
 - Views: plaza = tour `GALAXY_TEST_GRAND_STARS=6;GALAXY_TEST_TELEPORT=3100,700,1150,900/...` presents 6600-6660;
   garden = `GALAXY_TEST_TELEPORT=3200.7,392,1050.6,900`, presents 3900-3960.
 - The views of single terms (sun, sky and bounce, lamps and glows, contact occlusion), the material-row probe, the
-  emitter log and the validation dumps were selected by `GALAXY_RT_*` switches that no code reads now; only
-  `GALAXY_RT_LOG_GLOWS` and the render settings' `GALAXY_<KEY>` overrides remain.
+  emitter log and the validation dumps were selected by `GALAXY_RT_*` switches that no code reads now, and the glow log
+  (`GALAXY_RT_LOG_GLOWS`) is gone with them.
 - A reference run lasts until `-Seconds` after its snapshot; give it about 200 s.

@@ -92,9 +92,7 @@ static ComPtr<ID3D12RootSignature> s_blit_root_sig;
 // scene target-copy conversion blit root signature.
 static ComPtr<ID3D12RootSignature> s_conv_root_sig;
 static ComPtr<ID3D12RootSignature> s_clear_root_sig;
-#if defined(NEBULA_DEV)
 static bool s_listing_live_objects = false;
-#endif
 
 #ifndef GALAXY_WITH_STREAMLINE_BRIDGE
 #define GALAXY_WITH_STREAMLINE_BRIDGE 0
@@ -1739,10 +1737,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 }
             }
         }
-#if defined(NEBULA_DEV)
-        // Test builds: the removal data dump_device_removal prints (auto-breadcrumbs, page-fault allocations, breadcrumb
-        // contexts), asked for before the device exists. Release builds leave the system's choice.
-        {
+        // --diagnostics device-faults: the removal data dump_device_removal prints (auto-breadcrumbs, page-fault
+        // allocations, breadcrumb contexts), asked for before the device exists. Otherwise the system's choice.
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults)) {
             ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dred;
             if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
                 dred->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
@@ -1756,7 +1753,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 }
             }
         }
-#endif
         boot_step("window and display");
         UINT flags = 0;
         if (d3d_debug_level >= 1) {
@@ -1950,12 +1946,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 iq1->RegisterMessageCallback(
                     [](D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY severity,
                        D3D12_MESSAGE_ID id, LPCSTR description, void*) {
-#if defined(NEBULA_DEV)
                         if (s_listing_live_objects) {
                             std::cerr << "[D3D12-LIVE-OBJECT] " << description << '\n';
                             return;
                         }
-#endif
                         if (severity == D3D12_MESSAGE_SEVERITY_ERROR ||
                             severity == D3D12_MESSAGE_SEVERITY_CORRUPTION) {
                             // The callback runs inside the call the message is about: the executable's return addresses
@@ -2633,7 +2627,6 @@ void RendererD3D12::log_video_memory(const VideoMemoryOutside& outside) {
                  static_cast<unsigned long long>(outside.pipelines));
 }
 
-#if defined(NEBULA_DEV)
 void RendererD3D12::list_live_objects(Kept& kept) {
     if (kept.debug_device) {
         s_listing_live_objects = true;
@@ -2642,7 +2635,6 @@ void RendererD3D12::list_live_objects(Kept& kept) {
         kept.debug_device.Reset();
     }
 }
-#endif
 
 RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
     keep_window_ = true;
@@ -2654,9 +2646,7 @@ RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
         std::cerr << "[Renderer] the lost device's shutdown: " << error.what() << "\n";
     }
     Kept kept{window_, card_};
-#if defined(NEBULA_DEV)
     kept.debug_device = std::move(debug_device_);
-#endif
     return kept;
 }
 
@@ -2820,11 +2810,9 @@ void RendererD3D12::shutdown() {
     telemetry_pace_wait_ms_ = telemetry_pace_wait_max_ms_ = 0.0;
     telemetry_gpu_ms_ = 0.0;
     telemetry_gpu_samples_ = 0;
-#if defined(NEBULA_DEV)
-    if (device_) {
+    if (device_ && ::galaxy::launch_args().gpu_validation != 0u) {
         (void)device_.As(&debug_device_);
     }
-#endif
     BarrierPath::device = nullptr;
     barrier_device_.Reset();
     fence_.Reset(); queue_.Reset(); device_.Reset();

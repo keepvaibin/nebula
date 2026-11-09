@@ -8,7 +8,6 @@
 #include <atomic>
 #include <bit>
 #include <cmath>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -16,7 +15,6 @@
 #include <iostream>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 #include "galaxy/path_text.h"
 #include <vector>
@@ -318,11 +316,6 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                     } else {
                         stage_identities_.push_back({stage, rt_material_identity(name), index});
                     }
-                    if (rt_log_glows()) {
-                        std::fprintf(stderr, "[rt-identity] row %s = %08X -> material %u%s%s\n", name.c_str(),
-                                     rt_material_identity(name), static_cast<unsigned>(index),
-                                     stage.empty() ? "" : " on ", stage.c_str());
-                    }
                 }
             }
             target = &materials_.back();
@@ -531,55 +524,6 @@ std::vector<std::pair<std::uint32_t, std::uint16_t>> g_stage_identities;
 // Its untextured surfaces' material (0: none).
 std::uint16_t g_stage_untextured = 0u;
 }  // namespace
-
-namespace {
-bool log_glows() {
-    return false;
-}
-struct TextureName {
-    std::uint64_t pack;
-    std::uint32_t width, height, format;
-};
-std::unordered_map<std::uint64_t, TextureName> g_texture_names;
-std::unordered_map<std::uint64_t, bool> g_glows_logged;
-}  // namespace
-
-void note_rt_texture(std::uint64_t address, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
-                     std::uint32_t format) {
-    if (log_glows() && g_texture_names.size() < 65536u) {
-        g_texture_names[address] = {pack, width, height, format};
-    }
-}
-
-bool rt_log_glows() noexcept {
-    return log_glows();
-}
-
-namespace {
-
-// Once per texture and kind (the key: its address, bit 0 the kind: texture records are never odd-aligned).
-void note_unnamed(const char* kind, std::uint64_t address, std::uint64_t key) {
-    if (!log_glows() || !g_glows_logged.emplace(key, true).second) {
-        return;
-    }
-    const auto it = g_texture_names.find(address);
-    if (it == g_texture_names.end()) {
-        std::fprintf(stderr, "[rt-%s] unnamed addr=%llX (not hashed)\n", kind, static_cast<unsigned long long>(address));
-        return;
-    }
-    std::fprintf(stderr, "[rt-%s] unnamed addr=%llX tex1_%ux%u_%016llx_%u\n", kind, static_cast<unsigned long long>(address), it->second.width,
-                 it->second.height, static_cast<unsigned long long>(it->second.pack), it->second.format);
-}
-
-}  // namespace
-
-void note_rt_unnamed_glow(std::uint64_t address) {
-    note_unnamed("glow", address, address);
-}
-
-void note_rt_unnamed_surface(std::uint64_t address) {
-    note_unnamed("surface", address, address | 1u);
-}
 
 std::uint16_t rt_stage_untextured_material() noexcept {
     return g_stage_untextured;

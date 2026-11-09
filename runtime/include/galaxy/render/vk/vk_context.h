@@ -346,7 +346,7 @@ private:
     bool device_mapped_memory_ = false; // see device_mapped_memory()
     RtCaps rt_caps_{};
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
-    bool device_fault_binary_ = false;  // and its vendor binary feature
+    bool device_fault_binary_ = false;  // and its vendor binary feature (--diagnostics device-faults)
     std::atomic<bool> fault_reported_{false};
     std::atomic<bool> simulated_loss_{false};  // simulate_device_loss: asked, not yet submitted
     bool loss_was_simulated_ = false;          // the last loss was a simulated one: no fault to ask the driver for

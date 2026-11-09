@@ -25,12 +25,11 @@
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/game_step.h"
-#include "../../tools/test_driver/switches.h"
 #include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-#include "galaxy/host_env.h"
+#include "galaxy/hidden_start.h"
 #endif
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
@@ -3728,9 +3727,20 @@ int main(int argc, char** argv) {
 #endif
     read_launch_args(argc, argv);
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-    if (const char* error = galaxy::host::test_data_paths_error(argc, argv)) {
-        std::fprintf(stderr, "[test-paths] %s\n", error);
-        return 2;
+    // A tool's hidden start keeps off the player's data (hidden_start.h), before anything is written.
+    {
+        int count = 0;
+        LPWSTR* const wide = CommandLineToArgvW(GetCommandLineW(), &count);
+        const char* const error =
+            wide != nullptr ? galaxy::host::hidden_start_error(::galaxy::launch_args().started_hidden, count, wide)
+                            : (::galaxy::launch_args().started_hidden ? "cannot read the command line" : nullptr);
+        if (wide != nullptr) {
+            LocalFree(wide);
+        }
+        if (error != nullptr) {
+            std::fprintf(stderr, "[hidden-start] %s\n", error);
+            return 2;
+        }
     }
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)

@@ -1,4 +1,4 @@
-"""Reads the frame telemetry a running game publishes (runtime/include/galaxy/frame_telemetry.h)."""
+"""Reads the frame telemetry a game started with --diagnostics telemetry publishes (runtime/include/galaxy/frame_telemetry.h)."""
 from __future__ import annotations
 
 import ctypes
