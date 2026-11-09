@@ -14,7 +14,7 @@ NativeOut program_ps(Varyings i) {
     float4 r0 = m[0];
     float4 r1 = m[1];
     float2 tevcoord = float2(0.0, 0.0);
-    const float3 ind0 = round(tex[0].Sample(samp[0], i.uv0 / float2(1.0, 1.0)).abg * 255.0);
+    const float3 ind0 = round(TEX(0).Sample(SAMP(0), i.uv0 / float2(1.0, 1.0)).abg * 255.0);
     {
         float2 texel = i.uv1 * m[2].xy;
         float3 sv = floor(ind0 / 1.0);
@@ -23,7 +23,7 @@ NativeOut program_ps(Varyings i) {
         sv.z += -128.0;
         const float2 off = float2(dot(m[3].xyz, sv), dot(m[4].xyz, sv));
         tevcoord = texel + off;
-        const float4 t = tex[0].Sample(samp[0], tevcoord / m[2].zw).rgba;
+        const float4 t = TEX(0).Sample(SAMP(0), tevcoord / m[2].zw).rgba;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(low8(r0.rgb), low8(r1.rgb), t.rgb)));
         const float ra = saturate((0.0 + lerp(0.0, low8(r1.a), t.a)));
         prev.rgb = rc;

@@ -23,10 +23,10 @@ float4 material_color(NativeVaryings i) {
     if (round(i.color.a * 255.0) <= 0.0) {
         discard;
     }
-    float3 c = tex[0].Sample(samp[0], i.uv[0].xy).rgb * tex[0].Sample(samp[0], i.uv[0].zw).rgb * 0.5;
+    float3 c = TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb * TEX(0).Sample(SAMP(0), i.uv[0].zw).rgb * 0.5;
     c += material.band.rgb * level_line(c.r * 255.0, material.band.a * 255.0);
-    const float2 step = round(tex[2].Sample(samp[2], i.uv[1].xy).ab * 255.0) - 128.0;
+    const float2 step = round(TEX(2).Sample(SAMP(2), i.uv[1].xy).ab * 255.0) - 128.0;
     const float2 screen = i.uv[2].xy / i.uv[2].z + step * material.warp.xy;
-    c = saturate(c + tex[1].Sample(samp[1], screen).rgb * material.tint.rgb);
+    c = saturate(c + TEX(1).Sample(SAMP(1), screen).rgb * material.tint.rgb);
     return float4(c, i.color.a);
 }

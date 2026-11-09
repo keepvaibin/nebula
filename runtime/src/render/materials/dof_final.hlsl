@@ -15,9 +15,9 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float3 c = tex[0].Sample(samp[0], i.uv[0].xy).rgb;
-    const float3 sv = round(tex[2].Sample(samp[2], i.uv[0].xy).abg * 255.0);
+    const float3 c = TEX(0).Sample(SAMP(0), i.uv[0].xy).rgb;
+    const float3 sv = round(TEX(2).Sample(SAMP(2), i.uv[0].xy).abg * 255.0);
     const float2 offset = float2(sv.x - 128.0, sv.y - 128.0) * material.params.y;
-    const float ramp = tex[1].Sample(samp[1], offset / material.params.zw).a;
+    const float ramp = TEX(1).Sample(SAMP(1), offset / material.params.zw).a;
     return float4(c, saturate(ramp * material.params.x));
 }

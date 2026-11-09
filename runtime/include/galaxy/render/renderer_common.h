@@ -72,6 +72,8 @@ public:
         tables_.clear();
         cursor_ = kSamplerTableSlots;
     }
+    // Slots taken, the default table's included.
+    [[nodiscard]] unsigned used() const noexcept { return cursor_; }
 private:
     std::unordered_map<SamplerTableKey, unsigned, SamplerTableKeyHasher> tables_;
     unsigned cursor_ = kSamplerTableSlots;

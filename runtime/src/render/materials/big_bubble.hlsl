@@ -18,9 +18,9 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float4 rainbow = tex[0].Sample(samp[0], i.uv[0].xy);
+    const float4 rainbow = TEX(0).Sample(SAMP(0), i.uv[0].xy);
     const float2 env_uv = i.uv[1].z != 0.0 ? i.uv[1].xy / i.uv[1].z : i.uv[1].xy;
-    const float env = tex[1].Sample(samp[1], env_uv).a;
+    const float env = TEX(1).Sample(SAMP(1), env_uv).a;
     float3 c = saturate(rainbow.rgb + material.mix_color.rgb * env);
     float a = env;
     c = saturate(lerp(c, material.over_color.rgb, material.over_color.a));

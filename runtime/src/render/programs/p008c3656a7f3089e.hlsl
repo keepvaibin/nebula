@@ -11,7 +11,7 @@ struct Varyings {
 NativeOut program_ps(Varyings i) {
     float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     {
-        const float4 t = tex[0].Sample(samp[0], i.uv0).rgba;
+        const float4 t = TEX(0).Sample(SAMP(0), i.uv0).rgba;
         const float3 k = float3(1.0, 1.0, 1.0);
         const float ka = m[0].a;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), k.rgb, t.rgb)));
@@ -21,7 +21,7 @@ NativeOut program_ps(Varyings i) {
         NATIVE_STAGE(0, float4(rc, ra))
     }
     {
-        const float4 t = tex[1].Sample(samp[1], i.uv1).rgba;
+        const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;
         const float3 k = float3(32.0 / 255.0, 32.0 / 255.0, 32.0 / 255.0);
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), k.rgb, t.rgb)));
         const float ra = saturate((0.0 + lerp(0.0, t.a, prev.a)));

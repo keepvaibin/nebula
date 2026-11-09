@@ -16,9 +16,9 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float4 frame = tex[1].Sample(samp[1], i.uv[0].zw);
-    const float2 step = round(tex[0].Sample(samp[0], i.uv[0].xy).ab * 255.0) - 128.0;
-    const float3 screen = tex[1].Sample(samp[1], i.uv[0].zw + step * material.warp.xy).rgb;
+    const float4 frame = TEX(1).Sample(SAMP(1), i.uv[0].zw);
+    const float2 step = round(TEX(0).Sample(SAMP(0), i.uv[0].xy).ab * 255.0) - 128.0;
+    const float3 screen = TEX(1).Sample(SAMP(1), i.uv[0].zw + step * material.warp.xy).rgb;
     // Opaque over the taken frame: its own blend by the filter's alpha, the frame's alpha kept.
     const float a = round(material.water.a * 255.0) <= 0.0 ? 0.0 : material.water.a;
     return float4(lerp(frame.rgb, saturate(screen - material.water.rgb), a), frame.a);

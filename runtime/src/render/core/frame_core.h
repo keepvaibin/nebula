@@ -84,10 +84,14 @@ struct GpuModel {
     std::uint32_t generation = 0u;
 };
 
-// One registered list of textures: what it names, and the tables made from it.
+// One registered list of textures: what it names, and what the draws read it through (Direct3D 12: this walk's
+// texture list of {texture slot, sampler slot} pairs; Vulkan: the bound tables).
 struct TextureTable {
-    std::array<NebulaFrameTexture, kTableTextures> list{};
+    std::vector<NebulaFrameTexture> list;
     std::uint32_t count = 0u;
+    std::vector<std::uint32_t> sampler_slots;
+    gpu::Address lists = 0u;
+    std::uint32_t list_first = 0u;
     std::uint64_t key = 0u;
     gpu::Table textures{};
     gpu::Table samplers{};
@@ -254,7 +258,7 @@ private:
         std::unique_ptr<float[]> cpu;
     };
     struct TableKey {
-        std::array<NebulaFrameTexture, kTableTextures> list{};
+        std::vector<NebulaFrameTexture> list;
         std::uint32_t count = 0u;
         std::uint32_t id = 0u;
     };

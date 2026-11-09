@@ -14,9 +14,9 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float2 step = round(tex[1].Sample(samp[1], i.uv[0].zw).ab * 255.0) - 128.0;
+    const float2 step = round(TEX(1).Sample(SAMP(1), i.uv[0].zw).ab * 255.0) - 128.0;
     const float2 texel = i.uv[0].xy * material.warp.zw + step * material.warp.xy;
-    const float4 t = tex[0].Sample(samp[0], texel / material.warp.zw);
+    const float4 t = TEX(0).Sample(SAMP(0), texel / material.warp.zw);
     if (round(t.a * 255.0) <= 0.0) {
         discard;
     }

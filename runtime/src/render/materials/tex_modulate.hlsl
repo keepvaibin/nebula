@@ -13,7 +13,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float4 t = tex[0].Sample(samp[0], i.uv[0].xy);
+    const float4 t = TEX(0).Sample(SAMP(0), i.uv[0].xy);
     const float a = material.params.y != 0.0 ? i.color.a : t.a * i.color.a;
     if (round(a * 255.0) <= 0.0) {
         discard;

@@ -336,8 +336,8 @@ bool RendererVk::create_layouts() {
     }
     {
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-        // b3: the draw's first instance, flags and identity.
-        const VkPushConstantRange constants{stage_passes, 0u, 16u};
+        // b3: the draw's words (gpu::DrawRoot).
+        const VkPushConstantRange constants{stage_passes, 0u, static_cast<std::uint32_t>(sizeof(gpu::DrawRoot))};
         info.setLayoutCount = 3;
         info.pSetLayouts = draw_layout_.sets.data();
         info.pushConstantRangeCount = 1;

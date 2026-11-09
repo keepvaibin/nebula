@@ -15,10 +15,10 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float mask = round(tex[0].Sample(samp[0], i.uv[0].xy).a * 255.0);
+    const float mask = round(TEX(0).Sample(SAMP(0), i.uv[0].xy).a * 255.0);
     const bool shown = material.params.x != 0.0 ? mask > 1.0 : mask < 1.0;
     if (material.params.y != 0.0) {
-        const float4 frame = tex[0].Sample(samp[0], i.uv[0].xy);
+        const float4 frame = TEX(0).Sample(SAMP(0), i.uv[0].xy);
         return shown ? float4(lerp(frame.rgb, i.color.rgb, i.color.a), 0.0) : frame;
     }
     if (!shown || round(i.color.a * 255.0) <= 0.0) {

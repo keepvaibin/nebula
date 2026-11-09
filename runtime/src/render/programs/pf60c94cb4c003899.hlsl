@@ -9,7 +9,7 @@ struct Varyings {
 };
 NativeOut program_ps(Varyings i) {
     float4 prev;
-    const float4 t = tex[0].Sample(samp[0], i.uv0);
+    const float4 t = TEX(0).Sample(SAMP(0), i.uv0);
     prev = float4(t.rgb, 0.25);
     if (round(prev.a * 255.0) <= m[1].w) {
         discard;

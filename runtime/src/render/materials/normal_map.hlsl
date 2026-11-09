@@ -71,9 +71,9 @@ float4 material_color(NativeVaryings i) {
         return float4(i.color.rgb, k);
     }
     const float2 size = material.params3.zw;
-    const float3 ind = round(tex[0].Sample(samp[0], i.uv[0].xy).abg * 255.0) - 128.0;
+    const float3 ind = round(TEX(0).Sample(SAMP(0), i.uv[0].xy).abg * 255.0) - 128.0;
     const float2 offset = float2(dot(material.ind0.xyz, ind), dot(material.ind1.xyz, ind));
-    const float4 grad = tex[1].Sample(samp[1], (i.uv[0].zw * size + offset) / size);
+    const float4 grad = TEX(1).Sample(SAMP(1), (i.uv[0].zw * size + offset) / size);
     const float3 rasc = material.params2.z != 0.0 ? float3(1.0, 1.0, 1.0) : i.color.rgb;
 
     // Stage 0.
@@ -84,7 +84,7 @@ float4 material_color(NativeVaryings i) {
     const float lightB = material.params2.w != 0.0 ? alpha0 : i.color.a;
     const float alpha1 = saturate(material.reg0.a + k * (1.0 - lightB));
     // Stage 2.
-    const float3 t2 = tex[2].Sample(samp[2], i.uv[1].xy).rgb;
+    const float3 t2 = TEX(2).Sample(SAMP(2), i.uv[1].xy).rgb;
     const float3 mixed = lerp(material.reg1.rgb, c2, t2);
     if (mode == 4u || mode == 7u) {
         return float4(c2, k);

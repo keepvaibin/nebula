@@ -40,9 +40,9 @@ NativeOut program_ps(Varyings i) {
     float4 r1 = m[1];
     float4 r2 = m[2];
     float2 tevcoord = float2(0.0, 0.0);
-    const float3 ind0 = round(tex[0].Sample(samp[0], i.uv0 / float2(1.0, 1.0)).abg * 255.0);
+    const float3 ind0 = round(TEX(0).Sample(SAMP(0), i.uv0 / float2(1.0, 1.0)).abg * 255.0);
     {
-        const float4 t = tex[1].Sample(samp[1], i.uv1).rgba;
+        const float4 t = TEX(1).Sample(SAMP(1), i.uv1).rgba;
         const float4 ras = i.color.rgba;
         const float ka = 32.0 / 255.0;
         const float3 rc = saturate((r0.rgb + lerp(r1.rgb, t.rgb, ras.rgb)));
@@ -68,7 +68,7 @@ NativeOut program_ps(Varyings i) {
         sv.z += -128.0;
         const float2 off = float2(dot(m[4].xyz, sv), dot(m[5].xyz, sv));
         tevcoord = texel + off;
-        const float4 t = enh_env(tex[2].Sample(samp[2], tevcoord / m[3].zw).rgba);
+        const float4 t = enh_env(TEX(2).Sample(SAMP(2), tevcoord / m[3].zw).rgba);
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), low8(r2.rgb), t.rgb)));
         const float ra = (0.0 + lerp(prev.a, 0.0, 0.0));
         prev.rgb = rc;

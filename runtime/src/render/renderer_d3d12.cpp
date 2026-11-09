@@ -55,7 +55,6 @@
 #include <string>
 #include <vector>
 
-
 using Microsoft::WRL::ComPtr;
 
 namespace galaxy::render {
@@ -325,8 +324,9 @@ bool DescriptorRing::initialize(
     ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type,
     unsigned descriptors_per_frame,
     unsigned frames_in_flight,
-    unsigned persistent_descriptors) {
-    const std::uint64_t total = static_cast<std::uint64_t>(persistent_descriptors) +
+    unsigned persistent_descriptors,
+    unsigned texture_slots) {
+    const std::uint64_t total = static_cast<std::uint64_t>(texture_slots) + persistent_descriptors +
         static_cast<std::uint64_t>(descriptors_per_frame) * frames_in_flight;
     if (device == nullptr || frames_in_flight == 0u || total == 0u ||
         total > std::numeric_limits<UINT>::max()) {
@@ -353,6 +353,7 @@ bool DescriptorRing::initialize(
     cpu_base_ = cpu_base;
     gpu_base_ = gpu_base;
     increment_ = increment;
+    texture_slots_ = texture_slots;
     persistent_descriptors_ = persistent_descriptors;
     persistent_cursor_ = 0u;
     descriptors_per_frame_ = descriptors_per_frame;
@@ -366,7 +367,7 @@ void DescriptorRing::begin_frame(unsigned frame_slot) {
     if (!heap_ || frame_slot >= frames_in_flight_) {
         throw std::runtime_error("DescriptorRing invalid frame slot");
     }
-    segment_base_ = persistent_descriptors_ +
+    segment_base_ = texture_slots_ + persistent_descriptors_ +
         frame_slot * descriptors_per_frame_;
     cursor_       = segment_base_;
     transient_page_ = 0;
@@ -381,7 +382,7 @@ ID3D12DescriptorHeap* DescriptorRing::page(std::size_t number) {
     while (number > pages_.size()) {
         D3D12_DESCRIPTOR_HEAP_DESC desc{};
         desc.Type = type_;
-        desc.NumDescriptors = persistent_descriptors_ + descriptors_per_frame_ * frames_in_flight_;
+        desc.NumDescriptors = texture_slots_ + persistent_descriptors_ + descriptors_per_frame_ * frames_in_flight_;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next;
         d3d_check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&next)), "CreateDescriptorPage");
@@ -392,7 +393,7 @@ ID3D12DescriptorHeap* DescriptorRing::page(std::size_t number) {
 
 ID3D12DescriptorHeap* DescriptorRing::heap_for(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept {
     if (increment_ == 0u) { return nullptr; }
-    const UINT64 bytes = UINT64{increment_} * (persistent_descriptors_ +
+    const UINT64 bytes = UINT64{increment_} * (texture_slots_ + persistent_descriptors_ +
         UINT64{descriptors_per_frame_} * frames_in_flight_);
     for (std::size_t p = 0; p <= pages_.size(); ++p) {
         auto* candidate = page_at(p);
@@ -428,8 +429,8 @@ DescriptorRing::Table DescriptorRing::allocate_persistent(unsigned count) {
     auto* owner = page(persistent_page_);
     auto cpu = owner->GetCPUDescriptorHandleForHeapStart();
     auto gpu = owner->GetGPUDescriptorHandleForHeapStart();
-    cpu.ptr += static_cast<SIZE_T>(persistent_cursor_) * increment_;
-    gpu.ptr += static_cast<UINT64>(persistent_cursor_) * increment_;
+    cpu.ptr += static_cast<SIZE_T>(texture_slots_ + persistent_cursor_) * increment_;
+    gpu.ptr += static_cast<UINT64>(texture_slots_ + persistent_cursor_) * increment_;
     persistent_cursor_ += count;
     return {cpu, gpu};
 }
@@ -485,10 +486,13 @@ bool g_selected_adapter_valid = false;
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
 // boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
 static constexpr unsigned    kSrvPerFrame = 32768u;
-// The descriptor ring's persistent prefix, outside the rewound frame segments: the scene target
-// conversion sources (the scene target's views, the output scene target's, the MSAA depth's, then the wide
-// scene's). TextureStore's own SRV indices are independent of this prefix.
-static constexpr unsigned    kPersistentSrvDescriptors = 512u * 1024u;
+// The descriptor heap's texture slots: every texture view at its TextureStore index, the last slot the null view.
+static constexpr unsigned    kTextureSlots = 448u * 1024u;
+// The persistent descriptors after them, outside the rewound frame segments: the scene target conversion sources
+// (the scene target's views, the output scene target's, the MSAA depth's, then the wide scene's).
+static constexpr unsigned    kPersistentSrvDescriptors = 64u * 1024u;
+// Sampler slots a frame may add: the heap starts again between frames when fewer than this are free.
+static constexpr unsigned    kSamplerFrameRoom = 512u;
 
 void RendererD3D12::trace_rings() const {
     const auto line = [](const char* name, const UploadRing& ring) {
@@ -741,7 +745,6 @@ void RendererD3D12::write_msaa_depth_view(SceneMsaa& msaa) {
 
 namespace {
 
-
 }  // namespace
 
 void RendererD3D12::resolve_scene(bool depth, bool color_wanted) {
@@ -843,15 +846,19 @@ HRESULT create_draw_root_signature(
     }
     *root_signature = nullptr;
 
-    // b0 view, b1 vertex material, b2 pixel material, b3 four words, t0-15, s0-15, t16 rows, t17 instances.
+    // b0 view, b1 vertex material, b2 pixel material, b3 the draw's words; every texture (t0 space1) and sampler (s0
+    // space1) as unbounded arrays from the heaps' starts (resource binding tier 2); t16 rows, t17 instances, t18 the
+    // frame's texture lists.
     D3D12_DESCRIPTOR_RANGE tex_range{};
     tex_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    tex_range.NumDescriptors = 16;
+    tex_range.NumDescriptors = UINT_MAX;
+    tex_range.RegisterSpace = 1u;
     D3D12_DESCRIPTOR_RANGE samp_range{};
     samp_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-    samp_range.NumDescriptors = 16;
+    samp_range.NumDescriptors = UINT_MAX;
+    samp_range.RegisterSpace = 1u;
 
-    D3D12_ROOT_PARAMETER params[8]{};
+    D3D12_ROOT_PARAMETER params[9]{};
     for (UINT i = 0; i < 3u; ++i) {
         params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[i].Descriptor.ShaderRegister = i;
@@ -859,7 +866,7 @@ HRESULT create_draw_root_signature(
     }
     params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[3].Constants.ShaderRegister = 3;
-    params[3].Constants.Num32BitValues = 4;
+    params[3].Constants.Num32BitValues = gpu::kDrawRootWords;
     params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[4].DescriptorTable.NumDescriptorRanges = 1;
@@ -874,9 +881,12 @@ HRESULT create_draw_root_signature(
         params[6u + i].Descriptor.ShaderRegister = 16u + i;
         params[6u + i].ShaderVisibility = i == 0u ? D3D12_SHADER_VISIBILITY_ALL : D3D12_SHADER_VISIBILITY_VERTEX;
     }
+    params[8].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[8].Descriptor.ShaderRegister = 18u;
+    params[8].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 8;
+    rsd.NumParameters = 9;
     rsd.pParameters = params;
     rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -966,7 +976,6 @@ bool RendererD3D12::create_sampler_heap() {
     dhd.NumDescriptors = kSamplerHeapSlots;
     dhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&sampler_heap_)), "CreateDescriptorHeap Sampler");
-    default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
     sampler_config_ = ~0u;
     return true;
 }
@@ -976,7 +985,8 @@ bool RendererD3D12::create_sampler_heap() {
 void RendererD3D12::reset_sampler_frame() {
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config_key = sampler_config_key(cfg);
-    if (config_key == sampler_config_) {
+    const bool full = sampler_tables_.used() + kSamplerFrameRoom > kSamplerHeapSlots;
+    if (config_key == sampler_config_ && !full) {
         return;
     }
     if (sampler_config_ != ~0u) {
@@ -996,55 +1006,15 @@ void RendererD3D12::reset_sampler_frame() {
     sd.MaxLOD = D3D12_FLOAT32_MAX;
     const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     D3D12_CPU_DESCRIPTOR_HANDLE h = sampler_heap_->GetCPUDescriptorHandleForHeapStart();
-    for (unsigned page = 0; page <= sampler_pages_.size(); ++page) {
-        h = (page == 0 ? sampler_heap_.Get() : sampler_pages_[page - 1].Get())->GetCPUDescriptorHandleForHeapStart();
-        for (unsigned i = 0; i < kSamplerHeapSlots; ++i, h.ptr += stride) { device_->CreateSampler(&sd, h); }
+    for (unsigned i = 0; i < kSamplerHeapSlots; ++i, h.ptr += stride) {
+        device_->CreateSampler(&sd, h);
     }
 }
 
-void RendererD3D12::bind_draw_tables(gpu::Table textures, gpu::Table samplers) {
-    ID3D12DescriptorHeap* heap = sampler_heap_.Get();
-    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-    for (const auto& page : sampler_pages_) {
-        const auto base = page->GetGPUDescriptorHandleForHeapStart().ptr;
-        if (samplers.ptr >= base && samplers.ptr - base < UINT64{stride} * kSamplerHeapSlots) { heap = page.Get(); break; }
-    }
-    encoder_.set_descriptor_heaps(srv_ring_.heap_for(textures), heap);
+void RendererD3D12::bind_draw_textures(gpu::Address lists) {
+    encoder_.set_descriptor_heaps(srv_ring_.heap(), sampler_heap_.Get());
+    encoder_.set_texture_arrays(srv_ring_.texture_slots().gpu, sampler_heap_->GetGPUDescriptorHandleForHeapStart(), lists);
 }
-
-D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::sampler_table_for(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count) {
-    if (count == 0u) {
-        return default_sampler_table_;
-    }
-    const RenderConfig cfg = get_render_config();
-    const auto allocation = sampler_tables_.get_or_allocate(make_sampler_table_key(keys, count, cfg));
-    const unsigned page_number = allocation.index / kSamplerHeapSlots;
-    const unsigned index = allocation.index % kSamplerHeapSlots;
-    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-    while (page_number > sampler_pages_.size()) {
-        D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; desc.NumDescriptors = kSamplerHeapSlots;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        ComPtr<ID3D12DescriptorHeap> page;
-        d3d_check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&page)), "CreateSamplerPage");
-        auto h = page->GetCPUDescriptorHandleForHeapStart();
-        for (unsigned i = 0; i < kSamplerHeapSlots; ++i, h.ptr += stride) {
-            device_->CopyDescriptorsSimple(1u, h, sampler_heap_->GetCPUDescriptorHandleForHeapStart(), D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-        }
-        sampler_pages_.push_back(std::move(page));
-    }
-    ID3D12DescriptorHeap* heap = page_number == 0 ? sampler_heap_.Get() : sampler_pages_[page_number - 1].Get();
-    for (unsigned i = 0; allocation.created && i < count; ++i) {
-        const D3D12_SAMPLER_DESC dyn = build_sampler_desc_from_key(keys[i], cfg);
-        auto h = heap->GetCPUDescriptorHandleForHeapStart();
-        h.ptr += static_cast<SIZE_T>(index + i) * stride;
-        device_->CreateSampler(&dyn, h);
-    }
-    auto gpu = heap->GetGPUDescriptorHandleForHeapStart();
-    gpu.ptr += static_cast<UINT64>(index) * stride;
-    return gpu;
-}
-
 
 // The capture pipelines (root signature: SceneConversionShaderConstants, one SRV table, a static linear clamp sampler)
 // and the screen probes' compute pipeline (constants, the depth's SRV table, the pixels' SRV, the values' UAV).
@@ -2046,9 +2016,12 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             !ring(constant_ring_, "constant", kConstantRingBytes, kFramesInFlight) || !ring(matrix_ring_, "matrix", kMatrixRingBytes, kRingSegments)) {
             return false;
         }
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight, kPersistentSrvDescriptors)) {
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight,
+                                  kPersistentSrvDescriptors, kTextureSlots)) {
             return false;
         }
+        null_texture_slot_ = kTextureSlots - 1u;
+        mirrored_backend_ = nullptr;
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
@@ -2079,10 +2052,72 @@ UploadBuffer RendererD3D12::create_upload_buffer(std::size_t bytes, const char* 
 
 void RendererD3D12::attach_texture_uploads(TextureStore& cache) {
     cache.backend().set_upload_list(command_list_.Get());
+    if (mirrored_backend_ != &cache.backend()) {
+        // Every view into the texture slots from now on; the last slot holds the null view.
+        const DescriptorRing::Table slots = srv_ring_.texture_slots();
+        D3D12_CPU_DESCRIPTOR_HANDLE null_slot = slots.cpu;
+        null_slot.ptr += static_cast<SIZE_T>(null_texture_slot_) *
+            device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        device_->CopyDescriptorsSimple(1u, null_slot, cache.backend().null_srv(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        cache.backend().mirror_into(slots.cpu, null_texture_slot_);
+        mirrored_backend_ = &cache.backend();
+    }
 }
 
-void RendererD3D12::retire_texture_table(gpu::Table table) {
-    retired_tables_.push_back({srv_ring_.table_at(table), next_fence_value_ + 1u});
+std::uint32_t RendererD3D12::texture_slot(const TextureHandle& handle) const noexcept {
+    return handle.resource != nullptr ? handle.srv_index : null_texture_slot_;
+}
+
+std::uint32_t RendererD3D12::sampler_slot(const SamplerKey& key) {
+    std::array<SamplerKey, kSamplerTableSlots> keys{};
+    keys[0] = key;
+    const RenderConfig cfg = get_render_config();
+    const auto allocation = sampler_tables_.get_or_allocate(make_sampler_table_key(keys, 1u, cfg));
+    if (allocation.index >= kSamplerHeapSlots) {
+        throw std::runtime_error("[samplers] more new samplers in one frame than the sampler heap holds");
+    }
+    if (allocation.created) {
+        const D3D12_SAMPLER_DESC desc = build_sampler_desc_from_key(key, cfg);
+        D3D12_CPU_DESCRIPTOR_HANDLE slot = sampler_heap_->GetCPUDescriptorHandleForHeapStart();
+        slot.ptr += static_cast<SIZE_T>(allocation.index) *
+            device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        device_->CreateSampler(&desc, slot);
+    }
+    return allocation.index;
+}
+
+void RendererD3D12::write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists,
+                                       std::uint32_t& first) {
+    TextureListBuffer& buffer = texture_lists_[frame_slot_];
+    if (buffer.resource == nullptr || texture_lists_used_ + count > buffer.capacity) {
+        if (buffer.resource != nullptr) {
+            retired_texture_lists_.push_back({std::move(buffer.resource), next_fence_value_ + 1u});
+        }
+        const std::uint32_t capacity = std::max(4096u, 2u * std::max(buffer.capacity, count));
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        desc.Width = UINT64{capacity} * 8u;
+        desc.Height = 1u;
+        desc.DepthOrArraySize = 1u;
+        desc.MipLevels = 1u;
+        desc.SampleDesc.Count = 1u;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                                   nullptr, IID_PPV_ARGS(&buffer.resource)),
+                  "create texture lists");
+        const D3D12_RANGE none{0u, 0u};
+        void* mapped = nullptr;
+        d3d_check(buffer.resource->Map(0u, &none, &mapped), "map texture lists");
+        buffer.mapped = static_cast<std::uint32_t*>(mapped);
+        buffer.capacity = capacity;
+        texture_lists_used_ = 0u;
+    }
+    std::memcpy(buffer.mapped + std::size_t{texture_lists_used_} * 2u, pairs, std::size_t{count} * 8u);
+    lists = buffer.resource->GetGPUVirtualAddress();
+    first = texture_lists_used_;
+    texture_lists_used_ += count;
 }
 
 void RendererD3D12::free_target(std::uint32_t id, TextureStore& textures) {
@@ -2102,51 +2137,6 @@ void RendererD3D12::free_target(std::uint32_t id, TextureStore& textures) {
             ++it;
         }
     }
-}
-
-gpu::Table RendererD3D12::persistent_texture_table(const TextureHandle* handles, unsigned count, const TextureStore& cache, gpu::Table old) {
-    const std::uint64_t completed = completed_fence_value();
-    std::erase_if(retired_tables_, [&](const RetiredTable& retired) {
-        if (retired.fence > completed) {
-            return false;
-        }
-        free_tables_.push_back(retired.table);
-        return true;
-    });
-    if (old.ptr != 0u) {
-        retire_texture_table(old);
-    }
-    DescriptorRing::Table table;
-    if (!free_tables_.empty()) {
-        table = free_tables_.back();
-        free_tables_.pop_back();
-    } else {
-        table = srv_ring_.allocate_persistent(kTableTextures);
-    }
-    D3D12_CPU_DESCRIPTOR_HANDLE sources[kTableTextures]{};
-    for (unsigned m = 0; m < kTableTextures; ++m) {
-        sources[m] = m < count && handles[m].resource != nullptr
-            ? cache.backend().srv_cpu(handles[m].srv_index)
-            : cache.backend().null_srv();
-    }
-    const UINT destination_size = kTableTextures;
-    device_->CopyDescriptors(1, &table.cpu, &destination_size, kTableTextures, sources, nullptr, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    return table.gpu;
-}
-
-gpu::Table RendererD3D12::texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache) {
-    DescriptorRing::Table table = srv_ring_.allocate(kTableTextures);
-    D3D12_CPU_DESCRIPTOR_HANDLE sources[kTableTextures]{};
-    for (unsigned m = 0; m < kTableTextures; ++m) {
-        sources[m] = m < count && handles[m].resource != nullptr
-            ? cache.backend().srv_cpu(handles[m].srv_index)
-            : cache.backend().null_srv();
-    }
-    // CPU-only sources, one contiguous frame-owned table.
-    const UINT destination_size = kTableTextures;
-    device_->CopyDescriptors(1, &table.cpu, &destination_size, kTableTextures, sources, nullptr,
-                             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    return table.gpu;
 }
 
 #if defined(NEBULA_DEV)
@@ -2299,9 +2289,13 @@ void RendererD3D12::shutdown() {
     scene_color_.Reset();
     scene_depth_.Reset();
     for (auto& b : backbuffers_) b.Reset();
-    rtv_heap_.Reset(); dsv_heap_.Reset(); sampler_heap_.Reset(); sampler_pages_.clear(); root_signature_.Reset();
+    rtv_heap_.Reset(); dsv_heap_.Reset(); sampler_heap_.Reset(); root_signature_.Reset();
     sampler_tables_.reset();
-    default_sampler_table_ = {};
+    for (TextureListBuffer& lists : texture_lists_) {
+        lists = TextureListBuffer{};
+    }
+    retired_texture_lists_.clear();
+    mirrored_backend_ = nullptr;
     swap_chain_.Reset(); command_list_.Reset();
     for (auto& a : allocators_) a.Reset();
     vertex_ring_.reset();
@@ -2817,6 +2811,11 @@ void RendererD3D12::begin_frame() {
     index_ring_.begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
     srv_ring_.begin_frame(frame_slot_);
+    texture_lists_used_ = 0u;
+    {
+        const std::uint64_t completed = completed_fence_value();
+        std::erase_if(retired_texture_lists_, [&](const RetiredBuffer& retired) { return retired.fence <= completed; });
+    }
     reset_sampler_frame();
     bound_rt_aux_ = 0u;
     retired_targets_[frame_slot_].clear();
@@ -3430,7 +3429,6 @@ bool RendererD3D12::ensure_motion_target() {
     motion_target_map_ = frame_;
     return true;
 }
-
 
 void RendererD3D12::record_motion_debug_view() {
     // Its pipeline draws to the RGBA8 scene target.
@@ -4218,6 +4216,7 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std:
     desc.Texture2D.MipLevels = 1u;
     const auto cpu = textures.backend().srv_cpu(picture.view);
     device_->CreateShaderResourceView(picture.viewed.Get(), &desc, cpu);
+    textures.backend().publish_view(picture.view);
     return true;
 }
 
@@ -5027,7 +5026,6 @@ bool RendererD3D12::draw_frame_pass(
 
     const FramePassGeometry sampling =
         frame_pass_geometry(w, h, frame_);
-
 
     record_conversion_blit(dest.texture.Get(), w, h, dest.rtv, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
 

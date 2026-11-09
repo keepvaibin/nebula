@@ -16,12 +16,12 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 
 float4 material_color(NativeVaryings i) {
     uint width, height;
-    tex[0].GetDimensions(width, height);
+    TEX(0).GetDimensions(width, height);
     const int2 last = int2(width, height) - 1;
     const int2 p = clamp(int2(floor(i.uv[0].xy * float2(width, height) - 0.5)), int2(0, 0), last);
     const int2 q = min(p + 1, last);
-    const float4 texels = float4(tex[0].Load(int3(p, 0)).r, tex[0].Load(int3(q.x, p.y, 0)).r, tex[0].Load(int3(p.x, q.y, 0)).r,
-                                 tex[0].Load(int3(q, 0)).r);
+    const float4 texels = float4(TEX(0).Load(int3(p, 0)).r, TEX(0).Load(int3(q.x, p.y, 0)).r, TEX(0).Load(int3(p.x, q.y, 0)).r,
+                                 TEX(0).Load(int3(q, 0)).r);
     if (material.params.x != 0.0) {
         const bool4 marked = texels >= 1.0;
         const float on = (material.params.x == 1.0 ? any(marked) : all(marked)) ? 1.0 : 0.0;

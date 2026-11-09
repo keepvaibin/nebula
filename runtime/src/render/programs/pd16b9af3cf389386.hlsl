@@ -9,7 +9,7 @@ struct Varyings {
 };
 NativeOut program_ps(Varyings i) {
     float4 prev;
-    const float4 t = tex[0].Sample(samp[0], i.uv0);
+    const float4 t = TEX(0).Sample(SAMP(0), i.uv0);
     const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
     const float ka = m[0].a;
     const float a0 = saturate((0.0 + lerp(ka, 0.0, ras.a)) * 2.0);

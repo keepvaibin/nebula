@@ -58,6 +58,10 @@ public:
     void ensure_view(std::uint32_t index);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu(std::uint32_t index) const noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
+    // The shader-visible slots every view is copied into, a view's slot its index (the renderer's texture array):
+    // the views made so far are copied now, each later one when it is written (write_view, publish_view).
+    void mirror_into(D3D12_CPU_DESCRIPTOR_HANDLE slots, std::uint32_t count);
+    void publish_view(std::uint32_t index) const;
 
 private:
     PlacedTextureAllocator texture_heap_{D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
@@ -68,6 +72,9 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base_{};
     UINT srv_stride_ = 0u;
     D3D12_CPU_DESCRIPTOR_HANDLE null_srv_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE mirror_{};
+    std::uint32_t mirror_count_ = 0u;
+    std::uint32_t views_made_ = 0u;  // one past the highest view index ensured
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
 };
 

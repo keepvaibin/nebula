@@ -596,8 +596,79 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
     return count;
 }
 
+#if !defined(NEBULA_GPU_VULKAN)
+void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first) {
+    core::TextureTable& table = registries_.table(id);
+    if (table.walk_stamp == walk_.serial) {
+        lists = table.lists;
+        first = table.list_first;
+        return;
+    }
+    const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
+    const auto generation = renderer_.sampler_generation();
+    const std::uint32_t count = table.count;
+    walk_handles_.assign(count, TextureHandle{});
+    bool has_target = false;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const std::uint32_t texture = table.list[i].texture;
+        if (texture == 0u) {
+            continue;
+        }
+        if (TextureStore::is_target(texture)) {
+            has_target = true;
+            const std::uint64_t key = walk_.between && generated_written(texture) ? (kGeneratedPicture | texture) : texture;
+            (void)renderer_.target_picture(key, walk_handles_[i]);
+        } else {
+            walk_handles_[i] = texture_store_.handle(texture);
+        }
+    }
+    // A sampler depends on its texture (levels, generated levels, a replacement's shift): made again when the textures,
+    // the heap, the frame's height or the scene's bias changed, and each walk for a table holding a target.
+    if (has_target || table.sampler_slots.size() != count || table.textures_revision != texture_store_.revision() ||
+        table.samplers_generation != generation || table.samplers_mip_lines != mip_lines ||
+        table.samplers_scene_bias != scene_mip_bias_) {
+        table.sampler_slots.resize(count);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const NebulaFrameTexture& t = table.list[i];
+            TextureSampler mode;
+            mode.wrap_s = static_cast<TexWrap>(t.wrap_s);
+            mode.wrap_t = static_cast<TexWrap>(t.wrap_t);
+            mode.min_linear = t.min_linear != 0u;
+            mode.mag_linear = t.mag_linear != 0u;
+            mode.mip = t.mip_filter;
+            mode.anisotropy = t.anisotropy;
+            mode.lod_bias = t.lod_bias;
+            mode.min_lod = t.min_lod;
+            mode.max_lod = t.max_lod;
+            const TextureHandle& handle = walk_handles_[i];
+            const bool generated = TextureStore::samples_generated(mode, handle);
+            if (handle.generated_mips && !generated) {
+                mode.min_lod = 0.0f;
+                mode.max_lod = 0.0f;
+            }
+            table.sampler_slots[i] = renderer_.sampler_slot(make_sampler_key(mode, generated, handle.mip_levels, handle.lod_shift,
+                                                                             handle.lod_arbitrary, mip_lines, scene_mip_bias_));
+        }
+        table.textures_revision = texture_store_.revision();
+        table.samplers_generation = generation;
+        table.samplers_mip_lines = mip_lines;
+        table.samplers_scene_bias = scene_mip_bias_;
+    }
+    walk_pairs_.resize(std::size_t{count} * 2u);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        walk_pairs_[2u * i] = renderer_.texture_slot(walk_handles_[i]);
+        walk_pairs_[2u * i + 1u] = table.sampler_slots[i];
+    }
+    renderer_.write_texture_list(walk_pairs_.data(), count, table.lists, table.list_first);
+    table.walk_stamp = walk_.serial;
+    lists = table.lists;
+    first = table.list_first;
+}
+#else
+// Vulkan draws bind their table: as many maps as the bound table has (program.hlsli NEBULA_BOUND_TABLES).
 void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
     core::TextureTable& table = registries_.table(id);
+    const std::uint32_t count = std::min(table.count, core::kTableTextures);
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
     const bool per_walk = table.has_target && table.walk_stamp != walk_.serial;
     const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
@@ -607,7 +678,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
     if (stale || per_walk || samplers_stale) {
         std::array<TextureHandle, core::kTableTextures> handles{};
         bool has_target = false;
-        for (std::uint32_t i = 0; i < table.count; ++i) {
+        for (std::uint32_t i = 0; i < count; ++i) {
             const std::uint32_t texture = table.list[i].texture;
             if (texture == 0u) {
                 continue;
@@ -624,16 +695,16 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
         if (stale || has_target) {
             if (has_target) {
                 // A target's picture changes from frame to frame: the table lives for this frame.
-                table.textures = renderer_.texture_table_for(handles.data(), table.count, texture_store_);
+                table.textures = renderer_.texture_table_for(handles.data(), count, texture_store_);
                 table.walk_stamp = walk_.serial;
             } else {
-                table.textures = renderer_.persistent_texture_table(handles.data(), table.count, texture_store_, table.textures);
+                table.textures = renderer_.persistent_texture_table(handles.data(), count, texture_store_, table.textures);
             }
             table.textures_revision = texture_store_.revision();
         }
         if (samplers_stale || has_target) {
             std::array<SamplerKey, core::kTableTextures> keys{};
-            for (std::uint32_t i = 0; i < table.count; ++i) {
+            for (std::uint32_t i = 0; i < count; ++i) {
                 const NebulaFrameTexture& t = table.list[i];
                 TextureSampler mode;
                 mode.wrap_s = static_cast<TexWrap>(t.wrap_s);
@@ -654,7 +725,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
                 keys[i] = make_sampler_key(mode, generated, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary,
                                            mip_lines, scene_mip_bias_);
             }
-            table.samplers = renderer_.sampler_table_for(keys, table.count);
+            table.samplers = renderer_.sampler_table_for(keys, count);
             table.samplers_generation = generation;
             table.samplers_mip_lines = mip_lines;
             table.samplers_scene_bias = scene_mip_bias_;
@@ -663,6 +734,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
     textures = table.textures;
     samplers = table.samplers;
 }
+#endif
 
 bool RenderCore::item_culled(const NebulaFrameItem& item, const NebulaFramePass& pass, std::uint32_t state,
                              const core::GpuMesh* mesh) noexcept {
@@ -785,11 +857,17 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         encoder.set_view(view.address);
         const core::StaticSlot& material = walk_material(item.constants);
         encoder.set_material(material.vertex_rows, material.pixel_rows);
+        gpu::DrawRoot root;
+#if defined(NEBULA_GPU_VULKAN)
         gpu::Table textures{}, samplers{};
         walk_tables(item.textures, textures, samplers);
         renderer_.bind_draw_tables(textures, samplers);
         encoder.set_tables(textures, samplers);
-        gpu::DrawRoot root;
+#else
+        gpu::Address lists = 0u;
+        walk_tables(item.textures, lists, root.table);
+        renderer_.bind_draw_textures(lists);
+#endif
         root.first_instance = i;
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) | NEBULA_INSPECT_FLAGS();

@@ -307,7 +307,8 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     shader.setSourceEntryPoint(entry);
     // Constant-buffer matrices are row-major, as the D3D12 compile's D3DCOMPILE_PACK_MATRIX_ROW_MAJOR: the shared code
     // writes them row by row and the shaders multiply mul(matrix, vector).
-    std::string preamble = "#define NEBULA_VULKAN 1\n#pragma pack_matrix(row_major)\n";
+    // Vulkan draws bind each draw's own texture table (program.hlsli NEBULA_BOUND_TABLES).
+    std::string preamble = "#define NEBULA_VULKAN 1\n#define NEBULA_BOUND_TABLES 1\n#pragma pack_matrix(row_major)\n";
     for (const char* define : defines) {
         const char* equals = std::strchr(define, '=');
         if (equals == nullptr) {

@@ -60,11 +60,11 @@ float4 material_color(NativeVaryings i) {
     if ((flags & 1u) != 0u) {
         // the game's indirect lookup: the indirect texture's alpha, blue, green less 128 by indirect matrix 0, in texels.
         uint w, h;
-        tex[0].GetDimensions(w, h);
-        const float3 sv = round(tex[2].Sample(samp[2], i.uv[1].xy).abg * 255.0) - 128.0;
+        TEX(0).GetDimensions(w, h);
+        const float3 sv = round(TEX(2).Sample(SAMP(2), i.uv[1].xy).abg * 255.0) - 128.0;
         uv += float2(dot(material.ind_mtx[0].xyz, sv), dot(material.ind_mtx[1].xyz, sv)) / float2(w, h);
     }
-    const float4 t = (flags & 8u) != 0u ? tex[1].Sample(samp[1], uv) : tex[0].Sample(samp[0], uv);
+    const float4 t = (flags & 8u) != 0u ? TEX(1).Sample(SAMP(1), uv) : TEX(0).Sample(SAMP(0), uv);
     const float3 prm = i.color.rgb;
     const float3 env = i.color1.rgb;
     float3 c;
@@ -79,7 +79,7 @@ float4 material_color(NativeVaryings i) {
     c = saturate(c);
     float a = uint(material.params.y) == 0u ? t.a * i.color.a : i.color.a;
     if ((flags & 2u) != 0u) {
-        const float4 t3 = tex[3].Sample(samp[3], i.uv[1].xy);
+        const float4 t3 = TEX(3).Sample(SAMP(3), i.uv[1].xy);
         c *= t3.rgb;
         a *= t3.a;
     }

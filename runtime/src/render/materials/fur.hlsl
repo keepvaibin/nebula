@@ -54,8 +54,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 
 float4 material_color(NativeVaryings i) {
-    const float4 t0 = tex[0].Sample(samp[0], i.uv[0].xy);
-    const float4 t1 = tex[1].Sample(samp[1], i.uv[0].zw);
+    const float4 t0 = TEX(0).Sample(SAMP(0), i.uv[0].xy);
+    const float4 t1 = TEX(1).Sample(SAMP(1), i.uv[0].zw);
     const float3 c0 = saturate(t0.rgb * i.color.rgb + material.kshell.r);
     const float3 spec = material.params.w != 0.0 ? i.color1.rgb : float3(0.0, 0.0, 0.0);
     float3 c = saturate((lerp(material.color.rgb, c0, t1.rgb) + spec) * 2.0);

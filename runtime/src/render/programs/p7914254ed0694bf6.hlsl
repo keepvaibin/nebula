@@ -21,7 +21,7 @@ NativeOut program_ps(Varyings i) {
     float4 prev = float4(1.0, 1.0, 1.0, 1.0);
     float4 r0 = m[0];
     {
-        const float4 t = enh_env(tex[0].Sample(samp[0], i.uv0).rgba);
+        const float4 t = enh_env(TEX(0).Sample(SAMP(0), i.uv0).rgba);
         const float ka = m[1].a;
         const float3 rc = saturate((t.aaa + lerp(float3(0.0, 0.0, 0.0), t.rgb, r0.rgb)) * 4.0);
         const float ra = saturate((0.0 + lerp(0.0, r0.a, ka)));
