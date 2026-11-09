@@ -105,16 +105,23 @@ void save_use_file() {
 
 }  // namespace
 
+// Called for every drawn item on the render thread, which owns slot_of_id and the counts in `drawn`: the common case (a pipeline
+// already seen) takes no lock; the lock covers only a first draw and the save (pipelines_.shutdown, run on the same thread or
+// after it has stopped).
 void note_pipeline_use(std::uint32_t id, const PipelineEntry& entry) {
+    if (id < gUse.slot_of_id.size()) {
+        if (const std::uint32_t slot = gUse.slot_of_id[id]; slot != 0u) {
+            ++gUse.drawn[slot - 1u].draws;
+            return;
+        }
+    }
     std::lock_guard guard(gUse.lock);
     if (id >= gUse.slot_of_id.size()) {
         gUse.slot_of_id.resize(std::size_t{id} + 1024u, 0u);
     }
     std::uint32_t& slot = gUse.slot_of_id[id];
-    if (slot == 0u) {
-        gUse.drawn.push_back({use_key(entry), 0u});
-        slot = static_cast<std::uint32_t>(gUse.drawn.size());
-    }
+    gUse.drawn.push_back({use_key(entry), 0u});
+    slot = static_cast<std::uint32_t>(gUse.drawn.size());
     ++gUse.drawn[slot - 1u].draws;
 }
 

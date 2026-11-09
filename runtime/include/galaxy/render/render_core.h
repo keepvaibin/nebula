@@ -207,6 +207,7 @@ private:
         std::uint32_t rows_base = 0u;
         gpu::Address rows_address = 0u, instances = 0u, ring_vertices = 0u, ring_indices = 0u;
         bool between = false, same_list_ring = false;
+        float mip_lines = 0.0f;  // log2 of the frame's lines over the authored lines, taken once per walk (every draw's table reads it)
     };
     struct WalkView {
         std::uint64_t stamp = 0u;
