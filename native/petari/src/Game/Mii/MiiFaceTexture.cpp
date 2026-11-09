@@ -275,6 +275,8 @@ namespace Mii {
         NebulaMtxMultVec(view, &lightPos, &lightPos);
         LightValues::pos(&light, lightPos.x, lightPos.y, lightPos.z);
         Frame::setLight(0, light);
+        // Fixed to the face's own camera, which never moves.
+        Frame::setLightFollows(0, true);
         head.setMatrix(view);
 
         Style style = {};

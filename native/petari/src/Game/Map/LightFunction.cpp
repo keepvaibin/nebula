@@ -169,8 +169,13 @@ namespace {
     }
 };  // namespace
 
+// Each loader marks only the lights it writes (Frame::setLightFollows): a light another loader wrote keeps its own mark,
+// so the host carries every light across a camera move as what it is, fixed to the camera or to the world.
 void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
-    Frame::setLightFollowsCamera((pInfo->mInfo0.mIsFollowCamera ? 1 : 0) | (pInfo->mInfo1.mIsFollowCamera ? 2 : 0));
+    Frame::setLightFollows(0, pInfo->mInfo0.mIsFollowCamera);
+    Frame::setLightFollows(1, pInfo->mInfo1.mIsFollowCamera);
+    // Light 2 (the alpha light) sits at the eye.
+    Frame::setLightFollows(2, true);
     GameLightSignal::actorLight(pInfo);
     ::loadLightInfoDiffuse(pInfo->mInfo0, 0);
     ::loadLightInfoDiffuse(pInfo->mInfo1, 1);
@@ -182,7 +187,9 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
-    Frame::setLightFollowsCamera(pInfo->base.mIsFollowCamera ? 1 : 0);
+    Frame::setLightFollows(0, pInfo->base.mIsFollowCamera);
+    // The shine: a direction fixed in view space.
+    Frame::setLightFollows(3, true);
     ::loadLightInfoDiffuse(pInfo->base, 0);
     NebulaLight obj = {};
     f32 shininess = pInfo->mShininess;
@@ -193,7 +200,8 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
 }
 
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
-    Frame::setLightFollowsCamera(0);
+    // A world point (moved into view space below).
+    Frame::setLightFollows(4, false);
     GameLightSignal::pointLight(pInfo);
     Vec3f viewPos(pInfo->mPos);
     MR::getCameraViewMtx().mult(viewPos, viewPos);
@@ -206,7 +214,8 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
 }
 
 void LightFunction::loadAllLightWhite() {
-    Frame::setLightFollowsCamera(0);
+    // All eight at the eye.
+    Frame::setLightFollowsCamera(0xffu);
 
     for (u32 i = 0; i < 8; i++) {
         NebulaLight lightObj = {};
