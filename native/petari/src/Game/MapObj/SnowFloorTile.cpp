@@ -50,7 +50,8 @@ void SnowFloorTile::init(const TableIter& rIter) {
         mTextureShift++;
     }
 
-    mCellSize = 128.0f * mScale.x / ::sTextureSize;
+    // A tile placed with no scale takes scale 1 (a cell size of 0 divided the dig maps).
+    mCellSize = 128.0f * (mScale.x > 0.0f ? mScale.x : 1.0f) / ::sTextureSize;
     initHitSensor(1);
     MR::addHitSensorEye(this, "eye", 16, 1.4142f * (mTextureSize * mCellSize), Vec3f(0.0f, 0.0f, 0.0f));
     mSnowDepth = new f32[mTextureSize * mTextureSize];

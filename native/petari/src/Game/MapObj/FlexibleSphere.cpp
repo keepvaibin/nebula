@@ -122,7 +122,8 @@ void FlexibleSphere::init(const TableIter& rIter) {
 
     if (mVanishOnShrinkEnd) {
         mIsGrowing = false;
-        mTimer = static_cast< s32 >((mScale.x - mMinScale) / mScaleRate);
+        // A rate of 0 (placement arg 2) never shrinks: no steps to count.
+        mTimer = mScaleRate > 0.0f ? static_cast< s32 >((mScale.x - mMinScale) / mScaleRate) : 0;
     }
 }
 
@@ -149,7 +150,9 @@ void FlexibleSphere::control() {
         return;
     }
 
-    MR::startLevelSound(this, "SE_OJ_LV_FLEX_SPHERE_MOVE", ((mScale.x - mMinScale) / (mMaxScale - mMinScale)) * 100.0f);
+    // Equal limits (placement args 0 and 1) give the sound no range, not a division by 0.
+    const f32 scaleRange = mMaxScale - mMinScale;
+    MR::startLevelSound(this, "SE_OJ_LV_FLEX_SPHERE_MOVE", scaleRange != 0.0f ? ((mScale.x - mMinScale) / scaleRange) * 100.0f : 0.0f);
 
     f32 scale = mScale.x;
 

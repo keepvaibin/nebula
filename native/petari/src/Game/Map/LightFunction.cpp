@@ -41,6 +41,12 @@ s32 LightFunction::createLightDataParser(Table** pOut) {
     ResourceHolder* holder = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mResourceHolder;
     Table* info = MR::tryCreateCsvParser(holder, "LightData.bcsv");
     *pOut = info;
+
+    // A light archive with no LightData table holds no lights.
+    if (info == nullptr) {
+        return 0;
+    }
+
     return info->getNumEntries();
 }
 

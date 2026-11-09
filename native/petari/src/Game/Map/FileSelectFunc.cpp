@@ -2,6 +2,7 @@
 #include "Game/Map/FileSelectIconID.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Mii/Mii.hpp"
 
 namespace {
@@ -22,7 +23,9 @@ namespace FileSelectFunc {
             const char* pMessageId = ::sIconNameMessageID[rIcon.getFellowID()];
             const char16_t* pMessage = MR::getGameMessageDirect(pMessageId);
 
-            MR::copyMemory(pName, pMessage, getMiiNameBufferSize() * sizeof(char16_t));
+            // The name is copied to the buffer's size and ended there (a missing message copies as empty).
+            MR::copyString(reinterpret_cast< char16_t* >(pName), pMessage, getMiiNameBufferSize());
+            pName[getMiiNameBufferSize() - 1] = 0;
         } else if (rIcon.isMii()) {
             Mii::Character mii;
 

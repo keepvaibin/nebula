@@ -36,5 +36,10 @@ bool FileSelectIconID::isFellow() const {
 }
 
 FileSelectIconID::EFellowID FileSelectIconID::getFellowID() const {
+    // A saved icon number past the five characters shows Mario.
+    if (mData > static_cast< u32 >(Peach)) {
+        return Mario;
+    }
+
     return static_cast< EFellowID >(mData);
 }

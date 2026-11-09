@@ -112,7 +112,8 @@ void MeteorStrike::initAfterPlacement() {
         MR::offBind(this);
     }
 
-    mTotalSteps = static_cast< s32 >(pos0.distance(nextPos) / mStepSize) + 1;
+    // A speed of 0 or less (the map tool's speed) flies the whole way in one step.
+    mTotalSteps = mStepSize > 0.0f ? static_cast< s32 >(pos0.distance(nextPos) / mStepSize) + 1 : 1;
 }
 
 void MeteorStrike::appear() {

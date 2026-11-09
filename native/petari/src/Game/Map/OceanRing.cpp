@@ -144,7 +144,8 @@ bool OceanRing::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInf
     Vec3f side(rPos);
     side.sub(nearPos);
     f32 height = MR::vecKillElement(side, -rGravity, &side);
-    f32 angle = side.length() / width;
+    // A rail point with width 0 makes a tube with no depth, not a division by 0.
+    f32 angle = width > 0.0f ? side.length() / width : 1.0f;
     angle *= PI;
     angle *= 0.5f;
 

@@ -296,7 +296,16 @@ bool LayoutManager::isExistPaneCtrl(const char* pName) const {
 }
 
 void LayoutManager::addGroupCtrl(LayoutGroupCtrl* pGroupCtrl) {
+    // A group the layout does not have (no group, or an index past the end) is not registered.
+    if (pGroupCtrl->mGroup == nullptr) {
+        return;
+    }
+
     s32 index = getIndexOfGroupCtrl(pGroupCtrl->mGroup->mName);
+    if (index < 0 || static_cast< u32 >(index) >= mGroupCtrlCount) {
+        return;
+    }
+
     mGroupCtrlList[index] = pGroupCtrl;
 
     for (u32 i = 0; i < pGroupCtrl->getPaneNum(); i++) {
@@ -396,7 +405,13 @@ bool LayoutManager::isExistPaneMtxRef(const char* pName) const {
 }
 
 bool LayoutManager::isPointing(const char* pName, const Vec2f& rPos) const {
-    return isPointing(findPaneByName(pName), rPos);
+    // A pane the layout does not have is never pointed at.
+    const Ui::Pane* const pPane = findPaneByName(pName);
+    if (pPane == nullptr) {
+        return false;
+    }
+
+    return isPointing(pPane, rPos);
 }
 
 Ui::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
@@ -653,6 +668,11 @@ namespace {
 
         template < int N >
         void BitFlag< N >::onBit(int index) {
+            // A layout with more children than bits (a mod's) marks the first N.
+            if (index < 0 || index >= N) {
+                return;
+            }
+
             int word = index / 32;
             index -= word * 32;
             mBits[word] |= 1 << index;
@@ -660,6 +680,10 @@ namespace {
 
         template < int N >
         void BitFlag< N >::offBit(int index) {
+            if (index < 0 || index >= N) {
+                return;
+            }
+
             int word = index / 32;
             index -= word * 32;
             mBits[word] &= ~(1 << index);
@@ -667,6 +691,10 @@ namespace {
 
         template < int N >
         bool BitFlag< N >::isTrue(int index) const {
+            if (index < 0 || index >= N) {
+                return false;
+            }
+
             int word = index / 32;
             index -= word * 32;
             return (mBits[word] & (1 << index)) != 0;

@@ -878,7 +878,8 @@ FileSelectIconID::EFellowID FileSelector::getUserFileFellowID(s32 id) const {
     if (mUserFile[id - 1].getIconId(&iconId)) {
         FileSelectIconID::EFellowID fellowId = FileSelectIconID::Mario;
 
-        if (iconId <= ConfigDataMii::IconId_Peach) {
+        // An icon number of 0 (a Mii) or past Peach shows Mario.
+        if (iconId >= ConfigDataMii::IconId_Mario && iconId <= ConfigDataMii::IconId_Peach) {
             fellowId = static_cast< FileSelectIconID::EFellowID >(iconId - ConfigDataMii::IconId_Mario);
         }
 
@@ -1283,6 +1284,8 @@ void FileSelector::exeDemo() {
         MR::copyString(name, pMessage, ARRAY_SIZE(name));
     }
 
+    // A player name message past the buffer is cut and ended there.
+    name[ARRAY_SIZE(name) - 1] = 0;
     GameSequenceFunction::reserveUserName(name);
     MR::requestChangeStageInGameAfterLoadingGameData();
 }

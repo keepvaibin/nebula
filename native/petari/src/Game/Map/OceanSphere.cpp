@@ -219,7 +219,9 @@ bool OceanSphere::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterI
     const f32 radius = mRadius;
     Vec3f offset = rPos - rPosition;
     const f32 alongGravity = MR::vecKillElement(offset, -rGravity, &offset);
-    const f32 height = radius * MR::cos(offset.length() / radius * MR::pi() / 2.0f);
+    // A sphere placed with no scale (radius 0) holds no water: height 0, not a division by 0.
+    const f32 reach = radius > 0.0f ? offset.length() / radius : 1.0f;
+    const f32 height = radius * MR::cos(reach * MR::pi() / 2.0f);
     pInfo->mCamWaterDepth = height - alongGravity;
     pInfo->mDepth = height + alongGravity;
 

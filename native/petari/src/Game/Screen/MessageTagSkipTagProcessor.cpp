@@ -38,7 +38,9 @@ MessageEditorMessageTag::MessageEditorMessageTag(const char16_t* pMessage) : mMe
 }
 
 u32 MessageEditorMessageTag::getTagLength() const {
-    return reinterpret_cast< const u8* >(mMessage)[0] - 2;
+    // A tag whose length byte is under 2 (a corrupt or edited message) skips nothing, not 4 billion.
+    const u32 length = reinterpret_cast< const u8* >(mMessage)[0];
+    return length >= 2 ? length - 2 : 0;
 }
 
 u32 MessageEditorMessageTag::getSkipLength() const {
@@ -46,7 +48,9 @@ u32 MessageEditorMessageTag::getSkipLength() const {
 }
 
 s32 MessageEditorMessageTag::getParamLength() const {
-    return reinterpret_cast< const u8* >(mMessage)[0] - 6;
+    // A tag too short to hold parameters has none.
+    const s32 length = reinterpret_cast< const u8* >(mMessage)[0];
+    return length >= 6 ? length - 6 : 0;
 }
 
 // Natively the parameters are host-order 16-bit units (MessageData converts the file's text that way, and the game

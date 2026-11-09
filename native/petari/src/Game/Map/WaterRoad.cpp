@@ -117,7 +117,9 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
     mNumLinePoints = numPoints < 2 ? 2 : numPoints;
     mNumPoints = mNumLinePoints * mNumLoopPoints;
 
-    f32 lineDelta = MR::getRailTotalLength(pRoad) / static_cast< s32 >(MR::getRailTotalLength(pRoad) / ::sPointIntervalLine);
+    // A rail under one interval long steps its whole length at once (the count was 0).
+    const s32 intervalCount = static_cast< s32 >(MR::getRailTotalLength(pRoad) / ::sPointIntervalLine);
+    f32 lineDelta = MR::getRailTotalLength(pRoad) / (intervalCount > 0 ? intervalCount : 1);
 
     Vec3f up = pRoad->mBaseUp;
     f32 loopInterval = MR::toRadian(360.0f / mNumLoopPoints);
@@ -298,7 +300,9 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
         }
 
         if (pointNum < mNumLinePoints) {
-            f32 t = (MR::getRailCoord(pRoad) - mRailCoords[pointNum - 1]) / (mRailCoords[pointNum] - mRailCoords[pointNum - 1]);
+            // Two line points on one coordinate (a road with no length) draw the earlier one.
+            const f32 coordSpan = mRailCoords[pointNum] - mRailCoords[pointNum - 1];
+            f32 t = coordSpan != 0.0f ? (MR::getRailCoord(pRoad) - mRailCoords[pointNum - 1]) / coordSpan : 0.0f;
 
             // The road's end: points and normals between the last line passed and the next, on both loop sides.
             const Vec3f& prevA = mPoints[calcPointIndex(pointNum - 1, loopIdx)];

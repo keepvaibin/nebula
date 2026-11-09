@@ -79,7 +79,8 @@ void FluffWind::init(const TableIter& rIter) {
 
     s32 count = MR::getRailTotalLength(this) / ::sEffectEmitterInterval;
     mNumEffects = count + 1;
-    f32 stepDistance = MR::getRailTotalLength(this) / (mNumEffects - 1);
+    // A rail shorter than one interval holds a single effect at its start (the count was 0).
+    f32 stepDistance = MR::getRailTotalLength(this) / (mNumEffects > 1 ? mNumEffects - 1 : 1);
     mEffects = new FluffWindEffect*[mNumEffects];
     for (s32 i = 0; i < mNumEffects; i++) {
         f32 currentRailPos = i * stepDistance;

@@ -589,6 +589,11 @@ namespace MR {
         HitSensor* pReceiver = getMessageSensor();
         HitSensor* pSender = getMessageSensor();
 
+        // No actor (a target that was never picked) takes no message.
+        if (pActor == nullptr) {
+            return false;
+        }
+
         return pActor->receiveMessage(msg, pSender, pReceiver);
     }
 

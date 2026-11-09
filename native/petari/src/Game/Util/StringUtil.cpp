@@ -181,7 +181,8 @@ namespace MR {
     }
 
     void copyString(char16_t* pDst, const char16_t* pSrc, u32 num) {
-        MR::copyText(pDst, pSrc, num);
+        // A null source (a message the text lacks) copies as the empty text.
+        MR::copyText(pDst, pSrc != nullptr ? pSrc : u"", num);
     }
 
     char16_t* addPictureFontCode(char16_t* pDst, int code) {
@@ -364,6 +365,11 @@ namespace MR {
 
     int getStringLengthWithMessageTag(const char16_t* pMessage) {
         int length = 0;
+
+        // No message (an id the text lacks) is empty.
+        if (pMessage == nullptr) {
+            return 0;
+        }
 
         while (*pMessage != '\0') {
             if (*pMessage == cMessageTagEscape) {

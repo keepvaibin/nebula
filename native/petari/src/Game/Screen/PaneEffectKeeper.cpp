@@ -47,17 +47,29 @@ void PaneEffectKeeper::add(const char* pName1, const char* pName2, const char* p
 
 MultiEmitter* PaneEffectKeeper::createEmitter(const char* pName) {
     MultiEmitter* pEmitter = find(pName);
-    pEmitter->createEmitter();
+
+    // An effect name the layout's effect list lacks (a mod's list) makes no emitter.
+    if (pEmitter != nullptr) {
+        pEmitter->createEmitter();
+    }
 
     return pEmitter;
 }
 
 void PaneEffectKeeper::deleteEmitter(const char* pName) {
-    find(pName)->deleteEmitter();
+    MultiEmitter* pEmitter = find(pName);
+
+    if (pEmitter != nullptr) {
+        pEmitter->deleteEmitter();
+    }
 }
 
 void PaneEffectKeeper::forceDeleteEmitter(const char* pName) {
-    find(pName)->forceDeleteEmitter();
+    MultiEmitter* pEmitter = find(pName);
+
+    if (pEmitter != nullptr) {
+        pEmitter->forceDeleteEmitter();
+    }
 }
 
 void PaneEffectKeeper::deleteEmitterAll() {

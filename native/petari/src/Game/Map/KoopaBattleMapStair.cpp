@@ -154,7 +154,13 @@ f32 KoopaBattleMapStair::calcAndSetTargetPos(Vec3f* pPos, const Vec3f& rReferenc
 }
 
 f32 KoopaBattleMapStair::calcTimeRate() const {
-    return static_cast< f32 >(getNerveStep() - mFireAttackStep) / (mTimeToBreak - mFireAttackStep);
+    // A break time not past the fire step (placement arg 0) is already over: rate 1.
+    const s32 span = mTimeToBreak - mFireAttackStep;
+    if (span <= 0) {
+        return 1.0f;
+    }
+
+    return static_cast< f32 >(getNerveStep() - mFireAttackStep) / span;
 }
 
 bool KoopaBattleMapStair::isBreak() const {

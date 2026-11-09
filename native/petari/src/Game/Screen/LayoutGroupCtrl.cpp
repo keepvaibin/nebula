@@ -25,10 +25,19 @@ void LayoutGroupCtrl::calcAnim() {
 }
 
 u32 LayoutGroupCtrl::getPaneNum() const {
+    // A group the layout lacks (a mod's layout) holds no panes.
+    if (mGroup == nullptr) {
+        return 0;
+    }
+
     return mGroup->mPaneLinkList.Size();
 }
 
 Ui::Pane* LayoutGroupCtrl::getPane(u32 idx) const {
+    if (mGroup == nullptr) {
+        return nullptr;
+    }
+
     for (Ui::detail::PaneLink* pLink : mGroup->GetPaneList()) {
         if (idx == 0) {
             return pLink->mTarget;

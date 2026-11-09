@@ -16,7 +16,8 @@ LightDataHolder::LightDataHolder() {
 void LightDataHolder::initLightData() {
     Table* data = NULL;
     mLightCount = LightFunction::createLightDataParser(&data);
-    mLights = new AreaLightInfo[mLightCount];
+    // At least one light is held (zeroed), so a name that is not found has a first light to take.
+    mLights = new AreaLightInfo[mLightCount > 0 ? mLightCount : 1]();
 
     mIndex.reset(static_cast< u32 >(mLightCount));
     for (s32 i = 0; i < mLightCount; i++) {

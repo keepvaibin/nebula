@@ -69,7 +69,8 @@ void OceanRingPipe::initPoints() {
     mNumSegments = static_cast< s32 >(MR::getRailTotalLength(this) / 300.0f) + 1;
     mNumPoints = mNumSegments * mNumSides;
 
-    f32 length = MR::getRailTotalLength(this) / (mNumSegments - 1);
+    // A rail shorter than one segment (one cross-section) steps its whole length, not a division by 0.
+    f32 length = MR::getRailTotalLength(this) / (mNumSegments > 1 ? mNumSegments - 1 : 1);
     f32 angle = getAngle();
 
     mPositions = new Vec3f[mNumPoints];
