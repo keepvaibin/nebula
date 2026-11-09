@@ -1,4 +1,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
+#include <nebula_module.h>
+#include "Game/Util/MotionSignal.hpp"
 #include "Game/Screen/LensFlare.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -218,7 +220,28 @@ void LensFlareDirector::setDrawSyncToken() {
         if (pProbes->x != BrightObjBase::cNoProbes) {
             mBrightObjArray[i]->setResult(pProbes);
         }
+#if defined(NEBULA_DEV)
+        // Which of the object's points came back seen (bit per point, centre first), and the centre's depth and answer.
+        if (MotionSignal::drawNamesWanted() && pProbes->x != BrightObjBase::cNoProbes) {
+            u32 seen = 0, placed = 0;
+            for (u32 idx = 0; idx < BrightObjBase::cProbeCount; idx++) {
+                if (pProbes[idx].x >= 0.0f) {
+                    placed |= 1u << idx;
+                    if (pProbes[idx].value >= pProbes[idx].user_z) {
+                        seen |= 1u << idx;
+                    }
+                }
+            }
+            nebula_log("[flare] obj %u placed %05x seen %05x z0 %.9f v0 %.9f at %.1f %.1f\n", i, placed, seen,
+                       pProbes[0].user_z, pProbes[0].value, pProbes[0].user_x, pProbes[0].user_y);
+        }
+#endif
     }
+#if defined(NEBULA_DEV)
+    if (MotionSignal::drawNamesWanted() && mBrightObjCount != 0 && done == 0) {
+        nebula_log("[flare] no answers\n");
+    }
+#endif
 
     for (u32 i = 0; i < mBrightObjCount; i++) {
         mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);

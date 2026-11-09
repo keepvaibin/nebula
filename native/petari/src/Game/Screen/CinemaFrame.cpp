@@ -15,7 +15,7 @@ namespace NrvCinemaFrame {
     NEW_NERVE(CinemaFrameNrvFrameToScreen, CinemaFrame, FrameToScreen);
 };  // namespace NrvCinemaFrame
 
-CinemaFrame::CinemaFrame(bool isConnectToScene) : LayoutActor("シネマフレーム", true) {
+CinemaFrame::CinemaFrame(bool isConnectToScene) : LayoutActor("シネマフレーム", true), mStartAt(0.0f) {
     if (isConnectToScene) {
         MR::connectToScene(this, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_CinemaFrame);
     }
@@ -29,7 +29,29 @@ void CinemaFrame::init(const TableIter& /*rIter*/) {
 
 void CinemaFrame::appear() {
     LayoutActor::appear();
+    mStartAt = 0.0f;
     setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame));
+}
+
+// How far the running transition's animation has gone, 0 to 1; 0 before its first step has started it.
+f32 CinemaFrame::transitionDone() {
+    if (getNerveStep() < 1) {
+        return 0.0f;
+    }
+    const f32 end = MR::getAnimCtrl(this, 0)->getEnd();
+    if (end <= 0.0f) {
+        return 1.0f;
+    }
+    const f32 done = MR::getAnimFrame(this, 0) / end;
+    return done < 0.0f ? 0.0f : done > 1.0f ? 1.0f : done;
+}
+
+void CinemaFrame::startTransition(const char* pAnimName) {
+    MR::startAnim(this, pAnimName, 0);
+    if (mStartAt > 0.0f) {
+        MR::setAnimFrame(this, mStartAt * MR::getAnimCtrl(this, 0)->getEnd(), 0);
+    }
+    mStartAt = 0.0f;
 }
 
 void CinemaFrame::tryScreenToFrame() {
@@ -41,7 +63,9 @@ void CinemaFrame::tryScreenToFrame() {
                      isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame));
 
     if (!isInvalid) {
-        setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame));
+        // Bars on their way out come back from where they are: one not yet moving is still a full frame.
+        mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen)) ? 1.0f - transitionDone() : 0.0f;
+        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvFrame) : GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame));
     }
 }
 
@@ -53,7 +77,8 @@ void CinemaFrame::tryFrameToBlank() {
     bool isInvalid = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlank)) || isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank));
 
     if (!isInvalid) {
-        setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank));
+        mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame)) ? 1.0f - transitionDone() : 0.0f;
+        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvBlank) : GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank));
     }
 }
 
@@ -66,7 +91,8 @@ void CinemaFrame::tryBlankToFrame() {
                      isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame));
 
     if (!isInvalid) {
-        setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame));
+        mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank)) ? 1.0f - transitionDone() : 0.0f;
+        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvFrame) : GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame));
     }
 }
 
@@ -78,7 +104,8 @@ void CinemaFrame::tryFrameToScreen() {
     bool isInvalid = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreen)) || isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen));
 
     if (!isInvalid) {
-        setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen));
+        mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame)) ? 1.0f - transitionDone() : 0.0f;
+        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvScreen) : GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen));
     }
 }
 
@@ -86,6 +113,7 @@ void CinemaFrame::forceToScreen() {
     if (MR::isDead(this)) {
         appear();
     }
+    mStartAt = 0.0f;
 
     setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreen));
 }
@@ -94,6 +122,7 @@ void CinemaFrame::forceToFrame() {
     if (MR::isDead(this)) {
         appear();
     }
+    mStartAt = 0.0f;
 
     setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrame));
 }
@@ -102,6 +131,7 @@ void CinemaFrame::forceToBlank() {
     if (MR::isDead(this)) {
         appear();
     }
+    mStartAt = 0.0f;
 
     setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlank));
 }
@@ -131,21 +161,29 @@ void CinemaFrame::exeBlank() {
 }
 
 void CinemaFrame::exeScreenToFrame() {
-    MR::startAnimAtFirstStep(this, "Appear", 0);
+    if (MR::isFirstStep(this)) {
+        startTransition("Appear");
+    }
     MR::setNerveAtAnimStopped(this, GET_NERVE(CinemaFrame, CinemaFrameNrvFrame), 0);
 }
 
 void CinemaFrame::exeFrameToBlank() {
-    MR::startAnimAtFirstStep(this, "Close", 0);
+    if (MR::isFirstStep(this)) {
+        startTransition("Close");
+    }
     MR::setNerveAtAnimStopped(this, GET_NERVE(CinemaFrame, CinemaFrameNrvBlank), 0);
 }
 
 void CinemaFrame::exeBlankToFrame() {
-    MR::startAnimAtFirstStep(this, "Open", 0);
+    if (MR::isFirstStep(this)) {
+        startTransition("Open");
+    }
     MR::setNerveAtAnimStopped(this, GET_NERVE(CinemaFrame, CinemaFrameNrvFrame), 0);
 }
 
 void CinemaFrame::exeFrameToScreen() {
-    MR::startAnimAtFirstStep(this, "End", 0);
+    if (MR::isFirstStep(this)) {
+        startTransition("End");
+    }
     MR::setNerveAtAnimStopped(this, GET_NERVE(CinemaFrame, CinemaFrameNrvScreen), 0);
 }
