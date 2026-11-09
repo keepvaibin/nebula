@@ -190,14 +190,14 @@ void MR::setTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName, 
 }
 
 void MR::setTextBoxFormatRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pFormat, ...) {
-    char16_t message[256];
+    MR::Text16 message;
     va_list list;
 
     va_start(list, pFormat);
-    MR::formatTextV(message, ARRAY_SIZE(message), pFormat, list);
+    message.format(pFormat, list);
     va_end(list);
 
-    setTextBoxMessageRecursive(pActor, pPaneName, message);
+    setTextBoxMessageRecursive(pActor, pPaneName, message.c_str());
 }
 
 void MR::setTextBoxArgNumberRecursive(LayoutActor* pActor, const char* pPaneName, s32 number, s32 argIndex) {

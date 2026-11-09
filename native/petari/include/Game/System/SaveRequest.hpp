@@ -39,5 +39,5 @@ private:
     void* mBuffer;
     u32 mSize;           // a write's length, a read's capacity
     u32* mReadLength;    // a read: the file's length
-    volatile s32 mStatus;  // NEBULA_SAVE_*
+    s32 mStatus;  // NEBULA_SAVE_*: the host stores it from its own thread, the game loads it in acquire order
 };

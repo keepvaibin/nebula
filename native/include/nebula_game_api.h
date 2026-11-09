@@ -429,7 +429,7 @@ typedef struct NebulaSaveRequest {
     void* buffer;
     uint32_t size;
     uint32_t* length;          /* read: the file's length (may be NULL) */
-    volatile int32_t* status;  /* the host sets NEBULA_SAVE_PENDING at once and the result when done */
+    int32_t* status; /* the host sets NEBULA_SAVE_PENDING at once and the result when done (a release store) */
 } NebulaSaveRequest;
 
 /* Nebula's settings menu as the host has it now (settings_view), for the game to draw in its own windows and words.

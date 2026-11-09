@@ -11,8 +11,10 @@ namespace MR {
     void addFilePrefix(FormattedName& rDst, const char* pChild, const char* pParent);
 
     // Localized; size in bytes.
-    void makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day);
-    void makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute);
+    // The date or time in the played language, into pDst (size units with the terminator, cut to fit). Returns the
+    // whole text's units without the terminator; a null pDst only measures.
+    u32 makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day);
+    u32 makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute);
     // Minutes, seconds and centiseconds of a frame count.
     void makeClearTimeString(char16_t* pDst, u32 frame);
     void makeMinuteAndSecondString(char16_t* pDst, u32 frame);
@@ -104,6 +106,8 @@ namespace MR {
         char16_t* room(u32 units);
         // Room for `units` code units in all, the first `used` kept.
         char16_t* grow(u32 used, u32 units);
+        // The formatted text (MR::formatTextV's conversions), whole: the room grows until it fits.
+        const char16_t* format(const char16_t* pFormat, va_list args);
 
         const char16_t* c_str() const {
             return mText;
