@@ -133,6 +133,7 @@ namespace {
         pTargetInfo->mTarget->mLastPointedChannel = channel;
         return true;
     }
+    bool isPointingPaneOf(const LayoutActor*, const Ui::Pane*, const char*, s32, bool, const char*);
 };  // namespace
 
 namespace MR {
@@ -210,38 +211,61 @@ namespace MR {
         return false;
     }
 
-    bool isStarPointerPointingPaneForMeterLayout(const LayoutActor* pActor, const char* pLayoutName, s32 channel, bool enableTouch,
-                                                 const char* pStrength) {
-        if (!MR::isConnectedInput(channel)) {
-            return false;
+    bool isStarPointerPointingPane(const LayoutActor* pActor, const Ui::Pane* pPane, const char* pName, s32 channel, bool enableTouch,
+                                   const char* pStrength) {
+        if (::getStarPointerLayout(channel)->mIsPointerValid) {
+            return ::isPointingPaneOf(pActor, pPane, pName, channel, enableTouch, pStrength);
         }
-
-        if (channel == PLAYER_2 && isStarPointer2PTransparencyMode()) {
-            return false;
-        }
-
-        if (channel == PLAYER_1 && ::getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
-            return false;
-        }
-
-        if (!isStarPointerInScreen(channel)) {
-            return false;
-        }
-
-        Vec2f pos = getStarPointerScreenPositionOrEdge(channel);
-        if (pActor->getLayoutManager()->isPointing(pLayoutName, pos)) {
-            ::onReaction(reinterpret_cast< u64 >(pActor) + reinterpret_cast< u64 >(pLayoutName), channel, enableTouch, false, false);
-
-            if (pStrength != nullptr) {
-                if (::getStarPointerLayout(channel)->isChanceToRumble()) {
-                    MR::tryRumblePad(pActor, pStrength, channel);
-                }
-            }
-            return true;
-        }
-
         return false;
     }
+
+    bool isStarPointerPointingPaneForMeterLayout(const LayoutActor* pActor, const char* pLayoutName, s32 channel, bool enableTouch,
+                                                 const char* pStrength) {
+        return ::isPointingPaneOf(pActor, nullptr, pLayoutName, channel, enableTouch, pStrength);
+    }
+}  // namespace MR
+
+namespace {
+// Whether the pointer is on pPane (null: the pane named pName, found only once the pointer could be on it).
+bool isPointingPaneOf(const LayoutActor* pActor, const Ui::Pane* pPane, const char* pLayoutName, s32 channel, bool enableTouch,
+                      const char* pStrength) {
+    if (!MR::isConnectedInput(channel)) {
+        return false;
+    }
+
+    if (channel == PLAYER_2 && MR::isStarPointer2PTransparencyMode()) {
+        return false;
+    }
+
+    if (channel == PLAYER_1 && ::getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
+        return false;
+    }
+
+    if (!MR::isStarPointerInScreen(channel)) {
+        return false;
+    }
+
+    Vec2f pos = MR::getStarPointerScreenPositionOrEdge(channel);
+    const LayoutManager* pManager = pActor->getLayoutManager();
+    if (pPane == nullptr) {
+        pPane = pManager->findPaneByName(pLayoutName);
+    }
+    if (pPane != nullptr && pManager->isPointing(pPane, pos)) {
+        ::onReaction(reinterpret_cast< u64 >(pActor) + reinterpret_cast< u64 >(pLayoutName), channel, enableTouch, false, false);
+
+        if (pStrength != nullptr) {
+            if (::getStarPointerLayout(channel)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, channel);
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+}  // namespace
+
+namespace MR {
 
     bool isStarPointerPointingTarget(const LayoutActor* pActor, const char* pLayoutName, s32 channel, bool enableTouch, const char* pStrength) {
         if (!MR::isConnectedInput(channel)) {

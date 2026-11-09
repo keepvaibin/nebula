@@ -64,7 +64,7 @@ namespace {
             return true;
         }
         const ButtonPaneController* pButton = rEntry.mButton;
-        const Ui::Pane* pPane = pButton->mHost->getLayoutManager()->findPaneByName(pButton->mBoundingPaneName);
+        const Ui::Pane* pPane = pButton->mBoundingPane;
         if (pPane == nullptr) {
             return false;
         }
