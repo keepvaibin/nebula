@@ -90,6 +90,10 @@ void JetTurtle::init2(const TableIter& rIter, bool isGolden) {
         }
     }
 
+    if (shellType < SHELL_GREEN || shellType > SHELL_GOLD) {
+        shellType = SHELL_GREEN;
+    }
+
     if (isGolden) {
         shellType = SHELL_GOLD;
     }
