@@ -45,11 +45,15 @@ function Run-Setup([string[]]$Arguments, [switch]$Interrupt) {
     return $p.ExitCode
 }
 
-# A fresh copy: the program folders copied, the packed game hard-linked; saves and settings of the test's own.
+# A fresh copy: the program folders copied, each packed game hard-linked (the installed one and any kept content, such as
+# the format-1 content an older store is cooked again from); saves and settings of the test's own.
 if (Test-Path -LiteralPath $base) { Remove-Item -LiteralPath $base -Recurse -Force }
 New-Item -ItemType Directory -Force $root, $data | Out-Null
 & robocopy $source $root /E /XF game.pak /NFL /NDL /NJH /NJS /NP | Out-Null
-New-Item -ItemType HardLink -Path (Join-Path $root 'content\game.pak') -Target (Join-Path $source 'content\game.pak') | Out-Null
+$sourceFull = (Resolve-Path -LiteralPath $source).Path.TrimEnd('\')
+Get-ChildItem -LiteralPath $sourceFull -Recurse -File -Filter game.pak | ForEach-Object {
+    New-Item -ItemType HardLink -Path (Join-Path $root $_.FullName.Substring($sourceFull.Length + 1)) -Target $_.FullName | Out-Null
+}
 New-Item -ItemType Directory -Force (Join-Path $data 'saves\title\00010000\524d4745\data'), (Join-Path $data 'settings') | Out-Null
 [IO.File]::WriteAllBytes((Join-Path $data 'saves\title\00010000\524d4745\data\GameData.bin'), [byte[]](1..200))
 [IO.File]::WriteAllText((Join-Path $data 'settings\config.ini'), "bloom = 140`n")
