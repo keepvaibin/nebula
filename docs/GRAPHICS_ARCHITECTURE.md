@@ -186,7 +186,9 @@ next value of one timeline semaphore; `completed_value` reads it and `wait` wait
 submission (and no fence pool). Without them the fences stay. `GALAXY_VK_TEST_NO_FEATURE=timeline` keeps the fences.
 
 **Rings in video memory.** The vertex and constant rings are written once, in order, and read by the GPU every frame. Where the device maps
-its video memory for the CPU in bulk they live there (Direct3D 12: `D3D12_HEAP_TYPE_GPU_UPLOAD`, where `OPTIONS16` says it is supported;
+its video memory for the CPU in bulk they live there, on a discrete adapter only (on one that shares system memory an upload heap is
+already memory the GPU reads at full speed) (Direct3D 12: `D3D12_HEAP_TYPE_GPU_UPLOAD`, where `OPTIONS16` says it is supported and the
+adapter is not UMA;
 Vulkan: a device-local host-visible coherent memory type in a heap larger than the 256 MB window, beside video memory the CPU cannot map).
 The index and matrix rings and everything else stay in host memory. `[ring]` lines and `[gpu-rings]` say `memory=video (CPU-mapped)` or
 `host`. `GALAXY_D3D12_TEST_NO_FEATURE=gpu_upload` and `GALAXY_VK_TEST_NO_FEATURE=gpu_upload` keep host memory.

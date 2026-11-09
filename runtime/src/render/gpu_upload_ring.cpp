@@ -247,14 +247,20 @@ bool device_removed(Device* device) noexcept {
 
 namespace {
 
-// GPU upload heaps (OPTIONS16): video memory the CPU maps through a resizable BAR. GALAXY_D3D12_TEST_NO_FEATURE=gpu_upload
-// keeps upload heaps.
+// GPU upload heaps (OPTIONS16): video memory the CPU maps through a resizable BAR. A discrete adapter's alone: on one that
+// shares the system's memory (UMA) an upload heap is already memory the GPU reads at full speed, so the BAR saves nothing.
+// GALAXY_D3D12_TEST_NO_FEATURE=gpu_upload keeps upload heaps.
 bool gpu_upload_heaps(Device* device) {
     if (const char* const names = ::galaxy::run_options().d3d12_test_no_feature) {
         const std::string list = std::string(",") + names + ",";
         if (list.find(",gpu_upload,") != std::string::npos) {
             return false;
         }
+    }
+    D3D12_FEATURE_DATA_ARCHITECTURE architecture{};
+    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture))) ||
+        architecture.UMA == TRUE) {
+        return false;
     }
     D3D12_FEATURE_DATA_D3D12_OPTIONS16 options{};
     return SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS16, &options, sizeof(options))) &&
