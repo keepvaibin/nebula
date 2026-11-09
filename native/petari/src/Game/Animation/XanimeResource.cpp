@@ -42,6 +42,7 @@ XanimeResourceTable::XanimeResourceTable(ResourceHolder* pResourceHolder, Xanime
     if (mBckTables != nullptr) {
         for (; mBckTables[count].mParent.mAnimationName[0] != '\0'; count++) {
             mBckTables[count].mAnimationHash = MR::getHashCode(mBckTables[count].mParent.mAnimationName);
+            mBckTables[count].mFileHash = MR::getHashCode(mBckTables[count].mFileName);
         }
     }
 
@@ -123,6 +124,16 @@ u32 XanimeResourceTable::initGroupInfo(ResourceHolder*, XanimeGroupInfo* pInfo, 
         }
 
         pEntry->mBckName = pFirstFileName;
+
+        XanimeBckTable* pAuxTable = reinterpret_cast< XanimeBckTable* >(pAuxInfo);
+        if (search(&pAuxTable, pName, sizeof(XanimeAuxInfo))) {
+            XanimeAuxInfo* pAux = reinterpret_cast< XanimeAuxInfo* >(pAuxTable);
+            pEntry->mAuxValue = pAux->mValue;
+            pEntry->mAuxOfsInfo = &pAux->mOfsInfo;
+        } else {
+            pEntry->mAuxValue = 0;
+            pEntry->mAuxOfsInfo = nullptr;
+        }
 
         pEntry->mStart = 0.0f;
         if (pEntry->mBcks[0] == nullptr) {
@@ -242,11 +253,13 @@ void XanimeGroupInfo::init() {
     mLoop = 0.0f;
     mAttribute = 0;
     mBckTableVariant = 0;
+    mAuxValue = 0;
     for (u32 i = 0; i < ARRAY_SIZE(mBcks); i++) {
         mWeights[i] = 0.0f;
         mBcks[i] = nullptr;
     }
 
+    mAuxOfsInfo = nullptr;
     mHash = 0;
     mBckName = nullptr;
 }
