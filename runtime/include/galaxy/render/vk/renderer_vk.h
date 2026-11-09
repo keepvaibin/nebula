@@ -224,6 +224,22 @@ public:
     // The reactive mask (kind 0: R8, out[0] the byte) and the effects layer's transmittance (kind 1: RGBA16F, four halves) at a
     // pixel of the frame that just ended. False: not read.
     [[nodiscard]] bool inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out);
+    // What the render core holds that the breakdown line (log_video_memory) adds to the renderer's own figures; bytes unless noted.
+    struct VideoMemoryOutside {
+        std::uint64_t staging_bytes = 0u;                       // TextureStore's staging chunks
+        std::uint64_t mesh_page_bytes = 0u, mesh_live_bytes = 0u, slot_bytes = 0u;
+        std::uint32_t mesh_pages = 0u, mesh_empty_pages = 0u, slots = 0u;
+        std::uint64_t picture_bytes = 0u;                       // DisplayPictures' textures
+        std::uint32_t picture_count = 0u;
+        std::uint64_t pipelines = 0u;                           // pipelines made
+    };
+    // The 600-frame `[vram] breakdown` line: the device-local heap as the driver reads it, the allocator's own count of the
+    // blocks and allocations in it, then the images the renderer holds (allocation sizes) and what is left. Render thread.
+    void log_video_memory(const VideoMemoryOutside& outside);
+    // The size of `texture`'s allocation; zero for none.
+    [[nodiscard]] static std::uint64_t allocation_bytes(const vk::Texture* texture) noexcept {
+        return texture != nullptr ? texture->allocation_bytes : 0u;
+    }
 #endif
     // GPU time by pass (render_api.h GpuPassTime): any thread. Off: no query is recorded or read.
     void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
@@ -702,7 +718,12 @@ private:
         return kTargetIdleFrames * std::max<std::uint64_t>(1u, static_cast<std::uint64_t>(rate / kGameStepRate + 0.5));
     }
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
-    std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs
+    std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs, free to reuse
+    // A slot's targets go to the open frame's retired list; its colour input waits for the fence (retired_target_sources_).
+    void retire_target_slot(TargetSlot& slot);
+    // Slots no pass has used for target_idle_frames() give their targets back; also from begin_frame, so that a scene without
+    // target passes does not keep the last scene's.
+    void sweep_target_slots();
     std::uint64_t target_key_ = 0;
     SceneSet target_scene_;
     FrameMap target_scene_map_{};
@@ -937,6 +958,7 @@ private:
         std::uint64_t fence = 0;
     };
     std::vector<RetiredTable> retired_tables_;
+    std::vector<RetiredTable> retired_target_sources_;  // dropped slots' colour inputs until the GPU is past their last read
     std::vector<VkDescriptorSet> free_tables_;
     void write_table(VkDescriptorSet set, const TextureHandle* handles, unsigned count, const TextureStore& cache);
     bool ring_growth_failed_ = false;

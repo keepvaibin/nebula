@@ -268,6 +268,11 @@ pub fn bytes() -> Vec<u8> {
     file(&records())
 }
 
+/// A written shader's program id (tools/dev/compile_programs.py WRITTEN: SITE | number << 1, a vertex form also | 1).
+fn written(id: u64) -> bool {
+    id & SITE != 0 && id & !SITE < 256
+}
+
 /// A base-game import must only name the programs shipped with the renderer. Mods use their own compiler path.
 pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
     let records = records();
@@ -280,20 +285,10 @@ pub fn checked_bytes() -> anyhow::Result<Vec<u8>> {
             if stage == "v" { vertex.insert(hash); } else if stage == "p" { pixel.insert(hash); }
         }
     }
-    // The written programs add_particles names (tools/dev/compile_programs.py): the particle shader's vertex stage in
-    // both forms and its pixel stage; particle_instances is VERTEX_ONLY, a base vertex stage alone.
-    vertex.extend([SITE | SHADER_PARTICLE << 1, SITE | SHADER_PARTICLE << 1 | 1, SITE | SHADER_PARTICLE_INSTANCES << 1]);
-    pixel.insert(SITE | SHADER_PARTICLE << 1);
-    for line in include_str!("../../data/site_pipelines.txt").lines() {
-        if let Some(record) = parse_line(line) {
-            vertex.insert(u64::from_le_bytes(record[..8].try_into().unwrap()));
-            pixel.insert(u64::from_le_bytes(record[8..16].try_into().unwrap()));
-        }
-    }
     for record in &records {
         let v = u64::from_le_bytes(record[..8].try_into().unwrap());
         let p = u64::from_le_bytes(record[8..16].try_into().unwrap());
-        anyhow::ensure!(vertex.contains(&v) && pixel.contains(&p),
+        anyhow::ensure!((written(v) || vertex.contains(&v)) && (written(p) || pixel.contains(&p)),
             "The imported material names an uncompiled program ({v:016x}, {p:016x}); the game store was not installed");
     }
     Ok(file(&records))

@@ -1783,6 +1783,9 @@ void RendererVk::begin_frame() {
     frame.retired.clear();
     frame.retired_buffers.clear();
     destroy_retired_pools(frame);
+    if (frame_index_ % 120u == 0u) {
+        sweep_target_slots();
+    }
     reset_sampler_frame();
     vk::check(vkResetCommandPool(device, frame.pool, 0), "vkResetCommandPool");
     for (RecordCommands& record : record_commands_[frame_slot_]) {

@@ -281,6 +281,77 @@ bool RendererVk::video_memory(std::uint64_t& usage, std::uint64_t& budget) const
     return vk::Context::get().device_memory_budget(usage, budget);
 }
 
+#if defined(NEBULA_DEV)
+// `[vram] breakdown`: every 600 frames (RenderCore's table log). The allocator's blocks and used bytes are the device-local
+// heap's (images and buffers together); the images listed are each texture's allocation size. Textures of the store, the post
+// chain's, ambient occlusion's and bloom's targets and the rings are in `used`, not in `accounted`, so the rest is `unlisted`.
+// Upload rings in video memory (a CPU-mapped one) are counted in `rings local`.
+void RendererVk::log_video_memory(const VideoMemoryOutside& outside) {
+    const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    (void)video_memory(usage, budget);
+    vk::Context::HeapStats local;
+    vk::Context::HeapStats other;
+    (void)vk::Context::get().heap_stats(local, other);
+
+    const auto set_bytes = [](const SceneSet& set) {
+        return allocation_bytes(set.color.get()) + allocation_bytes(set.depth.get()) + allocation_bytes(set.ms_color.get()) +
+               allocation_bytes(set.ms_depth.get());
+    };
+    // The scene targets: the live set, the wide, output-resolution and open target pass's, and the motion, reactive and
+    // effects-layer targets, the frame-generation and HDR captures.
+    std::uint64_t scene = set_bytes(scene_) + set_bytes(wide_scene_) + set_bytes(alt_scene_) + set_bytes(target_scene_);
+    for (const gpu::TextureRef* texture : {&motion_.motion, &motion_.reactive, &motion_.layer_color, &motion_.layer_trans,
+                                           &fg_hudless_scene_color_, &fg_hudless_display_, &fg_hudless_target_, &hdr_capture_,
+                                           &oriented_}) {
+        scene += allocation_bytes(texture->get());
+    }
+    std::uint64_t slots = 0u;
+    for (const auto& entry : target_slots_) {
+        slots += set_bytes(entry.second.set);
+    }
+    std::uint64_t frame_pass = 0u;
+    for (const auto& entry : frame_pass_targets_) {
+        frame_pass += allocation_bytes(entry.second.texture.get());
+    }
+    // Images waiting out their frames, and buffers (retired rings and chunks) listed apart.
+    std::uint64_t retired_textures = 0u;
+    std::uint64_t retired_buffers = 0u;
+    for (const Frame& frame : frames_) {
+        for (const gpu::TextureRef& texture : frame.retired) {
+            retired_textures += allocation_bytes(texture.get());
+        }
+        for (const gpu::BufferRef& buffer : frame.retired_buffers) {
+            retired_buffers += buffer ? buffer->size : 0u;
+        }
+    }
+    std::uint64_t ring_local = 0u;
+    std::uint64_t ring_host = 0u;
+    std::uint64_t chunk_local = 0u;
+    std::uint64_t chunk_host = 0u;
+    for (const UploadRing* ring : {&vertex_ring_, &index_ring_, &constant_ring_, &matrix_ring_}) {
+        (ring->local() ? ring_local : ring_host) += ring->capacity();
+        (ring->local() ? chunk_local : chunk_host) += ring->live_chunk_bytes();
+    }
+    const std::uint64_t accounted = scene + slots + frame_pass + outside.picture_bytes + retired_textures + ring_local + chunk_local;
+    std::fprintf(stderr,
+                 "[vram] breakdown os-usage=%.0f budget=%.0f MB | allocator blocks=%u %.0f used=%.1f allocations=%u | "
+                 "scene-targets=%.1f target-slots=%zu %.1f frame-pass=%zu %.1f pictures=%u %.1f retired=%.1f | "
+                 "rings local=%.0f chunks=%.0f | accounted=%.0f unlisted=%.0f | other-heaps blocks=%u %.0f used=%.0f | "
+                 "host: staging=%.0f mesh-pages=%u (empty %u) %.0f live %.1f slots=%u %.1f rings=%.0f chunks=%.0f "
+                 "retired-buffers=%.1f | pipelines=%llu\n",
+                 mb(usage), mb(budget), local.blocks, mb(local.block_bytes), mb(local.allocation_bytes), local.allocations,
+                 mb(scene), target_slots_.size(), mb(slots), frame_pass_targets_.size(), mb(frame_pass), outside.picture_count,
+                 mb(outside.picture_bytes), mb(retired_textures), mb(ring_local), mb(chunk_local), mb(accounted),
+                 local.allocation_bytes > accounted ? mb(local.allocation_bytes - accounted) : 0.0, other.blocks,
+                 mb(other.block_bytes), mb(other.allocation_bytes), mb(outside.staging_bytes), outside.mesh_pages,
+                 outside.mesh_empty_pages, mb(outside.mesh_page_bytes), mb(outside.mesh_live_bytes), outside.slots,
+                 mb(outside.slot_bytes), mb(ring_host), mb(chunk_host), mb(retired_buffers),
+                 static_cast<unsigned long long>(outside.pipelines));
+}
+#endif
+
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
 // rule): scene target colour (4 bytes per pixel) and depth (4 for D24S8; D32F with stencil counted at 8, as drivers pad
 // it) and, at most, the display picture pair plus one full-picture copy (12 bytes per pixel of the picture).
@@ -616,9 +687,20 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         return false;
     }
     TargetSlot& slot = target_slots_[key];
-    if (slot.set.color_source == VK_NULL_HANDLE && !target_free_sources_.empty()) {
-        slot.set.color_source = target_free_sources_.back();
-        target_free_sources_.pop_back();
+    if (slot.set.color_source == VK_NULL_HANDLE) {
+        // Colour inputs of dropped slots come back once the GPU is past the commands that read them.
+        const std::uint64_t completed = completed_fence_value();
+        std::erase_if(retired_target_sources_, [&](const RetiredTable& retired) {
+            if (retired.fence > completed) {
+                return false;
+            }
+            target_free_sources_.push_back(retired.set);
+            return true;
+        });
+        if (!target_free_sources_.empty()) {
+            slot.set.color_source = target_free_sources_.back();
+            target_free_sources_.pop_back();
+        }
     }
     const FrameMap map(width, height);
     const bool kept = slot.set.color && slot.map == map;
@@ -677,17 +759,33 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureStore& textures) 
     target_scene_map_ = FrameMap{};
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
     // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
-    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        TargetSlot& idle = it->second;
-        if (idle.used + target_idle_frames() >= frame_index_) {
-            ++it;
-            continue;
-        }
-        destroy_scene_set(idle.set);
-        target_free_sources_.push_back(idle.set.color_source);
-        it = target_slots_.erase(it);
-    }
+    sweep_target_slots();
     bind_scene();
+}
+
+// A slot's targets go to the open frame's retired list; its colour input is reused once the commands recorded so far have run.
+void RendererVk::retire_target_slot(TargetSlot& slot) {
+    const VkDescriptorSet source = slot.set.color_source;
+    destroy_scene_set(slot.set);
+    if (source != VK_NULL_HANDLE) {
+        retired_target_sources_.push_back({source, last_submitted_ + 1u});
+    }
+    slot.set.color_source = VK_NULL_HANDLE;
+}
+
+void RendererVk::sweep_target_slots() {
+    if (target_slots_.empty()) {
+        return;
+    }
+    const std::uint64_t idle = target_idle_frames();
+    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
+        if (it->second.used + idle < frame_index_ && !(target_pass_active_ && it->first == target_key_)) {
+            retire_target_slot(it->second);
+            it = target_slots_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 bool RendererVk::target_picture(std::uint64_t key, TextureHandle& out) const {
@@ -2118,6 +2216,16 @@ void RendererVk::free_target(std::uint32_t id, TextureStore& textures) {
         if (static_cast<std::uint32_t>(it->first) == id) {
             retire(std::move(it->second.texture));
             it = frame_pass_targets_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    // A target pass's set for this texture: ids are not used again, so no pass draws into it after this (a slot used to stay
+    // until a later target pass swept it, and a scene with none kept the last scene's).
+    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
+        if (static_cast<std::uint32_t>(it->first) == id && !(target_pass_active_ && it->first == target_key_)) {
+            retire_target_slot(it->second);
+            it = target_slots_.erase(it);
         } else {
             ++it;
         }

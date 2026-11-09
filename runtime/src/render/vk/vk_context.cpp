@@ -1700,6 +1700,37 @@ bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) 
     return budget != 0u;
 }
 
+#if defined(NEBULA_DEV)
+bool Context::heap_stats(HeapStats& device_local, HeapStats& other) const noexcept {
+    device_local = HeapStats{};
+    other = HeapStats{};
+    if (allocator_ == nullptr) {
+        return false;
+    }
+    VkPhysicalDeviceMemoryProperties memory{};
+    vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(allocator_, budgets.data());
+    VkDeviceSize largest = 0u;
+    std::uint32_t chosen = VK_MAX_MEMORY_HEAPS;
+    for (std::uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
+        if ((memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u && memory.memoryHeaps[i].size > largest) {
+            largest = memory.memoryHeaps[i].size;
+            chosen = i;
+        }
+    }
+    for (std::uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
+        const VmaStatistics& heap = budgets[i].statistics;
+        HeapStats& into = i == chosen ? device_local : other;
+        into.block_bytes += heap.blockBytes;
+        into.allocation_bytes += heap.allocationBytes;
+        into.blocks += heap.blockCount;
+        into.allocations += heap.allocationCount;
+    }
+    return true;
+}
+#endif
+
 MappedBuffer Context::create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
                                            BufferPlace place) {
     MappedBuffer out;
