@@ -267,9 +267,11 @@ void Pairing::log_flicker(const ListData& now) {
 
         std::uint32_t light_count = 0u;
         std::uint64_t light[kFlickerSlots]{};
+        const NebulaFrameLight* light_record = nullptr;
         if (item.light_set != NEBULA_NONE32) {
             const NebulaFrameLightSet& set = list.light_sets[item.light_set];
             light_count = set.count;
+            light_record = list.lights + set.first;
             for (std::uint32_t l = 0; l < set.count && l < kFlickerSlots; ++l) {
                 light[l] = fnv(list.lights + set.first + l, sizeof(NebulaFrameLight));
             }
@@ -320,11 +322,25 @@ void Pairing::log_flicker(const ListData& now) {
                                  kKind[kind], item.source_hash, item.slot, item.part, which, light_count, l.color[0],
                                  l.color[1], l.color[2], l.color[3], l.position[0], l.position[1], l.position[2],
                                  l.direction[0], l.direction[1], l.direction[2]);
+                    // A (this list and the one two before) and B (the list before), every field of the light.
+                    const auto print_light = [](const char* pWhich, std::uint32_t at, const NebulaFrameLight& r) {
+                        std::fprintf(stderr,
+                                     "[flicker]   %s list %u: colour %.3f %.3f %.3f %.3f angle %.4f %.4f %.4f distance %.4f %.4f %.4f "
+                                     "position %.1f %.1f %.1f direction %.4f %.4f %.4f\n",
+                                     pWhich, at, r.color[0], r.color[1], r.color[2], r.color[3], r.angle[0], r.angle[1],
+                                     r.angle[2], r.distance[0], r.distance[1], r.distance[2], r.position[0], r.position[1],
+                                     r.position[2], r.direction[0], r.direction[1], r.direction[2]);
+                    };
+                    print_light("A", serial, l);
+                    print_light("B", serial - 1u, entry.light_before[which]);
                 } else if (kind == 2) {
                     const float* v = constants.rows[constants.vertex_rows + which];
                     std::fprintf(stderr, "[flicker] %s: material %08x slot %u part %u row %u of %u now %.4f %.4f %.4f %.4f\n",
                                  kKind[kind], item.source_hash, item.slot, item.part, which, row_count, v[0], v[1], v[2],
                                  v[3]);
+                    const float* b = entry.row_before[which];
+                    std::fprintf(stderr, "[flicker]   B list %u: row %u %.4f %.4f %.4f %.4f\n", serial - 1u, which, b[0], b[1],
+                                 b[2], b[3]);
                 } else {
                     std::fprintf(stderr, "[flicker] %s: material %08x slot %u part %u flags %x pipeline %u\n", kKind[kind],
                                  item.source_hash, item.slot, item.part, item.flags, item.pipeline);
@@ -341,6 +357,15 @@ void Pairing::log_flicker(const ListData& now) {
         std::memcpy(entry.light[0], light, sizeof(light));
         std::memcpy(entry.row[1], entry.row[0], sizeof(entry.row[0]));
         std::memcpy(entry.row[0], row, sizeof(row));
+        for (std::uint32_t l = 0; l < kFlickerSlots; ++l) {
+            entry.light_before[l] = light_record != nullptr && l < light_count ? light_record[l] : NebulaFrameLight{};
+        }
+        for (std::uint32_t r = 0; r < kFlickerSlots; ++r) {
+            const bool has = constants.rows != nullptr && r < row_count;
+            for (unsigned c = 0; c < 4u; ++c) {
+                entry.row_before[r][c] = has ? constants.rows[constants.vertex_rows + r][c] : 0.0f;
+            }
+        }
     }
     if (++flicker_lists_ % 600u != 0u) {
         return;
