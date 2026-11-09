@@ -187,10 +187,6 @@ fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) ->
         stats.expanded_files += 1;
     }
     if !archive::is_archive(&bytes) {
-        // A file named as an archive that isn't one would fail where the game opens it: it is refused here.
-        if extension(name) == "arc" {
-            bail!("{name} is not an archive");
-        }
         let cooked = cook_file(name, bytes.clone(), stats)?.unwrap_or(bytes);
         return Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]);
     }
