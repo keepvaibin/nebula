@@ -1,4 +1,5 @@
 #include "Game/Demo/DemoTimeKeeper.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -26,6 +27,7 @@ DemoTimePartInfo::DemoTimePartInfo() : mPartName(), mTotalStep(1), mSuspendFlag(
 void DemoTimeKeeper::start() {
     mPartIndex = 0;
     mCurrentPart = &mMainPartInfos[mPartIndex];
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_PART, mPartIndex, nullptr, mCurrentPart->mPartName);
 }
 
 void DemoTimeKeeper::update() {
@@ -47,6 +49,7 @@ void DemoTimeKeeper::update() {
             if (mNumPartInfos > mPartIndex) {
                 mCurrentPart = &mMainPartInfos[mPartIndex];
                 mCurrentStep = 0;
+                NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_PART, mPartIndex, nullptr, mCurrentPart->mPartName);
             }
         }
     }
@@ -104,6 +107,9 @@ inline s32 DemoTimeKeeper::getPart(const char* pPartName) const {
 void DemoTimeKeeper::setCurrentPart(const char* pPartName) {
     mPartIndex = getPart(pPartName);
     mCurrentPart = &mMainPartInfos[mPartIndex];
+    if (mPartIndex >= 0) {
+        NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_PART, mPartIndex, nullptr, mCurrentPart->mPartName);
+    }
 }
 
 bool DemoTimeKeeper::isCurrentDemoPartLastStep() const {

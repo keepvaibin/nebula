@@ -1,4 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/SensorHitChecker.hpp"
 
@@ -13,6 +14,11 @@ HitSensor::HitSensor(u32 type, u32 groupSize, f32 radius, LiveActor* pHost)
 }
 
 bool HitSensor::receiveMessage(u32 msg, HitSensor* pSender) {
+    // A plugin may refuse it: the host acts as if it never came.
+    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_ACTOR_MESSAGE] &&
+        NebulaMods::dispatch(NEBULA_MOD_EVENT_ACTOR_MESSAGE, static_cast< s32 >(msg), mHost, mHost->mName) < 0) {
+        return false;
+    }
     return mHost->receiveMessage(msg, pSender, this);
 }
 

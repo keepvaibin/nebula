@@ -315,6 +315,7 @@ void CameraDirector::checkStartCondition() {
 }
 
 void CameraDirector::startEvent(s32 zoneID, const char* pName, const CameraTargetArg& rTargetArg, s32 frame) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CAMERA_CHANGE, 1, nullptr, pName);
     mViewInterpolator->mIsInterpolationOff = false;
     removeEndEventAtLanding(zoneID, pName);
 

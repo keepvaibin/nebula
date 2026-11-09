@@ -130,6 +130,16 @@ namespace MR {
             return mCount;
         }
 
+        // A name holding this value, or null: a walk of every slot, for a rare reverse lookup.
+        const char* nameOf(u32 value) const {
+            for (u32 i = 0; mSlots != nullptr && i <= mMask; i++) {
+                if (mSlots[i].mName != nullptr && mSlots[i].mValue == value) {
+                    return mSlots[i].mName;
+                }
+            }
+            return nullptr;
+        }
+
     private:
         struct Slot {
             const char* mName;

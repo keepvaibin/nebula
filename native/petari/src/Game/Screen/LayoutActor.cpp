@@ -50,6 +50,7 @@ void LayoutActor::appear() {
     // Back from dead: a new life, so its panes do not blend from where they were before it was killed.
     if (mFlag.mIsDead) {
         ++mMotionEpoch;
+        NebulaMods::fire(NEBULA_MOD_EVENT_SCREEN, 1, nullptr, mName);
     }
 
     mFlag.mIsDead = false;
@@ -58,6 +59,10 @@ void LayoutActor::appear() {
 }
 
 void LayoutActor::kill() {
+    if (!mFlag.mIsDead) {
+        NebulaMods::fire(NEBULA_MOD_EVENT_SCREEN, 0, nullptr, mName);
+    }
+
     if (mEffectKeeper != nullptr) {
         mEffectKeeper->clear();
     }

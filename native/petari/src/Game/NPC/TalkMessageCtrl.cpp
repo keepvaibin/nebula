@@ -482,3 +482,17 @@ void TalkMessageCtrl::updateBalloonPos() {
     balloonPos.add(Vec3f(cameraMtx[0][3], cameraMtx[1][3], cameraMtx[2][3]));
     MR::calcScreenPosition(&mBalloonPos, balloonPos);
 }
+
+const char* TalkFunction::getMessageName(const TalkMessageCtrl* pCtrl) {
+    const TalkNodeCtrl* pNodes = pCtrl->mNodeCtrl;
+    if (pNodes == nullptr) {
+        return nullptr;
+    }
+
+    // A message placed by its own name has no flow node: the name is the message's.
+    if (pNodes->mCurrentNode == nullptr) {
+        return pNodes->mFlowName;
+    }
+
+    return MessageSystem::getSceneMessageData()->findMessageName(pCtrl->getMessageID());
+}

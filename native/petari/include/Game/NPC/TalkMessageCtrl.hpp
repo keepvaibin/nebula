@@ -126,6 +126,8 @@ public:
     static TalkMessageInfo* getMessageInfo(const TalkMessageCtrl*);
     static const char16_t* getSubMessage(const TalkMessageCtrl*);
     static const char16_t* getMessage(const TalkMessageCtrl*);
+    // The id of the line it shows (as luma.json "text" names it), or null.
+    static const char* getMessageName(const TalkMessageCtrl*);
     static void onTalkStateEntry(TalkMessageCtrl*);
     static void onTalkStateNone(TalkMessageCtrl*);
     static void onTalkStateEnableStart(TalkMessageCtrl*);

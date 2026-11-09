@@ -46,6 +46,8 @@ public:
     TalkNode* getBranchNode(u32) const;
     bool isValidBranchNode(u32) const;
     s32 findMessageIndex(const char*) const;
+    // The id of the message of that number, or null: a walk of the id table, for a rare lookup.
+    const char* findMessageName(u32) const;
 
     u32 getMessageNum() const {
         return mFile->mMessageNum;

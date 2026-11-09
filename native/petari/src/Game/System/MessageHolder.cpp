@@ -158,6 +158,25 @@ s32 MessageData::findMessageIndex(const char* pMessage) const {
     return messageIndex;
 }
 
+const char* MessageData::findMessageName(u32 index) const {
+    const s32 idColumn = mIDTable->searchItemInfo("MessageId");
+    const s32 indexColumn = mIDTable->searchItemInfo("Index");
+    if (idColumn < 0 || indexColumn < 0) {
+        return nullptr;
+    }
+
+    for (int i = 0; i < mIDTable->getNumEntries(); i++) {
+        s32 value = -1;
+        const char* pName = nullptr;
+        if (mIDTable->getValueFast(i, indexColumn, &value) && static_cast< u32 >(value) == index &&
+            mIDTable->getValueFast(i, idColumn, &pName)) {
+            return pName;
+        }
+    }
+
+    return nullptr;
+}
+
 void MessageHolder::initSystemData() {
     mSystemMessageData = new MessageData(::cSystemMessageArc);
 }
