@@ -156,7 +156,8 @@ AreaFormBowl::AreaFormBowl() {
 void AreaFormBowl::init(const TableIter& rIter) {
     MR::getPlacementTrans(rIter, &mTranslation);
 
-    f32 scale_x;
+    // 1 for a table without the column.
+    f32 scale_x = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale_x);
     mRadius = scale_x;
     mRadius *= 500.0f;
@@ -251,7 +252,7 @@ void AreaFormCylinder::calcDir(const Vec3f& rRotation) {
 void AreaFormSphere::init(const TableIter& rIter) {
     MR::getPlacementTrans(rIter, &mTranslation);
 
-    f32 scale_x;
+    f32 scale_x = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale_x);
 
     mRadius = scale_x;
@@ -275,7 +276,7 @@ void AreaFormCylinder::init(const TableIter& rIter) {
     MR::getPlacementRotate(rIter, &rotate);
     calcDir(rotate);
 
-    f32 scale;
+    f32 scale = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale);
 
     mRadius = scale;

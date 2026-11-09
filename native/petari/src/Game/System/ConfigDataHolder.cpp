@@ -31,7 +31,8 @@ s32 ConfigDataCreateChunk::deserialize(const u8* pBuffer, u32 size) {
 
     SaveReader stream(pBuffer, size);
 
-    u8 isCreated;
+    // A short save keeps the initial values.
+    u8 isCreated = 0;
     stream.read(&isCreated, sizeof(mIsCreated));
     mIsCreated = isCreated != 0;
 
