@@ -65,6 +65,15 @@ namespace NebulaMods {
     s32 firstMission();
     const char* hubStage();
     bool noStoryScenes();
+    // The mods' player animations (add_player_animation), each name once (the last added), for the player's tables;
+    // taken the first time the player is built: none are added after.
+    struct PlayerAnimation {
+        const char* mName;
+        const char* mFile;
+        f32 mRate;
+        u32 mBlendFrames;  // 0: the game's
+    };
+    s32 takePlayerAnimations(const PlayerAnimation** ppAnimations);
     // A sound a mod plays from a file, by its name: -1 for none.
     extern bool sHasSoundEffects;
     u32 soundEffectSlow(const char* pName);

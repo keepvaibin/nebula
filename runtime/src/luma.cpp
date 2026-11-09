@@ -667,6 +667,26 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.sound_effects.push_back(std::move(sound));
             }
         }
+        if (const Value* animations = entry.get("player_animations"); animations != nullptr) {
+            if (animations->array() == nullptr) return std::nullopt;
+            for (const Value& row : *animations->array()) {
+                PlayerAnimation animation{text_field(row, "name"), text_field(row, "file")};
+                if (animation.name.empty() || animation.file.empty()) return std::nullopt;
+                if (const Value* rate = row.get("rate"); rate != nullptr) {
+                    const double* number = rate->number();
+                    if (number == nullptr || !(*number > 0.0 && *number <= 100.0)) return std::nullopt;
+                    animation.rate = *number;
+                }
+                if (const Value* blend = row.get("blend_frames"); blend != nullptr) {
+                    const double* number = blend->number();
+                    if (number == nullptr || !(*number >= 0.0 && *number <= 600.0) || *number != static_cast<double>(static_cast<int>(*number))) {
+                        return std::nullopt;
+                    }
+                    animation.blend_frames = static_cast<int>(*number);
+                }
+                layer.player_animations.push_back(std::move(animation));
+            }
+        }
         if (const Value* classes = entry.get("object_classes"); classes != nullptr && classes->array() != nullptr) {
             for (const Value& row : *classes->array()) {
                 ObjectClass object{text_field(row, "name"), text_field(row, "like")};
@@ -757,9 +777,10 @@ int compare_versions(std::string_view a, std::string_view b) {
 std::string refusal(const Manifest& manifest, const std::string& game_id, std::string_view nebula_version, std::string_view) {
     if (manifest.format > kFormat) return "THIS MOD NEEDS A NEWER NEBULA";
     if (!manifest.retired.empty()) return manifest.retired;
-    // The features this Nebula has; any other is one it lacks. "tunables": the game's tuning numbers by "<file>.<name>".
+    // The features this Nebula has; any other is one it lacks. "tunables": the game's tuning numbers by "<file>.<name>";
+    // "player-animations": a layer's player_animations.
     for (const std::string& feature : manifest.requires_features) {
-        if (feature != "custom-shaders" && feature != "tunables") return "THIS MOD NEEDS A NEWER NEBULA";
+        if (feature != "custom-shaders" && feature != "tunables" && feature != "player-animations") return "THIS MOD NEEDS A NEWER NEBULA";
     }
     if (!manifest.nebula.empty() && compare_versions(nebula_version, manifest.nebula) < 0) return "THIS MOD NEEDS A NEWER NEBULA";
     if (manifest.game.starts_with("SB4") || manifest.game.starts_with("SB5")) return "THIS MOD IS FOR SUPER MARIO GALAXY 2";

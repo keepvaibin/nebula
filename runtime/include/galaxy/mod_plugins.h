@@ -99,6 +99,13 @@ struct SoundEffectToAdd {
     std::string name;
     std::string file;
 };
+struct PlayerAnimationToAdd {
+    std::string mod_id;
+    std::string name;
+    std::string file;
+    double rate = 1.0;
+    int blend_frames = 0;
+};
 struct ObjectClassToSet {
     std::string mod_id;
     std::string name;
@@ -124,9 +131,10 @@ struct ModRows {
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
     std::vector<SoundEffectToAdd> sound_effects;
+    std::vector<PlayerAnimationToAdd> player_animations;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return story.empty() && sound_effects.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that
