@@ -28,12 +28,13 @@ namespace {
     NEW_NERVE(FileSelectItemNrvChangeFellow, FileSelectItem, ChangeFellow);
     NEW_NERVE(FileSelectItemNrvChangeMii, FileSelectItem, ChangeMii);
 
-    bool checkCollisionOfPointAndCylinder(const Vec3f& rVec1, const Vec3f& rVec2, const Vec3f& rVec3, f32 f1) {
-        f32 length = rVec3.length();
-        Vec3f vecCopy(rVec3);
+    // rAxis runs from rBase along the cylinder; its length is the cylinder's.
+    bool checkCollisionOfPointAndCylinder(const Vec3f& rPoint, const Vec3f& rBase, const Vec3f& rAxis, f32 radius) {
+        f32 length = rAxis.length();
+        Vec3f vecCopy(rAxis);
         MR::normalize(&vecCopy);
 
-        Vec3f diff(rVec1 - rVec2);
+        Vec3f diff(rPoint - rBase);
 
         f32 dot = vecCopy.dot(diff);
         if (dot < 0.0f || dot > length) {
@@ -41,7 +42,7 @@ namespace {
         }
 
         vecCopy.scale(dot);
-        return !(vecCopy.distance(diff) > f1);
+        return !(vecCopy.distance(diff) > radius);
     }
 
     const char* const sFellowModel[] = {"FileSelectDataMario", "FileSelectDataLuigi", "FileSelectDataYoshi", "FileSelectDataKinopio",
