@@ -181,11 +181,11 @@ bool code_patch_notes() {
     const fs::path root = galaxy::test_temp_path("nebula_mods_code_patches");
     std::error_code ec;
     fs::remove_all(root, ec);
-    write(root / "mods" / "Rules" / "riivolution" / "rules.xml",
-          "<wiidisc version=\"1\"><id game=\"RMG\"/><options><section name=\"S\"><option name=\"O\" default=\"1\">"
-          "<choice name=\"On\"><patch id=\"p\"/></choice></option></section></options>"
-          "<patch id=\"p\"><memory offset=\"0x80451234\" value=\"38600006\"/>"
-          "<memory offset=\"0x80001000\" value=\"6000000060000000\" search=\"true\"/></patch></wiidisc>");
+    // A console mod's patches of the game's memory, as its own file (runtime/tests): its addresses are the console's.
+    std::ifstream fixture(fs::path(MODS_FIXTURES_DIR) / "riivolution_memory_patches.xml", std::ios::binary);
+    const std::string patches{std::istreambuf_iterator<char>(fixture), std::istreambuf_iterator<char>()};
+    ok &= expect(!patches.empty(), "the memory patch fixture reads");
+    write(root / "mods" / "Rules" / "riivolution" / "rules.xml", patches);
     galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
     const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
     const auto it = std::find_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == "Rules"; });
@@ -353,7 +353,7 @@ bool texture_names() {
                  "a palette name matches its palette, $ any");
 
     // A Dolphin pack converted: each file moves to .dolphin/, linked under every game texture it stands for.
-    const fs::path pack = galaxy::test_temp_path("nebula_dolphin_pack");
+    const fs::path pack = galaxy::test_temp_path("nebula_tex1_pack");
     std::error_code ec;
     fs::remove_all(pack, ec);
     write(pack / "RMGE01" / "a" / "tex1_32x32_m_0000000000001111_14.png", "body");
@@ -380,7 +380,7 @@ bool texture_names() {
     ok &= expect(!has_dolphin_files(pack) && convert_dolphin_pack(pack, names()).files == 0u, "converted once");
 
     // An installed mod's Dolphin pack is converted when the mods are first read.
-    const fs::path mods = galaxy::test_temp_path("nebula_dolphin_mods");
+    const fs::path mods = galaxy::test_temp_path("nebula_tex1_mods");
     fs::remove_all(mods, ec);
     write(mods / "mods" / "Old Pack" / "textures" / "tex1_32x32_0000000000001111_14.png", "old");
     galaxy::mods::set_mods_folder(mods / "mods", mods / "mods.ini", "RMGE01");
