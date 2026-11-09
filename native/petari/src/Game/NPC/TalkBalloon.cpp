@@ -77,13 +77,15 @@ void TalkBalloon::close() {
     MR::startAnim(this, "End", 0);
 }
 
-inline f32 smaller(f32 a, f32 b) {
-    return b >= a ? a : b;
-}
+namespace {
+    f32 smaller(f32 a, f32 b) {
+        return b >= a ? a : b;
+    }
 
-inline f32 larger(f32 a, f32 b) {
-    return b >= a ? b : a;
-}
+    f32 larger(f32 a, f32 b) {
+        return b >= a ? b : a;
+    }
+}  // namespace
 
 void TalkBalloon::updateBalloon() {
     mMessageCtrl->updateBalloonPos();
@@ -258,7 +260,7 @@ void TalkBalloonEvent::open(TalkMessageCtrl* pCtrl) {
     mMessageCtrl = pCtrl;
     LayoutActor::appear();
     TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
-    mTextFormer->formMessage(reinterpret_cast< const char16_t* >(info->mMessage), mFormMode);
+    mTextFormer->formMessage(info->mMessage, mFormMode);
     mTextFormer->setArg(pCtrl->mTagArg, 0);
     mAButton->kill();
     mAButton->setFollowActorPane(this, "AButtonPosition");
@@ -383,7 +385,7 @@ TalkBalloonInfo::TalkBalloonInfo(const char* pName) : TalkBalloon(pName) {
 
 void TalkBalloonInfo::open(TalkMessageCtrl* pCtrl) {
     TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
-    MR::appearInformationMessage(reinterpret_cast< const char16_t* >(info->mMessage), true);
+    MR::appearInformationMessage(info->mMessage, true);
 }
 
 void TalkBalloonInfo::close() {

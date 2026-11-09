@@ -394,11 +394,11 @@ TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
 }
 
 const char16_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
-    return reinterpret_cast< const char16_t* >(pCtrl->mNodeCtrl->mMessageInfo.mMessage);
+    return pCtrl->mNodeCtrl->mMessageInfo.mMessage;
 }
 
 const char16_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
-    return reinterpret_cast< const char16_t* >(pCtrl->mNodeCtrl->getSubMessage());
+    return pCtrl->mNodeCtrl->getSubMessage();
 }
 
 bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
