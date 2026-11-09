@@ -23,6 +23,13 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceWait_attenuateVelocity_1, "exeRaceWait.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceFall_attenuateVelocity_1, "exeRaceFall.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceGoal_attenuateVelocity_1, "exeRaceGoal.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceGoal_addVelocityToGravity_1, "exeRaceGoal.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateMove_addVelocityToGravity_1, "updateMove.addVelocityToGravity.1", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sGoalBrake, 0.005f);
     NEBULA_TUNABLE(f32, sFallBrake, 0.002f);
@@ -209,7 +216,7 @@ void PenguinRacer::exeRaceWait() {
         }
         MR::setBckFrameAtRandom(this);
     }
-    MR::attenuateVelocity(this, 0.9f);
+    MR::attenuateVelocity(this, cNum_exeRaceWait_attenuateVelocity_1);
 }
 
 void PenguinRacer::exeRaceWalk() {
@@ -284,7 +291,7 @@ void PenguinRacer::exeRaceFall() {
     if (mSpeed < 0.0f) {
         mSpeed = 0.0f;
     }
-    MR::attenuateVelocity(this, 0.9f);
+    MR::attenuateVelocity(this, cNum_exeRaceFall_attenuateVelocity_1);
 
     updateMove();
 
@@ -302,13 +309,13 @@ void PenguinRacer::exeRaceGoal() {
         mSpeed = 0.0f;
     }
 
-    MR::attenuateVelocity(this, 0.9f);
+    MR::attenuateVelocity(this, cNum_exeRaceGoal_attenuateVelocity_1);
 
     if (mVelocity.length() > 5.0f) {
         updateVelocity();
 
         if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim) && !MR::isBindedGround(this)) {
-            MR::addVelocityToGravity(this, 1.0f);
+            MR::addVelocityToGravity(this, cNum_exeRaceGoal_addVelocityToGravity_1);
         }
 
         if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim)) {
@@ -340,7 +347,7 @@ void PenguinRacer::updateMove() {
     updateVelocity();
 
     if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim) && !MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_updateMove_addVelocityToGravity_1);
     }
 
     if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim)) {

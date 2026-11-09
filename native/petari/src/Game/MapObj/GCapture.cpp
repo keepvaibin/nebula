@@ -29,6 +29,20 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_reboundVelocityFromCollision_1, "exeCapture.reboundVelocityFromCollision.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_reboundVelocityFromCollision_2, "exeCapture.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_reboundVelocityFromCollision_3, "exeCapture.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecapture_reboundVelocityFromCollision_1, "exeRecapture.reboundVelocityFromCollision.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecapture_reboundVelocityFromCollision_2, "exeRecapture.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecapture_reboundVelocityFromCollision_3, "exeRecapture.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTraction_reboundVelocityFromCollision_1, "exeTraction.reboundVelocityFromCollision.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTraction_reboundVelocityFromCollision_2, "exeTraction.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTraction_reboundVelocityFromCollision_3, "exeTraction.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHold_reboundVelocityFromCollision_1, "exeHold.reboundVelocityFromCollision.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHold_reboundVelocityFromCollision_2, "exeHold.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHold_reboundVelocityFromCollision_3, "exeHold.reboundVelocityFromCollision.3", 1.0f);
+
 namespace {
     const s32 sTargetKeepSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     NEBULA_TUNABLE(s32, sGuidanceSteps, 20);
@@ -381,7 +395,7 @@ void GCapture::exeCapture() {
     }
 
     updateRibbon(targetPos, sCaptureSteps);
-    MR::reboundVelocityFromCollision(this, 0.5f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeCapture_reboundVelocityFromCollision_1, cNum_exeCapture_reboundVelocityFromCollision_2, cNum_exeCapture_reboundVelocityFromCollision_3);
     tryCancelCapture();
 }
 
@@ -407,7 +421,7 @@ void GCapture::exeRecapture() {
     }
 
     downTractPower();
-    MR::reboundVelocityFromCollision(this, 0.5f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeRecapture_reboundVelocityFromCollision_1, cNum_exeRecapture_reboundVelocityFromCollision_2, cNum_exeRecapture_reboundVelocityFromCollision_3);
     fillGapBindTrans();
     MR::attenuateVelocity(this, sFriction);
 
@@ -487,7 +501,7 @@ void GCapture::exeTraction() {
     mVelocity += dir * sTractionAccel * mTractPower;
     MR::attenuateVelocity(this, friction);
     upTractPower();
-    MR::reboundVelocityFromCollision(this, 0.5f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeTraction_reboundVelocityFromCollision_1, cNum_exeTraction_reboundVelocityFromCollision_2, cNum_exeTraction_reboundVelocityFromCollision_3);
     tryAddVelocityReflectJumpCollision();
     fillGapBindTrans();
 
@@ -506,7 +520,7 @@ void GCapture::exeHold() {
     MR::startLevelSound(this, "SE_OJ_LV_GCAPTURE_CAPTURE");
     downTractPower();
     fillGapBindTrans();
-    MR::reboundVelocityFromCollision(this, 0.5f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeHold_reboundVelocityFromCollision_1, cNum_exeHold_reboundVelocityFromCollision_2, cNum_exeHold_reboundVelocityFromCollision_3);
     bool isReflected = tryAddVelocityReflectJumpCollision();
     // Rumbles while pointed at.
     MR::isStarPointerPointing(this, 0, true, "弱");

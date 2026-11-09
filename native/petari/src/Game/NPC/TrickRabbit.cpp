@@ -36,6 +36,49 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_tryRunaway_isNearPlayer_1, "tryRunaway.isNearPlayer.1", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryBrakeTurn_isNearPlayer_1, "tryBrakeTurn.isNearPlayer.1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryStop_isNearPlayer_1, "tryStop.isNearPlayer.1", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBrakeTurn_addVelocityToGravity_1, "exeBrakeTurn.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBrakeTurn_attenuateVelocity_1, "exeBrakeTurn.attenuateVelocity.1", 0.93f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBrakeTurn_reboundVelocityFromCollision_1, "exeBrakeTurn.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBrakeTurn_reboundVelocityFromCollision_2, "exeBrakeTurn.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBrakeTurn_reboundVelocityFromCollision_3, "exeBrakeTurn.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFallDown_addVelocityToGravity_1, "exeFallDown.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFallDown_attenuateVelocity_1, "exeFallDown.attenuateVelocity.1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFallDown_attenuateVelocity_2, "exeFallDown.attenuateVelocity.2", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFallDown_reboundVelocityFromCollision_1, "exeFallDown.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFallDown_reboundVelocityFromCollision_2, "exeFallDown.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFallDown_reboundVelocityFromCollision_3, "exeFallDown.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTumble_addVelocityToGravity_1, "exeTumble.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTumble_attenuateVelocity_1, "exeTumble.attenuateVelocity.1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTumble_reboundVelocityFromCollision_1, "exeTumble.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTumble_reboundVelocityFromCollision_2, "exeTumble.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTumble_reboundVelocityFromCollision_3, "exeTumble.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_addVelocityToGravity_1, "exeWaitPowerStarDemo.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_isNearPlayer_1, "exeWaitPowerStarDemo.isNearPlayer.1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_1, "exeWaitPowerStarDemo.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_2, "exeWaitPowerStarDemo.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_3, "exeWaitPowerStarDemo.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doWait_addVelocityToGravity_1, "doWait.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doWait_attenuateVelocity_1, "doWait.attenuateVelocity.1", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doWait_reboundVelocityFromCollision_1, "doWait.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doWait_reboundVelocityFromCollision_2, "doWait.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doWait_reboundVelocityFromCollision_3, "doWait.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_checkPassBckFrame_1, "doRunaway.checkPassBckFrame.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_checkPassBckFrame_2, "doRunaway.checkPassBckFrame.2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_addVelocityToGravity_1, "doRunaway.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_attenuateVelocity_1, "doRunaway.attenuateVelocity.1", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_reboundVelocityFromCollision_1, "doRunaway.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_reboundVelocityFromCollision_2, "doRunaway.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_reboundVelocityFromCollision_3, "doRunaway.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJumpStart_addVelocityToGravity_1, "doJumpStart.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJumpStart_attenuateVelocity_1, "doJumpStart.attenuateVelocity.1", 0.88f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJumpStart_reboundVelocityFromCollision_1, "doJumpStart.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJumpStart_reboundVelocityFromCollision_2, "doJumpStart.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJumpStart_reboundVelocityFromCollision_3, "doJumpStart.reboundVelocityFromCollision.3", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_receiveMsgTrample_1, "receiveMsgTrample.1", 1);
 NEBULA_TUNABLE_NAMED(s32, cStep_tryBrakeTurnEnd_1, "tryBrakeTurnEnd.1", 40);
@@ -308,7 +351,7 @@ void TrickRabbit::endDemoRunnaway() {
 }
 
 bool TrickRabbit::tryRunaway() {
-    if (MR::isNearPlayer(this, 1200.0f)) {
+    if (MR::isNearPlayer(this, cNum_tryRunaway_isNearPlayer_1)) {
         RunnawayNodeSelecter selecter;
         MR::moveNodeNearPosition(mRailGraphIter, mPosition, -1.0f, &selecter);
 
@@ -322,7 +365,7 @@ bool TrickRabbit::tryRunaway() {
 }
 
 bool TrickRabbit::tryBrakeTurn() {
-    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1)) && MR::isNearPlayer(this, 600.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1)) && MR::isNearPlayer(this, cNum_tryBrakeTurn_isNearPlayer_1)) {
         // The player is ahead on the route: turn back.
         Vec3f toPlayer(*MR::getPlayerPos() - mPosition);
         Vec3f toNextNode(*MR::getNextNodePosition(mRailGraphIter) - mPosition);
@@ -348,7 +391,7 @@ bool TrickRabbit::tryBrakeTurnEnd() {
 }
 
 bool TrickRabbit::tryStop() {
-    if (!MR::isNearPlayer(this, 1500.0f)) {
+    if (!MR::isNearPlayer(this, cNum_tryStop_isNearPlayer_1)) {
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvWait));
         return true;
     }
@@ -593,11 +636,11 @@ void TrickRabbit::exeBrakeTurn() {
     updateFootPrint();
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_exeBrakeTurn_addVelocityToGravity_1);
     }
 
-    MR::attenuateVelocity(this, 0.93f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::attenuateVelocity(this, cNum_exeBrakeTurn_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_exeBrakeTurn_reboundVelocityFromCollision_1, cNum_exeBrakeTurn_reboundVelocityFromCollision_2, cNum_exeBrakeTurn_reboundVelocityFromCollision_3);
     MR::turnVecToVecCosOnPlane(&mFront, *MR::getNextNodePosition(mRailGraphIter) - mPosition, mGravity, -1.0f);
     tryBrakeTurnEnd();
 }
@@ -630,13 +673,13 @@ void TrickRabbit::exeFallDown() {
     }
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
-        MR::attenuateVelocity(this, 0.99f);
+        MR::addVelocityToGravity(this, cNum_exeFallDown_addVelocityToGravity_1);
+        MR::attenuateVelocity(this, cNum_exeFallDown_attenuateVelocity_1);
     } else {
-        MR::attenuateVelocity(this, 0.85f);
+        MR::attenuateVelocity(this, cNum_exeFallDown_attenuateVelocity_2);
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeFallDown_reboundVelocityFromCollision_1, cNum_exeFallDown_reboundVelocityFromCollision_2, cNum_exeFallDown_reboundVelocityFromCollision_3);
     tryEndFallDown();
 }
 
@@ -685,9 +728,9 @@ void TrickRabbit::exeTumble() {
     }
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
-        MR::attenuateVelocity(this, 0.99f);
-        MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+        MR::addVelocityToGravity(this, cNum_exeTumble_addVelocityToGravity_1);
+        MR::attenuateVelocity(this, cNum_exeTumble_attenuateVelocity_1);
+        MR::reboundVelocityFromCollision(this, cNum_exeTumble_reboundVelocityFromCollision_1, cNum_exeTumble_reboundVelocityFromCollision_2, cNum_exeTumble_reboundVelocityFromCollision_3);
     } else {
         MR::zeroVelocity(this);
     }
@@ -726,17 +769,17 @@ void TrickRabbit::exeWaitPowerStarDemo() {
     MR::zeroVelocity(this);
 
     if (!MR::isOnGround(this) && !MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_exeWaitPowerStarDemo_addVelocityToGravity_1);
     }
 
     // Walked into by the player: pushed along their front.
-    if (MR::isNearPlayer(this, 70.0f)) {
+    if (MR::isNearPlayer(this, cNum_exeWaitPowerStarDemo_isNearPlayer_1)) {
         Vec3f playerFront;
         MR::getPlayerFrontVec(&playerFront);
         mVelocity += playerFront;
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_1, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_2, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_3);
     MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, 30.0f);
 
     if (tryEndPowerStarDemo()) {
@@ -755,11 +798,11 @@ void TrickRabbit::exeGiveUp() {
 
 void TrickRabbit::doWait() {
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_doWait_addVelocityToGravity_1);
     }
 
-    MR::attenuateVelocity(this, 0.85f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::attenuateVelocity(this, cNum_doWait_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_doWait_reboundVelocityFromCollision_1, cNum_doWait_reboundVelocityFromCollision_2, cNum_doWait_reboundVelocityFromCollision_3);
     MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, 10.0f);
 }
 
@@ -768,11 +811,11 @@ void TrickRabbit::doRunaway() {
         MR::startAction(this, "Run");
     }
 
-    if (MR::checkPassBckFrame(this, 0.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_doRunaway_checkPassBckFrame_1)) {
         updateFootPrint();
     }
 
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_doRunaway_checkPassBckFrame_2)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
@@ -786,13 +829,13 @@ void TrickRabbit::doRunaway() {
     }
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_doRunaway_addVelocityToGravity_1);
     }
 
     addMovingAccel(nextNodePos - mPosition, 2.4f * speedRate);
     addKeepRouteRange(1.0f, 100.0f, 400.0f);
-    MR::attenuateVelocity(this, 0.85f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::attenuateVelocity(this, cNum_doRunaway_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_doRunaway_reboundVelocityFromCollision_1, cNum_doRunaway_reboundVelocityFromCollision_2, cNum_doRunaway_reboundVelocityFromCollision_3);
 }
 
 void TrickRabbit::doJumpStart() {
@@ -809,11 +852,11 @@ void TrickRabbit::doJumpStart() {
     MR::turnVecToVecCosOnPlane(&mFront, *MR::getNextNodePosition(mRailGraphIter) - mPosition, mGravity, 0.99f);
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_doJumpStart_addVelocityToGravity_1);
     }
 
-    MR::attenuateVelocity(this, 0.88f);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::attenuateVelocity(this, cNum_doJumpStart_attenuateVelocity_1);
+    MR::reboundVelocityFromCollision(this, cNum_doJumpStart_reboundVelocityFromCollision_1, cNum_doJumpStart_reboundVelocityFromCollision_2, cNum_doJumpStart_reboundVelocityFromCollision_3);
 }
 
 void TrickRabbit::doJump() {

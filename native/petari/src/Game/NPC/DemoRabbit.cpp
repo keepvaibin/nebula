@@ -4,6 +4,16 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", -0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemo_turnDirectionToPlayerDegree_1, "exeDemo.turnDirectionToPlayerDegree.1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTalk_turnDirectionToPlayerDegree_1, "exeTalk.turnDirectionToPlayerDegree.1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_turnDirectionToPlayerDegree_1, "exeWait.turnDirectionToPlayerDegree.1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGoal_turnDirectionToPlayerDegree_1, "exeGoal.turnDirectionToPlayerDegree.1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGoal_isNearPlayer_1, "exeGoal.isNearPlayer.1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_checkPassBckFrame_1, "exeGuide.checkPassBckFrame.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 5);
 
@@ -151,7 +161,7 @@ void DemoRabbit::updateNormalVelocity() {
         MR::addVelocityToGravityOrGround(this, ::sAirGravityAccel);
     }
 
-    MR::reboundVelocityFromCollision(this, -0.05f);
+    MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1);
 }
 
 void DemoRabbit::updateRun(const Vec3f& targetDir, bool /*unused*/) {
@@ -233,7 +243,7 @@ void DemoRabbit::exeDemo() {
         MR::startAction(this, "Wait");
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeDemo_turnDirectionToPlayerDegree_1);
     updateStopVelocity();
 }
 
@@ -250,7 +260,7 @@ void DemoRabbit::exeTalk() {
         }
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeTalk_turnDirectionToPlayerDegree_1);
     updateStopVelocity();
 }
 
@@ -260,7 +270,7 @@ void DemoRabbit::exeWait() {
     }
 
     MR::tryTalkNearPlayer(mMsgCtrl);
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeWait_turnDirectionToPlayerDegree_1);
     updateStopVelocity();
 
     if (tryGuide()) {
@@ -273,14 +283,14 @@ void DemoRabbit::exeGoal() {
         MR::startAction(this, "Wait");
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeGoal_turnDirectionToPlayerDegree_1);
     updateStopVelocity();
 
     if (MR::isDemoActive()) {
         return;
     }
 
-    if (MR::isNearPlayer(mMsgCtrl, 500.0f)) {
+    if (MR::isNearPlayer(mMsgCtrl, cNum_exeGoal_isNearPlayer_1)) {
         MR::startTimeKeepDemoMarioPuppetable(this, "チコガイドデモ", "ウサギ追いかけ[フェードアウト]");
     } else {
         MR::tryTalkNearPlayer(mMsgCtrl);
@@ -293,7 +303,7 @@ void DemoRabbit::exeGuide() {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeGuide_checkPassBckFrame_1)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
@@ -322,7 +332,7 @@ void DemoRabbit::exeRunaway() {
     }
 
     MR::invalidateClipping(this);
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 

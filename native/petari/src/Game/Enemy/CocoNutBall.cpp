@@ -6,6 +6,9 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBackToHost_setBckRate_1, "exeHitBackToHost.setBckRate.1", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_1, "exeHitBackToHost.1", 1);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_2, "exeHitBackToHost.2", 2);
@@ -433,7 +436,7 @@ void CocoNutBall::exeThrow() {
 
 void CocoNutBall::exeHitBackToHost() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeHitBackToHost_setBckRate_1);
         MR::deleteEffect(this, "Touch");
         MR::emitEffect(this, "CocoNutBlur");
         MR::emitEffect(this, "CocoNutLight");

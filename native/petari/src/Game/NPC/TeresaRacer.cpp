@@ -19,6 +19,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_prepRacer_setRailCoordSpeed_1, "prepRacer.setRailCoordSpeed.1", 0.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sSpeed, 20.0f);
     NEBULA_TUNABLE(f32, sAccele, 0.1f);
@@ -248,7 +251,7 @@ void TeresaRacer::initRacer() {
 void TeresaRacer::prepRacer(const RaceManager* /*pRaceManager*/) {
     MR::invalidateClipping(this);
     MR::moveCoordToStartPos(this);
-    MR::setRailCoordSpeed(this, 0.0f);
+    MR::setRailCoordSpeed(this, cNum_prepRacer_setRailCoordSpeed_1);
     MR::followRailPose(this, 1.0f, 1.0f);
     MR::requestMovementOn(this);
     MR::startAction(this, "Chase");

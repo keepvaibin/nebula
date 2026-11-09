@@ -16,6 +16,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStarPointerBind_setBckRate_1, "exeStarPointerBind.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endStarPointerBind_setBckRate_1, "endStarPointerBind.setBckRate.1", 1.0f);
+
 namespace {
     static const s32 hWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     NEBULA_TUNABLE(s32, hAttackBeginTime, 82);
@@ -182,7 +186,7 @@ void Balloonfish::exeDash() {
 void Balloonfish::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
         MR::startPointerHitSound();
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_exeStarPointerBind_setBckRate_1);
         mAnimScaleController->startPointerHitVibration();
         MR::emitEffect(this, "Touch");
     }
@@ -244,7 +248,7 @@ void Balloonfish::calcAndSetBaseMtx() {
 }
 
 void Balloonfish::endStarPointerBind() {
-    MR::setBckRate(this, 1.0f);
+    MR::setBckRate(this, cNum_endStarPointerBind_setBckRate_1);
     mAnimScaleController->startAnim();
     MR::deleteEffect(this, "Touch");
 }

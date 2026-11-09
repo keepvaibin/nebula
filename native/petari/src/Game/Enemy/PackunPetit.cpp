@@ -24,6 +24,14 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNonActive_isNearPlayerAnyTime_1, "exeNonActive.isNearPlayerAnyTime.1", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 1700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThreat_isNearPlayer_1, "exeThreat.isNearPlayer.1", 1100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThreat_isNearPlayer_2, "exeThreat.isNearPlayer.2", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_selectNrvWait_isNearPlayer_1, "selectNrvWait.isNearPlayer.1", 1700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryNonActive_isNearPlayerAnyTime_1, "tryNonActive.isNearPlayerAnyTime.1", 5000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeThreat_1, "exeThreat.1", 50);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackStart_1, "exeAttackStart.1", 70);
@@ -100,7 +108,7 @@ void PackunPetit::exeNonActive() {
         MR::offCalcShadow(this, "JawA");
     }
 
-    if (MR::isNearPlayerAnyTime(this, 5000.0f)) {
+    if (MR::isNearPlayerAnyTime(this, cNum_exeNonActive_isNearPlayerAnyTime_1)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
     }
 }
@@ -116,7 +124,7 @@ void PackunPetit::exeWait() {
         MR::startBckWithInterpole(this, "Wait", 60);
     }
 
-    if (MR::isNearPlayer(this, 1700.0f)) {
+    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvFind));
     } else {
         tryNonActive();
@@ -149,9 +157,9 @@ void PackunPetit::exeThreat() {
         MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *pos, 2.0f);
     }
 
-    if (MR::isGreaterStep(this, cStep_exeThreat_1) && MR::isNearPlayer(this, 1100.0f) && (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f) || mDontTurn)) {
+    if (MR::isGreaterStep(this, cStep_exeThreat_1) && MR::isNearPlayer(this, cNum_exeThreat_isNearPlayer_1) && (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f) || mDontTurn)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttackStart));
-    } else if (!MR::isNearPlayer(this, 2000.0f)) {
+    } else if (!MR::isNearPlayer(this, cNum_exeThreat_isNearPlayer_2)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
     }
 }
@@ -484,7 +492,7 @@ void PackunPetit::punchDown(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void PackunPetit::selectNrvWait() {
-    if (!MR::isNearPlayer(this, 1700.0f)) {
+    if (!MR::isNearPlayer(this, cNum_selectNrvWait_isNearPlayer_1)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
     } else if (isNerve(GET_NERVE(PackunPetit, PackunPetitNrvSwoon))) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvSwoonToThreat));
@@ -494,7 +502,7 @@ void PackunPetit::selectNrvWait() {
 }
 
 bool PackunPetit::tryNonActive() {
-    if (MR::isNearPlayerAnyTime(this, 5000.0f)) {
+    if (MR::isNearPlayerAnyTime(this, cNum_tryNonActive_isNearPlayerAnyTime_1)) {
         return false;
     }
 

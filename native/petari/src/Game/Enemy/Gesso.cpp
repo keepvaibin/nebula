@@ -7,6 +7,14 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 1400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_turnDirectionToPlayerDegree_1, "exeSearch.turnDirectionToPlayerDegree.1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSink_isNearPlayer_1, "exeSink.isNearPlayer.1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_selectNextNerve_isNearPlayer_1, "selectNextNerve.isNearPlayer.1", 2400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_clipAndInitPos_isNearPlayer_1, "clipAndInitPos.isNearPlayer.1", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryChangeHighSpeedMode_isNearPlayer_1, "tryChangeHighSpeedMode.isNearPlayer.1", 1000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeComeFromBox_1, "exeComeFromBox.1", 10);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeWait_1, "exeWait.1", 2);
@@ -168,7 +176,7 @@ void Gesso::exeWait() {
 
     mVelocity.scale(1.5f * (MR::sinDegree(45.0f + (2.0f * getNerveStep()))), mGravity);
     MR::rotateVecDegree(&mFront, mGravity, 0.3f);
-    if (MR::isNearPlayer(this, 1400.0f) && MR::isPlayerInWaterMode()) {
+    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1) && MR::isPlayerInWaterMode()) {
         MR::validateClipping(this);
         setNerve(GET_NERVE(Gesso, GessoNrvSearch));
     }
@@ -182,7 +190,7 @@ void Gesso::exeSearch() {
     }
 
     mVelocity.scale(1.5f * (MR::sinDegree(45.0f + (2.0f * getNerveStep()))), mGravity);
-    MR::turnDirectionToPlayerDegree(this, &mFront, 1.5f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, cNum_exeSearch_turnDirectionToPlayerDegree_1);
     if (MR::isFaceToPlayerHorizontalDegree(this, mFront, 1.5f) && MR::isActionEnd(this)) {
         setNerve(GET_NERVE(Gesso, GessoNrvWalkCharge));
     }
@@ -221,7 +229,7 @@ void Gesso::exeWalk() {
 
 void Gesso::exeSink() {
     if (MR::isFirstStep(this)) {
-        if (MR::isNearPlayer(this, 1000.0f)) {
+        if (MR::isNearPlayer(this, cNum_exeSink_isNearPlayer_1)) {
             MR::startAction(this, "SinkFast");
         } else {
             MR::startAction(this, "Sink");
@@ -400,7 +408,7 @@ bool Gesso::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
 void Gesso::selectNextNerve() {
     if (!MR::isPlayerInWaterMode()) {
         setNerve(GET_NERVE(Gesso, GessoNrvComeBack));
-    } else if (!MR::isNearPlayer(this, 2400.0f)) {
+    } else if (!MR::isNearPlayer(this, cNum_selectNextNerve_isNearPlayer_1)) {
         setNerve(GET_NERVE(Gesso, GessoNrvLostPlayer));
     } else if (isMarioUp()) {
         setNerve(GET_NERVE(Gesso, GessoNrvWalkCharge));
@@ -419,7 +427,7 @@ void Gesso::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool Gesso::clipAndInitPos() {
-    if (!MR::isNearPlayer(this, 10000.0f) || MR::isJudgedToClipFrustum(mPosition, getSensor(nullptr)->getRadius())) {
+    if (!MR::isNearPlayer(this, cNum_clipAndInitPos_isNearPlayer_1) || MR::isJudgedToClipFrustum(mPosition, getSensor(nullptr)->getRadius())) {
         if (mClipStep >= NebulaFrameClock::stepsOfSeconds(5)) {
             mPosition.set(mInitPos);
             setNerve(GET_NERVE(Gesso, GessoNrvWait));
@@ -559,7 +567,7 @@ bool Gesso::isMarioLeft() const {
 
 bool Gesso::tryChangeHighSpeedMode() {
     bool change = false;
-    if (MR::isNearPlayer(this, 1000.0f) && !MR::isPlayerInWaterMode()) {
+    if (MR::isNearPlayer(this, cNum_tryChangeHighSpeedMode_isNearPlayer_1) && !MR::isPlayerInWaterMode()) {
         change = true;
     }
 

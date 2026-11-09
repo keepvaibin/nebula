@@ -26,6 +26,14 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_reboundVelocityFromCollision_1, "updateInfo.reboundVelocityFromCollision.1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_reboundVelocityFromCollision_2, "updateInfo.reboundVelocityFromCollision.2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_reboundVelocityFromCollision_3, "updateInfo.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_reboundVelocityFromCollision_4, "updateInfo.reboundVelocityFromCollision.4", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_reboundVelocityFromCollision_5, "updateInfo.reboundVelocityFromCollision.5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_reboundVelocityFromCollision_6, "updateInfo.reboundVelocityFromCollision.6", 1.0f);
+
 namespace NrvSurfRay {
     NEW_NERVE(SurfRayNrvWaitPlayer, SurfRay, WaitPlayer);
     NEW_NERVE(SurfRayNrvTurnToWait, SurfRay, TurnToWait);
@@ -617,7 +625,7 @@ void SurfRay::updateInfo() {
 
         MR::startLevelSound(this, "SE_SM_LV_SURF_RAY_LAND", sfxLvl);
 
-        if (MR::reboundVelocityFromCollision(this, 0.3f, 10.0f, 1.0f) && mVelocity.length() > ::sSpeedToRumble) {
+        if (MR::reboundVelocityFromCollision(this, cNum_updateInfo_reboundVelocityFromCollision_1, cNum_updateInfo_reboundVelocityFromCollision_2, cNum_updateInfo_reboundVelocityFromCollision_3) && mVelocity.length() > ::sSpeedToRumble) {
             MR::tryRumblePadMiddle(this, mPadChannel);
         }
     }
@@ -627,7 +635,7 @@ void SurfRay::updateInfo() {
             MR::startSound(this, "SE_SM_SURF_RAY_HIT_WALL");
         }
 
-        if (MR::reboundVelocityFromCollision(this, 0.8f, 10.0f, 1.0f) && mVelocity.length() > ::sSpeedToRumble) {
+        if (MR::reboundVelocityFromCollision(this, cNum_updateInfo_reboundVelocityFromCollision_4, cNum_updateInfo_reboundVelocityFromCollision_5, cNum_updateInfo_reboundVelocityFromCollision_6) && mVelocity.length() > ::sSpeedToRumble) {
             MR::tryRumblePadMiddle(this, mPadChannel);
         }
     }

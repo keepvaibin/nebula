@@ -20,6 +20,10 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRed1_isNearPlayer_1, "exeRed1.isNearPlayer.1", 400.0f);
 
 namespace NrvTico {
     NEW_NERVE(TicoNrvNoReaction, Tico, NoReaction);
@@ -396,7 +400,7 @@ void Tico::exeRed1() {
 
     MR::tryStartTurnAction(this);
 
-    if (MR::isNearPlayer(this, 400.0f)) {
+    if (MR::isNearPlayer(this, cNum_exeRed1_isNearPlayer_1)) {
         setNerve(GET_NERVE(Tico, TicoNrvRed2));
     }
 }

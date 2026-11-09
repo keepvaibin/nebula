@@ -27,6 +27,9 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_tearDownHide_setAnimRate_1, "tearDownHide.setAnimRate.1", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_isChanceToRumble_1, "isChanceToRumble.1", 1);
 NEBULA_TUNABLE_NAMED(s32, cStep_isChanceToRumble_2, "isChanceToRumble.2", 1);
@@ -529,7 +532,7 @@ void StarPointerLayout::endHide() {
 
 void StarPointerLayout::tearDownHide() {
     if (mPointerKind == StarPointerKind_StarPointer || mPointerKind == StarPointerKind_5 || mPointerKind == StarPointerKind_StarPointerNozzle) {
-        MR::setAnimRate(this, 1.0f, 0);
+        MR::setAnimRate(this, cNum_tearDownHide_setAnimRate_1, 0);
     } else if (mPointerKind == StarPointerKind_HandPointer || mPointerKind == StarPointerKind_2 || mPointerKind == StarPointerKind_FingerPointer) {
         ::setPaneVisible(mHandPointerPane, true);
     }

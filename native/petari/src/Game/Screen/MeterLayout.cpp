@@ -15,6 +15,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_setAnimBase_setAnimRate_1, "setAnimBase.setAnimRate.1", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setAnimBase_setAnimRate_2, "setAnimBase.setAnimRate.2", 2.0f);
+
 namespace {
     inline void calcFollowPosW(const MeterLayout* pLayout, Vec2f* pFollowPosW, Vec2f* pBasePos) {
         Vec2f headPos;
@@ -454,9 +458,9 @@ void MeterLayout::setAnimBase() {
     }
 
     if (mCount <= 1) {
-        MR::setAnimRate(this, 4.0f, 1);
+        MR::setAnimRate(this, cNum_setAnimBase_setAnimRate_1, 1);
     } else if (mCount <= 2) {
-        MR::setAnimRate(this, 2.0f, 1);
+        MR::setAnimRate(this, cNum_setAnimBase_setAnimRate_2, 1);
     } else {
         MR::setAnimFrameAndStop(this, 0.0f, 1);
     }

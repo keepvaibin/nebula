@@ -21,6 +21,13 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_1, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_2, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_3, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCling_setBckRate_1, "exeCling.setBckRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeInTornado_setBckRate_1, "exeInTornado.setBckRate.1", 2.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sSize, 30.0f);
 
@@ -134,7 +141,7 @@ void Karikari::init(const TableIter& rIter) {
 
 void Karikari::applyEnvironmentInfluenceToVelocity() {
     if (MR::isOnGround(this)) {
-        MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+        MR::reboundVelocityFromCollision(this, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_1, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_2, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_3);
         mVelocity.mult(::sVelocityDampGround);
         Vec3f norm(*MR::getGroundNormal(this));
         Vec3f velH(mVelocity);
@@ -470,7 +477,7 @@ void Karikari::exeCling() {
         MR::validateHitSensors(this);
         mCanAttack = false;
         mIsPushable = false;
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeCling_setBckRate_1);
         MR::startBck(this, "Bite");
         MR::startBtp(this, "Bite");
         MR::startSound(this, "SE_EM_KARIKARI_TOUCH");
@@ -645,7 +652,7 @@ void Karikari::exeInTornado() {
         MR::onCalcGravity(this);
         MR::validateHitSensors(this);
         MR::startBck(this, "Wait");
-        MR::setBckRate(this, 2.0f);
+        MR::setBckRate(this, cNum_exeInTornado_setBckRate_1);
         MR::startBtp(this, "Bite");
         MR::setBtpFrameAndStop(this, 0.0f);
         mCanAttack = false;

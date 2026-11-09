@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraContext.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
@@ -71,7 +72,7 @@ void CameraContext::setShakeOffset(f32 x, f32 y) {
 }
 
 void CameraContext::updateProjectionMtx() {
-    mProjection.makePerspective(getRenderFovy(), getAspect(), mNearZ, mFarZ);
+    mProjection.makePerspective(getRenderFovy(), getAspect(), NebulaMods::cameraNear(mNearZ), mFarZ);
 
     Proj3f trans;
     trans.makeTrans(mShakeOffset.x, mShakeOffset.y);

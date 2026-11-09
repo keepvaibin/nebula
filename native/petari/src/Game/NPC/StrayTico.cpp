@@ -6,6 +6,13 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLauncherCamera_addVelocityMoveToTarget_1, "exeLauncherCamera.addVelocityMoveToTarget.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_reboundVelocityFromCollision_1, "updateChase.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_reboundVelocityFromCollision_2, "updateChase.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_reboundVelocityFromCollision_3, "updateChase.reboundVelocityFromCollision.3", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sPushAccel, 0.3f);
     NEBULA_TUNABLE(f32, sWaitTurnDegree, 2.0f);
@@ -196,7 +203,7 @@ void StrayTico::exeWait() {
         MR::startBck(this, "Wait");
     }
 
-    if (MR::isNearPlayer(this, 1000.0f)) {
+    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1)) {
         MR::turnDirectionToTargetDegree(this, &mFrontVec, *MR::getPlayerPos(), ::sWaitTurnDegree);
     }
 }
@@ -251,7 +258,7 @@ void StrayTico::exeLauncherCamera() {
     Vec3f vec;
     vec.scaleAdd(-400.0f, MR::getCamZdir(), *MR::getPlayerPos());
 
-    MR::addVelocityMoveToTarget(this, vec, 0.5f);
+    MR::addVelocityMoveToTarget(this, vec, cNum_exeLauncherCamera_addVelocityMoveToTarget_1);
     MR::addVelocityKeepHeight(this, vec, 150.0f, 0.5f, 200.0f);
     MR::attenuateVelocity(this, ::sChaseFric);
 
@@ -303,7 +310,7 @@ void StrayTico::updateChase() {
     MR::turnDirectionDegree(this, &mFrontVec, playerFrontVec, ::sChaseTurnDegree);
     MR::addVelocityKeepHeight(this, *MR::getPlayerPos(), 150.0f, 0.5f, 200.0f);
     MR::attenuateVelocity(this, ::sChaseFric);
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_updateChase_reboundVelocityFromCollision_1, cNum_updateChase_reboundVelocityFromCollision_2, cNum_updateChase_reboundVelocityFromCollision_3);
 }
 
 void StrayTico::exeCompleteDemo() {

@@ -11,6 +11,11 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCountDown_setBckRate_1, "exeCountDown.setBckRate.1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitTalkNormal_isNearPlayer_1, "exeWaitTalkNormal.isNearPlayer.1", -1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTalkNormal_isNearPlayer_1, "exeTalkNormal.isNearPlayer.1", -1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitStarAppeared_1, "exeWaitStarAppeared.1", 1);
 
@@ -270,7 +275,7 @@ void Syati::exeCountDown() {
         MR::startSystemSE("SE_SY_RACE_COUNT_DOWN");
     }
 
-    MR::setBckRate(this, 0.5f);
+    MR::setBckRate(this, cNum_exeCountDown_setBckRate_1);
     updateSwimCommon();
     mPlayerPoseSetterInWater->update();
 
@@ -433,7 +438,7 @@ void Syati::exeWaitTalkNormal() {
     updateBlink();
     MR::tryTalkNearPlayer(mTalkMessageCtrl);
 
-    if (MR::isNearPlayer(mTalkMessageCtrl, -1.0f)) {
+    if (MR::isNearPlayer(mTalkMessageCtrl, cNum_exeWaitTalkNormal_isNearPlayer_1)) {
         setNerve(GET_NERVE(Syati, SyatiTalkNormal));
     }
 }
@@ -447,7 +452,7 @@ void Syati::exeTalkNormal() {
     updateBlink();
     MR::tryTalkNearPlayer(mTalkMessageCtrl);
 
-    if (!MR::isNearPlayer(mTalkMessageCtrl, -1.0f)) {
+    if (!MR::isNearPlayer(mTalkMessageCtrl, cNum_exeTalkNormal_isNearPlayer_1)) {
         setNerve(GET_NERVE(Syati, SyatiWaitTalkNormal));
     }
 }

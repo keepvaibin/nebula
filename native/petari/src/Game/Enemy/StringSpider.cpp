@@ -29,6 +29,17 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_1, "control.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_2, "control.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_3, "control.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_applyVelocityDampAndGravity_1, "control.applyVelocityDampAndGravity.1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_applyVelocityDampAndGravity_2, "control.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_applyVelocityDampAndGravity_3, "control.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_applyVelocityDampAndGravity_4, "control.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_applyVelocityDampAndGravity_5, "control.applyVelocityDampAndGravity.5", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTrampleFall_setBinderRadius_1, "exeTrampleFall.setBinderRadius.1", 10.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeTrampleFall_1, "exeTrampleFall.1", 5);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeWallHitDeath_1, "exeWallHitDeath.1", 35);
@@ -325,8 +336,8 @@ void StringSpider::control() {
     mScaleController->updateNerve();
     mStampController->updateNerve();
     reactPointer();
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
-    MR::applyVelocityDampAndGravity(this, 1.5f, 0.8f, 0.98f, 0.98f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_control_reboundVelocityFromCollision_1, cNum_control_reboundVelocityFromCollision_2, cNum_control_reboundVelocityFromCollision_3);
+    MR::applyVelocityDampAndGravity(this, cNum_control_applyVelocityDampAndGravity_1, cNum_control_applyVelocityDampAndGravity_2, cNum_control_applyVelocityDampAndGravity_3, cNum_control_applyVelocityDampAndGravity_4, cNum_control_applyVelocityDampAndGravity_5);
 
     if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvTrampleFall)) && !isNerve(GET_NERVE(StringSpider, HostTypeNrvTrampleDeath)) &&
         !isNerve(GET_NERVE(StringSpider, HostTypeNrvBlow))) {
@@ -557,7 +568,7 @@ void StringSpider::exeTrampleFall() {
         MR::startSound(this, "SE_EM_STOMPED_S");
         MR::startSound(this, "SE_EV_STRSPIDER_DEAD");
         MR::calcReflectionVector(&mVelocity, mGravity, 0.25f, 1.0f);
-        MR::setBinderRadius(this, 10.0f);
+        MR::setBinderRadius(this, cNum_exeTrampleFall_setBinderRadius_1);
     }
 
     if (MR::isGreaterStep(this, cStep_exeTrampleFall_1)) {

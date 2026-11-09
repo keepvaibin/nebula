@@ -22,6 +22,9 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_endStarPointerBind_setBckRate_1, "endStarPointerBind.setBckRate.1", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 15);
 
@@ -723,7 +726,7 @@ void HanachanParts::exeStarPointerBind() {
 
 void HanachanParts::endStarPointerBind() {
     MR::deleteEffect(this, "PointerTouch");
-    MR::setBckRate(this, 1.0f);
+    MR::setBckRate(this, cNum_endStarPointerBind_setBckRate_1);
 }
 
 bool HanachanParts::isHeadHitWall() {

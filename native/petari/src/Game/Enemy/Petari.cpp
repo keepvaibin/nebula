@@ -22,6 +22,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwoonEnd_checkPassBckFrame_1, "exeSwoonEnd.checkPassBckFrame.1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 3.0f);
+
 namespace {
     static const Vec sBodySensorOffset = {0.0f, 60.0f, 0.0f};
     static const Vec sSpinSensorOffset = {0.0f, 0.0f, 0.0f};
@@ -243,7 +247,7 @@ void Petari::exeSwoonEnd() {
         MR::startBck(this, "Hide");
         MR::startSound(this, "SE_EM_PETARI_WAKE_UP");
     }
-    if (MR::checkPassBckFrame(this, 60.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeSwoonEnd_checkPassBckFrame_1)) {
         MR::startSound(this, "SE_EM_PETARI_JUMP");
     }
     calcCenter();
@@ -412,7 +416,7 @@ bool Petari::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
 
 bool Petari::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensor(pReceiver, ::sBodySensorName) && isSolidBody()) {
-        MR::addVelocityFromPush(this, 3.0f, pSender, pReceiver);
+        MR::addVelocityFromPush(this, cNum_receiveMsgPush_addVelocityFromPush_1, pSender, pReceiver);
         return true;
     }
 

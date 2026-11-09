@@ -30,6 +30,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWeakToWait_setBrkRate_1, "exeWeakToWait.setBrkRate.1", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemoKoopa_1, "exeAppearDemoKoopa.1", 1);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeStageClearDemo_1, "exeStageClearDemo.1", 1);
@@ -778,7 +781,7 @@ void PowerStar::exeWeakNoRotate() {
 
 void PowerStar::exeWeakToWait() {
     if (MR::isFirstStep(this) && mColor != Color_Collected) {
-        MR::setBrkRate(this, 1.0f);
+        MR::setBrkRate(this, cNum_exeWeakToWait_setBrkRate_1);
     }
 
     mIsWeak = false;

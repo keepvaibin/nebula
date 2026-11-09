@@ -7,6 +7,18 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_1, "control.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_2, "control.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_3, "control.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.94f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwing_attenuateVelocity_1, "exeSwing.attenuateVelocity.1", 0.97f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointSnaped_attenuateVelocity_1, "exePointSnaped.attenuateVelocity.1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePunched_attenuateVelocity_1, "exePunched.attenuateVelocity.1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePunchedBrake_attenuateVelocity_1, "exePunchedBrake.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitted_attenuateVelocity_1, "exeHitted.attenuateVelocity.1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCrushedEnd_attenuateVelocity_1, "exeCrushedEnd.attenuateVelocity.1", 0.94f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exePointSnaped_1, "exePointSnaped.1", 6);
 NEBULA_TUNABLE_NAMED(s32, cStep_exePunched_1, "exePunched.1", 5);
@@ -135,7 +147,7 @@ void PunchingKinoko::control() {
     }
     mScaleController->update();
     mGroundChecker->movement();
-    MR::reboundVelocityFromCollision(mGroundChecker, 0.0f, 0.0f, 1.0f);
+    MR::reboundVelocityFromCollision(mGroundChecker, cNum_control_reboundVelocityFromCollision_1, cNum_control_reboundVelocityFromCollision_2, cNum_control_reboundVelocityFromCollision_3);
     if (mInvincibleHitCoolDown >= 0) {
         mInvincibleHitCoolDown--;
     }
@@ -388,7 +400,7 @@ void PunchingKinoko::exeWait() {
     }
 
     addSpringToRest();
-    MR::attenuateVelocity(mGroundChecker, 0.94f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exeWait_attenuateVelocity_1);
 
     if (MR::isStarPointerPointing2POnPressButton(this, nullptr, false, false)) {
         if (mStarPointerHitCoolDown == 0 && !mIsPointerHeld && MR::getStarPointerScreenSpeed(1) > 5.0f) {
@@ -413,7 +425,7 @@ void PunchingKinoko::exeWait() {
 void PunchingKinoko::exeSwing() {
     f32 lastSpeed = MR::calcVelocityLength(mGroundChecker);
     Vec3f toRest = addSpringToRest();
-    MR::attenuateVelocity(mGroundChecker, 0.97f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exeSwing_attenuateVelocity_1);
     f32 speed = MR::calcVelocityLength(mGroundChecker);
 
     // The bound sound plays as the swing passes 20 going up.
@@ -431,7 +443,7 @@ void PunchingKinoko::exeSwing() {
 void PunchingKinoko::exePointSnaped() {
     MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
     addVelocityKeepHeight();
-    MR::attenuateVelocity(mGroundChecker, 0.99f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exePointSnaped_attenuateVelocity_1);
     if (MR::isGreaterStep(this, cStep_exePointSnaped_1)) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing));
     }
@@ -440,7 +452,7 @@ void PunchingKinoko::exePointSnaped() {
 void PunchingKinoko::exePunched() {
     MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
     addVelocityKeepHeight();
-    MR::attenuateVelocity(mGroundChecker, 0.99f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exePunched_attenuateVelocity_1);
     MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, getSensor("Head"));
     mCameraTarget.set(mGroundChecker->mPosition);
 
@@ -452,7 +464,7 @@ void PunchingKinoko::exePunched() {
 // Swings back after 40 steps, or as soon as the head hits something it is bound to.
 void PunchingKinoko::exePunchedBrake() {
     addVelocityKeepHeight();
-    MR::attenuateVelocity(mGroundChecker, 0.9f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exePunchedBrake_attenuateVelocity_1);
     MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
     mCameraTarget.set(mGroundChecker->mPosition);
     if (!MR::isGreaterStep(this, cStep_exePunchedBrake_1) && !MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, getSensor("Head"))) {
@@ -467,7 +479,7 @@ void PunchingKinoko::exeHitted() {
         MR::startSound(this, "SE_OJ_PNC_KINOKO_HIT_SELF");
     }
     addVelocityKeepHeight();
-    MR::attenuateVelocity(mGroundChecker, 0.99f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exeHitted_attenuateVelocity_1);
     if (MR::isGreaterStep(this, cStep_exeHitted_1)) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
     }
@@ -506,7 +518,7 @@ void PunchingKinoko::exeCrushedEnd() {
     }
 
     addSpringToRest();
-    MR::attenuateVelocity(mGroundChecker, 0.94f);
+    MR::attenuateVelocity(mGroundChecker, cNum_exeCrushedEnd_attenuateVelocity_1);
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));

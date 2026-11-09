@@ -14,6 +14,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_setBrkRate_1, "exeWaveAttack.setBrkRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_setBrkRate_2, "exeWaveAttack.setBrkRate.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_setBrkRate_3, "exeWaveAttack.setBrkRate.3", 0.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeWaveAttack_1, "exeWaveAttack.1", 350);
 
@@ -95,9 +100,9 @@ void KoopaShockWave::exeWaveAttack() {
         MR::startBrk(mShadow, "Erase");
         MR::startBrk(mPartsModel, "Erase");
 
-        MR::setBrkRate(this, 0.0f);
-        MR::setBrkRate(mShadow, 0.0f);
-        MR::setBrkRate(mPartsModel, 0.0f);
+        MR::setBrkRate(this, cNum_exeWaveAttack_setBrkRate_1);
+        MR::setBrkRate(mShadow, cNum_exeWaveAttack_setBrkRate_2);
+        MR::setBrkRate(mPartsModel, cNum_exeWaveAttack_setBrkRate_3);
 
         MR::startAction(this, "Spread");
         MR::startAction(mShadow, "Spread");

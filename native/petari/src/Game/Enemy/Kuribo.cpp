@@ -29,6 +29,12 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryNonActive_isNearPlayerAnyTime_1, "tryNonActive.isNearPlayerAnyTime.1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryActive_isNearPlayerAnyTime_1, "tryActive.isNearPlayerAnyTime.1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_addVelocityToGravity_1, "calcPassiveMovement.addVelocityToGravity.1", 1.5f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_tryEndBlow_1, "tryEndBlow.1", 10);
 NEBULA_TUNABLE_NAMED(s32, cStep_tryEndBlowLand_1, "tryEndBlowLand.1", 15);
@@ -301,7 +307,7 @@ bool Kuribo::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (MR::isSensorEnemy(pSender) || (MR::isSensorRide(pSender) || (!isEnableAttack() && MR::isSensorPlayer(pSender)))) {
         if (isEnablePushMove()) {
-            MR::addVelocityFromPush(this, 1.5f, pSender, pReceiver);
+            MR::addVelocityFromPush(this, cNum_receiveMsgPush_addVelocityFromPush_1, pSender, pReceiver);
             return true;
         }
     }
@@ -472,7 +478,7 @@ void Kuribo::appearHipDropped(const Vec3f& rPosition, const Quat4f& rPose) {
 }
 
 bool Kuribo::tryNonActive() {
-    bool isNotNearPlayer = !MR::isNearPlayerAnyTime(this, 3000.0f);
+    bool isNotNearPlayer = !MR::isNearPlayerAnyTime(this, cNum_tryNonActive_isNearPlayerAnyTime_1);
     if (isNotNearPlayer && MR::isBindedGround(this)) {
         MR::zeroVelocity(this);
         setNerve(GET_NERVE(Kuribo, KuriboNrvNonActive));
@@ -483,7 +489,7 @@ bool Kuribo::tryNonActive() {
 }
 
 bool Kuribo::tryActive() {
-    if (MR::isNearPlayerAnyTime(this, 3000.0f)) {
+    if (MR::isNearPlayerAnyTime(this, cNum_tryActive_isNearPlayerAnyTime_1)) {
         setNerve(GET_NERVE(Kuribo, KuriboNrvWander));
         return true;
     }
@@ -700,7 +706,7 @@ void Kuribo::exeBlowDown() {
 
 void Kuribo::calcPassiveMovement() {
     if (!MR::isOnGround(this)) {
-        MR::addVelocityToGravity(this, 1.5f);
+        MR::addVelocityToGravity(this, cNum_calcPassiveMovement_addVelocityToGravity_1);
     }
 
     f32 vel;

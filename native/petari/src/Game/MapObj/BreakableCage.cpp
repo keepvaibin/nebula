@@ -7,6 +7,10 @@
 #include "Game/MapObj/PowerStar.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_isNearPlayer_1, "exeBreak.isNearPlayer.1", 1500.0f);
 
 namespace {
     const Vec cHitSensorOffsetCage = {0.0f, 0.0f, 0.0f};
@@ -339,7 +343,7 @@ void BreakableCage::exeBreak() {
 
     if (isAppearPowerStar() || mCameraInfo != nullptr) {
         MR::stopSceneAtStep(this, 2, 16);
-    } else if (MR::isNearPlayer(this, 1500.0f)) {
+    } else if (MR::isNearPlayer(this, cNum_exeBreak_isNearPlayer_1)) {
         f32 radius = getSensor("body")->mRadius;
 
         if (!MR::isJudgedToClipFrustum(mPosition, radius)) {

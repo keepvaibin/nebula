@@ -26,6 +26,16 @@
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_requestLoveHit_addVelocitySeparateHV_1, "requestLoveHit.addVelocitySeparateHV.1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestLoveHit_addVelocitySeparateHV_2, "requestLoveHit.addVelocitySeparateHV.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateAppear_attenuateVelocity_1, "updateAppear.attenuateVelocity.1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailWalk_moveCoord_1, "exeRailWalk.moveCoord.1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", -0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, "updateNormalVelocity.reboundVelocityFromCollision.2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_3, "updateNormalVelocity.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_attenuateVelocity_1, "updateNormalVelocity.attenuateVelocity.1", 0.9f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_tryWalk_1, "tryWalk.1", 192);
 NEBULA_TUNABLE_NAMED(s32, cStep_tryAggressiveEnd_1, "tryAggressiveEnd.1", 75);
@@ -337,7 +347,7 @@ bool Teresa::requestDrift() {
 
 bool Teresa::requestLoveHit(HitSensor* pSender, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(Teresa, TeresaNrvLoveChase))) {
-        MR::addVelocitySeparateHV(this, pSender, pReceiver, 20.0f, 0.0f);
+        MR::addVelocitySeparateHV(this, pSender, pReceiver, cNum_requestLoveHit_addVelocitySeparateHV_1, cNum_requestLoveHit_addVelocitySeparateHV_2);
         setNerve(GET_NERVE(Teresa, TeresaNrvLoveHit));
         return true;
     }
@@ -642,7 +652,7 @@ void Teresa::updateAppear(const Vec3f& rDir, const char* pAction) {
     Vec3f push(rDir);
     push *= 0.2f;
     mVelocity.add(push);
-    MR::attenuateVelocity(this, 0.9f);
+    MR::attenuateVelocity(this, cNum_updateAppear_attenuateVelocity_1);
     f32 rate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1));
     MR::setShadowVolumeSphereRadius(this, nullptr, (sShadowRadius * (1.0f - (1.0f - rate) * (1.0f - rate))));
     tryAppearEnd();
@@ -695,7 +705,7 @@ void Teresa::exeRailWalk() {
     toRail.killElement(MR::getRailPos(this) - mPosition, mGravity);
 
     if (toRail.length() < 10.0f) {
-        MR::moveCoord(this, 10.0f);
+        MR::moveCoord(this, cNum_exeRailWalk_moveCoord_1);
     }
 
     MR::turnDirectionToTarget(this, &mWallNormal, MR::getRailPos(this), 0.9995f);
@@ -932,8 +942,8 @@ void Teresa::endAppearFromWall() {
 
 void Teresa::updateNormalVelocity() {
     MR::addVelocityKeepHeightUseShadow(this, sFloatHeight + (85.0f * (mScale.y - 1.0f)), 0.40f, 40.0f, nullptr);
-    MR::reboundVelocityFromCollision(this, -0.2f, 4.0f, 1.0f);
-    MR::attenuateVelocity(this, 0.9f);
+    MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, cNum_updateNormalVelocity_reboundVelocityFromCollision_3);
+    MR::attenuateVelocity(this, cNum_updateNormalVelocity_attenuateVelocity_1);
 }
 
 void Teresa::addDriftVelocity() {

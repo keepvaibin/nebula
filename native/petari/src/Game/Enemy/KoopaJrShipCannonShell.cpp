@@ -16,6 +16,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_reboundVelocityFromCollision_1, "exeDown.reboundVelocityFromCollision.1", 1.0f);
+
 
 namespace {
     NEBULA_TUNABLE(f32, cBodySensorRadius, 75.0f);
@@ -238,7 +241,7 @@ void KoopaJrShipCannonShell::exeDown() {
     }
 
     mVelocity.add(mGravity * ::cGravity);
-    if (MR::reboundVelocityFromCollision(this, ::cReboundRate, ::cReboundMinSpeed, 1.0f)) {
+    if (MR::reboundVelocityFromCollision(this, ::cReboundRate, ::cReboundMinSpeed, cNum_exeDown_reboundVelocityFromCollision_1)) {
         MR::deleteEffect(this, "LocusSmoke");
     }
 

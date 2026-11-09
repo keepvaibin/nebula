@@ -21,6 +21,9 @@
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeProvoke_isNearPlayer_1, "exeProvoke.isNearPlayer.1", 10000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeCaught_1, "exeCaught.1", 20);
 
@@ -357,7 +360,7 @@ void PenguinSkater::exeProvoke() {
         stopRail(1.0f);
     } else {
         MR::tryStartBck(this, "Congratulate1");
-        if (MR::isNearPlayer(mMsgCtrl, 10000.0f)) {
+        if (MR::isNearPlayer(mMsgCtrl, cNum_exeProvoke_isNearPlayer_1)) {
             MR::tryTalkForce(mMsgCtrl);
             turnToPlayer();
         }

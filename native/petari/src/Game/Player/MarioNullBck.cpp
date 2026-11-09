@@ -3,6 +3,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_getFramePos_setBckRate_1, "getFramePos.setBckRate.1", 0.0f);
 
 MarioNullBck::MarioNullBck(const char* pName) : LiveActor(pName) {
 }
@@ -40,7 +44,7 @@ bool MarioNullBck::getFramePos(f32 frame, Vec3f* pPos, Vec3f* pRot) {
     }
     mLastFrame = (s16)(s32)(frame);
     MR::setBckFrame(this, frame);
-    MR::setBckRate(this, 0.0f);
+    MR::setBckRate(this, cNum_getFramePos_setBckRate_1);
     MR::updateModelManager(this);
     MR::calcAnimModelManager(this);
     MR::copyJointPos(this, "DummyItem", pPos);

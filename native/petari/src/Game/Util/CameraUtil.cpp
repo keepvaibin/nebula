@@ -15,6 +15,7 @@
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -158,6 +159,10 @@ namespace MR {
 
     f32 getNearZ() {
         return ::getCameraContext()->mNearZ;
+    }
+
+    f32 getRenderNearZ() {
+        return NebulaMods::cameraNear(::getCameraContext()->mNearZ);
     }
 
     f32 getFarZ() {

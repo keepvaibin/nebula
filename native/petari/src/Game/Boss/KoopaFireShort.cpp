@@ -15,6 +15,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeErase2P_setBckRate_1, "exeErase2P.setBckRate.1", 3.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFly_1, "exeFly.1", 50);
 
@@ -201,7 +204,7 @@ void KoopaFireShort::exeErase2P() {
         MR::start2PAttackAssistSound();
         MR::startSound(this, "SE_EM_FIRE_BUBBLE_REFLECT");
 
-        MR::setBckRate(this, 3.0f);
+        MR::setBckRate(this, cNum_exeErase2P_setBckRate_1);
     }
 
     updateFrontAndVelocity();

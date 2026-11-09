@@ -16,6 +16,9 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReady_isNearPlayer_1, "exeReady.isNearPlayer.1", -1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sTalkBalloonOffset, 950.0f);
 
@@ -163,7 +166,7 @@ void HoneyQueen::exeWait() {
 }
 
 void HoneyQueen::exeReady() {
-    if (!MR::isNearPlayer(mMsgCtrl, -1.0f)) {
+    if (!MR::isNearPlayer(mMsgCtrl, cNum_exeReady_isNearPlayer_1)) {
         setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvWait));
     }
 }

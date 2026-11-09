@@ -37,6 +37,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_addVelocityToGravity_1, "updateNormalVelocity.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, "updateNormalVelocity.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_3, "updateNormalVelocity.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_attenuateVelocity_1, "updateNormalVelocity.attenuateVelocity.1", 0.9f);
+
 namespace {
     template < bool IsRight >
     inline void addDinoFootPrint(DinoPackun* pActor, const Vec3f& rStart) {
@@ -390,14 +397,14 @@ void DinoPackun::updateCameraInfo() {
 
 void DinoPackun::updateNormalVelocity() {
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 1.0f);
+        MR::addVelocityToGravity(this, cNum_updateNormalVelocity_addVelocityToGravity_1);
     }
 
     if (MR::isBindedWall(this)) {
-        MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
+        MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, cNum_updateNormalVelocity_reboundVelocityFromCollision_3);
     }
 
-    MR::attenuateVelocity(this, 0.9f);
+    MR::attenuateVelocity(this, cNum_updateNormalVelocity_attenuateVelocity_1);
 }
 
 void DinoPackun::updateRunVelocity() {

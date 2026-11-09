@@ -5,6 +5,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_init_setRailCoordSpeed_1, "init.setRailCoordSpeed.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSetUp_setRailCoordSpeed_1, "exeSetUp.setRailCoordSpeed.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRun_setRailCoordSpeed_1, "exeRun.setRailCoordSpeed.1", 0.0f);
+
 namespace NrvBallRail {
     NEW_NERVE(BallRailNrvWait, BallRail, Wait);
     NEW_NERVE(BallRailNrvSetUp, BallRail, SetUp);
@@ -39,7 +44,7 @@ void BallRail::init(const TableIter& rIter) {
     MR::onCalcGravity(this);
     initRailRider(rIter);
     MR::moveCoordToStartPos(this);
-    MR::setRailCoordSpeed(this, 0.0f);
+    MR::setRailCoordSpeed(this, cNum_init_setRailCoordSpeed_1);
     initHitSensor(1);
     MR::addHitSensor(this, "bind", ATYPE_BALL_RAIL, 8, mBindSensorRadius, Vec3f(0.0f, mBindSensorRadius, 0.0f));
     initNerve(GET_NERVE(BallRail, BallRailNrvWait));
@@ -85,7 +90,7 @@ void BallRail::exeSetUp() {
     if (MR::isFirstStep(this)) {
         mBindStartPos = mBindSensor->mPosition;
         MR::zeroVelocity(mBindSensor->mHost);
-        MR::setRailCoordSpeed(this, 0.0f);
+        MR::setRailCoordSpeed(this, cNum_exeSetUp_setRailCoordSpeed_1);
     }
 
     MR::moveCoord(this, sSetUpSpeed);
@@ -116,7 +121,7 @@ void BallRail::exeSetUp() {
 // at the rail's speed.
 void BallRail::exeRun() {
     if (MR::isFirstStep(this)) {
-        MR::setRailCoordSpeed(this, 0.0f);
+        MR::setRailCoordSpeed(this, cNum_exeRun_setRailCoordSpeed_1);
     }
 
     Vec3f railDir = MR::getRailDirection(this);

@@ -4,6 +4,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_checkPassBckFrame_1, "exeChase.checkPassBckFrame.1", 0.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, cSensorRadius, 30.0f);
     NEBULA_TUNABLE(f32, cBinderRadius, 40.0f);
@@ -313,7 +316,7 @@ void FireBubble::exeChase() {
     updateChaseFrontVecAndVelocity(::cChaseRotateSpeed);
     updateGravity(::cChaseGravity);
 
-    if (MR::checkPassBckFrame(this, 0.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeChase_checkPassBckFrame_1)) {
         MR::startSound(this, "SE_EM_FIRE_BUBBLE_JUMP");
     }
 

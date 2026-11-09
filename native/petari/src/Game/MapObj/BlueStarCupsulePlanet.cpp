@@ -20,6 +20,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_isReleaseForce_isNearPlayer_1, "isReleaseForce.isNearPlayer.1", 0.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHitPointer_1, "exeHitPointer.1", 3);
 
@@ -162,7 +165,7 @@ void BlueStarCupsulePlanet::getTargetPosition(Vec3f* pPos) {
 }
 
 bool BlueStarCupsulePlanet::isReleaseForce() const {
-    return MR::isNearPlayer(this, 0.0f);
+    return MR::isNearPlayer(this, cNum_isReleaseForce_isNearPlayer_1);
 }
 
 f32 BlueStarCupsulePlanet::getPointableRange() const {

@@ -22,6 +22,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFreeze_setBckRate_1, "exeFreeze.setBckRate.1", 0.0f);
+
 namespace {
     static const Vec cBodyHitSensorOffset = {0.0f, 0.0f, -10.0f};
 
@@ -805,7 +808,7 @@ void HomingKiller::exeFreeze() {
         }
 
         if (mType != Type_MagnumKiller) {
-            MR::setBckRate(this, 0.0f);
+            MR::setBckRate(this, cNum_exeFreeze_setBckRate_1);
         }
     }
 

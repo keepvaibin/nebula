@@ -14,6 +14,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_startLeaveAnim_setBckRate_1, "startLeaveAnim.setBckRate.1", -1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 1);
 
@@ -178,7 +181,7 @@ void DemoKoopaJrShip::startLeaveAnim() {
     if (mAnimCameraIndex == -1) {
         MR::startBck(this, "Arrival");
         MR::setBckFrame(this, MR::getBckCtrl(this)->getEnd() - 1.0f);
-        MR::setBckRate(this, -1.0f);
+        MR::setBckRate(this, cNum_startLeaveAnim_setBckRate_1);
     } else {
         MR::startBck(this, ::sAnim[mAnimCameraIndex].mLeaveAnimName);
 

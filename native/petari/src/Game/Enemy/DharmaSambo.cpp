@@ -27,6 +27,15 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_setBckRate_1, "exeAppear.setBckRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_setBckRate_1, "exeAttack.setBckRate.1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_DharmaSambo_exeStarPointerBind_setBckRate_1, "DharmaSambo_exeStarPointerBind.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tearDownStarPointerBind_setBckRate_1, "tearDownStarPointerBind.setBckRate.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_setBckRate_1, "exeHide.setBckRate.1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_DharmaSamboParts_exeStarPointerBind_setBckRate_1, "DharmaSamboParts_exeStarPointerBind.setBckRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endStarPointerBind_setBckRate_1, "endStarPointerBind.setBckRate.1", 1.0f);
+
 namespace {
     NEBULA_TUNABLE_LIST(f32, hPursueGoParam, , {0.3f, 1.0f, 0.97f, 3.0f});
     NEBULA_TUNABLE_LIST(f32, hPursueEscapeParam, , {-0.25f, 1.0f, 0.97f, 3.0f});
@@ -312,7 +321,7 @@ void DharmaSambo::exeAppear() {
 
         if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvAppearImmediately))) {
             MR::setBckFrameAndStop(this, 59.0f);
-            MR::setBckRate(this, 1.0f);
+            MR::setBckRate(this, cNum_exeAppear_setBckRate_1);
         }
     }
 
@@ -374,7 +383,7 @@ void DharmaSambo::exeAttack() {
         }
 
         if (mPartsCount == 2) {
-            MR::setBckRate(this, 1.2f);
+            MR::setBckRate(this, cNum_exeAttack_setBckRate_1);
         }
     }
 
@@ -440,7 +449,7 @@ void DharmaSambo::exeSpinHitted() {
 
 void DharmaSambo::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_DharmaSambo_exeStarPointerBind_setBckRate_1);
         MR::setBckRate(getHeadParts(), 0.0f);
         s32 count = mParts.size();
 
@@ -474,7 +483,7 @@ void DharmaSambo::tearDownStarPointerBind() {
         }
     }
 
-    MR::setBckRate(this, 1.0f);
+    MR::setBckRate(this, cNum_tearDownStarPointerBind_setBckRate_1);
     MR::setBckRate(getHeadParts(), 1.0f);
 }
 
@@ -585,7 +594,7 @@ void DharmaSambo::exeHide() {
         startActionAllParts("Hide");
 
         if (mPartsCount == 1) {
-            MR::setBckRate(this, 1.2f);
+            MR::setBckRate(this, cNum_exeHide_setBckRate_1);
         }
     }
 
@@ -780,7 +789,7 @@ void DharmaSamboParts::exeBlow() {
 void DharmaSamboParts::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
         MR::startPointerHitSound();
-        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(this, cNum_DharmaSamboParts_exeStarPointerBind_setBckRate_1);
         MR::emitEffect(this, "Touch");
     }
 
@@ -789,7 +798,7 @@ void DharmaSamboParts::exeStarPointerBind() {
 
 void DharmaSamboParts::endStarPointerBind() {
     MR::deleteEffect(this, "Touch");
-    MR::setBckRate(this, 1.0f);
+    MR::setBckRate(this, cNum_endStarPointerBind_setBckRate_1);
 }
 
 void DharmaSamboParts::setHead(bool head) {

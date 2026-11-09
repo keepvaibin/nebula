@@ -4,6 +4,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_addVelocityToGravity_1, "exeAppear.addVelocityToGravity.1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_setBckRate_1, "exeWait.setBckRate.1", 1.0f);
 
 namespace {
     static const char* const cDemoName = "カギ出現";
@@ -100,7 +105,7 @@ void KeySwitch::exeAppear() {
     }
 
     MR::setBckRate(this, MR::calcNerveValue(this, 0xB4, 3.0f, 1.5f));
-    MR::addVelocityToGravity(this, 2.0f);
+    MR::addVelocityToGravity(this, cNum_exeAppear_addVelocityToGravity_1);
 
     bool isSettled = false;
 
@@ -132,7 +137,7 @@ void KeySwitch::exeAppear() {
 void KeySwitch::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::tryStartBck(this, "Rotation");
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeWait_setBckRate_1);
         mVelocity.zero();
         MR::offCalcGravity(this);
     }

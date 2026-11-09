@@ -40,6 +40,10 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGuidance_isNearPlayer_1, "updateGuidance.isNearPlayer.1", -1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGoods_isNearPlayer_1, "updateGoods.isNearPlayer.1", 2000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDemo_1, "exeDemo.1", 89);
 
@@ -561,7 +565,7 @@ void TicoFat::startAbsorbSound() {
 }
 
 void TicoFat::updateGuidance() {
-    bool isNear = MR::isNearPlayer(mHungryTalkCtrl, -1.0f);
+    bool isNear = MR::isNearPlayer(mHungryTalkCtrl, cNum_updateGuidance_isNearPlayer_1);
     if (isNear && MR::requestTicoSeedGuidanceForce()) {
         MR::requestCounterLayoutAppearanceForTicoEat(false);
     }
@@ -601,7 +605,7 @@ void TicoFat::updatePointing() {
 }
 
 void TicoFat::updateGoods() {
-    if (MR::isNearPlayer(this, 2000.0f)) {
+    if (MR::isNearPlayer(this, cNum_updateGoods_isNearPlayer_1)) {
         MR::tryStartBck(mGoods0, "TicoFatGoodsStarPiece");
         MR::tryStartBck(mGoods1, "TicoFatGoodsStarPiece");
     } else {

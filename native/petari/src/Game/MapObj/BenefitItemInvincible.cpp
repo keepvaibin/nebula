@@ -12,6 +12,9 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_doEscape_addVelocityToGravity_1, "doEscape.addVelocityToGravity.1", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, cAppearThrowUpSpd, 10.0f);
     NEBULA_TUNABLE(f32, cAppearThrowFwdSpd, 5.0f);
@@ -98,7 +101,7 @@ void BenefitItemInvincible::initEscape() {
 
 void BenefitItemInvincible::doEscape() {
     MR::calcGravity(this);
-    MR::addVelocityToGravity(this, 1.0f);
+    MR::addVelocityToGravity(this, cNum_doEscape_addVelocityToGravity_1);
 
     if (MR::isBindedGround(this)) {
         MR::vecKillElement(mFwdAxis, mGravity, &mFwdAxis);

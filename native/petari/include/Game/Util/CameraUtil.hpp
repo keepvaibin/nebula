@@ -28,6 +28,8 @@ namespace MR {
 
     f32 getAspect();
     f32 getNearZ();
+    // The near plane drawn with: a plugin's (set_camera_near), else getNearZ.
+    f32 getRenderNearZ();
     f32 getFarZ();
     f32 getFovy();
     f32 getRenderFovy();  // CameraContext::getRenderFovy

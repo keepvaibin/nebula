@@ -12,6 +12,12 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_3, "exeWait.reboundVelocityFromCollision.3", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeWait_1, "exeWait.1", 112);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeExplosion_1, "exeExplosion.1", 20);
@@ -96,10 +102,10 @@ void BossStinkBugBomb::exeWait() {
         MR::startBrk(this, "Signal");
     }
 
-    MR::addVelocityToGravity(this, 1.2f);
+    MR::addVelocityToGravity(this, cNum_exeWait_addVelocityToGravity_1);
     f32 dot = mGravity.dot(mVelocity);
 
-    if (MR::reboundVelocityFromCollision(this, 0.8f, 5.0f, 1.0f) && dot >= 9.5f) {
+    if (MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3) && dot >= 9.5f) {
         f32 liner = MR::getLinerValueFromMinMax(dot, 10.5f, 30.0f, 0.3f, 1.0f);
         MR::startSound(this, "SE_BM_BOSS_BUG_BOMB_GROUND", 100.0f * liner);
         if (MR::isBindedGroundWater(this)) {

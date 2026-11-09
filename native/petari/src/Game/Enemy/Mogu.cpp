@@ -24,6 +24,13 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_1, "exeHitBlow.applyVelocityDampAndGravity.1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_2, "exeHitBlow.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_3, "exeHitBlow.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_4, "exeHitBlow.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_5, "exeHitBlow.applyVelocityDampAndGravity.5", 1.0f);
+
 namespace {
     struct SightParam {
         f32 mRange;
@@ -441,7 +448,7 @@ void Mogu::exeHitBlow() {
         MR::turnVecToVecRadian(&mSight, mSight, toPlayerH, PI, mUp);
     }
 
-    MR::applyVelocityDampAndGravity(this, 2.0f, 0.8f, 0.98f, 0.98f, 1.0f);
+    MR::applyVelocityDampAndGravity(this, cNum_exeHitBlow_applyVelocityDampAndGravity_1, cNum_exeHitBlow_applyVelocityDampAndGravity_2, cNum_exeHitBlow_applyVelocityDampAndGravity_3, cNum_exeHitBlow_applyVelocityDampAndGravity_4, cNum_exeHitBlow_applyVelocityDampAndGravity_5);
 
     if (MR::isGreaterStep(this, sHitBlowSteps)) {
         MR::startSound(this, "SE_EM_EXPLODE_S");

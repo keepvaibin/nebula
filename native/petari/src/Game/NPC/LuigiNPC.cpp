@@ -20,6 +20,12 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_branchFunc_isNearPlayer_1, "branchFunc.isNearPlayer.1", -1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_trySetNerveAfraid_isNearPlayer_1, "trySetNerveAfraid.isNearPlayer.1", -1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_trySetNerveAfraid_isNearPlayer_2, "trySetNerveAfraid.isNearPlayer.2", -1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOnTreeFall_addVelocityToGravity_1, "exeOnTreeFall.addVelocityToGravity.1", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sLiftUpSeTiming, 87);
     NEBULA_TUNABLE(f32, sAfraidSeRange, 600.0f);
@@ -48,7 +54,7 @@ LuigiNPC::LuigiNPC(const char* pName) : NPCActor(pName), mTakeOutStar(), mType(T
 }
 
 bool LuigiNPC::branchFunc(u32 /*msg*/) {
-    return !MR::isNearPlayer(mMsgCtrl, -1.0f) || MR::inMessageArea(mMsgCtrl);
+    return !MR::isNearPlayer(mMsgCtrl, cNum_branchFunc_isNearPlayer_1) || MR::inMessageArea(mMsgCtrl);
 }
 
 bool LuigiNPC::eventFunc(u32 msg) {
@@ -201,11 +207,11 @@ void LuigiNPC::control() {
 }
 
 bool LuigiNPC::trySetNerveAfraid() {
-    if (MR::isNearPlayer(mMsgCtrl, -1.0f) && !MR::inMessageArea(mMsgCtrl) && !MR::isPlayerElementModeTeresa()) {
+    if (MR::isNearPlayer(mMsgCtrl, cNum_trySetNerveAfraid_isNearPlayer_1) && !MR::inMessageArea(mMsgCtrl) && !MR::isPlayerElementModeTeresa()) {
         return MR::trySetNerve(this, GET_NERVE(LuigiNPC, LuigiNPCNrvAfraidWait));
     }
 
-    if (MR::isNearPlayer(mMsgCtrl, -1.0f) && MR::isPlayerElementModeTeresa()) {
+    if (MR::isNearPlayer(mMsgCtrl, cNum_trySetNerveAfraid_isNearPlayer_2) && MR::isPlayerElementModeTeresa()) {
         return MR::trySetNerve(this, GET_NERVE(LuigiNPC, LuigiNPCNrvAfraidSquat));
     }
 
@@ -391,7 +397,7 @@ void LuigiNPC::exeOnTreeFall() {
         MR::startSound(this, "SE_SV_LUIGI_FALL");
     }
 
-    MR::addVelocityToGravity(this, 1.0f);
+    MR::addVelocityToGravity(this, cNum_exeOnTreeFall_addVelocityToGravity_1);
 
     if (MR::isOnGround(this)) {
         mVelocity.zero();

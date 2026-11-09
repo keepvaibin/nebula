@@ -5,6 +5,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemo_setBckRate_1, "exeAppearDemo.setBckRate.1", 1.0f);
+
 namespace NrvOtaKingLongFoot {
     NEW_NERVE(OtaKingLongFootNrvWait, OtaKingLongFoot, Wait)
     NEW_NERVE(OtaKingLongFootNrvDamage, OtaKingLongFoot, Damage)
@@ -127,7 +130,7 @@ void OtaKingLongFoot::exeAppearDemo() {
     }
 
     if (MR::isStep(this, mDemoBckStep)) {
-        MR::setBckRate(this, 1.0f);
+        MR::setBckRate(this, cNum_exeAppearDemo_setBckRate_1);
     }
 }
 

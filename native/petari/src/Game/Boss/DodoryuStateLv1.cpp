@@ -15,6 +15,10 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_shakeCameraInfinity_1, "exeHide.shakeCameraInfinity.1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_shakeCameraInfinity_2, "exeHide.shakeCameraInfinity.2", 2.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sStopSceneFrame, 10);
     NEBULA_TUNABLE(f32, sKnockSpeed, 10.0f);
@@ -82,7 +86,7 @@ void DodoryuStateLv1::exeHide() {
 
         mHideStep = MR::getRandom(::sHideTermMin, ::sHideTermMax);
 
-        MR::shakeCameraInfinity(this, 0.2f, 2.0f);
+        MR::shakeCameraInfinity(this, cNum_exeHide_shakeCameraInfinity_1, cNum_exeHide_shakeCameraInfinity_2);
         MR::startBva(mHost, "Normal");
     }
 

@@ -11,6 +11,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.992f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeGround_1, "exeGround.1", 75);
 
@@ -86,8 +90,8 @@ void DinoPackunTrackFire::exeWait() {
         MR::emitEffect(this, "TrackFire");
     }
 
-    MR::addVelocityToGravity(this, 2.0f);
-    MR::attenuateVelocity(this, 0.992f);
+    MR::addVelocityToGravity(this, cNum_exeWait_addVelocityToGravity_1);
+    MR::attenuateVelocity(this, cNum_exeWait_attenuateVelocity_1);
     if (MR::isBindedGround(this)) {
         setNerve(GET_NERVE(DinoPackunFire, DinoPackunTrackFireNrvGround));
         MR::zeroVelocity(this);

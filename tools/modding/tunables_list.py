@@ -43,7 +43,7 @@ def main():
         "",
         "A mod sets one by its key in a luma.json layer's `\"tunables\"` (with `\"requires\": [\"tunables\"]`), or from a",
         "plugin with `set_tunable`; `get_tunable` reads one. A list's place is `key[i]`. Values are the game's, as written.",
-        "`<file>.<function>.<k>` keys are the k-th step count (frames) in that function.",
+        "`<file>.<function>.<k>` is the k-th step count (frames) in that function; `<file>.<function>.<call>.<k>` the k-th number it gives that call.",
         "",
     ]
     for folder in sorted(by_folder):

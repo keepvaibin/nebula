@@ -10,6 +10,13 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitSnow_turnDirectionToPlayerDegree_1, "exeWaitSnow.turnDirectionToPlayerDegree.1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStartHideSnow_checkPassBckFrame_1, "exeStartHideSnow.checkPassBckFrame.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromSnow_setVelocityJump_1, "exeAppearFromSnow.setVelocityJump.1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromSnow_addVelocityToGravity_1, "exeAppearFromSnow.addVelocityToGravity.1", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearFromSnow_1, "exeAppearFromSnow.1", 5);
 
@@ -288,7 +295,7 @@ void TrickRabbitSnow::exeWaitSnow() {
         MR::startAction(this, "StartEvent");
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 15.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeWaitSnow_turnDirectionToPlayerDegree_1);
     MR::zeroVelocity(this);
 }
 
@@ -299,7 +306,7 @@ void TrickRabbitSnow::exeStartHideSnow() {
 
     MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam);
 
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeStartHideSnow_checkPassBckFrame_1)) {
         startJumpSound();
     }
 
@@ -355,13 +362,13 @@ void TrickRabbitSnow::exeAppearFromSnow() {
     if (MR::isFirstStep(this)) {
         MR::emitEffect(this, "AppearSmoke");
         MR::startAction(this, "Jump");
-        MR::setVelocityJump(this, 25.0f);
+        MR::setVelocityJump(this, cNum_exeAppearFromSnow_setVelocityJump_1);
         MR::addVelocityMoveToDirection(this, mFrontVec, 20.0f);
         MR::startSound(this, "SE_SM_RABBIT_APPEAR");
         MR::startSystemSE("SE_SM_RUNAWAY_RABBIT_APP_ME");
     }
 
-    MR::addVelocityToGravity(this, 1.0f);
+    MR::addVelocityToGravity(this, cNum_exeAppearFromSnow_addVelocityToGravity_1);
     MR::attenuateVelocity(this, ::sBrakeAccelRate);
 
     if (MR::isGreaterStep(this, cStep_exeAppearFromSnow_1)) {
@@ -374,7 +381,7 @@ void TrickRabbitSnow::exeAppearFromSnow() {
 void TrickRabbitSnow::exeRunaway() {
     MR::updateActorState(this, mStateRunaway);
 
-    if (mStateRunaway->isRunning() && MR::checkPassBckFrame(this, 3.0f)) {
+    if (mStateRunaway->isRunning() && MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
         startJumpSound();
     }
 

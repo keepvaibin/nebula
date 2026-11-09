@@ -27,6 +27,10 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCaught_addVelocityToGravity_1, "exeCaught.addVelocityToGravity.1", 2.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 5);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeCaught_1, "exeCaught.1", 7);
@@ -370,7 +374,7 @@ void RunawayRabbit::exeRunaway() {
     if (!mStateRunaway->isRunning()) {
         return;
     }
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
         startJumpSound();
     }
     f32 runawaySpeed = ::sNoPressureAccel;
@@ -433,7 +437,7 @@ void RunawayRabbit::exeCaught() {
     MR::vecBlend(mPlayerBindPos, mPosition, &mPlayerBindPos, nerveRate);
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, 2.0f);
+        MR::addVelocityToGravity(this, cNum_exeCaught_addVelocityToGravity_1);
         MR::attenuateVelocity(this, ::sAirFric);
     } else {
         MR::zeroVelocity(this);

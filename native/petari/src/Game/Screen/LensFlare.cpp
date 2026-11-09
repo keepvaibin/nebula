@@ -14,6 +14,12 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_controlAnim_setBrkRate_1, "LensFlareRing_controlAnim.setBrkRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareGlow_controlAnim_setBrkRate_1, "LensFlareGlow_controlAnim.setBrkRate.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareLine_controlAnim_setBrkRate_1, "LensFlareLine_controlAnim.setBrkRate.1", 0.0f);
 
 namespace {
     NEW_NERVE(LensFlareModelNrvKill, LensFlareModel, Kill);
@@ -139,7 +145,7 @@ void LensFlareRing::appearAnim() {
 
 void LensFlareRing::controlAnim() {
     MR::startBrk(this, "LensFlare");
-    MR::setBrkRate(this, 0.0f);
+    MR::setBrkRate(this, cNum_LensFlareRing_controlAnim_setBrkRate_1);
     MR::setBrkFrame(this, (1.0f - mFlareStrength * mFadeLevel) * MR::getBrkCtrl(this)->getEnd());
 
     if (MR::isBckStopped(this)) {
@@ -160,7 +166,7 @@ void LensFlareGlow::appearAnim() {
 
 void LensFlareGlow::controlAnim() {
     MR::startBrk(this, "GlareGlow");
-    MR::setBrkRate(this, 0.0f);
+    MR::setBrkRate(this, cNum_LensFlareGlow_controlAnim_setBrkRate_1);
     MR::setBrkFrame(this, (1.0f - mFlareStrength * mFadeLevel) * MR::getBrkCtrl(this)->getEnd());
 }
 
@@ -173,7 +179,7 @@ void LensFlareLine::appearAnim() {
 
 void LensFlareLine::controlAnim() {
     MR::startBrk(this, "GlareLine");
-    MR::setBrkRate(this, 0.0f);
+    MR::setBrkRate(this, cNum_LensFlareLine_controlAnim_setBrkRate_1);
     MR::setBrkFrame(this, (1.0f - mFlareStrength * mFadeLevel) * MR::getBrkCtrl(this)->getEnd());
 }
 

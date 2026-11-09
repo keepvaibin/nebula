@@ -1,6 +1,10 @@
 #include "Game/Screen/SubMeterLayout.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_control_setAnimRate_1, "control.setAnimRate.1", 1.0f);
 
 namespace {
     static f32 sScreenOffsetX = 60.0f;
@@ -80,7 +84,7 @@ void SubMeterLayout::control() {
     case 3:
         if (mLifeFrame > 0x40) {
             MR::startAnim(this, "Wait", 0);
-            MR::setAnimRate(this, 1.0f, 0);
+            MR::setAnimRate(this, cNum_control_setAnimRate_1, 0);
             mPhase = 2;
         } else {
             MR::setAnimRate(this, ((0x40 - mLifeFrame) * 1.0f / 32.0f) + 1.0f, 0);

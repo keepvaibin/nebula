@@ -21,6 +21,22 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_applyVelocityDampAndGravity_1, "exeJump.applyVelocityDampAndGravity.1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_1, "exeHitToPlayer.reboundVelocityFromCollision.1", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_2, "exeHitToPlayer.reboundVelocityFromCollision.2", 0.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_reboundVelocityFromCollision_3, "exeHitToPlayer.reboundVelocityFromCollision.3", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_1, "exeHitToPlayer.applyVelocityDampAndGravity.1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_2, "exeHitToPlayer.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_3, "exeHitToPlayer.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_4, "exeHitToPlayer.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_applyVelocityDampAndGravity_5, "exeHitToPlayer.applyVelocityDampAndGravity.5", 1.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_1, "exeNoPowerStart.applyVelocityDampAndGravity.1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_2, "exeNoPowerStart.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_3, "exeNoPowerStart.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_4, "exeNoPowerStart.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNoPowerStart_applyVelocityDampAndGravity_5, "exeNoPowerStart.applyVelocityDampAndGravity.5", 1.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHitToPlayer_1, "exeHitToPlayer.1", 58);
 
@@ -172,7 +188,7 @@ void JumpSpider::exeJump() {
         mVelocity.set(-mGravity * 22.0f);
     }
 
-    MR::applyVelocityDampAndGravity(this, 0.3f, ::hGroundDamp, ::hAirDampH, ::hAirDampV, ::hJumpVelV);
+    MR::applyVelocityDampAndGravity(this, cNum_exeJump_applyVelocityDampAndGravity_1, ::hGroundDamp, ::hAirDampH, ::hAirDampV, ::hJumpVelV);
     Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
     MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.02f, mGravity);
@@ -205,8 +221,8 @@ void JumpSpider::exeHitToPlayer() {
         mVelocity.zero();
     }
 
-    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
-    MR::applyVelocityDampAndGravity(this, 0.3f, 0.8f, 0.98f, 0.98f, 1.0f);
+    MR::reboundVelocityFromCollision(this, cNum_exeHitToPlayer_reboundVelocityFromCollision_1, cNum_exeHitToPlayer_reboundVelocityFromCollision_2, cNum_exeHitToPlayer_reboundVelocityFromCollision_3);
+    MR::applyVelocityDampAndGravity(this, cNum_exeHitToPlayer_applyVelocityDampAndGravity_1, cNum_exeHitToPlayer_applyVelocityDampAndGravity_2, cNum_exeHitToPlayer_applyVelocityDampAndGravity_3, cNum_exeHitToPlayer_applyVelocityDampAndGravity_4, cNum_exeHitToPlayer_applyVelocityDampAndGravity_5);
     MR::killVelocityOnGroundH(this);
 
     if (MR::isGreaterStep(this, cStep_exeHitToPlayer_1)) {
@@ -302,7 +318,7 @@ void JumpSpider::exeNoPowerStart() {
         mVelocity.zero();
     }
 
-    MR::applyVelocityDampAndGravity(this, 0.8f, 0.8f, 0.98f, 0.98f, 1.0f);
+    MR::applyVelocityDampAndGravity(this, cNum_exeNoPowerStart_applyVelocityDampAndGravity_1, cNum_exeNoPowerStart_applyVelocityDampAndGravity_2, cNum_exeNoPowerStart_applyVelocityDampAndGravity_3, cNum_exeNoPowerStart_applyVelocityDampAndGravity_4, cNum_exeNoPowerStart_applyVelocityDampAndGravity_5);
 
     if (MR::isOnGround(this) && MR::isBckStopped(this)) {
         mPosition.set(mJumpPos);

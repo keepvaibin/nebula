@@ -16,6 +16,13 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_applyVelocityDampAndGravity_1, "exeFall.applyVelocityDampAndGravity.1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_applyVelocityDampAndGravity_2, "exeFall.applyVelocityDampAndGravity.2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_applyVelocityDampAndGravity_3, "exeFall.applyVelocityDampAndGravity.3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_applyVelocityDampAndGravity_4, "exeFall.applyVelocityDampAndGravity.4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_applyVelocityDampAndGravity_5, "exeFall.applyVelocityDampAndGravity.5", 1.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sIceArcAddHeight, 200.0f);
     NEBULA_TUNABLE(s32, sThrowSteps, 100);
@@ -133,7 +140,7 @@ void MoguStone::exeThrow() {
 void MoguStone::exeFall() {
     NebulaQuatMultiply(&mRotateQuat, &mPoseQuat, &mPoseQuat);
     mPoseQuat.normalize();
-    MR::applyVelocityDampAndGravity(this, 2.0f, 0.8f, 0.98f, 0.98f, 1.0f);
+    MR::applyVelocityDampAndGravity(this, cNum_exeFall_applyVelocityDampAndGravity_1, cNum_exeFall_applyVelocityDampAndGravity_2, cNum_exeFall_applyVelocityDampAndGravity_3, cNum_exeFall_applyVelocityDampAndGravity_4, cNum_exeFall_applyVelocityDampAndGravity_5);
 
     if (MR::isBinded(this) || MR::isGreaterStep(this, sFallSteps)) {
         breakAndKill();
