@@ -6,6 +6,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
 #include <string.h>
@@ -15,11 +16,11 @@
 namespace {
     // Corners (points, lines, stripes) in the world, each with where it was a game frame ago; the vertex stage places them
     // at the presented frame's time, through the camera at that time.
-    const u32 cBatchVertices = 16384;
-    VertexCorner sBatch[cBatchVertices];
+    // The three lists grow together to the run's corner count.
+    MR::GrowBuffer< VertexCorner > sBatch;
     // For shapes that read them: coordinate 1 (the corner's own) and 2 (its projection's q).
-    f32 sBatchUv1[cBatchVertices * 2];
-    f32 sBatchQ[cBatchVertices * 2];
+    MR::GrowBuffer< f32 > sBatchUv1;
+    MR::GrowBuffer< f32 > sBatchQ;
     bool sBatchExtras = false;
     u32 sBatchCount = 0;
     // NEBULA_PRIMITIVE_QUADS: the run is of instances.
@@ -80,11 +81,8 @@ namespace {
 
     // A corner: `pNow` and `pBefore` in the world; x, y, z its place (a projection reads them).
     void addCorner(const f32* pNow, const f32* pBefore, f32 x, f32 y, f32 z, f32 s, f32 t) {
-        if (sBatchCount == cBatchVertices) {
-            ParticleDraw::flush();
-        }
         const u32 v = sBatchCount++;
-        VertexCorner& rCorner = sBatch[v];
+        VertexCorner& rCorner = sBatch.room(sBatchCount)[v];
         rCorner.x = pNow[0];
         rCorner.y = pNow[1];
         rCorner.z = pNow[2];
@@ -107,10 +105,12 @@ namespace {
         rCorner.s = u;
         rCorner.t = w;
         if (sBatchExtras) {
-            sBatchUv1[v * 2] = s;
-            sBatchUv1[v * 2 + 1] = t;
-            sBatchQ[v * 2] = q;
-            sBatchQ[v * 2 + 1] = 0.0f;
+            f32* const pUv1 = sBatchUv1.room(sBatchCount * 2);
+            f32* const pQ = sBatchQ.room(sBatchCount * 2);
+            pUv1[v * 2] = s;
+            pUv1[v * 2 + 1] = t;
+            pQ[v * 2] = q;
+            pQ[v * 2 + 1] = 0.0f;
         }
     }
 }  // namespace
@@ -231,7 +231,7 @@ namespace ParticleDraw {
         site.setFlags(NEBULA_ITEM_PARTICLE);
         const NebulaPrimitive primitive = static_cast< NebulaPrimitive >(sBatchPrimitive);
         if (!sBatchExtras) {
-            memcpy(site.vertices< VertexCorner >(primitive, sBatchCount), sBatch, sBatchCount * sizeof(VertexCorner));
+            memcpy(site.vertices< VertexCorner >(primitive, sBatchCount), sBatch.mItems, sBatchCount * sizeof(VertexCorner));
         } else {
             VertexCornerExtras* pOut = site.vertices< VertexCornerExtras >(primitive, sBatchCount);
             for (u32 v = 0; v < sBatchCount; v++) {
