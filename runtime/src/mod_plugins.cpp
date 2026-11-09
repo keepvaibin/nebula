@@ -9,6 +9,8 @@
 #include <cstring>
 #include <string>
 #include <filesystem>
+#include <cstdarg>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <cstdio>
@@ -87,6 +89,23 @@ std::string load_error() {
     const char* text = dlerror();
     return text != nullptr ? text : "unknown";
 #endif
+}
+
+void* api_alloc(uint64_t bytes) {
+    return bytes == 0 || bytes > SIZE_MAX ? nullptr : std::malloc(static_cast<std::size_t>(bytes));
+}
+
+void api_release(void* memory) {
+    std::free(memory);
+}
+
+int32_t api_format(char* buffer, uint64_t size, const char* format, ...) {
+    if (format == nullptr || (buffer == nullptr && size != 0)) return -1;
+    std::va_list args;
+    va_start(args, format);
+    const int written = std::vsnprintf(buffer, static_cast<std::size_t>(size > SIZE_MAX ? SIZE_MAX : size), format, args);
+    va_end(args);
+    return written;
 }
 
 void api_log(const NebulaPlugin* self, const char* text) {
@@ -293,6 +312,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.store_set = api_store_set;
     g_api.store_get_text = api_store_get_text;
     g_api.store_set_text = api_store_set_text;
+    g_api.alloc = api_alloc;
+    g_api.release = api_release;
+    g_api.format = api_format;
     for (const ModRows::TextToAdd& text : rows.texts) {
         if (text.like.empty()) {
             g_api.add_text(text.id.c_str(), text.words.c_str());

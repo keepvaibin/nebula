@@ -716,6 +716,14 @@ typedef struct NebulaModApi {
        that name: a name the game has (its own animation table's) is played from the mod's bck. Called from the plugin's
        entry, before the first stage: 0 done; -1 a bad name or file, or too late. */
     int32_t (*add_player_animation)(const char* name, const char* file, float rate, int32_t blend_frames);
+    /* Memory of the plugin's own, from the game's C library: a plugin built with none (as one built for every device
+       is) has no malloc. alloc: null for 0 bytes or when none is left; the memory is aligned for any type.
+       release(null) does nothing. Kept until released; a plugin's memory is never moved or reused under it. */
+    void* (*alloc)(uint64_t bytes);
+    void (*release)(void* memory);
+    /* printf's formatting into `buffer` of `size` bytes, always ended with a 0 when size is above 0: what snprintf
+       returns (the length the whole text needs; below 0 for a bad format). */
+    int32_t (*format)(char* buffer, uint64_t size, const char* format, ...);
 } NebulaModApi;
 
 /* The HUD's parts, for show_hud: any together. */
