@@ -334,19 +334,21 @@ void RendererVk::log_video_memory(const VideoMemoryOutside& outside) {
         (ring->local() ? ring_local : ring_host) += ring->capacity();
         (ring->local() ? chunk_local : chunk_host) += ring->live_chunk_bytes();
     }
-    const std::uint64_t accounted = scene + slots + frame_pass + outside.picture_bytes + retired_textures + ring_local + chunk_local;
+    const std::uint64_t accounted =
+        scene + slots + frame_pass + outside.picture_bytes + retired_textures + ring_local + chunk_local + outside.mesh_local_bytes;
     std::fprintf(stderr,
                  "[vram] breakdown os-usage=%.0f budget=%.0f MB | allocator blocks=%u %.0f used=%.1f allocations=%u | "
                  "scene-targets=%.1f target-slots=%zu %.1f frame-pass=%zu %.1f pictures=%u %.1f retired=%.1f | "
                  "rings local=%.0f chunks=%.0f | accounted=%.0f unlisted=%.0f | other-heaps blocks=%u %.0f used=%.0f | "
-                 "host: staging=%.0f mesh-pages=%u (empty %u) %.0f live %.1f slots=%u %.1f rings=%.0f chunks=%.0f "
+                 "host: staging=%.0f mesh-pages=%u (empty %u) %.0f (%.0f in video memory) live %.1f slots=%u %.1f rings=%.0f chunks=%.0f "
                  "retired-buffers=%.1f | pipelines=%llu\n",
                  mb(usage), mb(budget), local.blocks, mb(local.block_bytes), mb(local.allocation_bytes), local.allocations,
                  mb(scene), target_slots_.size(), mb(slots), frame_pass_targets_.size(), mb(frame_pass), outside.picture_count,
                  mb(outside.picture_bytes), mb(retired_textures), mb(ring_local), mb(chunk_local), mb(accounted),
                  local.allocation_bytes > accounted ? mb(local.allocation_bytes - accounted) : 0.0, other.blocks,
                  mb(other.block_bytes), mb(other.allocation_bytes), mb(outside.staging_bytes), outside.mesh_pages,
-                 outside.mesh_empty_pages, mb(outside.mesh_page_bytes), mb(outside.mesh_live_bytes), outside.slots,
+                 outside.mesh_empty_pages, mb(outside.mesh_page_bytes), mb(outside.mesh_local_bytes), mb(outside.mesh_live_bytes),
+                 outside.slots,
                  mb(outside.slot_bytes), mb(ring_host), mb(chunk_host), mb(retired_buffers),
                  static_cast<unsigned long long>(outside.pipelines));
 }

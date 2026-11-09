@@ -152,7 +152,7 @@ using Rect = D3D12_RECT;
 namespace galaxy::render::gpu {
 
 // Where upload memory lies: Host (system memory the GPU reads across the bus; the CPU writes it write-combined) or GpuLocal
-// (video memory the CPU writes through a resizable BAR, for data the GPU reads every frame: the vertex and constant rings),
+// (video memory the CPU writes through a resizable BAR, for data the GPU reads every frame: the vertex and constant rings and the resident geometry pages),
 // on a device that maps its video memory for the CPU in bulk (Direct3D 12: the GPU upload heap; Vulkan: device-local
 // host-visible memory in a heap of its own larger than the 256 MB window); Host elsewhere.
 enum class UploadPlace : std::uint8_t { Host, GpuLocal };

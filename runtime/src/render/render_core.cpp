@@ -2213,6 +2213,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             outside.mesh_pages = meshes.pages;
             outside.mesh_empty_pages = meshes.empty_pages;
             outside.mesh_page_bytes = meshes.page_bytes;
+            outside.mesh_local_bytes = meshes.local_bytes;
             outside.mesh_live_bytes = meshes.live_bytes;
             outside.slot_bytes = meshes.slot_bytes;
             outside.slots = meshes.slots;
@@ -2230,6 +2231,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             outside.mesh_pages = meshes.pages;
             outside.mesh_empty_pages = meshes.empty_pages;
             outside.mesh_page_bytes = meshes.page_bytes;
+            outside.mesh_local_bytes = meshes.local_bytes;
             outside.mesh_live_bytes = meshes.live_bytes;
             outside.slot_bytes = meshes.slot_bytes;
             outside.slots = meshes.slots;

@@ -228,6 +228,7 @@ public:
     struct VideoMemoryOutside {
         std::uint64_t staging_bytes = 0u;                       // TextureStore's staging chunks
         std::uint64_t mesh_page_bytes = 0u, mesh_live_bytes = 0u, slot_bytes = 0u;
+        std::uint64_t mesh_local_bytes = 0u;                    // of mesh_page_bytes, in video memory
         std::uint32_t mesh_pages = 0u, mesh_empty_pages = 0u, slots = 0u;
         std::uint64_t picture_bytes = 0u;                       // DisplayPictures' textures
         std::uint32_t picture_count = 0u;
