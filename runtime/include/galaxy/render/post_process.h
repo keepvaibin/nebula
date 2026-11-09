@@ -99,6 +99,7 @@ private:
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         gpu::Use use = gpu::Use::PixelRead;
+        std::uint64_t used_frame = 0;  // the last frame ensure_target was asked for it
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -138,6 +139,9 @@ private:
               const Constants& constants);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
     void release_retired(std::uint64_t frame_index) noexcept;
+    // Hands back the targets no pass has asked for in kTargetIdleFrames frames (SMAA's after a switch to FXAA or off, the
+    // scaling intermediate after a window size that needs none); the next pass that wants one makes it again.
+    void trim_idle_targets(std::uint64_t frame_index, unsigned frames_in_flight);
 
     ID3D12Device* device_ = nullptr;
     PostProcessSettings settings_{};

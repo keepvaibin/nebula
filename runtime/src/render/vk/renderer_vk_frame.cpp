@@ -641,9 +641,14 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkResult result = vkAllocateDescriptorSets(device, &info, &set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        // A frame with more distinct tables than the pool holds: another pool twice the size of the last one, freed with the slot (the
-        // size is kept, so a frame that needed it once does not chain small pools again).
-        frame.overflow_sets = frame.overflow_sets == 0u ? vk_detail::kFrameSets : frame.overflow_sets * 2u;
+        // A frame with more distinct tables than the pool holds: another pool, freed with the slot. The first one of a frame
+        // has the size that satisfied the last such frame, each further one in the same frame twice the last, so a frame that
+        // needs it every time makes the same pool again instead of a larger one each frame.
+        const bool first_of_frame = frame.overflow_descriptors.empty();
+        frame.overflow_sets = frame.overflow_sets == 0u ? vk_detail::kFrameSets
+                              : first_of_frame           ? frame.overflow_sets
+                              : frame.overflow_sets <= vk_detail::kMaxOverflowSets / 2u ? frame.overflow_sets * 2u
+                                                                                        : vk_detail::kMaxOverflowSets;
         const VkDescriptorPool pool = vk_detail::create_pool(device, frame.overflow_sets, vk_detail::frame_pool(!bindless_, frame.overflow_sets));
         frame.overflow_descriptors.push_back(pool);
         info.descriptorPool = pool;

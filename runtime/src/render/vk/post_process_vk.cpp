@@ -446,6 +446,7 @@ void PostProcessorVk::apply_settings(const PostProcessSettings& settings) {
 bool PostProcessorVk::ensure_target(Target& target, unsigned width, unsigned height, VkFormat format,
                                     VkRenderPass pass, bool with_stencil) {
     if (target.texture && target.width == width && target.height == height && target.texture->format == format) {
+        target.used = clock_;
         return true;
     }
     target = {};
@@ -476,10 +477,12 @@ bool PostProcessorVk::ensure_target(Target& target, unsigned width, unsigned hei
     target.texture = std::move(texture);
     target.width = width;
     target.height = height;
+    target.used = clock_;
     return true;
 }
 
 bool PostProcessorVk::ensure_smaa_targets(unsigned width, unsigned height) {
+    smaa_used_ = clock_;
     if (stencil_.texture && stencil_.width == width && stencil_.height == height && edges_.texture &&
         weights_.texture) {
         return true;
@@ -488,6 +491,18 @@ bool PostProcessorVk::ensure_smaa_targets(unsigned width, unsigned height) {
     return ensure_target(stencil_, width, height, stencil_format_, VK_NULL_HANDLE, false) &&
            ensure_target(edges_, width, height, kEdgesFormat, edges_pass_, true) &&
            ensure_target(weights_, width, height, kWeightsFormat, weights_pass_, true);
+}
+
+void PostProcessorVk::trim_idle_targets() {
+    constexpr std::uint64_t kTargetIdleFrames = 600u;
+    if (stencil_.texture && clock_ > smaa_used_ + kTargetIdleFrames) {
+        edges_ = weights_ = stencil_ = {};
+    }
+    for (Target* target : {&antialiased_, &scaled_}) {
+        if (target->texture && clock_ > target->used + kTargetIdleFrames) {
+            *target = {};
+        }
+    }
 }
 
 void PostProcessorVk::begin_pass(VkCommandBuffer commands, VkRenderPass pass, const Target& target,
@@ -560,6 +575,8 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
     if (!ready_ || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
+    ++clock_;
+    trim_idle_targets();
     const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width, display_height,
                                                    settings_, status_.smaa_ok, status_.fxaa_ok);
     AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;

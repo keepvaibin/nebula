@@ -40,6 +40,10 @@ struct PoolSizes {
     std::uint32_t storage = 0;
     std::uint32_t storage_images = 0;
 };
+// Sampled images the renderer's passes take in one frame's pool: all passes on come to about 80.
+inline constexpr std::uint32_t kPassSampledImages = 256u;
+// The largest overflow pool a frame makes, in sets (a doubling stops here).
+inline constexpr std::uint32_t kMaxOverflowSets = 1u << 20;
 // The storage images a frame's renderer passes take: the game's bloom (GameBloomVk).
 inline constexpr std::uint32_t kPassStorageImages = 64u;
 // The storage buffers they take: the ambient occlusion's objects and tiles, per set of its passes.
@@ -64,7 +68,10 @@ constexpr PoolSizes scaled(PoolSizes sizes, std::uint32_t factor) {
 // A frame's descriptor pool: its constants sets, the renderer's own passes' sets, and without descriptor indexing a bound
 // table of kBoundTableSlots maps for each set.
 constexpr PoolSizes frame_pool(bool bound_tables, std::uint32_t sets = kFrameSets) {
-    return constants_sets(sets, {.images = (bound_tables ? sets * vk::kBoundTableSlots : 0u) + 64u,
+    // The sampled images of the renderer's own passes (bloom, occlusion, camera, anti-aliasing, scaling: 3 or 4 a set), one
+    // pool's worth per kFrameSets of sets.
+    const std::uint32_t pass_images = kPassSampledImages * (sets > kFrameSets ? sets / kFrameSets : 1u);
+    return constants_sets(sets, {.images = (bound_tables ? sets * vk::kBoundTableSlots : 0u) + pass_images,
                                  .samplers = kFrameUtilitySamplers, .storage = kPassStorageBuffers,
                                  .storage_images = kPassStorageImages});
 }
