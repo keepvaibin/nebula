@@ -6,6 +6,7 @@
 #include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Map/KCollision.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -522,12 +523,23 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
 }
 
 namespace {
-    // Area lists are asked for on the game thread.
-    KC_PrismData* sAreaPrisms[512];
+    // Area lists are asked for on the game thread: one buffer for them all (the root arena's: it outlives scenes), grown
+    // to the longest list asked for.
+    KC_PrismData** sAreaPrisms = nullptr;
+    u32 sAreaPrismRoom = 0;
+
+    KC_PrismData** areaPrisms(u32 count) {
+        if (count > sAreaPrismRoom) {
+            delete[] sAreaPrisms;
+            sAreaPrismRoom = count < 512u ? 512u : count;
+            sAreaPrisms = new (NebulaArena::getRootHeap(), 0) KC_PrismData*[sAreaPrismRoom];
+        }
+        return sAreaPrisms;
+    }
 }  // namespace
 
 u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rMin, const Vec3f& rMax) {
-    KC_PrismData** const prisms = sAreaPrisms;
+    KC_PrismData** const prisms = areaPrisms(maxTriangles);
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();
@@ -548,19 +560,28 @@ u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles
 }
 
 u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, Vec3f* pPoints, u32 numPoints) {
-    KC_PrismData** const prisms = sAreaPrisms;
-    Vec3f localPoints[32];
+    if (numPoints == 0) {
+        return 0;
+    }
+    KC_PrismData** const prisms = areaPrisms(maxTriangles);
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();
 
-    for (u32 i = 0; i < numPoints; i++) {
-        mInvBaseMatrix.mult(pPoints[i], localPoints[i]);
-    }
-
+    // The points' box in the part's space.
     Vec3f min;
-    Vec3f max;
-    MR::createBoundingBox(localPoints, numPoints, &min, &max);
+    mInvBaseMatrix.mult(pPoints[0], min);
+    Vec3f max = min;
+    for (u32 i = 1; i < numPoints; i++) {
+        Vec3f local;
+        mInvBaseMatrix.mult(pPoints[i], local);
+        min.x = local.x < min.x ? local.x : min.x;
+        min.y = local.y < min.y ? local.y : min.y;
+        min.z = local.z < min.z ? local.z : min.z;
+        max.x = local.x > max.x ? local.x : max.x;
+        max.y = local.y > max.y ? local.y : max.y;
+        max.z = local.z > max.z ? local.z : max.z;
+    }
     u32 count = mServer->checkArea3D(reinterpret_cast< Fxyz* >(&min), reinterpret_cast< Fxyz* >(&max), prisms, maxTriangles);
     if (count == 0) {
         return 0;

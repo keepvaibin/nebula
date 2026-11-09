@@ -25,6 +25,8 @@ public:
 
 private:
     MR::Vector< MR::FixedArray< GalaxyNamePlatePrioritied*, 16 > > mPlateArray;
+    // The plates in drawing order, sorted again at each draw.
+    mutable MR::Vector< MR::FixedArray< const GalaxyNamePlatePrioritied*, 16 > > mDrawOrder;
 };
 
 namespace MR {
