@@ -94,6 +94,7 @@ enum SoundCommandKind : u16 {
     SOUND_STREAM_PREPARE,   // stream
     SOUND_STREAM_CANCEL,    // stream
     SOUND_STREAM_RELEASE,   // stream
+    SOUND_STREAM_ROOM,      // stream, StreamPlayer::MessageRoom*
     SOUND_ME_START,         // Me player, MeStartCommand
     SOUND_ME_PARAMS,        // Me player, SoundParams, then the frame's mix update
     SOUND_ME_STOP_AT_NOTE_END,  // Me player
