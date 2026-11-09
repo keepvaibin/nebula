@@ -3,6 +3,7 @@
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/SoundChild.hpp"
 #include "Game/Sound/SoundMemory.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 SequenceSound::SequenceSound(SequenceManager* seqMgr) {
     mManager = seqMgr;
@@ -190,7 +191,7 @@ s32 SequenceSound::getNumChild() const {
 SoundChild* SequenceSound::getChild(int index) {
     growChildren((index / 16 + 1) * 16);
     if (mSoundChild[index] == nullptr) {
-        mSoundChild[index] = new SoundChild();
+        mSoundChild[index] = new (SoundMemory::arena(), 0) SoundChild();
     }
     return mSoundChild[index];
 }

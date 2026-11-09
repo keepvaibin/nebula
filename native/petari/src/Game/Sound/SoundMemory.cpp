@@ -19,6 +19,10 @@ void SoundMemory::setArena(NebulaArena* pArena) {
     sArena = pArena;
 }
 
+NebulaArena* SoundMemory::arena() {
+    return sArena;
+}
+
 void* SoundMemory::alloc(u32 bytes) {
     u8* memory = static_cast< u8* >(NebulaArena::alloc(cHeaderBytes + bytes, 64, sArena));
     if (memory == nullptr) {
