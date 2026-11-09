@@ -39,12 +39,17 @@ GameEventValueChecker::GameEventValueChecker()
     initializeData();
 }
 
+// A name not in the table (a mod's) reads 0 and keeps nothing.
 u32 GameEventValueChecker::getValue(const char* pName) const {
-    return mValues[findIndex(pName)];
+    const s32 index = findIndex(pName);
+    return index >= 0 ? mValues[index] : 0;
 }
 
 void GameEventValueChecker::setValue(const char* pName, u16 value) {
-    mValues[findIndex(pName)] = value;
+    const s32 index = findIndex(pName);
+    if (index >= 0) {
+        mValues[index] = value;
+    }
 }
 
 u32 GameEventValueChecker::makeHeaderHashCode() const {
