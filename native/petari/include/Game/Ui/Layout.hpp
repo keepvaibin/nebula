@@ -149,7 +149,8 @@ namespace Ui {
         Pane* mpRootPane;
         GroupContainer* mpGroupContainer;
         Size mLayoutSize;
-        u8 _20;
+        // Where the layout's panes are measured from (ORIGINTYPE_*).
+        u8 mOriginType;
 
     private:
         struct ArenaObject {

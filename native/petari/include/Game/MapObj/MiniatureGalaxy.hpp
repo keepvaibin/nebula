@@ -64,7 +64,7 @@ public:
 
     s32 mType;
     s32 mState;
-    ModelObj* mUnknownModel;
+    ModelObj* mMysteryModel;
     ModelObj* mShadowModel;
     ModelObj* mSelectModel;
     ModelObj* mStarPlateModel;
