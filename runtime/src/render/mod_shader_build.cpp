@@ -188,9 +188,27 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
         thread.join();
     }
     if (!built.empty()) {
-        std::ofstream out(output, std::ios::binary);
+        // Written once, whole: to a temporary file beside it, then renamed over, so a crash or a full disk never leaves a
+        // half-written file for the next start to read.
         const std::string bytes = file_of(built);
-        out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        fs::path temporary = output;
+        temporary += ".tmp";
+        bool written = false;
+        {
+            std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
+            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+            written = static_cast<bool>(out);
+        }
+        std::error_code rename_error;
+        if (written) {
+            fs::rename(temporary, output, rename_error);
+        }
+        if (!written || rename_error) {
+            fs::remove(temporary, rename_error);
+            if (result.problem.empty()) {
+                result.problem = "the built shaders could not be written";
+            }
+        }
     }
     return result;
 }

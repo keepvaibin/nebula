@@ -34,7 +34,6 @@ struct RunOptions {
     const char* crash_dump_dir = nullptr;
     const char* d3d12_test_no_feature = nullptr;
     const char* d3d_debug = nullptr;
-    const char* d3d12_test_no_feature = nullptr;
     const char* gpu_draws = nullptr;
     const char* gpu_passes = nullptr;
     const char* gpu_preference = nullptr;
@@ -76,6 +75,7 @@ struct RunOptions {
     const char* test_settings_keys = nullptr;
     const char* test_motion_dump = nullptr;
     const char* test_settings_open = nullptr;
+    const char* test_vram_budget_mb = nullptr;
     const char* test_wide_tables = nullptr;
     const char* test_window_sizes = nullptr;
     const char* texture_dump_dir = nullptr;

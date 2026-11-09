@@ -1684,6 +1684,26 @@ void RenderCore::render_loop() {
             fail_queued_utilities(std::current_exception());
             break;
         }
+        // Out of sight: no picture of its own is presented, and nothing polls. A covered window is looked at every 100 ms to see
+        // whether the OS shows it again (the host resumes the game then); the device and its resources stay as they are, so a
+        // return costs no rebuild.
+        const bool hidden = window_hidden_.load(std::memory_order_relaxed);
+        if (hidden) {
+            try {
+                if (interp_sequence_.active) {
+                    supersede_interp_sequence();
+                }
+                const std::int64_t now = galaxy::qpc_now();
+                if (renderer_.occluded() && now >= occlusion_probe_due_qpc_) {
+                    occlusion_probe_due_qpc_ = now + galaxy::qpc_frequency() / 10;
+                    renderer_.probe_occlusion();
+                }
+            } catch (...) {
+                std::lock_guard<std::mutex> lock(queue_mutex_);
+                fail_queued_utilities(std::current_exception());
+                break;
+            }
+        }
         FrameChunk chunk;
         bool have_chunk = false;
         bool idle_present = false;
@@ -1691,7 +1711,7 @@ void RenderCore::render_loop() {
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             const RenderConfig cfg = get_render_config();
-            idle_present = cfg.frame_rate_decouple &&
+            idle_present = !hidden && cfg.frame_rate_decouple &&
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop: queued frames present without generated frames.
@@ -1699,7 +1719,7 @@ void RenderCore::render_loop() {
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
             // interpolation waits while the settings are open): the latest frame again at each display slot, so the
             // overlay keeps the rate play had instead of the game's 60 Hz frame rate.
-            overlay_idle = !stop_render_thread_ && overlay_idle_presents();
+            overlay_idle = !hidden && !stop_render_thread_ && overlay_idle_presents();
             if (!overlay_idle) {
                 overlay_idle_due_qpc_ = 0;
             } else if (overlay_idle_due_qpc_ == 0) {
@@ -1739,7 +1759,7 @@ void RenderCore::render_loop() {
                 });
             } else {
                 // A service waiting for a new card can't reach this thread any other way (DeviceGate).
-                queue_cv_.wait_for(lock, std::chrono::milliseconds(250), [this] {
+                queue_cv_.wait_for(lock, std::chrono::milliseconds(hidden ? 100 : 250), [this] {
                     return stop_render_thread_ || !frame_queue_.empty();
                 });
             }
@@ -2064,6 +2084,34 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     }
 }
 
+// Video memory: no size of it is assumed anywhere. The adapter's own figures (DXGI's local segment budget, Vulkan's device-local
+// heap budget) are read at each frame boundary; past the budget the store gives back textures no frame in flight names.
+// GALAXY_TEST_VRAM_BUDGET_MB=N (test builds) replaces the budget with N megabytes of the same reading.
+void RenderCore::enforce_video_memory() {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!renderer_.video_memory(usage, budget)) {
+        return;
+    }
+    if (const std::uint64_t forced = ::galaxy::run_option_u64(::galaxy::run_options().test_vram_budget_mb, 0u); forced != 0u) {
+        budget = forced << 20u;
+    }
+    texture_store_.enforce_budget(usage, budget);
+#if defined(NEBULA_DEV)
+    if (frame_index_ >= vram_log_at_) {
+        vram_log_at_ = frame_index_ + 600u;
+        const TextureStore::BudgetStats stats = texture_store_.budget_stats();
+        std::fprintf(stderr,
+                     "[vram] usage=%llu MB budget=%llu MB textures=%u resident=%llu MB evicted=%u (%llu evictions, %llu MB, "
+                     "%llu rebuilt, %llu blank draws)\n",
+                     static_cast<unsigned long long>(usage >> 20u), static_cast<unsigned long long>(budget >> 20u), stats.resident,
+                     static_cast<unsigned long long>(stats.resident_bytes >> 20u), stats.evicted,
+                     static_cast<unsigned long long>(stats.evictions), static_cast<unsigned long long>(stats.evicted_bytes >> 20u),
+                     static_cast<unsigned long long>(stats.rebuilds), static_cast<unsigned long long>(stats.blank_draws));
+    }
+#endif
+}
+
 void RenderCore::begin_walk_frame(ListEntry& entry) {
     const cadence::ScopedPhaseTimer render_begin_timer{cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
     const RenderConfig render = get_render_config();
@@ -2111,6 +2159,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
     texture_store_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+    enforce_video_memory();
     // New textures upload through this frame's command list.
     renderer_.attach_texture_uploads(texture_store_);
     {

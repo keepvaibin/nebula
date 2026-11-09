@@ -50,8 +50,24 @@ struct PlacedTextureAllocator::State {
         Heap heap;
         if (FAILED(device->CreateHeap(&desc, IID_PPV_ARGS(&heap.heap)))) return false;
         heap.free.emplace(0u, heap_bytes);
+        // A heap given back (release) leaves its place for the next one: the owners name heaps by index.
+        for (Heap& slot : heaps) {
+            if (!slot.heap) {
+                slot = std::move(heap);
+                return true;
+            }
+        }
         heaps.push_back(std::move(heap));
         return true;
+    }
+
+    // The heaps holding memory now.
+    [[nodiscard]] std::uint64_t live_heaps() const noexcept {
+        std::uint64_t live = 0u;
+        for (const Heap& heap : heaps) {
+            if (heap.heap) ++live;
+        }
+        return live;
     }
 
     // First fit over every heap's free ranges.
@@ -97,6 +113,12 @@ struct PlacedTextureAllocator::State {
         }
         free.emplace(start, length);
         used -= std::min(used, size);
+        // A heap with nothing placed in it gives its memory back to the adapter (the first stays: textures come back at once).
+        // Every range was returned by a resource that is gone, which only happens once the GPU is past the frames that read it.
+        if (heap_index != 0u && length == heap_bytes && free.size() == 1u && heaps[heap_index].heap) {
+            heaps[heap_index].heap.Reset();
+            free.clear();
+        }
     }
 };
 
@@ -240,8 +262,8 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
 PlacedTextureAllocator::Stats PlacedTextureAllocator::stats() const {
     std::lock_guard lock(state_->mutex);
     Stats stats;
-    stats.heaps = state_->heaps.size();
-    stats.heap_bytes = state_->heaps.size() * state_->heap_bytes;
+    stats.heaps = state_->live_heaps();
+    stats.heap_bytes = stats.heaps * state_->heap_bytes;
     stats.used_bytes = state_->used;
     stats.placed = state_->placed;
     stats.committed_fallbacks = state_->committed;

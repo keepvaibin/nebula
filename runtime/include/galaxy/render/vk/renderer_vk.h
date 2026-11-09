@@ -193,9 +193,15 @@ public:
     void trace_rings() const;
     void copy_fg_hudless_display(const DisplayTexture& dest);
     void attach_texture_uploads(TextureStore& cache);
+    // The device-local memory in use and its budget (VK_EXT_memory_budget when the device has it, else the allocator's
+    // estimate), read at a frame boundary. False: not known.
+    [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
     void wait_for_gpu_idle();
     void pump_messages() {}
     [[nodiscard]] bool quit_requested() const noexcept;
+    // Vulkan on Windows says nothing of a covered window (a minimised one is the host's word): never occluded.
+    [[nodiscard]] bool occluded() const noexcept { return false; }
+    void probe_occlusion() noexcept {}
 
     // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports a lost device (vk::Context::simulate_device_loss).
     void test_lose_device();

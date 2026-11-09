@@ -460,6 +460,15 @@ inline constexpr const char* test_small_heaps_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L"GALAXY_TEST_SMALL_HEAPS"; }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* test_vram_budget_mb() noexcept { return nullptr; }
+inline constexpr const char* test_vram_budget_mb_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_vram_budget_mb_wide_name() noexcept { return L""; }
+#else
+inline const char* test_vram_budget_mb() noexcept { return std::getenv("GALAXY_TEST_VRAM_BUDGET_MB"); }
+inline constexpr const char* test_vram_budget_mb_name() noexcept { return "GALAXY_TEST_VRAM_BUDGET_MB"; }
+inline constexpr const wchar_t* test_vram_budget_mb_wide_name() noexcept { return L"GALAXY_TEST_VRAM_BUDGET_MB"; }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* test_wide_tables() noexcept { return nullptr; }
 inline constexpr const char* test_wide_tables_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_wide_tables_wide_name() noexcept { return L""; }
@@ -728,15 +737,6 @@ inline constexpr const wchar_t* vk_test_refuse_wide_name() noexcept { return L"G
 inline constexpr const char* test_path_guard_name() noexcept { return ""; }
 #else
 inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* d3d12_test_no_feature() noexcept { return nullptr; }
-inline constexpr const char* d3d12_test_no_feature_name() noexcept { return ""; }
-inline constexpr const wchar_t* d3d12_test_no_feature_wide_name() noexcept { return L""; }
-#else
-inline const char* d3d12_test_no_feature() noexcept { return std::getenv("GALAXY_D3D12_TEST_NO_FEATURE"); }
-inline constexpr const char* d3d12_test_no_feature_name() noexcept { return "GALAXY_D3D12_TEST_NO_FEATURE"; }
-inline constexpr const wchar_t* d3d12_test_no_feature_wide_name() noexcept { return L"GALAXY_D3D12_TEST_NO_FEATURE"; }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* d3d_debug() noexcept { return nullptr; }

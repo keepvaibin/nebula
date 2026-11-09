@@ -82,13 +82,13 @@ void publish_native_pointer_input_origin(bool button, bool injected) noexcept;
 [[nodiscard]] bool native_pointer_input_injected(bool button) noexcept;
 
 // Binding capture for the overlay's CONTROLS page. While armed, the controller
-// of `scheme` (and `slot`, 0xff: any of the family) is read in every input
+// of `scheme` (and `slot`, kKeyboardSlot: any of the family) is read in every input
 // mode, never reaches the overlay's pad navigation, and the first new press
 // (button, stick direction past 0.6, trigger past 0.5) is stored; the overlay
 // is told through its key sink with kBindingCaptureKey and collects it with
 // take_controller_binding_capture.
 inline constexpr std::uintptr_t kBindingCaptureKey = 0xE8u;
-void arm_controller_binding_capture(input::ControlScheme scheme, std::uint8_t slot = input::kKeyboardSlot) noexcept;
+void arm_controller_binding_capture(input::ControlScheme scheme, std::uint32_t slot = input::kKeyboardSlot) noexcept;
 void cancel_controller_binding_capture() noexcept;
 [[nodiscard]] std::optional<input::InputSource> take_controller_binding_capture() noexcept;
 

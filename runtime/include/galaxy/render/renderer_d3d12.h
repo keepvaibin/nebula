@@ -272,10 +272,17 @@ public:
     void write_texture_list(const std::uint32_t* pairs, std::uint32_t count, gpu::Address& lists, std::uint32_t& first);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureStore& cache);
+    // The adapter's local video memory in use by this process and the OS's budget for it (DXGI QueryVideoMemoryInfo), read at
+    // a frame boundary. False: not known.
+    [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
     // The upload rings' sizes and the most one frame took (GALAXY_TRACE_MEMORY).
     void trace_rings() const;
     void pump_messages();           // no-op: window_owner_ pumps the window's messages
     [[nodiscard]] bool quit_requested() const noexcept;
+    // The last present said the whole window is covered (DXGI_STATUS_OCCLUDED); probe_occlusion asks again without drawing
+    // (a test present) and clears it when the window shows. Render thread for the probe, any thread for the flag.
+    [[nodiscard]] bool occluded() const noexcept { return occluded_.load(std::memory_order_relaxed); }
+    void probe_occlusion();
 
     // Advances the frame ring: waits on the fence of frame N-kFramesInFlight
     // only, resets that slot's command allocator, opens the command list,
@@ -666,6 +673,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Device10> barrier_device_;
     // The selected adapter, for video-memory budget queries.
     Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
+    std::atomic<bool> occluded_{false};
+    // The swap chain's frame latency waitable object (create_swap_chain): a present waits on it, bounded, so a frame is queued
+    // when the display can take it. Owned (closed with the chain); null where the chain has none.
+    HANDLE latency_wait_ = nullptr;
+    unsigned latency_timeouts_ = 0u;
+    void release_latency_wait() noexcept;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue_;
     Microsoft::WRL::ComPtr<IDXGISwapChain4> swap_chain_;
     Microsoft::WRL::ComPtr<IDXGIFactory4> dxgi_factory_;

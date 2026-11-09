@@ -72,6 +72,14 @@ bool quit_requested() noexcept {
     return backend().quit_requested();
 }
 
+void set_window_hidden(bool hidden) noexcept {
+    backend().set_window_hidden(hidden);
+}
+
+bool window_occluded() noexcept {
+    return backend().window_occluded();
+}
+
 std::uint64_t pictures_made() noexcept {
     return backend().pictures_made();
 }

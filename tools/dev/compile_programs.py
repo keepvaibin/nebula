@@ -1,7 +1,7 @@
 """Every program in every output variant, into one file. compile_programs.py dxil|spirv OUT.bin [SPIRV_TOOL]
 
 The generated programs are runtime/src/render/programs/ (build_programs.py); table.tsv maps every text's hash to the program
-that compiled the same. The written shaders are `WRITTEN` in NebulaShaderId order, from 1. Compiled stages are kept by
+that compiled the same. The written shaders are `WRITTEN` in NebulaShaderId order, from 1; --dev adds inspect_show and wide_probe after them. Compiled stages are kept by
 content in OUT's folder, so a rebuild compiles what changed. Format: core/program_table.cpp."""
 import hashlib
 import os
@@ -105,7 +105,7 @@ def main():
             add(stage, row, source, text, entry, defines, index)
         flags[(stage, row)] = LIT if "program_lit.hlsli" in text else 0
 
-    for number, name in enumerate(WRITTEN + (["inspect_show"] if dev else []), 1):
+    for number, name in enumerate(WRITTEN + (["inspect_show", "wide_probe"] if dev else []), 1):
         source = os.path.join(MATERIALS, name + ".hlsl")
         row = SITE | number << 1
         count = native_coords(source)

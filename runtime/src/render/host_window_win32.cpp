@@ -45,6 +45,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <filesystem>
 #include <iostream>
 #include <iterator>
@@ -87,6 +88,58 @@ void set_state_wake(void* event) noexcept {
 
 bool is_minimized() noexcept {
     return s_minimized.load(std::memory_order_relaxed);
+}
+
+namespace {
+std::atomic<std::uint64_t> s_instance_key{0u};
+constexpr wchar_t kInstanceProperty[] = L"NebulaInstanceKey";
+
+struct InstanceSearch {
+    std::uintptr_t key = 0u;
+    HWND found = nullptr;
+};
+
+BOOL CALLBACK find_instance_window(HWND window, LPARAM parameter) {
+    auto& search = *reinterpret_cast<InstanceSearch*>(parameter);
+    wchar_t name[64]{};
+    if (GetClassNameW(window, name, static_cast<int>(std::size(name))) == 0 || std::wcscmp(name, kWindowClass) != 0) {
+        return TRUE;
+    }
+    if (reinterpret_cast<std::uintptr_t>(GetPropW(window, kInstanceProperty)) != search.key) {
+        return TRUE;
+    }
+    search.found = window;
+    return FALSE;
+}
+}  // namespace
+
+void set_instance_key(std::uint64_t key) noexcept {
+    s_instance_key.store(key, std::memory_order_relaxed);
+}
+
+bool show_existing_instance(std::uint64_t key, unsigned wait_ms) noexcept {
+    if (key == 0u) {
+        return false;
+    }
+    const ULONGLONG deadline = GetTickCount64() + wait_ms;
+    for (;;) {
+        InstanceSearch search;
+        search.key = static_cast<std::uintptr_t>(key);
+        EnumWindows(find_instance_window, reinterpret_cast<LPARAM>(&search));
+        if (search.found != nullptr) {
+            // The user started this process last, so it may hand the foreground over; the running game's window takes it.
+            DWORD process = 0u;
+            GetWindowThreadProcessId(search.found, &process);
+            if (process != 0u) {
+                (void)AllowSetForegroundWindow(process);
+            }
+            return PostMessageW(search.found, kShowInstanceMessage, 0, 0) != FALSE;
+        }
+        if (GetTickCount64() >= deadline) {
+            return false;
+        }
+        Sleep(50);
+    }
 }
 static UINT monitor_dpi(const MonitorInfo& monitor) noexcept {
     const HMONITOR handle = MonitorFromPoint(
@@ -560,6 +613,9 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         }
         settings_window.store(
             reinterpret_cast<std::uintptr_t>(opened.window), std::memory_order_release);
+        if (const std::uint64_t key = s_instance_key.load(std::memory_order_relaxed); key != 0u) {
+            (void)SetPropW(opened.window, kInstanceProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(key)));
+        }
         borderless_active.store(fullscreen_window, std::memory_order_release);
         // No pointer seed from this thread: the window thread publishes geometry and input through WM_SIZE and
         // WM_SETFOCUS, and the first real message or cursor poll places the pointer.
@@ -612,6 +668,14 @@ double display_refresh_hz(NativeWindow window) noexcept {
 }
 
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_NCDESTROY) {
+        (void)RemovePropW(hwnd, kInstanceProperty);
+    }
+    if (msg == kShowInstanceMessage) {
+        ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
+        (void)SetForegroundWindow(hwnd);
+        return 0;
+    }
     if (msg == WM_DROPFILES) {
         // Dropped files: mod archives and folders into the mods folder (the MODS page opens on the import),
         // anything else to the Mii import.
