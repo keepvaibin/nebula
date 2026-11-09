@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/NameIndex.hpp"
 #include <nebula_geometry.hpp>
 
 class PlacementLink;
@@ -27,6 +28,8 @@ public:
 
     s32 mPosNum;           ///< The number of NamePosInfo instances.
     NamePosInfo* mInfos;  ///< The array of NamePosInfo instances.
+    MR::NameIndex mIndex;  // name -> its first entry
+    s32* mNextSame;        // per entry: the next entry of the same name, or -1
 };
 
 namespace MR {

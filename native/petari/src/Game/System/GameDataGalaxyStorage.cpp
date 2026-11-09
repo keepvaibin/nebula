@@ -160,6 +160,15 @@ GameDataAllGalaxyStorage::GameDataAllGalaxyStorage() : mHeaderSerializer(nullptr
         }
         iter.goNext();
     }
+
+    // First galaxy of a name, and of a save hash, in list order (as the scans found them).
+    mNames.reset(static_cast< u32 >(getGalaxyNum()));
+    mSaveHashes.reset(static_cast< u32 >(getGalaxyNum()));
+    for (s32 idx = 0; idx < getGalaxyNum(); idx++) {
+        const char* pName = mSomeGalaxyStorages[idx]->mGalaxyName;
+        mNames.add(pName, static_cast< u32 >(idx));
+        mSaveHashes.add(pName, static_cast< u16 >(MR::getHashCode(pName)), static_cast< u32 >(idx));
+    }
     initHeaderSerializer();
 }
 
@@ -294,21 +303,13 @@ s32 GameDataAllGalaxyStorage::getExtraStars() const {
 }
 
 s32 GameDataAllGalaxyStorage::findIndex(const char* pGalaxyName) const {
-    for (s32 idx = 0; idx < getGalaxyNum(); idx++) {
-        if (MR::isEqualString(pGalaxyName, mSomeGalaxyStorages[idx]->mGalaxyName)) {
-            return idx;
-        }
-    }
-    return -1;
+    const u32 index = mNames.find(pGalaxyName);
+    return index == MR::NameIndex::cNoValue ? -1 : static_cast< s32 >(index);
 }
 
 s32 GameDataAllGalaxyStorage::findIndex(u16 galaxyNameHash) const {
-    for (s32 idx = 0; idx < getGalaxyNum(); idx++) {
-        if ((u16)MR::getHashCode(mSomeGalaxyStorages[idx]->mGalaxyName) == galaxyNameHash) {
-            return idx;
-        }
-    }
-    return -1;
+    const u32 index = mSaveHashes.findHash(galaxyNameHash);
+    return index == MR::NameIndex::cNoValue ? -1 : static_cast< s32 >(index);
 }
 
 void GameDataSomeGalaxyStorage::serialize(const BinaryDataContentAccessor& rAccessor, u8* pData) const {
