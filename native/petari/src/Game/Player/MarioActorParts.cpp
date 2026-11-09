@@ -470,7 +470,7 @@ void MarioActor::createIceFloor(const Vec3f& rVec) {
 void MarioActor::createIceFloor(const Vec3f& rPos, const Vec3f& rRotation) {
     mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rPos, rRotation);
 
-    mIceStepIndex = (mIceStepIndex + 1) % 20;
+    mIceStepIndex = (mIceStepIndex + 1) % cIceStepNum;
 
     if (!MR::isDead(mIceSteps[mIceStepIndex])) {
         mIceSteps[mIceStepIndex]->destroy();
@@ -490,7 +490,7 @@ void MarioActor::createIceWall(const Vec3f& rPos, const Vec3f& rNormal) {
     vec *= 180.0f / PI;
     mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rPos, vec);
 
-    mIceStepIndex = (mIceStepIndex + 1) % 20;
+    mIceStepIndex = (mIceStepIndex + 1) % cIceStepNum;
 
     if (!MR::isDead(mIceSteps[mIceStepIndex])) {
         mIceSteps[mIceStepIndex]->destroy();

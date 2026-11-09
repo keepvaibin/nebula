@@ -12,6 +12,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
+namespace {
+    // One beam per interval of the attack.
+    const s32 sBeamNum = 3;
+    const s32 sBeamInterval = 80;
+};  // namespace
+
 namespace NrvRingBeamer {
     NEW_NERVE(RingBeamerNrvWait, RingBeamer, Wait);
     NEW_NERVE(RingBeamerNrvAttack, RingBeamer, Attack);
@@ -39,16 +45,12 @@ void RingBeamer::init(const TableIter& rIter) {
         MR::listenStageSwitchOffB(this, MR::Functor(this, &RingBeamer::syncSwitchOffB));
     }
     MR::joinToGroupArray(this, rIter, nullptr, 32);
-    // initializes to 5 long, but only uses 3?
-    mBeams = new RingBeam*[5];
-    for (int i = 0; i < 5; i++) {
-        mBeams[i] = nullptr;
-    }
+    mBeams = new RingBeam*[::sBeamNum];
     f32 beamSpeed = 20.0f;
     s32 beamLife = 100;
     MR::getPlacementArg0NoInit(rIter, &beamSpeed);
     MR::getPlacementArg1NoInit(rIter, &beamLife);
-    for (int i = 0; i < 3; i++) {
+    for (s32 i = 0; i < ::sBeamNum; i++) {
         mBeams[i] = new RingBeam("リングビーム", this, false, false);
         mBeams[i]->init(rIter);
         mBeams[i]->setSpeed(beamSpeed);
@@ -62,7 +64,7 @@ void RingBeamer::init(const TableIter& rIter) {
 void RingBeamer::syncSwitchOffB() {
     setNerve(GET_NERVE(RingBeamer, RingBeamerNrvInter));
 
-    for (int i = 0; i < 3; i++) {
+    for (s32 i = 0; i < ::sBeamNum; i++) {
         mBeams[i]->kill();
     }
 }
@@ -82,36 +84,33 @@ void RingBeamer::exeAttack() {
         MR::startBck(this, "Open");
     }
 
-    if (MR::isGreaterEqualStep(this, 240)) {
+    if (MR::isGreaterEqualStep(this, ::sBeamNum * ::sBeamInterval)) {
         setNerve(GET_NERVE(RingBeamer, RingBeamerNrvInter));
         return;
     }
 
-    if (getNerveStep() % 80 >= 0 && getNerveStep() % 80 < 79) {
+    if (getNerveStep() % ::sBeamInterval >= 0 && getNerveStep() % ::sBeamInterval < ::sBeamInterval - 1) {
         MR::startLevelSound(this, "SE_EM_LV_RINGBEAM_CHARGE");
     }
 
-    if (getNerveStep() % 80 == 0) {
+    if (getNerveStep() % ::sBeamInterval == 0) {
         MR::emitEffect(this, "Charge");
     }
 
-    if (getNerveStep() % 80 == 79) {
+    if (getNerveStep() % ::sBeamInterval == ::sBeamInterval - 1) {
         MR::deleteEffect(this, "Charge");
 
         if (!MR::enableGroupAttack(this, 3200.0f, 500.0f)) {
             MR::sendMsgToGroupMember(ACTMES_GROUP_HIDE, this, getSensor("Body"), "Body");
-        } else if (mBeams[getNerveStep() / 80]) {
-            mBeams[getNerveStep() / 80]->appear();
+        } else {
+            mBeams[getNerveStep() / ::sBeamInterval]->appear();
         }
     }
 }
 
 void RingBeamer::exeInter() {
-    if (MR::isFirstStep(this)) {
-    }
-
     if (MR::isGreaterEqualStep(this, 80)) {
-        for (int i = 0; i < 3; i++) {
+        for (s32 i = 0; i < ::sBeamNum; i++) {
             if (!MR::isDead(mBeams[i])) {
                 return;
             }

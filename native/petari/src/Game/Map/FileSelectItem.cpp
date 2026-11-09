@@ -44,8 +44,9 @@ namespace {
         return !(vecCopy.distance(diff) > f1);
     }
 
-    const char* const sFellowModel[5] = {"FileSelectDataMario", "FileSelectDataLuigi", "FileSelectDataYoshi", "FileSelectDataKinopio",
-                                   "FileSelectDataPeach"};
+    const char* const sFellowModel[] = {"FileSelectDataMario", "FileSelectDataLuigi", "FileSelectDataYoshi", "FileSelectDataKinopio",
+                                        "FileSelectDataPeach"};
+    const s32 sFellowNum = ARRAY_SIZE(sFellowModel);
 
     static const Vec sDataInfoOffset = {0.0f, 2150.0f, 0.0f};
 };  // namespace
@@ -87,9 +88,9 @@ FileSelectItem::FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconI
     mFellowMtx.identity();
     mFaceMtx.identity();
 
-    mModels = new FileSelectModel*[5];
+    mModels = new FileSelectModel*[::sFellowNum];
 
-    for (u32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         mModels[i] = nullptr;
     }
 }
@@ -137,7 +138,7 @@ void FileSelectItem::makeActorDead() {
     LiveActor::makeActorDead();
     mPlanetMapObj->makeActorDead();
 
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         mModels[i]->makeActorDead();
     }
 
@@ -363,7 +364,7 @@ void FileSelectItem::control() {
 
     mPlanetMapObj->mScale.setAll< f32 >(30.0f * mScaleCtrl->getScale());
 
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         mModels[i]->mScale.setAll< f32 >(30.0f * mScaleCtrl->getScale());
     }
 
@@ -385,7 +386,7 @@ void FileSelectItem::createNew() {
 }
 
 void FileSelectItem::createFellows() {
-    for (u32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         mModels[i] = new FileSelectModel(::sFellowModel[i], mFellowMtx, "キャラフェイス");
     }
 }
@@ -675,7 +676,7 @@ void FileSelectItem::appearFellowModel() {
 void FileSelectItem::killAllModels() {
     mPlanetMapObj->makeActorDead();
 
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         mModels[i]->makeActorDead();
     }
 
@@ -687,7 +688,7 @@ void FileSelectItem::emitOpen() {
         MR::emitEffect(mPlanetMapObj, "Open");
     }
 
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         if (!MR::isDead(mModels[i])) {
             mModels[i]->emitOpen();
         }
@@ -703,7 +704,7 @@ void FileSelectItem::emitVanish() {
         MR::emitEffect(mPlanetMapObj, "Vanish");
     }
 
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         if (!MR::isDead(mModels[i])) {
             mModels[i]->emitVanish();
         }
@@ -719,7 +720,7 @@ void FileSelectItem::emitCompleteEffect() {
         return;
     }
 
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         if (!MR::isDead(mModels[i])) {
             mModels[i]->emitCompleteEffect();
         }
@@ -731,7 +732,7 @@ void FileSelectItem::emitCompleteEffect() {
 }
 
 void FileSelectItem::deleteCompleteEffect() {
-    for (s32 i = 0; i < 5; i++) {
+    for (s32 i = 0; i < ::sFellowNum; i++) {
         mModels[i]->deleteCompleteEffect();
     }
 

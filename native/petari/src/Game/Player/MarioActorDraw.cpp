@@ -222,8 +222,8 @@ void MarioActor::initIceMario() {
     mIceModel->kill();
     MR::hideModel(mIceModel);
 
-    mIceSteps = new IceStep*[20];
-    for (u32 i = 0; i < 20; i++) {
+    mIceSteps = new IceStep*[cIceStepNum];
+    for (u32 i = 0; i < cIceStepNum; i++) {
         mIceSteps[i] = new IceStep("アイス床");
         mIceSteps[i]->initWithoutIter();
         mIceSteps[i]->kill();

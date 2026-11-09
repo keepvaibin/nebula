@@ -12,6 +12,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
+namespace {
+    const s32 sBeamNum = 12;
+};  // namespace
+
 namespace NrvBallBeamer {
     NEW_NERVE(BallBeamerNrvWait, BallBeamer, Wait);
     NEW_NERVE(BallBeamerNrvAttack, BallBeamer, Attack);
@@ -43,14 +47,14 @@ void BallBeamer::init(const TableIter& rIter) {
         MR::listenStageSwitchOnB(this, MR::Functor(this, &BallBeamer::syncSwitchOnB));
     }
 
-    mBeams = new RingBeam*[12];
+    mBeams = new RingBeam*[::sBeamNum];
     f32 beamSpeed = 12.0f;
     s32 beamLife = 530;
     s32 shadowMode = -1;
     MR::getPlacementArg0NoInit(rIter, &beamSpeed);
     MR::getPlacementArg1NoInit(rIter, &beamLife);
     MR::getPlacementArg2NoInit(rIter, &shadowMode);
-    for (int i = 0; i < 12; i++) {
+    for (s32 i = 0; i < ::sBeamNum; i++) {
         mBeams[i] = new RingBeam("リングビーム", this, true, shadowMode == 0);
         mBeams[i]->init(rIter);
         mBeams[i]->setSpeed(beamSpeed);
@@ -74,7 +78,7 @@ void BallBeamer::syncSwitchOnB() {
     MR::deleteEffect(this, "Charge");
     MR::emitEffect(this, "Vanish");
     kill();
-    for (int i = 0; i < 12; i++) {
+    for (s32 i = 0; i < ::sBeamNum; i++) {
         if (mBeams[i]) {
             mBeams[i]->kill();
         }
@@ -91,7 +95,7 @@ void BallBeamer::setupAttack() {
 }
 
 bool BallBeamer::tryAttack() {
-    for (int i = 0; i < 12; i++) {
+    for (s32 i = 0; i < ::sBeamNum; i++) {
         if (MR::isDead(mBeams[i])) {
             mBeams[i]->appear();
             return true;

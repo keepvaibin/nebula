@@ -56,6 +56,9 @@ namespace {
     }
 
     const s32 cHP = 3;
+    const s32 cCocoNutBallNum = 3;
+    const s32 cFireBallNum = 6;
+    const s32 cFireBubbleNum = 6;
     const f32 cThrowDistance = 4000.0f;
     const s32 cWaitFrame = 75;
     const f32 cValidThrowCocoNutDistance = 500.0f;
@@ -313,8 +316,8 @@ void OtaKing::initModel(const TableIter& rIter) {
 
     initLongFoot(rIter);
 
-    mCocoNutBallArray = new CocoNutBall[3];
-    for (int i = 0; i < 3; i++) {
+    mCocoNutBallArray = new CocoNutBall[::cCocoNutBallNum];
+    for (int i = 0; i < ::cCocoNutBallNum; i++) {
         mCocoNutBallArray[i].initWithoutIter();
         mCocoNutBallArray[i].mHost = this;
         mCocoNutBallArray[i].mIsHeightLimited = true;
@@ -331,15 +334,15 @@ void OtaKing::initModel(const TableIter& rIter) {
         }
     }
 
-    mFireBallArray = new FireBall[6];
+    mFireBallArray = new FireBall[::cFireBallNum];
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < ::cFireBallNum; i++) {
         mFireBallArray[i].initWithoutIter();
         mFireBallArray[i].mHost = this;
     }
 
-    mFireBubbleArray = new FireBubble[6];
-    for (int i = 0; i < 6; i++) {
+    mFireBubbleArray = new FireBubble[::cFireBubbleNum];
+    for (int i = 0; i < ::cFireBubbleNum; i++) {
         mFireBubbleArray[i].initWithoutIter();
     }
 
@@ -390,7 +393,7 @@ void OtaKing::dirToPlayer() {
 }
 
 CocoNutBall* OtaKing::getDisappearedCocoNut() {
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < ::cCocoNutBallNum; i++) {
         if (MR::isDead(&mCocoNutBallArray[i])) {
             return &mCocoNutBallArray[i];
         }
@@ -400,7 +403,7 @@ CocoNutBall* OtaKing::getDisappearedCocoNut() {
 }
 
 FireBall* OtaKing::getDisappearedFireBall() {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < ::cFireBallNum; i++) {
         if (MR::isDead(&mFireBallArray[i])) {
             return &mFireBallArray[i];
         }
@@ -410,7 +413,7 @@ FireBall* OtaKing::getDisappearedFireBall() {
 }
 
 FireBubble* OtaKing::getDisappearedBubble() {
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < ::cFireBubbleNum; i++) {
         if (MR::isDead(&mFireBubbleArray[i])) {
             return &mFireBubbleArray[i];
         }
@@ -421,7 +424,7 @@ FireBubble* OtaKing::getDisappearedBubble() {
 
 s32 OtaKing::getDisappearedCocoNutNum() const {
     s32 dissappearedNum = 0;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < ::cCocoNutBallNum; i++) {
         if (MR::isDead(&mCocoNutBallArray[i])) {
             dissappearedNum++;
         }
@@ -432,7 +435,7 @@ s32 OtaKing::getDisappearedCocoNutNum() const {
 
 s32 OtaKing::getDisappearedFireBallNum() const {
     s32 dissappearedNum = 0;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < ::cFireBallNum; i++) {
         if (MR::isDead(&mFireBallArray[i])) {
             dissappearedNum++;
         }
@@ -443,7 +446,7 @@ s32 OtaKing::getDisappearedFireBallNum() const {
 
 s32 OtaKing::getDisappearedFireBubbleNum() const {
     s32 dissappearedNum = 0;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < ::cFireBubbleNum; i++) {
         if (MR::isDead(&mFireBubbleArray[i])) {
             dissappearedNum++;
         }
@@ -462,7 +465,7 @@ bool OtaKing::isValidThrowCocoNut() const {
         return false;
     }
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < ::cCocoNutBallNum; i++) {
         CocoNutBall* currentCocoNut = &mCocoNutBallArray[i];
         if (!MR::isDead(currentCocoNut) && MR::isNear(this, currentCocoNut, distToPlayer + ::cValidThrowCocoNutDistance)) {
             return false;
@@ -1027,19 +1030,19 @@ void OtaKing::exeDown() {
         MR::invalidateHitSensors(this);
         MR::stopStageBGM(60);
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < ::cCocoNutBallNum; i++) {
             if (!MR::isDead(&mCocoNutBallArray[i])) {
                 mCocoNutBallArray[i].kill();
             }
         }
 
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < ::cFireBallNum; i++) {
             if (!MR::isDead(&mFireBallArray[i])) {
                 mFireBallArray[i].kill();
             }
         }
 
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < ::cFireBubbleNum; i++) {
             if (!MR::isDead(&mFireBubbleArray[i])) {
                 mFireBubbleArray[i].kill();
             }
