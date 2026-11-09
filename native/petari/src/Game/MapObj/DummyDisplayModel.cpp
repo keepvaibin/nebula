@@ -168,13 +168,12 @@ void DummyDisplayModel::control() {
 void DummyDisplayModel::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
     MtxPtr baseMtx = getBaseMtx();
-    Pos3f* pBase = reinterpret_cast< Pos3f* >(baseMtx);
 
     Vec3f modelOffset = mModelInfo->mOffset;
     Vec3f offset;
     offset.negate(modelOffset);
     NebulaMtxMultVec(baseMtx, offset, &mPosition);
-    pBase->setTrans(mPosition);
+    MR::setMtxTrans(baseMtx, mPosition);
 
     if (mIsInCrystal) {
         return;
@@ -182,13 +181,13 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
 
     switch (mItemType) {
     case DummyDisplayModelId_Coin:
-        MR::multMtx(*pBase, MR::getCoinRotateYMatrix(), *pBase);
+        MR::multMtx(baseMtx, MR::getCoinRotateYMatrix(), baseMtx);
         break;
     case DummyDisplayModelId_PowerStar:
     case DummyDisplayModelId_GrandStar: {
         Pos3f rot;
         rot.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
-        MR::multMtx(*pBase, rot, *pBase);
+        MR::multMtx(baseMtx, rot, baseMtx);
         break;
     }
     }

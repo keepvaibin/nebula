@@ -336,13 +336,13 @@ namespace MR {
     }
 
     void makeRTFromMtxPtr(Vec3f* pOutTrans, Vec3f* pOutRot, MtxPtr pSrc, bool toDegree) {
-        Pos3f* pMtx = reinterpret_cast< Pos3f* >(pSrc);
+        const Pos3f mtx(pSrc);
         if (pOutTrans != nullptr) {
-            pMtx->getTrans(*pOutTrans);
+            mtx.getTrans(*pOutTrans);
         }
 
         if (pOutRot != nullptr) {
-            pMtx->getEuler(*pOutRot);
+            mtx.getEuler(*pOutRot);
 
             if (toDegree) {
                 pOutRot->set(*pOutRot * _180_PI);
