@@ -187,6 +187,29 @@ public:
     // A picture back into the pool, once no frame in flight reads it.
     void release_texture(gpu::TextureRef texture, std::uint32_t width, std::uint32_t height);
 
+    // Calls `visit(gpu::TextureObject*)` for every texture the pictures hold: shown, waiting out their frames, idle (the
+    // video memory breakdown).
+    template <typename Visit>
+    void for_each_texture(Visit&& visit) const {
+        for (const auto& entry : registry_) {
+            if (entry.second.texture) {
+                visit(gpu::raw(entry.second.texture));
+            }
+        }
+        for (const std::vector<PooledTexture>& frame : retired_textures_) {
+            for (const PooledTexture& pooled : frame) {
+                if (pooled.texture) {
+                    visit(gpu::raw(pooled.texture));
+                }
+            }
+        }
+        for (const PooledTexture& pooled : idle_textures_) {
+            if (pooled.texture) {
+                visit(gpu::raw(pooled.texture));
+            }
+        }
+    }
+
     // The newest finished picture; nullptr before the first frame end.
     [[nodiscard]] const DisplayTexture* latest() const;
     // The finished picture in `slot`, or nullptr.

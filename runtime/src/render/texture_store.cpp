@@ -11,6 +11,7 @@
 #include "nebula_game_api.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -25,12 +26,23 @@ namespace {
 
 constexpr std::uint64_t kStagingChunkBytes = 16ull << 20u;
 constexpr std::size_t kFreeChunksKept = 4u;
+// Frames without a staging request before a spare chunk goes (one more for every kStagingTrimFrames after that): a scene's
+// load keeps its chunks for the next scene's, and a run that has stopped loading gives them back.
+constexpr unsigned kStagingIdleFrames = 600u;
+constexpr unsigned kStagingTrimFrames = 120u;
+
+// The bytes of the store's staging chunks that exist now (allocate_staging's), for the video memory breakdown.
+std::atomic<std::uint64_t> g_staging_bytes{0u};
 
 std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
 }
 
 }  // namespace
+
+std::uint64_t TextureStore::staging_bytes() noexcept {
+    return g_staging_bytes.load(std::memory_order_relaxed);
+}
 
 void detail::expand_record_level(std::uint8_t layout, const std::uint8_t* src, std::uint32_t width, std::uint32_t height,
                                  RGBA8* out) {
@@ -172,7 +184,9 @@ void TextureStore::restart(gpu::Device* device) {
 TextureStore::ChunkRef TextureStore::allocate_staging(std::uint64_t bytes, std::uint64_t& offset) {
     const auto make = [this](std::uint64_t size) {
         auto* chunk = new TextureBackend::UploadChunk(backend_.create_upload_chunk(size));
+        g_staging_bytes.fetch_add(chunk->size, std::memory_order_relaxed);
         return ChunkRef(chunk, [](TextureBackend::UploadChunk* gone) {
+            g_staging_bytes.fetch_sub(gone->size, std::memory_order_relaxed);
             TextureBackend::release_upload_chunk(*gone);
             delete gone;
         });
@@ -182,6 +196,7 @@ TextureStore::ChunkRef TextureStore::allocate_staging(std::uint64_t bytes, std::
         return make(bytes);
     }
     const std::lock_guard guard(lock_);
+    staging_requested_ = true;
     arena_used_ = align_up(arena_used_, TextureBackend::kPlacementAlignment);
     if (arena_chunk_ == nullptr || arena_used_ + bytes > kStagingChunkBytes) {
         if (!free_chunks_.empty()) {
@@ -462,6 +477,17 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
         }
     }
     kept_[frame_slot].clear();
+    {
+        // Spare chunks (idle: only this list holds them, and the frames that read them are past) go one at a time once no scene
+        // has staged a texture for a while; the chunk being filled stays.
+        const std::lock_guard guard(lock_);
+        if (std::exchange(staging_requested_, false)) {
+            staging_idle_frames_ = 0u;
+        } else if (++staging_idle_frames_ >= kStagingIdleFrames && !free_chunks_.empty()) {
+            free_chunks_.pop_back();
+            staging_idle_frames_ = kStagingIdleFrames - kStagingTrimFrames;
+        }
+    }
     packs_.retire_uploads(std::move(pack_staging_[frame_slot]));
     pack_staging_[frame_slot].clear();
     movie_staging_[frame_slot].clear();

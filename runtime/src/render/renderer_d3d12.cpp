@@ -419,6 +419,16 @@ D3D12_GPU_DESCRIPTOR_HANDLE DescriptorRing::texture_gpu_start() const noexcept {
     return heap_->GetGPUDescriptorHandleForHeapStart();
 }
 
+std::uint64_t DescriptorRing::heap_bytes() const noexcept {
+    std::uint64_t bytes = heap_ ? std::uint64_t{heap_->GetDesc().NumDescriptors} * increment_ : 0u;
+    for (const Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& replaced : replaced_) {
+        if (replaced) {
+            bytes += std::uint64_t{replaced->GetDesc().NumDescriptors} * increment_;
+        }
+    }
+    return bytes;
+}
+
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorRing::gpu_at(std::uint32_t index) const noexcept {
     auto gpu = heap_->GetGPUDescriptorHandleForHeapStart();
     gpu.ptr += static_cast<UINT64>(texture_descriptors_ + index) * increment_;
@@ -2519,9 +2529,107 @@ void RendererD3D12::free_target(std::uint32_t id, TextureStore& textures) {
             ++it;
         }
     }
+    // A target pass's set for this texture: ids are not used again, so no pass draws into it after this (a target slot used to
+    // stay until a later target pass swept it, and a scene with none kept the last scene's, at the frame's scale).
+    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
+        if (static_cast<std::uint32_t>(it->first) == id && !(target_pass_active_ && it->first == target_key_)) {
+            retire_target_slot(it->second);
+            it = target_slots_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 #if defined(NEBULA_DEV)
+std::uint64_t RendererD3D12::allocation_bytes(ID3D12Resource* resource) const {
+    if (resource == nullptr || !device_) {
+        return 0u;
+    }
+    const D3D12_RESOURCE_DESC desc = resource->GetDesc();
+    return device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
+}
+
+// `[vram] breakdown`: every 600 frames (RenderCore's table log), the OS's reading of the process's local video memory and what the
+// renderer holds of it by kind, each figure a resource's allocation size or a heap's size. Memory in upload heaps (host
+// memory on a discrete adapter, video memory for a ring that got a GPU upload heap) is listed apart: `rings local` and the
+// device-local kinds are subtracted from the OS figure to leave `other` (pipelines, the post chain's, ambient occlusion's
+// and bloom's own targets, the driver's and the compositor's).
+void RendererD3D12::log_video_memory(const VideoMemoryOutside& outside) {
+    const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    (void)video_memory(usage, budget);
+
+    const auto set_bytes = [this](const SceneTargetSet& set) {
+        return allocation_bytes(set.color.Get()) + allocation_bytes(set.depth.Get()) + allocation_bytes(set.msaa.color.Get()) +
+               allocation_bytes(set.msaa.depth.Get());
+    };
+    // The scene targets: the live set, the output-resolution one, the open target pass's, the wide and HUD-less ones, and the
+    // motion, reactive and effects-layer targets.
+    std::uint64_t scene = allocation_bytes(scene_color_.Get()) + allocation_bytes(scene_depth_.Get()) +
+                          allocation_bytes(scene_msaa_.color.Get()) + allocation_bytes(scene_msaa_.depth.Get());
+    scene += set_bytes(alt_scene_) + set_bytes(target_scene_) + set_bytes(hdr_scene_scene_) + set_bytes(fg_hudless_scene_target_);
+    scene += allocation_bytes(fg_hudless_display_.texture.Get()) + allocation_bytes(fg_hudless_target_.Get()) +
+             allocation_bytes(motion_target_.Get()) + allocation_bytes(reactive_target_.Get()) +
+             allocation_bytes(layer_color_.Get()) + allocation_bytes(layer_trans_.Get()) +
+             allocation_bytes(hdr_capture_target_.Get());
+    for (const OldSceneTarget& old : old_scene_targets_) {
+        scene += allocation_bytes(old.texture.Get());
+    }
+    std::uint64_t slots = 0u;
+    for (const auto& entry : target_slots_) {
+        slots += set_bytes(entry.second.set);
+    }
+    // Resources waiting out their frames: textures count as device-local, buffers (retired rings and chunks) are listed apart.
+    std::uint64_t retired_textures = 0u;
+    std::uint64_t retired_buffers = 0u;
+    for (const RetiredResourceList& list : retired_targets_) {
+        for (const Microsoft::WRL::ComPtr<ID3D12Resource>& resource : list) {
+            if (resource) {
+                (resource->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ? retired_buffers : retired_textures) +=
+                    allocation_bytes(resource.Get());
+            }
+        }
+    }
+    for (const RetiredBuffer& retired : retired_texture_lists_) {
+        retired_buffers += allocation_bytes(retired.resource.Get());
+    }
+    std::uint64_t ring_local = 0u;
+    std::uint64_t ring_host = 0u;
+    std::uint64_t chunk_local = 0u;
+    std::uint64_t chunk_host = 0u;
+    for (const UploadRing* ring : {&vertex_ring_, &index_ring_, &constant_ring_, &matrix_ring_}) {
+        (ring->local() ? ring_local : ring_host) += ring->capacity();
+        (ring->local() ? chunk_local : chunk_host) += ring->live_chunk_bytes();
+    }
+    const PlacedTextureAllocator::Stats frame_pass_heap = frame_pass_heap_.stats();
+    std::uint64_t descriptor_heaps = srv_ring_.heap_bytes();
+    const std::uint64_t descriptor_stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    for (const RetiredHeap& retired : retired_heaps_) {
+        if (retired.heap) {
+            descriptor_heaps += std::uint64_t{retired.heap->GetDesc().NumDescriptors} * descriptor_stride;
+        }
+    }
+    const std::uint64_t accounted = outside.texture_heap_bytes + frame_pass_heap.heap_bytes +
+                                    scene + slots + outside.picture_bytes + retired_textures + ring_local + chunk_local +
+                                    descriptor_heaps;
+    std::fprintf(stderr,
+                 "[vram] breakdown os-usage=%.0f budget=%.0f MB | textures heaps=%llu %.0f used=%.1f committed=%llu | "
+                 "scene-targets=%.1f target-slots=%zu %.1f frame-pass=%zu in %.0f (heap) pictures=%u %.1f retired=%.1f | "
+                 "rings local=%.0f chunks=%.0f | descriptor-heaps=%.1f | accounted=%.0f other=%.0f | "
+                 "host: staging=%.0f mesh-pages=%u (empty %u) %.0f live %.1f slots=%u %.1f rings=%.0f chunks=%.0f retired-buffers=%.1f | "
+                 "pipelines=%llu\n",
+                 mb(usage), mb(budget), static_cast<unsigned long long>(outside.texture_heaps), mb(outside.texture_heap_bytes),
+                 mb(outside.texture_used_bytes), static_cast<unsigned long long>(outside.texture_committed), mb(scene),
+                 target_slots_.size(), mb(slots), frame_pass_targets_.size(), mb(frame_pass_heap.heap_bytes), outside.picture_count,
+                 mb(outside.picture_bytes), mb(retired_textures), mb(ring_local), mb(chunk_local), mb(descriptor_heaps),
+                 mb(accounted), usage > accounted ? mb(usage - accounted) : 0.0, mb(outside.staging_bytes), outside.mesh_pages,
+                 outside.mesh_empty_pages, mb(outside.mesh_page_bytes), mb(outside.mesh_live_bytes), outside.slots,
+                 mb(outside.slot_bytes), mb(ring_host), mb(chunk_host), mb(retired_buffers),
+                 static_cast<unsigned long long>(outside.pipelines));
+}
+
 void RendererD3D12::list_live_objects(Kept& kept) {
     if (kept.debug_device) {
         s_listing_live_objects = true;
@@ -3446,6 +3554,9 @@ void RendererD3D12::begin_frame() {
     reset_sampler_frame();
     bound_rt_aux_ = 0u;
     retired_targets_[frame_slot_].clear();
+    if (frame_index_ % 120u == 0u) {
+        sweep_target_slots();
+    }
 
     // Bind both heaps for the entire frame: the one list-wide SetDescriptorHeaps unless a heap is replaced.
     srv_ring_.bind(command_list_.Get());
@@ -5066,8 +5177,30 @@ void RendererD3D12::end_target_pass(std::uint8_t channels, TextureStore& texture
     std::swap(slot.set, target_scene_);
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
     // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
+    sweep_target_slots();
+}
+
+void RendererD3D12::retire_target_slot(TargetSlot& slot) {
+    for (Microsoft::WRL::ComPtr<ID3D12Resource>* resource :
+         {&slot.set.color, &slot.set.depth, &slot.set.msaa.color, &slot.set.msaa.depth}) {
+        if (*resource) {
+            retired_targets_[frame_slot_].push_back(std::move(*resource));
+        }
+    }
+}
+
+void RendererD3D12::sweep_target_slots() {
+    if (target_slots_.empty()) {
+        return;
+    }
+    const std::uint64_t idle = target_idle_frames();
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        it = it->second.used + target_idle_frames() < frame_index_ ? target_slots_.erase(it) : std::next(it);
+        if (it->second.used + idle < frame_index_ && !(target_pass_active_ && it->first == target_key_)) {
+            retire_target_slot(it->second);
+            it = target_slots_.erase(it);
+        } else {
+            ++it;
+        }
     }
 }
 

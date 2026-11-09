@@ -2200,6 +2200,29 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             const core::Registries::TableCounts tables = registries_.table_counts();
             std::fprintf(stderr, "[render] texture tables: %u live, %u retired (%llu released since the start)\n", tables.live,
                          tables.retired, static_cast<unsigned long long>(tables.retirements));
+#if !defined(NEBULA_GPU_VULKAN)
+            // The same 600 frames: where the process's video memory is (the renderer adds its own targets, rings and heaps).
+            Renderer::VideoMemoryOutside outside;
+            const PlacedTextureAllocator::Stats texture_heap = texture_store_.backend().heap_stats();
+            outside.texture_heap_bytes = texture_heap.heap_bytes;
+            outside.texture_used_bytes = texture_heap.used_bytes;
+            outside.texture_heaps = texture_heap.heaps;
+            outside.texture_committed = texture_heap.committed_fallbacks;
+            outside.staging_bytes = TextureStore::staging_bytes();
+            const core::Registries::MemoryStats meshes = registries_.memory_stats();
+            outside.mesh_pages = meshes.pages;
+            outside.mesh_empty_pages = meshes.empty_pages;
+            outside.mesh_page_bytes = meshes.page_bytes;
+            outside.mesh_live_bytes = meshes.live_bytes;
+            outside.slot_bytes = meshes.slot_bytes;
+            outside.slots = meshes.slots;
+            display_pictures_.for_each_texture([&](gpu::TextureObject* texture) {
+                outside.picture_bytes += renderer_.allocation_bytes(texture);
+                ++outside.picture_count;
+            });
+            outside.pipelines = pipelines_.created();
+            renderer_.log_video_memory(outside);
+#endif
         }
 #endif
     }

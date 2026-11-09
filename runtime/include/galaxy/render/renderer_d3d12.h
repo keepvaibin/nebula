@@ -186,6 +186,8 @@ public:
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE gpu_at(std::uint32_t index) const noexcept;
 
     [[nodiscard]] ID3D12DescriptorHeap* heap() const { return heap_.Get(); }
+    // The bytes of the shader-visible heap and of the heaps growth replaced that are not yet freed (video memory).
+    [[nodiscard]] std::uint64_t heap_bytes() const noexcept;
     // The texture region.
     [[nodiscard]] std::uint32_t texture_slots() const noexcept { return texture_descriptors_; }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE texture_cpu(std::uint32_t slot) const noexcept;
@@ -280,6 +282,24 @@ public:
     [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
     // The upload rings' sizes and the most one frame took (GALAXY_TRACE_MEMORY).
     void trace_rings() const;
+#if defined(NEBULA_DEV)
+    // What the render core holds that the breakdown line (log_video_memory) adds to the renderer's own figures; bytes unless noted.
+    struct VideoMemoryOutside {
+        std::uint64_t texture_heap_bytes = 0u, texture_used_bytes = 0u, texture_heaps = 0u, texture_committed = 0u;
+        std::uint64_t staging_bytes = 0u;                       // TextureStore's staging chunks
+        std::uint64_t mesh_page_bytes = 0u, mesh_live_bytes = 0u, slot_bytes = 0u;
+        std::uint32_t mesh_pages = 0u, mesh_empty_pages = 0u, slots = 0u;
+        std::uint64_t picture_bytes = 0u;                       // DisplayPictures' textures
+        std::uint32_t picture_count = 0u;
+        std::uint64_t pipelines = 0u;                           // pipelines made
+    };
+    // The 600-frame `[vram] breakdown` line: the process's local video memory as the OS reads it, then the renderer's own
+    // accounting of each kind (resource allocation sizes and heap sizes, not estimates) and what is left. Render thread.
+    // `usage` is the OS figure.
+    void log_video_memory(const VideoMemoryOutside& outside);
+    // The size of `resource`'s allocation (GetResourceAllocationInfo); zero for none.
+    [[nodiscard]] std::uint64_t allocation_bytes(ID3D12Resource* resource) const;
+#endif
     void pump_messages();           // no-op: window_owner_ pumps the window's messages
     [[nodiscard]] bool quit_requested() const noexcept;
     // The last present said the whole window is covered (DXGI_STATUS_OCCLUDED); probe_occlusion asks again without drawing
@@ -877,6 +897,11 @@ private:
         return kTargetIdleFrames * std::max<std::uint64_t>(1u, static_cast<std::uint64_t>(rate / kGameStepRate + 0.5));
     }
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
+    // A slot's targets go to the open frame's retired list (the frames in flight may still draw into or read them).
+    void retire_target_slot(TargetSlot& slot);
+    // Slots no pass has used for target_idle_frames() give their targets back; also from begin_frame, so that a scene without
+    // target passes does not keep the last scene's.
+    void sweep_target_slots();
     std::uint64_t target_key_ = 0;
     SceneTargetSet target_scene_;
     bool target_pass_active_ = false;
