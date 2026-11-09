@@ -9,6 +9,7 @@ NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mExecutorId
     mListPlace[0] = -1;
     mListPlace[1] = -1;
     mListPlace[2] = -1;
+    mDrawBufferPlace = -1;
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
 
