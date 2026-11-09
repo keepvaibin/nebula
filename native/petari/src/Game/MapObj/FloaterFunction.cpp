@@ -42,17 +42,21 @@ namespace {
     }
 };  // namespace
 
+// An object not in the table (a mod's) has no sounds.
 namespace FloaterFunction {
     const char* getSeGroundOn(const char* pObjName) {
-        return ::getSeNameTable(pObjName)->mSeGroundOn;
+        const SeName* pRow = ::getSeNameTable(pObjName);
+        return pRow != nullptr ? pRow->mSeGroundOn : nullptr;
     }
 
     const char* getSeMoveDown(const char* pObjName) {
-        return ::getSeNameTable(pObjName)->mSeMoveDown;
+        const SeName* pRow = ::getSeNameTable(pObjName);
+        return pRow != nullptr ? pRow->mSeMoveDown : nullptr;
     }
 
     const char* getSeMoveUp(const char* pObjName) {
-        return ::getSeNameTable(pObjName)->mSeMoveUp;
+        const SeName* pRow = ::getSeNameTable(pObjName);
+        return pRow != nullptr ? pRow->mSeMoveUp : nullptr;
     }
 
     bool isExistImpactOnRide(const char* pObjName) {
