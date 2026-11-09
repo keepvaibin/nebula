@@ -364,6 +364,9 @@ private:
     std::vector<std::uint8_t> used_;
     std::vector<std::uint32_t> next_item_;
     float camera_move_ = 0.0f;
+    // GALAXY_TEST_PAIR_LOG (test builds): the ring draws that lost their pair, each drawer material and reason once.
+    void log_lost_ring_pairs(const ListData& now, const NebulaFrameList& last);
+    std::unordered_set<std::uint64_t> pair_logged_;
 };
 
 // A block's joints at t through its motions, `out` three rows each. An eye-space block's are eye matrices under `camera_t`.

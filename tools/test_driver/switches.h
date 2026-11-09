@@ -369,6 +369,11 @@ inline const char* test_motion_dump() noexcept { return nullptr; }
 inline const char* test_motion_dump() noexcept { return std::getenv("GALAXY_TEST_MOTION_DUMP"); }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* test_pair_log() noexcept { return nullptr; }
+#else
+inline const char* test_pair_log() noexcept { return std::getenv("GALAXY_TEST_PAIR_LOG"); }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* test_settings_open() noexcept { return nullptr; }
 #else
 inline const char* test_settings_open() noexcept { return std::getenv("GALAXY_TEST_SETTINGS_OPEN"); }

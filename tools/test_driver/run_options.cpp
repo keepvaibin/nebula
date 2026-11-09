@@ -103,6 +103,7 @@ RunOptions read_options() {
     o.test_small_heaps = nebula_switch::test_small_heaps();
     o.test_settings_keys = nebula_switch::test_settings_keys();
     o.test_motion_dump = nebula_switch::test_motion_dump();
+    o.test_pair_log = nebula_switch::test_pair_log();
     o.test_settings_open = nebula_switch::test_settings_open();
     o.test_vram_budget_mb = nebula_switch::test_vram_budget_mb();
     o.test_wide_tables = nebula_switch::test_wide_tables();
