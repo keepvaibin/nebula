@@ -68,7 +68,8 @@ void NoteCounter::add() {
     }
 
     mNoteAddNum++;
-    if (mNoteAddNum >= mNoteNum) {
+    // A note taken before any host declared the count has no one to tell.
+    if (mNoteAddNum >= mNoteNum && mHost != nullptr) {
         mHost->receiveMessage(0x66, MR::getMessageSensor(), MR::getMessageSensor());
     }
 

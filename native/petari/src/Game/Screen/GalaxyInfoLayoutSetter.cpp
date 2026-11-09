@@ -56,7 +56,8 @@ void GalaxyInfoLayoutSetter::replaceTexture(const char* pGalaxyName) {
         }
     }
 
-    MR::replacePaneTexture(mHost, "PicDummy", texture, 0);
+    // A galaxy (a mod's) with no picture in the archive shows the unknown picture.
+    MR::replacePaneTexture(mHost, "PicDummy", texture != nullptr ? texture : mHiddenGalaxyTexture, 0);
 }
 
 void GalaxyInfoLayoutSetter::updateInfo(const char* pGalaxyName, GalaxyState galaxyState) {
@@ -157,6 +158,9 @@ void GalaxyInfoLayoutSetter::setTextBoxStarNum(const char* pGalaxyName) {
     MR::Text16 starIconText;
     char16_t* const starBaseBuffer = starBaseText.room(room);
     char16_t* const starIconBuffer = starIconText.room(room);
+    // A galaxy with no scenarios shows empty texts.
+    starBaseBuffer[0] = 0;
+    starIconBuffer[0] = 0;
 
     char16_t* pStarBase = starIconBuffer;
     char16_t* pStarIcon = starBaseBuffer;

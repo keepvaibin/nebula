@@ -152,10 +152,14 @@ void MiiSelectIcon::copyIconID(FileSelectIconID* pIconID) {
 
 Ui::TexMap* MiiSelectIcon::getTexMap() {
     if (mIconID->isFellow()) {
-        SiteTexture texObj;
+        // A layout without the PicMario picture keeps the empty fellow texture.
+        const Ui::TexMap* pPicMario = MR::getLytTexMap(this, "PicMario", 0);
+        if (pPicMario != nullptr) {
+            SiteTexture texObj;
 
-        MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
-        mFellowTexMap->Set(texObj);
+            pPicMario->Get(&texObj);
+            mFellowTexMap->Set(texObj);
+        }
 
         return mFellowTexMap;
     }
@@ -241,10 +245,15 @@ void MiiSelectIcon::createFaceImageObj() {
         new MiiFaceIcon(128, 128, MiiFaceRecipe(Mii::SourceLibrary, 0, 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)), "Miiアイコン");
     mIcon->initWithoutIter();
 
-    SiteTexture texObj;
-    MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
-
-    mFellowTexMap = new Ui::TexMap(texObj);
+    // A layout without the PicMario picture gets an empty fellow texture.
+    const Ui::TexMap* pPicMario = MR::getLytTexMap(this, "PicMario", 0);
+    if (pPicMario != nullptr) {
+        SiteTexture texObj;
+        pPicMario->Get(&texObj);
+        mFellowTexMap = new Ui::TexMap(texObj);
+    } else {
+        mFellowTexMap = new Ui::TexMap();
+    }
     mMiiTexMap = MR::createLytTexMap(reinterpret_cast< ResTIMG* >(mIcon->mImageBuffer));
     pTexMap = mMiiTexMap;
 

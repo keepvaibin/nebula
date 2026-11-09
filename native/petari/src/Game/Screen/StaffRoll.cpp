@@ -115,8 +115,8 @@ namespace {
             return &::sStaffRollParamTable[2];
         }
 
-
-        return nullptr;
+        // A region the table lacks rolls as the US one (every caller reads the answer).
+        return &::sStaffRollParamTable[1];
     }
 };  // namespace
 
@@ -685,6 +685,10 @@ void StaffRoll::makeLine() {
         }
 
         pLine = getDeadLineLayout();
+        // Every line layout in use (a staff list with many columns or very short lines): the rest of this line is dropped.
+        if (pLine == nullptr) {
+            break;
+        }
         pLine->setPositionX(positionX);
         MR::setTextBoxMessageRecursive(pLine, ::cPaneNameText, columns[i]);
         pLine->appear();

@@ -84,9 +84,9 @@ namespace MR {
         template < class... Numbers >
         const char16_t* replaceWhole(Text16& rDst, const char* pMessageId, Numbers... numbers) {
             const char16_t* pMessage = MR::getGameMessageDirect(pMessageId);
-            const u32 units = ReplaceTagFunction::ReplaceArgs(rDst.data(), static_cast< s32 >(rDst.capacity()), pMessage, numbers...);
+            const u32 units = ReplaceTagFunction::ReplaceArgs(rDst.data(), static_cast< s32 >(rDst.capacity()), pMessage, sizeof...(Numbers), numbers...);
             if (units >= rDst.capacity()) {
-                ReplaceTagFunction::ReplaceArgs(rDst.room(units + 1), static_cast< s32 >(units + 1), pMessage, numbers...);
+                ReplaceTagFunction::ReplaceArgs(rDst.room(units + 1), static_cast< s32 >(units + 1), pMessage, sizeof...(Numbers), numbers...);
             }
             return rDst.c_str();
         }

@@ -435,7 +435,8 @@ Ui::TexMap* MR::getLytTexMap(LayoutActor* pActor, const char* pPaneName, u8 text
 void MR::replacePaneTexture(LayoutActor* pActor, const char* pPaneName, const Ui::TexMap* pTexture, u8 textureIndex) {
     Ui::Picture* pPicture = Ui::PaneCast< Ui::Picture >(getPane(pActor, pPaneName));
 
-    if (pPicture == nullptr) {
+    // A picture the caller found no texture for keeps the one it has.
+    if (pPicture == nullptr || pTexture == nullptr) {
         return;
     }
 

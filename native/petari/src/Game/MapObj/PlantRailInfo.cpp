@@ -7,6 +7,10 @@
 
 PlantRailInfo::PlantRailInfo(const TableIter& rIter, f32 speed) : mNumPlantPoints(), mPlantPoints(), mRailRider(), mRailSpeed(speed) {
     mRailRider = new RailRider(rIter);
+    // A speed of 0 or less covers the whole rail in one step (a rail of no length: one unit).
+    if (!(mRailSpeed > 0.0f)) {
+        mRailSpeed = mRailRider->getTotalLength() > 0.0f ? mRailRider->getTotalLength() : 1.0f;
+    }
     mRailRider->setSpeed(mRailSpeed);
 
     mNumPlantPoints = static_cast< s32 >(mRailRider->getTotalLength() / mRailSpeed) + 2;
@@ -28,7 +32,14 @@ PlantRailInfo::PlantRailInfo(const TableIter& rIter, f32 speed) : mNumPlantPoint
 }
 
 void PlantRailInfo::calcPosAndAxisY(Vec3f* pPos, Vec3f* pAxisY, f32 coord) const {
-    f32 normalized = (coord / mRailRider->getTotalLength()) * mNumPlantPoints;
+    // A rail of no length has one place.
+    const f32 totalLength = mRailRider->getTotalLength();
+    f32 normalized = totalLength > 0.0f ? (coord / totalLength) * mNumPlantPoints : 0.0f;
+
+    // A coordinate before the rail's start is its start.
+    if (normalized < 0.0f) {
+        normalized = 0.0f;
+    }
 
     s32 start = normalized;
     s32 end = start + 1;

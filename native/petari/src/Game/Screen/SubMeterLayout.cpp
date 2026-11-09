@@ -20,9 +20,17 @@ void SubMeterLayout::init(const TableIter& /*rIter*/) {
     MR::hideLayout(this);
     mPhase = 0;
     mFullLifeFrame = 0;
+    // Before the first ratio the meter is full.
+    mLifeFrame = 0x80;
 }
 
 void SubMeterLayout::setLifeRatio(f32 ratio) {
+    // A ratio outside 0 to 1, or not a number, stays on the meter's ends (the frame is an unsigned 16 bit number).
+    if (!(ratio >= 0.0f)) {
+        ratio = 0.0f;
+    } else if (ratio > 1.0f) {
+        ratio = 1.0f;
+    }
     f32 mult = 128.0f * ratio;
     mLifeFrame = (s32)(mult);
     MR::setPaneAnimFrameAndStop(this, "Count", 0x80 - mLifeFrame, 0);

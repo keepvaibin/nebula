@@ -141,7 +141,8 @@ void Flag::init(const TableIter& rIter) {
     mTexST = new f32[mNumPointsV * (mNumPointsU + 1) * 2];
     s32 idx = 0;
     for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
-        f32 texV = static_cast< f32 >(idxV) / static_cast< f32 >(mNumPointsV - 1);
+        // One row is the top of the picture.
+        f32 texV = mNumPointsV > 1 ? static_cast< f32 >(idxV) / static_cast< f32 >(mNumPointsV - 1) : 0.0f;
         mTexST[idx + 0] = 0.0f;
         mTexST[idx + 1] = texV;
         idx += 2;
@@ -214,7 +215,8 @@ void Flag::setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSid
         mPointIntervalU = width / mNumPointsU;
     }
 
-    if (height > 0.0f) {
+    // One row has no height between rows.
+    if (height > 0.0f && mNumPointsV > 1) {
         mPointIntervalV = height / (mNumPointsV - 1);
     }
 }
@@ -350,8 +352,9 @@ void Flag::updateFlag() {
     }
 
     for (s32 idxU = 0; idxU < getNumPointsU(); idxU++) {
-        f32 friction =
-            mFrictionRateMin + (1.0f - (static_cast< f32 >(idxU) / static_cast< f32 >(mNumPointsU - 1))) * (mFrictionRateMax - mFrictionRateMin);
+        // One column is the fixed end of the cloth.
+        const f32 along = mNumPointsU > 1 ? static_cast< f32 >(idxU) / static_cast< f32 >(mNumPointsU - 1) : 0.0f;
+        f32 friction = mFrictionRateMin + (1.0f - along) * (mFrictionRateMax - mFrictionRateMin);
 
         for (s32 idxV = 0; idxV < getNumPointsV(); idxV++) {
             SwingRopePoint* point = mFixPoints[idxV].mPoints[idxU];
