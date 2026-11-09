@@ -1,7 +1,6 @@
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include <cstring>
 #include <nebula_game_api.h>
 
 #include "Game/Util/StringUtil.hpp"
@@ -22,7 +21,7 @@ void* LayoutHolder::GetResource(u32 resourceKind, const char* pName, u32* pResou
         break;
     default:
 
-        if (strstr(pName, ".brfnt") == nullptr) {
+        if (!MR::isEqualSubString(pName, ".brfnt")) {
             pResource = mResOther.getRes(pName);
         }
 

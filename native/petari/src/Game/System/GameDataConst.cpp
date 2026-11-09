@@ -93,7 +93,7 @@ bool GameDataConst::isPowerStarSpecial(const char* pGalaxyName, s32 starId, cons
             continue;
         }
 
-        if (strstr(accessor.getName(), pSpecialStarName) == nullptr) {
+        if (!MR::isEqualSubString(accessor.getName(), pSpecialStarName)) {
             continue;
         }
 

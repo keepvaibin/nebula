@@ -7,14 +7,13 @@
 #include "Game/AreaObj/WarpCube.hpp"
 #include "Game/AreaObj/WaterArea.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <algorithm>
-#include <cstring>
 
 namespace {
     struct IsManagerName {
         bool operator()(const AreaObjMgr* pManager, const char* pName) const {
-            const char* pMatch = strstr(pName, pManager->mName);
-            return pMatch != nullptr && pMatch == pName;
+            return MR::isHeadString(pName, pManager->mName);
         }
     };
 

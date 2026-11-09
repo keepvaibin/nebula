@@ -4,6 +4,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 
 namespace {
@@ -96,7 +97,7 @@ SiteMesh< VertexFur >* createFurMesh(ModelData* pData, u32 shape, const ResTIMG*
             continue;
         }
         const Mesh* pOther = pData->getMeshAt(other);
-        if (strstr(pData->getMaterialName(pOther->mMaterial->mIndex), "Fur") != nullptr) {
+        if (MR::isEqualSubString(pData->getMaterialName(pOther->mMaterial->mIndex), "Fur")) {
             continue;
         }
         const NebulaModelMesh& rOther = *pOther->mFile;
