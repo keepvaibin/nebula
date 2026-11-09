@@ -83,10 +83,6 @@ public:
         return nullptr;
     }
 
-    virtual Pos3f* getMapBaseMtx() const {
-        return nullptr;
-    }
-
     virtual void resetStatus() {
     }
 };
@@ -146,7 +142,6 @@ public:
     virtual CubeCameraArea* getCubeCameraArea() const;
     virtual Triangle* getGroundTriangle() const;
     virtual GravityInfo* getGravityInfo() const;
-    virtual Pos3f* getMapBaseMtx() const;
 
     const MarioActor* mActor;
     Vec3f mSide;

@@ -270,7 +270,6 @@ public:
     void doFreezeAttack();
 
     // Defined in MarioActorCamera
-    MtxPtr getMapBaseMtx() const;
     bool isFastRise() const;
     bool isLongDrop() const;
     bool isFastDrop() const;
