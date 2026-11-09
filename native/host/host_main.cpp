@@ -2350,6 +2350,11 @@ uint32_t svc_option(void*, uint32_t what) {
         return ::galaxy::run_options().trace_loads != nullptr ? 1u : 0u;
     case NEBULA_OPTION_TEST_WIDE_TABLES:
         return ::galaxy::run_option_flag(::galaxy::run_options().test_wide_tables, false) ? 1u : 0u;
+    case NEBULA_OPTION_TEST_DRAW_NAMES:
+        return ::galaxy::run_option_flag(::galaxy::run_options().test_flicker_log, false) ||
+                       ::galaxy::run_option_flag(::galaxy::run_options().test_pair_log, false)
+                   ? 1u
+                   : 0u;
     case NEBULA_OPTION_TOUCH_POINTER:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::host::touch_pointer_state();

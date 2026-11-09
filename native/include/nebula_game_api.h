@@ -391,6 +391,8 @@ enum {
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
     NEBULA_OPTION_TEST_WIDE_TABLES,    /* tests (GALAXY_TEST_WIDE_TABLES): 1 draws the 24-map probe (NebulaWideProbe) */
+    NEBULA_OPTION_TEST_DRAW_NAMES,     /* tests (GALAXY_TEST_FLICKER_LOG or GALAXY_TEST_PAIR_LOG): 1 logs the names behind draw
+                                          identities, "[names] material <hash> <model>/<material>" and "[names] slot <n> <object>" */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

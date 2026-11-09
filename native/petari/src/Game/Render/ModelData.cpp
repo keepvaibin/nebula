@@ -4,8 +4,10 @@
 #include "Game/Render/Model.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_format.h>
+#include <nebula_module.h>
 #include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -223,5 +225,14 @@ void ModelData::setResourceName(const char* pName) {
     mResourceHash = hashName(hashName(2166136261u, pBase, true), "/", false);
     for (u32 i = 0; i < mFile->material_count; i++) {
         mMaterials[i].mSourceHash = hashName(mResourceHash, getMaterialName(i), false);
+    }
+    if (MotionSignal::drawNamesWanted()) {
+        s32 baseLength = 0;
+        while (pBase[baseLength] != '\0' && pBase[baseLength] != '.') {
+            baseLength++;
+        }
+        for (u32 i = 0; i < mFile->material_count; i++) {
+            nebula_log("[names] material %08x %.*s/%s\n", mMaterials[i].mSourceHash, baseLength, pBase, getMaterialName(i));
+        }
     }
 }

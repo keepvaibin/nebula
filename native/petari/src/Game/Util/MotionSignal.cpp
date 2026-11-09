@@ -36,6 +36,9 @@ namespace {
 
     u32* sEffectNames;
     u32 sEffectRoom;
+#if defined(NEBULA_DEV)
+    s32 sDrawNames = -1;
+#endif
 
     // "Effect/<ParticleNames.bcsv name>" of an emitter in the game's particle archive; 0 for another archive's.
     u32 effectName(const ParticleResource* pResource, const EmitterCore* pEmitter) {
@@ -59,12 +62,32 @@ namespace {
             }
             const u32 hash = hashName(hashName(hashName(2166136261u, "Effect"), "/"), pName);
             sEffectNames[index] = hash != 0 ? hash : 1;
+            if (MotionSignal::drawNamesWanted()) {
+                nebula_log("[names] material %08x Effect/%s\n", sEffectNames[index], pName);
+            }
         }
         return sEffectNames[index];
     }
 };  // namespace
 
 namespace MotionSignal {
+    bool drawNamesWanted() {
+#if defined(NEBULA_DEV)
+        if (sDrawNames < 0) {
+            sDrawNames = nebula_host()->option(nebula_host()->user, NEBULA_OPTION_TEST_DRAW_NAMES) != 0 ? 1 : 0;
+        }
+        return sDrawNames != 0;
+#else
+        return false;
+#endif
+    }
+
+    void slotNamed(u32 slot, const char* pName) {
+        if (drawNamesWanted()) {
+            nebula_log("[names] slot %u %s\n", slot, pName != nullptr ? pName : "");
+        }
+    }
+
     u32 drawEmitter(const ParticleResource* pResource, EmitterCore* pEmitter, bool child) {
         if (pEmitter->mDrawSlot == 0) {
             // Two numbers: the emitter's particles and its children's.

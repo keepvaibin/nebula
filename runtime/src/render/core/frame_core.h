@@ -381,7 +381,7 @@ private:
     void log_flicker(const ListData& now);
     std::unordered_map<std::uint64_t, FlickerEntry> flicker_;
     std::unordered_map<std::uint64_t, std::uint32_t> flicker_nth_;
-    std::unordered_map<std::uint64_t, std::uint32_t> flicker_counts_;  // material << 2 | kind
+    std::unordered_map<std::uint64_t, std::uint32_t> flicker_counts_;  // (material, or 1 << 32 | slot) << 2 | kind
     std::uint32_t flicker_lists_ = 0u;
 };
 
