@@ -17,13 +17,21 @@ class SoundEngine;
 // memory once mReleased says the audio thread has let go.
 class SoundPlayer {
 public:
-    static u32 bytes(u32 tracks, u32 mgrCount, const TrackRoom& rRoom);
-    static SoundPlayer* create(void* pMemory, u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute);
+    // `named`: the root's children whose own children the game names (a sequence's reserved children, 16 tracks each).
+    static u32 bytes(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 named);
+    static SoundPlayer* create(void* pMemory, u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 named, u32 ownerSound,
+                               u8 ownerRoute);
+    // The words of root children: every index a program's track byte or a reserved child can give.
+    static u32 rootWords(u32 named) {
+        return ((named > 256 ? named : 256) + 31) / 32;
+    }
 
-    // Read by the game thread: the root's status, the tracks it can name (root children 0-31; child 0's and child 1's children
-    // 0-31), and that the memory is free.
+    // Read by the game thread: the root's status, the tracks present (rootWords of root children, then one word of children
+    // for each named child), and that the memory is free.
     NebulaAtomic< s32 > mStatus = SeqTrack::STATUS_FREE;
-    NebulaAtomic< u32 > mPresent[3] = {0, 0, 0};
+    NebulaAtomic< u32 >* mPresent = nullptr;
+    u32 mRootWords = 0;
+    u32 mNamed = 0;
     NebulaAtomic< bool > mReleased = false;
 
     // The audio thread's.
@@ -33,9 +41,8 @@ public:
     SoundParams* mMgrSound = nullptr;
     bool* mHasSound = nullptr;
     u32 mMgrCount = 0;
-    // The values of the tracks the game names under the root's first two children (a sequence's sound children), by
-    // child * 16 + grandchild.
-    SoundParams mTrackSound[32];
+    // The values of the tracks the game names under the named children (a sequence's sound children), by child * 16 + grandchild.
+    SoundParams* mTrackSound = nullptr;
     bool mListed = false;
     bool mReleaseAsked = false;
     SoundPlayer* mNext = nullptr;
@@ -58,8 +65,8 @@ struct SoundJob {
 // A track as the game names it: the root, a child, or a child's child.
 struct TrackPath {
     u8 mDepth;
-    u8 mChild;
-    u8 mGrandchild;
+    u32 mChild;
+    u32 mGrandchild;
 };
 
 // The command kinds (SoundCommand::mKind) and their values.

@@ -32,12 +32,14 @@ namespace {
     }
 }  // namespace
 
-u32 SoundPlayer::bytes(u32 tracks, u32 mgrCount, const TrackRoom& rRoom) {
+u32 SoundPlayer::bytes(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 named) {
     return align16(sizeof(SoundPlayer)) + align16(mgrCount * sizeof(SoundParams)) + align16(mgrCount * sizeof(bool)) +
+           align16((rootWords(named) + named) * sizeof(NebulaAtomic< u32 >)) + align16(named * 16 * sizeof(SoundParams)) +
            tracks * TrackArena::recordBytes(mgrCount, rRoom);
 }
 
-SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute) {
+SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 named, u32 ownerSound,
+                                 u8 ownerRoute) {
     u8* cursor = static_cast< u8* >(pMemory);
     SoundPlayer* player = new (cursor) SoundPlayer();
     cursor += align16(sizeof(SoundPlayer));
@@ -52,6 +54,18 @@ SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, const 
     }
     cursor += align16(mgrCount * sizeof(bool));
     player->mMgrCount = mgrCount;
+    player->mRootWords = rootWords(named);
+    player->mNamed = named;
+    player->mPresent = reinterpret_cast< NebulaAtomic< u32 >* >(cursor);
+    for (u32 i = 0; i < player->mRootWords + named; i++) {
+        new (&player->mPresent[i]) NebulaAtomic< u32 >(0);
+    }
+    cursor += align16((player->mRootWords + named) * sizeof(NebulaAtomic< u32 >));
+    player->mTrackSound = reinterpret_cast< SoundParams* >(cursor);
+    for (u32 i = 0; i < named * 16; i++) {
+        new (&player->mTrackSound[i]) SoundParams();
+    }
+    cursor += align16(named * 16 * sizeof(SoundParams));
     player->mArena.setup(cursor, tracks, mgrCount, rRoom);
     player->mArena.mHolder.mKind = OWNER_TRACK;
     player->mArena.mHolder.mPlayer = player;
@@ -228,21 +242,41 @@ void SoundEngine::runTracks() {
 void SoundEngine::publish(SoundPlayer* pPlayer) {
     SeqTrack* const root = pPlayer->mRoot;
     pPlayer->mStatus = root->mStatus;
-    u32 present[3] = {0, 0, 0};
+    // Children are kept in index order: each word is stored once its bits are in.
+    const u32 rootWords = pPlayer->mRootWords;
+    u32 word = 0;
+    u32 bits = 0;
     for (SeqTrack* child = root->firstChild(); child != nullptr; child = child->nextSibling()) {
-        if (child->index() < 32) {
-            present[0] |= 1u << child->index();
+        const u32 at = child->index() / 32;
+        if (at >= rootWords) {
+            break;
         }
-        if (child->index() < 2) {
-            for (SeqTrack* grandchild = child->firstChild(); grandchild != nullptr; grandchild = grandchild->nextSibling()) {
-                if (grandchild->index() < 32) {
-                    present[1 + child->index()] |= 1u << grandchild->index();
-                }
+        for (; word < at; word++) {
+            pPlayer->mPresent[word] = bits;
+            bits = 0;
+        }
+        bits |= 1u << (child->index() & 31);
+    }
+    for (; word < rootWords; word++) {
+        pPlayer->mPresent[word] = bits;
+        bits = 0;
+    }
+    u32 named = 0;
+    for (SeqTrack* child = root->firstChild(); child != nullptr && child->index() < pPlayer->mNamed; child = child->nextSibling()) {
+        for (; named < child->index(); named++) {
+            pPlayer->mPresent[rootWords + named] = 0;
+        }
+        bits = 0;
+        for (SeqTrack* grandchild = child->firstChild(); grandchild != nullptr; grandchild = grandchild->nextSibling()) {
+            if (grandchild->index() < 32) {
+                bits |= 1u << grandchild->index();
             }
         }
+        pPlayer->mPresent[rootWords + named] = bits;
+        named++;
     }
-    for (u32 i = 0; i < 3; i++) {
-        pPlayer->mPresent[i] = present[i];
+    for (; named < pPlayer->mNamed; named++) {
+        pPlayer->mPresent[rootWords + named] = 0;
     }
 }
 
@@ -390,9 +424,9 @@ void SoundEngine::applyPlayer(SoundPlayer* pPlayer, const SoundCommand& rCommand
         root->init();
         break;
     case SOUND_PLAYER_RESERVE: {
-        // SequenceSound::reserveChildTracks_: two children, and under them the sequence's tracks by number (16 to a child).
+        // SequenceSound::reserveChildTracks_: the named children, and under them the sequence's tracks by number (16 to a child).
         const u32 tracks = rCommand.mValue;
-        for (u32 i = 0; i < 2; i++) {
+        for (u32 i = 0; i < pPlayer->mNamed; i++) {
             SeqTrack* child = root->reserveChild(i);
             if (child == nullptr) {
                 continue;
@@ -481,7 +515,7 @@ void SoundEngine::applyPlayer(SoundPlayer* pPlayer, const SoundCommand& rCommand
     }
     case SOUND_PLAYER_TRACK_SOUND: {
         const TrackSoundCommand& rTrack = rCommand.payload< TrackSoundCommand >();
-        if (rTrack.mPath.mDepth != 2 || rTrack.mPath.mChild >= 2 || rTrack.mPath.mGrandchild >= 16) {
+        if (rTrack.mPath.mDepth != 2 || rTrack.mPath.mChild >= pPlayer->mNamed || rTrack.mPath.mGrandchild >= 16) {
             break;
         }
         SeqTrack* target = track(pPlayer, rTrack.mPath);

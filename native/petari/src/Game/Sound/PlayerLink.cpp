@@ -9,10 +9,13 @@ namespace {
     }
 }  // namespace
 
-// The memory: the groups' last sent values (the game's), then the player (the audio thread's until it sets mReleased).
-void PlayerLink::create(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute) {
-    const u32 head = align64(mgrCount * (sizeof(SoundParams) + sizeof(bool)));
-    u8* memory = static_cast< u8* >(SoundMemory::alloc(head + SoundPlayer::bytes(tracks, mgrCount, rRoom)));
+// The memory: the groups' last sent values and the present tracks (the game's), then the player (the audio thread's until it
+// sets mReleased).
+void PlayerLink::create(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 named, u32 ownerSound, u8 ownerRoute) {
+    const u32 words = SoundPlayer::rootWords(named) + named;
+    const u32 present = (mgrCount * (sizeof(SoundParams) + sizeof(bool)) + 3) & ~3u;
+    const u32 head = align64(present + words * sizeof(u32));
+    u8* memory = static_cast< u8* >(SoundMemory::alloc(head + SoundPlayer::bytes(tracks, mgrCount, rRoom, named)));
     mMemory = memory;
     mSent = reinterpret_cast< SoundParams* >(memory);
     mSentHas = reinterpret_cast< bool* >(mSent + mgrCount);
@@ -20,11 +23,16 @@ void PlayerLink::create(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ow
         new (&mSent[i]) SoundParams();
         mSentHas[i] = false;
     }
-    mPlayer = SoundPlayer::create(memory + head, tracks, mgrCount, rRoom, ownerSound, ownerRoute);
+    mPresent = reinterpret_cast< u32* >(memory + present);
+    mRootWords = SoundPlayer::rootWords(named);
+    mNamed = named;
+    mPlayer = SoundPlayer::create(memory + head, tracks, mgrCount, rRoom, named, ownerSound, ownerRoute);
     mMgrCount = 1;
     mStatus = SeqTrack::STATUS_FREE;
     mStatusSerial = 0;
-    mPresent[0] = mPresent[1] = mPresent[2] = 0;
+    for (u32 i = 0; i < words; i++) {
+        mPresent[i] = 0;
+    }
     mPresentSerial = 0;
 }
 
@@ -65,17 +73,17 @@ bool PlayerLink::present(const TrackPath& rPath) const {
     u32 word;
     u32 bit;
     if (rPath.mDepth == 1) {
-        word = 0;
-        bit = rPath.mChild;
-    } else {
-        if (rPath.mChild >= 2) {
+        if (rPath.mChild >= mRootWords * 32) {
             return false;
         }
-        word = 1 + rPath.mChild;
+        word = rPath.mChild / 32;
+        bit = rPath.mChild & 31;
+    } else {
+        if (rPath.mChild >= mNamed || rPath.mGrandchild >= 32) {
+            return false;
+        }
+        word = mRootWords + rPath.mChild;
         bit = rPath.mGrandchild;
-    }
-    if (bit >= 32) {
-        return false;
     }
     const u32 mask = live ? static_cast< u32 >(mPlayer->mPresent[word]) : mPresent[word];
     return (mask >> bit & 1) != 0;
@@ -90,16 +98,19 @@ void PlayerLink::init() {
     }
 }
 
-// The reserved tracks: two children of the root, and the sequence's numbered tracks under them, 16 to a child.
+// The reserved tracks: the named children of the root, and the sequence's numbered tracks under them, 16 to a child.
 void PlayerLink::reserve(u32 tracks) {
     SoundCommand& rCommand = next(SOUND_PLAYER_RESERVE);
     rCommand.mValue = tracks;
-    mPresent[0] = 3;
-    for (u32 i = 0; i < 2; i++) {
-        mPresent[1 + i] = 0;
+    for (u32 w = 0; w < mRootWords; w++) {
+        mPresent[w] = 0;
+    }
+    for (u32 i = 0; i < mNamed; i++) {
+        mPresent[i / 32] |= 1u << (i & 31);
+        mPresent[mRootWords + i] = 0;
         for (u32 j = 0; j < 16; j++) {
             if (i * 16 + j < tracks) {
-                mPresent[1 + i] |= 1u << j;
+                mPresent[mRootWords + i] |= 1u << j;
             }
         }
     }
