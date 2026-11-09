@@ -24,4 +24,12 @@ public:
     void exeFrameToBlank();
     void exeBlankToFrame();
     void exeFrameToScreen();
+
+private:
+    f32 transitionDone();
+    void startTransition(const char* pAnimName);
+
+    // Where the next transition's animation starts, 0 to 1 of its length: a transition turned back part way starts the
+    // other way from the bars' place, never from its own beginning.
+    f32 mStartAt;
 };
