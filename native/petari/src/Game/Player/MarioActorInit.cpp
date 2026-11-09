@@ -35,11 +35,6 @@ void MarioActor::initMember() {
     mWallShadeAreaKind = 0;
     mCollisionShadow = nullptr;
     mShadowDrawer = nullptr;
-    mSilhouetteDrawer = nullptr;
-    mPreWipeDrawer = nullptr;
-    mDrawSearchLight = nullptr;
-    mScreenBlendDrawer = nullptr;
-    mIndirectDrawer = nullptr;
     mMario = nullptr;
     mMarioAnim = nullptr;
     mMarioEffect = nullptr;

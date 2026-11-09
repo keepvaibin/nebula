@@ -596,11 +596,6 @@ public:
     u8 mWallShadeAreaKind;  // 0 cube, 1 cylinder
     CollisionShadow* mCollisionShadow;  // the collision shadow
     DrawAdaptor* mShadowDrawer;  // draws drawShadow
-    DrawAdaptor* mSilhouetteDrawer;  // draws drawSilhouette
-    DrawAdaptor* mPreWipeDrawer;  // draws drawPreWipe
-    DrawAdaptor* mDrawSearchLight;
-    DrawAdaptor* mScreenBlendDrawer;  // draws drawScreenBlend
-    DrawAdaptor* mIndirectDrawer;  // draws drawIndirect
     Mario* mMario;
     MarioAnimator* mMarioAnim;
     MarioEffect* mMarioEffect;

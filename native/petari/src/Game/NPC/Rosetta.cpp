@@ -18,7 +18,7 @@ namespace NrvRosetta {
     NEW_NERVE(RosettaNrvReaction, Rosetta, Reaction);
 };  // namespace NrvRosetta
 
-Rosetta::Rosetta(const char* pName) : NPCActor(pName), mFadeStarter(this, -1), mDemoExecutor(), mTalkDemoExecutor(), mObjArg0(-1) {
+Rosetta::Rosetta(const char* pName) : NPCActor(pName), mFadeStarter(this, -1), mDemoExecutor(), mObjArg0(-1) {
 }
 
 void Rosetta::init(const TableIter& rIter) {
@@ -72,7 +72,7 @@ void Rosetta::init(const TableIter& rIter) {
         mDemoExecutor = new RosettaDemoAstroDomeFinalBattle(this, rIter);
     }
 
-    mTalkDemoExecutor = new RosettaDemoAstroDomeTalk(this, rIter);
+    new RosettaDemoAstroDomeTalk(this, rIter);  // its demos hold it
     MR::startBckNoInterpole(this, "WaitA");
     MR::calcAnimDirect(this);
 

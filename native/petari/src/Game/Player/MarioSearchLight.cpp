@@ -134,7 +134,7 @@ void MarioActor::initSearchLight() {
     PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(mSearchLight));
     model->initExtraPoses(16);
 
-    mDrawSearchLight = new DrawAdaptor(MR::Functor(this, &MarioActor::drawSearchLight), MR::DrawType_PlayerSearchLight);
+    new DrawAdaptor(MR::Functor(this, &MarioActor::drawSearchLight), MR::DrawType_PlayerSearchLight);
 }
 
 void MarioActor::updateThrowing() {
