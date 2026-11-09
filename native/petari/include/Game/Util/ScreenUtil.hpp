@@ -49,6 +49,9 @@ namespace MR {
     void forceCloseSystemWipeFade();
     // A wipe the scene being left holds fully closed carries on as the system wipe, in its colour (white or black).
     void holdClosedSceneWipeOnSystemWipe();
+    // For a scene change asked from inside a scene: false while the scene's own wipe is still closing (ask again later);
+    // true otherwise, with the system wipe closed in white when no closed wipe will cover the load.
+    bool coverScreenForSceneChange();
     bool isSystemWipeActive();
     void closeSystemWipeCircleWithCaptureScreen(s32 frame = -1);
     void closeSystemWipeFadeWithCaptureScreen(s32 frame = -1);
