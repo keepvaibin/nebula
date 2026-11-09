@@ -95,6 +95,7 @@ namespace GameAssets {
         Mapped* sMapped;
         u32 sMappedCount;
         u32 sMappedMax;
+        u32 sLastView;  // viewArena's last hit
 
         void release(const Mapped& rMapped) {
             const NebulaHostServices* const host = nebula_host();
@@ -151,6 +152,25 @@ namespace GameAssets {
             return *pA == *pB;
         }
     }  // namespace
+
+    NebulaArena* viewArena(const void* p) {
+        // A model's images lie in one view: the last view found is tried first.
+        const uintptr_t at = reinterpret_cast< uintptr_t >(p);
+        const auto holds = [at](const Mapped& rMapped) {
+            const uintptr_t start = reinterpret_cast< uintptr_t >(rMapped.mData);
+            return at >= start && at - start < rMapped.mSize;
+        };
+        if (sLastView < sMappedCount && holds(sMapped[sLastView])) {
+            return sMapped[sLastView].mArena;
+        }
+        for (u32 i = 0; i < sMappedCount; i++) {
+            if (holds(sMapped[i])) {
+                sLastView = i;
+                return sMapped[i].mArena;
+            }
+        }
+        return nullptr;
+    }
 
     void unloadArena(const NebulaArena* pArena) {
         for (u32 i = 0; i < sMappedCount;) {
