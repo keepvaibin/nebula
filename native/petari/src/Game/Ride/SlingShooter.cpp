@@ -466,6 +466,10 @@ void SlingShooter::calcBaseMtx(Pos3f* pBaseMtx) {
     MR::normalize(&up);
     Vec3f front(0.0f, 0.0f, -1.0f);
     Vec3f side = up.cross(front);
+    if (MR::isNearZero(side)) {
+        front.set< f32 >(1.0f, 0.0f, 0.0f);
+        side = up.cross(front);
+    }
     MR::normalize(&side);
     front.cross(side, up);
     MR::normalize(&front);
@@ -576,10 +580,12 @@ void SlingShooter::updateActorMtx() {
         Vec3f front;
         mBaseMtx.getZDir(front);
         Vec3f side = up.cross(front);
-        MR::normalize(&side);
-        up.cross(front, side);
-        MR::normalize(&up);
-        mBaseMtx.setXYZDir(side, up, front);
+        if (!MR::isNearZero(side)) {
+            MR::normalize(&side);
+            up.cross(front, side);
+            MR::normalize(&up);
+            mBaseMtx.setXYZDir(side, up, front);
+        }
     }
     mBaseMtx.setTrans(mPosition);
 }
@@ -638,8 +644,10 @@ bool SlingShooter::tryRelease() {
     Vec3f front;
     mBaseMtx.getZDir(front);
     Vec3f side = up.cross(front);
-    MR::normalize(&side);
-    mBaseMtx.setXYZDir(side, up, front);
+    if (!MR::isNearZero(side)) {
+        MR::normalize(&side);
+        mBaseMtx.setXYZDir(side, up, front);
+    }
 
     MR::emitEffect(mRider, "SpaceCocoonBlur");
     MR::emitEffect(this, "Stick");

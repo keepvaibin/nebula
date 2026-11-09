@@ -316,10 +316,17 @@ static inline f32 NebulaVecSquareDistance(const Vec* a, const Vec* b) {
     return (dx * dx + dy * dy) + dz * dz;
 }
 
-/* No zero test: a zero vector normalises to NaN. */
+/* A zero, NaN or infinite vector gives a zero vector (it would otherwise give NaN, which then sticks). */
 static inline void NebulaVecNormalize(const Vec* src, Vec* dst) {
     const f32 x = src->x, y = src->y, z = src->z;
-    const f32 r = 1.0f / sqrtf((x * x + z * z) + y * y);
+    const f32 m = (x * x + z * z) + y * y;
+    if (!(m > 0.0f && m <= 3.4028234e38f)) {
+        dst->x = 0.0f;
+        dst->y = 0.0f;
+        dst->z = 0.0f;
+        return;
+    }
+    const f32 r = 1.0f / sqrtf(m);
     dst->x = x * r;
     dst->y = y * r;
     dst->z = z * r;

@@ -36,17 +36,17 @@ void PlantRailInfo::calcPosAndAxisY(Vec3f* pPos, Vec3f* pAxisY, f32 coord) const
     const f32 totalLength = mRailRider->getTotalLength();
     f32 normalized = totalLength > 0.0f ? (coord / totalLength) * mNumPlantPoints : 0.0f;
 
-    // A coordinate before the rail's start is its start.
+    // A coordinate before the rail's start is its start; at or past its end (or not a number) is the last point.
     if (normalized < 0.0f) {
         normalized = 0.0f;
     }
 
+    if (!(normalized < static_cast< f32 >(mNumPlantPoints - 1))) {
+        normalized = static_cast< f32 >(mNumPlantPoints - 1);
+    }
+
     s32 start = normalized;
     s32 end = start + 1;
-
-    if (start >= mNumPlantPoints) {
-        start = mNumPlantPoints - 1;
-    }
 
     if (end >= mNumPlantPoints) {
         end = mNumPlantPoints - 1;

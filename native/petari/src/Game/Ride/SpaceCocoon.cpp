@@ -683,10 +683,12 @@ bool SpaceCocoon::tryRelease() {
     Vec3f reaxisUp = mVelocity * -1.0f;
     Vec3f reaxisFront = mUp;
     Vec3f reaxisSide = reaxisUp.cross(reaxisFront);
-    MR::normalize(&reaxisSide);
-    reaxisFront.cross(reaxisSide, reaxisUp);
-    MR::normalize(&reaxisFront);
-    mBaseMtx.setXYZDir(reaxisSide, reaxisUp, reaxisFront);
+    if (!MR::isNearZero(reaxisSide)) {
+        MR::normalize(&reaxisSide);
+        reaxisFront.cross(reaxisSide, reaxisUp);
+        MR::normalize(&reaxisFront);
+        mBaseMtx.setXYZDir(reaxisSide, reaxisUp, reaxisFront);
+    }
 
     mVelocity.mult(::sBindAttackSpeed);
     MR::emitEffect(mRider, "SpaceCocoonBlur");

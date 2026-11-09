@@ -354,7 +354,7 @@ namespace MR {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rSide, &axisX);
 
-        axisZ.cross(axisX, rUp);
+        MR::crossOrPerpendicular(&axisZ, axisX, rUp);
         MR::normalize(&axisZ);
 
         axisY.cross(axisZ, axisX);
@@ -371,7 +371,7 @@ namespace MR {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rSide, &axisX);
 
-        axisY.cross(rFront, axisX);
+        MR::crossOrPerpendicular(&axisY, rFront, axisX);
         MR::normalize(&axisY);
 
         axisZ.cross(axisX, axisY);
@@ -383,7 +383,7 @@ namespace MR {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
-        axisZ.cross(rSide, axisY);
+        MR::crossOrPerpendicular(&axisZ, rSide, axisY);
         MR::normalize(&axisZ);
 
         axisX.cross(axisY, axisZ);
@@ -404,7 +404,7 @@ namespace MR {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
-        axisX.cross(axisY, rFront);
+        MR::crossOrPerpendicular(&axisX, axisY, rFront);
         MR::normalize(&axisX);
 
         axisZ.cross(axisX, axisY);
@@ -425,7 +425,7 @@ namespace MR {
         Vec3f axisX, axisY, axisZ;
         MR::normalize(rFront, &axisZ);
 
-        axisY.cross(axisZ, rSide);
+        MR::crossOrPerpendicular(&axisY, axisZ, rSide);
         MR::normalize(&axisY);
 
         axisX.cross(axisY, axisZ);
@@ -438,7 +438,7 @@ namespace MR {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rFront, &axisZ);
 
-        axisX.cross(rUp, axisZ);
+        MR::crossOrPerpendicular(&axisX, rUp, axisZ);
         MR::normalize(&axisX);
 
         axisY.cross(axisZ, axisX);

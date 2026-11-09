@@ -820,7 +820,7 @@ void DodoryuStateLv2::calcRandomVelocity(s32 time) {
     rotateMtx.makeRotate(*gravityVec, randomAngle);
     rotateMtx.mult33(frontVec);
     f32 dist = MR::getRandom(mChaseParam->mRandomMoveDistanceMin, mChaseParam->mRandomMoveDistanceMax);
-    f32 speed = dist / time;
+    f32 speed = dist / (time > 0 ? time : 1);
     Pos3f playerMtx;
     playerMtx.set(MR::getPlayerBaseMtx());
     mHost->setMtx(playerMtx);

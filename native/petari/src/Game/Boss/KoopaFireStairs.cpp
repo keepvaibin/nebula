@@ -97,7 +97,7 @@ void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const Vec3f* pA
         mVelocity.set(toTarget);
         MR::normalize(&mVelocity);
         mFront.set(mVelocity);
-        mVelocity.scale(length / (breakTime - 1));
+        mVelocity.scale(length / (breakTime > 2 ? breakTime - 1 : 1));
     }
 }
 

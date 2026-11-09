@@ -18,4 +18,5 @@ public:
 
     s32 mNumPoints;
     SpiderThreadMainPoint** mPoints;
+    s32 mBufferSize;
 };

@@ -477,7 +477,7 @@ void Creeper::draw() const {
     const SiteMaterial material = loadMaterial();
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
-    f32 delta = 1.0f / (mNumPoints - 1);
+    f32 delta = mNumPoints > 1 ? 1.0f / (mNumPoints - 1) : 0.0f;
 
     VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2);
     for (s32 i = 0; i < mNumPoints; i++) {

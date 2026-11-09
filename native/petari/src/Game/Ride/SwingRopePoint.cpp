@@ -113,7 +113,17 @@ void SwingRopePoint::setInfo(const Vec3f& rTarget, const Vec3f& rVelocity, const
     mUp.set(direction);
     mUp.mult(-1.0f);
 
+    // A front that is zero or parallel to up is replaced by Z, or by X when up is along Z.
     mSide.cross(mUp, mFront);
+    if (MR::isNearZero(mSide)) {
+        mFront.set< f32 >(0.0f, 0.0f, 1.0f);
+        mSide.cross(mUp, mFront);
+        if (MR::isNearZero(mSide)) {
+            mFront.set< f32 >(1.0f, 0.0f, 0.0f);
+            mSide.cross(mUp, mFront);
+        }
+    }
+
     mFront.cross(mSide, mUp);
     MR::normalize(&mFront);
     mSide.cross(mUp, mFront);
