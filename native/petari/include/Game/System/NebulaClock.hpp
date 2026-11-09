@@ -1,11 +1,14 @@
 #pragma once
 
+#include "Game/System/NebulaHost.hpp"
+
 // The host's steady clock.
 // Nanoseconds from an arbitrary start, never 0, so 0 can mean "never".
 
-
 namespace NebulaClock {
-    s64 nowNs();
+    inline s64 nowNs() {
+        return static_cast< s64 >(NebulaHost::clockNs());
+    }
     inline s64 nowUs() {
         return nowNs() / 1000;
     }

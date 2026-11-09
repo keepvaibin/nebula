@@ -75,8 +75,9 @@ void KoopaShockWave::makeActorDead() {
 }
 
 namespace {
-    void makeShockWaveMtx(Pos3f* pDest, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& r6, f32 f1, f32 f2) {
-        MR::makeMtxUpFrontPos(pDest, rUp, rFront, rUp * f1 * f2 + r6);
+    // The wave's frame, at scale * height above the planet's center along up.
+    void makeShockWaveMtx(Pos3f* pDest, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rCenter, f32 scale, f32 height) {
+        MR::makeMtxUpFrontPos(pDest, rUp, rFront, rUp * scale * height + rCenter);
     }
 };  // namespace
 
@@ -101,12 +102,12 @@ void KoopaShockWave::exeWaveAttack() {
         mFront.set(mKoopa->mFront);
         MR::normalizeOrZero(&mUp);
 
-        Vec3f vec2 = mUp;
-        vec2.scale(KoopaFunction::getPlanetRadius(mKoopa));
+        Vec3f surfacePos = mUp;
+        surfacePos.scale(KoopaFunction::getPlanetRadius(mKoopa));
 
-        vec2.add(KoopaFunction::getPlanetCenterPos(mKoopa));
+        surfacePos.add(KoopaFunction::getPlanetCenterPos(mKoopa));
 
-        MR::makeMtxUpFrontPos(&mKoopaMtx, -mKoopa->mGravity, mKoopa->mFront, vec2);
+        MR::makeMtxUpFrontPos(&mKoopaMtx, -mKoopa->mGravity, mKoopa->mFront, surfacePos);
 
         MR::startSound(mKoopa, "SE_BM_KOOPA_SWAVE_SHOOT");
 

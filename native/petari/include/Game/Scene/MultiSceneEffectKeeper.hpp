@@ -10,7 +10,7 @@ class MultiSceneActor;
 
 class MultiSceneEffectKeeper {
 public:
-    MultiSceneEffectKeeper(const char*, ModelManager*, int extraEmitterNum, const char* pResName);
+    MultiSceneEffectKeeper(ModelManager*, int extraEmitterNum, const char* pResName);
 
     void init(const MultiSceneActor*, const EffectSystem*);
     void add(const char*, const Vec3f*, const Vec3f*, const Vec3f*, const char*);

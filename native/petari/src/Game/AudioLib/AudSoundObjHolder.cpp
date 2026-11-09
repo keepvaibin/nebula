@@ -4,8 +4,8 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Array.hpp"
 
-AudSoundObjHolder::AudSoundObjHolder(NebulaArena* pHeap, s32 capacity)
-    : mArray(new (pHeap, 0) AudSoundObject*[capacity]), mCapacity(capacity), mSize(0) {
+AudSoundObjHolder::AudSoundObjHolder(NebulaArena* pArena, s32 capacity)
+    : mArray(new (pArena, 0) AudSoundObject*[capacity]), mCapacity(capacity), mSize(0) {
 }
 
 void AudSoundObjHolder::update() {

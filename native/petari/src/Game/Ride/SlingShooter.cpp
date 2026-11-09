@@ -38,12 +38,11 @@ namespace {
     static const s32 sStepStopSceneAttackSuccess = 15;
     static const s32 sStepStopSceneLastDamage = 30;
     static const s32 sStepToEnableBindCancel = 10;
-};  // namespace
 
-inline void endBindAndPlayerNoJump(LiveActor* pActor) {
-    Vec3f jumpVec(0.0f, 0.0f, 0.0f);
-    MR::endBindAndPlayerJump(pActor, jumpVec, 0);
-}
+    void endBindAndPlayerNoJump(LiveActor* pActor) {
+        MR::endBindAndPlayerJump(pActor, Vec3f(0.0f, 0.0f, 0.0f), 0);
+    }
+};  // namespace
 
 namespace NrvSlingShooter {
     NEW_NERVE(SlingShooterNrvFree, SlingShooter, Free);
@@ -234,11 +233,9 @@ void SlingShooter::exeAttack() {
     if (tryAttackMap() || MR::isStep(this, ::sStepBindAttack)) {
         if (!mIsKinopioAttached) {
             MR::endEventCamera(mCameraInfo, "プレーヤー射出者[攻撃中]", true);
-            endBindAndPlayerNoJump(this);
-            endBind();
-        } else {
-            endBind();
+            ::endBindAndPlayerNoJump(this);
         }
+        endBind();
     }
 }
 
@@ -269,11 +266,9 @@ void SlingShooter::exeAttackSuccess() {
         if (!mIsKinopioAttached) {
             MR::endEventCamera(mCameraInfo, "プレーヤー射出者[攻撃中]", true);
             MR::startBckPlayer("AirRotation");
-            endBindAndPlayerNoJump(this);
-            endBind();
-        } else {
-            endBind();
+            ::endBindAndPlayerNoJump(this);
         }
+        endBind();
     }
 }
 
@@ -287,7 +282,7 @@ void SlingShooter::updateHitSensor(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_SPRING_ATTACKER_KINOPIO_BIND)) {
         pSensor->mPosition.x = mPosition.x;
         pSensor->mPosition.y = mPosition.y;
-        pSensor->mPosition.z = MR::getSpiderThreadPosZ() + -::sNpcSensorPosOffsetZ;
+        pSensor->mPosition.z = MR::getSpiderThreadPosZ() - ::sNpcSensorPosOffsetZ;
     }
 }
 
@@ -338,22 +333,14 @@ void SlingShooter::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         if (!mIsKinopioAttached) {
             MR::startBckPlayer("WallHit");
             MR::endEventCamera(mCameraInfo, "プレーヤー射出者[攻撃中]", true);
-
-            Vec3f jumpVec(0.0f, 0.0f, 0.0f);
-            MR::endBindAndPlayerJump(this, jumpVec, 0);
-            endBind();
-        } else {
-            endBind();
+            ::endBindAndPlayerNoJump(this);
         }
+        endBind();
     }
 }
 
 bool SlingShooter::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isMsgStarPieceReflect(msg)) {
-        return true;
-    }
-
-    return false;
+    return MR::isMsgStarPieceReflect(msg);
 }
 
 bool SlingShooter::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -373,9 +360,7 @@ bool SlingShooter::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
             MR::setPlayerPos(mPosition);
 
             MR::emitEffect(this, "Stick");
-
-            Vec3f jumpVec(0.0f, 0.0f, 0.0f);
-            MR::endBindAndPlayerDamage(this, jumpVec);
+            MR::endBindAndPlayerDamage(this, Vec3f(0.0f, 0.0f, 0.0f));
             endBind();
         }
         return true;
@@ -441,7 +426,7 @@ bool SlingShooter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
             startCancelAim();
             MR::startBckPlayer("Wait");
 
-            endBindAndPlayerNoJump(this);
+            ::endBindAndPlayerNoJump(this);
             endBind();
             return true;
         }
@@ -495,15 +480,8 @@ bool SlingShooter::updateWait() {
         MR::requestStarPointerModeBlueStarReady(this);
     }
 
-    bool set;
     if (MR::isStarPointerPointing(this, PLAYER_1, true, "弱") && MR::isPressedJump(PLAYER_1) &&
         MR::tryStartStarPointerCommandStream(this, &mPosition, PLAYER_1, false)) {
-        set = true;
-    } else {
-        set = false;
-    }
-
-    if (set) {
         mPadChannel = PLAYER_1;
     }
 
@@ -538,7 +516,6 @@ void SlingShooter::updateHang() {
     Vec3f followPos = mPointerPos;
 
     if (followPos.distance(*mNeutralPos) > ::sAimDistanceMax) {
-        followPos.set(mPointerPos);
         followPos.sub(*mNeutralPos);
         MR::normalize(&followPos);
         followPos.scale(::sAimDistanceMax);
@@ -607,7 +584,7 @@ void SlingShooter::updateActorMtx() {
 }
 
 bool SlingShooter::tryCancel() {
-    if (!mIsKinopioAttached && MR::isSpin(PLAYER_1) && MR::isGreaterStep(this, 10)) {
+    if (!mIsKinopioAttached && MR::isSpin(PLAYER_1) && MR::isGreaterStep(this, ::sStepToEnableBindCancel)) {
         MR::endEventCamera(mCameraInfo, "プレーヤー射出者[ウェイト]", true);
         MR::startBckPlayer("Spin2nd");
         MR::emitEffect(this, "Stick");
@@ -741,7 +718,6 @@ void SlingShooter::startBind(LiveActor* pRider) {
 
     if (!mIsKinopioAttached) {
         Pos3f mtx;
-        mtx.identity();
         calcBaseMtx(&mtx);
         mCameraTargetMtx->mMatrix.setInline(mtx);
         mCameraTargetMtx->mMatrix.setTrans(*mNeutralPos);
@@ -761,21 +737,16 @@ void SlingShooter::startBind(LiveActor* pRider) {
 
 void SlingShooter::startCancelWait() {
     mPosition.z = mPlayerZ;
-    f32 y = MR::getPlayerPos()->y;
-    f32 x = MR::getPlayerPos()->x;
-    MR::setPlayerPos(Vec3f(x, y, mPosition.z));
+    MR::setPlayerPos(Vec3f(MR::getPlayerPos()->x, MR::getPlayerPos()->y, mPosition.z));
 
-    endBindAndPlayerNoJump(this);
+    ::endBindAndPlayerNoJump(this);
     endBind();
     endCommandStream();
 }
 
 void SlingShooter::startCancelAim() {
     mPosition.z = MR::getSpiderThreadPosZ();
-
-    f32 y = MR::getPlayerPos()->y;
-    f32 x = MR::getPlayerPos()->x;
-    MR::setPlayerPos(Vec3f(x, y, mPosition.z));
+    MR::setPlayerPos(Vec3f(MR::getPlayerPos()->x, MR::getPlayerPos()->y, mPosition.z));
 
     MR::sendMsgToSpiderThread(ACTMES_SLING_SHOOT_ACTOR_HANG_END, getSensor("bind"));
     endCommandStream();
@@ -783,8 +754,7 @@ void SlingShooter::startCancelAim() {
 
 void SlingShooter::endBind() {
     if (mIsKinopioAttached) {
-        LiveActor* rider = mRider;
-        rider->mPosition.z = MR::getSpiderThreadPosZ() - ::sNpcSensorPosOffsetZ;
+        mRider->mPosition.z = MR::getSpiderThreadPosZ() - ::sNpcSensorPosOffsetZ;
         mRider->mVelocity.zero();
         mRider->receiveMessage(ACTMES_NPC_EVENT_END, MR::getMessageSensor(), MR::getMessageSensor());
     }

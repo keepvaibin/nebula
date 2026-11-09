@@ -17,6 +17,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     const char* const cDemoMovePartName = "移動";
@@ -72,9 +73,7 @@ void GrandStarReturnDemoStarter::init(const TableIter& rIter) {
     MR::initMultiActorCamera(this, rIter, &mActorCameraInfo, "リザルト");
 
     for (int i = 0; i < 6; i++) {
-        char buffer[256];
-        nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", i + 1);
-        MR::initAnimCamera(this, mActorCameraInfo, "DemoAstroReturn", buffer);
+        MR::initAnimCamera(this, mActorCameraInfo, "DemoAstroReturn", MR::FormattedName("DemoAstroReturn%d", i + 1).c_str());
     }
 
     initNerve(GET_NERVE(GrandStarReturnDemoStarter, GrandStarReturnDemoStarterNrvMove));
@@ -234,9 +233,7 @@ void GrandStarReturnDemoStarter::exeRushToCore() {
 }
 
 void GrandStarReturnDemoStarter::exeRevival() {
-    char buffer[256];
-    int index = AstroDemoFunction::getActiveGrandStarReturnDemoIndex() + 1;
-    nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", index);
+    const MR::FormattedName cameraName("DemoAstroReturn%d", AstroDemoFunction::getActiveGrandStarReturnDemoIndex() + 1);
 
     if (MR::isFirstStep(this)) {
         mReturnDemoRailMove->offPathDraw();
@@ -246,7 +243,7 @@ void GrandStarReturnDemoStarter::exeRevival() {
         mPosition.zero();
         mRotation.zero();
 
-        MR::startAnimCameraTargetSelf(this, mActorCameraInfo, buffer, 0, 1.0f);
+        MR::startAnimCameraTargetSelf(this, mActorCameraInfo, cameraName.c_str(), 0, 1.0f);
     }
 
     if (MR::isLessStep(this, 40)) {
@@ -261,7 +258,7 @@ void GrandStarReturnDemoStarter::exeRevival() {
     }
 
     if (MR::isDemoPartLastStep("ドーム復活")) {
-        MR::endAnimCamera(this, mActorCameraInfo, buffer, 0, true);
+        MR::endAnimCamera(this, mActorCameraInfo, cameraName.c_str(), 0, true);
         MR::overlayWithPreviousScreen(2);
     }
 

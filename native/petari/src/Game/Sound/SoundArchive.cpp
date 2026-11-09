@@ -1,7 +1,7 @@
 #include "Game/Sound/SoundArchive.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/Sound/SoundTable.hpp"
-#include "Game/Sound/SoundTableInfo.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -26,7 +26,7 @@ namespace {
     }
 }  // namespace
 
-SoundArchive::SoundArchive(NebulaArena* pHeap) : mHeap(pHeap) {
+SoundArchive::SoundArchive(NebulaArena* pArena) : mArena(pArena) {
 }
 
 void SoundArchive::load(const char* pPath) {
@@ -49,11 +49,11 @@ void SoundArchive::load(const char* pPath) {
     mFile = pFile;
 
     if ((pFile->mFlags & SoundArchiveFile::cHasTable) != 0) {
-        mSoundTable = new (mHeap, 0) SoundTable(true);
+        mSoundTable = new (mArena, 0) SoundTable(true);
         mSoundTable->init(pFile);
     }
     if ((pFile->mFlags & SoundArchiveFile::cHasNames) != 0) {
-        mSoundNameTable = new (mHeap, 0) SoundNameTable(true);
+        mSoundNameTable = new (mArena, 0) SoundNameTable(true);
         mSoundNameTable->init(pFile);
     }
 
@@ -70,19 +70,19 @@ void SoundArchive::load(const char* pPath) {
     }
 
     SoundEngine* engine = SoundEngine::get();
-    const WaveBankFile** ppWaveBanks = new (mHeap, 0) const WaveBankFile*[pFile->mWaveBankCount + 1];
-    engine->setupWaveBanks(pFile->mWaveBankCount, mHeap);
+    const WaveBankFile** ppWaveBanks = new (mArena, 0) const WaveBankFile*[pFile->mWaveBankCount + 1];
+    engine->setupWaveBanks(pFile->mWaveBankCount, mArena);
     for (u32 i = 0; i < pFile->mWaveBankCount; i++) {
         ppWaveBanks[i] = nullptr;
         if (waveBanks[i].mFile != 0) {
             ppWaveBanks[i] = reinterpret_cast< const WaveBankFile* >(part(pFile, waveBanks[i].mFile));
-            engine->setupWaveBank(i, ppWaveBanks[i], waveBanks[i].mBytes, mHeap);
+            engine->setupWaveBank(i, ppWaveBanks[i], waveBanks[i].mBytes, mArena);
         }
     }
     mWaveBanks = ppWaveBanks;
     for (u32 i = 0; i < pFile->mBankCount; i++) {
         if (banks[i].mFile != 0) {
-            engine->setupBank(reinterpret_cast< const BankFile* >(part(pFile, banks[i].mFile)), banks[i].mBytes, mHeap);
+            engine->setupBank(reinterpret_cast< const BankFile* >(part(pFile, banks[i].mFile)), banks[i].mBytes, mArena);
         }
     }
 }
@@ -135,9 +135,8 @@ bool SoundArchive::getSeqData(SoundID id, SeqData* pOut) {
             return true;
         }
     }
-    SoundTableInfo* pInfo = SoundGlobal< SoundTableInfo >::getInstance();
     AssetFolder::Item item;
-    if (mSeqArchive != nullptr && pInfo != nullptr && mSeqArchive->getItem(mSeqArchive->getEntry(), pInfo->getBgmSeqResourceID(id), &item)) {
+    if (mSeqArchive != nullptr && mSeqArchive->getItem(mSeqArchive->getEntry(), StdSoundInfo::getInstance()->getBgmSeqResourceID(id), &item)) {
         pOut->set(checkedProgram(item.mData, item.mSize), 0);
         return true;
     }

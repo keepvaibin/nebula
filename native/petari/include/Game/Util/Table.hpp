@@ -21,8 +21,8 @@ struct TableColumn {
     u32 mMask;
     u8 mKind;
     u8 mWidth;
-    u16 mPad;
 };
+static_assert(sizeof(TableColumn) == 12, "NTBL column stride");
 
 // NTBL as the importer cooks it: a u32 cell per row and column (masks and shifts applied), words UTF-8.
 struct TableData {

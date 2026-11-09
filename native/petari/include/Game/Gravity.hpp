@@ -5,7 +5,7 @@
 #include "Game/Gravity/DiskGravity.hpp"
 #include "Game/Gravity/DiskTorusGravity.hpp"
 #include "Game/Gravity/GlobalGravityObj.hpp"
-#include "Game/Gravity/GraviryFollower.hpp"
+#include "Game/Gravity/GravityFollower.hpp"
 #include "Game/Gravity/GravityCreator.hpp"
 #include "Game/Gravity/GravityInfo.hpp"
 #include "Game/Gravity/ParallelGravity.hpp"

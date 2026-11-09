@@ -52,8 +52,8 @@ public:
 
 class TurtlePartsModel : public PartsModel {
 public:
-    TurtlePartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr mtx, int drawBufferType, bool a6)
-        : PartsModel(pActor, pName, pModelName, mtx, drawBufferType, a6) {
+    TurtlePartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr mtx, int drawBufferType, bool deferMaterials)
+        : PartsModel(pActor, pName, pModelName, mtx, drawBufferType, deferMaterials) {
     }
 
     virtual void appear() {

@@ -20,7 +20,7 @@ public:
 
     ResourceHolder* mResourceHolder;
     LayoutHolder* mLayoutHolder;
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
 };
 
 class ResourceHolderManagerName2Resource {
@@ -35,7 +35,7 @@ public:
     ResourceHolder* mResourceHolder;
     LayoutHolder* mLayoutHolder;
     u32 mHash;
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
 };
 
 class ResourceHolderManager {
@@ -46,7 +46,8 @@ public:
     LayoutHolder* createAndAddLayoutHolder(const char* pArcName, NebulaArena*);
     LayoutHolder* createAndAddLayoutHolderRawData(const char* pArcPath);
     LayoutHolder* createAndAddGameLayoutHolder(const char* pArcName);
-    void removeIfIsEqualHeap(NebulaArena*);
+    // Drops the holders made in pArena (it is going).
+    void removeArenaHolders(NebulaArena* pArena);
 
 private:
     typedef void (ResourceHolderManager::*CreateHolderFunc)(const char*, CreateResourceHolderArgs*);
@@ -58,5 +59,5 @@ private:
     ResourceHolderManagerName2Resource* find(const char* pName);
 
 private:
-    MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
+    MR::InlineVector< ResourceHolderManagerName2Resource, 512 > mResourceArray;
 };

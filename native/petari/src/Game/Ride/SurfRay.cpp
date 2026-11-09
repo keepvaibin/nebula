@@ -86,7 +86,7 @@ namespace {
 };  // namespace
 
 SurfRay::SurfRay(const char* pName, s32 channel)
-    : LiveActor(pName), mSurfSpeed(0.0f), mOrthoSpeed(0.0f), mOrthoVelocity(0.0f, 0.0f, 0.0f), mSteerRate(0.0f), mSteerAccel(0.0f),
+    : LiveActor(pName), mSurfSpeed(0.0f), mOrthoVelocity(0.0f, 0.0f, 0.0f), mSteerRate(0.0f), mSteerAccel(0.0f),
       mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 1.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mBaseUp(0.0f, 1.0f, 0.0f), mBaseSide(1.0f, 0.0f, 0.0f),
       mGroundNormal(0.0f, 1.0f, 0.0f), mWarpPos(0.0f, 0.0f, 0.0f), mRider(nullptr), mPadChannel(channel), mRayTilt(0.0f), mInWater(false),
       mAirTime(0), mWaterNormal(0.0f, 1.0f, 0.0f), mWaterShadowPos(0.0f, 0.0f, 0.0f), mShadowAlpha(0.0f), mTwistBufferSize(8), mTwistBuffer(nullptr),
@@ -125,7 +125,6 @@ void SurfRay::init(const TableIter& rIter) {
     MR::initShadowFromCSV(this, "Shadow");
     Color8 shadowColor(0, 40, 128, 64);
     MR::setShadowSurfaceOvalColor(this, 0, shadowColor);
-    MR::setShadowSurfaceOvalAlpha(this, 0, 64);
     MR::setShadowProjectionPtr(this, 0, &mWaterShadowPos, &mWaterNormal);
     MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)mShadowAlpha);
 
@@ -347,8 +346,6 @@ void SurfRay::exeTutorial() {
         }
         break;
     }
-    case 13:
-        break;
     default:
         break;
     }
@@ -421,7 +418,6 @@ void SurfRay::calcAndSetBaseMtx() {
     MR::normalize(&mUp);
 
     Pos3f mtx;
-    mtx.identity();
     mtx.setTR(mSide, mUp, mFront, mPosition);
     MR::setBaseTRMtx(this, mtx);
     mActorJointCtrl->setCallBackFunction();
@@ -531,7 +527,6 @@ bool SurfRay::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
 void SurfRay::resetAllInfo() {
     Rot3f rotMtx;
-    rotMtx.identity();
     MR::makeMtxRotate(rotMtx, mRotation);
 
     rotMtx.getXDir(mSide);
@@ -547,7 +542,6 @@ void SurfRay::resetAllInfo() {
 
     mInWater = false;
     mSurfSpeed = 0.0f;
-    mOrthoSpeed = 0.0f;
     mSteerRate = 0.0f;
     mSteerAccel = 0.0f;
     mAirTime = 0;
@@ -635,7 +629,6 @@ void SurfRay::updateInfo() {
     proj.scale(mSurfSpeed);
     mOrthoVelocity.set(mVelocity);
     mOrthoVelocity.sub(proj);
-    mOrthoSpeed = mOrthoVelocity.length();
 }
 
 void SurfRay::updateToMap() {
@@ -800,12 +793,9 @@ void SurfRay::updateRotate() {
             steerAccel = MR::clamp(twistAngle, -1.5f, 1.5f);
             accelX = accel.x;
 
-            if (accelX < 0.0f) {
-                f32 tiltClamp = MR::clamp(accelX, -1.0f, 0.0f);
-                mRayTilt = MR::getInterpolateValue(0.3f, mRayTilt, tiltClamp);
-            } else if (accelX > 0.0f) {
-                f32 tiltClamp = MR::clamp(accelX, 0.0f, 1.0f);
-                mRayTilt = MR::getInterpolateValue(0.3f, mRayTilt, tiltClamp);
+            // Not for 0 or NaN.
+            if (accelX < 0.0f || accelX > 0.0f) {
+                mRayTilt = MR::getInterpolateValue(0.3f, mRayTilt, MR::clamp(accelX, -1.0f, 1.0f));
             }
         } else {
             mRayTilt = MR::getInterpolateValue(0.3f, mRayTilt, 0.0f);
@@ -821,9 +811,7 @@ void SurfRay::updateRotate() {
     }
 
     mSteerRate *= 0.95f;
-    f32 abs = MR::abs(mSteerRate);
-
-    if (abs < 0.1f) {
+    if (MR::abs(mSteerRate) < 0.1f) {
         mSteerRate = 0.0f;
     }
 
@@ -867,23 +855,16 @@ void SurfRay::updateSound() {
     if (mInWater) {
         if (mSurfSpeed > ::sMoveSe1StartSpeed) {
             lvl = MR::getLinerValueFromMinMax(mSurfSpeed, ::sMoveSe1StartSpeed, ::sMoveSe2StartSpeed, 0.1f, 1.0f);
-
             MR::startLevelSound(this, "SE_SM_LV_SURF_RAY_MOVE1", lvl * 1000.0f);
         }
-    }
 
-    if (mInWater) {
         if (mSurfSpeed > ::sMoveSe2StartSpeed) {
             lvl = MR::getLinerValueFromMinMax(mSurfSpeed, ::sMoveSe2StartSpeed, ::sMoveSe3StartSpeed, 0.1f, 1.0f);
-
             MR::startLevelSound(this, "SE_SM_LV_SURF_RAY_MOVE2", lvl * 1000.0f);
         }
-    }
 
-    if (mSurfSpeed > ::sMoveSe3StartSpeed) {
-        lvl = MR::getLinerValueFromMinMax(mSurfSpeed, ::sMoveSe3StartSpeed, ::sMoveSe3MaxSpeed, 0.1f, 1.0f);
-
-        if (mInWater) {
+        if (mSurfSpeed > ::sMoveSe3StartSpeed) {
+            lvl = MR::getLinerValueFromMinMax(mSurfSpeed, ::sMoveSe3StartSpeed, ::sMoveSe3MaxSpeed, 0.1f, 1.0f);
             MR::startLevelSound(this, "SE_SM_LV_SURF_RAY_MOVE3", lvl * 1000.0f);
         }
     }
@@ -904,15 +885,15 @@ void SurfRay::updateSound() {
 }
 
 void SurfRay::updateRiderMtx() {
-    MtxPtr mtx1 = MR::getJointMtx(this, "Center");
-    Pos3f mtx;
-    mtx.setInline(mtx1);
+    MtxPtr centerMtx = MR::getJointMtx(this, "Center");
+    Pos3f riderMtx;
+    riderMtx.setInline(centerMtx);
 
-    mtx[0][3] += mtx1[0][1] * 55.0f + mtx1[0][2] * 12.0f;
-    mtx[1][3] += mtx1[1][1] * 55.0f + mtx1[1][2] * 12.0f;
-    mtx[2][3] += mtx1[2][1] * 55.0f + mtx1[2][2] * 12.0f;
+    riderMtx[0][3] += centerMtx[0][1] * 55.0f + centerMtx[0][2] * 12.0f;
+    riderMtx[1][3] += centerMtx[1][1] * 55.0f + centerMtx[1][2] * 12.0f;
+    riderMtx[2][3] += centerMtx[2][1] * 55.0f + centerMtx[2][2] * 12.0f;
 
-    MR::setBaseTRMtx(mRider, mtx);
+    MR::setBaseTRMtx(mRider, riderMtx);
 }
 
 // Probes the body, 100 ahead, 150 above, 150 to each side across gravity and 150 to each side of the board; the
@@ -994,11 +975,7 @@ bool SurfRay::isTwistStart() const {
 
 bool SurfRay::isRotateStart() const {
     if (mInTutorial) {
-        if (mLectureIdx == 7 || mLectureIdx == 11) {
-            return true;
-        }
-
-        return false;
+        return mLectureIdx == 7 || mLectureIdx == 11;
     }
 
     return mSurfSpeed > 3.0f || MR::isHeldJump(mPadChannel);

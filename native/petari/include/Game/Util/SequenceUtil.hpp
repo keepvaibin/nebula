@@ -1,10 +1,11 @@
 #pragma once
 
+#include "Game/Scene/SceneFactory.hpp"
 
 class PlacementId;
 
 namespace MR {
-    void requestChangeScene(const char*);
+    void requestChangeScene(SceneKind);
     void requestChangeSceneTitle();
     void requestChangeStageInGameAfterLoadingGameData();
     void requestChangeStageAfterStageClear();

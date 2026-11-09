@@ -45,8 +45,7 @@ public:
     f32 mRange;
     f32 mDistant;
     s32 mPriority;
-    s32 mGravityId;     // read from the stage files but never used
-    const void* mHost;  // host object pointer, can be any pointer
+    const void* mHost;  // the gravity itself, or the actor it follows
     u32 mGravityType;   // gravity type bits
     s32 mGravityPower;  // gravity power type
     bool mActivated;    // corresponding GlobalGravityObj has switch activated?

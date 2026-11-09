@@ -5,7 +5,6 @@ PlanetGravity::PlanetGravity() {
     mRange = -1.0f;
     mDistant = 0.0f;
     mPriority = 0;
-    mGravityId = -1;
     mHost = this;
     mGravityType = GravityType_Normal;
     mGravityPower = GravityPower_Normal;

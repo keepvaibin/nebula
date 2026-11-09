@@ -1,7 +1,7 @@
 #include "Game/Scene/GameScene.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaLoadTrace.hpp"
-#include "Game/System/GameLog.hpp"
+#include <nebula_module.h>
 #include "Game/Render/FrameList.hpp"
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
@@ -107,7 +107,6 @@ namespace NrvGameScene {
     NEW_NERVE(GameSceneCometRetryAfterMiss, GameScene, CometRetryAfterMiss);
     NEW_NERVE(GameSceneSaveAfterGameOver, GameScene, SaveAfterGameOver);
     NEW_NERVE(GameScenePlayMovie, GameScene, PlayMovie);
-    NEW_NERVE(GameSceneTimeUp, GameScene, TimeUp);
     NEW_NERVE(GameSceneGalaxyMap, GameScene, GalaxyMap);
     NEW_NERVE(GameSceneStaffRoll, GameScene, StaffRoll);
     NEW_NERVE(GameSceneNebulaBoard, GameScene, NebulaBoard);
@@ -229,6 +228,20 @@ bool GameScene::initAfterScenarioChosen() {
 }
 
 namespace {
+    // The settings' galaxy select's galaxy `index` (its whole stage name in *pId): a name that fills the buffer is asked
+    // for again with twice the room. 0 past the last.
+    int getGalaxySelectStage(u32 index, MR::FormattedName* pId, u32* pStars) {
+        for (u32 capacity = 256;; capacity *= 2) {
+            char* const pText = pId->room(capacity);
+            if (NebulaHost::galaxySelectStage(index, pText, capacity, pStars) == 0) {
+                return 0;
+            }
+            if (strlen(pText) < capacity - 1) {
+                return 1;
+            }
+        }
+    }
+
     // The achievement board asked for by the Achievement Luma: it opens once the scene is in plain play, not paused,
     // in a demo or behind a wipe; a scene that starts drops the request.
     bool sBoardRequested = false;
@@ -253,9 +266,7 @@ void GameScene::start() {
     reportPresence();
     NebulaAchievements::evaluate();
 
-    if (MR::isGlobalTimerEnd()) {
-        MR::forceCloseWipeCircle();
-    } else if (!MR::hasRetryGalaxySequence()) {
+    if (!MR::hasRetryGalaxySequence()) {
         startStagePlayFirst();
     } else {
         startStagePlayRetry();
@@ -282,12 +293,6 @@ void GameScene::update() {
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->update();
     }
-
-    bool isTimeUp = MR::isGlobalTimerEnd() && !isNerve(GET_NERVE(GameScene, GameSceneTimeUp)) && MR::isGreaterEqualStep(this, 2);
-
-    if (isTimeUp) {
-        setNerve(GET_NERVE(GameScene, GameSceneTimeUp));
-    }
 }
 
 void GameScene::draw() const {
@@ -309,13 +314,13 @@ void GameScene::draw() const {
 #endif
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
     if (NebulaHost::galaxySelectNamesWanted() != 0) {
-        char id[256];
+        MR::FormattedName id;
         u32 stars = 0;
-        for (u32 i = 0; NebulaHost::galaxySelectStage(i, id, sizeof(id), &stars) != 0; ++i) {
-            NebulaHost::galaxySelectName(i, 0, reinterpret_cast< const u16* >(MR::getGalaxyNameOnCurrentLanguage(id)));
+        for (u32 i = 0; ::getGalaxySelectStage(i, &id, &stars) != 0; ++i) {
+            NebulaHost::galaxySelectName(i, 0, reinterpret_cast< const u16* >(MR::getGalaxyNameOnCurrentLanguage(id.c_str())));
             for (u32 star = 1; star <= stars; ++star) {
                 NebulaHost::galaxySelectName(i, star,
-                                         reinterpret_cast< const u16* >(MR::getScenarioNameOnCurrentLanguage(id, star)));
+                                         reinterpret_cast< const u16* >(MR::getScenarioNameOnCurrentLanguage(id.c_str(), star)));
             }
         }
     }
@@ -338,10 +343,7 @@ void GameScene::calcAnim() {
         SceneFunction::executeCalcAnimList();
     }
 
-    if (!isNerve(GET_NERVE(GameScene, GameSceneTimeUp))) {
-        CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
-    }
-
+    CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
     SceneFunction::executeCalcViewAndEntryList();
 }
 
@@ -419,7 +421,7 @@ void GameScene::exeCometRetryAfterMiss() {
     CometRetryButton* pCometRetryButton = ::getCometRetryButton();
 
     if (MR::isFirstStep(this)) {
-        ::getCometRetryButton()->appear();
+        pCometRetryButton->appear();
         MR::forceOpenWipeCircle();
     }
 
@@ -715,12 +717,6 @@ void GameScene::exeStaffRoll() {
     CategoryList::execute(MR::MovementType_Layout);
     CategoryList::execute(MR::DrawType_LayoutDecoration);
     CategoryList::execute(MR::MovementType_WipeLayout);
-}
-
-void GameScene::exeTimeUp() {
-    if (MR::isFirstStep(this)) {
-        MR::startGlobalTimerTimeUp();
-    }
 }
 
 void GameScene::exeGameOver() {

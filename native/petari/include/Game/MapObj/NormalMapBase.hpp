@@ -39,7 +39,7 @@ public:
     void loadNormalTex(const GameTexture*, u32 slot) const;
 
     GameTexture* mNormalTex;
-    GameTexture* mTextures[16];
+    GameTexture** mTextures;  // one per model texture
     void* mImagePtr;
     s32 mGradTexMode;
     Mtx mDrawMtx;

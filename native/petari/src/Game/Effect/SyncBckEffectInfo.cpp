@@ -12,9 +12,8 @@ bool SyncBckEffectInfo::BckResourceInfo::isLoop() const {
 }
 
 SyncBckEffectInfo::SyncBckEffectInfo(const XanimePlayer* pPlayer, const char* pName, s32 capacity, f32 startFrame, f32 endFrame, bool continueAnimEnd)
-    : mBckResources(), mCapacity(), mCount(), mStartFrame(startFrame), mEndFrame(endFrame), mContinueAnimEnd(continueAnimEnd) {
+    : mBckResources(), mCount(), mStartFrame(startFrame), mEndFrame(endFrame), mContinueAnimEnd(continueAnimEnd) {
     mBckResources = new BckResourceInfo*[capacity];
-    mCapacity = capacity;
     addBck(pPlayer, pName);
 }
 

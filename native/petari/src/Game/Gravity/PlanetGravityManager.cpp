@@ -11,7 +11,7 @@ PlanetGravityManager::PlanetGravityManager(const char* pName)
     : NameObj(pName), mGravities(new PlanetGravity*[::sFirstCapacity]), mMaxGravities(::sFirstCapacity), mNumGravities(0) {
 }
 
-bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, uintptr_t host) const {
+bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, const void* pHost) const {
     Vec3f totalGravity(0.0f, 0.0f, 0.0f);
     bool hasCalculated = false;
 
@@ -26,7 +26,7 @@ bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* 
         PlanetGravity* gravity = mGravities[i];
 
         if (!gravity->mActivated || !gravity->mValidFollower || !gravity->mAppeared || (gravityType & gravity->mGravityType) == 0 ||
-            host == reinterpret_cast< uintptr_t >(gravity->mHost)) {
+            pHost == gravity->mHost) {
             continue;
         }
 

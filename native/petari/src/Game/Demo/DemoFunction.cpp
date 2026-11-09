@@ -125,7 +125,7 @@ namespace {
 
     bool isCurrentMainPart(const char* pPartName) {
         DemoTimeKeeper* timeKeeper = getCurrentTimeKeeper();
-        return MR::isEqualString(pPartName, timeKeeper->mSubPartInfos[0].mPartName);
+        return MR::isEqualString(pPartName, timeKeeper->mCurrentPart->mPartName);
     }
 };  // namespace
 
@@ -151,7 +151,7 @@ namespace DemoFunction {
 
     s32 getDemoPartTotalStepFunction(const char* pPartName) {
         if (::isCurrentMainPart(pPartName)) {
-            return ::getCurrentTimeKeeper()->mSubPartInfos[0].mTotalStep;
+            return ::getCurrentTimeKeeper()->mCurrentPart->mTotalStep;
         } else {
             return ::getCurrentSubPartKeeper()->getDemoPartTotalStep(pPartName);
         }
@@ -161,7 +161,7 @@ namespace DemoFunction {
         if (!MR::isTimeKeepDemoActive()) {
             return false;
         }
-        s32 total = ::getCurrentTimeKeeper()->mSubPartInfos[0].mTotalStep;
+        s32 total = ::getCurrentTimeKeeper()->mCurrentPart->mTotalStep;
         s32 current = ::getCurrentTimeKeeper()->mCurrentStep;
         if (current != total - 1) {
             return false;
@@ -190,7 +190,7 @@ namespace DemoFunction {
         if (executor == nullptr) {
             return nullptr;
         }
-        DemoTimePartInfo* part = &executor->mTimeKeeper->mSubPartInfos[0];
+        DemoTimePartInfo* part = executor->mTimeKeeper->mCurrentPart;
         if (part != nullptr) {
             return part->mPartName;
         }

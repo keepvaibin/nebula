@@ -14,7 +14,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/ArenaOwned.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 namespace {

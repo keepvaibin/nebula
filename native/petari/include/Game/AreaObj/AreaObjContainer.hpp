@@ -11,7 +11,7 @@ typedef AreaObjMgr* (*ManagerCreatorFuncPtr)(s32, const char*);
 
 struct Name2CreateManagerFunc {
     const char* mName;
-    s32 mMaxCount;
+    s32 mFirstCapacity;  // the manager grows past it
     ManagerCreatorFuncPtr mCreateFunc;
 };
 

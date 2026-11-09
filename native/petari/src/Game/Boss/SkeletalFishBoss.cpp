@@ -37,6 +37,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/ModelData.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -632,10 +633,9 @@ void SkeletalFishBoss::initJoint() {
     }
 
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
-        char buf[16];
-        nebula_snprintf(buf, sizeof(buf), "Joint%02d", i);
-        mControllers[i] = MR::createJointDelegatorWithNullChildFunc(this, &SkeletalFishBoss::calcJoint, buf);
-        mJointIndicies[MR::getJointIndex(this, buf)] = i;
+        const MR::FormattedName jointName("Joint%02d", i);
+        mControllers[i] = MR::createJointDelegatorWithNullChildFunc(this, &SkeletalFishBoss::calcJoint, jointName.c_str());
+        mJointIndicies[MR::getJointIndex(this, jointName.c_str())] = i;
     }
 }
 
@@ -859,10 +859,9 @@ void SkeletalFishBoss::resetCamera() {
 }
 
 void SkeletalFishBoss::playDamageBrk() {
-    char buf[256];
-    nebula_snprintf(buf, sizeof(buf), "Damage%dColor", mDamageBrkIndex);
-    MR::startBrk(this, buf);
-    MR::startBrk(mBossHead, buf);
+    const MR::FormattedName brkName("Damage%dColor", mDamageBrkIndex);
+    MR::startBrk(this, brkName.c_str());
+    MR::startBrk(mBossHead, brkName.c_str());
     mDamageBrkIndex++;
 }
 

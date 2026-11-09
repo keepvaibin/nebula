@@ -61,12 +61,11 @@ public:
     void exeClose();
     void exeInter();
 
-    /// @brief Allocated array of `mNumBabies` babies.
-    JumpGuarderBaby* mBabies;
+    JumpGuarderBaby* mBabies;  // mNumBabies of them, and at least 4
 
     s32 mNumBabies;
     s32 mBumpCooldown;
-    JumpGuarderBaby* mActiveBabies[4];
+    JumpGuarderBaby** mActiveBabies;  // as much room as mBabies
     s32 mNumActiveBabies;
     s32 mNumCoins;
     f32 mBabyVelocity;

@@ -46,19 +46,19 @@ Ui::Font* LayoutHolder::GetFont(const char* pName) {
     }
 
     if (!MR::strcasecmp(pName, "MenuFont64.brfnt")) {
-        return MR::getMenuFontNW4R();
+        return MR::getMenuFont();
     }
 
     if (!MR::strcasecmp(pName, "NumberFont.brfnt")) {
-        return MR::getNumberFontNW4R();
+        return MR::getNumberFont();
     }
 
     if (!MR::strcasecmp(pName, "PictureFont.brfnt")) {
-        return MR::getPictureFontNW4R();
+        return MR::getPictureFont();
     }
 
     if (MR::strcasecmp(pName, "CinemaFont26.brfnt") == 0) {
-        return MR::getCinemaFontNW4R();
+        return MR::getCinemaFont();
     }
 
     return MR::getFontOnCurrentLanguage();

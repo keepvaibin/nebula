@@ -1,5 +1,5 @@
 #include "Game/Screen/ImageEffectResource.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
@@ -35,7 +35,7 @@ void ImageEffectResource::createDOFTexture() {
 GameTexture* ImageEffectResource::createTexture(f32 scale) {
     GameTexture* pTexture;
 
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
+    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
 
     pTexture = GameTexture::createTarget(scale, scale);
     pTexture->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);

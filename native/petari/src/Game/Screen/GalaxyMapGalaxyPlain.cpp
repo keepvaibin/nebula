@@ -3,7 +3,7 @@
 #include "Game/Screen/GalaxyNamePlate.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -70,7 +70,7 @@ void GalaxyMapGalaxyPlain::init(const TableIter& rIter) {
     mNamePlate->initWithoutIter();
     mNamePlate->setShowBalloonNozzle(false);
 
-    mGalaxyName = new (MR::getSceneHeap(), 0) char16_t[GALAXY_NAME_BUFFER_SIZE];
+    mGalaxyName = new (Arenas::scene(), 0) char16_t[GALAXY_NAME_BUFFER_SIZE];
 }
 
 void GalaxyMapGalaxyPlain::appear() {

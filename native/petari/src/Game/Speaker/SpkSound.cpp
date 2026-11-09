@@ -100,17 +100,17 @@ bool SpkSound::start(s32 padChannel, s32 waveID) {
 
     mWaveID = waveID;
 
-    SpkTable* table = data->getSpkTable();
-    const u16 id = table->getParameters(waveID)->mWaveID;
-    mReleaseTime = (table->getParameters(waveID)->mReleaseTime * 6) / 40;
+    const SpkParameters* params = data->getSpkTable()->getParameters(waveID);
+    const u16 id = params->mWaveID;
+    mReleaseTime = (params->mReleaseTime * 6) / 40;
 
-    SpkWave* wave = data->getWave();
+    const WaveData* wave = data->getWave()->getWaveData(id);
     SpeakerStartCommand command;
-    command.mWave = wave->getWave(id);
-    command.mSize = wave->getWaveSize(id) / 2;
-    command.mLoopStart = wave->getLoopStartPos(id);
-    command.mLoopEnd = wave->getLoopEndPos(id);
-    command.mBaseVolume = table->getParameters(waveID)->mVolume / 127.0f;
+    command.mWave = wave->mWave;
+    command.mSize = static_cast< s32 >(wave->mSize) / 2;
+    command.mLoopStart = wave->mLoopStartPos;
+    command.mLoopEnd = wave->mLoopEndPos;
+    command.mBaseVolume = params->mVolume / 127.0f;
 
     mMemory = SoundMemory::alloc(sizeof(SpeakerVoice));
     mVoice = new (mMemory) SpeakerVoice();
@@ -134,7 +134,7 @@ void SpkSound::kill() {
     setState(State_DEAD);
 }
 
-SpkSoundHolder::SpkSoundHolder(NebulaArena* pHeap) : SoundGlobal(true), mHeap(pHeap) {
+SpkSoundHolder::SpkSoundHolder(NebulaArena* pArena) : SoundGlobal(true), mArena(pArena) {
 }
 
 bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHandle) {
@@ -157,7 +157,7 @@ bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHan
         }
     }
 
-    SpkSound* sound = new (mHeap, 0) SpkSound();
+    SpkSound* sound = new (mArena, 0) SpkSound();
 
     if (pHandle != nullptr) {
         sound->attachHandle(pHandle);
@@ -185,7 +185,7 @@ void SpkSoundHolder::freeDeadSound(s32 padChannel) {
 
 // Each frame: last frame's sounds are heard from now, and the ended ones go.
 void SpkSoundHolder::framework() {
-    for (int i = 0; i < 4; i++) {
+    for (s32 i = 0; i < PLAYER_MAX; i++) {
         for (NebulaListLink< SpkSound >* sound = mSoundList[i].getFirst(); sound != mSoundList[i].getEnd(); sound = sound->getNext()) {
             if (sound->getObject()->getState() == SpkSound::State_LOCK) {
                 sound->getObject()->unlock();

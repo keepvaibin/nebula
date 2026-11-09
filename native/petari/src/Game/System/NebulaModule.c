@@ -4,7 +4,6 @@
 #include "nebula_module.h"
 
 #include <stdarg.h>
-#include <stdatomic.h>
 #include <stdlib.h>
 
 void nebula_game_main(void); /* Game/System/GameSystem.cpp: the game's main */
@@ -50,38 +49,48 @@ NEBULA_GAME_API void nebula_game_run(void) {
     nebula_fatal("the game's main returned");
 }
 
-/* The host's log takes whole lines (dropped before the host attaches): a report without its newline waits for the rest
-   of its line. */
-static char sLogLine[1024];
-static size_t sLogLength;
-static atomic_flag sLogLock = ATOMIC_FLAG_INIT;
-
-static void log_emit(void) {
-    const NebulaHostServices* host = nebula_host();
-    sLogLine[sLogLength] = '\0';
-    if (host != NULL && host->log != NULL) {
-        host->log(host->user, sLogLine);
-    }
-    sLogLength = 0;
-}
-
+/* Each line goes to the host in one call, which writes it whole from any thread; nothing is shared between calls (dropped
+   before the host attaches). Every caller ends its text with a newline; a last piece without one is a line of its own.
+   Text of any length: up to 1023 characters on the stack, longer in the host's heap (never an arena, so an arena can log
+   its own state). */
 void nebula_vlog(const char* format, va_list args) {
-    char text[1024];
-    const int n = nebula_vsnprintf(text, sizeof(text), format, args);
-    const size_t length = n < 0 ? 0 : ((size_t)n < sizeof(text) ? (size_t)n : sizeof(text) - 1);
-    while (atomic_flag_test_and_set_explicit(&sLogLock, memory_order_acquire)) {
+    const NebulaHostServices* host = nebula_host();
+    if (host == NULL || host->log == NULL) {
+        return;
     }
+
+    char stack_text[1024];
+    va_list again;
+    va_copy(again, args);
+    const int n = nebula_vsnprintf(stack_text, sizeof(stack_text), format, args);
+    char* text = stack_text;
+    size_t length = n < 0 ? 0 : (size_t)n;
+    if (length >= sizeof(stack_text)) {
+        text = host->heap_alloc != NULL ? (char*)host->heap_alloc(host->user, length + 1) : NULL;
+        if (text != NULL) {
+            nebula_vsnprintf(text, length + 1, format, again);
+        } else {
+            text = stack_text;
+            length = sizeof(stack_text) - 1;
+        }
+    }
+    va_end(again);
+
+    size_t start = 0;
     for (size_t i = 0; i < length; i++) {
         if (text[i] == '\n') {
-            log_emit();
-            continue;
+            text[i] = '\0';
+            host->log(host->user, text + start);
+            start = i + 1;
         }
-        if (sLogLength == sizeof(sLogLine) - 1) {
-            log_emit();
-        }
-        sLogLine[sLogLength++] = text[i];
     }
-    atomic_flag_clear_explicit(&sLogLock, memory_order_release);
+    if (start < length) {
+        text[length] = '\0';
+        host->log(host->user, text + start);
+    }
+    if (text != stack_text) {
+        host->heap_free(host->user, text);
+    }
 }
 
 void nebula_log(const char* format, ...) {

@@ -2,6 +2,7 @@
 
 #include "Game/Sound/SoundGlobal.hpp"
 #include "Game/Sound/SpeakerMixer.hpp"
+#include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaList.hpp"
 
 class NebulaArena;
@@ -66,12 +67,12 @@ private:
 
 class SpkSoundHolder : SoundGlobal< SpkSoundHolder > {
 public:
-    SpkSoundHolder(NebulaArena* pHeap);
+    SpkSoundHolder(NebulaArena* pArena);
 
     bool startSound(s32, s32, SpkSoundHandle*);
     void freeDeadSound(s32);
     void framework();
 
-    NebulaArena* mHeap;
-    NebulaList< SpkSound > mSoundList[4];
+    NebulaArena* mArena;
+    NebulaList< SpkSound > mSoundList[PLAYER_MAX];
 };

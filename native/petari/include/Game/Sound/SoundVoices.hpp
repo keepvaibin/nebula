@@ -99,6 +99,9 @@ struct NoteHolder {
 struct Note {
     enum Status : s32 { STATUS_STOP, STATUS_PLAY, STATUS_RELEASE };
     enum Kind : u32 { KIND_WAVE = 0, KIND_OSC = 2 };
+    // mFormat's low three bits: the wave's format on the disc (the store's samples are all PCM16). Below FORMAT_SAMPLED_NUM
+    // the wave plays; FORMAT_PCM16 marks music.
+    enum Format : u8 { FORMAT_PCM16 = 3, FORMAT_SAMPLED_NUM = 4, FORMAT_MASK = 7 };
 
     void free() {
         mOwner = OWNER_NONE;

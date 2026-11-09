@@ -109,8 +109,8 @@ namespace GameSequenceFunction {
         ::getGameSequenceProgress()->endScene();
     }
 
-    void requestChangeScene(const char* pSceneName) {
-        ::getGameSequenceProgress()->requestChangeScene(pSceneName);
+    void requestChangeScene(SceneKind kind) {
+        ::getGameSequenceProgress()->requestChangeScene(kind);
     }
 
     void requestGalaxyMove(const GalaxyMoveArgument& rArgument) {
@@ -239,7 +239,7 @@ namespace GameSequenceFunction {
     }
 
     bool isSuccessSaveDataHandleSequence() {
-        return ::getSaveDataHandleSequence()->mResultState == 2;
+        return ::getSaveDataHandleSequence()->mSucceeded;
     }
 
     void restoreUserFile(UserFile* pUserFile, int userFileIndex) {

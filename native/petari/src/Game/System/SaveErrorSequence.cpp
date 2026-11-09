@@ -3,6 +3,7 @@
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -13,7 +14,7 @@ namespace {
     NEW_NERVE(SaveErrorSequenceDamagedConfirm, SaveErrorSequence, DamagedConfirm);
     NEW_NERVE(SaveErrorSequenceNoSaveConfirm, SaveErrorSequence, NoSaveConfirm);
 
-    char16_t sText[256];
+    MR::GrowBuffer< char16_t > sText;
 };  // namespace
 
 SaveErrorSequence::SaveErrorSequence(SaveDataHandleSequence* pHost, SysInfoWindow* pConfirm)
@@ -56,8 +57,7 @@ void SaveErrorSequence::exeIdle() {
 // The drive refused: said once; the game goes on.
 void SaveErrorSequence::exeError() {
     if (MR::isFirstStep(this)) {
-        NebulaText::get(sText, ARRAY_SIZE(sText), "SaveFailed");
-        mSysInfoWindow->appearKeyWithText(sText);
+        mSysInfoWindow->appearKeyWithText(NebulaText::get(&sText, "SaveFailed"));
     }
 
     if (MR::isDead(mSysInfoWindow)) {
@@ -67,8 +67,7 @@ void SaveErrorSequence::exeError() {
 
 void SaveErrorSequence::exeDamagedConfirm() {
     if (MR::isFirstStep(this)) {
-        NebulaText::get(sText, ARRAY_SIZE(sText), "SaveDamaged");
-        mSysInfoWindow->appearYesNoWithText(sText);
+        mSysInfoWindow->appearYesNoWithText(NebulaText::get(&sText, "SaveDamaged"));
         MR::startSystemSE("SE_SY_SAVE_CONFIRM_INFO");
     }
 

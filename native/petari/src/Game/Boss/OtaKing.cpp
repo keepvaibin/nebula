@@ -1,4 +1,5 @@
 #include "Game/Boss/OtaKing.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Boss/OtaKingLongFoot.hpp"
 #include "Game/Boss/OtaKingMagma.hpp"
@@ -133,7 +134,7 @@ void OtaKing::init(const TableIter& rIter) {
     initEffectKeeper(0, "OtaKing");
     MR::setClippingTypeSphere(this, 3000.0f);
     initSound(8, false);
-    mSoundObj = new AudAnmSoundObject(&mSoundObjPos, 4, MR::getCurrentHeap());
+    mSoundObj = new AudAnmSoundObject(&mSoundObjPos, 4, NebulaArena::current());
     mAnimCamera = MR::createActorCameraInfo(rIter);
     MR::initAnimCamera(this, mAnimCamera, "Appear");
     MR::initAnimCamera(this, mAnimCamera, "Down");
@@ -610,11 +611,11 @@ void OtaKing::appearBubble() {
         FireBubble* currentBubble = getDisappearedBubble();
 
         if (currentBubble != nullptr) {
-            Vec3f vec1;
-            vec1.sub(trans, mPosition);
+            Vec3f dir;
+            dir.sub(trans, mPosition);
 
-            if (MR::normalizeOrZero(&vec1)) {
-                vec1.set< f32 >(0.0f, 0.0f, 1.0f);
+            if (MR::normalizeOrZero(&dir)) {
+                dir.set< f32 >(0.0f, 0.0f, 1.0f);
             }
 
             Pos3f rotate;
@@ -622,8 +623,8 @@ void OtaKing::appearBubble() {
             rotate.makeRotate(Vec3f(0.0f, 1.0f, 0.0f),
                               MR::toRadian(((i + 0.5f) * 60.0f) + MR::getRandom(-::cBubbleAppearRandomAngle, ::cBubbleAppearRandomAngle)));
 
-            rotate.mult33(vec1, vec1);
-            currentBubble->appear(trans, vec1, ::cBubbleAppearVelocity);
+            rotate.mult33(dir, dir);
+            currentBubble->appear(trans, dir, ::cBubbleAppearVelocity);
         }
     }
 }

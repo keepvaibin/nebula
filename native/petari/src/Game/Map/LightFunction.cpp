@@ -85,7 +85,6 @@ void LightFunction::getAreaLightLightData(Table* pInfo, int idx, AreaLightInfo* 
     ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mStrongLight, "Strong");
     ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mWeakLight, "Weak");
     ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mPlanetLight, "Planet");
-    MR::getCsvDataBool(&pLightInfo->mFix, pInfo, "Fix", idx);
 }
 
 const char* LightFunction::getDefaultAreaLightName() {

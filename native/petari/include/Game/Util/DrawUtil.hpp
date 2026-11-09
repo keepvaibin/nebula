@@ -21,7 +21,7 @@ namespace MR {
     void drawInitFor2DModel();
     void setDefaultViewportAndScissor();
     void loadProjectionMtxFor2D();
-    void setupDrawForNW4RLayout(f32, bool);
+    void setupDrawForLayout();
     void clearZBuffer();
     void clearStencil();
     // A fill's material, under an orthographic projection of the screen.

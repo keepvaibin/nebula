@@ -61,11 +61,6 @@ void RumbleChannel::setPattern(const void* pOwner, const RumblePattern& rPattern
 InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), mSerial(1), mStopTimer() {
     if (sInstanceForCallback == nullptr) {
         sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()]();
-        RumbleData::initHashValue();
-    }
-
-    for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-        mChannel[i].clear();
     }
 }
 
@@ -100,17 +95,15 @@ void InputRumble::stop() {
 
     pause();
 
-    for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-        mChannel[i].clear();
-    }
+    mChannels.clear();
 }
 
 void InputRumble::update() {
     // A cutscene running unseen (NebulaCutsceneSkip) does not rumble.
     if (NebulaCutsceneSkip::isSkipping()) {
         bool isActive = mStrength != 0;
-        for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-            isActive |= mChannel[i].mPattern != nullptr;
+        for (const RumbleChannel* pChannel = mChannels.begin(); pChannel != mChannels.end(); pChannel++) {
+            isActive |= pChannel->mPattern != nullptr;
         }
         if (isActive) {
             stop();
@@ -134,11 +127,11 @@ void InputRumble::update() {
 void InputRumble::updateRumble() {
     u8 strength = 0;
 
-    for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-        mChannel[i].update();
+    for (RumbleChannel* pChannel = mChannels.begin(); pChannel != mChannels.end(); pChannel++) {
+        pChannel->update();
 
-        if (strength < mChannel[i].mStrength) {
-            strength = mChannel[i].mStrength;
+        if (strength < pChannel->mStrength) {
+            strength = pChannel->mStrength;
         }
     }
 
@@ -156,54 +149,47 @@ bool InputRumble::vibratePatternIfNotExist(const void* pOwner, const char* pPatt
     return setRumblePatternIfNotExist(pOwner, *RumbleData::getPattern(pPatternName), false);
 }
 
-// A pattern already playing is left alone; a new one takes a free channel, else the oldest.
+// A pattern already playing is left alone; a new one takes a free channel, else a new one.
 bool InputRumble::setRumblePatternIfNotExist(const void* pOwner, const RumblePattern& rPattern, bool isLoop) {
     s32 existing = -1;
     s32 empty = -1;
-    s32 oldest = -1;
 
-    findRumblePattern(pOwner, &existing, &empty, &oldest, rPattern);
+    findRumblePattern(pOwner, &existing, &empty, rPattern);
 
     if (existing != -1) {
         return false;
     }
 
+    if (empty == -1) {
+        RumbleChannel channel;
+        channel.clear();
+        empty = mChannels.size();
+        mChannels.push_back(channel);
+    }
+
     mSerial = (mSerial + 1) & 0x7FFFFFFF;
-    mChannel[empty != -1 ? empty : oldest].setPattern(pOwner, rPattern, mSerial, isLoop);
+    mChannels[empty].setPattern(pOwner, rPattern, mSerial, isLoop);
 
     return true;
 }
 
-bool InputRumble::findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern& rPattern) {
-    u32 oldest = -1;
-    u8 oldestIndex = 0xFF;
-    u8 emptyIndex = 0xFF;
+bool InputRumble::findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, const RumblePattern& rPattern) {
+    s32 emptyIndex = -1;
 
-    for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-        const RumblePattern* pPattern = mChannel[i].mPattern;
+    for (s32 i = 0; i < mChannels.size(); i++) {
+        const RumblePattern* pPattern = mChannels[i].mPattern;
 
         if (pPattern == nullptr) {
-            if (emptyIndex == 0xFF) {
+            if (emptyIndex == -1) {
                 emptyIndex = i;
             }
-        } else {
-            if (pPattern->mHash == rPattern.mHash) {
-                *pExisting = i;
-                return true;
-            }
-
-            if (oldest > mChannel[i].mSerial) {
-                oldest = mChannel[i].mSerial;
-                oldestIndex = i;
-            }
+        } else if (pPattern == &rPattern) {
+            // Both are table entries, whose name hashes differ.
+            *pExisting = i;
+            return true;
         }
     }
 
-    if (emptyIndex != 0xFF) {
-        *pEmpty = emptyIndex;
-        return false;
-    }
-
-    *pOldest = oldestIndex;
+    *pEmpty = emptyIndex;
     return false;
 }

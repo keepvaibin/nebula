@@ -24,12 +24,12 @@ public:
     bool isResultFileCorrupted() const;
 
 private:
-    enum Result {
-        Result_None = 0,
-        Result_NewFile = 1,  // the damaged file is to be made again
-        Result_NoSave = 3,   // play on without saving
+    enum Result : u8 {
+        Result_None,
+        Result_NewFile,  // the damaged file is to be made again
+        Result_NoSave,   // play on without saving
     };
 
-    u32 mResult;  // Result
+    Result mResult;
     SysInfoWindow* mSysInfoWindow;
 };

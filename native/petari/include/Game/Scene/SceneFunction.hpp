@@ -6,7 +6,6 @@ namespace MR {
     // Category ids index the scene's category tables (SceneNameObjListExecutor); every value has a table row.
     enum MovementType {
         MovementType_None = -1,
-        MovementType_StopSceneDelayRequest,
         MovementType_Camera,
         MovementType_ScreenEffect,
         MovementType_ClippingDirector,

@@ -381,7 +381,7 @@ notSquat:
         goto doBrake;
     }
 
-    if (isAnimationRun("壁押し", 0)) {
+    if (isAnimationRun("壁押し", MarioIndexedAnime_WallPush)) {
         player = getPlayer();
         player->decideWalkSpeed();
         player = getPlayer();
@@ -422,7 +422,7 @@ afterBrake:
         setHipSliderTilt();
     }
 
-    if (isAnimationRun("坂すべり下向きあおむけ", 3)) {
+    if (isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
         setHipSlipTilt();
     }
 

@@ -6,8 +6,7 @@ class SwingRopePoint {
 public:
     SwingRopePoint(const Vec3f&);
 
-    virtual void updatePos(f32);
-
+    void updatePos(f32);
     void addAccel(const Vec3f&);
     bool restrict(const Vec3f&, f32, const Vec3f*);
     void strain(const Vec3f&, f32);

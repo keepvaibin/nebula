@@ -6,7 +6,7 @@ class ZoneLightID;
 
 class LightAreaHolder : public AreaObjMgr {
 public:
-    LightAreaHolder(s32 maxNum, const char* pName);
+    LightAreaHolder(s32 firstCapacity, const char* pName);
 
     virtual void initAfterPlacement();
 

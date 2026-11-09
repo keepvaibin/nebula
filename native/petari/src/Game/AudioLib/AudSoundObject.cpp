@@ -21,8 +21,8 @@ namespace {
     const s32 cLpfCutoffSpecialFx1 = 20;
 }  // namespace
 
-AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
-    : SoundObject(pPos, numHandles, pHeap), ArenaOwned(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
+AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pArena)
+    : SoundObject(pPos, numHandles, pArena), ArenaOwned(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
 }
 
 AudSoundObject::~AudSoundObject() {
@@ -69,14 +69,12 @@ bool AudSoundObject::isLimitedSound(SoundID soundID) {
 
     if (!isPlayingID(soundID)) {
         AudSoundInfo* info = AudWrap::getSoundInfo();
-        if (info != nullptr) {
-            if (info->isLimitCountPlaying(soundID)) {
-                return true;
-            }
+        if (info->isLimitCountPlaying(soundID)) {
+            return true;
+        }
 
-            if (info->isLimitNumPlaying(soundID)) {
-                return true;
-            }
+        if (info->isLimitNumPlaying(soundID)) {
+            return true;
         }
     }
 
@@ -286,10 +284,6 @@ void AudSoundObject::setCutoffToPort(SoundHandle* pHandle, SoundID soundID) {
     }
 
     AudSoundInfo* info = AudWrap::getSoundInfo();
-    if (info == nullptr) {
-        return;
-    }
-
     if (info->isUseLpf(soundID)) {
         AudEffector* effector = AudWrap::getSystem()->mAudEffector;
         s32 value = effector->mCutoff;

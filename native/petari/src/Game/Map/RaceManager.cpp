@@ -26,13 +26,9 @@ namespace {
 
 namespace {
     struct RaceStructData {
-        s32 getMaxTime() const {
-            return mMaxTime;
-        }
-
         const char* mName;
         s32 mEventBgmId;
-        s32 mMaxTime;
+        s32 mMaxTime;  // seconds; 0 is no limit
         const char* mMessageId;
         const char* mGalaxyName;
         s32 mScenarioNo;
@@ -46,7 +42,7 @@ namespace {
         {"サーフィン[トライアル]", MR::EventBgmID_Surfing, 0, "RaceName_SurfingTrial", "SurfingLv1Galaxy", 1, false},
         {"サーフィン[チャレンジ]", MR::EventBgmID_Surfing, 180, "RaceName_SurfingChallenge", "SurfingLv2Galaxy", 1, false}};
 
-    const RaceStructData& getRaceStruceData(s32 id) {
+    const RaceStructData& getRaceStructData(s32 id) {
         return ::sRaceStruct[id];
     }
 
@@ -265,7 +261,7 @@ void RaceManager::exeWipeIn() {
 
 void RaceManager::exeIntro() {
     if (MR::isFirstStep(this)) {
-        if (::getRaceStruceData(mCurrentRace).mIsDemoWithStarPointer) {
+        if (::getRaceStructData(mCurrentRace).mIsDemoWithStarPointer) {
             MR::startStarPointerModeDemoWithStarPointer(this);
         } else {
             MR::startStarPointerModeDemo(this);
@@ -293,7 +289,7 @@ void RaceManager::exeCount() {
     }
 
     if (MR::isStep(this, ::sBgmStartStep)) {
-        MR::startEventBGM(::getRaceStruceData(mCurrentRace).mEventBgmId);
+        MR::startEventBGM(::getRaceStructData(mCurrentRace).mEventBgmId);
     }
 
     if (mLayout->isPlayCountAnim()) {
@@ -310,7 +306,7 @@ void RaceManager::exeRace() {
         MR::startSystemSE("SE_SY_RACE_START");
     }
 
-    s32 maxTime = ::getRaceStruceData(mCurrentRace).getMaxTime();
+    s32 maxTime = ::getRaceStructData(mCurrentRace).mMaxTime;
     MR::updateClearTimeTextBox(mLayout, "TimeCounter", getNerveStep());
     if (maxTime > 0 && getNerveStep() >= NebulaFrameClock::stepsOfSeconds(maxTime)) {
         mRank = 0;
@@ -560,16 +556,16 @@ namespace RaceManagerFunction {
     }
 
     const char* getRaceName(int index) {
-        return ::getRaceStruceData(index).mName;
+        return ::getRaceStructData(index).mName;
     }
 
     const char* getRaceMessageId(int index) {
-        return ::getRaceStruceData(index).mMessageId;
+        return ::getRaceStructData(index).mMessageId;
     }
 
     s32 getRaceId(const char* pGalaxyName, s32 scenarioNo) {
         for (u32 i = 0; i < ARRAY_SIZE(::sRaceStruct); i++) {
-            const RaceStructData& rRaceStructData = ::getRaceStruceData(i);
+            const RaceStructData& rRaceStructData = ::getRaceStructData(i);
 
             if (MR::isEqualString(rRaceStructData.mGalaxyName, pGalaxyName) && rRaceStructData.mScenarioNo == scenarioNo) {
                 return i;
@@ -580,7 +576,7 @@ namespace RaceManagerFunction {
     }
 
     bool hasPowerStarRaceScenario(int index) {
-        return MR::isOnGameEventFlagPowerStarSuccess(::getRaceStruceData(index).mGalaxyName, ::getRaceStruceData(index).mScenarioNo);
+        return MR::isOnGameEventFlagPowerStarSuccess(::getRaceStructData(index).mGalaxyName, ::getRaceStructData(index).mScenarioNo);
     }
 };  // namespace RaceManagerFunction
 

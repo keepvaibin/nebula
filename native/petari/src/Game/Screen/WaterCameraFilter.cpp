@@ -12,7 +12,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -72,7 +72,7 @@ void WaterCameraFilter::init(const TableIter& rIter) {
 }
 
 void WaterCameraFilter::initScreenTex() {
-    MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
+    NebulaArena::CurrentScope restorer(Arenas::scene());
     mScreenTex = GameTexture::createTarget(1.0f, 1.0f);
 }
 

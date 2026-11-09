@@ -47,7 +47,7 @@ void PlantStalk::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_PlantStalk);
 
     initRailRider(rIter);
-    mRailInfo = new PlantRailInfo(rIter, 30.0f);
+    mRailInfo = new PlantRailInfo(rIter, ::sInterval);
 
     mPosition.set(MR::getRailPos(this));
     mNumPlantPoints = mRailInfo->mNumPlantPoints;
@@ -87,8 +87,7 @@ bool PlantStalk::updateGrowUp() {
 
     mStalkLength += mGrowSpeed;
 
-    f32 length = mStalkLength;
-    if (length <= 0.0f) {
+    if (mStalkLength <= 0.0f) {
         mStalkLength = 0.0f;
         mGrowSpeed = 0.0f;
     }
@@ -107,13 +106,11 @@ bool PlantStalk::updateGrowUp() {
     }
 
     mGrownPlantPoints = mStalkLength / ::sInterval;
-    (void)static_cast< f32 >(mGrownPlantPoints);
     mGrownPlantPoints = MR::clamp(mGrownPlantPoints, 2, mNumPlantPoints);
 
     Vec3f stalkPos;
     Vec3f axisY;
-    f32 posAlongStalk = mStalkLength;
-    mRailInfo->calcPosAndAxisY(&stalkPos, &axisY, posAlongStalk);
+    mRailInfo->calcPosAndAxisY(&stalkPos, &axisY, mStalkLength);
 
     Vec3f side(1.0f, 0.0f, 0.0f);
     Vec3f up;
@@ -139,7 +136,7 @@ void PlantStalk::calcNearestPos(Vec3f* pRailPos, const Vec3f& rSrcPos) const {
 
 f32 PlantStalk::calcPlayerCoord() const {
     Vec3f playerPos = *MR::getPlayerCenterPos();
-    f32 closestMag = 100000000.0;
+    f32 closestMag = 100000000.0f;
     s32 closestPoint = 0;
 
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
@@ -153,7 +150,7 @@ f32 PlantStalk::calcPlayerCoord() const {
 
     if (mStalkLength > 15.0f) {
         f32 maxLength = MR::getRailTotalLength(this);
-        return MR::clamp((((f32)(mGrownPlantPoints - closestPoint) * ::sInterval) / mStalkLength) * MR::getRailTotalLength(this), 0.0f, maxLength);
+        return MR::clamp(((static_cast< f32 >(mGrownPlantPoints - closestPoint) * ::sInterval) / mStalkLength) * MR::getRailTotalLength(this), 0.0f, maxLength);
     } else {
         return MR::getRailTotalLength(this);
     }
@@ -211,8 +208,7 @@ SiteMaterial PlantStalkDrawInit::makeMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
     SiteMaterial material;
-    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
-                       NEBULA_CULL_BACK);
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true, NEBULA_CULL_BACK);
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
     material.setTexture(0, mTexture);

@@ -1,13 +1,13 @@
 #include "Game/Sound/SoundObject.hpp"
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SoundHandles.hpp"
-#include "Game/Sound/SoundInfo.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 #include "Game/Sound/SoundStarter.hpp"
 #include "Game/Sound/SoundGlobal.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-SoundObject::SoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
-    : SoundHandles(new(pHeap, 0) SoundHandle[numHandles], numHandles), mPos(pPos) {
+SoundObject::SoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pArena)
+    : SoundHandles(new(pArena, 0) SoundHandle[numHandles], numHandles), mPos(pPos) {
     mIsAllocated = true;
 }
 
@@ -131,7 +131,7 @@ void SoundObject::stopSound(SoundID soundID, u32 fadeTime) {
 
 SoundHandle* SoundObject::getLowPrioSound(SoundID soundID) {
     SoundHandle* handle;
-    SoundInfo* info = SoundGlobal< SoundInfo >::getInstance();
+    const StdSoundInfo* info = StdSoundInfo::getInstance();
     u32 lowPrio = 0xFFFF;
     SoundHandle* prioHandle = nullptr;
 

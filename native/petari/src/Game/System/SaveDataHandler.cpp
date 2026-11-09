@@ -4,10 +4,10 @@
 #include "Game/System/SaveFileFormat.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/UserFile.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include "Game/System/GameLog.hpp"
+#include <nebula_module.h>
 #include <cstring>
 
 namespace {
@@ -92,11 +92,11 @@ SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     const u32 needed = pUserFile->makeGameDataBinary(pProbe, cProbeRoom);
     delete[] pProbe;
     mMakeRoom = needed * 2 + 0x1000;
-    mMake = new (MR::getPermanentHeap(), 0) u8[mMakeRoom];
+    mMake = new (Arenas::permanent(), 0) u8[mMakeRoom];
     mBufferRoom = (mMakeRoom + cRowSize) * cUserFiles * cKindNum + cHeaderSize;
-    mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
+    mBuffer = new (Arenas::permanent(), 0) u8[mBufferRoom];
 
-    mFiles = new (MR::getPermanentHeap(), 0) File[cUserFiles * cKindNum];
+    mFiles = new (Arenas::permanent(), 0) File[cUserFiles * cKindNum];
     for (u32 i = 0; i < cUserFiles * cKindNum; i++) {
         mFiles[i].mData = nullptr;
         mFiles[i].mSize = 0;
@@ -133,7 +133,7 @@ bool SaveDataHandler::readNative() {
     const u32 count = readU32(mBuffer + 12);
     if (version != cVersion || count > (mReadLength - cHeaderSize) / cRowSize ||
         readU32(mBuffer + 8) != crc32(mBuffer + cHeaderSize, mReadLength - cHeaderSize)) {
-        GameLog("save: %s is damaged\n", cReadNames[mReadIndex]);
+        nebula_log("save: %s is damaged\n", cReadNames[mReadIndex]);
         return false;
     }
 
@@ -142,7 +142,7 @@ bool SaveDataHandler::readNative() {
     for (u32 i = 0; i < count; i++) {
         const u32 size = readU32(mBuffer + cHeaderSize + i * cRowSize + cRowNameSize);
         if (size > mReadLength - place) {
-            GameLog("save: %s is damaged\n", cReadNames[mReadIndex]);
+            nebula_log("save: %s is damaged\n", cReadNames[mReadIndex]);
             return false;
         }
         place += size;
@@ -162,7 +162,7 @@ bool SaveDataHandler::readNative() {
         place += size;
     }
 
-    GameLog("save: read %s\n", cReadNames[mReadIndex]);
+    nebula_log("save: read %s\n", cReadNames[mReadIndex]);
     return true;
 }
 
@@ -171,7 +171,7 @@ bool SaveDataHandler::readOld() {
     NebulaSaveFormat::Header header;
     const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(mBuffer, mReadLength, header);
     if (error != NebulaSaveFormat::Error::None) {
-        GameLog("save: %s: %s\n", cReadNames[mReadIndex], NebulaSaveFormat::message(error));
+        nebula_log("save: %s: %s\n", cReadNames[mReadIndex], NebulaSaveFormat::message(error));
         return false;
     }
 
@@ -221,7 +221,7 @@ bool SaveDataHandler::readOld() {
 
     gOldSaveOrder = false;
     delete pUserFile;
-    GameLog("save: read %s, an old save\n", cReadNames[mReadIndex]);
+    nebula_log("save: read %s, an old save\n", cReadNames[mReadIndex]);
     return true;
 }
 
@@ -241,7 +241,7 @@ void SaveDataHandler::setFile(SaveFileId file, const u8* pData, u32 size) {
 
     if (size > pFile->mRoom) {
         delete[] pFile->mData;
-        pFile->mData = new (MR::getPermanentHeap(), 0) u8[size];
+        pFile->mData = new (Arenas::permanent(), 0) u8[size];
         pFile->mRoom = size;
     }
 
@@ -288,7 +288,7 @@ void SaveDataHandler::requestSaveSaveData() {
     if (total > mBufferRoom) {
         delete[] mBuffer;
         mBufferRoom = total;
-        mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
+        mBuffer = new (Arenas::permanent(), 0) u8[mBufferRoom];
     }
 
     writeU32(mBuffer, cMagic);
@@ -322,7 +322,7 @@ bool SaveDataHandler::isDone() {
         const u32 length = mReadLength;
         delete[] mBuffer;
         mBufferRoom = length;
-        mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
+        mBuffer = new (Arenas::permanent(), 0) u8[mBufferRoom];
         requestLoadSaveData(mReadIndex);
         return false;
     }

@@ -574,7 +574,8 @@ public:
 
     u8 mInitializing;  // true from init2's start to its end (calcCenterPos waits)
     MarioModelTint mAlphaTint;
-    MarioModelTint mGhostTints[0x40];
+    static const u32 cBlurPoseNum = 8;  // afterimages in the blur trail, one taken every 3 updates; also its tint levels
+    MarioModelTint mGhostTints[cBlurPoseNum * cBlurPoseNum];  // [age][pose slot] (createRainbowMesh)
     MarioModelTint mLightTint;
     u8 mFpViewHidden;  // the first-person view hides the model (calc1stPersonView)
     f32 mFogRate;  // the fog's strength for updateLightList (calcFogLighting)
@@ -683,8 +684,8 @@ public:
     bool mPolygonAttackDone;  // attackOrPushPolygons hit this frame
     Mtx34f mBaseMtx;  // the base matrix as set (calcAndSetBaseMtx) (?)
     HitSensor* mTakenSensor;  // the sensor he holds
-    HitSensor* mTakeSensors[4];   // what he holds, mTakeCount of them
-    Vec3f mTakeRotations[4];      // each one's rotation less his
+    MR::GrowTable< HitSensor*, 4 > mTakeSensors;  // what he holds, mTakeCount of them
+    MR::GrowTable< Vec3f, 4 > mTakeRotations;     // each one's rotation less his
     u32 mTakeCount;
     HitSensor* mTakeCandidate;    // the best sensor to take
     HitSensor* mThrowTarget;
@@ -730,8 +731,8 @@ public:
     u16 mSpinTicoTimer;  // the spin's Tico effect frames
     u16 mSpinStarTimer;  // the fairy star's frames after a spin
     u16 mSpinStarEndTimer;  // frames until the spin star effect ends
-    HitSensor* mAirPunchHits[8];  // sensors the air punch hit
-    u8 mAirPunchHitCount;  // entries in mAirPunchHits
+    MR::GrowTable< HitSensor*, 8 > mAirPunchHits;  // sensors the air punch hit
+    u32 mAirPunchHitCount;  // entries in mAirPunchHits
     Vec3f mControlVelocity;  // the velocity at control (updateBindRatio)
     f32 mBindRatio;  // how far the up follows the ground or wall normal
     u8 mTrampleJumpStep;  // the trample jump's height step (0-2)
@@ -792,11 +793,11 @@ public:
     bool mPreWipeOn;  // the pre-wipe fill is up (MarioAccess): the model is not drawn
     u16 mPreWipeTimer;  // the pre-wipe fill's frames: its alpha
     u8 mBlurState;  // the model blur: 0 off, 1 asked, 2 on, 3-5 fading out (calcViewBlurModel)
-    ModelPose mBlurPoses[2][8];
+    ModelPose mBlurPoses[2][cBlurPoseNum];
     Mtx34f mPrevViewMtx;  // last frame's camera view (drawModelBlur)
     Mtx34f mViewMtx;  // this frame's camera view
     u16 mBlurPoseSet;  // the blur pose set drawn (0 or 1)
-    u16 mBlurPoseIndex;  // the next blur pose (0-7)
+    u16 mBlurPoseIndex;  // the next blur pose (below cBlurPoseNum)
     Vec3f mReflectPos;  // the reflection model's position (calcScreenBoxRange)
     Vec2f mScreenBoxMin;   // the model's box on the screen (calcScreenBoxRange)
     Vec2f mScreenBoxMax;

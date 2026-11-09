@@ -154,18 +154,18 @@ void StarPieceFollowGroup::followPieces() {
 
         f32 cos = MR::cos(currentAngle);
         f32 sin = MR::sin(currentAngle);
-        f32 cos2 = 1.0f + 0.25f * MR::cos(3.0f * currentAngle);
+        f32 wobble = 1.0f + 0.25f * MR::cos(3.0f * currentAngle);
 
-        Vec3f vec2(playerPos);
-        Vec3f vec(0.0f, 0.0f, 0.0f);
+        Vec3f target(playerPos);
+        Vec3f offset(0.0f, 0.0f, 0.0f);
 
-        vec.add(mLocalXAxis * cos * mRadius);
-        vec.add(mLocalZAxis * sin * mRadius);
+        offset.add(mLocalXAxis * cos * mRadius);
+        offset.add(mLocalZAxis * sin * mRadius);
 
-        mPieceOffsets[i].set(vec);
+        mPieceOffsets[i].set(offset);
 
-        vec2.add(vec * cos2);
-        currentPiece->mVelocity.set(vec2);
+        target.add(offset * wobble);
+        currentPiece->mVelocity.set(target);
         currentPiece->mVelocity.sub(currentPiece->mPosition);
         currentPiece->mVelocity.mult(1.0f);
     }
@@ -205,31 +205,31 @@ void StarPieceFollowGroup::exeFollowToPlayer() {
 }
 
 void StarPieceFollowGroup::exeFollowEnd() {
-    bool doSomeExtraTVecStuff = false;
+    bool pullBack = false;
     if (MR::isGreaterStep(this, 20)) {
-        doSomeExtraTVecStuff = true;
+        pullBack = true;
     }
 
-    s32 numPiecesNotFollowingAnymore = 0;
+    s32 released = 0;
     for (int i = 0; i < (u32)mNumPiecesUse; i++) {
         StarPiece* currentPiece = mPieces[i];
         if (!currentPiece->isFollowing()) {
-            numPiecesNotFollowingAnymore++;
-            if (numPiecesNotFollowingAnymore == mNumPiecesUse - 1) {
+            released++;
+            if (released == mNumPiecesUse - 1) {
                 kill();
             }
             continue;
         }
 
-        if (doSomeExtraTVecStuff) {
+        if (pullBack) {
             const f32 SCALE = 0.05f;
             currentPiece->mVelocity += (mPieceOffsets[i] * SCALE);
         }
 
-        Vec3f vec2(*MR::getPlayerVelocity());
-        MR::normalizeOrZero(&vec2);
+        Vec3f playerDir(*MR::getPlayerVelocity());
+        MR::normalizeOrZero(&playerDir);
         const f32 TEN = 10.0f;
-        currentPiece->mVelocity += (vec2 * TEN);
+        currentPiece->mVelocity += (playerDir * TEN);
     }
 
     if (MR::isGreaterStep(this, 120)) {

@@ -390,10 +390,10 @@ void RhythmSeqParser::passPrintf(SeqTrack* pTrack, Scan& rScan) {
     }
 }
 
-void RhythmSystem::setup(SoundEngine* pEngine, u32 parsers, NebulaArena* pHeap) {
+void RhythmSystem::setup(SoundEngine* pEngine, u32 parsers, NebulaArena* pArena) {
     mEngine = pEngine;
     mParserCount = parsers;
-    mParsers = static_cast< RhythmSeqParser* >(NebulaArena::alloc(sizeof(RhythmSeqParser) * (parsers + 1), 16, pHeap));
+    mParsers = static_cast< RhythmSeqParser* >(NebulaArena::alloc(sizeof(RhythmSeqParser) * (parsers + 1), 16, pArena));
     if (mParsers == nullptr) {
         NEBULA_PANIC("no memory for the rhythm parsers");
     }
@@ -479,9 +479,7 @@ void RhythmSystem::apply(const SoundCommand& rCommand) {
     }
     case SOUND_ME_PARAMS:
         player->mRoot->setSound(rCommand.payload< SoundParams >());
-        if (rCommand.mArg != 0) {
-            player->mRoot->gframeProc();
-        }
+        player->mRoot->gframeProc();
         break;
     case SOUND_ME_STOP_AT_NOTE_END:
         player->mRoot->stopAtCurrentNoteEnd();

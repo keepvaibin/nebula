@@ -132,7 +132,7 @@ bool DemoDirector::registerDemoCast(LiveActor* pActor, const TableIter& rIter) {
         return false;
     }
 
-    PlacementId idInfo = PlacementId(MR::getDemoGroupID(rIter), rIter);
+    PlacementId idInfo = PlacementId(demoGroupId, rIter);
 
     if (mCastGroupHolder->tryRegisterDemoActor(pActor, rIter, idInfo)) {
         return true;

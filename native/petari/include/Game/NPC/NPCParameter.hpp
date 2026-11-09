@@ -31,30 +31,11 @@ public:
     T* mValue;
 };
 
-// Three columns, the name followed by X, Y and Z.
-class NPCParameterV3f : public NPCParameterBase {
-public:
-    NPCParameterV3f(const char*, Vec3f*);
-
-    virtual void read(Table*, s32);
-
-    Vec3f* mValue;
-};
-
-class NPCParameterReader : public NPCParameterBase, public MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > > {
+class NPCParameterReader : public NPCParameterBase, public MR::InlineVector< NPCParameterBase*, 4 > {
 public:
     NPCParameterReader(const char*);
 
     virtual void read(Table*, s32);
-};
-
-class NPCCapsParameterReader : public NPCParameterReader {
-public:
-    NPCCapsParameterReader(const char*);
-
-    void init();
-
-    NPCActorCaps mActorCaps;
 };
 
 class NPCItemParameterReader : public NPCParameterReader {

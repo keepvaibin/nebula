@@ -2,7 +2,7 @@
 
 #include "Game/RhythmLib/AudMeHandles.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/System/ArenaOwned.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 class AudMeObject : public AudMeHandles, public ArenaOwned {
 public:

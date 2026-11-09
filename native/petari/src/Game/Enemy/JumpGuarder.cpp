@@ -207,9 +207,9 @@ void JumpGuarder::control() {
 
     mHeadMtx.set(mBodyJointMtx);
 
-    Mtx34f mtx2;
-    mtx2.concat(mHeadMtx, mtx);
-    mHeadMtx.set(mtx2);
+    Mtx34f headMtx;
+    headMtx.concat(mHeadMtx, mtx);
+    mHeadMtx.set(headMtx);
 
     mBumpCooldown = MR::max(mBumpCooldown - 1, 0);
 
@@ -451,7 +451,7 @@ void JumpGuarder::exeInter() {
 }
 
 JumpGuarder::JumpGuarder(const char* pName)
-    : JumpEmitter(pName), mBabies(), mNumBabies(::sBabyNum), mBumpCooldown(), mNumActiveBabies(), mNumCoins(::sCoinDefault),
+    : JumpEmitter(pName), mBabies(), mNumBabies(::sBabyNum), mBumpCooldown(), mActiveBabies(), mNumActiveBabies(), mNumCoins(::sCoinDefault),
       mBabyVelocity(::sBabyVelocity) {
     mNumActiveBabies = 0;
 }
@@ -504,10 +504,12 @@ void JumpGuarder::init(const TableIter& rIter) {
         break;
     }
 
-    mBabies = new JumpGuarderBaby[::sBabyNum];
+    const s32 babyRoom = mNumBabies > ::sBabyNum ? mNumBabies : ::sBabyNum;
+    mBabies = new JumpGuarderBaby[babyRoom];
+    mActiveBabies = new JumpGuarderBaby*[babyRoom];
     MR::declareCoin(this, mNumCoins);
 
-    for (int i = 0; i < ::sBabyNum; i++) {
+    for (int i = 0; i < babyRoom; i++) {
         JumpGuarderBaby* baby = &mBabies[i];
         baby->mHost = this;
         baby->mPosition.set(mPosition);

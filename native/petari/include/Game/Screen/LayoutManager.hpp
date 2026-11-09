@@ -96,6 +96,6 @@ public:
     LayoutGroupCtrl** mGroupCtrlList;
     char* mLayoutName;
     // This layout's anchors (LayoutAspect::prepare, once: mAnchorsResolved), the layout's pass applies them.
-    MR::Vector< MR::FixedArray< Ui::Anchor, 16 > > mAnchors;
+    MR::InlineVector< Ui::Anchor, 16 > mAnchors;
     bool mAnchorsResolved = false;
 };

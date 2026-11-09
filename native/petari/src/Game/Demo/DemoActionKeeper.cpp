@@ -42,9 +42,6 @@ DemoActionInfo::DemoActionInfo() {
     mAnimName = nullptr;
     mCastCapacity = 128;
     mCastCount = 0;
-    mCastList = nullptr;
-    mFunctors = nullptr;
-    mNerves = nullptr;
     mCastList = new LiveActor*[mCastCapacity];
     mFunctors = new MR::FunctorBase*[mCastCapacity];
     mNerves = new const Nerve*[mCastCapacity];

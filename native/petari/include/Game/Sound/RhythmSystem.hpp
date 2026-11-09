@@ -93,7 +93,7 @@ private:
 class RhythmSystem {
 public:
     // Game thread, before the clock starts.
-    void setup(SoundEngine* pEngine, u32 parsers, NebulaArena* pHeap);
+    void setup(SoundEngine* pEngine, u32 parsers, NebulaArena* pArena);
 
     // Read by the game thread: the chord and scale in use (ChordInfo::isAvailable) and their numbers (a table loaded keeping them).
     NebulaAtomic< bool > mChordAvailable = false;

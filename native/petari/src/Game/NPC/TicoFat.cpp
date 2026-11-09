@@ -1,5 +1,4 @@
 #include "Game/NPC/TicoFat.hpp"
-#include "Game/System/GameLog.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Effect/MultiEmitter.hpp"

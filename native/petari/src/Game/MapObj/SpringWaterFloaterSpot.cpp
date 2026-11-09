@@ -82,10 +82,10 @@ void SpringWaterFloaterSpot::control() {
     mFloatPos.add(mVelocity);
     MR::makeMtxUpNoSupportPos(&mFloatMtx, -mGravity, mFloatPos);
 
-    Vec3f vec20;
-    Vec3f vec14(0.0f, -70.0f + mWaterCheckOffset, 0.0f);
-    NebulaMtxMultVec(mFloatMtx, vec14, vec20);
-    mFloatMtx.setTrans(vec20);
+    Vec3f waterCheckPos;
+    Vec3f waterCheckOffset(0.0f, -70.0f + mWaterCheckOffset, 0.0f);
+    NebulaMtxMultVec(mFloatMtx, waterCheckOffset, waterCheckPos);
+    mFloatMtx.setTrans(waterCheckPos);
 }
 
 void SpringWaterFloaterSpot::calcAndSetBaseMtx() {
@@ -108,10 +108,10 @@ void SpringWaterFloaterSpot::calcAndSetBaseMtx() {
 
 void SpringWaterFloaterSpot::exeWait() {
     Vec3f up(-mGravity);
-    Vec3f vec1C;
-    vec1C.scale(mWaterCheckOffset, up);
+    Vec3f waterCheckPos;
+    waterCheckPos.scale(mWaterCheckOffset, up);
 
-    if (MR::isInWater(this, vec1C)) {
+    if (MR::isInWater(this, waterCheckPos)) {
         if (mHeight >= 90.0f) {
             setNerve(GET_NERVE(SpringWaterFloaterSpot, SpringWaterFloaterSpotNrvFloatSignal));
         } else {

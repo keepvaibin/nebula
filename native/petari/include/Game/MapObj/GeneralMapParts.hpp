@@ -43,7 +43,7 @@ public:
     s32 mMoveConditionType;
     s32 mSignMotionType;
     s32 mShadowType;
-    MR::Vector< MR::FixedArray< MapPartsFunction*, 8 > > mFunctionArray;
+    MR::InlineVector< MapPartsFunction*, 8 > mFunctionArray;
     MapPartsAppearController* mAppearController;
     MapPartsRailRotator* mRailRotator;
     MapPartsRailMover* mRailMover;

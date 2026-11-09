@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/System/GameEventFlag.hpp"
+#include "Game/Util/Array.hpp"
 
 class GameEventFlagIter {
 public:
@@ -51,5 +52,6 @@ namespace GameEventFlagTable {
     s32 calcSpecialPowerStarNum(const char*);
     s32 getStarPieceNumToOpenExclamationGalaxy(const char*);
     s32 calcGreenPowerStarNum();
-    s32 getGalaxyDependedFlags(const char**, int, const char*);
+    // A galaxy's non-empty open conditions (the table's OpenCondition0, 1, ...), in column order.
+    void getGalaxyDependedFlags(MR::InlineVector< const char*, 3 >* pFlags, const char* pName);
 };  // namespace GameEventFlagTable

@@ -1,7 +1,7 @@
 #include "Game/Effect/ParticleResourceHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/Table.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/Particle/ParticleResources.hpp"
@@ -23,7 +23,7 @@ namespace {
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mNumEffectNums() {
     AssetFolder* pArchive = MR::getArchive(pArchiveName);
-    mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
+    mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), NebulaArena::current());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
     mAutoEffectList->attach(pArchive->getResource("AutoEffectList.bcsv"));
     countAutoEffectNum();
@@ -40,22 +40,18 @@ const char* ParticleResourceHolder::getParticleName(u32 index) const {
 
 u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
     const Table* pInfo = mParticleNames;
-    int middle;
-    int last;
     int first = 0;
-    last = pInfo->getNumEntries() - 1;
-
-    const char* pEntryName;
+    int last = pInfo->getNumEntries() - 1;
 
     while (first < last) {
-        middle = (first + last) / 2;
-        const char* pEntryName = "";
+        const int middle = (first + last) / 2;
+        const char* pMiddleName = "";
 
-        if (!pInfo->getValue(middle, "name", &pEntryName)) {
+        if (!pInfo->getValue(middle, "name", &pMiddleName)) {
             return 0xFFFF;
         }
 
-        const int comparison = compareNames(pEntryName, pName);
+        const int comparison = compareNames(pMiddleName, pName);
 
         if (comparison == 0) {
             return middle;
@@ -63,14 +59,12 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
 
         if (comparison < 0) {
             first = middle + 1;
-        }
-
-        if (comparison >= 0) {
+        } else {
             last = middle;
         }
     }
 
-    pEntryName = "";
+    const char* pEntryName = "";
 
     if (!pInfo->getValue(first, "name", &pEntryName)) {
         return 0xFFFF;

@@ -89,12 +89,12 @@ public:
     DemoActionKeeper* mActionKeeper;
     DemoWipeKeeper* mWipeKeeper;
     DemoSoundKeeper* mSoundKeeper;
-    MR::Vector< MR::FixedArray< DemoSheetKeeperBase*, 2 > > mSheetKeeper;
+    MR::InlineVector< DemoSheetKeeperBase*, 2 > mSheetKeeper;
     StageSwitchCtrl* mStageSwitchCtrl;
     NameObj* mDemoStarter;
     const char* mDemoName;
     MR::MovementControlType mMovementType;  // None while not running
-    MR::Vector< MR::FixedArray< LiveActor*, 192 > > mActor;
-    MR::Vector< MR::FixedArray< DemoTalkAnimCtrl*, 8 > > mTalkAnimCtrl;
-    MR::Vector< MR::FixedArray< DemoTalkMessageCtrl, 8 > > mTalkMessageCtrl;
+    MR::InlineVector< LiveActor*, 192 > mUnclippedCasts;  // casts start() stopped clipping; end() restores them
+    MR::InlineVector< DemoTalkAnimCtrl*, 8 > mTalkAnimCtrl;
+    MR::InlineVector< DemoTalkMessageCtrl, 8 > mTalkMessageCtrl;
 };

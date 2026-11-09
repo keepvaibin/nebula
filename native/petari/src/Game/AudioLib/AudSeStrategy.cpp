@@ -11,10 +11,6 @@ void AudSeStrategy::calc(EffectSound* pSe) {
     SoundID soundID = pSe->mSoundID;
 
     AudSoundInfo* info = AudWrap::getSoundInfo();
-    if (info == nullptr) {
-        return;
-    }
-
     if (info->isUseFxMix(soundID)) {
         pSe->getAuxiliary().moveFxMix(AudWrap::getSystem()->mAudEffector->mFxSend, 0);
     }
@@ -29,7 +25,7 @@ void AudSeStrategy::calc(EffectSound* pSe) {
         cutoff = 0x7F;
     }
 
-    if (soundID.getGroupID() == 1 && cutoff < 50) {  // SE_PV
+    if (soundID.getGroupID() == AudGroup_VoiceSe && cutoff < 50) {
         cutoff = 50;
     }
 

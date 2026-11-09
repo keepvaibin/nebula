@@ -340,8 +340,8 @@ typedef struct NebulaModApi {
        A name the game has is changed, a new one added. `kind`: 1 stars, 2 a galaxy's stars, 3 a special star, 4 two flags, 5 story,
        6 a galaxy, 7 a comet, 8 a hungry Luma. `a` and `b` follow the kind: the star's number, or the Luma's slot and its price. 0: done. */
     int32_t (*set_event_flag)(const char* name, int32_t kind, int32_t a, int32_t b, const char* first, const char* second);
-    /* Only in nebula_plugin_start. A dome's comets, 1 to 6, in the order they come, for the whole of its schedule: `galaxies[i]` with
-       `coins[i]` at 1 for the hundred purple coins. */
+    /* Only in nebula_plugin_start. A dome's comets (domes 1 to 6 are the game's; 7, 8 and on add domes while they run on unbroken), in
+       the order they come, for the whole of its schedule: `galaxies[i]` with `coins[i]` at 1 for the hundred purple coins. */
     int32_t (*set_comet_schedule)(int32_t dome, const char* const* galaxies, const int32_t* coins, int32_t count);
 
     /* One of the game's objects becomes another, or (`becomes` null) is gone. Where: NEBULA_OBJECTS_*. Before stages load. */

@@ -11,23 +11,22 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 WarpCube* WarpCubeMgr::getPairCube(const AreaObj* pObj) {
-    if (static_cast< const WarpCube* >(pObj)->mMapIdInfo == nullptr) {
+    const PlacementId* pId = static_cast< const WarpCube* >(pObj)->mMapIdInfo;
+    if (pId == nullptr) {
         return nullptr;
     }
 
-    for (WarpCube** pCube = reinterpret_cast< WarpCube** >(mArray.begin()); pCube != reinterpret_cast< WarpCube** >(mArray.end()); pCube++) {
-        if (*pCube == pObj) {
+    for (AreaObj* pArea : mArray) {
+        WarpCube* pCube = static_cast< WarpCube* >(pArea);
+        if (pCube == pObj || pCube->mMapIdInfo == nullptr) {
             continue;
         }
 
-        if ((*pCube)->mMapIdInfo == nullptr) {
-            continue;
-        }
-
-        if (*(*pCube)->mMapIdInfo == *static_cast< const WarpCube* >(pObj)->mMapIdInfo) {
-            return *pCube;
+        if (*pCube->mMapIdInfo == *pId) {
+            return pCube;
         }
     }
 
@@ -119,14 +118,13 @@ void WarpCube::init(const TableIter& rIter) {
     s32 cameraIndex;
     MR::getPlacementArg0WithInit(rIter, &cameraIndex);
 
-    char eventName[0x100];
-    nebula_snprintf(eventName, sizeof(eventName), "ワープカメラ %d-%c", groupID, 'A' + cameraIndex);
+    const MR::FormattedName eventName("ワープカメラ %d-%c", groupID, 'A' + cameraIndex);
 
-    MR::declareEventCamera(mCameraInfo, eventName);
+    MR::declareEventCamera(mCameraInfo, eventName.c_str());
 
-    const size_t eventNameSize = strlen(eventName) + 1;
+    const size_t eventNameSize = strlen(eventName.c_str()) + 1;
     mEventName = new char[eventNameSize];
-    memcpy(mEventName, eventName, eventNameSize);
+    memcpy(mEventName, eventName.c_str(), eventNameSize);
 
     MR::connectToScene(this, MR::MovementType_AreaObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_NormalMap);
     mInvalidateTimer = 0;

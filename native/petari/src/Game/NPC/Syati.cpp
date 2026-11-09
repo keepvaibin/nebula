@@ -533,10 +533,10 @@ void Syati::updatePoseByRail() {
     f32 rad = MR::acos(dot);
 
     if (dot < 1.0f) {
-        f32 dot2 = turnAxis.dot(mGravity);
-        if (dot2 < 0.0f) {
+        f32 side = turnAxis.dot(mGravity);
+        if (side < 0.0f) {
             roll.setEulerZ(-1.0f * rad);
-        } else if (0.0f < dot2) {
+        } else if (0.0f < side) {
             roll.setEulerZ(rad);
         }
     }

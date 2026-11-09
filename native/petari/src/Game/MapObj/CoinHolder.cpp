@@ -1,4 +1,6 @@
 #include "Game/MapObj/CoinHolder.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/Coin.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -140,7 +142,7 @@ Coin* CoinHolder::takeDeadCoin() {
 }
 
 void CoinHolder::createCoins() {
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
+    NebulaArena::CurrentScope scope(Arenas::scene());
     for (int i = 0; i < ::sCreateCoinNum; i++) {
         Coin* pCoin = new Coin("コイン(共用)");
         pCoin->initWithoutIter();
@@ -159,7 +161,6 @@ namespace MR {
     }
 
     void addToCoinHolder(const NameObj* pNameObj, Coin* pCoin) {
-        getCoinHolder();
         pCoin->setHostInfo(getCoinHolder()->declare(pNameObj, 1));
     }
 };  // namespace MR
