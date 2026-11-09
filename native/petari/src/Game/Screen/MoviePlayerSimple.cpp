@@ -4,7 +4,6 @@
 #include "Game/Screen/MovieStream.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
-#include "Game/System/HomeButtonStateNotifier.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -31,7 +30,6 @@ MoviePlayerSimple::MoviePlayerSimple()
 }
 
 MoviePlayerSimple::~MoviePlayerSimple() {
-    SingletonHolder< GameSystem >::get()->mHomeButtonStateNotifier->unregisterMoviePlayerSimple(this);
     mStream->quit();
     delete mStream;
 }
@@ -100,7 +98,6 @@ void MoviePlayerSimple::startMovie(const char* pMovieName, bool loop) {
     play(loop);
     appear();
     MR::requestMovementOn(this);
-    SingletonHolder< GameSystem >::get()->mHomeButtonStateNotifier->registerMoviePlayerSimple(this);
 }
 
 void MoviePlayerSimple::stopMovie() {
@@ -142,8 +139,13 @@ void MoviePlayerSimple::setVolume(f32 volume, s32 time) {
     mStream->setVolume(volume * 127.0f, time);
 }
 
-void MoviePlayerSimple::setUnpauseHomeButtonFlag() {
-    mStream->setUnpauseFrameFlag();
+// Before the nerve feeds this frame's sound: the host fades the sound back in after the hold.
+void MoviePlayerSimple::movement() {
+    if (GameSystemFunction::isSceneResumed() && isMovieActive()) {
+        mStream->setUnpauseFrameFlag();
+    }
+
+    LayoutActor::movement();
 }
 
 void MoviePlayerSimple::exeSimpleOff() {
