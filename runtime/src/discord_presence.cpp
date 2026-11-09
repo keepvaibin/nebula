@@ -125,8 +125,8 @@ public:
         if (WriteFile(handle_, bytes.data(), static_cast<DWORD>(bytes.size()), nullptr, &overlapped) == FALSE) {
             if (GetLastError() != ERROR_IO_PENDING) return false;
             if (WaitForSingleObject(event_, 2000) != WAIT_OBJECT_0) {
-                CancelIoEx(handle_, &overlapped);
-                GetOverlappedResult(handle_, &overlapped, &written, TRUE);
+                (void)CancelIoEx(handle_, &overlapped);
+                (void)GetOverlappedResult(handle_, &overlapped, &written, TRUE);
                 return false;
             }
         }
@@ -142,8 +142,8 @@ public:
             if (GetLastError() != ERROR_IO_PENDING) return false;
             if (WaitForSingleObject(event_, milliseconds) != WAIT_OBJECT_0) {
                 // Nothing came in time: what arrived while the read was being cancelled still counts.
-                CancelIoEx(handle_, &overlapped);
-                GetOverlappedResult(handle_, &overlapped, &got, TRUE);
+                (void)CancelIoEx(handle_, &overlapped);
+                (void)GetOverlappedResult(handle_, &overlapped, &got, TRUE);
                 if (got != 0 && out != nullptr) out->append(buffer, got);
                 return true;
             }
@@ -189,8 +189,9 @@ void worker() {
         }
         if (!enabled || client_id.empty()) {
             if (pipe.is_open()) {
-                if (shown) pipe.write(frame(kOpFrame, set_activity_json(GetCurrentProcessId(), {}, start, nonce++, true)));
-                pipe.write(frame(kOpClose, "{}"));
+                // Leaving: Discord is told on a best effort, the pipe closes either way.
+                if (shown) (void)pipe.write(frame(kOpFrame, set_activity_json(GetCurrentProcessId(), {}, start, nonce++, true)));
+                (void)pipe.write(frame(kOpClose, "{}"));
                 pipe.close();
                 std::fprintf(stderr, "[discord] status off\n");
             }
@@ -244,7 +245,7 @@ void start(std::string client_id) {
 #if defined(_WIN32)
     if (s_client_id.empty()) return;
     std::thread thread(worker);
-    SetThreadPriority(thread.native_handle(), THREAD_PRIORITY_BELOW_NORMAL);
+    (void)SetThreadPriority(thread.native_handle(), THREAD_PRIORITY_BELOW_NORMAL);
     thread.detach();  // ends with the process
 #endif
 }

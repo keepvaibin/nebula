@@ -973,7 +973,9 @@ namespace MR {
     }
 
     f32 normalizeAngleAbs(f32 angle) {
-        while (true) {
+        // One turn at a time, as the game always did; an angle many turns out (or infinite) is folded by fmod in one step
+        // instead of looping once per turn.
+        for (s32 turns = 0; turns < 16; turns++) {
             if (angle < 0.0f) {
                 angle += TWO_PI;
             } else if (angle > TWO_PI) {
@@ -982,6 +984,9 @@ namespace MR {
                 return angle;
             }
         }
+
+        angle = static_cast< f32 >(fmod(angle, TWO_PI));
+        return angle < 0.0f ? angle + TWO_PI : angle;
     }
 
     bool isAngleBetween(f32 angle, f32 min, f32 max) {

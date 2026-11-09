@@ -59,6 +59,8 @@ constexpr Info kCatalogue[] = {
 
 // Unlocks arriving together (a save that already meets many goals) are written once.
 constexpr std::chrono::milliseconds kWriteDelay{250};
+// Between tries after a write failed.
+constexpr std::chrono::seconds kRetryDelay{5};
 
 // Never destroyed: the writer thread may still wait on it while the process ends.
 struct State {
@@ -95,21 +97,25 @@ void load_locked(State& s) {
     }
 }
 
-void write_waiting() {
+// Writes what is waiting; false when the write failed (the unlocks stay waiting for the next try).
+bool write_waiting() {
     State& s = state();
     const std::lock_guard<std::mutex> io(s.io);
     std::string contents;
     std::filesystem::path path;
     {
         const std::lock_guard<std::mutex> lock(s.mutex);
-        if (!s.dirty) return;
+        if (!s.dirty) return true;
         s.dirty = false;
         std::ostringstream out;
         for (const auto& [key, value] : s.unlocked) out << key << '=' << value << '\n';
         contents = out.str();
         path = file_path_locked(s);
     }
-    if (!path.empty()) (void)io::write_file_atomically(path, contents);
+    if (path.empty() || io::write_file_atomically(path, contents)) return true;
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    s.dirty = true;
+    return false;
 }
 
 void writer_main() {
@@ -120,7 +126,8 @@ void writer_main() {
             s.wake.wait(lock, [&s] { return s.dirty; });
         }
         std::this_thread::sleep_for(kWriteDelay);
-        write_waiting();
+        // A failed write (the folder is locked for a moment) is tried again after a back-off, not in a spin.
+        if (!write_waiting()) std::this_thread::sleep_for(kRetryDelay);
     }
 }
 
@@ -201,11 +208,11 @@ int unlocked_date(std::string_view id) {
 }
 
 void flush() {
-    write_waiting();
+    (void)write_waiting();
 }
 
 void set_path_for_tests(const std::filesystem::path& path) {
-    write_waiting();
+    (void)write_waiting();
     State& s = state();
     const std::lock_guard<std::mutex> io(s.io);
     const std::lock_guard<std::mutex> lock(s.mutex);

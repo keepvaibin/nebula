@@ -148,7 +148,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/native_audio.cpp
     ${rt}/movie_audio.cpp
     ${rt}/atomic_file.cpp
-    ${rt}/disc_files.cpp
+    ${rt}/asset_store.cpp
     ${rt}/save_files.cpp
     ${rt}/mii_import.cpp
     ${rt}/mii_formats.cpp
@@ -245,7 +245,7 @@ if(ANDROID)
         ${rt}/mod_xml.cpp
         ${rt}/luma.cpp
         ${rt}/texture_categories.cpp
-        ${rt}/disc_files.cpp
+        ${rt}/asset_store.cpp
         ${rt}/atomic_file.cpp)
     target_include_directories(nebula_mods PRIVATE "${nebula_root}/runtime/include" "${nebula_root}/native/include")
     target_link_libraries(nebula_mods PRIVATE nebula_archive log)

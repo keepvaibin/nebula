@@ -114,8 +114,8 @@ target_include_directories(galaxy_runtime_abi INTERFACE "${CMAKE_CURRENT_SOURCE_
 add_library(galaxy_atomic_file STATIC runtime/src/atomic_file.cpp)
 target_link_libraries(galaxy_atomic_file PUBLIC galaxy_runtime_abi)
 
-add_library(galaxy_disc_files STATIC runtime/src/disc_files.cpp)
-target_link_libraries(galaxy_disc_files PUBLIC galaxy_runtime_abi)
+add_library(galaxy_asset_store STATIC runtime/src/asset_store.cpp)
+target_link_libraries(galaxy_asset_store PUBLIC galaxy_runtime_abi)
 
 add_library(galaxy_save_files STATIC runtime/src/save_files.cpp)
 target_link_libraries(galaxy_save_files PUBLIC galaxy_runtime_abi galaxy_atomic_file)
@@ -434,7 +434,7 @@ target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" 
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
 target_link_libraries(galaxy_render PRIVATE nebula_fidelityfx)
-target_link_libraries(galaxy_render PUBLIC galaxy_disc_files)
+target_link_libraries(galaxy_render PUBLIC galaxy_asset_store)
 # Intel XeSS headers (MIT, third_party/xess): the runtime loads the signed library from a vendor folder at run time.
 target_include_directories(galaxy_render SYSTEM PRIVATE third_party/xess/include)
 # NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
@@ -483,7 +483,7 @@ target_sources(NebulaNative PRIVATE ${galaxy_programs_dxil})
 target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
-target_link_libraries(NebulaNative PRIVATE galaxy_render galaxy_save_files galaxy_disc_files dwmapi)
+target_link_libraries(NebulaNative PRIVATE galaxy_render galaxy_save_files galaxy_asset_store dwmapi)
 if(MSVC)
     # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
     target_sources(NebulaNative PRIVATE native/host/nebula_host.manifest)
@@ -531,9 +531,9 @@ galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS ga
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
-galaxy_test(galaxy_disc_files_tests SOURCES ${rt}/disc_files_tests.cpp LIBS galaxy_disc_files)
+galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp LIBS galaxy_asset_store)
 # D-07: an older install's store and saves under the current layout.
-galaxy_test(galaxy_install_migration_tests SOURCES ${rt}/install_migration_tests.cpp LIBS galaxy_save_files galaxy_disc_files)
+galaxy_test(galaxy_install_migration_tests SOURCES ${rt}/install_migration_tests.cpp LIBS galaxy_save_files galaxy_asset_store)
 # The game's calendar (native/petari), compiled against a host the test provides.
 galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp
     native/petari/src/Game/System/NebulaCalendar.cpp)
@@ -572,7 +572,7 @@ galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii
     LIBS galaxy_atomic_file)
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/luma.cpp
-    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/disc_files.cpp LIBS galaxy_atomic_file nebula_archive)
+    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
 galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp tools/test_driver/data_guard.cpp LIBS galaxy_run_options shell32)
@@ -724,7 +724,7 @@ runtime/src/render/host_window_win32.cpp
     target_include_directories(galaxy_render_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_render_vk PUBLIC cxx_std_20)
-    target_link_libraries(galaxy_render_vk PUBLIC galaxy_disc_files)
+    target_link_libraries(galaxy_render_vk PUBLIC galaxy_asset_store)
     target_include_directories(galaxy_render_vk SYSTEM PRIVATE third_party/xess/include "${GALAXY_STREAMLINE_SDK}/include")
     target_compile_definitions(galaxy_render_vk PRIVATE GALAXY_STREAMLINE_VK=1)
     if(NEBULA_FSR3)
@@ -751,7 +751,7 @@ runtime/src/render/host_window_win32.cpp
     target_sources(NebulaNativeVk PRIVATE ${galaxy_programs_spirv})
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
-    target_link_libraries(NebulaNativeVk PRIVATE dwmapi galaxy_render_vk galaxy_save_files galaxy_disc_files)
+    target_link_libraries(NebulaNativeVk PRIVATE dwmapi galaxy_render_vk galaxy_save_files galaxy_asset_store)
     if(MSVC)
         target_sources(NebulaNativeVk PRIVATE native/host/nebula_host.manifest)
         target_compile_options(NebulaNativeVk PRIVATE /Zi)

@@ -4,27 +4,34 @@
 #      function and the release branch reads no environment; the files of tools/test_driver compile to nothing without
 #      NEBULA_DEV; each .inc there is included only under NEBULA_DEV; the CMake files define NEBULA_DEV only when
 #      NEBULA_RELEASE is off.
+#      A game-module file that names a test option (NEBULA_OPTION_TEST_*) holds it under a NEBULA_DEV conditional.
 #   2. Every file of -Path and every -Installer file (and the entries of the .zip/.apk/.jar/.nupkg files among them),
 #      as bytes (ASCII and UTF-8 text) and as UTF-16 text, holds none of: a test switch's name (the names read from switches.h, plus the
-#      prefixes below), a Windows or Unix user-profile path (drive:\Users\<name>\, /Users/<name>/, /home/<name>/), an
-#      e-mail address other than a GitHub noreply one, a MAC address (aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff,
-#      aabb.ccdd.eeff, or 12 hex digits after "mac"/"bdaddr"/"bluetooth"), or a personal term from the release key's
+#      prefixes below: GALAXY_TEST_, NEBULA_OPTION_TEST_, NEBULA_TEST_, NEBULA_DEV and others), a Windows or Unix user-profile path (drive:\Users\<name>\, /Users/<name>/, /home/<name>/), an
+#      e-mail address other than a GitHub noreply one, a MAC address (six hex pairs joined by colons or
+#      hyphens, three hex quads joined by dots, or 12 hex digits after "mac"/"bdaddr"/"bluetooth"), or a personal term from the release key's
 #      private-terms.txt (one per line; kept out of the repository, so no name is ever written here). A finding prints
 #      its kind, file and offset with the private part masked. -Allow names a local file of literal match texts to let
 #      through (one per line, # starts a comment): a third-party library's own address, say.
+#      The same personal-detail checks (paths, e-mail, MAC, private terms; not the switch names, which sources hold on
+#      purpose) run over every text file git tracks in this repository, except third_party/ and docs/licenses/ (their authors'
+#      details). -SkipSource leaves that out.
 #   3. Every .exe and .dll carries version information (product, file version, description).
 #   4. Signatures. Authenticode of every .exe, .dll and .msi: Valid passes; NotSigned is reported as "unsigned" and is
 #      not a failure (it is with -RequireSigned, for the Nebula-owned files); any other state (hash mismatch, untrusted)
 #      is a failure. Each -Installer file's release-key signature (<file>.sig, RSA SHA-256 over the file, checked against
-#      installer/release-public-key.xml): a missing .sig is reported "unsigned" (updates will not run it), a .sig that does
-#      not verify is a failure. No key is read or written here.
+#      installer/release-public-key.xml): a .sig that does not verify is a failure; a missing .sig is a failure when
+#      signing is configured (the release key's private file exists where installer/build-native-setup.ps1 looks for it,
+#      or -RequireSigned is given) and otherwise reported "unsigned" (updates will not run it). Only the existence of the
+#      private key file is tested; no key is read or written here.
 #   5. Microsoft Defender finds nothing in any file (scanned without remediation); -SkipDefender leaves this out.
 param(
     [Parameter(Mandatory = $true)][string]$Path,
     [string[]]$Installer = @(),
     [string]$Allow = "",
     [switch]$RequireSigned,
-    [switch]$SkipDefender
+    [switch]$SkipDefender,
+    [switch]$SkipSource
 )
 $ErrorActionPreference = "Stop"
 $failures = New-Object System.Collections.Generic.List[string]
@@ -126,8 +133,19 @@ foreach ($cmake in @("CMakeLists.txt", "native\CMakeLists.txt", "platform\sdl\CM
     }
 }
 
+# A game-module file that names a test option holds the read under a NEBULA_DEV conditional.
+$petariSource = Join-Path $repo "native\petari\src"
+if (Test-Path -LiteralPath $petariSource) {
+    foreach ($source in Get-ChildItem -LiteralPath $petariSource -Recurse -File -Include "*.cpp", "*.hpp", "*.c", "*.h") {
+        $text = [IO.File]::ReadAllText($source.FullName)
+        if ($text.Contains("NEBULA_OPTION_TEST_") -and $text -notmatch 'defined\(NEBULA_DEV\)') {
+            $failures.Add("$($source.FullName.Substring($repo.Length + 1)) names a test option outside any NEBULA_DEV conditional")
+        }
+    }
+}
+
 # ---- 2. What may not be in any shipped file ------------------------------------------------------------------------
-$prefixes = @("GALAXY_TEST_", "GALAXY_TRACE_", "GALAXY_DUMP_", "GALAXY_EXPORT_", "GALAXY_DEBUG_", "GALAXY_INPUT_",
+$prefixes = @("GALAXY_TEST_", "NEBULA_OPTION_TEST_", "NEBULA_TEST_", "NEBULA_DEV", "GALAXY_TRACE_", "GALAXY_DUMP_", "GALAXY_EXPORT_", "GALAXY_DEBUG_", "GALAXY_INPUT_",
               "GALAXY_PRESENT_SNAPSHOT", "GALAXY_INTERP_SNAPSHOT", "GALAXY_AUDIO_WAV", "GALAXY_HIDE_WINDOW",
               "GALAXY_BOOT_FAST", "GALAXY_PROFILE_GAME", "GALAXY_INSPECT_", "GALAXY_CRASH_DUMP_DIR", "GALAXY_VK_")
 $terms = New-Object System.Collections.Generic.List[string]
@@ -392,6 +410,40 @@ $options.Names = [string[]]@($switchNames)
 $options.Terms = [string[]]$terms.ToArray()
 $options.Allow = [string[]]$allowed.ToArray()
 
+# ---- 2b. The files git tracks --------------------------------------------------------------------------------------------
+if ($SkipSource) {
+    $notes.Add("tracked files were not scanned (-SkipSource)")
+} else {
+    $sourceOptions = New-Object NebulaScanOptions
+    $sourceOptions.Terms = $options.Terms
+    $sourceOptions.Allow = $options.Allow
+    $gitExe = Join-Path $env:ProgramFiles "Git\cmd\git.exe"
+    if (-not (Test-Path -LiteralPath $gitExe)) {
+        $found = Get-Command git -ErrorAction SilentlyContinue
+        $gitExe = if ($null -ne $found) { $found.Source } else { "" }
+    }
+    if ($gitExe -eq "") {
+        $failures.Add("git was not found: the tracked files were not checked for personal names, paths, e-mail or Bluetooth addresses")
+    } else {
+        $tracked = @(& $gitExe -c core.quotepath=false -C $repo ls-files)
+        if ($LASTEXITCODE -ne 0 -or $tracked.Count -eq 0) {
+            $failures.Add("git ls-files failed: the tracked files were not checked")
+        } else {
+            $vendored = 0
+            $unread = 0
+            $binaryName = '\.(png|jpe?g|gif|ico|webp|ttf|otf|woff2?|zip|7z|gz|bin|dds|ktx2?|mp4|ogg|wav|jar|aar|dll|exe|lib|a|so|pdf)$'
+            foreach ($relative in $tracked) {
+                if ($relative -like "third_party/*" -or $relative -like "docs/licenses/*" -or $relative -match $binaryName) { $vendored++; continue }
+                $full = Join-Path $repo $relative
+                if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { $unread++; continue }
+                foreach ($finding in [NebulaReleaseScan]::ScanFile($full, "source " + $relative, $sourceOptions)) { $failures.Add($finding) }
+            }
+            if ($vendored -ne 0) { $notes.Add("$vendored tracked files (third_party/, docs/licenses/, binary pictures, fonts and archives) were not scanned: they hold their authors' details or arbitrary bytes") }
+            if ($unread -ne 0) { $notes.Add("$unread tracked paths could not be opened (deleted in the tree, or a name outside the console code page)") }
+        }
+    }
+}
+
 $root = (Resolve-Path -LiteralPath $Path).Path
 $files = @(Get-ChildItem -LiteralPath $root -Recurse -File)
 if ($files.Count -eq 0) { Write-Output "release_check: no files under $Path"; exit 1 }
@@ -432,10 +484,17 @@ foreach ($item in $shipped) {
     }
 }
 $publicKeyFile = Join-Path $repo "installer\release-public-key.xml"
+# Signing is configured when the release key's private file is where the installer build looks for it (only its
+# existence is tested), or when -RequireSigned says it must be.
+$signingConfigured = $RequireSigned.IsPresent -or (Test-Path -LiteralPath (Join-Path $env:USERPROFILE ".nebula-release-key\nebula-release-private.xml"))
 foreach ($item in $shipped) {
     if (-not $item.Installer) { continue }
     $signatureFile = $item.Full + ".sig"
-    if (-not (Test-Path -LiteralPath $signatureFile)) { $notes.Add("$($item.Label): unsigned (no release-key .sig; updates will not run it)"); continue }
+    if (-not (Test-Path -LiteralPath $signatureFile)) {
+        if ($signingConfigured) { $failures.Add("$($item.Label): no release-key .sig although signing is configured (updates will not run it)") }
+        else { $notes.Add("$($item.Label): unsigned (no release-key .sig; updates will not run it)") }
+        continue
+    }
     if (-not (Test-Path -LiteralPath $publicKeyFile)) { $failures.Add("installer/release-public-key.xml is missing: $($item.Label) could not be verified"); continue }
     $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
     $rsa.PersistKeyInCsp = $false

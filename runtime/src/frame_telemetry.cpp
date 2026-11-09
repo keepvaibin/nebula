@@ -72,7 +72,7 @@ struct Publisher::Impl {
         if (acquired != WAIT_OBJECT_0 && acquired != WAIT_ABANDONED) return;
         ++packet[5];
         std::memcpy(view, packet.data(), sizeof(packet));
-        ReleaseMutex(guard);
+        (void)ReleaseMutex(guard);
     }
 
     void run() noexcept {

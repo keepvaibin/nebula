@@ -12,7 +12,7 @@
 #include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
-#include "galaxy/disc_files.h"
+#include "galaxy/asset_store.h"
 #include "galaxy/mod_xml.h"
 
 #include <algorithm>
@@ -745,7 +745,7 @@ std::string mods_signature(std::span<const ModInfo> mods) {
     std::stable_sort(sorted.begin(), sorted.end(), [](const ModInfo* a, const ModInfo* b) { return a->order < b->order; });
     std::string out;
     for (const ModInfo* m : sorted) {
-        if (!m->enabled || !changes_disc(*m)) continue;
+        if (!m->enabled || !changes_game_files(*m)) continue;
         out += m->id + (m->own_text ? "" : " text=game") + '\n';
         for (const ModOption& o : m->options) out += o.key + '=' + std::to_string(o.selected) + '\n';
     }
@@ -1108,7 +1108,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 for (const luma::Layer& layer : manifest->layers) {
                     if (!luma::layer_used(layer, situation)) continue;
                     mod.native_patches += static_cast<unsigned>(layer.switches.size());
-                    mod.luma_disc = mod.luma_disc || !layer.switches.empty() || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty();
+                    mod.luma_changes_game = mod.luma_changes_game || !layer.switches.empty() || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty();
                     if (layer.path.empty()) continue;
                     const fs::path place = dir / fs::path(from_utf8(layer.path));
                     std::error_code place_error;
@@ -1116,9 +1116,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         mod.problem = "THIS FILE IS DAMAGED";
                         continue;
                     }
-                    if (child_any_case(place, "merge", true)) mod.luma_disc = true;
+                    if (child_any_case(place, "merge", true)) mod.luma_changes_game = true;
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
-                        mod.luma_disc = true;
+                        mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
                         for (const char* language : kLanguageFolders) {
                             if (child_any_case(*files, language, true)) languages.insert(language);
@@ -1310,8 +1310,8 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
     return io::write_file_atomically(file, out.str());
 }
 
-bool changes_disc(const ModInfo& mod) noexcept {
-    return mod.riivolution || mod.files || mod.loose || mod.luma_disc;
+bool changes_game_files(const ModInfo& mod) noexcept {
+    return mod.riivolution || mod.files || mod.loose || mod.luma_changes_game;
 }
 
 std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods) {
@@ -1400,12 +1400,12 @@ namespace {
 
 // Where a disc file name (`name`: "Mario.arc"; `stored`, its store name in lower case) is in a store, archives as files:
 // each place's folder in the store with `name` after it, a disc path as plans take.
-void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, const std::string& path,
+void find_names(const galaxy::assets::AssetStore& store, std::int32_t folder, const std::string& path,
                 const std::string& name, const std::string& stored, std::vector<std::string>& out) {
-    const std::optional<galaxy::disc::Entry> self = store.entry(folder);
+    const std::optional<galaxy::assets::Entry> self = store.entry(folder);
     if (!self) return;
     for (std::uint32_t c = 0; c < self->children; ++c) {
-        const std::optional<galaxy::disc::Entry> child = store.child(folder, c);
+        const std::optional<galaxy::assets::Entry> child = store.child(folder, c);
         if (!child || child->name == nullptr) continue;
         const std::string child_name(child->name);
         if (lower(child_name) == stored) out.push_back(path + "/" + name);
@@ -1417,7 +1417,7 @@ void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, cons
 
 }  // namespace
 
-void add_layer_rows(DiscPlan& plan, const ModInfo& mod, const std::string& language, const luma::Rows& rows) {
+void add_layer_rows(ModPlan& plan, const ModInfo& mod, const std::string& language, const luma::Rows& rows) {
             for (const auto& [key, value] : rows.story) {
                 plan.rows.story[key] = value;
             }
@@ -1440,16 +1440,16 @@ void add_layer_rows(DiscPlan& plan, const ModInfo& mod, const std::string& langu
             }
 }
 
-DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::string& game_id,
+ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::string& game_id,
                            const std::string& language) {
     std::vector<ModInfo> mods = scan_mods(game_id);
     g_mods_on.clear();
     for (const ModInfo& mod : mods) {
         if (mod.enabled) g_mods_on.push_back(mod.id);
     }
-    DiscPlan plan;
+    ModPlan plan;
     std::vector<std::string> active;
-    std::map<std::string, DiscPlan::File> chosen;  // by the lower-case store path, the last set winning
+    std::map<std::string, ModPlan::File> chosen;  // by the lower-case store path, the last set winning
     struct Placed {
         std::string disc;
         fs::path host;
@@ -1506,7 +1506,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 plan.plugins.push_back({mod.path / fs::path(from_utf8(binary->second)), mod.id, mod.luma->version, situation.options});
             }
         }
-        if (!changes_disc(mod)) continue;
+        if (!changes_game_files(mod)) continue;
 #if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
         // The converter runs on computers: the page has told the player.
         if (!mod.package) continue;
@@ -1535,7 +1535,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 return;
             }
             if (!f.disc.empty() && f.disc[0] == '/') {
-                if (!f.create && !store.find(galaxy::disc::store_path(f.disc))) {
+                if (!f.create && !store.find(galaxy::assets::store_path(f.disc))) {
                     note(f.disc + ": the game has no such file and the patch does not create it");
                     return;
                 }
@@ -1543,7 +1543,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
                 return;
             }
             std::vector<std::string> paths;
-            find_names(store, 0, {}, f.disc, lower(galaxy::disc::store_path(f.disc)), paths);
+            find_names(store, 0, {}, f.disc, lower(galaxy::assets::store_path(f.disc)), paths);
             if (paths.empty()) note(f.disc + ": no file of that name in the game");
             for (const std::string& path : paths) set_file(path, *host);
         };
@@ -1702,7 +1702,7 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         }
         for (const fs::path& file : layout.loose) {
             std::vector<std::string> paths;
-            find_names(store, 0, {}, utf8_name(file), lower(galaxy::disc::store_path(utf8_name(file))), paths);
+            find_names(store, 0, {}, utf8_name(file), lower(galaxy::assets::store_path(utf8_name(file))), paths);
             if (paths.empty()) note(utf8_name(file) + ": no file of that name in the game");
             for (const std::string& path : paths) set_file(path, file);
         }
@@ -1736,12 +1736,12 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             // The game's own tables, but for the one that says where each galaxy is and what opens it.
             if (lower(p.disc).starts_with("/nebuladata/") && lower(p.disc) != "/nebuladata/galaxyinfotable.bcsv") continue;
             // A save's shape follows the galaxy list: a mod that adds a galaxy never plays on normal saves.
-            if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(galaxy::disc::store_path(p.disc))) {
+            if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(galaxy::assets::store_path(p.disc))) {
                 plan.save_folder = saves_of(mod.luma ? mod.luma->save_tag : mod.id);
                 plan.save_clone = false;
                 note("it adds a galaxy, so it keeps its own saves");
             }
-            chosen[lower(galaxy::disc::store_path(p.disc))] = {p.disc, p.host};
+            chosen[lower(galaxy::assets::store_path(p.disc))] = {p.disc, p.host};
         }
     }
     for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));
@@ -1753,42 +1753,42 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
     return plan;
 }
 
-std::string plan_text(const DiscPlan& plan, const std::string& game_id) {
+std::string plan_text(const ModPlan& plan, const std::string& game_id) {
     std::string text = game_id + "\n";
     {
         Settings& s = settings();
         const std::lock_guard<std::mutex> lock(s.mutex);
         if (!s.store.empty()) text += "base\t" + galaxy::path_text(s.store) + "\n";
     }
-    for (const DiscPlan::File& file : plan.files) {
+    for (const ModPlan::File& file : plan.files) {
         text += file.disc + "\t" + galaxy::path_text(file.host) + "\n";
     }
-    for (const DiscPlan::File& file : plan.merges) {
+    for (const ModPlan::File& file : plan.merges) {
         text += "+" + file.disc + "\t" + galaxy::path_text(file.host) + "\n";
     }
-    for (const DiscPlan::File& file : plan.materials) {
+    for (const ModPlan::File& file : plan.materials) {
         text += "=material\t" + file.disc + "\t" + galaxy::path_text(file.host) + "\n";
     }
     return text;
 }
 
-std::string plan_signature(const DiscPlan& plan, const std::string& game_id) {
+std::string plan_signature(const ModPlan& plan, const std::string& game_id) {
     std::string text = "1 " + game_id + "\n";
-    for (const DiscPlan::File& file : plan.files) {
+    for (const ModPlan::File& file : plan.files) {
         std::error_code ec;
         const auto size = fs::file_size(file.host, ec);
         const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
         text += file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
                 std::to_string(static_cast<long long>(time)) + "\n";
     }
-    for (const DiscPlan::File& file : plan.materials) {
+    for (const ModPlan::File& file : plan.materials) {
         std::error_code ec;
         const auto size = fs::file_size(file.host, ec);
         const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
         text += "=material\t" + file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
                 std::to_string(static_cast<long long>(time)) + "\n";
     }
-    for (const DiscPlan::File& file : plan.merges) {
+    for (const ModPlan::File& file : plan.merges) {
         std::error_code ec;
         const auto size = fs::file_size(file.host, ec);
         const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();

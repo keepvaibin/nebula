@@ -1,6 +1,6 @@
 // P-04: the host's store index on any bytes (libFuzzer + AddressSanitizer). A file whose index lies must be refused or answered inside its bounds.
-// clang++ -std=c++20 -g -O1 -fsanitize=fuzzer,address -I runtime/include tools/fuzz/store_fuzz.cpp runtime/src/disc_files.cpp -o store_fuzz
-#include "galaxy/disc_files.h"
+// clang++ -std=c++20 -g -O1 -fsanitize=fuzzer,address -I runtime/include tools/fuzz/store_fuzz.cpp runtime/src/asset_store.cpp -o store_fuzz
+#include "galaxy/asset_store.h"
 
 #include <array>
 #include <cstddef>
@@ -10,11 +10,11 @@
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
     // The magic is given, so the runs reach the index.
     std::vector<std::uint8_t> image(size + 8u);
-    std::memcpy(image.data(), galaxy::disc::kStoreMagic, 8u);
+    std::memcpy(image.data(), galaxy::assets::kStoreMagic, 8u);
     if (size != 0u) {
         std::memcpy(image.data() + 8u, data, size);
     }
-    galaxy::disc::AssetStore store;
+    galaxy::assets::AssetStore store;
     if (!store.load(image.data(), image.size())) {
         return 0;
     }

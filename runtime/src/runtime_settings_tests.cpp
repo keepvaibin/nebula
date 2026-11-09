@@ -598,6 +598,9 @@ int main() {
     write_text(settings_path, "button_icons=playstation\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::get_runtime_settings().button_icons == ButtonIcons::PlayStation, "PlayStation icons load");
+    write_text(settings_path, "button_icons=wii\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().button_icons == ButtonIcons::Game, "the old key 'wii' loads as the game's icons");
     write_text(settings_path, "button_icons=sega\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::get_runtime_settings().button_icons == ButtonIcons::Auto, "an unknown icon style is Auto");
@@ -656,31 +659,31 @@ int main() {
                          galaxy::get_runtime_settings().language == GameLanguage::French,
                      "a change while playing is saved but the session keeps its language");
 
-    // Each release's disc offers its own languages; a language it has not plays as Auto does.
+    // Each release offers its own languages; a language it has not plays as Auto does.
     const std::string europe[] = {"EuEnglish", "EuGerman", "EuFrench", "EuSpanish", "EuItalian", "HomeButton2"};
-    galaxy::set_disc_languages(europe);
-    passed &= expect(galaxy::game_language_on_disc(GameLanguage::German) &&
-                         galaxy::game_language_on_disc(GameLanguage::Italian) &&
-                         !galaxy::game_language_on_disc(GameLanguage::Dutch) &&
-                         !galaxy::game_language_on_disc(GameLanguage::Japanese) &&
-                         !galaxy::game_language_on_disc(GameLanguage::Auto),
-                     "Europe's disc offers its five languages");
+    galaxy::set_game_languages(europe);
+    passed &= expect(galaxy::game_language_available(GameLanguage::German) &&
+                         galaxy::game_language_available(GameLanguage::Italian) &&
+                         !galaxy::game_language_available(GameLanguage::Dutch) &&
+                         !galaxy::game_language_available(GameLanguage::Japanese) &&
+                         !galaxy::game_language_available(GameLanguage::Auto),
+                     "Europe's release offers its five languages");
     passed &= expect(galaxy::game_language_resolved(GameLanguage::Italian) == GameLanguage::Italian,
-                     "a language on the disc plays as chosen");
-    passed &= expect(galaxy::game_language_on_disc(galaxy::game_language_resolved(GameLanguage::Dutch)) &&
+                     "a language the game has plays as chosen");
+    passed &= expect(galaxy::game_language_available(galaxy::game_language_resolved(GameLanguage::Dutch)) &&
                          galaxy::game_language_resolved(GameLanguage::Dutch) ==
                              galaxy::game_language_resolved(GameLanguage::Auto),
-                     "a language not on the disc plays as Auto does, in one the disc has");
+                     "a language the game lacks plays as Auto does, in one the game has");
     const std::string japan[] = {"JpJapanese"};
-    galaxy::set_disc_languages(japan);
+    galaxy::set_game_languages(japan);
     passed &= expect(galaxy::game_language_resolved(GameLanguage::Auto) == GameLanguage::Japanese &&
                          galaxy::game_language_resolved(GameLanguage::English) == GameLanguage::Japanese,
-                     "Japan's disc plays in Japanese whatever is chosen");
+                     "Japan's release plays in Japanese whatever is chosen");
     const std::string usa[] = {"UsEnglish", "UsFrench", "UsSpanish"};
-    galaxy::set_disc_languages(usa);
+    galaxy::set_game_languages(usa);
     passed &= expect(galaxy::game_language_resolved(GameLanguage::French) == GameLanguage::French &&
-                         galaxy::game_language_on_disc(galaxy::game_language_resolved(GameLanguage::German)),
-                     "North America's disc plays its languages, and German as Auto does");
+                         galaxy::game_language_available(galaxy::game_language_resolved(GameLanguage::German)),
+                     "North America's release plays its languages, and German as Auto does");
     write_text(settings_path, "language=auto\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::save_runtime_settings_to_file() &&

@@ -2593,7 +2593,7 @@ public:
         }
         state.display_language = game_language_resolved(settings.language);
         for (const GameLanguage language : kGameLanguages) {
-            if (game_language_on_disc(language)) state.languages.push_back(language);
+            if (game_language_available(language)) state.languages.push_back(language);
         }
         state.saved_language = get_runtime_settings().language;
         state.resolved_saved_language = game_language_resolved(state.saved_language);

@@ -46,9 +46,9 @@ struct RuntimeAudioSettings {
 // not know), or one style always.
 enum class ButtonIcons : std::uint8_t { Auto, Game, Xbox, Nintendo, PlayStation, Keyboard };
 
-// The game's languages, by the game's language codes; the disc's release picks each one's
-// folder (UsEnglish on North America's disc, EuEnglish on Europe's, JpJapanese on Japan's). Auto: the system's language
-// where the disc has it, else English, else the disc's first (game_language_resolved).
+// The game's languages, by the game's language codes; the game's release picks each one's folder (UsEnglish for North
+// America, EuEnglish for Europe, JpJapanese for Japan). Auto: the system's language where the game has it, else
+// English, else the game's first (game_language_resolved).
 enum class GameLanguage : std::uint8_t {
     Japanese = 0,
     English = 1,
@@ -59,7 +59,7 @@ enum class GameLanguage : std::uint8_t {
     Dutch = 6,
     Auto = 0xFF,
 };
-// Every language a release's disc holds, in the order the settings step through them.
+// Every language a release holds, in the order the settings step through them.
 inline constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::German,  GameLanguage::French,
                                                   GameLanguage::Spanish, GameLanguage::Italian, GameLanguage::Dutch,
                                                   GameLanguage::Japanese};
@@ -90,12 +90,12 @@ struct RuntimeSettings {
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
 
-// The languages on the game's disc as it is read (its language folders, the mods' among them): the language setting
+// The languages the game's data holds as it is read (its language folders, the mods' among them): the language setting
 // offers only these, and a language whose folder is missing starts as Auto does. Every language until it is set.
-void set_disc_languages(std::span<const std::string> folders) noexcept;
-[[nodiscard]] bool game_language_on_disc(GameLanguage language) noexcept;
-// The language `setting` plays in on this disc: itself where the disc has it; else (and for Auto) the system's
-// language where the disc has it, else English, else the first of kGameLanguages the disc has.
+void set_game_languages(std::span<const std::string> folders) noexcept;
+[[nodiscard]] bool game_language_available(GameLanguage language) noexcept;
+// The language `setting` plays in with this data: itself where the data has it; else (and for Auto) the system's
+// language where the data has it, else English, else the first of kGameLanguages the data has.
 [[nodiscard]] GameLanguage game_language_resolved(GameLanguage setting) noexcept;
 
 // The language the game runs in this session: the setting when the game first asks (at boot), then
@@ -105,7 +105,7 @@ void set_disc_languages(std::span<const std::string> folders) noexcept;
 [[nodiscard]] bool running_game_language(GameLanguage& language) noexcept;
 // "auto", "japanese", "english", "german", "french", "spanish", "italian" or "dutch" (runtime_settings.ini).
 [[nodiscard]] const char* game_language_key(GameLanguage language) noexcept;
-// "auto", "wii", "xbox", "nintendo" or "playstation" (runtime_settings.ini).
+// "auto", "game", "xbox", "nintendo", "playstation" or "keyboard" (runtime_settings.ini; "wii" is read as "game").
 [[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
 [[nodiscard]] const char* sound_output_key(SoundOutput output) noexcept;
 // "keep", "pause" or "mute" (runtime_settings.ini).

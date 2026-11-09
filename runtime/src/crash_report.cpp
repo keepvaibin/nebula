@@ -97,9 +97,9 @@ Activity current_activity(char* file, std::size_t size) noexcept {
 void note_mod_read(std::string_view mod, std::string_view game_path) noexcept {
     s_mod_read_sequence.fetch_add(1u, std::memory_order_acq_rel);
     char line[sizeof(s_mod_read)];
-    std::snprintf(line, sizeof(line), "%.*s: %.*s", static_cast<int>(std::min<std::size_t>(mod.size(), 200u)),
-                  mod.data(), static_cast<int>(std::min<std::size_t>(game_path.size(), 400u)), game_path.data());
-    std::memcpy(s_mod_read, line, sizeof(line));
+    put(line, sizeof(line), "%.*s: %.*s", static_cast<int>(std::min<std::size_t>(mod.size(), 200u)), mod.data(),
+        static_cast<int>(std::min<std::size_t>(game_path.size(), 400u)), game_path.data());
+    copy(s_mod_read, sizeof(s_mod_read), std::string_view(line));
     s_mod_read_ms.store(now_ms(), std::memory_order_relaxed);
     s_mod_read_sequence.fetch_add(1u, std::memory_order_acq_rel);
 }

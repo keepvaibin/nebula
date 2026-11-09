@@ -22,6 +22,6 @@ GamePaths locate_game(const std::filesystem::path& input) {
         }
     }
     throw std::runtime_error(
-        "game input does not contain DATA/game.pak or game.pak; run build-pak first");
+        "game input does not contain DATA/game.pak or game.pak; run Nebula Setup first");
 }
 }  // namespace galaxy::host

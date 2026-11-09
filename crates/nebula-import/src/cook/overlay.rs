@@ -1,5 +1,5 @@
 //! Mods' files as the game reads them: each file a mod changes or adds is cooked as the disc's were at import and
-//! written to a store of its own, which the game reads over game.pak (runtime/src/disc_files.cpp). The plan names them,
+//! written to a store of its own, which the game reads over game.pak (runtime/src/asset_store.cpp). The plan names them,
 //! one a line: the game id, then `path<TAB>source file`.
 
 use super::{archive, audio_data, cook_entry, cooks, place, store, Stats, StoreItem, ALIGN};

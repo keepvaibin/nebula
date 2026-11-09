@@ -56,7 +56,7 @@ std::vector<SettingsRow> general_page(const RuntimeSettings& runtime, RuntimeSet
     rows.push_back({"LANGUAGE", game_language_name(state.display_language),
                     [&draft_runtime, &host](RenderConfig&, int delta) {
                         // Saved when applied; the game switches at the next start (game_language_for_boot).
-                        // The languages on the disc as it is read (galaxy::set_disc_languages); Auto shows the one
+                        // The languages the game's data holds (galaxy::set_game_languages); Auto shows the one
                         // it plays in, and a step chooses from there.
                         if (delta == 0) return;
                         RuntimeSettings& settings = draft_runtime;
