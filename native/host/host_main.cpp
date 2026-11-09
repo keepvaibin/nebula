@@ -628,7 +628,8 @@ bool save_folder_path(const char* path, fs::path* out) {
                           ? gModSaveRoot
                           : gSaveRoot;
     for (const fs::path& part : fs::path(path + 1)) {
-        if (part == ".." || part == ".") {
+        // A part with a drive or a root would replace the folder instead of joining it.
+        if (part == ".." || part == "." || part.has_root_name() || part.has_root_directory()) {
             return false;
         }
         result /= part;
@@ -974,9 +975,11 @@ void report_thread_cpu(double tsc_hz) {
         std::string name;
         PWSTR description = nullptr;
         if (SUCCEEDED(GetThreadDescription(thread, &description)) && description != nullptr && description[0] != 0) {
-            char narrow[64];
-            WideCharToMultiByte(CP_UTF8, 0, description, -1, narrow, sizeof(narrow), nullptr, nullptr);
-            name = narrow;
+            // A description longer than the buffer converts to nothing: the thread then shows by its start address.
+            char narrow[64] = {};
+            if (WideCharToMultiByte(CP_UTF8, 0, description, -1, narrow, sizeof(narrow), nullptr, nullptr) > 0) {
+                name = narrow;
+            }
         }
         LocalFree(description);
         void* start = nullptr;
@@ -1824,8 +1827,6 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
 #endif
 }
 
-// GALAXY_EXPORT_ART=<folder>: Nebula's own pictures (NebulaIcons) as a texture pack, pack/RMG/tex1_..._5.png at their
-// HD size, named by the texture the game draws; previews in native/ and hd/; pack-names.txt pairs them.
 // The scale the renderer last drew the 2D layer at (render_core: the scene target in use when the scene ends).
 uint32_t svc_layer_2d_lines(void*) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -2042,6 +2043,8 @@ int32_t svc_pointer_wheel(void*) {
 #endif
 }
 
+// GALAXY_EXPORT_ART=<folder> (Nebula's own pictures as a texture pack): this host writes none; 0 tells the game that no
+// export is on, so it paints nothing for one.
 uint32_t svc_art_export(void*, const NebulaArtExport*) {
     return 0u;
 }
