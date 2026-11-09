@@ -23,17 +23,13 @@ int main() {
     PowerWish wish = power_wish(facts);
     expect(!wish.efficient && wish.display_required, "in front and just played: full speed, display held");
 
-    // Idle a minute in front: efficiency, the display still held for the playing window.
-    facts.last_input_ms = facts.now_ms - kPowerIdleMs;
+    // Idle in front: full speed always (the player may be watching); the display held for the playing window, then let go.
+    facts.last_input_ms = facts.now_ms - kPowerPlayingMs + 1;
     wish = power_wish(facts);
-    expect(wish.efficient && wish.display_required, "idle for a minute: efficiency, display still held");
-    facts.last_input_ms = facts.now_ms - kPowerIdleMs + 1;
-    expect(!power_wish(facts).efficient, "one millisecond short of a minute is not idle");
-
-    // Idle past the playing window: the display is let go.
+    expect(!wish.efficient && wish.display_required, "idle in front within the playing window: full speed, display held");
     facts.last_input_ms = facts.now_ms - kPowerPlayingMs;
     wish = power_wish(facts);
-    expect(wish.efficient && !wish.display_required, "idle for minutes: the display is let go");
+    expect(!wish.efficient && !wish.display_required, "idle in front for minutes: full speed, the display is let go");
 
     // A cutscene with no input: full speed and the display held, until its sound has stopped for two seconds.
     facts.last_movie_ms = facts.now_ms - 500;
@@ -41,7 +37,7 @@ int main() {
     expect(!wish.efficient && wish.display_required, "a cutscene keeps full speed and the display");
     facts.last_movie_ms = facts.now_ms - kPowerMovieMs;
     wish = power_wish(facts);
-    expect(wish.efficient && !wish.display_required, "a cutscene that ended no longer counts");
+    expect(!wish.efficient && !wish.display_required, "a cutscene that ended no longer holds the display");
     facts.last_movie_ms = -1;
 
     // Not in front: efficiency and never the display, whatever was just pressed.

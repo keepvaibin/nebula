@@ -7,9 +7,7 @@
 
 namespace galaxy::host {
 
-// A menu or a game left alone this long drops to efficiency; a pad or key used within the playing window, or a cutscene, keeps
-// the display on. Milliseconds on one monotonic clock.
-inline constexpr std::int64_t kPowerIdleMs = 60'000;
+// A pad or key used within the playing window, or a cutscene, keeps the display on. Milliseconds on one monotonic clock.
 inline constexpr std::int64_t kPowerPlayingMs = 180'000;
 inline constexpr std::int64_t kPowerMovieMs = 2'000;
 
@@ -31,8 +29,9 @@ struct PowerWish {
     const bool movie = facts.last_movie_ms >= 0 && facts.now_ms - facts.last_movie_ms < kPowerMovieMs;
     const bool present = !facts.background && !facts.minimised;
     PowerWish wish;
-    // In the background, or idle with no cutscene running: the frame's time is worth nothing to a player who is not there.
-    wish.efficient = !present || (!movie && facts.now_ms - facts.last_input_ms >= kPowerIdleMs);
+    // Only away (behind another window or minimised). A player in front with no input may be watching (an in-game demo, the
+    // scenery): efficiency there could cost frames on a slow machine, and the game never runs slower than it can.
+    wish.efficient = !present;
     // Only in front, and only while someone plays or watches.
     wish.display_required = present && (movie || facts.now_ms - facts.last_input_ms < kPowerPlayingMs);
     return wish;
