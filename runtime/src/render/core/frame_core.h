@@ -26,6 +26,7 @@
 #include <mutex>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace galaxy::render {
@@ -367,6 +368,21 @@ private:
     // GALAXY_TEST_PAIR_LOG (test builds): the ring draws that lost their pair, each drawer material and reason once.
     void log_lost_ring_pairs(const ListData& now, const NebulaFrameList& last);
     std::unordered_set<std::uint64_t> pair_logged_;
+    // GALAXY_TEST_FLICKER_LOG (test builds): per draw identity, game frame to game frame, a value that goes A, B, A:
+    // drawn, missing for one frame, drawn again; a light of its set; a colour row of its material.
+    static constexpr std::uint32_t kFlickerSlots = 8u;
+    struct FlickerEntry {
+        std::uint32_t last = 0u;  // the list serial it was last drawn in
+        std::uint32_t bits = 0u;  // bit n: drawn n lists before `last`
+        std::uint32_t light_count[2]{}, row_count[2]{};
+        std::uint64_t light[2][kFlickerSlots]{};  // [0] the list before, [1] the one before that
+        std::uint64_t row[2][kFlickerSlots]{};
+    };
+    void log_flicker(const ListData& now);
+    std::unordered_map<std::uint64_t, FlickerEntry> flicker_;
+    std::unordered_map<std::uint64_t, std::uint32_t> flicker_nth_;
+    std::unordered_map<std::uint64_t, std::uint32_t> flicker_counts_;  // material << 2 | kind
+    std::uint32_t flicker_lists_ = 0u;
 };
 
 // A block's joints at t through its motions, `out` three rows each. An eye-space block's are eye matrices under `camera_t`.

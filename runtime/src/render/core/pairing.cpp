@@ -40,6 +40,11 @@ void Pairing::pair(ListData& now, const ListData* before) {
         return;
     }
     now.paired = true;
+#if defined(NEBULA_DEV)
+    if (::galaxy::run_option_flag(::galaxy::run_options().test_flicker_log, false)) {
+        log_flicker(now);
+    }
+#endif
     const NebulaFrameList& list = *now.list;
     now.block_before.assign(list.block_count, NEBULA_NONE32);
     now.camera_before.assign(list.camera_count, NEBULA_NONE32);
@@ -174,6 +179,131 @@ void Pairing::pair(ListData& now, const ListData* before) {
         log_lost_ring_pairs(now, last);
     }
 #endif
+}
+
+namespace {
+
+std::uint64_t fnv(const void* data, std::size_t bytes, std::uint64_t h = 0xCBF29CE484222325ull) noexcept {
+    const auto* p = static_cast<const unsigned char*>(data);
+    for (std::size_t i = 0; i < bytes; ++i) {
+        h = (h ^ p[i]) * 0x100000001B3ull;
+    }
+    return h;
+}
+
+}  // namespace
+
+// Flicker the game makes, before any picture: per draw identity (slot, generation, part, material, pipeline, and its
+// number among draws of that identity in the list), across game frames. Three kinds, each A, B, A over three lists:
+// presence (drawn, gone for one list, drawn again, having been drawn the list before that too), a light of its set (the
+// light's whole record), a pixel constant row of its material (colour registers). Each material and kind is logged
+// once with the light or row that moved; totals every 600 lists, the top materials first.
+void Pairing::log_flicker(const ListData& now) {
+    const NebulaFrameList& list = *now.list;
+    const std::uint32_t serial = now.serial;
+    static const char* const kKind[3] = {"drawn, gone one frame, drawn again", "a light went A, B, A",
+                                         "a colour row went A, B, A"};
+    flicker_nth_.clear();
+    for (std::uint32_t i = 0; i < list.item_count; ++i) {
+        const NebulaFrameItem& item = list.items[i];
+        const std::uint32_t ident[5] = {item.slot, item.generation, item.part, item.source_hash, item.pipeline};
+        const std::uint64_t base = fnv(ident, sizeof(ident));
+        const std::uint32_t nth = flicker_nth_[base]++;
+        const std::uint64_t key = fnv(&nth, sizeof(nth), base);
+
+        std::uint32_t light_count = 0u;
+        std::uint64_t light[kFlickerSlots]{};
+        if (item.light_set != NEBULA_NONE32) {
+            const NebulaFrameLightSet& set = list.light_sets[item.light_set];
+            light_count = set.count;
+            for (std::uint32_t l = 0; l < set.count && l < kFlickerSlots; ++l) {
+                light[l] = fnv(list.lights + set.first + l, sizeof(NebulaFrameLight));
+            }
+        }
+        std::uint32_t row_count = 0u;
+        std::uint64_t row[kFlickerSlots]{};
+        const NebulaFrameConstants& constants = list.constants[item.constants];
+        if (constants.rows != nullptr) {
+            row_count = constants.pixel_rows;
+            for (std::uint32_t r = 0; r < constants.pixel_rows && r < kFlickerSlots; ++r) {
+                row[r] = fnv(constants.rows[constants.vertex_rows + r], sizeof(float[4]));
+            }
+        }
+
+        FlickerEntry& entry = flicker_[key];
+        const std::uint32_t gap = entry.last != 0u ? serial - entry.last : 32u;
+        const std::uint32_t bits = (gap >= 32u ? 0u : entry.bits << gap) | 1u;
+        int kind = -1;
+        std::uint32_t which = 0u;
+        if ((bits & 0xFu) == 0xDu) {
+            kind = 0;
+        } else if ((bits & 7u) == 7u) {
+            for (std::uint32_t l = 0; kind < 0 && l < kFlickerSlots && l < light_count; ++l) {
+                if (entry.light_count[1] == light_count && entry.light_count[0] == light_count &&
+                    light[l] == entry.light[1][l] && light[l] != entry.light[0][l]) {
+                    kind = 1;
+                    which = l;
+                }
+            }
+            for (std::uint32_t r = 0; kind < 0 && r < kFlickerSlots && r < row_count; ++r) {
+                if (entry.row_count[1] == row_count && entry.row_count[0] == row_count && row[r] == entry.row[1][r] &&
+                    row[r] != entry.row[0][r]) {
+                    kind = 2;
+                    which = r;
+                }
+            }
+        }
+        if (kind >= 0) {
+            const std::uint64_t count_key = static_cast<std::uint64_t>(item.source_hash) << 2u | static_cast<std::uint32_t>(kind);
+            if (flicker_counts_[count_key]++ == 0u) {
+                if (kind == 1) {
+                    const NebulaFrameLight& l = list.lights[list.light_sets[item.light_set].first + which];
+                    std::fprintf(stderr,
+                                 "[flicker] %s: material %08x slot %u part %u light %u of %u colour %.3f %.3f %.3f %.3f "
+                                 "position %.1f %.1f %.1f direction %.3f %.3f %.3f\n",
+                                 kKind[kind], item.source_hash, item.slot, item.part, which, light_count, l.color[0],
+                                 l.color[1], l.color[2], l.color[3], l.position[0], l.position[1], l.position[2],
+                                 l.direction[0], l.direction[1], l.direction[2]);
+                } else if (kind == 2) {
+                    const float* v = constants.rows[constants.vertex_rows + which];
+                    std::fprintf(stderr, "[flicker] %s: material %08x slot %u part %u row %u of %u now %.4f %.4f %.4f %.4f\n",
+                                 kKind[kind], item.source_hash, item.slot, item.part, which, row_count, v[0], v[1], v[2],
+                                 v[3]);
+                } else {
+                    std::fprintf(stderr, "[flicker] %s: material %08x slot %u part %u flags %x pipeline %u\n", kKind[kind],
+                                 item.source_hash, item.slot, item.part, item.flags, item.pipeline);
+                }
+            }
+        }
+        entry.last = serial;
+        entry.bits = bits;
+        entry.light_count[1] = entry.light_count[0];
+        entry.light_count[0] = light_count;
+        entry.row_count[1] = entry.row_count[0];
+        entry.row_count[0] = row_count;
+        std::memcpy(entry.light[1], entry.light[0], sizeof(entry.light[0]));
+        std::memcpy(entry.light[0], light, sizeof(light));
+        std::memcpy(entry.row[1], entry.row[0], sizeof(entry.row[0]));
+        std::memcpy(entry.row[0], row, sizeof(row));
+    }
+    if (++flicker_lists_ % 600u != 0u) {
+        return;
+    }
+    for (auto it = flicker_.begin(); it != flicker_.end();) {
+        it = serial - it->second.last > 64u ? flicker_.erase(it) : std::next(it);
+    }
+    std::uint32_t totals[3]{};
+    std::vector<std::pair<std::uint32_t, std::uint64_t>> ranked;
+    for (const auto& [count_key, count] : flicker_counts_) {
+        totals[count_key & 3u] += count;
+        ranked.emplace_back(count, count_key);
+    }
+    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::fprintf(stderr, "[flicker] lists %u: presence %u light %u colour %u\n", flicker_lists_, totals[0], totals[1], totals[2]);
+    for (std::size_t r = 0; r < ranked.size() && r < 12u; ++r) {
+        std::fprintf(stderr, "[flicker]   material %08x %s: %u\n", static_cast<std::uint32_t>(ranked[r].second >> 2u),
+                     kKind[ranked[r].second & 3u], ranked[r].first);
+    }
 }
 
 // A ring draw shown at its newest vertices while the rest of its object blends between frames looks like a jump under
