@@ -14,7 +14,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
+    // The open movie's path in the game's data, for the host's replacement videos (one movie plays at a time).
     MR::GrowBuffer< char > sMovieName;
 
     void movieFrame(const char* pName, s32 frame, f32 frameRate, u32 pY, u32 pU, u32 pV, u32 width, u32 height) {

@@ -155,7 +155,7 @@ namespace Ui {
             }
             // Text that draws a code the font has no glyph for shows the alternate: said once a code, with the
             // font's cell (messagefont26 26x32, menufont64 59x63, cinemafont26 27x33): a tour in each language proves
-            // its text drawable (tools/nebula_text.py --fonts checks the table against the disc's fonts).
+            // its text drawable (tools/nebula_text.py --fonts checks the table against the game's fonts).
             u32& bits = mMissingLogged[ch >> 5];
             const u32 bit = 1u << (ch & 31u);
             if (ch >= 0x20 && (bits & bit) == 0) {

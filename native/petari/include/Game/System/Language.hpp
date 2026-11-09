@@ -40,7 +40,7 @@ struct Language {
 };
 
 namespace MR {
-    // The language id for the host's language setting and the disc's region.
+    // The language id for the host's language setting and the game data's region.
     u32 decideLanguage();
     u32 getLanguage();
     const char* getCurrentLanguagePrefix();

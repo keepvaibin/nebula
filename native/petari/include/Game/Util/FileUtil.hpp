@@ -10,10 +10,10 @@ class NebulaArena;
 namespace MR {
     class FormattedName;
 
-    /// @brief Determines if a file exists within the disc file system.
+    /// @brief Determines if a file exists within the game's data.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[in] considerLanguage Determines if the file is localized.
-    /// @return `true` if the file exists within the disc file system, `false` otherwise.
+    /// @return `true` if the file exists within the game's data, `false` otherwise.
     bool isFileExist(const char* pFilePath, bool considerLanguage);
 
     // The archive at pFilePath (the current language's when there is one), made on first use and held until the arena

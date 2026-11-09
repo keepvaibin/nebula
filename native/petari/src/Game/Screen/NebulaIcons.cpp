@@ -2451,7 +2451,7 @@ namespace NebulaIcons {
             swapPane(pManager->mLayout->mpRootPane, swaps, 0);
         }
         pActor->LayoutActor::draw();
-        // The original again: its animation and the next frame see the layout as it was.
+        // The game's own pictures back: its animation and the next frame see the layout as it was.
         for (s32 i = 0; i < swaps.mMaps.size(); i++) {
             *swaps.mMaps[i] = swaps.mSaved[i];
         }

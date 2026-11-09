@@ -34,7 +34,7 @@ namespace {
         {255, 176, 144, 255}, {152, 80, 48, 255},   {82, 46, 28, 255},
     };
 
-    // A default Mii: one of six plain Miis that differ only in these, every other part the default; kept on this console.
+    // A default Mii: one of six plain Miis that differ only in these, every other part the default; marked local-only.
     constexpr NebulaMii defaultMii(u8 sex, u8 color, u8 faceColor, u8 hairType, u8 hairColor, u8 eyeType, u8 eyeColor,
                                    u8 eyeRotate, u8 eyebrowType, u8 eyebrowColor, u8 number) {
         NebulaMii m = {};

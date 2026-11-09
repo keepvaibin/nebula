@@ -274,7 +274,7 @@ namespace MaterialAmbient {
 // Where a mesh keeps a vertex input, or the zero stream.
 void meshLayoutInput(NebulaPipelineDesc* pDesc, u8 semantic, const NebulaModelMesh& rMesh);
 
-// A colour register a draw sets, by name: the numbers are the console's (0 the stage output, which no draw sets), so a
+// A colour register a draw sets, by name: the numbers are the material data's (0 the stage output, which no draw sets), so a
 // call can never land one register down.
 enum MaterialRegister : u32 {
     MaterialRegister_0 = 1,

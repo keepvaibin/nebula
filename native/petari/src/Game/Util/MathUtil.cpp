@@ -1064,7 +1064,7 @@ f32 VecKillElement(const Vec* pSrc, const Vec* pKill, const Vec* pDst) {
     const f32 sx = pSrc->x, sy = pSrc->y, sz = pSrc->z;
     const f32 kx = pKill->x, ky = pKill->y, kz = pKill->z;
     const f32 dot = (sx * kx + sy * ky) + sz * kz;
-    // The original stores through pDst, declared const.
+    // Stores through pDst, which the signature declares const.
     Vec* dst = const_cast< Vec* >(pDst);
     dst->x = sx - dot * kx;
     dst->y = sy - dot * ky;

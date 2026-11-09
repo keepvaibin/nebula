@@ -2,7 +2,7 @@
 
 // Miis: the player's library (the host's, nebula_game_api.h mii_count and mii_record, any number of them), the six
 // default Miis, and the checks the game makes of a Mii. A Mii is the host's NebulaMii: every part, colour, scale and position as
-// a number, the names UTF-16, the create ID as consoles store it.
+// a number, the names UTF-16, the create ID in the Mii data format.
 
 #include <NebulaGpu.h>
 #include <nebula_game_api.h>
@@ -13,7 +13,7 @@ namespace Mii {
 
     typedef NebulaMii Character;
 
-    // A Mii's create ID: four bytes of type bits and time, four of the console that made it.
+    // A Mii's create ID: four bytes of type bits and time, four of the device that made it.
     struct Id {
         u8 data[8];
     };
@@ -57,7 +57,7 @@ namespace Mii {
     bool isSpecialId(const Id& rId);
     // The same Mii: both valid and not temporary, and equal.
     bool isSameId(const Id& rA, const Id& rB);
-    // Every part and value in range, a name, a real birthday; a special Mii only kept on its console.
+    // Every part and value in range, a name, a real birthday; a special Mii must be marked local-only.
     bool isValid(const Character& rMii);
 
     // The name with its terminator.
