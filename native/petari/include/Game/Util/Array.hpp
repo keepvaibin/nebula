@@ -260,13 +260,6 @@ namespace MR {
             return begin() + size();
         }
 
-        template < class U >
-        void callAllFunc(void (U::*pFunction)()) {
-            for (T* it = begin(); it != end(); it++) {
-                ((*it)->*pFunction)();
-            }
-        }
-
         inline int indexOf(T* pItem) const {
             return pItem - begin();
         }
