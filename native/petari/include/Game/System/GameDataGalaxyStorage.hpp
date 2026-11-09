@@ -2,6 +2,7 @@
 
 #include "Game/System/BinaryDataChunkHolder.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 class BinaryDataContentAccessor;
 class BinaryDataContentHeaderSerializer;
@@ -89,4 +90,6 @@ public:
 
     MR::Vector< MR::AssignableArray< GameDataSomeGalaxyStorage* > > mSomeGalaxyStorages;
     BinaryDataContentHeaderSerializer* mHeaderSerializer;
+    MR::NameIndex mNames;       // galaxy name -> index in mSomeGalaxyStorages
+    MR::NameIndex mSaveHashes;  // keyed by the 16-bit name hash a save holds, first galaxy of a hash
 };
