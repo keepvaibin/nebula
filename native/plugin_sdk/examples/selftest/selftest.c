@@ -102,6 +102,20 @@ static int32_t any_nerve(NebulaActor* actor, const char* nerve, NebulaNervePhase
     return 1;
 }
 
+/* The game's rules as Gecko codes change them (MOD-PLAN M9). */
+static int refuse_miss;
+static int misses_refused;
+static int speed_from;
+
+static int32_t player_miss(const NebulaModEventData* data, void* user) {
+    (void)user;
+    if (refuse_miss) {
+        ++misses_refused;
+        return -1;
+    }
+    return data->value;
+}
+
 static int32_t stage_frame(const NebulaModEventData* data, void* user) {
     NebulaActor* player = game->player();
     float at[3] = {0, 0, 0}, velocity[3] = {0, 0, 0}, x = 0, y = 0;
@@ -216,6 +230,78 @@ static int32_t stage_frame(const NebulaModEventData* data, void* user) {
     }
     if (frames == 480) {
         game->play(player, NEBULA_PLAY_PLAYER_ANIMATION, "Wait");
+    }
+    if (frames == 482) {
+        game->set_gravity_scale(0.5f);
+        say("gravity scale x100 (50), back (100)", (int)(game->gravity_scale() * 100.0f + 0.5f), 0, 0);
+        game->set_gravity_scale(1.0f);
+        say("gravity scale x100 (50), back (100)", (int)(game->gravity_scale() * 100.0f + 0.5f), 0, 0);
+    }
+    if (frames == 484) {
+        float left = -1.0f, limit = -1.0f;
+        say("no countdown here: timer (0), set (-1)", game->timer(&left, &limit), game->set_timer(10.0f), 0);
+        game->pause_timer(1);
+        game->pause_timer(0);
+    }
+    if (frames == 486) {
+        float target[3], place[3];
+        game->get_position(player, target);
+        place[0] = target[0];
+        place[1] = target[1] + 1500.0f;
+        place[2] = target[2] + 1500.0f;
+        game->set_camera(place, target, 70.0f);
+    }
+    if (frames == 490) {
+        float seen[3];
+        game->camera_position(seen);
+        game->get_position(player, at);
+        say("a plugin's camera: fov, height over the player (about 1500)", (int)(game->camera_fov() + 0.5f), (int)(seen[1] - at[1]), 0);
+        game->set_camera(0, 0, 0.0f);
+    }
+    if (frames == 494) {
+        say("the game's camera again: fov is not 70", (int)(game->camera_fov() + 0.5f) != 70, 0, 0);
+    }
+    if (frames == 500) {
+        speed_from = game->nerve_frames(player);
+        game->set_game_speed(0.5f);
+    }
+    if (frames == 520) {
+        const int now = game->nerve_frames(player);
+        say("half speed: steps in 20 frames (10)", now - speed_from, 0, 0);
+        speed_from = now;
+        game->set_game_speed(0.0f);
+    }
+    if (frames == 530) {
+        const int now = game->nerve_frames(player);
+        say("held: steps in 10 frames (0)", now - speed_from, 0, 0);
+        speed_from = now;
+        game->step_game(3);
+    }
+    if (frames == 540) {
+        const int now = game->nerve_frames(player);
+        say("held, 3 asked: steps in 10 frames (3)", now - speed_from, 0, 0);
+        game->set_game_speed(1.0f);
+    }
+    if (frames == 550) {
+        refuse_miss = 1;
+        game->kill_player();
+        refuse_miss = 0;
+    }
+    if (frames == 560) {
+        say("a miss refused: refused, dead (1 0)", misses_refused, game->value(NEBULA_VALUE_DEAD), 0);
+    }
+    if (frames == 600) {
+        /* Shown through the next pictures (GALAXY_PRESENT_SNAPSHOT_EVERY): no HUD, two lines of text. */
+        game->show_hud(NEBULA_HUD_ALL, 0);
+        say("text lines: set (0), past the last (-1)",
+            game->draw_text(0, 0.04f, 0.06f, 0.05f, 0xFFFFFFFFu, "Nebula self test: no HUD"),
+            game->draw_text(16, 0.0f, 0.0f, 0.05f, 0xFFFFFFFFu, "x"), 0);
+        game->draw_text(1, 0.04f, 0.13f, 0.035f, 0xFFD040FFu, "Second line \xE2\x98\x85");
+    }
+    if (frames == 1500) {
+        game->show_hud(NEBULA_HUD_ALL, 1);
+        game->draw_text(0, 0, 0, 0, 0, 0);
+        game->draw_text(1, 0, 0, 0, 0, "");
         game->log(me, "done");
     }
     return data->value;
@@ -233,6 +319,7 @@ NEBULA_PLUGIN_ENTRY(api, self) {
         }
     }
     game->subscribe(NEBULA_MOD_EVENT_STAGE_FRAME, stage_frame, 0);
+    game->subscribe(NEBULA_MOD_EVENT_PLAYER_MISS, player_miss, 0);
     {
         static const NebulaPowerUpClass power = {sizeof(NebulaPowerUpClass), "NebulaTestPower", 60, "BGM_FIRE_A", 1, 0, power_start, power_update, power_end};
         new_power = game->add_power_up(&power);

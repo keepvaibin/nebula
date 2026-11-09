@@ -1,4 +1,5 @@
 #include "Game/Screen/MarioMeter.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Screen/MeterLayout.hpp"
 #include "Game/Screen/SuddenDeathMeter.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -63,4 +64,6 @@ void MarioMeter::init(const TableIter& /*rIter*/) {
     mHitPointMeter->initWithoutIter();
     mSuddenDeathMeter = new SuddenDeathMeter("サドンデスHPメーター", "SuddenDeathMeter");
     mSuddenDeathMeter->initWithoutIter();
+    mHitPointMeter->mFlag.mHudPart = NEBULA_HUD_LIFE_METER;
+    mSuddenDeathMeter->mFlag.mHudPart = NEBULA_HUD_LIFE_METER;
 }

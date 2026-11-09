@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerLayout.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -541,7 +542,7 @@ void StarPointerLayout::calcAnim() {
 }
 
 void StarPointerLayout::draw() const {
-    if (!isAppear()) {
+    if (!isAppear() || NebulaMods::isHudHidden(NEBULA_HUD_POINTER)) {
         mBlur->hideAll();
         return;
     }

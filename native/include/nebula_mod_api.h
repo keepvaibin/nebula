@@ -45,7 +45,8 @@ typedef enum NebulaModEvent {
     NEBULA_MOD_EVENT_STAGE_START,
     /* The player is about to lose one health. Return 0 to refuse the hit. */
     NEBULA_MOD_EVENT_PLAYER_DAMAGE,
-    /* The player is about to die. value: how. */
+    /* The player is about to die. value: how (0 a fall out of the level). Return -1 to refuse it: the player lives on where
+       they are, so move them somewhere safe (set_position) and give back life (set_value) as the plugin's rule says. */
     NEBULA_MOD_EVENT_PLAYER_MISS,
     /* The player's power-up is about to change. value: the new one (NEBULA_POWER_UP_*); what you return is used. */
     NEBULA_MOD_EVENT_POWER_UP,
@@ -546,7 +547,49 @@ typedef struct NebulaModApi {
     /* The index-th tuning number (a list counts each place): its file ("Kuribo.cpp"), name, place in its list (-1: one number), kind (1 f32,
        2 f64, 3 s32, 4 u32, 5 s16, 6 u16, 7 s8, 8 u8, 9 bool), the game's number and the number now. 0: done; -1: past the last. */
     int32_t (*tunable_at)(int32_t index, const char** file, const char** name, int32_t* place, int32_t* kind, double* game_value, double* value);
+
+    /* The game's rules as a plugin changes them, any time. Each holds until set again; a stage change keeps it. */
+    /* How hard gravity pulls: the player's fall and every object's. 1 the game's, 0.5 half, 0 none; below 0 pulls away. */
+    void (*set_gravity_scale)(float scale);
+    float (*gravity_scale)(void);
+    /* The countdown on the screen (a comet's time limit). 1 while one runs, with its seconds left and its whole length; 0
+       when none does. */
+    int32_t (*timer)(float* seconds_left, float* seconds_limit);
+    /* Its seconds left, within its length. 0: done; -1: no countdown runs. */
+    int32_t (*set_timer)(float seconds_left);
+    /* 1 holds every countdown where it is, 0 lets them run. */
+    void (*pause_timer)(int32_t paused);
+    /* The camera at `position` looking at `target`, with `fov` degrees from the picture's top to its bottom. A null point or
+       a fov of 0 leaves that to the game; all three left: the game's camera again. A position set is where the camera is
+       that frame, with no easing, and it passes through walls. */
+    void (*set_camera)(const float* position, const float* target, float fov);
+    /* The angle of view the camera drew with last, in degrees. */
+    float (*camera_fov)(void);
+    /* HUD parts (NEBULA_HUD_*) hidden (0) or shown as the game shows them (1). */
+    void (*show_hud)(uint32_t parts, int32_t show);
+    /* The scene's speed: 1 the game's, 0.5 one step every other frame, 0 held (menus and the HUD still run). Between 0
+       and 1. Set in a STAGE_FRAME callback, it counts from that frame. */
+    void (*set_game_speed)(float speed);
+    /* While held: the scene runs this many steps, one a frame. */
+    void (*step_game)(int32_t steps);
+    /* A line of text over the game, in the game's message font. `line`: its slot, 0-15. x, y: its top-left corner, 0 to 1
+       across and down the screen. `size`: its height, of the screen's height (0.04 reads like the HUD's numbers).
+       `rgba`: its colour, 0xRRGGBBAA. Null or "" takes the line away; it stays until then, across stages. 0: done; -1: no
+       such slot. */
+    int32_t (*draw_text)(int32_t line, float x, float y, float size, uint32_t rgba, const char* utf8);
 } NebulaModApi;
+
+/* The HUD's parts, for show_hud: any together. */
+typedef enum NebulaHudPart {
+    NEBULA_HUD_COINS = 1u << 0,
+    NEBULA_HUD_STAR_BITS = 1u << 1,
+    NEBULA_HUD_LIVES = 1u << 2,
+    NEBULA_HUD_STARS = 1u << 3,
+    NEBULA_HUD_LIFE_METER = 1u << 4,
+    NEBULA_HUD_POINTER = 1u << 5,
+    NEBULA_HUD_TIMER = 1u << 6,
+    NEBULA_HUD_ALL = 0x7Fu
+} NebulaHudPart;
 
 /* Where an object change applies. */
 typedef enum NebulaObjectsIn {

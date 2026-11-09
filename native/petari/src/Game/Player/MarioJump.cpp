@@ -1,4 +1,5 @@
 #include "Game/Enemy/KarikariDirector.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -1345,7 +1346,7 @@ void Mario::procJump(bool atStart) {
         gravityScale = 1.0f;
     }
 
-    gravityScale *= mActor->getGravityRatio();
+    gravityScale *= mActor->getGravityRatio() * NebulaMods::gravityScale();
     if (mActor->mGravityJumpTimer != 0) {
         gravityScale *= 0.3f;
         if (!mActor->isInZeroGravitySpot() && mVerticalSpeed < 300.0f) {

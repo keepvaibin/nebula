@@ -82,6 +82,7 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
+#include "Game/Screen/NebulaModText.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -125,6 +126,7 @@ GameScene::GameScene()
 
 GameScene::~GameScene() {
     NebulaMods::fire(NEBULA_MOD_EVENT_STAGE_END, 0, nullptr, MR::getCurrentStageName());
+    NebulaMods::sceneEnded();
     MR::destroySceneMessage();
     NPCFunction::deleteNPCData();
     MR::onStarPointerSceneOut();
@@ -293,6 +295,9 @@ void GameScene::update() {
     // alike (the settings menu and the HOME Menu hold the whole scene, the pop-up with it).
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->update();
+    }
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mModText != nullptr) {
+        MR::getGameSceneLayoutHolder()->mModText->update();
     }
 }
 
@@ -590,6 +595,9 @@ void GameScene::draw2D() const {
 }
 
 void GameScene::drawOverlay() const {
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mModText != nullptr) {
+        MR::getGameSceneLayoutHolder()->mModText->drawOnTop();
+    }
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
     }

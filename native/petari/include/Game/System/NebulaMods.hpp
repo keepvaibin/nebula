@@ -6,6 +6,7 @@
 class NameObj;
 class LiveActor;
 class TableIter;
+class TimeLimitLayout;
 
 // The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
 namespace NebulaMods {
@@ -79,4 +80,49 @@ namespace NebulaMods {
     const char* objectLike(const char* pName);
     // What a model named by an object of that class comes from.
     const char* modelFor(const char* pObjectName, const char* pModelName);
+
+    // The game's rules as plugins change them (set_gravity_scale, set_game_speed, set_camera, show_hud, the countdown):
+    // with none changed each check is one load.
+    extern f32 sGravityScale;
+    inline f32 gravityScale() {
+        return sGravityScale;
+    }
+    // Whether the scene runs a step this frame: decided once a frame (StageFrame), for the step and the scene's stops.
+    extern bool sSceneStep;
+    inline bool isSceneStep() {
+        return sSceneStep;
+    }
+    // A plugin's camera: bit 0 a position, bit 1 a target, in pPosition and pTarget; 0 when it sets neither.
+    extern bool sCameraSet;
+    u32 cameraPoseSlow(f32* pPosition, f32* pTarget);
+    inline u32 cameraPose(f32* pPosition, f32* pTarget) {
+        return sCameraSet ? cameraPoseSlow(pPosition, pTarget) : 0;
+    }
+    // The angle of view: a plugin's, else the game's `fovy`. Kept as the last drawn.
+    f32 cameraFov(f32 fovy);
+    // The HUD parts plugins hide (NEBULA_HUD_*).
+    extern u32 sHudHidden;
+    inline bool isHudHidden(u8 part) {
+        return (sHudHidden & part) != 0u;
+    }
+    // The countdown on the screen while it shows (TimeLimitLayout), and whether plugins hold it.
+    void setCountdown(TimeLimitLayout* pLayout, bool shown);
+    extern bool sCountdownHeld;
+    // The scene ends: what pointed into it goes.
+    void sceneEnded();
+
+    // The lines of text plugins draw over the game (NebulaModText).
+    const s32 cTextLines = 16;
+    const s32 cTextLength = 128;
+    struct TextLine {
+        bool mShown;
+        f32 mX;
+        f32 mY;
+        f32 mSize;
+        u32 mRgba;
+        char16_t mText[cTextLength];
+    };
+    const TextLine& textLine(s32 line);
+    // Counts up with every change to the lines.
+    u32 textRevision();
 }  // namespace NebulaMods

@@ -8,6 +8,7 @@
 #include "Game/Scene/SceneNameObjMovementController.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Scene/StopSceneController.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
@@ -15,10 +16,17 @@
 #include "Game/Render/Model.hpp"
 
 void SceneFunction::movementStopSceneController() {
+    // A frame a plugin's slower scene skips counts for no stop either.
+    if (!NebulaMods::isSceneStep()) {
+        return;
+    }
     MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController)->movement();
 }
 
 void SceneFunction::executeMovementList() {
+    if (!NebulaMods::isSceneStep()) {
+        return;
+    }
     StopSceneController* pStopScene = MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController);
     if (pStopScene->isSceneStopped()) {
         return;

@@ -14,6 +14,7 @@ What a mod's code builds against. The guide is [LumaLink's docs/plugins.md](http
 | `examples/cube` | A new object with the stable interface and a model. |
 | `examples/pulse` | A new object with the game's headers, and a function hook. |
 | `examples/selftest` | Calls everything in the interface and says what came back. |
+| `examples/gecko/<code>` | Popular cheat codes done through the interface: moon jump, infinite health and lives, star bits, low gravity, power-ups anywhere or lasting, rainbow, freeze timer, free camera, wide fov, hide HUD, no fall death, slow motion and frame advance, position display, freeze enemies, warp anywhere. LumaLink names the one that does a code it reads. |
 
 A plugin with only the stable interface builds with clang and nothing else:
 
