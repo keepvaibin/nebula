@@ -339,10 +339,11 @@ bool read_directory(const Release& release, Remote& remote, std::unordered_map<s
     return true;
 }
 
-// The entry's bytes, inflated, to `sink`; `on_read` gets the compressed bytes read in this attempt.
+// The entry's bytes, inflated, to `sink`; `on_read` gets the compressed bytes read in this attempt. False when the entry
+// holds more than `limit` bytes (declared or inflated).
 template <typename Sink, typename OnRead>
-bool extract(Remote& remote, const Entry& entry, Sink&& sink, OnRead&& on_read) {
-    if (entry.method != 0u && entry.method != 8u) {
+bool extract(Remote& remote, const Entry& entry, std::uint64_t limit, Sink&& sink, OnRead&& on_read) {
+    if ((entry.method != 0u && entry.method != 8u) || entry.size > limit) {
         return false;
     }
     std::vector<unsigned char> header;
@@ -367,6 +368,7 @@ bool extract(Remote& remote, const Entry& entry, Sink&& sink, OnRead&& on_read) 
     std::vector<unsigned char> in(1u << 18u);
     std::vector<unsigned char> out(1u << 20u);
     std::uint64_t read_total = 0u;
+    std::uint64_t produced = 0u;
     int status = Z_OK;
     while (read_total < entry.compressed) {
         if (s_cancel.load(std::memory_order_relaxed)) {
@@ -380,6 +382,10 @@ bool extract(Remote& remote, const Entry& entry, Sink&& sink, OnRead&& on_read) 
         read_total += got;
         on_read(read_total);
         if (entry.method == 0u) {
+            produced += got;
+            if (produced > limit) {
+                return false;
+            }
             sink(in.data(), got);
             continue;
         }
@@ -390,6 +396,10 @@ bool extract(Remote& remote, const Entry& entry, Sink&& sink, OnRead&& on_read) 
             stream.avail_out = static_cast<uInt>(out.size());
             status = inflate(&stream, Z_NO_FLUSH);
             if (status != Z_OK && status != Z_STREAM_END) {
+                return false;
+            }
+            produced += out.size() - stream.avail_out;
+            if (produced > limit) {
                 return false;
             }
             sink(out.data(), out.size() - stream.avail_out);
@@ -417,7 +427,7 @@ bool install_part(Remote& remote, const Part& part, const Entry& entry, const st
         Sha256 hash;
         std::uint64_t written = 0u;
         good = output.good() && extract(
-                                    remote, entry,
+                                    remote, entry, part.size,
                                     [&](const unsigned char* data, std::size_t bytes) {
                                         output.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(bytes));
                                         hash.add(data, bytes);
@@ -524,6 +534,9 @@ void acknowledge() {
     }
 }
 
+// The licence text is read whole into memory: an entry that inflates past this is refused.
+constexpr std::uint64_t kLicenseLimit = 1u << 20u;
+
 void fetch_license(Package package) {
     LicenseStore& store = license_store();
     unsigned fetch = 0u;
@@ -541,7 +554,7 @@ void fetch_license(Package package) {
             if (read_directory(release, remote, entries)) {
                 const auto found = entries.find(release.license_entry);
                 good = found != entries.end() && extract(
-                                                     remote, found->second,
+                                                     remote, found->second, kLicenseLimit,
                                                      [&](const unsigned char* data, std::size_t bytes) {
                                                          text.append(reinterpret_cast<const char*>(data), bytes);
                                                      },

@@ -13,8 +13,6 @@ unsigned lighting_mode(const RenderConfig& render) {
     return render.enhanced_lighting ? 2u : render.per_pixel_lighting ? 1u : 0u;
 }
 
-// The game's settings the menu changed since it took them (its input mode is the controls draft's), each merged into
-// `live` when given: a setting changed elsewhere meanwhile keeps that value unless the menu changed it too.
 std::vector<SettingsRow> graphics_page(const RenderConfig& render, const GraphicsPageHost& host) {
     const GraphicsPageState state = host.query(render);
     std::vector<SettingsRow> rows;

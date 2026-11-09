@@ -226,6 +226,23 @@ void migrate_settings_file(input::ControlsConfig& controls, unsigned version) {
     std::fprintf(stderr, "[settings] controls version %u -> %u: %u defaults updated\n", version, input::kControlsVersion, changed);
 }
 
+// A settings file the game cannot read (an overlong line, a NUL byte) is renamed to "<name>.unreadable", replacing an
+// older one, so the start goes on with defaults and the player's file stays on disk.
+void set_aside_unreadable_settings(const std::filesystem::path& path) {
+    std::filesystem::path aside = path;
+    aside += ".unreadable";
+    std::error_code error;
+    std::filesystem::remove(aside, error);
+    error.clear();
+    std::filesystem::rename(path, aside, error);
+    if (error) {
+        std::fprintf(stderr, "[settings] the settings file is unreadable and could not be set aside (%s); using defaults\n",
+                     error.message().c_str());
+    } else {
+        std::fprintf(stderr, "[settings] the settings file has an overlong line or a NUL byte; kept as .unreadable, using defaults\n");
+    }
+}
+
 void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls) {
     const std::filesystem::path path = settings_path();
     if (path.empty()) {
@@ -235,7 +252,7 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
 
     FILE* file = open_path(path, "rb");
     const int open_error = file != nullptr ? 0 : errno;
-    const std::unique_ptr<FILE, decltype(&std::fclose)> owned_file(file, &std::fclose);
+    std::unique_ptr<FILE, decltype(&std::fclose)> owned_file(file, &std::fclose);
     if (open_error != 0 || file == nullptr) {
         if (open_error == ENOENT) {
             return;
@@ -245,14 +262,19 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
 
     std::string line;
     bool first_line = true;
+    bool unreadable = false;
     for (;;) {
         line.clear();
         int character = 0;
         while ((character = std::fgetc(file)) != EOF && character != '\n') {
             if (character == 0 || line.size() >= 4096u) {
-                throw std::runtime_error("invalid or overlong runtime settings line");
+                unreadable = true;
+                break;
             }
             line.push_back(static_cast<char>(character));
+        }
+        if (unreadable) {
+            break;
         }
         if (std::ferror(file) != 0) {
             throw std::runtime_error("cannot read runtime settings file");
@@ -280,6 +302,13 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
         } else if (!input::apply_controls_setting(controls, key_text, value_text)) {
             apply_kv(settings, key_text.c_str(), value_text.c_str());
         }
+    }
+    if (unreadable) {
+        owned_file.reset();
+        set_aside_unreadable_settings(path);
+        settings = RuntimeSettings{};
+        controls = input::default_controls_config();
+        return;
     }
 #if defined(__ANDROID__)
     if (controls_version < input::kControlsVersion && settings.input_mode == RuntimeInputMode::KeyboardMouse) {

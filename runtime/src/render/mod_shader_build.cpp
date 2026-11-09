@@ -116,7 +116,9 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
         std::string text;
     };
     std::vector<Job> jobs;
-    for (const auto& entry : fs::directory_iterator(sources, error)) {
+    // increment(ec) ends the list when the folder goes away mid-walk; the range-for form throws there.
+    for (auto it = fs::directory_iterator(sources, error); !error && it != fs::directory_iterator(); it.increment(error)) {
+        const fs::directory_entry& entry = *it;
         const std::string name = entry.path().filename().string();
         if (name.size() != 22u || (name[0] != 'v' && name[0] != 'p') || !name.ends_with(".hlsl")) {
             continue;
