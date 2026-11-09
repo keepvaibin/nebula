@@ -463,6 +463,10 @@ namespace {
         }
         // The file as the game has it: each of these ends up a stream of this name.
         const char* pEnd = strrchr(pFile, '.');
+        const char* const pSlash = strrchr(pFile, '/');
+        if (pEnd != nullptr && pSlash != nullptr && pEnd < pSlash) {
+            pEnd = nullptr;  // a dot in a folder name
+        }
         const size_t stem = pEnd != nullptr ? static_cast< size_t >(pEnd - pFile) : strlen(pFile);
         const bool rooted = pFile[0] == '/';
         char* pPath = new (NebulaArena::root(), 0) char[stem + 6];
@@ -813,8 +817,13 @@ namespace {
             }
             break;
         case NEBULA_SET_ADD_LIVES:
+            // The count stops at the lives setting: a huge number from a mod ends there, not after that many calls.
             for (s32 i = 0; i < value; i++) {
+                const s32 before = MR::getPlayerLeft();
                 MR::incPlayerLeft();
+                if (MR::getPlayerLeft() == before) {
+                    break;
+                }
             }
             break;
         default: break;
@@ -937,7 +946,6 @@ namespace {
     };
     const char* const cNeedTheirLevel[] = {
 #include "NebulaNeedTheirLevel.inc"
-#include "Game/Util/StringUtil.hpp"
     };
 
     template < int N >
@@ -1695,7 +1703,8 @@ namespace {
 
     void apiSetEventValue(const char* pName, int32_t value) {
         if (pName != nullptr) {
-            GameDataFunction::setGameEventValue(pName, static_cast< u16 >(value));
+            // The saved value is 16 bits: out of range is held at its ends, not wrapped.
+            GameDataFunction::setGameEventValue(pName, static_cast< u16 >(value < 0 ? 0 : value > 65535 ? 65535 : value));
         }
     }
 
