@@ -50,7 +50,6 @@ namespace MR {
     bool getPlacementArg7NoInit(const TableIter& rIter, f32*);
     bool getPlacementArg7NoInit(const TableIter& rIter, bool*);
     bool isEqualObjectName(const TableIter& rIter, const char*);
-    s32 getDemoGroupID(const TableIter& rIter);
     s32 getDemoGroupLinkID(const TableIter& rIter);
     bool getPlacementRailArg(const TableIter& rIter, const char*, s32*);
     bool getPlacementRailArg0NoInit(const TableIter& rIter, s32*);

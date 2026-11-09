@@ -224,10 +224,6 @@ namespace MR {
         endGlobalEventCamera(pActor->getName(), frame, resetView);
     }
 
-    bool isActiveActorCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo) {
-        return isActiveMultiActorCamera(pActor, pInfo, nullptr);
-    }
-
     bool isActiveMultiActorCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         if (pInfo->mCameraSetID < 0) {
             return false;

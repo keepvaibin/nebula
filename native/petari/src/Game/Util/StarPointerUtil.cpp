@@ -514,13 +514,6 @@ namespace MR {
         return ::getStarPointerDirector()->mTransHolder->mProjMtx;
     }
 
-    f32 getStarPointerRadius(s32 channel) {
-        if (::getStarPointerLayout(channel) == nullptr) {
-            return 10.0f;
-        }
-        return ::getStarPointerLayout(channel)->mRadius;
-    }
-
     // The 2D position menus and layouts test is this frame's, where the pointer is drawn (StarPointerLayout).
     Vec2f* getStarPointerScreenPosition(s32 channel) {
         return &::getStarPointerController(channel)->mInfo.mPos;

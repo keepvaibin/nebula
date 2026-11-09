@@ -75,7 +75,6 @@ namespace MR {
 
     bool isValidMovement(const LiveActor*);
     bool isValidCalcAnim(const LiveActor*);
-    bool isValidCalcViewAndEntry(const LiveActor*);
     bool isValidDraw(const LiveActor*);
 
     void calcAnimDirect(LiveActor*);

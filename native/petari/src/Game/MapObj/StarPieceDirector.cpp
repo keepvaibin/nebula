@@ -18,10 +18,6 @@ StarPieceDirector* MR::getStarPieceDirector() {
     return MR::getSceneObj< StarPieceDirector >(SceneObj_StarPieceDirector);
 }
 
-void MR::createStarPiece() {
-    getStarPieceDirector()->createStarPieces();
-}
-
 StarPiece* MR::getDeadStarPiece() {
     return getStarPieceDirector()->getDeadStarPiece();
 }

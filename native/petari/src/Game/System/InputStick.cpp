@@ -67,7 +67,3 @@ void InputStick::update() {
         mIsHoldUp = false;
     }
 }
-
-bool InputStick::isChanged() const {
-    return mSpeed > 0.0001f;
-}

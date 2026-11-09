@@ -8,11 +8,6 @@ void TriggerChecker::update(bool input) {
     mCurrLevel = input;
 }
 
-void TriggerChecker::setInput(bool input) {
-    mPrevLevel = input;
-    mCurrLevel = input;
-}
-
 bool TriggerChecker::getLevel() const {
     return mCurrLevel;
 }

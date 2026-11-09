@@ -49,7 +49,6 @@ namespace MR {
     bool isClockwiseToDir(const LiveActor*, const Vec3f&, const Vec3f&);
     bool isClockwiseToPlayer(const LiveActor*, const Vec3f&);
     bool isPlayerLeftSide(const LiveActor*);
-    bool isLeftSideFromPlayer(const LiveActor*);
     bool isInSightConePlayer(const LiveActor*, const Vec3f&, f32, f32);
     bool isInSightFanPlayer(const LiveActor*, const Vec3f&, f32, f32, f32);
     bool isBindedWallFront(const LiveActor*, const Vec3f&, f32);
