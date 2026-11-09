@@ -56,7 +56,7 @@ void GameDataSomeScenarioAccessor::updateMaxCoinNum(int coinNum) {
 
 void GameDataSomeScenarioAccessor::setBitFlagAccordingToBool(u8* pFlags, bool isOn) {
     const s32 scenarioNo = mScenarioNum - 1;
-    if (scenarioNo >= mSomeGalaxyStorage->mSlots) {
+    if (!mSomeGalaxyStorage->hasSlot(scenarioNo)) {
         return;
     }
     if (isOn) {
@@ -81,6 +81,10 @@ GameDataSomeGalaxyStorage::GameDataSomeGalaxyStorage(const GalaxyStatusAccessor&
     mAlreadyVisitedFlags = new u8[flagBytes];
     mMaxCoinNum = new u16[mSlots];
     resetAllData();
+}
+
+GameDataSomeGalaxyStorage::GameDataSomeGalaxyStorage()
+    : mGalaxyName(""), mPowerStarNum(0), mSlots(0), mPowerStarOwnedFlags(nullptr), mAlreadyVisitedFlags(nullptr), mMaxCoinNum(nullptr) {
 }
 
 void GameDataSomeGalaxyStorage::resetAllData() {
@@ -148,7 +152,7 @@ s32 GameDataSomeGalaxyStorage::deserialize(const BinaryDataContentAccessor& rAcc
     return 0;
 }
 
-GameDataAllGalaxyStorage::GameDataAllGalaxyStorage() : mHeaderSerializer(nullptr) {
+GameDataAllGalaxyStorage::GameDataAllGalaxyStorage() : mHeaderSerializer(nullptr), mNoGalaxy(new GameDataSomeGalaxyStorage()) {
     mHeaderSerializer = new BinaryDataContentHeaderSerializer(new u8[64], 64);
     mSomeGalaxyStorages.init(64);
 
@@ -185,8 +189,10 @@ bool GameDataAllGalaxyStorage::isExistAccessor(const char* pGalaxyName, int scen
     return false;
 }
 
+// A galaxy the save keeps no storage for (no stars, or not a galaxy) reads and keeps nothing.
 GameDataSomeScenarioAccessor GameDataAllGalaxyStorage::makeAccessor(const char* pGalaxyName, int scenarioNum) const {
-    return GameDataSomeScenarioAccessor(mSomeGalaxyStorages[findIndex(pGalaxyName)], scenarioNum);
+    const s32 index = findIndex(pGalaxyName);
+    return GameDataSomeScenarioAccessor(index >= 0 ? mSomeGalaxyStorages[index] : mNoGalaxy, scenarioNum);
 }
 
 s32 GameDataAllGalaxyStorage::calcCurrentPowerStarNum() const {
@@ -198,7 +204,8 @@ s32 GameDataAllGalaxyStorage::calcCurrentPowerStarNum() const {
 }
 
 s32 GameDataAllGalaxyStorage::getPowerStarNumOwned(const char* pGalaxyName) const {
-    return mSomeGalaxyStorages[findIndex(pGalaxyName)]->getPowerStarNumOwned();
+    const s32 index = findIndex(pGalaxyName);
+    return index >= 0 ? mSomeGalaxyStorages[index]->getPowerStarNumOwned() : 0;
 }
 
 s32 GameDataAllGalaxyStorage::getGalaxyNum() const {
