@@ -53,19 +53,6 @@ s32 Table::getColumnKind(const char* pKey) const {
     return itemId < 0 ? -1 : mData->columns()[itemId].mKind;
 }
 
-TableIter MR::findTableElementNoCase(const Table* pInfo, const char* key, const char* searchValue, int startIndex) {
-    int entryIndex = startIndex;
-    const char* value;
-    while (entryIndex < pInfo->getNumEntries()) {
-        pInfo->getValue< const char* >(entryIndex, key, &value);
-        if (MR::isEqualStringCase(value, searchValue)) {
-            return TableIter(pInfo, entryIndex);
-        }
-        entryIndex++;
-    }
-    return pInfo->end();
-}
-
 TableIter Table::findElementBinary(const char* key, const char* value) const {
     int low = 0;
     int high = getNumEntries();
