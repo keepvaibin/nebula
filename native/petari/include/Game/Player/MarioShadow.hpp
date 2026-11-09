@@ -6,6 +6,7 @@ class TypedDraw;
 #include <nebula_geometry.hpp>
 
 class PlayerModel;
+struct SiteMaterial;
 class Triangle;
 class GameTexture;
 
@@ -22,8 +23,8 @@ public:
     void drawAndCaptureTex(PlayerModel*, const Vec3f&);
     void setUpdateFlag();
     void draw1() const;
-    void sendVtx(TypedDraw& rDraw) const;
-    void sendZsortedVtx(TypedDraw& rDraw, bool) const;
+    void initMaterial(SiteMaterial* pMaterial, u32 test, u8 ref) const;
+    void sendPolygons(TypedDraw& rDraw, u32 partBase, bool sorted, bool offset) const;
     void initCaptureTex();
     void setViewMtx(const Vec3f&);
     void drawVolumeBox(const Vec3f&, const Vec3f&) const;
@@ -32,7 +33,7 @@ public:
     void makePolygonLists(u32 num);
     const Vec3f& getDrawPos(u32) const;
     const Vec3f& getDrawPos(u32, u32) const;
-    const Vec2f& getDrawTx(u32, u32) const;
+    u32 getDrawPart(u32 polygon, bool sorted) const;
 
     u8 mMode;  // the shadow's mode (setMode; 255 none)
     f32 mRadius;  // the polygon box's half size
@@ -48,7 +49,7 @@ public:
     u16 mVertsPerPolygon;  // corners per polygon (3)
     u32* mPolygonIndices;  // each shadow polygon's index in mPolygons
     Vec3f* mVertices;  // the distinct vertices
-    Vec2f* mTexCoords;  // each vertex's texture coordinates
+    u32* mPolygonParts;  // each polygon's draw number, from its triangle (create)
     u32* mVertexIndices;  // each polygon corner's vertex
     u32 mVertexCount;  // entries in mVertices
     u32 mEdgePolygonCount;  // polygons edge-on to the direction
@@ -56,6 +57,10 @@ public:
     s32* mSortOrder;  // the polygons by distance (doSortPolygons)
     f32* mSortDistances;
     Vec3f mCenter;  // the shadow's center (create)
+    Vec3f mProjSide;  // the texture's s axis as of the polygons (create)
+    Vec3f mProjUp;  // its t axis
+    Vec3f mProjCenter;  // the point at the texture's middle
+    u32 mProjJumps;  // steps the projection jumped (create); part of every polygon's draw number
     GameTexture* mCaptureTex;  // the captured shadow
     u8 mUpdate;  // the capture is due (setUpdateFlag)
     bool mSnapDirection;  // the direction snaps instead of blending (the bee's wall stick)

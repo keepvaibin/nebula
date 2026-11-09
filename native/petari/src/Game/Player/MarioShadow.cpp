@@ -20,11 +20,42 @@
 #include "Game/Render/Model.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include <cstdint>
 #include <cstring>
 
 namespace {
     f32 cCheckOffset0 = 5.0f;
     f32 cDrawOffset0 = -5.0f;
+
+    // The shadow texture covers 300 units across (the capture's orthographic box).
+    const f32 cTexScale = 1.0f / 300.0f;
+    // A step in which the centre moves farther than this, or an axis turns past 60 degrees, is a jump: nothing pairs across it.
+    const f32 cJumpDistance = 300.0f;
+    const f32 cJumpAxisDot = 0.5f;
+
+    // The numbers of a shadow's draws among its object's draws (Frame::setPart). A polygon takes one from its triangle in
+    // [cPolygonPartFirst, cPolygonPartEnd) plus its pass's base; the other draws take fixed ones past every polygon.
+    const u32 cPolygonPartFirst = 0x10000u;
+    const u32 cPolygonPartEnd = 1u << 28;
+    const u32 cMarkPartBase = 0u;
+    const u32 cColorPartBase = 1u << 28;
+    const u32 cEdgePart = 2u << 28;
+    // The wipe box's first draw (CollisionShadow::draw3).
+    const u32 cWipeFirstPart = 3u << 28;
+    // The volume box's first draw.
+    const u32 cVolumeFirstPart = 4u << 28;
+
+    // A triangle's draw number: the same triangle (its collision part and its index in it) has the same number every step,
+    // and a jump gives every triangle a new one.
+    u32 polygonPart(const Triangle& rTriangle, u32 jumps) {
+        u64 h = static_cast< u64 >(reinterpret_cast< uintptr_t >(rTriangle.mParts)) * 0x9E3779B97F4A7C15ull;
+        h ^= (static_cast< u64 >(rTriangle.mIdx) + 1ull) * 0xC2B2AE3D27D4EB4Full;
+        h ^= static_cast< u64 >(jumps) * 0x165667B19E3779F9ull;
+        h ^= h >> 32;
+        h *= 0xD6E8FEB86659FD93ull;
+        h ^= h >> 29;
+        return cPolygonPartFirst + static_cast< u32 >(h % static_cast< u64 >(cPolygonPartEnd - cPolygonPartFirst));
+    }
 };  // namespace
 
 CollisionShadow::~CollisionShadow() {
@@ -67,6 +98,10 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャ
     mUp.zero();
     mVolumeUp.zero();
     mReferencePos.zero();
+    mProjSide.zero();
+    mProjUp.zero();
+    mProjCenter.zero();
+    mProjJumps = 0;
     mRadius = radius;
     mLength = length;
     mPolygonCount = 0;
@@ -86,7 +121,7 @@ void CollisionShadow::makePolygonLists(u32 num) {
     if (mPolygons != nullptr) {
         delete[] mPolygons;
         delete[] mVertices;
-        delete[] mTexCoords;
+        delete[] mPolygonParts;
         delete[] mVertexIndices;
         delete[] mPolygonIndices;
         delete[] mEdgePolygons;
@@ -98,7 +133,7 @@ void CollisionShadow::makePolygonLists(u32 num) {
     mListCapacity = num;
     mPolygons = new (pArena, 0) Triangle[num];
     mVertices = new (pArena, 0) Vec3f[num * mVertsPerPolygon];
-    mTexCoords = new (pArena, 0) Vec2f[num * mVertsPerPolygon];
+    mPolygonParts = new (pArena, 0) u32[num];
     mVertexIndices = new (pArena, 0) u32[num * mVertsPerPolygon];
     mPolygonIndices = new (pArena, 0) u32[num];
     mEdgePolygons = new (pArena, 0) u32[num]();
@@ -226,33 +261,43 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
         }
     }
 
-    const f32 texScale = 1.0f / 300.0f;
+    // The shadow texture's coordinates are made on the GPU from this projection (initMaterial), which the host blends
+    // between steps; a jump gives the polygons new numbers so they do not pair across it.
+    if (rPosition.squared(mProjCenter) > ::cJumpDistance * ::cJumpDistance || side.dot(mProjSide) < ::cJumpAxisDot ||
+        mUp.dot(mProjUp) < ::cJumpAxisDot) {
+        mProjJumps++;
+    }
 
-    for (u32 i = 0; i < mVertexCount; i++) {
-        Vec3f relative(mVertices[i] - rPosition);
-        f32 s = relative.dot(side);
-        f32 t = relative.dot(mUp);
-
-        mTexCoords[i].x = 0.5f + s * texScale;
-        mTexCoords[i].y = 0.5f + t * texScale;
+    mProjSide = side;
+    mProjUp = mUp;
+    mProjCenter = rPosition;
+    for (u32 i = 0; i < mPolygonCount; i++) {
+        mPolygonParts[i] = ::polygonPart(mPolygons[mPolygonIndices[i]], mProjJumps);
     }
 }
 
-namespace {
-    // The number of the first draw of the wipe box in CollisionShadow::draw3, past any count of polygon draws before it.
-    const u32 cWipeFirstPart = 1u << 16;
-
-    // runtime/src/render/materials/color_tex_alpha.hlsl: black at the shadow texture's alpha where it passes `test`
-    // (0 above, 1 equal to, 2 not equal to `ref`), blended by alpha unless the site changes it; no culling.
-    void initShadowMaterial(SiteMaterial* pMaterial, const GameTexture* pTexture, u32 test, u8 ref) {
-        TDDraw::setupNative(pMaterial, 1, 1, 0);
-        pMaterial->setShader(NEBULA_SHADER_COLOR_TEX_ALPHA);
-        pMaterial->constants[0] = 0.0f;  // the colour: black (the reference of the shader it began as is gone)
-        pMaterial->constants[4] = ref;
-        pMaterial->constants[5] = static_cast< f32 >(test);
-        pMaterial->setTexture(0, pTexture);
-    }
-}  // namespace
+// runtime/src/render/materials/color_tex_alpha.hlsl: black at the shadow texture's alpha where it passes `test` (0 above, 1 equal
+// to, 2 not equal to `ref`), blended by alpha unless the site changes it; no culling. The texture's coordinate is projected
+// from the vertex's world position (params.z): axes scaled to texture units and the point at the middle, in rows 2-4. Plain
+// rows, so the host's blend of two steps' constants moves the whole projection (the shadow where its centre is at t).
+void CollisionShadow::initMaterial(SiteMaterial* pMaterial, u32 test, u8 ref) const {
+    TDDraw::setupNative(pMaterial, 1, 1, 0);
+    pMaterial->setShader(NEBULA_SHADER_COLOR_TEX_ALPHA);
+    pMaterial->constants[0] = 0.0f;  // the colour: black (the reference of the shader it began as is gone)
+    pMaterial->constants[4] = ref;
+    pMaterial->constants[5] = static_cast< f32 >(test);
+    pMaterial->constants[6] = 1.0f;
+    pMaterial->constants[8] = mProjSide.x * ::cTexScale;
+    pMaterial->constants[9] = mProjSide.y * ::cTexScale;
+    pMaterial->constants[10] = mProjSide.z * ::cTexScale;
+    pMaterial->constants[12] = mProjUp.x * ::cTexScale;
+    pMaterial->constants[13] = mProjUp.y * ::cTexScale;
+    pMaterial->constants[14] = mProjUp.z * ::cTexScale;
+    pMaterial->constants[16] = mProjCenter.x;
+    pMaterial->constants[17] = mProjCenter.y;
+    pMaterial->constants[18] = mProjCenter.z;
+    pMaterial->setTexture(0, mCaptureTex);
+}
 
 // On a wall (a Bee's walk): marked where the shadow's texture shows, behind what is there; the screen blend darkens it.
 void CollisionShadow::draw1() const {
@@ -261,51 +306,30 @@ void CollisionShadow::draw1() const {
     }
 
     SiteMaterial material;
-    initShadowMaterial(&material, mCaptureTex, 0, 1);
+    initMaterial(&material, 0, 1);
     material.setDepth(true, NEBULA_COMPARE_GEQUAL, false);
     material.mState.color_write = 0;
     material.mState.alpha_write = 0;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
-    // Rebuilt collision triangles can change order even with the same vertex count.
-    site.setFlags(NEBULA_ITEM_DISCRETE_VERTICES);
-    sendVtx(site);
+    sendPolygons(site, ::cMarkPartBase, false, false);
 }
 
-void CollisionShadow::sendVtx(TypedDraw& rDraw) const {
-    if (!mPolygonCount) {
-        return;
+// One draw a polygon, numbered by its triangle (partBase + mPolygonParts), so a polygon in two steps pairs with itself and the
+// host blends its positions and the pass's constants; `sorted` takes the polygons in mSortOrder, `offset` moves them back
+// along the direction. The vertices' texture coordinates are not read (the material projects them).
+void CollisionShadow::sendPolygons(TypedDraw& rDraw, u32 partBase, bool sorted, bool offset) const {
+    Vec3f shift(0.0f, 0.0f, 0.0f);
+    if (offset) {
+        shift = -mDirection * 5.0f;
     }
 
-    u32 vertexCount = mPolygonCount * mVertsPerPolygon;
-    VertexPT* vtx = rDraw.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
-
-    const Vec2f* pTex;
-    u32 index = 0;
     for (u32 i = 0; i < mPolygonCount; i++) {
+        rDraw.setPart(partBase + getDrawPart(i, sorted));
+        VertexPT* vtx = rDraw.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, mVertsPerPolygon);
         for (u32 j = 0; j < mVertsPerPolygon; j++) {
-            const Vec3f& point = getDrawPos(index);
-            pTex = &mTexCoords[mVertexIndices[index]];
-            index++;
-            *vtx++ = {point.x, point.y, point.z, pTex->x, pTex->y};
-        }
-    }
-}
-
-void CollisionShadow::sendZsortedVtx(TypedDraw& rDraw, bool offset) const {
-    u32 vertexCount = mPolygonCount * mVertsPerPolygon;
-    VertexPT* vtx = rDraw.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
-
-    Vec3f shift(-mDirection * 5.0f);
-    for (u32 i = 0; i < mPolygonCount; i++) {
-        for (u32 j = 0; j < mVertsPerPolygon; j++) {
-            const Vec3f& point = getDrawPos(i, j);
-            const Vec2f& tex = getDrawTx(i, j);
-            if (offset) {
-                *vtx++ = {point.x + shift.x, point.y + shift.y, point.z + shift.z, tex.x, tex.y};
-            } else {
-                *vtx++ = {point.x, point.y, point.z, tex.x, tex.y};
-            }
+            const Vec3f& point = sorted ? getDrawPos(i, j) : getDrawPos(i * mVertsPerPolygon + j);
+            *vtx++ = {point.x + shift.x, point.y + shift.y, point.z + shift.z, 0.0f, 0.0f};
         }
     }
 }
@@ -469,10 +493,11 @@ void CollisionShadow::draw3() const {
     }
 
     Vec3f position(mCenter - mDirection * mCheckOffset);
+    Frame::setPart(::cVolumeFirstPart);
     drawVolumeBox(position, mDirection * mLength);
     // Where the shadow's texture is clear, unmarked; and the faces in front of the volume.
     SiteMaterial material;
-    initShadowMaterial(&material, mCaptureTex, 1, 0);
+    initMaterial(&material, 1, 0);
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
     material.mState.color_write = 0;
     material.mState.alpha_write = 0;
@@ -481,14 +506,15 @@ void CollisionShadow::draw3() const {
     material.mState.blend_dst = NEBULA_FACTOR_ZERO;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
-    // Rebuilt collision triangles can change order even with the same vertex count.
-    site.setFlags(NEBULA_ITEM_DISCRETE_VERTICES);
-    sendZsortedVtx(site, true);
+    sendPolygons(site, ::cMarkPartBase, true, true);
     if (mEdgePolygonCount) {
         SiteMaterial clear = material;
         clear.setShader(NEBULA_SHADER_FLAT_COLOR);
         clear.setColor(0, 0, 0, 0, 0);
         site.setMaterial(clear);
+        // One draw of many triangles, which have no identity inside it: it shows its newest triangles.
+        site.setFlags(NEBULA_ITEM_DISCRETE_VERTICES);
+        site.setPart(::cEdgePart);
         VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLES, mEdgePolygonCount * 3);
         for (u32 i = 0; i < mEdgePolygonCount; i++) {
             for (u32 j = 0; j < 3; j++) {
@@ -496,6 +522,8 @@ void CollisionShadow::draw3() const {
                 *vtx++ = {point.x, point.y, point.z, -1.0f, -1.0f};
             }
         }
+
+        site.setFlags(0);
     }
 
     // The shadow's colour at its texture's alpha where the mark stands, nearest polygon first; the mark goes as it is drawn.
@@ -505,15 +533,7 @@ void CollisionShadow::draw3() const {
     material.setBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     material.setStencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
     site.setMaterial(material);
-    for (u32 i = 0; i < mPolygonCount; i++) {
-        VertexPT* vtx = site.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, mVertsPerPolygon);
-
-        for (u32 j = 0; j < mVertsPerPolygon; j++) {
-            const Vec3f& point = getDrawPos(i, j);
-            const Vec2f& tex = getDrawTx(i, j);
-            *vtx++ = {point.x, point.y, point.z, tex.x, tex.y};
-        }
-    }
+    sendPolygons(site, ::cColorPartBase, true, false);
 
     // What the polygons did not cover.
     SiteMaterial wipe = material;
@@ -523,8 +543,7 @@ void CollisionShadow::draw3() const {
     wipe.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     site.setMaterial(wipe);
     // The wipe box is the volume box again and must cover the pixels it marked: it pairs with itself and blends as the
-    // volume box does, not as the polygons (rebuilt every frame, drawn at their newest) before it.
-    site.setFlags(0);
+    // volume box does, so on a generated frame both stand where the polygons' projection puts the shadow.
     site.setPart(::cWipeFirstPart);
     Vec3f up(mVolumeUp);
     Vec3f side;
@@ -557,6 +576,6 @@ const Vec3f& CollisionShadow::getDrawPos(u32 polygon, u32 vertex) const {
     return mVertices[mVertexIndices[vertex + mVertsPerPolygon * mSortOrder[polygon]]];
 }
 
-const Vec2f& CollisionShadow::getDrawTx(u32 polygon, u32 vertex) const {
-    return mTexCoords[mVertexIndices[vertex + mVertsPerPolygon * mSortOrder[polygon]]];
+u32 CollisionShadow::getDrawPart(u32 polygon, bool sorted) const {
+    return mPolygonParts[sorted ? mSortOrder[polygon] : polygon];
 }
