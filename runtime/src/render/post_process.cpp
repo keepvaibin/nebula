@@ -638,6 +638,11 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
          !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight))) {
         pass = AaRun::kNone;
     }
+    // The last pass's pipeline (over MSAA made at first use): without one the scene is left as it is.
+    ID3D12PipelineState* const last_pass = pass != AaRun::kNone ? scene_pass_pipeline(pass == AaRun::kSmaa, samples) : nullptr;
+    if (last_pass == nullptr) {
+        pass = AaRun::kNone;
+    }
     note_aa_run(plan, pass);
     if (pass == AaRun::kNone) {
         return pass;
@@ -663,7 +668,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
         list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-        draw(list, srv_ring, scene_pass_pipeline(false, samples), {source}, viewport, c);
+        draw(list, srv_ring, last_pass, {source}, viewport, c);
         return pass;
     }
     constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -683,8 +688,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
          viewport, c);
     transition(list, weights_, gpu::Use::PixelRead);
     list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-    draw(list, srv_ring, scene_pass_pipeline(true, samples), {source, weights_.resource.Get()},
-         viewport, c);
+    draw(list, srv_ring, last_pass, {source, weights_.resource.Get()}, viewport, c);
     return pass;
 }
 

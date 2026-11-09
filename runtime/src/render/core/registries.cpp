@@ -89,6 +89,7 @@ Registries::MemoryStats Registries::memory_stats() noexcept {
         ++stats.pages;
         stats.empty_pages += arena.live == 0u ? 1u : 0u;
         stats.page_bytes += arena.bytes;
+        stats.local_bytes += arena.memory.local ? arena.bytes : 0u;
         stats.live_bytes += arena.bytes - arena.free_bytes;
     }
     stats.slot_bytes = slot_bytes_;
@@ -159,7 +160,11 @@ Registries::Placed Registries::place(std::size_t bytes) {
         }
         arena.free_bytes -= bytes;
         ++arena.live;
-        return {arena.memory.cpu + chosen_offset, arena.memory.gpu + chosen_offset, chosen, chosen_offset, bytes};
+        Placed placed{arena.memory.cpu + chosen_offset, arena.memory.gpu + chosen_offset, chosen, chosen_offset, bytes};
+#if defined(NEBULA_DEV)
+        placed.shadow = arena.shadow.get() + chosen_offset;
+#endif
+        return placed;
     }
     // A new page, in the place of one given back when there is one (a page's index is held by what is placed in it only).
     auto index = static_cast<std::uint32_t>(arenas_.size());
@@ -170,7 +175,8 @@ Registries::Placed Registries::place(std::size_t bytes) {
         }
     }
     const std::size_t page = std::max(bytes, kArenaPage);
-    gpu::UploadMemory memory = gpu::create_upload_memory(device_, page, "Nebula Meshes");
+    // Geometry is written once, in order, and read by the GPU every frame it draws: video memory where the device maps it.
+    gpu::UploadMemory memory = gpu::create_upload_memory(device_, page, "Nebula Meshes", gpu::UploadPlace::GpuLocal);
     if (!memory) {
         throw std::runtime_error("no memory for meshes");
     }
@@ -179,6 +185,9 @@ Registries::Placed Registries::place(std::size_t bytes) {
     }
     Arena& arena = arenas_[index];
     arena.memory = std::move(memory);
+#if defined(NEBULA_DEV)
+    arena.shadow.reset(new std::byte[page]);
+#endif
     arena.bytes = page;
     arena.free.clear();
     if (page > bytes) {
@@ -186,7 +195,18 @@ Registries::Placed Registries::place(std::size_t bytes) {
     }
     arena.free_bytes = page - bytes;
     arena.live = 1u;
-    return {arena.memory.cpu, arena.memory.gpu, index, 0u, bytes};
+    Placed placed{arena.memory.cpu, arena.memory.gpu, index, 0u, bytes};
+#if defined(NEBULA_DEV)
+    placed.shadow = arena.shadow.get();
+#endif
+    return placed;
+}
+
+void Registries::fill(const Placed& placed, const void* source, std::size_t bytes) noexcept {
+    std::memcpy(placed.cpu, source, bytes);
+#if defined(NEBULA_DEV)
+    std::memcpy(placed.shadow, source, bytes);
+#endif
 }
 
 void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t size) {
@@ -225,6 +245,9 @@ void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t 
     }
     if (release) {
         arena.memory = {};
+#if defined(NEBULA_DEV)
+        arena.shadow.reset();
+#endif
         arena.bytes = 0u;
         arena.free.clear();
         arena.free_bytes = 0u;
@@ -389,7 +412,7 @@ std::uint32_t Registries::model_register(const void* file, std::uint32_t* first_
             }
         }
         if (header.geometry_size != 0u) {
-            std::memcpy(placed.cpu, at<std::byte>(file, header.geometry_at), header.geometry_size);
+            fill(placed, at<std::byte>(file, header.geometry_at), header.geometry_size);
         }
         return id;
     });
@@ -405,7 +428,7 @@ void Registries::model_free(std::uint32_t model) {
 void Registries::place_mesh(std::uint32_t id, const LiveMesh& live) {
     const std::size_t bytes = std::size_t{live.vertex_bytes} + std::size_t{live.index_count} * 4u;
     const Placed placed = place(bytes);
-    std::memcpy(placed.cpu, live.bytes.get(), bytes);
+    fill(placed, live.bytes.get(), bytes);
     GpuMesh gpu_mesh;
     gpu_mesh.positions = placed.gpu;
     gpu_mesh.indices = live.index_count != 0u ? placed.gpu + live.vertex_bytes : gpu::Address{0u};
@@ -508,7 +531,7 @@ void Registries::restart(gpu::Device* device) {
         const Placed placed = header.geometry_size != 0u ? place(header.geometry_size) : Placed{};
         place_model(id, live, std::move(model), meshes, placed);
         if (header.geometry_size != 0u) {
-            std::memcpy(placed.cpu, at<std::byte>(live.file, header.geometry_at), header.geometry_size);
+            fill(placed, at<std::byte>(live.file, header.geometry_at), header.geometry_size);
         }
     }
     for (const auto& [id, live] : live_meshes_) {

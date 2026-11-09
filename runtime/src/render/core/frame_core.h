@@ -270,6 +270,7 @@ public:
         std::uint32_t pages = 0u;         // geometry pages holding memory
         std::uint32_t empty_pages = 0u;   // of them, with no model or mesh in
         std::uint64_t page_bytes = 0u;    // their memory
+        std::uint64_t local_bytes = 0u;   // of it, in video memory
         std::uint64_t live_bytes = 0u;    // the part of it placed models and meshes hold
         std::uint64_t slot_bytes = 0u;    // material slot pages (never given back: a slot's id is the game's)
         std::uint32_t slots = 0u;         // material slots registered
@@ -279,8 +280,8 @@ public:
     // The rows a registered slot holds, and what a registered mesh's stream holds, for the inspector.
     [[nodiscard]] const float* slot_rows(std::uint32_t id) const noexcept { return id < slot_rows_.size() ? slot_rows_[id] : nullptr; }
     [[nodiscard]] const std::byte* mesh_cpu(const GpuMesh& mesh, gpu::Address address) const noexcept {
-        const gpu::UploadMemory& memory = arenas_[mesh.arena].memory;
-        return memory.cpu + (address - memory.gpu);
+        const Arena& arena = arenas_[mesh.arena];
+        return arena.shadow.get() + (address - arena.memory.gpu);
     }
 #endif
 
@@ -288,7 +289,10 @@ private:
     // A page of upload memory models and meshes are placed in: free ranges (offset -> size), taken best fit and given back
     // when what was placed retires, so a model that lives on does not keep the space of the ones freed around it.
     struct Arena {
-        gpu::UploadMemory memory;
+        gpu::UploadMemory memory;  // video memory where the device offers it: written in order, never read back
+#if defined(NEBULA_DEV)
+        std::unique_ptr<std::byte[]> shadow;  // a CPU copy of the page, for the inspector
+#endif
         std::size_t bytes = 0u;
         std::size_t free_bytes = 0u;
         std::map<std::size_t, std::size_t> free;
@@ -299,6 +303,9 @@ private:
         gpu::Address gpu = 0u;
         std::uint32_t arena = 0u;
         std::size_t offset = 0u, size = 0u;
+#if defined(NEBULA_DEV)
+        std::byte* shadow = nullptr;
+#endif
     };
     struct Retired {
         std::uint64_t fence = 0u;
@@ -326,6 +333,8 @@ private:
         std::uint32_t vertex_bytes = 0u, stride = 0u, index_count = 0u;
     };
     Placed place(std::size_t bytes);
+    // `bytes` from `source` into the placed range: one sequential write.
+    static void fill(const Placed& placed, const void* source, std::size_t bytes) noexcept;
     // `size` bytes at `offset` of page `index` are free again (lock_ held). The last thing leaving a page frees the page's
     // memory, except for one spare page that stays for the next scene.
     void give_back(std::uint32_t index, std::size_t offset, std::size_t size);
