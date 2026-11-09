@@ -78,6 +78,10 @@ namespace GameSystemFunction {
         return SingletonHolder< GameSystem >::get()->mErrorWatcher->isWarning();
     }
 
+    bool isSceneResumed() {
+        return SingletonHolder< GameSystem >::get()->mIsSceneResumed;
+    }
+
     bool isResetProcessing() {
         return SingletonHolder< GameSystemRestartProcess >::get()->isActive();
     }
