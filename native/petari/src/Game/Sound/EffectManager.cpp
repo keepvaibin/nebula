@@ -1,6 +1,8 @@
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SoundHandles.hpp"
+#include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StdSoundInfo.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 void EffectCategory::managerCalc_() {
     mParams.calc();
@@ -168,7 +170,7 @@ EffectSound* EffectManager::newSe_(int category, u32 priority) {
         return nullptr;
     }
 
-    EffectSound* se = new EffectSound(this, priority);
+    EffectSound* se = new (SoundMemory::arena(), 0) EffectSound(this, priority);
     if (se == nullptr) {
         return nullptr;
     }

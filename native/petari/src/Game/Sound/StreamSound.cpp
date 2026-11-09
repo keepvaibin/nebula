@@ -4,6 +4,7 @@
 #include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StreamManager.hpp"
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <new>
 
@@ -309,7 +310,7 @@ s32 StreamSound::getNumChild() const {
 
 SoundChild* StreamSound::getChild(int index) {
     if (children[index] == nullptr) {
-        children[index] = new SoundChild();
+        children[index] = new (SoundMemory::arena(), 0) SoundChild();
     }
     return children[index];
 }

@@ -1,7 +1,9 @@
 #include "Game/Sound/SequenceManager.hpp"
 #include "Game/Sound/SequenceSound.hpp"
 #include "Game/Sound/SoundHandles.hpp"
+#include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StdSoundInfo.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 SequenceManager::SequenceManager(bool setInstance) : SoundGlobal< SequenceManager >(setInstance), mAudience() {
     seqDataMgr = nullptr;
@@ -88,7 +90,7 @@ void SequenceManager::mixOut() {
 }
 
 SequenceSound* SequenceManager::beginStartSeq_() {
-    SequenceSound* seq = new SequenceSound(this);
+    SequenceSound* seq = new (SoundMemory::arena(), 0) SequenceSound(this);
     return seq;
 }
 
