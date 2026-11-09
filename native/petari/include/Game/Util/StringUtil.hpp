@@ -86,4 +86,39 @@ namespace MR {
         char* mText;
         char mInline[256];
     };
+
+    // UTF-16 text with no length limit: 128 code units in itself, past that the heap.
+    class Text16 {
+    public:
+        Text16() : mText(mInline), mRoom(cInline) {
+            mInline[0] = u'\0';
+        }
+        ~Text16();
+
+        Text16(const Text16&) = delete;
+        Text16& operator=(const Text16&) = delete;
+
+        // Writable storage of `units` code units, the terminator included; the previous text is gone.
+        char16_t* room(u32 units);
+        // Room for `units` code units in all, the first `used` kept.
+        char16_t* grow(u32 used, u32 units);
+
+        const char16_t* c_str() const {
+            return mText;
+        }
+
+        char16_t* data() {
+            return mText;
+        }
+
+        u32 capacity() const {
+            return mRoom;
+        }
+
+    private:
+        static const u32 cInline = 128;
+        char16_t* mText;
+        u32 mRoom;
+        char16_t mInline[cInline];
+    };
 };  // namespace MR

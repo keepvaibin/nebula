@@ -7,6 +7,7 @@
 #include "Game/Map/LightPointCtrl.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include <nebula_game_api.h>
 #include "Game/System/NebulaHost.hpp"
@@ -19,17 +20,17 @@ namespace {
         u32 mFrame;
     };
 
-    const u32 cRequesters = 64;
     // A requester silent for more frames than this keeps its light only while the game clips it: a clipped actor runs
     // no control, which is where it asks. One that died, or that the game runs but that stopped asking, lets its light
     // fade out.
     const u32 cRequestGap = 2;
-    Requester sRequesters[cRequesters];
+    // Every actor that asked: no limit.
+    MR::GrowBuffer< Requester > sRequesters;
     u32 sRequesterCount;
     const LiveActor* sStarCore;
     u32 sFrame;
     // The ActorLightInfos already sent this frame: one is loaded for every draw buffer group that uses it.
-    const ActorLightInfo* sWorldSent[16];
+    MR::GrowBuffer< const ActorLightInfo* > sWorldSent;
     u32 sWorldSentCount;
     u32 sWorldFrame;
 
@@ -159,16 +160,7 @@ namespace GameLightSignal {
             }
         }
         if (slot == nullptr) {
-            if (sRequesterCount < cRequesters) {
-                slot = &sRequesters[sRequesterCount++];
-            } else {
-                slot = &sRequesters[0];
-                for (u32 i = 1; i < cRequesters; i++) {
-                    if (sRequesters[i].mFrame < slot->mFrame) {
-                        slot = &sRequesters[i];
-                    }
-                }
-            }
+            slot = &sRequesters.room(sRequesterCount + 1)[sRequesterCount++];
         }
         slot->mActor = pActor;
         for (u32 i = 0; i < 7; i++) {
@@ -187,9 +179,7 @@ namespace GameLightSignal {
                 return;
             }
         }
-        if (sWorldSentCount < 16) {
-            sWorldSent[sWorldSentCount++] = pInfo;
-        }
+        sWorldSent.room(sWorldSentCount + 1)[sWorldSentCount++] = pInfo;
         worldLight(pInfo->mInfo0);
         worldLight(pInfo->mInfo1);
     }
