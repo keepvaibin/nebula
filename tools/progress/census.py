@@ -1,7 +1,7 @@
 """census.py <repo> <game build dir> <snapshot>: appends this batch's console API census to census.tsv.
 
 Two measurements (M), both tracked to zero:
-- call sites of console SDK functions in the game source (src/Game, src/JSystem, src/RVLFaceLib), by family:
+- call sites of console SDK functions in the game source (src/Game), by family:
   sites and distinct functions;
 - the game code's undefined symbols (objects under CMakeFiles/smg_game.dir/petari) by owner, from
   native/tools/boundary.py."""
@@ -20,7 +20,7 @@ FAMILIES = ["PSMTX", "PSVEC", "PSQUAT", "C_MTX", "C_VEC", "NWC24", "WPAD", "KPAD
             "IC", "LC", "SC", "VF"]
 call = re.compile(r"\b(" + "|".join(FAMILIES) + r")([A-Z][A-Za-z0-9_]*)\s*\(")
 sites, names = collections.Counter(), collections.defaultdict(set)
-for sub in ("src/Game", "src/JSystem", "src/RVLFaceLib"):
+for sub in ("src/Game",):
     for base, _, files in os.walk(os.path.join(repo, "native", "petari", sub)):
         for f in files:
             if not f.endswith((".c", ".cpp", ".h", ".hpp", ".inc")):

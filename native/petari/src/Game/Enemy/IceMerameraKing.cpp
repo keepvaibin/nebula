@@ -281,7 +281,7 @@ void IceMerameraKing::exeThrow() {
         if (MR::calcDistanceToPlayer(this) < sAttackDistance) {
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvPreAttack));
         } else {
-            const u32 throwMax = isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvThrow2nd)) ? 6 : 3;
+            const s32 throwMax = isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvThrow2nd)) ? 6 : 3;
 
             if (throwMax <= mThrowNum || !isEnableThrow()) {
                 setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));

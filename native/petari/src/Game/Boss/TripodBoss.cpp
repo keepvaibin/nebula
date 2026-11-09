@@ -313,7 +313,7 @@ bool TripodBoss::tryChangeSequence() {
     // The other moving legs go back down where they stand before the new sequence starts.
     bool isAnyMoving = false;
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
-        if (i != leg && !mLegs[i]->isStop()) {
+        if (i != static_cast< u32 >(leg) && !mLegs[i]->isStop()) {
             mLegs[i]->requestStepTarget(mStepPoints[i]);
             isAnyMoving = true;
         }

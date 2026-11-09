@@ -1,5 +1,6 @@
-# clang-tidy for the game module (native/petari): bugprone and performance checks, and a few readability ones that
-# find real mistakes. Nothing stylistic. Run it with tools/dev/tidy.py on a build's compile_commands.json.
+# clang-tidy for the game module (native/petari): defects and avoidable cost, and a few checks that find real mistakes.
+# Nothing stylistic. tools/dev/static_analysis.sh runs it over a build and writes the findings to a file; tools/dev/tidy.py
+# prints counts by check. The reason each group is on or off is in tools/dev/static_analysis.sh.
 Checks: >-
   -*,
   bugprone-*,
@@ -10,12 +11,18 @@ Checks: >-
   -bugprone-reserved-identifier,
   performance-*,
   -performance-no-int-to-ptr,
+  modernize-use-nullptr,
+  modernize-use-override,
   readability-container-size-empty,
+  readability-delete-null-pointer,
   readability-duplicate-include,
   readability-misleading-indentation,
   readability-redundant-control-flow,
   readability-redundant-smartptr-get,
-  readability-simplify-boolean-expr
+  readability-simplify-boolean-expr,
+  readability-string-compare,
+  clang-analyzer-core.*,
+  clang-analyzer-deadcode.DeadStores
 WarningsAsErrors: ''
 HeaderFilterRegex: 'native/petari/(include|src)/'
 FormatStyle: none

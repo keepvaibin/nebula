@@ -195,10 +195,6 @@ void LiveActor::calcViewAndEntry() {
         return;
     }
 
-    if (mFlag.mIsNoCalcView) {
-        return;
-    }
-
     mModelManager->calcView();
 }
 

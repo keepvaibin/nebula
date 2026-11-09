@@ -449,7 +449,7 @@ void EarthenPipe::processBgmPlayerIn() {
         u32 bgmId = AudStageBgmTable::getBgmId(MR::getCurrentStageName(), idx);
         if (bgmId != -1) {
             s32 cur = AudWrap::getBgmMgr()->mCurrentBGM[AudBgmMgr::BgmType_Stage];
-            if (cur != bgmId) {
+            if (static_cast< u32 >(cur) != bgmId) {
                 MR::stopStageBGM(60);
                 return;
             }
@@ -474,7 +474,7 @@ void EarthenPipe::processBgmPlayerOut() {
         u32 bgmId = AudStageBgmTable::getBgmId(MR::getCurrentStageName(), idx);
         if (bgmId != -1) {
             s32 cur = AudWrap::getBgmMgr()->mCurrentBGM[AudBgmMgr::BgmType_Stage];
-            if (cur == bgmId && MR::isPlayingStageBgm()) {
+            if (static_cast< u32 >(cur) == bgmId && MR::isPlayingStageBgm()) {
                 return;
             }
 

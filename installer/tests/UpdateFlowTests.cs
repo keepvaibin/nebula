@@ -283,13 +283,6 @@ namespace Nebula.Setup
 
         static string Pak(string folder) { return File.ReadAllText(Path.Combine(folder, "game.pak")); }
 
-        // A save's first bytes: only its version word (at 4) matters here.
-        static byte[] Save(byte[] versionWord, int seed)
-        {
-            byte[] bytes = Payload(64, seed);
-            versionWord.CopyTo(bytes, 4);
-            return bytes;
-        }
 
         static void CheckRollback()
         {
@@ -340,7 +333,7 @@ namespace Nebula.Setup
             Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked", "and changes nothing");
         }
 
-        // Rollback between content formats: the game files and the save each version reads.
+        // Rollback between content formats: the game files each version reads; the saves stay.
         static void CheckFormatRollback()
         {
             int newest = InstallEngine.ContentFormatVersion;
@@ -351,34 +344,19 @@ namespace Nebula.Setup
             string keptOld = layout.KeptContent(1), keptNew = layout.KeptContent(newest);
             WriteContent(keptOld, 1, "raw");
             File.WriteAllText(layout.Current, "{\"version\":\"2.0.8-beta.1\",\"previous\":\"2.0.0-beta.1\"}");
-            string saveFolder = Path.Combine(NebulaPaths.Saves, "title", "00010000", "524d4745", "data");
+            // The saves are the player's: a rollback never touches them (each version reads its own file).
+            string saveFolder = Path.Combine(NebulaPaths.Saves, "RMGE01");
             Directory.CreateDirectory(saveFolder);
-            string save = Path.Combine(saveFolder, "GameData.bin"), v2 = save + ".v2", v3 = save + ".v3";
-            byte[] oldWord = { 0, 0, 0, 2 }, nativeWord = { 3, 0, 0, 0 };
-            byte[] oldSave = Save(oldWord, 10), nativeSave = Save(nativeWord, 11), playedOld = Save(oldWord, 12);
-            File.WriteAllBytes(v2, oldSave);
-            File.WriteAllBytes(save, nativeSave);
+            string save = Path.Combine(saveFolder, "Nebula.sav");
+            byte[] saveBytes = Payload(64, 11);
+            File.WriteAllBytes(save, saveBytes);
 
             Check(Integration.Rollback(layout) == "2.0.0-beta.1" && Pak(layout.Content) == "raw" && Pak(keptNew) == "cooked" && !Directory.Exists(keptOld),
                   "rollback to a format-1 version swaps its game files in and keeps the newer ones");
-            Check(FileEquals(save, oldSave) && FileEquals(v3, nativeSave), "its save is the old one again; the native one waits");
+            Check(FileEquals(save, saveBytes), "its saves are as they were");
             Check(Integration.Rollback(layout) == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && Pak(keptOld) == "raw" && !Directory.Exists(keptNew),
                   "forward again swaps them back");
-            Check(FileEquals(save, nativeSave) && !File.Exists(v3) && FileEquals(v2, oldSave), "and the native save returns");
-
-            // The older version saved meanwhile: its save is the newest, and the next native save keeps it.
-            Integration.Rollback(layout);
-            File.WriteAllBytes(save, playedOld);
-            Integration.Rollback(layout);
-            Check(FileEquals(save, playedOld) && !File.Exists(v2) && FileEquals(v3, nativeSave), "a save the older version wrote stays");
-
-            // Only ever a native save: the older version finds none, and it returns.
-            File.WriteAllBytes(save, nativeSave);
-            File.Delete(v3);
-            Integration.Rollback(layout);
-            Check(!File.Exists(save) && FileEquals(v3, nativeSave), "a native save with no old one waits aside");
-            Integration.Rollback(layout);
-            Check(FileEquals(save, nativeSave) && !File.Exists(v3), "and returns");
+            Check(FileEquals(save, saveBytes), "and the saves are still as they were");
 
             // Back on the older version, this version's folder is reused by an update.
             Integration.Rollback(layout);
@@ -386,16 +364,15 @@ namespace Nebula.Setup
             Integration.Rollback(layout);
 
             // A file held in the kept folder: the content returns and nothing has changed.
-            File.WriteAllBytes(v2, oldSave);
             using (new FileStream(Path.Combine(keptOld, "game.pak"), FileMode.Open, FileAccess.Read, FileShare.Read))
                 Throws<IOException>(() => Integration.Rollback(layout), "kept game files that cannot move in: rollback fails");
             Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && Pak(keptOld) == "raw" &&
-                  !Directory.Exists(keptNew) && FileEquals(save, nativeSave), "and everything is as it was");
+                  !Directory.Exists(keptNew) && FileEquals(save, saveBytes), "and everything is as it was");
 
             // The kept game files gone: refused, nothing changed.
             FileUtil.DeleteTree(keptOld);
             Throws<InvalidOperationException>(() => Integration.Rollback(layout), "the previous version's game files not kept: rollback refuses");
-            Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && FileEquals(save, nativeSave), "and changes nothing");
+            Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && FileEquals(save, saveBytes), "and changes nothing");
 
             // A version that does not say what it reads: refused.
             string dir = layout.VersionDir("2.0.0-beta.1");

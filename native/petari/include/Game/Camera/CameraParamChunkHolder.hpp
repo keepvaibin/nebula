@@ -24,8 +24,8 @@ public:
     static const u32 cInitialCapacity = 0x400;
 
     CameraHolder* mCameraHolder;
-    u32 mChunkCapacity;
-    u32 mNrChunks;
+    s32 mChunkCapacity;
+    s32 mNrChunks;
     CameraParamChunk** mChunks;
     u32 mCameraVersion;
     bool mIsSorted;

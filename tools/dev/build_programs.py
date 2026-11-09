@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DXC = os.environ.get("DXC", "C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/dxc.exe")
-IMPORT = os.environ.get("NEBULA_IMPORT", "D:/NebulaWork/build/p-cargo/release/nebula-import.exe")
+IMPORT = os.environ.get("NEBULA_IMPORT", os.path.join(ROOT, "target", "release", "nebula-import.exe"))
 INCLUDE = os.path.join(ROOT, "runtime", "src", "render", "materials")
 OUT = os.path.join(ROOT, "runtime", "src", "render", "programs")
 

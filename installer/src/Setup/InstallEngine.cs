@@ -52,7 +52,8 @@ namespace Nebula.Setup
     {
         /// <summary>Bump when nebula-import's content folder changes shape. 2: the game's files cooked (textures as
         /// texture records, archives expanded); a format-1 folder is cooked on update without the disc. 3: the game's data in
-        /// host order (B-02); a format-2 folder cannot be cooked again: it needs the disc.</summary>
+        /// host order (B-02); a format-2 folder cannot be cooked again: it needs the disc. 4 to 6: later changes of the store's
+        /// shape; only a format-1 folder is cooked from, every other older one needs the disc.</summary>
         public const int ContentFormatVersion = 6;
         /// <summary>The content format nebula-import's cook command converts from; a version of it reads only version 2 saves.</summary>
         internal const int CookableContentFormatVersion = 1;
@@ -250,9 +251,6 @@ namespace Nebula.Setup
             RemoveRecompiledGame();
             var installed = InstalledInfo.Read(layout);
             PruneKeptContent(layout, installed != null ? installed.Previous : null, Log);
-            // Over a version rolled back to: the save set aside for this one returns.
-            try { SaveRollback.To(ContentFormatVersion, NebulaPaths.Saves); }
-            catch (Exception error) { Log("Could not restore the save kept for this version: " + error.Message); }
             Report(1.0, NebulaText.Of("Nebula {0} is installed.", BuildInfo.Version), 1);
             Log(string.Format("Completed in {0:mm\\:ss}.", clock.Elapsed));
         }

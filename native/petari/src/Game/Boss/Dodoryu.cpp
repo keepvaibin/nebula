@@ -403,7 +403,7 @@ void Dodoryu::nextState() {
 
     mStateIndex++;
 
-    if (mStateIndex < mState.size()) {
+    if (mStateIndex < static_cast< u32 >(mState.size())) {
         MR::turnOnDepthOfField(true);
         MR::setDepthOfFieldBlurIntensity(::sStateStartBlur);
         mState[mStateIndex]->start();

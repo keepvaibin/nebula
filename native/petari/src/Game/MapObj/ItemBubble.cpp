@@ -60,7 +60,7 @@ void ItemBubble::init(const TableIter& rIter) {
         mStarPieces = new StarPiece*[itemCount];
     }
 
-    for (u32 i = 0; i < itemCount; i++) {
+    for (s32 i = 0; i < itemCount; i++) {
         switch (itemType) {
         case 0:
             mCoins[i] = new RotPartsModel(this, "ダミーコイン", "Coin", nullptr, MR::DrawBufferType_NoSilhouettedMapObjStrongLight, false);
@@ -142,7 +142,7 @@ void ItemBubble::init(const TableIter& rIter) {
             ringOffset.zero();
         }
 
-        for (u32 i = 0; i < itemCount; i++) {
+        for (s32 i = 0; i < itemCount; i++) {
             if (mCoins[i] == nullptr) {
                 continue;
             }

@@ -145,7 +145,7 @@ bool EmitterCore::processTermination() {
         setStatus(8);
         return getParticleNumber() == 0;
     }
-    if (mTick >= mMaxFrame) {
+    if (mTick >= static_cast< u32 >(mMaxFrame)) {
         setStatus(8);
         if (checkStatus(0x40)) {
             return 0;

@@ -3588,10 +3588,9 @@ int main(int argc, char** argv) {
         // Mods: the mods folder next to the settings (galaxy::mods), applied before the game reads its disc.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
         const std::string game_id(gPak.store.game_id());
-        char title[9];
-        std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", (unsigned char)gPak.id[0], (unsigned char)gPak.id[1], (unsigned char)gPak.id[2], (unsigned char)gPak.id[3]);
-        gOldSaveDataPath = std::string("/title/00010000/") + title + "/data";
-        gSaveDataPath = "/" + std::string(gPak.id, 4);
+        const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
+        gOldSaveDataPath = save_folders.earlier;
+        gSaveDataPath = save_folders.current;
         fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);

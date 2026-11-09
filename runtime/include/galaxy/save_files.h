@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 namespace galaxy::saves {
@@ -18,11 +19,19 @@ enum Result : std::int32_t {
 // A plain file name: not empty, no separators, not "." or "..".
 [[nodiscard]] bool is_plain_name(std::string_view name) noexcept;
 
+// Where a game's saves are under the save root, as paths from it. `current` is the game's four-character code
+// ("/RMGE": Nebula.sav and its backups); `earlier` is where the versions before Nebula.sav kept GameData.bin
+// ("/title/00010000/<the code in hex>/data"), which the game reads once and leaves as it was.
+struct SaveFolders {
+    std::string current;
+    std::string earlier;
+};
+[[nodiscard]] SaveFolders save_folders(std::string_view code);
+
 [[nodiscard]] Result read(const std::filesystem::path& folder, std::string_view name, void* buffer,
                           std::uint32_t capacity, std::uint32_t* length) noexcept;
-// Replaces the whole file: a reader sees the old contents or the new, never a part (galaxy/atomic_file.h).
-// The first version 3 GameData.bin over a version 2 one keeps the old file once as GameData.bin.v2 (an install's rollback
-// restores it); if that cannot be kept, nothing is replaced.
+// Replaces the whole file: a reader sees the old contents or the new, never a part (galaxy/atomic_file.h). The two
+// files it replaced last stay beside it as <name>.1 and <name>.2.
 [[nodiscard]] Result write(const std::filesystem::path& folder, std::string_view name, const void* data,
                            std::uint32_t size) noexcept;
 [[nodiscard]] Result remove(const std::filesystem::path& folder, std::string_view name) noexcept;

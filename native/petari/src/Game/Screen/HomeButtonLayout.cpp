@@ -139,7 +139,7 @@ bool HomeButtonLayout::isActive() const {
 
 
 bool HomeButtonLayout::tryPressedHome() {
-    for (s32 i = 0; i < MR::getPlayerMaxCount(); i++) {
+    for (u32 i = 0; i < MR::getPlayerMaxCount(); i++) {
         if (MR::isPressedHome(i)) {
             return true;
         }

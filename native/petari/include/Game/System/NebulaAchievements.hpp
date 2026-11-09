@@ -14,7 +14,7 @@ struct NebulaAchievementIcon {
     const char* mTexture;   // "mymapdome1.tpl", "PictureBookCoverFront.bti"
     f32 mU0, mV0, mU1, mV1;
     f32 mWidth, mHeight;    // the drawn part's proportions
-    f32 mFill;              // how much larger it draws than the others (0: the same), for room around the picture
+    f32 mFill = 0.0f;       // how much larger it draws than the others (0: the same), for room around the picture
 };
 
 // The save file's numbers: the achievement board's progress bars and its file page.

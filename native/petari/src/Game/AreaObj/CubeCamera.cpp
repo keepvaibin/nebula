@@ -90,11 +90,11 @@ void CubeCameraMgr::sort() {
         return;
     }
 
-    for (u32 i = 0; i < mArray.size() - 1; i++) {
+    for (s32 i = 0; i < mArray.size() - 1; i++) {
         int swapIndex = i;
         AreaObj* swapObj = getAreaObj(i);
         AreaObj* curObj = swapObj;
-        for (u32 j = i + 1; j < mArray.size(); j++) {
+        for (s32 j = i + 1; j < mArray.size(); j++) {
             AreaObj* nextObj = getAreaObj(j);
             if (swapObj->mObjArg2 > nextObj->mObjArg2) {
                 swapIndex = j;

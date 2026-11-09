@@ -42,7 +42,7 @@ void RailCoin::placementNormalRail() {
     MR::moveCoordToStartPos(this);
     MR::setRailCoordSpeed(this, speed);
 
-    for (s32 i = 0; i < coinCount; i++) {
+    for (u32 i = 0; i < coinCount; i++) {
         setCoinTrans(i, MR::getRailPos(this));
         MR::moveRailRider(this);
     }

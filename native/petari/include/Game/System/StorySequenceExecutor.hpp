@@ -56,8 +56,8 @@ public:
     class DemoSequenceInfo {
     public:
         u16 mType;
-        u16 mEvent;
-        const char* mName;
+        u16 mEvent = Event_None;  // the tables end a sequence with the step alone
+        const char* mName = nullptr;
     };
 };
 
@@ -116,6 +116,7 @@ public:
     const char* mStageName;  // MR::internName
     s32 mScenarioNo;
     MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > mDemoSequences;
-    MR::InlineVector< StorySequenceExecutorType::DemoSequenceInfo, 8 > mDynamicDemoInfos;
+    // The steps made while moving (a butler's report): each made by new, so its address holds while mDemoSequences points at it.
+    MR::InlineVector< StorySequenceExecutorType::DemoSequenceInfo*, 8 > mDynamicDemoInfos;
     bool mIsSaveStarted;
 };

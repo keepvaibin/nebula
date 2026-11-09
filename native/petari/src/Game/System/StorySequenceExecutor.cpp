@@ -287,6 +287,10 @@ void StorySequenceExecutor::moveGalaxy(GalaxyMoveArgument* pMoveArgument, bool n
         pMoveArgument->mScenarioNo = calcAproposScenarioNoOnAstroDome();
     }
 
+    for (s32 i = 0; i < mDynamicDemoInfos.size(); i++) {
+        delete mDynamicDemoInfos[i];
+    }
+
     mDynamicDemoInfos.clear();
     mDemoSequences.clear();
 
@@ -952,11 +956,12 @@ bool StorySequenceExecutor::tryNextDemoInfo() {
 }
 
 const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::addDynamicDemoSequenceInfo(u16 type, u16 event, const char* pName) {
-    StorySequenceExecutorType::DemoSequenceInfo& rInfo = mDynamicDemoInfos[mDynamicDemoInfos.mCount++];
-    rInfo.mType = type;
-    rInfo.mEvent = event;
-    rInfo.mName = pName;
-    return &rInfo;
+    StorySequenceExecutorType::DemoSequenceInfo* pInfo = new StorySequenceExecutorType::DemoSequenceInfo();
+    pInfo->mType = type;
+    pInfo->mEvent = event;
+    pInfo->mName = pName;
+    mDynamicDemoInfos.push_back(pInfo);
+    return pInfo;
 }
 
 void StorySequenceExecutor::setBeforeStageScenario(const GalaxyMoveArgument& rMoveArgument, bool noScenarioBefore) {

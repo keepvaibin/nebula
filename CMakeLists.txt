@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.1 LANGUAGES C CXX)
 add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
 
-# A build for players: the test switches' names are left out (galaxy/test_hooks.h).
+# A build for players: the test switches' names are left out (tools/test_driver/switches.h; tools/release_check.ps1 checks the build).
 option(NEBULA_RELEASE "Leave the test hooks out" OFF)
 if(NEBULA_RELEASE)
     add_compile_definitions(NEBULA_RELEASE=1)
@@ -531,6 +531,8 @@ galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS gala
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
 galaxy_test(galaxy_disc_files_tests SOURCES ${rt}/disc_files_tests.cpp LIBS galaxy_disc_files)
+# D-07: an older install's store and saves under the current layout.
+galaxy_test(galaxy_install_migration_tests SOURCES ${rt}/install_migration_tests.cpp LIBS galaxy_save_files galaxy_disc_files)
 # The game's calendar (native/petari), compiled against a host the test provides.
 galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp
     native/petari/src/Game/System/NebulaCalendar.cpp)

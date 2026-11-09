@@ -137,7 +137,7 @@ void DemoKoopaJrShip::initAnimID(const TableIter& rIter) {
 
     u32 animNum = ARRAY_SIZE(::sAnim);
 
-    if (mAnimCameraIndex >= animNum) {
+    if (static_cast< u32 >(mAnimCameraIndex) >= animNum) {
         mAnimCameraIndex = -1;
     }
 
