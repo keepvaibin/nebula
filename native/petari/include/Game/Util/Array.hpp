@@ -106,9 +106,13 @@ namespace MR {
             mMaxSize = num;
         }
 
+        // From empty, in the arena that holds this array (the current one for a static): a scene's list that first gets an
+        // item in a frame stays the scene's.
         void grow() {
             if (mMaxSize == 0) {
-                init(16);
+                delete[] mArr;
+                mArr = new (NebulaArena::findFromRoot(this), 0) T[16];
+                mMaxSize = 16;
                 return;
             }
 

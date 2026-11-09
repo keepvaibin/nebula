@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/Model.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry* pMatPacket)
     : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
@@ -12,6 +13,17 @@ DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry*
 void DrawBufferShapeDrawer::init(s32 maxActors) {
     mMaxPackets = maxActors * mNumShapes;
     mPackets = new PacketInfo[mMaxPackets]();
+}
+
+void DrawBufferShapeDrawer::reserve(s32 maxActors) {
+    const s32 maxPackets = maxActors * mNumShapes;
+    PacketInfo* pPackets = new (NebulaArena::findFromRoot(this), 0) PacketInfo[maxPackets]();
+    for (s32 idx = 0; idx < mNumPackets; idx++) {
+        pPackets[idx] = mPackets[idx];
+    }
+    delete[] mPackets;
+    mPackets = pPackets;
+    mMaxPackets = maxPackets;
 }
 
 void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
@@ -138,6 +150,13 @@ DrawBuffer::DrawBuffer(Model* pModel)
 void DrawBuffer::init(int maxActors) {
     mMaxActors = maxActors;
     initTable();
+}
+
+void DrawBuffer::reserve(int maxActors) {
+    mMaxActors = maxActors;
+    for (s32 idx = 0; idx < mNumShapeDrawers; idx++) {
+        mShapeDrawers[idx]->reserve(maxActors);
+    }
 }
 
 void DrawBuffer::add(const LiveActor* pActor) {

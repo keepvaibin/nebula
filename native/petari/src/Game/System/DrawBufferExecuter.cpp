@@ -1,6 +1,7 @@
 #include "Game/System/DrawBufferExecuter.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/System/DrawBuffer.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include <algorithm>
 
@@ -18,7 +19,29 @@ void DrawBufferExecuter::allocateActorListBuffer() {
     }
 }
 
+// Room past the actors counted at scene start, for actors made later (CoinHolder::takeDeadCoin), in this executer's arena.
+void DrawBufferExecuter::reserve(s32 count) {
+    LiveActor** pActors = new (NebulaArena::findFromRoot(this), 0) LiveActor*[count];
+    for (s32 i = 0; i < mNumActors; i++) {
+        pActors[i] = mActors[i];
+    }
+    delete[] mActors;
+    mActors = pActors;
+
+    if (mMaxNumActors == 0) {
+        mDrawBuffer->init(count);
+    } else {
+        mDrawBuffer->reserve(count);
+    }
+    mMaxNumActors = count;
+}
+
 void DrawBufferExecuter::add(LiveActor* pActor) {
+    if (mNumActors >= mMaxNumActors) {
+        // A new executer has its registrations (at least this actor's) counted in mDrawBufferCount.
+        reserve(mMaxNumActors > 0 ? mMaxNumActors * 2 : mDrawBufferCount);
+    }
+
     s32 lastActor = mNumActors;
     mNumActors++;
     mActors[lastActor] = pActor;

@@ -21,6 +21,7 @@ public:
     DrawBufferShapeDrawer(Material*, MaterialEntry*);
 
     void init(s32 maxActors);
+    void reserve(s32 maxActors);
     void swap(DrawBufferShapeDrawer*);
     void draw() const;
     void add(const MeshEntry*, const ActorLightCtrl*);
@@ -49,6 +50,8 @@ public:
     DrawBuffer(Model* pModel);
 
     void init(int maxActors);
+    // Room for more actors after init (actors made mid-scene).
+    void reserve(int maxActors);
     void add(const LiveActor*);
     void remove(const LiveActor*);
     void resetLightSort(const ActorLightCtrl*);

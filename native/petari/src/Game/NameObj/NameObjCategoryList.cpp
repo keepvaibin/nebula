@@ -38,8 +38,9 @@ void NameObjCategoryList::incrementCheck(NameObj*, int index) {
 
 void NameObjCategoryList::allocateBuffer() {
     for (CategoryInfo& rInfo : mCategoryInfo) {
-        rInfo.mNameObjArr.mArray.mArr = new NameObj*[rInfo.mCheck];
-        rInfo.mNameObjArr.mArray.mMaxSize = rInfo.mCheck;
+        if (rInfo.mCheck != 0) {
+            rInfo.mNameObjArr.mArray.init(static_cast< s32 >(rInfo.mCheck));
+        }
     }
 }
 
