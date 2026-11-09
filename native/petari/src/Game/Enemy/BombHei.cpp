@@ -66,7 +66,6 @@ namespace {
     const BombHeiParam hPursueFastFarParam = {hPursueVelFast, 2.0f, 0.8f, hTurnVecValue + 1.0f};
     // const BombHeiParam hPursueNearParam =
     // const BombHeiParam hPursueWaitParam =
-    static s32 hCountTimer = hStartBrkTime;
 };  // namespace
 
 namespace NrvBombHei {
@@ -90,7 +89,7 @@ namespace NrvBombHei {
 
 BombHei::BombHei(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mBindStarPointerState(nullptr), mRotQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1),
-      mBinderOffset(0, 1, 0), mTargetFront(0, 0, 1), mCountdown(-1), mCarrySensor(nullptr), mExplodeRadius(500.0f), mBodyJoint(nullptr),
+      mBinderOffset(0, 1, 0), mTargetFront(0, 0, 1), mCountdown(-1), mFuseTime(hStartBrkTime), mCarrySensor(nullptr), mExplodeRadius(500.0f), mBodyJoint(nullptr),
       mType(BOMB_HEI), mExplosionIgnoreCollision(false) {
 }
 
@@ -100,11 +99,12 @@ void BombHei::init(const TableIter& rIter) {
 
         s32 detonateTime = ::hStartBrkTime;
         MR::getPlacementArg0NoInit(rIter, &detonateTime);
-        ::hCountTimer = detonateTime;
+        mFuseTime = detonateTime;
 
         s32 rangeArg = mExplodeRadius;
         MR::getPlacementArg1NoInit(rIter, &rangeArg);
-        mExplodeRadius = rangeArg;
+        // a negative range is a zero blast; zero stays zero
+        mExplodeRadius = rangeArg < 0 ? 0 : rangeArg;
 
         s32 ignoreCollisionArg = -1;
         MR::getPlacementArg2NoInit(rIter, &ignoreCollisionArg);
@@ -198,7 +198,7 @@ void BombHei::kill() {
 void BombHei::startCountdown() {
     if (mCountdown == -1) {
         MR::invalidateClipping(this);
-        mCountdown = ::hCountTimer;
+        mCountdown = mFuseTime;
         MR::emitEffect(this, "Ignite");
     }
 }
@@ -605,7 +605,7 @@ void BombHei::control() {
     }
 
     if (mCountdown > 0) {
-        if (mCountdown == ::hCountTimer) {
+        if (mCountdown == mFuseTime) {
             MR::startBrk(this, "CountDown");
             MR::setBrkRate(this, ::hBrkSlowRate);
         } else if (mCountdown == ::hBrkRateUpTime) {
