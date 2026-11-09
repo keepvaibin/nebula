@@ -3,6 +3,8 @@
 #include "galaxy/render/vk/device_quirks_vk.h"
 #include "galaxy/run_options.h"
 
+#include <charconv>
+#include <system_error>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -90,8 +92,25 @@ void apply_simulation(DeviceIdentity& identity) {
     for (const auto& entry : kKinds) {
         const std::size_t length = std::strlen(entry.name);
         if (std::strncmp(value, entry.name, length) == 0 && value[length] == ':') {
-            unsigned major = 0, minor = 0, patch = 0;
-            if (std::sscanf(value + length + 1, "%u.%u.%u", &major, &minor, &patch) >= 2) {
+            // "major.minor[.patch]": at least two numbers.
+            unsigned parts[3] = {0u, 0u, 0u};
+            const char* at = value + length + 1;
+            const char* const end = at + std::strlen(at);
+            int read = 0;
+            while (read < 3) {
+                const auto [next, error] = std::from_chars(at, end, parts[read]);
+                if (error != std::errc{}) {
+                    break;
+                }
+                ++read;
+                at = next;
+                if (at == end || *at != '.') {
+                    break;
+                }
+                ++at;
+            }
+            const unsigned major = parts[0], minor = parts[1], patch = parts[2];
+            if (read >= 2) {
                 identity.driver = entry.kind;
                 identity.vendor_id = entry.vendor;
                 identity.driver_version = {major, minor, patch};
