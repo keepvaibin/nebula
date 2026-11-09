@@ -12,8 +12,15 @@ NameObjGroup::~NameObjGroup() {
 
 void NameObjGroup::registerObj(NameObj* pObj) {
     if (mObjNum >= mObjNumMax) {
-        mObjArray = MR::growArray(mObjArray, mObjNumMax);
-        mObjNumMax *= 2;
+        // A group made for 0 (ExterminationChecker with no children, a mod's FlipPanel group size) starts at 16.
+        if (mObjNumMax == 0) {
+            delete[] mObjArray;
+            mObjArray = new (NebulaArena::findFromRoot(this), 0) NameObj*[16];
+            mObjNumMax = 16;
+        } else {
+            mObjArray = MR::growArray(mObjArray, mObjNumMax);
+            mObjNumMax *= 2;
+        }
     }
 
     mObjArray[mObjNum] = pObj;
