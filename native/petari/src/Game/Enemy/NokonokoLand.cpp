@@ -379,7 +379,7 @@ bool NokonokoLand::tryBindStarPointer() {
     return true;
 }
 
-bool NokonokoLand::receiveTrample(HitSensor* pSender, HitSensor* pReceiver) {
+bool NokonokoLand::receiveTrample(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (pReceiver == getSensor("body") && (isStateWalk() || isStateRattle())) {
         setNerve(GET_NERVE(NokonokoLand, HostTypeShellStart));
         return true;
@@ -441,7 +441,7 @@ bool NokonokoLand::receiveTurtleAttack(HitSensor* pSender, HitSensor* pReceiver)
     return false;
 }
 
-bool NokonokoLand::receiveStorm(HitSensor* pSender, HitSensor* pReceiver) {
+bool NokonokoLand::receiveStorm(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (pReceiver == getSensor("shell") && isStateShell() && !(isNerve(GET_NERVE(NokonokoLand, HostTypeShellStart)) && MR::isFirstStep(this))) {
         setNerve(GET_NERVE(NokonokoLand, HostTypeBecomeJetTurtle));
         return true;
@@ -454,7 +454,7 @@ bool NokonokoLand::receiveStorm(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool NokonokoLand::receiveStarPieceAttack(HitSensor* pSender, HitSensor* pReceiver) {
+bool NokonokoLand::receiveStarPieceAttack(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (pReceiver == getSensor("body") && tryRattle()) {
         return true;
     }

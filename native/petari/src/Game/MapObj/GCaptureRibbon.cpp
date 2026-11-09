@@ -69,7 +69,7 @@ f32 GCaptureRibbon::calcLineWidth() const {
     return (20.0f * rate) + (90.0f * (1.0f - rate));
 }
 
-void GCaptureRibbon::init(const TableIter& rIter) {
+void GCaptureRibbon::init(const TableIter& /*rIter*/) {
     mTexture = new GameTexture(MR::loadTexFromArc("GCaptureRibbon", "GCaptureRibbon.bti"));
     MR::invalidateClipping(this);
     makeActorAppeared();

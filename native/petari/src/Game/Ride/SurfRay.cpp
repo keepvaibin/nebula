@@ -429,7 +429,7 @@ void SurfRay::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::tryGetItem(pSender, pReceiver);
 }
 
-bool SurfRay::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SurfRay::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         if (MR::getPlayerVelocity()->y > 0.0f) {
             return false;

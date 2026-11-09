@@ -43,7 +43,7 @@ void BattleShipElevator::control() {
     }
 }
 
-bool BattleShipElevator::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BattleShipElevator::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!isNerve(GET_NERVE(BattleShipElevator, BattleShipElevatorNrvWait))) {
         return false;
     }

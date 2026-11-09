@@ -21,7 +21,7 @@ void SandCapsuleInsidePlanet::init(const TableIter& rIter) {
     MR::setBrkFrameEndAndStop(this);
 }
 
-void SandCapsuleInsidePlanet::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void SandCapsuleInsidePlanet::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffA(this, MR::Functor(this, &SandCapsuleInsidePlanet::startOn), MR::Functor(this, &SandCapsuleInsidePlanet::startOff));
 }
 

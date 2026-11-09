@@ -7,7 +7,7 @@ class RosettaChair : public LiveActor {
 public:
     RosettaChair(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void setDefaultPose();
     void startDemo();

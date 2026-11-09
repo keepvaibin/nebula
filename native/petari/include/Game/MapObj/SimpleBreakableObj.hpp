@@ -10,10 +10,10 @@ public:
     SimpleBreakableObjBase(const char* pName) : MapObjActor(pName) {
     }
 
-    virtual ~SimpleBreakableObjBase() {
+    virtual ~SimpleBreakableObjBase() override {
     }
 
-    virtual void control();
+    virtual void control() override;
 };
 
 class SimpleBreakableObj : public SimpleBreakableObjBase {
@@ -60,6 +60,6 @@ public:
     SimpleBreakableIndirectObj(const char* pName) : SimpleBreakableObj(pName) {
     }
 
-    virtual ~SimpleBreakableIndirectObj() {
+    virtual ~SimpleBreakableIndirectObj() override {
     }
 };

@@ -34,7 +34,7 @@ namespace NrvPressureBase {
 PressureMessenger::PressureMessenger(MsgSharedGroup* pGroup, const char* pName) : LiveActor(pName), mSharedGroup(pGroup), mWaitSyncTime() {
 }
 
-void PressureMessenger::init(const TableIter& rIter) {
+void PressureMessenger::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovement(this);
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
@@ -235,11 +235,11 @@ void PressureBase::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool PressureBase::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PressureBase::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgStarPieceReflect(msg);
 }
 
-bool PressureBase::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PressureBase::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_GROUP_MOVE_START) {
         bool isRelax = isNerve(GET_NERVE(PressureBase, PressureBaseNrvRelaxStart)) || isNerve(GET_NERVE(PressureBase, PressureBaseNrvRelax));
 
@@ -277,7 +277,7 @@ bool PressureBase::shotBullet(f32) {
     return false;
 }
 
-bool PressureBase::calcJointCannonV(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool PressureBase::calcJointCannonV(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     Vec3f front(0.0f, 0.0f, 1.0f);
     bool isRelax = isNerve(GET_NERVE(PressureBase, PressureBaseNrvRelaxStart)) || isNerve(GET_NERVE(PressureBase, PressureBaseNrvRelax)) ||
                    isNerve(GET_NERVE(PressureBase, PressureBaseNrvWaitStart));

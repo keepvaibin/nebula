@@ -18,17 +18,17 @@ public:
     TimeUpLayout() : LayoutActor("タイムアップ画面", true) {
     }
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 };
 
 class TimeLimitLayout : public LayoutActor {
 public:
     TimeLimitLayout(u32 timeLimit);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void setTimeLimit(u32);
     void setDisplayModeOnNormal(bool);

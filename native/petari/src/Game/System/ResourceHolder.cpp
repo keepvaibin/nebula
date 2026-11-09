@@ -22,8 +22,8 @@ static_assert(NEBULA_ASSET_KIND_MATERIAL_TABLE - NEBULA_ASSET_KIND_MODEL + 2 == 
 ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
-      mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
-      mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mBackupMaterialFirst(nullptr) {
+      mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mMaterialBound(false),
+      mBckCtrl(nullptr), mBackupMaterialData(nullptr), mBackupMaterialFirst(nullptr), mArchive(&rArchive) {
     mArena = NebulaArena::current();
     initializeArc(*mArchive);
 

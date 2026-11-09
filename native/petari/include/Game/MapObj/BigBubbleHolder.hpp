@@ -11,9 +11,9 @@ class BigBubbleMoveLimitter;
 class BigBubbleHolder : public NameObj {
 public:
     BigBubbleHolder(const char*);
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     void addMoveLimitter(BigBubbleMoveLimitter*);
     BigBubble* generateBigBubble(LiveActor*, const Vec3f&, const Vec3f&, f32, bool, s32, s32, s32);

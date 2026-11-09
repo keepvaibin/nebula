@@ -39,7 +39,7 @@ void StarPieceSpot::init(const TableIter& rIter) {
     }
 }
 
-bool StarPieceSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StarPieceSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         MR::appearStarPiece(this, mPosition, MR::getDeclareRemnantStarPieceCount(this), ::sRandomPieceValue, ::sLaunchYVel, false);

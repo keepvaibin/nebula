@@ -97,7 +97,7 @@ void TeresaRacer::control() {
     NPCActor::control();
 }
 
-bool TeresaRacer::branchFunc(u32 state) {
+bool TeresaRacer::branchFunc(u32 /*state*/) {
     return RaceManagerFunction::getRaceRank() == 1;
 }
 
@@ -140,7 +140,7 @@ bool TeresaRacer::animeFunc(u32 anime) {
     return false;
 }
 
-bool TeresaRacer::eventFunc(u32 state) {
+bool TeresaRacer::eventFunc(u32 /*state*/) {
     return mTakeOutStar->takeOut();
 }
 
@@ -244,7 +244,7 @@ void TeresaRacer::initRacer() {
     AbstractRacer::initRacer();
 }
 
-void TeresaRacer::prepRacer(const RaceManager* pRaceManager) {
+void TeresaRacer::prepRacer(const RaceManager* /*pRaceManager*/) {
     MR::invalidateClipping(this);
     MR::moveCoordToStartPos(this);
     MR::setRailCoordSpeed(this, 0.0f);

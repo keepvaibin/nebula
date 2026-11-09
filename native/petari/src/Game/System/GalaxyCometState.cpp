@@ -42,7 +42,7 @@ s32 GalaxyCometState::getPastSecond() const {
     return 0;
 }
 
-void GalaxyCometState::setStateAndPastSecond(s32 state, u16 pastSecond) {
+void GalaxyCometState::setStateAndPastSecond(s32 state, u16 /*pastSecond*/) {
     if (state == State_Hide) {
         setNerve(GET_NERVE_ANON(GalaxyCometStateHide));
     } else if (state == State_Land) {

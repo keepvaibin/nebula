@@ -147,7 +147,7 @@ SoundID AudStageBgmWrap::changeStageNameToSoundID(const char* pSceneName, const 
     return soundID;
 }
 
-SoundID AudStageBgmWrap::getCometEventBgm(const char* pStageName) {
+SoundID AudStageBgmWrap::getCometEventBgm(const char* /*pStageName*/) {
     if (MR::isGalaxyRedCometAppearInCurrentStage() || MR::isGalaxyDarkCometAppearInCurrentStage()) {
         return MBGM_GALAXY_02_HURRY;
     }

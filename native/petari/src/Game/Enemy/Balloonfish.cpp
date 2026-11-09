@@ -211,7 +211,7 @@ void Balloonfish::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Balloonfish::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Balloonfish::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceReflect(msg)) {
         if (!isNerve(GET_NERVE(Balloonfish, HostTypeNrvStarPointerBind))) {
             mAnimScaleController->startHitReaction();

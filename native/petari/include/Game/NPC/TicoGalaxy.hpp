@@ -8,15 +8,15 @@ class TicoGalaxy : public TicoFat {
 public:
     TicoGalaxy(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void shootStarPiece();
-    virtual void startEat();
-    virtual bool enableAppear();
-    virtual void initStarPieceSaveData(const TableIter&);
-    virtual void addStarPieceSaveData(s32);
-    virtual void disappear(bool);
-    virtual void appearInformation() const;
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void shootStarPiece() override;
+    virtual void startEat() override;
+    virtual bool enableAppear() override;
+    virtual void initStarPieceSaveData(const TableIter&) override;
+    virtual void addStarPieceSaveData(s32) override;
+    virtual void disappear(bool) override;
+    virtual void appearInformation() const override;
 
     const char* mGalaxyName;
     TicoStarRing* mStarRing;

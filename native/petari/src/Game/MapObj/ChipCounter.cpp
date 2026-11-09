@@ -26,7 +26,7 @@ namespace NrvChipCounter {
 ChipCounter::ChipCounter(const char* pName, s32 type) : LayoutActor(pName, true), mCollectCounter(), mCount(), mType(type), mGroupId(-1), mShowRate(1.0f) {
 }
 
-void ChipCounter::init(const TableIter& rIter) {
+void ChipCounter::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
 
     switch (mType) {

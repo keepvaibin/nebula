@@ -85,7 +85,7 @@ void AstroDomeSky::calcAndSetBaseMtx() {
     mProjmap->updateMtxUseBaseMtx();
 }
 
-bool AstroDomeSky::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroDomeSky::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::isMsgSelectStart(msg)) {
         setNerve(GET_NERVE(AstroDomeSky, AstroDomeSkyNrvAppear));
         return true;

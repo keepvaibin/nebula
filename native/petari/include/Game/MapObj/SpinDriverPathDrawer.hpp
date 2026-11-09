@@ -11,8 +11,8 @@ class SpinDriverPathDrawer : public LiveActor {
 public:
     SpinDriverPathDrawer(SpinDriverShootPath*);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
 
     // The path sampled every sampleStep of length; a sample is kept once it leaves the last kept point's direction line
     // by more than minSideOffset.

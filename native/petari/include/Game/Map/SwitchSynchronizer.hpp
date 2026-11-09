@@ -8,8 +8,8 @@ class SwitchSynchronizer : public NameObj {
 public:
     SwitchSynchronizer(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
 
     StageSwitchCtrl* mSwitchCtrl;
     bool mIsCheckSameSwitchState;

@@ -8,7 +8,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     ImageEffectBase(const char* pName);
 
-    virtual void calcAnim();
+    virtual void calcAnim() override;
 
     virtual void calcAnimSub() {
     }

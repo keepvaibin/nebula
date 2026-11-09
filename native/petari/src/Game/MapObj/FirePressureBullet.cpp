@@ -16,7 +16,7 @@ FirePressureBullet::FirePressureBullet(const char* pName) : LiveActor(pName) {
     mCanCrash = false;
 }
 
-void FirePressureBullet::init(const TableIter& rIter) {
+void FirePressureBullet::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("FireBullet", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
@@ -41,7 +41,7 @@ void FirePressureBullet::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mtx);
 }
 
-void FirePressureBullet::shotFireBullet(LiveActor* pFirePressure, const Pos3f& rMtx, const f32& rSpeed, bool isHoming, bool canCrash) {
+void FirePressureBullet::shotFireBullet(LiveActor* /*pFirePressure*/, const Pos3f& rMtx, const f32& rSpeed, bool isHoming, bool canCrash) {
     mSpeed = rSpeed;
     mIsHoming = isHoming;
     mCanCrash = canCrash;

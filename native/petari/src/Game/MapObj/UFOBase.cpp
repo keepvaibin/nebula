@@ -208,7 +208,7 @@ void UFOBreakable::initSensorType() {
     MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
-bool UFOBreakable::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool UFOBreakable::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgExplosionAttack(msg) && !isNerve(GET_NERVE(UFOBase, UFOBaseNrvBreak))) {
         setNerve(GET_NERVE(UFOBase, UFOBaseNrvBreak));
         return true;

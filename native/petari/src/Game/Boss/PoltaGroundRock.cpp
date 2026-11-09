@@ -88,7 +88,7 @@ void PoltaGroundRock::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool PoltaGroundRock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaGroundRock::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (getSensor("collision") != pReceiver) {
         return false;
     }
@@ -100,7 +100,7 @@ bool PoltaGroundRock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
     return false;
 }
 
-bool PoltaGroundRock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaGroundRock::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (getSensor("collision") != pReceiver) {
         return false;
     }
@@ -113,7 +113,7 @@ bool PoltaGroundRock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSens
     return false;
 }
 
-bool PoltaGroundRock::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaGroundRock::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (msg == ACTMES_BREAK_POLTA_GROUND_ROCK && getSensor("body") == pReceiver && isEnableBreak()) {
         setNerve(GET_NERVE(PoltaGroundRock, PoltaGroundRockNrvBreak));
         return true;

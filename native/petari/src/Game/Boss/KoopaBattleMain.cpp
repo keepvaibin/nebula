@@ -359,7 +359,7 @@ void KoopaBattleMain::testHit(HitSensor* pPlayer) {
 }
 #endif
 
-bool KoopaBattleMain::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaBattleMain::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_KOOPA_PLAYER_DAMAGE) {
         if (isNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvAttackRoll))) {
             return true;

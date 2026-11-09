@@ -113,7 +113,7 @@ void FallDownBridge::control() {
     mAngleSpeed *= 0.99f;
 }
 
-bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (!mIsFallen && isNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvWait)) && (msg == ACTMES_BALL_DASH_WALL || msg == ACTMES_BALL_TOUCH_WALL)) {
         LiveActor* pHost = pSender->mHost;
 

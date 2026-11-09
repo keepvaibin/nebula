@@ -84,7 +84,7 @@ ScenarioSelectLayout::ScenarioSelectLayout(EffectSystem* pEffectSystem, const Ca
     }
 }
 
-void ScenarioSelectLayout::init(const TableIter& rIter) {
+void ScenarioSelectLayout::init(const TableIter& /*rIter*/) {
     initLayoutManager("ScenarioSelect", 1);
     MR::createAndAddPaneCtrl(this, "ScenarioSelect", 1);
     MR::createAndAddPaneCtrl(this, "ScenarioFrame", 1);
@@ -493,7 +493,7 @@ bool ScenarioSelectLayout::calcDisplayScenarioNum(s32* pNormalScenarioCompleteNu
     return isNewScenario;
 }
 
-void ScenarioSelectLayout::appearAllStar(s32 normalScenarioCompleteNum, s32 extraScenarioCompleteNum, bool isNewScenario) {
+void ScenarioSelectLayout::appearAllStar(s32 normalScenarioCompleteNum, s32 /*extraScenarioCompleteNum*/, bool isNewScenario) {
     if (MR::isScenarioDecided()) {
         s32 starState = 2;
 

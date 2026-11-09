@@ -6,8 +6,8 @@ class PhantomShipBridge : public LiveActor {
 public:
     PhantomShipBridge(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAnim();
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override;
 
     void startMoveA();
     void startMoveB();

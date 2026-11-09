@@ -6,8 +6,8 @@ class CameraFrontAndBack : public Camera {
 public:
     CameraFrontAndBack(const char* pName = "表裏カメラ");
 
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void calcBaseQuat(Quat4f*, const Vec3f&);
     void calcDipQuat(Quat4f*, const Vec3f&, const Vec3f&);

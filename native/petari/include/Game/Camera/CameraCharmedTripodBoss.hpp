@@ -6,9 +6,9 @@ class CameraCharmedTripodBoss : public Camera {
 public:
     CameraCharmedTripodBoss(const char* pName = "三脚ボスジョイント注視カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(s32, Vec3f, const Vec3f&, const Vec2f&);
 

@@ -55,7 +55,7 @@ void FaceJointCtrl::setCallBackFunction() {
     mJointController->registerCallBack();
 }
 
-bool FaceJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool FaceJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     Vec3f position;
     pMtx->getTrans(position);
     Vec3f direction(*MR::getPlayerPos());

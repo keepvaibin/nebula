@@ -20,16 +20,16 @@ public:
 
     MorphItemObjNeo(const char*, s32);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void makeActorDead();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
     virtual bool isDemo() const;
 
 
@@ -42,8 +42,8 @@ public:
     void exeFly();
     void exeDemo();
 
-    u16 mSpiralTime;    // frames of the switch-appear spiral left
-    u16 mAppearFrames;  // frames of the current appear camera left
+    s32 mSpiralTime;    // frames of the switch-appear spiral left
+    s32 mAppearFrames;  // frames of the current appear camera left
     bool mIsUseSwitch;
     bool mIsFloating;  // Obj_arg2 != 1
     bool mIsDemoPending;
@@ -105,15 +105,15 @@ public:
     EffectObjR100F50SyncClipping(const char* pName) : SimpleEffectObj(pName) {
     }
 
-    virtual f32 getClippingRadius() const {
+    virtual f32 getClippingRadius() const override {
         return 100.0f;
     }
 
-    virtual f32 getFarClipDistance() const {
+    virtual f32 getFarClipDistance() const override {
         return 50.0f;
     }
 
-    virtual bool isSyncClipping() const {
+    virtual bool isSyncClipping() const override {
         return true;
     }
 };
@@ -123,11 +123,11 @@ public:
     EffectObjR500F50(const char* pName) : SimpleEffectObj(pName) {
     }
 
-    virtual f32 getClippingRadius() const {
+    virtual f32 getClippingRadius() const override {
         return 500.0f;
     }
 
-    virtual f32 getFarClipDistance() const {
+    virtual f32 getFarClipDistance() const override {
         return 50.0f;
     }
 };
@@ -137,11 +137,11 @@ public:
     EffectObjR1000F50(const char* pName) : SimpleEffectObj(pName) {
     }
 
-    virtual f32 getClippingRadius() const {
+    virtual f32 getClippingRadius() const override {
         return 1000.0f;
     }
 
-    virtual f32 getFarClipDistance() const {
+    virtual f32 getFarClipDistance() const override {
         return 50.0f;
     }
 };
@@ -151,19 +151,19 @@ public:
     EffectObj20x20x10SyncClipping(const char* pName) : SimpleEffectObj(pName) {
     }
 
-    virtual f32 getClippingRadius() const {
+    virtual f32 getClippingRadius() const override {
         return 1000.0f;
     }
 
-    virtual f32 getFarClipDistance() const {
+    virtual f32 getFarClipDistance() const override {
         return 50.0f;
     }
 
-    virtual Vec3f getClippingCenterOffset() const {
+    virtual Vec3f getClippingCenterOffset() const override {
         return Vec3f(0.0f, 200.0f, 0.0f);
     }
 
-    virtual bool isSyncClipping() const {
+    virtual bool isSyncClipping() const override {
         return true;
     }
 };
@@ -173,16 +173,16 @@ public:
     EffectObj50x50x10SyncClipping(const char* pName) : SimpleEffectObj(pName) {
     }
 
-    virtual f32 getClippingRadius() const {
+    virtual f32 getClippingRadius() const override {
         return 2500.0f;
     };
-    virtual f32 getFarClipDistance() const {
+    virtual f32 getFarClipDistance() const override {
         return 50.0f;
     };
-    virtual Vec3f getClippingCenterOffset() const {
+    virtual Vec3f getClippingCenterOffset() const override {
         return Vec3f(0.0f, 200.0f, 0.0f);
     };
-    virtual bool isSyncClipping() const {
+    virtual bool isSyncClipping() const override {
         return true;
     };
 };
@@ -192,19 +192,19 @@ public:
     EffectObj10x10x10SyncClipping(const char* pName) : SimpleEffectObj(pName) {
     }
 
-    virtual f32 getClippingRadius() const {
+    virtual f32 getClippingRadius() const override {
         return 1000.0f;
     }
 
-    virtual f32 getFarClipDistance() const {
+    virtual f32 getFarClipDistance() const override {
         return 50.0f;
     }
 
-    virtual Vec3f getClippingCenterOffset() const {
+    virtual Vec3f getClippingCenterOffset() const override {
         return Vec3f(0.0f, 580.0f, 0.0f);
     }
 
-    virtual bool isSyncClipping() const {
+    virtual bool isSyncClipping() const override {
         return true;
     }
 };

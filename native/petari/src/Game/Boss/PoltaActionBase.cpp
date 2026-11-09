@@ -111,17 +111,17 @@ bool PoltaActionBase::updateDamageCore() {
     return false;
 }
 
-bool PoltaActionBase::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaActionBase::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool PoltaActionBase::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaActionBase::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool PoltaActionBase::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaActionBase::receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-void PoltaActionBase::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void PoltaActionBase::attackSensor(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
 }

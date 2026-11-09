@@ -7,24 +7,24 @@ public:
     BegomanBaby(const char*);
     BegomanBaby(NameObj*, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPush(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
-    virtual u32 getKind() const {
+    virtual u32 getKind() const override {
         return Kind_Baby;
     }
 
-    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
-    virtual bool setNerveReturn();
-    virtual const Nerve* getNerveWait();
+    virtual bool onTouchElectric(const Vec3f&, const Vec3f&) override;
+    virtual bool setNerveReturn() override;
+    virtual const Nerve* getNerveWait() override;
 
     bool receiveMsgTrample(HitSensor*, HitSensor*);
     void appearFromLaunch(const Vec3f&, const Vec3f&);

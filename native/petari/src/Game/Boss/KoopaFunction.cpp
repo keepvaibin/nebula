@@ -310,7 +310,7 @@ bool KoopaFunction::tryKoopaAttackMapObj(HitSensor* pSender, HitSensor* pReceive
     return false;
 }
 
-bool KoopaFunction::tryKoopaReflectStarPiece(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaFunction::tryKoopaReflectStarPiece(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!MR::isMsgStarPieceReflect(msg)) {
         return false;
     }

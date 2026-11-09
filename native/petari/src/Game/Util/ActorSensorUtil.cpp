@@ -24,192 +24,192 @@ namespace {
 };  // namespace
 
 namespace MR {
-    HitSensor* addHitSensor(LiveActor* pActor, const char* pName, u32 type, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensor(LiveActor* pActor, const char* pName, u32 type, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return pActor->mSensorKeeper->add(pName, type, groupSize, radius, pActor, rOffset);
     }
 
-    HitSensor* addHitSensorBinder(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorBinder(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_BINDER, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorTransferableBinder(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorTransferableBinder(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_TRANSFERABLE_BINDER, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorPriorBinder(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPriorBinder(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_PRIOR_BINDER, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorRide(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorRide(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_RIDE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorMapObj(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMapObj(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_MAP_OBJ, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorMapObjPress(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMapObjPress(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_MAP_OBJ_PRESS, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorMapObjSimple(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMapObjSimple(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_MAP_OBJ_SIMPLE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorMapObjMoveCollision(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMapObjMoveCollision(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_MAP_OBJ_MOVE_COLLISION, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorEnemy(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorEnemy(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_ENEMY, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorEnemySimple(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorEnemySimple(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_ENEMY_SIMPLE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorEnemyAttack(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorEnemyAttack(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_ENEMY_ATTACK, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorNpc(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorNpc(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_NPC, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorEye(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorEye(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_EYE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorPush(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPush(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f& rOffset) {
         return addHitSensor(pActor, pName, ATYPE_PUSH, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorPos(LiveActor* pActor, const char* pName, u32 type, u16 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPos(LiveActor* pActor, const char* pName, u32 type, u32 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
         return pActor->mSensorKeeper->addPos(pName, type, groupSize, radius, pActor, pPos, rOffset);
     }
 
-    HitSensor* addHitSensorPosBinder(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPosBinder(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
         return addHitSensorPos(pActor, pName, ATYPE_BINDER, groupSize, radius, pPos, rOffset);
     }
 
-    HitSensor* addHitSensorPosRide(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPosRide(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
         return addHitSensorPos(pActor, pName, ATYPE_RIDE, groupSize, radius, pPos, rOffset);
     }
 
-    HitSensor* addHitSensorPosMapObj(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPosMapObj(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
         return addHitSensorPos(pActor, pName, ATYPE_MAP_OBJ, groupSize, radius, pPos, rOffset);
     }
 
-    HitSensor* addHitSensorPosEye(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
+    HitSensor* addHitSensorPosEye(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, const Vec3f* pPos, const Vec3f& rOffset) {
         return addHitSensorPos(pActor, pName, ATYPE_EYE, groupSize, radius, pPos, rOffset);
     }
 
-    HitSensor* addHitSensorMtx(LiveActor* pActor, const char* pName, u32 type, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtx(LiveActor* pActor, const char* pName, u32 type, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return pActor->mSensorKeeper->addMtx(pName, type, groupSize, radius, pActor, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorMtxRide(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtxRide(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, ATYPE_RIDE, groupSize, radius, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorMtxMapObj(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtxMapObj(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, ATYPE_MAP_OBJ, groupSize, radius, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorMtxEnemy(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtxEnemy(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, ATYPE_ENEMY, groupSize, radius, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorMtxEnemyAttack(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtxEnemyAttack(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, ATYPE_ENEMY_ATTACK, groupSize, radius, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorMtxNpc(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtxNpc(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, ATYPE_NPC, groupSize, radius, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorMtxAnimal(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
+    HitSensor* addHitSensorMtxAnimal(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius, MtxPtr pMtx, const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, ATYPE_ANIMAL, groupSize, radius, pMtx, rOffset);
     }
 
-    HitSensor* addHitSensorAtJoint(LiveActor* pActor, const char* pName, const char* pJointName, u32 type, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJoint(LiveActor* pActor, const char* pName, const char* pJointName, u32 type, u32 groupSize, f32 radius,
                                    const Vec3f& rOffset) {
         return addHitSensorMtx(pActor, pName, type, groupSize, radius, getJointMtx(pActor, pJointName), rOffset);
     }
 
-    HitSensor* addHitSensorAtJointRide(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointRide(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                        const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_RIDE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointMapObj(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointMapObj(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                          const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_MAP_OBJ, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointMapObjSimple(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointMapObjSimple(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                                const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_MAP_OBJ_SIMPLE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointEnemy(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointEnemy(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                         const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_ENEMY, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointEnemySimple(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointEnemySimple(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                               const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_ENEMY_SIMPLE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointEnemyAttack(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointEnemyAttack(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                               const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_ENEMY_ATTACK, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointNpc(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointNpc(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                       const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_NPC, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorAtJointEye(LiveActor* pActor, const char* pName, const char* pJointName, u16 groupSize, f32 radius,
+    HitSensor* addHitSensorAtJointEye(LiveActor* pActor, const char* pName, const char* pJointName, u32 groupSize, f32 radius,
                                       const Vec3f& rOffset) {
         return addHitSensorAtJoint(pActor, pName, pJointName, ATYPE_EYE, groupSize, radius, rOffset);
     }
 
-    HitSensor* addHitSensorCallback(LiveActor* pActor, const char* pName, u32 type, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallback(LiveActor* pActor, const char* pName, u32 type, u32 groupSize, f32 radius) {
         return pActor->mSensorKeeper->addCallback(pName, type, groupSize, radius, pActor);
     }
 
-    HitSensor* addHitSensorCallbackBinder(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackBinder(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_BINDER, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackPriorBinder(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackPriorBinder(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_PRIOR_BINDER, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackRide(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackRide(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_RIDE, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackMapObj(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackMapObj(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_MAP_OBJ, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackMapObjSimple(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackMapObjSimple(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_MAP_OBJ_SIMPLE, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackEnemy(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackEnemy(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_ENEMY, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackEnemyAttack(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackEnemyAttack(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_ENEMY_ATTACK, groupSize, radius);
     }
 
-    HitSensor* addHitSensorCallbackEye(LiveActor* pActor, const char* pName, u16 groupSize, f32 radius) {
+    HitSensor* addHitSensorCallbackEye(LiveActor* pActor, const char* pName, u32 groupSize, f32 radius) {
         return addHitSensorCallback(pActor, pName, ATYPE_EYE, groupSize, radius);
     }
 
@@ -691,7 +691,7 @@ namespace MR {
     void sendMsgExplosionToNearActor(HitSensor* pSender, f32 distance) {
         HitSensor* pReceiver;
 
-        for (u16 i = 0; i < pSender->mSensorCount; i++) {
+        for (u32 i = 0; i < pSender->mSensorCount; i++) {
             pReceiver = pSender->mSensors[i];
 
             if (distance < 0.0f || isNear(pSender, pReceiver, distance)) {
@@ -704,7 +704,7 @@ namespace MR {
         return msg == ACTMES_SPIN_STORM_RANGE && isNear(pSender, pReceiver, range);
     }
 
-    bool receiveItemShowMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    bool receiveItemShowMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
         if (msg == ACTMES_ITEM_SHOW && isDead(getSensorHost(pReceiver))) {
             getSensorHost(pReceiver)->makeActorAppeared();
 
@@ -714,7 +714,7 @@ namespace MR {
         return false;
     }
 
-    bool receiveItemHideMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    bool receiveItemHideMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
         if (msg == ACTMES_ITEM_HIDE && !isDead(getSensorHost(pReceiver))) {
             getSensorHost(pReceiver)->makeActorDead();
 

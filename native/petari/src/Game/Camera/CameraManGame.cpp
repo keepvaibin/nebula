@@ -39,7 +39,7 @@ CameraManGame::CameraManGame(CameraHolder* pHolder, CameraParamChunkHolder* pChu
     CameraLocalUtil::setWatchPos(this, Vec3f(0.0f, 0.0f, ::sMinDistance));
 }
 
-void CameraManGame::init(const TableIter& rIter) {
+void CameraManGame::init(const TableIter& /*rIter*/) {
 }
 
 void CameraManGame::calc() {

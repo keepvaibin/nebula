@@ -24,7 +24,7 @@ class ImageEffectAreaMgr : public AreaObjMgr {
 public:
     ImageEffectAreaMgr(s32, const char*);
 
-    virtual void initAfterPlacement();
+    virtual void initAfterPlacement() override;
 
     void sort();
 };

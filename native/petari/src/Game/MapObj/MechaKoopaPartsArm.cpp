@@ -110,7 +110,7 @@ void MechaKoopaPartsArm::exeBreak() {
     }
 }
 
-void MechaKoopaPartsArm::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void MechaKoopaPartsArm::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     if (mIsRightArm) {
         MR::listenStageSwitchOnB(this, MR::Functor(this, &MechaKoopaPartsArm::startBreak));
     }

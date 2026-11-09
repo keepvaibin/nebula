@@ -67,17 +67,17 @@ void IKJointCtrl::setCallBackFunction() {
     }
 }
 
-bool IKJointCtrl::updateRootJointCallBack(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool IKJointCtrl::updateRootJointCallBack(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     *pPos = mJoint->mRootMtx;
     return true;
 }
 
-bool IKJointCtrl::updateMiddleJointCallBack(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool IKJointCtrl::updateMiddleJointCallBack(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     *pPos = mJoint->mMiddleMtx;
     return true;
 }
 
-bool IKJointCtrl::updateEndJointCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool IKJointCtrl::updateEndJointCallBack(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     MR::turnMtxToLocalDirDegree(pMtx, mEndLocalDir, mEndDir, mEndDirMaxDegree * mEndDirRate);
     return true;
 }

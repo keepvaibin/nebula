@@ -8,11 +8,11 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     CameraInfo(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void movement();
-    virtual void calcAnim();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void movement() override;
+    virtual void calcAnim() override;
+    virtual void draw() const override;
 
     void activate();
     void deactivate();

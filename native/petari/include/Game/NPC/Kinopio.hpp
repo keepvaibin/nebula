@@ -9,10 +9,10 @@ class Kinopio : public NPCActor {
 public:
     Kinopio(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void faceToVector(const Vec3f&, f32);
     void faceToPlayer(f32);

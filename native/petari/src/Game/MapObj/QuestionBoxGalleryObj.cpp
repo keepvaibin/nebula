@@ -96,11 +96,11 @@ void QuestionBoxGalleryObj::exeOffWait() {
     }
 }
 
-void QuestionBoxGalleryObj::initCaseUseSwitchA(const MapObjActorInitInfo& pInitInfo) {
+void QuestionBoxGalleryObj::initCaseUseSwitchA(const MapObjActorInitInfo& /*pInitInfo*/) {
     MR::listenStageSwitchOnA(this, MR::Functor(this, &QuestionBoxGalleryObj::startSwitchOn));
 }
 
-void QuestionBoxGalleryObj::initCaseUseSwitchB(const MapObjActorInitInfo& pInitInfo) {
+void QuestionBoxGalleryObj::initCaseUseSwitchB(const MapObjActorInitInfo& /*pInitInfo*/) {
     MR::listenStageSwitchOnB(this, MR::Functor(this, &QuestionBoxGalleryObj::startSwitchOff));
 }
 

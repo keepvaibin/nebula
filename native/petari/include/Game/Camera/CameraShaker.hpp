@@ -24,7 +24,7 @@ public:
 
     CameraShaker(const char*);
 
-    virtual void movement();
+    virtual void movement() override;
 
     void shakeVertical(ESinglyVerticalPower);
     void shakeInfinity(NameObj*, f32, f32);

@@ -7,7 +7,7 @@
 Sun::Sun(const char* pName) : LiveActor(pName) {
 }
 
-void Sun::init(const TableIter& rIter) {
+void Sun::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("Sun", nullptr, false);
     MR::connectToSceneSun(this);
     MR::invalidateClipping(this);

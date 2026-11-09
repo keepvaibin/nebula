@@ -34,7 +34,7 @@ GameStageClearSequence::GameStageClearSequence()
     : LayoutActor("ステージクリアシーケンス", true), mEffectLayout(nullptr), mEffectFollowPos(0.0f, 0.0f) {
 }
 
-void GameStageClearSequence::init(const TableIter& rIter) {
+void GameStageClearSequence::init(const TableIter& /*rIter*/) {
     mEffectLayout = new SimpleEffectLayout("スター取得", "GetStar", 1, -1);
     mEffectLayout->initWithoutIter();
 

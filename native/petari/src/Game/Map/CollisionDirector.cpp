@@ -15,7 +15,7 @@ CollisionDirector::CollisionDirector() : NameObj("地形コリジョン"), mCate
     MR::connectToScene(this, MR::MovementType_CollisionDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
-void CollisionDirector::init(const TableIter& rIter) {
+void CollisionDirector::init(const TableIter& /*rIter*/) {
 }
 
 void CollisionDirector::initAfterPlacement() {

@@ -9,9 +9,9 @@ class ClipArea : public LiveActor {
 public:
     ClipArea(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mBaseMtx;
     }
     virtual bool isInArea(const Vec3f&, f32) const;

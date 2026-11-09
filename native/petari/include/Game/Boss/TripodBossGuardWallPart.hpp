@@ -7,12 +7,12 @@ class TripodBossGuardWallPart : public LiveActor {
 public:
     TripodBossGuardWallPart(const char* pName = "三脚ボスコア防壁部品");
 
-    virtual void init(const TableIter&);
-    virtual void makeActorAppeared();
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void makeActorAppeared() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
 
     void requestStartDemo();
     bool requestBreak();

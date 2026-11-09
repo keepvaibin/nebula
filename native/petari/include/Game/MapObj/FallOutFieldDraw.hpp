@@ -8,8 +8,8 @@ class FallOutFieldDraw : public NameObj {
 public:
     FallOutFieldDraw(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
 
     void activate();
     void deactivate();

@@ -6,10 +6,10 @@ class BootScene : public Scene {
 public:
     BootScene();
 
-    virtual void init();
-    virtual void update();
-    virtual void calcAnim();
-    virtual void draw() const;
+    virtual void init() override;
+    virtual void update() override;
+    virtual void calcAnim() override;
+    virtual void draw() const override;
 
     bool isBeforeTitle() const;
 

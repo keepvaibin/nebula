@@ -6,12 +6,12 @@ class RandomEffectObj : public SimpleEffectObj {
 public:
     RandomEffectObj(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
 
-    virtual f32 getClippingRadius() const;
-    virtual f32 getFarClipDistance() const;
+    virtual f32 getClippingRadius() const override;
+    virtual f32 getFarClipDistance() const override;
 
     s32 getRandomTime() const;
 

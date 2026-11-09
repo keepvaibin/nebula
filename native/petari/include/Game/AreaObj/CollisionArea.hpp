@@ -7,7 +7,7 @@ class AreaPolygon : public DynamicCollisionObj {
 public:
     AreaPolygon();
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void setMtx(MtxPtr pMatrix, const Vec3f& rSize, f32 offset);
     void setSurfaceAndSync(s32 surface);
@@ -25,8 +25,8 @@ class CollisionArea : public AreaObj {
 public:
     CollisionArea(int formType, const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
 
     bool hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal);
 

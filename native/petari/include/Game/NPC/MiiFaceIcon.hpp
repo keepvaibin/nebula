@@ -12,8 +12,8 @@ public:
     /// @param rRecipe The Mii.
     MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
 
     /// @brief Draws the icon, once after each change of Mii.
     void drawIcon();

@@ -48,7 +48,7 @@ void KoopaBattleMapCoinPlate::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-bool KoopaBattleMapCoinPlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaBattleMapCoinPlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg != ACTMES_KOOPA_HIP_DROP_ATTACK) {
         return false;
     }

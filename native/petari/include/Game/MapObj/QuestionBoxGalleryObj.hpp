@@ -6,10 +6,10 @@ class QuestionBoxGalleryObj : public MapObjActor {
 public:
     QuestionBoxGalleryObj(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override;
 
     void startSwitchOn();
     void startSwitchOff();

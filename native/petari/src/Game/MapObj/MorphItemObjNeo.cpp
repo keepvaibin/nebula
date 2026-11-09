@@ -395,7 +395,7 @@ void MorphItemObjNeo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgPush(pReceiver, pSender);
 }
 
-bool MorphItemObjNeo::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MorphItemObjNeo::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvAppear))) {
         return false;
     }

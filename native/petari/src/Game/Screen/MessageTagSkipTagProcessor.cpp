@@ -103,7 +103,7 @@ Ui::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::Process(
     }
 }
 
-Ui::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::skipTag(Ui::Rect* pRect, ContextType* pPrintContext, bool param3) {
+Ui::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::skipTag(Ui::Rect* /*pRect*/, ContextType* pPrintContext, bool /*param3*/) {
     MessageEditorMessageTag tag(pPrintContext);
     pPrintContext->str += tag.getSkipLength();
     return OPERATION_DEFAULT;

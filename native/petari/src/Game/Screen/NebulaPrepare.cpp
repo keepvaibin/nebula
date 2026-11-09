@@ -52,7 +52,7 @@ public:
         mKits.mButton = nullptr;
     }
 
-    virtual void init(const TableIter& rIter) {
+    virtual void init(const TableIter& /*rIter*/) {
         initLayoutManager("SysInfoWindow", 0);
         LayoutManager* pManager = getLayoutManager();
         static const char cLayoutName[] = "NebulaPrepare";

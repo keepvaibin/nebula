@@ -13,12 +13,12 @@ class OceanRing : public LiveActor {
 public:
     OceanRing(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void movement();
-    virtual void draw() const;
-    virtual void startClipped();
-    virtual void endClipped();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
 
     bool isInWater(const Vec3f& rPos) const;
     bool calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const;

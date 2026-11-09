@@ -6,10 +6,10 @@ class TripodBossFixParts : public TripodBossFixPartsBase {
 public:
     TripodBossFixParts(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
 
-    virtual void activateTripodBoss();
+    virtual void activateTripodBoss() override;
 
     virtual void exeWaitOwn() {
     }

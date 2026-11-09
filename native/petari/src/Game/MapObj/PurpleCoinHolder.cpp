@@ -40,7 +40,7 @@ namespace MR {
         MR::createSceneObj(SceneObj_PurpleCoinHolder);
     }
 
-    void addToPurpleCoinHolder(const NameObj* pObj, Coin* pCoin) {
+    void addToPurpleCoinHolder(const NameObj* /*pObj*/, Coin* pCoin) {
         ::getPurpleCoinHolder()->registerActor(pCoin);
     }
 

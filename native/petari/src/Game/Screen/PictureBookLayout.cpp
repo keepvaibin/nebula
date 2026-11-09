@@ -95,7 +95,7 @@ PictureBookLayout::PictureBookLayout(s32 chapterMin, s32 chapterMax, bool isRose
     }
 }
 
-void PictureBookLayout::init(const TableIter& rIter) {
+void PictureBookLayout::init(const TableIter& /*rIter*/) {
     initLayoutManagerWithTextBoxBufferLength("PictureBook", 512, 1);
     MR::createAndAddPaneCtrl(this, "AButtonPosition", 1);
     MR::createAndAddPaneCtrl(this, "Text", 1);

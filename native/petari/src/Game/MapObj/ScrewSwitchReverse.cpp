@@ -115,7 +115,7 @@ void ScrewSwitchReverse::exeScrew() {
     }
 }
 
-bool ScrewSwitchReverse::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool ScrewSwitchReverse::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgRushBegin(msg) && MR::isSensorPlayer(pSender) && MR::isOnPlayer(getSensor("binder"))) {
         mHost = pSender->mHost;
 

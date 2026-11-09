@@ -33,7 +33,7 @@ public:
     BaseMatrixFollowTarget(const PlacementLink*);
 
     void set(LiveActor*, const Pos3f&, const Pos3f*, BaseMatrixFollowValidater*);
-    const MtxPtr getHostBaseMtx() const;
+    MtxPtr getHostBaseMtx() const;
     bool isValid(s32) const;
 
     Mtx34f mInvHostMtx;
@@ -49,8 +49,8 @@ class BaseMatrixFollowTargetHolder : public NameObj {
 public:
     BaseMatrixFollowTargetHolder(const char*, s32, s32);
 
-    virtual void initAfterPlacement();
-    virtual void movement();
+    virtual void initAfterPlacement() override;
+    virtual void movement() override;
 
     void addFollower(BaseMatrixFollower* pFollower);
     void setFollowTargetInfo(LiveActor* pActor, const TableIter& rIter, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater);

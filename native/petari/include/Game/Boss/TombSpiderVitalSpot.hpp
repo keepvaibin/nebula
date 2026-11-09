@@ -6,7 +6,7 @@ class TombSpiderVitalSpot : public PartsModel {
 public:
     TombSpiderVitalSpot(LiveActor*, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void startChance();
     void endChance();

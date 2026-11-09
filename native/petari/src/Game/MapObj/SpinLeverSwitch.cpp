@@ -68,7 +68,7 @@ void SpinLeverSwitch::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SpinLeverSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpinLeverSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!isNerve(GET_NERVE(SpinLeverSwitch, SpinLeverSwitchNrvWait))) {
         return false;
     }

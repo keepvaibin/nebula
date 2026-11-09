@@ -25,13 +25,13 @@ class DotCamReaderInBin : public DotCamReader {
 public:
     DotCamReaderInBin(const void*);
 
-    virtual u32 getVersion() const;
-    virtual bool hasMoreChunk() const;
-    virtual void nextToChunk();
-    virtual bool getValueInt(const char*, s32*);
-    virtual bool getValueFloat(const char*, f32*);
-    virtual bool getValueVec(const char*, Vec3f*);
-    virtual bool getValueString(const char*, const char**);
+    virtual u32 getVersion() const override;
+    virtual bool hasMoreChunk() const override;
+    virtual void nextToChunk() override;
+    virtual bool getValueInt(const char*, s32*) override;
+    virtual bool getValueFloat(const char*, f32*) override;
+    virtual bool getValueVec(const char*, Vec3f*) override;
+    virtual bool getValueString(const char*, const char**) override;
 
     void init(const void*);
 

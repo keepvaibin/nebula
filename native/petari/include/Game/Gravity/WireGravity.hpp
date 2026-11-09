@@ -7,7 +7,7 @@ class WireGravity : public PlanetGravity {
 public:
     WireGravity();
 
-    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const override;
 
     void setPointListSize(u32);
     void addPoint(const Vec3f&);

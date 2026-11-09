@@ -10,8 +10,8 @@ class AstroDomeOrbit : public LiveActor {
 public:
     AstroDomeOrbit();
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
 
     void drawBloom() const;
     void setup(s32 galaxyIndex);

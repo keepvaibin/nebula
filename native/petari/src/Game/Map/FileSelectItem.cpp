@@ -98,7 +98,7 @@ FileSelectItem::FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconI
     }
 }
 
-void FileSelectItem::init(const TableIter& rIter) {
+void FileSelectItem::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovement(this);
     MR::createSceneObj(SceneObj_MiiFacePartsHolder);
     createNew();

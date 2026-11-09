@@ -40,15 +40,15 @@ void SimpleClipPartsObj::connectToScene(const MapObjActorInitInfo& rInfo) {
 }
 
 // Keeps the base from entering the wait nerve.
-void SimpleClipPartsObj::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void SimpleClipPartsObj::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
 }
 
-void SimpleClipPartsObj::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void SimpleClipPartsObj::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffB(this, MR::Functor< MapObjActor >(this, &MapObjActor::startMapPartsFunctions),
                                 MR::Functor< MapObjActor >(this, &MapObjActor::endMapPartsFunctions));
     setStateWait();
 }
 
-void SimpleClipPartsObj::initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void SimpleClipPartsObj::initCaseNoUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MapObjActor::startMapPartsFunctions();
 }

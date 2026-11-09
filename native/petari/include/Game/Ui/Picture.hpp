@@ -14,12 +14,12 @@ namespace Ui {
         Picture(Layout&, const TexMap& texMap);
         Picture(Layout&, const UiPaneData*, const ResBlockSet&);
 
-        virtual ~Picture();
-        virtual void DrawSelf(const DrawInfo& rInfo);
-        virtual const Color8 GetVtxColor(u32 idx) const;
-        virtual void SetVtxColor(u32 idx, Color8 color);
-        virtual u8 GetVtxColorElement(u32 idx) const;
-        virtual void SetVtxColorElement(u32 idx, u8 value);
+        virtual ~Picture() override;
+        virtual void DrawSelf(const DrawInfo& rInfo) override;
+        virtual const Color8 GetVtxColor(u32 idx) const override;
+        virtual void SetVtxColor(u32 idx, Color8 color) override;
+        virtual u8 GetVtxColorElement(u32 idx) const override;
+        virtual void SetVtxColorElement(u32 idx, u8 value) override;
         virtual void Append(const TexMap& rTexMap);
 
         void Init(u8);

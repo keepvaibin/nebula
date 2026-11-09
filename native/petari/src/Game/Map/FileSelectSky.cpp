@@ -20,7 +20,7 @@ FileSelectSky::~FileSelectSky() {
 FileSelectSky::FileSelectSky(const char* pName) : LiveActor(pName), mAngleX(), mAngleY(), mProjmapEffectMtxSetter() {
 }
 
-void FileSelectSky::init(const TableIter& rIter) {
+void FileSelectSky::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("CometNearOrbitSky", nullptr, false);
     mScale.x = 0.8f;
     mScale.y = 0.8f;
@@ -42,7 +42,7 @@ void FileSelectSky::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mBaseMtx);
 }
 
-bool FileSelectSky::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FileSelectSky::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

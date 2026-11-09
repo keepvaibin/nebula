@@ -30,5 +30,5 @@ class RumbleCalculatorCosMultLinear : public RumbleCalculator {
 public:
     RumbleCalculatorCosMultLinear(f32, f32, f32, u32);
 
-    virtual void calcValues(Vec3f*, const Vec3f&);
+    virtual void calcValues(Vec3f*, const Vec3f&) override;
 };

@@ -101,7 +101,7 @@ void AstroDomeComet::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
 }
 
-bool AstroDomeComet::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroDomeComet::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::trySyncAppearMsgSelectStart(this, msg)) {
         return true;
     }

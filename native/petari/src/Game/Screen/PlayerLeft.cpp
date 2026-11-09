@@ -18,7 +18,7 @@ PlayerLeft::PlayerLeft(const char* pName)
     : LayoutActor(pName, true), mPlayerLeft(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr), mIsForceAppear(false) {
 }
 
-void PlayerLeft::init(const TableIter& rIter) {
+void PlayerLeft::init(const TableIter& /*rIter*/) {
     initLayoutManager("PlayerLeft", 3);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
     MR::hidePaneRecursive(this, "CenterPlayerLeft");

@@ -22,7 +22,7 @@ namespace NrvProloguePictureBook {
 ProloguePictureBook::ProloguePictureBook() : LayoutActor("プロローグの絵本", true), mIconAButton(), mPage() {
 }
 
-void ProloguePictureBook::init(const TableIter& rIter) {
+void ProloguePictureBook::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayoutManager("PrologueDemo", 1);
     initNerve(GET_NERVE(ProloguePictureBook, ProloguePictureBookPlaying));

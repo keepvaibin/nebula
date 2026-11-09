@@ -11,7 +11,7 @@
 MercatorFixParts::MercatorFixParts(const char* pName) : LiveActor(pName), mAppearController() {
 }
 
-bool MercatorFixParts::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MercatorFixParts::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return mAppearController->receiveMsg(msg);
 }
 

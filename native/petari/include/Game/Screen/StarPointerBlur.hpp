@@ -20,10 +20,10 @@ public:
 
     StarPointerBlur(GameTexture* pTexture);
 
-    virtual ~StarPointerBlur();
+    virtual ~StarPointerBlur() override;
 
-    virtual void movement();
-    virtual void draw() const;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     void show();
     void hide();
@@ -35,7 +35,7 @@ public:
     void draw2(TypedDraw& rDraw) const;
     SiteMaterial loadMaterial() const;
 
-    void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* pSubColor) {
+    void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* /*pSubColor*/) {
         mPadChannel = padChannel;
         mMainColor = pMainColor;
     }

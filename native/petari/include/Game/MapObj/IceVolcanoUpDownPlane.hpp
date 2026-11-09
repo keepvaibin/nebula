@@ -6,9 +6,9 @@ class IceVolcanoUpDownPlane : public RailMoveObj {
 public:
     IceVolcanoUpDownPlane(const char*);
 
-    void move();
+    void move() override;
     bool tryCalcNearestPosToPlayer(Vec3f*) const;
-    Vec3f* getSoundCalcPos();
+    Vec3f* getSoundCalcPos() override;
 
     Vec3f mNearestPosToPlayer;
 };

@@ -10,12 +10,12 @@ public:
 
     CameraFixedThere(const char* pName = "その場定点カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isCorrectingErpPositionOff() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isCorrectingErpPositionOff() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(u32 cameraType, bool isFovyFixed) {
         mCameraType = cameraType;

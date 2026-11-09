@@ -8,8 +8,8 @@ class CameraManSubjective : public CameraMan {
 public:
     CameraManSubjective(const char*);
 
-    virtual void calc();
-    virtual void notifyActivate();
+    virtual void calc() override;
+    virtual void notifyActivate() override;
 
     CameraSubjective* mCamera;
 };

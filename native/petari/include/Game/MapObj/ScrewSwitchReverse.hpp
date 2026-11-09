@@ -6,8 +6,8 @@ class ScrewSwitchReverse : public LiveActor {
 public:
     ScrewSwitchReverse(const char*);
 
-    virtual void init(const TableIter&);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void updateBindActorMtx();
     void endBind();

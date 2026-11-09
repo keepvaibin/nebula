@@ -115,7 +115,7 @@ bool BossKameckStateBattle::requestDamage(HitSensor* pSender, HitSensor* pReceiv
     return false;
 }
 
-bool BossKameckStateBattle::requestGuard(HitSensor* pSender, HitSensor* pReceiver) {
+bool BossKameckStateBattle::requestGuard(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isEnableGuard()) {
         if (mBeam != nullptr) {
             mBeam->kill();

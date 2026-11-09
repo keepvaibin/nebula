@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/Array.hpp"
 
 class ClippingActorInfo;
 class PlacementId;
@@ -18,9 +19,8 @@ public:
     void endClippedAll();
     void updateDrawnClippedAll();
 
-    s32 mCapacity;
     s32 mCount;
-    ClippingActorInfo** mInfos;
+    MR::GrowBuffer< ClippingActorInfo* > mInfos;
     PlacementId* mGroupId;
     bool mIsClipped;
 };
@@ -29,7 +29,7 @@ class ClippingGroupHolder : public NameObj {
 public:
     ClippingGroupHolder();
 
-    virtual void movement();
+    virtual void movement() override;
 
     void createAndAdd(ClippingActorInfo*, const TableIter&, s32 capacity);
     ClippingInfoGroup* createGroup(ClippingActorInfo*, const TableIter&, s32 capacity);

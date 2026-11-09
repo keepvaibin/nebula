@@ -6,9 +6,9 @@ class OneUpBoard : public LayoutActor {
 public:
     OneUpBoard();
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void popup(s32 oneUpNum);
     void calcPos();

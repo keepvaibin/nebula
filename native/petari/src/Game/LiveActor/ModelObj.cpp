@@ -30,7 +30,7 @@ ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int d
     }
 }
 
-void ModelObj::init(const TableIter& rIter) {
+void ModelObj::init(const TableIter& /*rIter*/) {
     makeActorAppeared();
 }
 

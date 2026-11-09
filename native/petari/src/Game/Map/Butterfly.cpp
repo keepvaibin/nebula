@@ -134,7 +134,7 @@ void Butterfly::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mtx);
 }
 
-void Butterfly::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void Butterfly::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!MR::isSensorNpc(pReceiver)) {
         return;
     }

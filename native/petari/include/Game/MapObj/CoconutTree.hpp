@@ -6,5 +6,5 @@ class CoconutTree : public LiveActor {
 public:
     CoconutTree(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };

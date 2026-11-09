@@ -9,10 +9,10 @@ class KoopaFireStairs : public LiveActor {
 public:
     KoopaFireStairs(const char* pName, bool isKoopaJr);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void makeActorDead();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void makeActorDead() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void setInfo(const KoopaBattleMapStair*, const Vec3f*);
     void exeFly();

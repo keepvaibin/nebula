@@ -9,9 +9,9 @@ class PurpleCoinCounter : public LayoutActor {
 public:
     PurpleCoinCounter(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void validate();
     void updateCounter();

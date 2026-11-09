@@ -65,7 +65,7 @@ void DinoPackunTrackFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver)
     MR::sendMsgEnemyAttackFire(pReceiver, pSender);
 }
 
-bool DinoPackunTrackFire::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DinoPackunTrackFire::receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

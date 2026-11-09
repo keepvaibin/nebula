@@ -39,18 +39,18 @@ class CameraAnim : public Camera {
 public:
     CameraAnim(const char* pName = "アニメーションカメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isInterpolationOff() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isInterpolationOff() const override {
         return true;
     }
-    virtual bool isCollisionOff() const {
+    virtual bool isCollisionOff() const override {
         return true;
     }
-    virtual bool isZeroFrameMoveOff() const {
+    virtual bool isZeroFrameMoveOff() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(u8*, f32);
     bool isAnimEnd() const;

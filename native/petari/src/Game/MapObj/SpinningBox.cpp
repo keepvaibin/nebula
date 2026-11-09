@@ -424,7 +424,7 @@ void SpinningBox::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SpinningBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpinningBox::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgInhaleBlackHole(msg)) {
         kill();
         return true;
@@ -458,7 +458,7 @@ bool SpinningBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
     return false;
 }
 
-bool SpinningBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpinningBox::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorEnemyAttack(pReceiver)) {
         return false;
     }
@@ -487,7 +487,7 @@ bool SpinningBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return false;
 }
 
-bool SpinningBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpinningBox::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isExistInAttributeGroupReflectSpinningBox(pSender->mHost)) {
         if (!isNerve(GET_NERVE(SpinningBox, HostTypeNrvSpinning)) && !isNerve(GET_NERVE(SpinningBox, HostTypeNrvSliding))) {
             Vec3f dir = mPosition - pSender->mPosition;

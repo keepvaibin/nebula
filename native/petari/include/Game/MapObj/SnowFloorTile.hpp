@@ -33,7 +33,7 @@ public:
     s32 mTextureShift;
     s32 mTextureSize;
     Vec2f mLastPlayerPoint;
-    u16 mDirtyFrames;
+    s32 mDirtyFrames;
     u8* mImage;
     GameTexture* mTexture;
     f32* mSnowDepth;

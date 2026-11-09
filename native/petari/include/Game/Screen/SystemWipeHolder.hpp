@@ -10,15 +10,15 @@ public:
 
     /// @brief Intializes the `SystemWipeHolder` while being placed into a scene.
     /// @param rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void movement();
+    virtual void movement() override;
 
     /// @brief Draws the `SystemWipeHolder` to the screen.
-    virtual void draw() const;
+    virtual void draw() const override;
 
-    virtual void calcAnim();
-    virtual void updateWipe(const char*);
+    virtual void calcAnim() override;
+    virtual void updateWipe(const char*) override;
 
     void setWipeRingCenter(const Vec3f&);
     void startGameScreenCapture();

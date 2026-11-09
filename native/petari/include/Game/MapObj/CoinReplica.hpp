@@ -8,7 +8,7 @@ class CoinReplica : public NameObj {
 public:
     CoinReplica(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void activeCoin();
     void activeCoinWithGravity();

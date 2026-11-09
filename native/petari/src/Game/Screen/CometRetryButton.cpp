@@ -21,7 +21,7 @@ CometRetryButton::CometRetryButton(const char* pName)
     : LayoutActor(pName, true), mButtonYesPaneCtrl(nullptr), mButtonNoPaneCtrl(nullptr), mPlayerMissLeft(nullptr) {
 }
 
-void CometRetryButton::init(const TableIter& rIter) {
+void CometRetryButton::init(const TableIter& /*rIter*/) {
     initLayoutManager("RetryButton", 1);
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE(CometRetryButton, HostTypeNrvMissLeftWait));

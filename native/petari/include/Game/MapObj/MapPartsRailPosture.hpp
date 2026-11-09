@@ -15,10 +15,10 @@ public:
 
     MapPartsRailPosture(LiveActor*);
 
-    virtual void init(const TableIter&);
-    virtual bool isWorking() const;
-    virtual void start();
-    virtual void end();
+    virtual void init(const TableIter&) override;
+    virtual bool isWorking() const override;
+    virtual void start() override;
+    virtual void end() override;
 
     bool isPostureTypeRailDirRailUseShadowGravity() const;
 

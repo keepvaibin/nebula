@@ -5,5 +5,5 @@
 class MogucchiRefuseTerritory : public LiveActor {
 public:
     MogucchiRefuseTerritory(const char*);
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };

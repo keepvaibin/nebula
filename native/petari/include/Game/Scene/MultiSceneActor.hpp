@@ -13,10 +13,10 @@ class MultiSceneActor : public NameObj {
 public:
     MultiSceneActor(const char* pName, const char* pModelName, bool deferMaterials);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
-    virtual void calcAnim();
-    virtual void calcViewAndEntry();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
+    virtual void calcAnim() override;
+    virtual void calcViewAndEntry() override;
     virtual void appear();
     virtual void kill();
     virtual void control();

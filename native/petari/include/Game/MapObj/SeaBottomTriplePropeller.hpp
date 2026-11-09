@@ -9,9 +9,9 @@ class SeaBottomTriplePropeller : public LiveActor {
 public:
     SeaBottomTriplePropeller(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAnim();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override;
+    virtual void control() override;
 
     void exeWait();
     void exeBreak();

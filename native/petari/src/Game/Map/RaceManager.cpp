@@ -54,7 +54,7 @@ namespace {
 RaceManagerLayout::RaceManagerLayout(const char* pName) : LayoutActor(pName, true) {
 }
 
-void RaceManagerLayout::init(const TableIter& rIter) {
+void RaceManagerLayout::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayoutManager("Race", 1);
     MR::createAndAddPaneCtrl(this, "Go", 1);

@@ -6,6 +6,6 @@ class KoopaPowerUpSwitch : public LiveActor {
 public:
     KoopaPowerUpSwitch(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
 };

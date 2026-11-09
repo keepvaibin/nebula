@@ -238,7 +238,7 @@ void RainCloud::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool RainCloud::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool RainCloud::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_END_DEMO && !mNoRain) {
         switchEffect();
         return true;

@@ -10,7 +10,8 @@ namespace {
 };  // namespace
 
 ClippingInfoGroup::ClippingInfoGroup(const char* pGroupName, s32 capacity)
-    : NameObj(pGroupName), mCapacity(capacity), mCount(0), mInfos(new ClippingActorInfo*[capacity]()), mGroupId(), mIsClipped(false) {
+    : NameObj(pGroupName), mCount(0), mInfos(), mGroupId(), mIsClipped(false) {
+    mInfos.room(capacity > 0 ? static_cast< u32 >(capacity) : 16);
 }
 
 void ClippingInfoGroup::setGroupNo(const TableIter& rIter) {
@@ -18,17 +19,7 @@ void ClippingInfoGroup::setGroupNo(const TableIter& rIter) {
 }
 
 void ClippingInfoGroup::registerInfo(ClippingActorInfo* pInfo) {
-    if (mCount >= mCapacity) {
-        const s32 grown = mCapacity > 0 ? mCapacity * 2 : 16;
-        ClippingActorInfo** pList = new ClippingActorInfo*[grown]();
-        for (s32 i = 0; i < mCount; i++) {
-            pList[i] = mInfos[i];
-        }
-        delete[] mInfos;
-        mInfos = pList;
-        mCapacity = grown;
-    }
-    mInfos[mCount++] = pInfo;
+    mInfos.room(mCount + 1)[mCount++] = pInfo;
 }
 
 bool ClippingInfoGroup::isClippedNowAll() const {

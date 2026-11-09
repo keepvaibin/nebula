@@ -41,8 +41,8 @@ class FurDrawManager : public NameObj {
 public:
     FurDrawManager(u32 capacity);
 
-    virtual ~FurDrawManager();
-    virtual void draw() const;
+    virtual ~FurDrawManager() override;
+    virtual void draw() const override;
 
     void add(FurCtrl* pCtrl, u8 index);
 

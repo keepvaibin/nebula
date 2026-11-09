@@ -14,9 +14,9 @@ public:
 
     OceanBowl(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     bool isInWater(const Vec3f& rPos) const;
     bool calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const;

@@ -16,7 +16,7 @@ namespace {
 WipeKoopa::WipeKoopa() : WipeLayoutBase("クッパ"), mFrame(::sAnimFrame) {
 }
 
-void WipeKoopa::init(const TableIter& rIter) {
+void WipeKoopa::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE_ANON(WipeKoopaNrvWait));
     initLayoutManager("WipeKoopa", 1);
 }

@@ -9,20 +9,20 @@ class WoodBox : public LiveActor {
 public:
     WoodBox(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcViewAndEntry();
-    virtual void kill();
-    virtual void control();
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void calcViewAndEntry() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exeHit();
     void exeKilled();
     void doHit(HitSensor*, HitSensor*);
 
-    u16 mFloorTouchTimer;
+    s32 mFloorTouchTimer;
     u16 mHitPoint;
     bool mHasPowerStar;
     bool mIsNoRespawn;

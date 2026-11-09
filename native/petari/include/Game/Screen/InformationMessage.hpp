@@ -8,8 +8,8 @@ class InformationMessage : public LayoutActor {
 public:
     InformationMessage();
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
 
     void appearWithButtonLayout();
     void disappear();

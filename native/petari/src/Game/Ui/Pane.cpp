@@ -100,11 +100,11 @@ namespace Ui {
         mpLayout->TouchStructure();
     }
 
-    const Color8 Pane::GetVtxColor(u32 idx) const {
+    const Color8 Pane::GetVtxColor(u32 /*idx*/) const {
         return -1;
     }
 
-    void Pane::SetVtxColor(u32 idx, Color8 color) {
+    void Pane::SetVtxColor(u32 /*idx*/, Color8 /*color*/) {
     }
 
     u8 Pane::GetColorElement(u32 idx) const {
@@ -133,11 +133,11 @@ namespace Ui {
         }
     }
 
-    u8 Pane::GetVtxColorElement(u32 idx) const {
+    u8 Pane::GetVtxColorElement(u32 /*idx*/) const {
         return 0xFF;
     }
 
-    void Pane::SetVtxColorElement(u32 idx, u8 value) {
+    void Pane::SetVtxColorElement(u32 /*idx*/, u8 /*value*/) {
     }
 
     Pane* Pane::FindPaneByName(const char* pName, bool recursive) {
@@ -259,7 +259,7 @@ namespace Ui {
         }
     }
 
-    void Pane::DrawSelf(const DrawInfo& rInfo) {
+    void Pane::DrawSelf(const DrawInfo& /*rInfo*/) {
     }
 
     void Pane::AnimateSelf(u32 option) {

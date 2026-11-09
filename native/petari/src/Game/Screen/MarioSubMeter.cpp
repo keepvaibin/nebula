@@ -58,7 +58,7 @@ void MarioSubMeter::deactivate() {
 MarioSubMeter::~MarioSubMeter() {
 }
 
-void MarioSubMeter::init(const TableIter& rIter) {
+void MarioSubMeter::init(const TableIter& /*rIter*/) {
     mFlyMeter = new SubMeterLayout("ハチメーター", "FlyMeter");
     mFlyMeter->initWithoutIter();
 

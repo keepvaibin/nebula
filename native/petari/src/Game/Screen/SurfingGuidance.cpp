@@ -22,7 +22,7 @@ namespace {
 SurfingGuidance::SurfingGuidance() : LayoutActor("サーフィンガイダンス", true) {
 }
 
-void SurfingGuidance::init(const TableIter& rIter) {
+void SurfingGuidance::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayoutManager("TiltGuidance", 3);
     initNerve(GET_NERVE_ANON(SurfingGuidanceFadeIn));

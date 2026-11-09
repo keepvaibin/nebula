@@ -286,7 +286,7 @@ void RingBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool RingBeam::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool RingBeam::receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

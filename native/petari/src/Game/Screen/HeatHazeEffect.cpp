@@ -30,14 +30,14 @@ void HeatHazeEffect::control() {
 HeatHazeDirector::HeatHazeDirector(const char* pName) : NameObj(pName) {
 }
 
-void HeatHazeEffect::init(const TableIter& rIter) {
+void HeatHazeEffect::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("ShimmerBoard", nullptr, false);
     MR::connectToSceneIndirectMapObj(this);
     MR::invalidateClipping(this);
     makeActorDead();
 }
 
-void HeatHazeDirector::init(const TableIter& rIter) {
+void HeatHazeDirector::init(const TableIter& /*rIter*/) {
     mEffect = new HeatHazeEffect("陽炎");
     mEffect->initWithoutIter();
 

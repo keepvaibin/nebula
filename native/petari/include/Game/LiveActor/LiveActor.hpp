@@ -61,38 +61,38 @@ public:
     enum ClipScope { ClipScope_All, ClipScope_Run, ClipScope_Seen };
     static ClipScope sClipScope;
 
-    virtual void updateHitSensor(HitSensor* pSensor) {
+    virtual void updateHitSensor(HitSensor* /*pSensor*/) {
     }
 
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgTake(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgTake(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgTaken(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgThrow(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
     virtual bool receiveMsgApart(HitSensor* pSender, HitSensor* pReceiver);
 
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 

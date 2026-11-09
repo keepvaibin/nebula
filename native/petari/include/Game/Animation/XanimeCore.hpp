@@ -90,9 +90,9 @@ public:
     XanimeCore(u32, u32, u8);
     XanimeCore(u32, XanimeCore*);
 
-    virtual void setWeight(u8, f32);
-    virtual void init(const Vec&, const Mtx&);
-    virtual void calc();
+    virtual void setWeight(u8, f32) override;
+    virtual void init(const Vec&, const Mtx&) override;
+    virtual void calc() override;
 
     void shareJointTransform(const XanimeCore*);
     void doFreeze();

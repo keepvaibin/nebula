@@ -61,7 +61,7 @@ namespace {
         return getStarPointerDirector()->getStarPointerController(channel);
     }
 
-    bool always(s32 channel) {
+    bool always(s32 /*channel*/) {
         return true;
     }
 
@@ -75,11 +75,11 @@ namespace {
         }
     }
 
-    bool checkPointingTarget(StarPointerTargetInfo* pTargetInfo, const Vec3f& rOffset, const Vec2f& rPointerPos, f32 zMargin, f32 radiusMargin) {
+    bool checkPointingTarget(StarPointerTargetInfo* pTargetInfo, const Vec3f& /*rOffset*/, const Vec2f& rPointerPos, f32 zMargin, f32 radiusMargin) {
         return pTargetInfo->mTarget->isPointing(rPointerPos, zMargin, radiusMargin);
     }
 
-    bool checkPointingWithoutCheckZ(StarPointerTargetInfo* pTargetInfo, const Vec3f& rOffset, const Vec2f& rPointerPos, f32 zMargin,
+    bool checkPointingWithoutCheckZ(StarPointerTargetInfo* pTargetInfo, const Vec3f& rOffset, const Vec2f& rPointerPos, f32 /*zMargin*/,
                                     f32 radiusMargin) {
         return checkPointingTarget(pTargetInfo, rOffset, rPointerPos, ::hPointColRayLength, radiusMargin);
     }

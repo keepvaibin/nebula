@@ -379,7 +379,7 @@ void EarthenPipe::control() {
     }
 }
 
-bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         if (isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHide)) ||
             isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToShowUp)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp)) ||

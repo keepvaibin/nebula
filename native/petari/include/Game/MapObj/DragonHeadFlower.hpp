@@ -6,13 +6,13 @@ class DragonHeadFlower : public LiveActor {
 public:
     DragonHeadFlower(const char*);
 
-    virtual ~DragonHeadFlower() {
+    virtual ~DragonHeadFlower() override {
     }
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void initParabola(const Vec3f&);
 

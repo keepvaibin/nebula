@@ -262,7 +262,7 @@ void FileSelector::control() {
     updateQuitButton();
 }
 
-bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg) && isNerve(GET_NERVE(FileSelector, FileSelectorNrvWaitBind))) {
         MR::hidePlayer();
         setNerve(GET_NERVE(FileSelector, FileSelectorNrvTitle));

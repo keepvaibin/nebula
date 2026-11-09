@@ -19,7 +19,7 @@ namespace NrvElectricPressureBullet {
 ElectricPressureBullet::ElectricPressureBullet(const char* pName) : LiveActor(pName), mFront(0.0f, 0.0f, 0.0f), mSpeed(0.0f) {
 }
 
-void ElectricPressureBullet::init(const TableIter& rIter) {
+void ElectricPressureBullet::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("ElectricBullet", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
@@ -39,7 +39,7 @@ void ElectricPressureBullet::kill() {
     LiveActor::kill();
 }
 
-void ElectricPressureBullet::shotElectricBullet(LiveActor* actor, const Pos3f& pos, const f32& value) {
+void ElectricPressureBullet::shotElectricBullet(LiveActor* /*actor*/, const Pos3f& pos, const f32& value) {
     mSpeed = value;
     pos.getZDir(mFront);
     mVelocity.scale(mSpeed, mFront);

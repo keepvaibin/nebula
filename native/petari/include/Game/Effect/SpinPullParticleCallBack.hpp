@@ -9,11 +9,11 @@ class SpinPullParticleCallBack : public MultiEmitterParticleCallBack {
 public:
     SpinPullParticleCallBack();
 
-    virtual void execute(EmitterCore*, ParticleCore*);
+    virtual void execute(EmitterCore*, ParticleCore*) override;
 };
 
 // Pulled by the spin velocity alone.
 class MerameraParticleCallBack : public SpinPullParticleCallBack {
 public:
-    virtual void execute(EmitterCore*, ParticleCore*);
+    virtual void execute(EmitterCore*, ParticleCore*) override;
 };

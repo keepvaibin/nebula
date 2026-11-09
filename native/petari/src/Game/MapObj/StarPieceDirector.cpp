@@ -319,10 +319,10 @@ void StarPieceDirector::createStarPieces(unsigned count) {
 }
 
 StarPieceShooter::StarPieceShooter(s32 port, const char* pName)
-    : LiveActor(pName), mSearchSensor(), mShootSpeed(), mSearchDist(999999.0f), mLockOnSensor(), mPort(port), mChargeStep(), mEffectPos(0, 0, 0), mEffectRot(0, 0, 0) {
+    : LiveActor(pName), mShootSpeed(), mSearchSensor(), mSearchDist(999999.0f), mLockOnSensor(), mPort(port), mChargeStep(), mEffectPos(0, 0, 0), mEffectRot(0, 0, 0) {
 }
 
-void StarPieceShooter::init(const TableIter& rIter) {
+void StarPieceShooter::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovementCalcAnim(this);
     MR::invalidateClipping(this);
     MR::offCalcGravity(this);

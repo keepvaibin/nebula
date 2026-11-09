@@ -604,7 +604,7 @@ namespace MR {
         return startSystemSE(id, level, subLevel);
     }
 
-    void startSpinHitSound(const LiveActor* pActor) {
+    void startSpinHitSound(const LiveActor* /*pActor*/) {
         startCSSound("CS_SPIN_HIT", nullptr, 0);
     }
 

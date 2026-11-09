@@ -8,11 +8,11 @@ class DriftWood : public MapObjActor {
 public:
     DriftWood(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void connectToScene(const MapObjActorInitInfo&);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void connectToScene(const MapObjActorInitInfo&) override;
+    virtual void calcAndSetBaseMtx() override;
 
-    void attackSensor(HitSensor*, HitSensor*);
+    void attackSensor(HitSensor*, HitSensor*) override;
     bool tryVibrate();
     void exeWait();
     void exeVibrate();

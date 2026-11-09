@@ -24,14 +24,14 @@ public:
 
     ElectricBall(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)mBaseMtx.mMtx;
     };
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void initBalls(const TableIter&);
     Ball* getNearestBall();

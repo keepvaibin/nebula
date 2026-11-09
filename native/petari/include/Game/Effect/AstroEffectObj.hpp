@@ -6,9 +6,9 @@ class AstroEffectObj : public SimpleEffectObj {
 public:
     AstroEffectObj(const char*);
 
-    virtual void init(const TableIter&);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
-    virtual void setStateMove();
+    virtual void init(const TableIter&) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
+    virtual void setStateMove() override;
 
     void selectNrvWait();
 

@@ -21,8 +21,8 @@ class ActorAppearSwitchListener : public SwitchEventListener {
 public:
     ActorAppearSwitchListener(LiveActor*, bool, bool);
 
-    virtual void listenSwitchOnEvent();
-    virtual void listenSwitchOffEvent();
+    virtual void listenSwitchOnEvent() override;
+    virtual void listenSwitchOffEvent() override;
 
     LiveActor* mActor;
     bool mUsesOn;

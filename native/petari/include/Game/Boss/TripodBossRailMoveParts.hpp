@@ -8,11 +8,11 @@ class TripodBossRailMoveParts : public TripodBossFixParts {
 public:
     TripodBossRailMoveParts(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void makeActorDead();
-    virtual void calcTripodLocalMatrix(Pos3f*);
-    virtual void activateTripodBoss();
-    virtual void exeWaitOwn();
+    virtual void init(const TableIter&) override;
+    virtual void makeActorDead() override;
+    virtual void calcTripodLocalMatrix(Pos3f*) override;
+    virtual void activateTripodBoss() override;
+    virtual void exeWaitOwn() override;
 
     MapPartsRailMover* mRailMover;
 };

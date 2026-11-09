@@ -118,7 +118,7 @@ StageResultInformer::StageResultInformer()
     mSequenceChecker = new StageResultSequenceChecker();
 }
 
-void StageResultInformer::init(const TableIter& rIter) {
+void StageResultInformer::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayoutManager("ResultWindow", 2);
     mIconAButton = MR::createAndSetupIconAButton(this, true, false);

@@ -50,7 +50,7 @@ void ReverseGravityRoomPlanet::exeUpStart() {
 void ReverseGravityRoomPlanet::exeUpWait() {
 }
 
-void ReverseGravityRoomPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void ReverseGravityRoomPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffA(this, MR::Functor(this, &ReverseGravityRoomPlanet::startSwitchOn),
                                 MR::Functor(this, &ReverseGravityRoomPlanet::startSwitchOff));
 }

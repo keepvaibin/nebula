@@ -129,8 +129,8 @@ void CreeperPoint::updateLocalAxis() {
 
 Creeper::Creeper(const char* pName)
     : LiveActor(pName), mNumPoints(), mPoints(), mRider(), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 1.0f, 0.0f), mHangSpeed(), mCoord(),
-      mJumpSpeedFront(::sDefaultJumpSpeedFront), mJumpSpeedUp(::sDefaultJumpSpeedUp), mBendDirection(0.0f, 0.0f, 0.0f), mBendRate(::sDefaultBendRate),
-      mBendRateBee(-1.0f), mCameraInfo(), mClippingCenter(0.0f, 0.0f, 0.0f), mTexture(), mFlowerModel(), mLeafModel() {
+      mBendRate(::sDefaultBendRate), mBendRateBee(-1.0f), mBendDirection(0.0f, 0.0f, 0.0f), mJumpSpeedFront(::sDefaultJumpSpeedFront),
+      mJumpSpeedUp(::sDefaultJumpSpeedUp), mCameraInfo(), mClippingCenter(0.0f, 0.0f, 0.0f), mTexture(), mFlowerModel(), mLeafModel() {
     mTopMtx.identity();
 }
 
@@ -276,7 +276,7 @@ void Creeper::control() {
     mTopMtx.setTrans(getHeadPoint()->mPosition);
 }
 
-bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         if (isNerve(GET_NERVE(Creeper, CreeperNrvFreeInvalid)) || (!MR::isPlayerSwingAction() && MR::isOnGroundPlayer())) {
             return false;

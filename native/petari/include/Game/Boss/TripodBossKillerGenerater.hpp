@@ -8,12 +8,12 @@ class TripodBossKillerGenerater : public TripodBossFixPartsBase {
 public:
     TripodBossKillerGenerater(const char* pName = "三脚ボスキラー発生源");
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
 
-    virtual void calcTripodLocalMatrix(Pos3f*);
-    virtual void activateTripodBoss();
+    virtual void calcTripodLocalMatrix(Pos3f*) override;
+    virtual void activateTripodBoss() override;
 
     void setLocalMatrix(const Pos3f&);
     void setActiveLebel(s32);

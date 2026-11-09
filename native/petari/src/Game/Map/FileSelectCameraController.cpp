@@ -30,7 +30,7 @@ FileSelectCameraController::FileSelectCameraController(const char* pName)
       mUpVec(0.0f, 1.0f, 0.0f) {
 }
 
-void FileSelectCameraController::init(const TableIter& rIter) {
+void FileSelectCameraController::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);
     MR::initActorCameraProgrammable(this);

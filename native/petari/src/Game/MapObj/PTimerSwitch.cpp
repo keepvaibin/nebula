@@ -80,11 +80,11 @@ void PTimerSwitch::calcAndSetBaseMtx() {
     mConnector->connect();
 }
 
-bool PTimerSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PTimerSwitch::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool PTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!MR::isMsgPlayerTrample(msg)) {
         return false;
     }

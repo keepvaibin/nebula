@@ -9,12 +9,12 @@ class KoopaBattleMapPlanet : public LiveActor {
 public:
     KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool isFinalPlanet, bool isNoPlate);
 
-    virtual void init(const TableIter&);
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mBaseMtx;
     }
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void startAnimPowerStarAppear();
     void createPlate();

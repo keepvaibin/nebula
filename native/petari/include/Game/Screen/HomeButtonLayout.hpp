@@ -7,8 +7,8 @@ public:
     /// @brief Creates a new `HomeButtonLayout`.
     HomeButtonLayout();
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
 
     void forceToDeactive();
     bool isActive() const;

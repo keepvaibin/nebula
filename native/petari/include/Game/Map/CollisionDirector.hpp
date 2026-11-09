@@ -18,9 +18,9 @@ class CollisionDirector : public NameObj {
 public:
     CollisionDirector();
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void movement() override;
 
     CollisionCategorizedKeeper* getCategoryKeeper(s32 category) {
         return mCategoryKeeper[category];

@@ -545,7 +545,7 @@ bool Petari::receivePlayerAttackAtBody(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-bool Petari::receivePlayerAttackAtSpin(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Petari::receivePlayerAttackAtSpin(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!MR::isMsgPlayerSpinAttack(msg) && !MR::isMsgFreezeAttack(msg)) {
         return false;
     }

@@ -435,7 +435,7 @@ f32 NoteFairy::getNoteCoord(s32 val) {
     return val * mNoteCoord;
 }
 
-bool NoteFairy::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool NoteFairy::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_SUCCESS) {
         killAllNotes();
 

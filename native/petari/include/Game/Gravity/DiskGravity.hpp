@@ -6,8 +6,8 @@ class DiskGravity : public PlanetGravity {
 public:
     DiskGravity();
 
-    virtual void updateMtx(const Pos3f& rMtx);
-    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
+    virtual void updateMtx(const Pos3f& rMtx) override;
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const override;
 
     void updateLocalParam();
 

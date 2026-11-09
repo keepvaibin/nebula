@@ -379,7 +379,7 @@ bool Gesso::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
     return false;
 }
 
-bool Gesso::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool Gesso::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender)) {
         Vec3f pushDir;
         pushDir.sub(mPosition, pSender->mHost->mPosition);

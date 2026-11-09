@@ -185,7 +185,7 @@ void TrickRabbit::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool TrickRabbit::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool TrickRabbit::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isSensorPlayer(pSender) && !isCaughtable()) {
         return true;
     }

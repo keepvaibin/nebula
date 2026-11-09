@@ -8,14 +8,14 @@ class IronCannonShell : public KoopaJrShipCannonShell {
 public:
     IronCannonShell(const char*);
 
-    virtual f32 getBaseScale() const;
+    virtual f32 getBaseScale() const override;
 };
 
 class IronCannonLauncherPoint : public LiveActor {
 public:
     IronCannonLauncherPoint(const char*);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     virtual void initModelAndConnectToScene();
 
@@ -34,9 +34,9 @@ class IronCannonLauncher : public IronCannonLauncherPoint {
 public:
     IronCannonLauncher(const char*);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void initModelAndConnectToScene();
+    virtual void initModelAndConnectToScene() override;
 
     void exeRelax();
     void exeWait();

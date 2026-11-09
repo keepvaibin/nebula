@@ -94,7 +94,7 @@ void Banekiti::control() {
     }
 }
 
-bool Banekiti::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Banekiti::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceAttack(msg)) {
         mAnimScaleCtrl->startHitReaction();
         return true;
@@ -103,7 +103,7 @@ bool Banekiti::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
     return false;
 }
 
-bool Banekiti::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Banekiti::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (!MR::isSensorPlayer(pSender)) {
         return false;
     }

@@ -13,10 +13,10 @@ class MiiFaceParts : public LiveActor {
 public:
     MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe);
 
-    virtual ~MiiFaceParts();
-    virtual void init(const TableIter& rIter);
-    virtual void calcAnim();
-    virtual void calcViewAndEntry();
+    virtual ~MiiFaceParts() override;
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAnim() override;
+    virtual void calcViewAndEntry() override;
 
     void drawOpa(const Mii::Style& rStyle) const;
     void drawXlu(const Mii::Style& rStyle) const;

@@ -140,7 +140,7 @@ bool StarPointerLayout::startCommandStream(const LiveActor* pActor, const Vec3f*
     return true;
 }
 
-void StarPointerLayout::endCommandStream(const LiveActor* pActor) {
+void StarPointerLayout::endCommandStream(const LiveActor* /*pActor*/) {
     forceEndCommandStream();
     MR::endStarPointerMode(this);
 }

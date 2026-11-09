@@ -10,9 +10,9 @@ class CameraMan : public NameObj {
 public:
     CameraMan(const char*);
 
-    virtual void init(const TableIter&) {
+    virtual void init(const TableIter&) override {
     }
-    virtual void movement();
+    virtual void movement() override;
     virtual void calc() {
     }
     virtual void notifyActivate() {

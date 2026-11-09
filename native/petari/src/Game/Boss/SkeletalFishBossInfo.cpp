@@ -22,7 +22,7 @@ SkeletalFishBossInfo::SkeletalFishBossInfo(SkeletalFishBoss* pBoss, s32 levelNum
     createLevelStatus();
 }
 
-void SkeletalFishBossInfo::init(const TableIter& rIter) {
+void SkeletalFishBossInfo::init(const TableIter& /*rIter*/) {
     const Table* pCsvParser = MR::tryCreateCsvParser(mFishBoss, "%s.bcsv", ::sParamFileName);
 
     if (pCsvParser != nullptr) {

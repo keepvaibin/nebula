@@ -122,7 +122,7 @@ void ValveSwitch::exeEnd() {
     }
 }
 
-bool ValveSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool ValveSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgRushBegin(msg) && MR::isSensorPlayer(pSender) && MR::isOnPlayer(getSensor("binder"))) {
         mBindActor = pSender->mHost;
         MR::startSound(mBindActor, "SE_PV_TWIST_START");

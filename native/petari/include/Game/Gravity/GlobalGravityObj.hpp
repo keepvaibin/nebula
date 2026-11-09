@@ -7,12 +7,12 @@ class GlobalGravityObj : public LiveActor {
 public:
     GlobalGravityObj(const char* pName);
 
-    virtual ~GlobalGravityObj() {
+    virtual ~GlobalGravityObj() override {
     }
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
 
     void updateSwitch();
     PlanetGravity* getGravity();

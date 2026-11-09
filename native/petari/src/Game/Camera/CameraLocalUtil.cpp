@@ -89,7 +89,7 @@ namespace CameraLocalUtil {
         return pCameraMan->mDirector->getTarget();
     }
 
-    const MtxPtr getMtxReg(const char* pRegName) {
+    MtxPtr getMtxReg(const char* pRegName) {
         return getCameraDirector()->mRegisterHolder->getMtx(pRegName);
     }
 

@@ -57,7 +57,7 @@ DodoryuStateLv2::DodoryuStateLv2(Dodoryu* pHost, const DodoryuChaseParam* pChase
     initWithoutIter();
 }
 
-void DodoryuStateLv2::init(const TableIter& rIter) {
+void DodoryuStateLv2::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuStateLv2NrvStart));
     MR::declareEventCameraProgrammable("ドドリュウＬＶ２ダメージ");

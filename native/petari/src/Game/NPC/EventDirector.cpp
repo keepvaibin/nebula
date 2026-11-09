@@ -10,7 +10,7 @@ EventDirector::EventDirector()
     : NameObj("イベント指揮"), mPowerStarEventKeeper(), mStageStateKeeper(), mPowerStarHolder(), mCometEventKeeper() {
 }
 
-void EventDirector::init(const TableIter& rIter) {
+void EventDirector::init(const TableIter& /*rIter*/) {
     mPowerStarEventKeeper = new PowerStarEventKeeper();
     mStageStateKeeper = new StageStateKeeper();
     mPowerStarHolder = new PowerStarHolder("パワースター保持");

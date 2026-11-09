@@ -6,10 +6,10 @@ class FallDownBridge : public LiveActor {
 public:
     FallDownBridge(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeWait();
     void exeQuake();

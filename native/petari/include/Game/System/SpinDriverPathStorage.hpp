@@ -65,11 +65,11 @@ class SpinDriverPathStorage : public BinaryDataChunkBase {
 public:
     SpinDriverPathStorage();
 
-    virtual u32 makeHeaderHashCode() const;
-    virtual u32 getSignature() const;
-    virtual s32 serialize(u8* pData, u32 maxBufferSize) const;
-    virtual s32 deserialize(const u8* pData, u32 maxBufferSize);
-    virtual void initializeData();
+    virtual u32 makeHeaderHashCode() const override;
+    virtual u32 getSignature() const override;
+    virtual s32 serialize(u8* pData, u32 maxBufferSize) const override;
+    virtual s32 deserialize(const u8* pData, u32 maxBufferSize) override;
+    virtual void initializeData() override;
 
     s32 setup(const char* pGalaxyName, int scenarioNo, int zoneId, int spinDriverId, f32* pDrawRange);
     void updateValue(const char* pGalaxyName, int scenarioNo, int spinDriverIndex, f32 drawRange);

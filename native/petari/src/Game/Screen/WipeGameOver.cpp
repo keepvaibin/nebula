@@ -10,7 +10,7 @@ namespace NrvWipeGameOver {
 WipeGameOver::WipeGameOver() : WipeLayoutBase("ゲームオーバー") {
 }
 
-void WipeGameOver::init(const TableIter& rIter) {
+void WipeGameOver::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(WipeGameOver, WipeGameOverWait));
     initLayoutManager("GameOver", 1);
 }
@@ -20,7 +20,7 @@ void WipeGameOver::kill() {
     setNerve(GET_NERVE(WipeGameOver, WipeGameOverWait));
 }
 
-void WipeGameOver::wipe(s32 frame) {
+void WipeGameOver::wipe(s32 /*frame*/) {
     if (isNerve(GET_NERVE(WipeGameOver, WipeGameOverActive))) {
         return;
     }

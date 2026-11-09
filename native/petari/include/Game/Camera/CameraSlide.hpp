@@ -6,8 +6,8 @@ class CameraSlide : public Camera {
 public:
     CameraSlide(const char* pName = "スライドカメラ");
 
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec3f& axis, const Vec3f& up, const Vec3f& wPoint, f32 angle, f32 dist) {
         mAxis.set(axis);

@@ -6,7 +6,7 @@ class IconComet : public LayoutActor {
 public:
     IconComet();
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     bool appearIfLanding(const char*);
     void appearByCometNameId(int);

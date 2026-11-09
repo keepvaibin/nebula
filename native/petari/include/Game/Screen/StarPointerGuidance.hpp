@@ -12,8 +12,8 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     StarPointerGuidance(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void checkRequest2P();
     void checkRequest1P();

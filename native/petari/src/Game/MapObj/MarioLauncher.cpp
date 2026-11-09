@@ -136,7 +136,7 @@ void MarioLauncherShell::init(const TableIter& rIter) {
     makeActorDead();
 }
 
-void MarioLauncherLayout::init(const TableIter& rIter) {
+void MarioLauncherLayout::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayout();
 }
@@ -362,7 +362,7 @@ void MarioLauncher::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool MarioLauncher::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MarioLauncher::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensor(pReceiver, "Shell")) {
         return doLanding(msg);
     }
@@ -379,7 +379,7 @@ bool MarioLauncher::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool MarioLauncher::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MarioLauncher::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         if (doReady(pSender)) {
             setNerve(GET_NERVE(MarioLauncher, MarioLauncherNrvReady));

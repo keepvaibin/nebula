@@ -6,9 +6,9 @@ class SpaceInner : public LiveActor {
 public:
     SpaceInner(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void calcAnim();
-    virtual void appear();
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
 
     void exeAppear();
     void exeDisappear();

@@ -28,7 +28,7 @@ public:
     const bool* mNear;
     const bool* mFar;
     const bool* mHidden;
-    s16 mViewGroupID;
+    s32 mViewGroupID;
 };
 
 class LodCtrlFunction {

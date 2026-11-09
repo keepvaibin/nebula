@@ -8,8 +8,8 @@ class FluffWindEffect : public LiveActor {
 public:
     FluffWindEffect(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void makeActorDead();
+    virtual void init(const TableIter& rIter) override;
+    virtual void makeActorDead() override;
 
     // radius <= 0 keeps the default clipping.
     void initEffectInfo(const Vec3f& rPos, const Vec3f& rFront, const Vec3f& rUp, const char* pEffectName, f32 radius);
@@ -25,8 +25,8 @@ class FluffWind : public LiveActor {
 public:
     FluffWind(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void makeActorDead();
+    virtual void init(const TableIter& rIter) override;
+    virtual void makeActorDead() override;
 
     s32 mNumEffects;
     FluffWindEffect** mEffects;

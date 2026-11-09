@@ -78,7 +78,7 @@ void OtaKingLongFoot::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool OtaKingLongFoot::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool OtaKingLongFoot::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceReflect(msg)) {
         mScaleController->startHitReaction();
         return true;
@@ -86,7 +86,7 @@ bool OtaKingLongFoot::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
     return false;
 }
 
-bool OtaKingLongFoot::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool OtaKingLongFoot::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(OtaKingLongFoot, OtaKingLongFootNrvWait))) {
         setNerve(GET_NERVE(OtaKingLongFoot, OtaKingLongFootNrvDamage));
     }

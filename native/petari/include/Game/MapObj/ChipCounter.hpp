@@ -8,8 +8,8 @@ class ChipCounter : public LayoutActor {
 public:
     ChipCounter(const char*, s32);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void setCount(s32);
     void requestShow(s32 groupId, s32 count);

@@ -21,7 +21,7 @@ IconAButton::IconAButton(bool connectToScene, bool connectToPause) : LayoutActor
     }
 }
 
-void IconAButton::init(const TableIter& rIter) {
+void IconAButton::init(const TableIter& /*rIter*/) {
     initLayoutManager("IconAButton", 1);
     initNerve(GET_NERVE(IconAButton, IconAButtonNrvOpen));
     MR::startAnim(this, "Appear", 0);

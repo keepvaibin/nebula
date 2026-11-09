@@ -6,8 +6,8 @@ class LavaShellTower : public MapObjActor {
 public:
     LavaShellTower(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) {};
+    virtual void init(const TableIter&) override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override {};
 
     void exeWait();
     void exeDemo();

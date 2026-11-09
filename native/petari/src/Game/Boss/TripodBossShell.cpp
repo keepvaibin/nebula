@@ -59,7 +59,7 @@ void TripodBossShell::kill() {
     mBreakModel->kill();
 }
 
-bool TripodBossShell::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TripodBossShell::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (pReceiver == getSensor("killer_terget") && !isNerve(GET_NERVE(TripodBossShell, TripodBossShellNrvBreak))) {
         setNerve(GET_NERVE(TripodBossShell, TripodBossShellNrvBreak));
 

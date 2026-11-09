@@ -7,17 +7,17 @@ class FlexibleSphere : public LiveActor {
 public:
     FlexibleSphere(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void kill();
-    virtual void control();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void draw() const override;
 
     bool tryStart();
     void updateVanishTimer();
     void startQuake();
     void updateQuake();
 
-    u16 mShakeTimer;
+    s32 mShakeTimer;
     bool mIsGrowing;
     bool mVanishOnShrinkEnd;
     bool mEnabled;

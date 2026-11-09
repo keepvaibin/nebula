@@ -6,10 +6,10 @@ class KoopaJr : public NPCActor {
 public:
     KoopaJr(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void setStateShipBattleAppear();
     void setStateShipBattlePowerUp();

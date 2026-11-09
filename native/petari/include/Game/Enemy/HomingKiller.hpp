@@ -100,9 +100,9 @@ class HomingKillerLauncher : public LiveActor {
 public:
     HomingKillerLauncher(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeAppearKiller();
     void exeDeadKiller();

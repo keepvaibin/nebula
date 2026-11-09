@@ -6,9 +6,9 @@ class CircleCoinGroup : public CoinGroup {
 public:
     CircleCoinGroup(const char*);
 
-    virtual void initCoinArray(const TableIter&);
-    virtual void placementCoin();
-    virtual const char* getCoinName() const;
+    virtual void initCoinArray(const TableIter&) override;
+    virtual void placementCoin() override;
+    virtual const char* getCoinName() const override;
 
     f32 mCoinRadius;
 };

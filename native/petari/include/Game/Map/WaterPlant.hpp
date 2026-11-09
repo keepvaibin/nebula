@@ -32,10 +32,10 @@ public:
 
     WaterPlant(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     void initPlant();
     void initPlantAfterPlacement();
@@ -54,7 +54,7 @@ class WaterPlantDrawInit : public NameObj {
 public:
     WaterPlantDrawInit();
 
-    virtual void movement();
+    virtual void movement() override;
 
 
     SiteMaterial material(int) const;

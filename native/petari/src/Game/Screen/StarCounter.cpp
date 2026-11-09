@@ -16,7 +16,7 @@ namespace NrvStarCounter {
 StarCounter::StarCounter() : LayoutActor("スターカウンタ", true), mPowerStarNum(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr) {
 }
 
-void StarCounter::init(const TableIter& rIter) {
+void StarCounter::init(const TableIter& /*rIter*/) {
     initLayoutManager("StarCounter", 2);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
 

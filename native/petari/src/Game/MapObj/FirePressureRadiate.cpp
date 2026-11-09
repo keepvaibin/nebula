@@ -184,7 +184,7 @@ void FirePressureRadiate::attackSensor(HitSensor* pSender, HitSensor* pReceiver)
     }
 }
 
-bool FirePressureRadiate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FirePressureRadiate::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_GROUP_MOVE_STOP) {
         setNerve(GET_NERVE(FirePressureRadiate, FirePressureRadiateNrvSyncWait));
 

@@ -6,9 +6,9 @@ class CameraBehind : public Camera {
 public:
     CameraBehind(const char* pName = "後方カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void calcPosAndUp(f32 accel);
 

@@ -9,13 +9,13 @@ class TripodBossKinokoOneUp : public LiveActor {
 public:
     TripodBossKinokoOneUp(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
-    virtual MtxPtr getBaseMtx() const {
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mMtx;
     }
 
-    virtual void control();
+    virtual void control() override;
 
     void exeActive();
     void exeEnd();

@@ -9,7 +9,7 @@ class TripodBossKillerGeneraterCircle : public NameObj {
 public:
     TripodBossKillerGeneraterCircle(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void placementGenerater();
 

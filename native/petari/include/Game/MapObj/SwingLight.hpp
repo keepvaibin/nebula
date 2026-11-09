@@ -9,14 +9,14 @@ class LightCylinder : public MapObjActor {
 public:
     LightCylinder(const char*, MtxPtr, const Color8&);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
-    virtual void calcAndSetBaseMtx();
-    virtual void connectToScene(const MapObjActorInitInfo&);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void connectToScene(const MapObjActorInitInfo&) override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override {
     }
 
-    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) {
+    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) override {
     }
 
     void initLightCylinderByOwner(const TableIter&);
@@ -31,10 +31,10 @@ class SwingLight : public MapObjActor {
 public:
     SwingLight(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
-    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&);
-    virtual void makeSubModels(const TableIter&, const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override;
+    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) override;
+    virtual void makeSubModels(const TableIter&, const MapObjActorInitInfo&) override;
 
     void appearLight();
 

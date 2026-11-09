@@ -8,9 +8,9 @@ class SimpleEffectObj : public LiveActor {
 public:
     SimpleEffectObj(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void startClipped();
-    virtual void endClipped();
+    virtual void init(const TableIter&) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
 
     virtual f32 getClippingRadius() const {
         return 500.0f;

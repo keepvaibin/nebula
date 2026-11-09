@@ -6,11 +6,11 @@ class FireBarBall : public ModelObj {
 public:
     FireBarBall(LiveActor*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
     void controlEmitEffect();
 
@@ -21,11 +21,11 @@ class FireBar : public LiveActor {
 public:
     FireBar(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void updateHitSensor(HitSensor*);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void exeWait();
     void initFireBarBall(const TableIter&);

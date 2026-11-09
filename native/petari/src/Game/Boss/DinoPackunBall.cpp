@@ -36,7 +36,7 @@ DinoPackunBall::DinoPackunBall(const char* pName, DinoPackun* pParent)
     mDragEffectMtx.identity();
 }
 
-void DinoPackunBall::init(const TableIter& rIter) {
+void DinoPackunBall::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemyDecorationMovement(this);
     initBinder(sRadius, 0.0f, 0);
     initSound(6, false);
@@ -197,7 +197,7 @@ bool DinoPackunBall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSens
     return false;
 }
 
-bool DinoPackunBall::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DinoPackunBall::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

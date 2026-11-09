@@ -9,10 +9,10 @@ class MapPartsRailGuideDrawer : public MapPartsFunction {
 public:
     MapPartsRailGuideDrawer(LiveActor* pHost, const char* pModelName);
 
-    virtual void init(const TableIter& rIter);
-    virtual bool isWorking() const;
-    virtual void start();
-    virtual void end();
+    virtual void init(const TableIter& rIter) override;
+    virtual bool isWorking() const override;
+    virtual void start() override;
+    virtual void end() override;
 
     void initGuidePoints(const TableIter& rIter);
 

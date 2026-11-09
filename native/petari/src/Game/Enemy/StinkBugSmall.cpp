@@ -390,7 +390,7 @@ void StinkBugSmall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool StinkBugSmall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StinkBugSmall::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvHipDropDown)) || pReceiver != getSensor("body")) {
         return false;
     }

@@ -6,5 +6,5 @@ class NPCSupportRail : public LiveActor {
 public:
     NPCSupportRail(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };

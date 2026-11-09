@@ -6,5 +6,5 @@ class NormalMapTestObj : public NormalMapBase {
 public:
     NormalMapTestObj(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };

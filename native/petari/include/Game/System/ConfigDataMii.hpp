@@ -17,11 +17,11 @@ public:
 
     ConfigDataMii();
 
-    virtual u32 makeHeaderHashCode() const;
-    virtual u32 getSignature() const;
-    virtual s32 serialize(u8*, u32) const;
-    virtual s32 deserialize(const u8*, u32);
-    virtual void initializeData();
+    virtual u32 makeHeaderHashCode() const override;
+    virtual u32 getSignature() const override;
+    virtual s32 serialize(u8*, u32) const override;
+    virtual s32 deserialize(const u8*, u32) override;
+    virtual void initializeData() override;
 
     void setMiiOrIconId(const void*, const u32*);
     bool getIconId(u32*) const;

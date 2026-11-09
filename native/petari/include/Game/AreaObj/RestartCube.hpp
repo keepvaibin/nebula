@@ -8,7 +8,7 @@ class RestartCube : public AreaObj {
 public:
     RestartCube(int, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void updatePlayerRestartIdInfo();
     void changeBgm();

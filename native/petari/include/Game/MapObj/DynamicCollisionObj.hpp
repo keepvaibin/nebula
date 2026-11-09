@@ -13,10 +13,10 @@ public:
 
     DynamicCollisionObj(const char* pName);
 
-    virtual ~DynamicCollisionObj() {
+    virtual ~DynamicCollisionObj() override {
     }
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void syncCollision();
     void updateTriangle();

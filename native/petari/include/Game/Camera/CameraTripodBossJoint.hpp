@@ -6,12 +6,12 @@ class CameraTripodBossJoint : public Camera {
 public:
     CameraTripodBossJoint(const char* pName = "三脚ボス関節カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isEnableToReset() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isEnableToReset() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec2f& angle, f32 dist, s32 jointID, const Vec3f& axis) {
         mAngleX = angle.x;

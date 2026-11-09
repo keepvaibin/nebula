@@ -97,7 +97,7 @@ bool PlanetGravity::calcGravityFromMassPosition(Vec3f* pDirection, f32* pScalar,
     return true;
 }
 
-void PlanetGravity::updateMtx(const Pos3f& rMtx) {
+void PlanetGravity::updateMtx(const Pos3f& /*rMtx*/) {
 }
 
 void PlanetGravity::updateIdentityMtx() {

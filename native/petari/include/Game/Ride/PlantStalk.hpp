@@ -11,8 +11,8 @@ class PlantStalk : public LiveActor {
 public:
     PlantStalk();
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
     virtual void drawGrowUp(TypedDraw& rDraw) const;
 
     bool updateGrowUp();

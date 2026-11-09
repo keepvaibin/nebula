@@ -36,13 +36,13 @@ class FileSelector : public LiveActor {
 public:
     FileSelector(const char* pName);
 
-    virtual ~FileSelector();
-    virtual void init(const TableIter& rIter);
-    virtual bool initStep(const TableIter& rIter, uint64_t deadline);
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual ~FileSelector() override;
+    virtual void init(const TableIter& rIter) override;
+    virtual bool initStep(const TableIter& rIter, uint64_t deadline) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void callbackStart();
     void callbackCopy();

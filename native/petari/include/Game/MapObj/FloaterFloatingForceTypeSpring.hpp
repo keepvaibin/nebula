@@ -21,10 +21,10 @@ class FloaterFloatingForceTypeSpring : public FloaterFloatingForce {
 public:
     FloaterFloatingForceTypeSpring(LiveActor*, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void start();
-    virtual void updateHostVelocity(Vec3f*) const;
-    virtual const Vec3f& getCurrentVelocity() const {
+    virtual void init(const TableIter&) override;
+    virtual void start() override;
+    virtual void updateHostVelocity(Vec3f*) const override;
+    virtual const Vec3f& getCurrentVelocity() const override {
         return mVelocity;
     }
 

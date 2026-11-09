@@ -10,10 +10,10 @@ class LavaHomeSeesaw : public LiveActor {
 public:
     LavaHomeSeesaw(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     LavaHomeSeesawRotator* mSeesawRotator;
     ProjmapEffectMtxSetter* mMtxSetter;

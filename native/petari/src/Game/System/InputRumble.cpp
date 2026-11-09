@@ -175,7 +175,7 @@ bool InputRumble::setRumblePatternIfNotExist(const void* pOwner, const RumblePat
     return true;
 }
 
-bool InputRumble::findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, const RumblePattern& rPattern) {
+bool InputRumble::findRumblePattern(const void* /*pOwner*/, s32* pExisting, s32* pEmpty, const RumblePattern& rPattern) {
     s32 emptyIndex = -1;
 
     for (s32 i = 0; i < mChannels.size(); i++) {

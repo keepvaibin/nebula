@@ -9,8 +9,8 @@ class ElectricRailPoint : public LiveActor {
 public:
     ElectricRailPoint(const char* name = "電撃レール点");
 
-    virtual void init(const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     bool mHasShadow;
     bool mIsActive;
@@ -33,9 +33,9 @@ class ElectricRailShadowDrawer : public ShadowVolumeDrawer {
 public:
     ElectricRailShadowDrawer(const LiveActor*, ElectricRailSeparator*, s32);
 
-    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
-    virtual void drawShape(TypedDraw& rDraw) const;
-    virtual bool isDraw() const;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
+    virtual void drawShape(TypedDraw& rDraw) const override;
+    virtual bool isDraw() const override;
 
     void writeShadowVolumeShape(ElectricRailSeparator*, s32);
 
@@ -48,12 +48,12 @@ class ElectricRail : public ElectricRailDrawn {
 public:
     ElectricRail(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void drawWith(MaterialDraw& rMaterial) const;
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void drawWith(MaterialDraw& rMaterial) const override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void disappear();
     void deactivate();

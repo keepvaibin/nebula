@@ -10,7 +10,7 @@ namespace Ui {
         static constexpr UiPaneKind cKind = UiPaneKind_Bounding;
         Bounding(Layout&, const UiPaneData*, const ResBlockSet&);
 
-        virtual ~Bounding();
-        virtual void DrawSelf(const DrawInfo&);
+        virtual ~Bounding() override;
+        virtual void DrawSelf(const DrawInfo&) override;
     };
 }  // namespace Ui

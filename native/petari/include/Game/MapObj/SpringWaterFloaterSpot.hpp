@@ -7,9 +7,9 @@ class SpringWaterFloaterSpot : public LiveActor {
 public:
     SpringWaterFloaterSpot(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeWait();
     void exeFloatSignal();

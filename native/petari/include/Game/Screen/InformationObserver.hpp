@@ -20,7 +20,7 @@ public:
     /// @brief Creates a new `InformationObserver`.
     InformationObserver();
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void entry(InformationObserver::TYPE, LiveActor*);
     void exeWait();

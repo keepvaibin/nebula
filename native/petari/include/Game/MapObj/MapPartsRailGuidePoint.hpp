@@ -7,7 +7,7 @@ public:
     MapPartsRailGuidePoint(const LiveActor*, const char* pName, f32 coord, bool isPointModel);
     MapPartsRailGuidePoint(const LiveActor*, const char* pName, int pointIndex, bool isPointModel);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     f32 mCoord;
     bool mIsPointModel;

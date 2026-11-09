@@ -20,7 +20,7 @@ public:
     /// @brief Creates a new `GameSceneLayoutHolder`.
     GameSceneLayoutHolder();
 
-    virtual void movement();
+    virtual void movement() override;
 
     void createPurpleCoinCounter();
     PurpleCoinCounter* getPurpleCoinCounter() const;

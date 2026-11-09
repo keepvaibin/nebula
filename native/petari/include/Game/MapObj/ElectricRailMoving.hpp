@@ -9,8 +9,8 @@ class ElectricRailMovingPoint : public LiveActor {
 public:
     ElectricRailMovingPoint(const char* pName = "移動電撃レール点");
 
-    virtual void init(const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     bool mHasShadow;
     bool mIsElectric;  // pushes instead once the rail vanishes
@@ -20,9 +20,9 @@ class ElectricRailMoving : public ElectricRailDrawn {
 public:
     ElectricRailMoving(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void drawWith(MaterialDraw& rMaterial) const;
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void drawWith(MaterialDraw& rMaterial) const override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void disappear();
     bool isTouchRail(const HitSensor*, Vec3f*, Vec3f*) const;

@@ -9,7 +9,7 @@ public:
         mStinkBug = pStinkBug;
     }
 
-    virtual bool isValid(s32 id) const {
+    virtual bool isValid(s32 id) const override {
         return mStinkBug->isValidFollowId(id);
     }
 

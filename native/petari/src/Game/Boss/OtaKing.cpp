@@ -212,7 +212,7 @@ void OtaKing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool OtaKing::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool OtaKing::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (isSensorBodyOrFace(pReceiver) && MR::isMsgStarPieceReflect(msg)) {
         mScaleController->startHitReaction();
         return true;
@@ -221,7 +221,7 @@ bool OtaKing::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-bool OtaKing::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool OtaKing::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (!pSender->isType(ATYPE_COCO_NUT)) {
         return false;
     }
@@ -263,7 +263,7 @@ bool OtaKing::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
     return false;
 }
 
-bool OtaKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool OtaKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     switch (msg)
     case ACTMES_RUSH_END:
         if (pSender->isType(ATYPE_COCO_NUT)) {

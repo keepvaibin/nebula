@@ -8,8 +8,8 @@ class BigFan : public LiveActor {
 public:
     BigFan(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void initWindModel();
     void calcWindInfo(Vec3f*, const Vec3f&);

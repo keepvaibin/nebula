@@ -15,7 +15,7 @@ PictureBookCloseButton::PictureBookCloseButton(bool canCloseWithPad)
     : LayoutActor("絵本閉じるボタン", true), mPaneCtrl(nullptr), mCanCloseWithPad(canCloseWithPad) {
 }
 
-void PictureBookCloseButton::init(const TableIter& rIter) {
+void PictureBookCloseButton::init(const TableIter& /*rIter*/) {
     initLayoutManager("BackButton", 1);
     MR::connectToSceneLayoutDecoration(this);
 

@@ -118,7 +118,7 @@ void TrickRabbitFreeRun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) 
     MR::sendMsgPush(pReceiver, pSender);
 }
 
-bool TrickRabbitFreeRun::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool TrickRabbitFreeRun::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isSensorPlayer(pSender)) {
         return !isEnableCaught();
     }

@@ -29,7 +29,7 @@ KoopaFireStairs::KoopaFireStairs(const char* pName, bool isKoopaJr)
       mBreakModel(nullptr) {
 }
 
-void KoopaFireStairs::init(const TableIter& rIter) {
+void KoopaFireStairs::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("MeteorStrike", nullptr, false);
     MR::startBrk(this, "MeteorStrike");
     MR::connectToSceneEnemy(this);

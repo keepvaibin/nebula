@@ -9,9 +9,9 @@ public:
     /// @param timeLimit The number of seconds to initialize the timer with.
     CometEventExecutorTimeLimit(u32 timeLimit);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void kill() override;
 
     void exeStartEvent();
     u32 getTimeLimit() const;

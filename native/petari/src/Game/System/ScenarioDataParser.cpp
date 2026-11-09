@@ -204,7 +204,7 @@ namespace ScenarioDataFunction {
     }
 
     // The common layer is bit 0 of every zone.
-    u32 getCurrentCommonLayers(const char* pZoneName) {
+    u32 getCurrentCommonLayers(const char* /*pZoneName*/) {
         return 1;
     }
 

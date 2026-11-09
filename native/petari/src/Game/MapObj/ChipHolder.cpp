@@ -106,7 +106,7 @@ void MR::deactivateChipLayout() {
     }
 }
 
-void ChipHolder::init(const TableIter& rIter) {
+void ChipHolder::init(const TableIter& /*rIter*/) {
     switch (mChipType) {
     case ChipBase::Type_Blue:
         mChipCounter = new ChipCounter("ブルーチップカウンター", mChipType);

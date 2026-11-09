@@ -15,7 +15,7 @@ namespace NrvGalaxyConfirmLayout {
 GalaxyConfirmLayout::GalaxyConfirmLayout() : LayoutActor("ギャラクシー確認レイアウト", true), mPaneCtrl(nullptr), mBackButton(nullptr) {
 }
 
-void GalaxyConfirmLayout::init(const TableIter& rIter) {
+void GalaxyConfirmLayout::init(const TableIter& /*rIter*/) {
     initLayoutManager("GalaxySelect", 1);
     MR::connectToSceneLayout(this);
 

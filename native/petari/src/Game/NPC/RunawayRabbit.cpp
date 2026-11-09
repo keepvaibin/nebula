@@ -302,7 +302,7 @@ bool RunawayRabbit::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool RunawayRabbit::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool RunawayRabbit::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgTouchPlantItem(msg);
 }
 
@@ -524,7 +524,7 @@ bool RunawayRabbit::isEnableBlow() const {
     return isNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvRunaway));
 }
 
-bool RunawayRabbit::isValidFollow(s32 id) const {
+bool RunawayRabbit::isValidFollow(s32 /*id*/) const {
     if (isNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvNoActive)) || isNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvHide)) ||
         isNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvStop))) {
         return false;

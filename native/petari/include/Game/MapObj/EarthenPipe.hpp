@@ -10,14 +10,14 @@ class EarthenPipe : public LiveActor {
 public:
     EarthenPipe(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAnim() {};
-    virtual void makeActorAppeared();
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override {};
+    virtual void makeActorAppeared() override;
+    virtual MtxPtr getBaseMtx() const override {
         return mTopJointMtx;
     }
-    virtual void control();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     bool tryShowUp();
     bool tryHideDown();

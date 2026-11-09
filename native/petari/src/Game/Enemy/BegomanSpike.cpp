@@ -478,7 +478,7 @@ void BegomanSpike::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     setNerve(GET_NERVE(BegomanSpike, HostTypeNrvHitReaction));
 }
 
-bool BegomanSpike::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanSpike::receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
@@ -580,7 +580,7 @@ bool BegomanSpike::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return true;
 }
 
-bool BegomanSpike::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanSpike::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgHitmarkEmit(msg);
 }
 

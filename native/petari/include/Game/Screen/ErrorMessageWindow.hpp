@@ -17,8 +17,8 @@ public:
     /// @brief Creates a new `ErrorMessageWindow`.
     ErrorMessageWindow();
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
 
     bool isAnimEnd() const;
     void appearWithMessage(const char*, MessageType, const Ui::TexMap*);

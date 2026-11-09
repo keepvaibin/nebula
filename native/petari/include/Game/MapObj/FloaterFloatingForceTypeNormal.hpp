@@ -6,10 +6,10 @@ class FloaterFloatingForceTypeNormal : public FloaterFloatingForce {
 public:
     FloaterFloatingForceTypeNormal(LiveActor*, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void start();
-    virtual void updateHostTrans(Vec3f*) const;
-    virtual const Vec3f& getCurrentVelocity() const {
+    virtual void init(const TableIter&) override;
+    virtual void start() override;
+    virtual void updateHostTrans(Vec3f*) const override;
+    virtual const Vec3f& getCurrentVelocity() const override {
         return mVelocity;
     }
 

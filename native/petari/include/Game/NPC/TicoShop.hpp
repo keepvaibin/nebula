@@ -9,9 +9,9 @@ class TicoShop : public TicoComet {
 public:
     TicoShop(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void startReactionSound();
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void startReactionSound() override;
 
     bool branchFunc(u32);
     bool eventFunc(u32);

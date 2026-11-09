@@ -78,7 +78,7 @@ Vec3f* RailMoveObj::getSoundCalcPos() {
     return nullptr;
 }
 
-void RailMoveObj::setupInitInfo(const TableIter& rIter, MapObjActorInitInfo* pInfo) {
+void RailMoveObj::setupInitInfo(const TableIter& /*rIter*/, MapObjActorInitInfo* /*pInfo*/) {
 }
 
 void RailMoveObj::startClipped() {
@@ -152,7 +152,7 @@ bool RailMoveObj::isMoving() const {
     return MapObjActorUtil::isRailMoverWorking(this);
 }
 
-bool RailMoveObj::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool RailMoveObj::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_MAPPARTS_DISAPPEAR_WITH_BLINK && isNerve(GET_NERVE(RailMoveObj, HostTypeMove))) {
         kill();
 
@@ -216,7 +216,7 @@ void RailMoveObjBreakAtEnd::doAtEndPoint() {
     kill();
 }
 
-void RailMoveIndirectObj::connectToScene(const MapObjActorInitInfo& rInfo) {
+void RailMoveIndirectObj::connectToScene(const MapObjActorInitInfo& /*rInfo*/) {
     MR::connectToSceneIndirectMapObj(this);
 }
 
@@ -225,7 +225,7 @@ void RailMoveObjSwitchShadow::init(const TableIter& rIter) {
     MR::invalidateShadow(this, 0);
 }
 
-void RailMoveObjSwitchShadow::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void RailMoveObjSwitchShadow::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnA(this, MR::Functor(this, &RailMoveObjSwitchShadow::startOnShadow));
 }
 
@@ -292,7 +292,7 @@ bool RailDemoMoveObj::endMove() {
 RailRotateMoveObj::RailRotateMoveObj(const char* pName) : RailMoveObj(pName) {
 }
 
-void RailRotateMoveObj::setupInitInfo(const TableIter& rIter, MapObjActorInitInfo* pInfo) {
+void RailRotateMoveObj::setupInitInfo(const TableIter& /*rIter*/, MapObjActorInitInfo* pInfo) {
     pInfo->setupRailRotator();
 }
 
@@ -313,7 +313,7 @@ bool RailRotateMoveObj::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* 
     return RailMoveObj::receiveOtherMsg(msg, pSender, pReceiver);
 }
 
-void RailRotateMoveObj::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void RailRotateMoveObj::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     setNerve(GET_NERVE(RailMoveObj, HostTypeWait));
     MR::listenStageSwitchOffB(this, MR::Functor< MapObjActor >(this, &MapObjActor::pauseMapPartsFunctions));
 }

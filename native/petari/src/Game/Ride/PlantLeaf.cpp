@@ -102,7 +102,7 @@ bool PlantLeaf::updateSpring(f32 growthPercent) {
     return stopped;
 }
 
-void PlantLeafDrawInit::init(const TableIter& rIter) {
+void PlantLeafDrawInit::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     makeActorDead();
 }

@@ -6,9 +6,9 @@ class CameraCubePlanet : public Camera {
 public:
     CameraCubePlanet(const char* pName = "キューブ惑星カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(f32 dist, f32 angleX, f32 angleY) {
         mDist = dist;

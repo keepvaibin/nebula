@@ -6,8 +6,8 @@ class FileSelectModel : public LiveActor {
 public:
     FileSelectModel(const char*, MtxPtr, const char*);
 
-    virtual void calcAnim();
-    virtual void calcAndSetBaseMtx();
+    virtual void calcAnim() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void open();
     void blinkOnce();

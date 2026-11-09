@@ -9,7 +9,7 @@ public:
 
     MapPartsRailRotator(LiveActor*);
 
-    virtual ~MapPartsRailRotator() {
+    virtual ~MapPartsRailRotator() override {
     }
     virtual void init(const TableIter&) override;
     virtual bool isWorking() const override;

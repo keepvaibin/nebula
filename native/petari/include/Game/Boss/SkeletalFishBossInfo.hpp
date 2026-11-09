@@ -31,7 +31,7 @@ public:
 
     SkeletalFishBossInfo(SkeletalFishBoss*, s32, s32, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     LevelStatus* getLevelStatus(s32) const;
     void createLevelStatus();

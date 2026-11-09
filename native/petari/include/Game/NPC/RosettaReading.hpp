@@ -8,8 +8,8 @@ class RosettaReading : public LiveActor {
 public:
     RosettaReading(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
 
 
     void exePictureBookBefore();

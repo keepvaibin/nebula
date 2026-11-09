@@ -55,7 +55,7 @@ void SimpleMapObjNoSilhouetted::connectToScene(const MapObjActorInitInfo& rInfo)
     }
 }
 
-void SimpleTextureSwitchChangeObj::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void SimpleTextureSwitchChangeObj::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnA(this, MR::Functor(this, &SimpleTextureSwitchChangeObj::changeTexture));
 }
 
@@ -90,7 +90,7 @@ void SimpleMirrorReflectionObj::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
 }
 
-void SimpleMirrorReflectionObj::connectToScene(const MapObjActorInitInfo& rInfo) {
+void SimpleMirrorReflectionObj::connectToScene(const MapObjActorInitInfo& /*rInfo*/) {
     MR::connectToSceneMirrorMapObjNoMovement(this);
 }
 

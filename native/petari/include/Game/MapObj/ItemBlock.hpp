@@ -6,14 +6,14 @@ class ItemBlock : public LiveActor {
 public:
     ItemBlock(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void kill();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void checkKind(const TableIter&);
     void initBlock();

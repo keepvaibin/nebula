@@ -12,9 +12,9 @@ class NormalMapBase : public LiveActor {
 public:
     NormalMapBase(const char*);
 
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void control();
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void control() override;
     virtual void drawSetting(MtxPtr) const;
     virtual void drawMaterialSetting(Material*) const;
     virtual void setStageForObject() const;

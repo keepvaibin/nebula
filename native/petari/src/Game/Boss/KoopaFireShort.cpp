@@ -34,7 +34,7 @@ KoopaFireShort::KoopaFireShort(const Koopa* pKoopa)
     : LiveActor("クッパの炎（ショート）"), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mSpeed(), mOffset() {
 }
 
-void KoopaFireShort::init(const TableIter& rIter) {
+void KoopaFireShort::init(const TableIter& /*rIter*/) {
     mScale.set(1.0f, 1.0f, 1.0f);
 
     initModelManagerWithAnm("KoopaFire", nullptr, false);

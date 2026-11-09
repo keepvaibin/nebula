@@ -11,13 +11,13 @@ class GameScene : public Scene {
 public:
     GameScene();
 
-    virtual ~GameScene();
-    virtual void init();
-    virtual bool initAfterScenarioChosen();
-    virtual void start();
-    virtual void update();
-    virtual void draw() const;
-    virtual void calcAnim();
+    virtual ~GameScene() override;
+    virtual void init() override;
+    virtual bool initAfterScenarioChosen() override;
+    virtual void start() override;
+    virtual void update() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
 
     void notifyEndScenarioStarter();
     void requestPlayMovieDemo();

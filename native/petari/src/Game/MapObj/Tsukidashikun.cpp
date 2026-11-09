@@ -108,15 +108,15 @@ void Tsukidashikun::exeMove() {
     }
 }
 
-void Tsukidashikun::connectToScene(const MapObjActorInitInfo& rInfo) {
+void Tsukidashikun::connectToScene(const MapObjActorInitInfo& /*rInfo*/) {
     MR::connectToSceneCollisionMapObjStrongLight(this);
 }
 
-void Tsukidashikun::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void Tsukidashikun::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnB(this, MR::Functor(this, &Tsukidashikun::startMove));
 }
 
-void Tsukidashikun::initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void Tsukidashikun::initCaseNoUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     startMove();
 }
 

@@ -150,7 +150,7 @@ void DemoRabbit::updateNormalVelocity() {
     MR::reboundVelocityFromCollision(this, -0.05f);
 }
 
-void DemoRabbit::updateRun(const Vec3f& targetDir, bool unused) {
+void DemoRabbit::updateRun(const Vec3f& targetDir, bool /*unused*/) {
     f32 turnAngle = MR::calcNerveValue(this, ::sRunawayTurnDeccelTime, ::sRunawayTurnStartLimit, ::sRunawayTurnLimit);
 
     MR::turnDirectionDegree(this, &mFrontVec, targetDir - mPosition, turnAngle);

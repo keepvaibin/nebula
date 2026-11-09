@@ -6,9 +6,9 @@ class TicoReading : public LiveActor {
 public:
     TicoReading(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void kill() override;
 
     void exeWait();
 };

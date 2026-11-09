@@ -44,7 +44,7 @@ void FieldGravity::prepare(EmitterWork* work, ParticleField* block) {
     }
 }
 
-void FieldGravity::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldGravity::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     calcAffect(block, ptcl);
 }
 
@@ -106,7 +106,7 @@ void FieldSpin::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     mRotation[0][3] = mRotation[1][3] = mRotation[2][3] = 0.0f;
 }
 
-void FieldAir::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldAir::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     calcAffect(block, ptcl);
     if (block->checkStatus(4)) {
         f32 len = ptcl->mVelType1.length();
@@ -121,7 +121,7 @@ void FieldMagnet::prepare(EmitterWork* work, ParticleField* block) {
     NebulaMtxMultVecSR(work->mRotationMtx, &mDir, &mDir);
 }
 
-void FieldMagnet::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldMagnet::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     mAccel.sub(mDir, ptcl->mLocalPosition);
     mAccel.setLength(block->getMag());
     calcAffect(block, ptcl);
@@ -133,7 +133,7 @@ void FieldNewton::prepare(EmitterWork* work, ParticleField* block) {
     mCutoff = block->getVal1() * block->getVal1();
 }
 
-void FieldNewton::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldNewton::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     mAccel.sub(mDir, ptcl->mLocalPosition);
     f32 len_sq = mAccel.squared();
     if (len_sq > mCutoff) {
@@ -144,7 +144,7 @@ void FieldNewton::calc(EmitterWork* work, ParticleField* block, ParticleCore* pt
     calcAffect(block, ptcl);
 }
 
-void FieldConvection::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldConvection::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     Vec3f vec1, vec2, vec3;
     vec1.scale(mRadial.dot(ptcl->mLocalPosition), mRadial);
     vec3.scale(mTangent.dot(ptcl->mLocalPosition), mTangent);
@@ -166,7 +166,7 @@ void FieldRandom::calc(EmitterWork* work, ParticleField* block, ParticleCore* pt
     }
 }
 
-void FieldDrag::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldDrag::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     if (!ptcl->checkStatus(4)) {
         f32 fade = calcFadeAffect(block, ptcl->mTime);
         ptcl->mDrag *= 1.0f - fade * (1.0f - block->getMag());
@@ -175,7 +175,7 @@ void FieldDrag::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl
     }
 }
 
-void FieldSpin::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
+void FieldSpin::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore* ptcl) {
     Vec vec;
     NebulaMtxMultVecSR(mRotation, &ptcl->mLocalPosition, &vec);
     mAccel.set< f32 >(vec.x - ptcl->mLocalPosition.x, vec.y - ptcl->mLocalPosition.y, vec.z - ptcl->mLocalPosition.z);

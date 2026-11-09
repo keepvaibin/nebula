@@ -123,7 +123,7 @@ CoinHostInfo* CoinHolder::findHostInfo(const NameObj* pObj) const {
     return nullptr;
 }
 
-void CoinHolder::init(const TableIter& rIter) {
+void CoinHolder::init(const TableIter& /*rIter*/) {
     createCoins();
 }
 

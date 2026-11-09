@@ -12,7 +12,7 @@ class JumpEmitter : public LiveActor {
 public:
     JumpEmitter(const char*);
 
-    virtual void kill();
+    virtual void kill() override;
 
     void initEventCamera(const TableIter&);
     void startEventCamera();
@@ -37,11 +37,11 @@ class JumpGuarder : public JumpEmitter {
 public:
     JumpGuarder(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     /// @brief Filters out their own babies.
     bool isHit(const LiveActor*) const;

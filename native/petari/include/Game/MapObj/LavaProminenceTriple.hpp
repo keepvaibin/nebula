@@ -9,12 +9,12 @@ class LavaProminenceTriple : public LiveActor {
 public:
     LavaProminenceTriple(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void updateHitSensor(HitSensor*);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void updateEffectClipping();
     void updateEffectClippingIndividual(bool*, const char*, const char*);

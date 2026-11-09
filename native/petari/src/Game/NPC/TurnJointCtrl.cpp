@@ -115,11 +115,11 @@ void TurnJointCtrl::setCallBackFunction() {
     }
 }
 
-bool TurnJointCtrl::updateJointMtxCallBackFace(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool TurnJointCtrl::updateJointMtxCallBackFace(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     return updateJointMtxCallBack(pMtx, mFace);
 }
 
-bool TurnJointCtrl::updateJointMtxCallBackWaist(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool TurnJointCtrl::updateJointMtxCallBackWaist(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     return updateJointMtxCallBack(pMtx, mWaist);
 }
 

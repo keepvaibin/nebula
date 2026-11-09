@@ -9,11 +9,11 @@ class BeamGoRoundBeam : public LiveActor {
 public:
     BeamGoRoundBeam(MtxPtr);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
-    virtual void calcAndSetBaseMtx();
-    virtual void updateHitSensor(HitSensor*);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     VolumeModelDrawer* mModelDrawer;
     ModelObj* mBloomModel;
@@ -24,8 +24,8 @@ class BeamGoRoundPlanet : public MapObjActor {
 public:
     BeamGoRoundPlanet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void connectToScene(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void connectToScene(const MapObjActorInitInfo&) override;
 
     void initBeam();
     void exeWait();

@@ -59,7 +59,7 @@ void HitWallTimerSwitch::control() {
     mIsHit = 0;
 }
 
-bool HitWallTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HitWallTimerSwitch::receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(HitWallTimerSwitch, HitWallTimerSwitchNrvOff)) && pReceiver->isType(ATYPE_SWITCH_BIND)) {
         mIsHit = 1;
         return true;
@@ -68,7 +68,7 @@ bool HitWallTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, Hit
     return false;
 }
 
-bool HitWallTimerSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HitWallTimerSwitch::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!isNerve(GET_NERVE(HitWallTimerSwitch, HitWallTimerSwitchNrvOff))) {
         return false;
     }

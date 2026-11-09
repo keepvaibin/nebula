@@ -111,7 +111,7 @@ void TalkStateEvent::clos() {
     mBalloon->close();
 }
 
-bool TalkStateEvent::talk(const TalkMessageCtrl* pMsgCtrl) {
+bool TalkStateEvent::talk(const TalkMessageCtrl* /*pMsgCtrl*/) {
     // A skipped cutscene (NebulaCutsceneSkip): each page, shown whole, turns as soon as it is up; a question ends
     // the skip with the question on screen.
     if (NebulaCutsceneSkip::isSkipping()) {
@@ -163,7 +163,7 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pMsgCtrl) {
     return false;
 }
 
-bool TalkStateEvent::term(const TalkMessageCtrl* pMsgCtrl) {
+bool TalkStateEvent::term(const TalkMessageCtrl* /*pMsgCtrl*/) {
     if (mTermStep++ > 30) {
         mTermStep = 0;
         return true;

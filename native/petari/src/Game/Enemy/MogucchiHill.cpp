@@ -36,7 +36,7 @@ MogucchiHillPiece::MogucchiHillPiece(const char* pName) : LiveActor(pName), mHos
     mMtx.identity();
 }
 
-void MogucchiHillPiece::init(const TableIter& rIter) {
+void MogucchiHillPiece::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
     initHitSensor(1);
@@ -189,7 +189,7 @@ void MogucchiHillPiece::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgPush(pReceiver, pSender);
 }
 
-bool MogucchiHillPiece::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MogucchiHillPiece::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isDead(this)) {
         return false;
     }
@@ -240,7 +240,7 @@ bool MogucchiHillPiece::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     return false;
 }
 
-bool MogucchiHillPiece::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MogucchiHillPiece::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     bool isCrumbleEnd = isNerve(GET_NERVE_ANON(MogucchiHillPieceNrvPieceCrumble)) && MR::isGreaterEqualStep(this, ::sCrumbleFrame);
 
     if (isCrumbleEnd) {
@@ -278,7 +278,7 @@ MogucchiHill::MogucchiHill(LiveActor* pHost, s32 pieceCount, const char* pName)
     mReserveMtx.identity();
 }
 
-void MogucchiHill::init(const TableIter& rIter) {
+void MogucchiHill::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemyMovement(this);
     initNerve(GET_NERVE_ANON(MogucchiHillNrvMove));
     createPieces();

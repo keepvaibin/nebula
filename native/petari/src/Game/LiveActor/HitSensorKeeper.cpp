@@ -6,30 +6,31 @@
 #include <cstring>
 
 HitSensorKeeper::HitSensorKeeper(s32 capacity)
-    : mSensorInfosSize(0), mCapacity(capacity > 0 ? capacity : 1), mSensorInfos(new HitSensorInfo*[mCapacity]()), mTaking(), mTaken() {
+    : mSensorInfosSize(0), mSensorInfos(), mTaking(), mTaken() {
+    mSensorInfos.room(capacity > 0 ? static_cast< u32 >(capacity) : 1);
 }
 
-HitSensor* HitSensorKeeper::add(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f& rOffset) {
+HitSensor* HitSensorKeeper::add(const char* pName, u32 sensorType, u32 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f& rOffset) {
     HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, rOffset, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
-HitSensor* HitSensorKeeper::addPos(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f* pPos,
+HitSensor* HitSensorKeeper::addPos(const char* pName, u32 sensorType, u32 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f* pPos,
                                    const Vec3f& rOffset) {
     HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), pPos, nullptr, rOffset, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
-HitSensor* HitSensorKeeper::addMtx(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, MtxPtr mtx,
+HitSensor* HitSensorKeeper::addMtx(const char* pName, u32 sensorType, u32 sensorGroupSize, f32 radius, LiveActor* pActor, MtxPtr mtx,
                                    const Vec3f& rOffset) {
     HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, mtx, rOffset, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
-HitSensor* HitSensorKeeper::addCallback(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor) {
+HitSensor* HitSensorKeeper::addCallback(const char* pName, u32 sensorType, u32 sensorGroupSize, f32 radius, LiveActor* pActor) {
     HitSensorInfo* pInfo =
         new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, Vec3f(0.0f, 0.0f, 0.0f), true);
     registHitSensorInfo(pInfo);
@@ -116,15 +117,6 @@ HitSensorInfo* HitSensorKeeper::getSensorInfo(const char* pSensorName) const {
 }
 
 void HitSensorKeeper::registHitSensorInfo(HitSensorInfo* pInfo) {
-    if (mSensorInfosSize >= mCapacity) {
-        HitSensorInfo** pList = new HitSensorInfo*[mCapacity * 2]();
-        for (s32 i = 0; i < mSensorInfosSize; i++) {
-            pList[i] = mSensorInfos[i];
-        }
-        delete[] mSensorInfos;
-        mSensorInfos = pList;
-        mCapacity *= 2;
-    }
-    mSensorInfos[mSensorInfosSize++] = pInfo;
+    mSensorInfos.room(mSensorInfosSize + 1)[mSensorInfosSize++] = pInfo;
     pInfo->update();
 }

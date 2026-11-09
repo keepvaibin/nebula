@@ -202,7 +202,7 @@ void KirairaChain::control() {
     updatePoints();
 }
 
-void KirairaChain::init(const TableIter& rIter) {
+void KirairaChain::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, MR::DrawType_KirairaChain);
     initPoints();
 

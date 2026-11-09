@@ -6,7 +6,7 @@ class QuakeEffectGenerator : public LiveActor {
 public:
     QuakeEffectGenerator();
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void exeWait();
     void exeWaitInArea();

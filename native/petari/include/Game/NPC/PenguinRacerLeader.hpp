@@ -9,9 +9,9 @@ class PenguinRacerLeader : public PenguinRacer {
 public:
     PenguinRacerLeader(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void resetRacer(const RaceManager* pRaceManager);
-    virtual void exitRacer();
+    virtual void init(const TableIter& rIter) override;
+    virtual void resetRacer(const RaceManager* pRaceManager) override;
+    virtual void exitRacer() override;
 
     bool branchFunc(u32);
     bool eventFunc(u32);

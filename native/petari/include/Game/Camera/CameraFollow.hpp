@@ -6,14 +6,14 @@ class CameraFollow : public Camera {
 public:
     CameraFollow(const char* pName = "フォローカメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isEnableToRoundLeft() const;
-    virtual bool isEnableToRoundRight() const;
-    virtual bool isEnableToReset() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isEnableToRoundLeft() const override;
+    virtual bool isEnableToRoundRight() const override;
+    virtual bool isEnableToReset() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(f32, f32, f32, f32, f32, bool);
     void calcIdealPos();

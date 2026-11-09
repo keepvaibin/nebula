@@ -6,11 +6,11 @@ class ScenarioSelectStar : public MultiSceneActor {
 public:
     ScenarioSelectStar(EffectSystem*);
 
-    virtual void init(const TableIter&);
-    virtual void calcViewAndEntry();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void calcViewAndEntry() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void tryPointing();
     void select();

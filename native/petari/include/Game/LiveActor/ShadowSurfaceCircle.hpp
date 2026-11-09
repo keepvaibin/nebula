@@ -6,7 +6,7 @@ class ShadowSurfaceCircle : public ShadowSurfaceDrawer {
 public:
     ShadowSurfaceCircle();
 
-    virtual ~ShadowSurfaceCircle();
+    virtual ~ShadowSurfaceCircle() override;
 
     virtual void draw() const override;
 

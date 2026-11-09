@@ -249,7 +249,7 @@ bool SkeletalFishBoss::calcJoint(Pos3f* pJointPos, const JointControllerInfo& rI
     return true;
 }
 
-void SkeletalFishBoss::damage(const HitSensor* pSensor, const Vec3f& rStarPieceOffs) {
+void SkeletalFishBoss::damage(const HitSensor* /*pSensor*/, const Vec3f& rStarPieceOffs) {
     if (isEnableToBeDamaged()) {
         MR::shakeCameraStrong();
         playDamageBrk();

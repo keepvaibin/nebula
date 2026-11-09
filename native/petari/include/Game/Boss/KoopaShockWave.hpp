@@ -11,12 +11,12 @@ class KoopaShockWave : public LiveActor {
 public:
     KoopaShockWave(Koopa*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void makeActorDead();
-    virtual void calcAndSetBaseMtx();
-    virtual void updateHitSensor(HitSensor*);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void makeActorDead() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void exeWaveAttack();
 

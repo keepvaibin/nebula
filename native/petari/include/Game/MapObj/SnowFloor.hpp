@@ -34,7 +34,7 @@ public:
     Vec2f mLastPlayerPoint;
     f32* mTexCoords;
     Vec3f* mDirections;
-    u16 mDirtyFrames;
+    s32 mDirtyFrames;
     u8* mImage;
     GameTexture* mTexture;
     f32* mSnowDepth;
@@ -43,7 +43,7 @@ public:
     u16 mReduceMapSize;
     Vec2f mLastPointerPoint;
     f32 mWalkingResist;
-    u16 mResistFrames;
+    s32 mResistFrames;
     u16 mCheckCount;
     MR::GrowTable< HitSensor*, 8 > mCheckList;
     GameTexture* mTextures[2];

@@ -14,8 +14,8 @@ public:
 
     DiskTorusGravity();
 
-    virtual void updateMtx(const Pos3f& rMtx);
-    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
+    virtual void updateMtx(const Pos3f& rMtx) override;
+    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const override;
 
     void setPosition(const Vec3f& rPosition);
     void setDirection(const Vec3f& rDirection);

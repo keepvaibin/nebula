@@ -149,7 +149,7 @@ void SkeletalFishBaby::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SkeletalFishBaby::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SkeletalFishBaby::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgJetTurtleAttack(msg)) {
         return damage(pSender->mPosition, true);
     }
@@ -162,11 +162,11 @@ bool SkeletalFishBaby::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
     return false;
 }
 
-bool SkeletalFishBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SkeletalFishBaby::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool SkeletalFishBaby::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SkeletalFishBaby::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     switch (msg) {
     case ACTMES_SKELETAL_FISH_BOSS_BATTLE_START:
         MR::invalidateClipping(this);

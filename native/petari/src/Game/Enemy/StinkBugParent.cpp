@@ -402,7 +402,7 @@ void StinkBugParent::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool StinkBugParent::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StinkBugParent::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvHipDropDown)) || isNrvDemo()) {
         return false;
     }
@@ -439,7 +439,7 @@ bool StinkBugParent::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSens
     return false;
 }
 
-bool StinkBugParent::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StinkBugParent::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvHipDropDown)) || isNrvDemo() || isNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvPanic)) ||
         isNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvShakeStart)) || isNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvShake))) {
         return false;

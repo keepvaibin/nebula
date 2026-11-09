@@ -8,9 +8,9 @@ class Onimasu : public LiveActor {
 public:
     Onimasu(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void calcAndSetBaseMtx() override;
 
     virtual void initFromRailPoint() = 0;
     virtual void incrementNextPoint() = 0;

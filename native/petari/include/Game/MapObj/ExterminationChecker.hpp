@@ -16,8 +16,8 @@ class ExterminationChecker : public LiveActor {
 public:
     ExterminationChecker(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void exeWatching();
     void exeTryStartDemoAppear();

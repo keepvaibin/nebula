@@ -9,11 +9,11 @@ class TripodBossFixPartsBase : public LiveActor {
 public:
     TripodBossFixPartsBase(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void makeActorDead();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void makeActorDead() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
     virtual void calcTripodLocalMatrix(Pos3f*);
     virtual void activateTripodBoss();
 

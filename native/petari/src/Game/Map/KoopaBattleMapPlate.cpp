@@ -32,7 +32,7 @@ void KoopaBattleMapPlate::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-bool KoopaBattleMapPlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaBattleMapPlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg != ACTMES_KOOPA_HIP_DROP_ATTACK) {
         return false;
     }

@@ -8,11 +8,11 @@ class MoguStone : public ModelObj {
 public:
     MoguStone(const char*, const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     virtual void doBehavior();
     virtual void startBreakSound();
@@ -36,12 +36,12 @@ class ThrowingIce : public MoguStone {
 public:
     ThrowingIce(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual void doBehavior();
-    virtual void startBreakSound();
-    virtual void startThrowLevelSound();
+    virtual void init(const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual void doBehavior() override;
+    virtual void startBreakSound() override;
+    virtual void startThrowLevelSound() override;
 
     void emitIce(const Vec3f& rFrom, const Vec3f& rTo, f32 speed, const Vec3f& rGravity);
 

@@ -13,11 +13,11 @@ class KoopaFigureBall : public LiveActor {
 public:
     KoopaFigureBall(const char* pName, Koopa* pKoopa, f32, const MR::ActorMoveParam* pMoveParam);
 
-    virtual void init(const TableIter& rIter);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual MtxPtr getBaseMtx() const;
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual MtxPtr getBaseMtx() const override;
+    virtual void control() override;
 
     Koopa* mKoopa;
     Vec3f mFront;

@@ -10,7 +10,7 @@
 OceanBowlBloomDrawer::OceanBowlBloomDrawer(OceanBowl* pHost) : NameObj("オーシャンボウル[ブルーム描画]"), mHost(pHost) {
 }
 
-void OceanBowlBloomDrawer::init(const TableIter& rIter) {
+void OceanBowlBloomDrawer::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanBowlBloomDrawer);
 }
 

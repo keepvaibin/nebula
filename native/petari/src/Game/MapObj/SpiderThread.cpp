@@ -50,8 +50,8 @@ inline SpiderThreadPart* connectPoints(SpiderThreadPoint* pPointA, SpiderThreadP
 }
 
 SpiderThread::SpiderThread(const char* pName)
-    : LiveActor(pName), mRadialPartsBufferSize(0), mMainPoint(nullptr), mHangInfos(nullptr), mNumHangInfos(0), mShootHangInfo(nullptr),
-      mNumRadialLines(8), mRadialLines(nullptr), mAnchorPoints(nullptr), mNumRadialParts(0), mRadialParts(nullptr), mNumCircleParts(0),
+    : LiveActor(pName), mMainPoint(nullptr), mHangInfos(nullptr), mNumHangInfos(0), mShootHangInfo(nullptr), mNumRadialLines(8),
+      mRadialLines(nullptr), mAnchorPoints(nullptr), mRadialPartsBufferSize(0), mNumRadialParts(0), mRadialParts(nullptr), mNumCircleParts(0),
       mCircleParts(nullptr), mCutPointsBufferSize(0), mNumCutPoints(0), mCutPoints(nullptr), mFront(0.0f, 0.0f, 1.0f), mWindCtrl(nullptr),
       mIsBloomOn(false), mThreadTexture(nullptr), mIndirectTexture(nullptr) {
     mRadialPartsBufferSize = mNumRadialLines * (::sMainRadialLinePointNum + 1);
@@ -68,7 +68,7 @@ SpiderThread::SpiderThread(const char* pName)
     }
 }
 
-void SpiderThread::init(const TableIter& rIter) {
+void SpiderThread::init(const TableIter& /*rIter*/) {
 }
 
 void SpiderThread::initThread(const Vec3f& rPos) {
@@ -262,7 +262,7 @@ void SpiderThread::connectMainPoint(SpiderThreadPoint* pPointA, SpiderThreadPoin
     }
 }
 
-bool SpiderThread::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpiderThread::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_SLING_SHOOT_ACTOR_HANG_START) {
         SpiderThreadHangInfo* hangInfo = findHangInfo(pSender->mHost);
         if (mShootHangInfo != nullptr) {

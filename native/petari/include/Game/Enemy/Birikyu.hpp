@@ -6,14 +6,14 @@ class Birikyu : public LiveActor {
 public:
     Birikyu(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
     virtual f32 getHitRadius() const;
     virtual const char* getCenterJointName() const;
 
@@ -45,10 +45,10 @@ class BirikyuWithFace : public Birikyu {
 public:
     BirikyuWithFace(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAndSetBaseMtx();
-    virtual f32 getHitRadius() const;
-    virtual const char* getCenterJointName() const;
+    virtual void init(const TableIter&) override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual f32 getHitRadius() const override;
+    virtual const char* getCenterJointName() const override;
 
     bool mIsFaceReversed;
 };

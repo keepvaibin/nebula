@@ -451,7 +451,7 @@ void PenguinRacer::initRacer() {
     AbstractRacer::initRacer();
 }
 
-void PenguinRacer::prepRacer(const RaceManager* pRaceManager) {
+void PenguinRacer::prepRacer(const RaceManager* /*pRaceManager*/) {
     MR::invalidateClipping(this);
     mBinder->mOffsetY = 60.0f;
 
@@ -516,7 +516,7 @@ void PenguinRacer::loseRacer() {
     setNerve(GET_NERVE(PenguinRacer, PenguinRacerNrvRacePrep));
 }
 
-void PenguinRacer::resetRacer(const RaceManager* pRaceManager) {
+void PenguinRacer::resetRacer(const RaceManager* /*pRaceManager*/) {
     MR::onBind(this);
     mBinder->mOffsetY = 80.0f;
     MR::setDefaultPose(this);

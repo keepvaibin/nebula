@@ -22,7 +22,7 @@ namespace DodoryuSub {
     public:
         MoveStateRail(MoveStateHolder* pHolder);
 
-        virtual void execute();
+        virtual void execute() override;
 
         f32 mMaxSpeed;
         f32 mSpeed;
@@ -33,7 +33,7 @@ namespace DodoryuSub {
         MoveStateChase(MoveStateHolder* pHolder) : MoveState(pHolder), mAccel(), mLateralDamping(), mMaxSpeed(), mTurnAngle() {
         }
 
-        virtual void execute();
+        virtual void execute() override;
 
         f32 mAccel;
         f32 mLateralDamping;
@@ -45,7 +45,7 @@ namespace DodoryuSub {
     public:
         MoveStateDetour(MoveStateHolder* pHolder);
 
-        virtual void execute();
+        virtual void execute() override;
 
         bool isPlayerOppositeFromWall() const;
 
@@ -59,7 +59,7 @@ namespace DodoryuSub {
     public:
         MoveStateEscape(MoveStateHolder* pHolder);
 
-        virtual void execute();
+        virtual void execute() override;
 
         s32 mDirStepLeft;
         s32 mDirStepMin;
@@ -75,7 +75,7 @@ namespace DodoryuSub {
     public:
         MoveStateJumpOut(MoveStateHolder* pHolder);
 
-        virtual void execute();
+        virtual void execute() override;
 
         f32 mTurnAngle;
         f32 mSpeed;
@@ -85,7 +85,7 @@ namespace DodoryuSub {
     public:
         MoveStateNull(MoveStateHolder* pHolder);
 
-        virtual void execute();
+        virtual void execute() override;
     };
 
     class MoveStateHolder {

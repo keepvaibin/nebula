@@ -22,7 +22,7 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
 #if defined(NEBULA_DEV)
-    virtual void testHit(HitSensor* pPlayer) {}
+    virtual void testHit(HitSensor* /*pPlayer*/) {}
 #endif
 
     void startBattleLevel2();

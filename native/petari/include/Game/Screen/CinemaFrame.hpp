@@ -6,8 +6,8 @@ class CinemaFrame : public LayoutActor {
 public:
     CinemaFrame(bool param1);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
 
     void tryScreenToFrame();
     void tryFrameToBlank();

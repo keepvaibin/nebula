@@ -18,8 +18,8 @@ class NebulaAchievementToast : public LayoutActor {
 public:
     NebulaAchievementToast();
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     // GameScene: one frame of play, and the drawing at the end of its 2D.
     void update();

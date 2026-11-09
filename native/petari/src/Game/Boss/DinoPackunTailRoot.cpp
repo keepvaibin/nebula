@@ -11,7 +11,7 @@ typedef bool (DinoPackunTailRoot::*func)(Pos3f*, const JointControllerInfo&);
 DinoPackunTailRoot::DinoPackunTailRoot(const char* name, DinoPackun* pPackun) : DinoPackunTailNode(name, pPackun) {
 }
 
-void DinoPackunTailRoot::init(const TableIter& rIter) {
+void DinoPackunTailRoot::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     makeActorAppeared();
 }
@@ -30,4 +30,4 @@ bool DinoPackunTailRoot::calcJointDirection(Pos3f* pOut, const JointControllerIn
 }
 
 // The root is not pushed by the tail.
-void DinoPackunTailRoot::addNodeVelocity(const Vec3f& rVel) {}
+void DinoPackunTailRoot::addNodeVelocity(const Vec3f& /*rVel*/) {}

@@ -520,7 +520,7 @@ bool Kinopio::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return NPCActor::receiveMsgPlayerAttack(msg, pSender, pReceiver);
 }
 
-bool Kinopio::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Kinopio::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_NPC_EVENT_START) {
         MR::offRootNodeAutomatic(mMsgCtrl);
         MR::onCalcAnim(this);

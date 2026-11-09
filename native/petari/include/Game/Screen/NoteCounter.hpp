@@ -10,7 +10,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     NoteCounter(const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void declareNoteNumMaxAndMelody(LiveActor* pHost, s32 noteNum, s32 melodyNo, f32 railLength);
     void add();

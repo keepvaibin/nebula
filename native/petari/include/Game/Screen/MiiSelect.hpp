@@ -28,11 +28,11 @@ public:
 
     /// @brief Intializes the `MiiSelect` while being placed into a scene.
     /// @param[in] rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void control();
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void disappear();
     bool isAppearing() const;

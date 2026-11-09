@@ -6,7 +6,7 @@ class LavaBallRisingPlanetLava : public MapObjActor {
 public:
     LavaBallRisingPlanetLava(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void exeWait();
     void exeScaleUp();

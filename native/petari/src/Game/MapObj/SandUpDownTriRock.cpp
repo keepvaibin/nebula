@@ -79,7 +79,7 @@ void SandUpDownTriRock::exeUp() {
 void SandUpDownTriRock::exeStop() {
 }
 
-bool SandUpDownTriRock::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SandUpDownTriRock::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStartPowerStarGet(msg)) {
         setNerve(GET_NERVE(SandUpDownTriRock, SandUpDownTriRockNrvStop));
 
@@ -89,7 +89,7 @@ bool SandUpDownTriRock::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* 
     return false;
 }
 
-void SandUpDownTriRock::initCaseUseSwitchB(const MapObjActorInitInfo& info) {
+void SandUpDownTriRock::initCaseUseSwitchB(const MapObjActorInitInfo& /*info*/) {
     MR::listenStageSwitchOnB(this, MR::Functor(this, &SandUpDownTriRock::startDown));
 }
 

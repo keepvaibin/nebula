@@ -12,7 +12,7 @@ class WarpPodMgr : public NameObj {
 public:
     WarpPodMgr(const char* pName);
 
-    virtual void draw() const;
+    virtual void draw() const override;
 
     WarpPod* getPairPod(const LiveActor*);
     void startEventCamera(const LiveActor*);
@@ -29,11 +29,11 @@ public:
     WarpPod(const char* pName) : LiveActor(pName), mPlacementId(nullptr) {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void appear();
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void appear() override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void glowEffect();
     void initPair();
@@ -53,8 +53,8 @@ public:
     ActorCameraInfo* mCamInfo;
     char* mEventCameraName;
     char* mPairCameraName;
-    u16 mDelay;
-    u16 mCameraStep;
+    s32 mDelay;
+    s32 mCameraStep;
     s32 mVisibilityState;
     s32 mArg2;
     s32 mPathOpenType;
@@ -63,7 +63,7 @@ public:
     s32 mCameraTime;
     s32 mGlowColorIndex;
     Vec3f* mPathPoints;
-    u16 mNumPathPoints;
+    u32 mNumPathPoints;
     bool mDrawsPath;
     bool mIsInactive;
     bool mIsPairCameraOn;

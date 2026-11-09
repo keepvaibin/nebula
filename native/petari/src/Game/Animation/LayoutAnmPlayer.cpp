@@ -2,7 +2,7 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include <Game/Ui/Animation.hpp>
 
-LayoutAnmPlayer::LayoutAnmPlayer(const LayoutManager* pManager) : mManager(pManager), mAnimName(), mAnimTransform(), mFrameCtrl() {
+LayoutAnmPlayer::LayoutAnmPlayer(const LayoutManager* pManager) : mAnimName(), mAnimTransform(), mManager(pManager), mFrameCtrl() {
 }
 
 void LayoutAnmPlayer::movement() {

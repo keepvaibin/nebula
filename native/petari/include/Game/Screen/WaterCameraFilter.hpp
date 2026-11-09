@@ -11,9 +11,9 @@ class WaterCameraFilter : public LiveActor {
 public:
     WaterCameraFilter();
 
-    virtual void init(const TableIter& rIter);
-    virtual void draw() const;
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void draw() const override;
+    virtual void control() override;
 
     void exeAirToWater();
     void exeWaterToAir();

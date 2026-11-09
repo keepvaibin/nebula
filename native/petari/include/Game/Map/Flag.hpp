@@ -21,10 +21,10 @@ public:
 
     Flag(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void appear() override;
 
     void setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
                     s32 numPointsV);

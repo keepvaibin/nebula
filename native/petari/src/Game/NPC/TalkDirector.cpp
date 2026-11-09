@@ -128,7 +128,7 @@ TalkDirector::TalkDirector(const char* pName)
       mIsPlayerTalk(), mMessageInfo(), mCameraInfo(), mHostActor(), mBranchResult() {
 }
 
-void TalkDirector::init(const TableIter& rIter) {
+void TalkDirector::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_TalkDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
     mBalloonHolder = new TalkBalloonHolder();
     mStateHolder = new TalkStateHolder();

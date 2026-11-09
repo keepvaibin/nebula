@@ -69,7 +69,7 @@ bool RabbitStateWaitStart::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, H
     return false;
 }
 
-bool RabbitStateWaitStart::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool RabbitStateWaitStart::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgSpinStormRange(msg)) {
         return requestSpin();
     }

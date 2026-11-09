@@ -12,11 +12,11 @@ class FlipPanel : public MapObjActor {
 public:
     FlipPanel(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void endClipped();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void endClipped() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeFrontLand();
     void exeBackLand();
@@ -37,9 +37,9 @@ class FlipPanelObserver : public LiveActor {
 public:
     FlipPanelObserver(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exeComplete();

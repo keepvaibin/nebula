@@ -6,9 +6,9 @@ class CameraMedianTower : public Camera {
 public:
     CameraMedianTower(const char* pName = "中点塔カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void calcFovyPos(Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     void limitAngularVelocity(Vec3f*, Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);

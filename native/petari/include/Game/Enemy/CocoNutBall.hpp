@@ -6,12 +6,12 @@ class CocoNutBall : public LiveActor {
 public:
     CocoNutBall(const char* pName = "ヤシの実弾");
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void kill();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void appearAndThrow(const Vec3f& rAppearPos, f32 angleDegree);
     void hitBackToPlayer();

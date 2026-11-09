@@ -17,7 +17,7 @@ void AstroEffectObj::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-bool AstroEffectObj::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroEffectObj::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

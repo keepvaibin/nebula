@@ -27,7 +27,7 @@ StarPointerCommandStream::StarPointerCommandStream(const Vec2f* pScreenPos)
     : LayoutActor("スターポインタ指示線", true), mOffScreenTime(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
 }
 
-void StarPointerCommandStream::start(const Vec3f* pPos, bool b) {
+void StarPointerCommandStream::start(const Vec3f* pPos, bool /*b*/) {
     mWorldPos = pPos;
     MR::showLayout(this);
     MR::startAnim(this, "Wait", 0);
@@ -50,7 +50,7 @@ void StarPointerCommandStream::clear() {
     mWorldPos = nullptr;
 }
 
-void StarPointerCommandStream::init(const TableIter& rIter) {
+void StarPointerCommandStream::init(const TableIter& /*rIter*/) {
     initLayoutManager("CommandStream", 1);
     MR::createAndAddPaneCtrl(this, "CommandStream", 1);
     MR::createAndAddPaneCtrl(this, "PicRibbon", 1);

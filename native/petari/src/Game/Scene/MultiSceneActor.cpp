@@ -18,7 +18,7 @@ MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool
     mModelManager->init(pModelName, nullptr, deferMaterials);
 }
 
-void MultiSceneActor::init(const TableIter& rIter) {
+void MultiSceneActor::init(const TableIter& /*rIter*/) {
 }
 
 void MultiSceneActor::movement() {

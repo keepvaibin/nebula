@@ -6,5 +6,5 @@ class TicoAstro : public Tico {
 public:
     TicoAstro(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };

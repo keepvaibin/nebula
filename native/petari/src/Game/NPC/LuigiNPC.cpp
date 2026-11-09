@@ -46,7 +46,7 @@ namespace NrvLuigiNPC {
 LuigiNPC::LuigiNPC(const char* pName) : NPCActor(pName), mTakeOutStar(), mType(Type_Invalid) {
 }
 
-bool LuigiNPC::branchFunc(u32 msg) {
+bool LuigiNPC::branchFunc(u32 /*msg*/) {
     return !MR::isNearPlayer(mMsgCtrl, -1.0f) || MR::inMessageArea(mMsgCtrl);
 }
 
@@ -70,7 +70,7 @@ void LuigiNPC::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     NPCActor::attackSensor(pSender, pReceiver);
 }
 
-bool LuigiNPC::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool LuigiNPC::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStartPowerStarGet(msg)) {
         makeActorDead();
 

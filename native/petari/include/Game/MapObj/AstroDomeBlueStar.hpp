@@ -13,8 +13,8 @@ public:
     public:
         CaptureActor();
 
-        virtual void init(const TableIter&);
-        virtual void kill();
+        virtual void init(const TableIter&) override;
+        virtual void kill() override;
 
         void updateTransTraction(const Vec3f&, const Vec3f&, s32);
 
@@ -33,12 +33,12 @@ public:
 
     AstroDomeBlueStar(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void waitAppear();
     void forceKill();

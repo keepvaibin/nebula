@@ -340,11 +340,11 @@ void SlingShooter::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SlingShooter::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SlingShooter::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgStarPieceReflect(msg);
 }
 
-bool SlingShooter::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SlingShooter::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(SlingShooter, SlingShooterNrvLand)) || isNerve(GET_NERVE(SlingShooter, SlingShooterNrvWait)) ||
         isNerve(GET_NERVE(SlingShooter, SlingShooterNrvAim)) || isNerve(GET_NERVE(SlingShooter, SlingShooterNrvAttack))) {
         if (!mIsKinopioAttached) {
@@ -370,7 +370,7 @@ bool SlingShooter::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
     return false;
 }
 
-bool SlingShooter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SlingShooter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_AUTORUSH_BEGIN) {
         if (isNerve(GET_NERVE(SlingShooter, SlingShooterNrvFreeInvalid))) {
             return false;

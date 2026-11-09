@@ -150,7 +150,7 @@ bool KoopaStateAttackRoll::attackSensor(HitSensor* pSender, HitSensor* pReceiver
     return false;
 }
 
-bool KoopaStateAttackRoll::isDamage(u32 msg, HitSensor* pSender, HitSensor* pReceiver) const {
+bool KoopaStateAttackRoll::isDamage(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) const {
     if (!MR::isMsgToEnemyAttackBlow(msg) || !MR::isSensor(pReceiver, "AttackRollReceiver")) {
         return false;
     }

@@ -13,8 +13,8 @@ public:
 
     KoopaBattleMapStair(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
 
     bool isRequestAttackVs1() const;
     s32 calcRemainTimeToBreak() const;

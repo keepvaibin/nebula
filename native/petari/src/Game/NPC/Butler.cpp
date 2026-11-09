@@ -269,7 +269,7 @@ bool Butler::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
     return NPCActor::receiveMsgPlayerAttack(msg, pSender, pReceiver);
 }
 
-bool Butler::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Butler::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::trySyncKillMsgSelectStart(this, msg)) {
         return true;
     } else {

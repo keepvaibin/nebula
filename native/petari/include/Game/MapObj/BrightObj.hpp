@@ -55,11 +55,11 @@ class BrightObj : public LiveActor, public BrightObjBase {
 public:
     BrightObj(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
-    virtual void calcBrightInfo(NebulaScreenProbe*);
-    virtual void getNowCenter(Vec2f*) const;
+    virtual void calcBrightInfo(NebulaScreenProbe*) override;
+    virtual void getNowCenter(Vec2f*) const override;
 
     f32 mRadius;
 };
@@ -68,11 +68,11 @@ class BrightSun : public LiveActor, public BrightObjBase {
 public:
     BrightSun(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
-    virtual void calcBrightInfo(NebulaScreenProbe*);
-    virtual void getNowCenter(Vec2f*) const;
+    virtual void calcBrightInfo(NebulaScreenProbe*) override;
+    virtual void getNowCenter(Vec2f*) const override;
 
     void controlSunModel();
 

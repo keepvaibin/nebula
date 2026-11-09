@@ -12,7 +12,7 @@ class EventDirector : public NameObj {
 public:
     EventDirector();
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     PowerStarEventKeeper* mPowerStarEventKeeper;
     StageStateKeeper* mStageStateKeeper;

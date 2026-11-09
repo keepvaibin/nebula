@@ -6,9 +6,9 @@ class CameraWaterPlanet : public Camera {
 public:
     CameraWaterPlanet(const char* pName = "水中プラネットカメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(f32 distMin, f32 distMax, f32 angleX) {
         mDistMin = distMin;

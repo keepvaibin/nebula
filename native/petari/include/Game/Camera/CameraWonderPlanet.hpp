@@ -6,12 +6,12 @@ class CameraWonderPlanet : public Camera {
 public:
     CameraWonderPlanet(const char* pName = "ワンダープラネットカメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isEnableToReset() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isEnableToReset() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void updateCameraReset();
     void rotateCamera();

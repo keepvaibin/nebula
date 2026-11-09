@@ -102,7 +102,7 @@ void KameckTurtle::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool KameckTurtle::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KameckTurtle::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerTrample(msg)) {
         setNerve(GET_NERVE(KameckTurtle, KameckTurtleNrvWait));
         appearJetTurtle(false);
@@ -113,7 +113,7 @@ bool KameckTurtle::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
-bool KameckTurtle::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KameckTurtle::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_IS_PULL_ENABLE) {
         return true;
     }

@@ -9,10 +9,10 @@ class SpiderCoin : public LiveActor {
 public:
     SpiderCoin(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void kill();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void kill() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeWait();
     void exeTouch();

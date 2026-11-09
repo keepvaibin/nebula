@@ -123,7 +123,7 @@ void JumpBeamer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 // Trampling the spring launches the player; trampling the body or spinning it makes it hop.
-bool JumpBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JumpBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgPlayerTrample(msg)) {
         if (pReceiver->isType(ATYPE_PLAYER_AUTO_JUMP)) {
             Vec3f up;
@@ -162,7 +162,7 @@ void JumpBeamer::syncSwitchOffB() {
     }
 }
 
-bool JumpBeamer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JumpBeamer::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_GROUP_ATTACK) {
         MR::invalidateClipping(this);
         setNerve(GET_NERVE(JumpBeamer, JumpBeamerNrvUp));

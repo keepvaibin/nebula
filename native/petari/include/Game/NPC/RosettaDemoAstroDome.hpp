@@ -53,10 +53,10 @@ class RosettaMonologue : public SimpleLayout {
 public:
     RosettaMonologue();
 
-    virtual void movement();
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void control();
+    virtual void movement() override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void control() override;
 
     s32 mMessageNo;
     TalkTextFormer mTextFormer;

@@ -163,7 +163,7 @@ void CocoSamboHead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool CocoSamboHead::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool CocoSamboHead::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerveSwoon()) {
         if (MR::isMsgPlayerTrample(msg) || MR::isMsgPlayerHipDrop(msg)) {
             return static_cast< CocoSambo* >(mHost)->tryToPress();
@@ -181,7 +181,7 @@ bool CocoSamboHead::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     return false;
 }
 
-bool CocoSamboHead::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool CocoSamboHead::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (static_cast< CocoSambo* >(mHost)->isSensorTryToFallHead(pSender) && static_cast< CocoSambo* >(mHost)->tryToFallHead(pReceiver, pSender)) {
         return true;
     }
@@ -432,7 +432,7 @@ bool CocoSambo::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-bool CocoSambo::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool CocoSambo::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (isSensorTryToFallHead(pSender)) {
         if (tryToFallHead(pReceiver, pSender)) {
             return true;

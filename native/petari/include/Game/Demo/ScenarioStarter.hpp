@@ -11,8 +11,8 @@ class ScenarioStarter : public LiveActor {
 public:
     ScenarioStarter(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void initShootPath(const TableIter&);
     void exeWaitScenarioCameraEnd();

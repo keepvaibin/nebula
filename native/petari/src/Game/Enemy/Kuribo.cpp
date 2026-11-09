@@ -328,7 +328,7 @@ bool Kuribo::requestDead() {
     return true;
 }
 
-bool Kuribo::requestFlatDown(HitSensor* pSender, HitSensor* pReceiver) {
+bool Kuribo::requestFlatDown(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorEnemyAttack(pReceiver)) {
         return false;
     }
@@ -354,7 +354,7 @@ bool Kuribo::requestFlatDown(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool Kuribo::requestHipDropDown(HitSensor* pSender, HitSensor* pReceiver) {
+bool Kuribo::requestHipDropDown(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!requestDead()) {
         return false;
     }

@@ -40,7 +40,7 @@ CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJoi
     mTipPosition.set(mRestTipPosition);
 }
 
-void CoconutTreeLeaf::init(const TableIter& rIter) {
+void CoconutTreeLeaf::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionPartsFromResourceHolder(this, "CoconutTreeLeaf", getSensor("body"), MR::getResourceHolder(mGroup), mJointMtx);
@@ -137,7 +137,7 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
     }
 }
 
-bool CoconutTreeLeaf::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool CoconutTreeLeaf::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerHipDropFloor(msg)) {
         Vec3f accel(mRestUp);
         accel.scale(-::sHipDropAccel);

@@ -8,7 +8,7 @@ class StinkBugBase : public LiveActor {
 public:
     StinkBugBase(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void setDashVelocity(f32);
     bool tryTurnSearch(f32);

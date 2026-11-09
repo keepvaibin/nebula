@@ -8,7 +8,7 @@ class AreaObjFollower : public BaseMatrixFollower {
 public:
     AreaObjFollower(AreaObj*, const TableIter&);
 
-    virtual void update();
+    virtual void update() override;
 
     Pos3f mFollowMtx;
     AreaObj* mObj;

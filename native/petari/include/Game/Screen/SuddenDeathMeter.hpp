@@ -8,8 +8,8 @@ class SuddenDeathMeter : public LayoutActor {
 public:
     SuddenDeathMeter(const char*, const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void requestActive();
     void requestDeactivate();

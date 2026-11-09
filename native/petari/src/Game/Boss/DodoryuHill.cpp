@@ -28,6 +28,6 @@ DodoryuHill::DodoryuHill(Dodoryu* pHost) : MogucchiHill(pHost, 50, "ドドリュ
     initWithoutIter();
 }
 
-bool DodoryuHill::notifyAppearAttackToPlayer(HitSensor* pSender, HitSensor* pReceiver) {
+bool DodoryuHill::notifyAppearAttackToPlayer(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }

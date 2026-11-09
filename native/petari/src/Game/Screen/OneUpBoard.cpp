@@ -19,7 +19,7 @@ namespace NrvOneUpBoard {
 OneUpBoard::OneUpBoard() : LayoutActor("1UPボード", true) {
 }
 
-void OneUpBoard::init(const TableIter& rIter) {
+void OneUpBoard::init(const TableIter& /*rIter*/) {
     initLayoutManager("OneUp", 2);
     initNerve(GET_NERVE(OneUpBoard, HostTypeWait));
     MR::connectToSceneLayout(this);

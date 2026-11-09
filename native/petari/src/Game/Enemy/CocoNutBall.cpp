@@ -58,7 +58,7 @@ CocoNutBall::CocoNutBall(const char* pName)
       mIsHeightLimited(), mHeightMax(cDefaultHeightMax), mHeightMin(), mUp(0.0f, 1.0f, 0.0f), mKillDistance(cDefaultKillDistance), mIsRallyBgm() {
 }
 
-void CocoNutBall::init(const TableIter& rIter) {
+void CocoNutBall::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm(CocoNut::getModelName(), nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     MR::initLightCtrl(this);
@@ -178,7 +178,7 @@ void CocoNutBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool CocoNutBall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool CocoNutBall::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
         if (isValidReceivePunch()) {
             setNerve(GET_NERVE(CocoNutBall, CocoNutBallNrvHitBackToHost));

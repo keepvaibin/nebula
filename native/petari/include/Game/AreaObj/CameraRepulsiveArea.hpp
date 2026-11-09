@@ -8,7 +8,7 @@ public:
     CameraRepulsiveArea(int formType, const char* pName) : AreaObj(formType, pName) {
     }
 
-    virtual const char* getManagerName() const {
+    virtual const char* getManagerName() const override {
         return "CameraRepulsiveArea";
     }
 
@@ -20,7 +20,7 @@ public:
     CameraRepulsiveSphere(const char* pName) : CameraRepulsiveArea(AreaForm::Type_Sphere, pName) {
     }
 
-    virtual Vec3f getRepulsion(const Vec3f&);
+    virtual Vec3f getRepulsion(const Vec3f&) override;
 };
 
 class CameraRepulsiveCylinder : public CameraRepulsiveArea {
@@ -28,5 +28,5 @@ public:
     CameraRepulsiveCylinder(const char* pName) : CameraRepulsiveArea(AreaForm::Type_Cylinder, pName) {
     }
 
-    virtual Vec3f getRepulsion(const Vec3f&);
+    virtual Vec3f getRepulsion(const Vec3f&) override;
 };

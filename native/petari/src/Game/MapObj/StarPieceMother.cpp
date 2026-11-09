@@ -161,7 +161,7 @@ void StarPieceMother::offSwitchA() {
     }
 }
 
-void StarPieceMother::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void StarPieceMother::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver) && (!MR::isValidSwitchA(this) || MR::isOnSwitchA(this))) {
         emitStarPieces();
         kill();

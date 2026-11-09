@@ -6,5 +6,5 @@ class AstroDomeDemoAstroGalaxy : public MapObjActor {
 public:
     AstroDomeDemoAstroGalaxy(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };

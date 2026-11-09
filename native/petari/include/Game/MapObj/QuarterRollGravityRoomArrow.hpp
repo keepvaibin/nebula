@@ -9,10 +9,10 @@ class QuarterRollGravityRoomArrow : public MapObjActor {
 public:
     QuarterRollGravityRoomArrow(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo& rInfo);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo& rInfo);
-    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) override;
+    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) override;
 
     void exeWait();
     void exeRollOnA();

@@ -100,7 +100,7 @@ void HipDropRock::exeWreck() {
     }
 }
 
-bool HipDropRock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HipDropRock::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(HipDropRock, HipDropRockNrvBreak))) {
         return false;
     }

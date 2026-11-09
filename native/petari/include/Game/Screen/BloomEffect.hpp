@@ -6,7 +6,7 @@ class BloomEffect : public ImageEffectBase {
 public:
     BloomEffect(const char* pName);
 
-    virtual ~BloomEffect() {
+    virtual ~BloomEffect() override {
     }
 
     void preDraw() const;

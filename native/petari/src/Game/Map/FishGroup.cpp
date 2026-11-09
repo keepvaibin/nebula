@@ -64,7 +64,7 @@ Fish::Fish(const char* pName, FishGroup* pGroup, int fishType, bool canEscape)
       mTimeToSearchPlayer(MR::getRandom(::sTimeToSearchPlayerMin, ::sTimeToSearchPlayerMax)), mStepToMove(), mEscapePos() {
 }
 
-void Fish::init(const TableIter& rIter) {
+void Fish::init(const TableIter& /*rIter*/) {
     updateFollowPointPos();
     mPosition.set(mFollowPos);
     mFront.set(MR::getRailDirection(mGroup));

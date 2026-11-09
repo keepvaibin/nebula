@@ -115,7 +115,7 @@ bool KoopaStateChaseRoll::attackSensor(HitSensor* pSender, HitSensor* pReceiver)
            (MR::isSensor(pSender, "ChaseRollAttack") && KoopaFunction::tryKoopaAttackMapObj(pSender, pReceiver));
 }
 
-bool KoopaStateChaseRoll::tryDamage(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaStateChaseRoll::tryDamage(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!MR::isMsgPlayerSpinAttack(msg) || !MR::isSensor(pReceiver, "ChaseRollFace")) {
         return false;
     }

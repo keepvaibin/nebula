@@ -764,7 +764,7 @@ bool StarPiece::throwToTarget(HitSensor* pSensor, const Vec3f& rStart, const Vec
     return true;
 }
 
-bool StarPiece::throwToTargetCore(const Vec3f& rEnd, const Vec3f& rStart, const Vec3f& rGravity, f32 speed, bool isFall) {
+bool StarPiece::throwToTargetCore(const Vec3f& rEnd, const Vec3f& rStart, const Vec3f& rGravity, f32 /*speed*/, bool isFall) {
     mGravity.set(rGravity);
     mThrowEnd.set(rEnd);
     mThrowStart.set(rStart);
@@ -1010,7 +1010,7 @@ void StarPiece::setReflect(const Vec3f& rNormal, const Vec3f& rHitPos) {
     setNerve(GET_NERVE(StarPiece, HostTypeNrvFallAfterReflect));
 }
 
-bool StarPiece::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StarPiece::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgInhaleBlackHole(msg) && isNerveFall()) {
         kill();
         return true;

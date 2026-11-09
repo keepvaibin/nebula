@@ -291,7 +291,7 @@ void ItemBubble::exeBreak() {
     }
 }
 
-bool ItemBubble::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool ItemBubble::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isSensorPlayer(pSender)) {
         setNerve(GET_NERVE(ItemBubble, ItemBubbleNrvBreak));
         return true;
@@ -300,7 +300,7 @@ bool ItemBubble::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool ItemBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool ItemBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceAttack(msg)) {
         setNerve(GET_NERVE(ItemBubble, ItemBubbleNrvBreak));
         return true;

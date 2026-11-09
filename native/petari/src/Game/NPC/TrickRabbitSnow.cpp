@@ -156,7 +156,7 @@ void TrickRabbitSnow::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgPush(pReceiver, pSender);
 }
 
-bool TrickRabbitSnow::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool TrickRabbitSnow::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitSnowNrvHideSnow))) {
         return false;
     }

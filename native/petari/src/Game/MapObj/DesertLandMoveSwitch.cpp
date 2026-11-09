@@ -114,7 +114,7 @@ void DesertLandMoveSwitch::calcAndSetBaseMtx() {
     mMapObjConnector->connect();
 }
 
-bool DesertLandMoveSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DesertLandMoveSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerHipDropFloor(msg) && !mIsHipDropped) {
         mIsHipDropped = true;
         return true;
@@ -124,7 +124,7 @@ bool DesertLandMoveSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, H
 }
 
 // Taken the frame the player steps on.
-bool DesertLandMoveSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DesertLandMoveSwitch::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_FLOOR_TOUCH) {
         mIsOnPlayer = true;
         return !mWasOnPlayer;

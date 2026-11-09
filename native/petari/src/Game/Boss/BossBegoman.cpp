@@ -971,7 +971,7 @@ bool BossBegoman::receiveMsgTrample(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool BossBegoman::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BossBegoman::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return !isNerveIgnoreAttack() && MR::isMsgHitmarkEmit(msg);
 }
 

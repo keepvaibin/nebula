@@ -18,7 +18,7 @@ namespace {
 GalaxyMapSelectButton::GalaxyMapSelectButton() : LayoutActor("選択用ボタン", true), mNextNerve(nullptr), mPaneCtrl(nullptr) {
 }
 
-void GalaxyMapSelectButton::init(const TableIter& rIter) {
+void GalaxyMapSelectButton::init(const TableIter& /*rIter*/) {
     initLayoutManager("MapButton", 1);
     MR::createAndAddPaneCtrl(this, "MapList", 1);
 

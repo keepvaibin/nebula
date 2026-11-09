@@ -71,7 +71,7 @@ void TreasureSpot::control() {
     }
 }
 
-bool TreasureSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TreasureSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isSpouted() || !MR::isNearPlayerAnyTime(this, ::sEnableSpoutLength)) {
         return false;
     }

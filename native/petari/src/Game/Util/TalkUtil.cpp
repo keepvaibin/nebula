@@ -239,7 +239,7 @@ namespace MR {
         return MR::isYesNoSelected() && !MR::isYesNoSelectedYes();
     }
 
-    const MtxPtr getMessageBalloonFollowMatrix(const TalkMessageCtrl* pCtrl) {
+    MtxPtr getMessageBalloonFollowMatrix(const TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return nullptr;
         }

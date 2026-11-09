@@ -18,7 +18,7 @@ DinoPackunTailPart::DinoPackunTailPart(const char* pName, DinoPackun* pParent) :
     mRadius = 50.0f;
 }
 
-void DinoPackunTailPart::init(const TableIter& rIter) {
+void DinoPackunTailPart::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(DinoPackunTailPart, DinoPackunTailPartNrvWait));
     MR::onCalcGravity(this);
     initBinder(mRadius, 0.0f, 0);

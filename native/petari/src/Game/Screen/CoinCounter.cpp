@@ -25,7 +25,7 @@ CoinCounter::CoinCounter(const char* pName)
       mIsForceAppear(false), mFollowPos(0.0f, 0.0f) {
 }
 
-void CoinCounter::init(const TableIter& rIter) {
+void CoinCounter::init(const TableIter& /*rIter*/) {
     initLayoutManager("CoinCounter", 2);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
     MR::createAndAddPaneCtrl(this, "CoinCounter", 1);

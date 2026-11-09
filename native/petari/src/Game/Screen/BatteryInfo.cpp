@@ -198,7 +198,7 @@ bool BatteryInfo::tryChangeNerveWithBatteryLeftAlreadyAppear() {
 BatteryLayout::BatteryLayout() : LayoutActor("BatteryLayout", true), mInfo1P(nullptr), mInfo2P(nullptr) {
 }
 
-void BatteryLayout::init(const TableIter& rIter) {
+void BatteryLayout::init(const TableIter& /*rIter*/) {
     initLayoutManager("BatteryInfo", 1);
 
     mInfo1P = new BatteryInfo(this, "WinBattery1", 0);

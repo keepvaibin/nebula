@@ -13,7 +13,7 @@ class MultiEmitterCallBackBase : public EmitterCallBack {
 public:
     MultiEmitterCallBackBase() {};
 
-    virtual void init(EmitterCore*) {};
+    virtual void init(EmitterCore*) override {};
 };
 
 // Places an effect's emitters on its host: a matrix, or translation/rotation/scale vectors.
@@ -33,8 +33,8 @@ public:
     MultiEmitterCallBack(const MultiEmitter*, MtxPtr pMtx, const Vec3f& rOffset);
     MultiEmitterCallBack(const MultiEmitter*, MtxPtr pMtx, const Vec3f* pScale, const Vec3f& rOffset);
 
-    void execute(EmitterCore*);
-    void init(EmitterCore*);
+    void execute(EmitterCore*) override;
+    void init(EmitterCore*) override;
     void setHostSRT(const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale);
     void setHostMtx(MtxPtr);
     void setBaseScale(f32);

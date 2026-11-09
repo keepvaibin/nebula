@@ -8,9 +8,9 @@ class LargeChain : public LiveActor {
 public:
     LargeChain(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
+    virtual void init(const TableIter&) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
 
     void exeWait();
     void exeBreak();

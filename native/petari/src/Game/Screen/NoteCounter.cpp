@@ -27,7 +27,7 @@ NoteCounter::NoteCounter(const char* pName)
     : LayoutActor(pName, true), mNoteNum(), mNoteAddNum(), mNoteMissNum(), mMelodyNo(-1), mRailLength(), mHost() {
 }
 
-void NoteCounter::init(const TableIter& rIter) {
+void NoteCounter::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(NoteCounter, NoteCounterNrvHide));
     appear();
 }

@@ -22,7 +22,7 @@ namespace NrvPlayerMissLeft {
 PlayerMissLeft::PlayerMissLeft(const char* pName) : LayoutActor(pName, true), mLayoutAppearer(), mPaneRumbler() {
 }
 
-void PlayerMissLeft::init(const TableIter& rIter) {
+void PlayerMissLeft::init(const TableIter& /*rIter*/) {
     initLayoutManager("PlayerLeft", 3);
     MR::createAndAddPaneCtrl(this, "CenterPlayerLeft", 1);
 

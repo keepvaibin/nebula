@@ -82,11 +82,11 @@ void CapsuleCage::kill() {
     MapObjActor::kill();
 }
 
-void CapsuleCage::connectToScene(const MapObjActorInitInfo& rInfo) {
+void CapsuleCage::connectToScene(const MapObjActorInitInfo& /*rInfo*/) {
     MR::connectToSceneIndirectMapObj(this);
 }
 
-void CapsuleCage::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void CapsuleCage::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnB(this, MR::Functor(this, &CapsuleCage::startOpen));
 }
 

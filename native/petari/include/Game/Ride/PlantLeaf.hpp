@@ -10,8 +10,8 @@ class PlantLeaf : public LiveActor {
 public:
     PlantLeaf(f32, const Vec3f&, const Vec3f&, f32);
 
-    virtual void init(const TableIter&);
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mBaseMtx;
     }
 
@@ -33,7 +33,7 @@ class PlantLeafDrawInit : public LiveActor {
 public:
     PlantLeafDrawInit(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     Material* mMaterial;
     Mesh* mShape;

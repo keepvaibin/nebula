@@ -177,7 +177,7 @@ bool WaterBazooka::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
-bool WaterBazooka::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool WaterBazooka::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (pReceiver == getSensor("body")) {
         return false;
     }
@@ -792,7 +792,7 @@ void WaterBazooka::damageBazooka(HitSensor* pSender, HitSensor* pReceiver) {
     mLife--;
 }
 
-bool WaterBazooka::calcJointCannon(Pos3f* pMtx, const JointControllerInfo& rJointInfo) {
+bool WaterBazooka::calcJointCannon(Pos3f* pMtx, const JointControllerInfo& /*rJointInfo*/) {
     pMtx->setInline(mBaseMtx);
     return true;
 }

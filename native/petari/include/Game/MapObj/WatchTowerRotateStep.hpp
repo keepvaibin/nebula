@@ -8,8 +8,8 @@ class WatchTowerRotateStep : public LiveActor {
 public:
     WatchTowerRotateStep(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAndSetBaseMtx() override;
 
     void initLift(const TableIter& rIter);
     void attachLift();

@@ -13,9 +13,9 @@ public:
 
     SimpleBloomArea(int, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
-    virtual const char* getManagerName() const {
+    virtual const char* getManagerName() const override {
         return "ImageEffectArea";
     }
 

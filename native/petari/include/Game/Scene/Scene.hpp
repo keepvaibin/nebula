@@ -8,7 +8,7 @@ class Scene : public NerveExecutor {
 public:
     Scene(const char*);
 
-    virtual ~Scene();
+    virtual ~Scene() override;
     virtual void init();
     virtual bool initAfterScenarioChosen() { return true; }
     virtual void start();

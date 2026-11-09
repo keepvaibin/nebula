@@ -11,9 +11,9 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     StarPieceCounter(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void forceAppear(bool);
     void disappear(bool);

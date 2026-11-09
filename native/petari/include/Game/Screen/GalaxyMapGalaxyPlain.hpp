@@ -11,13 +11,13 @@ public:
     /// @param pHost The pointer to the owning actor instance.
     GalaxyMapGalaxyPlain(const LayoutActor* pHost);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void show(const char*, const char*);
     void adjustTransInScreen();

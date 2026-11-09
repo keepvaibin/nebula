@@ -18,8 +18,8 @@ namespace {
 };  // namespace
 
 GameDataHolder::GameDataHolder(const UserFile* pUserFile)
-    : mUserFile(pUserFile), mEventFlagChecker(), mEventValueChecker(), mPlayerStatus(), mAllGalaxyStorage(), mSpinDriverPathStorage(),
-      mStarPieceAlmsStorage(), mMapInfo(), mChunkHolder() {
+    : mEventFlagChecker(), mEventValueChecker(), mPlayerStatus(), mAllGalaxyStorage(), mSpinDriverPathStorage(), mStarPieceAlmsStorage(),
+      mMapInfo(), mChunkHolder(), mUserFile(pUserFile) {
     mAllGalaxyStorage = new GameDataAllGalaxyStorage();
     mEventFlagChecker = new GameEventFlagChecker(this);
     mEventValueChecker = new GameEventValueChecker();

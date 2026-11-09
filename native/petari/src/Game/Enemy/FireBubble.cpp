@@ -120,7 +120,7 @@ void FireBubble::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool FireBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FireBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgLockOnStarPieceShoot(msg)) {
         return true;
     }

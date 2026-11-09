@@ -10,9 +10,9 @@ class RunawayRabbitCollect : public LiveActor {
 public:
     RunawayRabbitCollect(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void control() override;
 
     s32 calcCompleteRabbitCount() const;
     void linkMsgCtrl();

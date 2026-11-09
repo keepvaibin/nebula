@@ -11,11 +11,11 @@ class UFOBase : public LiveActor {
 public:
     UFOBase(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void makeActorDead();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
     virtual void initSensorType();
 
     void initSubModel(const TableIter&, const char*);
@@ -54,6 +54,6 @@ class UFOBreakable : public UFOBase {
 public:
     UFOBreakable(const char*);
 
-    virtual void initSensorType();
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
+    virtual void initSensorType() override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
 };

@@ -36,12 +36,12 @@ f32 DinoPackunTailNode::getKeepBendPower() const {
     return mKeepBendPower;
 }
 
-bool DinoPackunTailNode::preCalcJoint(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool DinoPackunTailNode::preCalcJoint(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     pMtx->getTrans(mJointPos);
     return false;
 }
 
-bool DinoPackunTailNode::turnJointLocalXDir(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool DinoPackunTailNode::turnJointLocalXDir(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     if (!mPrevNode && !mNextNode) {
         return false;
     }
@@ -73,7 +73,7 @@ bool DinoPackunTailNode::turnJointLocalXDir(Pos3f* pMtx, const JointControllerIn
     return true;
 }
 
-bool DinoPackunTailNode::calcJointScale(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool DinoPackunTailNode::calcJointScale(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     if (!mNextNode) {
         return false;
     }

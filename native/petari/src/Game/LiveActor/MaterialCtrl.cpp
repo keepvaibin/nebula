@@ -241,5 +241,5 @@ void TexMtxCtrl::updateMaterial(Material* pMaterial) {
     }
 }
 
-void MaterialCtrl::updateMaterial(Material* pMaterial) {
+void MaterialCtrl::updateMaterial(Material* /*pMaterial*/) {
 }

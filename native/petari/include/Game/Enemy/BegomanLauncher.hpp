@@ -8,9 +8,9 @@ class BegomanLauncher : public LiveActor {
 public:
     BegomanLauncher(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void kill();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void kill() override;
 
     void onSwitchAppear();
     void exeWaitAfterSwitchOn();

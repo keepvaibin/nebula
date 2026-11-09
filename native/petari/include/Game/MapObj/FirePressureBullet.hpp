@@ -7,10 +7,10 @@ class FirePressureBullet : public LiveActor {
 public:
     FirePressureBullet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void shotFireBullet(LiveActor* pFirePressure, const Pos3f& rMtx, const f32& rSpeed, bool isHoming, bool canCrash);
     void exeFly();

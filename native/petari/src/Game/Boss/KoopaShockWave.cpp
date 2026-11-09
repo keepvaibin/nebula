@@ -24,7 +24,7 @@ KoopaShockWave::KoopaShockWave(Koopa* pKoopa)
     mMtx.identity();
 }
 
-void KoopaShockWave::init(const TableIter& rIter) {
+void KoopaShockWave::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("KoopaShockWave", nullptr, false);
 
     MR::startAction(this, "Spread");

@@ -24,9 +24,9 @@ public:
 
     Rabbit(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void calcRailPos(Vec3f*);
     bool isNeedTurn(const Vec3f&);
@@ -51,7 +51,7 @@ public:
     s32 mBehavior;
     bool mIsFalling;
     u16 mIsLanded;
-    u16 mWaitStep;
+    s32 mWaitStep;
     f32 mJumpHeight;
     f32 mJumpSpeed;
     f32 mMoveSpeed;

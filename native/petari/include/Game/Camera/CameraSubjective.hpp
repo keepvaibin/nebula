@@ -6,9 +6,9 @@ class CameraSubjective : public Camera {
 public:
     CameraSubjective(const char* pName = "主観カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isCollisionOff() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isCollisionOff() const override {
         return true;
     }
 

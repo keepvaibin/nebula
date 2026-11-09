@@ -46,7 +46,7 @@ class BossKameckDemoPosition : public LiveActor {
 public:
     BossKameckDemoPosition();
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     ActorCameraInfo* mCameraInfo;
 };

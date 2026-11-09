@@ -96,7 +96,7 @@ void HipDropSwitch::calcAndSetBaseMtx() {
     mConnector->connect();
 }
 
-bool HipDropSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HipDropSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgStarPieceAttack(msg)) {
         mIsOnPlayer = true;
         return true;
@@ -108,7 +108,7 @@ bool HipDropSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     return false;
 }
 
-bool HipDropSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HipDropSwitch::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgFloorTouch(msg) && mSpringModel->mHitSensor == pReceiver) {
         mIsOnPlayer = true;
         return !mWasOnPlayer;

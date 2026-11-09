@@ -269,7 +269,7 @@ bool Kiraira::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-bool Kiraira::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Kiraira::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!isDown() && MR::isMsgExplosionAttack(msg) && MR::isSensorEnemy(pReceiver)) {
         MR::invalidateClipping(this);
         setNerve(GET_NERVE(Kiraira, KirairaNrvBeExploded));
@@ -279,7 +279,7 @@ bool Kiraira::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
     return false;
 }
 
-bool Kiraira::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Kiraira::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isDown()) {
         return false;
     }

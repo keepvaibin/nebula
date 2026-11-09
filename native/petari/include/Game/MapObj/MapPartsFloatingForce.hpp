@@ -21,8 +21,8 @@ class MapPartsFloatingForce : public MapPartsFunction {
 public:
     MapPartsFloatingForce(LiveActor* pActor);
 
-    virtual void init(const TableIter& rIter);
-    virtual void start();
+    virtual void init(const TableIter& rIter) override;
+    virtual void start() override;
 
     void setObjectName(const char* pName);
     void initForNormalMotion(const TableIter& rIter);

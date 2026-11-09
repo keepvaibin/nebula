@@ -23,7 +23,7 @@ FullnessMeter::FullnessMeter(LiveActor* pHost, s32 a2, s32 a3) : LayoutActor("æº
     initNerve(GET_NERVE(FullnessMeter, FullnessMeterNrvAppear));
 }
 
-void FullnessMeter::init(const TableIter& rIter) {
+void FullnessMeter::init(const TableIter& /*rIter*/) {
     MR::startPaneAnim(this, "TargetMeter", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "TargetMeter", 0.0f, 0);
 }

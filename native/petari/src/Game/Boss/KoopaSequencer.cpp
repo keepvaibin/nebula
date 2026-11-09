@@ -21,7 +21,7 @@ KoopaSequencer::KoopaSequencer(const char* pName, s32 vs)
     : NerveExecutor(pName), mKoopa(), mPowerUp(), mBattleStairs(), mJumpToPlanet(), mLv(1), mVs(vs), mIsAngry() {
 }
 
-void KoopaSequencer::init(Koopa* pKoopa, const TableIter& rIter) {
+void KoopaSequencer::init(Koopa* pKoopa, const TableIter& /*rIter*/) {
     mKoopa = pKoopa;
 
     mPowerUp = new KoopaDemoPowerUp(mKoopa);
@@ -39,18 +39,18 @@ void KoopaSequencer::calcAndSetBaseMtx() {
     MR::calcAndSetBaseMtxFromGravityAndZAxis(mKoopa, mKoopa->mFront);
 }
 
-void KoopaSequencer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void KoopaSequencer::attackSensor(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
 }
 
-bool KoopaSequencer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaSequencer::receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool KoopaSequencer::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaSequencer::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool KoopaSequencer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaSequencer::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

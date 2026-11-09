@@ -5,7 +5,7 @@
 GalaxyMapMarioIcon::GalaxyMapMarioIcon(LayoutActor* pParam1, const char* pParam2) : LayoutActor("マリオ", true), mTargetLayout(pParam1), mTargetPaneName(pParam2) {
 }
 
-void GalaxyMapMarioIcon::init(const TableIter& rIter) {
+void GalaxyMapMarioIcon::init(const TableIter& /*rIter*/) {
     f32 animFrame;
 
     initLayoutManager("IconMario", 2);

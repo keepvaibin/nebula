@@ -11,7 +11,7 @@ class SwitchWatcherHolder : public NameObj {
 public:
     SwitchWatcherHolder();
 
-    virtual void movement();
+    virtual void movement() override;
 
     void joinSwitchEventListenerA(const StageSwitchCtrl*, SwitchEventListener*);
     void joinSwitchEventListenerB(const StageSwitchCtrl*, SwitchEventListener*);

@@ -622,7 +622,7 @@ void WaterRoad::updateHitSensor(HitSensor* pSensor) {
     }
 }
 
-bool WaterRoad::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool WaterRoad::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         if (!isNerve(GET_NERVE(WaterRoad, WaterRoadNrvWait))) {
             return false;

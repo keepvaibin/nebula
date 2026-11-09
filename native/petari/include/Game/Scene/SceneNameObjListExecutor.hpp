@@ -7,8 +7,8 @@ public:
     SceneNameObjListExecutor() : NameObjListExecutor() {
     }
 
-    virtual void initMovementList();
-    virtual void initCalcAnimList();
-    virtual void initCalcViewAndEntryList();
-    virtual void initDrawList();
+    virtual void initMovementList() override;
+    virtual void initCalcAnimList() override;
+    virtual void initCalcViewAndEntryList() override;
+    virtual void initDrawList() override;
 };

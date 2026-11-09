@@ -59,7 +59,7 @@ void PlayerActionGuidance::control() {
     }
 }
 
-void PlayerActionGuidance::init(const TableIter& rIter) {
+void PlayerActionGuidance::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayoutMovement(this);
     initNerve(GET_NERVE_ANON(PlayerActionGuidanceWaitFocusIn));
     startAnimAllLayout("Appear");

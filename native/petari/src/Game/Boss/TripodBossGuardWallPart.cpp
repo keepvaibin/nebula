@@ -28,7 +28,7 @@ namespace NrvTripodBossGuardWallPart {
 TripodBossGuardWallPart::TripodBossGuardWallPart(const char* pName) : LiveActor(pName), mHostMtx(), mPlacementAngle(), mStartTiming() {
 }
 
-void TripodBossGuardWallPart::init(const TableIter& rIter) {
+void TripodBossGuardWallPart::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("TripodBossGuardWall", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initHitSensor(2);
@@ -66,7 +66,7 @@ void TripodBossGuardWallPart::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mtx);
 }
 
-bool TripodBossGuardWallPart::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TripodBossGuardWallPart::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorType(pReceiver, ATYPE_TRIPODBOSS_GUARD_WALL) && MR::isMsgExplosionAttack(msg)) {
         return requestBreak();
     }

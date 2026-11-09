@@ -10,11 +10,11 @@ class RingBeam : public LiveActor {
 public:
     RingBeam(const char* pName, LiveActor* pHost, bool isFollowGravity, bool hasShadow);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void kill();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void setSpeed(f32 speed);
     void setLife(s32 life);
@@ -41,10 +41,10 @@ class RingBeamShadowDrawer : public ShadowVolumeDrawer {
 public:
     RingBeamShadowDrawer(const LiveActor*);
 
-    virtual ~RingBeamShadowDrawer() {};
-    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
-    virtual void drawShape(TypedDraw& rDraw) const;
-    virtual bool isDraw() const;
+    virtual ~RingBeamShadowDrawer() override {};
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
+    virtual void drawShape(TypedDraw& rDraw) const override;
+    virtual bool isDraw() const override;
 
     const LiveActor* mHost;
     f32 mRadius;

@@ -38,17 +38,17 @@ public:
 
     SkeletalFishBoss(const char*);
 
-    virtual ~SkeletalFishBoss() {
+    virtual ~SkeletalFishBoss() override {
     }
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void makeActorAppeared();
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void makeActorAppeared() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     bool calcJoint(Pos3f*, const JointControllerInfo&);
     void damage(const HitSensor*, const Vec3f&);
@@ -138,25 +138,25 @@ class SkeletalFishBossScarFlash : public PartsModel {
 public:
     SkeletalFishBossScarFlash(LiveActor*);
 
-    virtual ~SkeletalFishBossScarFlash() {
+    virtual ~SkeletalFishBossScarFlash() override {
     }
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void control() override;
 };
 
 class SkeletalFishBossHead : public PartsModel {
 public:
     SkeletalFishBossHead(LiveActor*);
 
-    virtual ~SkeletalFishBossHead() {
+    virtual ~SkeletalFishBossHead() override {
     }
 
-    virtual void movement();
-    virtual void calcAnim();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void movement() override;
+    virtual void calcAnim() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void updateCollisionMtx();
     void createSubModel();

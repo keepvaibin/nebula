@@ -12,11 +12,11 @@ class PrologueDirector : public LiveActor {
 public:
     PrologueDirector(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void exeWait();
     void exePictureBook();

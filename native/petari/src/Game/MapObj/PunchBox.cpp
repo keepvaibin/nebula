@@ -170,7 +170,7 @@ void PunchBox::kill() {
     LiveActor::kill();
 }
 
-void PunchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
+void PunchBox::doHit(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (mHitPoint != 0) {
         mHitPoint--;
     }
@@ -225,7 +225,7 @@ bool PunchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
     return false;
 }
 
-bool PunchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PunchBox::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;

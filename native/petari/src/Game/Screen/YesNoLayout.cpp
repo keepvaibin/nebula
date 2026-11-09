@@ -14,7 +14,7 @@ namespace NrvYesNoLayout {
 YesNoLayout::YesNoLayout() : SimpleLayout("Yes/Noレイアウト", "SelectButton", 1, MR::DrawType_TalkPartsLayout), mController(nullptr), mHasInformationMessage(false) {
 }
 
-void YesNoLayout::init(const TableIter& rIter) {
+void YesNoLayout::init(const TableIter& /*rIter*/) {
     MR::createAndAddPaneCtrl(this, "Left", 1);
     MR::createAndAddPaneCtrl(this, "Right", 1);
     initEffectKeeper(0, nullptr, nullptr);

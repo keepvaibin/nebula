@@ -8,9 +8,9 @@ class OceanSmallTurtle : public LiveActor {
 public:
     OceanSmallTurtle(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeWait();
     void exeFloatSignal();

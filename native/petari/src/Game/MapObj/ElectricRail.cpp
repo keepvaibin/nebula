@@ -88,7 +88,7 @@ namespace NrvElectricRail {
 ElectricRailPoint::ElectricRailPoint(const char* pName) : LiveActor(pName), mHasShadow(true), mIsActive(true) {
 }
 
-void ElectricRailPoint::init(const TableIter& rIter) {
+void ElectricRailPoint::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("ElectricRailPoint", nullptr, false);
     MR::connectToSceneMapObjDecoration(this);
 

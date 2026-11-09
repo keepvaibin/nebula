@@ -10,7 +10,7 @@ namespace NrvIconComet {
 IconComet::IconComet() : LayoutActor("コメットアイコン", true) {
 }
 
-void IconComet::init(const TableIter& rIter) {
+void IconComet::init(const TableIter& /*rIter*/) {
     initLayoutManager("IconComet", 1);
     initNerve(GET_NERVE(IconComet, IconCometNrvWait));
 }

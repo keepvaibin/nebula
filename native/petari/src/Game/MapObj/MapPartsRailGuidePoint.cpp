@@ -23,7 +23,7 @@ MapPartsRailGuidePoint::MapPartsRailGuidePoint(const LiveActor* pActor, const ch
     mCoord = MR::getRailPointCoord(pActor, pointIndex);
 }
 
-void MapPartsRailGuidePoint::init(const TableIter& rIter) {
+void MapPartsRailGuidePoint::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjNoMovement(this);
 
     if (mIsPointModel) {

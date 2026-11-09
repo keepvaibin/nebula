@@ -114,7 +114,7 @@ bool ArrowSwitchMulti::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
     return MR::isMsgPlayerHitAll(msg) && requestPunch(pSender, pReceiver);
 }
 
-bool ArrowSwitchMulti::requestPunch(HitSensor* pSender, HitSensor* pReceiver) {
+bool ArrowSwitchMulti::requestPunch(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (getSensor("body") != pReceiver) {
         return false;
     }

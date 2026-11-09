@@ -46,7 +46,7 @@ MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const TableIter& r
     mIdInfo = pIdInfo;
 }
 
-void MsgSharedGroup::init(const TableIter& rIter) {
+void MsgSharedGroup::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_MsgSharedGroup, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
@@ -73,7 +73,7 @@ void MsgSharedGroup::sendMsgToGroupMember(u32 msg, HitSensor* pSensor, const cha
 LiveActorGroupArray::LiveActorGroupArray(const char* pName) : NameObj(pName), mGroups() {
 }
 
-void LiveActorGroupArray::init(const TableIter& rIter) {
+void LiveActorGroupArray::init(const TableIter& /*rIter*/) {
 }
 
 LiveActorGroup* LiveActorGroupArray::getLiveActorGroup(const LiveActor* pActor) const {

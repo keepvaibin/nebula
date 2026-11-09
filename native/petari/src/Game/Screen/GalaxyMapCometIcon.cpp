@@ -27,7 +27,7 @@ void GalaxyMapCometIcon::control() {
 GalaxyMapCometIcon::~GalaxyMapCometIcon() {
 }
 
-void GalaxyMapCometIcon::init(const TableIter& rIter) {
+void GalaxyMapCometIcon::init(const TableIter& /*rIter*/) {
     initLayoutManager("IconComet", 2);
     MR::startAnim(this, "Wait", 0);
 }

@@ -12,15 +12,15 @@ public:
 
     JetTurtle(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgThrow(HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgThrow(HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
     virtual void resetPosition();
     virtual void reset(u32);
 
@@ -65,8 +65,8 @@ public:
     GoldenTurtle(const char* pName) : JetTurtle(pName) {
     }
 
-    virtual void init(const TableIter&);
-    virtual void resetPosition();
-    virtual void reset(u32);
-    virtual void exeThrowing();
+    virtual void init(const TableIter&) override;
+    virtual void resetPosition() override;
+    virtual void reset(u32) override;
+    virtual void exeThrowing() override;
 };

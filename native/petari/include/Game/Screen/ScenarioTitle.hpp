@@ -6,7 +6,7 @@ class ScenarioTitle : public LayoutActor {
 public:
     ScenarioTitle();
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void start();
     void end();

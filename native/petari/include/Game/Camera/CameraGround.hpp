@@ -6,9 +6,9 @@ class CameraGround : public Camera {
 public:
     CameraGround(const char* pName = "地面カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec2f& angle, f32 dist, const Vec3f& rUp) {
         mAngleA = angle.x;

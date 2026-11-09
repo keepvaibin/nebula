@@ -3,5 +3,5 @@
 #include "Game/Demo/DemoExecutor.hpp"
 
 template < class T >
-void DemoSheetKeeperInfoHolder< T >::executeType(const T* pInfo) {
+void DemoSheetKeeperInfoHolder< T >::executeType(const T* /*pInfo*/) {
 }

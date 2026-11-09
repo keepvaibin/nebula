@@ -49,7 +49,7 @@ void PomponPlant::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool PomponPlant::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PomponPlant::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceReflect(msg)) {
         setNerve(GET_NERVE(PomponPlant, HostTypeSwingPlayer));
         return true;

@@ -10,11 +10,11 @@ class MarblePlanet : public LiveActor {
 public:
     MarblePlanet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exeScaleUpCore();
@@ -32,11 +32,11 @@ class MarblePlanetElectron : public LiveActor {
 public:
     MarblePlanetElectron(LiveActor*, const Vec3f&, const Vec3f&, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPush(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void exeMove();
     void exeAttack();
@@ -51,8 +51,8 @@ class MarblePlanetElectronShadow : public LiveActor {
 public:
     MarblePlanetElectronShadow(LiveActor*, const Vec3f&, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void calcAndSetBaseMtx() override;
 
     MarblePlanetElectron* mParentElectron;
     const Vec3f* mGroundPos;

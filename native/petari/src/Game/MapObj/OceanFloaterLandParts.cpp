@@ -109,7 +109,7 @@ void OceanFloaterLandParts::control() {
     }
 }
 
-bool OceanFloaterLandParts::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool OceanFloaterLandParts::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_MAPPARTS_DISAPPEAR_WITH_BLINK && isNerve(GET_NERVE(OceanFloaterLandParts, HostTypeMove))) {
         kill();
         return true;

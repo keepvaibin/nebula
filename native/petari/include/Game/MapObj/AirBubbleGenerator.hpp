@@ -6,8 +6,8 @@ class AirBubbleGenerator : public LiveActor {
 public:
     AirBubbleGenerator(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void exeWait();
     void exeGenerate();

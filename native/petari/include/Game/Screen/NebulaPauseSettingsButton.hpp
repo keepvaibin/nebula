@@ -11,8 +11,8 @@ class NebulaPauseSettingsButton : public LayoutActor {
 public:
     NebulaPauseSettingsButton();
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void show();
     void hide();

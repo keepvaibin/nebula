@@ -278,7 +278,7 @@ void MiniatureGalaxy::calcAndSetBaseMtx() {
     mProjmapEffectMtxSetter->updateMtxUseBaseMtx();
 }
 
-bool MiniatureGalaxy::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MiniatureGalaxy::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::trySyncAppearMsgSelectStart(this, msg)) {
         return true;
     }

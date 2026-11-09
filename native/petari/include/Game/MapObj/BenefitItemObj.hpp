@@ -9,7 +9,7 @@ class FlashingCtrl;
 
 class ShadowClipActor : public LiveActor {
 public:
-    virtual void endClipped();
+    virtual void endClipped() override;
 
     LiveActor* mHost;
 };
@@ -44,14 +44,14 @@ public:
 
     BenefitItemObj(const char* pName, const char* pModelName);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void makeActorAppeared();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void makeActorAppeared() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
     virtual void appearGround();
     virtual void appearThrowUp();
     virtual void appearThrowUpQuestionBox();
@@ -75,11 +75,11 @@ public:
 
     Vec3f mBlendFront;
     Vec3f mUp;
-    s16 mEscapeLife;
-    s16 mFlashPeriod;
-    s16 mFlashHideTime;
-    s16 mFlashCounter;
-    s16 mHideCounter;
+    s32 mEscapeLife;
+    s32 mFlashPeriod;
+    s32 mFlashHideTime;
+    s32 mFlashCounter;
+    s32 mHideCounter;
     Vec3f mEscapeVelocity;
     Vec3f mFallVelocity;
     MtxPtr mFollowMtx;
@@ -105,7 +105,7 @@ public:
     ActorCameraInfo* mCameraInfo;
     u32 mCameraFrames;
     LiveActor* mHitSensorActor;
-    u16 mSensorInvalidStep;
+    s32 mSensorInvalidStep;
 };
 
 namespace NrvBenefitItemObj {

@@ -6,9 +6,9 @@ class GreenCaterpillarBigBody : public ModelObj {
 public:
     GreenCaterpillarBigBody(LiveActor*, MtxPtr);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void setPosAndDirection(LiveActor*);
     void calcBodyDir(LiveActor*, Vec3f*);
@@ -22,11 +22,11 @@ class GreenCaterpillarBig : public LiveActor {
 public:
     GreenCaterpillarBig(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void startWriggle();
     void exeHide();

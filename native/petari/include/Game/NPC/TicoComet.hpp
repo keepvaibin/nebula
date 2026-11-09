@@ -7,9 +7,9 @@ class TicoEat : public Tico {
 public:
     TicoEat(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
     virtual void startReactionSound();
 
     void initStarPiece(s32);
@@ -30,8 +30,8 @@ class TicoComet : public TicoEat {
 public:
     TicoComet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void startReactionSound();
+    virtual void init(const TableIter&) override;
+    virtual void startReactionSound() override;
 
     bool branchFunc(u32);
     bool tryDemo();

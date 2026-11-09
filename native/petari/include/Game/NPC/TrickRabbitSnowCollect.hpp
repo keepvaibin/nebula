@@ -12,8 +12,8 @@ class TrickRabbitSnowCollect : public LiveActor {
 public:
     TrickRabbitSnowCollect(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual MtxPtr getBaseMtx() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual MtxPtr getBaseMtx() const override;
 
     void initRabbits(const TableIter&);
     void initTalk(const TableIter&);
@@ -58,17 +58,17 @@ public:
     TrickRabbitCollectListener(TrickRabbitSnowCollect* pHost) : TrickRabbitSnowListener(), mHost(pHost) {
     }
 
-    virtual void noticeStart(TrickRabbitSnow* pSubject) {
+    virtual void noticeStart(TrickRabbitSnow* /*pSubject*/) override {
     }
 
-    virtual void noticeAppear(TrickRabbitSnow* pSubject) {
+    virtual void noticeAppear(TrickRabbitSnow* /*pSubject*/) override {
     }
 
-    virtual void noticeCaught(TrickRabbitSnow* pSubject) {
+    virtual void noticeCaught(TrickRabbitSnow* pSubject) override {
         mHost->noticeCaught(pSubject);
     }
 
-    virtual void noticeGiveUp(TrickRabbitSnow* pSubject) {
+    virtual void noticeGiveUp(TrickRabbitSnow* pSubject) override {
         mHost->noticeGiveUp(pSubject);
     }
 

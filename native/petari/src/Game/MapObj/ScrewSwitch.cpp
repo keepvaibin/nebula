@@ -123,7 +123,7 @@ void ScrewSwitch::control() {
     mCollisionParts->setMtx();
 }
 
-bool ScrewSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool ScrewSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgRushBegin(msg) && MR::isSensorPlayer(pSender) && MR::isOnPlayer(getSensor("binder"))) {
         mBindActor = pSender->mHost;
         MR::startSound(mBindActor, "SE_PV_TWIST_START");

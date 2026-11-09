@@ -15,7 +15,7 @@ namespace NrvInformationMessage {
 InformationMessage::InformationMessage() : LayoutActor("インフォメーションメッセージ", true), mAButtonIcon(nullptr), mIsCenter(false) {
 }
 
-void InformationMessage::init(const TableIter& rIter) {
+void InformationMessage::init(const TableIter& /*rIter*/) {
     initLayoutManager("InformationWindow", 2);
     MR::createAndAddPaneCtrl(this, "AButtonPosC", 1);
     MR::createAndAddPaneCtrl(this, "AButtonPosU", 1);

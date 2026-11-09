@@ -10,12 +10,12 @@ class CrystalCageMoving : public MapObjActor {
 public:
     CrystalCageMoving(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void control();
-    virtual void updateHitSensor(HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
-    virtual void connectToScene(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
+    virtual void connectToScene(const MapObjActorInitInfo&) override;
 
     void exeWaitBig();
     void exeBreakBig();

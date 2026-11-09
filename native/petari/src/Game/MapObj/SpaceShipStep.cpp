@@ -76,7 +76,7 @@ void SpaceShipStep::control() {
     updateResetToInitPosCheck();
 }
 
-bool SpaceShipStep::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpaceShipStep::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvBreak))) {
         return false;
     }

@@ -22,7 +22,7 @@ public:
 
     /// @brief Intializes the `AreaObjContainer` while being placed into a scene.
     /// @param rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     AreaObjMgr* getManager(const char*) const;
     AreaObj* getAreaObj(const char*, const Vec3f&) const;

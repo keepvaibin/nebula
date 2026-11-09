@@ -27,7 +27,7 @@ namespace CameraLocalUtil {
     void setUpperOffset(CameraMan*, f32);
     void setRoll(CameraMan*, f32);
     CameraTargetObj* getTarget(const CameraMan*);
-    const MtxPtr getMtxReg(const char*);
+    MtxPtr getMtxReg(const char*);
     const Vec3f& getVecReg(const char*);
     const char* getDummyVecRegName();
     bool isForceCameraChange();

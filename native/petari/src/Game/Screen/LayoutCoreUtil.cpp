@@ -19,13 +19,13 @@ namespace LayoutCoreUtil {
         return pUserData;
     }
 
-    u16 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg) {
+    u32 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg) {
         char16_t stack[512];  // the common case on the stack; past it the text is made in a Text16, whole
         MR::Text16 heap;
         const u32 room = ReplaceTagProcessor::getReplaceRoom(pMsg);
         char16_t* const buffer = room <= 512 ? stack : heap.room(room);
         ReplaceTagProcessor::Replace(buffer, pMsg);
-        const u16 length = MR::getStringLengthWithMessageTag(buffer);
+        const u32 length = static_cast< u32 >(MR::getStringLengthWithMessageTag(buffer));
         // A box that has a string buffer holds whatever is set; its buffer grows to the text.
         if (pTextBox->GetStringBufferLength() != 0 && length > pTextBox->GetStringBufferLength()) {
             pTextBox->AllocStringBuffer(length);

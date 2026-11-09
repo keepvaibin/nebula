@@ -6,11 +6,11 @@ class BenefitItemLifeUp : public BenefitItemObj {
 public:
     BenefitItemLifeUp(const char*);
 
-    virtual void init(const TableIter& rIter) {
+    virtual void init(const TableIter& rIter) override {
         BenefitItemObj::init(rIter);
     }
-    virtual void initModelAndEfx();
-    virtual void exeCatch();
-    virtual void runEfx(const char*);
-    virtual void stopEfx(const char*);
+    virtual void initModelAndEfx() override;
+    virtual void exeCatch() override;
+    virtual void runEfx(const char*) override;
+    virtual void stopEfx(const char*) override;
 };

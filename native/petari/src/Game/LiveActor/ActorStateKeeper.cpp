@@ -2,26 +2,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-namespace {
-    const s32 sFirstCapacity = 8;
-};  // namespace
-
-ActorStateKeeper::ActorStateKeeper() : mCapacity(0), mLength(0), mStates(nullptr), mCurrentState(nullptr) {
+ActorStateKeeper::ActorStateKeeper() : mLength(0), mStates(), mCurrentState(nullptr) {
 }
 
 void ActorStateKeeper::addState(ActorStateBaseInterface* pInterface, const Nerve* pNerve) {
-    if (mLength == mCapacity) {
-        const s32 capacity = mCapacity != 0 ? mCapacity * 2 : ::sFirstCapacity;
-        State* const pStates = new (NebulaArena::findFromRoot(this), 0) State[capacity];
-        for (s32 i = 0; i < mLength; i++) {
-            pStates[i] = mStates[i];
-        }
-        delete[] mStates;
-        mStates = pStates;
-        mCapacity = capacity;
-    }
-
-    State& rState = mStates[mLength];
+    State& rState = mStates.room(mLength + 1)[mLength];
     rState.mInterface = pInterface;
     rState.mNerve = pNerve;
     mLength++;

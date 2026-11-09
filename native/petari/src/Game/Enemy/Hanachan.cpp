@@ -126,7 +126,7 @@ HanachanParts::HanachanParts(Hanachan* pHost, s32 partsIndex, const char* pName,
     }
 }
 
-void HanachanParts::init(const TableIter& rIter) {
+void HanachanParts::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_Enemy, MR::DrawType_None);
     initNerve(GET_NERVE(Hanachan, HanachanPartsNrvWalk));
     initHitSensor(1);
@@ -212,7 +212,7 @@ void HanachanParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool HanachanParts::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HanachanParts::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgInvincibleAttack(msg)) {
         if (mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanBlow)) || mHost->isNerve(GET_NERVE(Hanachan, HanachanNrvHanachanHipDropped))) {
             return false;
@@ -319,7 +319,7 @@ bool HanachanParts::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     return false;
 }
 
-bool HanachanParts::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HanachanParts::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return true;
 }
 

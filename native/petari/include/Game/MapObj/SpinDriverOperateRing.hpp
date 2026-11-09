@@ -7,7 +7,7 @@ class SpinDriverOperateRing : public LiveActor {
 public:
     SpinDriverOperateRing(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     // 0 turns steering off; 1 is the full ring radius.
     void setRadiusRate(f32);

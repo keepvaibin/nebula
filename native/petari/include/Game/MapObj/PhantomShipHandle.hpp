@@ -8,9 +8,9 @@ class PhantomShipHandle : public LiveActor {
 public:
     PhantomShipHandle(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     MapPartsSeesaw1AxisRotator* mRotator;
 };

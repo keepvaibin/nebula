@@ -11,7 +11,7 @@ MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pH
     mPostureMtx.identity();
 }
 
-void MapPartsRailPosture::init(const TableIter& rIter) {
+void MapPartsRailPosture::init(const TableIter& /*rIter*/) {
     MR::getMapPartsArgMovePosture(&mMovePosture, mHost);
 
     if (mMovePosture == POSTURE_NONE) {

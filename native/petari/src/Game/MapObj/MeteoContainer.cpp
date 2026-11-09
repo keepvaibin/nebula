@@ -67,11 +67,11 @@ void MeteoContainer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool MeteoContainer::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool MeteoContainer::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     return MR::isSensorPlayer(pSender);
 }
 
-bool MeteoContainer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MeteoContainer::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_TORNADO_ATTACK && isNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvWait))) {
         setNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvDestroy));
 

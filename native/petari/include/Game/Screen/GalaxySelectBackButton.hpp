@@ -9,9 +9,9 @@ public:
     /// @brief Creates a new `GalaxySelectBackButton`.
     GalaxySelectBackButton();
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void disappear();
     void decide();

@@ -74,7 +74,7 @@ void LinearRailPart::set(const Vec3f& rPoint1, const Vec3f& rPoint2) {
     mLength = NebulaVecMagXYZ(&mCtrlDegree1);
 }
 
-f32 LinearRailPart::getNearestParam(const Vec3f& rPos, f32 t) const {
+f32 LinearRailPart::getNearestParam(const Vec3f& rPos, f32 /*t*/) const {
     Vec3f v = rPos;
     v -= mStart;
 

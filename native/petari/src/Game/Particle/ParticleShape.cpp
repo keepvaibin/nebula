@@ -370,5 +370,5 @@ void ParticleDrawParticleCallBack(EmitterWork* work, ParticleCore* ptcl) {
 // The shape's blending and depth (the particle material keeps them) and its alpha test's references (the register
 // file the particle material reads); its colour and alpha modes and compares go into the particle material
 // (ParticleResource::sendMaterial).
-void ParticleShape::setPass(EmitterWork* work) const {
+void ParticleShape::setPass(EmitterWork* /*work*/) const {
 }

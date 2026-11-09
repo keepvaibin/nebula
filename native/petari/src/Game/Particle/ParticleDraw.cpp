@@ -297,20 +297,20 @@ namespace {
         }
     }
 
-    void dirTypeVel(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
+    void dirTypeVel(EmitterWork const* /*pWork*/, ParticleCore const* pParticle, Vec3f* pDirection) {
         pParticle->getVelVec(*pDirection);
     }
 
-    void dirTypePos(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
+    void dirTypePos(EmitterWork const* /*pWork*/, ParticleCore const* pParticle, Vec3f* pDirection) {
         pParticle->getLocalPosition(*pDirection);
     }
 
-    void dirTypePosInv(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
+    void dirTypePosInv(EmitterWork const* /*pWork*/, ParticleCore const* pParticle, Vec3f* pDirection) {
         pParticle->getLocalPosition(*pDirection);
         pDirection->negate();
     }
 
-    void dirTypeEmtrDir(EmitterWork const* pWork, ParticleCore const* pParticle, Vec3f* pDirection) {
+    void dirTypeEmtrDir(EmitterWork const* pWork, ParticleCore const* /*pParticle*/, Vec3f* pDirection) {
         pDirection->set(pWork->mGlobalEmtrDir);
     }
 
@@ -552,7 +552,7 @@ void ParticleDrawRotation(EmitterWork* work, ParticleCore* ptcl) {
     }
 }
 
-void ParticleDrawPoint(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleDrawPoint(EmitterWork* /*work*/, ParticleCore* ptcl) {
     if (!!(ptcl->mStatus & ParticleStatus_Invisible)) {
         return;
     }

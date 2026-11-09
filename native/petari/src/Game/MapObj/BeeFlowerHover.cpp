@@ -21,7 +21,7 @@ namespace NrvBeeFlowerHover {
 };  // namespace NrvBeeFlowerHover
 
 BeeFlowerHover::BeeFlowerHover(const char* pName)
-    : LiveActor(pName), mLodCtrlPlanet(), mRotateSpeed(::sDefaultRotateSpeed), mRailMover(), mRailPosture(), mClipCenter(0.0f, 0.0f, 0.0f) {
+    : LiveActor(pName), mRotateSpeed(::sDefaultRotateSpeed), mLodCtrlPlanet(), mRailMover(), mRailPosture(), mClipCenter(0.0f, 0.0f, 0.0f) {
     mRotateMtx.identity();
 }
 
@@ -174,7 +174,7 @@ void BeeFlowerHover::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, baseMtx);
 }
 
-bool BeeFlowerHover::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BeeFlowerHover::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!isNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvWait))) {
         return false;
     }

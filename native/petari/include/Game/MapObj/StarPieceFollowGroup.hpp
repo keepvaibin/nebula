@@ -9,7 +9,7 @@ class StarPieceFollowGroup : public LiveActor {
 public:
     StarPieceFollowGroup(const char*);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     bool beginFollowPieces();
     void placementPiece(s32);

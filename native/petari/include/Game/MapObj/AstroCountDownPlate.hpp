@@ -7,7 +7,7 @@ class AstroCountDownPlate : public LiveActor {
 public:
     AstroCountDownPlate(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void exeWait();
     void exeRevival();

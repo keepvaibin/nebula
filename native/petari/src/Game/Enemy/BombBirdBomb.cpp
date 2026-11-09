@@ -32,7 +32,7 @@ namespace NrvBombBirdBomb {
 BombBirdBomb::BombBirdBomb(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mRotateMoment(0.0f, 0.0f, 0.0f) {
 }
 
-void BombBirdBomb::init(const TableIter& rIter) {
+void BombBirdBomb::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("BombBirdBomb", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::onCalcGravity(this);
@@ -105,11 +105,11 @@ void BombBirdBomb::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     kill();
 }
 
-bool BombBirdBomb::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool BombBirdBomb::receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
-bool BombBirdBomb::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BombBirdBomb::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgStarPieceReflect(msg);
 }
 

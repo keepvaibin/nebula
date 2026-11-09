@@ -8,9 +8,9 @@ class CameraFix : public Camera {
 public:
     CameraFix(const char* pName = "完全固定カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec3f&, const Vec3f&, const Vec3f&);
 

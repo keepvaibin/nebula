@@ -7,8 +7,8 @@ class FloaterFloatingForce : public MapPartsFunction {
 public:
     FloaterFloatingForce(LiveActor*, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void start();
+    virtual void init(const TableIter&) override;
+    virtual void start() override;
 
     virtual void updateHostTrans(Vec3f*) const {
     }

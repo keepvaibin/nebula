@@ -8,13 +8,13 @@ class AstroMapObj : public MapObjActor {
 public:
     AstroMapObj(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
-    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) {};
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) {};
-    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) {};
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {};
+    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) override {};
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override {};
+    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) override {};
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override {};
 
     void exeOpen();
     void exeWait();
@@ -48,8 +48,8 @@ class AstroSimpleObj : public SimpleMapObjFarMax {
 public:
     AstroSimpleObj(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     const Table* mNamePlateTable;
     GalaxyNamePlate* mNamePlate;

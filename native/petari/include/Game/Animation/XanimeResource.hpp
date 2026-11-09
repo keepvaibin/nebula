@@ -113,7 +113,7 @@ public:
     void init();
 
     bool mHasGroupTable;
-    u8 mMaxGroupInfoTableSize;
+    u32 mMaxGroupInfoTableSize;
     u32 mAmountOfGroupInfos;
     u32 mAmountOfBckTables;
     XanimeGroupInfo* mGroupInfos;

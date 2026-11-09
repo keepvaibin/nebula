@@ -437,7 +437,7 @@ void Plant::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Plant::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Plant::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
         if (isNerve(GET_NERVE(Plant, PlantNrvSeedWait))) {
             MR::invalidateClipping(this);
@@ -452,7 +452,7 @@ bool Plant::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
     return false;
 }
 
-bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         if ((isNerve(GET_NERVE(Plant, PlantNrvWaitFar)) || isNerve(GET_NERVE(Plant, PlantNrvSeedWait))) ||
             (!MR::isPlayerSwingAction() && MR::isOnGroundPlayer()) || (isNerve(GET_NERVE(Plant, PlantNrvGrowUp)) && MR::isOnGroundPlayer()) ||

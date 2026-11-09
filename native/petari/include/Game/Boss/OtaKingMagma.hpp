@@ -8,8 +8,8 @@ class OtaKingMagma : public PartsModel {
 public:
     OtaKingMagma(LiveActor*, s32);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void appearDemo();
     void attack();

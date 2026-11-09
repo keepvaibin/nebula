@@ -64,14 +64,14 @@ TitleSequenceProduct::TitleSequenceProduct()
         pPrompt[at + 2] = 0x0000;
     }
     // The layout's boxes hold the prompt they ship with, or the room it needs.
-    const u16 promptLength = static_cast< u16 >(MR::textLength(prompt.c_str()));
+    const u32 promptLength = static_cast< u32 >(MR::textLength(prompt.c_str()));
     static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(promptLength);
     static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(promptLength);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", prompt.c_str());
 #else
     MR::Text16 prompt;
     NebulaUi::getText(prompt, "PressAnyStart");
-    const u16 promptLength = static_cast< u16 >(MR::textLength(prompt.c_str()));
+    const u32 promptLength = static_cast< u32 >(MR::textLength(prompt.c_str()));
     static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(promptLength);
     static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(promptLength);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", prompt.c_str());

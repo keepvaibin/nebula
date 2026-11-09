@@ -8,10 +8,10 @@ class BackButton : public LayoutActor {
 public:
     BackButton(const char* pName, bool connectToDecoration);
 
-    virtual ~BackButton();
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
+    virtual ~BackButton() override;
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void disappear();
     bool isHidden() const;

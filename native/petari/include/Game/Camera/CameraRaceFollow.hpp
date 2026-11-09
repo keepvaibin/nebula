@@ -6,9 +6,9 @@ class CameraRaceFollow : public Camera {
 public:
     CameraRaceFollow(const char* pName = "CameraRaceFollow");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void goRound();
 

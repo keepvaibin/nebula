@@ -21,7 +21,7 @@ void AudCameraWatcher::playAtmosphereSE() {
     AudWrap::getSystem()->mAudEffector->setCutoff(127);
 }
 
-void AudCameraWatcher::init(const TableIter& rIter) {
+void AudCameraWatcher::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_AudCameraWatcher, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 

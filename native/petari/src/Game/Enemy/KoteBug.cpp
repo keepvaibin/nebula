@@ -633,7 +633,7 @@ void KoteBug::calcAndSetBaseMtx() {
     mJointController->registerCallBack();
 }
 
-bool KoteBug::calcJoint(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool KoteBug::calcJoint(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     Pos3f rotation;
     rotation.makeQuat(mPosture);
     pMtx->concat(*pMtx, rotation);

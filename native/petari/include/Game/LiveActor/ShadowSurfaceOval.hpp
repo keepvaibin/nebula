@@ -10,7 +10,7 @@ class ShadowSurfaceOval : public ShadowSurfaceDrawer {
 public:
     ShadowSurfaceOval();
 
-    virtual ~ShadowSurfaceOval();
+    virtual ~ShadowSurfaceOval() override;
 
     virtual void draw() const override;
 

@@ -10,9 +10,9 @@ public:
     ShadowVolumeFlatModel(const char*);
     ShadowVolumeFlatModel();
 
-    inline virtual ~ShadowVolumeFlatModel();
-    virtual void draw() const;
-    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
+    inline virtual ~ShadowVolumeFlatModel() override;
+    virtual void draw() const override;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
 
     void initModel(const char*);
     void setBaseMatrixPtr(MtxPtr);

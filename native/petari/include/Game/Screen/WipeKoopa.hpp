@@ -6,16 +6,16 @@ class WipeKoopa : public WipeLayoutBase {
 public:
     WipeKoopa();
 
-    virtual void init(const TableIter&);
-    virtual void wipe(s32);
-    virtual void forceClose();
-    virtual void forceOpen();
-    virtual bool isOpen() const;
-    virtual bool isClose() const;
-    virtual bool isWipeIn() const;
-    virtual bool isWipeOut() const;
+    virtual void init(const TableIter&) override;
+    virtual void wipe(s32) override;
+    virtual void forceClose() override;
+    virtual void forceOpen() override;
+    virtual bool isOpen() const override;
+    virtual bool isClose() const override;
+    virtual bool isWipeIn() const override;
+    virtual bool isWipeOut() const override;
 
-    virtual s32 getWipeType() const {
+    virtual s32 getWipeType() const override {
         return 2;
     }
 

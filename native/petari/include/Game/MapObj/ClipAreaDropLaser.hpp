@@ -9,9 +9,9 @@
 class ClipAreaDropLaser : public LiveActor {
 public:
     ClipAreaDropLaser(const char* pName);
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void draw() const override;
     void exeWait();
     void exeMove();
     void incrementDrawCount();

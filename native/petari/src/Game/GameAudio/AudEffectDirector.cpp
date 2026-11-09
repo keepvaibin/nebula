@@ -22,7 +22,7 @@ namespace {
 AudEffectDirector::AudEffectDirector() : NameObj("オーディオエフェクトディレクター"), mEffectType(0), mAppliedType(0), mPriority(0) {
 }
 
-void AudEffectDirector::init(const TableIter& rIter) {
+void AudEffectDirector::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_AudEffectDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 

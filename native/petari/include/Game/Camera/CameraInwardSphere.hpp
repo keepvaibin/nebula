@@ -6,9 +6,9 @@ class CameraInwardSphere : public Camera {
 public:
     CameraInwardSphere(const char* pName = "球内部カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void calcGravityCenter();
 

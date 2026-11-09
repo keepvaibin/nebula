@@ -22,7 +22,7 @@ public:
 
     /// @brief Intializes the `RaceManagerLayout` while being placed into a scene.
     /// @param rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void playCountAndGo();
     void playGo();
@@ -83,9 +83,9 @@ public:
 
     /// @brief Intializes the `RaceManager` while being placed into a scene.
     /// @param rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void movement();
+    virtual void movement() override;
 
     void exeWait();
     void exePrep();

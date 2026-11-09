@@ -51,7 +51,7 @@ KoopaJrShipCannonShell::KoopaJrShipCannonShell(const char* pName)
     mPosition.set(gZeroVec);
 }
 
-void KoopaJrShipCannonShell::init(const TableIter& rIter) {
+void KoopaJrShipCannonShell::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("KoopaJrShipCannonShell", nullptr, false);
     MR::startBck(this, "KoopaJrShipCannonShell");
     initSound(4, false);
@@ -103,7 +103,7 @@ void KoopaJrShipCannonShell::attackSensor(HitSensor* pSender, HitSensor* pReceiv
     }
 }
 
-bool KoopaJrShipCannonShell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaJrShipCannonShell::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorEnemyAttack(pReceiver)) {
         return false;
     }
@@ -142,7 +142,7 @@ bool KoopaJrShipCannonShell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender,
     return false;
 }
 
-bool KoopaJrShipCannonShell::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaJrShipCannonShell::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (!MR::isMsgExplosionAttack(msg) || !MR::isSensorEnemyAttack(pSender) || !isStateEnableExplosion()) {
         return false;
     }
@@ -151,7 +151,7 @@ bool KoopaJrShipCannonShell::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, 
     return true;
 }
 
-bool KoopaJrShipCannonShell::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaJrShipCannonShell::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (!MR::isSensorPlayer(pSender) || !MR::isMsgInvalidHit(msg)) {
         return false;
     }

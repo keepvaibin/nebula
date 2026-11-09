@@ -8,7 +8,7 @@ public:
     CannonShellBase(const char* pName) : LiveActor(pName) {
     }
 
-    virtual ~CannonShellBase() {
+    virtual ~CannonShellBase() override {
     }
 
     virtual void launch(const Vec3f& rStartPos, const Vec3f& rVelocity) = 0;

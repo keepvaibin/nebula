@@ -6,8 +6,8 @@ class BombTimerLayout : public LayoutActor {
 public:
     BombTimerLayout(bool isConnectToScene);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
 
     void setTimeLimit(u32 timeLimit);
     void suspend();

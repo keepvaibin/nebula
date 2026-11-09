@@ -418,7 +418,7 @@ void BegomanBaby::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool BegomanBaby::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanBaby::receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
@@ -529,7 +529,7 @@ bool BegomanBaby::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return false;
 }
 
-bool BegomanBaby::receiveMsgTrample(HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanBaby::receiveMsgTrample(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow))) {
         return false;
     }
@@ -542,7 +542,7 @@ bool BegomanBaby::receiveMsgTrample(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool BegomanBaby::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanBaby::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgHitmarkEmit(msg);
 }
 
@@ -577,7 +577,7 @@ const Nerve* BegomanBaby::getNerveWait() {
     return GET_NERVE_ANON(NrvBegomanBaby::HostTypeNrvWait);
 }
 
-bool BegomanBaby::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool BegomanBaby::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     if (isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBlow))) {
         return true;
     }

@@ -26,7 +26,7 @@ OceanRingPipeOutside::OceanRingPipeOutside(const OceanRingPipe* pPipe)
     : LiveActor("オーシャンリングの外側"), mRingPipe(pPipe), mTexU(0.0f), mWaterPipeIndirectTex(nullptr), mWaterPipeHighLightTex(nullptr) {
 }
 
-void OceanRingPipeOutside::init(const TableIter& rIter) {
+void OceanRingPipeOutside::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeOutside);
     initMesh();
     MR::invalidateClipping(this);

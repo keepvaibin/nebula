@@ -9,7 +9,7 @@
 OceanRingBloomDrawer::OceanRingBloomDrawer(OceanRing* pRing) : NameObj("オーシャンリング[ブルーム描画]"), mRing(pRing) {
 }
 
-void OceanRingBloomDrawer::init(const TableIter& rIter) {
+void OceanRingBloomDrawer::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanBowlBloomDrawer);
 }
 

@@ -13,9 +13,9 @@ public:
     /// @brief Creates a new `LuigiLetter`.
     LuigiLetter(bool, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void movement() override;
 
     void exeAppear();
     void exeWait();

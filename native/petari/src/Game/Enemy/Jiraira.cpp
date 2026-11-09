@@ -172,7 +172,7 @@ void Jiraira::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Jiraira::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Jiraira::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(Jiraira, HostTypeNrvExplode)) || isNerve(GET_NERVE(Jiraira, HostTypeNrvSteppedExplode)) ||
         isNerve(GET_NERVE(Jiraira, HostTypeNrvPreRecover))) {
         return false;
@@ -189,7 +189,7 @@ bool Jiraira::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-bool Jiraira::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Jiraira::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(Jiraira, HostTypeNrvExplode)) || isNerve(GET_NERVE(Jiraira, HostTypeNrvSteppedExplode))) {
         return false;
     }

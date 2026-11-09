@@ -23,7 +23,7 @@ EffectSystem::EffectSystem(const char* pName, bool createAdaptors)
     mCalcExec = new ParticleCalcExecutor(this, createAdaptors);
 }
 
-void EffectSystem::init(const TableIter& rIter) {
+void EffectSystem::init(const TableIter& /*rIter*/) {
 }
 
 ParticleEmitter* EffectSystem::createEmitter(u16 resourceId, u8 groupId, u8 resourceManagerId) {

@@ -12,13 +12,13 @@ class ScenarioSelectLayout : public LayoutActor {
 public:
     ScenarioSelectLayout(EffectSystem*, const CameraContext*);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void calcViewAndEntryStarModel();
     s32 getSelectedScenarioNo() const;

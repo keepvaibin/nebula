@@ -187,7 +187,7 @@ bool SmallStone::tryBreak() {
     return true;
 }
 
-bool SmallStone::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SmallStone::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_SPIN_STORM_RANGE) {
         for (s32 i = 0; i < mMemberCount; i++) {
             mMembers[i]->tryShake();
@@ -199,7 +199,7 @@ bool SmallStone::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     return false;
 }
 
-bool SmallStone::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SmallStone::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!MR::isMsgPlayerSpinAttack(msg)) {
         return false;
     }

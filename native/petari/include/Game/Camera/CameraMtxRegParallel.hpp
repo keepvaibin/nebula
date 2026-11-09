@@ -6,9 +6,9 @@ class CameraMtxRegParallel : public Camera {
 public:
     CameraMtxRegParallel(const char* pName = "マトリクスレジスタ並行カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const char* str, f32 dist, const Vec2f& angle, const Vec3f& wPoint) {
         mString = str;

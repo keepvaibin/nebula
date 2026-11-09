@@ -7,7 +7,7 @@
 SpinPullParticleCallBack::SpinPullParticleCallBack() : MultiEmitterParticleCallBack() {
 }
 
-void SpinPullParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
+void SpinPullParticleCallBack::execute(EmitterCore* /*pEmitter*/, ParticleCore* pParticle) {
     Vec3f pullVelocity;
     MR::calcPlayerSpinPullVelocity(&pullVelocity, pParticle->mPosition);
 
@@ -15,7 +15,7 @@ void SpinPullParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pPar
     pParticle->mOffsetPosition.set(pParticle->mOffsetPosition + ((pullVelocity * time) * time));
 }
 
-void MerameraParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
+void MerameraParticleCallBack::execute(EmitterCore* /*pEmitter*/, ParticleCore* pParticle) {
     Vec3f pullVelocity;
     MR::calcPlayerSpinPullVelocity(&pullVelocity, pParticle->mPosition);
     pParticle->mOffsetPosition.set(pParticle->mOffsetPosition + pullVelocity);

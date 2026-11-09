@@ -8,7 +8,7 @@ class ShadowSurfaceDrawInit : public NameObj {
 public:
     ShadowSurfaceDrawInit(const char*);
 
-    virtual ~ShadowSurfaceDrawInit();
+    virtual ~ShadowSurfaceDrawInit() override;
 
     static void initDraw();
     // The surface shadows' material (runtime/src/render/materials/flat_color.hlsl) in `rColor`: blended by alpha,
@@ -21,7 +21,7 @@ class ShadowSurfaceDrawer : public ShadowDrawer {
 public:
     ShadowSurfaceDrawer(const char*);
 
-    virtual ~ShadowSurfaceDrawer();
+    virtual ~ShadowSurfaceDrawer() override;
 };
 
 inline ShadowSurfaceDrawer::~ShadowSurfaceDrawer() {
