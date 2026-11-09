@@ -867,6 +867,9 @@ void apply_pointer_script_envs(
 
 NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_frame, const ScriptServices& services) {
     NativeInputScriptOverlay overlay{};
+    if (g_native_input_script_held.load(std::memory_order_relaxed)) {
+        return overlay;
+    }
     apply_button_script_env(overlay, current_frame, nebula_switch::input_autopress_script_name(), services.clock_ticks);
     apply_stick_script_env(overlay, current_frame, nebula_switch::input_stick_script_name());
     apply_shake_script_env(
