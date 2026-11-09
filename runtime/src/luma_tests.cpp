@@ -161,6 +161,32 @@ int main() {
         check(!parse_manifest(with_rows(R"("galaxies":[{"name":"G","stars_to_open":1e300}])")).has_value(), "a number past the int range is refused, not cast");
     }
     {
+        // A file's tuning numbers: a number, a bool, or an option's choice; a key without a file, or another kind of value, refuses the file.
+        const auto with_layer = [](const std::string& layer) {
+            return std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","layers":[{)") + layer + "}]}";
+        };
+        const std::optional<Manifest> tuned = parse_manifest(with_layer(R"("tunables":{"Kuribo.cWalkSpeed":2.5,"Kuribo.cIsSmall":true,"Koopa.cHp":{"option":"hp"}})"));
+        check(tuned && tuned->layers.size() == 1u && tuned->layers[0].tunables.size() == 3u, "tunables read");
+        if (tuned && tuned->layers.size() == 1u && tuned->layers[0].tunables.size() == 3u) {
+            const std::vector<Tunable>& rows = tuned->layers[0].tunables;
+            const auto find = [&](const char* key) -> const Tunable* {
+                for (const Tunable& row : rows) {
+                    if (row.key == key) return &row;
+                }
+                return nullptr;
+            };
+            const Tunable* walk = find("Kuribo.cWalkSpeed");
+            const Tunable* small = find("Kuribo.cIsSmall");
+            const Tunable* hp = find("Koopa.cHp");
+            check(walk != nullptr && walk->value == 2.5 && walk->option.empty(), "a number");
+            check(small != nullptr && small->value == 1.0, "a bool is 1 or 0");
+            check(hp != nullptr && hp->option == "hp", "an option's choice");
+        }
+        check(!parse_manifest(with_layer(R"("tunables":{"cWalkSpeed":2.0})")).has_value(), "a key without its file is refused");
+        check(!parse_manifest(with_layer(R"("tunables":{"Kuribo.cWalkSpeed":"fast"})")).has_value(), "text is refused");
+        check(!parse_manifest(with_layer(R"("tunables":[1,2])")).has_value(), "a list is refused");
+    }
+    {
         // A range of choices: counted, so numbers too large for the step cannot loop for ever.
         const std::optional<Manifest> ranged = parse_manifest(std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","options":[)") +
             R"({"id":"r1","name":"R","range":{"from":1,"to":5,"step":1}},)" +

@@ -8,11 +8,17 @@ namespace {
 #pragma section("nebtun$z", read)
     __declspec(allocate("nebtun$a")) NEBULA_TUNABLE_KEEP const nebula::Tunable sFirst = {};
     __declspec(allocate("nebtun$z")) NEBULA_TUNABLE_KEEP const nebula::Tunable sLast = {};
+    // The walk goes from one marker to the other: through an empty asm the compiler no longer knows they are two objects,
+    // so it can't fold the walk away as running past sFirst.
+    const nebula::Tunable* hidden(const nebula::Tunable* pTunable) {
+        __asm__("" : "+r"(pTunable));
+        return pTunable;
+    }
     const nebula::Tunable* begin() {
-        return &sFirst + 1;
+        return hidden(&sFirst) + 1;
     }
     const nebula::Tunable* end() {
-        return &sLast;
+        return hidden(&sLast);
     }
 #else
 }  // namespace
