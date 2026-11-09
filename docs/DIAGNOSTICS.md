@@ -1,7 +1,32 @@
 # Diagnostics
 
-Environment variables for testing and debugging the runtime. None of them is needed to play. The command line's
-arguments (settings and data folders, crash dumps, GPU validation, the console log) are in COMMAND_LINE.md.
+What a run records with `--diagnostics <what>[,<what>]` (every build), then the environment variables for testing the
+runtime. None of them is needed to play. The command line's other arguments are in COMMAND_LINE.md.
+
+## --diagnostics
+
+Files go to `diagnostics` in the data folder (COMMAND_LINE.md `--data`), named with the process id; lines go to the log.
+
+| Name | Records |
+|---|---|
+| `timeline` | The frame pipeline's events, written at exit to `timeline-<pid>.bin` (or `--timeline`'s file); `tools/perf/timeline_digest.py` reads it |
+| `frame-tails` | The frame intervals' histogram every 2 s |
+| `pointer-latency` | The pointer's selection to the picture showing it |
+| `present-stats` | Presented and new frames, GPU and CPU times, each second |
+| `frame-times` | Each frame's time and where a scripted press begins (`[latency]` lines; `tools/verify/gaps.py`) |
+| `gpu-passes` | GPU time by pass and the shader invocation counts (present-stats' `gpu-pass-ms`, `gpu-stats`) |
+| `memory` | What the renderer holds every 600 frames: rings, texture tables, the `[vram] breakdown` line |
+| `heaps` | `memory`, and the process's heaps by block size |
+| `thread-cpu` | Each thread's CPU time and context switches each second |
+| `profile` | The game thread sampled each millisecond with its callers, to the run's end (10 minutes at most), into `game-profile-<pid>.txt`; `tools/perf/game_profile.py` names them from the game module's link map |
+| `scene-loads` | Each scene change's phases, presses and placed objects (`tools/verify/loads.py`) |
+| `file-reads` | Each read and map of the game's files, and the sound clock, with its frame |
+| `pipelines` | The pipelines the run created, at exit, into `pipelines-<pid>.bin` (`tools/dev/site_pipelines.py`) |
+
+Sets: `frames` (timeline, frame-tails, pointer-latency, present-stats, frame-times), `gpu` (gpu-passes), `threads`
+(thread-cpu, profile), `loads` (scene-loads, file-reads), `1` (the launcher's recording: timeline, frame-tails,
+pointer-latency, present-stats, gpu-passes), `0` (nothing). Texture dumps are a setting (Graphics, DUMP TEXTURES) into
+`TextureDumps` beside `config.ini`.
 
 ## Test sessions
 
@@ -11,7 +36,6 @@ arguments (settings and data folders, crash dumps, GPU validation, the console l
 | `GALAXY_TEST_NO_RAW_MOUSE=1` | Leaves raw mouse motion (WM_INPUT) unregistered, so only the cursor position moves the pointer |
 | `GALAXY_AUDIO_WAV_DUMP=<path>`, `GALAXY_AUDIO_WAV_DUMP_ONLY=1` | Write the mixed audio to a WAV file, optionally without opening the sound device |
 | `GALAXY_PRESENT_SNAPSHOT_DIR`, `GALAXY_PRESENT_SNAPSHOT_EVERY`, `_FIRST`, `_LAST` | Save every Nth presented frame as a PPM image |
-| `GALAXY_TRACE_PRESENT_STATS=1` | Log presented and new frames per second |
 
 ## The start and the game thread
 
@@ -22,8 +46,6 @@ step).
 | Variable | Effect |
 |---|---|
 | `GALAXY_BOOT_FAST=0` | Game frames at 60 a second from the start (by default the black frames before the first 3D scene run ahead) |
-| `GALAXY_PROFILE_GAME=<seconds>` | Sample the game thread each millisecond from its start, with its callers, into `game-profile.txt` beside the crash dumps; `tools/perf/game_profile.py` names them from the game module's link map |
-| `GALAXY_TRACE_THREAD_CPU=1` | Log each thread's CPU time each second |
 
 ## Scripted input
 

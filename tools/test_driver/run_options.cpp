@@ -47,10 +47,6 @@ RunOptions read_options() {
     load_test_environment();
 #endif
     RunOptions o;
-    o.frame_timeline = nebula_switch::frame_timeline();
-    o.frame_timeline_events = nebula_switch::frame_timeline_events();
-    o.monitor_frame_tails = nebula_switch::monitor_frame_tails();
-    o.monitor_pointer_latency = nebula_switch::monitor_pointer_latency();
     o.audio_wav_dump = nebula_switch::audio_wav_dump();
     o.audio_wav_dump_only = nebula_switch::audio_wav_dump_only();
     o.audio_wav_dump_seconds = nebula_switch::audio_wav_dump_seconds();
@@ -59,16 +55,13 @@ RunOptions read_options() {
     o.audio_test_gaps = nebula_switch::audio_test_gaps();
     o.boot_fast = nebula_switch::boot_fast();
     o.d3d12_test_no_feature = nebula_switch::d3d12_test_no_feature();
-    o.gpu_passes = nebula_switch::gpu_passes();
     o.hide_window = nebula_switch::hide_window();
     o.test_no_raw_mouse = nebula_switch::test_no_raw_mouse();
-    o.pipeline_list_out = nebula_switch::pipeline_list_out();
     o.present_snapshot_dir = nebula_switch::present_snapshot_dir();
     o.present_snapshot_every = nebula_switch::present_snapshot_every();
     o.present_snapshot_first = nebula_switch::present_snapshot_first();
     o.present_snapshot_last = nebula_switch::present_snapshot_last();
     o.present_snapshot_game_only = nebula_switch::present_snapshot_game_only();
-    o.profile_game = nebula_switch::profile_game();
     o.test_cpu_affinity = nebula_switch::test_cpu_affinity();
     o.test_deterministic = nebula_switch::test_deterministic();
     o.test_disc_delay_us = nebula_switch::test_disc_delay_us();
@@ -85,17 +78,9 @@ RunOptions read_options() {
     o.test_settings_open = nebula_switch::test_settings_open();
     o.test_vram_budget_mb = nebula_switch::test_vram_budget_mb();
     o.test_window_sizes = nebula_switch::test_window_sizes();
-    o.texture_dump_dir = nebula_switch::texture_dump_dir();
-    o.trace_file_reads = nebula_switch::trace_file_reads();
-    o.trace_frame_times = nebula_switch::trace_frame_times();
-    o.trace_loads = nebula_switch::trace_loads();
     o.test_mods_screen = nebula_switch::test_mods_screen();
     o.test_mods_changed = nebula_switch::test_mods_changed();
-    o.trace_memory = nebula_switch::trace_memory();
-    o.trace_present_stats = nebula_switch::trace_present_stats();
-    o.trace_thread_cpu = nebula_switch::trace_thread_cpu();
     o.vk_simulate_driver = nebula_switch::vk_simulate_driver();
-    o.trace_interp_slots = nebula_switch::trace_interp_slots();
     o.vk_test_no_feature = nebula_switch::vk_test_no_feature();
     o.xinput_require_focus = nebula_switch::xinput_require_focus();
 #if defined(_WIN32)
@@ -113,9 +98,7 @@ RunOptions read_options() {
         wide.push_back(std::move(value));
         return wide.back().c_str();
     };
-    o.frame_timeline_path_w = read_wide(nebula_switch::frame_timeline_path_wide_name());
     o.audio_wav_dump_w = read_wide(nebula_switch::audio_wav_dump_wide_name());
-    o.texture_dump_dir_w = read_wide(nebula_switch::texture_dump_dir_wide_name());
 #endif
     return o;
 }

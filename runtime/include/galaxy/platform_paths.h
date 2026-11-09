@@ -15,6 +15,8 @@
 #include "galaxy/windows_api.h"
 #include "galaxy/windows_paths.h"
 #include <Shlobj.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace galaxy {
@@ -42,6 +44,26 @@ namespace galaxy {
         return std::filesystem::path(home) / ".local" / "share" / "Nebula";
     }
     return {};
+#endif
+}
+
+// Where --diagnostics writes its files: <data>/diagnostics, made when first asked for; empty without a data folder.
+[[nodiscard]] inline std::filesystem::path nebula_diagnostics_directory() {
+    const std::filesystem::path data = nebula_data_directory();
+    if (data.empty()) {
+        return {};
+    }
+    std::error_code error;
+    std::filesystem::create_directories(data / "diagnostics", error);
+    return data / "diagnostics";
+}
+
+// This process's id (a diagnostics file's name: runs sharing a data folder keep their own).
+[[nodiscard]] inline unsigned long current_process_id() noexcept {
+#if defined(_WIN32)
+    return static_cast<unsigned long>(GetCurrentProcessId());
+#else
+    return static_cast<unsigned long>(getpid());
 #endif
 }
 

@@ -1,4 +1,4 @@
-"""Digest of a Nebula frame timeline (GALAXY_FRAME_TIMELINE=1, runtime/include/galaxy/frame_timeline.h).
+"""Digest of a Nebula frame timeline (--diagnostics timeline, runtime/include/galaxy/frame_timeline.h).
 
 Usage: python timeline_digest.py <timeline.bin> [--skip-seconds N]
 

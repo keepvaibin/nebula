@@ -258,7 +258,7 @@ public:
     [[nodiscard]] const GpuModel& model(std::uint32_t id) const noexcept { return models_[id]; }
     [[nodiscard]] const StaticSlot& slot(std::uint32_t id) const noexcept { return slots_[id]; }
     [[nodiscard]] const PipelineEntry& pipeline(std::uint32_t id) const noexcept { return pipelines_[id]; }
-    void write_pipeline_list(const char* path);
+    void write_pipeline_list(const std::filesystem::path& path);
     [[nodiscard]] std::uint32_t pipeline_count() const noexcept { return static_cast<std::uint32_t>(pipelines_.size()); }
     [[nodiscard]] TextureTable& table(std::uint32_t id) noexcept {
         return id < tables_.size() && tables_[id] != nullptr ? *tables_[id] : no_table_;

@@ -49,8 +49,7 @@ void RendererVk::test_lose_device() {
 namespace {
 
 bool trace_present_stats_enabled() {
-    static const bool enabled = ::galaxy::run_option_flag(::galaxy::run_options().trace_present_stats, false);
-    return enabled;
+    return ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats);
 }
 
 constexpr std::uint32_t kPushConstantBytes = 64u;
@@ -2301,10 +2300,11 @@ std::size_t RendererVk::gpu_pass_times(GpuPassTime* out, std::size_t capacity) c
 }
 
 void RendererVk::prepare_gpu_pass_queries() {
-    const bool full = ::galaxy::run_option_flag(::galaxy::run_options().gpu_passes, false);
-    // Passes are timed only on request: GALAXY_GPU_PASSES, a diagnostics recording, or the settings page's GPU TIMING. A timestamp
-    // at each pass boundary (no pass is split) of every submission then; with none of them nothing is recorded or read.
-    const bool wanted = full || ::galaxy::diagnostics_recording() || gpu_timing_wanted_.load(std::memory_order_relaxed);
+    // Passes are timed only on request: --diagnostics gpu-passes (with the shader invocation counts) or the settings page's
+    // GPU TIMING. A timestamp at each pass boundary (no pass is split) of every submission then; with neither nothing is
+    // recorded or read.
+    const bool full = ::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses);
+    const bool wanted = full || gpu_timing_wanted_.load(std::memory_order_relaxed);
     if (!wanted && profile_frame_) {
         for (std::atomic<float>& average : pass_ema_ms_) {
             average.store(0.0f, std::memory_order_relaxed);

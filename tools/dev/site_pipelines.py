@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Merges the pipelines dev runs registered (GALAXY_PIPELINE_LIST_OUT) into crates/nebula-import/data/site_pipelines.txt,
+"""Merges the pipelines runs registered (--diagnostics pipelines: pipelines-<pid>.bin in the diagnostics folder) into crates/nebula-import/data/site_pipelines.txt,
 leaving out what the cook's own list has and what names a program the program pack does not have (runtime/src/render/programs/
 table.tsv and the written shaders): a pipeline of a program text that no longer exists is refused by every run.
 

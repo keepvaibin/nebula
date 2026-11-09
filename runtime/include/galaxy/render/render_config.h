@@ -343,8 +343,7 @@ void record_render_adapter(const char* description, unsigned vendor_id, unsigned
 // runs), reads it over the live settings, as the in-game menu would apply them, and returns true.
 bool reload_render_config_if_changed();
 
-// Texture packs are mods (mods.h). TextureDumps beside config.ini takes dumps (GALAXY_TEXTURE_DUMP_DIR replaces it);
-// empty when unknown.
+// Texture packs are mods (mods.h). TextureDumps beside config.ini takes dumps; empty when unknown.
 [[nodiscard]] std::filesystem::path texture_dump_directory();
 // The enabled mods' textures/ folders in load order (the host sets them at start); the generation changes with each
 // set.

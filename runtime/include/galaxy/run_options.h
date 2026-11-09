@@ -14,16 +14,7 @@
 
 namespace galaxy {
 
-// A run the player asked to record (--diagnostics 1, in a release too): the frame and pointer monitors and the timeline.
-// Set once, before the threads that read it start.
-inline bool g_diagnostics_recording = false;
-[[nodiscard]] inline bool diagnostics_recording() noexcept { return g_diagnostics_recording; }
-
 struct RunOptions {
-    const char* frame_timeline = nullptr;
-    const char* frame_timeline_events = nullptr;
-    const char* monitor_frame_tails = nullptr;
-    const char* monitor_pointer_latency = nullptr;
     const char* audio_wav_dump = nullptr;
     const char* audio_wav_dump_only = nullptr;
     const char* audio_wav_dump_seconds = nullptr;
@@ -32,16 +23,13 @@ struct RunOptions {
     const char* audio_test_gaps = nullptr;
     const char* boot_fast = nullptr;
     const char* d3d12_test_no_feature = nullptr;
-    const char* gpu_passes = nullptr;
     const char* hide_window = nullptr;
     const char* test_no_raw_mouse = nullptr;
-    const char* pipeline_list_out = nullptr;
     const char* present_snapshot_dir = nullptr;
     const char* present_snapshot_every = nullptr;
     const char* present_snapshot_first = nullptr;
     const char* present_snapshot_last = nullptr;
     const char* present_snapshot_game_only = nullptr;  // a generated (interpolated) present is neither captured nor counted
-    const char* profile_game = nullptr;
     const char* test_cpu_affinity = nullptr;
     const char* test_deterministic = nullptr;
     const char* test_disc_delay_us = nullptr;
@@ -58,23 +46,13 @@ struct RunOptions {
     const char* test_settings_open = nullptr;
     const char* test_vram_budget_mb = nullptr;
     const char* test_window_sizes = nullptr;
-    const char* texture_dump_dir = nullptr;
-    const char* trace_file_reads = nullptr;
-    const char* trace_frame_times = nullptr;
-    const char* trace_loads = nullptr;
     const char* test_mods_screen = nullptr;
     const char* test_mods_changed = nullptr;
-    const char* trace_memory = nullptr;
-    const char* trace_interp_slots = nullptr;
-    const char* trace_present_stats = nullptr;
-    const char* trace_thread_cpu = nullptr;
     const char* vk_simulate_driver = nullptr;
     const char* vk_test_no_feature = nullptr;
     const char* xinput_require_focus = nullptr;
 #if defined(_WIN32)
-    const wchar_t* frame_timeline_path_w = nullptr;
     const wchar_t* audio_wav_dump_w = nullptr;
-    const wchar_t* texture_dump_dir_w = nullptr;
 #endif
 };
 
