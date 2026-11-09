@@ -3,6 +3,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 #include <nebula_geometry.hpp>
 
 class AssetFolder;
@@ -71,6 +72,7 @@ public:
     MR::AssignableArray< Table > mListObjs;
     MR::AssignableArray< Table > mPathObjs;
     Table* mObjNameTbl;
+    MR::NameIndex mObjNameIndex;  // en_name -> row of mObjNameTbl
     s32 mStageDataHolderCount;
     MR::GrowTable< StageDataHolder*, 0x18 > mStageDataArray;
     AssetFolder* mArchive;

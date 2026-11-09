@@ -339,12 +339,13 @@ bool StageDataHolder::isPlacedZone(int zoneID) const {
 }
 
 const char* StageDataHolder::getJapaneseObjectName(const char* pName) const {
-    const TableIter englishName = mObjNameTbl->findElement< const char* >("en_name", pName, 0);
+    const u32 row = mObjNameIndex.find(pName);
 
-    if (englishName == mObjNameTbl->end()) {
+    if (row == MR::NameIndex::cNoValue) {
         return nullptr;
     }
 
+    const TableIter englishName(mObjNameTbl, static_cast< s32 >(row));
     const char* japaneseName;
     englishName.getValue< const char* >("jp_name", &japaneseName);
     return japaneseName;
@@ -458,6 +459,17 @@ void StageDataHolder::initTableData() {
 
     mObjNameTbl = new Table();
     mObjNameTbl->attach(tableFile);
+
+    // en_name -> its first row, as findElement found it.
+    const s32 column = mObjNameTbl->searchItemInfo("en_name");
+    if (column >= 0) {
+        mObjNameIndex.reset(static_cast< u32 >(mObjNameTbl->getNumEntries()));
+        for (s32 row = 0; row < mObjNameTbl->getNumEntries(); row++) {
+            const char* pEnglishName;
+            mObjNameTbl->getValueFast(row, column, &pEnglishName);
+            mObjNameIndex.add(pEnglishName, static_cast< u32 >(row));
+        }
+    }
 }
 
 void StageDataHolder::initPlacementInfoOrderedCommon() {
