@@ -76,6 +76,13 @@ struct PlayerConstant {
     std::string option;  // when set: the number is this option's choice
 };
 
+// A file's tuning number by "<file stem>.<name>" ("Kuribo.cWalkSpeed").
+struct Tunable {
+    std::string key;
+    double value = 0.0;
+    std::string option;  // when set: the number is this option's choice
+};
+
 // A new object, made as one of the game's.
 struct ObjectClass {
     std::string name;
@@ -150,6 +157,7 @@ struct Layer {
     std::vector<CometLimit> comet_time_limits;
     std::vector<StageRule> stages;
     std::vector<PlayerConstant> player_constants;
+    std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
     std::vector<SoundEffect> sound_effects;
     When when;

@@ -89,6 +89,11 @@ struct PlayerConstantToSet {
     int index = 0;
     float value = 0.0f;
 };
+struct TunableToSet {
+    std::string mod_id;
+    std::string key;  // "Kuribo.cWalkSpeed"
+    double value = 0.0;
+};
 struct SoundEffectToAdd {
     std::string mod_id;
     std::string name;
@@ -111,11 +116,12 @@ struct ModRows {
     std::vector<CometLimitToSet> comet_limits;
     std::vector<StageRuleToSet> stage_rules;
     std::vector<PlayerConstantToSet> player_constants;
+    std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
     std::vector<SoundEffectToAdd> sound_effects;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return story.empty() && sound_effects.empty() && stage_rules.empty() && player_constants.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return story.empty() && sound_effects.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that

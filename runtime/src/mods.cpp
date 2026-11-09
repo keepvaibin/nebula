@@ -1604,6 +1604,15 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     }
                     plan.rows.player_constants.push_back({mod.id, constant.character, constant.name, constant.index, value});
                 }
+                for (const luma::Tunable& tunable : layer.tunables) {
+                    double value = tunable.value;
+                    if (!tunable.option.empty()) {
+                        const auto choice = situation.options.find(tunable.option);
+                        if (choice == situation.options.end()) continue;
+                        value = std::strtod(choice->second.c_str(), nullptr);
+                    }
+                    plan.rows.tunables.push_back({mod.id, tunable.key, value});
+                }
                 for (const auto& [name, option] : layer.switch_options) {
                     const auto choice = situation.options.find(option);
                     const std::uint32_t number = luma::switch_number(name);

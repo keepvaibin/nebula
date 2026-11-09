@@ -627,6 +627,22 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 }
             }
         }
+        if (const Value* tunables = entry.get("tunables"); tunables != nullptr) {
+            // { "Kuribo.cWalkSpeed": 2.0, "Kuribo.cIsDead": true, "Kuribo.cTurn": {"option": "turn"} }
+            if (tunables->object() == nullptr) return std::nullopt;
+            for (const auto& [key, value] : *tunables->object()) {
+                if (key.find('.') == std::string::npos) return std::nullopt;
+                if (const double* number = value.number()) {
+                    layer.tunables.push_back({key, *number, {}});
+                } else if (const bool* flag = std::get_if<bool>(&value.data)) {
+                    layer.tunables.push_back({key, *flag ? 1.0 : 0.0, {}});
+                } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
+                    layer.tunables.push_back({key, 0.0, *option->string()});
+                } else {
+                    return std::nullopt;
+                }
+            }
+        }
         if (const Value* sounds = entry.get("sound_effects"); sounds != nullptr && sounds->array() != nullptr) {
             for (const Value& row : *sounds->array()) {
                 SoundEffect sound{text_field(row, "name"), text_field(row, "file")};
