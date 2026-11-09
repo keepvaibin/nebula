@@ -5,6 +5,8 @@
 #include "Game/Ride/BigBubble.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -23,7 +25,7 @@ BigBubbleHolder::BigBubbleHolder(const char* pName)
 
 void BigBubbleHolder::movement() {
     mIsMarioBinded = false;
-    for (s32 idx = 0; idx < cBubbleCount; idx++) {
+    for (s32 idx = 0; idx < mBubbles.size(); idx++) {
         if (mBubbles[idx]->isBindMario()) {
             mIsMarioBinded = true;
             break;
@@ -53,16 +55,32 @@ BigBubble* BigBubbleHolder::generateBigBubble(LiveActor* pHost, const Vec3f& rPo
         limitter = getMoveLimitter(limitterID);
     }
 
-    for (s32 idx = 0; idx < cBubbleCount; idx++) {
+    BigBubble* pBubble = nullptr;
+    for (s32 idx = 0; idx < mBubbles.size(); idx++) {
         if (MR::isDead(mBubbles[idx])) {
-            mBubbles[idx]->setHost(pHost);
-            mBubbles[idx]->generate(rPos, rUp, volume, isObstruct, actionType, shapeType, limitter);
-
-            return mBubbles[idx];
+            pBubble = mBubbles[idx];
+            break;
         }
     }
 
-    return nullptr;
+    if (pBubble == nullptr) {
+        pBubble = createBubble();
+        pBubble->initAfterPlacement();
+    }
+
+    pBubble->setHost(pHost);
+    pBubble->generate(rPos, rUp, volume, isObstruct, actionType, shapeType, limitter);
+
+    return pBubble;
+}
+
+BigBubble* BigBubbleHolder::createBubble() {
+    NebulaArena::CurrentScope scope(Arenas::scene());
+    BigBubble* pBubble = new BigBubble("オオアワ[共有]");
+    pBubble->initWithoutIter();
+    mBubbles.push_back(pBubble);
+    mDrawBubbles.push_back(nullptr);
+    return pBubble;
 }
 
 BigBubbleMoveLimitter* BigBubbleHolder::getMoveLimitter(s32 limitterID) const {
@@ -76,7 +94,7 @@ BigBubbleMoveLimitter* BigBubbleHolder::getMoveLimitter(s32 limitterID) const {
 
 void BigBubbleHolder::sortDrawOrder() {
     mNumBubbles = 0;
-    for (s32 idx = 0; idx < cBubbleCount; idx++) {
+    for (s32 idx = 0; idx < mBubbles.size(); idx++) {
         if (mBubbles[idx]->isDraw()) {
             bool skipSort;
             s32 other = mNumBubbles;
@@ -133,8 +151,9 @@ bool MR::isPlayerBindedBigBubble() {
 }
 
 void BigBubbleHolder::init(const TableIter& rIter) {
+    mBubbles.init(cBubbleCount);
+    mDrawBubbles.init(cBubbleCount);
     for (s32 idx = 0; idx < cBubbleCount; idx++) {
-        mBubbles[idx] = new BigBubble("オオアワ[共有]");
-        mBubbles[idx]->initWithoutIter();
+        createBubble();
     }
 }
