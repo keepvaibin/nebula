@@ -49,6 +49,8 @@ public:
     u32 mMotionEpoch;
     // Its place in the scene's movement, calc-anim and draw category lists (NameObjCategoryList::mPlaceSlot); -1: none.
     s32 mListPlace[3];
+    // An actor's place in its draw buffer executer's list (DrawBufferExecuter); -1: none.
+    s32 mDrawBufferPlace;
 };
 
 class NameObjFunction {

@@ -3,7 +3,6 @@
 #include "Game/System/DrawBuffer.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/LightUtil.hpp"
-#include <algorithm>
 
 DrawBufferExecuter::DrawBufferExecuter(const char* pName, Model* pModel)
     : mActors(nullptr), mMaxNumActors(0), mNumActors(0), mName(pName), mDrawBuffer(nullptr), mLightType(-1), mDrawBufferCount(0) {
@@ -45,12 +44,25 @@ void DrawBufferExecuter::add(LiveActor* pActor) {
     s32 lastActor = mNumActors;
     mNumActors++;
     mActors[lastActor] = pActor;
+    pActor->mDrawBufferPlace = lastActor;
     mDrawBuffer->add(pActor);
 }
 
+// The last actor takes the removed one's place.
 void DrawBufferExecuter::remove(LiveActor* pActor) {
-    LiveActor** it = std::find(mActors, mActors + mNumActors, pActor);
-    mActors[it - mActors] = getActor(mNumActors - 1);
+    s32 place = pActor->mDrawBufferPlace;
+    if (place < 0 || place >= mNumActors || mActors[place] != pActor) {
+        for (place = 0; place < mNumActors && mActors[place] != pActor; place++) {
+        }
+        if (place == mNumActors) {
+            return;
+        }
+    }
+
+    LiveActor* pLast = getActor(mNumActors - 1);
+    mActors[place] = pLast;
+    pLast->mDrawBufferPlace = place;
+    pActor->mDrawBufferPlace = -1;
     mNumActors--;
     mDrawBuffer->remove(pActor);
 }
