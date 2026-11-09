@@ -35,6 +35,10 @@ void SoundMemory::retire(void* pMemory, const NebulaAtomic< bool >& rReleased) {
     sRetired = header;
 }
 
+void SoundMemory::free(void* pMemory) {
+    NebulaArena::free(static_cast< u8* >(pMemory) - cHeaderBytes, sArena);
+}
+
 void SoundMemory::collect() {
     Header** link = &sRetired;
     while (*link != nullptr) {

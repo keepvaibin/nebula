@@ -144,7 +144,7 @@ void EffectSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* audie
     startSound_(id, posPtr, audience);
     const SeqFile* pFile = mManager->getSeqDataMgr() != nullptr ? mManager->getSeqDataMgr()->program() : nullptr;
     mPlayer.create(pFile != nullptr ? pFile->mTrackBound : 1, mAudible != nullptr ? mAudience->getMaxChannels() : 1,
-                   TrackRoom::of(pFile), (u32)id, 1);
+                   TrackRoom::of(pFile), 2, (u32)id, 1);
     mTrackStarted = false;
     if (mSoundStrategyMgr != nullptr) {
         mSoundStrategy = mSoundStrategyMgr->newStrategy(id);

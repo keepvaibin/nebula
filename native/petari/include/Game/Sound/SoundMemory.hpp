@@ -14,6 +14,8 @@ namespace SoundMemory {
     void* alloc(u32 bytes);
     // The memory goes back once `rReleased` is set (the audio thread's last write to it).
     void retire(void* pMemory, const NebulaAtomic< bool >& rReleased);
+    // Memory the audio thread never had goes back at once.
+    void free(void* pMemory);
     // Each frame: frees what the audio thread has let go.
     void collect();
 }  // namespace SoundMemory

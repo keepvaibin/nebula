@@ -7,10 +7,11 @@
 class SequenceManager;
 struct SoundChild;
 
-// A sequence (music, or a scene's sequence): a player whose tracks the game numbers 0 to 31 (child id >> 4, its track id & 15).
+// A sequence (music, or a scene's sequence): a player whose tracks the game numbers (child id >> 4, its track id & 15), at
+// least 0 to 31.
 class SequenceSound final : public Sound, public NebulaListLink< SequenceSound > {
 public:
-    static const int NUM_CHILDREN = 32;
+    static const int cInlineChildren = 32;
 
     virtual s32 getNumChild() const;
     virtual SoundChild* getChild(int index);
@@ -31,6 +32,7 @@ public:
     void die_();
     void mixOut_(const SoundParams& params, SoundActivity activity);
     void managerMixOut_(const SoundParams& params, SoundActivity activity);
+    void growChildren(s32 count);
 
     const SeqData& getSeqData() const {
         return mSeqData;
@@ -40,7 +42,12 @@ public:
     }
 
     PlayerLink mPlayer;
-    SoundChild* mSoundChild[NUM_CHILDREN];
+    // The sound children by track id: inline, then a SoundMemory block once an id passes it; mNumChild: the ids this start
+    // reserves (16 to each named child).
+    SoundChild* mInlineChild[cInlineChildren];
+    SoundChild** mSoundChild;
+    s32 mChildRoom;
+    s32 mNumChild;
     SoundTempo mTempoMgr;
     SoundParams mSoundParams;
     SeqData mSeqData;
