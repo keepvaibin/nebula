@@ -917,7 +917,7 @@ s32 MeTrack::parse() {
         setBaseNoteFromChromatic(data + 2, data[0], data[1] != 0);
         return 0;
     }
-    case 0x84: {  // another part's note (none: kept; the console read through null)
+    case 0x84: {  // another part's note (none: unchanged)
         const MeTrack* track = brother(static_cast< s32 >(read8()));
         if (track != nullptr) {
             mBaseNote = track->mBaseNote;

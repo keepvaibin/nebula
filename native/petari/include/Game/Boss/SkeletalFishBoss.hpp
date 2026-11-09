@@ -167,6 +167,6 @@ public:
     CollisionParts* mJawCollision;
     ModelObj* mLightModels[2];
     ModelObj* mBloomModels[2];
-    // The game's constructor leaves it unset and read the console heap's leftover bytes: the eye light cones showed until the last hit.
+    // True from construction: the eye light cones show until the last hit.
     bool mIsEyeLightOn;
 };

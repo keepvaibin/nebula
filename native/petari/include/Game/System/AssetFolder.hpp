@@ -1,6 +1,6 @@
 #pragma once
 
-// A folder of the asset store as one block of memory. What the disc holds as an archive the cooker lays out as a folder whose
+// A folder of the asset store as one block of memory. What the game's data keeps as an archive the cooker lays out as a folder whose
 // files lie side by side, so its bytes come as a single view and each file is a place in it. The names and the order come from
 // the store's index; letters match in either case.
 

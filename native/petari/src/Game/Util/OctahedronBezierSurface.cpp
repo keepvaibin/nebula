@@ -8,7 +8,7 @@ namespace {
     void calcBezierHandlePoint(Vec3f* pHandle1, Vec3f* pHandle2, const Vec3f& rPointA, const Vec3f& rPointB, const Vec3f& rPointC,
                                f32 diagonalRate) {
         // Both handles at B lie on one tangent through B (BA scaled to BC's length, minus BC), each at diagonalRate of its
-        // side's projection on it. A point on B divides by zero; the handles are then not finite, as in the original.
+        // side's projection on it. A point on B divides by zero; the handles are then not finite, as the game's calculation also gives.
         Vec3f toA(rPointA - rPointB);
         Vec3f toC(rPointC - rPointB);
         f32 distAB = toA.length();

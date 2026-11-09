@@ -2195,7 +2195,7 @@ void MarioSwim::jet() {
         }
 
         f32 speedScale = 1.0f;
-        targetSpeed *= speedScale;  // okay nintendo
+        targetSpeed *= speedScale;
 
         if (mJetTimer == 1) {
             if (checkLvlZ()) {

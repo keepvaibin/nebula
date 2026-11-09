@@ -133,7 +133,7 @@ namespace MR {
         const char* const pExtSeparator = strrchr(pPath, '.');
         const char* const pDirSeparator = strrchr(pPath, '/');
 
-        // No dot at all: the console code wrote through a null separator here.
+        // No dot at all, or a dot before the last slash or right after it: the whole path is kept.
         if (pExtSeparator == nullptr || pExtSeparator < pDirSeparator || (pDirSeparator != nullptr && pDirSeparator + 1 == pExtSeparator)) {
             rDst.format("%s", pPath);
             return;

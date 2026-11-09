@@ -123,7 +123,7 @@ namespace {
         pVoice->iir[0] = 32767.0f / 32768.0f;
     }
 
-    // `skip`: samples to start into the wave (1: from its loop start). A wave that was PCM16 on the disc is music unless a sound
+    // `skip`: samples to start into the wave (1: from its loop start). A wave stored as PCM16 in the game's data is music unless a sound
     // names the voice.
     void setVoiceWave(NebulaVoice* pVoice, const Note& rNote, u32 skip) {
         const u8 kind = rNote.mFormat & 7;

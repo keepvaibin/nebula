@@ -42,7 +42,7 @@ namespace Ui {
         u8 cellHeight;
         s8 baselinePos;
         u8 maxCharWidth;
-        u16 sheetFormat;  // the disc's (SheetFormat)
+        u16 sheetFormat;  // the source font's (SheetFormat)
         u16 sheetNum;
         u16 sheetWidth;  // source pixels (a distance sheet's record is larger; coordinates divide by these)
         u16 sheetHeight;

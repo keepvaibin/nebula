@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Disc/save import formats only. The game receives checked host-order data.
+// Save and game-data import formats only. The game receives checked host-order data.
 namespace NebulaSaveFormat {
     enum class Format { Unknown, Native3, Switch2, Wii2 };
     enum class Error { None, Short, EncryptedExport, Version, Length, Table, Chunk, Checksum };
