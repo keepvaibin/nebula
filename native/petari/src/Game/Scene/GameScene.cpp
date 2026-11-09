@@ -499,7 +499,8 @@ void GameScene::drawMirror() const {
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
         Frame::mirror(false);
-        ModelSys::mViewRole = NEBULA_CAMERA_SCENE;
+        // The scene's view, not the mirror's under the scene's role: a draw before draw3D's own load is in the scene.
+        MR::loadViewMtx();
         MR::clearZBuffer();
         NebulaColor8 c = {0, 0, 255, 0};
         MR::fillScreen(c, true);
