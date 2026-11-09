@@ -1,4 +1,5 @@
 #include "Game/Screen/ErrorMessageWindow.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -69,9 +70,9 @@ void ErrorMessageWindow::exeAppear() {
             pMessage = MR::getGameMessageDirect(mMessageId);
             break;
         case MessageType_Nebula: {
-            static char16_t sText[256];
-            NebulaText::get(sText, 256, mMessageId);
-            pMessage = sText;
+            static MR::GrowBuffer< char16_t > sText;
+            NebulaUi::getText(sText, mMessageId);
+            pMessage = sText.mItems;
             break;
         }
         }

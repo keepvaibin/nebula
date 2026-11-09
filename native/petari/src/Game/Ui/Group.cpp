@@ -5,8 +5,7 @@
 namespace Ui {
     // The cook resolved each member name to the first pane of that name in tree order (FindPaneByName from the root).
     Group::Group(Layout& rLayout, const UiGroupData* pResGroup, const ResBlockSet& rBlockSet) {
-        strncpy(mName, rBlockSet.String(pResGroup->mName), sizeof(mName) - 1);
-        mName[sizeof(mName) - 1] = '\0';
+        mName.set(rBlockSet.String(pResGroup->mName));
 
         const u16* const pMembers = rBlockSet.At< u16 >(pResGroup->mPanes);
         for (u32 i = 0; i < pResGroup->mPaneCount; ++i) {

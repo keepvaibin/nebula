@@ -324,15 +324,23 @@ namespace {
     class TextBuffer {
     public:
         TextBuffer(LayoutActor* pActor, const char* const* pPaneNames, s32 rowsPerPane)
-            : mActor(pActor), mPaneNames(pPaneNames), mRowsPerPane(rowsPerPane), mTail(mBuffer) {
-            MR::formatText(mBuffer, ARRAY_SIZE(mBuffer), u"");
+            : mActor(pActor), mPaneNames(pPaneNames), mRowsPerPane(rowsPerPane), mTail(0) {
+        }
+
+        // The tail, with room for `units` more units after it (the text may move).
+        char16_t* tailFor(u32 units) {
+            return mBuffer.grow(mTail + 1, mTail + units + 1) + mTail;
+        }
+
+        void setTail(const char16_t* pTail) {
+            mTail = static_cast< u32 >(pTail - mBuffer.c_str());
         }
 
         void addNewLine(s32 row) {
             s32 paneIndex = row / mRowsPerPane;
 
             if (row - paneIndex * mRowsPerPane != 0) {
-                mTail = MR::addNewLine(mTail);
+                setTail(MR::addNewLine(tailFor(2)));
             }
         }
 
@@ -340,9 +348,9 @@ namespace {
             s32 paneIndex = row / mRowsPerPane;
 
             if (row - paneIndex * mRowsPerPane == 0) {
-                MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex - 1], mBuffer);
-                mTail = mBuffer;
-                MR::formatText(mBuffer, ARRAY_SIZE(mBuffer), u"");
+                MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex - 1], mBuffer.c_str());
+                mTail = 0;
+                mBuffer.room(1);
             }
         }
 
@@ -353,14 +361,14 @@ namespace {
                 return;
             }
 
-            MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex], mBuffer);
+            MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex], mBuffer.c_str());
         }
 
         LayoutActor* mActor;
         const char* const* mPaneNames;
         s32 mRowsPerPane;
-        char16_t mBuffer[256];
-        char16_t* mTail;
+        MR::Text16 mBuffer;
+        u32 mTail;  // where the text ends
     };
 };  // namespace
 
@@ -428,9 +436,11 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
         switch (pItem->mType) {
         case 0: {
             galaxyBuffer.mTail = makeGalaxyNameText(galaxyBuffer.mBuffer, &pItem->mGalaxyAccessor, row % 4 == 0);
-            starBuffer.mTail = makeStarNumText(starBuffer.mTail, &pItem->mGalaxyAccessor, row % 8 == 0);
-            coinBuffer.mTail = makeCoinText(coinBuffer.mTail, &pItem->mGalaxyAccessor, row % 8 == 0);
-            crownBuffer.mTail = makeCrownText(crownBuffer.mTail, &pItem->mGalaxyAccessor, row % 8 == 0);
+            // A newline, a code for each star, and the terminator.
+            starBuffer.setTail(makeStarNumText(starBuffer.tailFor(pItem->mGalaxyAccessor.getPowerStarNum() + 2), &pItem->mGalaxyAccessor, row % 8 == 0));
+            // A newline, the tag, three digits and the terminator.
+            coinBuffer.setTail(makeCoinText(coinBuffer.tailFor(16), &pItem->mGalaxyAccessor, row % 8 == 0));
+            crownBuffer.setTail(makeCrownText(crownBuffer.tailFor(3), &pItem->mGalaxyAccessor, row % 8 == 0));
             timeBuffer.addNewLine(row);
 
             s32 priority = ::getSortPriority(&pItem->mGalaxyAccessor);
@@ -504,17 +514,22 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     timeBuffer.finish(row);
 }
 
-char16_t* PowerStarList::makeGalaxyNameText(char16_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
-    s32 offset;
-    if (isFirstLine) {
-        const char16_t* pName = MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName());
-        offset = MR::formatText(pBuffer, 0x100, pName);
-    } else {
-        const char16_t* pName = MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName());
-        offset = MR::formatText(pBuffer, 0x100, u"%ls%s%ls", pBuffer, "\n", pName);
+namespace {
+    // `rBuffer`'s text with `pName` as a line after it (a new text when `isFirstLine`); its length.
+    u32 addLine(MR::Text16& rBuffer, const char16_t* pName, bool isFirstLine) {
+        const u32 nameLength = static_cast< u32 >(MR::textLength(pName));
+        const u32 used = isFirstLine ? 0 : static_cast< u32 >(MR::textLength(rBuffer.c_str())) + 1;
+        char16_t* const pText = rBuffer.grow(used, used + nameLength + 1);
+        if (!isFirstLine) {
+            pText[used - 1] = u'\n';
+        }
+        MR::copyText(pText + used, pName, nameLength + 1);
+        return used + nameLength;
     }
+};  // namespace
 
-    return pBuffer + offset;
+u32 PowerStarList::makeGalaxyNameText(MR::Text16& rBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
+    return addLine(rBuffer, MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName()), isFirstLine);
 }
 
 char16_t* PowerStarList::makeStarNumText(char16_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
@@ -589,31 +604,15 @@ char16_t* PowerStarList::makeCrownText(char16_t* pBuffer, const GalaxyStatusAcce
     return pBuffer;
 }
 
-char16_t* PowerStarList::makeRaceNameText(char16_t* pBuffer, int raceId, bool isFirstLine) const {
-    s32 offset;
-    if (isFirstLine) {
-        const char16_t* pName = MR::getRaceNameOnCurrentLanguage(raceId);
-        offset = MR::formatText(pBuffer, 0x100, pName);
-    } else {
-        const char16_t* pName = MR::getRaceNameOnCurrentLanguage(raceId);
-        offset = MR::formatText(pBuffer, 0x100, u"%ls%s%ls", pBuffer, "\n", pName);
-    }
-
-    return pBuffer + offset;
+u32 PowerStarList::makeRaceNameText(MR::Text16& rBuffer, int raceId, bool isFirstLine) const {
+    return addLine(rBuffer, MR::getRaceNameOnCurrentLanguage(raceId), isFirstLine);
 }
 
-char16_t* PowerStarList::makeRaceTimeText(char16_t* pBuffer, int raceId, bool isFirstLine) const {
+u32 PowerStarList::makeRaceTimeText(MR::Text16& rBuffer, int raceId, bool isFirstLine) const {
     char16_t raceBest[10];
     MR::makeRaceBestTimeString(raceBest, raceId);
 
-    s32 offset;
-    if (isFirstLine) {
-        offset = MR::formatText(pBuffer, 0x100, raceBest);
-    } else {
-        offset = MR::formatText(pBuffer, 0x100, u"%ls%s%ls", pBuffer, "\n", raceBest);
-    }
-
-    return pBuffer + offset;
+    return addLine(rBuffer, raceBest, isFirstLine);
 }
 
 void PowerStarList::startScrollAnimNext(bool set) {

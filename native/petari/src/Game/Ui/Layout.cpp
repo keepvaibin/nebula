@@ -33,13 +33,9 @@ namespace {
         OrderBlock* mNext;
     };
 
-    // FNV-1a over a pane name's first 16 characters: all a pane name holds, and what EqualsResName compares.
+    // FNV-1a over a pane name.
     u32 HashPaneName(const char* pName) {
-        u32 hash = 0x811C9DC5u;
-        for (u32 i = 0; i < 16 && pName[i] != '\0'; i++) {
-            hash = (hash ^ static_cast< u8 >(pName[i])) * 0x01000193u;
-        }
-        return hash;
+        return uiNameHash(pName);
     }
 
     u32 CountBranch(const Pane* pPane) {
@@ -199,7 +195,7 @@ namespace Ui {
         for (u32 i = 0; i < order.mNum; i++) {
             const char* const pName = order.mPanes[i]->mName;
             u32 slot = HashPaneName(pName) & mask;
-            while (pSlots[slot] != 0 && strncmp(order.mPanes[pSlots[slot] - 1]->mName, pName, 16) != 0) {
+            while (pSlots[slot] != 0 && !uiSameName(order.mPanes[pSlots[slot] - 1]->mName, pName)) {
                 slot = (slot + 1) & mask;
             }
             if (pSlots[slot] == 0) {
@@ -240,7 +236,7 @@ namespace Ui {
         RefreshOrder();
         for (u32 slot = HashPaneName(pName) & mNameSlotMask; mNameSlots[slot] != 0; slot = (slot + 1) & mNameSlotMask) {
             Pane* const pPane = mOrder.mPanes[mNameSlots[slot] - 1];
-            if (strncmp(pPane->mName, pName, 16) == 0) {
+            if (uiSameName(pPane->mName, pName)) {
                 return pPane;
             }
         }

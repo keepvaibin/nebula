@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 class ButtonPaneController;
 class GalaxyStatusAccessor;
@@ -30,12 +31,13 @@ public:
     void resetButtonAll();
     void updateButtonAppearance();
     void updateList(s32, bool);
-    char16_t* makeGalaxyNameText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    // The names and times add a line to the text; they return its length.
+    u32 makeGalaxyNameText(MR::Text16&, const GalaxyStatusAccessor*, bool) const;
     char16_t* makeStarNumText(char16_t*, const GalaxyStatusAccessor*, bool) const;
     char16_t* makeCoinText(char16_t*, const GalaxyStatusAccessor*, bool) const;
     char16_t* makeCrownText(char16_t*, const GalaxyStatusAccessor*, bool) const;
-    char16_t* makeRaceNameText(char16_t*, int, bool) const;
-    char16_t* makeRaceTimeText(char16_t*, int, bool) const;
+    u32 makeRaceNameText(MR::Text16&, int, bool) const;
+    u32 makeRaceTimeText(MR::Text16&, int, bool) const;
     void startScrollAnimNext(bool);
     void startScrollAnimPrev();
     bool tryShowSeparator(s32, f32);

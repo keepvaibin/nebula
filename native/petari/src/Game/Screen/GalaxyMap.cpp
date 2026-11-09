@@ -502,9 +502,13 @@ void GalaxyMap::initPaneCtrlPointing() {
         if (!NebulaMods::mapSpot(pGalaxyName, &x, &y, &dome)) {
             continue;
         }
-        char parentName[16];
-        nebula_snprintf(parentName, sizeof(parentName), dome > 0 ? "Galaxy%d" : "Tico", dome);
-        Ui::Pane* pParent = getLayoutManager()->findPaneByName(parentName);
+        MR::FormattedName parentName;
+        if (dome > 0) {
+            parentName.format("Galaxy%d", dome);
+        } else {
+            parentName.format("Tico");
+        }
+        Ui::Pane* pParent = getLayoutManager()->findPaneByName(parentName.c_str());
         if (pParent == nullptr) {
             continue;
         }
@@ -606,20 +610,20 @@ void GalaxyMap::initMarioIcon() {
 
 void GalaxyMap::initTicoIcon() {
     GalaxyMapTicoIcon* ticoIcon;
-    char exclamationGalaxyName[16];
+    MR::FormattedName exclamationGalaxyName;
     s32 exclamationGalaxyNum = GameEventFlagTable::calcExclamationGalaxyNum();
 
     mTicoIcon.init(exclamationGalaxyNum);
 
     for (s32 i = 0; i < exclamationGalaxyNum; i++) {
-        nebula_snprintf(exclamationGalaxyName, sizeof(exclamationGalaxyName), "Tico%d", i + 1);
+        exclamationGalaxyName.format("Tico%d", i + 1);
 
         // A slot no Luma uses, or a Luma a mod added with no place on its map.
-        if (GameEventFlagTable::getExclamationGalaxyNameFromIndex(i) == nullptr || getLayoutManager()->findPaneByName(exclamationGalaxyName) == nullptr) {
+        if (GameEventFlagTable::getExclamationGalaxyNameFromIndex(i) == nullptr || getLayoutManager()->findPaneByName(exclamationGalaxyName.c_str()) == nullptr) {
             continue;
         }
 
-        ticoIcon = new GalaxyMapTicoIcon(i, GameEventFlagTable::getExclamationGalaxyNameFromIndex(i), this, exclamationGalaxyName);
+        ticoIcon = new GalaxyMapTicoIcon(i, GameEventFlagTable::getExclamationGalaxyNameFromIndex(i), this, exclamationGalaxyName.c_str());
         ticoIcon->initWithoutIter();
 
         mTicoIcon.push_back(ticoIcon);

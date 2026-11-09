@@ -235,17 +235,16 @@ void Manual2P::reflectPageIndex() {
 
     MR::setAnimFrameAndStop(this, mPageIndex, 1);
 
-    char messageID[256];
-    nebula_snprintf(messageID, sizeof(messageID), "2PGuidance%03d", mPageIndex + 1);
+    MR::FormattedName messageID("2PGuidance%03d", mPageIndex + 1);
 
-    if (MR::isExistGameMessage(messageID)) {
-        MR::setTextBoxGameMessageRecursive(this, "Text", messageID);
+    if (MR::isExistGameMessage(messageID.c_str())) {
+        MR::setTextBoxGameMessageRecursive(this, "Text", messageID.c_str());
     }
 
-    nebula_snprintf(messageID, sizeof(messageID), "2PGuidanceTitle%03d", mPageIndex + 1);
+    messageID.format("2PGuidanceTitle%03d", mPageIndex + 1);
 
-    if (MR::isExistGameMessage(messageID)) {
-        MR::setTextBoxGameMessageRecursive(this, "Title", messageID);
+    if (MR::isExistGameMessage(messageID.c_str())) {
+        MR::setTextBoxGameMessageRecursive(this, "Title", messageID.c_str());
     }
 
     MR::setTextBoxFormatRecursive(this, "PageNumber", u"%d/%d", mPageIndex + 1, mPageNum);

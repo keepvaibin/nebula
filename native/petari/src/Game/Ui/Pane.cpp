@@ -34,7 +34,6 @@ namespace Ui {
         Init();
         rLayout.Join(this);
         mBasePosition = 4;
-        memset(mName, 0, sizeof(mName));
         memset(mUserData, 0, sizeof(mUserData));
         mTranslate = Vec3f(0.0f, 0.0f, 0.0f);
         mRotate = Vec3f(0.0f, 0.0f, 0.0f);
@@ -82,8 +81,7 @@ namespace Ui {
     }
 
     void Pane::SetName(const char* pName) {
-        strncpy(mName, pName, 0x10);
-        mName[0x10] = '\0';
+        mName.set(pName);
         mpLayout->TouchStructure();
     }
 

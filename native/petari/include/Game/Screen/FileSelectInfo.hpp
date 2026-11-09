@@ -2,6 +2,7 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/System/NerveExecutor.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace FileSelectInfoSub {
     class SlideState;
@@ -36,8 +37,8 @@ private:
     s32 mStarPieceNum;
     s32 mNameBufferSize;
     char16_t* mName;
-    char16_t mDateMessage[32];
-    char16_t mTimeMessage[32];
+    MR::Text16 mDateMessage;
+    MR::Text16 mTimeMessage;
     s32 mMissNum;
     bool mIsSelectedMarioPrev;
     bool mIsSelectedMario;

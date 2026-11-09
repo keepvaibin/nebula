@@ -1,5 +1,7 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaText.hpp"
+#include "Game/Util/TextString.hpp"
 #include <Game/Ui/TextBox.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -41,34 +43,38 @@ TitleSequenceProduct::TitleSequenceProduct()
     mPressStartLayout->initWithoutIter();
 #if defined(__ANDROID__)
     // "Press A or tap the screen": one thumb starts the game. The game's own tag for A, whichever device shows it.
-    static char16_t sPrompt[96];
-    NebulaText::get(sPrompt, 96 - 3, "PressATap");
+    MR::Text16 prompt;
+    NebulaUi::getText(prompt, "PressATap");
     s32 at = 0;
-    while (sPrompt[at] != 0 && sPrompt[at] != u'\u25A0') {
+    while (prompt.c_str()[at] != 0 && prompt.c_str()[at] != u'\u25A0') {
         at++;
     }
-    if (sPrompt[at] != 0) {
+    if (prompt.c_str()[at] != 0) {
         s32 end = at + 1;
-        while (sPrompt[end] != 0) {
+        while (prompt.c_str()[end] != 0) {
             end++;
         }
+        // The tag takes three units where the square was one.
+        char16_t* const pPrompt = prompt.grow(static_cast< u32 >(end) + 1, static_cast< u32 >(end) + 3);
         for (s32 i = end; i > at; i--) {
-            sPrompt[i + 2] = sPrompt[i];
+            pPrompt[i + 2] = pPrompt[i];
         }
-        sPrompt[at] = 0x1A;
-        sPrompt[at + 1] = static_cast< char16_t >(6 | (3 << 8));
-        sPrompt[at + 2] = 0x0000;
+        pPrompt[at] = 0x1A;
+        pPrompt[at + 1] = static_cast< char16_t >(6 | (3 << 8));
+        pPrompt[at + 2] = 0x0000;
     }
-    // The layout's boxes hold the prompt they ship with.
-    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(96);
-    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(96);
-    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
+    // The layout's boxes hold the prompt they ship with, or the room it needs.
+    const u16 promptLength = static_cast< u16 >(MR::textLength(prompt.c_str()));
+    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(promptLength);
+    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(promptLength);
+    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", prompt.c_str());
 #else
-    static char16_t sPrompt[128];
-    NebulaText::get(sPrompt, 128, "PressAnyStart");
-    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(128);
-    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(128);
-    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
+    MR::Text16 prompt;
+    NebulaUi::getText(prompt, "PressAnyStart");
+    const u16 promptLength = static_cast< u16 >(MR::textLength(prompt.c_str()));
+    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(promptLength);
+    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(promptLength);
+    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", prompt.c_str());
 #endif
     mAButtonChecker = new TriggerChecker();
     mBButtonChecker = new TriggerChecker();

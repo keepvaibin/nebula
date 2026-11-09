@@ -8,11 +8,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <Game/Ui/Pane.hpp>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Array.hpp"
 
 namespace {
     using NebulaMenuFocus::Direction;
 
-    const s32 cEntriesMax = 64;
     const s32 cRepeatDelay = 18;         // frames a direction is held before it repeats
     const s32 cRepeatInterval = 5;       // then a step every this many frames
     const f32 cStickHold = 0.6f;         // the stick's deflection that counts as a press
@@ -27,9 +27,9 @@ namespace {
     };
 
     // Offered during a frame; at the next update they are the places the highlight can move to.
-    Entry sOffered[cEntriesMax];
+    MR::GrowBuffer< Entry > sOffered;
     s32 sOfferedCount = 0;
-    Entry sEntries[cEntriesMax];
+    MR::GrowBuffer< Entry > sEntries;
     s32 sEntryCount = 0;
 
     const void* sFocus = nullptr;  // the button or target highlighted
@@ -163,9 +163,8 @@ namespace {
                 return;
             }
         }
-        if (sOfferedCount < cEntriesMax) {
-            sOffered[sOfferedCount++] = rEntry;
-        }
+        Entry* const pOffered = sOffered.room(sOfferedCount + 1);
+        pOffered[sOfferedCount++] = rEntry;
     }
 };  // namespace
 
@@ -220,9 +219,10 @@ namespace NebulaMenuFocus {
         sPress = Direction_None;
         sUnmoved = Direction_None;
         sEntryCount = 0;
+        Entry* const pEntries = sEntries.room(sOfferedCount);
         for (s32 i = 0; i < sOfferedCount; i++) {
             if (isFocusable(sOffered[i])) {
-                sEntries[sEntryCount++] = sOffered[i];
+                pEntries[sEntryCount++] = sOffered[i];
             }
         }
         sOfferedCount = 0;
