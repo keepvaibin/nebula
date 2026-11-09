@@ -388,22 +388,24 @@ namespace Nebula.Launcher
                 // leaves the running game's upscaler, Frame Generation and frame rate in config.ini; the player's own
                 // choice of upscaler is saved.
                 File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + Rtx.Id + "\nupscaler=3\nframe_generation=1\nmax_fps=120\n");
+                bool owned = false;
                 using (var held = new ManualResetEvent(false))
                 using (var release = new ManualResetEvent(false))
                 {
                     var holder = new Thread(() =>
                     {
-                        using (var lease = new Mutex(true, @"Local\Nebula.RMGE01.NativeRuntime"))
+                        using (var lease = new Mutex(true, LaunchSession.LeaseName("RMGE01"), out owned))
                         {
                             held.Set();
                             release.WaitOne();
-                            lease.ReleaseMutex();
+                            if (owned) lease.ReleaseMutex();
                         }
                     });
                     holder.Start();
                     held.WaitOne();
                     try
                     {
+                        Check(owned, "the test holds its lease");
                         Check(LaunchSession.RuntimeLeaseHeld(), "the test's lease reads as a running game");
                         using (var form = new SettingsForm(session))
                         {
@@ -963,6 +965,8 @@ namespace Nebula.Launcher
         {
             try
             {
+                // The test's own lease names: a game open in this session holds the real ones.
+                LaunchSession.LeaseNamespace = @"Local\NebulaTest." + Guid.NewGuid().ToString("N") + ".";
                 string dataRoot = Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT");
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
