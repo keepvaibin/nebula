@@ -6,7 +6,7 @@ class ValueControl;
 
 // Back to the title, a restart or leaving the game: the picture fades out and the sound stops, then the game goes on from
 // the title (fading in) or the host restarts or closes it.
-class GameSystemResetAndPowerProcess : public LayoutActor {
+class GameSystemRestartProcess : public LayoutActor {
 public:
     enum ResetOperation {
         ResetOperation_ApplicationReset,
@@ -14,7 +14,7 @@ public:
         ResetOperation_Quit,
     };
 
-    GameSystemResetAndPowerProcess();
+    GameSystemRestartProcess();
 
     virtual void init(const TableIter&);
     virtual void draw() const;
