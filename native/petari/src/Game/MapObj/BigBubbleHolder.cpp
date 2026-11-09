@@ -9,6 +9,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
@@ -34,8 +35,12 @@ void BigBubbleHolder::movement() {
 }
 
 void BigBubbleHolder::draw() const {
+    // The bubbles draw far to near, an order that changes as they and the camera move: each draws as an object of its own
+    // (its slot, its life), so its surface pairs with itself whatever its place in the order.
     for (s32 idx = 0; idx < mNumBubbles; idx++) {
-        mDrawBubbles[idx]->draw();
+        BigBubble* pBubble = mDrawBubbles[idx];
+        MotionSignal::drawObject(pBubble->mDrawSlot, pBubble->mMotionEpoch);
+        pBubble->draw();
     }
 }
 

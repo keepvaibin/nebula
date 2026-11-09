@@ -1,4 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeLine.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -82,6 +83,20 @@ void ShadowVolumeLine::drawShape(TypedDraw& rDraw) const {
     *vtx++ = {points[5].x, points[5].y, points[5].z};
     *vtx++ = {points[0].x, points[0].y, points[0].z};
     *vtx++ = {points[1].x, points[1].y, points[1].z};
+}
+
+// The line stands between two shadows' hosts: either host renewed starts a new object.
+u32 ShadowVolumeLine::calcDrawLives() const {
+    u32 lives = ShadowVolumeDrawer::calcDrawLives();
+    if (mFromShadowController != nullptr) {
+        lives = lives * 61u + mFromShadowController->getHost()->mMotionEpoch;
+    }
+
+    if (mToShadowController != nullptr) {
+        lives = lives * 61u + mToShadowController->getHost()->mMotionEpoch;
+    }
+
+    return lives;
 }
 
 void ShadowVolumeLine::setFromShadowController(const ShadowController* pController) {

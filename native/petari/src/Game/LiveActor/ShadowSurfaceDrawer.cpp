@@ -1,5 +1,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
+#include "Game/LiveActor/ShadowController.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -35,6 +36,10 @@ void ShadowSurfaceDrawInit::initDraw() {
 ShadowSurfaceDrawer::ShadowSurfaceDrawer(const char* pName) : ShadowDrawer(pName) {
     MR::createSceneObj(SceneObj_ShadowSurfaceDrawInit);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ShadowSurface);
+}
+
+void ShadowSurfaceDrawer::calcDrawAnchor(Vec3f* pOut) const {
+    getController()->getProjectionPos(pOut);
 }
 
 ShadowSurfaceDrawInit::~ShadowSurfaceDrawInit() {

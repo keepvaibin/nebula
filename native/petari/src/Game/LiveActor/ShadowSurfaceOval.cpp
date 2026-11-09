@@ -39,6 +39,7 @@ void ShadowSurfaceOval::draw() const {
         return;
     }
 
+    beginDrawObject();
     Vec3f size(mSize / 100.0f);
     if (controller->isFollowHostScale()) {
         size *= controller->getHost()->mScale;

@@ -10,6 +10,7 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <ModelFileNumbers.h>
 
@@ -96,6 +97,10 @@ void MiiFacePartsHolder::drawEachActor(DrawPartsFuncPtr pDrawFunc, const Mii::St
         MiiFaceParts* pParts = static_cast< MiiFaceParts* >(getActor(i));
 
         if (!MR::isDead(pParts)) {
+            // Each head draws as an object of its own (its slot, its life), the translucent pass after the opaque pass's
+            // numbers, so a head dead or not yet built does not renumber the others and the heads' places pair with themselves.
+            MotionSignal::drawObject(pParts->mDrawSlot, pParts->mMotionEpoch);
+            Frame::setPart(rStyle.chain == Mii::ChainNpcXlu ? 16u : 0u);
             (pParts->*pDrawFunc)(rStyle);
         }
     }

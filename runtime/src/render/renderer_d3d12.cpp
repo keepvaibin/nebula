@@ -6160,7 +6160,7 @@ void RendererD3D12::queue_debug_ppm_capture(
 }
 
 bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The readback decodes RGBA8: the HDR scene scene target's dumps are taken after its scene's end.
+    // The readback decodes the 10-bit scene target (R10G10B10A2): the wide scene target's dumps are taken after its scene's end.
     if (scene_hdr_) {
         return false;
     }

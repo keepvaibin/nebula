@@ -22,6 +22,8 @@ public:
     ShadowSurfaceDrawer(const char*);
 
     virtual ~ShadowSurfaceDrawer() override;
+    // A surface shadow stands where the drop meets the water: that point jumping starts a new object.
+    virtual void calcDrawAnchor(Vec3f* pOut) const override;
 };
 
 inline ShadowSurfaceDrawer::~ShadowSurfaceDrawer() {

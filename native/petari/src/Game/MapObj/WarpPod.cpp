@@ -39,6 +39,8 @@ namespace {
     const f32 cStandOnDistance = 200.0f;
     const u16 cPathPointCount = 60;
     const f32 cPathLift = 200.0f;
+    // Draw numbers a pod's tube owns (a segment for each of cPathPointCount points).
+    const u32 cPartsPerPod = 256;
     const f32 cPathTubeRadius = 30.0f;
 
     // After a warp the far pod rests (closed) for a while before it takes the player back.
@@ -153,8 +155,9 @@ void WarpPodMgr::notifyWarpEnd(WarpPod* pWarpPod) {
 }
 
 void WarpPodMgr::draw() const {
+    // Each pod owns a range of draw numbers by its place in the group, so a pod without a tube does not renumber the others.
     for (u32 i = 0; i < mPods->getObjNum(); i++) {
-        static_cast< WarpPod* >(mPods->getActor(i))->drawCylinder();
+        static_cast< WarpPod* >(mPods->getActor(i))->drawCylinder(i * ::cPartsPerPod);
     }
 }
 
@@ -510,7 +513,7 @@ void WarpPod::initDraw() {
 
 // A tube of two crossed ribbons along the path, facing the view, its texture's v running 1 at the ends to 0 midway.
 // While a pod of the pair opens, the tube grows from this end with the opening.
-void WarpPod::drawCylinder() const {
+void WarpPod::drawCylinder(u32 firstPart) const {
     if (!mDrawsPath || mPairPod->mIsInactive || mIsInactive || mVisibilityState != 1) {
         return;
     }
@@ -589,6 +592,8 @@ void WarpPod::drawCylinder() const {
 
         cur.set(mPathPoints[i], side, up);
 
+        // A segment skipped for a degenerate cross keeps the numbers of the ones after it.
+        site.setPart(firstPart + i);
         VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 8);
 
         sendVertex(vtx, prev.mSidePlus, prevTexCoords[0]);

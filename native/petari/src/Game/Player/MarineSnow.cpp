@@ -15,6 +15,16 @@ namespace {
     void sendFlake(VertexPCT*& rVtx, const Vec3f& rPoint, u32 alpha, f32 s, f32 t) {
         *rVtx++ = {rPoint.x, rPoint.y, rPoint.z, Rgba8(alpha), s, t};
     }
+
+    // The draw object of the cell at world cell (x, y, z): the same cell is the same object from step to step, whichever
+    // cells around the player are drawn and wherever the player's own cell is.
+    u32 cellObject(s32 x, s32 y, s32 z) {
+        u32 h = static_cast< u32 >(x) * 73856093u ^ static_cast< u32 >(y) * 19349663u ^ static_cast< u32 >(z) * 83492791u;
+        h ^= h >> 15;
+        h *= 0x2C1B3C6Du;
+        h ^= h >> 12;
+        return h | 0x80000000u;
+    }
 }  // namespace
 
 MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new Vec3f[mParticleCount]), mCellSize(1000.0f) {
@@ -81,6 +91,13 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
     Vec3f diagonalUp = (billboardRight + billboardUp) * 10.0f;
     Vec3f diagonalDown = (billboardRight - billboardUp) * 10.0f;
 
+    // Each cell draws as an object of its own (the caller's slot, a generation from the cell's place in the world), and
+    // the caller's object and numbers are back when the snow is done: a cell left out, or the player crossing into
+    // another cell, renumbers neither the other cells nor what the caller draws after.
+    const u32 callerSlot = Frame::objectSlot();
+    const u32 callerGeneration = Frame::objectGeneration();
+    const u32 callerPart = Frame::nextPart();
+
     // runtime/src/render/materials/tex_vertex_alpha.hlsl: the flake texture, its alpha times the cell's opacity (the
     // vertices' alpha); blended by alpha, depth tested.
     SiteMaterial flakes;
@@ -130,6 +147,7 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
                     continue;
                 }
 
+                Frame::setObject(callerSlot, ::cellObject(cellX + i, cellY + j, cellZ + k));
                 TypedDraw site(flakes, MR::tmpMtxTrans(cellOrigin), MR::getCameraViewMtx());
 
                 u16 lastParticle;
@@ -144,6 +162,8 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
                 }
 
                 for (u16 point = firstParticle; point < lastParticle; point += particleStride) {
+                    // A flake keeps its number when the cell's stride (its distance from the player) changes.
+                    site.setPart(point);
                     VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, 4);
                     {
                         sendFlake(vtx, mParticlePositions[point] - diagonalDown, alpha, 0.0f, 0.0f);
@@ -158,5 +178,8 @@ void MarineSnow::draw(const Vec3f& rPosition, const Vec3f& rUp, f32 surfaceDista
             }
         }
     }
+
+    Frame::setObject(callerSlot, callerGeneration);
+    Frame::setPart(callerPart);
 }
 

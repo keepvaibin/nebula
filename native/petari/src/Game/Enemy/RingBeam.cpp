@@ -145,6 +145,15 @@ bool RingBeamShadowDrawer::isDraw() const {
     return MR::isValidDraw(mHost);
 }
 
+// No controller: the beam's own place and life name the draws.
+void RingBeamShadowDrawer::calcDrawAnchor(Vec3f* pOut) const {
+    pOut->set(mHost->mPosition);
+}
+
+u32 RingBeamShadowDrawer::calcDrawLives() const {
+    return mHost->mMotionEpoch;
+}
+
 RingBeam::RingBeam(const char* pName, LiveActor* pHost, bool isFollowGravity, bool hasShadow) : LiveActor(pName) {
     mHost = pHost;
     mSpeed = 20.0f;

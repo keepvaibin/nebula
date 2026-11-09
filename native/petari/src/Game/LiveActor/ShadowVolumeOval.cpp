@@ -16,6 +16,11 @@ bool ShadowVolumeOval::isDraw() const {
     return controller->isProjected() && controller->isDraw();
 }
 
+// The oval stands where the drop meets the ground: that point jumping at a ledge starts a new object.
+void ShadowVolumeOval::calcDrawAnchor(Vec3f* pOut) const {
+    getController()->getProjectionPos(pOut);
+}
+
 void ShadowVolumeOval::loadModelDrawMtx(TypedDraw& rDraw) const {
     MtxPtr dropMtx;
     ShadowController* controller = getController();

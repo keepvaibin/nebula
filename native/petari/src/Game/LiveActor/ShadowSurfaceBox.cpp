@@ -27,6 +27,7 @@ void ShadowSurfaceBox::draw() const {
         return;
     }
 
+    beginDrawObject();
     Pos3f modelMtx;
     baseMtx = controller->mHostMtx;
     Vec3f side(baseMtx[0][0], baseMtx[1][0], baseMtx[2][0]);
