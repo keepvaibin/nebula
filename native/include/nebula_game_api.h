@@ -497,7 +497,7 @@ enum {
     NEBULA_ICON_START,    /* Xbox Menu, Plus, Options */
     NEBULA_ICON_BACK,     /* Xbox View, Minus, Share or Create */
     NEBULA_ICON_HOME,
-    NEBULA_ICON_DPAD,     /* KEYBOARD: the four keys of `pad_keys` */
+    NEBULA_ICON_DPAD,     /* place: 0 up, 1 down, 2 left, 3 right; KEYBOARD: the four keys of `pad_keys` */
     NEBULA_ICON_KEY,      /* place: NEBULA_KEY_* */
     NEBULA_ICON_CAPTURE,  /* Capture, the touchpad's click, Steam's quick access */
     NEBULA_ICON_CHAT,     /* Pro Controller 2 C, DualSense mute */

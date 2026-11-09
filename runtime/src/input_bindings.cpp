@@ -1152,10 +1152,10 @@ GlyphPlace glyph_of(InputSource source) noexcept {
     case pad::kStartBit: return {ButtonGlyph::Start, 0u};
     case pad::kBackBit: return {ButtonGlyph::Back, 0u};
     case pad::kHomeBit: return {ButtonGlyph::Home, 0u};
-    case pad::kDpadUpBit:
-    case pad::kDpadDownBit:
-    case pad::kDpadLeftBit:
-    case pad::kDpadRightBit: return {ButtonGlyph::Dpad, 0u};
+    case pad::kDpadUpBit: return {ButtonGlyph::Dpad, 0u};
+    case pad::kDpadDownBit: return {ButtonGlyph::Dpad, 1u};
+    case pad::kDpadLeftBit: return {ButtonGlyph::Dpad, 2u};
+    case pad::kDpadRightBit: return {ButtonGlyph::Dpad, 3u};
     case pad::kCaptureBit: return {ButtonGlyph::Capture, 0u};
     case pad::kChatBit: return {ButtonGlyph::Chat, 0u};
     case pad::kGripLeftBit: return {ButtonGlyph::Grip, 0u};
@@ -1306,7 +1306,7 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
         (model == ButtonIconModel::Steam && style == ButtonIconStyle::Xbox)) {
         spec.model = model;
     }
-    // HOME and the Control Pad look alike on every controller: the game's own stay (Keep), but for the Steam button.
+    // The Control Pad looks alike on every controller: the game's own stays (Keep). HOME is resolved after these.
     static constexpr GameInput kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
         GameInput::A, GameInput::B, GameInput::C, GameInput::Z, GameInput::One, GameInput::Two, GameInput::Plus,
         GameInput::Minus};
@@ -1327,13 +1327,12 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
         spec.glyphs[i] = found.glyph;
         spec.places[i] = found.place;
     }
-    if (spec.model == ButtonIconModel::Steam) {
-        // HOME bound to the Steam button shows it; bound to anything else it stays the game's.
-        const GlyphPlace home = first(GameInput::Home);
-        if (home.glyph == ButtonGlyph::Home) {
-            spec.glyphs[static_cast<std::size_t>(ButtonIcon::Home)] = ButtonGlyph::Home;
-            spec.places[static_cast<std::size_t>(ButtonIcon::Home)] = home.place;
-        }
+    // HOME shows the input it is bound to. On a controller's own home button the game's HOME stays (every pad's reads as
+    // one), but for the Steam model's Steam button.
+    const GlyphPlace home = first(GameInput::Home);
+    if (home.glyph != ButtonGlyph::Home || spec.model == ButtonIconModel::Steam) {
+        spec.glyphs[static_cast<std::size_t>(ButtonIcon::Home)] = home.glyph;
+        spec.places[static_cast<std::size_t>(ButtonIcon::Home)] = home.place;
     }
     return spec;
 }

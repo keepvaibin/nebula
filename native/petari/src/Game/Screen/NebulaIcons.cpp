@@ -106,6 +106,23 @@ namespace {
         }
     };
 
+    // A plus-shaped pad: two rounded bars `mArm` from the centre (mX, mY) to each tip and `mHalfWidth` half wide.
+    struct Cross {
+        f32 mX;
+        f32 mY;
+        f32 mHalfHeight;  // = mArm, for drawShape's shading
+        f32 mHalfWidth;
+        f32 mRadius;
+
+        f32 distance(f32 x, f32 y) const {
+            const Shape across = {mX, mY, mHalfHeight, mHalfWidth, mRadius};
+            const Shape upright = {mX, mY, mHalfWidth, mHalfHeight, mRadius};
+            const f32 a = across.distance(x, y);
+            const f32 b = upright.distance(x, y);
+            return a < b ? a : b;
+        }
+    };
+
     f32 coverOf(f32 distance) {
         return NebulaUi::clamp(0.5f - distance, 0.0f, 1.0f);
     }
@@ -728,8 +745,7 @@ namespace {
     enum { LookText, LookUp, LookPressed };
 
     // The icon of `glyph` at `place` in `style`, of `model`'s where that has its own, on the canvas (cleared first); false
-    // when the game's own shows (HOME and the Control Pad, but for the Steam model's HOME), or the model is another
-    // family's.
+    // when the game's own shows (HOME, but for the Steam model's), or the model is another family's.
     bool paint(Canvas& rCanvas, s32 style, s32 glyph, s32 place, s32 look, s32 model = NEBULA_ICON_MODEL_STANDARD) {
         static const char* const cNintendoFaces[4] = {"B", "A", "Y", "X"};
         static const char* const cXboxLetters[4] = {"A", "B", "X", "Y"};
@@ -949,6 +965,24 @@ namespace {
             drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
             drawText(rCanvas, cTrackpads[place & 1], cx, cy, diameter * 0.3f, ink);
             return true;
+        case NEBULA_ICON_DPAD: {
+            // The cross, the direction pressed filled with ink from the centre's edge to the tip.
+            const f32 arm = diameter * 0.5f;
+            const f32 half = diameter * 0.18f;
+            const Cross cross = {cx, cy, arm, half, diameter * 0.05f};
+            drawShape(rCanvas, cross, ringColor, ring, faceTop, faceBottom);
+            const s32 p = place & 3;
+            const f32 dx = p == 2 ? -1.0f : p == 3 ? 1.0f : 0.0f;
+            const f32 dy = p == 0 ? -1.0f : p == 1 ? 1.0f : 0.0f;
+            const f32 inset = ring * 1.5f;
+            const f32 length = (arm - half - inset) * 0.5f;
+            const f32 middle = half + length;
+            const f32 across = half - inset;
+            const Shape pressedArm = {cx + dx * middle, cy + dy * middle, dx != 0.0f ? length : across, dx != 0.0f ? across : length,
+                                      diameter * 0.03f};
+            drawShape(rCanvas, pressedArm, ink, 0.0f, ink, ink);
+            return true;
+        }
         case NEBULA_ICON_STICK_AXIS: {
             // The stick's cap, the way it is pushed, and which stick.
             static const char* const cArrows[4] = {"\x01", "\x02", "\x03", "\x04"};
@@ -1403,6 +1437,10 @@ namespace {
         {NEBULA_ICON_STICK_AXIS, 5}, // right down
         {NEBULA_ICON_STICK_AXIS, 6}, // right left
         {NEBULA_ICON_STICK_AXIS, 7}, // right right
+        {NEBULA_ICON_DPAD, 0},     // up
+        {NEBULA_ICON_DPAD, 1},     // down
+        {NEBULA_ICON_DPAD, 2},     // left
+        {NEBULA_ICON_DPAD, 3},     // right
         // The ones only a model draws:
         {NEBULA_ICON_START, 0, NEBULA_ICON_MODEL_SIXAXIS},        // start
         {NEBULA_ICON_BACK, 0, NEBULA_ICON_MODEL_SIXAXIS},         // select
@@ -1461,6 +1499,8 @@ namespace {
             return 18 + (place & 1);
         case NEBULA_ICON_STICK_AXIS:
             return 20 + (place & 7);
+        case NEBULA_ICON_DPAD:
+            return 28 + (place & 3);
         default:
             return -1;
         }
