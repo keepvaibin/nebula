@@ -4,6 +4,13 @@
 class CustomTagArg;
 class LayoutActor;
 
+// How a page's letters come in: quickly (talk), slowly (an event's text) or the whole page at once.
+enum TalkTextForm {
+    TalkTextForm_Talk = 0,
+    TalkTextForm_Event = 1,
+    TalkTextForm_Whole = 2,
+};
+
 class TalkTextFormer {
 public:
     TalkTextFormer(LayoutActor*, const char*);

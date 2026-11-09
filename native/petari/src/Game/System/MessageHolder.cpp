@@ -65,7 +65,7 @@ TalkNode* MessageData::findNode(const char* pMessage) const {
     for (u32 i = 0; i < mFile->mNodeNum; i++) {
         TalkNode* pNode = &mNodes[i];
 
-        if (pNode->mNodeType == 1 && static_cast< s32 >(pNode->mIndex) == messageIndex) {
+        if (pNode->mNodeType == TalkNodeType_Message && static_cast< s32 >(pNode->mIndex) == messageIndex) {
             return pNode;
         }
     }

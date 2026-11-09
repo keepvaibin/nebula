@@ -27,38 +27,6 @@
 #include <nebula_math.h>
 
 namespace {
-    // A branch node's condition (TalkNode::mIndex). The flow data numbers them in this order: the galaxy result comes
-    // before the time-keep demo and the read-message test.
-    enum BranchKind {
-        // The player chooses; mNextIdx is the select's id (sSelectBranchID).
-        BranchKind_Select,
-        BranchKind_Func,
-        BranchKind_NearPlayer,
-        BranchKind_SwitchA,
-        BranchKind_SwitchB,
-        BranchKind_PlayerNormal,
-        BranchKind_PlayerBee,
-        BranchKind_PlayerTeresa,
-        BranchKind_PowerStarAppeared,
-        BranchKind_AlreadyDone,
-        BranchKind_PlayerLuigi,
-        BranchKind_GalaxyResult,
-        BranchKind_TimeKeepDemo,
-        BranchKind_MessageRead,
-    };
-
-    // An event node's kind (TalkNode::mGroupID).
-    enum EventKind {
-        EventKind_Func,
-        EventKind_FuncStop,
-        EventKind_None,
-        EventKind_Skip,
-        EventKind_Anime,
-        EventKind_SwitchA,
-        EventKind_SwitchB,
-        EventKind_Kill,
-    };
-
     // Indexed by a select branch's mNextIdx.
     const char* const sSelectBranchID[] = {
         "PenguinRace",       "SwimmingSchool",    "PenguinRace",       "BombTimeAttackLv1",         "PhantomTeresaRacer",
