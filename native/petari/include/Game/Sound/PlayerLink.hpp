@@ -9,8 +9,8 @@ public:
     bool exists() const {
         return mPlayer != nullptr;
     }
-    // A player for `tracks` tracks alive at once, `mgrCount` channel groups and `slots` note slots a group.
-    void create(u32 tracks, u32 mgrCount, u32 slots, u32 ownerSound, u8 ownerRoute);
+    // A player for `tracks` tracks alive at once and `mgrCount` channel groups, each track with `rRoom`.
+    void create(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute);
     // The player goes to the audio thread to finish; SoundMemory frees it once the audio thread lets it go.
     void release();
 

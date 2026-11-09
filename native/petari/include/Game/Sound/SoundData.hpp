@@ -9,7 +9,7 @@
 // entry points (a sound effect collection: groups of entries).
 struct SeqFile {
     static const u32 cMagic = 0x5145534e;  // "NSEQ"
-    static const u32 cVersion = 1;
+    static const u32 cVersion = 2;
 
     u32 mMagic;
     u32 mVersion;
@@ -17,10 +17,13 @@ struct SeqFile {
     u32 mDataBytes;
     u32 mGroupCount;
     u32 mEntryCount;
-    // Bounds over every entry, for the memory a player reserves: tracks alive at once and note slots of a track.
+    // Bounds over every entry, for the memory a player reserves: tracks alive at once, note slots of a track, the call and
+    // loop entries a track holds at once, and the points of the longest envelope an operation sets.
     u32 mTrackBound;
     u32 mNoteSlots;
-    u32 mReserved[4];
+    u32 mStackBound;
+    u32 mEnvelopePoints;
+    u32 mReserved[2];
     // Then: u32 groupFirst[mGroupCount + 1] (into the entries), u32 entries[mEntryCount] (operation indices), u32 offsets[mOpCount]
     // (each operation's byte offset, ascending), SeqOp ops[mOpCount], u8 data[mDataBytes].
 };

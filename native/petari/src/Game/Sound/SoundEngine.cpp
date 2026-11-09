@@ -32,12 +32,12 @@ namespace {
     }
 }  // namespace
 
-u32 SoundPlayer::bytes(u32 tracks, u32 mgrCount, u32 slots) {
+u32 SoundPlayer::bytes(u32 tracks, u32 mgrCount, const TrackRoom& rRoom) {
     return align16(sizeof(SoundPlayer)) + align16(mgrCount * sizeof(SoundParams)) + align16(mgrCount * sizeof(bool)) +
-           tracks * TrackArena::recordBytes(mgrCount, slots);
+           tracks * TrackArena::recordBytes(mgrCount, rRoom);
 }
 
-SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, u32 slots, u32 ownerSound, u8 ownerRoute) {
+SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute) {
     u8* cursor = static_cast< u8* >(pMemory);
     SoundPlayer* player = new (cursor) SoundPlayer();
     cursor += align16(sizeof(SoundPlayer));
@@ -52,7 +52,7 @@ SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, u32 sl
     }
     cursor += align16(mgrCount * sizeof(bool));
     player->mMgrCount = mgrCount;
-    player->mArena.setup(cursor, tracks, mgrCount, slots);
+    player->mArena.setup(cursor, tracks, mgrCount, rRoom);
     player->mArena.mHolder.mKind = OWNER_TRACK;
     player->mArena.mHolder.mPlayer = player;
     player->mRoot = player->mArena.alloc(SoundEngine::get());

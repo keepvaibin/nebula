@@ -10,9 +10,9 @@ namespace {
 }  // namespace
 
 // The memory: the groups' last sent values (the game's), then the player (the audio thread's until it sets mReleased).
-void PlayerLink::create(u32 tracks, u32 mgrCount, u32 slots, u32 ownerSound, u8 ownerRoute) {
+void PlayerLink::create(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute) {
     const u32 head = align64(mgrCount * (sizeof(SoundParams) + sizeof(bool)));
-    u8* memory = static_cast< u8* >(SoundMemory::alloc(head + SoundPlayer::bytes(tracks, mgrCount, slots)));
+    u8* memory = static_cast< u8* >(SoundMemory::alloc(head + SoundPlayer::bytes(tracks, mgrCount, rRoom)));
     mMemory = memory;
     mSent = reinterpret_cast< SoundParams* >(memory);
     mSentHas = reinterpret_cast< bool* >(mSent + mgrCount);
@@ -20,7 +20,7 @@ void PlayerLink::create(u32 tracks, u32 mgrCount, u32 slots, u32 ownerSound, u8 
         new (&mSent[i]) SoundParams();
         mSentHas[i] = false;
     }
-    mPlayer = SoundPlayer::create(memory + head, tracks, mgrCount, slots, ownerSound, ownerRoute);
+    mPlayer = SoundPlayer::create(memory + head, tracks, mgrCount, rRoom, ownerSound, ownerRoute);
     mMgrCount = 1;
     mStatus = SeqTrack::STATUS_FREE;
     mStatusSerial = 0;

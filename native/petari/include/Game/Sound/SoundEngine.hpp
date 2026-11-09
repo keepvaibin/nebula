@@ -17,8 +17,8 @@ class SoundEngine;
 // memory once mReleased says the audio thread has let go.
 class SoundPlayer {
 public:
-    static u32 bytes(u32 tracks, u32 mgrCount, u32 slots);
-    static SoundPlayer* create(void* pMemory, u32 tracks, u32 mgrCount, u32 slots, u32 ownerSound, u8 ownerRoute);
+    static u32 bytes(u32 tracks, u32 mgrCount, const TrackRoom& rRoom);
+    static SoundPlayer* create(void* pMemory, u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 ownerSound, u8 ownerRoute);
 
     // Read by the game thread: the root's status, the tracks it can name (root children 0-31; child 0's and child 1's children
     // 0-31), and that the memory is free.

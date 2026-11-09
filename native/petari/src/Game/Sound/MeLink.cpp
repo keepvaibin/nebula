@@ -11,9 +11,9 @@ u64 MeLink::send() {
 }
 
 // Running from the start.
-void MeLink::start(u32 tracks, const u8* pData, u32 start, const SoundParams& rSound) {
-    mMemory = SoundMemory::alloc(MePlayer::bytes(tracks));
-    mPlayer = MePlayer::create(mMemory, tracks);
+void MeLink::start(u32 tracks, u32 stack, const u8* pData, u32 start, const SoundParams& rSound) {
+    mMemory = SoundMemory::alloc(MePlayer::bytes(tracks, stack));
+    mPlayer = MePlayer::create(mMemory, tracks, stack);
     mStart = start;
     MeStartCommand command;
     command.mData = pData;
