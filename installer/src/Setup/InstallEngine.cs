@@ -57,7 +57,8 @@ namespace Nebula.Setup
         /// <summary>The content format nebula-import's cook command converts from; a version of it reads only version 2 saves.</summary>
         internal const int CookableContentFormatVersion = 1;
 
-        /// <summary>The instruction set NebulaNative.exe and smg_game.dll are built for.</summary>
+        /// <summary>The instruction set NebulaNative.exe and smg_game.dll are built for (the module: x86-64-v3, which every
+        /// AVX2 CPU runs; native/CMakeLists.txt, NEBULA_CPU_LEVEL).</summary>
         private const string NativeIsa = "AVX2";
 
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>

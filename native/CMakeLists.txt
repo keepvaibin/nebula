@@ -168,6 +168,24 @@ if(NEBULA_PGO)
     target_link_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}")
 endif()
 
+# CPU level. The Windows package needs AVX2 (Setup checks it; the host is built for it), and every AVX2 CPU also has
+# FMA3, BMI1, BMI2, F16C, LZCNT and MOVBE: the module is built for that level, x86-64-v3, not the x86-64 baseline.
+# -ffp-contract=off (above) keeps every multiply and add a separate rounding with FMA3 present: the results stay
+# those of the baseline build.
+if(WIN32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64|amd64)$")
+    set(nebula_cpu_level_default "x86-64-v3")
+else()
+    set(nebula_cpu_level_default "")
+endif()
+set(NEBULA_CPU_LEVEL "${nebula_cpu_level_default}" CACHE STRING "Game module CPU level (-march): x86-64-v3, x86-64, or empty for the compiler's default")
+if(NEBULA_CPU_LEVEL)
+    if(NOT NEBULA_CPU_LEVEL MATCHES "^x86-64(-v[234])?$")
+        message(FATAL_ERROR "NEBULA_CPU_LEVEL must be x86-64, x86-64-v2, x86-64-v3, x86-64-v4 or empty")
+    endif()
+    target_compile_options(smg_game PRIVATE -march=${NEBULA_CPU_LEVEL})
+endif()
+message(STATUS "Nebula game module CPU level: ${NEBULA_CPU_LEVEL}")
+
 # Sanitizer builds (tests only): e.g. -DNEBULA_SANITIZE=address for the module and the host.
 set(NEBULA_SANITIZE "" CACHE STRING "Sanitizers for a test build (clang -fsanitize=...)")
 if(NEBULA_SANITIZE)
