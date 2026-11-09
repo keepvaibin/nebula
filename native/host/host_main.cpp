@@ -793,7 +793,7 @@ void apply_power_wish(bool background, bool minimised) {
     }
     if (wish.efficient != applied.efficient) {
         galaxy::host::set_process_efficiency(wish.efficient);
-        log_line("[power]", wish.efficient ? "efficiency requested (away or idle)" : "full speed (playing)");
+        log_line("[power]", wish.efficient ? "efficiency requested (away)" : "full speed (in front)");
     }
     if (wish.display_required != applied.display_required) {
         galaxy::host::keep_display_on(wish.display_required);
