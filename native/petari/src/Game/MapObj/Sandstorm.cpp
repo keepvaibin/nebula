@@ -9,6 +9,7 @@ namespace {
     static const f32 sTurnRate = 2.0f;
     static const f32 sActiveRadius = 7000.0f;
     static const s32 sStepToEnableSpin = 15;
+    static const s32 sTrapNum = 2;  // on opposite sides
     static const f32 sTrapOffsetY = 200.0f;
     static const f32 sTrapOffsetZ = 220.0f;
     static const f32 sTrapRotateSpeed = 4.0f;
@@ -255,7 +256,7 @@ void Sandstorm::calcAndSetBaseMtx() {
 
 void Sandstorm::startClipped() {
     if (mTrapModel != nullptr) {
-        for (s32 i = 0; i < 2; i++) {
+        for (s32 i = 0; i < ::sTrapNum; i++) {
             if (mTrapModel[i] != nullptr) {
                 mTrapModel[i]->startClipped();
             }
@@ -267,7 +268,7 @@ void Sandstorm::startClipped() {
 
 void Sandstorm::endClipped() {
     if (mTrapModel != nullptr) {
-        for (s32 i = 0; i < 2; i++) {
+        for (s32 i = 0; i < ::sTrapNum; i++) {
             if (mTrapModel[i] != nullptr) {
                 mTrapModel[i]->endClipped();
             }
@@ -381,9 +382,9 @@ void Sandstorm::initTrapModel() {
         return;
     }
 
-    mTrapModel = new SunakazeKunTrap*[2];
+    mTrapModel = new SunakazeKunTrap*[::sTrapNum];
 
-    for (s32 i = 0; i < 2; i++) {
+    for (s32 i = 0; i < ::sTrapNum; i++) {
         Vec3f axis = Vec3f(0.0f, 1.0f, 0.0f);
         Vec3f offset = Vec3f(0.0f, ::sTrapOffsetY, ::sTrapOffsetZ);
         MR::rotateVecDegree(&offset, axis, i * 180.0f);

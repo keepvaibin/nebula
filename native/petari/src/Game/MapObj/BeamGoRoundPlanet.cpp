@@ -7,6 +7,11 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 
+namespace {
+    // One per joint beam1..beam16.
+    const s32 sBeamNum = 16;
+};  // namespace
+
 BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("ビームゴーラウンドビーム") {
     mModelDrawer = nullptr;
     mBloomModel = nullptr;
@@ -93,9 +98,9 @@ void BeamGoRoundPlanet::connectToScene(const MapObjActorInitInfo&) {
 }
 
 void BeamGoRoundPlanet::initBeam() {
-    mBeams = new BeamGoRoundBeam*[16];
+    mBeams = new BeamGoRoundBeam*[::sBeamNum];
 
-    for (s32 i = 0; i < 16; i++) {
+    for (s32 i = 0; i < ::sBeamNum; i++) {
         MtxPtr jointMtx = MR::getJointMtx(this, MR::FormattedName("beam%d", i + 1).c_str());
         mBeams[i] = new BeamGoRoundBeam(jointMtx);
         mBeams[i]->initWithoutIter();

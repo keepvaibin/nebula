@@ -85,6 +85,9 @@ namespace {
     f32 larger(f32 a, f32 b) {
         return b >= a ? b : a;
     }
+
+    // Short balloons are reused in turn.
+    const s32 sBalloonShortNum = 4;
 }  // namespace
 
 void TalkBalloon::updateBalloon() {
@@ -414,9 +417,9 @@ void TalkBalloonIcon::open(TalkMessageCtrl* pCtrl) {
 }
 
 TalkBalloonHolder::TalkBalloonHolder() : mShortIndex() {
-    mBalloonShortArray = new TalkBalloonShort*[4];
+    mBalloonShortArray = new TalkBalloonShort*[::sBalloonShortNum];
 
-    for (u32 i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::sBalloonShortNum; i++) {
         mBalloonShortArray[i] = new TalkBalloonShort("会話吹き出し[簡易会話]");
         mBalloonShortArray[i]->initWithoutIter();
         mBalloonShortArray[i]->kill();
@@ -474,7 +477,7 @@ TalkBalloon* TalkBalloonHolder::getBalloon(const TalkMessageCtrl* pArg) {
     }
 
     if (balloon == mBalloonShortArray[mShortIndex]) {
-        mShortIndex = (mShortIndex + 1) % 4;
+        mShortIndex = (mShortIndex + 1) % ::sBalloonShortNum;
     }
 
     return balloon;
@@ -486,7 +489,7 @@ void TalkBalloonHolder::pauseOff() {
     mBalloonSign->pauseOff();
     mBalloonIcon->pauseOff();
 
-    for (int i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::sBalloonShortNum; i++) {
         mBalloonShortArray[i]->pauseOff();
     }
 
@@ -501,7 +504,7 @@ void TalkBalloonHolder::update() {
 }
 
 bool TalkBalloonHolder::isActiveBalloonShort() const {
-    for (int i = 0; i < 4; i++) {
+    for (s32 i = 0; i < ::sBalloonShortNum; i++) {
         if (!MR::isDead(mBalloonShortArray[i])) {
             return true;
         }

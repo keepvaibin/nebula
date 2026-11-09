@@ -389,7 +389,15 @@ SmokeEffectEntry cSmokeTable[] = {{"共通着地普通", 0x08000000, 1.0f, 1.0f,
 void MarioActor::initCommonEffect() {
     mCommonEffectCount = 0;
     mSmokeEntryCount = 0;
-    mSmokeEntries = new SmokeEffectEntry*[8];
+
+    // The list holds the table's entries of types 2 and 5: the ones that time out.
+    s32 timedNum = 0;
+    for (const SmokeEffectEntry* pEntry = cSmokeTable; pEntry->mName != nullptr; pEntry++) {
+        if (pEntry->mType.byte0() == 2 || pEntry->mType.byte0() == 5) {
+            timedNum++;
+        }
+    }
+    mSmokeEntries = new SmokeEffectEntry*[timedNum];
 
     SmokeEffectEntry* entry = cSmokeTable;
     while (entry->mName != nullptr) {

@@ -658,12 +658,12 @@ void BegomanBase::launchBegomanBabyFromGuarder(LiveActor* pActor, BegomanBaby** 
     }
 }
 
-void BegomanBase::launchBegomanBabyLauncher(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+void BegomanBase::launchBegomanBabyLauncher(LiveActor* pActor, BegomanBase* const* pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
                                             const Vec3f* pFront) {
     launchCore(pActor, pBabyArray, numBegoman, radius, velH, velV, pFront);
 
     for (s32 i = 0; i < numBegoman; i++) {
-        pBabyArray[i]->appearFromLaunch(pActor->mPosition, -pActor->mGravity);
+        static_cast< BegomanBaby* >(pBabyArray[i])->appearFromLaunch(pActor->mPosition, -pActor->mGravity);
     }
 }
 
