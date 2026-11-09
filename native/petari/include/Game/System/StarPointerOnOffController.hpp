@@ -3,6 +3,7 @@
 #include "Game/System/NerveExecutor.hpp"
 #include "Game/Util/Array.hpp"
 
+// A row of cModeSetups, in this order.
 enum StarPointerModeEnum {
     StarPointerMode_HomeButton = 0,
     StarPointerMode_ErrorWindow = 1,

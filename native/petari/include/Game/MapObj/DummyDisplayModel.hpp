@@ -6,6 +6,7 @@ class LodCtrl;
 
 // The table rows (arg 7 of the hosts) with special handling.
 // Rows of the model table (placement arg 7).
+// A model id the stage data names (MR::getDummyDisplayModelId reads it).
 enum DummyDisplayModelId {
     DummyDisplayModelId_Coin = 0,
     DummyDisplayModelId_Kinopio = 1,

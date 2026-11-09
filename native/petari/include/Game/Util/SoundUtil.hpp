@@ -26,7 +26,6 @@ namespace MR {
         BossBgmID_DinoPackunB = BossBgmID_03_B,
         BossBgmID_DodoryuA = BossBgmID_05_A,
         BossBgmID_DodoryuB = BossBgmID_05_B,
-        BossBgmID_OtaKing = BossBgmID_01_A,
         BossBgmID_TombSpiderA = BossBgmID_03_A,
         BossBgmID_TombSpiderB = BossBgmID_03_B,
         BossBgmID_TripodBossA = BossBgmID_02_A,

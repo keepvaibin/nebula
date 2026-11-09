@@ -18,6 +18,7 @@ public:
 
 class PressureBase : public LiveActor {
 public:
+    // PressureBase's arg 3 in the stage data.
     enum ShotType {
         ShotType_OnGravity = 0,
         ShotType_Straight = 1,  // no gravity, no follow, no aim

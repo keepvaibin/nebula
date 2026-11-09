@@ -13,10 +13,7 @@ namespace Ui {
     typedef Vec2f (*TexCoordQuad)[4];
     typedef const Vec2f (*ConstTexCoordQuad)[4];
 
-    enum { HORIZONTALPOSITION_LEFT, HORIZONTALPOSITION_CENTER, HORIZONTALPOSITION_RIGHT, HORIZONTALPOSITION_MAX };
-    enum { VERTICALPOSITION_TOP, VERTICALPOSITION_CENTER, VERTICALPOSITION_BOTTOM, VERTICALPOSITION_MAX };
 
-    enum AnimContentType { ANIMCONTENTTYPE_PANE, ANIMCONTENTTYPE_MATERIAL };
 
     // A name of any length: N characters with the terminator in itself, a longer one in a new array. It reads as a
     // const char*.
@@ -141,7 +138,6 @@ namespace Ui {
             ANIMTARGET_MATCOLOR_TEVKONST3_B,
             ANIMTARGET_MATCOLOR_TEVKONST3_A,
 
-            ANIMTARGET_MATCOLOR_MAX
         };
     };  // namespace detail
 

@@ -6,7 +6,7 @@
 /// @brief The identifier of a File Selection Screen icon.
 class FileSelectIconID {
 public:
-    /// @brief The identifier of a Mario character icon.
+    /// @brief The identifier of a Mario character icon: the number saved in a user file.
     enum EFellowID {
         /// @brief The Mario icon.
         Mario,

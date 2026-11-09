@@ -33,8 +33,6 @@ namespace Ui {
             VERTICAL_ORIGIN_BOTTOM = 0x200,
             VERTICAL_ORIGIN_BASELINE = 0x300,
             VERTICAL_ORIGIN_MASK = 0x300,
-            VERTICAL_BASE_TOP = 0x0000,
-            VERTICAL_BASE_BASELINE = VERTICAL_ORIGIN_BASELINE
         };
 
         enum ContextFlag { CONTEXT_NO_CHAR_SPACE = 0x1 };

@@ -10,7 +10,7 @@ namespace Ui {
 
     class CharWriter {
     public:
-        enum GradationMode { GRADMODE_NONE, GRADMODE_H, GRADMODE_V, NUM_OF_GRADMODE };
+        enum GradationMode { GRADMODE_NONE, GRADMODE_H, GRADMODE_V, };
 
         CharWriter();
         ~CharWriter();

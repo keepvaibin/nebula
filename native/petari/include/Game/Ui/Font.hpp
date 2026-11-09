@@ -14,7 +14,6 @@ namespace Ui {
         FONT_ENCODING_SJIS,
         FONT_ENCODING_CP1252,
 
-        FONT_ENCODING_MAX
     };
 
     // A sheet's format as a font file names it.
@@ -33,7 +32,7 @@ namespace Ui {
 
     class Font {
     public:
-        enum Type { TYPE_NULL, TYPE_ROM, TYPE_RESOURCE, TYPE_PAIR };
+        enum Type { TYPE_RESOURCE, };
 
         Font() : mReadFunc(&CharStrmReader::ReadNextCharCP1252) {
         }

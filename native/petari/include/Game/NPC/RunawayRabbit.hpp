@@ -11,6 +11,7 @@ class WalkerStateRunaway;
 
 class RunawayRabbit : public LiveActor {
 public:
+    // RunawayRabbit's arg 1 in the stage data.
     enum HideLocation {
         /* -0x1 */ HideLocation_None = -1,
         HideLocation_Hole,

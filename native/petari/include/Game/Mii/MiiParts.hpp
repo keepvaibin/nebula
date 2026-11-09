@@ -23,6 +23,7 @@ namespace Mii {
     };
 
     // The part textures, in the file's order: the face texture's parts (eye to mole) and the shapes' own.
+    // The flag bit of a shape record in the cooked Mii parts.
     enum TextureKind {
         TextureEye,
         TextureEyebrow,

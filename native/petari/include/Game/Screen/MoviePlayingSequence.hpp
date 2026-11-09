@@ -47,6 +47,7 @@ struct MoviePlayingInfo {
 
 class MoviePlayingSequence : public LayoutActor {
 public:
+    // Indexes the movie list in this order.
     enum MovieType {
         MovieType_PrologueA,
         MovieType_PrologueB,

@@ -6,7 +6,6 @@ class CameraDead : public Camera {
 public:
     enum CameraType {
         CameraType_FixedPos = 0,
-        CameraType_Interpolate = 1,
     };
 
     CameraDead(const char* pName = "通常死亡カメラ");

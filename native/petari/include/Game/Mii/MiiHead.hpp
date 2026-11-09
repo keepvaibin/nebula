@@ -56,6 +56,7 @@ namespace Mii {
         void drawXlu(const Style& rStyle) const;
 
     private:
+        // MiiHead.cpp walks PartBeard to PartFace by number.
         enum PartName { PartBeard, PartNose, PartForehead, PartHair, PartCap, PartFace, PartMask, PartNoseLine, PartGlasses, PartCount };
 
         struct Part {

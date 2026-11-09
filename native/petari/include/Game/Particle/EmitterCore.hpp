@@ -69,7 +69,6 @@ enum {
     EmitterStatus_FirstEmit = 0x10,
     EmitterStatus_RateStepEmit = 0x20,
     EmitterStatus_Immortal = 0x40,
-    EmitterStatus_Delete = 0x100,
 };
 
 class EmitterCore {

@@ -8,6 +8,7 @@ class PeachLetter;
 
 class KinopioAstro : public Kinopio {
 public:
+    // The letter event numbers of KinopioAstro's placement.
     enum LetterEvent {
         LetterEvent_LuigiLetter,
         LetterEvent_PeachLetterNormal,

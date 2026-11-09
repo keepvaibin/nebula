@@ -9,6 +9,7 @@ class GameTexture;
 class NameObj;
 
 namespace ImageEffectLocalUtil {
+    // The draw calls pass 0 to 3 as plain numbers (casts).
     enum ETexDrawType {
         TexDrawType_0,
         TexDrawType_1,
@@ -16,15 +17,6 @@ namespace ImageEffectLocalUtil {
         TexDrawType_3,
     };
 
-    // The stage the texture draws use: setupDrawTexture's (modulate) or the brightness threshold (red above the
-    // material colour's, constant alpha).
-    enum EStage {
-        Stage_Modulate,
-        Stage_Threshold,
-        Stage_Luminance,
-    };
-
-    void setStage(EStage stage);
     // The fall-out field's passes (runtime/src/render/materials/image_effect.hlsl modes 4, 5): the alpha alone (its blur),
     // the edge colour at the texture's alpha.
     enum EMode {
