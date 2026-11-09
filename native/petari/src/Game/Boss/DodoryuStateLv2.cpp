@@ -493,7 +493,8 @@ void DodoryuStateLv2::exeChaseMoreStart() {
             MR::normalize(&toPlayer);
         }
 
-        mHost->mVelocity.set(toPlayer * (1000.0f / MR::getBckCtrl(mHost)->getEnd()));
+        f32 bckEnd = static_cast< f32 >(MR::getBckCtrl(mHost)->getEnd());
+        mHost->mVelocity.set(toPlayer * (bckEnd > 0.0f ? 1000.0f / bckEnd : 0.0f));
     }
 
     MR::startLevelSound(mHost, "SE_BV_LV_DODORYU_COUNTER");

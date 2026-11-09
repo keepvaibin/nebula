@@ -325,7 +325,8 @@ void SkeletalFishGuard::calcAndSetBaseMtx() {
         Vec3f up;
         MR::calcGravityVector(this, mTargetPos, &up, nullptr, 0);
         up.negate();
-        Vec3f side = up.cross(mTargetRailDir);
+        Vec3f side;
+        MR::crossOrPerpendicular(&side, up, mTargetRailDir);
         MR::normalize(&side);
         up.cross(mTargetRailDir, side);
         Quat4f toFront;

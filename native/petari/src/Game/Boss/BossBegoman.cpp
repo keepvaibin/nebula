@@ -953,8 +953,12 @@ bool BossBegoman::receiveMsgTrample(HitSensor* pSender, HitSensor* pReceiver) {
     Vec3f awayFromPlayer(pReceiver->mPosition);
     awayFromPlayer.sub(pSender->mPosition);
     MR::vecKillElement(awayFromPlayer, mGravity, &awayFromPlayer);
-    MR::normalize(&awayFromPlayer);
-    mFaceVec.set(awayFromPlayer);
+    MR::normalizeOrZero(&awayFromPlayer);
+
+    // Straight above the boss there is no side to face; keep the facing.
+    if (!MR::isNearZero(awayFromPlayer)) {
+        mFaceVec.set(awayFromPlayer);
+    }
 
     // Slide sideways to the player's motion, or to the player's facing when standing.
     Vec3f slide(*MR::getPlayerVelocity());

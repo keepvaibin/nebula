@@ -238,7 +238,8 @@ void JumpGuarder::exeUp() {
         MR::startSound(this, "SE_EM_JGUARDER_APPEAR");
     }
 
-    f32 ratio = MR::getBckFrame(this) / MR::getBckCtrl(this)->getEnd();
+    f32 bckEnd = static_cast< f32 >(MR::getBckCtrl(this)->getEnd());
+    f32 ratio = bckEnd > 0.0f ? MR::getBckFrame(this) / bckEnd : 1.0f;
     MR::setShadowVolumeSphereRadius(this, nullptr, (::sShadowRadius - ::sHideShadowRadius) * ratio + ::sHideShadowRadius);
 
     if (MR::isBckStopped(this)) {
@@ -263,7 +264,8 @@ void JumpGuarder::exeDown() {
         MR::startSound(this, "SE_EM_JGUARDER_HIDE");
     }
 
-    f32 ratio = 1.0f - MR::getBckFrame(this) / MR::getBckCtrl(this)->getEnd();
+    f32 bckEnd = static_cast< f32 >(MR::getBckCtrl(this)->getEnd());
+    f32 ratio = bckEnd > 0.0f ? 1.0f - MR::getBckFrame(this) / bckEnd : 0.0f;
     MR::setShadowVolumeSphereRadius(this, nullptr, (::sShadowRadius - ::sHideShadowRadius) * ratio + ::sHideShadowRadius);
 
     if (MR::isBckStopped(this)) {

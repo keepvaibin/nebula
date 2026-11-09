@@ -213,11 +213,12 @@ const Pos3f& TripodBossLeg::getAnkleLocalXZMatrix() const {
 }
 
 void TripodBossLeg::requestStepTarget(TripodBossStepPoint* pPoint) {
-    if (!canStep()) {
+    if (pPoint == nullptr || !canStep()) {
         return;
     }
 
-    mPrevStepPoint = mStepPoint;
+    // A leg that never had a standing point lifts from the new one.
+    mPrevStepPoint = mStepPoint != nullptr ? mStepPoint : pPoint;
     mStepPoint = pPoint;
 
     if (isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold))) {
@@ -623,7 +624,9 @@ void TripodBossLeg::updateAnkleSlerpToBasePose() {
 void TripodBossLeg::updateAnkleLanding() {
     Vec3f offset(mForceEndPoint - mStepPoint->mStepPosition);
     f32 height = offset.dot(mStepPoint->mStepNormal);
-    f32 rate = MR::normalize((height / mLandingHeight), sAnkleLandingStartRate, 1.0f);
+    // A leg that began landing on the step plane counts as already landed.
+    f32 heightRatio = mLandingHeight != 0.0f ? height / mLandingHeight : 0.0f;
+    f32 rate = MR::normalize(heightRatio, sAnkleLandingStartRate, 1.0f);
     f32 restRate = 1.0f - rate;
     Quat4f quat;
     quat.slerp(mAnkleStartQuat, mAnkleLandingQuat, (restRate * (restRate * restRate)));

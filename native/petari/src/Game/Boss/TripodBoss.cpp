@@ -307,7 +307,13 @@ bool TripodBoss::tryChangeSequence() {
         return false;
     }
 
-    s32 leg = getCurrentStepSequence()->getCurrentLeg();
+    TripodBossStepSequence* currentSequence = getCurrentStepSequence();
+
+    if (currentSequence == nullptr) {
+        return false;
+    }
+
+    s32 leg = currentSequence->getCurrentLeg();
 
     if (!mLegs[leg]->canCancelStep()) {
         return false;
@@ -359,7 +365,13 @@ bool TripodBoss::tryNextSequence() {
 }
 
 bool TripodBoss::tryDamage() {
-    s32 leg = getCurrentStepSequence()->getCurrentLeg();
+    TripodBossStepSequence* stepSequence = getCurrentStepSequence();
+
+    if (stepSequence == nullptr) {
+        return false;
+    }
+
+    s32 leg = stepSequence->getCurrentLeg();
 
     if (mLegs[leg]->isDamage()) {
         setNerve(GET_NERVE(TripodBoss, TripodBossNrvDamage));
@@ -371,7 +383,13 @@ bool TripodBoss::tryDamage() {
 }
 
 bool TripodBoss::tryWaitStep() {
-    s32 leg = getCurrentStepSequence()->getCurrentLeg();
+    TripodBossStepSequence* stepSequence = getCurrentStepSequence();
+
+    if (stepSequence == nullptr) {
+        return false;
+    }
+
+    s32 leg = stepSequence->getCurrentLeg();
 
     if (mLegs[leg]->isLanding()) {
         setNerve(GET_NERVE(TripodBoss, TripodBossNrvWaitStep));
@@ -388,6 +406,11 @@ bool TripodBoss::tryNextStep() {
     }
 
     TripodBossStepSequence* stepSequence = getCurrentStepSequence();
+
+    if (stepSequence == nullptr) {
+        return false;
+    }
+
     s32 leg = stepSequence->getCurrentLeg();
 
     if (MR::isGreaterStep(this, stepSequence->getCurrentWaitTime()) || mLegs[leg]->isBroken()) {
@@ -511,12 +534,15 @@ void TripodBoss::exeWait() {
 void TripodBoss::exeStep() {
     if (MR::isFirstStep(this)) {
         TripodBossStepSequence* stepSequence = getCurrentStepSequence();
-        s32 leg = stepSequence->getCurrentLeg();
 
-        if (mLegs[leg]->canStep()) {
-            mLegs[leg]->requestStepTarget(stepSequence->getCurrentStepPoint());
-        } else {
-            stepSequence->nextStep();
+        if (stepSequence != nullptr) {
+            s32 leg = stepSequence->getCurrentLeg();
+
+            if (mLegs[leg]->canStep()) {
+                mLegs[leg]->requestStepTarget(stepSequence->getCurrentStepPoint());
+            } else {
+                stepSequence->nextStep();
+            }
         }
     }
 
@@ -770,6 +796,11 @@ bool TripodBoss::isLeaveMarioNow() const {
 }
 
 void TripodBoss::setJointAttachBaseMatrix(const Pos3f& rPos, s32 idx) {
+    // A placement bone id with no bone (index -1) has nothing to set.
+    if (idx < 0 || idx >= cBoneNum) {
+        return;
+    }
+
     mBossBones[idx].setAttachBaseMatrix(rPos);
 }
 
@@ -802,10 +833,21 @@ void TripodBoss::getBodyMatrix(Pos3f* pMtx) const {
 }
 
 void TripodBoss::getJointMatrix(Pos3f* pMtx, s32 boneID) const {
+    // No bone (or not yet attached): the identity.
+    if (boneID < 0 || boneID >= cBoneNum || mBossBones[boneID].mAttachMtx == nullptr) {
+        pMtx->identity();
+        return;
+    }
+
     pMtx->set(*mBossBones[boneID].mAttachMtx);
 }
 
 void TripodBoss::getJointAttachMatrix(Pos3f* pMtx, s32 boneID) const {
+    if (boneID < 0 || boneID >= cBoneNum || mBossBones[boneID].mAttachMtx == nullptr) {
+        pMtx->identity();
+        return;
+    }
+
     pMtx->concat(*mBossBones[boneID].mAttachMtx, mBossBones[boneID].mLocalMtx);
 }
 
