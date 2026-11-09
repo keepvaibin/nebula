@@ -74,7 +74,8 @@ public:
     ResTable mDefaultTable;
     bool mMaterialBound;
     BckCtrl* mBckCtrl;
-    Mtx44* mBackupMaterialData;
+    Mtx44* mBackupMaterialData;  // material n's slots from mBackupMaterialFirst[n]
+    u32* mBackupMaterialFirst;
     AssetFolder* mArchive;
     NebulaArena* mArena;
     u32 mTotalResourceSize;

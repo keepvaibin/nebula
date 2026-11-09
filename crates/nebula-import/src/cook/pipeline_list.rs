@@ -7,7 +7,7 @@
 use std::collections::BTreeSet;
 use std::sync::Mutex;
 
-use super::model_write::{further_stride, MeshStreams, MESH_COLOR0, MESH_COLOR1, MESH_COORD0, MESH_NORMAL, MESH_TANGENTS};
+use super::model_write::{further_stride, MeshStreams, MESH_COLOR0, MESH_COLOR1, MESH_NORMAL, MESH_TANGENTS};
 
 pub const PATH: &str = "NebulaData/Pipelines.bin";
 /// NEBULA_PIPELINE_RECORD_BYTES and NEBULA_LAYOUT_INPUT_BYTES.
@@ -32,7 +32,7 @@ pub fn reset() {
 
 fn input(code: u8, program_number: u16, m: &MeshStreams) -> [u8; INPUT_BYTES] {
     let further = further_stride(m);
-    let coords = (1..super::limits::MATERIAL_SLOTS).filter(|n| m.attributes & (MESH_COORD0 << n) != 0).count() as u32;
+    let coords = (1..m.coordinates.len()).filter(|&n| m.has_coord(n)).count() as u32;
     let after_coords = coords * 8;
     let after_color = after_coords + if m.attributes & MESH_COLOR1 != 0 { 4 } else { 0 };
     let (stream, format, offset, stride): (u8, u8, u32, u32) = match code {
@@ -41,12 +41,12 @@ fn input(code: u8, program_number: u16, m: &MeshStreams) -> [u8; INPUT_BYTES] {
         2 if m.attributes & MESH_COLOR1 != 0 => (3, 2, after_coords, further),
         3 if m.attributes & MESH_TANGENTS != 0 => (3, 0, after_color, further),
         4 if m.attributes & MESH_TANGENTS != 0 => (3, 0, after_color + 12, further),
-        c if c >= INPUT_COORD0 && m.attributes & (MESH_COORD0 << (c - INPUT_COORD0)) != 0 => {
-            let number = c - INPUT_COORD0;
+        c if c >= INPUT_COORD0 && m.has_coord(usize::from(c - INPUT_COORD0)) => {
+            let number = usize::from(c - INPUT_COORD0);
             if number == 0 {
                 (1, 1, 16, 24)
             } else {
-                let before = (1..number).filter(|n| m.attributes & (MESH_COORD0 << n) != 0).count() as u32;
+                let before = (1..number).filter(|&n| m.has_coord(n)).count() as u32;
                 (3, 1, before * 8, further)
             }
         }

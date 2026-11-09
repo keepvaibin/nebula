@@ -104,6 +104,40 @@ struct MaterialCoord {
     }
 };
 
+// A material's slot n: map n, coordinate n and matrix n.
+struct MaterialSlot {
+    u32 mTextureIndex;     // NEBULA_NONE32: no texture
+    MaterialCoord mCoord;
+    CoordMatrix* mMatrix;  // null: none; set once, its place kept while the slots grow
+};
+
+// A material's slots, as many as anything names; a slot past them grows them. A copy owns its slots and matrices.
+class MaterialSlots {
+public:
+    MaterialSlots() : mSlots(nullptr), mCount(0) {}
+    MaterialSlots(const MaterialSlots& rOther);
+    MaterialSlots& operator=(const MaterialSlots&) = delete;
+    ~MaterialSlots();
+
+    u32 count() const {
+        return mCount;
+    }
+    const MaterialSlot* find(u32 n) const {
+        return n < mCount ? &mSlots[n] : nullptr;
+    }
+    MaterialSlot& at(u32 n) {
+        if (n >= mCount) {
+            grow(n + 1);
+        }
+        return mSlots[n];
+    }
+    void grow(u32 count);
+
+private:
+    MaterialSlot* mSlots;
+    u32 mCount;
+};
+
 // A material: everything its draw reads, as plain values, starting as the file gave them. A model file's materials are
 // shared by its models; a model whose material moves (animation, a controller) draws its own copy (Model::ownMaterial).
 class Material {
@@ -137,26 +171,28 @@ public:
         return mData;
     }
 
-    CoordMatrix* getCoordMatrix(u32 index) {
-        return (mMatrixUsed & (1u << index)) != 0 ? &mMatrices[index] : nullptr;
+    // Slots 0 to getSlotCount() - 1 hold every map, coordinate and matrix the material has.
+    u32 getSlotCount() const {
+        return mSlots.count();
     }
-    void setCoordMatrix(u32 index, const CoordMatrix& rMatrix) {
-        mMatrices[index] = rMatrix;
-        mMatrixUsed |= static_cast< u16 >(1u << index);
-        touch();
+    CoordMatrix* getCoordMatrix(u32 index) const {
+        const MaterialSlot* pSlot = mSlots.find(index);
+        return pSlot != nullptr ? pSlot->mMatrix : nullptr;
     }
+    void setCoordMatrix(u32 index, const CoordMatrix& rMatrix);
     MaterialCoord* getCoord(u32 index) {
         touch();
-        return &mCoords[index];
+        return &mSlots.at(index).mCoord;
     }
     u32 getCoordCount() const {
         return mFile->coord_count;
     }
     u32 getTextureIndex(u32 map) const {
-        return mTextureIndex[map];
+        const MaterialSlot* pSlot = mSlots.find(map);
+        return pSlot != nullptr ? pSlot->mTextureIndex : NEBULA_NONE32;
     }
     void setTextureIndex(u32 map, u32 number) {
-        mTextureIndex[map] = number;
+        mSlots.at(map).mTextureIndex = number;
         mTextureStamp++;
     }
     NebulaColor8* getMaterialColor(u32 index) {
@@ -191,11 +227,12 @@ public:
     }
 
     bool usesMap(u32 map) const {
-        return (mFile->used_maps & (1u << map)) != 0;
+        return map < mFile->slot_count && (fileSlots()[map].uses & NEBULA_SLOT_USES_MAP) != 0;
     }
     bool usesCoord(u32 coord) const {
-        return (mFile->used_coords & (1u << coord)) != 0;
+        return coord < mFile->slot_count && (fileSlots()[coord].uses & NEBULA_SLOT_USES_COORD) != 0;
     }
+    const NebulaModelSlot* fileSlots() const;
     bool usesLight(u32 channel, u32 light) const {
         const NebulaModelChannel& rChannel = mFile->channels[channel];
         return rChannel.enable != 0 && (rChannel.light_mask & (1u << light)) != 0;
@@ -227,15 +264,12 @@ public:
     Mesh* mMesh;
     Joint* mJoint;
     u32 mIndex;
-    u16 mMatrixUsed;
-    u32 mTextureIndex[NEBULA_MATERIAL_SLOTS];
+    MaterialSlots mSlots;
     NebulaColor8 mMaterialColor[2];
     NebulaColor8 mAmbientColor[2];
     NebulaColor16 mRegisters[4];
     NebulaColor8 mConstants[4];
     FogInfo mFog;
-    MaterialCoord mCoords[NEBULA_MATERIAL_SLOTS];
-    CoordMatrix mMatrices[NEBULA_MATERIAL_SLOTS];
     u32 mStamp;
     u32 mTextureStamp;
 
@@ -248,7 +282,7 @@ public:
         u32 mTableDataStamp;
         u32 mPipeline;
         u32 mPipelineState;
-        u32 mPipelineAttributes, mPipelineStride;
+        u64 mPipelineLayout;  // meshLayoutKey
         u32 mConstantsFrame;
         u32 mConstantsStamp;
         u32 mConstantsIndex;
@@ -273,6 +307,8 @@ namespace MaterialAmbient {
 
 // Where a mesh keeps a vertex input, or the zero stream: appended to `pInputs` at pDesc->input_count, which counts it.
 void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 semantic, const NebulaModelMesh& rMesh);
+// One value per layout meshLayoutInput gives: meshes with one value read their inputs from the same places.
+u64 meshLayoutKey(const NebulaModelMesh& rMesh);
 
 // A colour register a draw sets, by name: the numbers are the material data's (0 the stage output, which no draw sets), so a
 // call can never land one register down.
@@ -336,9 +372,23 @@ private:
         Edit_Ambient0 = 1u << 5,
         Edit_Ambient1 = 1u << 6,
         Edit_Fog = 1u << 7,
-        Edit_Coord0 = 1u << 8,       // through slot 15
-        Edit_Scale0 = 1u << 24,
+        Edit_Coord = 1u << 8,  // mCoordEdits
+        Edit_Scale0 = 1u << 9,
     };
+
+    // A coordinate's rows and a map's image this set-up changes, in the frame's memory.
+    struct CoordEdit {
+        CoordEdit* mNext;
+        u32 mCoord;
+        f32 mRows[3][4];
+    };
+    struct ImageEdit {
+        ImageEdit* mNext;
+        u32 mMap;
+        u32 mTexture;
+    };
+    CoordEdit* findCoord(u32 coord) const;
+    ImageEdit* findImage(u32 map) const;
 
     void clear();
     s32 resolveForm();
@@ -357,15 +407,14 @@ private:
     bool mZeroAlphaRef;
     bool mCoordinateTexture;
     u32 mState;
-    u32 mImageMask;
-    u32 mImages[NEBULA_MATERIAL_SLOTS];
+    ImageEdit* mImageEdits;
+    CoordEdit* mCoordEdits;
     bool mFlat;
     f32 mOverride[4];
     f32 mRegisters[3][4];
     f32 mMaterialColors[2][4];
     f32 mAmbient[2][4];
     f32 mFogValues[2][4];
-    f32 mCoords[NEBULA_MATERIAL_SLOTS][3][4];
     f32 mScale0[4];
     f32 mFlatColor[4];
     s32 mForm;

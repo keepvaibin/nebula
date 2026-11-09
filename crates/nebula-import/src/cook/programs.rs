@@ -21,9 +21,10 @@ pub const ROW_FOG: u32 = 11; // start, end, near, far
 pub const ROW_FOG_COLOR: u32 = 12;
 pub const ROW_ALPHA_REF: u32 = 13;
 pub const ROW_OVERRIDE: u32 = 14; // the replacing forms' values
-pub const ROW_SCALE: u32 = 32; // per texture number: xy its coordinate's scale, zw its size. 32 of them
-pub const ROW_WARP: u32 = 64; // two per warp matrix. 32 of them
-pub const ROW_COORD: u32 = 128; // three per coordinate
+// The counted kinds: kind << 16 | index.
+pub const ROW_SCALE: u32 = 1 << 16; // + coordinate: xy its scale, zw its map's size
+pub const ROW_WARP: u32 = 2 << 16; // + two per warp matrix
+pub const ROW_COORD: u32 = 3 << 16; // + three per coordinate
 
 const CC: [&str; 16] = [
     "prev.rgb", "prev.aaa", "r0.rgb", "r0.aaa", "r1.rgb", "r1.aaa", "r2.rgb", "r2.aaa", "t.rgb", "t.aaa", "ras.rgb", "ras.aaa",

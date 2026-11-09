@@ -126,6 +126,59 @@ namespace MaterialAmbient {
     }
 }  // namespace MaterialAmbient
 
+MaterialSlots::MaterialSlots(const MaterialSlots& rOther) : mSlots(nullptr), mCount(0) {
+    if (rOther.mCount != 0) {
+        mSlots = new MaterialSlot[rOther.mCount];
+        mCount = rOther.mCount;
+        for (u32 i = 0; i < mCount; i++) {
+            mSlots[i] = rOther.mSlots[i];
+            mSlots[i].mMatrix = rOther.mSlots[i].mMatrix != nullptr ? new CoordMatrix(*rOther.mSlots[i].mMatrix) : nullptr;
+        }
+    }
+}
+
+MaterialSlots::~MaterialSlots() {
+    for (u32 i = 0; i < mCount; i++) {
+        delete mSlots[i].mMatrix;
+    }
+    delete[] mSlots;
+}
+
+void MaterialSlots::grow(u32 count) {
+    if (count <= mCount) {
+        return;
+    }
+    MaterialSlot* pSlots = new MaterialSlot[count];
+    for (u32 i = 0; i < count; i++) {
+        if (i < mCount) {
+            pSlots[i] = mSlots[i];
+        } else {
+            pSlots[i].mTextureIndex = NEBULA_NONE32;
+            pSlots[i].mCoord.mType = 0;
+            pSlots[i].mCoord.mSource = 0;
+            pSlots[i].mCoord.mMatrix = NEBULA_COORD_IDENTITY;
+            pSlots[i].mMatrix = nullptr;
+        }
+    }
+    delete[] mSlots;
+    mSlots = pSlots;
+    mCount = count;
+}
+
+const NebulaModelSlot* Material::fileSlots() const {
+    return reinterpret_cast< const NebulaModelSlot* >(mData->at(mFile->slots_at));
+}
+
+void Material::setCoordMatrix(u32 index, const CoordMatrix& rMatrix) {
+    MaterialSlot& rSlot = mSlots.at(index);
+    if (rSlot.mMatrix == nullptr) {
+        rSlot.mMatrix = new CoordMatrix(rMatrix);
+    } else {
+        *rSlot.mMatrix = rMatrix;
+    }
+    touch();
+}
+
 void Material::init(ModelData* pData, u32 index) {
     const NebulaModelMaterial* pFile = reinterpret_cast< const NebulaModelMaterial* >(pData->at(pData->mFile->materials_at)) + index;
     mFile = pFile;
@@ -134,16 +187,16 @@ void Material::init(ModelData* pData, u32 index) {
     mMesh = pFile->mesh != NEBULA_MODEL_NONE && pData->mMeshes != nullptr ? &pData->mMeshes[pFile->mesh] : nullptr;
     mJoint = pFile->joint != NEBULA_MODEL_NONE && pData->mJoints != nullptr ? &pData->mJoints[pFile->joint] : nullptr;
     mIndex = index;
-    mMatrixUsed = 0;
     mStamp = 0;
     mTextureStamp = 0;
     mForms = nullptr;
     mSourceHash = pFile->name_hash;
     mFollowsView = false;
 
-    const u32* pTextures = reinterpret_cast< const u32* >(pData->at(pFile->textures_at));
-    for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
-        mTextureIndex[i] = i < pFile->texture_count ? pTextures[i] : NEBULA_NONE32;
+    mSlots.grow(pFile->slot_count);
+    const NebulaModelSlot* pFileSlots = fileSlots();
+    for (u32 i = 0; i < pFile->slot_count; i++) {
+        mSlots.at(i).mTextureIndex = pFileSlots[i].texture;
     }
     for (u32 i = 0; i < 2; i++) {
         memcpy(&mMaterialColor[i], pFile->material_color[i], 4);
@@ -164,15 +217,20 @@ void Material::init(ModelData* pData, u32 index) {
     memcpy(&mFog.mColor, pFile->fog.color, 4);
 
     const NebulaModelCoord* pCoords = reinterpret_cast< const NebulaModelCoord* >(pData->at(pFile->coords_at));
-    for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
-        mCoords[i].mType = i < pFile->coord_count ? pCoords[i].type : 0;
-        mCoords[i].mSource = i < pFile->coord_count ? pCoords[i].source : 0;
-        mCoords[i].mMatrix = i < pFile->coord_count ? pCoords[i].matrix : NEBULA_COORD_IDENTITY;
+    for (u32 i = 0; i < pFile->coord_count; i++) {
+        MaterialCoord& rCoord = mSlots.at(i).mCoord;
+        rCoord.mType = pCoords[i].type;
+        rCoord.mSource = pCoords[i].source;
+        rCoord.mMatrix = pCoords[i].matrix;
     }
     const NebulaModelCoordMatrix* pMatrices = reinterpret_cast< const NebulaModelCoordMatrix* >(pData->at(pFile->matrices_at));
     for (u32 i = 0; i < pFile->matrix_count; i++) {
         const NebulaModelCoordMatrix& rFile = pMatrices[i];
-        CoordMatrix& rMatrix = mMatrices[rFile.slot];
+        MaterialSlot& rSlot = mSlots.at(rFile.slot);
+        if (rSlot.mMatrix == nullptr) {
+            rSlot.mMatrix = new CoordMatrix();
+        }
+        CoordMatrix& rMatrix = *rSlot.mMatrix;
         rMatrix.mInfo.mProjection = rFile.projection;
         rMatrix.mInfo.mInfo = rFile.info;
         rMatrix.mInfo.mCenter.x = rFile.center[0];
@@ -184,7 +242,6 @@ void Material::init(ModelData* pData, u32 index) {
         rMatrix.mInfo.mSRT.mTranslationX = rFile.translation[0];
         rMatrix.mInfo.mSRT.mTranslationY = rFile.translation[1];
         memcpy(rMatrix.mInfo.mEffectMtx, rFile.effect, sizeof(rFile.effect));
-        mMatrixUsed |= static_cast< u16 >(1u << rFile.slot);
         mFollowsView = mFollowsView || rMatrix.followsView() || ((pFile->flags & NEBULA_MATERIAL_ON_BILLBOARD) != 0 && rMatrix.readsEye());
     }
     calc();
@@ -192,12 +249,13 @@ void Material::init(ModelData* pData, u32 index) {
 
 void Material::calc() {
     bool changed = false;
-    for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
-        if ((mMatrixUsed & (1u << i)) != 0) {
+    for (u32 i = 0; i < mSlots.count(); i++) {
+        CoordMatrix* pMatrix = mSlots.find(i)->mMatrix;
+        if (pMatrix != nullptr) {
             Mtx before;
-            NebulaMtxCopy(mMatrices[i].getMtx(), before);
-            mMatrices[i].calc();
-            changed = changed || memcmp(before, mMatrices[i].getMtx(), sizeof(Mtx)) != 0;
+            NebulaMtxCopy(pMatrix->getMtx(), before);
+            pMatrix->calc();
+            changed = changed || memcmp(before, pMatrix->getMtx(), sizeof(Mtx)) != 0;
         }
     }
     if (changed) {
@@ -233,12 +291,14 @@ void Material::fillRow(u32 row, f32* pOut) const {
         pOut[1] = r == 1 ? 1.0f : 0.0f;
         pOut[2] = r == 2 ? 1.0f : 0.0f;
         pOut[3] = 0.0f;
-        const u32 place = mCoords[coord].mMatrix;
+        const MaterialSlot* pSlot = mSlots.find(coord);
+        const u32 place = pSlot != nullptr ? pSlot->mCoord.mMatrix : NEBULA_COORD_IDENTITY;
         if (place != NEBULA_COORD_IDENTITY) {
             const u32 number = place;
-            if ((mMatrixUsed & (1u << number)) != 0) {
-                memcpy(pOut, const_cast< CoordMatrix& >(mMatrices[number]).getMtx()[r], sizeof(f32) * 4);
-                if ((mFile->flags & NEBULA_MATERIAL_ON_BILLBOARD) != 0 && mMatrices[number].readsEye()) {
+            CoordMatrix* pMatrix = getCoordMatrix(number);
+            if (pMatrix != nullptr) {
+                memcpy(pOut, pMatrix->getMtx()[r], sizeof(f32) * 4);
+                if ((mFile->flags & NEBULA_MATERIAL_ON_BILLBOARD) != 0 && pMatrix->readsEye()) {
                     // A billboard's eye rows have turned to the eye; the coordinate reads the joint before that: world
                     // input, under this view. A direction takes no translation of it.
                     const f32 (*pView)[4] = ModelSys::mViewMtx;
@@ -246,7 +306,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
                     for (u32 c = 0; c < 3; c++) {
                         pOut[c] = a0 * pView[0][c] + a1 * pView[1][c] + a2 * pView[2][c];
                     }
-                    if (mCoords[coord].mSource == 0) {
+                    if (pSlot->mCoord.mSource == 0) {
                         pOut[3] += a0 * pView[0][3] + a1 * pView[1][3] + a2 * pView[2][3];
                     }
                 }
@@ -278,7 +338,7 @@ void Material::fillRow(u32 row, f32* pOut) const {
     if (row >= NEBULA_ROW_SCALE) {
         const u32 coord = row - NEBULA_ROW_SCALE;
         const auto sizeOf = [this](u32 map, f32* pSize) {
-            const u32 number = map < NEBULA_MATERIAL_SLOTS ? mTextureIndex[map] : NEBULA_NONE32;
+            const u32 number = getTextureIndex(map);
             if (number == NEBULA_NONE32) {
                 pSize[0] = pSize[1] = 1.0f;
             } else {
@@ -288,8 +348,8 @@ void Material::fillRow(u32 row, f32* pOut) const {
             }
         };
         sizeOf(coord, pOut + 2);
-        const u8 map = mFile->coord_map[coord];
-        if (map != 255) {
+        const u32 map = coord < mFile->slot_count ? fileSlots()[coord].scale_map : NEBULA_SLOT_NO_MAP;
+        if (map != NEBULA_SLOT_NO_MAP) {
             sizeOf(map, pOut);
         } else {
             pOut[0] = pOut[2];
@@ -398,7 +458,8 @@ void MaterialDraw::clear() {
     mHasState = false;
     mZeroAlphaRef = false;
     mState = 0;
-    mImageMask = 0;
+    mImageEdits = nullptr;
+    mCoordEdits = nullptr;
     mCoordinateTexture = false;
     mFlat = false;
     mForm = -1;
@@ -440,14 +501,37 @@ void MaterialDraw::overrideCoordinate(u32 texture, u32 width, u32 height) {
     mScale0[0] = mScale0[2] = width;
     mScale0[1] = mScale0[3] = height;
     mEdits |= Edit_Scale0;
-    mImageMask |= 1;
-    mImages[0] = texture;
+    swapImage(0, texture);
     mCoordinateTexture = true;
 }
 
+MaterialDraw::ImageEdit* MaterialDraw::findImage(u32 map) const {
+    for (ImageEdit* pEdit = mImageEdits; pEdit != nullptr; pEdit = pEdit->mNext) {
+        if (pEdit->mMap == map) {
+            return pEdit;
+        }
+    }
+    return nullptr;
+}
+
+MaterialDraw::CoordEdit* MaterialDraw::findCoord(u32 coord) const {
+    for (CoordEdit* pEdit = mCoordEdits; pEdit != nullptr; pEdit = pEdit->mNext) {
+        if (pEdit->mCoord == coord) {
+            return pEdit;
+        }
+    }
+    return nullptr;
+}
+
 void MaterialDraw::swapImage(u32 map, u32 texture) {
-    mImageMask |= 1u << map;
-    mImages[map] = texture;
+    ImageEdit* pEdit = findImage(map);
+    if (pEdit == nullptr) {
+        pEdit = Frame::alloc< ImageEdit >(1);
+        pEdit->mNext = mImageEdits;
+        pEdit->mMap = map;
+        mImageEdits = pEdit;
+    }
+    pEdit->mTexture = texture;
 }
 
 void MaterialDraw::applyPass(u8 pass) {
@@ -459,8 +543,15 @@ void MaterialDraw::applyPass(u8 pass) {
 }
 
 void MaterialDraw::setCoordinate(u32 coord, const f32 (*pMtx)[4]) {
-    memcpy(mCoords[coord], pMtx, sizeof(mCoords[coord]));
-    mEdits |= Edit_Coord0 << coord;
+    CoordEdit* pEdit = findCoord(coord);
+    if (pEdit == nullptr) {
+        pEdit = Frame::alloc< CoordEdit >(1);
+        pEdit->mNext = mCoordEdits;
+        pEdit->mCoord = coord;
+        mCoordEdits = pEdit;
+    }
+    memcpy(pEdit->mRows, pMtx, sizeof(pEdit->mRows));
+    mEdits |= Edit_Coord;
 }
 
 void MaterialDraw::setRegister(MaterialRegister reg, NebulaColor8 color) {
@@ -541,8 +632,9 @@ void MaterialDraw::applyEdits(const u32* pRows, u32 count, f32 (*pOut)[4]) const
         f32* pRow = pOut[i];
         if (row >= NEBULA_ROW_COORD) {
             const u32 at = row - NEBULA_ROW_COORD;
-            if ((mEdits & (Edit_Coord0 << (at / 3))) != 0) {
-                memcpy(pRow, mCoords[at / 3][at % 3], sizeof(f32) * 4);
+            const CoordEdit* pEdit = findCoord(at / 3);
+            if (pEdit != nullptr) {
+                memcpy(pRow, pEdit->mRows[at % 3], sizeof(f32) * 4);
             }
         } else if (row == NEBULA_ROW_SCALE) {
             if ((mEdits & Edit_Scale0) != 0) {
@@ -660,18 +752,18 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelForm& rForm) {
     Material* pMaterial = getMaterial();
     Material::FormState* pState = pMaterial->formState(formIndex);
     ModelData* pData = pMaterial->mData;
-    if (mImageMask == 0 && pState->mTable != NEBULA_NONE32 && pState->mTableStamp == pMaterial->mTextureStamp &&
+    if (mImageEdits == nullptr && pState->mTable != NEBULA_NONE32 && pState->mTableStamp == pMaterial->mTextureStamp &&
         pState->mTableDataStamp == pData->getTextureStamp()) {
         return pState->mTable;
     }
 
-    NebulaFrameTexture list[NEBULA_MATERIAL_SLOTS];
+    NebulaFrameTexture* list = rForm.texture_count != 0 ? Frame::alloc< NebulaFrameTexture >(rForm.texture_count) : nullptr;
     const u8* pNumbers = reinterpret_cast< const u8* >(pData->at(rForm.textures_at));
     for (u32 i = 0; i < rForm.texture_count; i++) {
         const u32 map = pNumbers[i];
         NebulaFrameTexture& rOut = list[i];
         memset(&rOut, 0, sizeof(rOut));
-        const u32 number = pMaterial->mTextureIndex[map];
+        const u32 number = pMaterial->getTextureIndex(map);
         if (number != NEBULA_NONE32) {
             const ResTIMG* pTexture = pData->getTexture(number);
             rOut.texture = RenderTexture::idOf(pTexture->image());
@@ -685,11 +777,12 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelForm& rForm) {
             rOut.max_lod = pTexture->mMaxLod;
             rOut.lod_bias = pTexture->mLodBias;
         }
-        if ((mImageMask & (1u << map)) != 0) {
-            rOut.texture = mImages[map];
+        const ImageEdit* pImage = findImage(map);
+        if (pImage != nullptr) {
+            rOut.texture = pImage->mTexture;
             if (map == 0 && mCoordinateTexture) {
                 memset(&rOut, 0, sizeof(rOut));
-                rOut.texture = mImages[0];
+                rOut.texture = pImage->mTexture;
                 rOut.wrap_s = 1;
                 rOut.wrap_t = 1;
                 rOut.min_linear = 1;
@@ -699,7 +792,7 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelForm& rForm) {
     }
     const NebulaHostServices* pHost = nebula_host();
     const u32 table = pHost->texture_table(pHost->user, list, rForm.texture_count);
-    if (mImageMask == 0) {
+    if (mImageEdits == nullptr) {
         pState->mTable = table;
         pState->mTableStamp = pMaterial->mTextureStamp;
         pState->mTableDataStamp = pData->getTextureStamp();
@@ -720,9 +813,10 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
         const auto further = [&rMesh, &place](u8 format, u32 offset) {
             place(3, format, offset, rMesh.further_stride);
         };
+        const NebulaModelMeshCoord* pCoords = nebula_mesh_coords(&rMesh);
         u32 coords = 0;
-        for (u32 n = 1; n < NEBULA_MATERIAL_SLOTS; n++) {
-            if ((rMesh.attributes & (NEBULA_MESH_COORD0 << n)) != 0) {
+        for (u32 n = 1; n < rMesh.coord_count; n++) {
+            if (pCoords[n].stream != NEBULA_MESH_NO_COORD) {
                 coords++;
             }
         }
@@ -761,17 +855,12 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
             break;
         default: {
             const u32 number = semantic - NEBULA_INPUT_COORD0;
-            if ((rMesh.attributes & (NEBULA_MESH_COORD0 << number)) != 0) {
-                if (number == 0) {
-                    place(1, 1, 16, 24);
+            if (number < rMesh.coord_count && pCoords[number].stream != NEBULA_MESH_NO_COORD) {
+                const NebulaModelMeshCoord& rCoord = pCoords[number];
+                if (rCoord.stream == 1) {
+                    place(1, 1, rCoord.offset, 24);
                 } else {
-                    u32 offset = 0;
-                    for (u32 n = 1; n < number; n++) {
-                        if ((rMesh.attributes & (NEBULA_MESH_COORD0 << n)) != 0) {
-                            offset = static_cast< u32 >(offset + 8);
-                        }
-                    }
-                    further(1, offset);
+                    further(1, rCoord.offset);
                 }
                 return;
             }
@@ -783,13 +872,31 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
     }
 }
 
+// Exact for meshes with up to six coordinates (attributes 4 bits, stride 12 bits, a byte a coordinate: its stream 1,
+// 3 or none and its place among stream 3's in eights); a 64-bit hash of them past that.
+u64 meshLayoutKey(const NebulaModelMesh& rMesh) {
+    const NebulaModelMeshCoord* pCoords = nebula_mesh_coords(&rMesh);
+    u64 key = static_cast< u64 >(rMesh.attributes & 0xF) | static_cast< u64 >(rMesh.further_stride & 0xFFF) << 4;
+    if (rMesh.coord_count <= 6) {
+        for (u32 n = 0; n < rMesh.coord_count; n++) {
+            const u64 code = pCoords[n].stream == NEBULA_MESH_NO_COORD ? 0 : pCoords[n].stream == 1 ? 1 : 2 + pCoords[n].offset / 8;
+            key |= code << (16 + n * 8);
+        }
+        return key;
+    }
+    key = (key ^ rMesh.coord_count) * 0x100000001B3ull | 1ull << 63;
+    for (u32 n = 0; n < rMesh.coord_count; n++) {
+        key = (key ^ pCoords[n].stream ^ static_cast< u64 >(pCoords[n].offset) << 8) * 0x100000001B3ull;
+    }
+    return key | 1ull << 63;
+}
+
 u32 MaterialDraw::pipelineOf(s32 formIndex, const NebulaModelForm& rForm, const Mesh* pMesh) {
     Material* pMaterial = getMaterial();
     Material::FormState* pState = pMaterial->formState(formIndex);
     const u32 state = Frame::finishState(getState());
-    const u32 attributes = pMesh->mFile->attributes;
-    const u32 stride = pMesh->mFile->further_stride;
-    if (pState->mPipeline != NEBULA_NONE32 && pState->mPipelineState == state && pState->mPipelineAttributes == attributes && pState->mPipelineStride == stride) {
+    const u64 layout = meshLayoutKey(*pMesh->mFile);
+    if (pState->mPipeline != NEBULA_NONE32 && pState->mPipelineState == state && pState->mPipelineLayout == layout) {
         return pState->mPipeline;
     }
     NebulaPipelineDesc desc;
@@ -809,8 +916,7 @@ u32 MaterialDraw::pipelineOf(s32 formIndex, const NebulaModelForm& rForm, const 
     const NebulaHostServices* pHost = nebula_host();
     pState->mPipeline = pHost->pipeline_register(pHost->user, &desc, pRoom);
     pState->mPipelineState = state;
-    pState->mPipelineAttributes = attributes;
-    pState->mPipelineStride = stride;
+    pState->mPipelineLayout = layout;
     return pState->mPipeline;
 }
 

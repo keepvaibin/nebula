@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 pub const LAYOUT_MAGIC: u32 = 0x5459_4C4E; // NLYT
 pub const ANIMATION_MAGIC: u32 = 0x4E41_4C4E; // NLAN
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 pub const KIND_PANE: u8 = 0;
 pub const KIND_PICTURE: u8 = 1;
