@@ -242,10 +242,10 @@ bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, co
     const char* modelName = getModelName(pObjName, domeId);
     s32 i = ::findModelName(pInfo, modelName);
 
-    f32 offsetY;
+    f32 offsetY = 0.0f;
     MR::getCsvDataF32(&offsetY, pInfo, offsetYId.c_str(), i);
 
-    bool upperFlag;
+    bool upperFlag = false;
     MR::getCsvDataBool(&upperFlag, pInfo, upperFlagId.c_str(), i);
 
     Vec3f pos = rPos;

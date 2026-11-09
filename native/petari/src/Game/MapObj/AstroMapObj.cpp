@@ -163,8 +163,12 @@ void AstroMapObj::exeOpen() {
     }
 
     if (MR::isBtkStopped(this)) {
-        MR::validateCollisionParts(mOpenCollision);
-        MR::invalidateCollisionParts(mCloseCollision);
+        // Only a door has the two collisions (an open demo cast on another part has none to swap).
+        if (mOpenCollision != nullptr && mCloseCollision != nullptr) {
+            MR::validateCollisionParts(mOpenCollision);
+            MR::invalidateCollisionParts(mCloseCollision);
+        }
+
         setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAliveAfterDemo));
     }
 }

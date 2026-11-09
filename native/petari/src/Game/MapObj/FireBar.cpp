@@ -138,6 +138,15 @@ void FireBar::init(const TableIter& rIter) {
     MR::getPlacementArg5NoInit(rIter, &mStickDistance);
     MR::getPlacementArg7NoInit(rIter, &mStickCount);
 
+    // A negative count of balls or sticks (a placement other than the unset -1) makes none, not a negative array.
+    if (numFireBalls < 0) {
+        numFireBalls = 0;
+    }
+
+    if (mStickCount < 0) {
+        mStickCount = 0;
+    }
+
     mFireBarSpeed = 0.1f * fireBallSpeed;
     mFireBallCount = mStickCount * numFireBalls;
     MR::calcFrontVec(&mFront, this);
