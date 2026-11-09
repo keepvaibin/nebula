@@ -6,7 +6,8 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scratch = Join-Path $env:TEMP ('nebula-launcher-tests-' + [guid]::NewGuid().ToString('N'))
 $app = Join-Path $scratch 'root\versions\test'
-$data = Join-Path $scratch 'data'
+$localAppData = Join-Path $scratch 'localappdata'
+$data = Join-Path $localAppData 'Nebula'
 New-Item -ItemType Directory -Force $app, $data, (Join-Path $scratch 'root\content') | Out-Null
 Set-Content -LiteralPath (Join-Path $scratch 'root\content\game.pak') -Value 'stub'
 $stub = Join-Path $scratch 'BuildInfo.cs'
@@ -46,10 +47,11 @@ static class GameStub { static void Main(string[] a) {
 & $csc /nologo /target:exe /platform:x64 "/out:$app\NebulaNative.exe" $gameStub
 if ($LASTEXITCODE -ne 0) { throw 'Game stub compilation failed.' }
 
-$env:NEBULA_DATA_ROOT = $data
+$userLocalAppData = $env:LOCALAPPDATA
+$env:LOCALAPPDATA = $localAppData
 & "$app\LauncherTests.exe" $scratch
 $code = $LASTEXITCODE
-Remove-Item Env:NEBULA_DATA_ROOT
+$env:LOCALAPPDATA = $userLocalAppData
 if ($code -ne 0) { throw 'Launcher cases failed.' }
 
 $setupSources = @(Get-ChildItem -LiteralPath (Join-Path $repo 'installer\src\Setup') -Filter *.cs | ForEach-Object FullName)

@@ -8,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 $base = $Work
 $source = $Source
 $root = Join-Path $base 'Nebula'
-$data = Join-Path $base 'data'
+$setupLocalAppData = Join-Path $base 'setup-localappdata'
+$data = Join-Path $setupLocalAppData 'Nebula'
 $old = (Get-Content -Raw (Join-Path $source 'current.json') | ConvertFrom-Json).version
 $failures = 0
 function Check([bool]$ok, [string]$what) { if ($ok) { "PASS: $what" } else { "FAIL: $what"; $script:failures++ } }
@@ -28,18 +29,19 @@ function Version-Intact([string]$version) {
 }
 # -Interrupt: ended by force as soon as the new version's files begin to appear in staging (before the switch).
 function Run-Setup([string[]]$Arguments, [switch]$Interrupt) {
-    $env:NEBULA_DATA_ROOT = $data
+    $userLocalAppData = $env:LOCALAPPDATA
+    $env:LOCALAPPDATA = $setupLocalAppData
     $p = Start-Process -FilePath $Setup -ArgumentList (@('--unattended', '--root', "`"$root`"") + $Arguments) -PassThru -WindowStyle Hidden
     if ($Interrupt) {
         while (-not $p.HasExited) {
             $app = Get-ChildItem -LiteralPath (Join-Path $root 'staging') -Directory -ErrorAction SilentlyContinue |
                 ForEach-Object { Join-Path $_.FullName 'app' } | Where-Object { Test-Path -LiteralPath $_ }
-            if ($app) { Stop-Process -Id $p.Id -Force; $p.WaitForExit(); Remove-Item Env:NEBULA_DATA_ROOT; return 'killed' }
+            if ($app) { Stop-Process -Id $p.Id -Force; $p.WaitForExit(); $env:LOCALAPPDATA = $userLocalAppData; return 'killed' }
             Start-Sleep -Milliseconds 5
         }
     }
     $p.WaitForExit()
-    Remove-Item Env:NEBULA_DATA_ROOT
+    $env:LOCALAPPDATA = $userLocalAppData
     return $p.ExitCode
 }
 
@@ -99,10 +101,8 @@ New-Item -ItemType Directory -Force $appdata, (Join-Path $base 'saves') | Out-Nu
 $env:NEBULA_WORK = $base; $env:NEBULA_APPDATA = $appdata; $env:NEBULA_SAVES = Join-Path $base 'saves'; $env:NEBULA_SETTINGS = Join-Path $base 'settings'
 $env:GALAXY_HIDE_WINDOW = '1'; $env:GALAXY_XINPUT_REQUIRE_FOCUS = '1'; $env:LOCALAPPDATA = $appdata
 $env:GALAXY_AUDIO_WAV_DUMP_ONLY = '1'; $env:GALAXY_AUDIO_WAV_DUMP = Join-Path $base 'audio.wav'
-$env:GALAXY_RENDER_CONFIG_PATH = Join-Path $base 'config.ini'; $env:GALAXY_RUNTIME_SETTINGS_PATH = Join-Path $base 'runtime_settings.ini'
-$env:GALAXY_CRASH_DUMP_DIR = $base
 $log = Join-Path $base 'boot.log'
-$p = Start-Process -FilePath (Join-Path $bin 'NebulaNative.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--saves', "`"$(Join-Path $base 'saves')`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')
+$p = Start-Process -FilePath (Join-Path $bin 'NebulaNative.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--saves', "`"$(Join-Path $base 'saves')`"", '--settings', "`"$base`"", '--crash-dumps', "`"$base`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')
 $p.WaitForExit()
 Check ((Select-String -LiteralPath $log -Pattern 'boot: title screen' -Quiet)) "the installed $New starts and reaches the title"
 

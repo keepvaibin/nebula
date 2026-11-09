@@ -4,6 +4,7 @@
 #include "../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/c_locale_number.h"
 
@@ -193,26 +194,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
 }
 
 std::filesystem::path settings_path() {
-#if defined(_WIN32)
-    if (const wchar_t* override_value = ::galaxy::run_options().runtime_settings_path_w; override_value != nullptr && override_value[0] != L'\0') {
-        const std::filesystem::path path(override_value);
-        if (path.filename().empty()) {
-            throw std::runtime_error("the settings path must name a settings file");
-        }
-        return path;
-    }
-
-#else
-    if (const char* override_value = ::galaxy::run_options().runtime_settings_path;
-        override_value != nullptr && override_value[0] != '\0') {
-        const std::filesystem::path path(override_value);
-        if (path.filename().empty()) {
-            throw std::runtime_error("the settings path must name a settings file");
-        }
-        return path;
-    }
-#endif
-    const std::filesystem::path folder = nebula_data_directory();
+    const std::filesystem::path& named = launch_args().settings;
+    const std::filesystem::path folder = named.empty() ? nebula_data_directory() : named;
     return folder.empty() ? folder : folder / "runtime_settings.ini";
 }
 

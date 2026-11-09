@@ -6,7 +6,7 @@
 //   - On SDL platforms (platform/sdl, NEBULA_HOST_SDL): the same with the Vulkan renderer, SDL's window, sound and
 //     input; on Android SDL's activity calls SDL_main.
 //
-//   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N]
+//   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #include "galaxy/windows_paths.h"
@@ -21,6 +21,8 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/run_options.h"
+#include "galaxy/launch_args.h"
+#include "galaxy/platform_paths.h"
 #include "galaxy/game_step.h"
 #include "../../tools/test_driver/switches.h"
 #include "galaxy/asset_store.h"
@@ -128,6 +130,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <io.h>
 #endif
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -249,16 +252,12 @@ void gather_crash_facts(galaxy::crash::Facts::Kind kind, const char* text, bool 
     gCrashFacts.mods_change_game = galaxy::crash::session_mods_change_game();
 }
 
-// Crash dumps and reports: GALAXY_CRASH_DUMP_DIR, else %LOCALAPPDATA%\Nebula\crashes for the player's executable and
-// crashes\ in the working directory for the headless test host.
+// Crash dumps and reports: --crash-dumps, else crashes\ in Nebula's data folder for the player's executable and crashes\
+// in the working directory for the headless host.
 fs::path crash_folder() {
-#if defined(_WIN32)
-    if (const wchar_t* dir = ::galaxy::run_options().crash_dump_dir_w; dir != nullptr && dir[0] != 0) return fs::path(dir);
-#if defined(NEBULA_HOST_RENDERER)
-    return fs::path(::galaxy::windows::environment_text(L"LOCALAPPDATA")) / "Nebula" / "crashes";
-#endif
-#else
-    if (const char* dir = ::galaxy::run_options().crash_dump_dir; dir != nullptr && dir[0] != 0) return fs::path(dir);
+    if (!::galaxy::launch_args().crash_dumps.empty()) return ::galaxy::launch_args().crash_dumps;
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+    if (const fs::path data = ::galaxy::nebula_data_directory(); !data.empty()) return data / "crashes";
 #endif
     return fs::path("crashes");
 }
@@ -1400,6 +1399,11 @@ void svc_fatal(void*, const char* text) {
     std::_Exit(3);
 }
 
+#if defined(_WIN32)
+// Arguments a restart adds to this start's command line (--gpu-start-retry).
+std::wstring gRestartArguments;
+#endif
+
 #if defined(NEBULA_HOST_RENDERER)
 // The renderer: the game's records reach it in frames (render_frame at the game's frame end and, while the start runs
 // ahead, at the frame, which also presents). All of this runs on the simulation thread, where the game makes these
@@ -1415,22 +1419,19 @@ void submit_frame_unchecked(bool present, bool black) {
 
 [[noreturn]] void finish_and_exit(bool restart);
 
-// The card has no memory free at the start: another program holds it for a moment. A new process tries again, up to
-// five times, two seconds apart; after that it is a fault to report.
+// The card has no memory free at the start: another program holds it for a moment. A new process tries again
+// (--gpu-start-retry counts the tries), up to five times, two seconds apart; after that it is a fault to report.
 bool retry_start_for_gpu_memory(const std::string& reason) {
 #if defined(_WIN32)
-    const char* before = std::getenv("NEBULA_GPU_START_RETRIES");
-    const int count = before != nullptr ? std::atoi(before) : 0;
+    const unsigned count = ::galaxy::launch_args().gpu_start_retry;
     char out_of_memory[16];
     std::snprintf(out_of_memory, sizeof(out_of_memory), "0x%08lX", static_cast<unsigned long>(E_OUTOFMEMORY));
     const bool wanted = reason.find(out_of_memory) != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
                         reason.find("VkResult -1") != std::string::npos || reason.find("VkResult -2") != std::string::npos;
-    if (!wanted || count >= 5) {
+    if (!wanted || count >= 5u) {
         return false;
     }
-    char text[16];
-    std::snprintf(text, sizeof(text), "%d", count + 1);
-    _putenv_s("NEBULA_GPU_START_RETRIES", text);
+    gRestartArguments = L" --gpu-start-retry " + std::to_wstring(count + 1u);
     log_line("host: no graphics memory free at the start, trying again:", reason.c_str());
     std::this_thread::sleep_for(std::chrono::seconds(2));
     return true;
@@ -3158,6 +3159,7 @@ void hold_runtime_lease() {
             startup.cb = sizeof(startup);
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
+            command += gRestartArguments;
             if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
@@ -3551,7 +3553,51 @@ int run_mods_tool() {
 }  // namespace
 #endif
 
+namespace {
+
+// The command line's launch arguments (launch_args.h, docs/COMMAND_LINE.md), before anything reads them. Paths come
+// from the UTF-16 command line on Windows: argv is in the system's code page, which cannot hold every folder name.
+void read_launch_args(int argc, char** argv) {
+    galaxy::LaunchArgs& args = galaxy::g_launch_args;
+#if defined(_WIN32)
+    int wide_count = 0;
+    LPWSTR* const wide = CommandLineToArgvW(GetCommandLineW(), &wide_count);
+#endif
+    const auto path_at = [&](int index) {
+#if defined(_WIN32)
+        if (wide != nullptr && index < wide_count) {
+            return fs::path(wide[index]);
+        }
+#endif
+        return fs::path(argv[index]);
+    };
+    for (int i = 1; i + 1 < argc; i += 2) {
+        const std::string_view key = argv[i];
+        if (key == "--data") {
+            args.data = path_at(i + 1);
+        } else if (key == "--settings") {
+            args.settings = path_at(i + 1);
+        } else if (key == "--crash-dumps") {
+            args.crash_dumps = path_at(i + 1);
+        } else if (key == "--gpu-validation") {
+            args.gpu_validation = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--console-log") {
+            args.console_log = argv[i + 1][0] == '1';
+        } else if (key == "--gpu-start-retry") {
+            args.gpu_start_retry = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        }
+    }
+#if defined(_WIN32)
+    if (wide != nullptr) {
+        LocalFree(wide);
+    }
+#endif
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
+    read_launch_args(argc, argv);
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     if (const char* error = galaxy::host::test_data_paths_error(argc, argv)) {
         std::fprintf(stderr, "[test-paths] %s\n", error);
@@ -3576,7 +3622,7 @@ int main(int argc, char** argv) {
     // settings, the last start's to previous.log. A test or a shell capturing the output to a pipe or a file keeps it.
     {
         const DWORD output = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
-        if (output != FILE_TYPE_PIPE && output != FILE_TYPE_DISK && ::galaxy::run_options().log_to_console == nullptr) {
+        if (output != FILE_TYPE_PIPE && output != FILE_TYPE_DISK && !::galaxy::launch_args().console_log) {
             const fs::path settings = galaxy::runtime_settings_folder();
             std::error_code error;
             if (!settings.empty() && fs::create_directories(settings / "logs", error) | fs::is_directory(settings / "logs", error)) {
@@ -3658,8 +3704,10 @@ int main(int argc, char** argv) {
             saves = arg_path(i + 1);
         } else if (key == "--module") {
             module = arg_path(i + 1);
-        } else if (key == "--diagnostics" || key == "--timeline") {
-            // Read above, before the timeline starts.
+        } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
+                   key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
+                   key == "--gpu-start-retry") {
+            // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
         } else {
@@ -3667,7 +3715,7 @@ int main(int argc, char** argv) {
         }
     }
     if (pak.empty() || saves.empty()) {
-        die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N]");
+        die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)");
     }
     if (module.empty()) {
 #if defined(_WIN32)
@@ -3710,7 +3758,7 @@ int main(int argc, char** argv) {
         (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
     }
 #if defined(NEBULA_HOST_RENDERER)
-    // The player's settings (GALAXY_RUNTIME_SETTINGS_PATH in tests) before the mods: the language they choose
+    // The player's settings (in --settings' folder when given) before the mods: the language they choose
     // picks the mods' text (and is the game's language from then on).
     try {
         galaxy::load_runtime_settings_from_file();
@@ -3856,7 +3904,7 @@ int main(int argc, char** argv) {
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
 #if defined(NEBULA_HOST_RENDERER)
-    // The display configuration (GALAXY_RENDER_CONFIG_PATH in tests), loaded before the window; the settings overlay
+    // The display configuration (in --settings' folder when given), loaded before the window; the settings overlay
     // reads its frame art from the game files.
     try {
         galaxy::render::load_render_config_from_file();

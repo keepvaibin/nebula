@@ -102,10 +102,10 @@ public:
     static Context& get() noexcept;
 
     // `chosen_gpu`: the GPU chosen in Nebula Settings (RenderConfig::gpu, gpu_identity), taken first when present.
-    // `prefer_integrated`: GALAXY_GPU_PREFERENCE=low picks the integrated GPU first otherwise. `validation` loads the
+    // A discrete GPU comes first otherwise. `validation` (--gpu-validation) loads the
     // Khronos validation layer when present. `create_surface`, when given, makes the window's surface once the
     // instance exists (returned in `surface`); the device chosen then presents to it.
-    bool initialize(const std::string& chosen_gpu, bool prefer_integrated, bool validation,
+    bool initialize(const std::string& chosen_gpu, bool validation,
                     std::vector<const char*> instance_extensions,
                     const std::function<VkSurfaceKHR(VkInstance)>& create_surface = {},
                     VkSurfaceKHR* surface = nullptr);

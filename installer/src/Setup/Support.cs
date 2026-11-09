@@ -289,8 +289,9 @@ namespace Nebula.Setup
         {
             string app = layout.VersionDir(version);
             var failures = new List<string>();
-            // Automated tests (NEBULA_DATA_ROOT) install into their own folders: the user's shortcuts and registry stay.
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT"))) return failures;
+            // A run whose %LOCALAPPDATA% is another folder than the user's (sandboxed, or a test) installs into its own
+            // folders: the user's shortcuts and registry stay.
+            if (NebulaPaths.LocalAppDataRedirected) return failures;
             Action<string, string, string, string, string> link = (path, target, arguments, directory, description) =>
             {
                 try { Shortcut(path, target, arguments, directory, description); }

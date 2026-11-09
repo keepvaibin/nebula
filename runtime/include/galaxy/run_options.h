@@ -31,15 +31,10 @@ struct RunOptions {
     const char* audio_test_reopen = nullptr;
     const char* audio_test_gaps = nullptr;
     const char* boot_fast = nullptr;
-    const char* crash_dump_dir = nullptr;
     const char* d3d12_test_no_feature = nullptr;
-    const char* d3d_debug = nullptr;
     const char* gpu_passes = nullptr;
-    const char* gpu_preference = nullptr;
     const char* hide_window = nullptr;
     const char* test_no_raw_mouse = nullptr;
-    const char* log_to_console = nullptr;
-    const char* movie_dir = nullptr;
     const char* pipeline_list_out = nullptr;
     const char* present_snapshot_dir = nullptr;
     const char* present_snapshot_every = nullptr;
@@ -47,8 +42,6 @@ struct RunOptions {
     const char* present_snapshot_last = nullptr;
     const char* present_snapshot_game_only = nullptr;  // a generated (interpolated) present is neither captured nor counted
     const char* profile_game = nullptr;
-    const char* render_config_path = nullptr;
-    const char* runtime_settings_path = nullptr;
     const char* test_cpu_affinity = nullptr;
     const char* test_deterministic = nullptr;
     const char* test_disc_delay_us = nullptr;
@@ -66,7 +59,6 @@ struct RunOptions {
     const char* test_vram_budget_mb = nullptr;
     const char* test_window_sizes = nullptr;
     const char* texture_dump_dir = nullptr;
-    const char* texture_pack_dir = nullptr;
     const char* trace_file_reads = nullptr;
     const char* trace_frame_times = nullptr;
     const char* trace_loads = nullptr;
@@ -78,19 +70,11 @@ struct RunOptions {
     const char* trace_thread_cpu = nullptr;
     const char* vk_simulate_driver = nullptr;
     const char* vk_test_no_feature = nullptr;
-    const char* vulkan_validation = nullptr;
     const char* xinput_require_focus = nullptr;
 #if defined(_WIN32)
     const wchar_t* frame_timeline_path_w = nullptr;
-    const wchar_t* xess_dir_w = nullptr;
-    const wchar_t* streamline_dir_w = nullptr;
-    const wchar_t* render_config_path_w = nullptr;
-    const wchar_t* runtime_settings_path_w = nullptr;
-    const wchar_t* crash_dump_dir_w = nullptr;
     const wchar_t* audio_wav_dump_w = nullptr;
-    const wchar_t* texture_pack_dir_w = nullptr;
     const wchar_t* texture_dump_dir_w = nullptr;
-    const wchar_t* movie_dir_w = nullptr;
 #endif
 };
 

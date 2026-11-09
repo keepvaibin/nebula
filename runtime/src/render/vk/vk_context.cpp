@@ -226,7 +226,7 @@ Context& Context::get() noexcept {
     return context;
 }
 
-bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, bool validation,
+bool Context::initialize(const std::string& chosen_gpu, bool validation,
                          std::vector<const char*> instance_extensions,
                          const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface) {
     if (device_ != VK_NULL_HANDLE) {
@@ -375,14 +375,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         }
     }
 
-    // The GPU chosen in Nebula Settings, else the first device of the preferred kind; each needs a graphics queue
+    // The GPU chosen in Nebula Settings, else the first discrete device; each needs a graphics queue
     // (that presents to the surface) and the swapchain extension.
     std::uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance_, &count, nullptr);
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance_, &count, devices.data());
-    const VkPhysicalDeviceType wanted =
-        prefer_integrated ? VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU : VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    const VkPhysicalDeviceType wanted = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
     {
         std::vector<std::pair<unsigned, VkPhysicalDevice>> ranked;
         ranked.reserve(devices.size());

@@ -52,6 +52,8 @@ Put `NebulaNative.exe` and `smg_game.dll` in one folder, then:
 .\NebulaNative.exe --pak D:\nebula\content\game.pak --saves "$env:LOCALAPPDATA\Nebula\saves"
 ```
 
+The other arguments are in COMMAND_LINE.md.
+
 ## Tests
 
 ```powershell

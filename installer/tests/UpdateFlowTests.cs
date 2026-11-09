@@ -16,7 +16,7 @@ namespace Nebula.Setup
     /// and a release can have), signed with a key made for the run: the check and its notes, offline and slow
     /// answers, the download and its signature, corrupt, truncated, cancelled and missing downloads, a release
     /// published again, then switching to the previous version and back on an install of the test's own. Nothing
-    /// touches the player's install, saves or settings (NEBULA_DATA_ROOT and every folder are the test's).
+    /// touches the player's install, saves or settings (%LOCALAPPDATA% and every folder are the test's).
     /// </summary>
     internal static class UpdateFlowTests
     {
@@ -482,7 +482,7 @@ namespace Nebula.Setup
             key = new RSACryptoServiceProvider();
             key.PersistKeyInCsp = false;
             key.FromXmlString(File.ReadAllText(args[1]));
-            Environment.SetEnvironmentVariable("NEBULA_DATA_ROOT", Path.Combine(scratch, "data"));
+            Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(scratch, "localappdata"));
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             port = ((IPEndPoint)listener.LocalEndpoint).Port;

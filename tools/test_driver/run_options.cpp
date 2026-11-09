@@ -2,6 +2,7 @@
 // A test run's options, read from its environment (galaxy/run_options.h). Not in a release.
 #if defined(NEBULA_DEV)
 #include "galaxy/run_options.h"
+#include "galaxy/platform_paths.h"
 #include "switches.h"
 
 #if defined(_WIN32)
@@ -21,11 +22,11 @@ namespace {
 #if defined(__ANDROID__)
 // The activity's process has no environment a test can set: its switches are lines of test_env in the app's data.
 void load_test_environment() {
-    const char* const data = std::getenv("NEBULA_DATA_DIR");
-    if (data == nullptr) {
+    const std::filesystem::path data = nebula_data_directory();
+    if (data.empty()) {
         return;
     }
-    std::FILE* const file = std::fopen((std::string(data) + "/test_env").c_str(), "r");
+    std::FILE* const file = std::fopen((data / "test_env").c_str(), "r");
     if (file == nullptr) {
         return;
     }
@@ -57,15 +58,10 @@ RunOptions read_options() {
     o.audio_test_reopen = nebula_switch::audio_test_reopen();
     o.audio_test_gaps = nebula_switch::audio_test_gaps();
     o.boot_fast = nebula_switch::boot_fast();
-    o.crash_dump_dir = nebula_switch::crash_dump_dir();
-    o.d3d_debug = nebula_switch::d3d_debug();
     o.d3d12_test_no_feature = nebula_switch::d3d12_test_no_feature();
     o.gpu_passes = nebula_switch::gpu_passes();
-    o.gpu_preference = nebula_switch::gpu_preference();
     o.hide_window = nebula_switch::hide_window();
     o.test_no_raw_mouse = nebula_switch::test_no_raw_mouse();
-    o.log_to_console = nebula_switch::log_to_console();
-    o.movie_dir = nebula_switch::movie_dir();
     o.pipeline_list_out = nebula_switch::pipeline_list_out();
     o.present_snapshot_dir = nebula_switch::present_snapshot_dir();
     o.present_snapshot_every = nebula_switch::present_snapshot_every();
@@ -73,8 +69,6 @@ RunOptions read_options() {
     o.present_snapshot_last = nebula_switch::present_snapshot_last();
     o.present_snapshot_game_only = nebula_switch::present_snapshot_game_only();
     o.profile_game = nebula_switch::profile_game();
-    o.render_config_path = nebula_switch::render_config_path();
-    o.runtime_settings_path = nebula_switch::runtime_settings_path();
     o.test_cpu_affinity = nebula_switch::test_cpu_affinity();
     o.test_deterministic = nebula_switch::test_deterministic();
     o.test_disc_delay_us = nebula_switch::test_disc_delay_us();
@@ -92,7 +86,6 @@ RunOptions read_options() {
     o.test_vram_budget_mb = nebula_switch::test_vram_budget_mb();
     o.test_window_sizes = nebula_switch::test_window_sizes();
     o.texture_dump_dir = nebula_switch::texture_dump_dir();
-    o.texture_pack_dir = nebula_switch::texture_pack_dir();
     o.trace_file_reads = nebula_switch::trace_file_reads();
     o.trace_frame_times = nebula_switch::trace_frame_times();
     o.trace_loads = nebula_switch::trace_loads();
@@ -104,7 +97,6 @@ RunOptions read_options() {
     o.vk_simulate_driver = nebula_switch::vk_simulate_driver();
     o.trace_interp_slots = nebula_switch::trace_interp_slots();
     o.vk_test_no_feature = nebula_switch::vk_test_no_feature();
-    o.vulkan_validation = nebula_switch::vulkan_validation();
     o.xinput_require_focus = nebula_switch::xinput_require_focus();
 #if defined(_WIN32)
     // Set but empty counts as set: an empty path never falls back to a player's.
@@ -122,15 +114,8 @@ RunOptions read_options() {
         return wide.back().c_str();
     };
     o.frame_timeline_path_w = read_wide(nebula_switch::frame_timeline_path_wide_name());
-    o.xess_dir_w = read_wide(nebula_switch::xess_dir_wide_name());
-    o.streamline_dir_w = read_wide(nebula_switch::streamline_dir_wide_name());
-    o.render_config_path_w = read_wide(nebula_switch::render_config_path_wide_name());
-    o.runtime_settings_path_w = read_wide(nebula_switch::runtime_settings_path_wide_name());
-    o.crash_dump_dir_w = read_wide(nebula_switch::crash_dump_dir_wide_name());
     o.audio_wav_dump_w = read_wide(nebula_switch::audio_wav_dump_wide_name());
-    o.texture_pack_dir_w = read_wide(nebula_switch::texture_pack_dir_wide_name());
     o.texture_dump_dir_w = read_wide(nebula_switch::texture_dump_dir_wide_name());
-    o.movie_dir_w = read_wide(nebula_switch::movie_dir_wide_name());
 #endif
     return o;
 }

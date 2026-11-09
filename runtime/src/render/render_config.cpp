@@ -5,6 +5,7 @@
 #include "galaxy/run_options.h"
 #include "../../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
@@ -324,17 +325,8 @@ static void clamp_feature_caps(RenderFeatureCaps& caps) {
 }
 
 static std::filesystem::path config_path() {
-    // An empty override never falls back to the default config.ini.
-#if defined(_WIN32)
-    if (const wchar_t* override_path = ::galaxy::run_options().render_config_path_w; override_path != nullptr) {
-        return override_path[0] != L'\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
-    }
-#else
-    if (const char* override_path = ::galaxy::run_options().render_config_path; override_path != nullptr) {
-        return override_path[0] != '\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
-    }
-#endif
-    const std::filesystem::path folder = galaxy::nebula_data_directory();
+    const std::filesystem::path& named = galaxy::launch_args().settings;
+    const std::filesystem::path folder = named.empty() ? galaxy::nebula_data_directory() : named;
     return folder.empty() ? folder : folder / "config.ini";
 }
 
@@ -632,7 +624,7 @@ std::string next_start_gpu() {
 }
 
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
-                           unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept {
+                           unsigned subsys_id, bool ray_tracing) noexcept {
     try {
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {
@@ -649,7 +641,6 @@ void record_render_adapter(const char* description, unsigned vendor_id, unsigned
                  << "vendor_id=" << vendor_id << '\n'
                  << "device_id=" << device_id << '\n'
                  << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
-                 << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
                  << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
         static_cast<void>(io::write_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
@@ -658,44 +649,22 @@ void record_render_adapter(const char* description, unsigned vendor_id, unsigned
 
 namespace {
 
-// A folder beside config.ini, or the environment's override (an empty override: none).
-#if defined(_WIN32)
-using RunFolder = const wchar_t*;
-#else
-using RunFolder = const char*;
-#endif
-
-std::filesystem::path data_folder(RunFolder named, const char* folder) {
-    if (named != nullptr) {
-        return named[0] != 0 ? std::filesystem::path(named) : std::filesystem::path{};
-    }
+// A folder beside config.ini.
+std::filesystem::path data_folder(const char* folder) {
     const std::filesystem::path config = config_path();
     return config.empty() ? std::filesystem::path{} : config.parent_path() / folder;
 }
 
-RunFolder run_folder_texture_pack_dir() {
+// The test's dump folder (an empty one: none).
 #if defined(_WIN32)
-    return ::galaxy::run_options().texture_pack_dir_w;
-#else
-    return ::galaxy::run_options().texture_pack_dir;
-#endif
-}
-
-RunFolder run_folder_texture_dump_dir() {
-#if defined(_WIN32)
+const wchar_t* run_folder_texture_dump_dir() {
     return ::galaxy::run_options().texture_dump_dir_w;
+}
 #else
+const char* run_folder_texture_dump_dir() {
     return ::galaxy::run_options().texture_dump_dir;
-#endif
 }
-
-RunFolder run_folder_movie_dir() {
-#if defined(_WIN32)
-    return ::galaxy::run_options().movie_dir_w;
-#else
-    return ::galaxy::run_options().movie_dir;
 #endif
-}
 
 std::mutex s_mod_folders_mutex;
 std::vector<std::filesystem::path> s_mod_folders;
@@ -707,19 +676,11 @@ std::string s_texture_pack_game_id = "RMGE01";  // TexturePacks::kGameId until t
 
 }  // namespace
 
-std::filesystem::path texture_pack_directory() {
-    return data_folder(run_folder_texture_pack_dir(), "TexturePacks");
-}
-
-std::filesystem::path texture_pack_test_directory() {
-    // Only the environment's: texture packs are mods (mods.h); tests name a pack folder directly.
-    static const bool named = run_folder_texture_pack_dir() != nullptr;
-    static const std::filesystem::path folder = named ? texture_pack_directory() : std::filesystem::path{};
-    return folder;
-}
-
 std::filesystem::path texture_dump_directory() {
-    return data_folder(run_folder_texture_dump_dir(), "TextureDumps");
+    if (const auto* named = run_folder_texture_dump_dir(); named != nullptr) {
+        return named[0] != 0 ? std::filesystem::path(named) : std::filesystem::path{};
+    }
+    return data_folder("TextureDumps");
 }
 
 void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders, std::vector<std::uint32_t> categories_off) {
@@ -755,7 +716,7 @@ std::uint64_t texture_pack_mod_folders_generation() noexcept {
 }
 
 std::filesystem::path movie_directory() {
-    static const std::filesystem::path folder = data_folder(run_folder_movie_dir(), "Movies");
+    static const std::filesystem::path folder = data_folder("Movies");
     return folder;
 }
 

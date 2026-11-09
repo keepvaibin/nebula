@@ -149,7 +149,7 @@ void load_runtime_settings_from_file();
 // Returns false on an invalid explicit path or a failed write; a bad override never redirects the save to
 // the normal settings file.
 [[nodiscard]] bool save_runtime_settings_to_file();
-// The folder of the settings file (GALAXY_RUNTIME_SETTINGS_PATH's, else Nebula's data folder); empty when unknown.
+// The folder of the settings file (--settings, else Nebula's data folder); empty when unknown.
 [[nodiscard]] std::filesystem::path runtime_settings_folder() noexcept;
 
 [[nodiscard]] const char* runtime_input_mode_name(RuntimeInputMode mode);

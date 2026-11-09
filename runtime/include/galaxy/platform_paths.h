@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Nebula's data folder and file opening on every platform. The folder is %LOCALAPPDATA%\Nebula on Windows (the
-// variable, as the shader cache and crash dumps read it, so a test's private one holds everything; the shell's folder
-// without it); elsewhere NEBULA_DATA_DIR (the Android app sets it to its private files folder), else
-// $XDG_DATA_HOME/Nebula, else ~/.local/share/Nebula.
+// Nebula's data folder and file opening on every platform. The folder is the one --data names (launch_args.h; the
+// Android app passes its private files folder), else %LOCALAPPDATA%\Nebula on Windows (the variable, so a test's
+// private one holds everything; the shell's folder without it), else $XDG_DATA_HOME/Nebula, else
+// ~/.local/share/Nebula.
 #pragma once
+
+#include "galaxy/launch_args.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -19,6 +21,9 @@ namespace galaxy {
 
 // Empty when the platform gives no folder.
 [[nodiscard]] inline std::filesystem::path nebula_data_directory() {
+    if (!launch_args().data.empty()) {
+        return launch_args().data;
+    }
 #if defined(_WIN32)
     const std::wstring local = windows::environment_text(L"LOCALAPPDATA");
     if (!local.empty()) {
@@ -30,9 +35,6 @@ namespace galaxy {
     }
     return std::filesystem::path(app_data) / L"Nebula";
 #else
-    if (const char* dir = std::getenv("NEBULA_DATA_DIR"); dir != nullptr && dir[0] != '\0') {
-        return dir;
-    }
     if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg != nullptr && xdg[0] == '/') {
         return std::filesystem::path(xdg) / "Nebula";
     }

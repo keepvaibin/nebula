@@ -5,7 +5,6 @@
 #include "locked_file.h"
 
 #include "galaxy/platform_paths.h"
-#include "galaxy/run_options.h"
 
 #include <SoftPub.h>
 #include <WinTrust.h>
@@ -42,9 +41,6 @@ bool signature_trusted(const wchar_t* path) {
 }  // namespace
 
 std::wstring directory() {
-    if (const wchar_t* const test = ::galaxy::run_options().xess_dir_w; test != nullptr && test[0] != L'\0') {
-        return test;
-    }
     const std::filesystem::path data = galaxy::nebula_data_directory();
     return data.empty() ? std::wstring{} : (data / L"vendor" / L"xess-3.0.2").wstring();
 }
