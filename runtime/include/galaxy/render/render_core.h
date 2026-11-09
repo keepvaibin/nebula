@@ -51,16 +51,8 @@ namespace galaxy::render {
 
 void note_layer_2d_lines(unsigned lines) noexcept;
 
-#if defined(NEBULA_DEV)
-namespace inspector {
-struct Access;
-}
-#endif
 
 class RenderCore final {
-#if defined(NEBULA_DEV)
-    friend struct inspector::Access;
-#endif
 public:
     RenderCore() = default;
 

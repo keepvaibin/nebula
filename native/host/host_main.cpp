@@ -1177,7 +1177,6 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
             std::snprintf(line, sizeof(line), "thrown: %s (thread %lu)", text + std::strlen("uncaught "),
                           GetCurrentThreadId());
             log_line("exception:", line);
-#if defined(NEBULA_DEV)
             void* frames[16];
             const USHORT count = RtlCaptureStackBackTrace(1, 16, frames, nullptr);
             const auto exe = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
@@ -1186,7 +1185,6 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
                 std::snprintf(line, sizeof(line), "NebulaNative.exe+0x%llx", static_cast<unsigned long long>(at - exe));
                 log_line("thrown from:", line);
             }
-#endif
         }
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -2445,19 +2443,8 @@ uint32_t svc_option(void*, uint32_t what) {
         in >> done >> total;
         return total != 0u ? static_cast<uint32_t>(done * 10000u / total) : 0u;
     }
-    case NEBULA_OPTION_TEST_ARENA_FILL: {
-        const char* value = ::galaxy::run_options().test_arena_fill;
-        return value != nullptr ? 0x100u | (static_cast<uint32_t>(std::strtoul(value, nullptr, 16)) & 0xFFu) : 0u;
-    }
     case NEBULA_OPTION_TEST_TRACE_LOADS:
         return ::galaxy::run_options().trace_loads != nullptr ? 1u : 0u;
-    case NEBULA_OPTION_TEST_WIDE_TABLES:
-        return ::galaxy::run_option_flag(::galaxy::run_options().test_wide_tables, false) ? 1u : 0u;
-    case NEBULA_OPTION_TEST_DRAW_NAMES:
-        return ::galaxy::run_option_flag(::galaxy::run_options().test_flicker_log, false) ||
-                       ::galaxy::run_option_flag(::galaxy::run_options().test_pair_log, false)
-                   ? 1u
-                   : 0u;
     case NEBULA_OPTION_TOUCH_POINTER:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::host::touch_pointer_state();

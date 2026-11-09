@@ -26,7 +26,6 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
-#include "render/core/inspector.h"
 #include "galaxy/host_env.h"
 #include "galaxy/render/host_window.h"
 
@@ -2295,21 +2294,6 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             for (std::uint32_t id = pipelines_queued_.load(std::memory_order_relaxed); id < count; ++id) {
                 order.push_back(id);
             }
-#if defined(NEBULA_DEV)
-            // A test build warms the pipelines the last runs drew first, in the order they first drew them, the others after
-            // (core/pipelines.h); a release keeps the cooked order.
-            {
-                std::vector<std::pair<std::uint32_t, std::uint32_t>> ranked;
-                ranked.reserve(order.size());
-                for (const std::uint32_t id : order) {
-                    ranked.emplace_back(core::pipeline_use_rank(registries_.pipeline(id)), id);
-                }
-                std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-                for (std::size_t i = 0u; i < ranked.size(); ++i) {
-                    order[i] = ranked[i].second;
-                }
-            }
-#endif
             for (const std::uint32_t id : order) {
                 const core::PipelineEntry& pipeline = registries_.pipeline(id);
                 if (pipeline.lit_form && !pixel_lit_) {
@@ -2357,7 +2341,6 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     ++frame_index_;
     if (real) {
         release_lists_before(entry);
-        NEBULA_INSPECT_AFTER_FRAME(*this, entry);
     }
 }
 
@@ -2481,7 +2464,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     renderer_.debug_log_backbuffer_readback();
     ++frame_index_;
     release_lists_before(entry);
-    NEBULA_INSPECT_AFTER_FRAME(*this, entry);
 }
 
 

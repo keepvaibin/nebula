@@ -7,7 +7,6 @@
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/run_options.h"
-#include "render/core/inspector.h"
 
 #include <algorithm>
 #include <bit>
@@ -32,25 +31,6 @@ constexpr bool state_depth_test(std::uint32_t s) noexcept { return (s & (1u << 1
 constexpr bool state_stencil(std::uint32_t s) noexcept { return ((s >> 20u) & 3u) != 0u; }
 constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_STATE_COLOR_WRITE) != 0u; }
 
-// GALAXY_TRACE_CUTS=1 (dev): each pair of lists whose scene camera is cut, marked by the game (MotionSignal) or by the
-// eye's move or turn; and each pair whose camera moved over 300 units or turned over 10 degrees in a step and was blended.
-void trace_cuts(const ListData& now) {
-    static const bool enabled = ::galaxy::run_option_u64(::galaxy::run_options().trace_cuts, 0u) != 0u;
-    if (!enabled) {
-        return;
-    }
-    const NebulaFrameList& list = *now.list;
-    for (std::uint32_t c = 0; c < list.camera_count && c < now.camera_motion.size(); ++c) {
-        const CameraMotion& m = now.camera_motion[c];
-        if (list.cameras[c].role != NEBULA_CAMERA_SCENE || !m.known) {
-            continue;
-        }
-        if (m.cut || m.moved > 300.0f || m.turn_degrees > 10.0f) {
-            std::fprintf(stderr, "[cut] list=%u %s moved=%.0f turn=%.1f\n", now.serial,
-                         m.cut ? (now.cut ? "game" : "detected") : "blended", m.moved, m.turn_degrees);
-        }
-    }
-}
 
 // Two constants entries are one material when they are one entry or name one registered slot.
 inline bool same_material(const NebulaFrameList& list, std::uint32_t a, std::uint32_t b) noexcept {
@@ -151,11 +131,7 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     walk_.mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
     const bool between = time.t < 1.0f && before != nullptr;
     if (between) {
-        const bool fresh = !now.motion_ready;
         pairing_.prepare_motion(now, *before);
-        if (fresh) {
-            trace_cuts(now);
-        }
     }
     walk_.between = between;
 
@@ -661,8 +637,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
         return;
     }
     const float mip_lines = walk_.mip_lines;  // taken once in prepare_walk
-    // The run is as long as the list: no count caps it (GALAXY_TEST_WIDE_TABLES pads it, entry_of repeats the last map).
-    const std::uint32_t count = walked_textures(table.count);
+    // The run is as long as the list: no count caps it.
+    const std::uint32_t count = table.count;
     const NebulaFrameTexture none{};
     const auto entry_of = [&](std::uint32_t i) -> const NebulaFrameTexture& {
         return table.count == 0u ? none : table.list[std::min(i, table.count - 1u)];
@@ -737,8 +713,8 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
     core::TextureTable& table = registries_.table(id);
     table.last_frame = frame_index_;
     table.retired = false;
-    // The list as walked (GALAXY_TEST_WIDE_TABLES pads it), cut to the bound table's compile-time size; told once per list.
-    const std::uint32_t listed = walked_textures(table.count);
+    // The list cut to the bound table's compile-time size; told once per list.
+    const std::uint32_t listed = table.count;
     const std::uint32_t count = std::min(listed, renderer_.table_slots());
     if (count < listed && !table.clamp_logged) {
         table.clamp_logged = true;
@@ -934,9 +910,8 @@ private:
     Renderer& renderer_;
 };
 
-// A draw pass of at least this many items is recorded in chunks, on a machine with at least kRecordMinCores logical processors
-// (GALAXY_TEST_RECORD_THRESHOLD lowers the first and ignores the second). A chunk is at least kRecordMinChunkDraws draws, and a
-// recorded pass of fewer than kRecordMinParallelDraws draws is replayed by the render thread.
+// A draw pass of at least this many items is recorded in chunks, on a machine with at least kRecordMinCores logical processors.
+// A chunk is at least kRecordMinChunkDraws draws, and a recorded pass of fewer than kRecordMinParallelDraws draws is replayed by the render thread.
 constexpr std::uint32_t kRecordThreshold = 1500u;
 constexpr unsigned kRecordMinCores = 6u;
 constexpr std::uint32_t kRecordMinChunkDraws = 64u;
@@ -944,31 +919,12 @@ constexpr std::uint32_t kRecordMinParallelDraws = 96u;
 
 }  // namespace
 
-// 0: the pass is drawn through the encoder as it is walked. Else the threads that replay its recording (1: the render thread
-// alone, GALAXY_TEST_ONE_RECORD_THREAD).
+// 0: the pass is drawn through the encoder as it is walked. Else the threads that replay its recording.
 unsigned RenderCore::recording_workers(const NebulaFramePass& pass) const {
-    const RunOptions& options = ::galaxy::run_options();
-#if defined(NEBULA_DEV)
-    // The inspector names each draw to the encoder as it is made.
-    for (const char* const inspect : {options.inspect_dir, options.inspect_dump, options.inspect_includes, options.inspect_motion,
-                                      options.inspect_names, options.inspect_pixel, options.inspect_programs, options.inspect_show,
-                                      options.inspect_solo, options.inspect_views}) {
-        if (inspect != nullptr && inspect[0] != '\0') {
-            return 0u;
-        }
-    }
-#endif
-    const bool lowered = options.test_record_threshold != nullptr && options.test_record_threshold[0] != '\0';
     // Asked once: this runs for every draw pass of every walk, and the count asks the OS (it cannot change in a run).
     static const unsigned cores = logical_cores();
-    if (!lowered && cores < kRecordMinCores) {
+    if (cores < kRecordMinCores || pass.item_count < kRecordThreshold) {
         return 0u;
-    }
-    if (pass.item_count < (lowered ? ::galaxy::run_option_u64(options.test_record_threshold, kRecordThreshold) : kRecordThreshold)) {
-        return 0u;
-    }
-    if (::galaxy::run_option_flag(options.test_one_record_thread, false)) {
-        return 1u;
     }
     return std::clamp(cores / 2u, 2u, 8u);
 }
@@ -1055,7 +1011,6 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         if (scene_layer && motion_scene_ && one_pass && aux != 1u) {
             aux = 4u;
         }
-        NEBULA_PIPELINE_USE(item.pipeline, entry);
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
@@ -1092,9 +1047,6 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         if (ring && !instanced && (item.flags & NEBULA_ITEM_INDEXED) != 0u && aux != 1u) {
             instances = merge_ring_run(i, end, entry.matrix_at, ring_index_count);
         }
-        if constexpr (Draws::kDirect) {
-            NEBULA_INSPECT_ITEM(*this, i, instances, pass, aux, pipeline, entry);
-        }
 
         encoder.set_draw_aux(aux);
         renderer_.note_scene_draw(state);
@@ -1117,15 +1069,12 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         }
         root.first_instance = i;
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
-                     ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) | NEBULA_INSPECT_FLAGS();
+                     ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u);
         root.half_line = item.line_width * view.frame_height;
         root.half_point = item.point_size * view.frame_height;
         encoder.set_root(root);
         encoder.set_scissor(view.scissor);
         encoder.set_viewport(view.viewport);
-        if constexpr (Draws::kDirect) {
-            NEBULA_INSPECT_DRAW_BEGIN(*this, i, instances, pass, encoder.raw(), view.scissor);
-        }
 
         if (instanced) {
             // The vertex stage reads its instances from the rows: every stream the layout names reads zero.
@@ -1179,9 +1128,6 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             const std::uint32_t index_count = refined ? mesh->refined_index_count : mesh->index_count;
             encoder.set_indices(refined ? mesh->refined_indices : mesh->indices, index_count * mesh->index_bytes, mesh->index_bytes);
             encoder.draw_indexed(index_count, instances, 0u, 0);
-        }
-        if constexpr (Draws::kDirect) {
-            NEBULA_INSPECT_DRAW_END(*this);
         }
         i += instances;
     }
@@ -1541,7 +1487,6 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     const NebulaFrameList& list = *now.list;
     target_open_ = false;
     std::uint32_t target_channels = 0u;
-    NEBULA_INSPECT_BEGIN(*this, list);
     if (!now.targets_planned) {
         plan_early_targets(now);
         plan_early_probes(now);
@@ -1581,7 +1526,6 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     }
     // A generated frame asks nothing: its depth is the scene at t, and the points are the camera's at t = 1.
     now.probes_done = now.probes_done || !walk_.between;
-    NEBULA_INSPECT_END(*this);
 }
 
 void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target_channels) {
@@ -1696,9 +1640,6 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
 }
 
 void RenderCore::walk_show() {
-    if (NEBULA_INSPECT_REPLAYING()) {
-        return;
-    }
     FramePassRequest request{};
     request.display = true;
     const bool real = !walk_.between;

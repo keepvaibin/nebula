@@ -114,11 +114,6 @@ public:
     [[nodiscard]] BudgetStats budget_stats() const;
     // The bytes of the staging chunks that exist now (in use, kept for frames in flight, or spare), any thread.
     [[nodiscard]] static std::uint64_t staging_bytes() noexcept;
-#if defined(NEBULA_DEV)
-    [[nodiscard]] std::uint64_t name_hash(std::uint32_t id) const noexcept {
-        return id < entries_.size() && entries_[id] != nullptr ? entries_[id]->name.hash : 0u;
-    }
-#endif
 
     // A view slot for a picture the renderer owns; retire_view returns both after the frame's fence.
     [[nodiscard]] std::uint32_t allocate_view() { return allocate_srv_index(); }

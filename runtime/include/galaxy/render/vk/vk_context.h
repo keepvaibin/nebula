@@ -148,6 +148,8 @@ public:
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
+    // VK_EXT_debug_utils is on (the validation layer or RenderDoc's): objects are named and passes labelled.
+    [[nodiscard]] bool debug_labels() const noexcept { return debug_names_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
     [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }

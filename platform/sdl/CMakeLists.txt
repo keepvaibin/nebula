@@ -96,7 +96,6 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/affine.cpp
     ${rt}/render/core/compose.cpp
     ${rt}/render/core/draw_walker.cpp
-    ${rt}/render/core/inspector.cpp
     ${rt}/render/core/pairing.cpp
     ${rt}/render/core/pipelines.cpp
     ${rt}/render/core/program_table.cpp

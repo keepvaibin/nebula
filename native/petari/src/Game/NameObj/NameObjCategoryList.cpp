@@ -22,11 +22,7 @@ void NameObjCategoryList::execute(int idx) {
     // end() is read each pass: a call may add to or remove from this category.
     if (mMethodConst != nullptr) {
         for (NameObj** pNameObj = pCategoryInfo->mNameObjArr.begin(); pNameObj != pCategoryInfo->mNameObjArr.end(); pNameObj++) {
-            const bool fresh = (*pNameObj)->mDrawSlot == 0;
             MotionSignal::drawObject((*pNameObj)->mDrawSlot, (*pNameObj)->mMotionEpoch);
-            if (fresh) {
-                MotionSignal::slotNamed((*pNameObj)->mDrawSlot, (*pNameObj)->mName);
-            }
             ((*pNameObj)->*mMethodConst)();
         }
     } else {

@@ -25,9 +25,6 @@ namespace MotionSignal {
     };
 
     // The object with this slot (0: none yet) and generation draws next.
-    // Test builds with NEBULA_OPTION_TEST_DRAW_NAMES: the flicker and pair logs name draws by these lines.
-    bool drawNamesWanted();
-    void slotNamed(u32 slot, const char* pName);
 
     inline void drawObject(u32& rSlot, u32 generation) {
         if (rSlot == 0) {

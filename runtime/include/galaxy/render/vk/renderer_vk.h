@@ -215,15 +215,6 @@ public:
     [[nodiscard]] std::uint64_t completed_fence_value() const;
     [[nodiscard]] std::uint64_t submitted_fence_value() const noexcept { return last_submitted_; }
 #if defined(NEBULA_DEV)
-    void inspect_mark(const char* name);
-    void inspect_queries_open(std::uint32_t count);
-    void inspect_query_begin(std::uint32_t index);
-    void inspect_query_end(std::uint32_t index);
-    void inspect_queries_read(std::uint32_t count, std::uint64_t* out);
-    [[nodiscard]] bool inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out);
-    // The reactive mask (kind 0: R8, out[0] the byte) and the effects layer's transmittance (kind 1: RGBA16F, four halves) at a
-    // pixel of the frame that just ended. False: not read.
-    [[nodiscard]] bool inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out);
     // What the render core holds that the breakdown line (log_video_memory) adds to the renderer's own figures; bytes unless noted.
     struct VideoMemoryOutside {
         std::uint64_t staging_bytes = 0u;                       // TextureStore's staging chunks
@@ -322,7 +313,6 @@ public:
     // anything reads or tests it (settle_depth_clear). False when the clear is clear_scene's.
     [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t clear_rgba);
     // Test builds: the motion vectors as colour over the 8-bit scene target (RendererD3D12's); nothing otherwise.
-    void record_motion_debug_view();
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     void set_present_game_frame(bool) noexcept {}
     // A present rate above 60.
@@ -631,15 +621,6 @@ private:
     std::array<Frame, kFramesInFlight> frames_{};
     unsigned frame_slot_ = 0;
     Frame* frame_ = &frames_[0];  // the submission being recorded
-#if defined(NEBULA_DEV)
-    VkQueryPool inspect_query_pool_ = VK_NULL_HANDLE;
-    std::uint32_t inspect_query_capacity_ = 0u;
-    bool inspect_queries_reset_ = false;  // the next recording resets the pool
-    gpu::BufferRef inspect_motion_buffer_;
-    unsigned inspect_motion_width_ = 0u, inspect_motion_height_ = 0u;
-    gpu::BufferRef inspect_mask_buffer_[2];
-    unsigned inspect_mask_width_[2]{}, inspect_mask_height_[2]{};
-#endif
     VkCommandBuffer commands_ = VK_NULL_HANDLE;  // where work records
     std::uint64_t frame_index_ = 0;
     std::uint64_t last_submitted_ = 0;
@@ -767,7 +748,6 @@ private:
     [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
     void prepare_temporal_upscaler();
     [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
-    void dump_temporal_inputs(const vk::Texture& color, const vk::Texture& motion, std::uint64_t index);
     [[nodiscard]] bool ensure_output_set(const FrameMap& output, bool storage);
     std::unique_ptr<vk::TemporalUpscaler> temporal_;
     std::future<std::unique_ptr<vk::TemporalUpscaler>> temporal_pending_;
@@ -834,7 +814,6 @@ private:
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
     std::array<std::array<VkPipeline, kSceneVariantCount>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
-    std::array<VkPipeline, kSceneVariantCount> motion_debug_pipelines_{};  // by scene variant
     // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the
     // depth clear's shader at the point's depth, tested GREATER_OR_EQUAL against the reversed depth on the first sample,
     // writing nothing, counted by an occlusion query.

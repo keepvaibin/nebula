@@ -425,7 +425,6 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/affine.cpp
     runtime/src/render/core/compose.cpp
     runtime/src/render/core/draw_walker.cpp
-    runtime/src/render/core/inspector.cpp
     runtime/src/render/core/pairing.cpp
     runtime/src/render/core/pipelines.cpp
     runtime/src/render/core/program_table.cpp
@@ -686,7 +685,6 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/affine.cpp
         runtime/src/render/core/compose.cpp
         runtime/src/render/core/draw_walker.cpp
-        runtime/src/render/core/inspector.cpp
         runtime/src/render/core/pairing.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp

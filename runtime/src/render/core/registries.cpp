@@ -161,9 +161,6 @@ Registries::Placed Registries::place(std::size_t bytes) {
         arena.free_bytes -= bytes;
         ++arena.live;
         Placed placed{arena.memory.cpu + chosen_offset, arena.memory.gpu + chosen_offset, chosen, chosen_offset, bytes};
-#if defined(NEBULA_DEV)
-        placed.shadow = arena.shadow.get() + chosen_offset;
-#endif
         return placed;
     }
     // A new page, in the place of one given back when there is one (a page's index is held by what is placed in it only).
@@ -185,9 +182,6 @@ Registries::Placed Registries::place(std::size_t bytes) {
     }
     Arena& arena = arenas_[index];
     arena.memory = std::move(memory);
-#if defined(NEBULA_DEV)
-    arena.shadow.reset(new std::byte[page]);
-#endif
     arena.bytes = page;
     arena.free.clear();
     if (page > bytes) {
@@ -196,17 +190,11 @@ Registries::Placed Registries::place(std::size_t bytes) {
     arena.free_bytes = page - bytes;
     arena.live = 1u;
     Placed placed{arena.memory.cpu, arena.memory.gpu, index, 0u, bytes};
-#if defined(NEBULA_DEV)
-    placed.shadow = arena.shadow.get();
-#endif
     return placed;
 }
 
 void Registries::fill(const Placed& placed, const void* source, std::size_t bytes) noexcept {
     std::memcpy(placed.cpu, source, bytes);
-#if defined(NEBULA_DEV)
-    std::memcpy(placed.shadow, source, bytes);
-#endif
 }
 
 void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t size) {
@@ -245,9 +233,6 @@ void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t 
     }
     if (release) {
         arena.memory = {};
-#if defined(NEBULA_DEV)
-        arena.shadow.reset();
-#endif
         arena.bytes = 0u;
         arena.free.clear();
         arena.free_bytes = 0u;
@@ -590,10 +575,6 @@ std::uint32_t Registries::material_register_locked(const float (*rows)[4], std::
     record.id = id;
     record.cpu = std::make_unique<float[]>(count * 4u);
     std::memcpy(record.cpu.get(), rows, count * 16u);
-#if defined(NEBULA_DEV)
-    slot_rows_.resize(std::max<std::size_t>(slot_rows_.size(), id + 1u));
-    slot_rows_[id] = record.cpu.get();
-#endif
     bucket.push_back(std::move(record));
     return id;
 }

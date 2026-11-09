@@ -9,7 +9,6 @@ X(ScreenProbeCs, annotate(screen_probe_shader_source(), kScreenProbeBindings), C
 X(DepthResolvePs, annotate(kDepthResolvePs, kUtilityBindings), Fragment, "main", {})
 X(ClearPs, annotate(clear_pixel_shader_source(), kUtilityBindings), Fragment, "main", {})
 X(ClearDepthPs, annotate(clear_depth_pixel_shader_source(), kUtilityBindings), Fragment, "main", {})
-X(MotionDebugPs, annotate(motion_debug_pixel_shader_source(), kUtilityBindings), Fragment, "main", {})
 X(AoDistanceCs, ao_source(), Compute, "DepthCS", {"AO_PASS_distance_cs=1"})
 X(AoOcclusionCs, ao_source(), Compute, "AoCS", {"AO_PASS_occlusion_cs=1"})
 X(AoSsaoCs, ao_source(), Compute, "SsaoCS", {"AO_PASS_ssao_cs=1"})

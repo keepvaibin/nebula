@@ -113,11 +113,6 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   and the HID pads; the list the CONTROLS page shows has no cap; the raw input device list is as long as the system says.
 - **Test switch** `GALAXY_TEST_SMALL_HEAPS=1` (test builds) starts the rings at 1 MB, the Direct3D 12 heap's regions at 4 persistent and
   64 texture descriptors, and the first Vulkan pools at a handful of sets, so every growth above runs in the first seconds.
-  `GALAXY_TEST_WIDE_TABLES=1` walks every texture list as at least 24 maps (the extra maps repeat its last), so runs past sixteen are
-  written, read and, on the bound-table path, clamped on both backends; in a development build it also draws a probe once the game's
-  3D scene runs (`wide_probe.hlsl`, `Game/Render/NebulaWideProbe.cpp`): a list of 24 one-texel maps, the shader samples map 23 and writes
-  its red as the pixel's depth, a depth probe brings it back, and one line says `[wide-table] map 23 of 24: red read 240, expected 240:
-  ok` (or `WRONG`) on either backend.
 - **Video memory**: no size of it is assumed. The renderer reads the adapter's usage and budget at most ten times a second (a kernel
   call; DXGI's budget-change event is taken at once) and each frame boundary acts on the latest reading: DXGI `QueryVideoMemoryInfo`
   (usage at most every 100 ms; the budget at once when the OS signals `RegisterVideoMemoryBudgetChangeNotificationEvent`, which is
@@ -179,7 +174,7 @@ sent it before its staging chunks (the 16 MB pool of `TextureStore`) and retired
 transfer queue's value at the time of the call before it destroys anything. With enhanced barriers a texture in the common layout is copied
 to and from on a copy queue without a barrier; with legacy states the copy list moves it common to copy destination and back. Not used with
 direct host writes (unified memory with coherence, or `VK_EXT_host_image_copy`), which have no copy to overlap.
-`GALAXY_TEST_SAME_QUEUE_UPLOADS=1` keeps the old path; `GALAXY_VK_TEST_NO_FEATURE=transfer_queue` leaves the transfer queue out.
+`GALAXY_VK_TEST_NO_FEATURE=transfer_queue` leaves the transfer queue out.
 
 **Vulkan frame sync.** Where the device has timeline semaphores (core 1.2, or `VK_KHR_timeline_semaphore`) every submission signals the
 next value of one timeline semaphore; `completed_value` reads it and `wait` waits on it. One object instead of a fence for each
@@ -201,9 +196,8 @@ command list each (Direct3D 12: the frame's list is closed at the pass, the chun
 continues in a new list) or one secondary command buffer each (Vulkan: run in a render pass opened for secondary buffers, one per run of
 chunks with the same draw targets). A chunk's lists start with the state the frame's list had at the pass: root signature, draw targets
 and descriptor heaps (Direct3D 12); pipeline, sets and dynamic state are the encoder's own (both). Vulkan's descriptor-set cache
-(`constants_set`) is locked while chunks record. A pass under the inspector, one with pipeline statistics queries (Direct3D 12), or a recorded pass with fewer than 96 draws is drawn by the render
-thread alone (replayed from the recording on its own list, or at once). `GALAXY_TEST_RECORD_THRESHOLD=<items>` lowers the threshold (and the core
-count rule) so small lists take the path; `GALAXY_TEST_ONE_RECORD_THREAD=1` makes it record and replay on the render thread alone, to tell the recording from the threads.
+(`constants_set`) is locked while chunks record. A pass with pipeline statistics queries (Direct3D 12), or a recorded pass with fewer
+than 96 draws, is drawn by the render thread alone (replayed from the recording on its own list, or at once).
 
 ## HDR output
 
@@ -217,8 +211,7 @@ BT.2390 roll-off of the brightest channel to the display's peak when that is und
 triangular dither. `hdr10_encode` (post_process_settings.cpp) is the CPU twin the tests check. With HDR off nothing differs: the same
 passes write the same 8-bit values (`origin[2] == 1`). Screenshots and test pictures stay SDR: while the chain is HDR, a capture draws
 the last write again for an 8-bit window into a scratch target and reads that. HDR stays off under frame generation (AMD's swap chain,
-DLSS), on a pre-rotated Vulkan surface, and without the post chain. `GALAXY_TEST_FORCE_HDR=1` offers HDR on any monitor (Vulkan:
-whose surface lists the format) to run the path; `GALAXY_VK_TEST_NO_FEATURE=hdr` leaves the Vulkan extensions out.
+DLSS), on a pre-rotated Vulkan surface, and without the post chain. `GALAXY_VK_TEST_NO_FEATURE=hdr` leaves the Vulkan extensions out.
 Log lines: `[display] output HDR|SDR ...`, `[hdr] on peak N nits paper M`, `[hdr] off`.
 
 ## Power
@@ -259,14 +252,10 @@ A lost device (driver reset) restarts the game from its save, twice in a row at 
 
 ## Testing
 
-Test aids (test builds only): `GALAXY_TEST_MOTION_PROBE=1` replays a few draws of each kind of mover alone every 300 frames and compares
-the CPU-projected motion of their vertices with the motion target (`[motion-probe]`); `GALAXY_TEST_FRAME_INPUTS=1` checks the
-temporal upscaler's inputs (jitter against Halton, depth range and reversed Z, the previous camera, the reactive and transparency masks
-where particles draw: `[frame-inputs]`); `GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1` leaves interpolated frames out of the snapshot
+Test aids (test builds only): `GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1` leaves interpolated frames out of the snapshot
 numbering, `tools/verify/interp_real.sh` uses it to compare a run with interpolation on against one with it off by the game's own
 frames. `GALAXY_VK_TEST_NO_FEATURE` also takes `present_wait`, `present_mode_switch`, `pipeline_library`, `timeline`, `transfer_queue`
-and `gpu_upload`; `GALAXY_D3D12_TEST_NO_FEATURE` also takes `gpu_upload`. `GALAXY_TEST_SAME_QUEUE_UPLOADS`, `GALAXY_TEST_RECORD_THRESHOLD` and
-`GALAXY_TEST_ONE_RECORD_THREAD` are described above.
+and `gpu_upload`; `GALAXY_D3D12_TEST_NO_FEATURE` also takes `gpu_upload`.
 
 `tools/verify`: identical pictures between builds in deterministic mode (`GALAXY_TEST_DETERMINISTIC=1`), a window against the same build's
 control in real time, all stops in the tour, `[loss]` counters for draws without a material or pipeline.

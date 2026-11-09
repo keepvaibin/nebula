@@ -81,11 +81,6 @@ inline const char* crash_dump_dir() noexcept { return std::getenv("GALAXY_CRASH_
 inline constexpr const wchar_t* crash_dump_dir_wide_name() noexcept { return L"GALAXY_CRASH_DUMP_DIR"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_window_off_desktop() noexcept { return nullptr; }
-#else
-inline const char* test_window_off_desktop() noexcept { return std::getenv("GALAXY_TEST_WINDOW_OFF_DESKTOP"); }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* test_no_raw_mouse() noexcept { return nullptr; }
 #else
 inline const char* test_no_raw_mouse() noexcept { return std::getenv("GALAXY_TEST_NO_RAW_MOUSE"); }
@@ -201,24 +196,6 @@ inline constexpr const char* present_snapshot_game_only_name() noexcept { return
 inline constexpr const wchar_t* present_snapshot_game_only_wide_name() noexcept { return L"GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_motion_probe() noexcept { return nullptr; }
-inline constexpr const char* test_motion_probe_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_motion_probe_wide_name() noexcept { return L""; }
-#else
-inline const char* test_motion_probe() noexcept { return std::getenv("GALAXY_TEST_MOTION_PROBE"); }
-inline constexpr const char* test_motion_probe_name() noexcept { return "GALAXY_TEST_MOTION_PROBE"; }
-inline constexpr const wchar_t* test_motion_probe_wide_name() noexcept { return L"GALAXY_TEST_MOTION_PROBE"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_frame_inputs() noexcept { return nullptr; }
-inline constexpr const char* test_frame_inputs_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_frame_inputs_wide_name() noexcept { return L""; }
-#else
-inline const char* test_frame_inputs() noexcept { return std::getenv("GALAXY_TEST_FRAME_INPUTS"); }
-inline constexpr const char* test_frame_inputs_name() noexcept { return "GALAXY_TEST_FRAME_INPUTS"; }
-inline constexpr const wchar_t* test_frame_inputs_wide_name() noexcept { return L"GALAXY_TEST_FRAME_INPUTS"; }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* profile_game() noexcept { return nullptr; }
 #else
 inline const char* profile_game() noexcept { return std::getenv("GALAXY_PROFILE_GAME"); }
@@ -229,11 +206,6 @@ inline constexpr const wchar_t* test__wide_name() noexcept { return L""; }
 #else
 inline const char* test_() noexcept { return std::getenv("GALAXY_TEST_"); }
 inline constexpr const wchar_t* test__wide_name() noexcept { return L"GALAXY_TEST_"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_arena_fill() noexcept { return nullptr; }
-#else
-inline const char* test_arena_fill() noexcept { return std::getenv("GALAXY_TEST_ARENA_FILL"); }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* test_cpu_affinity() noexcept { return nullptr; }
@@ -290,42 +262,6 @@ inline constexpr const char* test_device_lost_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* test_device_lost_wide_name() noexcept { return L"GALAXY_TEST_DEVICE_LOST"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_same_queue_uploads() noexcept { return nullptr; }
-inline constexpr const char* test_same_queue_uploads_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_same_queue_uploads_wide_name() noexcept { return L""; }
-#else
-inline const char* test_same_queue_uploads() noexcept { return std::getenv("GALAXY_TEST_SAME_QUEUE_UPLOADS"); }
-inline constexpr const char* test_same_queue_uploads_name() noexcept { return "GALAXY_TEST_SAME_QUEUE_UPLOADS"; }
-inline constexpr const wchar_t* test_same_queue_uploads_wide_name() noexcept { return L"GALAXY_TEST_SAME_QUEUE_UPLOADS"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_force_hdr() noexcept { return nullptr; }
-inline constexpr const char* test_force_hdr_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_force_hdr_wide_name() noexcept { return L""; }
-#else
-inline const char* test_force_hdr() noexcept { return std::getenv("GALAXY_TEST_FORCE_HDR"); }
-inline constexpr const char* test_force_hdr_name() noexcept { return "GALAXY_TEST_FORCE_HDR"; }
-inline constexpr const wchar_t* test_force_hdr_wide_name() noexcept { return L"GALAXY_TEST_FORCE_HDR"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_record_threshold() noexcept { return nullptr; }
-inline constexpr const char* test_record_threshold_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_record_threshold_wide_name() noexcept { return L""; }
-#else
-inline const char* test_record_threshold() noexcept { return std::getenv("GALAXY_TEST_RECORD_THRESHOLD"); }
-inline constexpr const char* test_record_threshold_name() noexcept { return "GALAXY_TEST_RECORD_THRESHOLD"; }
-inline constexpr const wchar_t* test_record_threshold_wide_name() noexcept { return L"GALAXY_TEST_RECORD_THRESHOLD"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_one_record_thread() noexcept { return nullptr; }
-inline constexpr const char* test_one_record_thread_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_one_record_thread_wide_name() noexcept { return L""; }
-#else
-inline const char* test_one_record_thread() noexcept { return std::getenv("GALAXY_TEST_ONE_RECORD_THREAD"); }
-inline constexpr const char* test_one_record_thread_name() noexcept { return "GALAXY_TEST_ONE_RECORD_THREAD"; }
-inline constexpr const wchar_t* test_one_record_thread_wide_name() noexcept { return L"GALAXY_TEST_ONE_RECORD_THREAD"; }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* test_small_heaps() noexcept { return nullptr; }
 inline constexpr const char* test_small_heaps_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L""; }
@@ -342,15 +278,6 @@ inline constexpr const wchar_t* test_vram_budget_mb_wide_name() noexcept { retur
 inline const char* test_vram_budget_mb() noexcept { return std::getenv("GALAXY_TEST_VRAM_BUDGET_MB"); }
 inline constexpr const char* test_vram_budget_mb_name() noexcept { return "GALAXY_TEST_VRAM_BUDGET_MB"; }
 inline constexpr const wchar_t* test_vram_budget_mb_wide_name() noexcept { return L"GALAXY_TEST_VRAM_BUDGET_MB"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_wide_tables() noexcept { return nullptr; }
-inline constexpr const char* test_wide_tables_name() noexcept { return ""; }
-inline constexpr const wchar_t* test_wide_tables_wide_name() noexcept { return L""; }
-#else
-inline const char* test_wide_tables() noexcept { return std::getenv("GALAXY_TEST_WIDE_TABLES"); }
-inline constexpr const char* test_wide_tables_name() noexcept { return "GALAXY_TEST_WIDE_TABLES"; }
-inline constexpr const wchar_t* test_wide_tables_wide_name() noexcept { return L"GALAXY_TEST_WIDE_TABLES"; }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* test_gpu_lost_frame() noexcept { return nullptr; }
@@ -400,21 +327,6 @@ inline const char* test_settings_keys() noexcept { return nullptr; }
 inline const char* test_settings_keys() noexcept { return std::getenv("GALAXY_TEST_SETTINGS_KEYS"); }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* test_motion_dump() noexcept { return nullptr; }
-#else
-inline const char* test_motion_dump() noexcept { return std::getenv("GALAXY_TEST_MOTION_DUMP"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_pair_log() noexcept { return nullptr; }
-#else
-inline const char* test_pair_log() noexcept { return std::getenv("GALAXY_TEST_PAIR_LOG"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* test_flicker_log() noexcept { return nullptr; }
-#else
-inline const char* test_flicker_log() noexcept { return std::getenv("GALAXY_TEST_FLICKER_LOG"); }
-#endif
-#if !defined(NEBULA_DEV)
 inline const char* test_settings_open() noexcept { return nullptr; }
 #else
 inline const char* test_settings_open() noexcept { return std::getenv("GALAXY_TEST_SETTINGS_OPEN"); }
@@ -452,11 +364,6 @@ inline const char* trace_loads() noexcept { return std::getenv("GALAXY_TRACE_LOA
 inline const char* trace_memory() noexcept { return nullptr; }
 #else
 inline const char* trace_memory() noexcept { return std::getenv("GALAXY_TRACE_MEMORY"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* trace_cuts() noexcept { return nullptr; }
-#else
-inline const char* trace_cuts() noexcept { return std::getenv("GALAXY_TRACE_CUTS"); }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* trace_present_stats() noexcept { return nullptr; }
@@ -519,56 +426,6 @@ inline constexpr const wchar_t* movie_dir_wide_name() noexcept { return L""; }
 #else
 inline const char* movie_dir() noexcept { return std::getenv("GALAXY_MOVIE_DIR"); }
 inline constexpr const wchar_t* movie_dir_wide_name() noexcept { return L"GALAXY_MOVIE_DIR"; }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_dir() noexcept { return nullptr; }
-#else
-inline const char* inspect_dir() noexcept { return std::getenv("GALAXY_INSPECT_DIR"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_dump() noexcept { return nullptr; }
-#else
-inline const char* inspect_dump() noexcept { return std::getenv("GALAXY_INSPECT_DUMP"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_includes() noexcept { return nullptr; }
-#else
-inline const char* inspect_includes() noexcept { return std::getenv("GALAXY_INSPECT_INCLUDES"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_motion() noexcept { return nullptr; }
-#else
-inline const char* inspect_motion() noexcept { return std::getenv("GALAXY_INSPECT_MOTION"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_names() noexcept { return nullptr; }
-#else
-inline const char* inspect_names() noexcept { return std::getenv("GALAXY_INSPECT_NAMES"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_pixel() noexcept { return nullptr; }
-#else
-inline const char* inspect_pixel() noexcept { return std::getenv("GALAXY_INSPECT_PIXEL"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_programs() noexcept { return nullptr; }
-#else
-inline const char* inspect_programs() noexcept { return std::getenv("GALAXY_INSPECT_PROGRAMS"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_show() noexcept { return nullptr; }
-#else
-inline const char* inspect_show() noexcept { return std::getenv("GALAXY_INSPECT_SHOW"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_solo() noexcept { return nullptr; }
-#else
-inline const char* inspect_solo() noexcept { return std::getenv("GALAXY_INSPECT_SOLO"); }
-#endif
-#if !defined(NEBULA_DEV)
-inline const char* inspect_views() noexcept { return nullptr; }
-#else
-inline const char* inspect_views() noexcept { return std::getenv("GALAXY_INSPECT_VIEWS"); }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* pipeline_list_out() noexcept { return nullptr; }

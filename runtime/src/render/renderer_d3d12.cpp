@@ -1,5 +1,4 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
-#include "galaxy/render/temporal_dump.h"
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/run_options.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -3282,6 +3281,11 @@ void RendererD3D12::gpu_pass(GpuPass pass) {
         return;
     }
     current_pass_ = pass;
+    // The pass by name for PIX and RenderDoc.
+    if (pass_list_open_ && pass != GpuPass::Count) {
+        const char* const name = kPassTimeNames[static_cast<std::size_t>(pass)];
+        command_list_->SetMarker(1u, name, static_cast<UINT>(std::strlen(name) + 1u));
+    }
     unsigned& marks = pass_mark_count_[frame_slot_];
     if (!pass_timing_on_ || !pass_query_heap_ || !pass_list_open_ || marks + 1u >= kGpuPassSlots) {
         return;
@@ -3649,12 +3653,11 @@ void RendererD3D12::read_display_output() {
     publish_display_hdr();
 }
 
-// What the settings page and the logs know of HDR: the display is in HDR mode (or GALAXY_TEST_FORCE_HDR=1 says so) and the
-// post chain, which writes the last pass, is here to encode for it.
+// What the settings page and the logs know of HDR: the display is in HDR mode and the post chain, which writes the last
+// pass, is here to encode for it.
 void RendererD3D12::publish_display_hdr() {
     DisplayHdr hdr{};
-    const bool forced = ::galaxy::run_option_flag(::galaxy::run_options().test_force_hdr, false);
-    hdr.available = (display_reading_.hdr || forced) && swap_chain_ != nullptr && post_process_.ready();
+    hdr.available = display_reading_.hdr && swap_chain_ != nullptr && post_process_.ready();
     hdr.active = hdr_active_;
     hdr.peak_nits = display_reading_.known && display_reading_.hdr ? display_reading_.peak_nits : 0u;
     hdr.full_frame_nits = display_reading_.known && display_reading_.hdr ? display_reading_.full_frame_nits : 0u;
@@ -4479,76 +4482,6 @@ bool RendererD3D12::ensure_motion_target() {
     return true;
 }
 
-void RendererD3D12::record_motion_debug_view() {
-    // Its pipeline draws to the RGBA8 scene target.
-    if (!motion_target_ || scene_hdr_) {
-        return;
-    }
-    if (!motion_debug_pipeline_) {
-        D3D12_DESCRIPTOR_RANGE range{};
-        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        range.NumDescriptors = 1;
-        D3D12_ROOT_PARAMETER param{};
-        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        param.DescriptorTable.NumDescriptorRanges = 1;
-        param.DescriptorTable.pDescriptorRanges = &range;
-        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        D3D12_ROOT_SIGNATURE_DESC rsd{};
-        rsd.NumParameters = 1;
-        rsd.pParameters = &param;
-        ComPtr<ID3DBlob> blob, err;
-        d3d_check(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err),
-                  "SerializeMotionDebugRS");
-        d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                               IID_PPV_ARGS(&motion_debug_root_)),
-                  "CreateMotionDebugRS");
-        const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
-        const UtilityShaderBytes ps = utility_shader(UtilityShader::MotionDebugPs);
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
-        pd.pRootSignature = motion_debug_root_.Get();
-        pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-        pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-        pd.SampleMask = UINT_MAX;
-        pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        pd.RasterizerState.DepthClipEnable = TRUE;
-        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pd.NumRenderTargets = 1;
-        pd.RTVFormats[0] = kSceneColorFormat;
-        pd.SampleDesc.Count = 1;
-        pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&motion_debug_pipeline_)),
-                  "CreateMotionDebugPSO");
-    }
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(motion_target_.Get(), gpu::Use::ColorWrite, gpu::Use::PixelRead);
-    uses.issue();
-    const DescriptorRing::Table table = srv_ring_.allocate(1u);
-    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
-    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    view.Texture2D.MipLevels = 1u;
-    view.Format = kMotionVectorFormat;
-    device_->CreateShaderResourceView(motion_target_.Get(), &view, table.cpu);
-    command_list_->SetGraphicsRootSignature(motion_debug_root_.Get());
-    command_list_->SetPipelineState(motion_debug_pipeline_.Get());
-    srv_ring_.bind(command_list_.Get());
-    command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
-    command_list_->OMSetRenderTargets(1, &scene_rtv_, FALSE, nullptr);
-    bound_rt_aux_ = 0u;
-    const D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(frame_.width),
-                            static_cast<float>(frame_.height), 0.0f, 1.0f};
-    const D3D12_RECT sci{0, 0, static_cast<LONG>(frame_.width),
-                         static_cast<LONG>(frame_.height)};
-    command_list_->RSSetViewports(1, &vp);
-    command_list_->RSSetScissorRects(1, &sci);
-    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list_->DrawInstanced(3, 1, 0, 0);
-    uses.undo();
-    command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_draw_bindings();
-    bind_scene();
-}
 
 bool RendererD3D12::interpolation_mode() const {
     const RenderConfig cfg = get_render_config();
@@ -4750,147 +4683,12 @@ bool RendererD3D12::temporal_inputs_match(const TemporalUpscaleInputs& in) const
     return match;
 }
 
-// GALAXY_TEST_MOTION_DUMP (temporal_dump.h): this frame's inputs copied out; the frame before's written.
-void RendererD3D12::dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* motion, std::uint64_t index) {
-#if !defined(NEBULA_DEV)
-    (void)color, (void)motion, (void)index;
-#else
-    struct Pending {
-        const char* name;
-        std::uint64_t frame;
-        unsigned width, height;
-        UINT row_pitch;
-        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
-    };
-    static const temporal_dump::Plan plan = temporal_dump::read_plan();
-    static std::vector<Pending> pending;
-    if (plan.every == 0u) {
-        return;
-    }
-    if (!pending.empty()) {
-        wait_for_gpu();
-        for (Pending& p : pending) {
-            void* mapped = nullptr;
-            if (SUCCEEDED(p.buffer->Map(0u, nullptr, &mapped))) {
-                temporal_dump::write(plan, p.name, p.frame, p.width, p.height, 4u, mapped, p.row_pitch);
-                p.buffer->Unmap(0u, nullptr);
-            }
-        }
-        pending.clear();
-    }
-    if (!plan.wanted(index)) {
-        return;
-    }
-    const auto copy = [&](ID3D12Resource* image, const char* name) {
-        const D3D12_RESOURCE_DESC desc = image->GetDesc();
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
-        UINT64 bytes = 0u;
-        device_->GetCopyableFootprints(&desc, 0u, 1u, 0u, &footprint, nullptr, nullptr, &bytes);
-        D3D12_HEAP_PROPERTIES heap{};
-        heap.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC buffer_desc{};
-        buffer_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        buffer_desc.Width = bytes;
-        buffer_desc.Height = 1u;
-        buffer_desc.DepthOrArraySize = 1u;
-        buffer_desc.MipLevels = 1u;
-        buffer_desc.SampleDesc.Count = 1u;
-        buffer_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
-        if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&buffer)))) {
-            return;
-        }
-        BarriersD3D12 uses{command_list_.Get()};
-        uses.texture(image, gpu::Use::ColorWrite, gpu::Use::CopySource);
-        uses.issue();
-        D3D12_TEXTURE_COPY_LOCATION to{};
-        to.pResource = buffer.Get();
-        to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        to.PlacedFootprint = footprint;
-        D3D12_TEXTURE_COPY_LOCATION from{};
-        from.pResource = image;
-        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        command_list_->CopyTextureRegion(&to, 0u, 0u, 0u, &from, nullptr);
-        uses.undo();
-        pending.push_back({name, index, static_cast<unsigned>(desc.Width), desc.Height, footprint.Footprint.RowPitch, std::move(buffer)});
-    };
-    copy(color, "color");
-    copy(motion, "motion");
-#endif
-}
 
 bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     const GpuPassScope pass{*this, GpuPass::Upscale};
     if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
         return false;
     }
-    dump_temporal_inputs(scene_color_.Get(), motion_target_.Get(), frame_index_);
-#if defined(NEBULA_DEV)
-    if (inspect_query_capacity_ != 0u) {
-        const D3D12_RESOURCE_DESC desc = motion_target_->GetDesc();
-        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
-        UINT64 bytes = 0u;
-        device_->GetCopyableFootprints(&desc, 0u, 1u, 0u, &footprint, nullptr, nullptr, &bytes);
-        D3D12_HEAP_PROPERTIES heap{};
-        heap.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC buffer{};
-        buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        buffer.Width = bytes;
-        buffer.Height = 1u;
-        buffer.DepthOrArraySize = 1u;
-        buffer.MipLevels = 1u;
-        buffer.SampleDesc.Count = 1u;
-        buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        inspect_motion_readback_.Reset();
-        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                                   IID_PPV_ARGS(&inspect_motion_readback_)),
-                  "Create inspector motion readback");
-        inspect_motion_pitch_ = footprint.Footprint.RowPitch;
-        BarriersD3D12 uses{command_list_.Get()};
-        uses.texture(motion_target_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
-        uses.issue();
-        D3D12_TEXTURE_COPY_LOCATION to{};
-        to.pResource = inspect_motion_readback_.Get();
-        to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        to.PlacedFootprint = footprint;
-        D3D12_TEXTURE_COPY_LOCATION from{};
-        from.pResource = motion_target_.Get();
-        from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        command_list_->CopyTextureRegion(&to, 0u, 0u, 0u, &from, nullptr);
-        uses.undo();
-        // The reactive mask and the effects layer's transmittance, the same way (GALAXY_TEST_FRAME_INPUTS).
-        ID3D12Resource* const masks[2] = {reactive_target_.Get(), layer_trans_.Get()};
-        for (unsigned kind = 0u; kind < 2u; ++kind) {
-            inspect_mask_readback_[kind].Reset();
-            if (masks[kind] == nullptr) {
-                continue;
-            }
-            const D3D12_RESOURCE_DESC mask_desc = masks[kind]->GetDesc();
-            D3D12_PLACED_SUBRESOURCE_FOOTPRINT mask_footprint{};
-            UINT64 mask_bytes = 0u;
-            device_->GetCopyableFootprints(&mask_desc, 0u, 1u, 0u, &mask_footprint, nullptr, nullptr, &mask_bytes);
-            D3D12_RESOURCE_DESC mask_buffer = buffer;
-            mask_buffer.Width = mask_bytes;
-            if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &mask_buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                                        IID_PPV_ARGS(&inspect_mask_readback_[kind])))) {
-                continue;
-            }
-            inspect_mask_pitch_[kind] = mask_footprint.Footprint.RowPitch;
-            BarriersD3D12 mask_uses{command_list_.Get()};
-            mask_uses.texture(masks[kind], gpu::Use::ColorWrite, gpu::Use::CopySource);
-            mask_uses.issue();
-            D3D12_TEXTURE_COPY_LOCATION mask_to{};
-            mask_to.pResource = inspect_mask_readback_[kind].Get();
-            mask_to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-            mask_to.PlacedFootprint = mask_footprint;
-            D3D12_TEXTURE_COPY_LOCATION mask_from{};
-            mask_from.pResource = masks[kind];
-            mask_from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-            command_list_->CopyTextureRegion(&mask_to, 0u, 0u, 0u, &mask_from, nullptr);
-            mask_uses.undo();
-        }
-    }
-#endif
     TemporalUpscaleInputs in{};
     in.list = command_list_.Get();
     in.color = scene_color_.Get();
@@ -5712,88 +5510,6 @@ void RendererD3D12::record_scene_ao() {
     bound_rt_aux_ = 0xFFu;
 }
 
-#if defined(NEBULA_DEV)
-void RendererD3D12::inspect_mark(const char* name) {
-    command_list_->SetMarker(1u, name, static_cast<UINT>(std::strlen(name) + 1u));
-}
-
-void RendererD3D12::inspect_queries_open(std::uint32_t count) {
-    inspect_queries_used_ = 0u;
-    if (count <= inspect_query_capacity_) {
-        return;
-    }
-    wait_for_gpu();
-    inspect_query_capacity_ = count;
-    D3D12_QUERY_HEAP_DESC heap{};
-    heap.Type = D3D12_QUERY_HEAP_TYPE_OCCLUSION;
-    heap.Count = count;
-    d3d_check(device_->CreateQueryHeap(&heap, IID_PPV_ARGS(&inspect_query_heap_)), "Create inspector queries");
-    D3D12_HEAP_PROPERTIES properties{};
-    properties.Type = D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC desc{};
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    desc.Width = std::uint64_t{count} * 8u;
-    desc.Height = 1u;
-    desc.DepthOrArraySize = 1u;
-    desc.MipLevels = 1u;
-    desc.SampleDesc.Count = 1u;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    d3d_check(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                               IID_PPV_ARGS(&inspect_query_readback_)),
-              "Create inspector query readback");
-}
-
-void RendererD3D12::inspect_query_begin(std::uint32_t index) {
-    command_list_->BeginQuery(inspect_query_heap_.Get(), D3D12_QUERY_TYPE_BINARY_OCCLUSION, index);
-}
-
-void RendererD3D12::inspect_query_end(std::uint32_t index) {
-    command_list_->EndQuery(inspect_query_heap_.Get(), D3D12_QUERY_TYPE_BINARY_OCCLUSION, index);
-    inspect_queries_used_ = index + 1u;
-    command_list_->ResolveQueryData(inspect_query_heap_.Get(), D3D12_QUERY_TYPE_BINARY_OCCLUSION, index, 1u, inspect_query_readback_.Get(),
-                                    std::uint64_t{index} * 8u);
-}
-
-void RendererD3D12::inspect_queries_read(std::uint32_t count, std::uint64_t* out) {
-    void* mapped = nullptr;
-    if (count != 0u && SUCCEEDED(inspect_query_readback_->Map(0u, nullptr, &mapped))) {
-        std::memcpy(out, mapped, std::size_t{count} * 8u);
-        inspect_query_readback_->Unmap(0u, nullptr);
-    }
-}
-
-bool RendererD3D12::inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out) {
-    if (!inspect_motion_readback_ || x >= frame_.width || y >= frame_.height) {
-        return false;
-    }
-    void* mapped = nullptr;
-    if (FAILED(inspect_motion_readback_->Map(0u, nullptr, &mapped))) {
-        return false;
-    }
-    const auto* row = static_cast<const std::byte*>(mapped) + std::size_t{y} * inspect_motion_pitch_;
-    std::memcpy(out, row + std::size_t{x} * 4u, 4u);
-    inspect_motion_readback_->Unmap(0u, nullptr);
-    return true;
-}
-
-bool RendererD3D12::inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out) {
-    if (kind > 1u || !inspect_mask_readback_[kind] || x >= frame_.width || y >= frame_.height) {
-        return false;
-    }
-    void* mapped = nullptr;
-    if (FAILED(inspect_mask_readback_[kind]->Map(0u, nullptr, &mapped))) {
-        return false;
-    }
-    const auto* row = static_cast<const std::byte*>(mapped) + std::size_t{y} * inspect_mask_pitch_[kind];
-    if (kind == 0u) {
-        out[0] = static_cast<std::uint8_t>(row[x]);
-    } else {
-        std::memcpy(out, row + std::size_t{x} * 8u, 8u);
-    }
-    inspect_mask_readback_[kind]->Unmap(0u, nullptr);
-    return true;
-}
-#endif
 
 // The game's bloom on the scene target's single-sample colour (MSAA resolves it first); the composite lands on every sample of
 // a multisampled scene target.

@@ -99,13 +99,6 @@ ModShadersResult load_mod_shaders(const std::filesystem::path& file) {
     return ModShadersResult::Loaded;
 }
 
-#if defined(NEBULA_DEV)
-void add_mod_program(std::uint64_t id, unsigned variant, bool pixel, std::vector<std::uint8_t> bytes) {
-    static std::vector<std::vector<std::uint8_t>> kept;
-    kept.push_back(std::move(bytes));
-    registry().programs[key_of(id, variant, pixel)] = ProgramBytes{kept.back().data(), kept.back().size()};
-}
-#endif
 
 ProgramBytes mod_program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexcept {
     const Registry& r = registry();

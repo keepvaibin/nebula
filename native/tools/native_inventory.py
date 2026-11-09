@@ -6,8 +6,9 @@ other than the release-hygiene ones counts zero and no file is left in a replace
 Signals are counted per file from source text, comments excluded: calls into the console's SDK (GX, GD, OS, VI, DVD,
 NAND, WPAD/KPAD, AI/DSP/AR, cache and processor calls, SYSCONF, NWC24, HBM, RSO, RFL, THP, TPL, MTX/VEC), console
 byte order and addresses, the renderer's emulation of the console (command stream, register state, EFB/XFB, TEV,
-precision), the host's console shapes (guest memory, Wii Remote reports, the DSP program, the disc image) and test
-hooks, which must compile out of release builds."""
+precision), the host's console shapes (guest memory, Wii Remote reports, the DSP program, the disc image), test
+hooks, and test or trace options in product code (run options, NEBULA_DEV blocks, test-only game options), which tests
+reach from outside through the mod and host-extension interfaces instead."""
 import collections
 import os
 import re
@@ -86,6 +87,8 @@ SIGNALS = [
                     r"\baudio_dsp\b|\bai_dma\b", "DSP program model"),
     ("test_seam", r"\bnebula_switch::|tools/test_driver/", "call into the test driver, compiled out of a release"),
     ("env_read", r"L?\"(?:GALAXY|NEBULA)_[A-Z0-9_]+\"", "an environment name a release can still read"),
+    ("test_option", r"\brun_options\(\)|\brun_option_\w+\(|\bNEBULA_DEV\b|\bNEBULA_OPTION_TEST_\w+|\bNebulaTestAction\b",
+     "a test or trace option, or code only a test build has, in product code"),
     ("test_hook", r"\bGALAXY_(?:TEST|TRACE|EXPORT|DEBUG|DUMP)_[A-Z0-9_]+|\bNEBULA_TEST_[A-Z0-9_]+",
      "test/trace hook (release hygiene)"),
     ("decomp_residue", r"\bTARGET_PC\b|\b__MWERKS__\b|\basm\s*\{|\b__asm\b|\bnofralloc\b|\bfralloc\b",
@@ -269,7 +272,7 @@ for rel in files:
             if area == "importer" and key in ("dol", "disc"):
                 continue
             # A test file is not in a release.
-            if key == "env_read" and re.search(r"(_tests?\.|/tests/)", rel):
+            if key in ("env_read", "test_option") and re.search(r"(_tests?\.|/tests/)", rel):
                 continue
             n = len(rx.findall(body))
             if n:

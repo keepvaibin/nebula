@@ -242,9 +242,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     if (validation && has_layer("VK_LAYER_KHRONOS_validation")) {
         layers.push_back("VK_LAYER_KHRONOS_validation");
     }
-    // Object names and the validation messages only with the validation layer: a name is a driver call per object,
-    // and the Android emulator's driver crashes on them.
-    const bool debug_utils = !layers.empty() && has_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    // Object names, pass labels and the validation messages only with the validation layer or RenderDoc's capture layer
+    // present: a name is a driver call per object, and the Android emulator's driver crashes on them.
+    const bool debug_utils = (!layers.empty() || has_layer("VK_LAYER_RENDERDOC_Capture")) &&
+                             has_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     if (debug_utils) {
         instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }

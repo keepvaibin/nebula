@@ -146,7 +146,7 @@ int main() {
         const core::PipelineEntry missing{};
         (void)pipelines.get(0xFFFF0000u, missing, 0, 0);
         (void)pipelines.get((std::uint64_t{1} << 32u) | 0xFFFF0000u, missing, 0, 0);
-        passed &= expect(pipelines.failures() == 2, "full-width pipeline IDs and inspector IDs reach separate cache cells");
+        passed &= expect(pipelines.failures() == 2, "pipeline IDs past 32 bits reach separate cache cells");
         pipelines.shutdown();
     }
     if (device) {
