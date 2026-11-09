@@ -4362,6 +4362,22 @@ void RendererD3D12::trim_idle_effect_targets() {
         retire(layer_trans_);
         motion_target_map_ = FrameMap{};
     }
+    // The output scene target and the wide set are the live scene target while a swap holds them; between scenes they
+    // are idle targets of their own.
+    if (alt_scene_.color && !output_scene_active_ && !scene_hdr_ && frame_index_ > output_scene_used_frame_ + kIdleFrames) {
+        retired_targets_[frame_slot_].push_back(std::move(alt_scene_.color));
+        retired_targets_[frame_slot_].push_back(std::move(alt_scene_.depth));
+        alt_scene_.map = FrameMap{};
+    }
+    if (hdr_scene_scene_.color && !scene_hdr_ && !output_scene_active_ && !target_pass_active_ &&
+        frame_index_ > wide_scene_used_frame_ + kIdleFrames) {
+        retired_targets_[frame_slot_].push_back(std::move(hdr_scene_scene_.color));
+        if (hdr_scene_scene_.msaa.color) {
+            retired_targets_[frame_slot_].push_back(std::move(hdr_scene_scene_.msaa.color));
+        }
+        hdr_scene_scene_.depth.Reset();  // the scene target's own depth, held by the scene target too
+        hdr_scene_scene_.map = FrameMap{};
+    }
 }
 
 bool RendererD3D12::ensure_motion_target() {
@@ -4443,6 +4459,7 @@ bool RendererD3D12::ensure_motion_target() {
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
     command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
+    record_layer_begin();  // an empty layer until the first layer window, as that window starts
     motion_target_map_ = frame_;
     return true;
 }
@@ -4940,6 +4957,7 @@ FrameMap RendererD3D12::output_frame_for_window() const {
 }
 
 bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
+    output_scene_used_frame_ = frame_index_;
     if (alt_scene_.color && alt_scene_.map == map) {
         return true;
     }
@@ -5555,6 +5573,7 @@ bool RendererD3D12::begin_wide_scene(bool wanted, const SceneClearValues* initia
         return false;
     }
     SceneTargetSet& set = hdr_scene_scene_;
+    wide_scene_used_frame_ = frame_index_;
     if (!ensure_wide_set(set, hdr_scene_rtv_heap_)) {
         return false;
     }
