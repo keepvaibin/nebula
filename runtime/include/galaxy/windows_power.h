@@ -23,10 +23,29 @@ inline void name_current_thread(const wchar_t* name) noexcept {
                  static_cast<unsigned long>(GetCurrentThreadId()));
 }
 
-// Background work (the shape builder): the calling thread runs where the game's and the renderer's threads leave a
-// core idle.
+// Whether the machine runs on its battery, as the OS says (SYSTEM_POWER_STATUS: ACLineStatus 0 offline, 1 online, 255 not
+// known); false when it cannot say.
+[[nodiscard]] inline bool running_on_battery() noexcept {
+    SYSTEM_POWER_STATUS status{};
+    return GetSystemPowerStatus(&status) != FALSE && status.ACLineStatus == 0;
+}
+
+// The calling thread asks the OS for efficiency (EcoQoS: efficiency cores and lower clocks), or takes the request back.
+inline void set_current_thread_efficiency(bool efficient) noexcept {
+    THREAD_POWER_THROTTLING_STATE state{};
+    state.Version = THREAD_POWER_THROTTLING_CURRENT_VERSION;
+    state.ControlMask = THREAD_POWER_THROTTLING_EXECUTION_SPEED;
+    state.StateMask = efficient ? THREAD_POWER_THROTTLING_EXECUTION_SPEED : 0u;
+    (void)SetThreadInformation(GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
+}
+
+// Background work (the shape builder, loaders): the calling thread runs where the game's and the renderer's threads leave a
+// core idle, and on battery asks for efficiency too (the frame threads never do: the frame's time is what the battery buys).
 inline void lower_current_thread_priority() noexcept {
     (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
+    if (running_on_battery()) {
+        set_current_thread_efficiency(true);
+    }
 }
 
 // Request execution-speed QoS for the process and calling thread, and retain

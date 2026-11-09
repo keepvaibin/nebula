@@ -778,6 +778,11 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
             table.samplers_mip_lines = mip_lines;
             table.samplers_scene_bias = scene_mip_bias_;
         }
+    } else {
+        // The table stands as it was built: its textures are named again all the same (the budget evicts the unnamed ones).
+        for (std::uint32_t i = 0; i < count; ++i) {
+            texture_store_.touch(entry_of(i).texture);
+        }
     }
     textures = table.textures;
     samplers = table.samplers;

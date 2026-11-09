@@ -20,7 +20,7 @@ enum class ControllerLink : std::uint8_t { Unknown, Usb, Bluetooth, Wireless };
 
 struct ControllerInfo {
     ControlScheme scheme = ControlScheme::Xbox;
-    std::uint8_t slot = 0;  // XInput user index or HID worker slot
+    std::uint32_t slot = 0;  // XInput user index or HID worker slot
     ControllerLink link = ControllerLink::Unknown;
     const char* model = "";  // static storage
     const char* note = nullptr;  // static storage; shown after the name
@@ -31,15 +31,16 @@ struct ControllerInfo {
     ButtonIconModel icons = ButtonIconModel::Standard;
 };
 
-inline constexpr std::uint8_t kKeyboardSlot = 0xff;
+// The keyboard and the phone's screen are the two slots at the top of the 32-bit range; a controller's slot counts up from 0.
+inline constexpr std::uint32_t kKeyboardSlot = 0xFFFFFFFFu;
 // The controllers the host's sources can report at once: XInput's four user slots (XUSER_MAX_COUNT) and the HID worker's pads
-// (kMaxHidPads, set by the 64 handles one wait takes). A bound of the sources for the arrays that receive their list
-// (connected_controllers), not a cap of the roster: DeviceList grows to what it is given.
-inline constexpr std::size_t kMaxControllers = 4 + 30;
+// (kMaxHidPads, the size of the worker's tables). A bound of the sources for the arrays that receive their list
+// (connected_controllers), not of DeviceKey (any 32-bit slot) and not a cap of the roster: DeviceList grows to what it is given.
+inline constexpr std::size_t kMaxControllers = 4 + 256;
 
 struct DeviceKey {
     ControlScheme scheme = ControlScheme::Keyboard;
-    std::uint8_t slot = kKeyboardSlot;
+    std::uint32_t slot = kKeyboardSlot;
     friend constexpr bool operator==(DeviceKey, DeviceKey) noexcept = default;
 };
 
@@ -55,7 +56,7 @@ struct DeviceList {
 };
 
 // The phone's own screen: a device with no bindings, the keyboard's scheme with a slot of its own.
-inline constexpr std::uint8_t kPhoneSlot = 0xFEu;
+inline constexpr std::uint32_t kPhoneSlot = 0xFFFFFFFEu;
 [[nodiscard]] constexpr bool is_phone(DeviceKey key) noexcept {
     return key.scheme == ControlScheme::Keyboard && key.slot == kPhoneSlot;
 }

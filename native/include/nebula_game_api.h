@@ -225,6 +225,13 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_COUNT
 } NebulaShaderId;
 
+/* The shaders a NEBULA_DEV build adds after the last (tools/dev/compile_programs.py --dev): the inspector's picture of a
+   value, and the wide-table probe (GALAXY_TEST_WIDE_TABLES). A release build has neither program. */
+enum {
+    NEBULA_SHADER_INSPECT_SHOW = 44,
+    NEBULA_SHADER_WIDE_PROBE = 45
+};
+
 enum {
     NEBULA_BLEND_REPLACE = 0,  /* blend_op: the source replaces */
     NEBULA_BLEND_ADD = 1,      /* source * blend_src + destination * blend_dst */
@@ -379,6 +386,7 @@ enum {
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
+    NEBULA_OPTION_TEST_WIDE_TABLES,    /* tests (GALAXY_TEST_WIDE_TABLES): 1 draws the 24-map probe (NebulaWideProbe) */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

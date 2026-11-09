@@ -133,9 +133,11 @@ void TextureStore::shutdown() {
     }
     entries_.clear();
     retired_.clear();
+    evicting_bytes_ = 0u;
     kept_.clear();
     {
         const std::lock_guard guard(lock_);
+        rebuild_ids_.clear();
         queued_ = std::make_shared<Ops>();
         arena_chunk_.reset();
         free_chunks_.clear();
@@ -374,6 +376,42 @@ void TextureStore::queue_built_in(std::uint32_t id, const void* record_bytes) {
 }
 
 std::shared_ptr<TextureStore::Ops> TextureStore::take_ops() {
+    // Evicted textures a list named: staged again here, on the game's thread (the caller holds the device gate), from the
+    // memory the game keeps for them while the id lives.
+    std::vector<std::uint32_t> wanted;
+    {
+        const std::lock_guard guard(lock_);
+        wanted.swap(rebuild_ids_);
+    }
+    for (const std::uint32_t id : wanted) {
+        Source source;
+        const void* built_in = nullptr;
+        {
+            const std::lock_guard guard(lock_);
+            const auto found = sources_.find(id);
+            if (found == sources_.end()) {
+                continue;
+            }
+            source = found->second;
+            if (const auto painting = built_ins_.find(id); painting != built_ins_.end()) {
+                built_in = painting->second;
+            }
+        }
+        Op op;
+        op.kind = Op::Kind::Create;
+        op.id = id;
+        op.rebuild = true;
+        if (!stage_image(op, source.bytes, source.size, source.width, source.height, source.format)) {
+            continue;
+        }
+        {
+            const std::lock_guard guard(lock_);
+            queued_->list.push_back(std::move(op));
+        }
+        if (built_in != nullptr) {
+            queue_built_in(id, built_in);
+        }
+    }
     const std::lock_guard guard(lock_);
     if (queued_->list.empty()) {
         return nullptr;
@@ -391,8 +429,10 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
         pack_staging_.resize(frames_in_flight);
         movie_staging_.resize(frames_in_flight);
     }
+    ++frame_;
     // The renderer has waited for this slot's fence: what it retired and read is idle.
     for (Retired& retired : retired_[frame_slot]) {
+        evicting_bytes_ -= std::min(evicting_bytes_, retired.evicted_bytes);
         if (retired.view != ~0u) {
             backend_.release_view(retired.view);
             free_srv_indices_.push_back(retired.view);
@@ -440,7 +480,12 @@ void TextureStore::apply_ops(Ops& ops, std::vector<std::uint32_t>& freed) {
     release_held(freed);
     for (Op& op : ops.list) {
         switch (op.kind) {
-        case Op::Kind::Create: create_entry(op); break;
+        case Op::Kind::Create:
+            // A made-again texture whose id was freed or made again since is dropped.
+            if (!op.rebuild || (op.id < entries_.size() && entries_[op.id] != nullptr && entries_[op.id]->evicted)) {
+                create_entry(op);
+            }
+            break;
         case Op::Kind::Update: update_entry(op); break;
         case Op::Kind::Free:
         case Op::Kind::FreeTarget: held_frees_.push_back(op.id); break;
@@ -453,8 +498,8 @@ void TextureStore::apply_ops(Ops& ops, std::vector<std::uint32_t>& freed) {
 
 void TextureStore::apply_built_in(Op& op) {
     Entry* const entry = op.id < entries_.size() ? entries_[op.id].get() : nullptr;
-    if (entry == nullptr) {
-        return;
+    if (entry == nullptr || entry->evicted) {
+        return;  // an evicted texture takes the game's painting again with its rebuild (built_ins_)
     }
     if (entry->built_in.texture) {
         retire(std::move(entry->built_in.texture), ~0u);
@@ -488,6 +533,7 @@ void TextureStore::apply_built_in(Op& op) {
 void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     std::uint64_t allocation = 0u;
     entry.texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, allocation, op.staged.format, once);
+    entry.bytes = allocation;
     backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                            op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
     keep(op.staged.chunk);
@@ -508,6 +554,7 @@ void TextureStore::create_entry(Op& op) {
     auto entry = std::make_unique<Entry>();
     make_own(*entry, op, true);
     entry->current = entry->own;
+    entry->named = frame_;
     entry->name = op.name;
     if (op.name.named) {
         ++pack_hashed_;
@@ -519,11 +566,15 @@ void TextureStore::create_entry(Op& op) {
         }
     }
     look_up(op.id, *entry);
+    if (entries_[op.id] != nullptr && entries_[op.id]->evicted) {
+        ++rebuilds_;
+        ++revision_;  // the tables naming it read the new texture
+    }
     entries_[op.id] = std::move(entry);
 }
 
 void TextureStore::update_entry(Op& op) {
-    if (op.id >= entries_.size() || entries_[op.id] == nullptr) {
+    if (op.id >= entries_.size() || entries_[op.id] == nullptr || entries_[op.id]->evicted) {
         create_entry(op);
         return;
     }
@@ -676,7 +727,19 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
         }
     }
     if (id < entries_.size() && entries_[id] != nullptr) {
-        return entries_[id]->current;
+        Entry& entry = *entries_[id];
+        entry.named = frame_;
+        if (entry.evicted) [[unlikely]] {
+            // Given back for the budget: blank until the next list's first walk, which has it made again.
+            ++evicted_draws_;
+            if (entry.asked_at == ~std::uint64_t{0} || frame_ - entry.asked_at > 30u) {
+                entry.asked_at = frame_;
+                const std::lock_guard guard(lock_);
+                rebuild_ids_.push_back(id);
+            }
+            return {};
+        }
+        return entry.current;
     }
     // An image that never came: blank. One that went with its scene is blank too and has lost nothing.
     if (blank_images_.insert(id).second) {
@@ -686,7 +749,7 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
     return {};
 }
 
-void TextureStore::retire(gpu::TextureRef texture, std::uint32_t view) {
+void TextureStore::retire(gpu::TextureRef texture, std::uint32_t view, std::uint64_t evicted_bytes) {
     if (retired_.empty()) {
         if (view != ~0u) {
             backend_.release_view(view);
@@ -694,7 +757,94 @@ void TextureStore::retire(gpu::TextureRef texture, std::uint32_t view) {
         }
         return;
     }
-    retired_[frame_slot_].push_back(Retired{std::move(texture), view});
+    evicting_bytes_ += evicted_bytes;
+    retired_[frame_slot_].push_back(Retired{std::move(texture), view, evicted_bytes});
+}
+
+// Gives an entry's textures back to the device; it keeps its place (name, id) and draws blank until it is made again.
+void TextureStore::evict(Entry& entry) {
+    stop_showing(entry);
+    std::uint64_t bytes = entry.bytes;
+    if (entry.built_in.texture) {
+        bytes += entry.built_in.bytes;
+        retire(std::move(entry.built_in.texture), ~0u);
+        entry.built_in = {};
+    }
+    retire(std::move(entry.texture), entry.own.srv_index, bytes);
+    entry.own = TextureHandle{};
+    entry.own.srv_index = ~0u;
+    entry.current = entry.own;
+    entry.bytes = 0u;
+    entry.evicted = true;
+    entry.asked_at = ~std::uint64_t{0};
+    ++evictions_;
+    evicted_bytes_total_ += bytes;
+    ++revision_;
+}
+
+void TextureStore::enforce_budget(std::uint64_t usage, std::uint64_t budget) {
+    // Not while a dump wants every image, and not before the frame slots exist.
+    if (budget == 0u || retired_.empty() || packs_.dumping()) {
+        return;
+    }
+    // What earlier evictions still hold will be gone once their frames finish: it counts as freed already.
+    const std::uint64_t pending = std::min(evicting_bytes_, usage);
+    if (usage - pending <= budget) {
+        return;
+    }
+    // Down to 95% of the budget, so the next frame is not over it again.
+    std::uint64_t need = std::min(usage - pending - (budget - budget / 20u), kEvictBytesPerFrame);
+    // Not named by this frame's walks or by any frame in flight (a table writes its handles in the walk that names it).
+    const std::uint64_t idle = static_cast<std::uint64_t>(retired_.size()) + 2u;
+    struct Candidate {
+        std::uint32_t id;
+        std::uint64_t named, bytes;
+    };
+    std::vector<Candidate> found;
+    for (std::uint32_t id = 0; id < entries_.size(); ++id) {
+        const Entry* const entry = entries_[id].get();
+        if (entry != nullptr && !entry->evicted && entry->bytes != 0u && frame_ - entry->named > idle) {
+            found.push_back(Candidate{id, entry->named, entry->bytes});
+        }
+    }
+    if (found.empty()) {
+        return;
+    }
+    {
+        // Only an id whose image the game still keeps can be made again.
+        const std::lock_guard guard(lock_);
+        std::erase_if(found, [this](const Candidate& candidate) { return sources_.find(candidate.id) == sources_.end(); });
+    }
+    std::sort(found.begin(), found.end(), [](const Candidate& a, const Candidate& b) {
+        return a.named != b.named ? a.named < b.named : a.bytes > b.bytes;
+    });
+    for (const Candidate& candidate : found) {
+        if (need == 0u) {
+            break;
+        }
+        evict(*entries_[candidate.id]);
+        need -= std::min(need, candidate.bytes);
+    }
+}
+
+TextureStore::BudgetStats TextureStore::budget_stats() const {
+    BudgetStats stats;
+    for (const std::unique_ptr<Entry>& entry : entries_) {
+        if (entry == nullptr) {
+            continue;
+        }
+        if (entry->evicted) {
+            ++stats.evicted;
+        } else {
+            ++stats.resident;
+            stats.resident_bytes += entry->bytes;
+        }
+    }
+    stats.evictions = evictions_;
+    stats.evicted_bytes = evicted_bytes_total_;
+    stats.rebuilds = rebuilds_;
+    stats.blank_draws = evicted_draws_;
+    return stats;
 }
 
 std::uint32_t TextureStore::allocate_srv_index() {
@@ -728,7 +878,7 @@ void TextureStore::apply_texture_packs() {
         // New index, packs turned off, or dumping toggled: every texture is looked up again.
         pack_waiters_.clear();
         for (std::uint32_t id = 0; id < entries_.size(); ++id) {
-            if (entries_[id] != nullptr) {
+            if (entries_[id] != nullptr && !entries_[id]->evicted) {
                 look_up(id, *entries_[id]);
             }
         }

@@ -9,6 +9,8 @@
 #include "galaxy/render/render_core.h"
 #include "galaxy/run_options.h"
 
+#include <nebula_game_api.h>
+
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -53,7 +55,7 @@ std::FILE* open_for_writing(const char* path) {
 namespace {
 
 constexpr std::uint64_t kShowPipelines = std::uint64_t{1} << 32u;
-constexpr std::uint64_t kShowProgram = NEBULA_PROGRAM_SITE | (std::uint64_t{42u} << 1u);
+constexpr std::uint64_t kShowProgram = NEBULA_PROGRAM_SITE | (std::uint64_t{NEBULA_SHADER_INSPECT_SHOW} << 1u);
 constexpr std::uint64_t kStageProgram = 1ull << 62u;
 
 std::string text(const char* value) { return value != nullptr ? std::string(value) : std::string{}; }

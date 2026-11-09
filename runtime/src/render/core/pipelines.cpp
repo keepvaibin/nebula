@@ -2,6 +2,9 @@
 #include "render/core/pipelines.h"
 
 #include "galaxy/cpu_count.h"
+#if defined(_WIN32)
+#include "galaxy/windows_power.h"
+#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -20,9 +23,11 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     failures_.store(0u, std::memory_order_relaxed);
     misses_ = 0u;
     reported_.store(false, std::memory_order_relaxed);
-    // The title waits for the list once; every core but the game's prepares it. Idle workers cost nothing.
-    const unsigned hardware = std::max(2u, logical_cores());
-    const unsigned count = hardware - 1u;
+    // One worker for every logical core, at the lowest priority (worker()): the list is prepared by whatever the game and render
+    // threads leave idle, and no frame waits for it. A draw whose pipeline is not made yet makes that one itself (create_now);
+    // idle workers cost nothing.
+    const unsigned count = std::max(1u, logical_cores());
+    workers_ = count;
     for (unsigned i = 0; i < count; ++i) {
         threads_.emplace_back([this] { worker(); });
     }
@@ -161,6 +166,10 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
 }
 
 void Pipelines::worker() {
+#if defined(_WIN32)
+    // Lowest priority; started on battery, it also asks for efficiency (windows_power.h).
+    galaxy::host::lower_current_thread_priority();
+#endif
     for (;;) {
         Job job;
         {
@@ -187,14 +196,22 @@ void Pipelines::worker() {
     }
 }
 
-// Every queued pipeline is made: the driver's cache goes to disk now, off the render thread, so the next boot loads it
-// whatever way this one ends. Pipelines a draw made itself are written with the next list.
+// The cache files (the driver's pipeline library or cache, both back ends) are written twice at most in a run, never on the
+// render thread and never in the middle of a frame's work: when the first queue drains (warm-up done, here, on the worker that
+// finished it), so the next boot loads it whatever way this one ends, and at exit (destroy_all). Each write is whole or absent:
+// a temporary file renamed over (replace_file), one writer at a time. Pipelines made later in the run, by what a scene change
+// registers or by a draw, join the file at exit.
 void Pipelines::drained() noexcept {
+    if (reported_.exchange(true, std::memory_order_relaxed)) {
+        return;
+    }
     const std::size_t written = unsaved_.exchange(false, std::memory_order_acq_rel) ? save_cache() : 0u;
-    if (!reported_.exchange(true, std::memory_order_relaxed)) {
+    {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started_).count();
-        std::fprintf(stderr, "[pipelines] %llu prepared at %lld ms, cache %zu bytes written\n",
-                     static_cast<unsigned long long>(created_.load(std::memory_order_relaxed)), static_cast<long long>(ms), written);
+        std::fprintf(stderr, "[pipelines] %llu prepared by %u workers at %lld ms (%llu made by draws first, %llu refused), cache %zu bytes written\n",
+                     static_cast<unsigned long long>(created_.load(std::memory_order_relaxed)), workers_, static_cast<long long>(ms),
+                     static_cast<unsigned long long>(misses_.load(std::memory_order_relaxed)), static_cast<unsigned long long>(failures_.load(std::memory_order_relaxed)),
+                     written);
     }
 }
 

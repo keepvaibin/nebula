@@ -277,6 +277,10 @@ void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record
     }
 }
 
+bool RendererVk::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+    return vk::Context::get().device_memory_budget(usage, budget);
+}
+
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
 // rule): scene target colour (4 bytes per pixel) and depth (4 for D24S8; D32F with stencil counted at 8, as drivers pad
 // it) and, at most, the display picture pair plus one full-picture copy (12 bytes per pixel of the picture).

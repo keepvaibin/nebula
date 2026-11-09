@@ -195,15 +195,23 @@ float fog_rev_exp2(float f) { const float g = 1.0 - f; return exp2(-8.0 * g * g)
 #define PER_SAMPLE
 #endif
 
+// NATIVE_DEPTH_OUT (wide_probe.hlsl, a dev build's probe): the material also writes the pixel's depth, g_native_depth.
+#if NATIVE_DEPTH_OUT
+static float g_native_depth = 0.0;
+#define NATIVE_OUT_DEPTH float depth : SV_Depth;
+#else
+#define NATIVE_OUT_DEPTH
+#endif
+
 #if NATIVE_LAYER
 struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; float4 layer : SV_Target2;
-                   float4 trans : SV_Target3; };
+                   float4 trans : SV_Target3; NATIVE_OUT_DEPTH };
 #elif NATIVE_REACTIVE
-struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; };
+struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; NATIVE_OUT_DEPTH };
 #elif NATIVE_MOTION
-struct NativeOut { float4 color : SV_Target0; float2 motion : SV_Target1; };
+struct NativeOut { float4 color : SV_Target0; float2 motion : SV_Target1; NATIVE_OUT_DEPTH };
 #else
-struct NativeOut { float4 color : SV_Target0; };
+struct NativeOut { float4 color : SV_Target0; NATIVE_OUT_DEPTH };
 #endif
 
 // The colour as it is; the target rounds it once.
@@ -219,6 +227,9 @@ NativeOut native_out_of(float4 c) {
 #endif
 #if NATIVE_MOTION
     o.motion = float2(0.0, 0.0);
+#endif
+#if NATIVE_DEPTH_OUT
+    o.depth = g_native_depth;
 #endif
     return o;
 }

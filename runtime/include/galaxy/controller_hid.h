@@ -21,10 +21,11 @@
 
 namespace galaxy::host {
 
-// The HID worker's pads: it waits on 3 handles and 2 for each pad in one WaitForMultipleObjects, which takes at most 64
-// (MAXIMUM_WAIT_OBJECTS). That API limit, not a budget, sets the count; more pads would need a second waiting thread.
-inline constexpr std::size_t kMaxHidPads = (64u - 3u) / 2u;
-static_assert(3u + 2u * kMaxHidPads <= 64u, "one WaitForMultipleObjects takes 64 handles");
+// The HID worker's pads. The worker waits on four handles whatever the number of pads: each pad's read and write completions
+// reach it through the thread pool (controller_hid.cpp IoWait), so the Windows wait limit of 64 handles does not set the count.
+// A pad's slot is the u32 of input::DeviceKey and ControllerInfo (the top two values are the phone's screen and the keyboard);
+// kMaxHidPads is the size of this worker's tables (published pads, rumble handles), not a limit of the key.
+inline constexpr std::size_t kMaxHidPads = 256;
 
 struct HidPadState {
     bool connected = false;
@@ -58,7 +59,7 @@ struct HidPadState {
     std::array<float, 3> gravity{0.0f, 1.0f, 0.0f};
     bool gravity_valid = false;
     // Worker slot of this controller.
-    std::uint8_t slot = 0;
+    std::uint32_t slot = 0;
 };
 
 // Vibration: the virtual Wii Remote's motor bit (rumble.h) mirrored to the
@@ -71,7 +72,7 @@ struct HidPadState {
 struct RumbleTarget {
     enum class Kind : std::uint8_t { None, XInput, Hid };
     Kind kind = Kind::None;
-    std::uint8_t slot = 0;  // XInput user index or HID worker slot
+    std::uint32_t slot = 0;  // XInput user index or HID worker slot
     input::ControlScheme scheme = input::ControlScheme::Xbox;  // Hid: the controller family
     friend bool operator==(RumbleTarget, RumbleTarget) = default;
 };
@@ -90,9 +91,9 @@ void stop_all_rumble() noexcept;
 
 // Starts the worker on first use; later calls are free.
 void ensure_controller_hid_started() noexcept;
-// Copies every connected pad into `out`; `consume_gyro` clears the gyro and
+// Replaces `out` with every connected pad; `consume_gyro` clears the gyro and
 // touch accumulators. Returns the number written. Never blocks on device I/O.
-std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcept;
+std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noexcept;
 // Steady-clock microseconds, the time base of shake_until_us.
 [[nodiscard]] std::uint64_t controller_hid_now_us() noexcept;
 

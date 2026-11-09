@@ -787,7 +787,7 @@ void test_pad_sample() {
            "the pointer stick has its own dead zone");
 }
 
-ControllerInfo controller(ControlScheme scheme, std::uint8_t slot, ControllerLink link, const char* model) {
+ControllerInfo controller(ControlScheme scheme, std::uint32_t slot, ControllerLink link, const char* model) {
     ControllerInfo info;
     info.scheme = scheme;
     info.slot = slot;
@@ -858,11 +858,19 @@ void test_device_list() {
 
     std::array<ControllerInfo, 16> many{};
     for (std::size_t i = 0; i < many.size(); ++i) {
-        many[i] = controller(ControlScheme::SwitchPro, static_cast<std::uint8_t>(i), ControllerLink::Usb, "Switch Pro Controller");
+        many[i] = controller(ControlScheme::SwitchPro, static_cast<std::uint32_t>(i), ControllerLink::Usb, "Switch Pro Controller");
     }
     build_device_list(many, std::nullopt, list);
     expect(list.count == many.size() + 1, "a long list is listed whole");
     expect(label_of(list, many.size()) == "Switch Pro Controller 16 (USB)", "every controller of a model is numbered");
+
+    // Slots past a byte keep their identity, and stay clear of the keyboard's and the phone's.
+    const std::array<ControllerInfo, 2> wide{controller(ControlScheme::PlayStation, 255, ControllerLink::Usb, "DualShock 4"),
+                                             controller(ControlScheme::PlayStation, 300, ControllerLink::Usb, "DualShock 4")};
+    build_device_list(wide, DeviceKey{ControlScheme::PlayStation, 300}, list);
+    expect(list.count == 3 && list.entries[1].key.slot == 255u && list.entries[2].key.slot == 300u &&
+               list.entries[2].active && !is_phone(list.entries[2].key),
+           "a slot is a 32-bit number");
 
     ControllerInfo undriven = controller(ControlScheme::SwitchPro2, 0, ControllerLink::Usb, "Switch 2 Pro Controller");
     undriven.note = "needs WinUSB";

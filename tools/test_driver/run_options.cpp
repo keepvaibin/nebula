@@ -101,6 +101,7 @@ RunOptions read_options() {
     o.test_settings_keys = nebula_switch::test_settings_keys();
     o.test_motion_dump = nebula_switch::test_motion_dump();
     o.test_settings_open = nebula_switch::test_settings_open();
+    o.test_vram_budget_mb = nebula_switch::test_vram_budget_mb();
     o.test_wide_tables = nebula_switch::test_wide_tables();
     o.test_window_sizes = nebula_switch::test_window_sizes();
     o.texture_dump_dir = nebula_switch::texture_dump_dir();
@@ -116,7 +117,6 @@ RunOptions read_options() {
     o.vk_simulate_driver = nebula_switch::vk_simulate_driver();
     o.trace_interp_slots = nebula_switch::trace_interp_slots();
     o.vk_test_no_feature = nebula_switch::vk_test_no_feature();
-    o.d3d12_test_no_feature = nebula_switch::d3d12_test_no_feature();
     o.vk_test_refuse = nebula_switch::vk_test_refuse();
     o.vulkan_validation = nebula_switch::vulkan_validation();
     o.xinput_require_focus = nebula_switch::xinput_require_focus();

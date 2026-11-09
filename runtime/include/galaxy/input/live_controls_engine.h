@@ -26,7 +26,7 @@ struct LivePad {
     bool gravity_valid = false;
     galaxy::input::tilt::Vec3 gravity{0.0f, 1.0f, 0.0f};
     // XInput user index or Switch worker slot (with the scheme: identity).
-    std::uint8_t device_slot = 0xFF;
+    std::uint32_t device_slot = galaxy::input::kKeyboardSlot;
 };
 
 
@@ -91,15 +91,16 @@ class LiveControlsEngine {
 public:
     LiveControlsResult sample(const LiveControlsFrame& frame, LiveControlsHost& host);
 private:
-    static constexpr std::uint32_t kDrivingNone = 0xFFFFFFFFu;
-    static constexpr std::uint32_t kDrivingKeyboard = 0xFFFFFFFEu;
+    // A pad's key is its scheme in the high 32 bits and its slot in the low 32.
+    static constexpr std::uint64_t kDrivingNone = ~std::uint64_t{0};
+    static constexpr std::uint64_t kDrivingKeyboard = ~std::uint64_t{0} - 1u;
     struct PadHistory {
         galaxy::input::DeviceKey device;
         std::uint32_t pressed = 0;
         bool seen = false;
     };
     std::vector<PadHistory> s_pad_history;
-    std::uint32_t s_driving_pad = kDrivingNone;
+    std::uint64_t s_driving_pad = kDrivingNone;
     galaxy::input::JumpBackLatch s_jump_back{};
     float s_pointer_x = 0.0f;
     float s_pointer_y = 0.0f;

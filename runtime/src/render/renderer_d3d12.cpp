@@ -1532,6 +1532,31 @@ bool RendererD3D12::scene_fits_memory(const FrameMap& map) const {
            0.9 * static_cast<double>(info.Budget);
 }
 
+void RendererD3D12::probe_occlusion() {
+    if (!swap_chain_ || !occluded_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    // A test present draws nothing and moves no buffer: S_OK once the window shows, DXGI_STATUS_OCCLUDED while it does not.
+    const HRESULT hr = swap_chain_->Present(0u, DXGI_PRESENT_TEST);
+    if (hr != DXGI_STATUS_OCCLUDED) {
+        occluded_.store(false, std::memory_order_relaxed);
+    }
+}
+
+bool RendererD3D12::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+    usage = budget = 0u;
+    if (!adapter3_) {
+        return false;
+    }
+    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+    if (FAILED(adapter3_->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
+        return false;
+    }
+    usage = info.CurrentUsage;
+    budget = info.Budget;
+    return true;
+}
+
 bool RendererD3D12::create_clear_pipeline() {
     D3D12_ROOT_PARAMETER param{};
     param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -2540,6 +2565,7 @@ void RendererD3D12::shutdown() {
     retired_heaps_.clear();
     mirrored_backend_ = nullptr;
     mirrored_store_ = nullptr;
+    release_latency_wait();
     swap_chain_.Reset(); command_list_.Reset();
     for (auto& a : allocators_) a.Reset();
     vertex_ring_.reset();
@@ -2626,7 +2652,16 @@ bool RendererD3D12::create_swap_chain(bool fsr) {
     ComPtr<IDXGISwapChain2> swap_chain2;
     d3d_check(swap_chain_.As(&swap_chain2), "SwapChain2 As");
     d3d_check(swap_chain2->SetMaximumFrameLatency(1u), "SetMaximumFrameLatency");
+    release_latency_wait();
+    latency_wait_ = swap_chain2->GetFrameLatencyWaitableObject();
     return true;
+}
+
+void RendererD3D12::release_latency_wait() noexcept {
+    if (latency_wait_ != nullptr) {
+        CloseHandle(latency_wait_);
+        latency_wait_ = nullptr;
+    }
 }
 
 // The swap chain made again when frame generation changes it (RenderConfig::frame_generation, applied between frames).
@@ -2643,6 +2678,7 @@ void RendererD3D12::recreate_swap_chain(bool fsr) {
     for (auto& buffer : backbuffers_) {
         buffer.Reset();
     }
+    release_latency_wait();
     swap_chain_.Reset();
     create_swap_chain(fsr);
     const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -3196,6 +3232,13 @@ void RendererD3D12::present_to_swap_chain() {
         fg_hudless_ready_ = false;
     }
     streamline::marker(streamline::Marker::kPresentStart);
+    // The display's own signal that a frame may be queued, awaited asleep (never a poll) and bounded, so a display that stopped
+    // never holds the render thread. Not when presenting at once with no wait for the display (vsync off), and not on a chain
+    // that frame generation replaced.
+    if (latency_wait_ != nullptr && vsync != 0u && !generating && !fsr_swap_chain_ &&
+        WaitForSingleObjectEx(latency_wait_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
+        std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
+    }
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
     if (generating && collect_present_telemetry) {
         // What frame generation sends to the display per frame here.
@@ -3212,6 +3255,7 @@ void RendererD3D12::present_to_swap_chain() {
     }
     streamline::marker(streamline::Marker::kPresentEnd);
     streamline_frame_open_ = false;
+    occluded_.store(present_hr == DXGI_STATUS_OCCLUDED, std::memory_order_relaxed);
     if (timeline_present) {
         galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
                              timeline_present_ordinal);
