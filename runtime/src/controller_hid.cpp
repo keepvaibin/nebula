@@ -371,20 +371,17 @@ DWORD CALLBACK on_device_change(HCMNOTIFICATION, PVOID context, CM_NOTIFY_ACTION
     return ERROR_SUCCESS;
 }
 
-// A controller's product name for ControllerInfo::model (static storage):
-// the first names seen are kept for the process, then a generic one.
+// A controller's product name for ControllerInfo::model: each distinct name is kept for the process (a deque's
+// elements stay where they are), so the pointer outlives the device.
 const char* intern_model_name(const char* name) noexcept {
     static std::mutex mutex;
-    static std::array<std::array<char, 40>, 32> names{};
-    static std::size_t count = 0;
+    static std::deque<std::string> names;
     const std::lock_guard<std::mutex> lock(mutex);
-    for (std::size_t i = 0; i < count; ++i) {
-        if (std::strcmp(names[i].data(), name) == 0) return names[i].data();
+    for (const std::string& known : names) {
+        if (known == name) return known.c_str();
     }
-    if (count == names.size()) return "Game controller";
-    std::array<char, 40>& entry = names[count++];
-    strncpy_s(entry.data(), entry.size(), name, _TRUNCATE);
-    return entry.data();
+    names.emplace_back(name);
+    return names.back().c_str();
 }
 
 // The HID product string in printable ASCII (the overlay's character set),

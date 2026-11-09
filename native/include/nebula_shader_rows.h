@@ -22,7 +22,7 @@ static const unsigned char nebula_shader_rows[] = {
     8, /* OCEAN_RING_BLOOM */
     19, /* WATER_ROAD */
     9, /* OCEAN_RING_PIPE_OUTSIDE */
-    2, /* COLOR_TEX_ALPHA */
+    5, /* COLOR_TEX_ALPHA */
     1, /* VERTEX_COLOR */
     1, /* DD_TEXTURE */
     2, /* DD_TEXTURE_COLOR */
