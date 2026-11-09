@@ -14,6 +14,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--gpu-validation 1\|2` | The graphics API's validation layer: 1 the Direct3D 12 debug layer or the Khronos validation layer (when installed), 2 also Direct3D 12's GPU-based validation. Slow. |
 | `--console-log 1` | The log stays on the console instead of `logs/latest.log` in the settings folder (a start with its output in a pipe or a file keeps it there anyway). |
 | `--diagnostics <what>[,<what>]` | What this run records, into the log and `diagnostics` in the data folder (DIAGNOSTICS.md). `1` is the launcher's recording: the frame timeline, the frame and pointer monitors, present statistics and GPU time by pass. |
+| `--dump-tunables <file>` | Every tuning number a mod can set (luma.json `tunables`), one `<key>\t<kind>\t<game's number>` line each, written there as the game module starts. docs/modding/TUNABLES.md is the same list from the source. |
 | `--timeline <file>` | Where the recorded timeline goes; default `diagnostics/timeline-<process id>.bin` in the data folder. |
 | `--seconds <n>` | End the game after n seconds. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |

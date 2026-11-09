@@ -142,6 +142,9 @@ struct ModRows {
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*));
+// Every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each (a list's places as <key>[i]),
+// written to `list_file` (--dump-tunables). False when the game module has no list or the file can't be written.
+bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file);
 // The plugin an address is in: its mod's id, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;
 
