@@ -84,71 +84,6 @@ namespace Nebula.Setup
         }
     }
 
-    /// <summary>
-    /// GameData.bin across versions: one of content format 1 reads only the big-endian version 2 save; later ones read
-    /// it and write version 3, keeping the old file once as GameData.bin.v2 (runtime save_files.cpp). Going back, the
-    /// native save waits as GameData.bin.v3; coming forward it returns, unless the older version saved since.
-    /// </summary>
-    internal static class SaveRollback
-    {
-        private const string SaveName = "GameData.bin";
-
-        public static void To(long contentFormat, string saves)
-        {
-            if (!Directory.Exists(saves)) return;
-            var folders = new List<string>(Directory.GetDirectories(saves, "*", SearchOption.AllDirectories));
-            folders.Add(saves);
-            foreach (var folder in folders)
-            {
-                string save = Path.Combine(folder, SaveName);
-                if (contentFormat == InstallEngine.CookableContentFormatVersion) ToOld(save);
-                else ToNew(save);
-            }
-        }
-
-        private static void ToOld(string save)
-        {
-            if (!File.Exists(save) || !IsNative(save)) return;
-            CopyAtomically(save, save + ".v3");
-            if (File.Exists(save + ".v2")) CopyAtomically(save + ".v2", save);
-            else File.Delete(save);
-        }
-
-        private static void ToNew(string save)
-        {
-            string v2 = save + ".v2", v3 = save + ".v3";
-            if (!File.Exists(v3) || (File.Exists(save) && IsNative(save))) return;
-            if (!File.Exists(save) || (File.Exists(v2) && Same(save, v2)))
-            {
-                CopyAtomically(v3, save);
-                File.Delete(v3);
-            }
-            else if (File.Exists(v2)) File.Delete(v2);  // the next native save keeps the newer old one
-        }
-
-        private static bool IsNative(string save)
-        {
-            using (var file = new FileStream(save, FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                var header = new byte[8];
-                return file.Read(header, 0, 8) == 8 && header[4] == 3 && header[5] == 0 && header[6] == 0 && header[7] == 0;
-            }
-        }
-
-        private static bool Same(string first, string second)
-        {
-            return FileUtil.Sha256File(first) == FileUtil.Sha256File(second);
-        }
-
-        private static void CopyAtomically(string source, string destination)
-        {
-            string temp = destination + ".tmp-" + Guid.NewGuid().ToString("N");
-            File.Copy(source, temp);
-            if (File.Exists(destination)) File.Replace(temp, destination, null, true);
-            else File.Move(temp, destination);
-        }
-    }
-
     /// <summary>Start Menu shortcuts, the Add/Remove Programs entry and uninstall.</summary>
     internal static class Integration
     {
@@ -225,7 +160,7 @@ namespace Nebula.Setup
         }
 
         /// <summary>
-        /// Switch back to the retained previous version, with the game files it reads and, for a format-1 one, its save.
+        /// Switch back to the retained previous version, with the game files it reads. The saves stay as they are: each version reads its own file.
         /// A recompiled 1.x version is never restored: an update removes it and its compiler, so normally none is retained.
         /// A refusal changes nothing.
         /// </summary>
@@ -246,17 +181,11 @@ namespace Nebula.Setup
             if (swap) SwapContent(layout, format, active);
             try
             {
-                if (swap) SaveRollback.To(format, NebulaPaths.Saves);
                 Json.Save(layout.Current, new Dictionary<string, object> { { "version", previous }, { "previous", current.Version } });
             }
             catch (Exception)
             {
-                if (swap)
-                {
-                    try { SaveRollback.To(active, NebulaPaths.Saves); }
-                    catch (Exception) { }  // its copies stay beside the save
-                    SwapContent(layout, active, format);
-                }
+                if (swap) SwapContent(layout, active, format);
                 throw;
             }
             Register(layout, previous, false);

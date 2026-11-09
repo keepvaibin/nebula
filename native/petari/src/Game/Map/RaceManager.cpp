@@ -319,7 +319,7 @@ void RaceManager::exeRace() {
         mLayout->playRank(getRank(mPlayerRacer));
     }
 
-    for (s32 idx = mRank; idx < mRacerNum; idx++) {
+    for (u32 idx = mRank; idx < mRacerNum; idx++) {
         AbstractRacer* racer = mRacer[idx];
         if (racer->updateRacer(this)) {
             std::swap(mRacer[idx], mRacer[mRank++]);

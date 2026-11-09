@@ -16,6 +16,16 @@ bool is_plain_name(std::string_view name) noexcept {
     return !name.empty() && name != "." && name != ".." && name.find_first_of("/\\:") == std::string_view::npos;
 }
 
+SaveFolders save_folders(std::string_view code) {
+    std::string hex;
+    for (const char c : code) {
+        const unsigned byte = static_cast<unsigned char>(c);
+        hex.push_back("0123456789abcdef"[byte >> 4u]);
+        hex.push_back("0123456789abcdef"[byte & 15u]);
+    }
+    return {"/" + std::string(code), "/title/00010000/" + hex + "/data"};
+}
+
 Result read(const std::filesystem::path& folder, std::string_view name, void* buffer, std::uint32_t capacity,
             std::uint32_t* length) noexcept {
     try {

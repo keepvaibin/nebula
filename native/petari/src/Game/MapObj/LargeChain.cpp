@@ -79,13 +79,13 @@ void LargeChain::exeBreak() {
 
     if (step == 0) {
         mBottomFixParts->breakChainParts();
-    } else if (step == mChainCount - 1) {
+    } else if (static_cast< u32 >(step) == mChainCount - 1) {
         mTopFixParts->breakChainParts();
     }
 
     mChainArray[step].breakChainParts();
 
-    if (step == mChainCount - 1) {
+    if (static_cast< u32 >(step) == mChainCount - 1) {
         kill();
     }
 }

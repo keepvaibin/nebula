@@ -324,7 +324,7 @@ void WireGravityCreator::settingFromPlacementOtherParam(const TableIter& rIter) 
     mRailRider->setCoord(0.0f);
     mRailRider->setSpeed(railInterval);
 
-    for (s32 i = 0; i < numPoints - 1; i++) {
+    for (u32 i = 0; i < numPoints - 1; i++) {
         mGravityInstance->addPoint(mRailRider->mCurPos);
         mRailRider->move();
     }

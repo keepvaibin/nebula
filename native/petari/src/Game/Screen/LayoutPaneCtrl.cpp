@@ -9,19 +9,19 @@ LayoutPaneCtrl::LayoutPaneCtrl(LayoutManager* pHost, const char* pPaneName, u32 
     LayoutManager* pManager = mHost;
     mPane = pPaneName == nullptr ? pManager->mLayout->mpRootPane : pManager->mLayout->mpRootPane->FindPaneByName(pPaneName, true);
 
-    for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {
+    for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i] = new LayoutAnmPlayer(pHost);
     }
 }
 
 void LayoutPaneCtrl::movement() {
-    for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {
+    for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i]->movement();
     }
 }
 
 void LayoutPaneCtrl::calcAnim() {
-    for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {
+    for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i]->reflectFrame();
     }
 }

@@ -406,7 +406,7 @@ void MiiSelect::refresh() {
 }
 
 void MiiSelect::getIconID(FileSelectIconID* pIconID, s32 param2) const {
-    if (param2 < mFellowIconNum) {
+    if (static_cast< u32 >(param2) < mFellowIconNum) {
         s32 v = 0;
 
         for (int i = 0; i < mFellowEnabled->size(); i++) {

@@ -81,7 +81,7 @@ BaseMatrixFollowTargetHolder::BaseMatrixFollowTargetHolder(const char* pName, s3
 }
 
 void BaseMatrixFollowTargetHolder::initAfterPlacement() {
-    for (u32 i = 0; i < mFollowers.size(); i++) {
+    for (s32 i = 0; i < mFollowers.size(); i++) {
         BaseMatrixFollower* pFollower = mFollowers[i];
         BaseMatrixFollowTarget* pTarget = findFollowTarget(pFollower);
         if (pTarget->mActor) {
@@ -91,7 +91,7 @@ void BaseMatrixFollowTargetHolder::initAfterPlacement() {
 }
 
 void BaseMatrixFollowTargetHolder::movement() {
-    for (u32 i = 0; i < mFollowers.size(); i++) {
+    for (s32 i = 0; i < mFollowers.size(); i++) {
         if (mFollowers[i]->isEnableFollow()) {
             mFollowers[i]->update();
         }
@@ -126,7 +126,7 @@ BaseMatrixFollowTarget* BaseMatrixFollowTargetHolder::findFollowTarget(const Pla
         return nullptr;
     }
 
-    for (u32 i = 0; i < mTargets.size(); i++) {
+    for (s32 i = 0; i < mTargets.size(); i++) {
         if (*mTargets[i]->mLinkInfo == *pLinkInfo) {
             return mTargets[i];
         }

@@ -58,8 +58,8 @@ namespace {
         s32 mWidth;
         s32 mHeight;
         f32 mScale;
-        s32 mBandTop;
-        s32 mBandRows;
+        s32 mBandTop = 0;
+        s32 mBandRows = 0;
 
         s32 top() const { return mBandRows != 0 ? mBandTop : 0; }
         s32 bottom() const { return mBandRows != 0 ? mBandTop + mBandRows : mHeight; }
@@ -1301,7 +1301,7 @@ namespace {
         u8 mGlyph;
         u8 mPlace;
         const char* mName;
-        u8 mModel;
+        u8 mModel = 0;
     };
     const AtlasIcon cAtlas[] = {
         {NEBULA_ICON_FACE, 0, "face-south"},          {NEBULA_ICON_FACE, 1, "face-east"},       {NEBULA_ICON_FACE, 2, "face-west"},
@@ -1590,6 +1590,7 @@ namespace {
         s32 mRow;
     };
     HdPainting sHd = {nullptr, nullptr, -1, 0, 0};
+    bool sHdSkippedLogged = false;  // the sheets are too large to repaint at eight times: said once
 
     void forgetHdSheet(s32 sheet) {
         if (sheet < sHdSheetNum) {
@@ -1653,6 +1654,11 @@ namespace {
         const s32 width = sFont.mSheetWidth * cHdScale;
         const s32 height = sFont.mSheetHeight * cHdScale;
         if (width > cHdSheetMax || height > cHdSheetMax) {
+            if (!sHdSkippedLogged) {
+                sHdSkippedLogged = true;
+                nebula_log("NebulaIcons: the picture font's sheets are %d x %d, too large to repaint at eight times; the icons stay at the game's size\n",
+                           static_cast< int >(sFont.mSheetWidth), static_cast< int >(sFont.mSheetHeight));
+            }
             return false;
         }
         if (sHd.mSheet < 0) {

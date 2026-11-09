@@ -7,19 +7,19 @@ LayoutGroupCtrl::LayoutGroupCtrl(LayoutManager* pManager, const char* pName, u32
     : mManager(pManager), mGroup(), mAnmPlayerArray(animLayerCount) {
     mGroup = pManager->getGroup(pName);
 
-    for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {
+    for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i] = new LayoutAnmPlayer(pManager);
     }
 }
 
 void LayoutGroupCtrl::movement() {
-    for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {
+    for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i]->movement();
     }
 }
 
 void LayoutGroupCtrl::calcAnim() {
-    for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {
+    for (s32 i = 0; i < mAnmPlayerArray.size(); i++) {
         mAnmPlayerArray[i]->reflectFrame();
     }
 }

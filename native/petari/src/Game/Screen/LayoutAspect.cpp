@@ -32,8 +32,8 @@ namespace {
         const char* mLayout;
         const char* mPane;
         u16 mFit;
-        f32 mWidth;
-        f32 mHeight;
+        f32 mWidth = 0.0f;
+        f32 mHeight = 0.0f;
     };
 
     // From the authored pane trees: location-adjusted panes in the outer part of the canvas follow their edge,

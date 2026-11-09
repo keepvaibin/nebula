@@ -1,4 +1,4 @@
-# Assignments that store a block-scoped local's address where it outlives the block (tools/escape_audit.py covers calls).
+# Assignments that store a block-scoped local's address where it outlives the block (native/tools/escape_audit.py covers calls).
 # clang-query -p <build> -f scope_escape.query <files>
 set output diag
 set bind-root false

@@ -59,7 +59,7 @@ void DrawBufferGroup::findLightInfo(LiveActor* pActor, s32 index) {
     mExecutors[index]->findLightInfo(pActor);
 
     if (mLightLoadType != -1) {
-        for (u32 i = 0; i < mExecutors.size(); i++) {
+        for (s32 i = 0; i < mExecutors.size(); i++) {
             mExecutors[i]->onExecuteLight(mLightType);
         }
 
@@ -109,7 +109,7 @@ void DrawBufferGroup::setLightType(s32 type) {
 }
 
 s32 DrawBufferGroup::findExecuterIndex(const char* pName) const {
-    for (u32 i = 0; i < mExecutors.size(); i++) {
+    for (s32 i = 0; i < mExecutors.size(); i++) {
         if (MR::isEqualString(mExecutors[i]->mName, pName)) {
             return i;
         }

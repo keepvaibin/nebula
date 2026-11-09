@@ -2,9 +2,15 @@
 Each shard is a real-time run of its share of the stops; a line per shard: crash lines, dump, the stop it was at, loss counters."""
 import os, random, re, shutil, subprocess, sys, threading
 BIN, TAG, SHARDS, FRAMES, SEED = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
-VERIFY = 'D:/NebulaWork/MarioGalaxyRecomp/Nebula-A-s4/tools/verify'
-BINDIR = 'D:/NebulaWork/port/bins/' + BIN
-ROOT = f'D:/NebulaWork/port/runs/mk_{TAG}'
+# Folders as the other verify scripts take them: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output),
+# NEBULA_TEST_SAVES (an empty saves folder to copy).
+for _name in ('NEBULA_BINS', 'NEBULA_RUNS', 'NEBULA_TEST_SAVES'):
+    if _name not in os.environ:
+        sys.exit(f'{_name} is not set')
+VERIFY = os.path.dirname(os.path.abspath(__file__)).replace(chr(92), '/')
+BINDIR = os.environ['NEBULA_BINS'].replace(chr(92), '/') + '/' + BIN
+ROOT = os.environ['NEBULA_RUNS'].replace(chr(92), '/') + f'/mk_{TAG}'
+SAVES = os.environ['NEBULA_TEST_SAVES'].replace(chr(92), '/')
 lines = [l for l in open(os.environ.get('MONKEY_STOPS', VERIFY + '/tours/tour_enterable.txt'), encoding='utf8').read().splitlines() if l.strip() and not l.startswith('#')]
 rng = random.Random(SEED)
 rng.shuffle(lines)
@@ -42,7 +48,7 @@ V={VERIFY}
 export VERIFY_DIR=$V NEBULA_WORK="{out}" NEBULA_PAK="$(cat {BINDIR}/pak.path)"
 W=$(cygpath -w "{out}")
 export NEBULA_SETTINGS="$W\\\\settings" NEBULA_SAVES="$W\\\\saves"
-cp -r /d/NebulaWork/port/nand-test3 "{out}/saves"
+cp -r "{SAVES}" "{out}/saves"
 . $V/common.sh; VERIFY=$V
 run_build "{BINDIR}" r {int(total / 60) + 120} {extra} GALAXY_TEST_GALAXY_TOUR="$(cygpath -w "{tour}")" GALAXY_TEST_GALAXY_TOUR_FRAMES={FRAMES} GALAXY_MAX_FPS=60 GALAXY_TEST_EVENT_FLAGS=SpinAndStarPointer GALAXY_PRESENT_SNAPSHOT_EVERY=1000000 \\
   "GALAXY_INPUT_AUTOPRESS_SCRIPT={';'.join(presses)}" "GALAXY_INPUT_STICK_SCRIPT={';'.join(sticks)}" "GALAXY_INPUT_SHAKE_SCRIPT={';'.join(shakes)}" >/dev/null 2>&1

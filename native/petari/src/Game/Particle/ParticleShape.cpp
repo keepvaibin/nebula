@@ -125,7 +125,7 @@ void ParticleRegistEnv(EmitterWork* work, ParticleCore* ptcl) {
 void ParticleCalcClrIdxNormal(EmitterWork* work) {
     ParticleShape* bsp = work->mpRes->getBsp();
     s16 keyFrame;
-    if (work->mpEmtr->mTick < bsp->getClrAnmMaxFrm()) {
+    if (work->mpEmtr->mTick < static_cast< u32 >(bsp->getClrAnmMaxFrm())) {
         keyFrame = work->mpEmtr->mTick;
     } else {
         keyFrame = bsp->getClrAnmMaxFrm();

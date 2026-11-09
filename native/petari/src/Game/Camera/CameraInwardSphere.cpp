@@ -73,7 +73,7 @@ CameraTargetObj* CameraInwardSphere::calc() {
 
     f32 maxDist = 0.0f;
     s32 collisions = Collision::checkStrikeBallToMap(newPos, mDistBase, nullptr, nullptr);
-    for (u32 idx = 0; idx < collisions; idx++) {
+    for (s32 idx = 0; idx < collisions; idx++) {
         const HitInfo* info = Collision::getStrikeInfoMap(idx);
         f32 dot = grav.dot(*info->mParentTriangle.getNormal(0) * info->mDepth);
         if (maxDist < -dot) {
