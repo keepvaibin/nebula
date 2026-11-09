@@ -271,6 +271,10 @@ void MR::showPane(LayoutActor* pActor, const char* pPaneName) {
 }
 
 void MR::showPaneRecursive(Ui::Pane* pPane) {
+    // A pane a mod's layout lacks is null: nothing to show.
+    if (pPane == nullptr) {
+        return;
+    }
     pPane->SetVisible(true);
     for (Ui::Pane* pChild : pPane->GetChildList()) {
         showPaneRecursive(pChild);
@@ -278,6 +282,10 @@ void MR::showPaneRecursive(Ui::Pane* pPane) {
 }
 
 void MR::hidePaneRecursive(Ui::Pane* pPane) {
+    // A pane a mod's layout lacks is null: nothing to hide.
+    if (pPane == nullptr) {
+        return;
+    }
     pPane->SetVisible(false);
     for (Ui::Pane* pChild : pPane->GetChildList()) {
         hidePaneRecursive(pChild);

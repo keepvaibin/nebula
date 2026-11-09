@@ -39,6 +39,11 @@ void CaptureScreenDirector::capture() {
 void CaptureScreenDirector::requestCaptureTiming(const char* pName) {
     const TimingInfo* pInfo = findFromName(pName);
 
+    // A timing name the table lacks asks for nothing.
+    if (pInfo == nullptr) {
+        return;
+    }
+
     if (getCurrentTiming() == nullptr || getCurrentTiming()->mTiming < pInfo->mTiming) {
         mRequestedTiming = pName;
         mRequestedInfo = pInfo;

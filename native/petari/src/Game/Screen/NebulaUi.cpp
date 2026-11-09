@@ -140,7 +140,8 @@ namespace NebulaUi {
 
     void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight) {
         // The result holds the source's units, one break in place of each run of spaces; a line holds a word more.
-        const u32 room = static_cast< u32 >(MR::textLength(pSource)) + 3;
+        const s32 sourceLength = static_cast< s32 >(MR::textLength(pSource));
+        const u32 room = static_cast< u32 >(sourceLength) + 3;
         MR::Text16 outText;
         MR::Text16 lineText;
         char16_t* const out = outText.room(room);
@@ -152,6 +153,10 @@ namespace NebulaUi {
             s32 end = i;
             while (pSource[end] != 0 && pSource[end] != u' ') {
                 end += unitLength(&pSource[end]);
+            }
+            // A tag longer than the text left (a mod's text) ends at the text's end.
+            if (end > sourceLength) {
+                end = sourceLength;
             }
             // The line so far with the word added.
             s32 n = 0;

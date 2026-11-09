@@ -477,6 +477,11 @@ MoviePlayingSequenceHolder::MoviePlayingSequenceHolder(const char* pName) : Name
 }
 
 MoviePlayingSequence* MoviePlayingSequenceHolder::getSequence(int idx) const {
+    // A type with no movie (or out of range) has no sequence (null).
+    if (idx < 0 || idx >= static_cast< int >(mSequence.size())) {
+        return nullptr;
+    }
+
     return mSequence[idx];
 }
 
@@ -490,11 +495,18 @@ namespace MR {
     }
 
     void startMovie(int type) {
-        ::getMoviePlayingSequence(type)->appear();
+        MoviePlayingSequence* pSequence = ::getMoviePlayingSequence(type);
+
+        if (pSequence != nullptr) {
+            pSequence->appear();
+        }
     }
 
     bool isEndMovie(int type) {
-        return isDead(::getMoviePlayingSequence(type));
+        MoviePlayingSequence* pSequence = ::getMoviePlayingSequence(type);
+
+        // No sequence never plays: it is ended.
+        return pSequence == nullptr || isDead(pSequence);
     }
 
     void startMovieEpilogueA() {

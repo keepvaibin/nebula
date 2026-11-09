@@ -426,7 +426,8 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     s32 separatorRows = 0;
     galaxyCount = 0;
 
-    for (; pItem != pEnd; pItem++) {
+    // A page past the list's end has no rows (it was a != compare).
+    for (; pItem < pEnd; pItem++) {
         switch (pItem->mType) {
         case 0: {
             galaxyBuffer.mTail = makeGalaxyNameText(galaxyBuffer.mBuffer, &pItem->mGalaxyAccessor, row % 4 == 0);
@@ -568,6 +569,12 @@ char16_t* PowerStarList::makeCoinText(char16_t* pBuffer, const GalaxyStatusAcces
     }
 
     s32 coinScore = MR::getCoinBestScore(pAccessor->getName());
+    // Three digits: a save's score outside 0..999 is held to them.
+    if (coinScore < 0) {
+        coinScore = 0;
+    } else if (coinScore > 999) {
+        coinScore = 999;
+    }
 
     pBuffer = MR::addPictureFontTag(pBuffer, u'A');
 
@@ -634,6 +641,11 @@ void PowerStarList::startScrollAnimPrev() {
 }
 
 bool PowerStarList::tryShowSeparator(s32 separatorIdx, f32 myFloat) {
+    // A page with no galaxy row (the race page) has no separator yet (-1).
+    if (separatorIdx < 0 || separatorIdx >= 4) {
+        return false;
+    }
+
     const char* pPaneName = ::cSeparatorPaneTable[separatorIdx];
 
     if (MR::isHiddenPane(this, pPaneName)) {

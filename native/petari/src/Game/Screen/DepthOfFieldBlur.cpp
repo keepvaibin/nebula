@@ -109,14 +109,15 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
         u8 blurMinDist;
         u8 blurMaxDist = 248;
 
+        // The distances come from an area's arguments (a mod's): held to a byte, not wrapped.
         if (mBlurMaxDist >= 0) {
-            blurMaxDist = mBlurMaxDist;
+            blurMaxDist = mBlurMaxDist > 255 ? 255 : mBlurMaxDist;
         }
 
         blurMinDist = 242;
 
         if (mBlurMinDist >= 0) {
-            blurMinDist = mBlurMinDist;
+            blurMinDist = mBlurMinDist > 255 ? 255 : mBlurMinDist;
         }
 
         if (blurMaxDist >= blurMinDist) {

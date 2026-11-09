@@ -311,7 +311,11 @@ bool ScenarioSelectLayout::isCanceled() const {
 
 void ScenarioSelectLayout::control() {
     if (!mIsDecided && mSelectedScenarioNo > 0) {
-        getSelectedStar()->tryPointing();
+        // No star shows the selected number (null) after a page change or a kill.
+        ScenarioSelectStar* pSelected = getSelectedStar();
+        if (pSelected != nullptr) {
+            pSelected->tryPointing();
+        }
     }
 
     MR::copyPaneTrans(&mMarioPaneFollowPos, this, mMarioPaneName);
