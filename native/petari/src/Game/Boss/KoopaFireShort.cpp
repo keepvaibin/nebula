@@ -31,7 +31,7 @@ namespace NrvKoopaFireShort {
 };  // namespace NrvKoopaFireShort
 
 KoopaFireShort::KoopaFireShort(const Koopa* pKoopa)
-    : LiveActor("クッパの炎（ショート）"), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mSpeed(), mOffset() {
+    : LiveActor("クッパの炎（ショート）"), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mSpeed(), mDuration(), mOffset() {
 }
 
 void KoopaFireShort::init(const TableIter& /*rIter*/) {

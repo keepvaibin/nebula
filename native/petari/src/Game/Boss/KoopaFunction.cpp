@@ -330,7 +330,14 @@ HitSensor* KoopaFunction::getKoopaMessageSensor(Koopa* pKoopa) {
 }
 
 void KoopaFunction::registerKoopaSwitchKeeper(LiveActor* pActor) {
-    BossAccess::getBossAccessorKoopa()->mParts->mKoopaSwitchKeeper = static_cast< KoopaSwitchKeeper* >(pActor);
+    // A keeper placed in a stage with no Koopa has nobody to register with.
+    Koopa* pKoopa = BossAccess::getBossAccessorKoopa();
+
+    if (pKoopa == nullptr || pKoopa->mParts == nullptr) {
+        return;
+    }
+
+    pKoopa->mParts->mKoopaSwitchKeeper = static_cast< KoopaSwitchKeeper* >(pActor);
 }
 
 KoopaSwitchKeeper* KoopaFunction::getKoopaSwitchKeeper(Koopa* pKoopa) {
@@ -338,7 +345,13 @@ KoopaSwitchKeeper* KoopaFunction::getKoopaSwitchKeeper(Koopa* pKoopa) {
 }
 
 void KoopaFunction::registerKoopaViewSwitchKeeper(LiveActor* pActor) {
-    BossAccess::getBossAccessorKoopa()->mParts->mKoopaViewSwitchKeeper = static_cast< KoopaViewSwitchKeeper* >(pActor);
+    Koopa* pKoopa = BossAccess::getBossAccessorKoopa();
+
+    if (pKoopa == nullptr || pKoopa->mParts == nullptr) {
+        return;
+    }
+
+    pKoopa->mParts->mKoopaViewSwitchKeeper = static_cast< KoopaViewSwitchKeeper* >(pActor);
 }
 
 KoopaViewSwitchKeeper* KoopaFunction::getKoopaViewSwitchKeeper(Koopa* pKoopa) {
@@ -346,7 +359,13 @@ KoopaViewSwitchKeeper* KoopaFunction::getKoopaViewSwitchKeeper(Koopa* pKoopa) {
 }
 
 void KoopaFunction::registerKoopaPowerUpSwitch(LiveActor* pActor) {
-    BossAccess::getBossAccessorKoopa()->mParts->mKoopaPowerUpSwitch = static_cast< KoopaPowerUpSwitch* >(pActor);
+    Koopa* pKoopa = BossAccess::getBossAccessorKoopa();
+
+    if (pKoopa == nullptr || pKoopa->mParts == nullptr) {
+        return;
+    }
+
+    pKoopa->mParts->mKoopaPowerUpSwitch = static_cast< KoopaPowerUpSwitch* >(pActor);
 }
 
 KoopaPowerUpSwitch* KoopaFunction::getKoopaPowerUpSwitch(Koopa* pKoopa) {

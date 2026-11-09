@@ -61,12 +61,16 @@ void KoopaDemoPowerUp::exeWaitDemo() {
             MR::startAction(getHost(), "DemoKoopaPowerUpFinal");
             KoopaFunction::startKoopaTargetCamera(getHost(), "最終パワーアップデモ");
 
-            MR::onSwitchB(KoopaFunction::getKoopaPowerUpSwitch(getHost()));
+            if (KoopaPowerUpSwitch* pSwitch = KoopaFunction::getKoopaPowerUpSwitch(getHost())) {
+                MR::onSwitchB(pSwitch);
+            }
         } else {
             MR::startAction(getHost(), "DemoKoopaPowerUp");
             KoopaFunction::startKoopaTargetCamera(getHost(), "パワーアップデモ");
 
-            MR::onSwitchA(KoopaFunction::getKoopaPowerUpSwitch(getHost()));
+            if (KoopaPowerUpSwitch* pSwitch = KoopaFunction::getKoopaPowerUpSwitch(getHost())) {
+                MR::onSwitchA(pSwitch);
+            }
         }
     } else {
         KoopaFunction::setKoopaPos(getHost(), "パワーアップデモＬｖ３（クッパ）");
@@ -75,7 +79,9 @@ void KoopaDemoPowerUp::exeWaitDemo() {
         MR::startAction(getHost(), "DemoKoopaPowerUpFinal");
         KoopaFunction::startKoopaTargetCamera(getHost(), "最終パワーアップデモ");
 
-        MR::onSwitchA(KoopaFunction::getKoopaPowerUpSwitch(getHost()));
+        if (KoopaPowerUpSwitch* pSwitch = KoopaFunction::getKoopaPowerUpSwitch(getHost())) {
+            MR::onSwitchA(pSwitch);
+        }
     }
 
     MR::startBckPlayer("BattleWait");

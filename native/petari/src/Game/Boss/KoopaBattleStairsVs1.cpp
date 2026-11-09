@@ -141,7 +141,9 @@ void KoopaBattleStairsVs1::exeDemo() {
         KoopaFunction::endKoopaAnimCamera(mKoopa, "DemoBattleStairsStart", 0);
         MR::endDemo(mKoopa, "階段の戦い開始デモ");
 
-        MR::onSwitchB(KoopaFunction::getKoopaSwitchKeeper(mKoopa));
+        if (KoopaSwitchKeeper* pKeeper = KoopaFunction::getKoopaSwitchKeeper(mKoopa)) {
+            MR::onSwitchB(pKeeper);
+        }
 
         KoopaFunction::startFaceCtrl(mKoopa);
         MR::startStageBGM("MBGM_GALAXY_15_HURRY", false);

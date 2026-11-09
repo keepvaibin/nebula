@@ -69,7 +69,9 @@ void KoopaDemoFallToPlanetVs3Lv3::exeFallOutside() {
 
     if (MR::isStep(this, ::sFallOutsideChangeSun)) {
         KoopaFunction::appearKoopaHoleSunPlanetInside(mHost);
-        MR::onSwitchDead(KoopaFunction::getKoopaSwitchKeeper(mHost));
+        if (KoopaSwitchKeeper* pKeeper = KoopaFunction::getKoopaSwitchKeeper(mHost)) {
+            MR::onSwitchDead(pKeeper);
+        }
     }
 
     if (MR::isStep(this, ::sFallOutsideChangeSun + 1)) {
@@ -78,9 +80,11 @@ void KoopaDemoFallToPlanetVs3Lv3::exeFallOutside() {
 
         KoopaFunction::killKoopaHoleSunPlanetOutside(mHost);
 
-        MR::offSwitchA(KoopaFunction::getKoopaSwitchKeeper(mHost));
-        MR::onSwitchB(KoopaFunction::getKoopaSwitchKeeper(mHost));
-        MR::offSwitchDead(KoopaFunction::getKoopaSwitchKeeper(mHost));
+        if (KoopaSwitchKeeper* pKeeper = KoopaFunction::getKoopaSwitchKeeper(mHost)) {
+            MR::offSwitchA(pKeeper);
+            MR::onSwitchB(pKeeper);
+            MR::offSwitchDead(pKeeper);
+        }
     }
 
     if (MR::isLessStep(this, ::sFallDownSeStep2)) {
