@@ -442,6 +442,33 @@ inline constexpr const char* test_game_stall_ms_name() noexcept { return "GALAXY
 inline constexpr const wchar_t* test_game_stall_ms_wide_name() noexcept { return L"GALAXY_TEST_GAME_STALL_MS"; }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* test_device_lost() noexcept { return nullptr; }
+inline constexpr const char* test_device_lost_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_device_lost_wide_name() noexcept { return L""; }
+#else
+inline const char* test_device_lost() noexcept { return std::getenv("GALAXY_TEST_DEVICE_LOST"); }
+inline constexpr const char* test_device_lost_name() noexcept { return "GALAXY_TEST_DEVICE_LOST"; }
+inline constexpr const wchar_t* test_device_lost_wide_name() noexcept { return L"GALAXY_TEST_DEVICE_LOST"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* test_small_heaps() noexcept { return nullptr; }
+inline constexpr const char* test_small_heaps_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L""; }
+#else
+inline const char* test_small_heaps() noexcept { return std::getenv("GALAXY_TEST_SMALL_HEAPS"); }
+inline constexpr const char* test_small_heaps_name() noexcept { return "GALAXY_TEST_SMALL_HEAPS"; }
+inline constexpr const wchar_t* test_small_heaps_wide_name() noexcept { return L"GALAXY_TEST_SMALL_HEAPS"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* test_wide_tables() noexcept { return nullptr; }
+inline constexpr const char* test_wide_tables_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_wide_tables_wide_name() noexcept { return L""; }
+#else
+inline const char* test_wide_tables() noexcept { return std::getenv("GALAXY_TEST_WIDE_TABLES"); }
+inline constexpr const char* test_wide_tables_name() noexcept { return "GALAXY_TEST_WIDE_TABLES"; }
+inline constexpr const wchar_t* test_wide_tables_wide_name() noexcept { return L"GALAXY_TEST_WIDE_TABLES"; }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* test_gpu_lost_frame() noexcept { return nullptr; }
 inline constexpr const char* test_gpu_lost_frame_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_gpu_lost_frame_wide_name() noexcept { return L""; }
@@ -678,6 +705,15 @@ inline constexpr const wchar_t* vk_test_no_feature_wide_name() noexcept { return
 inline const char* vk_test_no_feature() noexcept { return std::getenv("GALAXY_VK_TEST_NO_FEATURE"); }
 inline constexpr const char* vk_test_no_feature_name() noexcept { return "GALAXY_VK_TEST_NO_FEATURE"; }
 inline constexpr const wchar_t* vk_test_no_feature_wide_name() noexcept { return L"GALAXY_VK_TEST_NO_FEATURE"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* d3d12_test_no_feature() noexcept { return nullptr; }
+inline constexpr const char* d3d12_test_no_feature_name() noexcept { return ""; }
+inline constexpr const wchar_t* d3d12_test_no_feature_wide_name() noexcept { return L""; }
+#else
+inline const char* d3d12_test_no_feature() noexcept { return std::getenv("GALAXY_D3D12_TEST_NO_FEATURE"); }
+inline constexpr const char* d3d12_test_no_feature_name() noexcept { return "GALAXY_D3D12_TEST_NO_FEATURE"; }
+inline constexpr const wchar_t* d3d12_test_no_feature_wide_name() noexcept { return L"GALAXY_D3D12_TEST_NO_FEATURE"; }
 #endif
 #if !defined(NEBULA_DEV)
 inline const char* vk_test_refuse() noexcept { return nullptr; }

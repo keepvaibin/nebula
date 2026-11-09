@@ -171,7 +171,9 @@ private:
                      std::uint8_t format);
     void queue_built_in(std::uint32_t id, const void* record);
     void create_entry(Op& op);
-    void make_own(Entry& entry, const Op& op);
+    // `once`: the texture's levels are written once (a new id), so it may be a direct-write texture; an id that is updated
+    // keeps a texture the GPU copies into.
+    void make_own(Entry& entry, const Op& op, bool once);
     void update_entry(Op& op);
     void free_entry(std::uint32_t id);
     void apply_built_in(Op& op);

@@ -37,7 +37,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const uint src = uint(material.params.z);
     float3 lit0 = float3(0.0, 0.0, 0.0);
     float3 lit1 = float3(0.0, 0.0, 0.0);
-    for (uint n = 0u; n < 8u; ++n) {
+    // The masks travel in float constants (24 bits); the set holds as many lights as the game lit.
+    for (uint n = 0u; n < min(native_light_count(), 24u); ++n) {
         if (((mask0 >> n) & 1u) != 0u) {
             lit0 += channel_light(n, 2u, 2u, v.eye, nrm).rgb;
         }

@@ -122,12 +122,20 @@ float3 world_position(Place p, float3 pos) { return row_times_point(p.world_row,
 float3 world_normal_rigid(Place p, float3 nrm) { return row_times_direction(p.world_row, nrm); }
 float3 world_normal_skinned(Place p, float3 nrm) { return row_times_direction(p.world_row + 3u, nrm); }
 
+// A draw's light set at `base` (Place.light): a header row (x the number of lights), then four rows a light. There is
+// no limit on the count; a light number past it lights nothing.
+uint light_count(uint base) { return uint(rows[base].x); }
+uint light_row(uint base, uint n) { return base + 1u + 4u * n; }
+
 // Light n's contribution to a lit channel, in 0-255 units (rgb, and a for an alpha channel): its colour by its attenuation
 // (1 specular, 2 directional, 3 spot) and diffuse function (0 none, 1 signed, 2 clamped), at the eye-space position and
 // normal. Four rows: colour; cosine attenuation, distance attenuation x; distance y and z, position x and y; position z,
 // direction.
 float4 light_term(uint base, uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
-    const uint at = base + 4u * n;
+    if (n >= light_count(base)) {
+        return float4(0.0, 0.0, 0.0, 0.0);
+    }
+    const uint at = light_row(base, n);
     const float4 lcol = rows[at];
     const float4 le1 = rows[at + 1u];
     const float4 le2 = rows[at + 2u];

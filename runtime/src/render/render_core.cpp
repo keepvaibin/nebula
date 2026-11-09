@@ -415,8 +415,8 @@ void RenderCore::trace_memory() {
     // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
     static const bool heaps = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) == 2u;
     if (heaps) {
-        HANDLE list[64];
-        const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
+        std::vector<HANDLE> list(GetProcessHeaps(0, nullptr));  // as many as the process has
+        const DWORD count = list.empty() ? 0u : std::min<DWORD>(GetProcessHeaps(static_cast<DWORD>(list.size()), list.data()), static_cast<DWORD>(list.size()));
         for (DWORD i = 0; i < count; ++i) {
             std::unordered_map<std::uint64_t, std::uint64_t> by_size;
             std::uint64_t busy = 0u;
@@ -1654,6 +1654,10 @@ bool RenderCore::restart_device() {
         return false;
     }
     std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency() << " ms\n";
+    if (test_loss_frame_ != 0u) {
+        std::cerr << "[gpu] recovered from the test device loss at frame " << test_loss_frame_ << " (rendering goes on)\n";
+        test_loss_frame_ = 0u;
+    }
     return true;
 }
 
@@ -2082,7 +2086,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
         matrix_bytes += matrices * core::kRowsPerMatrix * 16u * 2u;
     }
-    matrix_bytes += std::size_t{list.light_set_count} * core::kLightRows * 16u;
+    matrix_bytes += std::size_t{core::light_set_rows(0u)} * 16u;
+    for (std::uint32_t s = 0; s < list.light_set_count; ++s) {
+        matrix_bytes += std::size_t{core::light_set_rows(list.light_sets[s].count)} * 16u;
+    }
     matrix_bytes += std::size_t{list.instance_row_count} * 16u;
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
@@ -2179,6 +2186,27 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 renderer_.free_target(id, texture_store_);
             }
         }
+        // Tables no walk has named for a long while give up what was built for them (core::Registries::retire_idle_tables).
+        if (frame_index_ >= table_sweep_at_) {
+            table_sweep_at_ = frame_index_ + core::Registries::kTableSweepFrames;
+            retired_tables_.clear();
+            registries_.retire_idle_tables(frame_index_, retired_tables_);
+#if defined(NEBULA_GPU_VULKAN)
+            if (!renderer_.bindless()) {
+                for (const gpu::Table table : retired_tables_) {
+                    renderer_.retire_texture_table(table);
+                }
+            }
+#endif
+        }
+#if defined(NEBULA_DEV)
+        if (frame_index_ >= table_log_at_) {
+            table_log_at_ = frame_index_ + 600u;
+            const core::Registries::TableCounts tables = registries_.table_counts();
+            std::fprintf(stderr, "[render] texture tables: %u live, %u retired (%llu released since the start)\n", tables.live,
+                         tables.retired, static_cast<unsigned long long>(tables.retirements));
+        }
+#endif
     }
     registries_.reclaim(renderer_.completed_fence_value());
     // Finished replacements upload here and take the place of their originals.
@@ -2289,11 +2317,18 @@ void RenderCore::flush_waiting_list() {
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
-    // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1): the card is lost at frame n and every
-    // 300 frames after, that many times.
-    static const std::uint64_t lose_at = ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
-    if (lose_at != 0u && frame_index_ >= lose_at + std::uint64_t{device_losses_} * 300u) [[unlikely]] {
-        if (device_losses_ < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
+    // GALAXY_TEST_DEVICE_LOST=n (GALAXY_TEST_GPU_LOST_FRAME is the older name; GALAXY_TEST_GPU_LOST_TIMES, default 1, how
+    // many): the card is lost on purpose at frame n and every 300 frames after. Direct3D 12 removes its device; Vulkan has no
+    // call for that, so its next submission reports VK_ERROR_DEVICE_LOST. Both go on through the loss recovery below.
+    static const std::uint64_t lose_at = [] {
+        const std::uint64_t named = ::galaxy::run_option_u64(::galaxy::run_options().test_device_lost, 0u);
+        return named != 0u ? named : ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
+    }();
+    if (lose_at != 0u && frame_index_ >= lose_at + std::uint64_t{test_losses_injected_} * 300u) [[unlikely]] {
+        if (test_losses_injected_ < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
+            ++test_losses_injected_;
+            test_loss_frame_ = frame_index_;
+            std::cerr << "[gpu] device lost (test) at frame " << frame_index_ << '\n';
             renderer_.test_lose_device();
         }
     }

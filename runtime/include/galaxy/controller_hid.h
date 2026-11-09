@@ -21,7 +21,10 @@
 
 namespace galaxy::host {
 
-inline constexpr std::size_t kMaxHidPads = 16;
+// The HID worker's pads: it waits on 3 handles and 2 for each pad in one WaitForMultipleObjects, which takes at most 64
+// (MAXIMUM_WAIT_OBJECTS). That API limit, not a budget, sets the count; more pads would need a second waiting thread.
+inline constexpr std::size_t kMaxHidPads = (64u - 3u) / 2u;
+static_assert(3u + 2u * kMaxHidPads <= 64u, "one WaitForMultipleObjects takes 64 handles");
 
 struct HidPadState {
     bool connected = false;

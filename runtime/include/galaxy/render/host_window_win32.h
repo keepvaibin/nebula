@@ -38,6 +38,9 @@ extern std::atomic<std::uintptr_t> settings_window;
 extern std::atomic<std::uintptr_t> pointer_hwnd;
 // The desktop's monitors changed: a borderless window's bounds are out of date.
 extern std::atomic<bool> display_changed;
+// The window moved onto another monitor (its refresh rate may differ): the renderer measures the rate at once instead of at
+// its next periodic check. Set by the window's thread; the renderer clears it.
+extern std::atomic<bool> monitor_changed;
 // The window is minimised, as the last message said.
 [[nodiscard]] bool is_minimized() noexcept;
 

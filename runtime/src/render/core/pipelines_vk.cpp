@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/pipelines.h"
 
+#include "render/core/pipeline_cache_file.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
@@ -146,59 +147,29 @@ struct Modules {
 Modules gModules;
 
 std::uint64_t bytes_hash(const std::vector<char>& bytes) noexcept {
-    std::uint64_t hash = 0x9E3779B97F4A7C15ull ^ bytes.size();
-    std::size_t i = 0u;
-    for (; i + 8u <= bytes.size(); i += 8u) {
-        std::uint64_t word;
-        std::memcpy(&word, bytes.data() + i, 8u);
-        hash = (hash ^ word) * 0xFF51AFD7ED558CCDull;
-        hash ^= hash >> 32u;
-    }
-    for (; i < bytes.size(); ++i) {
-        hash = (hash ^ static_cast<unsigned char>(bytes[i])) * 0x100000001B3ull;
-    }
-    return hash;
+    return cache_bytes_hash(bytes.data(), bytes.size());
 }
 
-// The cache file: this header, then the driver's cache data. The header names what the data is good for (the programs'
-// compiler revision and the device's vendor, id, driver version and pipeline cache UUID); a file that differs, is short, or
-// whose data does not hash to the header's is never handed to the driver, so the cache starts empty and is written again.
-struct CacheFileHeader {
-    char magic[8];
-    std::uint32_t compiler_revision;
-    std::uint32_t vendor_id;
-    std::uint32_t device_id;
-    std::uint32_t driver_version;
-    std::uint8_t uuid[VK_UUID_SIZE];
-    std::uint64_t size;
-    std::uint64_t hash;
-};
-constexpr char kCacheMagic[8] = {'N', 'B', 'V', 'K', 'P', 'C', 'H', '1'};
+// The cache file: a header (pipeline_cache_file.h) then the driver's cache data. The header names what the data is good for (the
+// programs' compiler revision and the device's vendor, id, driver version and pipeline cache UUID); a file that differs, is
+// short, or whose data does not hash to the header's is never handed to the driver, so the cache starts empty and is written
+// again.
+static_assert(VK_UUID_SIZE == kCacheUuidSize);
 
-CacheFileHeader cache_header(const std::vector<char>& data) noexcept {
+VkCacheIdentity cache_identity() noexcept {
     const VkPhysicalDeviceProperties& properties = vk::Context::get().properties();
-    CacheFileHeader header{};
-    std::memcpy(header.magic, kCacheMagic, sizeof(kCacheMagic));
-    header.compiler_revision = vk::kCompilerRevision;
-    header.vendor_id = properties.vendorID;
-    header.device_id = properties.deviceID;
-    header.driver_version = properties.driverVersion;
-    std::memcpy(header.uuid, properties.pipelineCacheUUID, VK_UUID_SIZE);
-    header.size = data.size();
-    header.hash = bytes_hash(data);
-    return header;
+    VkCacheIdentity identity{};
+    identity.compiler_revision = vk::kCompilerRevision;
+    identity.vendor_id = properties.vendorID;
+    identity.device_id = properties.deviceID;
+    identity.driver_version = properties.driverVersion;
+    std::memcpy(identity.uuid, properties.pipelineCacheUUID, kCacheUuidSize);
+    return identity;
 }
 
 // The driver data inside a cache file; empty when the file is not this device's with the same programs.
 std::vector<char> unwrap_cache_file(const std::vector<char>& file) {
-    CacheFileHeader header{};
-    if (file.size() <= sizeof(header)) {
-        return {};
-    }
-    std::memcpy(&header, file.data(), sizeof(header));
-    std::vector<char> data(file.begin() + sizeof(header), file.end());
-    const CacheFileHeader expected = cache_header(data);
-    return std::memcmp(&header, &expected, sizeof(header)) == 0 ? data : std::vector<char>{};
+    return unwrap_vk_cache(cache_identity(), file);
 }
 
 // The cache is internally synchronised, so the workers keep building while a copy goes out; one writer at a time.
@@ -229,10 +200,7 @@ std::size_t write_driver_cache() noexcept {
     if (hash == on_disk) {
         return 0u;
     }
-    const CacheFileHeader header = cache_header(bytes);
-    std::vector<char> out(sizeof(header) + bytes.size());
-    std::memcpy(out.data(), &header, sizeof(header));
-    std::memcpy(out.data() + sizeof(header), bytes.data(), bytes.size());
+    const std::vector<char> out = wrap_vk_cache(cache_identity(), bytes.data(), bytes.size());
     if (!replace_file(file, out.data(), out.size())) {
         return 0u;
     }
@@ -442,7 +410,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         color.dstAlphaBlendFactor = alpha_factor(color.dstColorBlendFactor);
         color.alphaBlendOp = color.colorBlendOp;
     }
-    VkPipelineColorBlendAttachmentState targets[2]{color, {}};
+    VkPipelineColorBlendAttachmentState targets[4]{color, {}, {}, {}};
     // Aux 4: the motion pass's second target is there and left as it is.
     if (aux == 1u) {
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;
@@ -456,8 +424,22 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         targets[1].alphaBlendOp = VK_BLEND_OP_MAX;
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
     }
+    if (aux == 3u) {
+        // The effects layer: render target 2 takes the colour as the scene target blends it, 3 the product of the
+        // destination factors (nothing from the source: it keeps what the destination factor lets through). Colour only.
+        constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        targets[2] = color;
+        targets[2].colorWriteMask = kRgb;
+        targets[3] = targets[2];
+        targets[3].srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        targets[3].colorBlendOp = VK_BLEND_OP_ADD;
+        targets[3].dstColorBlendFactor = color.colorBlendOp == VK_BLEND_OP_ADD ? color.dstColorBlendFactor : VK_BLEND_FACTOR_ONE;
+        targets[3].srcAlphaBlendFactor = alpha_factor(targets[3].srcColorBlendFactor);
+        targets[3].dstAlphaBlendFactor = alpha_factor(targets[3].dstColorBlendFactor);
+        targets[3].alphaBlendOp = VK_BLEND_OP_ADD;
+    }
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend.attachmentCount = aux != 0u ? 2u : 1u;
+    blend.attachmentCount = aux == 3u ? 4u : aux != 0u ? 2u : 1u;
     blend.pAttachments = targets;
 
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
@@ -477,7 +459,11 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = layout->layout;
-    info.renderPass = aux != 0u ? layout->aux_pass_for(variant, aux == 4u ? 1u : std::min(aux, 2u)) : layout->pass_for(variant, false);
+    info.renderPass = aux != 0u ? layout->aux_pass_for(variant, aux == 4u ? 1u : std::min(aux, 3u)) : layout->pass_for(variant, false);
+    if (info.renderPass == VK_NULL_HANDLE) {
+        // The device cannot draw this variant (the effects layer's pass is absent): the walker misses this draw.
+        return nullptr;
+    }
 
     const VkPipelineCache cache = driver_cache(device);
     VkPipeline pipeline = VK_NULL_HANDLE;

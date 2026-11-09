@@ -80,10 +80,12 @@ struct RenderLayout {
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;
     // A temporal scene's passes: the scene target and depth with one more target, single-sample (aux 1 the
-    // motion vectors, 2 the reactive mask), over the 8-bit or the wide scene's colour.
-    std::array<std::array<VkRenderPass, 2>, 2> aux_passes{};
-    // The same, every attachment cleared as the pass begins (the scene's first clear): compatible with aux_passes.
-    std::array<std::array<VkRenderPass, 2>, 2> aux_passes_clear{};
+    // motion vectors, 2 the reactive mask, 3 the reactive mask and the effects layer's colour and transmittance, which are
+    // attachments 3 and 4), over the 8-bit or the wide scene's colour. Aux 3 is null where the device cannot make it.
+    std::array<std::array<VkRenderPass, 3>, 2> aux_passes{};
+    // The same, every attachment cleared as the pass begins (the scene's first clear; the layer's two load): compatible with
+    // aux_passes.
+    std::array<std::array<VkRenderPass, 3>, 2> aux_passes_clear{};
     [[nodiscard]] VkRenderPass aux_pass_for(unsigned samples_log2, unsigned aux, bool clear = false) const noexcept {
         const unsigned wide = (samples_log2 & kSceneVariantHdr) != 0u ? 1u : 0u;
         return clear ? aux_passes_clear[wide][aux - 1u] : aux_passes[wide][aux - 1u];
@@ -152,8 +154,10 @@ public:
             scene_view_ = *view;
         }
     }
-    // The effects layer's targets exist only on Direct3D 12 for now.
-    [[nodiscard]] bool layer_window() const noexcept { return false; }
+    // The effects layer (RendererD3D12's): while its window is open, blended draws that never read the scene also write
+    // its colour and transmittance targets (aux 3).
+    [[nodiscard]] bool layer_window() const noexcept { return layer_window_; }
+    void begin_layer_window();
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera_vk.h).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
@@ -162,7 +166,8 @@ public:
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass, the
     // ones without motion leaving it as it is, so the pass is not closed and reopened between them.
     [[nodiscard]] bool motion_pass_only() const;
-    [[nodiscard]] bool has_layer_targets() const noexcept { return false; }
+    // True where the device renders the layer's format with blending and four colour attachments.
+    [[nodiscard]] bool has_layer_targets() const noexcept { return layer_targets_ok_; }
     // The draws' textures, as the Direct3D 12 renderer offers them (renderer_d3d12.h): with descriptor indexing (bindless())
     // every texture view sits in one array at its index and every sampler in another, and a draw names its maps by their
     // places in a list of {texture slot, sampler slot} pairs.
@@ -192,8 +197,8 @@ public:
     void pump_messages() {}
     [[nodiscard]] bool quit_requested() const noexcept;
 
-    // Test only (GALAXY_TEST_GPU_LOST_FRAME): as a lost device reports itself.
-    [[noreturn]] void test_lose_device();
+    // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports a lost device (vk::Context::simulate_device_loss).
+    void test_lose_device();
     void begin_frame();
     // D3D12 waits for its swap chain's frame latency here (a frame begun without a present that presents after all);
     // Vulkan paces at the image acquire in present().
@@ -216,7 +221,8 @@ public:
     void clear_scene(std::uint32_t clear_rgba, bool color_enable,
                    bool alpha_enable, bool depth_enable, unsigned rect_x = 0, unsigned rect_y = 0, unsigned rect_w = 0,
                    unsigned rect_h = 0, std::uint8_t pixel_format = 0);
-    // What the walker draws through. Aux targets beside the scene target: 0 none, 1 motion, 2 reactive.
+    // What the walker draws through. Aux targets beside the scene target: 0 none, 1 motion, 2 reactive, 3 reactive and the
+    // effects layer, 4 the motion pass for a draw that writes no motion.
     [[nodiscard]] gpu::Encoder& encoder() noexcept { return encoder_; }
     void set_draw_aux(unsigned aux);
     void note_scene_draw(std::uint32_t state) {
@@ -278,7 +284,8 @@ public:
     // and a load of the whole target on a tiled GPU). The depth is cleared as the next scene pass opens, or before
     // anything reads or tests it (settle_depth_clear). False when the clear is clear_scene's.
     [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t clear_rgba);
-    void record_motion_debug_view() noexcept {}
+    // Test builds: the motion vectors as colour over the 8-bit scene target (RendererD3D12's); nothing otherwise.
+    void record_motion_debug_view();
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     void set_present_game_frame(bool) noexcept {}
     // A present rate above 60.
@@ -371,6 +378,8 @@ private:
         std::vector<VkFramebuffer> framebuffers;
         std::vector<VkSemaphore> rendered;  // per image: the frame's commands finished writing it
     };
+    std::uint32_t logged_swap_images_ = 0u;  // create_swapchain's "[vk] swap chain" line, written when these change
+    VkPresentModeKHR logged_swap_mode_ = VK_PRESENT_MODE_MAX_ENUM_KHR;
     struct FramePassTarget {
         gpu::TextureRef texture;
         unsigned width = 0;
@@ -418,7 +427,7 @@ private:
     // `clear`: begins with both targets cleared to it (scene_pass_clear).
     // `caller` (the calling function's name) counts why the scene target was opened again (GpuWindow::opens).
     void begin_scene_pass(const SceneClearValues* clear = nullptr, const char* caller = __builtin_FUNCTION());
-    // The same with a temporal scene's second target (`aux`: 1 the motion target, 2 the reactive mask); a pass open with another one ends.
+    // The same with a temporal scene's second target (`aux`: 1 the motion target, 2 the reactive mask, 3 the reactive mask and the effects layer); a pass open with another one ends.
     void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false,
                                const char* caller = __builtin_FUNCTION(),
                                unsigned clear_depth = 0u);
@@ -624,7 +633,9 @@ private:
     struct MotionTargets {
         gpu::TextureRef motion;
         gpu::TextureRef reactive;
-        std::array<VkFramebuffer, 2> framebuffers{};
+        gpu::TextureRef layer_color;  // the effects layer: what its draws added, R16G16B16A16F
+        gpu::TextureRef layer_trans;  // and the product of their destination factors
+        std::array<VkFramebuffer, 3> framebuffers{};
         VkImageView framebuffer_color = VK_NULL_HANDLE;
         VkImageView framebuffer_depth = VK_NULL_HANDLE;
         FrameMap map{};
@@ -632,6 +643,11 @@ private:
     MotionTargets motion_;
     [[nodiscard]] bool ensure_motion_targets();
     void clear_motion_targets(bool motion = true);  // the reactive mask too where it is read
+    // The layer's targets to nothing added (zero colour) and everything let through (transmittance one).
+    void clear_layer_targets();
+    bool layer_targets_ok_ = false;  // create_layouts: the format and the attachment count are there
+    bool layer_window_ = false;
+    bool reactive_scene_ = false;  // this scene's blended draws write the reactive mask (begin_motion_scene)
     void destroy_motion_framebuffers();
     [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
     void prepare_temporal_upscaler();
@@ -702,10 +718,11 @@ private:
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
     std::array<std::array<VkPipeline, 9>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
-    // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 2, and scene variant): the
+    std::array<VkPipeline, 9> motion_debug_pipelines_{};  // by scene variant (the 8-bit scene's: index below 8)
+    // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the
     // depth clear's shader at the point's depth, tested GREATER_OR_EQUAL against the reversed depth on the first sample,
     // writing nothing, counted by an occlusion query.
-    std::array<std::array<VkPipeline, 9>, 3> probe_test_pipelines_{};
+    std::array<std::array<VkPipeline, 9>, 4> probe_test_pipelines_{};
     [[nodiscard]] VkPipeline probe_test_pipeline();
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;

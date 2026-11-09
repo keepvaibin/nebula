@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Programs a mod needs and didn't bring, or brought for an earlier Nebula: built here from the texts the cooker wrote, in the file
 // format of mod_shaders.h. Each graphics interface compiles a stage its own way (compile_mod_shader_stage).
+#include "galaxy/cpu_count.h"
 #include "galaxy/render/mod_shaders.h"
 
 #include <algorithm>
@@ -134,7 +135,8 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
     std::vector<Stage> built;
     std::atomic<std::size_t> next{0u};
     std::atomic<unsigned> done{0u};
-    const unsigned threads = std::clamp(std::thread::hardware_concurrency(), 1u, 4u);
+    // One worker per logical processor, and no more than there are programs to build.
+    const auto threads = static_cast<unsigned>(std::min<std::size_t>(logical_cores(), jobs.size()));
     std::vector<std::thread> pool;
     for (unsigned t = 0u; t < threads; ++t) {
         pool.emplace_back([&]() {

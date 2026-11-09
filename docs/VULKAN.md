@@ -67,6 +67,27 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   PowerVR, Xclipse, Maleoon; newest and oldest driver each); `galaxy_vk_shader_tests <keys.bin>` compiles every
   captured shader in every form.
 
+## Presentation, lost devices and uploads
+
+- **Swap chain images.** One rule on every platform, from the surface's own limits: MAILBOX and IMMEDIATE take 3 images (clamped to
+  the surface's minimum and maximum); FIFO takes `minImageCount + 1`, or `minImageCount` where `VK_KHR_present_wait` is an enabled
+  device extension. The log says `[vk] swap chain: N images, MODE` when the count or the mode first appears or changes. The pacing
+  reads the present timestamps and the sync interval, not the count.
+- **Lost devices.** With `VK_EXT_device_fault` (enabled when the device has it and its `deviceFault` feature) a `VK_ERROR_DEVICE_LOST`
+  from a submit, a fence wait or poll, or a present logs `vkGetDeviceFaultInfoEXT`'s counts, then the description, the address
+  infos (type, reported address, the range its precision allows) and the vendor infos, once per device; test builds also write the
+  vendor binary to `logs/device_fault_<vendor>_<device>.bin` in the settings folder. Without the extension nothing changes.
+  `GALAXY_TEST_DEVICE_LOST=<frame>` makes the next submit report a lost device (Vulkan has no call that removes one; Direct3D 12
+  removes its device) and the renderer recovers as it would from a real loss: `[gpu] device lost (test) at frame N`, then
+  `[gpu] recovered from the test device loss at frame N`.
+- **Effects layer.** The layer's colour and transmittance targets and the pass that writes them exist as on Direct3D 12, where the
+  device renders R16G16B16A16F with blending and four colour attachments.
+- **Texture uploads.** With `VK_EXT_host_image_copy` (and SHADER_READ_ONLY_OPTIMAL among the layouts it copies into, and
+  `optimalDeviceAccess` for the format) a new game or pack texture is written from host memory, with no copy command; the log says
+  `[textures] uploads: ...` once. Movie planes and textures an id updates in place are still copied.
+- **Test switches** (test builds): `GALAXY_VK_TEST_NO_FEATURE` also takes `device_fault` and `host_image_copy`;
+  `GALAXY_D3D12_TEST_NO_FEATURE=uma_writes` keeps Direct3D 12's staged copies on a shared-memory adapter.
+
 ## Android controls (the user's design, 2026-10-18)
 
 - The touch screen is the IR canvas: a touch points the Wii Remote there (Star Bits by sweeping a finger, menus by

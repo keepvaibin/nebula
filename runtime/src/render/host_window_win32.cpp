@@ -68,7 +68,9 @@ std::atomic<std::uintptr_t> settings_window{0};
 std::atomic<bool> borderless_active{false};
 std::atomic<std::uintptr_t> pointer_hwnd{0};
 std::atomic<bool> display_changed{false};
+std::atomic<bool> monitor_changed{false};
 namespace {
+HMONITOR s_window_monitor = nullptr;  // the window's thread only
 std::atomic<bool> s_minimized{false};
 }
 std::atomic<HANDLE> s_state_wake{nullptr};
@@ -634,6 +636,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DISPLAYCHANGE) {
         store_monitor_cache(enumerate_monitors());
         display_changed.store(true, std::memory_order_release);
+        monitor_changed.store(true, std::memory_order_release);
+    }
+    if (msg == WM_WINDOWPOSCHANGED || msg == WM_DPICHANGED) {
+        // The message goes on to the default handling below.
+        const HMONITOR now = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (now != s_window_monitor) {
+            s_window_monitor = now;
+            monitor_changed.store(true, std::memory_order_release);
+        }
     }
     if (msg == kTestResizeMessage) {
         RECT rect{0, 0, static_cast<LONG>(wp), static_cast<LONG>(lp)};

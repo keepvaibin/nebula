@@ -51,6 +51,31 @@ Depth is reversed. Rows of differences this made are in the project's look-chang
 748 known pipelines (`pipeline_seeds.inc`, from tours by `tools/dev/pipeline_seed.py`) are built on two background threads at start
 (`[pipelines] N prepared at T ms`). Anything else is created at its first draw, synchronously, on the render thread.
 
+## No fixed caps
+
+A count of things (textures, tables, lights, layers, draws, uploads, descriptors, pads, monitors, files) never refuses or stalls at a
+fixed number. A limit read from the device or the API is fine; each is named with the query that gives it. `helpers/runtime_caps.tsv`
+(agents/native-progress) lists every constant of runtime/src and runtime/include that bounds a count, with its class: **B** budget
+(a number someone chose: 11 rows, all fixed or growing except the SDL host's pad arrays and the model format's limits, which are
+Q's), **D** design (27: page sizes, rings of frames, policy, bounds on untrusted input) and **H** hardware or API (7).
+
+- **Upload rings** (vertices, indices, constants, matrix rows): a ring grows into a new buffer between frames when a frame took over half
+  its budget, without waiting for the GPU (the old buffer is freed after the frames in flight); a request that fits neither the frame's
+  segment nor the spill goes to a chunk of its own, kept until that frame slot begins again. The matrix ring, whose rows are indexed
+  from its base address, only grows between frames.
+- **Direct3D 12 descriptors**: the shader-visible heap's limit is read from the device (`ResourceBindingTier`: one million on tiers 1 and 2,
+  more on tier 3). The texture region doubles to that limit; the persistent region doubles when full (a new heap and persistent shadow,
+  indices kept, the replaced heap freed at the fence). A frame's segment holds the renderer's own tables only (a few hundred), so it is
+  sized by design and reported (`frame_high_water`). The sampler heap holds 2048 (the API's number) and starts again between frames.
+- **Vulkan descriptors**: a new pool when one is full; the image array doubles to the device's update-after-bind limit.
+- **Texture tables**: a table no walk has named for 600 frames releases what was built for it (its persistent descriptor table on a
+  device without descriptor indexing, freed after the fence) and is rebuilt when a walk names it again. Ids are never reused, because
+  the game keeps them in its materials.
+- **Input**: HID pads are bounded by the 64 handles one wait takes (30), the controller list by the sources (XInput's four and the HID
+  pads); the list the CONTROLS page shows has no cap; the raw input device list is as long as the system says.
+- **Test switch** `GALAXY_TEST_SMALL_HEAPS=1` (test builds) starts the rings at 1 MB, the Direct3D 12 heap's regions at 4 persistent and
+  64 texture descriptors, and the first Vulkan pools at a handful of sets, so every growth above runs in the first seconds.
+
 ## Failure
 
 A lost device (driver reset) restarts the game from its save, twice in a row at most; the third is report NEB-G01

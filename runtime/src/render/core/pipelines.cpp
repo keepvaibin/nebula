@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/pipelines.h"
 
+#include "galaxy/cpu_count.h"
+
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
@@ -19,7 +21,7 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
     misses_ = 0u;
     reported_.store(false, std::memory_order_relaxed);
     // The title waits for the list once; every core but the game's prepares it. Idle workers cost nothing.
-    const unsigned hardware = std::max(2u, std::thread::hardware_concurrency());
+    const unsigned hardware = std::max(2u, logical_cores());
     const unsigned count = hardware - 1u;
     for (unsigned i = 0; i < count; ++i) {
         threads_.emplace_back([this] { worker(); });

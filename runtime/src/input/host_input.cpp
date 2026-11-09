@@ -154,11 +154,19 @@ void set_touch_controls_settings(const TouchControlsSettings&) noexcept {}
 void reset_touch_controls_places() noexcept {}
 
 bool keyboard_or_mouse_attached() noexcept {
-    RAWINPUTDEVICELIST devices[32];
-    UINT count = static_cast<UINT>(std::size(devices));
-    const UINT listed = GetRawInputDeviceList(devices, &count, sizeof(RAWINPUTDEVICELIST));
+    // The list is as long as the system says; a device plugged in between the two calls makes the second ask again.
+    std::vector<RAWINPUTDEVICELIST> devices;
+    UINT listed = static_cast<UINT>(-1);
+    for (int attempt = 0; attempt < 4 && listed == static_cast<UINT>(-1); ++attempt) {
+        UINT count = 0u;
+        if (GetRawInputDeviceList(nullptr, &count, sizeof(RAWINPUTDEVICELIST)) == static_cast<UINT>(-1)) {
+            break;
+        }
+        devices.resize(count);
+        listed = GetRawInputDeviceList(devices.data(), &count, sizeof(RAWINPUTDEVICELIST));
+    }
     if (listed == static_cast<UINT>(-1)) {
-        // More devices than the list holds, or no answer: nothing says they are gone.
+        // No answer: nothing says they are gone.
         return true;
     }
     for (UINT i = 0; i < listed; ++i) {
@@ -186,6 +194,9 @@ bool controller_present_now() noexcept {
     }
     return hid_controller_present_now();
 }
+
+// What the arrays that receive this list hold (input::kMaxControllers) covers every source.
+static_assert(input::kMaxControllers >= XUSER_MAX_COUNT + kMaxHidPads);
 
 std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept {
     std::uint32_t xinput = g_xinput_mask.load(std::memory_order_acquire);

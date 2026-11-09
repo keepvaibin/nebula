@@ -861,8 +861,8 @@ void test_device_list() {
         many[i] = controller(ControlScheme::SwitchPro, static_cast<std::uint8_t>(i), ControllerLink::Usb, "Switch Pro Controller");
     }
     build_device_list(many, std::nullopt, list);
-    expect(list.count == kMaxControllers + 1, "a long list is cut at its capacity");
-    expect(label_of(list, kMaxControllers) == "Switch Pro Controller 12 (USB)", "numbering stays within the list");
+    expect(list.count == many.size() + 1, "a long list is listed whole");
+    expect(label_of(list, many.size()) == "Switch Pro Controller 16 (USB)", "every controller of a model is numbered");
 
     ControllerInfo undriven = controller(ControlScheme::SwitchPro2, 0, ControllerLink::Usb, "Switch 2 Pro Controller");
     undriven.note = "needs WinUSB";

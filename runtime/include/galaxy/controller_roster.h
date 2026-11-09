@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace galaxy::input {
 
@@ -31,7 +32,10 @@ struct ControllerInfo {
 };
 
 inline constexpr std::uint8_t kKeyboardSlot = 0xff;
-inline constexpr std::size_t kMaxControllers = 12;
+// The controllers the host's sources can report at once: XInput's four user slots (XUSER_MAX_COUNT) and the HID worker's pads
+// (kMaxHidPads, set by the 64 handles one wait takes). A bound of the sources for the arrays that receive their list
+// (connected_controllers), not a cap of the roster: DeviceList grows to what it is given.
+inline constexpr std::size_t kMaxControllers = 4 + 30;
 
 struct DeviceKey {
     ControlScheme scheme = ControlScheme::Keyboard;
@@ -46,8 +50,8 @@ struct DeviceEntry {
 };
 
 struct DeviceList {
-    std::array<DeviceEntry, kMaxControllers + 2> entries{};
-    std::size_t count = 0;
+    std::vector<DeviceEntry> entries;
+    std::size_t count = 0;  // entries.size()
 };
 
 // The phone's own screen: a device with no bindings, the keyboard's scheme with a slot of its own.
@@ -57,10 +61,10 @@ inline constexpr std::uint8_t kPhoneSlot = 0xFEu;
 }
 
 // What is there, in the order it is offered: the phone's screen (`phone`), the keyboard and mouse only when one is attached
-// (`keyboard`), then the controllers by scheme and slot (more than kMaxControllers are dropped). Controllers of one model
+// (`keyboard`), then every controller by scheme and slot. Controllers of one model
 // are numbered; wired, Bluetooth and wireless links are named, then the note. `active` marks the entry with that key.
 void build_device_list(std::span<const ControllerInfo> connected, std::optional<DeviceKey> active,
-                       DeviceList& out, bool keyboard = true, bool phone = false) noexcept;
+                       DeviceList& out, bool keyboard = true, bool phone = false);
 
 // The entry to edit after the list changed: `previous` if it is still there,
 // else another controller of its scheme (same bindings), else the keyboard.
