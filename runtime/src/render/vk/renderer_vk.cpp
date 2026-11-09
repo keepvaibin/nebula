@@ -94,10 +94,7 @@ VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, con
 
 using vk_detail::create_pool;
 using vk_detail::image_barrier;
-using vk_detail::kFrameSets;
 using vk_detail::kFrameUtilitySamplers;
-using vk_detail::kPersistentPool;
-using vk_detail::kPersistentSets;
 
 namespace {
 
@@ -159,9 +156,8 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             vk::check(vkAllocateCommandBuffers(device, &alloc, buffers), "vkAllocateCommandBuffers");
             frame.uploads = buffers[0];
             frame.commands = buffers[1];
-            frame.descriptors = test_small_heaps()
-                ? create_pool(device, vk_detail::kSmallFrameSets, vk_detail::frame_pool(!bindless_, vk_detail::kSmallFrameSets))
-                : create_pool(device, kFrameSets, vk_detail::frame_pool(!bindless_));
+            frame.descriptors =
+                create_pool(device, vk_detail::kFirstFrameSets, vk_detail::frame_pool(!bindless_, vk_detail::kFirstFrameSets));
             VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.acquired), "vkCreateSemaphore");
         }
@@ -177,8 +173,8 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         // The vertex, index and constant rings take a request past their segment and spill in a chunk; the matrix ring's rows are
         // indexed from its base, so it only grows between frames.
         const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes, unsigned segments, bool chunks) {
-            bytes = first_ring_bytes(bytes);
-            return target.initialize(device, name, UploadRing::budget(bytes, segments), segments, bytes, chunks);
+            (void)bytes;
+            return target.initialize(device, name, UploadRing::budget(kFirstRingBytes, segments), segments, kFirstRingBytes, chunks);
         };
         // The vertex and constant rings are read by the GPU every frame and written once, in order: video memory the CPU maps,
         // where the device has it (vk::Context::device_mapped_memory); the others stay in host memory.
@@ -694,11 +690,9 @@ bool RendererVk::create_layouts() {
                                    std::memory_order_relaxed);
     draw_layout_.depth_clamp = context.depth_clamp();
     draw_layout_.depth_clip_enable = context.depth_clip_enable();
-    persistent_pool_ = test_small_heaps()
-        ? create_pool(device, vk_detail::kSmallPersistentSets,
-                      vk_detail::constants_sets(2u, {.images = vk_detail::kSmallPersistentSets * vk::kBoundTableSlots,
-                                                     .samplers = vk_detail::kSmallPersistentSets * vk::kBoundTableSlots}))
-        : create_pool(device, kPersistentSets, kPersistentPool);
+    persistent_pool_ = create_pool(device, vk_detail::kFirstPersistentSets,
+                                   vk_detail::constants_sets(2u, {.images = vk_detail::kFirstPersistentSets * vk::kBoundTableSlots,
+                                                                  .samplers = vk_detail::kFirstPersistentSets * vk::kBoundTableSlots}));
     return true;
 }
 

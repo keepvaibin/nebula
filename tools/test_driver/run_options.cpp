@@ -54,35 +54,24 @@ RunOptions read_options() {
     o.audio_test_reopen = nebula_switch::audio_test_reopen();
     o.audio_test_gaps = nebula_switch::audio_test_gaps();
     o.boot_fast = nebula_switch::boot_fast();
-    o.d3d12_test_no_feature = nebula_switch::d3d12_test_no_feature();
-    o.hide_window = nebula_switch::hide_window();
-    o.test_no_raw_mouse = nebula_switch::test_no_raw_mouse();
     o.present_snapshot_dir = nebula_switch::present_snapshot_dir();
     o.present_snapshot_every = nebula_switch::present_snapshot_every();
     o.present_snapshot_first = nebula_switch::present_snapshot_first();
     o.present_snapshot_last = nebula_switch::present_snapshot_last();
     o.present_snapshot_game_only = nebula_switch::present_snapshot_game_only();
-    o.test_cpu_affinity = nebula_switch::test_cpu_affinity();
     o.test_deterministic = nebula_switch::test_deterministic();
     o.test_disc_delay_us = nebula_switch::test_disc_delay_us();
     o.test_device_lost = nebula_switch::test_device_lost();
     o.test_gpu_lost_frame = nebula_switch::test_gpu_lost_frame();
     o.test_gpu_lost_times = nebula_switch::test_gpu_lost_times();
     o.test_home_row = nebula_switch::test_home_row();
-    o.test_memory_at = nebula_switch::test_memory_at();
-    o.test_one_game = nebula_switch::test_one_game();
-    o.test_post_fault = nebula_switch::test_post_fault();
     o.test_script_clock = nebula_switch::test_script_clock();
-    o.test_small_heaps = nebula_switch::test_small_heaps();
     o.test_settings_keys = nebula_switch::test_settings_keys();
     o.test_settings_open = nebula_switch::test_settings_open();
     o.test_vram_budget_mb = nebula_switch::test_vram_budget_mb();
     o.test_window_sizes = nebula_switch::test_window_sizes();
     o.test_mods_screen = nebula_switch::test_mods_screen();
     o.test_mods_changed = nebula_switch::test_mods_changed();
-    o.vk_simulate_driver = nebula_switch::vk_simulate_driver();
-    o.vk_test_no_feature = nebula_switch::vk_test_no_feature();
-    o.xinput_require_focus = nebula_switch::xinput_require_focus();
 #if defined(_WIN32)
     // Set but empty counts as set: an empty path never falls back to a player's.
     static std::deque<std::wstring> wide;

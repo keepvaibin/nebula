@@ -99,7 +99,7 @@ $bin = Join-Path $root "versions\$New"
 $appdata = Join-Path $base 'localappdata'
 New-Item -ItemType Directory -Force $appdata, (Join-Path $base 'saves') | Out-Null
 $env:NEBULA_WORK = $base; $env:NEBULA_APPDATA = $appdata; $env:NEBULA_SAVES = Join-Path $base 'saves'; $env:NEBULA_SETTINGS = Join-Path $base 'settings'
-$env:GALAXY_HIDE_WINDOW = '1'; $env:GALAXY_XINPUT_REQUIRE_FOCUS = '1'; $env:LOCALAPPDATA = $appdata
+$env:LOCALAPPDATA = $appdata
 $env:GALAXY_AUDIO_WAV_DUMP_ONLY = '1'; $env:GALAXY_AUDIO_WAV_DUMP = Join-Path $base 'audio.wav'
 $log = Join-Path $base 'boot.log'
 $p = Start-Process -FilePath (Join-Path $bin 'NebulaNative.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--saves', "`"$(Join-Path $base 'saves')`"", '--settings', "`"$base`"", '--crash-dumps', "`"$base`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')

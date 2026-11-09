@@ -3,6 +3,7 @@
 // loses the pointer). Hidden window: no live keyboard or mouse.
 
 #include "galaxy/runtime_settings.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/input/host_input.h"
@@ -125,7 +126,7 @@ void replayed_input() {
 }  // namespace
 
 int main() {
-    set_env("GALAXY_HIDE_WINDOW", "1");
+    galaxy::g_launch_args.started_hidden = true;
     try {
         scripted_input();
         replayed_input();

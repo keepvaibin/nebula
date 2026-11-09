@@ -91,6 +91,9 @@ struct LaunchArgs {
     unsigned diagnostics = 0u;          // --diagnostics: Diagnostic bits
     unsigned gpu_validation = 0u;       // --gpu-validation: 1 the graphics API's validation layer, 2 also Direct3D 12's GPU-based
     bool console_log = false;           // --console-log 1: the log stays on the console, not logs/latest.log
+    // Started with its window hidden (Windows: STARTUPINFO's SW_HIDE, as a test starts it): no window, dialog or Discord
+    // status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
+    bool started_hidden = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
 };
 

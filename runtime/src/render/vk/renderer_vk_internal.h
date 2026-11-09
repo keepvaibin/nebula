@@ -75,10 +75,10 @@ constexpr PoolSizes frame_pool(bool bound_tables, std::uint32_t sets = kFrameSet
                                  .samplers = kFrameUtilitySamplers, .storage = kPassStorageBuffers,
                                  .storage_images = kPassStorageImages});
 }
-// GALAXY_TEST_SMALL_HEAPS: the first pools hold a handful of sets, so the overflow pools (a new pool when one is full) are made at
-// once. The overflow pools are full size.
-inline constexpr std::uint32_t kSmallFrameSets = 8u;
-inline constexpr std::uint32_t kSmallPersistentSets = 4u;
+// The first pools hold a handful of sets; an overflow pool (a new pool when one is full, full size) is made as the content
+// asks, in every session.
+inline constexpr std::uint32_t kFirstFrameSets = 8u;
+inline constexpr std::uint32_t kFirstPersistentSets = 4u;
 // The persistent pool (and each overflow pool after it): samplers, the corner set and cached constants sets.
 inline constexpr std::uint32_t kPersistentSets = 1024u;
 inline constexpr PoolSizes kPersistentPool = constants_sets(64u, {.images = kPersistentSets * vk::kBoundTableSlots, .samplers = kPersistentSets * vk::kBoundTableSlots});

@@ -32,8 +32,6 @@ pointer-latency, present-stats, gpu-passes), `0` (nothing). Texture dumps are a 
 
 | Variable | Effect |
 |---|---|
-| `GALAXY_HIDE_WINDOW=1` | Runs without showing the game window; controllers never vibrate |
-| `GALAXY_TEST_NO_RAW_MOUSE=1` | Leaves raw mouse motion (WM_INPUT) unregistered, so only the cursor position moves the pointer |
 | `GALAXY_AUDIO_WAV_DUMP=<path>`, `GALAXY_AUDIO_WAV_DUMP_ONLY=1` | Write the mixed audio to a WAV file, optionally without opening the sound device |
 | `GALAXY_PRESENT_SNAPSHOT_DIR`, `GALAXY_PRESENT_SNAPSHOT_EVERY`, `_FIRST`, `_LAST` | Save every Nth presented frame as a PPM image |
 

@@ -1,5 +1,6 @@
 #include "../../tools/test_driver/switches.h"
 #include "galaxy/host_env.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/test_data_paths.h"
 
 #include "galaxy/windows_api.h"
@@ -25,7 +26,7 @@ int main() {
         check(!galaxy::host::path_is_within("relative", root), "relative path");
         check(galaxy::host::path_is_within(L"d:/nebulawork/port/x/runs/path-policy/settings", root), "Windows case");
 
-        _putenv_s("GALAXY_HIDE_WINDOW", "1");
+        galaxy::g_launch_args.started_hidden = true;
         _wputenv_s(L"NEBULA_WORK", root.c_str());
         const wchar_t* names[] = {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_SAVES", L"LOCALAPPDATA"};
         for (const auto* name : names) _wputenv_s(name, (root / name).c_str());
@@ -58,7 +59,7 @@ int main() {
             argv[value] = kept;
         }
         _wputenv_s(L"NEBULA_WORK", L"");
-        _putenv_s("GALAXY_HIDE_WINDOW", "0");
+        galaxy::g_launch_args.started_hidden = false;
         _putenv_s(nebula_switch::test_path_guard_name(), "1");
         check(galaxy::host::test_data_paths_error(1, argv), "test variable activates guard");
         std::cout << "test data paths: passed\n";

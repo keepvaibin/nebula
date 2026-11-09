@@ -123,11 +123,9 @@ public:
     [[nodiscard]] VkQueue generation_acquire_queue() const noexcept { return generation_acquire_queue_; }
     [[nodiscard]] std::uint32_t queue_family() const noexcept { return queue_family_; }
     // Frame sync on one timeline semaphore (completed_value reads it, wait waits on it) rather than a fence per submission.
-    // GALAXY_VK_TEST_NO_FEATURE=timeline keeps the fences.
     [[nodiscard]] bool timeline_semaphores() const noexcept { return timeline_ != VK_NULL_HANDLE; }
     // A queue of a family that only transfers (no graphics or compute), when the device has one and timeline semaphores:
     // textures are copied there beside the frame (texture_backend_vk.cpp). Null otherwise.
-    // GALAXY_VK_TEST_NO_FEATURE=transfer_queue leaves it out.
     [[nodiscard]] VkQueue transfer_queue() const noexcept { return transfer_queue_; }
     [[nodiscard]] std::uint32_t transfer_family() const noexcept { return transfer_family_; }
     // Submits one command buffer to the transfer queue; it signals the transfer timeline semaphore, whose value is returned.
@@ -180,7 +178,7 @@ public:
     // VK_KHR_present_wait with VK_KHR_present_id, enabled: vkWaitForPresentKHR waits until a presented frame is on the screen.
     [[nodiscard]] bool present_wait() const noexcept { return present_wait_; }
     // VK_EXT_swapchain_colorspace on the instance (the surface can list HDR10 formats) and VK_EXT_hdr_metadata on the device
-    // (vkSetHdrMetadataEXT), each where it is here and not switched off by GALAXY_VK_TEST_NO_FEATURE=hdr.
+    // (vkSetHdrMetadataEXT), each where it is here.
     [[nodiscard]] bool swapchain_colorspace() const noexcept { return swapchain_colorspace_; }
     [[nodiscard]] bool hdr_metadata() const noexcept { return hdr_metadata_; }
     // Swapchain maintenance 1, enabled with its surface extension on the instance: a swap chain made with a list of present
@@ -196,7 +194,7 @@ public:
     [[nodiscard]] bool host_image_copy() const noexcept { return host_image_copy_; }
     // The device maps video memory for the CPU in bulk (resizable BAR): a device-local host-visible coherent type in a heap
     // larger than the 256 MB window, on a device that also has video memory the CPU cannot map. BufferPlace::DeviceMapped
-    // buffers lie there; elsewhere they are Host. GALAXY_VK_TEST_NO_FEATURE=gpu_upload keeps host memory.
+    // buffers lie there; elsewhere they are Host.
     [[nodiscard]] bool device_mapped_memory() const noexcept { return device_mapped_memory_; }
     // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports VK_ERROR_DEVICE_LOST without reaching the driver, as a
     // lost device would; no API removes a Vulkan device. The fault report is skipped (the device is not lost).

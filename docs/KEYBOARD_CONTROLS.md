@@ -245,8 +245,7 @@ turns vibration off, and values the player changed stay.
 
 ## Controllers
 
-- Xbox: every XInput slot (0-3) is read. `GALAXY_XINPUT_REQUIRE_FOCUS=1` reads it only while the window has
-  focus.
+- Xbox: every XInput slot (0-3) is read while the window has focus.
 - Switch Pro Controller: USB or Bluetooth (HID). Nebula reads the stick and
   IMU calibration from the controller, switches it to full reports with the
   IMU on, rumble off and player LED 1.

@@ -1,6 +1,7 @@
 // The real Wii Remote's worker (wiimote_hid.h): finds a remote through the platform's link (wiimote_link.h), sets it
 // up as the game wants it and hands its reports to the host's input thread.
 #include "galaxy/wiimote_hid.h"
+#include "galaxy/launch_args.h"
 
 #include "galaxy/input/host_input.h"
 #include "galaxy/platform_time.h"
@@ -447,9 +448,8 @@ void name_this_thread() {
 }  // namespace
 
 void ensure_real_wiimote_started() noexcept {
-    // Test sessions (hidden window) never take the player's remote.
-    static const bool hidden = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
-    if (hidden) return;
+    // A hidden start (a test) never takes the player's remote.
+    if (::galaxy::launch_args().started_hidden) return;
     std::call_once(shared().started, [] {
         try {
             std::thread([] {

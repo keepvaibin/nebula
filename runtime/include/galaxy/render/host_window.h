@@ -60,7 +60,7 @@ extern std::timed_mutex surface_use;
 bool flush_native_settings_if_dirty();
 // Takes a config.ini that Nebula Settings changed while the game runs.
 void poll_render_config_file();
-// GALAXY_HIDE_WINDOW: a hidden test window.
+// A hidden start (launch_args.h started_hidden): the window is never shown.
 [[nodiscard]] bool hidden_window_mode_enabled();
 
 // The game window at the renderer's start, owned by `owner`. Sets backbuffer_width/height; a null window (logged)

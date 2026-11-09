@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
-#include "galaxy/run_options.h"
 #include "galaxy/render/vk/vk_context.h"
 #include "galaxy/render/render_config.h"
 #if defined(NEBULA_DEV)
@@ -316,11 +315,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         surface_maintenance_ = true;
     }
     // The surface's HDR formats (HDR10 ST 2084, scRGB) are listed only with this on the instance.
-    bool test_no_hdr = false;
-    if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
-        test_no_hdr = (std::string(",") + names + ",").find(",hdr,") != std::string::npos;
-    }
-    if (!test_no_hdr && has_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME)) {
+    if (has_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME)) {
         if (std::none_of(instance_extensions.begin(), instance_extensions.end(),
                          [&](const char* have) { return std::strcmp(have, VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME) == 0; })) {
             instance_extensions.push_back(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
@@ -449,33 +444,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     quirks_ = quirks_for(identity_);
     VkPhysicalDeviceFeatures available{};
     vkGetPhysicalDeviceFeatures(physical_, &available);
-    // GALAXY_VK_TEST_NO_FEATURE=<names, comma-separated>: this GPU acts without those features, as a phone's may, so
-    // the paths for it run on any GPU. "indexing": no descriptor indexing (draws bind their own tables).
-    bool test_no_indexing = false;
-    bool test_no_device_fault = false;
-    bool test_no_host_image_copy = false;
-    bool test_no_present_wait = false;
-    bool test_no_present_mode_switch = false;
-    bool test_no_pipeline_library = false;
-    bool test_no_timeline = false;
-    bool test_no_transfer_queue = false;
-    bool test_no_gpu_upload = false;
-    if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
-        const std::string list = std::string(",") + names + ",";
-        const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
-        if (off("bc")) available.textureCompressionBC = VK_FALSE;
-        if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
-        if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
-        test_no_indexing = off("indexing");
-        test_no_device_fault = off("device_fault");
-        test_no_host_image_copy = off("host_image_copy");
-        test_no_present_wait = off("present_wait");
-        test_no_present_mode_switch = off("present_mode_switch");
-        test_no_pipeline_library = off("pipeline_library");
-        test_no_timeline = off("timeline");
-        test_no_transfer_queue = off("transfer_queue");
-        test_no_gpu_upload = off("gpu_upload");
-    }
+    // A device without a feature (as a phone's may be) is presented on any GPU by the Khronos profiles layer
+    // (VK_LAYER_KHRONOS_profiles with a gpuinfo.org profile): each path below follows what the device reports.
     VkPhysicalDeviceFeatures enabled{};
     enabled.sampleRateShading = available.sampleRateShading;
     sample_rate_shading_ = available.sampleRateShading == VK_TRUE;
@@ -508,8 +478,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // VK_EXT_descriptor_indexing. It is used only when all of it is here.
     const bool indexing_extension =
         !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-    std::string indexing_note = test_no_indexing ? "switched off by GALAXY_VK_TEST_NO_FEATURE" : "no descriptor indexing";
-    if (!test_no_indexing && (core_12 || indexing_extension)) {
+    std::string indexing_note = "no descriptor indexing";
+    if (core_12 || indexing_extension) {
         VkPhysicalDeviceDescriptorIndexingFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &have;
@@ -619,8 +589,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // Timeline semaphores: the core feature of Vulkan 1.2 or the extension's, wherever the device has it. One for the graphics
     // queue's frame sync (submit, completed_value, wait) and, with a transfer-only queue family, one for that queue's copies.
     bool timeline_wanted = false;
-    if (!test_no_timeline && (properties_.apiVersion >= VK_API_VERSION_1_2 ||
-                              has_device_extension(physical_, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))) {
+    if (properties_.apiVersion >= VK_API_VERSION_1_2 ||
+        has_device_extension(physical_, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME)) {
         VkPhysicalDeviceTimelineSemaphoreFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &have;
@@ -628,7 +598,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         timeline_wanted = have.timelineSemaphore == VK_TRUE;
     }
     std::uint32_t transfer_family = UINT32_MAX;
-    if (timeline_wanted && !test_no_transfer_queue) {
+    if (timeline_wanted) {
         std::uint32_t families = 0u;
         vkGetPhysicalDeviceQueueFamilyProperties(physical_, &families, nullptr);
         std::vector<VkQueueFamilyProperties> props(families);
@@ -691,7 +661,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     }
     // The fault report after a lost device (report_device_fault): the extension and its feature, enabled where both are here.
     VkPhysicalDeviceFaultFeaturesEXT fault{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT};
-    if (!test_no_device_fault && has_device_extension(physical_, VK_EXT_DEVICE_FAULT_EXTENSION_NAME)) {
+    if (has_device_extension(physical_, VK_EXT_DEVICE_FAULT_EXTENSION_NAME)) {
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &fault;
         vkGetPhysicalDeviceFeatures2(physical_, &features);
@@ -706,7 +676,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // Writes to a texture from host memory (texture_backend_vk.cpp): the extension (core in 1.4; before 1.3 it needs two more),
     // its feature, and SHADER_READ_ONLY_OPTIMAL among the layouts it copies into, where the textures rest.
     VkPhysicalDeviceHostImageCopyFeaturesEXT host_copy{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT};
-    if (!test_no_host_image_copy && has_device_extension(physical_, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME) &&
+    if (has_device_extension(physical_, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME) &&
         (properties_.apiVersion >= VK_API_VERSION_1_3 ||
          (has_device_extension(physical_, VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME) &&
           has_device_extension(physical_, VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME)))) {
@@ -740,7 +710,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // both features.
     VkPhysicalDevicePresentIdFeaturesKHR present_id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR};
     VkPhysicalDevicePresentWaitFeaturesKHR present_wait{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR};
-    if (!test_no_present_wait && has_device_extension(physical_, VK_KHR_PRESENT_ID_EXTENSION_NAME) &&
+    if (has_device_extension(physical_, VK_KHR_PRESENT_ID_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_PRESENT_WAIT_EXTENSION_NAME)) {
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &present_id;
@@ -756,7 +726,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     }
     // A present mode per present (the surface side was enabled on the instance): swapchain maintenance 1 and its feature.
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT swap_maintenance{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT};
-    if (surface_maintenance_ && !test_no_present_mode_switch) {
+    if (surface_maintenance_) {
         const char* const name = surface_maintenance_khr_ ? "VK_KHR_swapchain_maintenance1" : "VK_EXT_swapchain_maintenance1";
         if (has_device_extension(physical_, name)) {
             VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
@@ -773,7 +743,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // first use. Taken only where the driver says linking is fast (graphicsPipelineLibraryFastLinking): else a library is a
     // detour, and the monolithic pipeline stays.
     VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT pipeline_library{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT};
-    if (!test_no_pipeline_library && has_device_extension(physical_, VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME) &&
+    if (has_device_extension(physical_, VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME)) {
         VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         features.pNext = &pipeline_library;
@@ -1125,7 +1095,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             unmapped_video = unmapped_video || ((flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0u &&
                                                 (flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0u);
         }
-        device_mapped_memory_ = !test_no_gpu_upload && large_mapped && unmapped_video;
+        device_mapped_memory_ = large_mapped && unmapped_video;
         std::string text;
         for (std::uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
             const VkMemoryHeap& heap = memory.memoryHeaps[i];

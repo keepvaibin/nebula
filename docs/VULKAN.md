@@ -58,9 +58,8 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   crash, as on a laptop with two, is not this one's).
 - **Reports.** The first refusal logs the VkResult, the pipeline's state, this process's driver log (Android's
   logcat) and the shaders' HLSL.
-- **Checks** (development scripts, outside the repository): `vk_compat_runs.sh` runs a simulated driver
-  (`GALAXY_VK_SIMULATE_DRIVER=qualcomm:512.700.0`) and device features switched off
-  (`GALAXY_VK_TEST_NO_FEATURE=dual-source,bc,geometry,anisotropy,tessellation,gather`); `vk_profile_matrix.sh` runs the game under the validation layer with
+- **Checks** (development scripts, outside the repository): the workaround table is unit-tested by driver and version
+  (`galaxy_vk_driver_key_tests`); `vk_profile_matrix.sh` runs the game under the validation layer with
   each Android GPU's gpuinfo.org profile (`fetch_device_profiles.py`: Adreno 610-840, Turnip, Mali-G52-G715,
   PowerVR, Xclipse, Maleoon; newest and oldest driver each); `galaxy_vk_shader_tests <keys.bin>` compiles every
   captured shader in every form.
@@ -83,8 +82,6 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
 - **Texture uploads.** With `VK_EXT_host_image_copy` (and SHADER_READ_ONLY_OPTIMAL among the layouts it copies into, and
   `optimalDeviceAccess` for the format) a new game or pack texture is written from host memory, with no copy command; the log says
   `[textures] uploads: ...` once. Movie planes and textures an id updates in place are still copied.
-- **Test switches** (test builds): `GALAXY_VK_TEST_NO_FEATURE` also takes `device_fault`, `host_image_copy`, `present_wait`, `present_mode_switch`, `pipeline_library`, `timeline` (fences for frame sync), `transfer_queue` and `gpu_upload`;
-  `GALAXY_D3D12_TEST_NO_FEATURE=uma_writes` keeps Direct3D 12's staged copies on a shared-memory adapter.
 
 ## Android controls (the user's design, 2026-10-18)
 

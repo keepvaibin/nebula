@@ -11,7 +11,6 @@
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render_api.h"
-#include "galaxy/run_options.h"
 
 #include <algorithm>
 #include <array>
@@ -43,15 +42,9 @@ inline constexpr std::size_t kSceneVariantCount = std::size_t{kSceneVariantTarge
 }
 
 inline constexpr unsigned kFramesInFlight = 2;
-// GALAXY_TEST_SMALL_HEAPS=1 (test builds): the renderers start their descriptor heaps and pools and their upload rings tiny, so the
-// growth that keeps a count from being a cap runs at once.
-[[nodiscard]] inline bool test_small_heaps() noexcept {
-    return ::galaxy::run_option_flag(::galaxy::run_options().test_small_heaps, false);
-}
-// A ring's first size: `bytes`, or one megabyte under test_small_heaps().
-[[nodiscard]] inline std::size_t first_ring_bytes(std::size_t bytes) noexcept {
-    return test_small_heaps() ? std::size_t{1} << 20u : bytes;
-}
+// The upload rings' first size: one megabyte each. A ring grows at a frame boundary to what the frames take (the descriptor
+// heaps and pools the same way), so the growth runs in every session and no first size is a guess of the content.
+inline constexpr std::size_t kFirstRingBytes = std::size_t{1} << 20u;
 // The vertex and matrix rings' segments:a frame reads the rows and vertices of the walk before it.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
 inline constexpr std::size_t kVertexRingBytes = 32u * 1024u * 1024u;

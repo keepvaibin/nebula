@@ -123,7 +123,7 @@ void set_joycon_pairing(bool on) noexcept;
 // The HID interfaces present of `vendor`'s `products`, by device path (a real Wii Remote's, wiimote_hid.cpp).
 [[nodiscard]] std::vector<std::wstring> hid_interface_paths(std::uint16_t vendor,
                                                            std::span<const std::uint16_t> products);
-// A test session (GALAXY_HIDE_WINDOW set and not 0, false, off or no): it drives no motor and takes no Wii Remote.
+// A hidden start (launch_args.h started_hidden, a test): it drives no motor and takes no Wii Remote.
 [[nodiscard]] bool hidden_test_session() noexcept;
 
 }  // namespace galaxy::host

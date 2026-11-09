@@ -145,6 +145,16 @@ struct PostSelfTestResult {
 [[nodiscard]] PostSelfTestResult check_post_self_test(const std::uint8_t* pattern, const std::uint8_t* result,
                                                       unsigned pitch) noexcept;
 
+// What the AA passes can do after the start: SMAA needs its pipelines and lookup textures, FXAA its pipeline. A pass
+// that cannot run has its reason for the settings overlay ("" when it can).
+struct AaAvailability {
+    bool smaa_ok = false;
+    bool fxaa_ok = false;
+    const char* smaa_reason = "";
+    const char* fxaa_reason = "";
+};
+[[nodiscard]] AaAvailability aa_availability(bool smaa_pipelines, bool lookup_textures, bool fxaa_pipeline) noexcept;
+
 // What the presentation chain can do and did last frame; published by the
 // renderer for the settings overlay and the logs.
 struct PostProcessStatus {

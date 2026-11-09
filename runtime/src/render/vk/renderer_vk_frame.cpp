@@ -1917,7 +1917,7 @@ void RendererVk::attach_texture_uploads(TextureStore& cache) {
     if (bindless_ && mirrored_backend_ != &cache.backend() && cache.backend().ready()) {
         // Every view goes to the image array at its index from now on: a set for twice the views made so far (at least
         // kBindlessTextureSlotsMin), the null view in its last slot.
-        const std::uint64_t wanted = std::max<std::uint64_t>(test_small_heaps() ? 64u : vk::kBindlessTextureSlotsMin,
+        const std::uint64_t wanted = std::max<std::uint64_t>(vk::kBindlessTextureSlotsFirst,
                                                              2u * std::uint64_t{cache.backend().live_views()});
         install_texture_array(cache, static_cast<std::uint32_t>(std::min<std::uint64_t>(wanted, texture_array_limit_)));
     }

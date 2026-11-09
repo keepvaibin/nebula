@@ -111,8 +111,9 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   Windows 64-handle limit is gone. A device key's slot is 32 bits (the keyboard and the phone's screen take the top two values); the
   HID worker's tables hold 256 pads (`kMaxHidPads`), a size of those tables and not of the key. The controller list is XInput's four
   and the HID pads; the list the CONTROLS page shows has no cap; the raw input device list is as long as the system says.
-- **Test switch** `GALAXY_TEST_SMALL_HEAPS=1` (test builds) starts the rings at 1 MB, the Direct3D 12 heap's regions at 4 persistent and
-  64 texture descriptors, and the first Vulkan pools at a handful of sets, so every growth above runs in the first seconds.
+- **First sizes**: the rings start at 1 MB, the Direct3D 12 heap's regions at 1024 per frame, 4 persistent and 64 texture
+  descriptors, the Vulkan texture array at 64 and the first Vulkan pools at a handful of sets; each grows to what the content takes,
+  so every growth above runs in the first seconds of every session.
 - **Video memory**: no size of it is assumed. The renderer reads the adapter's usage and budget at most ten times a second (a kernel
   call; DXGI's budget-change event is taken at once) and each frame boundary acts on the latest reading: DXGI `QueryVideoMemoryInfo`
   (usage at most every 100 ms; the budget at once when the OS signals `RegisterVideoMemoryBudgetChangeNotificationEvent`, which is
@@ -174,11 +175,10 @@ sent it before its staging chunks (the 16 MB pool of `TextureStore`) and retired
 transfer queue's value at the time of the call before it destroys anything. With enhanced barriers a texture in the common layout is copied
 to and from on a copy queue without a barrier; with legacy states the copy list moves it common to copy destination and back. Not used with
 direct host writes (unified memory with coherence, or `VK_EXT_host_image_copy`), which have no copy to overlap.
-`GALAXY_VK_TEST_NO_FEATURE=transfer_queue` leaves the transfer queue out.
 
 **Vulkan frame sync.** Where the device has timeline semaphores (core 1.2, or `VK_KHR_timeline_semaphore`) every submission signals the
 next value of one timeline semaphore; `completed_value` reads it and `wait` waits on it. One object instead of a fence for each
-submission (and no fence pool). Without them the fences stay. `GALAXY_VK_TEST_NO_FEATURE=timeline` keeps the fences.
+submission (and no fence pool). Without them the fences stay.
 
 **Rings in video memory.** The vertex and constant rings are written once, in order, and read by the GPU every frame. Where the device maps
 its video memory for the CPU in bulk they live there, on a discrete adapter only (on one that shares system memory an upload heap is
@@ -186,7 +186,7 @@ already memory the GPU reads at full speed) (Direct3D 12: `D3D12_HEAP_TYPE_GPU_U
 adapter is not UMA;
 Vulkan: a device-local host-visible coherent memory type in a heap larger than the 256 MB window, beside video memory the CPU cannot map).
 The index and matrix rings and everything else stay in host memory. `[ring]` lines and `[gpu-rings]` say `memory=video (CPU-mapped)` or
-`host`. `GALAXY_D3D12_TEST_NO_FEATURE=gpu_upload` and `GALAXY_VK_TEST_NO_FEATURE=gpu_upload` keep host memory.
+`host`.
 
 **Recording a big pass on several threads.** A draw pass of at least 1500 items on a machine with at least 6 logical processors is
 resolved on the render thread as ever (views, materials, pipelines, texture lists), but its encoder calls go to a recorder as plain
@@ -211,7 +211,7 @@ BT.2390 roll-off of the brightest channel to the display's peak when that is und
 triangular dither. `hdr10_encode` (post_process_settings.cpp) is the CPU twin the tests check. With HDR off nothing differs: the same
 passes write the same 8-bit values (`origin[2] == 1`). Screenshots and test pictures stay SDR: while the chain is HDR, a capture draws
 the last write again for an 8-bit window into a scratch target and reads that. HDR stays off under frame generation (AMD's swap chain,
-DLSS), on a pre-rotated Vulkan surface, and without the post chain. `GALAXY_VK_TEST_NO_FEATURE=hdr` leaves the Vulkan extensions out.
+DLSS), on a pre-rotated Vulkan surface, and without the post chain.
 Log lines: `[display] output HDR|SDR ...`, `[hdr] on peak N nits paper M`, `[hdr] off`.
 
 ## Power
@@ -254,8 +254,8 @@ A lost device (driver reset) restarts the game from its save, twice in a row at 
 
 Test aids (test builds only): `GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1` leaves interpolated frames out of the snapshot
 numbering, `tools/verify/interp_real.sh` uses it to compare a run with interpolation on against one with it off by the game's own
-frames. `GALAXY_VK_TEST_NO_FEATURE` also takes `present_wait`, `present_mode_switch`, `pipeline_library`, `timeline`, `transfer_queue`
-and `gpu_upload`; `GALAXY_D3D12_TEST_NO_FEATURE` also takes `gpu_upload`.
+frames. A Vulkan device without a feature, or with another driver, is presented by the Khronos profiles layer
+(`VK_LAYER_KHRONOS_profiles` with a gpuinfo.org profile); the game has no switch for it.
 
 `tools/verify`: identical pictures between builds in deterministic mode (`GALAXY_TEST_DETERMINISTIC=1`), a window against the same build's
 control in real time, all stops in the tour, `[loss]` counters for draws without a material or pipeline.

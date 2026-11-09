@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan driver identification and known-bug table (device_quirks_vk.h).
 #include "galaxy/render/vk/device_quirks_vk.h"
-#include "galaxy/run_options.h"
 
-#include <charconv>
 #include <system_error>
 #include <cstdio>
 #include <cstdlib>
@@ -74,53 +72,6 @@ DriverVersion decode(DriverKind kind, std::uint32_t raw) {
     }
 }
 
-// GALAXY_VK_SIMULATE_DRIVER=<kind>:<major>.<minor>.<patch> (kind: qualcomm, arm, imagination, samsung) presents this
-// device as that driver to the table, so a desktop run exercises a mobile driver's workarounds.
-void apply_simulation(DeviceIdentity& identity) {
-    const char* value = ::galaxy::run_options().vk_simulate_driver;
-    if (value == nullptr || value[0] == '\0') {
-        return;
-    }
-    static constexpr struct {
-        const char* name;
-        DriverKind kind;
-        std::uint32_t vendor;
-    } kKinds[] = {{"qualcomm", DriverKind::QualcommProprietary, kVendorQualcomm},
-                  {"arm", DriverKind::ArmProprietary, kVendorArm},
-                  {"imagination", DriverKind::ImaginationProprietary, kVendorImagination},
-                  {"samsung", DriverKind::SamsungProprietary, kVendorSamsung}};
-    for (const auto& entry : kKinds) {
-        const std::size_t length = std::strlen(entry.name);
-        if (std::strncmp(value, entry.name, length) == 0 && value[length] == ':') {
-            // "major.minor[.patch]": at least two numbers.
-            unsigned parts[3] = {0u, 0u, 0u};
-            const char* at = value + length + 1;
-            const char* const end = at + std::strlen(at);
-            int read = 0;
-            while (read < 3) {
-                const auto [next, error] = std::from_chars(at, end, parts[read]);
-                if (error != std::errc{}) {
-                    break;
-                }
-                ++read;
-                at = next;
-                if (at == end || *at != '.') {
-                    break;
-                }
-                ++at;
-            }
-            const unsigned major = parts[0], minor = parts[1], patch = parts[2];
-            if (read >= 2) {
-                identity.driver = entry.kind;
-                identity.vendor_id = entry.vendor;
-                identity.driver_version = {major, minor, patch};
-                identity.driver_info = "simulated";
-            }
-            return;
-        }
-    }
-}
-
 }  // namespace
 
 DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties) {
@@ -146,7 +97,6 @@ DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties) {
         identity.driver = kind_from_vendor(core.vendorID);
     }
     identity.driver_version = decode(identity.driver, core.driverVersion);
-    apply_simulation(identity);
     return identity;
 }
 
