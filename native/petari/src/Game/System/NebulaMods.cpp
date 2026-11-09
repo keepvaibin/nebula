@@ -647,8 +647,13 @@ namespace {
         }
     }
 
+    // A galaxy with scenario data (the game's or a mod's): one a stage change or the scenario select can open.
+    bool isGalaxy(const char* pGalaxy) {
+        return pGalaxy != nullptr && ScenarioDataFunction::getScenarioDataParser()->getScenarioData(pGalaxy) != nullptr;
+    }
+
     void apiOpenScenarioSelect(const char* pGalaxy) {
-        if (pGalaxy != nullptr && sStageFrames > 0) {
+        if (isGalaxy(pGalaxy) && sStageFrames > 0) {
             MR::requestStartScenarioSelect(copyText(pGalaxy));
         }
     }
@@ -1392,7 +1397,7 @@ namespace {
     }
 
     void apiChangeStage(const char* pGalaxy, int32_t mission) {
-        if (pGalaxy != nullptr && sStageFrames > 0) {
+        if (isGalaxy(pGalaxy) && sStageFrames > 0) {
             MR::requestChangeStageInGameMoving(copyText(pGalaxy), mission);
         }
     }
@@ -1401,6 +1406,11 @@ namespace {
         if (sStageFrames > 0) {
             MR::requestChangeStageGoBackAstroDome();
         }
+    }
+
+    // A mod's galaxy name: the game's spelling of a galaxy the save keeps stars for, or null.
+    const char* starGalaxy(const char* pGalaxy) {
+        return pGalaxy != nullptr ? GameDataFunction::findStarGalaxyName(pGalaxy) : nullptr;
     }
 
     int32_t apiIsEventFlagOn(const char* pName) {
@@ -1414,7 +1424,8 @@ namespace {
     }
 
     int32_t apiHasStar(const char* pGalaxy, int32_t star) {
-        return pGalaxy != nullptr && star > 0 && MR::isOnGameEventFlagPowerStarSuccess(pGalaxy, star) ? 1 : 0;
+        const char* pName = starGalaxy(pGalaxy);
+        return pName != nullptr && star > 0 && MR::isOnGameEventFlagPowerStarSuccess(pName, star) ? 1 : 0;
     }
 
     void apiShowMessage(const char* pText, int32_t centre) {
@@ -1668,17 +1679,21 @@ namespace {
     }
 
     void apiSetStar(const char* pGalaxy, int32_t star, int32_t have) {
-        if (pGalaxy != nullptr && star > 0) {
-            GameDataFunction::setGameFlagPowerStarSuccess(pGalaxy, star, have != 0);
+        const char* pName = starGalaxy(pGalaxy);
+        if (pName != nullptr && star > 0) {
+            GameDataFunction::setGameFlagPowerStarSuccess(pName, star, have != 0);
         }
     }
 
     int32_t apiStarsInGalaxy(const char* pGalaxy) {
-        return pGalaxy != nullptr ? MR::makeGalaxyStatusAccessor(pGalaxy).getPowerStarNum() : 0;
+        const ScenarioData* pData =
+            pGalaxy != nullptr ? ScenarioDataFunction::getScenarioDataParser()->getScenarioData(pGalaxy) : nullptr;
+        return pData != nullptr ? pData->getPowerStarNum() : 0;
     }
 
     int32_t apiStarsWonInGalaxy(const char* pGalaxy) {
-        return pGalaxy != nullptr ? GameDataFunction::getPowerStarNumOwned(pGalaxy) : 0;
+        const char* pName = starGalaxy(pGalaxy);
+        return pName != nullptr ? GameDataFunction::getPowerStarNumOwned(pName) : 0;
     }
 
     // ---- layouts

@@ -17,6 +17,9 @@ namespace GameDataFunction {
     bool isAppearGalaxy(const char*);
     s32 calcCurrentPowerStarNum();
     s32 getPowerStarNumOwned(const char*);
+    // The galaxy's name as its scenario data spells it (found ASCII case folded), when the save keeps its stars; null
+    // for a galaxy with no stars or no scenario data.
+    const char* findStarGalaxyName(const char* pGalaxyName);
     s32 getPowerStarNumMax();
     s32 getPictureBookChapterCanRead();
     u32 getPictureBookChapterAlreadyRead();
