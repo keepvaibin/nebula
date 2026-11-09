@@ -1,6 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Render/FrameList.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/MapObj/FallOutFieldDraw.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/Material.hpp"
@@ -27,26 +27,14 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), mFillIns
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
     mDepthKey = ImageEffectLocalUtil::createFrameKey();
-    mMask = JUTTexture::createTarget(0.5f, 0.5f);
-    mMask->mWrapS = NEBULA_WRAP_CLAMP;
-    mMask->mWrapT = NEBULA_WRAP_CLAMP;
-    mMask->mMinType = NEBULA_FILTER_LINEAR;
-    mMask->mMagType = NEBULA_FILTER_LINEAR;
-    mBlurScratch = JUTTexture::createTarget(0.25f, 0.25f);
-    mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
-    mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
-    mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
-    mBlurScratch->mMagType = NEBULA_FILTER_LINEAR;
-    mEdge = JUTTexture::createTarget(0.25f, 0.25f);
-    mEdge->mWrapS = NEBULA_WRAP_CLAMP;
-    mEdge->mWrapT = NEBULA_WRAP_CLAMP;
-    mEdge->mMinType = NEBULA_FILTER_LINEAR;
-    mEdge->mMagType = NEBULA_FILTER_LINEAR;
-    mEdgeBlurred = JUTTexture::createTarget(0.25f, 0.25f);
-    mEdgeBlurred->mWrapS = NEBULA_WRAP_CLAMP;
-    mEdgeBlurred->mWrapT = NEBULA_WRAP_CLAMP;
-    mEdgeBlurred->mMinType = NEBULA_FILTER_LINEAR;
-    mEdgeBlurred->mMagType = NEBULA_FILTER_LINEAR;
+    mMask = GameTexture::createTarget(0.5f, 0.5f);
+    mMask->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
+    mBlurScratch = GameTexture::createTarget(0.25f, 0.25f);
+    mBlurScratch->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
+    mEdge = GameTexture::createTarget(0.25f, 0.25f);
+    mEdge->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
+    mEdgeBlurred = GameTexture::createTarget(0.25f, 0.25f);
+    mEdgeBlurred->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
 }
 
 namespace {
@@ -105,7 +93,7 @@ void FallOutFieldDraw::draw() const {
     // The mark as a half-size mask (arg 0: a pixel with any mark under it, else one with all marked), halved again and
     // blurred, each into its own texture, for the glow along the edge.
     ImageEffectLocalUtil::setWrites(false, true);
-    Frame::targetBeginOverFrame(mMask->mImage, mMask->mShareAcross, mMask->mShareDown, 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->mImage);
+    Frame::targetBeginOverFrame(mMask->image(), mMask->shareAcross(), mMask->shareDown(), 0, nullptr, NEBULA_TARGET_RGBA, mDepthKey->image());
     SiteMaterial mask;
     mask.init(NEBULA_SHADER_FRAME_DEPTH, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
     mask.mState.color_write = 0;
@@ -113,12 +101,12 @@ void FallOutFieldDraw::draw() const {
     mask.constants[0] = mFillInsideVolume ? 1.0f : 2.0f;
     mask.setTexture(0, mDepthKey);
     ImageEffectLocalUtil::drawQuad(mask);
-    Frame::targetEnd(mMask->mImage, NEBULA_TARGET_ALPHA);
+    Frame::targetEnd(mMask->image(), NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, ::sEdgeColor);
-    Frame::targetBegin(mEdge->mImage, mEdge->mShareAcross, mEdge->mShareDown, 0);
+    Frame::targetBegin(mEdge->image(), mEdge->shareAcross(), mEdge->shareDown(), 0);
     ImageEffectLocalUtil::drawTexture(mMask, 255, ImageEffectLocalUtil::TexDrawType_0);
-    Frame::targetEnd(mEdge->mImage, NEBULA_TARGET_ALPHA);
+    Frame::targetEnd(mEdge->image(), NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::blurTexture(mEdge, mBlurScratch, mEdgeBlurred, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
 

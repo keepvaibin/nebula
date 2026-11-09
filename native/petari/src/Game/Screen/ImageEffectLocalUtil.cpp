@@ -14,7 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 #include <cstring>
 
@@ -42,7 +42,7 @@ namespace {
     // blur's offset) in the mode, the material colour the intensity (draw type 2: its alpha), blended by the draw type
     // (0 replace, 1 added, 2 by its alpha, 3 the frame times it), no depth or culling; the colour and alpha writes the
     // caller set.
-    SiteMaterial drawMaterial(JUTTexture* pTexture, u8 intensity, u32 type) {
+    SiteMaterial drawMaterial(GameTexture* pTexture, u8 intensity, u32 type) {
         SiteMaterial material;
         static const SiteMaterial::Blend kBlends[4] = {SiteMaterial::BLEND_OPAQUE, SiteMaterial::BLEND_ADD,
                                                        SiteMaterial::BLEND_ALPHA, SiteMaterial::BLEND_OPAQUE};
@@ -64,7 +64,7 @@ namespace {
         return material;
     }
 
-    SiteMaterial gaussianMaterial(JUTTexture* pTexture, f32 axisX, f32 axisY, f32 width, f32 alphaGain) {
+    SiteMaterial gaussianMaterial(GameTexture* pTexture, f32 axisX, f32 axisY, f32 width, f32 alphaGain) {
         SiteMaterial material;
         material.init(NEBULA_SHADER_GAUSSIAN_BLUR, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
@@ -100,30 +100,27 @@ void ImageEffectLocalUtil::setWrites(bool color, bool alpha) {
     sWriteAlpha = alpha;
 }
 
-void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, u8 intensity, ETexDrawType texDrawType) {
+void ImageEffectLocalUtil::drawTexture(GameTexture* pTexture, u8 intensity, ETexDrawType texDrawType) {
     drawQuad(drawMaterial(pTexture, intensity, static_cast< u32 >(texDrawType) & 3u));
 }
 
-JUTTexture* ImageEffectLocalUtil::createFrameKey() {
-    JUTTexture* pKey = JUTTexture::createTarget(1.0f, 1.0f);
-    pKey->mWrapS = NEBULA_WRAP_CLAMP;
-    pKey->mWrapT = NEBULA_WRAP_CLAMP;
-    pKey->mMinType = NEBULA_FILTER_LINEAR;
-    pKey->mMagType = NEBULA_FILTER_LINEAR;
+GameTexture* ImageEffectLocalUtil::createFrameKey() {
+    GameTexture* pKey = GameTexture::createTarget(1.0f, 1.0f);
+    pKey->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
     return pKey;
 }
 
-void ImageEffectLocalUtil::drawFrameDepth(JUTTexture* pTarget, JUTTexture* pDepthKey) {
+void ImageEffectLocalUtil::drawFrameDepth(GameTexture* pTarget, GameTexture* pDepthKey) {
     setupDrawTexture();
-    Frame::targetBeginOverFrame(pTarget->mImage, pTarget->mShareAcross, pTarget->mShareDown, 0, nullptr, NEBULA_TARGET_RGBA,
-                                    pDepthKey->mImage);
+    Frame::targetBeginOverFrame(pTarget->image(), pTarget->shareAcross(), pTarget->shareDown(), 0, nullptr, NEBULA_TARGET_RGBA,
+                                    pDepthKey->image());
     SiteMaterial material;
     material.init(NEBULA_SHADER_FRAME_DEPTH, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
     material.setTexture(0, pDepthKey);
     material.mState.alpha_write = 0;
     drawQuad(material);
-    Frame::targetEnd(pTarget->mImage, NEBULA_TARGET_RED);
+    Frame::targetEnd(pTarget->image(), NEBULA_TARGET_RED);
 }
 
 void ImageEffectLocalUtil::drawQuad(const SiteMaterial& rMaterial) {
@@ -142,7 +139,7 @@ void ImageEffectLocalUtil::sendTextureVertex(TypedDraw& rDraw) {
     *vtx++ = {1.0f, 0.0f, 0.0f, 1.0f, 0.0f};
 }
 
-void ImageEffectLocalUtil::blurTexture(JUTTexture* pSource, JUTTexture* pScratch, JUTTexture* pTarget, f32 radius,
+void ImageEffectLocalUtil::blurTexture(GameTexture* pSource, GameTexture* pScratch, GameTexture* pTarget, f32 radius,
                                        NebulaTargetChannels channels, f32 alphaGain) {
     // A ring of `radius` spreads radius^2 / 2 along each axis, and a tap's bilinear footprint at the picture this blur
     // was made for (160 x 114) adds texel^2 / 6: the same width at every resolution.
@@ -152,12 +149,12 @@ void ImageEffectLocalUtil::blurTexture(JUTTexture* pSource, JUTTexture* pScratch
     const f32 widthX = __builtin_sqrtf(radius * radius / 2.0f + texelX * texelX / 6.0f);
     const f32 widthY = __builtin_sqrtf(verticalRadius * verticalRadius / 2.0f + texelY * texelY / 6.0f);
     const bool alphaAlone = channels == NEBULA_TARGET_ALPHA;
-    Frame::targetBegin(pScratch->mImage, pScratch->mShareAcross, pScratch->mShareDown, 0);
+    Frame::targetBegin(pScratch->image(), pScratch->shareAcross(), pScratch->shareDown(), 0);
     drawQuad(gaussianMaterial(pSource, 1.0f, 0.0f, widthX, alphaAlone ? 1.0f : 0.0f));
-    Frame::targetEnd(pScratch->mImage, channels);
-    Frame::targetBegin(pTarget->mImage, pTarget->mShareAcross, pTarget->mShareDown, 0);
+    Frame::targetEnd(pScratch->image(), channels);
+    Frame::targetBegin(pTarget->image(), pTarget->shareAcross(), pTarget->shareDown(), 0);
     drawQuad(gaussianMaterial(pScratch, 0.0f, 1.0f, widthY, alphaAlone ? alphaGain : 0.0f));
-    Frame::targetEnd(pTarget->mImage, channels);
+    Frame::targetEnd(pTarget->image(), channels);
 }
 
 void MR::connectToSceneNormalBloom(BloomEffect* pBloomEffect) {

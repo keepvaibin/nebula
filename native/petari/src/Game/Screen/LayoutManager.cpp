@@ -16,7 +16,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <cstdio>
 #include <cstring>
 #include <Game/Ui/Group.hpp>
@@ -567,9 +567,9 @@ void LayoutManager::replaceIndDummyTexture() {
         return;
     }
 
-    JUTTexture screenTex(MR::getScreenResTIMG());
+    GameTexture screenTex(MR::getScreenResTIMG());
 
-    mIndDummyTexMap = new Ui::TexMap(screenTex.getTexObj());
+    mIndDummyTexMap = new Ui::TexMap(screenTex.site());
 
     void* pIndDummyResStart = mLayoutHolder->getResOther("IndDummy.tpl");
     void* pIndDummyResEnd = reinterpret_cast< void* >(-1);

@@ -9,13 +9,13 @@
 class ModelData;
 class Model;
 class Material;
-class JUTTexture;
+class GameTexture;
 
 
 namespace MR {
     void setupScreen2D();
     void drawScreenColor(const NebulaColor8& rColor);
-    void drawScreenPicture(const JUTTexture& rTexture);
+    void drawScreenPicture(const GameTexture& rTexture);
     void resetDrawState();
     void loadViewMtxFor2DModel();
     void drawInitFor2DModel();
@@ -33,10 +33,10 @@ namespace MR {
     // writes as the drawing state has them (each pass sets them).
     void initShadowVolumeMaterial(SiteMaterial& rMaterial, const NebulaColor8& rColor);
     void fillSilhouetteColor();
-    const JUTTexture* getMarioShadowTex();
-    const JUTTexture* getMarioShadowTexForLoad();
+    const GameTexture* getMarioShadowTex();
+    const GameTexture* getMarioShadowTexForLoad();
     const Vec3f& getMarioShadowVec();
-    void setMarioShadowTex(const JUTTexture*);
+    void setMarioShadowTex(const GameTexture*);
     void setMarioShadowVec(const Vec3f&);
     void loadTexProjectionMtx(u32);
     // The camera's projection to screen texture coordinates (s, t, q from a world position) loadTexProjectionMtx loads.

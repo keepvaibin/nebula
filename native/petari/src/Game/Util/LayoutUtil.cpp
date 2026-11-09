@@ -18,7 +18,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Material.hpp>
 #include <Game/Ui/Picture.hpp>
@@ -386,15 +386,15 @@ void MR::setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(LayoutActor* pActor, co
 }
 
 Ui::TexMap* MR::createLytTexMap(const char* pArcName, const char* pTextureName) {
-    JUTTexture texture(loadTexFromArc(pArcName, pTextureName));
+    GameTexture texture(loadTexFromArc(pArcName, pTextureName));
 
-    return new Ui::TexMap(texture.getTexObj());
+    return new Ui::TexMap(texture.site());
 }
 
 Ui::TexMap* MR::createLytTexMap(ResTIMG* pImage) {
-    JUTTexture texture(pImage);
+    GameTexture texture(pImage);
 
-    return new Ui::TexMap(texture.getTexObj());
+    return new Ui::TexMap(texture.site());
 }
 
 Ui::TexMap* MR::getLytTexMap(LayoutActor* pActor, const char* pPaneName, u8 textureIndex) {

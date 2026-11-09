@@ -20,7 +20,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     // By arg 6.
@@ -501,7 +501,7 @@ void WarpPod::initDraw() {
         mPathPoints[i] = position + up * cPathLift;
     }
 
-    mGlowTexture = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
+    mGlowTexture = new GameTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
 }
 
 // A tube of two crossed ribbons along the path, facing the view, its texture's v running 1 at the ends to 0 midway.

@@ -18,7 +18,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
@@ -775,7 +775,7 @@ void SwingRope::drawBind(TypedDraw& rDraw) const {
 
 SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope", "SwingRope.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("SwingRope", "SwingRope.bti"));
 
     mMaterial = makeMaterial();
 }

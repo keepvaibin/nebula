@@ -19,7 +19,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 
 namespace {
@@ -750,7 +750,7 @@ void Trapeze::drawRope(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB,
 
 TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("Trapeze", "TrapezeRope.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("Trapeze", "TrapezeRope.bti"));
 
     mMaterial = makeMaterial();
 }

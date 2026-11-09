@@ -5,7 +5,7 @@
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
 
-class JUTTexture;
+class GameTexture;
 
 class StarPointerBlur : public NameObj {
 public:
@@ -18,7 +18,7 @@ public:
         bool mIsHidden;
     };
 
-    StarPointerBlur(JUTTexture* pTexture);
+    StarPointerBlur(GameTexture* pTexture);
 
     virtual ~StarPointerBlur();
 
@@ -41,7 +41,7 @@ public:
         mSubColor = pSubColor;
     }
 
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
     s32 mPadChannel;
     const NebulaColor8* mMainColor;
     const NebulaColor8* mSubColor;

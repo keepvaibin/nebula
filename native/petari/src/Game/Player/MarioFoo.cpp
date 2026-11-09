@@ -15,7 +15,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     f32 cTurnMotionSpeed = 5.0f;
@@ -73,7 +73,7 @@ MarioFoo::MarioFoo(MarioActor* pActor) : MarioState(pActor, MarioStatus_Foo) {
 }
 
 void MarioFoo::init() {
-    mTrailTexture = new JUTTexture(MR::getTexture(MR::getModelResourceHolder(mActor), "FooLine.bti"));
+    mTrailTexture = new GameTexture(MR::getTexture(MR::getModelResourceHolder(mActor), "FooLine.bti"));
 }
 
 bool MarioFoo::start() {

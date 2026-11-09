@@ -4,7 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 
 
@@ -18,8 +18,8 @@ namespace {
 BigBubbleDrawer::BigBubbleDrawer() {
     mBubbleTexture = nullptr;
     mRainbowTexture = nullptr;
-    mBubbleTexture = new JUTTexture(MR::loadTexFromArc("BigBubble", "Bubble.bti"));
-    mRainbowTexture = new JUTTexture(MR::loadTexFromArc("BigBubble", "Rainbow.bti"));
+    mBubbleTexture = new GameTexture(MR::loadTexFromArc("BigBubble", "Bubble.bti"));
+    mRainbowTexture = new GameTexture(MR::loadTexFromArc("BigBubble", "Rainbow.bti"));
 }
 
 void BigBubbleDrawer::setUpDraw() const {

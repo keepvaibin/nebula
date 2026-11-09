@@ -4,7 +4,7 @@
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 
 NebulaColor8 sWhirlPoolAcceleratorStageColor1 = {0x00, 0x34, 0x52, 0xFF};
@@ -37,7 +37,7 @@ void WhirlPoolAccelerator::init(const TableIter& rIter) {
     mHeight = 100.0f * mScale.y;
     MR::calcActorAxisY(&mAxis, this);
     initPoints();
-    mTexture = new JUTTexture(MR::loadTexFromArc("Whirlpool", "Whirlpool.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("Whirlpool", "Whirlpool.bti"));
     initSound(4, false);
     mClippingCenter.set(mPosition);
     mClippingCenter.y += mHeight / 2.0f;

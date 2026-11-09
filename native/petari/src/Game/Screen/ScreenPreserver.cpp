@@ -1,7 +1,7 @@
 #include "Game/Screen/ScreenPreserver.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "JSystem/JUtility/JUTTexture.hpp"
+#include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 ScreenPreserver::ScreenPreserver() : NameObj(""), mIsActive(false) {
@@ -20,7 +20,7 @@ void ScreenPreserver::draw() const {
     }
 
     MR::setupScreen2D();
-    JUTTexture tex(MR::getScreenResTIMG());
+    GameTexture tex(MR::getScreenResTIMG());
     MR::drawScreenPicture(tex);
 }
 

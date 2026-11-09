@@ -23,7 +23,7 @@ namespace {
     }
 };  // namespace
 
-const JUTTexture* mShadowTex;
+const GameTexture* mShadowTex;
 Vec3f mShadowVec;
 
 namespace MR {
@@ -85,13 +85,13 @@ namespace MR {
     }
 
     // runtime/src/render/materials/j2d_picture.hlsl: the texture over the screen.
-    void drawScreenPicture(const JUTTexture& rTexture) {
+    void drawScreenPicture(const GameTexture& rTexture) {
         SiteMaterial material;
         material.init(NEBULA_SHADER_J2D_PICTURE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         material.setColor(12, 255, 255, 255, 255);
         material.constants[16] = 1.0f;
-        material.constants[17] = rTexture.getTransparency() ? 1.0f : 0.0f;
+        material.constants[17] = rTexture.info()->mTransparency != 0 ? 1.0f : 0.0f;
         material.setTexture(0, &rTexture);
         const f32 width = getScreenWidth();
         const f32 height = ::getScreenHeightInline();
@@ -227,11 +227,11 @@ namespace MR {
 
     }
 
-    const JUTTexture* getMarioShadowTex() {
+    const GameTexture* getMarioShadowTex() {
         return mShadowTex;
     }
 
-    const JUTTexture* getMarioShadowTexForLoad() {
+    const GameTexture* getMarioShadowTexForLoad() {
         return mShadowTex;
     }
 
@@ -239,7 +239,7 @@ namespace MR {
         return mShadowVec;
     }
 
-    void setMarioShadowTex(const JUTTexture* pShadowTex) {
+    void setMarioShadowTex(const GameTexture* pShadowTex) {
         mShadowTex = pShadowTex;
     }
 

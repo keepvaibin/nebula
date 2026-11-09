@@ -5,7 +5,7 @@
 #include <NebulaGpuTypes.h>
 
 class BloomEffect;
-class JUTTexture;
+class GameTexture;
 class NameObj;
 
 namespace ImageEffectLocalUtil {
@@ -36,18 +36,18 @@ namespace ImageEffectLocalUtil {
     void setupDrawTexture();
     // What the draws that follow write: until the next setupDrawTexture, colour and not alpha.
     void setWrites(bool color, bool alpha);
-    void drawTexture(JUTTexture* pTexture, u8 intensity, ETexDrawType texDrawType);
+    void drawTexture(GameTexture* pTexture, u8 intensity, ETexDrawType texDrawType);
     void sendTextureVertex(TypedDraw& rDraw);
     // The material over the whole of the target.
     void drawQuad(const SiteMaterial& rMaterial);
     // A small texture whose key stands for the frame or its depth in a pass that samples them.
-    JUTTexture* createFrameKey();
+    GameTexture* createFrameKey();
     // The frame's depth into `pTarget`, half the screen; `pDepthKey` from createFrameKey. Leaves setupDrawTexture's state.
-    void drawFrameDepth(JUTTexture* pTarget, JUTTexture* pDepthKey);
+    void drawFrameDepth(GameTexture* pTarget, GameTexture* pDepthKey);
     // A Gaussian standing for a ring of `radius` (fractions of the screen), one pass across into `pScratch`, one down
     // into `pTarget`, all of the picture's size (a quarter of the screen). An alpha picture's result is times `alphaGain`,
     // clamped.
-    void blurTexture(JUTTexture* pSource, JUTTexture* pScratch, JUTTexture* pTarget, f32 radius, NebulaTargetChannels channels,
+    void blurTexture(GameTexture* pSource, GameTexture* pScratch, GameTexture* pTarget, f32 radius, NebulaTargetChannels channels,
                      f32 alphaGain = 1.0f);
 };  // namespace ImageEffectLocalUtil
 

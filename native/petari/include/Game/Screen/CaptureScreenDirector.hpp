@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 
-class JUTTexture;
+class GameTexture;
 struct ResTIMG;
 
 struct TimingInfo {
@@ -29,7 +29,7 @@ public:
 private:
     const char* mRequestedTiming;
     const char* mTimingType;
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
     bool mIsCaptureRequested;
 };
 

@@ -2,21 +2,21 @@
 
 #include "Game/Particle/ParticleDraw.hpp"
 
-#include "JSystem/JUtility/JUTTexture.hpp"
+#include "Game/Render/GameTexture.hpp"
 #include "Game/Particle/ParticleData.hpp"
 
 class ParticleTexture {
 public:
     ParticleTexture(const char* pName, const NebulaTextureInfo* pInfo) : mInfo(ResTIMG::fromNative(*pInfo)), mpName(pName) {
-        mTexture.storeTIMG(&mInfo);
+        mTexture.set(&mInfo);
     }
 
     // This texture in the particle material's slot.
     void use(u32 slot) {
-        ParticleMaterial::texture(slot, mTexture.texObj());
+        ParticleMaterial::texture(slot, &mTexture.site());
     }
 
-    JUTTexture* getJUTTexture() {
+    GameTexture* getTexture() {
         return &mTexture;
     }
     const char* getName() const {
@@ -25,6 +25,6 @@ public:
 
 public:
     ResTIMG mInfo;
-    JUTTexture mTexture;
+    GameTexture mTexture;
     const char* mpName;
 };

@@ -3,7 +3,7 @@
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/Transform.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
 #include <nebula_geometry.hpp>
 #include <string.h>

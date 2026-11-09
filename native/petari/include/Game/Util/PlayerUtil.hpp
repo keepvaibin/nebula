@@ -6,7 +6,7 @@ class BckCtrlData;
 class CameraTargetArg;
 class CubeCameraArea;
 class HitSensor;
-class JUTTexture;
+class GameTexture;
 class LiveActor;
 class NameObj;
 class Triangle;
@@ -196,7 +196,7 @@ namespace MR {
     bool isPlayerOnWaterSurface();
     bool isPlayerHidden();
     void calcPlayerWorldPadDir(Vec3f*, f32, f32);
-    JUTTexture* getFullScreenBlurTexture();
+    GameTexture* getFullScreenBlurTexture();
     u16 getPlayerMovementTimer();
     CubeCameraArea* getCameraCube();
 };  // namespace MR

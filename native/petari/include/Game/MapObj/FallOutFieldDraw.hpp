@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 
-class JUTTexture;
+class GameTexture;
 
 class FallOutFieldDraw : public NameObj {
 public:
@@ -15,11 +15,11 @@ public:
     void deactivate();
 
     bool mFillInsideVolume;
-    JUTTexture* mMask;      // the screen mask at half size
-    JUTTexture* mDepthKey;  // the frame's depth, in the mask's pass
-    JUTTexture* mEdge;
-    JUTTexture* mEdgeBlurred;
-    JUTTexture* mBlurScratch;
+    GameTexture* mMask;      // the screen mask at half size
+    GameTexture* mDepthKey;  // the frame's depth, in the mask's pass
+    GameTexture* mEdge;
+    GameTexture* mEdgeBlurred;
+    GameTexture* mBlurScratch;
 };
 
 namespace MR {

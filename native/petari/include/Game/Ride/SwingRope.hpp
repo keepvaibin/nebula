@@ -5,7 +5,7 @@
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
-class JUTTexture;
+class GameTexture;
 class SledRopePoint;
 class SwingRopePoint;
 
@@ -89,5 +89,5 @@ public:
     // What its objects draw with.
     SiteMaterial mMaterial;
 
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
 };

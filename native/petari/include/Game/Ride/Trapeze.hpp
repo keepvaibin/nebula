@@ -6,7 +6,7 @@
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
-class JUTTexture;
+class GameTexture;
 class PartsModel;
 class SwingRopePoint;
 
@@ -73,7 +73,7 @@ public:
     // What its objects draw with.
     SiteMaterial mMaterial;
 
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
 };
 
 // these have to be header bodies because for some reason they are actually linked in NameObjFactory

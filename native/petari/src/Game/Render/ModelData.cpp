@@ -3,7 +3,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/RenderTexture.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_format.h>
 #include <string.h>
 

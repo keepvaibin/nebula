@@ -2,7 +2,7 @@
 
 #include <nebula_geometry.hpp>
 
-class JUTTexture;
+class GameTexture;
 
 class MarineSnow {
 public:
@@ -16,5 +16,5 @@ public:
     Vec3f* mParticlePositions;
     f32 mCellSize;
     u16 mFadeStep;
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
 };

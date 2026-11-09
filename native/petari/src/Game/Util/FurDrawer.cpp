@@ -4,7 +4,7 @@
 #include "Game/Util/FurParam.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <cmath>
 
 namespace {
@@ -23,7 +23,7 @@ namespace {
 }  // namespace
 
 FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody)
-    : mBodyTexture(new JUTTexture(pBody)), mFurTexture(), mNumLayers(numLayers), mLength(), mShells(new f32[numLayers]), mBrightness(),
+    : mBodyTexture(new GameTexture(pBody)), mFurTexture(), mNumLayers(numLayers), mLength(), mShells(new f32[numLayers]), mBrightness(),
       mAlpha(), mColorBlend(), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColor() {
     for (u32 layer = 0; layer < numLayers; layer++) {
         mShells[layer] = 0.0f;
@@ -115,11 +115,11 @@ void FurDrawer::createFurMap(const FurParam& rParam) {
         pImage->mImageNum = 1;
         pImage->mLodBias = 0;
         pImage->mImageDataOffset = sizeof(ResTIMG);
-        mFurTexture = new JUTTexture(pImage);
+        mFurTexture = new GameTexture(pImage);
     }
 
     // LA8 texels in rows (NEBULA_TEXTURE_LINEAR_LA8): intensity, then alpha. Each strand is written at its place in the rows.
-    u8* pTexels = mFurTexture->mImage;
+    u8* pTexels = mFurTexture->image();
     const u32 count = height * width;
 
     for (u32 i = 0; i < count; i++) {

@@ -14,7 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "JSystem/JUtility/JUTTexture.hpp"
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     const s32 cPointNum = OceanBowl::cPointNum;
@@ -88,9 +88,9 @@ void OceanBowl::init(const TableIter& rIter) {
     initPoints();
     WaterAreaFunction::entryOceanBowl(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
-    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
-    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "Mask.bti"));
+    mWaterTex = new GameTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mWaterIndirectTex = new GameTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
+    mMaskTex = new GameTexture(MR::loadTexFromArc("WaterWave", "Mask.bti"));
 
     mBloomDrawer = new OceanBowlBloomDrawer(this);
     mBloomDrawer->initWithoutIter();
@@ -346,7 +346,7 @@ SiteMaterial OceanBowl::loadMaterial() const {
     // its alpha (added under water), depth tested, not written.
 
     const bool inWater = MR::isCameraInWater();
-    JUTTexture screenTexture(MR::getScreenResTIMG());
+    GameTexture screenTexture(MR::getScreenResTIMG());
     SiteMaterial material;
     material.init(NEBULA_SHADER_OCEAN_BOWL,
                        inWater ? SiteMaterial::BLEND_ADD_ALPHA : SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,

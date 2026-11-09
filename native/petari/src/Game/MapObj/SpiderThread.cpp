@@ -19,7 +19,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
@@ -80,8 +80,8 @@ void SpiderThread::initThread(const Vec3f& rPos) {
     initMainThreads();
     MR::invalidateClipping(this);
 
-    mThreadTexture = new JUTTexture(MR::loadTexFromArc("SpiderThread", "SpiderThread.bti"));
-    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("SpiderThread", "Indirect.bti"));
+    mThreadTexture = new GameTexture(MR::loadTexFromArc("SpiderThread", "SpiderThread.bti"));
+    mIndirectTexture = new GameTexture(MR::loadTexFromArc("SpiderThread", "Indirect.bti"));
 
     mHangInfos = new SpiderThreadHangInfo*[::sHangActorNumMax];
     for (s32 idx = 0; idx < ::sHangActorNumMax; idx++) {

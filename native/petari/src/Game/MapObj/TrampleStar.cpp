@@ -8,7 +8,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 namespace {
     // Shadow-space x and z onto the shadow texture: s = x * scale + 0.5, t = -z * scale + 0.5, q = 1.
@@ -44,7 +44,7 @@ void TrampleStar::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_FlexibleSphere);
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("TrampleStar", "TrampleStar.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("TrampleStar", "TrampleStar.bti"));
 
     f32 scale = 500.0f;
     scale *= mScale.x;

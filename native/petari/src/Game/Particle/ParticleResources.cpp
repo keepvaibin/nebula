@@ -82,9 +82,9 @@ ParticleResources::ParticleResources(void const* pFile, NebulaArena* pHeap) : mp
 const ResTIMG* ParticleResources::swapTexture(ResTIMG const* img, char const* swapName) {
     for (u32 i = 0; i < mTexNum; i++) {
         if (strcmp(swapName, mpTexArr[i]->getName()) == 0) {
-            JUTTexture* tex = mpTexArr[i]->getJUTTexture();
-            const ResTIMG* ret = tex->getTexInfo();
-            tex->storeTIMG(img);
+            GameTexture* tex = mpTexArr[i]->getTexture();
+            const ResTIMG* ret = tex->info();
+            tex->set(img);
             return ret;
         }
     }

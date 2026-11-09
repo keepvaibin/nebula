@@ -14,7 +14,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 NebulaColor8 sOceanSphereStageColor0Face = {0x48, 0x80, 0xBE, 0x1C};
 NebulaColor8 sOceanSphereStageColor1FrontDefault = {0x00, 0x51, 0x70, 0x6F};
@@ -155,8 +155,8 @@ void OceanSphere::init(const TableIter& rIter) {
     initMesh();
     WaterAreaFunction::entryOceanSphere(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "OceanSphere.bti"));
-    mWaterEnvTex = new JUTTexture(MR::loadTexFromArc("WaterWave", "OceanSphereEnvRef.bti"));
+    mWaterTex = new GameTexture(MR::loadTexFromArc("WaterWave", "OceanSphere.bti"));
+    mWaterEnvTex = new GameTexture(MR::loadTexFromArc("WaterWave", "OceanSphereEnvRef.bti"));
 
     MR::setClippingTypeSphere(this, mRadius);
     MR::setClippingFarMax(this);
@@ -629,7 +629,7 @@ OceanSpherePoint* OceanSphere::getPlanePointRightLower(int row, int col) const {
 namespace {
     // runtime/src/render/materials/ocean_sphere.hlsl with its four colours: blended by alpha, depth tested and not
     // written, `cull` (NEBULA_CULL_*), no fog.
-    SiteMaterial faceMaterial(JUTTexture* pTexture, const NebulaColor8& rHighlight, const NebulaColor8& rDeep, const NebulaColor8& rShallow,
+    SiteMaterial faceMaterial(GameTexture* pTexture, const NebulaColor8& rHighlight, const NebulaColor8& rDeep, const NebulaColor8& rShallow,
                           const NebulaColor8& rTint, u8 cull) {
         SiteMaterial material;
         material.init(NEBULA_SHADER_OCEAN_SPHERE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,

@@ -4,7 +4,7 @@
 #include "Game/Map/WhirlPoolAccelerator.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 NebulaColor8 sWhirlPoolStageColor1 = {0x28, 0x28, 0x28, 0x14};
 NebulaColor8 sWhirlPoolStageColor2 = {0x55, 0x96, 0xBE, 0xFF};
@@ -24,8 +24,8 @@ void WhirlPool::init(const TableIter& rIter) {
     mHeight = 100.0f * mScale.y;
     MR::calcActorAxisY(&mAxis, this);
     initPoints();
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
-    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("WaterWave", "Water.bti"));
+    mIndirectTexture = new GameTexture(MR::loadTexFromArc("WaterWave", "WaterIndirect.bti"));
     initSound(4, false);
     mClippingCenter.set(mPosition);
     mClippingCenter.y -= mRadius / 2.0f;
@@ -127,7 +127,7 @@ SiteMaterial WhirlPool::loadMaterial() const {
     // runtime/src/render/materials/whirlpool.hlsl: the swirl (texture 0) over the screen behind (texture 1) warped by
     // the indirect texture (texture 2); blended by its alpha where above zero, depth tested and written.
     
-    JUTTexture screenTexture(MR::getScreenResTIMG());
+    GameTexture screenTexture(MR::getScreenResTIMG());
     SiteMaterial material;
     material.init(NEBULA_SHADER_WHIRLPOOL, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);

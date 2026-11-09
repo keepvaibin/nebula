@@ -4,7 +4,7 @@
 #include <nebula_geometry.hpp>
 
 struct ResTIMG;
-class JUTTexture;
+class GameTexture;
 class FootPrintInfo;
 
 class FootPrintInfo {
@@ -41,7 +41,7 @@ public:
     void invalidate(u32);
     bool isValid(u32) const;
 
-    JUTTexture* mTexture;
+    GameTexture* mTexture;
 
     /// @brief Array of footprints.
     FootPrintInfo* mPrints;

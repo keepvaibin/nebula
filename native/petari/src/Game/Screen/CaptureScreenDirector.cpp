@@ -5,7 +5,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 
@@ -17,7 +17,7 @@ namespace {
 CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), mRequestedTiming(nullptr), mTimingType("Indirect"), mTexture(nullptr), mIsCaptureRequested(false) {
     MR::CurrentHeapRestorer heapRestorer(MR::getPermanentHeap());
 
-    mTexture = JUTTexture::createTarget(1.0f, 1.0f);
+    mTexture = GameTexture::createTarget(1.0f, 1.0f);
 }
 
 void CaptureScreenDirector::captureIfAllow(const char* pName) {
@@ -31,7 +31,7 @@ void CaptureScreenDirector::captureIfAllow(const char* pName) {
 }
 
 void CaptureScreenDirector::capture() {
-    mTexture->frameColor();
+    mTexture->copyFrame();
 }
 
 void CaptureScreenDirector::requestCaptureTiming(const char* pName) {
@@ -54,7 +54,7 @@ void CaptureScreenDirector::invalidateCaptureTiming(const char* pName) {
 }
 
 const ResTIMG* CaptureScreenDirector::getResTIMG() const {
-    return mTexture->mTIMG;
+    return mTexture->info();
 }
 
 const TimingInfo* CaptureScreenDirector::getUsingTiming() const {

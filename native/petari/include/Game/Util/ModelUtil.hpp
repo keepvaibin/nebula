@@ -8,7 +8,7 @@
 
 class Model;
 class Material;
-class JUTTexture;
+class GameTexture;
 class LiveActor;
 class ResourceHolder;
 struct ResTIMG;
@@ -59,7 +59,7 @@ namespace MR {
     void initEnvelopeAndEnvMapOrProjMapModelData(ModelData*);
     ResTIMG* getResTIMG(const LiveActor*, int);
     ResTIMG* getResTIMG(const ModelData*, int);
-    JUTTexture* getTextue(ResourceHolder*, const char*);
+    GameTexture* getTextue(ResourceHolder*, const char*);
     const char* getTextureName(const LiveActor*, int);
     void copyJointAnimation(Model*, Model*);
     void copyJointAnimation(LiveActor*, const LiveActor*);

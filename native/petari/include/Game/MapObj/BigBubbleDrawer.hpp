@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JUTTexture;
+class GameTexture;
 struct SiteMaterial;
 
 #include "Game/Util/Color.hpp"
@@ -22,6 +22,6 @@ public:
     void setUpPixelFormat() const;
     void setUpMaterial() const;
 
-    JUTTexture* mBubbleTexture;
-    JUTTexture* mRainbowTexture;
+    GameTexture* mBubbleTexture;
+    GameTexture* mRainbowTexture;
 };

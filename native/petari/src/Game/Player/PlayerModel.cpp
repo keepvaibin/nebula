@@ -5,7 +5,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 
 void PlayerModel::viewCalc2() {
     capturePose(&mPose, mAnmMtx, mModelData->getJointCount(), nullptr, mBaseTransformMtx);

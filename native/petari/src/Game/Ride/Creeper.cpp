@@ -19,7 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
@@ -166,7 +166,7 @@ void Creeper::init(const TableIter& rIter) {
 
     initSound(4, false);
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("Creeper", "Stalk.bti"));
+    mTexture = new GameTexture(MR::loadTexFromArc("Creeper", "Stalk.bti"));
 
     mFlowerModel = MR::createPartsModelNoSilhouettedMapObj(this, "花（つる花）", "CreeperFlower", mTopMtx.toMtxPtr());
     mLeafModel = MR::createPartsModelNoSilhouettedMapObj(this, "葉（つる花）", "CreeperLeaf", nullptr);

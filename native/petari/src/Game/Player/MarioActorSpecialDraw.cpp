@@ -1,4 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -16,7 +17,7 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/FurMulti.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <new>
 
 void MarioActor::initScreenBox() {
@@ -131,7 +132,7 @@ void MarioActor::writeBackScreenBox() const {
     const f32 v0 = static_cast< s32 >(mScreenBoxPos.y) / screenHeight;
     const f32 u1 = (static_cast< s32 >(mScreenBoxPos.x) + static_cast< s32 >(mScreenBoxSize.x)) / screenWidth;
     const f32 v1 = (static_cast< s32 >(mScreenBoxPos.y) + static_cast< s32 >(mScreenBoxSize.y)) / screenHeight;
-    SiteTextures::init(&texture, mScreenBoxKey, JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    SiteTextures::init(&texture, mScreenBoxKey, NebulaFrameClock::cEffectTexelsAcross, NebulaFrameClock::cScreenHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     minimum = mScreenBoxPos;
     maximum = mScreenBoxPos + mScreenBoxSize;
     SiteMaterial material;
@@ -354,7 +355,7 @@ void MarioActor::drawScreenBlend() const {
 void MarioActor::updateRandomTexture(f32 distance) {
     mMaskIndex = 1 - mMaskIndex;
     u8* pixel;
-    u8* image = mMaskTextures[mMaskIndex]->mImage;
+    u8* image = mMaskTextures[mMaskIndex]->image();
     distance = 1.0f - distance / 1000.0f;
     f32 probability = MR::clamp(distance, 0.0f, 1.0f);
 
@@ -429,7 +430,7 @@ namespace {
         TDDraw::setupNative(&material, 1, 0, 2);
         material.init(NEBULA_SHADER_FRAME_RIPPLE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        SiteTextures::init(&texture, const_cast< void* >(pFrame), JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP,
+        SiteTextures::init(&texture, const_cast< void* >(pFrame), NebulaFrameClock::cEffectTexelsAcross, NebulaFrameClock::cScreenHeight, NEBULA_WRAP_CLAMP,
                                NEBULA_WRAP_CLAMP);
         Frame::takeFrame(pFrame);
         material.mState.alpha_write = 1;
@@ -615,7 +616,7 @@ void MarioActor::drawSphereMask() const {
 
 void MarioActor::initDarkMask() {
     for (u32 texture = 0; texture < 2; texture++) {
-        u8* image = mMaskTextures[texture]->mImage;
+        u8* image = mMaskTextures[texture]->image();
 
         for (u32 i = 0; i < 8 * 8 * 2; i++) {
             image[i] = 0;
@@ -632,9 +633,9 @@ void MarioActor::updateDarkMask(u16 unused) {
         return;
     }
 
-    u8* previous = mMaskTextures[mMaskIndex]->mImage;
+    u8* previous = mMaskTextures[mMaskIndex]->image();
     mMaskIndex = 1 - mMaskIndex;
-    u8* image = mMaskTextures[mMaskIndex]->mImage;
+    u8* image = mMaskTextures[mMaskIndex]->image();
     u8 x = MR::getRandom(0, 8);
     u8 y = MR::getRandom(0, 8);
     s32 index = 2 * (x + y * 8);

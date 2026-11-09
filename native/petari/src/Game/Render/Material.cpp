@@ -5,7 +5,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/Transform.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <nebula_format.h>
 #include <string.h>
 

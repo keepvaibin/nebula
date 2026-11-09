@@ -7,7 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
 
 namespace {
@@ -53,7 +53,7 @@ FootPrintInfo::FootPrintInfo() {
 
 void FootPrint::setTexture(ResTIMG* img) {
     MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(reinterpret_cast< NebulaArena* >(MR::getSceneHeap()));
-    mTexture = new JUTTexture(img);
+    mTexture = new GameTexture(img);
 }
 
 void FootPrint::movement() {

@@ -21,7 +21,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <nebula_geometry.hpp>
 
-#include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -101,7 +101,7 @@ void StarPointerLayout::initWithPort(s32 channel) {
 
     initNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHideImmediately));
 
-    mBlur = new StarPointerBlur(new JUTTexture(MR::loadTexFromArc("StarPointerBlur", "Blur.bti")));
+    mBlur = new StarPointerBlur(new GameTexture(MR::loadTexFromArc("StarPointerBlur", "Blur.bti")));
 
     mCommandStream = new StarPointerCommandStream(&mPosition);
 
