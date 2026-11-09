@@ -39,6 +39,30 @@ namespace MR {
         }
     };
 
+    /// @brief Scratch for `count` items: room for N in itself, from the current arena past that, freed at scope end.
+    template < class T, int N >
+    class LocalArray {
+    public:
+        explicit LocalArray(u32 count) : mItems(count <= static_cast< u32 >(N) ? mRoom : new T[count]) {
+        }
+
+        ~LocalArray() {
+            if (mItems != mRoom) {
+                delete[] mItems;
+            }
+        }
+
+        LocalArray(const LocalArray&) = delete;
+        LocalArray& operator=(const LocalArray&) = delete;
+
+        T& operator[](u32 index) {
+            return mItems[index];
+        }
+
+        T mRoom[N];
+        T* const mItems;
+    };
+
     /// @brief A full table: twice the room, in the arena it lies in, and the old one goes. Pointers into it do not survive this.
     template < class T >
     T* growArray(T* pOld, s32 num) {

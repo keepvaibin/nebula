@@ -10,7 +10,7 @@ SaveRequest::SaveRequest() {
 
 void SaveRequest::init() {
     mType = Type_None;
-    mName[0] = '\0';
+    mName = "";
     mBuffer = nullptr;
     mSize = 0;
     mReadLength = nullptr;
@@ -53,7 +53,7 @@ const char* SaveRequest::setWriteSeq(const char* pName, const void* pBuf, u32 si
     mType = Type_Write;
     mBuffer = const_cast< void* >(pBuf);
     mSize = size;
-    nebula_snprintf(mName, sizeof(mName), "%s", pName);
+    mName = pName;
     return mName;
 }
 
@@ -63,13 +63,13 @@ const char* SaveRequest::setReadSeq(const char* pName, void* pBuf, u32 capacity,
     mBuffer = pBuf;
     mSize = capacity;
     mReadLength = pLength;
-    nebula_snprintf(mName, sizeof(mName), "%s", pName);
+    mName = pName;
     return mName;
 }
 
 SaveRequest* SaveRequest::setDelete(const char* pName) {
     init();
     mType = Type_Delete;
-    nebula_snprintf(mName, sizeof(mName), "%s", pName);
+    mName = pName;
     return this;
 }

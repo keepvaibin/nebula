@@ -341,9 +341,7 @@ namespace MR {
 
     void getCurrentScenarioStartAnimCameraData(void** ppData, s32* pSize) {
         StageDataHolder* pHolder = getStageDataHolder();
-        char fileName[256];
-        nebula_snprintf(fileName, sizeof(fileName), "StartScenario%d.canm", getCurrentScenarioNo());
-        *ppData = pHolder->getStageArchiveResource(fileName);
+        *ppData = pHolder->getStageArchiveResource(MR::FormattedName("StartScenario%d.canm", getCurrentScenarioNo()).c_str());
         if (*ppData != nullptr) {
             *pSize = pHolder->getStageArchiveResourceSize(*ppData);
         } else {

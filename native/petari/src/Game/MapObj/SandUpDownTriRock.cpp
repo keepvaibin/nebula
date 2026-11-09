@@ -33,11 +33,10 @@ void SandUpDownTriRock::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mRestStep);
 
     for (s32 i = 0; i < ARRAY_SIZE(mRockCollisionParts); i++) {
-        char name[256];
-        nebula_snprintf(name, sizeof(name), "Move0%d", i);
+        const MR::FormattedName name("Move0%d", i);
 
-        mRockCollisionParts[i] =
-            MR::createCollisionPartsFromLiveActor(this, name, getSensor("body"), MR::getJointMtx(this, name), MR::CollisionScaleType_Default);
+        mRockCollisionParts[i] = MR::createCollisionPartsFromLiveActor(this, name.c_str(), getSensor("body"), MR::getJointMtx(this, name.c_str()),
+                                                                       MR::CollisionScaleType_Default);
         MR::validateCollisionParts(mRockCollisionParts[i]);
     }
 }

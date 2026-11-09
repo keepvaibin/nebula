@@ -8,6 +8,7 @@
 #include "Game/Map/KCollision.hpp"
 #include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -536,20 +537,6 @@ namespace {
         }
         return sAreaPrisms;
     }
-
-    // The points in the parts' frame: inline up to 32, else on the heap for this call.
-    struct LocalPoints {
-        explicit LocalPoints(u32 numPoints) : mPoints(numPoints <= ARRAY_SIZEU(mRoom) ? mRoom : new Vec3f[numPoints]) {}
-
-        ~LocalPoints() {
-            if (mPoints != mRoom) {
-                delete[] mPoints;
-            }
-        }
-
-        Vec3f mRoom[32];
-        Vec3f* mPoints;
-    };
 }  // namespace
 
 u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rMin, const Vec3f& rMax) {
@@ -575,8 +562,8 @@ u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles
 
 u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, Vec3f* pPoints, u32 numPoints) {
     KC_PrismData** const prisms = ::areaPrisms(maxTriangles);
-    LocalPoints local(numPoints);
-    Vec3f* const localPoints = local.mPoints;
+    MR::LocalArray< Vec3f, 32 > local(numPoints);  // the points in the parts' frame
+    Vec3f* const localPoints = local.mItems;
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();

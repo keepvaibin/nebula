@@ -16,7 +16,8 @@ public:
     void exeMove();
     void incrementDrawCount();
 
-    Vec3f mPoints[0x40];
+    static const int cPointNum = 0x40;  // the trail, one point each update (oldest overwritten)
+    Vec3f mPoints[cPointNum];
     f32 mNumPointsToDraw;
     int mPointIndexToSkipDraw;
     int mDrawCount;

@@ -533,7 +533,7 @@ namespace {
     }
 
     int32_t apiSetCometSchedule(int32_t dome, const char* const* ppGalaxies, const int32_t* pCoins, int32_t count) {
-        if (dome < 1 || dome > 16 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
+        if (dome < 1 || ppGalaxies == nullptr || pCoins == nullptr || count <= 0) {
             return -1;
         }
         GalaxyCometTimePaper* pPaper = new GalaxyCometTimePaper[count + 1];

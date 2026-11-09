@@ -55,7 +55,7 @@ public:
     f32 mPrevRotateSpeedX;
     Vec3f mSide;
     Vec3f mUp;
-    Vec2f mPointerVelocities[3];
+    Vec2f mPointerVelocities[3];  // the last updates' pointer velocities, newest first; the fastest turns the sphere
     s32 mNotPointingStep;
     bool mIsRotateBgm;
 };

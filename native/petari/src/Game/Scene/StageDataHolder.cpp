@@ -150,9 +150,7 @@ TableIter StageDataHolder::getCommonPathPointInfo(const Table** ppOut, int idx) 
 
 TableIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const Table** ppInfo, int idx) const {
     const Table* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
-    char buf[256];
-    nebula_snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
-    *ppInfo = findJmpInfoFromArray(&mPathObjs, buf);
+    *ppInfo = findJmpInfoFromArray(&mPathObjs, MR::FormattedName("CommonPathPointInfo.%d", idx).c_str());
     return TableIter(pInfo, idx);
 }
 

@@ -682,7 +682,7 @@ void MarioActor::updateFace() {
 
 void MarioActor::initBlur() {
     for (u32 i = 0; i < 2; i++) {
-        for (u32 j = 0; j < 8; j++) {
+        for (u32 j = 0; j < cBlurPoseNum; j++) {
             Model::initPose(&mBlurPoses[i][j]);
         }
     }
@@ -907,8 +907,8 @@ void MarioActor::drawModelBlur() const {
     Mtx inv;
     NebulaMtxInverse(const_cast< Mtx34f& >(mPrevViewMtx).toMtxPtr(), inv);
     MR::multMtx(inv, inv, MR::getCameraViewMtx());
-    for (u32 i = 1; i < 8; i++) {
-        const u32 idx = static_cast< u32 >(i + mBlurPoseIndex) & 7;
+    for (u32 i = 1; i < cBlurPoseNum; i++) {
+        const u32 idx = static_cast< u32 >(i + mBlurPoseIndex) % cBlurPoseNum;
         ModelPose& rPose = const_cast< MarioActor* >(this)->mBlurPoses[mBlurPoseSet][idx];
         if (!mBaseMtxStale) {
             Model::copyPose(&rPose, mBlurPoses[1 - mBlurPoseSet][idx]);
@@ -917,7 +917,7 @@ void MarioActor::drawModelBlur() const {
         model->setDrawPose(&rPose);
 
 
-        model->setDynamicList(&mGhostTints[idx + ((i - 1) << 3)]);
+        model->setDynamicList(&mGhostTints[(i - 1) * cBlurPoseNum + idx]);
         model->directDraw();
     }
 

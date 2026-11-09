@@ -20,6 +20,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 namespace {
@@ -199,13 +200,12 @@ void WarpPod::init(const TableIter& rIter) {
     s32 cameraLetter;
     MR::getPlacementArg0WithInit(rIter, &cameraLetter);
 
-    char eventCameraName[256];
-    nebula_sprintf(eventCameraName, "ワープカメラ %d-%c", groupId, 'A' + cameraLetter);
-    MR::declareEventCamera(mCamInfo, eventCameraName);
+    const MR::FormattedName eventCameraName("ワープカメラ %d-%c", groupId, 'A' + cameraLetter);
+    MR::declareEventCamera(mCamInfo, eventCameraName.c_str());
 
-    const size_t eventCameraSize = strlen(eventCameraName) + 1;
+    const size_t eventCameraSize = strlen(eventCameraName.c_str()) + 1;
     mEventCameraName = new char[eventCameraSize];
-    memcpy(mEventCameraName, eventCameraName, eventCameraSize);
+    memcpy(mEventCameraName, eventCameraName.c_str(), eventCameraSize);
 
     if (mVisibilityState == 0) {
         MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
@@ -308,12 +308,11 @@ void WarpPod::initPair() {
         return;
     }
 
-    char pairCameraName[256];
-    nebula_sprintf(pairCameraName, "wPod出現カメラ %d", mGroupId);
+    const MR::FormattedName pairCameraName("wPod出現カメラ %d", mGroupId);
 
-    const size_t size = strlen(pairCameraName) + 1;
+    const size_t size = strlen(pairCameraName.c_str()) + 1;
     mPairCameraName = new char[size];
-    memcpy(mPairCameraName, pairCameraName, size);
+    memcpy(mPairCameraName, pairCameraName.c_str(), size);
 
     MR::declareEventCamera(mCamInfo, mPairCameraName);
 }

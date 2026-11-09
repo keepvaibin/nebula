@@ -14,6 +14,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/NebulaText.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
@@ -190,10 +191,10 @@ namespace {
 
     // The question in the played language (NebulaText; the game's own Yes and No answer it), its lines broken as
     // the game's messages are (its text boxes do not wrap).
+    MR::GrowBuffer< char16_t > sQuestion;
+
     const char16_t* promptText() {
-        static char16_t question[128];
-        NebulaText::get(question, 128, "SkipCutsceneQuestion");
-        return question;
+        return NebulaText::get(&sQuestion, "SkipCutsceneQuestion");
     }
 
     void mute(bool on) {

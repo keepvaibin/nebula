@@ -23,6 +23,7 @@ public:
     // The result, once done.
     Result getResult() const;
     void start();
+    // The name is held, not copied: it must last until the request is done.
     const char* setWriteSeq(const char*, const void*, u32);
     const char* setReadSeq(const char*, void*, u32, u32*);
     SaveRequest* setDelete(const char*);
@@ -35,7 +36,7 @@ private:
         Type_Read,
     };
 
-    char mName[64];
+    const char* mName;
     Type mType;
     void* mBuffer;
     u32 mSize;           // a write's length, a read's capacity
