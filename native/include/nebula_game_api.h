@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 143u
+#define NEBULA_GAME_API_VERSION 144u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -435,9 +435,9 @@ typedef struct NebulaSaveRequest {
 /* Nebula's settings menu as the host has it now (settings_view), for the game to draw in its own windows and words.
    The host keeps the settings, their pages, the draft and its apply, and takes the keyboard and controllers while the
    menu is open; the game shows it (and takes the pointer, settings_input). Texts are the host's own, in English
-   (UTF-8): the game names each in the played language (NebulaSettingsMenu). */
-#define NEBULA_SETTINGS_PAGES 8
-#define NEBULA_SETTINGS_ROWS 96
+   (UTF-8): the game names each in the played language (NebulaSettingsMenu).
+   The view has no fixed sizes: the page names and every row of the open page are sent whole. The strings, the page names
+   and the rows are the host's, valid until the next settings_view call; the game copies what it keeps. */
 
 enum {
     NEBULA_SETTINGS_ROW_HEADING = 1,     /* a section's title: never selected */
@@ -631,8 +631,8 @@ enum {
 };
 
 typedef struct NebulaSettingsRow {
-    char label[64];
-    char value[96];
+    const char* label;
+    const char* value;
     uint32_t flags; /* NEBULA_SETTINGS_ROW_* */
     uint16_t slider_steps;
     uint16_t slider_at;
@@ -642,23 +642,22 @@ typedef struct NebulaSettingsView {
     uint32_t open;
     uint32_t page;
     uint32_t page_count;
-    char pages[NEBULA_SETTINGS_PAGES][24];
-    uint32_t controls_page; /* the page whose rows are bindings (its hints differ) */
-    uint32_t input;         /* what the player last used, for the hints: NEBULA_SETTINGS_INPUT_* */
-    uint32_t total_rows;    /* the page's rows; `rows` holds `row_count` of them from `first_row`, around the selection */
-    uint32_t first_row;
-    uint32_t row_count;
-    uint32_t selected;      /* counted from the page's first row */
+    const char* const* pages; /* `page_count` names */
+    uint32_t controls_page;   /* the page whose rows are bindings (its hints differ) */
+    uint32_t input;           /* what the player last used, for the hints: NEBULA_SETTINGS_INPUT_* */
+    /* Changed by the host whenever anything else in the view changes: views with equal revisions are identical. */
+    uint32_t revision;
+    uint32_t total_rows;      /* the page's rows: `rows` holds all of them */
+    const NebulaSettingsRow* rows;
+    uint32_t selected;        /* counted from the page's first row */
     uint32_t selected_button; /* the selected row's, when it has buttons */
-    /* The MODS page's lists (off, on): the place in its list of each one's first row sent, and their lengths. */
-    uint32_t mod_list_first[2];
+    /* The MODS page's lists (off, on): their lengths. */
     uint32_t mod_list_count[2];
-    NebulaSettingsRow rows[NEBULA_SETTINGS_ROWS];
-    char help[192];
+    const char* help;
     uint32_t status; /* NEBULA_SETTINGS_STATUS_* */
     int32_t status_number;
-    char status_text[160];
-    char long_text[1536]; /* a license's page */
+    const char* status_text;
+    const char* long_text; /* a license's page */
 } NebulaSettingsView;
 
 /* The player's input to the settings menu (settings_input); the keyboard and controllers reach it through the host. */

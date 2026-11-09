@@ -1496,16 +1496,45 @@ uint64_t svc_stat_get(void*, const char* name) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// UTF-8 text into a fixed field, cut at a whole character, always terminated.
-template <std::size_t N>
-void copy_settings_text(char (&field)[N], const std::string& text) {
-    std::size_t length = std::min(text.size(), N - 1u);
-    while (length > 0u && length < text.size() && (static_cast<unsigned char>(text[length]) & 0xC0u) == 0x80u) {
-        --length;
-    }
-    std::memcpy(field, text.data(), length);
-    field[length] = '\0';
-}
+// The settings view as the game was last given it. The host owns the strings, the page names and the rows that
+// NebulaSettingsView points at; they stay as they are until the content changes, and the revision counts the changes.
+struct SettingsRowContent {
+    std::string label;
+    std::string value;
+    uint32_t flags = 0;
+    uint16_t slider_steps = 0;
+    uint16_t slider_at = 0;
+    bool operator==(const SettingsRowContent&) const = default;
+};
+
+struct SettingsContent {
+    uint32_t open = 0;
+    uint32_t page = 0;
+    uint32_t controls_page = 0;
+    uint32_t input = 0;
+    uint32_t selected = 0;
+    uint32_t selected_button = 0;
+    uint32_t mod_list_count[2] = {0, 0};
+    uint32_t status = 0;
+    int32_t status_number = 0;
+    std::vector<std::string> pages;
+    std::vector<SettingsRowContent> rows;
+    std::string help;
+    std::string status_text;
+    std::string long_text;
+    bool operator==(const SettingsContent&) const = default;
+};
+
+struct SettingsViewStorage {
+    SettingsContent content;
+    bool built = false;
+    uint32_t revision = 0;
+    // What the view points at, made from the content whenever it changes.
+    std::vector<const char*> page_names;
+    std::vector<NebulaSettingsRow> rows;
+};
+
+SettingsViewStorage g_settings_view;
 #endif
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -1538,59 +1567,79 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsInput::Open) =
 #endif
 
 // The settings menu for the game's own (NebulaSettingsMenu): the overlay's state, which the game draws from then on.
-// The headless host has no settings menu: always closed.
+// The strings, the page names and the rows are held here, whole, until the next call. The revision changes whenever the
+// content differs from the previous call's. The headless host has no settings menu: always closed, nothing pointed at.
 void svc_settings_view(void*, NebulaSettingsView* view) {
     std::memset(view, 0, sizeof(*view));
 #if defined(NEBULA_HOST_RENDERER)
     const galaxy::render::NativeSettingsView source = galaxy::render::native_settings_view();
-    view->open = source.open ? 1u : 0u;
-    view->page = source.page;
-    view->page_count = static_cast<uint32_t>(std::min<std::size_t>(source.pages.size(), NEBULA_SETTINGS_PAGES));
-    for (uint32_t i = 0; i < view->page_count; ++i) {
-        copy_settings_text(view->pages[i], source.pages[i]);
-    }
-    view->controls_page = source.controls_page;
-    view->input = source.input;
-    // A long page (many mods) is sent in part: the rows around the selection, more than the menu shows at once.
+    SettingsContent next;
+    next.open = source.open ? 1u : 0u;
+    next.page = source.page;
+    next.pages = source.pages;
+    next.controls_page = source.controls_page;
+    next.input = source.input;
     const std::size_t total = source.rows.size();
     const std::size_t selected = std::min<std::size_t>(source.selected, total == 0u ? 0u : total - 1u);
-    const std::size_t first = total <= NEBULA_SETTINGS_ROWS
-                                  ? 0u
-                                  : std::min(selected - std::min<std::size_t>(selected, NEBULA_SETTINGS_ROWS / 2u),
-                                             total - NEBULA_SETTINGS_ROWS);
-    view->total_rows = static_cast<uint32_t>(total);
-    view->first_row = static_cast<uint32_t>(first);
-    view->row_count = static_cast<uint32_t>(std::min<std::size_t>(total - first, NEBULA_SETTINGS_ROWS));
-    for (uint32_t i = 0; i < view->row_count; ++i) {
-        const galaxy::render::NativeSettingsViewRow& row = source.rows[first + i];
-        copy_settings_text(view->rows[i].label, row.label);
-        copy_settings_text(view->rows[i].value, row.value);
-        view->rows[i].flags = (row.heading ? NEBULA_SETTINGS_ROW_HEADING : 0u) |
-                              (row.changes ? NEBULA_SETTINGS_ROW_CHANGES : 0u) | (row.name ? NEBULA_SETTINGS_ROW_NAME : 0u) |
-                              (row.active ? NEBULA_SETTINGS_ROW_ACTIVE : 0u) |
-                              (row.label_name ? NEBULA_SETTINGS_ROW_LABEL_NAME : 0u) |
-                              (row.buttons ? NEBULA_SETTINGS_ROW_BUTTONS : 0u) |
-                              (row.mod_list == 1u ? NEBULA_SETTINGS_ROW_MOD_OFF : 0u) |
-                              (row.mod_list == 2u ? NEBULA_SETTINGS_ROW_MOD_ON : 0u) | (row.held ? NEBULA_SETTINGS_ROW_HELD : 0u) |
-                              (row.slider_steps != 0u ? NEBULA_SETTINGS_ROW_SLIDER : 0u) |
-                              (row.inputs ? NEBULA_SETTINGS_ROW_BINDING : 0u) |
-                              (row.shared ? NEBULA_SETTINGS_ROW_SHARED : 0u);
-        view->rows[i].slider_steps = static_cast<uint16_t>(row.slider_steps);
-        view->rows[i].slider_at = static_cast<uint16_t>(row.slider_at);
-    }
-    view->selected = static_cast<uint32_t>(selected);
-    view->selected_button = source.selected_button;
+    next.rows.reserve(total);
     for (std::size_t r = 0; r < total; ++r) {
         const galaxy::render::NativeSettingsViewRow& row = source.rows[r];
-        if (row.mod_list == 0u || row.mod_list > 2u || row.heading) continue;
-        if (r < first) ++view->mod_list_first[row.mod_list - 1u];
-        ++view->mod_list_count[row.mod_list - 1u];
+        SettingsRowContent& out = next.rows.emplace_back();
+        out.label = row.label;
+        out.value = row.value;
+        out.flags = (row.heading ? NEBULA_SETTINGS_ROW_HEADING : 0u) |
+                    (row.changes ? NEBULA_SETTINGS_ROW_CHANGES : 0u) | (row.name ? NEBULA_SETTINGS_ROW_NAME : 0u) |
+                    (row.active ? NEBULA_SETTINGS_ROW_ACTIVE : 0u) |
+                    (row.label_name ? NEBULA_SETTINGS_ROW_LABEL_NAME : 0u) |
+                    (row.buttons ? NEBULA_SETTINGS_ROW_BUTTONS : 0u) |
+                    (row.mod_list == 1u ? NEBULA_SETTINGS_ROW_MOD_OFF : 0u) |
+                    (row.mod_list == 2u ? NEBULA_SETTINGS_ROW_MOD_ON : 0u) | (row.held ? NEBULA_SETTINGS_ROW_HELD : 0u) |
+                    (row.slider_steps != 0u ? NEBULA_SETTINGS_ROW_SLIDER : 0u) |
+                    (row.inputs ? NEBULA_SETTINGS_ROW_BINDING : 0u) |
+                    (row.shared ? NEBULA_SETTINGS_ROW_SHARED : 0u);
+        out.slider_steps = static_cast<uint16_t>(row.slider_steps);
+        out.slider_at = static_cast<uint16_t>(row.slider_at);
+        if (row.mod_list != 0u && row.mod_list <= 2u && !row.heading) ++next.mod_list_count[row.mod_list - 1u];
     }
-    copy_settings_text(view->help, source.help);
-    view->status = static_cast<uint32_t>(source.status);
-    view->status_number = source.status_number;
-    copy_settings_text(view->status_text, source.status_text);
-    copy_settings_text(view->long_text, source.long_text);
+    next.selected = static_cast<uint32_t>(selected);
+    next.selected_button = source.selected_button;
+    next.help = source.help;
+    next.status = static_cast<uint32_t>(source.status);
+    next.status_number = source.status_number;
+    next.status_text = source.status_text;
+    next.long_text = source.long_text;
+
+    SettingsViewStorage& held = g_settings_view;
+    if (!held.built || !(next == held.content)) {
+        held.content = std::move(next);
+        held.built = true;
+        ++held.revision;
+        held.page_names.clear();
+        for (const std::string& name : held.content.pages) held.page_names.push_back(name.c_str());
+        held.rows.clear();
+        for (const SettingsRowContent& row : held.content.rows) {
+            held.rows.push_back(NebulaSettingsRow{row.label.c_str(), row.value.c_str(), row.flags, row.slider_steps, row.slider_at});
+        }
+    }
+    const SettingsContent& content = held.content;
+    view->open = content.open;
+    view->page = content.page;
+    view->page_count = static_cast<uint32_t>(held.page_names.size());
+    view->pages = held.page_names.data();
+    view->controls_page = content.controls_page;
+    view->input = content.input;
+    view->revision = held.revision;
+    view->total_rows = static_cast<uint32_t>(held.rows.size());
+    view->rows = held.rows.data();
+    view->selected = content.selected;
+    view->selected_button = content.selected_button;
+    view->mod_list_count[0] = content.mod_list_count[0];
+    view->mod_list_count[1] = content.mod_list_count[1];
+    view->help = content.help.c_str();
+    view->status = content.status;
+    view->status_number = content.status_number;
+    view->status_text = content.status_text.c_str();
+    view->long_text = content.long_text.c_str();
 #endif
 }
 
