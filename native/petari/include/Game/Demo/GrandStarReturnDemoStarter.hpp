@@ -4,7 +4,7 @@
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
-class PowerStar;
+class ModelObj;
 class ReturnDemoRailMove;
 class StageResultInformer;
 
@@ -33,7 +33,7 @@ public:
     StageResultInformer* mStageResultInformer;
     Pos3f mPrevTransform;
     Pos3f mTransform;
-    PowerStar* mPowerStar;
+    ModelObj* mPowerStar;  // the grand star's model, not a PowerStar
     Vec3f mDistanceToCore;
     Vec3f mPowerStarPosition;
     ActorCameraInfo* mActorCameraInfo;

@@ -61,7 +61,7 @@ bool CameraManEvent::isEventActive(s32 zoneID, const char* pName) const {
         CameraParamChunkID_Tmp chunkID = CameraParamChunkID_Tmp();
         chunkID.createEventID(zoneID, pName);
 
-        CameraParamChunkEvent* chunk = reinterpret_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
+        CameraParamChunkEvent* chunk = static_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 
         // i++ walks up past the last slot when it holds no request (logged in NATIVE-STATE-Q).
         for (s32 i = cPriorityNum - 1; i >= 0; i++) {
@@ -147,7 +147,7 @@ void CameraManEvent::pauseOnAnimCamera(s32 zoneID, const char* pName) {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
     if (chunk == mChunk && mCamera != nullptr) {
-        reinterpret_cast< CameraAnim* >(mCamera)->mIsPaused = true;
+        static_cast< CameraAnim* >(mCamera)->mIsPaused = true;
     }
 }
 
@@ -155,7 +155,7 @@ void CameraManEvent::pauseOffAnimCamera(s32 zoneID, const char* pName) {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
     if (chunk == mChunk && mCamera != nullptr) {
-        reinterpret_cast< CameraAnim* >(mCamera)->mIsPaused = false;
+        static_cast< CameraAnim* >(mCamera)->mIsPaused = false;
     }
 }
 
@@ -309,7 +309,7 @@ CameraParamChunkEvent* CameraManEvent::findChunk(s32 zoneID, const char* pName) 
     CameraParamChunkID_Tmp chunkID = CameraParamChunkID_Tmp();
     chunkID.createEventID(zoneID, pName);
 
-    return reinterpret_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
+    return static_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 }
 
 void CameraManEvent::request(CameraParamChunkEvent* pChunk, u32 priority, const CameraTargetArg& rArg, s32 frame) {
@@ -429,7 +429,7 @@ bool CameraManEvent::isAnimCameraEnd(s32 zoneID, const char* pName) const {
     if (isRequested(chunk)) {
         if (chunk == mChunk) {
             if (mCamera != nullptr) {
-                return reinterpret_cast< CameraAnim* >(mCamera)->isAnimEnd();
+                return static_cast< CameraAnim* >(mCamera)->isAnimEnd();
             }
         } else {
             return false;

@@ -1,4 +1,5 @@
 #include "Game/System/InputRumble.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/InputRumbleData.hpp"
@@ -60,7 +61,7 @@ void RumbleChannel::setPattern(const void* pOwner, const RumblePattern& rPattern
 
 InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), mSerial(1), mStopTimer() {
     if (sInstanceForCallback == nullptr) {
-        sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()]();
+        sInstanceForCallback = new (NebulaArena::root(), 0) InputRumble*[MR::getPlayerMaxCount()]();
     }
 }
 
