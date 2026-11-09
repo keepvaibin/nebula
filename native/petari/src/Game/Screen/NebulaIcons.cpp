@@ -1564,7 +1564,8 @@ namespace {
         const NebulaTexture* pSheet = nebula_texture_record(rOld.pSheets);
         bool usable = pSheet != nullptr && pSheet->layout == NEBULA_TEXTURE_RGBA8 && pSheet->levels == 1 &&
                       pSheet->width == rFile.sheetWidth && pSheet->height == rFile.sheetHeight &&
-                      rFile.sheetSize >= pSheet->size && rFile.sheetRow > 0 && rFile.sheetLine > 0 &&
+                      rFile.sheetSize >= pSheet->size && rFile.sheetRow > 0 && rFile.sheetLine > 0 && rFile.cellWidth > 0 && rFile.cellHeight > 0 &&
+                      static_cast< u32 >(rFile.sheetRow) * rFile.sheetLine <= 0x7FFFu &&
                       (rFile.cellWidth + 1) * rFile.sheetRow <= rFile.sheetWidth &&
                       (rFile.cellHeight + 1) * rFile.sheetLine <= rFile.sheetHeight &&
                       rOld.glyphNum == static_cast< u32 >(rOld.sheetNum) * rFile.sheetRow * rFile.sheetLine;
@@ -1609,6 +1610,9 @@ namespace {
             return FontUnusable;
         }
         const Ui::CharWidths widths = pFont->GetCharWidths(cCodes[0]);
+        if (widths.glyphWidth == 0) {
+            return FontUnusable;
+        }
         f.mGlyphWidth = widths.glyphWidth < f.mCellWidth ? widths.glyphWidth : f.mCellWidth;
         f.mGlyphHeight = f.mCellHeight;
         for (u16 code = cMapFirst; code <= cMapLast; code++) {

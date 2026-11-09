@@ -787,7 +787,7 @@ namespace {
                 rCard.mMeta->mTranslate = Vec3f(textRight, textCentre(barY, cMetaSize), 0.0f);
                 const f32 barWidth = textRight - rCard.mMetaWidth - 10.0f - textX;
                 shape(rCard.mTrack, textX + barWidth * 0.5f, barY, barWidth, cBarHeight, cBarHeight * 0.5f);
-                const f32 part = barWidth * rCard.mCurrent / rCard.mGoal;
+                const f32 part = barWidth * (rCard.mCurrent < rCard.mGoal ? rCard.mCurrent : rCard.mGoal) / rCard.mGoal;
                 const f32 shown = part < cBarHeight ? cBarHeight : part;
                 shape(rCard.mBar, textX + shown * 0.5f, barY, shown, cBarHeight, cBarHeight * 0.5f);
             }
@@ -1469,6 +1469,10 @@ void NebulaAchievementBoard::open() {
         } else {
             // What earns it stays a surprise until it is unlocked.
             getText(rCard.mHintText, "AchievementLocked");
+        }
+        // A save's count below 0 shows as 0 (formatCount takes it as unsigned).
+        if (rCard.mCurrent < 0) {
+            rCard.mCurrent = 0;
         }
         MR::Text16 meta;
         if (rCard.mDate > 1) {
