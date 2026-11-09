@@ -3051,6 +3051,8 @@ int svc_home_menu(void*, uint32_t what, uint32_t value) {
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport),
 //     with the animation they play, and whether they are shown, clipped, or drawn while clipped as shadow casters.
 //   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
+//   GALAXY_TEST_EVENTS audio@frame: the sound mixer's counters then (the "host: jaudio" line, which otherwise comes in
+//     the first second of every 30 game seconds).
 //   GALAXY_TEST_EVENTS defeat:<model>@frame: the live actors with that model (as actors@ names it) are killed, as their
 //     defeat ends: what they leave appears (KuriboChief, the Gateway's big Goomba: its key).
 //   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of frames, so a
