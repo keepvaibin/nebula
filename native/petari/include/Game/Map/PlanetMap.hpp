@@ -29,8 +29,6 @@ public:
     Vec3f mClippingCenter;
     LodCtrl* mLODCtrl;
     ModelObj* mBloomModel;
-    PartsModel* mWaterModel;
-    PartsModel* mIndirectModel;
 };
 
 class FurPlanetMap : public PlanetMap {

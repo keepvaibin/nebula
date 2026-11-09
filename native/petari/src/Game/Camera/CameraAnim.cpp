@@ -63,7 +63,7 @@ void CameraAnim::getWatchPos(Vec3f* pWatchPos, f32 key) const {
 }
 
 CameraAnim::CameraAnim(const char* pName)
-    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mFileData(), mIsPaused() {
+    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mIsPaused() {
 }
 
 void CameraAnim::reset() {
@@ -116,7 +116,6 @@ CameraTargetObj* CameraAnim::calc() {
 
 void CameraAnim::setParam(u8* pFile, f32 speed) {
     loadBin(pFile);
-    mFileData = pFile;
     mSpeed = speed;
 }
 

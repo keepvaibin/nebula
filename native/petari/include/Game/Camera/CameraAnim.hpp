@@ -65,6 +65,5 @@ public:
     f32 mSpeed;
     f32 mCurrentFrame;
     const CamAnmHeader* mClip;
-    u8* mFileData;
     bool mIsPaused;
 };

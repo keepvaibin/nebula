@@ -141,7 +141,6 @@ OceanSphere::OceanSphere(const char* pName)
     mAlwaysUseRealDrawing = false;
     mIsCameraInside = false;
     mIsStartPosCamera = true;
-    mIsTearDrop = false;
     mEnableStartPosCameraSwitch = false;
 }
 
@@ -168,7 +167,6 @@ void OceanSphere::init(const TableIter& rIter) {
     }
 
     if (MR::isEqualStageName("TearDropGalaxy")) {
-        mIsTearDrop = true;
         mAlwaysUseRealDrawing = true;
         mIsStartPosCamera = false;
         NebulaColor8 front;

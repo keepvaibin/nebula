@@ -18,7 +18,7 @@
 
 BossStinkBugActionBase::BossStinkBugActionBase(const char* pName, BossStinkBug* pStinkBug)
     : ActorStateBase< BossStinkBug >(pName, pStinkBug), mSpringValue(), mRailDiff(0.0f, 0.0f, 0.0f), mTurnFront(0.0f, 0.0f, 1.0f), mFlySpeed(15.0f), mHeightOffset(), mLocalHeightOffset(),
-      mThrowBombTimer(), mIsRailToEnd(true), mCameraDistance(), mPrevCameraDistance(), mApproachStep(), mIsNearPlayer(), mWasNearPlayer() {
+      mThrowBombTimer(), mIsRailToEnd(true), mCameraDistance(), mPrevCameraDistance(), mApproachStep(), mIsNearPlayer() {
     mSpringValue = new SpringValue(mHeightOffset, mHeightOffset, 0.02f, 0.95f, 0.0f);
 }
 
@@ -205,8 +205,6 @@ void BossStinkBugActionBase::updateSound() {
 }
 
 void BossStinkBugActionBase::updateSoundFly() {
-    mWasNearPlayer = mIsNearPlayer;
-
     if (MR::isNearPlayer(getHost(), 2000.0f)) {
         mIsNearPlayer = true;
     } else {

@@ -16,7 +16,7 @@ namespace {
     const Vec3f sZeroVec(0.0f, 0.0f, 0.0f);
 };  // namespace
 
-CameraTargetObj::CameraTargetObj(const char* pName) : NameObj(pName), mCameraWall() {
+CameraTargetObj::CameraTargetObj(const char* pName) : NameObj(pName) {
 }
 
 CameraTargetActor::CameraTargetActor(const char* pName)

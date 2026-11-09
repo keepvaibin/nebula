@@ -23,7 +23,7 @@ namespace {
     };
 };  // namespace
 
-CometEventKeeper::CometEventKeeper() : mExecutorTimeLimit(nullptr), mScreenFilter(nullptr), mCometName(nullptr), mCometStateIndex(0) {
+CometEventKeeper::CometEventKeeper() : mExecutorTimeLimit(nullptr), mScreenFilter(nullptr), mCometName(nullptr){
 }
 
 void CometEventKeeper::init() {
@@ -87,5 +87,4 @@ u32 CometEventKeeper::getTimeLimitFromTable(const GalaxyTimeLimitInfo* pTable, i
 
 void CometEventKeeper::initCometStatus() {
     mCometName = MR::makeCurrentGalaxyStatusAccessor().getCometName(MR::getCurrentScenarioNo());
-    mCometStateIndex = MR::getGalaxyCometStateIndexInCurrentStage();
 }

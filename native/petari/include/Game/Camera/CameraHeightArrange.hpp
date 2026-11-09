@@ -37,7 +37,6 @@ public:
     Camera* mCamera;
     bool mIsJumping;
     bool mIsStartJump;
-    bool mIsEndJump;
     CameraPoseParam* mNextParam;
     CameraPoseParam* mCurrParam;
     f32 mCameraWatchPosBaseHeight;

@@ -121,7 +121,6 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mNullAnimationKind = 0;
     mPlayerMode = 0;
     mPrevPlayerMode = 0;
-    mModelSet = 1;
     mMorphFlashDone = 0;
     mMorphAnimDone = 0;
     mSwingPermission = 1;
