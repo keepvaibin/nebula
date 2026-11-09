@@ -1,4 +1,5 @@
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
 #include "Game/Scene/SceneNameObjMovementController.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -10,6 +11,8 @@ NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mExecutorId
     mListPlace[1] = -1;
     mListPlace[2] = -1;
     mDrawBufferPlace = -1;
+    mNameHolder = nullptr;
+    mHolderPlace = -1;
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
 
@@ -39,7 +42,11 @@ void NameObj::initWithoutIter() {
 }
 
 void NameObj::setName(const char* pName) {
+    const char* pOld = mName;
     mName = pName;
+    if (mNameHolder != nullptr) {
+        mNameHolder->renamed(this, pOld);
+    }
 }
 
 void NameObj::executeMovement() {
