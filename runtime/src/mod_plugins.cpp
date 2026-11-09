@@ -260,11 +260,35 @@ void* api_find_function(const char* symbol) {
 
 }  // namespace
 
+namespace {
+// GALAXY_DUMP_TUNABLES=<file>: every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each, for the mod docs.
+void dump_tunables(const NebulaModApi* game_api) {
+    const char* path = std::getenv("GALAXY_DUMP_TUNABLES");
+    if (path == nullptr || *path == '\0' || game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return;
+    std::ofstream out(std::filesystem::u8path(path), std::ios::binary | std::ios::trunc);
+    if (!out) return;
+    static constexpr const char* kKinds[] = {"?", "f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"};
+    const char* file = nullptr;
+    const char* name = nullptr;
+    int32_t kind = 0;
+    double game_value = 0.0;
+    double value = 0.0;
+    for (int32_t i = 0; game_api->tunable_at(i, &file, &name, &kind, &game_value, &value) == 0; ++i) {
+        std::string stem = file != nullptr ? file : "";
+        if (const std::size_t dot = stem.rfind('.'); dot != std::string::npos) stem.resize(dot);
+        char number[64];
+        std::snprintf(number, sizeof(number), "%.9g", game_value);
+        out << stem << '.' << (name != nullptr ? name : "") << '\t' << kKinds[(kind >= 1 && kind <= 9) ? kind : 0] << '\t' << number << '\n';
+    }
+}
+}  // namespace
+
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*)) {
     g_log = log;
     g_find_symbol = find_symbol;
+    dump_tunables(game_api);
     if (plugins.empty() && rows.empty()) return 0;
     if (game_api == nullptr || game_api->size < sizeof(NebulaModApi)) {
         say("the game module has no plugin interface");
@@ -349,6 +373,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     for (const PlayerConstantToSet& constant : rows.player_constants) {
         if (g_api.set_player_constant(constant.character, constant.name.c_str(), constant.index, constant.value) != 0) {
             say(constant.mod_id + ": the player has no number " + constant.name);
+        }
+    }
+    for (const TunableToSet& tunable : rows.tunables) {
+        if (g_api.set_tunable(tunable.key.c_str(), tunable.value) != 0) {
+            say(tunable.mod_id + ": the game has no tuning number " + tunable.key);
         }
     }
     for (const auto& [key, value] : rows.story) {

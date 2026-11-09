@@ -10,6 +10,7 @@
 #include "Game/System/GameEventFlagTable.hpp"
 
 #include "Game/AudioLib/AudSoundNameConverter.hpp"
+#include "Game/Util/Tunable.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Player/MarioAccess.hpp"
@@ -659,6 +660,27 @@ namespace {
         if (sStageFrames > 0) {
             GameSequenceFunction::startGameDataSaveSequence(false, false);
         }
+    }
+
+    int32_t apiSetTunable(const char* pKey, double value) {
+        return nebula::setTunable(pKey, value);
+    }
+
+    int32_t apiTunableAt(int32_t index, const char** pFile, const char** pName, int32_t* pKind, double* pGameValue, double* pValue) {
+        u32 kind = 0;
+        const char* pFileOut = nullptr;
+        const char* pNameOut = nullptr;
+        f64 gameValue = 0.0;
+        f64 value = 0.0;
+        if (!nebula::tunableAt(index, &pFileOut, &pNameOut, &kind, &gameValue, &value)) {
+            return -1;
+        }
+        if (pFile != nullptr) *pFile = pFileOut;
+        if (pName != nullptr) *pName = pNameOut;
+        if (pKind != nullptr) *pKind = static_cast<int32_t>(kind);
+        if (pGameValue != nullptr) *pGameValue = gameValue;
+        if (pValue != nullptr) *pValue = value;
+        return 0;
     }
 
     // A galaxy with scenario data (the game's or a mod's): one a stage change or the scenario select can open.
@@ -1966,6 +1988,8 @@ namespace {
         apiOpenScenarioSelect,
         apiSetStory,
         apiSaveGame,
+        apiSetTunable,
+        apiTunableAt,
     };
 }  // namespace
 
