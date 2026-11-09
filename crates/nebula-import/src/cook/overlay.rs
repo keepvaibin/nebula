@@ -131,8 +131,20 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
     }
     let mut placed = Vec::new();
     let mut failed = Vec::new();
+    // Two of the files may be one place in the game under two names (StageData/X.arc and StageData/S/X.arc, or two
+    // mods' cases): the later one stands, the other is named, and the rest of the store is still written.
+    let mut last_of: BTreeMap<String, usize> = BTreeMap::new();
+    for (i, change) in changes.iter().enumerate().filter(|(_, c)| !c.merge) {
+        last_of.insert(store::store_path(change.path.trim_start_matches('/')).to_ascii_lowercase(), i);
+    }
     let progress = PROGRESS.lock().unwrap_or_else(|e| e.into_inner()).clone();
     for (done, change) in changes.iter().enumerate().filter(|(_, c)| !c.merge) {
+        let key = store::store_path(change.path.trim_start_matches('/')).to_ascii_lowercase();
+        if last_of.get(&key) != Some(&done) {
+            let later = &changes[last_of[&key]].path;
+            failed.push((change.path.clone(), format!("the same file of the game as {later}, which is used instead")));
+            continue;
+        }
         if let Some(file) = &progress {
             let _ = fs::write(file, format!("{done} {}\n", changes.len()));
         }
@@ -418,6 +430,23 @@ mod tests {
             assert!(files[0].2);
             assert_eq!(&files[0].1[..4], b"NMDL");
         }
+    }
+
+    #[test]
+    fn one_game_file_under_two_names_keeps_the_later_and_names_the_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.bin"), dir.path().join("b.bin"));
+        fs::write(&a, b"first").unwrap();
+        fs::write(&b, b"second").unwrap();
+        let changes = vec![
+            Change { path: "StageData/Galaxy/ZoneA.bin".into(), source: a, merge: false },
+            Change { path: "StageData/galaxy/zonea.bin".into(), source: b, merge: false },
+        ];
+        let out = dir.path().join("mods.pak");
+        let failed = write_overlay("RMGE01", &changes, None, &out, &mut Stats::default()).unwrap();
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert!(failed[0].0 == "StageData/Galaxy/ZoneA.bin" && failed[0].1.contains("used instead"));
+        assert_eq!(store::read_file(&out, "StageData/galaxy/zonea.bin").unwrap(), b"second");
     }
 
     #[test]
