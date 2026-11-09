@@ -139,9 +139,12 @@ struct GameLight {
     // actor, else its place), never 0.
     std::uint32_t key = 0u;
 };
-// The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
+// The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count. The stores hold every light lit
+// at once; the count calls say how many a copy will write (the lights in between may change; ask for max_age_ms <= 10000).
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
+[[nodiscard]] std::size_t game_point_light_count(std::uint64_t max_age_ms) noexcept;
+[[nodiscard]] std::size_t game_world_light_count(std::uint64_t max_age_ms) noexcept;
 // Simulation thread: the movie frame the game draws (movie_playback.h); every later submission carries it until the
 // next. `data`: the cooked movie (null keeps the one given).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,

@@ -268,9 +268,9 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     const UploadRing::Allocation tiles_at = ring.allocate(tile_bytes, static_cast<std::size_t>(alignment));
     std::memcpy(objects_at.cpu, object_values_.data(), object_bytes);
     std::memcpy(tiles_at.cpu, object_tiles_.data(), tile_bytes);
-    const auto buffer = reinterpret_cast<VkBuffer>(ring.resource());
-    objects_ = {buffer, objects_at.offset, object_bytes};
-    tiles_ = {buffer, tiles_at.offset, tile_bytes};
+    // Each in the buffer it lies in (a chunk when the ring's segment and spill were full).
+    objects_ = {reinterpret_cast<VkBuffer>(ring.resource_of(objects_at)), objects_at.offset, object_bytes};
+    tiles_ = {reinterpret_cast<VkBuffer>(ring.resource_of(tiles_at)), tiles_at.offset, tile_bytes};
     if (mark) mark(Stage::Distance);
     dispatch(commands, kDistance, set_of(allocate, depth.view, depth_layout, *denoised_, *distance_, *distance_), width, height);
     if (mark) mark(Stage::Occlusion);

@@ -3,6 +3,9 @@
 #include "galaxy/run_options.h"
 #include "galaxy/render/vk/vk_context.h"
 #include "galaxy/render/render_config.h"
+#if defined(NEBULA_DEV)
+#include "galaxy/runtime_settings.h"
+#endif
 
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 #if defined(_WIN32)
@@ -23,6 +26,8 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <utility>
 #include <vector>
 #include <cstdio>
@@ -63,6 +68,9 @@ std::array<std::int64_t, static_cast<unsigned>(DriverCall::Count)> take_driver_c
 
 void check(VkResult result, const char* what) {
     if (result < VK_SUCCESS) {
+        if (result == VK_ERROR_DEVICE_LOST) {
+            Context::get().report_device_fault(what);
+        }
         throw std::runtime_error(std::string("[vulkan] ") + what + " failed: VkResult " + std::to_string(result));
     }
 }
@@ -416,6 +424,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     // GALAXY_VK_TEST_NO_FEATURE=<names, comma-separated>: this GPU acts without those features, as a phone's may, so
     // the paths for it run on any GPU. "indexing": no descriptor indexing (draws bind their own tables).
     bool test_no_indexing = false;
+    bool test_no_device_fault = false;
+    bool test_no_host_image_copy = false;
     if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
         const std::string list = std::string(",") + names + ",";
         const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
@@ -423,6 +433,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
         if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
         test_no_indexing = off("indexing");
+        test_no_device_fault = off("device_fault");
+        test_no_host_image_copy = off("host_image_copy");
     }
     VkPhysicalDeviceFeatures enabled{};
     enabled.sampleRateShading = available.sampleRateShading;
@@ -591,6 +603,53 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
             device_extensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
         }
     }
+    // The fault report after a lost device (report_device_fault): the extension and its feature, enabled where both are here.
+    VkPhysicalDeviceFaultFeaturesEXT fault{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT};
+    if (!test_no_device_fault && has_device_extension(physical_, VK_EXT_DEVICE_FAULT_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &fault;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        device_fault_ = fault.deviceFault == VK_TRUE;
+        device_fault_binary_ = device_fault_ && fault.deviceFaultVendorBinary == VK_TRUE;
+        if (device_fault_) {
+            device_extensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+            fault.pNext = nullptr;
+            fault.deviceFaultVendorBinary = device_fault_binary_ ? VK_TRUE : VK_FALSE;
+        }
+    }
+    // Writes to a texture from host memory (texture_backend_vk.cpp): the extension (core in 1.4; before 1.3 it needs two more),
+    // its feature, and SHADER_READ_ONLY_OPTIMAL among the layouts it copies into, where the textures rest.
+    VkPhysicalDeviceHostImageCopyFeaturesEXT host_copy{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT};
+    if (!test_no_host_image_copy && has_device_extension(physical_, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME) &&
+        (properties_.apiVersion >= VK_API_VERSION_1_3 ||
+         (has_device_extension(physical_, VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME) &&
+          has_device_extension(physical_, VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME)))) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &host_copy;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        if (host_copy.hostImageCopy == VK_TRUE) {
+            VkPhysicalDeviceHostImageCopyPropertiesEXT copy_properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_PROPERTIES_EXT};
+            VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+            properties.pNext = &copy_properties;
+            vkGetPhysicalDeviceProperties2(physical_, &properties);  // the counts
+            std::vector<VkImageLayout> destination(copy_properties.copyDstLayoutCount);
+            std::vector<VkImageLayout> source(copy_properties.copySrcLayoutCount);
+            copy_properties.pCopyDstLayouts = destination.data();
+            copy_properties.pCopySrcLayouts = source.data();
+            vkGetPhysicalDeviceProperties2(physical_, &properties);
+            const std::size_t listed = std::min<std::size_t>(copy_properties.copyDstLayoutCount, destination.size());
+            host_image_copy_ = std::find(destination.begin(), destination.begin() + static_cast<std::ptrdiff_t>(listed),
+                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) != destination.begin() + static_cast<std::ptrdiff_t>(listed);
+        }
+        if (host_image_copy_) {
+            device_extensions.push_back(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
+            if (properties_.apiVersion < VK_API_VERSION_1_3) {
+                device_extensions.push_back(VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME);
+                device_extensions.push_back(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+            }
+            host_copy.pNext = nullptr;
+        }
+    }
     // Synchronization2 (barriers_vk.h): copy, resolve and clear apart from other transfers, stages per image. A device
     // and instance of Vulkan 1.3 (the frame generation device always) take it as core through the 1.3 features chain;
     // a 1.2 device takes the extension where it has it; any other uses version-1 barriers.
@@ -658,6 +717,14 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     if (sync2_extension) {
         sync2.pNext = const_cast<void*>(device_info.pNext);
         device_info.pNext = &sync2;
+    }
+    if (device_fault_) {
+        fault.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &fault;
+    }
+    if (host_image_copy_) {
+        host_copy.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &host_copy;
     }
     if (core_12) {
         if (temporal_upscaling_) {
@@ -796,6 +863,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         return fail("vkCreateDevice failed");
     }
     volkLoadDevice(device_);
+    fault_reported_.store(false, std::memory_order_relaxed);
+    simulated_loss_.store(false, std::memory_order_relaxed);
+    loss_was_simulated_ = false;
     pipeline_barrier2_ = sync2_core ? vkCmdPipelineBarrier2 : sync2_extension ? vkCmdPipelineBarrier2KHR : nullptr;
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
     if (generation_queues_at != 0u) {
@@ -850,11 +920,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     std::fprintf(stderr,
                  "[vulkan] features: depth-clamp=%d depth-clip=%d bc=%d "
                  "anisotropy=%d display-timing=%d queues=%u temporal-upscaling=%d frame-generation-queues=%d "
-                 "synchronization2=%s\n",
+                 "synchronization2=%s device-fault=%s host-image-copy=%d\n",
                  depth_clamp_, depth_clip_enable_, bc_textures_,
                  sampler_anisotropy_, display_timing_, queue_info.queueCount, temporal_upscaling_ ? 1 : 0,
                  generation_present_queue_ != VK_NULL_HANDLE ? 1 : 0,
-                 sync2_core ? "core" : sync2_extension ? "extension" : "off");
+                 sync2_core ? "core" : sync2_extension ? "extension" : "off",
+                 device_fault_binary_ ? "report+binary" : device_fault_ ? "report" : "off", host_image_copy_ ? 1 : 0);
     // The memory BufferPlace chooses from: each heap's size (L: device-local), each type's heap and flags (L device
     // local, V host visible, C coherent, $ cached).
     {
@@ -958,7 +1029,12 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
         submit.pSignalSemaphores = &signal_semaphore;
     }
     const std::int64_t cpu_start = thread_cpu_ns();
-    const VkResult result = vkQueueSubmit(queue_, 1, &submit, fence);
+    VkResult result = VK_ERROR_DEVICE_LOST;
+    if (simulated_loss_.exchange(false, std::memory_order_acq_rel)) {
+        loss_was_simulated_ = true;  // GALAXY_TEST_DEVICE_LOST: the commands are not submitted
+    } else {
+        result = vkQueueSubmit(queue_, 1, &submit, fence);
+    }
     note_driver_cpu(DriverCall::Submit, thread_cpu_ns() - cpu_start);
     if (result != VK_SUCCESS) {
         free_fences_.push_back(fence);
@@ -974,7 +1050,15 @@ std::uint64_t Context::completed_value() {
     std::lock_guard<std::mutex> lock(submit_mutex_);
     std::size_t done = 0;
     const std::int64_t cpu_start = thread_cpu_ns();
-    while (done < pending_.size() && vkGetFenceStatus(device_, pending_[done].fence) == VK_SUCCESS) {
+    while (done < pending_.size()) {
+        const VkResult status = vkGetFenceStatus(device_, pending_[done].fence);
+        if (status != VK_SUCCESS) {
+            // Not done, or an error the next submit or wait throws; a lost device is reported here, without throwing.
+            if (status == VK_ERROR_DEVICE_LOST) {
+                report_device_fault("vkGetFenceStatus");
+            }
+            break;
+        }
         completed_ = pending_[done].value;
         free_fences_.push_back(pending_[done].fence);
         ++done;
@@ -1010,10 +1094,108 @@ bool Context::wait(std::uint64_t value, std::uint64_t timeout_ns) {
         --waiters_;
     }
     if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_DEVICE_LOST) {
+            report_device_fault("vkWaitForFences");
+        }
         return false;
     }
     static_cast<void>(completed_value());
     return true;
+}
+
+namespace {
+
+const char* fault_address_type(VkDeviceFaultAddressTypeEXT type) noexcept {
+    switch (type) {
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT: return "none";
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT: return "invalid read";
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT: return "invalid write";
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT: return "invalid execute";
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT: return "instruction pointer, unknown";
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT: return "instruction pointer, invalid";
+    case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT: return "instruction pointer, fault";
+    default: return "unknown";
+    }
+}
+
+}  // namespace
+
+// vkGetDeviceFaultInfoEXT twice, as the extension asks: the counts first, then the arrays sized by them (capped, so a driver
+// that reports a huge count cannot make this allocate without end).
+void Context::report_device_fault(const char* where) noexcept {
+    if (!device_fault_ || device_ == VK_NULL_HANDLE || vkGetDeviceFaultInfoEXT == nullptr || loss_was_simulated_ ||
+        fault_reported_.exchange(true, std::memory_order_acq_rel)) {
+        return;
+    }
+    try {
+        VkDeviceFaultCountsEXT counts{VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT};
+        const VkResult first = vkGetDeviceFaultInfoEXT(device_, &counts, nullptr);
+        if (first < VK_SUCCESS) {
+            std::fprintf(stderr, "[vulkan] device fault after %s: the counts failed (VkResult %d)\n", where, static_cast<int>(first));
+            return;
+        }
+        std::fprintf(stderr, "[vulkan] device fault after %s: %u address infos, %u vendor infos, %llu bytes of vendor binary\n",
+                     where, counts.addressInfoCount, counts.vendorInfoCount, static_cast<unsigned long long>(counts.vendorBinarySize));
+        constexpr std::uint32_t kMaxInfos = 256u;
+        [[maybe_unused]] constexpr VkDeviceSize kMaxBinary = VkDeviceSize{64} << 20u;
+        std::vector<VkDeviceFaultAddressInfoEXT> addresses(std::min(counts.addressInfoCount, kMaxInfos));
+        std::vector<VkDeviceFaultVendorInfoEXT> vendors(std::min(counts.vendorInfoCount, kMaxInfos));
+        std::vector<unsigned char> binary;
+#if defined(NEBULA_DEV)
+        if (device_fault_binary_ && counts.vendorBinarySize != 0u && counts.vendorBinarySize <= kMaxBinary) {
+            binary.resize(static_cast<std::size_t>(counts.vendorBinarySize));
+        }
+#endif
+        VkDeviceFaultCountsEXT sizes{VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT};
+        sizes.addressInfoCount = static_cast<std::uint32_t>(addresses.size());
+        sizes.vendorInfoCount = static_cast<std::uint32_t>(vendors.size());
+        sizes.vendorBinarySize = binary.size();
+        VkDeviceFaultInfoEXT info{VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT};
+        info.pAddressInfos = addresses.empty() ? nullptr : addresses.data();
+        info.pVendorInfos = vendors.empty() ? nullptr : vendors.data();
+        info.pVendorBinaryData = binary.empty() ? nullptr : binary.data();
+        const VkResult second = vkGetDeviceFaultInfoEXT(device_, &sizes, &info);
+        if (second < VK_SUCCESS) {
+            std::fprintf(stderr, "[vulkan] device fault: the details failed (VkResult %d)\n", static_cast<int>(second));
+            return;
+        }
+        info.description[VK_MAX_DESCRIPTION_SIZE - 1u] = '\0';
+        std::fprintf(stderr, "[vulkan] device fault: %s\n", info.description);
+        for (std::uint32_t i = 0; i < sizes.addressInfoCount && i < addresses.size(); ++i) {
+            const VkDeviceFaultAddressInfoEXT& address = addresses[i];
+            // The address is exact to the precision (a power of two): the fault lies in that aligned range.
+            const std::uint64_t low = address.addressPrecision > 1u ? address.reportedAddress & ~(address.addressPrecision - 1u)
+                                                                    : address.reportedAddress;
+            const std::uint64_t high = address.addressPrecision > 1u ? low + address.addressPrecision - 1u : address.reportedAddress;
+            std::fprintf(stderr, "[vulkan] device fault address %u: %s at 0x%llx (0x%llx to 0x%llx, precision %llu)\n", i,
+                         fault_address_type(address.addressType), static_cast<unsigned long long>(address.reportedAddress),
+                         static_cast<unsigned long long>(low), static_cast<unsigned long long>(high),
+                         static_cast<unsigned long long>(address.addressPrecision));
+        }
+        for (std::uint32_t i = 0; i < sizes.vendorInfoCount && i < vendors.size(); ++i) {
+            VkDeviceFaultVendorInfoEXT& vendor = vendors[i];
+            vendor.description[VK_MAX_DESCRIPTION_SIZE - 1u] = '\0';
+            std::fprintf(stderr, "[vulkan] device fault vendor %u: %s code=0x%llx data=0x%llx\n", i, vendor.description,
+                         static_cast<unsigned long long>(vendor.vendorFaultCode), static_cast<unsigned long long>(vendor.vendorFaultData));
+        }
+#if defined(NEBULA_DEV)
+        // The vendor's own binary, for its tools: beside the run log (the settings folder's logs).
+        if (!binary.empty() && sizes.vendorBinarySize != 0u && sizes.vendorBinarySize <= binary.size()) {
+            const std::filesystem::path folder = ::galaxy::runtime_settings_folder() / "logs";
+            std::error_code error;
+            std::filesystem::create_directories(folder, error);
+            const std::filesystem::path file =
+                folder / ("device_fault_" + std::to_string(properties_.vendorID) + "_" + std::to_string(properties_.deviceID) + ".bin");
+            std::ofstream out(file, std::ios::binary | std::ios::trunc);
+            if (out) {
+                out.write(reinterpret_cast<const char*>(binary.data()), static_cast<std::streamsize>(sizes.vendorBinarySize));
+                std::fprintf(stderr, "[vulkan] device fault vendor binary: %llu bytes, %s\n",
+                             static_cast<unsigned long long>(sizes.vendorBinarySize), file.string().c_str());
+            }
+        }
+#endif
+    } catch (...) {
+    }
 }
 
 std::uint64_t Context::submit_frame(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore,
@@ -1280,8 +1462,9 @@ Resource* raw(const BufferRef& buffer) noexcept {
     return buffer != nullptr ? buffer->buffer : VK_NULL_HANDLE;
 }
 
-// Room past a buffer's end for a binding's fixed range at the last offset.
-constexpr std::size_t kBindingRoom = 4096u;
+// Room past a buffer's end for a binding's fixed range at the last offset: the largest range a binding takes
+// (vk::kMaterialConstantRange).
+constexpr std::size_t kBindingRoom = vk::kMaterialConstantRange;
 
 bool device_removed(Device*) noexcept {
     return false;

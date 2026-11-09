@@ -23,17 +23,29 @@ public:
     struct Allocation {
         std::byte* cpu = nullptr;
         gpu::Address gpu = 0;
-        std::size_t offset = 0;     // within the whole resource
+        std::size_t offset = 0;     // within `resource`, else the whole resource
+        // The chunk it lies in (a ring made with `chunks`, when the segments and the spill were full), else null: the ring's
+        // own buffer. A user that names a buffer and an offset takes both from here (resource_of).
+        gpu::Resource* resource = nullptr;
     };
+    [[nodiscard]] gpu::Resource* resource_of(const Allocation& at) const { return at.resource != nullptr ? at.resource : resource(); }
 
     // `capacity`: bytes reserved beyond bytes_per_frame * frames_in_flight, so later
-    // resegment() calls up to it need no new buffer.
+    // resegment() calls up to it need no new buffer. `chunks`: a request that fits neither the frame's segment nor the spill
+    // is placed in a chunk of its own (a new buffer, kept until that frame's slot comes round again) instead of throwing;
+    // only for a ring whose users take absolute addresses (not the matrix ring, whose rows are indexed from gpu_base()).
     bool initialize(
         gpu::Device* device,
         const char* name,
         std::size_t bytes_per_frame,
         unsigned frames_in_flight,
-        std::size_t capacity = 0);
+        std::size_t capacity = 0,
+        bool chunks = false);
+    // The buffer and the chunks go to `out` for the caller to release once the GPU is past every frame that used them (the
+    // ring is empty after; initialize makes the next).
+    void release_into(std::vector<gpu::BufferRef>& out);
+    // The bytes of chunks made since initialize (diagnostics).
+    [[nodiscard]] std::size_t chunk_bytes_made() const { return chunk_bytes_made_; }
     // A new segmentation inside the existing buffer (the caller has retired every GPU
     // reference to its contents); false when it does not fit.
     bool resegment(std::size_t bytes_per_frame, unsigned frames_in_flight);
@@ -44,8 +56,8 @@ public:
 
     // Bump-allocates in the current frame's segment, then in the spill region behind the segments (the capacity
     // past them), which only a resegment or initialize rewinds: spilled() asks the caller to grow the ring at the
-    // next frame boundary. `alignment` must be a nonzero power of two. Exhausting both throws rather than dropping
-    // geometry. A rejected request consumes nothing.
+    // next frame boundary. `alignment` must be a nonzero power of two. Exhausting both goes to a chunk (a ring made with
+    // `chunks`), else throws rather than dropping geometry. A rejected request consumes nothing.
     Allocation allocate(std::size_t size, std::size_t alignment);
 
     // The peak since the last call (diagnostics windows).
@@ -98,6 +110,17 @@ public:
 private:
     [[nodiscard]] std::size_t spill_base() const { return bytes_per_frame_ * frames_in_flight_; }
 
+    struct Chunk {
+        gpu::UploadMemory memory;
+        std::size_t size = 0;
+        std::size_t used = 0;
+    };
+    [[nodiscard]] Allocation allocate_in_chunk(std::size_t size, std::size_t alignment);
+
+    gpu::Device* device_ = nullptr;
+    bool chunks_ = false;
+    std::vector<std::vector<Chunk>> chunk_slots_;  // by frame slot; released when the slot begins again
+    std::size_t chunk_bytes_made_ = 0;
     gpu::BufferRef buffer_;
     const char* name_ = "";
     std::byte* mapped_ = nullptr;

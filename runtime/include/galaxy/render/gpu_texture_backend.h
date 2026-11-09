@@ -38,10 +38,19 @@ public:
     void write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
-    // A DEFAULT-heap texture in the copy-destination state.
+    // A DEFAULT-heap texture in the copy-destination state. `writable`: a texture whose levels are uploaded once and never
+    // rewritten while the GPU may read them; with direct_writes() it is made in CPU-visible memory instead (born in the
+    // shader-resource state), and record_upload writes it from the CPU with no command.
     [[nodiscard]] gpu::TextureRef create_texture(
         std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
-        TexelFormat format = TexelFormat::Rgba8);
+        TexelFormat format = TexelFormat::Rgba8, bool writable = false);
+    // True on an adapter with one memory shared by the CPU and the GPU and cache coherence between them
+    // (D3D12_FEATURE_DATA_ARCHITECTURE UMA and CacheCoherentUMA): textures are written from the CPU (WriteToSubresource) into
+    // custom write-back heap memory, and staging chunks are write-back memory the CPU also reads. GALAXY_D3D12_TEST_NO_FEATURE
+    // names uma_writes to force the copy path.
+    [[nodiscard]] bool direct_writes() const noexcept { return direct_; }
+    // A texture create_texture made in CPU-visible memory: it is never uploaded again in place.
+    [[nodiscard]] static bool direct_written(ID3D12Resource* texture) noexcept;
     [[nodiscard]] static bool supports_bc1() noexcept { return true; }
     // A texture made by create_texture that the pool may hand out again for the same extent.
     [[nodiscard]] static bool poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
@@ -53,7 +62,18 @@ public:
                        const std::uint32_t* pitches);
     void set_upload_list(ID3D12GraphicsCommandList* list) noexcept { upload_list_ = list; }
     [[nodiscard]] bool has_upload_list() const noexcept { return upload_list_ != nullptr; }
-    [[nodiscard]] PlacedTextureAllocator::Stats heap_stats() const { return texture_heap_.stats(); }
+    [[nodiscard]] PlacedTextureAllocator::Stats heap_stats() const {
+        PlacedTextureAllocator::Stats stats = texture_heap_.stats();
+        if (direct_) {
+            const PlacedTextureAllocator::Stats direct = direct_heap_.stats();
+            stats.heaps += direct.heaps;
+            stats.heap_bytes += direct.heap_bytes;
+            stats.used_bytes += direct.used_bytes;
+            stats.placed += direct.placed;
+            stats.committed_fallbacks += direct.committed_fallbacks;
+        }
+        return stats;
+    }
 
     void ensure_view(std::uint32_t index);
     // A view index the store gave up (its texture is gone and the GPU is past the frames that read it): the slot holds the
@@ -75,6 +95,11 @@ private:
     // `count` descriptors from `first` take the null view (a copy, then doubling copies).
     void fill_null(D3D12_CPU_DESCRIPTOR_HANDLE first, std::uint32_t count);
     PlacedTextureAllocator texture_heap_{D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
+    // The CPU-visible texture heaps of direct_writes(): system memory, write-back (valid with CacheCoherentUMA).
+    static constexpr D3D12_HEAP_PROPERTIES kDirectProperties{D3D12_HEAP_TYPE_CUSTOM, D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+                                                             D3D12_MEMORY_POOL_L0, 0u, 0u};
+    PlacedTextureAllocator direct_heap_{D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20, &kDirectProperties};
+    bool direct_ = false;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_heap_;
     std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> srv_pages_;

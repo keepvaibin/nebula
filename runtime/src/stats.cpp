@@ -14,7 +14,6 @@
 
 namespace galaxy::stats {
 namespace {
-constexpr std::size_t kMaxCounters = 64;
 // Counts arriving together (the game hands them over every few seconds) are written once.
 constexpr std::chrono::milliseconds kWriteDelay{1500};
 
@@ -46,7 +45,7 @@ void load_locked(State& s) {
     s.loaded = true;
     std::ifstream in(file_path_locked(s));
     std::string line;
-    while (std::getline(in, line) && s.counters.size() < kMaxCounters) {
+    while (std::getline(in, line)) {
         const std::size_t eq = line.find('=');
         if (eq == std::string::npos || !valid_name(std::string_view(line).substr(0, eq))) continue;
         try {
@@ -102,7 +101,6 @@ void add(std::string_view name, std::uint64_t delta) {
         load_locked(s);
         const auto it = s.counters.find(std::string(name));
         if (it == s.counters.end()) {
-            if (s.counters.size() >= kMaxCounters) return;
             s.counters.emplace(std::string(name), delta);
         } else {
             it->second = delta > UINT64_MAX - it->second ? UINT64_MAX : it->second + delta;

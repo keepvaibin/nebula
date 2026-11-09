@@ -32,6 +32,7 @@ struct RunOptions {
     const char* audio_test_gaps = nullptr;
     const char* boot_fast = nullptr;
     const char* crash_dump_dir = nullptr;
+    const char* d3d12_test_no_feature = nullptr;
     const char* d3d_debug = nullptr;
     const char* d3d12_test_no_feature = nullptr;
     const char* gpu_draws = nullptr;
@@ -63,6 +64,7 @@ struct RunOptions {
     const char* test_cpu_affinity = nullptr;
     const char* test_deterministic = nullptr;
     const char* test_disc_delay_us = nullptr;
+    const char* test_device_lost = nullptr;
     const char* test_gpu_lost_frame = nullptr;
     const char* test_gpu_lost_times = nullptr;
     const char* test_home_row = nullptr;
@@ -70,9 +72,11 @@ struct RunOptions {
     const char* test_one_game = nullptr;
     const char* test_post_fault = nullptr;
     const char* test_script_clock = nullptr;
+    const char* test_small_heaps = nullptr;
     const char* test_settings_keys = nullptr;
     const char* test_motion_dump = nullptr;
     const char* test_settings_open = nullptr;
+    const char* test_wide_tables = nullptr;
     const char* test_window_sizes = nullptr;
     const char* texture_dump_dir = nullptr;
     const char* texture_pack_dir = nullptr;

@@ -5,6 +5,7 @@
 // loop, and the input it gathers (touch controls, the finger on the picture, keys, gamepads) for the virtual Wii
 // Remote (native_game_host_sdl.cpp).
 
+#include "galaxy/controller_roster.h"
 #include "galaxy/input_bindings.h"
 
 #include <array>
@@ -59,7 +60,8 @@ enum TouchButton : std::uint32_t {
     kTouchRight = 1u << 13,
 };
 
-inline constexpr std::size_t kMaxPads = 4;
+// The pads the host keeps state for: the controllers the other hosts' sources can report at once (galaxy::input::kMaxControllers).
+inline constexpr std::size_t kMaxPads = galaxy::input::kMaxControllers;
 
 // One coherent copy of everything the input poll reads.
 // A pad's sensors and touch surface.

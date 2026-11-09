@@ -484,7 +484,7 @@ if(WIN32)
     enable_language(RC)
 endif()
 include(cmake/nebula_file_details.cmake)
-nebula_file_details(NebulaNative NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
+nebula_file_details(NebulaNative NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico" DPI_MANIFEST)
 target_sources(NebulaNative PRIVATE ${galaxy_programs_dxil})
 target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
@@ -607,6 +607,9 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/include)
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
+# The pipeline cache files' headers (header-only; both backends' caches).
+galaxy_test(galaxy_pipeline_cache_file_tests SOURCES ${render_src}/core/pipeline_cache_file_tests.cpp)
+target_include_directories(galaxy_pipeline_cache_file_tests PRIVATE runtime/src)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback frame_pass post_process
@@ -747,7 +750,7 @@ runtime/src/render/host_window_win32.cpp
     endif()
 
     add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/frame_phase.cpp)
-    nebula_file_details(NebulaNativeVk NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
+    nebula_file_details(NebulaNativeVk NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico" DPI_MANIFEST)
     target_sources(NebulaNativeVk PRIVATE ${galaxy_programs_spirv})
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)

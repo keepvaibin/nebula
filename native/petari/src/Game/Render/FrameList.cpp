@@ -187,6 +187,20 @@ namespace {
             return mData[mCount++];
         }
 
+        // `count` more entries in one run; the first is returned.
+        T* addRun(u32 count) {
+            if (mCount + count > mRoom) {
+                u32 room = mRoom != 0 ? mRoom : 256;
+                while (room < mCount + count) {
+                    room *= 2;
+                }
+                reserve(room);
+            }
+            T* pFirst = mData + mCount;
+            mCount += count;
+            return pFirst;
+        }
+
         void reserve(u32 room) {
             mData = static_cast< T* >(host()->heap_realloc(host()->user, mData, room * sizeof(T)));
             mRoom = room;
@@ -215,6 +229,8 @@ namespace {
         Grown< NebulaFrameCamera > mCameras;
         Grown< NebulaFrameBlock > mBlocks;
         Grown< NebulaFrameLightSet > mLightSets;
+        Grown< NebulaFrameLight > mLights;
+        Grown< u32 > mLightFollow;
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
@@ -245,8 +261,11 @@ namespace {
     bool sViewDirty = true;
     u32 sViewIndex;
 
-    // The lights now.
-    NebulaFrameLightSet sLights;
+    // The lights now: as many as the game has set (the highest number set, plus one), and the words saying which follow the
+    // camera. A light set of the list is a copy of these.
+    Grown< NebulaFrameLight > sLights;
+    Grown< u32 > sLightFollow;
+    u32 sLightsCamera = 0;
     bool sLightsDirty = true;
     bool sLightsSet = false;
     u32 sLightSet = NEBULA_NONE32;
@@ -283,6 +302,8 @@ namespace {
         pStore->mCameras.mCount = 0;
         pStore->mBlocks.mCount = 0;
         pStore->mLightSets.mCount = 0;
+        pStore->mLights.mCount = 0;
+        pStore->mLightFollow.mCount = 0;
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
@@ -422,6 +443,8 @@ namespace Frame {
         rList.cameras = pStore->mCameras.mData;
         rList.blocks = pStore->mBlocks.mData;
         rList.light_sets = pStore->mLightSets.mData;
+        rList.lights = pStore->mLights.mData;
+        rList.light_follow = pStore->mLightFollow.mData;
         rList.constants = pStore->mConstants.mData;
         rList.ring_vertices = pStore->mRingVertices;
         rList.ring_indices = pStore->mRingIndices.mData;
@@ -434,6 +457,8 @@ namespace Frame {
         rList.camera_count = pStore->mCameras.mCount;
         rList.block_count = pStore->mBlocks.mCount;
         rList.light_set_count = pStore->mLightSets.mCount;
+        rList.light_count = pStore->mLights.mCount;
+        rList.light_follow_count = pStore->mLightFollow.mCount;
         rList.constants_count = pStore->mConstants.mCount;
         rList.probe_count = pStore->mProbes.mCount;
         rList.ring_vertex_bytes = pStore->mRingBytes;
@@ -629,6 +654,18 @@ namespace Frame {
         hostViewport(viewport, pOut + 6);
     }
 
+    static void growLights(u32 count) {
+        while (sLights.mCount < count) {
+            memset(&sLights.add(), 0, sizeof(NebulaFrameLight));
+        }
+    }
+
+    static void growLightFollow(u32 words) {
+        while (sLightFollow.mCount < words) {
+            sLightFollow.add() = 0;
+        }
+    }
+
     u32 currentLightSet(u32 block) {
         if (!sLightsSet) {
             return NEBULA_NONE32;
@@ -636,12 +673,26 @@ namespace Frame {
         Store* pStore = store();
         const u32 camera = pStore->mBlocks.mData[block].camera;
         const u32 cameraPlusOne = camera != NEBULA_NONE32 ? camera + 1u : 0u;
-        if (sLights.camera_plus_one != cameraPlusOne) {
-            sLights.camera_plus_one = cameraPlusOne;
+        if (sLightsCamera != cameraPlusOne) {
+            sLightsCamera = cameraPlusOne;
             sLightsDirty = true;
         }
         if (sLightsDirty || sLightSet == NEBULA_NONE32) {
-            pStore->mLightSets.add() = sLights;
+            // The list's set is a copy of the lights now: their run, and the words for as many lights.
+            const u32 count = sLights.mCount;
+            const u32 words = (count + 31u) / 32u;
+            growLightFollow(words);
+            NebulaFrameLightSet& rSet = pStore->mLightSets.add();
+            rSet.first = pStore->mLights.mCount;
+            rSet.count = count;
+            rSet.follow_first = pStore->mLightFollow.mCount;
+            rSet.camera_plus_one = cameraPlusOne;
+            if (count != 0) {
+                memcpy(pStore->mLights.addRun(count), sLights.mData, count * sizeof(NebulaFrameLight));
+            }
+            if (words != 0) {
+                memcpy(pStore->mLightFollow.addRun(words), sLightFollow.mData, words * sizeof(u32));
+            }
             sLightSet = static_cast< u32 >(pStore->mLightSets.mCount - 1);
             sLightsDirty = false;
         }
@@ -649,7 +700,8 @@ namespace Frame {
     }
 
     void setLight(u32 index, const NebulaLight& rLight) {
-        NebulaFrameLight& rOut = sLights.lights[index];
+        growLights(index + 1);
+        NebulaFrameLight& rOut = sLights.mData[index];
         for (u32 c = 0; c < 4; c++) {
             rOut.color[c] = rLight.color[c];
         }
@@ -661,9 +713,22 @@ namespace Frame {
         sLightsSet = true;
     }
 
+    // Lights 0-31 at once.
     void setLightFollowsCamera(u32 mask) {
-        if (sLights.follows_camera != mask) {
-            sLights.follows_camera = mask;
+        growLightFollow(1);
+        if (sLightFollow.mData[0] != mask) {
+            sLightFollow.mData[0] = mask;
+            sLightsDirty = true;
+        }
+    }
+
+    // Light `index`, whatever its number.
+    void setLightFollows(u32 index, bool follows) {
+        growLightFollow(index / 32u + 1u);
+        u32& rWord = sLightFollow.mData[index / 32u];
+        const u32 next = follows ? (rWord | 1u << (index % 32u)) : (rWord & ~(1u << (index % 32u)));
+        if (rWord != next) {
+            rWord = next;
             sLightsDirty = true;
         }
     }

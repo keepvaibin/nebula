@@ -32,6 +32,7 @@ struct PlacedTextureAllocator::State {
 
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
     std::uint64_t heap_bytes = 0;
+    D3D12_HEAP_PROPERTIES properties{D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 0u, 0u};
     ComPtr<ID3D12Device> device;
     mutable std::mutex mutex;
     std::vector<Heap> heaps;
@@ -43,7 +44,7 @@ struct PlacedTextureAllocator::State {
         if (!device) return false;
         D3D12_HEAP_DESC desc{};
         desc.SizeInBytes = heap_bytes;
-        desc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+        desc.Properties = properties;
         desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
         desc.Flags = flags;
         Heap heap;
@@ -141,10 +142,14 @@ private:
 }  // namespace
 
 PlacedTextureAllocator::PlacedTextureAllocator(D3D12_HEAP_FLAGS heap_flags,
-                                               std::uint64_t heap_bytes)
+                                               std::uint64_t heap_bytes,
+                                               const D3D12_HEAP_PROPERTIES* properties)
     : state_(std::make_shared<State>()) {
     state_->flags = heap_flags;
     state_->heap_bytes = heap_bytes;
+    if (properties != nullptr) {
+        state_->properties = *properties;
+    }
 }
 
 PlacedTextureAllocator::~PlacedTextureAllocator() { shutdown(); }
@@ -222,8 +227,7 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
         }
     }
 
-    D3D12_HEAP_PROPERTIES properties{};
-    properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    const D3D12_HEAP_PROPERTIES properties = state_->properties;
     const HRESULT hr = create_texture(device.Get(), &properties, D3D12_HEAP_FLAG_NONE, &desc, initial, clear_value,
                                       IID_PPV_ARGS(&resource));
     if (SUCCEEDED(hr)) {

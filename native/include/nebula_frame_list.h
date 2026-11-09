@@ -43,13 +43,14 @@ typedef struct NebulaFrameLight {
     float direction[3];
 } NebulaFrameLight;
 
-enum { NEBULA_LIGHTS_PER_SET = 8 };
-
+/* A light set: `count` lights, list->lights[first ...), as many as the game lit. A material names a light by its number in
+   the set; a number past `count` lights nothing. Bit n % 32 of list->light_follow[follow_first + n / 32] says light n's
+   position moves with the camera (ceil(count / 32) words). */
 typedef struct NebulaFrameLightSet {
-    NebulaFrameLight lights[NEBULA_LIGHTS_PER_SET];
-    uint32_t follows_camera; /* bit per light: its position moves with the camera */
+    uint32_t first;
+    uint32_t count;
+    uint32_t follow_first;
     uint32_t camera_plus_one; /* camera whose eye space holds these lights; 0 when unknown */
-    uint32_t reserved[2];
 } NebulaFrameLightSet;
 
 /* Block flags. */
@@ -239,6 +240,8 @@ typedef struct NebulaFrameList {
     const NebulaFrameCamera* cameras;
     const NebulaFrameBlock* blocks;
     const NebulaFrameLightSet* light_sets;
+    const NebulaFrameLight* lights;  /* every set's lights, one run per set */
+    const uint32_t* light_follow;    /* every set's follow words */
     const NebulaFrameConstants* constants;
     const void* ring_vertices;
     const uint32_t* ring_indices;
@@ -246,6 +249,7 @@ typedef struct NebulaFrameList {
     const float (*instance_rows)[4]; /* NEBULA_ITEM_INSTANCES draws' instances (NebulaParticleInstance, NebulaGlyphInstance) */
     uint32_t pass_count, item_count, view_count, camera_count;
     uint32_t block_count, light_set_count, constants_count, probe_count;
+    uint32_t light_count, light_follow_count;
     uint64_t ring_vertex_bytes;
     uint32_t ring_index_count;
     uint32_t instance_row_count;

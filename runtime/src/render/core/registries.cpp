@@ -629,6 +629,40 @@ void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vect
     }
 }
 
+void Registries::retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired) {
+    for (const std::unique_ptr<TextureTable>& entry : tables_) {
+        TextureTable* const table = entry.get();
+        if (table == nullptr || table->retired || frame < table->last_frame || frame - table->last_frame <= kTableIdleFrames) {
+            continue;
+        }
+        // A table holding a target lives for one frame (texture_table_for): its set is the renderer's to recycle.
+        if (!table->has_target && table->textures.ptr != 0u) {
+            retired.push_back(table->textures);
+        }
+        table->textures = {};
+        table->samplers = {};
+        table->lists = 0u;
+        table->list_first = 0u;
+        table->walk_stamp = ~0ull;
+        table->textures_revision = ~0ull;
+        table->samplers_generation = 0u;
+        std::vector<std::uint32_t>().swap(table->sampler_slots);
+        table->retired = true;
+        ++table_retirements_;
+    }
+}
+
+Registries::TableCounts Registries::table_counts() const noexcept {
+    TableCounts counts;
+    counts.retirements = table_retirements_;
+    for (const std::unique_ptr<TextureTable>& table : tables_) {
+        if (table != nullptr) {
+            ++(table->retired ? counts.retired : counts.live);
+        }
+    }
+    return counts;
+}
+
 std::span<const ao::ObjectSlot> Registries::object_slots(const GpuMesh& mesh) const noexcept {
     if (mesh.object_slots_count == 0u) {
         return {};

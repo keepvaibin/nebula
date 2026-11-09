@@ -463,7 +463,8 @@ void TextureStore::apply_built_in(Op& op) {
     if (op.staged.chunk != nullptr) {
         try {
             std::uint64_t bytes = 0u;
-            gpu::TextureRef texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, bytes);
+            gpu::TextureRef texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, bytes,
+                                                              TexelFormat::Rgba8, true);
             if (texture) {
                 backend_.record_upload(gpu::raw(texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                                        op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
@@ -484,9 +485,9 @@ void TextureStore::apply_built_in(Op& op) {
     look_up(op.id, *entry);
 }
 
-void TextureStore::make_own(Entry& entry, const Op& op) {
+void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     std::uint64_t allocation = 0u;
-    entry.texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, allocation, op.staged.format);
+    entry.texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, allocation, op.staged.format, once);
     backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                            op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
     keep(op.staged.chunk);
@@ -505,7 +506,7 @@ void TextureStore::create_entry(Op& op) {
         entries_.resize(std::size_t{op.id} + 1u);
     }
     auto entry = std::make_unique<Entry>();
-    make_own(*entry, op);
+    make_own(*entry, op, true);
     entry->current = entry->own;
     entry->name = op.name;
     if (op.name.named) {
@@ -528,8 +529,9 @@ void TextureStore::update_entry(Op& op) {
     }
     Entry& entry = *entries_[op.id];
     TextureHandle& own = entry.own;
+    // A texture written from the CPU (direct_writes) is never rewritten in place: a frame in flight may read it.
     const bool same = own.width == op.staged.width && own.height == op.staged.height && own.mip_levels == op.staged.levels &&
-                      entry.name.format == op.name.format;
+                      entry.name.format == op.name.format && !TextureBackend::direct_written(gpu::raw(entry.texture));
     if (same) {
         backend_.record_upload(gpu::raw(entry.texture), true, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                                op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
@@ -540,7 +542,7 @@ void TextureStore::update_entry(Op& op) {
     } else {
         const bool showing_own = entry.current.srv_index == own.srv_index;
         retire(std::move(entry.texture), own.srv_index);
-        make_own(entry, op);
+        make_own(entry, op, false);  // updated once: it may be again, in place
         if (showing_own) {
             entry.current = own;
         }
@@ -748,7 +750,8 @@ void TextureStore::apply_texture_packs() {
             if (pixels.staging && pixels.level_count != 0u) {
                 // Staged by the loader: create and record the copy; the buffer lives until this slot comes round.
                 std::uint64_t allocation_bytes = 0;
-                gpu::TextureRef texture = backend_.create_texture(pixels.width, pixels.height, pixels.level_count, allocation_bytes);
+                gpu::TextureRef texture = backend_.create_texture(pixels.width, pixels.height, pixels.level_count, allocation_bytes,
+                                                                  TexelFormat::Rgba8, true);
                 if (texture) {
                     backend_.record_upload(gpu::raw(texture), false, *pixels.staging, 0u, pixels.width, pixels.height,
                                            pixels.level_count, pixels.offsets.data(), pixels.pitches.data());
@@ -785,7 +788,8 @@ void TextureStore::apply_texture_packs() {
                     }
                 }
                 std::uint64_t allocation_bytes = 0;
-                gpu::TextureRef texture = backend_.create_texture(pixels.width, pixels.height, levels, allocation_bytes);
+                gpu::TextureRef texture = backend_.create_texture(pixels.width, pixels.height, levels, allocation_bytes,
+                                                                  TexelFormat::Rgba8, true);
                 if (texture) {
                     backend_.record_upload(gpu::raw(texture), false, *chunk, offset, pixels.width, pixels.height, levels,
                                            offsets.data(), pitches.data());

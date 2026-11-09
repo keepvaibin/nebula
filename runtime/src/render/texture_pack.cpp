@@ -2,6 +2,7 @@
 // texture_pack.cpp: the texture-pack index, loaders, resident replacements and dump writer (texture_pack.h).
 
 #include "galaxy/render/texture_pack.h"
+#include "galaxy/cpu_count.h"
 #include "galaxy/texture_categories.h"
 
 #include "galaxy/crash_report.h"
@@ -314,7 +315,8 @@ TexturePacks::NameKey TexturePacks::name_key(SizeKey size, std::uint64_t hash, s
 void TexturePacks::start_workers() {
     if (!workers_.empty()) return;
     stopping_ = false;
-    const unsigned count = std::clamp(std::thread::hardware_concurrency() / 8u, 2u, 4u);
+    // An eighth of the logical processors decode in the background, at least two.
+    const unsigned count = std::max(2u, logical_cores() / 8u);
     for (unsigned i = 0; i < count; ++i) {
         workers_.emplace_back([this] { worker_main(); });
     }

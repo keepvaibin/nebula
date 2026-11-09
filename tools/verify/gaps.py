@@ -11,7 +11,7 @@ for s in open(sys.argv[1], errors="replace"):
     m = re.search(r"scene: (\[.*\])|tour: (\d+/\d+ \S+ \d+)", s)
     if m:
         state = m.group(1) or m.group(2)
-    m = re.search(r"\[latency\] retrace vi=(\d+) qpc=(\d+)", s)
+    m = re.search(r"\[latency\] frame vi=(\d+) qpc=(\d+)", s)
     if m:
         t = int(m.group(2)) / QPC
         frames += 1

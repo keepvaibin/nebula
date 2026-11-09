@@ -50,6 +50,14 @@ int main() {
  old_light.camera_plus_one=2;
  ListData right_light{};right_light.list=&lb;Pairing right_pair;right_pair.pair(right_light,&da);
  if (right_light.light_set_before[0] != 0u) return 8;
+ // Sets of different counts pair when the lights they share follow the camera alike.
+ std::uint32_t follow_old = 3u, follow_new = 3u;
+ old_light.count = 2u;new_light.count = 3u;la.light_follow = &follow_old;lb.light_follow = &follow_new;
+ ListData grown_light{};grown_light.list=&lb;Pairing grown_pair;grown_pair.pair(grown_light,&da);
+ if (grown_light.light_set_before[0] != 0u) return 9;
+ follow_new = 1u;
+ ListData moved_light{};moved_light.list=&lb;Pairing moved_pair;moved_pair.pair(moved_light,&da);
+ if (moved_light.light_set_before[0] != NEBULA_NONE32) return 10;
  std::puts("PASS: explicit light camera survives camera reorder and rejects the wrong camera.");
  std::puts("PASS: shadow camera identity, discrete texture changes, and one-use draw pairing.");
  std::puts("PASS: regenerated shadow topology stays discrete; its camera still pairs.");
