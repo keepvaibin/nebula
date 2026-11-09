@@ -381,7 +381,8 @@ void EarthenPipe::control() {
 
 bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
-        if (isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHide)) ||
+        // A pipe with no partner (a mod's placement) takes nobody in.
+        if (mTargetPipe == nullptr || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHide)) ||
             isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToShowUp)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp)) ||
             isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToHideDown)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHideDown)) ||
             MR::isPlayerDead()) {
@@ -421,7 +422,11 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pRec
     }
     if (MR::isMsgRushCancel(msg)) {
         mHostActor = nullptr;
-        mTargetPipe->tryHideDown();
+
+        if (mTargetPipe != nullptr) {
+            mTargetPipe->tryHideDown();
+        }
+
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWait));
         return true;
     }

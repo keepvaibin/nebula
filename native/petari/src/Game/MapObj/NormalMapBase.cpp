@@ -93,7 +93,11 @@ void NormalMapBase::setupTexture() {
         const char* pName = MR::getTextureName(this, i);
         if (strstr(pName, "Nswap_")) {
             MR::FormattedName fileName("%s.bti", pName + 6);
-            pImage = MR::getTexFromArc(fileName.c_str(), this);
+            // The model's own picture stays when the archive lacks the swap file.
+            const ResTIMG* pSwapImage = MR::getTexFromArc(fileName.c_str(), this);
+            if (pSwapImage != nullptr) {
+                pImage = pSwapImage;
+            }
             mNormalTex = new GameTexture(pImage);
             mTextures[i] = mNormalTex;
             mTextures[i]->setFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
@@ -321,13 +325,31 @@ void NormalMapBase::loadNormalTex(const GameTexture* pTex, u32 slot) const {
 }
 
 void NormalMapBase::loadTexture1(Material* pMaterial) const {
-    sNormalMap.setTexture(2, mTextures[pMaterial->getTextureIndex(0)]);
-    loadNormalTex(mTextures[pMaterial->getTextureIndex(1)], 0);
+    // A material without the two pictures keeps the ones the last material set.
+    const u32 textureCount = MR::getModelData(this)->getTextureCount();
+    const u32 baseIndex = pMaterial->getTextureIndex(0);
+    const u32 normalIndex = pMaterial->getTextureIndex(1);
+
+    if (baseIndex < textureCount) {
+        sNormalMap.setTexture(2, mTextures[baseIndex]);
+    }
+
+    if (normalIndex < textureCount) {
+        loadNormalTex(mTextures[normalIndex], 0);
+    }
 }
 
 void NormalMapBase::drawMaterialSetting(Material* pMaterial) const {
     loadTexture1(pMaterial);
-    sNormalMap.setMatrix(9, 2, pMaterial->getCoordMatrix(0)->getMtx());
+    // A material with no texture matrix uses the identity.
+    CoordMatrix* pCoordMatrix = pMaterial->getCoordMatrix(0);
+    if (pCoordMatrix != nullptr) {
+        sNormalMap.setMatrix(9, 2, pCoordMatrix->getMtx());
+    } else {
+        Mtx identity;
+        NebulaMtxIdentity(identity);
+        sNormalMap.setMatrix(9, 2, identity);
+    }
     Color8 ambient;
     Color8 material;
     ambient.set(mAmbColor, mAmbColor, mAmbColor, mAmbAlpha);

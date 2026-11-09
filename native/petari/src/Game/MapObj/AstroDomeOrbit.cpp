@@ -71,9 +71,12 @@ void AstroDomeOrbit::drawBloom() const {
 }
 
 void AstroDomeOrbit::setup(s32 galaxyIndex) {
-    const f32* pRadii = MiniatureGalaxyFunction::getMiniatureGalaxyNum() == ARRAY_SIZE(::cRadius) ? ::cRadius : ::cRadiusLastDome;
+    const bool isFullDome = MiniatureGalaxyFunction::getMiniatureGalaxyNum() == ARRAY_SIZE(::cRadius);
+    const f32* pRadii = isFullDome ? ::cRadius : ::cRadiusLastDome;
+    const s32 radiusNum = isFullDome ? ARRAY_SIZE(::cRadius) : ARRAY_SIZE(::cRadiusLastDome);
 
-    mOrbitRadius = pRadii[galaxyIndex];
+    // A dome with more galaxies than rings puts the extra ones on the outermost ring.
+    mOrbitRadius = pRadii[MR::clamp(galaxyIndex, 0, radiusNum - 1)];
     mAngle = ::cGalaxyRotateCoordOffset * galaxyIndex;
 
     if (galaxyIndex >= ::cOutermostIndex) {

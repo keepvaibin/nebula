@@ -400,6 +400,10 @@ void SmallStone::initMember(const char* pModelName, bool useGravity) {
             case 4:
                 pMember->mBreakEffectName = "Break3";
                 break;
+            default:
+                // A model with more kinds than break effects uses Break1.
+                pMember->mBreakEffectName = "Break1";
+                break;
             }
         } else {
             mRotation.set(0.0f);

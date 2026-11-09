@@ -375,6 +375,20 @@ void Sandstorm::initSandstormParam() {
     MR::getCsvDataF32(&mBindHeight, csvParser, "BindHeight", 0);
     MR::getCsvDataF32(&mSpiralRot, csvParser, "SpiralRot", 0);
     MR::getCsvDataF32(&mSpiralRadius, csvParser, "SpiralRadius", 0);
+
+    // Step counts below 1 never reach their step test (0 divides the bind steps by zero), and a bind height of 0 divides the
+    // start step by zero.
+    if (mStepStorm < 1) {
+        mStepStorm = 1;
+    }
+
+    if (mStepAdjust < 1) {
+        mStepAdjust = 1;
+    }
+
+    if (MR::isNearZero(mBindHeight, 0.0001f)) {
+        mBindHeight = 1.0f;
+    }
 }
 
 void Sandstorm::initTrapModel() {
