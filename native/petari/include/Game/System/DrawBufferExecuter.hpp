@@ -27,6 +27,7 @@ public:
     }
 
     LiveActor** mActors;
+    s32 mMaxNumActors;
     s32 mNumActors;
     const char* mName;
     DrawBuffer* mDrawBuffer;
