@@ -157,6 +157,10 @@ void CoconutTreeLeafGroup::init(const TableIter& rIter) {
     initModelManagerWithAnm("CoconutTreeLeaf", nullptr, false);
     MR::connectToSceneMapObjNoCalcAnim(this);
     mNumLeaves = MR::getJointNum(this) - 1;
+    // A model with only its root joint has no leaves.
+    if (mNumLeaves < 0) {
+        mNumLeaves = 0;
+    }
     mLeaves = new CoconutTreeLeaf*[mNumLeaves];
 
     for (s32 i = 0; i < mNumLeaves; i++) {

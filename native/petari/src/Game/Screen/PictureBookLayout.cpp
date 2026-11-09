@@ -401,7 +401,9 @@ s32 PictureBookLayout::getChapterNumberMax() const {
         return mChapterRosettaMax;
     }
 
-    return MR::getPictureBookChapterAlreadyRead();
+    // A save that counts chapters the book lacks (or fewer than none) is held to the book's nine.
+    const s32 chapters = MR::getPictureBookChapterAlreadyRead();
+    return chapters > getChapterMax() ? getChapterMax() : (chapters < 0 ? 0 : chapters);
 }
 
 bool PictureBookLayout::isValidCloseButton() const {

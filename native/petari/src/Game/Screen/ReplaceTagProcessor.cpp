@@ -30,7 +30,7 @@ namespace ReplaceTagProcessor {
     namespace ImplArgs {
         struct GroupFunctionInfo {
             u8 mGroup;
-            u32 (*mFunction)(char16_t*, const MessageEditorMessageTag&, va_list);
+            u32 (*mFunction)(char16_t*, const MessageEditorMessageTag&, va_list, u32);
         };
 
         const GroupFunctionInfo sGroupFunctionTable[] = {{7, exeStringGroup}, {6, exeNumberGroup}, {0, nullptr}};
@@ -106,7 +106,7 @@ namespace ReplaceTagProcessor {
         return pDst - pStart;
     }
 
-    u32 ReplaceArgs(char16_t* pDst, const char16_t* pSrc, va_list args) {
+    u32 ReplaceArgs(char16_t* pDst, const char16_t* pSrc, va_list args, u32 argCount) {
         char16_t* pStart = pDst;
         while (*pSrc != 0) {
             if (MR::isMessageEditorNextTag(pSrc)) {
@@ -118,7 +118,7 @@ namespace ReplaceTagProcessor {
                 MessageEditorMessageTag tag(pSrc + 1);
                 const ImplArgs::GroupFunctionInfo* pInfo = ImplArgs::findGroupFunctionInfo(tag.getGroup());
                 if (pInfo != nullptr) {
-                    pDst += pInfo->mFunction(pDst, tag, args);
+                    pDst += pInfo->mFunction(pDst, tag, args, argCount);
                 } else {
                     MR::copyMemory(pDst, pSrc, (tag.getSkipLength() + 1) * sizeof(char16_t));
                     pDst += tag.getSkipLength() + 1;
@@ -142,7 +142,9 @@ namespace ReplaceTagProcessor {
             u8 mGroup;
             u16 mTag;
         } tag;
-        tag.mLength = rTag.getTagLength() + 2;
+        // A picture tag longer than the 4 bytes of the struct (an edited message) keeps only those 4.
+        const u32 tagLength = rTag.getTagLength() < sizeof(PictureTag) ? rTag.getTagLength() : sizeof(PictureTag);
+        tag.mLength = tagLength + 2;
         tag.mGroup = rTag.getGroup();
         tag.mTag = rTag.getTag();
         if (static_cast< char16_t >(rTag.getTag() + 0x30) == 0x5B) {
@@ -154,15 +156,19 @@ namespace ReplaceTagProcessor {
         }
 
         *pDst++ = 0x1A;
-        MR::copyMemory(pDst, &tag, rTag.getTagLength());
-        return rTag.getTagLength() / 2 + 1;
+        MR::copyMemory(pDst, &tag, tagLength);
+        return tagLength / 2 + 1;
     }
 
     namespace {
         // The string argument a string tag names.
-        const char16_t* findStringArg(const MessageEditorMessageTag& rTag, va_list args) {
+        const char16_t* findStringArg(const MessageEditorMessageTag& rTag, va_list args, u32 argCount) {
             va_list copy;
             const char16_t* pString = nullptr;
+            // A tag naming an argument the caller did not pass is the empty text.
+            if (rTag.getParam32(1) >= argCount) {
+                return nullptr;
+            }
             va_copy(copy, args);
             for (u32 i = 0; i <= rTag.getParam32(1); i++) {
                 pString = va_arg(copy, const char16_t*);
@@ -182,13 +188,13 @@ namespace ReplaceTagProcessor {
         }
     }  // namespace
 
-    u32 getStringGroupRoom(const MessageEditorMessageTag& rTag, va_list args) {
-        return stringUnits(findStringArg(rTag, args));
+    u32 getStringGroupRoom(const MessageEditorMessageTag& rTag, va_list args, u32 argCount) {
+        return stringUnits(findStringArg(rTag, args, argCount));
     }
 
     // The whole argument, however long.
-    u32 exeStringGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
-        const char16_t* pString = findStringArg(rTag, args);
+    u32 exeStringGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args, u32 argCount) {
+        const char16_t* pString = findStringArg(rTag, args, argCount);
         const u32 units = stringUnits(pString);
         for (u32 i = 0; i < units; i++) {
             pDst[i] = pString[i];
@@ -197,9 +203,14 @@ namespace ReplaceTagProcessor {
         return units;
     }
 
-    u32 exeNumberGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
+    u32 exeNumberGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args, u32 argCount) {
         va_list copy;
         int number = 0;
+        // A tag naming an argument the caller did not pass is the empty text.
+        if (rTag.getParam32(1) >= argCount) {
+            *pDst = 0;
+            return 0;
+        }
         va_copy(copy, args);
         for (u32 i = 0; i <= rTag.getParam32(1); i++) {
             number = va_arg(copy, int);
@@ -282,14 +293,14 @@ namespace ReplaceTagProcessor {
     }
 };  // namespace ReplaceTagProcessor
 
-u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* pFormat, ...) {
+u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* pFormat, u32 argCount, ...) {
     // No format (a message id the text lacks) is the empty text.
     if (pFormat == nullptr) {
         pFormat = u"";
     }
 
     va_list args;
-    va_start(args, pFormat);
+    va_start(args, argCount);
     // Room for the replaced text: a number tag gives at most 12 units, a string tag its argument's length, any other
     // tag keeps its length.
     u32 room = 1;
@@ -298,7 +309,7 @@ u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* 
             MessageEditorMessageTag tag(pText + 1);
             const u32 skip = tag.getSkipLength() + 1;
             if (tag.getGroup() == 7) {
-                room += ReplaceTagProcessor::getStringGroupRoom(tag, args);
+                room += ReplaceTagProcessor::getStringGroupRoom(tag, args, argCount);
             } else {
                 room += tag.getGroup() == 6 ? 12 : skip;
             }
@@ -312,7 +323,7 @@ u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* 
     char16_t stack[0x200];
     MR::Text16 heap;
     char16_t* const buffer = room <= 0x200 ? stack : heap.room(room);
-    const u32 result = ReplaceTagProcessor::ReplaceArgs(buffer, pFormat, args);
+    const u32 result = ReplaceTagProcessor::ReplaceArgs(buffer, pFormat, args, argCount);
     va_end(args);
     if (pDst != nullptr && length > 0) {
         if (result >= static_cast< u32 >(length)) {

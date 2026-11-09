@@ -140,7 +140,8 @@ void PauseMenu::appear() {
         mLowerButton->appear();
     }
 
-    if (MR::isOnLuigiHiding()) {
+    // A stage with no letter galaxy made no letter button.
+    if (MR::isOnLuigiHiding() && mLetterButton != nullptr) {
         mLetterButton->appear();
     }
 
