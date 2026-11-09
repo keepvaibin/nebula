@@ -65,7 +65,11 @@ void CinemaFrame::tryScreenToFrame() {
     if (!isInvalid) {
         // Bars on their way out come back from where they are: one not yet moving is still a full frame.
         mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen)) ? 1.0f - transitionDone() : 0.0f;
-        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvFrame) : GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame));
+        if (mStartAt >= 1.0f) {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrame));
+        } else {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame));
+        }
     }
 }
 
@@ -78,7 +82,11 @@ void CinemaFrame::tryFrameToBlank() {
 
     if (!isInvalid) {
         mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame)) ? 1.0f - transitionDone() : 0.0f;
-        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvBlank) : GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank));
+        if (mStartAt >= 1.0f) {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlank));
+        } else {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank));
+        }
     }
 }
 
@@ -92,7 +100,11 @@ void CinemaFrame::tryBlankToFrame() {
 
     if (!isInvalid) {
         mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToBlank)) ? 1.0f - transitionDone() : 0.0f;
-        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvFrame) : GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame));
+        if (mStartAt >= 1.0f) {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrame));
+        } else {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvBlankToFrame));
+        }
     }
 }
 
@@ -105,7 +117,11 @@ void CinemaFrame::tryFrameToScreen() {
 
     if (!isInvalid) {
         mStartAt = isNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreenToFrame)) ? 1.0f - transitionDone() : 0.0f;
-        setNerve(mStartAt >= 1.0f ? GET_NERVE(CinemaFrame, CinemaFrameNrvScreen) : GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen));
+        if (mStartAt >= 1.0f) {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreen));
+        } else {
+            setNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvFrameToScreen));
+        }
     }
 }
 
