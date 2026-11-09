@@ -4,6 +4,7 @@
 #include <Game/Ui/DrawInfo.hpp>
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Pane.hpp>
+#include <Game/Util/Array.hpp>
 
 namespace Ui {
     class AnimTransform;
@@ -94,7 +95,7 @@ public:
     u32 mGroupCtrlCount;
     LayoutGroupCtrl** mGroupCtrlList;
     char* mLayoutName;
-    // This layout's anchors (LayoutAspect::prepare; count -1 until resolved), the layout's pass applies them.
-    Ui::Anchor mAnchors[16];
-    s32 mAnchorCount;
+    // This layout's anchors (LayoutAspect::prepare, once: mAnchorsResolved), the layout's pass applies them.
+    MR::Vector< MR::FixedArray< Ui::Anchor, 16 > > mAnchors;
+    bool mAnchorsResolved = false;
 };

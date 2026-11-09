@@ -140,23 +140,23 @@ namespace {
         return strcmp(pPane->mName, pName) == 0;
     }
 
-    bool add(LayoutManager* pManager, Pane* pPane, u32 fit, f32 width, f32 height) {
-        const s32 capacity = static_cast< s32 >(sizeof(pManager->mAnchors) / sizeof(pManager->mAnchors[0]));
-        if (pPane == nullptr || pManager->mAnchorCount == capacity) {
-            return false;
+    void add(LayoutManager* pManager, Pane* pPane, u32 fit, f32 width, f32 height) {
+        if (pPane == nullptr) {
+            return;
         }
-        Anchor& rAnchor = pManager->mAnchors[pManager->mAnchorCount++];
-        rAnchor.mpPane = pPane;
-        rAnchor.mFit = fit;
-        rAnchor.mWidth = width;
-        rAnchor.mHeight = height;
-        return true;
+        Anchor anchor;
+        anchor.mpPane = pPane;
+        anchor.mFit = fit;
+        anchor.mWidth = width;
+        anchor.mHeight = height;
+        pManager->mAnchors.push_back(anchor);
     }
 
     // In the order they apply: the cinema bars, the backings, then the layout's rules in table order (an offset
     // moves the screen matrices the later ones read).
     void resolve(LayoutManager* pManager) {
-        pManager->mAnchorCount = 0;
+        pManager->mAnchors.clear();
+        pManager->mAnchorsResolved = true;
         Pane* pRoot = pManager->mLayout->mpRootPane;
         if (pRoot == nullptr) {
             return;
@@ -196,8 +196,8 @@ namespace {
                 add(pManager, pRoot->FindPaneByName(rRule.mPane, true), rRule.mFit, rRule.mWidth, rRule.mHeight);
             }
         }
-        if (pManager->mAnchorCount != 0) {
-            pManager->mLayout->SetAnchors(pManager->mAnchors, static_cast< u32 >(pManager->mAnchorCount));
+        if (pManager->mAnchors.size() != 0) {
+            pManager->mLayout->SetAnchors(pManager->mAnchors.begin(), static_cast< u32 >(pManager->mAnchors.size()));
         }
     }
 
@@ -219,10 +219,10 @@ namespace {
 
 namespace LayoutAspect {
     void prepare(LayoutManager* pManager) {
-        if (pManager->mAnchorCount < 0) {
+        if (!pManager->mAnchorsResolved) {
             resolve(pManager);
         }
-        if (pManager->mAnchorCount != 0) {
+        if (pManager->mAnchors.size() != 0) {
             pManager->mLayout->SetCanvas(getCanvas());
         }
     }
