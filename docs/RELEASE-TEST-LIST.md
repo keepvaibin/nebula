@@ -30,6 +30,7 @@ Use a Windows user that never ran Nebula, a mid-range PC and a low-end one, and 
 | W11 | Play: reach the title, File Select, a new game | Title music plays; no black frames; the Mii picker opens |
 | W11b | Install from a European (RMGP01) and a Japanese (RMGJ01) disc image as well as the American one; in each, choose every language the disc has (Language row), then play the prologue and a galaxy | Each is accepted; title, menus, talk, star names and voices are in the language chosen, with no missing letters; the speed is the game's own on every disc |
 | W12 | Every launcher page and every in-game settings page (`F1`): change a row, quit, reopen | The value is kept and shown the same in both; Defaults resets only its own page |
+| W12b | Settings, ADVANCED: travel to a galaxy and star from the galaxy select; then give the Grand Stars | The game goes there through its own stage change; with the Grand Stars the Observatory's domes are built |
 | W13 | Save in a galaxy, quit, start | The file shows its stars and Mii |
 | W14 | Export saves; import the `.zip` into a fresh install | Same files, stars and Miis |
 | W15 | Import a `Nebula.sav`, a `GameData.bin` from a Wii or Dolphin save folder, a damaged file, and an import while the game runs | The first two load (the saves in place go to the backups folder); the damaged file is explained and nothing changes; the last asks to close the game |

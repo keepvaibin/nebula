@@ -580,21 +580,6 @@ namespace NebulaAchievements {
         return sQueued > 1;
     }
 
-    void showForTest(const char* pId) {
-        if (const Entry* pEntry = findEntry(pId)) {
-            enqueue(*pEntry);
-        } else if (isModKey(pId)) {
-            for (s32 i = 0; i < modNum(); i++) {
-                const char* pKey = nullptr;
-                if (modAt(cEntryNum + i, &pKey, nullptr, nullptr, nullptr) && MR::isEqualString(pKey, pId)) {
-                    enqueueMod(i);
-                }
-            }
-        } else {
-            nebula_log("test: no achievement %s\n", pId);
-        }
-    }
-
     s32 getNum() {
         return cEntryNum + modNum();
     }

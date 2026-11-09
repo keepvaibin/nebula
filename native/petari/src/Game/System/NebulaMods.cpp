@@ -1,4 +1,5 @@
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/NebulaModCalls.hpp"
 #include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
@@ -2733,6 +2734,13 @@ namespace {
         apiShowJoint,
         apiJointName,
         apiGetJointMatrix,
+        nebula_mod_give_star,
+        nebula_mod_give_grand_stars,
+        nebula_mod_set_player_character,
+        nebula_mod_list_materials,
+        nebula_mod_water_point,
+        nebula_mod_circle_wipe,
+        nebula_mod_grant_spin_and_pointer,
     };
 }  // namespace
 

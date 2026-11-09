@@ -308,6 +308,30 @@ typedef enum NebulaNervePhase {
    NEBULA_NERVE_FRAME; when several plugins hook one nerve they all run, and any 0 skips the game's code. */
 typedef int32_t (*NebulaNerveCallback)(NebulaActor* actor, const char* nerve, NebulaNervePhase phase, int32_t frames, void* user);
 
+/* A material's texture coordinate (list_materials): how it is made (the game's TexGen type, source and matrix), its
+   matrix's kind and projection (255: no matrix), and whether a stage of the material reads it. */
+typedef struct NebulaMaterialCoord {
+    /* How the coordinate is made: the game's TexGen type, its source and its matrix slot. */
+    uint32_t type, source, matrix;
+    /* Its matrix's kind and projection; 255 for both when it has no matrix. */
+    uint32_t matrix_kind, projection;
+    /* 1 when a stage of the material reads it, 0 when none does. */
+    uint32_t used;
+} NebulaMaterialCoord;
+/* A model's material (list_materials). Valid during the callback. */
+typedef struct NebulaMaterialInfo {
+    /* sizeof(NebulaMaterialInfo): fields are only added at the end. */
+    uint32_t size;
+    /* Its place in the model and its name. */
+    int32_t index;
+    const char* name;
+    /* Its texture coordinates: coord_count of them at coords. */
+    int32_t coord_count;
+    const NebulaMaterialCoord* coords;
+} NebulaMaterialInfo;
+/* list_materials calls it once for each material of the model, with list_materials' `user`. It returns nothing. */
+typedef void (*NebulaMaterialCallback)(const NebulaMaterialInfo* material, void* user);
+
 typedef struct NebulaModApi {
     uint32_t size;
     uint32_t version;
@@ -762,6 +786,26 @@ typedef struct NebulaModApi {
        x, y and z axes in the world (scaled with the model), column 3 its position. Without the joint or a model: no
        turn, at the actor's position. */
     void (*get_joint_matrix)(NebulaActor* actor, const char* joint, float* matrix);
+
+    /* A star of the stage played won, as the player wins it: its result counted and its get demo (the Grand Star's with
+       `grand` 1) once the stage is in play (after its opening camera and starter). `galaxy`: null or the stage played.
+       0: refused (no galaxy is played, or another one is named); 1: done. */
+    int32_t (*give_star)(const char* galaxy, int32_t star, int32_t grand);
+    /* The save holds Grand Stars 1 to `count` (1-7), and the stage played starts again, so the Observatory's domes are
+       built with them. 0: refused; 1: done. */
+    int32_t (*give_grand_stars)(int32_t count);
+    /* The file is played as Luigi (1) or Mario (0) from the next stage. 0: refused; 1: done. */
+    int32_t (*set_player_character)(int32_t luigi);
+    /* The materials of the first living actor whose model is `model` (any case), each given to `callback`: how many. */
+    int32_t (*list_materials)(const char* model, NebulaMaterialCallback callback, void* user);
+    /* A point inside the stage's `index`-th body of water (its oceans first, then its water areas; the index wraps):
+       how many bodies of water the stage has (0: none, `xyz` untouched). */
+    int32_t (*water_point)(int32_t index, float* xyz);
+    /* The circle wipe closes (`open` 0) or opens (1) over `frames` frames. 0: refused (no stage); 1: done. */
+    int32_t (*circle_wipe)(int32_t open, int32_t frames);
+    /* The story's grant of the spin and the Star Pointer (the Gateway Luma's), which a new file has not reached. 0:
+       refused (no stage); 1: done. */
+    int32_t (*grant_spin_and_pointer)(void);
 } NebulaModApi;
 
 /* True when this Nebula has `field` (fields are added at the end over time):
