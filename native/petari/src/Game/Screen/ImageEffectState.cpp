@@ -66,7 +66,7 @@ void ImageEffectState::forceOff() {
 
 namespace ImageEffectStateImpl {
     StateBloomNormal::StateBloomNormal(ImageEffectDirector* pHost)
-        : ImageEffectState(pHost), _8(true), _C(), mBloomIntensityNow(), mBloomIntensity(), mThresholdNow(), mThreshold(), mIntensity1Now(), mIntensity1(), mIntensity2Now(), mIntensity2() {
+        : ImageEffectState(pHost), _8(true), mBloomIntensityNow(), mBloomIntensity(), mThresholdNow(), mThreshold(), mIntensity1Now(), mIntensity1(), mIntensity2Now(), mIntensity2() {
     }
 
     void StateBloomNormal::update() {
