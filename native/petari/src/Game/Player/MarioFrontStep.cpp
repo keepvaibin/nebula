@@ -152,7 +152,7 @@ bool MarioFrontStep::postureCtrl(MtxPtr pMtx) {
         blendVec = -getPlayer()->getAirGravityVec();
     }
 
-    MR::makeMtxUpFront(reinterpret_cast< Pos3f* >(pMtx), blendVec, getPlayer()->mFrontVec);
+    MR::makeMtxUpFront(pMtx, blendVec, getPlayer()->mFrontVec);
 
     return true;
 }

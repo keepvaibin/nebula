@@ -379,7 +379,7 @@ namespace MR {
         pDst->setXYZDir(axisX, axisY, axisZ);
     }
 
-    void makeMtxUpSide(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide) {
+    void makeMtxUpSide(MtxPtr pDst, const Vec3f& rUp, const Vec3f& rSide) {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
@@ -388,7 +388,11 @@ namespace MR {
 
         axisX.cross(axisY, axisZ);
 
-        pDst->setXYZDir(axisX, axisY, axisZ);
+        setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
+    }
+
+    void makeMtxUpSide(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide) {
+        makeMtxUpSide(pDst->toMtxPtr(), rUp, rSide);
     }
 
     void makeMtxUpSidePos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rSide, const Vec3f& rPos) {
@@ -396,7 +400,7 @@ namespace MR {
         pDst->setTrans(rPos);
     }
 
-    void makeMtxUpFront(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront) {
+    void makeMtxUpFront(MtxPtr pDst, const Vec3f& rUp, const Vec3f& rFront) {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rUp, &axisY);
 
@@ -405,7 +409,11 @@ namespace MR {
 
         axisZ.cross(axisX, axisY);
 
-        pDst->setXYZDir(axisX, axisY, axisZ);
+        setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
+    }
+
+    void makeMtxUpFront(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront) {
+        makeMtxUpFront(pDst->toMtxPtr(), rUp, rFront);
     }
 
     void makeMtxUpFrontPos(Pos3f* pDst, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos) {
@@ -426,7 +434,7 @@ namespace MR {
         pDst->setTrans(rPos);
     }
 
-    void makeMtxFrontUp(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp) {
+    void makeMtxFrontUp(MtxPtr pDst, const Vec3f& rFront, const Vec3f& rUp) {
         Vec3f axisZ, axisY, axisX;
         MR::normalize(rFront, &axisZ);
 
@@ -435,7 +443,11 @@ namespace MR {
 
         axisY.cross(axisZ, axisX);
 
-        pDst->setXYZDir(axisX, axisY, axisZ);
+        setMtxAxisXYZ(pDst, axisX, axisY, axisZ);
+    }
+
+    void makeMtxFrontUp(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp) {
+        makeMtxFrontUp(pDst->toMtxPtr(), rFront, rUp);
     }
 
     void makeMtxFrontUpPos(Pos3f* pDst, const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rPos) {

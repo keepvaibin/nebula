@@ -41,11 +41,14 @@ namespace MR {
     void makeMtxSideUp(Pos3f*, const Vec3f&, const Vec3f&);
     void makeMtxSideUpPos(Pos3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     void makeMtxSideFront(Pos3f*, const Vec3f&, const Vec3f&);
+    void makeMtxUpSide(MtxPtr, const Vec3f&, const Vec3f&);
     void makeMtxUpSide(Pos3f*, const Vec3f&, const Vec3f&);
     void makeMtxUpSidePos(Pos3f*, const Vec3f&, const Vec3f&, const Vec3f&);
+    void makeMtxUpFront(MtxPtr, const Vec3f&, const Vec3f&);
     void makeMtxUpFront(Pos3f*, const Vec3f&, const Vec3f&);
     void makeMtxUpFrontPos(Pos3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     void makeMtxFrontSidePos(Pos3f*, const Vec3f&, const Vec3f&, const Vec3f&);
+    void makeMtxFrontUp(MtxPtr, const Vec3f&, const Vec3f&);
     void makeMtxFrontUp(Pos3f*, const Vec3f&, const Vec3f&);
     void makeMtxFrontUpPos(Pos3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     void makeMtxUpNoSupport(Pos3f*, const Vec3f&);
