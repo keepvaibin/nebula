@@ -80,9 +80,6 @@ BaseMatrixFollowTargetHolder::BaseMatrixFollowTargetHolder(const char* pName, s3
     MR::connectToSceneMapObjMovement(this);
 }
 
-template MR::Vector< MR::AssignableArray< BaseMatrixFollowTarget* > >::~Vector();
-template MR::Vector< MR::AssignableArray< BaseMatrixFollower* > >::~Vector();
-
 void BaseMatrixFollowTargetHolder::initAfterPlacement() {
     for (u32 i = 0; i < mFollowers.size(); i++) {
         BaseMatrixFollower* pFollower = mFollowers[i];
@@ -170,6 +167,3 @@ namespace MR {
 
 void BaseMatrixFollower::update() {
 }
-
-template MR::AssignableArray< BaseMatrixFollowTarget* >::~AssignableArray();
-template MR::AssignableArray< BaseMatrixFollower* >::~AssignableArray();
