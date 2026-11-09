@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Merges the pipelines dev runs registered (GALAXY_PIPELINE_LIST_OUT) into crates/nebula-import/data/site_pipelines.txt,
-leaving out what the cook's own list has.
+leaving out what the cook's own list has and what names a program the program pack does not have (runtime/src/render/programs/
+table.tsv and the written shaders): a pipeline of a program text that no longer exists is refused by every run.
 
 site_pipelines.py PIPELINES_BIN RUN_LIST...
 
@@ -20,6 +21,26 @@ INPUT = 12
 FIXED_RECORD = 320
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "crates", "nebula-import", "data", "site_pipelines.txt")
+TABLE = os.path.join(HERE, "..", "..", "runtime", "src", "render", "programs", "table.tsv")
+SITE = 1 << 63
+WRITTEN_LIMIT = 256  # the written shaders' ids are SITE | number << 1 (compile_programs.py WRITTEN), a vertex form also | 1
+
+
+def shipped():
+    """The (stage, hash) pairs the program pack holds: stage "v" vertex, "p" pixel."""
+    found = set()
+    with open(TABLE, encoding="utf-8") as f:
+        for line in f:
+            fields = line.split()
+            if len(fields) == 3:
+                found.add((fields[0], int(fields[1], 16)))
+    return found
+
+
+def has_programs(record, table):
+    """Both programs of a record are written shaders or in the table."""
+    vertex, pixel = struct.unpack_from("<QQ", record, 0)
+    return all(i & SITE and i & ~SITE < WRITTEN_LIMIT or (stage, i) in table for stage, i in (("v", vertex), ("p", pixel)))
 
 
 def from_fixed(old):
@@ -63,10 +84,13 @@ def main():
     cooked = records(sys.argv[1]) - kept
     for path in sys.argv[2:]:
         kept |= records(path) - cooked
+    table = shipped()
+    stale = {r for r in kept if not has_programs(r, table)}
+    kept -= stale
     with open(OUT, "w", encoding="ascii", newline="\n") as f:
         for r in sorted(kept):
             f.write(r.hex() + "\n")
-    print("cook", len(cooked), "others", len(kept))
+    print("cook", len(cooked), "others", len(kept), "dropped, no program:", len(stale))
 
 
 if __name__ == "__main__":

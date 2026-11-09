@@ -5181,12 +5181,16 @@ void RendererD3D12::end_target_pass(std::uint8_t channels, TextureStore& texture
 }
 
 void RendererD3D12::retire_target_slot(TargetSlot& slot) {
-    for (Microsoft::WRL::ComPtr<ID3D12Resource>* resource :
-         {&slot.set.color, &slot.set.depth, &slot.set.msaa.color, &slot.set.msaa.depth}) {
-        if (*resource) {
-            retired_targets_[frame_slot_].push_back(std::move(*resource));
+    // ComPtr's operator& yields a ComPtrRef, so each resource goes through a reference.
+    const auto retire = [this](Microsoft::WRL::ComPtr<ID3D12Resource>& resource) {
+        if (resource) {
+            retired_targets_[frame_slot_].push_back(std::move(resource));
         }
-    }
+    };
+    retire(slot.set.color);
+    retire(slot.set.depth);
+    retire(slot.set.msaa.color);
+    retire(slot.set.msaa.depth);
 }
 
 void RendererD3D12::sweep_target_slots() {

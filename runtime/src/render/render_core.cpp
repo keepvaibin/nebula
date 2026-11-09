@@ -2222,6 +2222,23 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             });
             outside.pipelines = pipelines_.created();
             renderer_.log_video_memory(outside);
+#else
+            // The same 600 frames: the device-local heap as the driver and the allocator read it (the renderer adds its images and rings).
+            Renderer::VideoMemoryOutside outside;
+            outside.staging_bytes = TextureStore::staging_bytes();
+            const core::Registries::MemoryStats meshes = registries_.memory_stats();
+            outside.mesh_pages = meshes.pages;
+            outside.mesh_empty_pages = meshes.empty_pages;
+            outside.mesh_page_bytes = meshes.page_bytes;
+            outside.mesh_live_bytes = meshes.live_bytes;
+            outside.slot_bytes = meshes.slot_bytes;
+            outside.slots = meshes.slots;
+            display_pictures_.for_each_texture([&](gpu::TextureObject* texture) {
+                outside.picture_bytes += Renderer::allocation_bytes(texture);
+                ++outside.picture_count;
+            });
+            outside.pipelines = pipelines_.created();
+            renderer_.log_video_memory(outside);
 #endif
         }
 #endif
