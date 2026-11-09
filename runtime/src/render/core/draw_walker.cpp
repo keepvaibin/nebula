@@ -332,10 +332,14 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     walk_index_cpu_ = nullptr;
     if (list.ring_vertex_bytes != 0u) {
         const UploadRing::Allocation vertices = renderer_.vertex_ring().allocate(list.ring_vertex_bytes, 16u);
-        std::memcpy(vertices.cpu, list.ring_vertices, list.ring_vertex_bytes);
         walk_.ring_vertices = vertices.gpu;
         walk_ring_cpu_ = vertices.cpu;
+        // The ring is write-combined memory: the positions moved at t are made in a copy of the vertices, which then go
+        // out in one sequential copy, not patched in place after it.
         if (between && before != nullptr && !now.cut) {
+            const auto* source = static_cast<const std::byte*>(list.ring_vertices);
+            walk_ring_stage_.assign(source, source + list.ring_vertex_bytes);
+            std::byte* const shaped = walk_ring_stage_.data();
             for (std::uint32_t i = 0; i < list.item_count; ++i) {
                 const NebulaFrameItem& item = list.items[i];
                 const std::uint32_t pair = now.item_before[i];
@@ -348,7 +352,7 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
                 }
                 const auto* a = static_cast<const std::byte*>(before->list->ring_vertices) + other.ring_at;
                 const auto* b = static_cast<const std::byte*>(list.ring_vertices) + item.ring_at;
-                std::byte* to = vertices.cpu + item.ring_at;
+                std::byte* to = shaped + item.ring_at;
                 const std::uint32_t second = (item.flags & NEBULA_ITEM_WIDE) != 0u ? item.mesh - 16u : 0u;
                 const auto lerp3 = [t = time.t](const std::byte* from_a, const std::byte* from_b, std::byte* out) {
                     float pa[3], pb[3], p[3];
@@ -364,6 +368,9 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
                     }
                 }
             }
+            std::memcpy(vertices.cpu, shaped, list.ring_vertex_bytes);
+        } else {
+            std::memcpy(vertices.cpu, list.ring_vertices, list.ring_vertex_bytes);
         }
         // The vertices they were at on the frame before, for what writes motion: its own, or its pair's.
         walk_ring_previous_ = same_list ? now.ring_address : from_before ? before->ring_address : gpu::Address{0u};
