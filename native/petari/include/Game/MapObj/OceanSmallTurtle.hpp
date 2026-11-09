@@ -29,7 +29,7 @@ private:
     f32 mFloatUpSpeed;
     f32 mAccelRate;
     Vec3f mStartNearestRailPos;
-    f32 mFloatDelayTimer;  // used as a timer. a float for some reason
+    f32 mFloatDelayTimer;  // frames, counted in a float
     f32 mArg1;
     s32 mBoundTimer;
     Vec3f mMercatorPos;

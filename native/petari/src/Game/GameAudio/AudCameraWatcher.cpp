@@ -28,12 +28,9 @@ void AudCameraWatcher::init(const TableIter& rIter) {
 void AudCameraWatcher::movement() {
     MR::setMicMtx(const_cast< Pos3f& >(MR::getCameraViewMtx()), 0);
 
-    // They could've just done something like setFarCamera(MR::getFovy() < 20.0f), but oh well.
-    if (MR::getFovy() < 20.0f) {
-        AudWrap::getSystem()->setFarCamera(true);
-    } else {
-        AudWrap::getSystem()->setFarCamera(false);
-    }
+    // A narrow view (first person, a zoom) hears as from afar.
+    const bool isFar = MR::getFovy() < 20.0f;
+    AudWrap::getSystem()->setFarCamera(isFar);
 
     playAtmosphereSE();
 }

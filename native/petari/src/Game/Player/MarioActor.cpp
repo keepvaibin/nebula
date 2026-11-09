@@ -1822,7 +1822,6 @@ void MarioActor::forceSetBaseMtx(MtxPtr pMtx) {
 
 void MarioActor::calcAnim() {
     CollisionShadow* pShadow;
-    // FIXME: switch stuff
     if (mHidden != 0) {
         mBlendMtxTimer = 0;
         return;
@@ -2459,17 +2458,10 @@ bool MarioActor::isStaggering() const {
 }
 
 bool MarioActor::isSleeping() const {
-    // No way that this is a real inline but only way I could make it match
-    bool out = true;
-    if (!IsMarioAnimationRun("特殊ウエイト1B") && !IsMarioAnimationRun("特殊ウエイト1A")) {
-        out = false;
-    }
-
-    return out;
+    return mMario->isAnimationRun("特殊ウエイト1B") || mMario->isAnimationRun("特殊ウエイト1A");
 }
 
 bool MarioActor::isRefuseTalk() const {
-    // FIXME: isPlayerModeTeresa() is giving issues
     if (!isEnableNerveChange()) {
         return true;
     }

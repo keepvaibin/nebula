@@ -277,7 +277,6 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
 }
 
 bool MarioActor::releaseThrowMemoSensor() {
-    // FIXME: missing class at 0x988 that has HitSensor* at 0xA4
     if (mTakeCount != 0) {
         if (mMario->isStatusActive(MarioStatus_Wall) || mMario->isStatusActive(MarioStatus_SideStep)) {
             return false;

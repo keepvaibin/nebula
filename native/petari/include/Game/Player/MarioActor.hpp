@@ -534,11 +534,6 @@ public:
         return mMario->mPrevDrawStates;
     }
 
-    // Only used in isSleeping() to make it match
-    inline bool IsMarioAnimationRun(const char* pAnimName) const {
-        return mMario->isAnimationRun(pAnimName);
-    }
-
     inline bool IsMarioSwimming() const {
         return mMario->isSwimming();
     }
