@@ -32,7 +32,7 @@ public:
     void setMtx(const Pos3f&);
     void setMtx();
     void updateMtx();
-    f32 makeEqualScale(MtxPtr);
+    f32 makeEqualScale(Pos3f&);
     void updateBoundingSphereRange();
     void updateBoundingSphereRange(Vec3f);
     void updateBoundingSphereRangePrivate(f32);

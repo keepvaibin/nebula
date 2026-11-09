@@ -115,7 +115,7 @@ void CollisionParts::resetAllMtx() {
 
     if (reset) {
         Pos3f matrix(mFollowMtx);
-        makeEqualScale(matrix.toMtxPtr());
+        makeEqualScale(matrix);
 
         resetAllMtxPrivate(matrix);
     }
@@ -123,7 +123,7 @@ void CollisionParts::resetAllMtx() {
 
 void CollisionParts::forceResetAllMtxAndSetUpdateMtxOneTime() {
     Pos3f matrix(mFollowMtx);
-    makeEqualScale(matrix.toMtxPtr());
+    makeEqualScale(matrix);
     resetAllMtxPrivate(matrix);
 
     mIsUpdateOnce = true;
@@ -165,7 +165,7 @@ void CollisionParts::updateMtx() {
                 mStillCount = 0;
             }
 
-            f32 scale = makeEqualScale(mMatrix.toMtxPtr());
+            f32 scale = makeEqualScale(mMatrix);
             f32 scaleChange = scale - mScale;
 
             if (!MR::isNearZero(scaleChange)) {
@@ -183,9 +183,7 @@ void CollisionParts::updateMtx() {
     }
 }
 
-f32 CollisionParts::makeEqualScale(MtxPtr pMatrix) {
-    Pos3f& mtx = *reinterpret_cast< Pos3f* >(pMatrix);
-
+f32 CollisionParts::makeEqualScale(Pos3f& mtx) {
     Vec3f scale;
     mtx.getScale(scale);
 
@@ -196,7 +194,7 @@ f32 CollisionParts::makeEqualScale(MtxPtr pMatrix) {
     }
 
     f32 uniformScale = 1.0f;
-    Vec3f invScale;
+    Vec3f invScale(1.0f, 1.0f, 1.0f);  // the default type keeps the matrix's scale
 
     if (mIsNotUsingScale) {
         invScale.set< f32 >(uniformScale / scale.x, uniformScale / scale.y, uniformScale / scale.z);
@@ -223,7 +221,7 @@ f32 CollisionParts::makeEqualScale(MtxPtr pMatrix) {
 
 void CollisionParts::updateBoundingSphereRange() {
     Pos3f matrix(mFollowMtx);
-    f32 scale = makeEqualScale(matrix.toMtxPtr());
+    f32 scale = makeEqualScale(matrix);
     updateBoundingSphereRangePrivate(scale);
 }
 
