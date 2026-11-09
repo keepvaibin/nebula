@@ -1,7 +1,5 @@
 #include "galaxy/portable.h"
 #include "galaxy/runtime_settings.h"
-#include "galaxy/run_options.h"
-#include "../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/launch_args.h"
@@ -301,12 +299,6 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
     migrate_settings_file(controls, controls_version);
 }
 
-#if !defined(NEBULA_DEV)
-void apply_env_overrides(RuntimeSettings&) {}
-#else
-#include "../../tools/test_driver/runtime_settings_env.inc"
-#endif
-
 }  // namespace
 
 std::filesystem::path runtime_settings_folder() noexcept {
@@ -519,7 +511,6 @@ void load_runtime_settings_from_file() {
     input::ControlsConfig controls = input::default_controls_config();
     parse_settings_file(settings, controls);
     const RuntimeInputMode file_mode = sanitize_settings(settings).input_mode;
-    apply_env_overrides(settings);
     set_runtime_settings(settings);
     input::set_controls_config(controls);
     record_input_mode_sync(file_mode, get_runtime_settings().input_mode);

@@ -55,11 +55,13 @@ for a in "$@"; do
             powershell.exe -NoProfile -Command "(Get-Process -Id $(cat /proc/$$/winpid)).ProcessorAffinity = 0x${a#*=}" ;;
     esac
 done
+# Settings named GALAXY_<KEY> (the window size here, any among the assignments or exported) go into the run's
+# config.ini and runtime_settings.ini for this run (settings_args.py): the game reads no setting from its environment.
+python -I "$(cygpath -w "$(dirname "$0")")\\settings_args.py" "$settings" GALAXY_WINDOW_WIDTH=1280 GALAXY_WINDOW_HEIGHT=720 "$@"
 # The game starts hidden (start_hidden.py: STARTUPINFO's SW_HIDE), as a program a shortcut sets to hidden.
 env GALAXY_RENDER_CONFIG_PATH="$settings\\config.ini" \
     GALAXY_RUNTIME_SETTINGS_PATH="$settings\\runtime_settings.ini" \
     LOCALAPPDATA="$NEBULA_APPDATA" GALAXY_CRASH_DUMP_DIR="$(cygpath -w "$out")" \
-    GALAXY_WINDOW_WIDTH=1280 GALAXY_WINDOW_HEIGHT=720 \
     GALAXY_PRESENT_SNAPSHOT_DIR="$(cygpath -w "$out")" GALAXY_PRESENT_SNAPSHOT_EVERY=60 \
     GALAXY_AUDIO_WAV_DUMP_ONLY=1 GALAXY_AUDIO_WAV_DUMP="$(cygpath -w "$out")\\audio.wav" \
     "$@" \

@@ -1,9 +1,6 @@
-// The rendering settings: config.ini loading and saving, the GALAXY_<KEY> overrides, and the data folders beside
-// config.ini.
+// The rendering settings: config.ini loading and saving, and the data folders beside config.ini.
 #include "galaxy/portable.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/run_options.h"
-#include "../../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
@@ -238,12 +235,6 @@ static void parse_ini(FILE* f, RenderConfig& cfg) {
         apply_kv(cfg, key.c_str(), val.c_str());
     }
 }
-
-#if !defined(NEBULA_DEV)
-static void apply_env_overrides(RenderConfig&) {}
-#else
-#include "../../../tools/test_driver/render_config_env.inc"
-#endif
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
     // Clamps every value into its range; settings the renderer does not implement stay parseable but off.
@@ -485,7 +476,6 @@ void load_render_config_from_file() {
     std::array<char, 32> file_gpu = cfg.gpu;
     file_gpu.back() = '\0';
 
-    apply_env_overrides(cfg);
     // Frame-rate decoupling is not offered: its key is read but stays off.
     cfg.frame_rate_decouple = false;
     clamp_unimplemented_features(cfg);
@@ -518,7 +508,6 @@ bool reload_render_config_if_changed() {
     std::fclose(f);
     std::array<char, 32> file_gpu = cfg.gpu;
     file_gpu.back() = '\0';
-    apply_env_overrides(cfg);
     cfg.gpu = session_gpu;
     cfg.frame_rate_decouple = false;
     clamp_unimplemented_features(cfg);
