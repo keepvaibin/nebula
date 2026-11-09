@@ -169,7 +169,6 @@ namespace Ui {
         f32 mBuiltScreenScale = 1.0f;
         bool mLocalBuilt = false;
         static constexpr u32 cNoVersion = 0xFFFFFFFFu;
-        u8 mPadding;
     };
     // The pane as a T (Picture, TextBox, Window, Bounding) when it is one, else null; null stays null.
     template < class T >

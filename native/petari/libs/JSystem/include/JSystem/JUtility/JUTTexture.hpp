@@ -151,6 +151,7 @@ public:
     f32 mMaxLod;
     f32 mLodBias;
     u8 mFlag;
-    ResTIMG* _3C;
+    // The image and pixels makeBuffer allocated (freed with the texture; mFlag bit 0 says it is set).
+    ResTIMG* mOwnedImage;
     ResTIMG mSourceInfo;
 };

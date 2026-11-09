@@ -206,7 +206,6 @@ namespace Ui {
         CharScale mScale;
         CursorPos mCursorPos;
         TextureFilter mFilter;
-        u8 pad[2];
         u8 mAlpha;
         bool mIsWidthFixed;
         f32 mFixedWidth;

@@ -19,7 +19,7 @@ void JUTTexture::makeBuffer(int width, int height, u8 layout) {
     u32 bufSize = RenderTexture::linearSize(layout, width, height, 1);
 
     ResTIMG* texBuf = reinterpret_cast< ResTIMG* >(new (32) u8[bufSize + sizeof(ResTIMG)]);
-    _3C = texBuf;
+    mOwnedImage = texBuf;
     texBuf->mFormat = layout;
     texBuf->mTransparency = 0;
     texBuf->mWidth = width;
@@ -43,7 +43,7 @@ void JUTTexture::makeBuffer(int width, int height, u8 layout) {
 
 JUTTexture::~JUTTexture() {
     if (mFlag & 0x1) {
-        delete[] _3C;
+        delete[] mOwnedImage;
     }
 }
 

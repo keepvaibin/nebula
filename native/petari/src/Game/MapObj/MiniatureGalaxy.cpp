@@ -98,7 +98,7 @@ namespace NrvMiniatureGalaxy {
 };  // namespace NrvMiniatureGalaxy
 
 MiniatureGalaxy::MiniatureGalaxy(const char* pName)
-    : LiveActor(pName), mType(-1), mState(MiniatureGalaxyState_Open), mUnknownModel(), mShadowModel(), mSelectModel(), mStarPlateModel(),
+    : LiveActor(pName), mType(-1), mState(MiniatureGalaxyState_Open), mMysteryModel(), mShadowModel(), mSelectModel(), mStarPlateModel(),
       mProjmapEffectMtxSetter(), mObjectName(), mGalaxyName(), mIsZoomOut(true), mZoomStep(::cZoomFrame), mOnesTexMtx(), mTensTexMtx(), mOrbit(),
       mNamePlate() {
     mPosMtx.identity();
@@ -129,7 +129,7 @@ void MiniatureGalaxy::init(const TableIter& rIter) {
 
     MR::registerDemoCast(this, ::cDemoNameDomeLecture2, rIter);
     MR::registerDemoCast(mShadowModel, ::cDemoNameDomeLecture2, rIter);
-    MR::registerDemoCast(mUnknownModel, ::cDemoNameDomeLecture2, rIter);
+    MR::registerDemoCast(mMysteryModel, ::cDemoNameDomeLecture2, rIter);
     MR::registerDemoCast(mSelectModel, ::cDemoNameDomeLecture2, rIter);
 
     if (mStarPlateModel != nullptr) {
@@ -206,7 +206,7 @@ void MiniatureGalaxy::kill() {
             MR::forceDeleteEffect(this, ::cEyeLightEffect);
         }
 
-        MR::forceDeleteEffect(mUnknownModel, ::cEyeLightEffect);
+        MR::forceDeleteEffect(mMysteryModel, ::cEyeLightEffect);
     }
 
     LiveActor::kill();
@@ -215,8 +215,8 @@ void MiniatureGalaxy::kill() {
         mShadowModel->kill();
     }
 
-    if (!MR::isDead(mUnknownModel)) {
-        mUnknownModel->kill();
+    if (!MR::isDead(mMysteryModel)) {
+        mMysteryModel->kill();
     }
 
     if (!MR::isDead(mSelectModel)) {
@@ -330,8 +330,8 @@ void MiniatureGalaxy::initPartsModel() {
         pModelName = "MiniatureGalaxyUnknownKoopa";
     }
 
-    mUnknownModel = ::createGalaxyPart("Unknownモデル", pModelName, getBaseMtx(), false);
-    ::initGalaxyPart(mUnknownModel);
+    mMysteryModel = ::createGalaxyPart("Unknownモデル", pModelName, getBaseMtx(), false);
+    ::initGalaxyPart(mMysteryModel);
 
     mShadowModel = ::createGalaxyPart("影モデル", "MiniatureGalaxyShadow", mShadowBaseMtx, true);
     mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(mShadowModel);
@@ -378,7 +378,7 @@ void MiniatureGalaxy::setScale(f32 scale) {
         return;
     }
 
-    mUnknownModel->mScale.setAll< f32 >(scale);
+    mMysteryModel->mScale.setAll< f32 >(scale);
 
     if (mStarPlateModel != nullptr) {
         mStarPlateModel->mScale.setAll< f32 >(scale);
@@ -450,13 +450,13 @@ void MiniatureGalaxy::updateNamePlate() {
 }
 
 void MiniatureGalaxy::appearUnknownModel(const char* pBrkName) {
-    mUnknownModel->appear();
-    MR::startBrk(mUnknownModel, pBrkName);
+    mMysteryModel->appear();
+    MR::startBrk(mMysteryModel, pBrkName);
 
     if (mType == MiniatureGalaxyType_Normal) {
-        MR::startBtk(mUnknownModel, "MiniatureGalaxyUnknown");
+        MR::startBtk(mMysteryModel, "MiniatureGalaxyUnknown");
     } else if (mType == MiniatureGalaxyType_Hatena) {
-        MR::startBtk(mUnknownModel, "MiniHatenaGalaxy");
+        MR::startBtk(mMysteryModel, "MiniHatenaGalaxy");
     }
 
     if (mStarPlateModel != nullptr) {
@@ -472,14 +472,14 @@ void MiniatureGalaxy::appearUnknownModel(const char* pBrkName) {
 
 void MiniatureGalaxy::showUnknownModel() {
     MR::hideModelAndOnCalcAnimIfShown(this);
-    MR::showModelIfHidden(mUnknownModel);
+    MR::showModelIfHidden(mMysteryModel);
 
     if (mStarPlateModel != nullptr) {
         MR::showModelIfHidden(mStarPlateModel);
     }
 
     if (mType == MiniatureGalaxyType_Koopa) {
-        MR::emitEffect(mUnknownModel, ::cEyeLightEffect);
+        MR::emitEffect(mMysteryModel, ::cEyeLightEffect);
     }
 }
 
@@ -491,14 +491,14 @@ void MiniatureGalaxy::showSelectModel() {
 
 void MiniatureGalaxy::hideUnknownModel() {
     MR::hideModelAndOnCalcAnimIfShown(this);
-    MR::hideModelIfShown(mUnknownModel);
+    MR::hideModelIfShown(mMysteryModel);
 
     if (mStarPlateModel != nullptr) {
         MR::hideModelIfShown(mStarPlateModel);
     }
 
     if (mType == MiniatureGalaxyType_Koopa) {
-        MR::forceDeleteEffect(mUnknownModel, ::cEyeLightEffect);
+        MR::forceDeleteEffect(mMysteryModel, ::cEyeLightEffect);
     }
 }
 
@@ -610,8 +610,8 @@ void MiniatureGalaxy::exeNotSelected() {
 
 void MiniatureGalaxy::exeOpen() {
     if (MR::isFirstStep(this)) {
-        MR::emitEffect(mUnknownModel, "Select");
-        MR::emitEffect(mUnknownModel, "MiniatureGalaxyNewOpenSign");
+        MR::emitEffect(mMysteryModel, "Select");
+        MR::emitEffect(mMysteryModel, "MiniatureGalaxyNewOpenSign");
         MR::startSystemSE("SE_SY_NEW_GALAXY_OPEN_SIGN");
 
         mIsZoomOut = false;
@@ -633,7 +633,7 @@ void MiniatureGalaxy::exeOpen() {
 
     if (MR::isStep(this, ::cOpenMiniatureAppearStep)) {
         MR::startSystemSE("SE_SY_NEW_GALAXY_OPEN");
-        MR::emitEffect(mUnknownModel, "MiniatureGalaxyNewOpen");
+        MR::emitEffect(mMysteryModel, "MiniatureGalaxyNewOpen");
         MR::tryRumblePadWeak(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
@@ -642,7 +642,7 @@ void MiniatureGalaxy::exeOpen() {
         mState = MiniatureGalaxyState_Open;
         showOpenModel();
 
-        mUnknownModel->kill();
+        mMysteryModel->kill();
 
         if (mStarPlateModel != nullptr) {
             mStarPlateModel->kill();

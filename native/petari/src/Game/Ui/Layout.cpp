@@ -83,7 +83,7 @@ namespace Ui {
         // The block's bytes follow, from a cArenaAlign boundary.
     };
 
-    Layout::Layout() : mpRootPane(nullptr), mpGroupContainer(nullptr), mLayoutSize(0.0f, 0.0f), _20(0) {
+    Layout::Layout() : mpRootPane(nullptr), mpGroupContainer(nullptr), mLayoutSize(0.0f, 0.0f), mOriginType(0) {
     }
 
     // Every arena object newest first (a pane before the materials its constructor made; the groups, built last,
@@ -255,7 +255,7 @@ namespace Ui {
             return false;
         }
 
-        _20 = (pHead->mFlags & UiLayoutFlag_Centered) != 0 ? ORIGINTYPE_CENTER : ORIGINTYPE_TOPLEFT;
+        mOriginType = (pHead->mFlags & UiLayoutFlag_Centered) != 0 ? ORIGINTYPE_CENTER : ORIGINTYPE_TOPLEFT;
         mLayoutSize = Size(pHead->mWidth, pHead->mHeight);
 
         Pane** const ppPanes = static_cast< Pane** >(AllocMemory(sizeof(Pane*) * (pHead->mPaneCount + 1)));
@@ -553,7 +553,7 @@ namespace Ui {
     }
 
     const Rect Layout::GetLayoutRect() const {
-        if (_20 == 1) {
+        if (mOriginType == 1) {
             return Rect(-mLayoutSize.width / 2, mLayoutSize.height / 2, mLayoutSize.width / 2, -mLayoutSize.height / 2);
         }
 
