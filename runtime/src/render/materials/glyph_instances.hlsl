@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The font material's vertex stage for instanced glyphs (NEBULA_ITEM_INSTANCES, nw4r CharWriter's runs): each instance
+// The font material's vertex stage for instanced glyphs (NEBULA_ITEM_INSTANCES, CharWriter's runs): each instance
 // is a glyph (NebulaGlyphInstance, three rows from the instance table's z), its six vertices the quad's two triangles
 // (corners 0, 1, 2 and 0, 2, 3: top left, top right, bottom right, bottom left). A corner's place in the draw matrix's
 // plane, its sheet coordinate and its colour come from the glyph's rows. The pixel stage is font_text.hlsl's.

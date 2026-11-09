@@ -61,7 +61,7 @@ int main() {
 
     Facts game_fatal;
     game_fatal.kind = Facts::Kind::GameFatal;
-    game_fatal.text = "JKRHeap: out of heap";
+    game_fatal.text = "fatal: a stage table has no entry";
     expect(code_of(game_fatal) == "NEB-C02", "the game's own fatal stop");
 
     Facts host_fault;
