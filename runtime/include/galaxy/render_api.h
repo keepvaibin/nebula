@@ -90,63 +90,6 @@ void attach_frame_list(NebulaFrameList* list) noexcept;
 // Simulation thread: how the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM: 0 not at all, 1 its scene
 // kept, 2 drawn by it; galaxy/render/game_bloom.h).
 [[nodiscard]] unsigned bloom_route() noexcept;
-// Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
-// the distance of its model from the camera. The ray tracer lights the scene from it while updates
-// keep arriving.
-void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept;
-// The direction (and distance) when one arrived within `max_age_ms`.
-[[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
-                            float* distance = nullptr) noexcept;
-// Simulation thread, each scene while the Comet Observatory's star core (AstroCore) exists: its
-// world centre and scale (it grows with the Grand Stars). The ray tracer lights the scene from it
-// and gives it its finish.
-void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
-[[nodiscard]] bool star_core(std::array<float, 3>& position, float& scale, std::uint64_t max_age_ms) noexcept;
-// Number of set_game_sun calls so far.
-[[nodiscard]] std::uint64_t game_sun_updates() noexcept;
-// Simulation thread: the game's lights as it loads them for drawing. A point light
-// (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its
-// distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
-// ActorLightInfo (follow-camera off: its far position names its direction).
-void note_game_point_light(std::uint64_t info, const std::array<float, 3>& position,
-                           const std::array<float, 3>& color, float half_distance) noexcept;
-void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
-// The game's area lights (native game, NEBULA_LIGHT_AREA and _PLAYER): an ambient and two lights, each with its
-// colour (0-1), position (world, or the camera's eye space when it follows the camera).
-struct GameAreaLight {
-    std::array<float, 3> ambient{};
-    struct Light {
-        std::array<float, 3> color{};
-        std::array<float, 3> position{};
-        bool follows_camera = false;
-    } lights[2];
-};
-enum class GameAreaLightKind : std::uint8_t { Stage, Player };
-void set_game_area_light(GameAreaLightKind kind, const GameAreaLight& light) noexcept;
-// The latest of `kind` when reported within `max_age_ms`.
-[[nodiscard]] bool game_area_light(GameAreaLightKind kind, GameAreaLight& out, std::uint64_t max_age_ms) noexcept;
-
-// Simulation thread: an actor asking for the game's one point light this frame (MR::requestPointLight: Lumas,
-// Power Stars, item blocks, fireballs, Boos), as its own light. While requests arrive, the one light the game hands
-// to the requester nearest the player (note_game_point_light) is not noted again.
-void note_game_point_request(std::uint64_t actor, const std::array<float, 3>& position,
-                             const std::array<float, 3>& color, float half_distance) noexcept;
-struct GameLight {
-    std::array<float, 3> position{};
-    std::array<float, 3> color{};
-    float half_distance = 0.0f;
-    // Its identity while it lights: the store's serial for the entry holding it (the game's light info or requesting
-    // actor, else its place), never 0.
-    std::uint32_t key = 0u;
-};
-// How many lights were noted within `max_age_ms` (not black): the room game_point_lights / game_world_lights need.
-[[nodiscard]] std::size_t game_point_light_count(std::uint64_t max_age_ms) noexcept;
-[[nodiscard]] std::size_t game_world_light_count(std::uint64_t max_age_ms) noexcept;
-// The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
-std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
-std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
-// Test hook: the light stores' clock runs `ms` ahead from now on (an entry unseen for 10 s is reused).
-void advance_game_lights_clock(std::uint64_t ms) noexcept;
 // Simulation thread: the movie frame the game draws (movie_playback.h); every later submission carries it until the
 // next. `data`: the cooked movie (null keeps the one given).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,

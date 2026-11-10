@@ -53,6 +53,46 @@ typedef struct NebulaFrameLightSet {
     uint32_t camera_plus_one; /* camera whose eye space holds these lights; 0 when unknown */
 } NebulaFrameLightSet;
 
+/* What a world light is. */
+enum {
+    NEBULA_WORLD_LIGHT_KEY = 0,   /* an area's light for one kind of actor: its first light (light 0 of the sets it fills) */
+    NEBULA_WORLD_LIGHT_FILL,      /* and its second (light 1) */
+    NEBULA_WORLD_LIGHT_POINT,     /* the game's one point light (light 4): `reach` the distance where it halves */
+    NEBULA_WORLD_LIGHT_REQUEST,   /* an actor's request for that light, chosen or not: every lamp of the scene */
+    NEBULA_WORLD_LIGHT_SUN,       /* the sun's model: `position` the unit direction from the camera to it, `reach` its distance */
+    NEBULA_WORLD_LIGHT_STAR_CORE, /* a glowing core: its place, `reach` its scale */
+    NEBULA_WORLD_LIGHT_KIND_COUNT,
+};
+
+/* World light flags. */
+enum {
+    NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA = 1u << 0, /* `position` is in the scene camera's eye space and moves with it */
+};
+
+/* A light of the world, for what needs where a light is rather than how a material sums it: its place in the world,
+   its colour as the art gives it (0 to 1), and whose it is. `id` names it from frame to frame: its owner (the area's
+   light record, the actor asking, the core) and its part there. A list holds each id once, in ascending order. */
+typedef struct NebulaFrameWorldLight {
+    uint64_t id;
+    uint32_t kind;  /* NEBULA_WORLD_LIGHT_* */
+    uint32_t flags; /* NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA */
+    float color[3];
+    float reach;
+    float position[3];
+    float reserved;
+} NebulaFrameWorldLight;
+
+/* Whose lights a light set holds, one per set (list->light_set_owners, in the sets' order). `actor_light`: the world
+   lights `actor_light` (the key, the set's light 0) and `actor_light + 1` (the fill, its light 1); 0 when the set's
+   lights are no light of the world (every light white at the eye). `point_light`: the id of the world light that is
+   the set's light 4, or 0. `ambient`: the ambient colour loaded with the lights, 0 to 1. */
+typedef struct NebulaFrameLightOwner {
+    uint64_t actor_light;
+    uint64_t point_light;
+    float ambient[3];
+    float reserved;
+} NebulaFrameLightOwner;
+
 /* Block flags. */
 enum {
     NEBULA_BLOCK_WORLD_ROWS = 1u << 0, /* a material reads world position or normal: keep its world rows for the vertex stage */
@@ -242,6 +282,8 @@ typedef struct NebulaFrameList {
     const NebulaFrameLightSet* light_sets;
     const NebulaFrameLight* lights;  /* every set's lights, one run per set */
     const uint32_t* light_follow;    /* every set's follow words */
+    const NebulaFrameLightOwner* light_set_owners; /* light_set_count of them */
+    const NebulaFrameWorldLight* world_lights;     /* the world's lights this frame, ascending by id */
     const NebulaFrameConstants* constants;
     const void* ring_vertices;
     const uint32_t* ring_indices;
@@ -250,6 +292,12 @@ typedef struct NebulaFrameList {
     uint32_t pass_count, item_count, view_count, camera_count;
     uint32_t block_count, light_set_count, constants_count, probe_count;
     uint32_t light_count, light_follow_count;
+    uint32_t world_light_count;
+    uint32_t stage_light_known;  /* stage_light and stage_ambient are set */
+    uint64_t stage_light;        /* the light of the stage's surfaces where the player is (the area's planet light): the
+                                    world lights `stage_light` and `stage_light + 1` */
+    float stage_ambient[3];      /* and its ambient, 0 to 1 */
+    float stage_reserved;
     uint64_t ring_vertex_bytes;
     uint32_t ring_index_count;
     uint32_t instance_row_count;

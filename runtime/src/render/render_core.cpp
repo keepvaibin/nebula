@@ -1945,6 +1945,12 @@ RenderCore::ListEntry& RenderCore::list_arrived(FrameChunk& chunk) {
     entry->data.list = chunk.list;
     entry->data.serial = ++list_serial_;
     entry->before = lists_.empty() ? nullptr : lists_.back().get();
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
+        world_light_stats_.add(*chunk.list, entry->before != nullptr ? entry->before->data.list : nullptr);
+        if (world_light_stats_.lists >= 300u) {
+            world_light_stats_.report();
+        }
+    }
     entry->pointer_response = chunk.pointer_response;
     entry->prerecorded_movie = chunk.prerecorded_movie;
     entry->movie_frame = chunk.movie_frame;

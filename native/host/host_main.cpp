@@ -2302,50 +2302,6 @@ uint32_t svc_display_extent(void*) {
 #endif
 }
 
-// The game's lights (NEBULA_LIGHT_*) into the renderer's light registry (game_lights.cpp), which the ray tracer reads.
-void svc_game_light(void*, uint32_t kind, uint64_t id, const float* v) {
-#if defined(NEBULA_HOST_RENDERER)
-    switch (kind) {
-    case NEBULA_LIGHT_SUN:
-        galaxy::render::set_game_sun({v[0], v[1], v[2]}, v[3]);
-        break;
-    case NEBULA_LIGHT_STAR_CORE:
-        galaxy::render::set_star_core({v[0], v[1], v[2]}, v[3]);
-        break;
-    case NEBULA_LIGHT_POINT:
-        galaxy::render::note_game_point_light(id, {v[0], v[1], v[2]}, {v[3], v[4], v[5]}, v[6]);
-        break;
-    case NEBULA_LIGHT_POINT_REQUEST:
-        galaxy::render::note_game_point_request(id, {v[0], v[1], v[2]}, {v[3], v[4], v[5]}, v[6]);
-        break;
-    case NEBULA_LIGHT_WORLD:
-        galaxy::render::note_game_world_light({v[0], v[1], v[2]}, {v[3], v[4], v[5]});
-        break;
-    case NEBULA_LIGHT_AREA:
-    case NEBULA_LIGHT_PLAYER: {
-        galaxy::render::GameAreaLight light{};
-        light.ambient = {v[0], v[1], v[2]};
-        for (unsigned i = 0; i < 2u; ++i) {
-            const float* l = v + 3 + 7 * i;
-            light.lights[i].color = {l[0], l[1], l[2]};
-            light.lights[i].position = {l[3], l[4], l[5]};
-            light.lights[i].follows_camera = l[6] != 0.0f;
-        }
-        galaxy::render::set_game_area_light(kind == NEBULA_LIGHT_AREA ? galaxy::render::GameAreaLightKind::Stage
-                                                                  : galaxy::render::GameAreaLightKind::Player,
-                                        light);
-        break;
-    }
-    default:
-        break;
-    }
-#else
-    (void)kind;
-    (void)id;
-    (void)v;
-#endif
-}
-
 // While their files cook at the start: the phase NEBULA_OPTION_PREPARATION reports, and where the cooker says how far it is.
 std::atomic<uint32_t> gModsPreparing{0u};
 #if defined(NEBULA_HOST_RENDERER)
@@ -3901,7 +3857,6 @@ int main(int argc, char** argv) {
     services.test_scene_frame = svc_test_scene_frame;
     services.display_extent = svc_display_extent;
     services.option = svc_option;
-    services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
 #if defined(NEBULA_HOST_RENDERER)
     // The display configuration (in --settings' folder when given), loaded before the window; the settings overlay
