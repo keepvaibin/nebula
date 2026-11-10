@@ -674,11 +674,17 @@ namespace lumascript {
                 return nullptr;
             }
             const char* const name = p->string(h.name);
-            static const char* const cOwn[] = {"frame", "enter", "leave", "start", "touch_player", "attacked", "appear",
-                                               "kill", "message"};
-            for (u32 e = 0; e < sizeof(cOwn) / sizeof(cOwn[0]); e++) {
-                if (MR::isEqualString(name, cOwn[e])) {
-                    h.event = static_cast< u8 >(e);
+            struct OwnEvent {
+                const char* name;
+                Event event;
+            };
+            static const OwnEvent cOwn[] = {{"frame", Event_Frame},     {"enter", Event_Enter},       {"leave", Event_Leave},
+                                            {"start", Event_Start},     {"touch_player", Event_Touch}, {"attacked", Event_Attacked},
+                                            {"appear", Event_Appear},   {"kill", Event_Kill},         {"message", Event_Message},
+                                            {"control", Event_Control}, {"touch", Event_TouchActor}};
+            for (const OwnEvent& own : cOwn) {
+                if (MR::isEqualString(name, own.name)) {
+                    h.event = static_cast< u8 >(own.event);
                 }
             }
             if (h.event == Event_Count && MR::isEqualStringPrefix(name, "message:")) {

@@ -1815,7 +1815,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     plan.rows.player_animations.push_back({mod.id, animation.name, animation.file, animation.rate, animation.blend_frames});
                 }
                 for (const luma::ObjectClass& object : layer.object_classes) {
-                    plan.rows.object_classes.push_back({mod.id, object.name, object.like});
+                    plan.rows.object_classes.push_back({mod.id, mod.luma->version, object.name, object.like, object.script});
                 }
                 for (const luma::ScriptObject& object : layer.objects) {
                     plan.rows.script_objects.push_back({mod.id, mod.luma->version, object.name, object.script, object.archive, object.radius,

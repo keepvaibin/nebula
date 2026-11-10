@@ -257,6 +257,24 @@ typedef struct NebulaObjectClass {
     int32_t (*message)(NebulaActor* actor, int32_t message, NebulaActor* from, void* user);
 } NebulaObjectClass;
 
+/* What runs on every actor levels place by a name: one of the game's classes ("Kuribo") or a mod's made like one
+   (set_object_class). Each hook may be null. The class's own behaviour runs as well unless a hook takes its place. */
+typedef struct NebulaClassHooks {
+    uint32_t size;
+    void* user;
+    /* After the class made and set up the actor. */
+    void (*start)(NebulaActor* actor, void* user);
+    /* Every frame before the class's own update. Return 1 to skip the class's update this frame. */
+    int32_t (*control)(NebulaActor* actor, void* user);
+    /* A message another object sends it (docs/modding/EVENTS.md lists the numbers), from `from` (null when it has no
+       sender). Return -1 to leave it to the class; 0 or 1 is the actor's answer and the class never sees it. */
+    int32_t (*message)(NebulaActor* actor, int32_t message, NebulaActor* from, void* user);
+    /* One of its touch spheres touching another object's. Return 1 to skip the class's own reaction. */
+    int32_t (*touch)(NebulaActor* actor, NebulaActor* other, void* user);
+    void (*appeared)(NebulaActor* actor, void* user);
+    void (*killed)(NebulaActor* actor, void* user);
+} NebulaClassHooks;
+
 /* The kind of a plugin's object. */
 typedef enum NebulaObjectKind {
     NEBULA_OBJECT_ENEMY = 0,
@@ -900,6 +918,11 @@ typedef struct NebulaModApi {
     int32_t (*registry_find)(const char* kind, const char* name);
     int32_t (*registry_value)(const char* kind, const char* name);
     const char* (*registry_mod)(const char* kind, int32_t index);
+    /* Only in nebula_plugin_start. What runs on every actor placed by `name` (the game's or a mod's object name): the
+       mod's script (scripts/<script>.lumascript; its handlers start, frame, control, appear, kill, message and touch)
+       or hooks. Several mods may name one class; each runs, in load order. 0: done. */
+    int32_t (*set_class_script)(const NebulaPlugin* mod, const char* name, const char* script);
+    int32_t (*set_class_hooks)(const NebulaPlugin* mod, const char* name, const NebulaClassHooks* hooks);
 } NebulaModApi;
 
 /* True when this Nebula has `field` (fields are added at the end over time):

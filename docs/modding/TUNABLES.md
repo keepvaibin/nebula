@@ -11657,7 +11657,7 @@ damping and turn) is a list of its numbers in order.
 | `NebulaAchievementToast.cMargin` | f32 | `8.0f` |
 | `NebulaAchievementToast.cPadding` | f32 | `16.0f` |
 | `NebulaAchievementToast.cRiseFrames` | s32 | `24` |
-| `NebulaAchievementToast.cScale` | f32 | `0.5f` |
+| `NebulaAchievementToast.cScale` | f32 | `0.65f` |
 | `NebulaAchievementToast.cTextMax` | f32 | `440.0f` |
 | `NebulaFileSelectButton.cShowDelayFrames` | s32 | `8` |
 | `NebulaIcons.cDarkBottom` | u32 | `0x2E3036FF` |

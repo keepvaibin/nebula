@@ -4,6 +4,10 @@
 #include "Game/NameObj/NameObj.hpp"
 #include <nebula_geometry.hpp>
 
+namespace lumacore {
+    struct ModActor;
+}
+
 class ActorAnimKeeper;
 class ActorLightCtrl;
 class ActorPadAndCameraCtrl;
@@ -190,4 +194,6 @@ public:
     StarPointerTarget* mStarPointerTarget;
     ActorLightCtrl* mActorLightCtrl;
     ActorPadAndCameraCtrl* mCameraCtrl;
+    // The mods' classes on this actor (Game/System/LumaClass.hpp); null when no mod names its class.
+    lumacore::ModActor* mModActor;
 };

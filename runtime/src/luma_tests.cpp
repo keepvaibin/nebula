@@ -185,7 +185,7 @@ int main() {
 
     // Regions: "any", or the discs a mod is for; elsewhere it is refused, naming them.
     {
-        const std::string head = R"({"format":1,"id":"r","name":"R","version":"1","game":"RMG",)";
+        const std::string head = R"({"format":1,"id":"r","name":"R","version":"1","game":"RMG","layers":[],)";
         const std::optional<Manifest> any = parse_manifest(head + R"("regions":"any"})");
         check(any && any->regions.empty() && refusal(*any, "RMGJ01", "2.1.0", "windows").empty(), "region-free");
         const std::optional<Manifest> some = parse_manifest(head + R"("regions":["US","PAL"]})");
