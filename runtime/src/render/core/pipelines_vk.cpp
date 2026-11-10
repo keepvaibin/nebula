@@ -252,7 +252,8 @@ std::size_t write_driver_cache() noexcept {
         on_disk = gModules.on_disk;
     }
     std::size_t size = 0u;
-    if (cache == VK_NULL_HANDLE || vkGetPipelineCacheData(device, cache, &size, nullptr) != VK_SUCCESS || size == 0u) {
+    if (cache == VK_NULL_HANDLE || vk::Context::get().quirks().no_cache_file ||
+        vkGetPipelineCacheData(device, cache, &size, nullptr) != VK_SUCCESS || size == 0u) {
         return 0u;
     }
     std::vector<char> bytes(size);
@@ -301,7 +302,9 @@ VkPipelineCache driver_cache(VkDevice device) {
         gModules.cache_file = shader_cache_directory() / ("vk_pipelines-" + vk::driver_key(vk::Context::get().identity()) + ".bin");
         std::error_code ignored;
         std::filesystem::remove(shader_cache_directory() / "vk_pipelines.bin", ignored);  // the one file every GPU shared
-        if (std::ifstream in(gModules.cache_file, std::ios::binary | std::ios::ate); in) {
+        if (vk::Context::get().quirks().no_cache_file) {
+            // Nothing is read; write_driver_cache writes nothing either.
+        } else if (std::ifstream in(gModules.cache_file, std::ios::binary | std::ios::ate); in) {
             std::vector<char> file(static_cast<std::size_t>(in.tellg()));
             in.seekg(0);
             in.read(file.data(), static_cast<std::streamsize>(file.size()));

@@ -14,6 +14,8 @@
 
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/texture_backend_vk.h"
+#elif defined(NEBULA_GPU_METAL)
+#include "galaxy/render/mtl/texture_backend_mtl.h"
 #else
 #include "galaxy/render/gpu_placed_textures.h"
 

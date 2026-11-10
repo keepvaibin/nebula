@@ -46,7 +46,160 @@ struct ViewportRect {
 
 }  // namespace galaxy::render::gpu
 
-#if !defined(NEBULA_GPU_VULKAN)
+#if defined(NEBULA_GPU_METAL)
+#include "galaxy/render/mtl/draw_types.h"
+
+namespace galaxy::render::gpu {
+
+// Implemented over Metal's render command encoder (mtl/encoder_mtl.mm). A draw's buffers sit at shader_msl.h's indices
+// in the vertex and the fragment function: the view (0), the material's vertex rows (1) and pixel rows (2), the
+// composed rows (3), the instances (4), the frame's texture lists (5), b3 as inline bytes (6), every texture and every
+// sampler (7, 8) or the draw's own table of sixteen, and the vertex streams from 10. `Address` is the renderer's address
+// space (mtl::Context::resolve). The comparisons against what is bound are here; Metal is called from encoder_mtl.mm.
+class Encoder {
+public:
+    struct Layout {
+        // Every texture and sampler is read from one array each (set_texture_arrays); else a draw binds its tables
+        // (set_tables).
+        bool texture_arrays = false;
+    };
+    void configure(const Layout& layout) noexcept { layout_ = layout; }
+    // `encoder`: an id<MTLRenderCommandEncoder>, the caller's to end. `width`, `height`: its targets' size in pixels, which
+    // a scissor is cut to (Metal takes no rectangle that leaves the target).
+    void attach(mtl::Object encoder, std::uint32_t width, std::uint32_t height) noexcept {
+        encoder_ = encoder;
+        target_width_ = width;
+        target_height_ = height;
+        reset();
+    }
+    // Nothing is taken as bound any more. The rows and instances asked for stay: a draw pass names them once, and the
+    // renderer's own work inside it resets the bindings.
+    void reset() noexcept {
+        pipeline_ = nullptr;
+        for (Slot& slot : slots_) {
+            slot.bound = 0u;
+            slot.buffer = nullptr;
+        }
+        slots_[kSlotView].wanted = slots_[kSlotVertexRows].wanted = slots_[kSlotPixelRows].wanted = 0u;
+        slots_[kSlotLists].wanted = 0u;
+        constants_valid_ = false;
+        textures_ = samplers_ = 0u;
+        root_valid_ = scissor_valid_ = viewport_valid_ = index_valid_ = false;
+        scissor_empty_ = false;
+        for (StreamView& s : streams_) s = StreamView{};
+        for (mtl::Object& buffer : stream_buffers_) buffer = nullptr;
+    }
+    // Other code set the viewport and scissor.
+    void forget_rects() noexcept { scissor_valid_ = viewport_valid_ = false; }
+    void set_pipeline(Pipeline* pipeline) noexcept {
+        if (pipeline != pipeline_) {
+            bind_pipeline(pipeline);
+            pipeline_ = pipeline;
+        }
+    }
+    void set_view(Address view) noexcept { want(kSlotView, view); }
+    void set_material(Address vertex_rows, Address pixel_rows) noexcept {
+        want(kSlotVertexRows, vertex_rows);
+        want(kSlotPixelRows, pixel_rows);
+    }
+    void set_root(const DrawRoot& root) noexcept {
+        if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
+            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+            root_ = root;
+            root_valid_ = true;
+            push_root();
+        }
+    }
+    // A draw's own tables: mtl::BoundTextures and mtl::BoundSamplers behind the tables' ptr.
+    void set_tables(Table textures, Table samplers) noexcept {
+        if (textures.ptr != textures_ || samplers.ptr != samplers_) {
+            bind_tables(textures.ptr != textures_ ? textures.ptr : 0u, samplers.ptr != samplers_ ? samplers.ptr : 0u);
+            textures_ = textures.ptr;
+            samplers_ = samplers.ptr;
+        }
+    }
+    // Every texture and every sampler (the arrays' buffers behind the tables' ptr, bound once per list of bindings) and
+    // the frame's texture lists, read through each draw's DrawRoot::table.
+    void set_texture_arrays(Table textures, Table samplers, Address lists) noexcept {
+        if (textures.ptr != textures_ || samplers.ptr != samplers_) {
+            bind_arrays(textures.ptr, samplers.ptr);
+            textures_ = textures.ptr;
+            samplers_ = samplers.ptr;
+        }
+        want(kSlotLists, lists);
+    }
+    void set_rows(Address rows, Address instances) noexcept {
+        want(kSlotRows, rows);
+        want(kSlotInstances, instances);
+    }
+    void set_scissor(const Rect& rect) noexcept {
+        if (!scissor_valid_ || rect.left != scissor_.left || rect.top != scissor_.top || rect.right != scissor_.right ||
+            rect.bottom != scissor_.bottom) {
+            scissor_ = rect;
+            scissor_valid_ = true;
+            apply_scissor();
+        }
+    }
+    void set_viewport(const ViewportRect& rect) noexcept {
+        if (!viewport_valid_ || !(rect == viewport_)) {
+            viewport_ = rect;
+            viewport_valid_ = true;
+            apply_viewport();
+        }
+    }
+    void set_stream(unsigned slot, const StreamView& view) noexcept {
+        if (view.address != streams_[slot].address) {
+            bind_stream(slot, view);
+            streams_[slot] = view;
+        }
+    }
+    void set_indices(Address address, std::uint32_t bytes, std::uint32_t index_bytes) noexcept;
+    void draw_indexed(std::uint32_t count, std::uint32_t instances, std::uint32_t first, std::int32_t base_vertex) noexcept;
+    void draw(std::uint32_t count, std::uint32_t instances, std::uint32_t first) noexcept;
+
+private:
+    // The buffers a draw's constants come from, each bound to the functions that read it.
+    enum : unsigned { kSlotView, kSlotVertexRows, kSlotPixelRows, kSlotRows, kSlotInstances, kSlotLists, kSlotCount };
+    struct Slot {
+        Address wanted = 0u, bound = 0u;
+        mtl::Object buffer = nullptr;  // what `bound` resolved to
+    };
+    void want(unsigned slot, Address address) noexcept {
+        slots_[slot].wanted = address;
+        // An address of 0 asks for nothing: a program that reads no rows leaves it so, and what is bound stands in.
+        constants_valid_ = constants_valid_ && (address == slots_[slot].bound || address == 0u);
+    }
+    void flush_constants() noexcept;
+    void bind_pipeline(Pipeline* pipeline) noexcept;
+    void push_root() noexcept;
+    void bind_tables(std::uint64_t textures, std::uint64_t samplers) noexcept;
+    void bind_arrays(std::uint64_t textures, std::uint64_t samplers) noexcept;
+    void apply_scissor() noexcept;
+    void apply_viewport() noexcept;
+    void bind_stream(unsigned slot, const StreamView& view) noexcept;
+
+    Layout layout_{};
+    mtl::Object encoder_ = nullptr;
+    std::uint32_t target_width_ = 0u, target_height_ = 0u;
+    Pipeline* pipeline_ = nullptr;
+    Slot slots_[kSlotCount]{};
+    bool constants_valid_ = false;
+    std::uint64_t textures_ = 0u, samplers_ = 0u;
+    DrawRoot root_{};
+    Rect scissor_{};
+    ViewportRect viewport_{};
+    StreamView streams_[kStreamCount]{};
+    mtl::Object stream_buffers_[kStreamCount]{};
+    mtl::Object index_buffer_ = nullptr;
+    std::uint64_t index_offset_ = 0u;
+    Address index_address_ = 0u;
+    std::uint32_t index_size_ = 0u, index_stride_ = 0u;
+    bool root_valid_ = false, scissor_valid_ = false, viewport_valid_ = false, index_valid_ = false;
+    bool scissor_empty_ = false;  // the scissor lets nothing through: draws are left out
+};
+
+}  // namespace galaxy::render::gpu
+#elif !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
 
 namespace galaxy::render::gpu {

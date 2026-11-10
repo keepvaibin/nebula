@@ -190,7 +190,7 @@ double display_refresh_hz() noexcept {
     return g_interval_ns != 0 ? 1e9 / static_cast<double>(g_interval_ns) : 0.0;
 }
 
-#else
+#elif !defined(NEBULA_HOST_APPLE)  // Apple's display link: platform/apple/display_clock_apple.mm
 
 bool wait_display_frame(std::int64_t, std::int64_t&) noexcept {
     return false;

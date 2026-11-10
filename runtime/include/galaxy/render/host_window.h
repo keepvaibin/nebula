@@ -141,6 +141,12 @@ extern std::atomic<bool> rtx_adapter;          // the session's GPU is an NVIDIA
 [[nodiscard]] float upscaler_render_fraction(const RenderConfig& render, unsigned output_width, unsigned output_height);
 void save_native_settings_now();
 
+#if defined(NEBULA_GPU_METAL)
+// The window's Metal layer (a CAMetalLayer*, the window's to keep), which the Metal renderer draws to; null when the
+// window has none. Its drawable size is the renderer's to set.
+[[nodiscard]] void* metal_layer(NativeWindow window);
+#endif
+
 #if defined(NEBULA_GPU_VULKAN)
 // The instance extensions the window's surface needs, and the surface (VK_NULL_HANDLE when it cannot be made).
 [[nodiscard]] std::vector<const char*> vulkan_instance_extensions();

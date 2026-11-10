@@ -2,6 +2,8 @@
 // Post-processing settings, pass planning, FSR 1 constants, the AA self-test and the overlay's status text.
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/vk_context.h"
+#elif defined(NEBULA_GPU_METAL)
+#include "galaxy/render/mtl/mtl_context.h"
 #endif
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/run_options.h"
@@ -20,7 +22,9 @@ PostProcessSettings post_process_settings_from(const RenderConfig& cfg) noexcept
     PostProcessSettings post{};
     post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 3u));
     post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
-    post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
+    post.upscaler = cfg.upscaler == 6u && metalfx_available()
+        ? PostProcessSettings::Upscaler::kMetalFx
+        : static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
     post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
     return post;
 }
@@ -165,7 +169,8 @@ PostProcessPlan plan_post_process(
     const bool enlarging = target_width >= source_width &&
         target_height >= source_height && !same_size;
     plan.easu = enlarging &&
-        settings.upscaler == PostProcessSettings::Upscaler::kFsr1;
+        (settings.upscaler == PostProcessSettings::Upscaler::kFsr1 ||
+         settings.upscaler == PostProcessSettings::Upscaler::kMetalFx);
     plan.rcas = settings.sharpness > 0u;
     // The box filter handles reduction, mixed axes, bilinear enlargement and
     // the plain copy when neither EASU nor RCAS writes the window.
@@ -344,12 +349,36 @@ std::string post_process_caps_text(const PostProcessStatus& status) {
 }
 
 bool sgsr2_available() noexcept {
-#if defined(NEBULA_GPU_VULKAN)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
     return true;
 #else
     return false;
 #endif
 }
+
+bool metalfx_available() noexcept {
+#if defined(NEBULA_GPU_METAL)
+    const mtl::DeviceCaps& caps = mtl::Context::get().caps();
+    return caps.metalfx_spatial || caps.metalfx_temporal;
+#else
+    return false;
+#endif
+}
+
+bool metalfx_temporal_available() noexcept {
+#if defined(NEBULA_GPU_METAL)
+    return mtl::Context::get().caps().metalfx_temporal;
+#else
+    return false;
+#endif
+}
+
+#if defined(NEBULA_GPU_METAL)
+// AMD's FSR 3 is not this renderer's: its temporal upscalers are MetalFX's and SGSR 2.
+bool fsr3_available() noexcept {
+    return false;
+}
+#endif
 
 #if defined(NEBULA_GPU_VULKAN)
 // Whether the build holds it (temporal_upscaler_vk.cpp) and, once there is a device, whether it runs there.

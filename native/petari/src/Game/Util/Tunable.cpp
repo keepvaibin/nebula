@@ -20,6 +20,20 @@ namespace {
     const nebula::Tunable* end() {
         return hidden(&sLast);
     }
+#elif defined(__APPLE__)
+}  // namespace
+// Mach-O: the linker names the section's ends too, by these names.
+extern "C" {
+    extern const nebula::Tunable __start_nebtun[] __asm__("section$start$__DATA$nebtun");
+    extern const nebula::Tunable __stop_nebtun[] __asm__("section$end$__DATA$nebtun");
+}
+namespace {
+    const nebula::Tunable* begin() {
+        return __start_nebtun;
+    }
+    const nebula::Tunable* end() {
+        return __stop_nebtun;
+    }
 #else
 }  // namespace
 extern "C" {

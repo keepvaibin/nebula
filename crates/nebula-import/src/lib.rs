@@ -12,6 +12,7 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod c_api;
 pub mod cook;
 mod jni;
 

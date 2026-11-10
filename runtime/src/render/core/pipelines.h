@@ -23,8 +23,8 @@ namespace galaxy::render::core {
 
 class Pipelines {
 public:
-#if defined(NEBULA_GPU_VULKAN)
-    using RootLayout = void*;
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
+    using RootLayout = void*;  // Vulkan: a vk::RenderLayout; Metal: an mtl::RenderLayout
 #else
     using RootLayout = ID3D12RootSignature*;
 #endif

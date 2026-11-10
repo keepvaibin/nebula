@@ -263,7 +263,12 @@ void PresentPacer::sleep_before(double remaining_ms) {
     // CLOCK_MONOTONIC sleeps are high resolution on Linux and Android.
     const auto ns = static_cast<long long>(remaining_ms * 1e6);
     timespec duration{static_cast<time_t>(ns / 1000000000), static_cast<long>(ns % 1000000000)};
+#if defined(__APPLE__)
+    // Darwin has no clock_nanosleep; nanosleep there is a Mach wait of the same resolution.
+    nanosleep(&duration, nullptr);
+#else
     clock_nanosleep(CLOCK_MONOTONIC, 0, &duration, nullptr);
+#endif
 }
 #endif
 

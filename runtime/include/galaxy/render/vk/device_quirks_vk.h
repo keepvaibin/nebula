@@ -63,6 +63,9 @@ struct DeviceQuirks {
     bool clear_by_command = false;
     // Scene depth D24S8, not D32F with stencil (Adreno's 32-bit depth clears have no effect).
     bool depth_d24 = false;
+    // No pipeline cache file is read or written (MoltenVK compiles every shader of a cache it is given as it reads it,
+    // on the thread that made the cache; Metal keeps what it compiled itself).
+    bool no_cache_file = false;
 };
 
 [[nodiscard]] DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties);

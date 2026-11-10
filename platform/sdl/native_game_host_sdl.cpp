@@ -19,7 +19,9 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/tilt.h"
 
+#if !defined(NEBULA_HOST_NATIVE_APPLE)
 #include <SDL3/SDL.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -385,9 +387,21 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     // A game menu's touch becomes a pointer only after it resolves to a tap: a swipe never hovers buttons along its path.
     // Nebula's menu has the finger's pointer while it is down and for kTouchPointerHoldMs after, so it sees the release
     // where the finger left.
-    const bool finger_shown = s_finger_ms != 0 && now - s_finger_ms <= kTouchPointerHoldMs &&
+    bool finger_shown = s_finger_ms != 0 && now - s_finger_ms <= kTouchPointerHoldMs &&
         (direct_finger || captured || context != in::PlayContext::Menu ||
          (!state.finger_down && (s_tap_waiting || tap_pressing)));
+    // A mouse points wherever it is over the picture, in a menu as in play, for as long as it is there: the pointer of
+    // the Windows host, not a finger's.
+    if (state.mouse_pointer) {
+        finger_shown = state.mouse_inside && state.finger_ms != 0 &&
+                       project_window_point(state, state.finger_x, state.finger_y, x, y);
+        if (finger_shown) {
+            finger_moved = finger_moved || x != s_finger_x || y != s_finger_y;
+            s_finger_x = x;
+            s_finger_y = y;
+            s_finger_ms = now;
+        }
+    }
     controls::PointerSample finger{};
     finger.polled = true;
     finger.window_focused = state.window_focused;

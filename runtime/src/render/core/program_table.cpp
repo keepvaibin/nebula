@@ -14,6 +14,10 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#elif defined(__APPLE__)
+__asm__(".section __TEXT,__const\n.balign 16\n.globl _nebula_programs_begin\n.private_extern _nebula_programs_begin\n"
+        "_nebula_programs_begin:\n.incbin \"" GALAXY_PROGRAM_BLOB "\"\n.text\n");
+extern "C" const unsigned char nebula_programs_begin[];
 #else
 __asm__(".section .rodata\n.balign 16\n.global nebula_programs_begin\nnebula_programs_begin:\n.incbin \"" GALAXY_PROGRAM_BLOB
         "\"\n.previous\n");
@@ -151,6 +155,8 @@ bool program_lit(std::uint64_t pixel) noexcept {
 const char* program_file_name() noexcept {
 #if defined(NEBULA_GPU_VULKAN)
     return "spirv.shaders";
+#elif defined(NEBULA_GPU_METAL)
+    return "msl.shaders";
 #else
     return "dxil.shaders";
 #endif

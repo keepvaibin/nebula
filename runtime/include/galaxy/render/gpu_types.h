@@ -94,6 +94,83 @@ struct DeviceRef {
 [[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
 
 }  // namespace galaxy::render::gpu
+#elif defined(NEBULA_GPU_METAL)
+#include "galaxy/render/mtl/draw_types.h"
+
+namespace galaxy::render::gpu {
+
+// Metal (docs/APPLE.md). The names the shared code reads are those of the other two; Metal's own objects stay behind
+// mtl_context.h's untyped pointers, so this header is plain C++.
+struct Device;  // never defined: a Device* is mtl::Context's id<MTLDevice>
+using Pipeline = mtl::Pipeline;
+using PipelineRef = Pipeline*;  // owned by core::Pipelines, deleted in its destroy_all
+using Resource = mtl::Buffer;
+// A 64-bit address in the renderer's own buffer address space (mtl::Context::resolve), as on Vulkan.
+using Address = std::uint64_t;
+struct Table {
+    std::uint64_t ptr = 0;  // mtl/draw_types.h: a bound table, or an array's buffer
+};
+struct VertexView {
+    Address BufferLocation = 0;
+    std::uint32_t SizeInBytes = 0;
+    std::uint32_t StrideInBytes = 0;
+};
+struct IndexView {
+    Address BufferLocation = 0;
+    std::uint32_t SizeInBytes = 0;
+    std::uint32_t Format = 0;  // 16-bit indices only
+};
+struct Rect {
+    std::int32_t left = 0;
+    std::int32_t top = 0;
+    std::int32_t right = 0;
+    std::int32_t bottom = 0;
+};
+
+[[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
+    return VertexView{address, size, stride};
+}
+
+[[nodiscard]] inline IndexView index_view(Address address, std::uint32_t size) noexcept {
+    return IndexView{address, size, 16u};
+}
+
+[[nodiscard]] inline Rect rect(std::int32_t left, std::int32_t top, std::int32_t right, std::int32_t bottom) noexcept {
+    return Rect{left, top, right, bottom};
+}
+
+// An owned texture and an owned buffer: the last reference releases it once the GPU is done with it.
+using TextureRef = std::shared_ptr<mtl::Texture>;
+using BufferRef = std::shared_ptr<mtl::Buffer>;
+[[nodiscard]] inline Resource* raw(const BufferRef& buffer) noexcept { return buffer.get(); }
+using TextureObject = mtl::Texture;
+[[nodiscard]] inline TextureObject* raw(const TextureRef& texture) noexcept { return texture.get(); }
+// Another reference to a texture a handle names.
+[[nodiscard]] inline TextureRef texture_ref(TextureObject* texture) {
+    return texture != nullptr ? texture->shared_from_this() : TextureRef{};
+}
+// A render target: the texture itself.
+struct CpuDescriptor {
+    std::uint64_t ptr = 0;
+};
+// ComPtr<ID3D12Device>'s interface over the context's device.
+struct DeviceRef {
+    Device* handle = nullptr;
+    DeviceRef& operator=(Device* device) noexcept {
+        handle = device;
+        return *this;
+    }
+    [[nodiscard]] Device* Get() const noexcept { return handle; }
+    void Reset() noexcept { handle = nullptr; }
+    explicit operator bool() const noexcept { return handle != nullptr; }
+    bool operator!=(std::nullptr_t) const noexcept { return handle != nullptr; }
+    bool operator==(std::nullptr_t) const noexcept { return handle == nullptr; }
+};
+
+// An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
+[[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
+
+}  // namespace galaxy::render::gpu
 #else
 #include "galaxy/windows_api.h"
 #include <d3d12.h>

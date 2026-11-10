@@ -121,7 +121,7 @@ public:
         op.a[2] = arrays.lists;
         op.a[3] = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(arrays.heap));
     }
-#if defined(NEBULA_GPU_VULKAN)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
     void set_tables(Table textures, Table samplers) {
         DrawOp& op = next(DrawOp::Kind::Tables);
         op.a[0] = textures.ptr;
@@ -226,7 +226,7 @@ void replay_ops(E& encoder, const DrawOp* ops, std::size_t count, OnArrays&& on_
             break;
         }
         case DrawOp::Kind::Tables:
-#if defined(NEBULA_GPU_VULKAN)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
         {
             Table textures, samplers;
             textures.ptr = op.a[0];

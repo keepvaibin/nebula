@@ -55,6 +55,9 @@ namespace nebula {
 #if defined(_WIN32)
 #pragma section("nebtun$m", read)
 #define NEBULA_TUNABLE_SECTION __declspec(allocate("nebtun$m"))
+#elif defined(__APPLE__)
+// Mach-O names a section by its segment too.
+#define NEBULA_TUNABLE_SECTION __attribute__((section("__DATA,nebtun")))
 #else
 #define NEBULA_TUNABLE_SECTION __attribute__((section("nebtun")))
 #endif

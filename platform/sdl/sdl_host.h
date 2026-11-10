@@ -104,6 +104,11 @@ struct InputState {
     float finger_land_y = 0.0f;
     // Since it came down, the finger has gone past the system's touch slop (a still fingertip's tremor stays inside).
     bool finger_moved = false;
+    // The pointer's place (finger_x, finger_y) came from a mouse: it points wherever it is over the window, as on
+    // Windows, with none of a finger's rules (shown only while it touches and a moment after; a menu's pointer only
+    // from a tap). `mouse_inside`: the mouse is over the window.
+    bool mouse_pointer = false;
+    bool mouse_inside = false;
     int window_width = 0;
     int window_height = 0;
     bool window_focused = true;

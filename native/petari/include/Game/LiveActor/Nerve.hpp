@@ -88,6 +88,8 @@ namespace nebula {
 #if defined(_WIN32)
 #pragma section("nebnrv$m", read)
 #define NEBULA_NERVE_SECTION __declspec(allocate("nebnrv$m"))
+#elif defined(__APPLE__)
+#define NEBULA_NERVE_SECTION __attribute__((section("__DATA,nebnrv")))
 #else
 #define NEBULA_NERVE_SECTION __attribute__((section("nebnrv")))
 #endif
