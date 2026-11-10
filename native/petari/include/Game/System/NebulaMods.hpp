@@ -68,6 +68,9 @@ namespace NebulaMods {
     typedef NameObj* (*CreatorFuncPtr)(const char*);
     // A plugin's object by its placed name: how to make it. nullptr: not a plugin's.
     CreatorFuncPtr findCreator(const char* pName);
+    // The mod object (luma.json "objects", a plugin's class) a placed name makes: by its own name, or by what an
+    // object change turns it into. Null for the game's own.
+    const char* modObjectName(const char* pPlacedName);
     // What a mod has made of an object of the game's, where `where` (NEBULA_OBJECTS_*) is: its own name unchanged, another's, or null: gone.
     const char* objectBecomes(s32 where, const char* pName);
     // Frames, from what mods say of a comet mission; 0: they say nothing.
