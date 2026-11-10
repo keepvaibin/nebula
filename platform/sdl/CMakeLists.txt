@@ -100,9 +100,9 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/core/pipelines.cpp
     ${rt}/render/core/program_table.cpp
     ${rt}/render/core/registries.cpp
+    ${rt}/render/core/world_lights.cpp
     ${rt}/render/core/pipelines_vk.cpp
     ${rt}/render/core/encoder_vk.cpp
-    ${rt}/render/game_lights.cpp
     ${rt}/render/galaxy_select.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/rt_materials.cpp

@@ -231,6 +231,8 @@ namespace {
         Grown< NebulaFrameLightSet > mLightSets;
         Grown< NebulaFrameLight > mLights;
         Grown< u32 > mLightFollow;
+        Grown< NebulaFrameLightOwner > mLightOwners;
+        Grown< NebulaFrameWorldLight > mWorldLights;
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
@@ -269,6 +271,15 @@ namespace {
     bool sLightsDirty = true;
     bool sLightsSet = false;
     u32 sLightSet = NEBULA_NONE32;
+    // Whose lights those are (NebulaFrameLightOwner), with the world lights of its key and fill and of its point light:
+    // a set made from lights loaded on an earlier frame still brings its world lights into this frame's list.
+    NebulaFrameLightOwner sLightOwner = {};
+    NebulaFrameWorldLight sOwnerLights[2] = {};
+    NebulaFrameWorldLight sOwnerPoint = {};
+    // The stage's light, as the last frame that knew it said.
+    u64 sStageLight = 0;
+    f32 sStageAmbient[3] = {};
+    bool sStageLightKnown = false;
 
     // The pass's own decisions.
     bool sPassAlpha = false;
@@ -304,6 +315,8 @@ namespace {
         pStore->mLightSets.mCount = 0;
         pStore->mLights.mCount = 0;
         pStore->mLightFollow.mCount = 0;
+        pStore->mLightOwners.mCount = 0;
+        pStore->mWorldLights.mCount = 0;
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
@@ -447,6 +460,16 @@ namespace Frame {
         rList.light_sets = pStore->mLightSets.mData;
         rList.lights = pStore->mLights.mData;
         rList.light_follow = pStore->mLightFollow.mData;
+        rList.light_set_owners = pStore->mLightOwners.mData;
+        rList.world_lights = pStore->mWorldLights.mData;
+        rList.world_light_count = pStore->mWorldLights.mCount;
+        rList.stage_light_known = sStageLightKnown ? 1u : 0u;
+        rList.stage_light = sStageLight;
+        rList.stage_ambient[0] = sStageAmbient[0];
+        rList.stage_ambient[1] = sStageAmbient[1];
+        rList.stage_ambient[2] = sStageAmbient[2];
+        // A scene that stops saying what its light is has none on the next frame.
+        sStageLightKnown = false;
         rList.constants = pStore->mConstants.mData;
         rList.ring_vertices = pStore->mRingVertices;
         rList.ring_indices = pStore->mRingIndices.mData;
@@ -695,6 +718,14 @@ namespace Frame {
             if (words != 0) {
                 memcpy(pStore->mLightFollow.addRun(words), sLightFollow.mData, words * sizeof(u32));
             }
+            pStore->mLightOwners.add() = sLightOwner;
+            if (sLightOwner.actor_light != 0) {
+                worldLight(sOwnerLights[0]);
+                worldLight(sOwnerLights[1]);
+            }
+            if (sLightOwner.point_light != 0) {
+                worldLight(sOwnerPoint);
+            }
             sLightSet = static_cast< u32 >(pStore->mLightSets.mCount - 1);
             sLightsDirty = false;
         }
@@ -713,6 +744,60 @@ namespace Frame {
         memcpy(rOut.direction, rLight.direction, sizeof(rOut.direction));
         sLightsDirty = true;
         sLightsSet = true;
+    }
+
+    void worldLight(const NebulaFrameWorldLight& rLight) {
+        Store* pStore = store();
+        Grown< NebulaFrameWorldLight >& rLights = pStore->mWorldLights;
+        // Ascending by id, each id once: the newest values of a light named twice stand.
+        u32 at = rLights.mCount;
+        while (at != 0 && rLights.mData[at - 1].id > rLight.id) {
+            at--;
+        }
+        if (at != 0 && rLights.mData[at - 1].id == rLight.id) {
+            rLights.mData[at - 1] = rLight;
+            return;
+        }
+        rLights.add();
+        for (u32 i = rLights.mCount - 1; i > at; i--) {
+            rLights.mData[i] = rLights.mData[i - 1];
+        }
+        rLights.mData[at] = rLight;
+    }
+
+    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient) {
+        NebulaFrameLightOwner owner = sLightOwner;
+        owner.actor_light = pKey != nullptr ? pKey->id : 0;
+        for (u32 c = 0; c < 3; c++) {
+            owner.ambient[c] = pAmbient != nullptr ? pAmbient[c] : 0.0f;
+        }
+        if (pKey != nullptr) {
+            sOwnerLights[0] = *pKey;
+            sOwnerLights[1] = *pFill;
+        }
+        if (memcmp(&owner, &sLightOwner, sizeof(owner)) != 0) {
+            sLightOwner = owner;
+            sLightsDirty = true;
+        }
+    }
+
+    void setLightPointOwner(const NebulaFrameWorldLight* pPoint) {
+        const u64 id = pPoint != nullptr ? pPoint->id : 0;
+        if (pPoint != nullptr) {
+            sOwnerPoint = *pPoint;
+        }
+        if (sLightOwner.point_light != id) {
+            sLightOwner.point_light = id;
+            sLightsDirty = true;
+        }
+    }
+
+    void setStageLight(u64 id, const f32* pAmbient) {
+        sStageLight = id;
+        for (u32 c = 0; c < 3; c++) {
+            sStageAmbient[c] = pAmbient[c];
+        }
+        sStageLightKnown = true;
     }
 
     // Lights 0-31 at once.

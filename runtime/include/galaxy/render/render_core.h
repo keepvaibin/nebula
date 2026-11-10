@@ -24,6 +24,7 @@
 #include "render/core/draw_record.h"
 #include "render/core/frame_core.h"
 #include "render/core/pipelines.h"
+#include "render/core/world_lights.h"
 
 #include <array>
 #include <atomic>
@@ -288,6 +289,7 @@ private:
 
     core::Registries registries_;
     core::Pairing pairing_;
+    core::WorldLightStats world_light_stats_;  // --diagnostics rt-inputs
     core::Pipelines pipelines_;
     NebulaFrameList* producer_list_ = nullptr;
     std::deque<std::unique_ptr<ListEntry>> lists_;

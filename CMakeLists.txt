@@ -420,7 +420,6 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/temporal_upscaler.cpp
     runtime/src/render/xess_library.cpp
     runtime/src/render/xess_upscaler.cpp
-    runtime/src/render/game_lights.cpp
     runtime/src/render/rt_materials.cpp
     runtime/src/render/rt_caps.cpp
     runtime/src/render/rt/rt_shaders.cpp
@@ -438,6 +437,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/pipelines.cpp
     runtime/src/render/core/program_table.cpp
     runtime/src/render/core/registries.cpp
+    runtime/src/render/core/world_lights.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
     $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
     runtime/src/perf_hint.cpp
@@ -622,13 +622,15 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp LIBS galaxy_run_options)
 target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/include)
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
+galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
+target_include_directories(galaxy_core_world_lights_tests PRIVATE runtime/src native/include)
 # The pipeline cache files' headers (header-only; both backends' caches).
 galaxy_test(galaxy_pipeline_cache_file_tests SOURCES ${render_src}/core/pipeline_cache_file_tests.cpp)
 target_include_directories(galaxy_pipeline_cache_file_tests PRIVATE runtime/src)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback frame_pass post_process
-        render_core_host game_lights rt_caps)
+        render_core_host rt_caps)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
 # The tests compile their own small shaders; the program itself never compiles any.
@@ -701,9 +703,9 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp
         runtime/src/render/core/registries.cpp
+        runtime/src/render/core/world_lights.cpp
         runtime/src/render/core/pipelines_vk.cpp
         runtime/src/render/core/encoder_vk.cpp
-        runtime/src/render/game_lights.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/rt_materials.cpp

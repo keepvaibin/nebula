@@ -22,6 +22,7 @@ Files go to `diagnostics` in the data folder (COMMAND_LINE.md `--data`), named w
 | `scene-loads` | Each scene change's phases, presses and placed objects (`tools/verify/loads.py`) |
 | `file-reads` | Each read and map of the game's files, and the sound clock, with its frame |
 | `pipelines` | The pipelines the run created, at exit, into `pipelines-<pid>.bin` (`tools/dev/site_pipelines.py`) |
+| `rt-inputs` | What ray tracing reads of each frame list, checked against its rules and counted every 300 lists: the world's lights (`[rt-inputs] lights` lines) |
 
 Sets: `frames` (timeline, frame-tails, pointer-latency, present-stats, frame-times), `gpu` (gpu-passes), `threads`
 (thread-cpu, profile), `loads` (scene-loads, file-reads), `1` (the launcher's recording: timeline, frame-tails,

@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 149u
+#define NEBULA_GAME_API_VERSION 150u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -382,19 +382,6 @@ enum {
     NEBULA_OPTION_DIAGNOSE_SCENE_LOADS, /* --diagnostics scene-loads: 1 logs what each scene change loads */
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
-};
-
-/* game_light: the game's lights, from the objects that own them; `values` per kind. */
-enum {
-    NEBULA_LIGHT_SUN = 0,       /* BrightSun: direction from the camera towards it (3), its distance */
-    NEBULA_LIGHT_STAR_CORE,     /* the Comet Observatory's AstroCore: position (3), scale */
-    NEBULA_LIGHT_POINT,         /* LightPointCtrl's point light: position (3), colour (3), distance where it halves */
-    NEBULA_LIGHT_POINT_REQUEST, /* one actor's request for it (id the actor), as NEBULA_LIGHT_POINT */
-    NEBULA_LIGHT_WORLD,         /* a world-fixed area light far out: position (3), colour (3) */
-    NEBULA_LIGHT_AREA,          /* the stage's planet light (LightDirector's default area light), then */
-    NEBULA_LIGHT_PLAYER,        /* the player's current light: ambient (3), then the key and the fill light each:
-                                   colour (3), position (3; the camera's eye space when it follows the camera),
-                                   follows the camera (1) */
 };
 
 /* The movie player's sound (movie_audio_control). */
@@ -810,9 +797,6 @@ typedef struct NebulaHostServices {
     uint32_t (*display_extent)(void* user);
     /* A Nebula option (NEBULA_OPTION_*), read when the game needs it. */
     uint32_t (*option)(void* user, uint32_t what);
-    /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (its object's address; 0: none), `values` as
-       the kind lists. */
-    void (*game_light)(void* user, uint32_t kind, uint64_t id, const float* values);
     /* The stage being played (MR::getCurrentStageName), before each 3D scene's begin marker. */
     void (*game_stage)(void* user, const char* name);
     /* A movie (MovieStream): its disc path and NEBULA_MOVIE_OPENING when it opens (with its cooked file, NMOV, as

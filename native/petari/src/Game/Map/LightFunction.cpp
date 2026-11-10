@@ -196,6 +196,7 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     Frame::setLightFollows(0, pInfo->base.mIsFollowCamera);
     // The shine: a direction fixed in view space.
     Frame::setLightFollows(3, true);
+    GameLightSignal::coinLight(pInfo);
     ::loadLightInfoDiffuse(pInfo->base, 0);
     NebulaLight obj = {};
     f32 shininess = pInfo->mShininess;
@@ -222,6 +223,7 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
 void LightFunction::loadAllLightWhite() {
     // All eight at the eye.
     Frame::setLightFollowsCamera(0xffu);
+    GameLightSignal::noLight();
 
     for (u32 i = 0; i < 8; i++) {
         NebulaLight lightObj = {};
