@@ -2892,6 +2892,18 @@ namespace NebulaMods {
         sStageFrames--;
     }
 
+    InStage::InStage(bool on) : mOn(on) {
+        if (mOn) {
+            sStageFrames++;
+        }
+    }
+
+    InStage::~InStage() {
+        if (mOn) {
+            sStageFrames--;
+        }
+    }
+
     s32 powerUpStart(u16 mode, LiveActor* pPlayer) {
         const NebulaPowerUpClass* pPower = powerUpOf(mode);
         if (pPower == nullptr) {
