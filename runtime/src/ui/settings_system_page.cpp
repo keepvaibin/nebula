@@ -15,7 +15,12 @@ std::vector<SettingsRow> system_page(const render::RenderFeatureCaps& caps, std:
     {
         std::string name = mods_ui_text(caps.adapter_description.data(), 32u);
         while (!name.empty() && name.back() == ' ') name.pop_back();
+#if defined(__APPLE__)
+        // A Mac has no Nebula Settings: Metal's device is chosen at each start (mtl_context.mm).
+        rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN AT EACH START: A SEPARATE GPU BEFORE THE BUILT-IN ONE"});
+#else
         rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
+#endif
     }
     char text[64]{};
     if (caps.dxr_raytracing_tier != 0u) {
