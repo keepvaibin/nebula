@@ -1,0 +1,26 @@
+# Checks the tracked files on every pull request and push to main, documentation included: no game content, build
+# outputs, oversized files or credentials (tools/audit_repo.ps1).
+name: Audit
+
+on:
+  # A push to a pull request's branch is checked by the pull_request trigger.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Repository audit
+    runs-on: windows-2025
+    steps:
+      - uses: actions/Checkout@v7
+      - name: Audit
+        run: .\tools\audit_repo.ps1

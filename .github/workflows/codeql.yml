@@ -1,0 +1,85 @@
+name: "CodeQL Advanced"
+
+# CodeQL code scanning of Nebula's own code.
+#
+# Replaces GitHub's default setup so the scan can skip code Nebula does not own: the Petari
+# decompilation (native/petari, which mirrors the original game's code) and the unmodified
+# libraries in third_party (THIRD-PARTY-NOTICES.md). Every language is extracted without a
+# build (build-mode none), which is what lets paths-ignore apply to C/C++ as well.
+#
+# paths-ignore only skips those files as sources: a header Nebula's code includes (stb_image.h,
+# Petari's headers) is still analyzed with it, and its results are reported. So the results are
+# written to a file, those under the ignored paths dropped, and the rest uploaded.
+#
+# Default setup must be turned off (Settings > Code security > CodeQL analysis) for GitHub to
+# accept this workflow's results.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, c-cpp, csharp, java-kotlin, python, rust]
+    steps:
+      - uses: actions/Checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config: |
+            paths-ignore:
+              - native/petari
+              - third_party
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+          output: sarif-results
+          upload: failure-only
+      - name: Drop results in code Nebula does not own
+        shell: python
+        run: |
+          import json, os, pathlib
+
+          ignored = ("native/petari/", "third_party/")
+          workspace = os.environ["GITHUB_WORKSPACE"].rstrip("/") + "/"
+
+          def owned(result):
+              for location in result.get("locations", [])[:1]:
+                  uri = location.get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
+                  path = uri.removeprefix("file://").removeprefix(workspace)
+                  return not path.startswith(ignored)
+              return True
+
+          for path in pathlib.Path("sarif-results").glob("*.sarif"):
+              sarif = json.loads(path.read_text())
+              for run in sarif.get("runs", []):
+                  results = run.get("results", [])
+                  run["results"] = [r for r in results if owned(r)]
+                  print(f"{path.name}: dropped {len(results) - len(run['results'])} of {len(results)} results")
+              path.write_text(json.dumps(sarif))
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: sarif-results
+          category: /language:${{ matrix.language }}

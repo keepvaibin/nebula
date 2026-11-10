@@ -1,0 +1,351 @@
+# Compiles every part of Nebula and runs its tests on each pull request and each push to main (docs/BUILDING.md), and
+# keeps what it built as test builds for Windows, Linux and Android: downloads for 14 days.
+# Releases are made by hand (installer/build-native-setup.ps1, platform/android/build_apk.ps1).
+name: Build
+
+on:
+  # A push to a pull request's branch is built by the pull_request trigger: building it on push too ran every change
+  # twice at once.
+  push:
+    branches: [main]
+    # Only changes that can affect the build: not documentation or the other workflows.
+    paths:
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "!LICENSE"
+      - "!.github/**"
+      - ".github/workflows/build.yml"
+  # Every pull request, so that the Build result check always reports and can be required: a pull request that changes
+  # nothing the build uses (the push paths above) skips the jobs, which counts as passing.
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # The SDL host's dependencies (platform/sdl/CMakeLists.txt, NEBULA_DEPS), at the versions cmake/vulkan_deps.cmake
+  # pins for the Windows build.
+  SDL_TAG: release-3.4.18
+  VULKAN_SDK_TAG: vulkan-sdk-1.4.350.1
+  VMA_TAG: v3.4.0
+  GLSLANG_TAG: 16.6.0
+  SPIRV_TOOLS_COMMIT: ef96ed763b43b59b33b31b362f09a02b729fa1c9
+  SPIRV_HEADERS_COMMIT: 496543121ce6419f23d6fa5d7194ba66c36212d2
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-24.04
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
+    steps:
+      - uses: actions/Checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          # The pull request's merge commit and the base branch it was merged onto (its first parent).
+          fetch-depth: 2
+      - id: filter
+        # The same files as the push paths: anything but documentation and the other workflows.
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo build=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only HEAD^1 HEAD)
+          if printf '%s\n' "$files" | grep -qxF .github/workflows/build.yml ||
+             printf '%s\n' "$files" | grep -vE '\.md$|^docs/|^LICENSE$|^\.github/' | grep -q .; then
+            echo build=true >> "$GITHUB_OUTPUT"
+          else
+            echo build=false >> "$GITHUB_OUTPUT"
+          fi
+
+  import:
+    name: Disc import tool (Rust)
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-2025
+    env:
+      # The C runtime linked in, as Setup ships it: it runs on PCs without the Visual C++ runtime.
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/Checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --locked -p nebula-import
+      - name: Test
+        run: cargo test --locked -p nebula-import
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-import
+          path: target/release/nebula-import.exe
+          retention-days: 1
+          if-no-files-found: error
+
+  host:
+    name: Host (${{ matrix.renderer }})
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    # Visual Studio 2022's MSVC: with 2026's (MSVC 19.51, windows-2025) the frame interpolation and interp GPU
+    # tests fail every palette check, which no other compiler reproduces.
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - renderer: Direct3D 12
+            vulkan: OFF
+          - renderer: Vulkan
+            vulkan: ON
+    env:
+      # Compile on this machine when the sccache server can't be reached mid-build, instead of failing.
+      SCCACHE_IGNORE_SERVER_IO_ERROR: "1"
+    steps:
+      - uses: actions/Checkout@v7
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      # The libraries CMake builds at configure time (zlib, xz, libarchive, the FidelityFX SDK) and the downloaded
+      # Vulkan sources: each is skipped when its files are already in the build tree.
+      - name: Cache configure-time dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/host/archive-deps
+            build/host/fidelityfx-fg.built
+            build/host/fidelityfx-fg-vk-luma16.built
+            build/host/_deps
+          key: host-deps-${{ matrix.vulkan }}-${{ hashFiles('cmake/**', 'third_party/archive/**') }}
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      # sccache keeps compiled objects in the GitHub Actions cache. Its server reads that cache when it starts and
+      # gives up if it can't (a GitHub outage, or "Egress is over the account limit"), which failed every compile.
+      # Then it uses its local cache instead: the build is slower but doesn't fail. SCCACHE_GHA_ENABLED is set
+      # here rather than in the job's env, which would take precedence over GITHUB_ENV.
+      - name: Start sccache
+        run: |
+          $env:SCCACHE_GHA_ENABLED = "true"
+          for ($try = 1; $try -le 3; $try++) {
+            sccache --start-server
+            if ($LASTEXITCODE -eq 0) {
+              "SCCACHE_GHA_ENABLED=true" >> $env:GITHUB_ENV
+              exit 0
+            }
+            Start-Sleep -Seconds 10
+          }
+          Write-Output "::warning title=sccache::The GitHub Actions cache is unavailable: building without it."
+          $env:SCCACHE_GHA_ENABLED = "false"
+          "SCCACHE_GHA_ENABLED=false" >> $env:GITHUB_ENV
+          sccache --start-server
+          exit $LASTEXITCODE
+      - name: Configure
+        # Without cross-file optimization: the link of every test against the renderer library otherwise takes
+        # minutes. Release builds keep it (NEBULA_HOST_IPO defaults to ON).
+        run: >-
+          cmake -S . -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=${{ matrix.vulkan }}
+          -DNEBULA_HOST_IPO=OFF -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+      - name: Build
+        run: cmake --build build/host
+      - name: Test
+        run: ctest --test-dir build/host --output-on-failure
+      # The Vulkan build makes both programs: the test build's.
+      - if: matrix.vulkan == 'ON'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-hosts
+          path: |
+            build/host/NebulaNative.exe
+            build/host/NebulaNativeVk.exe
+          retention-days: 1
+          if-no-files-found: error
+      # The shader tools the Android build runs on this machine (platform/sdl's NEBULA_HOST_TOOLS).
+      - if: matrix.vulkan == 'ON'
+        uses: actions/upload-artifact@v7
+        with:
+          name: spirv-tools
+          path: |
+            build/host/galaxy_native_spirv.exe
+            build/host/galaxy_utility_spirv.exe
+          retention-days: 1
+          if-no-files-found: error
+
+  game:
+    name: Game module
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-2025
+    steps:
+      - uses: actions/Checkout@v7
+      - name: Clang version
+        run: '& "C:\Program Files\LLVM\bin\clang.exe" --version'
+      - name: Build
+        run: .\native\build.ps1 -Petari native\petari -Build build\game
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-game-module
+          path: build/game/smg_game.dll
+          retention-days: 1
+          if-no-files-found: error
+
+  windows:
+    name: Windows test build
+    # What the jobs above built and tested, put together: nothing is compiled again.
+    needs: [import, host, game]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/Checkout@v7
+        with:
+          sparse-checkout: |
+            LICENSE
+            THIRD-PARTY-NOTICES.md
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: windows-*
+          path: dist
+          merge-multiple: true
+      - name: Stage
+        run: cp LICENSE THIRD-PARTY-NOTICES.md dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nebula-windows-x64
+          path: dist
+          retention-days: 14
+          if-no-files-found: error
+
+  linux:
+    name: Linux
+    # Needs the game module job: if the game module doesn't build, the Linux binary is useless.
+    needs: [changes, game]
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/Checkout@v7
+      - name: System packages
+        # SDL3's video, audio and input back ends (X11, Wayland, ALSA, PulseAudio, PipeWire, udev).
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang ninja-build patchelf \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+            libwayland-dev libxkbcommon-dev wayland-protocols libdecor-0-dev libegl-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Dependencies
+        run: |
+          mkdir -p deps && cd deps
+          clone() { git -c advice.detachedHead=false clone -q --depth 1 --branch "$2" "https://github.com/$1" "$3"; }
+          pin() { mkdir -p "$3" && git -C "$3" init -q && git -C "$3" fetch -q --depth 1 "https://github.com/$1" "$2" &&
+                  git -C "$3" -c advice.detachedHead=false checkout -q FETCH_HEAD; }
+          clone libsdl-org/SDL "$SDL_TAG" SDL3-3.4.18
+          clone KhronosGroup/Vulkan-Headers "$VULKAN_SDK_TAG" Vulkan-Headers-vulkan-sdk-1.4.350.1
+          clone zeux/volk "$VULKAN_SDK_TAG" volk-vulkan-sdk-1.4.350.1
+          clone GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator "$VMA_TAG" VulkanMemoryAllocator-v3.4.0
+          clone KhronosGroup/glslang "$GLSLANG_TAG" glslang-src
+          pin KhronosGroup/SPIRV-Tools "$SPIRV_TOOLS_COMMIT" glslang-src/External/spirv-tools
+          pin KhronosGroup/SPIRV-Headers "$SPIRV_HEADERS_COMMIT" glslang-src/External/spirv-tools/external/spirv-headers
+      - name: Host
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S platform/sdl -B build/host -G Ninja -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$PWD/deps"
+          cmake --build build/host --target main
+      - name: Game module
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S native -B build/game -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/game --target smg_game
+      - name: Disc import tool
+        run: cargo build --release --locked -p nebula-import --bin nebula-import
+      - name: Stage
+        # The program finds libSDL3 and the game module beside it.
+        run: |
+          mkdir -p dist
+          cp build/host/nebula dist/NebulaNative
+          cp -L build/host/SDL3/libSDL3.so.0 build/game/libsmg_game.so target/release/nebula-import dist/
+          patchelf --set-rpath '$ORIGIN' dist/NebulaNative
+          cp LICENSE THIRD-PARTY-NOTICES.md dist/
+          # Artifacts drop file modes: a tar keeps the programs executable.
+          tar -C dist -czf nebula-linux-x64.tar.gz .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nebula-linux-x64
+          path: nebula-linux-x64.tar.gz
+          retention-days: 14
+          if-no-files-found: error
+
+  android:
+    name: Android
+    # The Vulkan host build's shader tools compile the SPIR-V the APK carries.
+    # Also needs the game module: if it doesn't build, the APK is useless.
+    needs: [changes, host, game]
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-2025
+    steps:
+      - uses: actions/Checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - name: Android SDK
+        run: |
+          $sdkmanager = Join-Path $env:ANDROID_HOME 'cmdline-tools\latest\bin\sdkmanager.bat'
+          # Every licence question answered yes.
+          1..20 | ForEach-Object { 'y' } | & $sdkmanager --install 'ndk;28.2.13676358' 'platforms;android-36' |
+              Select-Object -Last 3
+          if ($LASTEXITCODE -ne 0) { throw "sdkmanager failed ($LASTEXITCODE)" }
+      - name: Dependencies
+        shell: bash
+        run: |
+          mkdir -p deps && cd deps
+          clone() { git -c advice.detachedHead=false clone -q --depth 1 --branch "$2" "https://github.com/$1" "$3"; }
+          pin() { mkdir -p "$3" && git -C "$3" init -q && git -C "$3" fetch -q --depth 1 "https://github.com/$1" "$2" &&
+                  git -C "$3" -c advice.detachedHead=false checkout -q FETCH_HEAD; }
+          clone libsdl-org/SDL "$SDL_TAG" SDL3-3.4.18
+          clone KhronosGroup/Vulkan-Headers "$VULKAN_SDK_TAG" Vulkan-Headers-vulkan-sdk-1.4.350.1
+          clone zeux/volk "$VULKAN_SDK_TAG" volk-vulkan-sdk-1.4.350.1
+          clone GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator "$VMA_TAG" VulkanMemoryAllocator-v3.4.0
+          clone KhronosGroup/glslang "$GLSLANG_TAG" glslang-src
+          pin KhronosGroup/SPIRV-Tools "$SPIRV_TOOLS_COMMIT" glslang-src/External/spirv-tools
+          pin KhronosGroup/SPIRV-Headers "$SPIRV_HEADERS_COMMIT" glslang-src/External/spirv-tools/external/spirv-headers
+      - uses: actions/download-artifact@v8
+        with:
+          name: spirv-tools
+          path: build/spirv-tools
+      - name: APK
+        # Debug-signed: no -Signing.
+        run: |
+          $env:JAVA_HOME = $env:JAVA_HOME_17_X64
+          .\platform\android\build_apk.ps1 -Deps "$PWD\deps" -Work "$PWD\build\android" -HostTools "$PWD\build\spirv-tools"
+      - name: Logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-build-logs
+          path: build/android/*.log
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nebula-android
+          path: build/android/Nebula.apk
+          retention-days: 14
+          if-no-files-found: error
+
+  # The one check to require before merging: it fails when any job above failed or was cancelled, and passes when they
+  # passed or were skipped.
+  result:
+    name: Build result
+    if: always()
+    needs: [changes, import, host, game, windows, linux, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
