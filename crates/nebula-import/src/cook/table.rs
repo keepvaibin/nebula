@@ -607,7 +607,7 @@ pub mod proof {
     }
 
     /// Every read of `bcsv` (big-endian) and its cooked `ntbl` agrees. f32 reads are compared on float columns and bool
-    /// reads on non-text columns only: the game makes no other (measured, NATIVE-STATE-Q 11-07 table reads).
+    /// reads on non-text columns only: the game makes no other.
     pub fn reads_agree(bcsv: &[u8], ntbl: &[u8]) -> Result<()> {
         let (entries, fields, data, size) = bcsv_layout(bcsv).context("not a table")?;
         for row in 0..entries {

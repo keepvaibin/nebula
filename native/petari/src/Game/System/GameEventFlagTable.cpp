@@ -551,8 +551,7 @@ namespace GameEventFlagTable {
     }
 
     u16 getSaveHash(const char* pName) {
-        // The flags named in Japanese; their names are UTF-8 now, their saves' hashes stay of the Shift-JIS bytes
-        // (agents/native-q/flag_save_hashes.py made these).
+        // Flags with Japanese names: the names are UTF-8, the save hashes are of the Shift-JIS bytes.
         struct SavedName {
             const char* mName;
             u16 mHash;

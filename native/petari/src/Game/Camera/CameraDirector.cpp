@@ -191,7 +191,9 @@ void CameraDirector::calcPose() {
     mOnlyCamera->calcPose(getCurrentCameraMan());
     mPoseParam1->copyFrom(*mOnlyCamera->mPoseParam);
 
-    // A plugin's camera (set_camera): where it says at once, through walls.
+    // The game's own pose, for game_camera; then a plugin's camera (set_camera): where it says at once, through walls.
+    NebulaMods::recordGameCamera(mPoseParam1->mPos.x, mPoseParam1->mPos.y, mPoseParam1->mPos.z, mPoseParam1->mWatchPos.x,
+                                 mPoseParam1->mWatchPos.y, mPoseParam1->mWatchPos.z);
     f32 position[3];
     f32 target[3];
     const u32 given = NebulaMods::cameraPose(position, target);

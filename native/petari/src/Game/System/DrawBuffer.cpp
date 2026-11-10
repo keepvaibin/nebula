@@ -55,7 +55,7 @@ void DrawBufferShapeDrawer::draw() const {
             if (packet->mMaterial != pShared) {
                 draw.sendOwn(packet->mMaterial, pShared);
             }
-            if (!packet->checkFlag(MeshEntry::Flag_Hidden)) {
+            if (!packet->isHidden()) {
                 draw.draw(packet->mModel, packet->mMesh);
             }
         }

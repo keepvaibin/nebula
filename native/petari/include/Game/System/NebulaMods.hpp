@@ -120,6 +120,10 @@ namespace NebulaMods {
     inline f32 cameraNear(f32 nearZ) {
         return sCameraNear > 0.0f ? sCameraNear : nearZ;
     }
+    // The game's own camera this frame, before a plugin's (CameraDirector::calcPose), for game_camera.
+    void recordGameCamera(f32 x, f32 y, f32 z, f32 targetX, f32 targetY, f32 targetZ);
+    // Where a plugin wants the large talk box (place_talk_box): its middle in screen coordinates. False: its own place.
+    bool talkBoxPlace(f32* pX, f32* pY);
     // The angle of view: a plugin's, else the game's `fovy`. Kept as the last drawn.
     f32 cameraFov(f32 fovy);
     // The HUD parts plugins hide (NEBULA_HUD_*).

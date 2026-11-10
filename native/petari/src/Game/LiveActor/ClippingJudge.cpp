@@ -1,12 +1,16 @@
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Level 0's entry is unused: it ends at the camera's far Z.
     const f32 sFarClipDistance[ClippingJudge::cFarClipLevelNum] = {
         0.0f, 60000.0f, 50000.0f, 40000.0f, 30000.0f, 20000.0f, 10000.0f, 5000.0f,
     };
+    // Objects closer than this in front of the camera are not drawn or run; the second while in first-person view.
+    NEBULA_TUNABLE(f32, cNearClip, 500.0f);
+    NEBULA_TUNABLE(f32, cNearClipSubjective, 100.0f);
 };  // namespace
 
 ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustums() {
@@ -26,9 +30,12 @@ bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rPos, f32 radius, s32 far
 
 // Every level shares the four side planes and the near plane; only the far plane differs.
 void ClippingJudge::calcViewingVolumes(f32 farZ) {
-    f32 nearClip = 500.0f;
+    f32 nearClip = ::cNearClip;
     if (MR::isSubjectiveCameraOnForObjClipping()) {
-        nearClip = 100.0f;
+        nearClip = ::cNearClipSubjective;
+    }
+    if (!(nearClip > 1.0f)) {
+        nearClip = 1.0f;
     }
 
     f32 aspect = MR::getAspect();

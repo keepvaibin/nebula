@@ -273,7 +273,7 @@ namespace MR {
             MeshEntry* pShapePacket = pModel->getMeshEntry(pMaterial->getMesh()->getIndex());
             MaterialDraw draw(pMatPacket->getMaterial());
             draw.sendOwn(pShapePacket->mMaterial, pMatPacket->getMaterial());
-            if (!pShapePacket->checkFlag(MeshEntry::Flag_Hidden)) {
+            if (!pShapePacket->isHidden()) {
                 draw.draw(pModel, pShapePacket->getMesh());
             }
         }

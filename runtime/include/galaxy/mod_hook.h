@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Replacing a function, where MinHook isn't.
+// Function hooking on platforms without MinHook (Linux, macOS, Android).
 #pragma once
 
 namespace galaxy::mods {
 
-// `target` now runs `replacement`; `*original` runs what `target` did. False: this function can't be hooked, and nothing has changed.
+// Makes `target` run `replacement` and sets `*original` to a function that runs the old code. Returns false, changing
+// nothing, when the function can't be hooked.
 [[nodiscard]] bool hook_function(void* target, void* replacement, void** original);
 
 }  // namespace galaxy::mods

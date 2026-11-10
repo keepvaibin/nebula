@@ -161,7 +161,7 @@ bool PlayerModel::simpleDrawSetup(Material* pMaterial, MaterialDraw* pDraw) {
 
 void PlayerModel::simpleDrawShape(Material* pMaterial, MaterialDraw& rDraw) {
     Mesh* pMesh = pMaterial->getMesh();
-    if (!getMeshEntry(pMesh->getIndex())->checkFlag(MeshEntry::Flag_Hidden)) {
+    if (!getMeshEntry(pMesh->getIndex())->isHidden()) {
         if (mDrawHook != nullptr) {
             mDrawHook(rDraw);
         }

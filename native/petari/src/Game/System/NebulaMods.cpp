@@ -35,6 +35,9 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
@@ -921,6 +924,59 @@ namespace {
         }
     }
 
+    void apiShowJoint(NebulaActor* pActor, const char* pJoint, int32_t show) {
+        if (pActor == nullptr || pJoint == nullptr || asActor(pActor)->mModelManager == nullptr) {
+            return;
+        }
+        if (asActor(pActor) == MarioAccess::getPlayerActor()) {
+            MarioAccess::getPlayerActor()->showJointByPlugin(pJoint, show != 0);
+            return;
+        }
+        Model* pModel = MR::getModel(asActor(pActor));
+        const s32 idx = pModel->mModelData->findJoint(pJoint);
+        if (idx >= 0) {
+            MR::showJointAndChildrenOn(pModel, pModel->mModelData->getJointAt(static_cast< u32 >(idx)), show != 0);
+        }
+    }
+
+    void apiGetJointMatrix(NebulaActor* pActor, const char* pJoint, float* pOut) {
+        if (pActor == nullptr || pOut == nullptr) {
+            return;
+        }
+        const LiveActor* pLive = asActor(pActor);
+        for (s32 i = 0; i < 12; i++) {
+            pOut[i] = i % 5 == 0 ? 1.0f : 0.0f;
+        }
+        pOut[3] = pLive->mPosition.x;
+        pOut[7] = pLive->mPosition.y;
+        pOut[11] = pLive->mPosition.z;
+        if (pLive->mModelManager == nullptr || pJoint == nullptr) {
+            return;
+        }
+        Model* pModel = MR::getModel(pLive);
+        const s32 idx = pModel->mModelData->findJoint(pJoint);
+        if (idx < 0) {
+            return;
+        }
+        MtxPtr mtx = pModel->getAnmMtx(idx);
+        for (s32 r = 0; r < 3; r++) {
+            for (s32 c = 0; c < 4; c++) {
+                pOut[r * 4 + c] = mtx[r][c];
+            }
+        }
+    }
+
+    const char* apiJointName(NebulaActor* pActor, int32_t index) {
+        if (pActor == nullptr || index < 0 || asActor(pActor)->mModelManager == nullptr) {
+            return nullptr;
+        }
+        const ModelData* pData = MR::getModel(asActor(pActor))->mModelData;
+        if (static_cast< u32 >(index) >= pData->getJointCount()) {
+            return nullptr;
+        }
+        return pData->getJointName(static_cast< u32 >(index));
+    }
+
     int32_t apiPlay(NebulaActor* pActor, NebulaModPlay what, const char* pName) {
         if (pActor == nullptr || pName == nullptr) {
             return 0;
@@ -1623,7 +1679,9 @@ namespace {
         }
         const LiveActor* pLive = asActor(pActor);
         Vec3f at(pLive->mPosition);
-        if (pLive->mModelManager != nullptr && pJoint != nullptr) {
+        // A name the model lacks is its own position, not the root joint's (MR::copyJointPos's).
+        if (pLive->mModelManager != nullptr && pJoint != nullptr &&
+            MR::getModel(pLive)->mModelData->findJoint(pJoint) >= 0) {
             MR::copyJointPos(pLive, pJoint, &at);
         }
         pOut[0] = at.x;
@@ -2395,6 +2453,45 @@ namespace {
         NebulaMods::sCameraNear = distance > 0.0f ? (distance < 1.0f ? 1.0f : distance) : 0.0f;
     }
 
+    // The game's camera before a plugin's, recorded each frame it is posed.
+    f32 sGameCameraAt[3];
+    f32 sGameCameraLook[3];
+
+    int32_t apiGameCamera(float* pPosition, float* pTarget) {
+        if (sStageFrames <= 0) {
+            return 0;
+        }
+        for (s32 i = 0; i < 3; i++) {
+            if (pPosition != nullptr) {
+                pPosition[i] = sGameCameraAt[i];
+            }
+            if (pTarget != nullptr) {
+                pTarget[i] = sGameCameraLook[i];
+            }
+        }
+        return 1;
+    }
+
+    NebulaActor* apiTalkingActor() {
+        if (sStageFrames <= 0) {
+            return nullptr;
+        }
+        return asHandle(MR::getTalkingActor());
+    }
+
+    bool sTalkBoxPlaced = false;
+    f32 sTalkBoxX = 0.0f;
+    f32 sTalkBoxY = 0.0f;
+
+    void apiPlaceTalkBox(float x, float y, int32_t on) {
+        if (on != 0 && (!isFinite(x) || !isFinite(y))) {
+            return;
+        }
+        sTalkBoxPlaced = on != 0;
+        sTalkBoxX = x;
+        sTalkBoxY = y;
+    }
+
     float apiCameraFov() {
         return sLastFov;
     }
@@ -2629,6 +2726,13 @@ namespace {
         nullptr,
         nullptr,
         apiSetCameraNear,
+        nullptr,  // unlock_achievement: the host's
+        apiGameCamera,
+        apiTalkingActor,
+        apiPlaceTalkBox,
+        apiShowJoint,
+        apiJointName,
+        apiGetJointMatrix,
     };
 }  // namespace
 
@@ -2703,6 +2807,22 @@ namespace NebulaMods {
     void sceneEnded() {
         sCountdown = nullptr;
         sMessagePending = false;
+        sTalkBoxPlaced = false;
+    }
+
+    void recordGameCamera(f32 x, f32 y, f32 z, f32 targetX, f32 targetY, f32 targetZ) {
+        sGameCameraAt[0] = x;
+        sGameCameraAt[1] = y;
+        sGameCameraAt[2] = z;
+        sGameCameraLook[0] = targetX;
+        sGameCameraLook[1] = targetY;
+        sGameCameraLook[2] = targetZ;
+    }
+
+    bool talkBoxPlace(f32* pX, f32* pY) {
+        *pX = sTalkBoxX;
+        *pY = sTalkBoxY;
+        return sTalkBoxPlaced;
     }
 
     const TextLine& textLine(s32 line) {

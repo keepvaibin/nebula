@@ -1,4 +1,4 @@
-//! A layout material's program, read by programs.rs: gone with the layout format in batch 4.
+//! A layout material's program, read by programs.rs.
 
 pub const STAGE_BYTES: usize = 34;
 #[path = "material_layout.rs"]

@@ -62,8 +62,8 @@ enum class RtSurfaceClass : std::uint8_t {
 
 enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 
-// The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (the owner, 27 October
-// 2026: ice 20 to 25 % of its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
+// The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (ice 20 to 25 % of
+// its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
 // multiply and add (material and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
 // it by (0, 40, 65), its sheen by (55, 77, 92)); their textures are grey and what shows through them (the screen
 // capture the ice refracts, its reflection) keeps its own colours. Those colours keep that share of their chroma, their

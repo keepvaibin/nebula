@@ -245,7 +245,7 @@ void MaterialEntry::draw() {
     draw.send(mMaterial);
     for (MeshEntry* pShape = mMeshEntry; pShape != nullptr; pShape = pShape->mNext) {
         draw.sendOwn(pShape->mMaterial, mMaterial);
-        if (!pShape->checkFlag(MeshEntry::Flag_Hidden) && pShape->mMesh != nullptr) {
+        if (!pShape->isHidden() && pShape->mMesh != nullptr) {
             draw.draw(pShape->mModel, pShape->mMesh);
         }
     }
