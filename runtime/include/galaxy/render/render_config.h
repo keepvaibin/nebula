@@ -111,17 +111,13 @@ struct RenderConfig {
     bool     hdr                 = false;
     unsigned paper_white         = 200;
 
-    // Ray tracing on adapters with DXR 1.1, shader model 6.5 and dedicated video memory; ignored elsewhere.
-    // rt_shadow_quality and rt_ao_enabled are not implemented and clamped off.
+    // Ray tracing, on a device that can trace (rt_caps.h); ignored elsewhere. The fields below are the settings the
+    // tracer being rebuilt will read: rt_shadow_quality and rt_ao_enabled are clamped off until their effects exist.
     bool     ray_tracing_enabled = false;
-    // Ray tracing quality: 0 medium (lighting at a share of the pixels, 2 sky rays, one glow light per
-    // sample), 1 high (every pixel up to 4K-class pictures, 4 sky rays, two glow lights, reflections that
-    // shade what they hit off screen).
+    // The preset: 0 medium, 1 high, 2 low.
     unsigned rt_quality          = 1;
-    // The ray-traced effects players choose, each read every frame: the reflections on the scene's surfaces (metal,
-    // gloss, glass, crystal; off: the game's painted ones, SceneRayTracer::surface_reflections_active), the camera's
-    // lens bloom and the sun's shafts (ray_tracing_camera.cpp), the traced seas, lakes and pools (their reflections
-    // and refraction; off: the game's own water).
+    // The ray-traced effects players choose: reflections (off: the game's painted ones), lens bloom, light shafts,
+    // traced water (off: the game's own).
     bool     rt_reflections      = true;
     bool     rt_lens_bloom       = true;
     bool     rt_sun_rays         = true;
@@ -172,11 +168,6 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
 
 // The most interpolated frames one game frame needs at a present rate: ceil(rate / 60) - 1 (75 Hz shows one between
 // most pairs of game frames, 144 Hz two between some), none at 60 and below, at most 7.
-// The ray tracer is parked (E-02): it shaded hits by evaluating the material from the old path's shader keys, which native
-// draws no longer have. It returns when it is rebuilt on native materials (the additions' F/G phase); until then the
-// RAY TRACING row is not offered and no tracer starts, on any adapter.
-inline constexpr bool kRayTracingParked = true;
-
 inline unsigned interpolated_frames_per_game_frame(double rate) {
     if (!(rate > kGameStepRate + 1.0)) return 0u;
     const double frames = std::ceil(rate / kGameStepRate - 1e-3) - 1.0;

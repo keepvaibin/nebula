@@ -12,7 +12,8 @@
 
 In PowerShell, dot-source `tools\enter_msvc_environment.ps1` first. CMake downloads the remaining dependencies at
 configure time from pinned archives checked by SHA-256: the FidelityFX SDK (FSR 3), and for the Vulkan renderer
-Vulkan-Headers, volk, VulkanMemoryAllocator, glslang, SPIRV-Tools and SPIRV-Headers.
+Vulkan-Headers, volk, VulkanMemoryAllocator, glslang, SPIRV-Tools and SPIRV-Headers, and the DirectX Shader Compiler's
+release (a build tool: it compiles the ray tracing shaders to SPIR-V; `GALAXY_DXC_SPIRV` names another dxc that can).
 
 ## 1. Game files
 

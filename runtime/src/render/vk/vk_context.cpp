@@ -2,6 +2,7 @@
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
 #include "galaxy/render/vk/vk_context.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/rt/rt_shaders.h"
 #if defined(NEBULA_DEV)
 #include "galaxy/runtime_settings.h"
 #endif
@@ -227,7 +228,8 @@ Context& Context::get() noexcept {
 
 bool Context::initialize(const std::string& chosen_gpu, bool validation,
                          std::vector<const char*> instance_extensions,
-                         const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface) {
+                         const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface,
+                         bool ray_tracing) {
     if (device_ != VK_NULL_HANDLE) {
         return true;
     }
@@ -816,12 +818,50 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             enabled.shaderStorageImageExtendedFormats = VK_TRUE;
         }
     }
+    // Ray tracing (rt_caps.h): acceleration structures and ray queries, with device addresses, on Vulkan 1.2 (descriptor
+    // indexing, SPIR-V 1.4 and the address feature are core there). Reported for every device; the device is made with
+    // them only when `ray_tracing` asks.
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR rt_structures{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
+    VkPhysicalDeviceRayQueryFeaturesKHR rt_queries{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
+    rt_caps_ = RtCaps{};
+    rt_caps_.shaders = rt_shaders_present();
+    rt_caps_.bindless = bindless_;
+    rt_caps_.unified_memory = properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+    if (core_12 && has_device_extension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)) {
+        VkPhysicalDeviceVulkan12Features have12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+        rt_structures.pNext = &rt_queries;
+        rt_queries.pNext = &have12;
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &rt_structures;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        rt_caps_.acceleration_structures = rt_structures.accelerationStructure == VK_TRUE && have12.bufferDeviceAddress == VK_TRUE;
+        rt_caps_.ray_queries = rt_queries.rayQuery == VK_TRUE;
+        rt_caps_.micromaps = has_device_extension(physical_, "VK_EXT_opacity_micromap");
+    }
+    const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless;
+    // Only what the tracer uses is enabled, whatever else the device reports in these structures.
+    rt_structures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
+    rt_structures.accelerationStructure = VK_TRUE;
+    rt_queries = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
+    rt_queries.rayQuery = VK_TRUE;
+    if (rt_enable) {
+        device_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+        device_extensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+        device_extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+    }
     depth_clamp_ = available.depthClamp == VK_TRUE;
     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     if (depth_clip_enable_) {
         depth_clip.pNext = nullptr;
         depth_clip.depthClipEnable = VK_TRUE;
         device_info.pNext = &depth_clip;
+    }
+    if (rt_enable) {
+        rt_queries.pNext = const_cast<void*>(device_info.pNext);
+        rt_structures.pNext = &rt_queries;
+        device_info.pNext = &rt_structures;
     }
     if (sync2_extension) {
         sync2.pNext = const_cast<void*>(device_info.pNext);
@@ -853,6 +893,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         device_info.pNext = &timeline_features;
     }
     if (core_12) {
+        if (rt_enable) {
+            features12.bufferDeviceAddress = VK_TRUE;
+        }
         if (temporal_upscaling_) {
             features11.storageBuffer16BitAccess = VK_TRUE;
             features12.shaderFloat16 = VK_TRUE;
@@ -989,6 +1032,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         return fail("vkCreateDevice failed");
     }
     volkLoadDevice(device_);
+    rt_caps_.enabled = rt_enable;
     fault_reported_.store(false, std::memory_order_relaxed);
     simulated_loss_.store(false, std::memory_order_relaxed);
     loss_was_simulated_ = false;
@@ -1050,6 +1094,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     allocator_info.pVulkanFunctions = &functions;
     if (memory_budget_) {
         allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    }
+    if (rt_caps_.enabled) {
+        // Buffers an acceleration structure is built from are named by device address (core in the device's Vulkan 1.2).
+        allocator_info.vulkanApiVersion = VK_API_VERSION_1_2;
+        allocator_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     }
     if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
         allocator_ = nullptr;
