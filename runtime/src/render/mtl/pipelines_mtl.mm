@@ -271,12 +271,6 @@ mtl::Object function_of(const ProgramBytes& program, bool pixel) {
         // The arithmetic the programs state, as the other renderers' compilers keep it.
         options.fastMathEnabled = NO;
         NSString* source = [[NSString alloc] initWithBytes:program.data length:program.size encoding:NSUTF8StringEncoding];
-#if defined(NEBULA_DEV)
-        // A test of a first start: a text no cache of the system's has seen (NEBULA_METAL_COLD=<any new word>).
-        if (const char* const cold = std::getenv("NEBULA_METAL_COLD"); cold != nullptr && source != nil) {
-            source = [source stringByAppendingFormat:@"\n// %s\n", cold];
-        }
-#endif
         NSError* error = nil;
         const std::uint64_t began = now_us();
         id<MTLLibrary> const library = source != nil ? [metal_device() newLibraryWithSource:source options:options error:&error] : nil;

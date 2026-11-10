@@ -2,7 +2,7 @@
 #pragma once
 
 // The ADVANCED page's galaxy select: its stage list, the page's requests (taken by the game each scene frame,
-// svc_test_scene_frame) and the names the game gives it in its own words.
+// svc_galaxy_travel) and the names the game gives it in its own words.
 
 #include <cstddef>
 #include <cstdint>

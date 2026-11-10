@@ -68,17 +68,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
-#if defined(NEBULA_DEV)
-#include "Game/Boss/Koopa.hpp"
-#include "Game/Boss/KoopaSequencer.hpp"
-#include "Game/Util/ModelUtil.hpp"
-#include "Game/Render/ModelData.hpp"
-#include "Game/Render/Material.hpp"
-#include "Game/Player/MarioAccess.hpp"
-#include "Game/Player/MarioActor.hpp"
-#include "Game/Map/StageSwitch.hpp"
-#include "Game/Util/ActorSwitchUtil.hpp"
-#endif
 #include "Game/System/NebulaModCalls.hpp"
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"

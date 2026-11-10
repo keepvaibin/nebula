@@ -2338,10 +2338,6 @@ const char* svc_game_id(void*) {
     return gPak.id;
 }
 
-std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
-constexpr uint64_t kNoStopFrames = ~uint64_t{0};
-// Scene frames since the tour's current stop began (GALAXY_TEST_SCRIPT_CLOCK=stop), kNoStopFrames before the first stop.
-std::atomic<uint64_t> gStopFrames{kNoStopFrames};
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
@@ -3147,13 +3143,28 @@ void attach_extensions() {
     log_line("host:", (std::to_string(files.size()) + " extension(s) attached").c_str());
 }
 
-int svc_test_scene_frame(void*, NebulaTestAction* action) {
-#if !defined(NEBULA_DEV)
-    (void)action;
-    return 0;
+// The settings' galaxy select (its ADVANCED page): a travel the player asked for, through the game's own stage change,
+// and the Grand Stars with the Observatory they power.
+int svc_galaxy_travel(void*, char* stage, uint32_t capacity, int32_t* star) {
+#if defined(NEBULA_HOST_RENDERER)
+    std::size_t index = 0u;
+    std::uint32_t chosen = 0u;
+    if (galaxy::render::take_galaxy_travel(index, chosen)) {
+        std::snprintf(stage, capacity, "%s", galaxy::render::kGalaxyStages[index].id);
+        *star = static_cast<int32_t>(chosen);
+        return NEBULA_GALAXY_TRAVEL_STAGE;
+    }
+    if (galaxy::render::take_grand_stars()) {
+        std::snprintf(stage, capacity, "%s", galaxy::render::kObservatoryId);
+        *star = 6;
+        return NEBULA_GALAXY_TRAVEL_GRAND_STARS;
+    }
 #else
-#include "../../tools/test_driver/host_scene_frame.inc"
+    (void)stage;
+    (void)capacity;
+    (void)star;
 #endif
+    return NEBULA_GALAXY_TRAVEL_NONE;
 }
 
 // A restart starts this executable again with the same arguments (the game's boot); the
@@ -4023,7 +4034,7 @@ int main(int argc, char** argv) {
     services.app_exit = svc_app_exit;
     services.app_restart = svc_app_restart;
     services.mods_start = svc_mods_start;
-    services.test_scene_frame = svc_test_scene_frame;
+    services.galaxy_travel = svc_galaxy_travel;
     services.display_extent = svc_display_extent;
     services.option = svc_option;
     services.game_stage = svc_game_stage;

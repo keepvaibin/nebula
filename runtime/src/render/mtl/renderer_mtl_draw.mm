@@ -105,13 +105,7 @@ mtl::Object RendererMtl::sampler_for(const SamplerKey& key, const RenderConfig& 
         // The level bias: Metal's sampler takes one (its descriptor's lodBias), named in the SDK from macOS 15 and
         // iOS 18 and present before them.
         const float bias = std::clamp(key.lod_bias + cfg_bias, -16.0f, 16.0f);
-#if defined(NEBULA_DEV)
-        // Test builds: NEBULA_METAL_NO_LOD_BIAS=1 leaves the bias out, as a layered Vulkan (which has none) draws.
-        static const bool biased = std::getenv("NEBULA_METAL_NO_LOD_BIAS") == nullptr;
-#else
-        constexpr bool biased = true;
-#endif
-        if (biased && bias != 0.0f && [descriptor respondsToSelector:NSSelectorFromString(@"setLodBias:")]) {
+        if (bias != 0.0f && [descriptor respondsToSelector:NSSelectorFromString(@"setLodBias:")]) {
             [descriptor setValue:@(bias) forKey:@"lodBias"];
         }
         descriptor.supportArgumentBuffers = bindless_ ? YES : NO;
