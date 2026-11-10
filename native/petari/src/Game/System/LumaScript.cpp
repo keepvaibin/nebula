@@ -656,7 +656,7 @@ namespace lumascript {
         for (u32 i = 0; i < p->mGlobalCount; i++) {
             p->mGlobalNames[i].name = r.u32v();
             p->mGlobalNames[i].kind = r.u8v();
-            p->mGlobals[i] = none();
+            p->mGlobals[i] = zeroOf(p->mGlobalNames[i].kind);
         }
         p->mSaved = new Variable[p->mSavedCount];
         for (u32 i = 0; i < p->mSavedCount; i++) {
@@ -818,6 +818,27 @@ namespace lumascript {
         freeProgram(pProgram);
     }
 
+    NebulaValue zeroOf(u8 kind) {
+        switch (kind) {
+        case NEBULA_KIND_BOOL:
+            return fromBool(false);
+        case NEBULA_KIND_INT:
+            return fromInt(0);
+        case NEBULA_KIND_FLOAT:
+            return fromFloat(0.0);
+        case NEBULA_KIND_VEC3:
+            return fromVec(0.0f, 0.0f, 0.0f);
+        case NEBULA_KIND_TEXT: {
+            NebulaValue v = none();
+            v.kind = NEBULA_KIND_TEXT;
+            v.u.s = "";
+            return v;
+        }
+        default:
+            return none();
+        }
+    }
+
     Instance* createInstance(Program* pProgram, const NebulaValue& rSelf) {
         Instance* i = new Instance();
         if (i == nullptr) {
@@ -828,7 +849,7 @@ namespace lumascript {
         i->mLocals = new NebulaValue[pProgram->mLocalCount > 0 ? pProgram->mLocalCount : 1];
         i->mLocalMatrices = new Matrix12[pProgram->mLocalCount > 0 ? pProgram->mLocalCount : 1];
         for (u32 n = 0; n < pProgram->mLocalCount; n++) {
-            i->mLocals[n] = none();
+            i->mLocals[n] = zeroOf(pProgram->mLocals[n].kind);
         }
         i->mState = cNoState;
         i->mNextState = cNoState;

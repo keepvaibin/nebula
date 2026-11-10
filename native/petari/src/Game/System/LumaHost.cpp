@@ -191,8 +191,8 @@ namespace lumacore {
     }
 
     NebulaValue scriptSaved(const char* pMod, const char* pName, u8 kind) {
-        NebulaValue v;
-        std::memset(&v, 0, sizeof(v));
+        // Never saved yet: the kind's zero, as a variable starts.
+        NebulaValue v = lumascript::zeroOf(kind);
         const NebulaPlugin* mod = nullptr;
         for (u32 i = 0; i < sScripts.mCount; i++) {
             if (MR::isEqualString(sScripts.mItems[i].mMod->id, pMod)) {

@@ -84,6 +84,8 @@ namespace lumascript {
     // script runs (the dispatch records free an actor's instance when its scene ends, never from inside a handler).
     class Instance;
     Instance* createInstance(Program* pProgram, const NebulaValue& rSelf);
+    // A declared variable's starting value: its kind's zero (0, 0.0, false, (0, 0, 0), ""); none for "any".
+    NebulaValue zeroOf(u8 kind);
     void destroyInstance(Instance* pInstance);
 
     // Runs the handler for an event name ("start", "frame", "touch_player", "message:ACTMES_PLAYER_SPIN"...), with
