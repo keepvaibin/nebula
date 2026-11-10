@@ -41,9 +41,16 @@ float enh_vis(float NoL, float NoV, float a) {
     return 0.5 / max(NoL * (NoV * (1.0 - a) + a) + NoV * (NoL * (1.0 - a) + a), 1e-4);
 }
 
-// Light n at P: direction towards it, the spot attenuation or none, colour.
+// Light n at P: direction towards it, the spot attenuation or none, colour. The set at `base` begins with its header
+// row (program.hlsli light_row), and a light number past its count lights nothing, as light_term has it.
 void enh_light(uint base, uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
-    const uint at = base + 4u * n;
+    const uint at = light_row(base, n);
+    if (n >= light_count(base)) {
+        ldir = float3(0.0, 0.0, 1.0);
+        attn = 0.0;
+        lcol = float3(0.0, 0.0, 0.0);
+        return;
+    }
     const float4 le1 = rows[at + 1u];
     const float4 le2 = rows[at + 2u];
     const float4 le3 = rows[at + 3u];
