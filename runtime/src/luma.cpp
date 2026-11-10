@@ -759,6 +759,45 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.object_classes.push_back(std::move(object));
             }
         }
+        if (const Value* forms = entry.get("forms"); forms != nullptr) {
+            if (forms->array() == nullptr) return std::nullopt;
+            for (const Value& row : *forms->array()) {
+                Form form;
+                form.name = text_field(row, "name");
+                form.model = text_field(row, "model");
+                form.music = text_field(row, "music");
+                form.script = text_field(row, "script");
+                if (form.name.empty() || (!form.script.empty() && !script_name_ok(form.script))) return std::nullopt;
+                // The game's forms by name (NEBULA_POWER_UP_*).
+                const auto game_form = [&row](std::string_view key, int& out) {
+                    const std::string name = text_field(row, key);
+                    if (name.empty()) return true;
+                    static constexpr std::pair<std::string_view, int> names[] = {
+                        {"normal", 0}, {"invincible", 1}, {"fire", 2}, {"ice", 3}, {"bee", 4},
+                        {"spring", 5}, {"boo", 6},        {"flying", 7}, {"tornado", 9}};
+                    for (const auto& [known, number] : names) {
+                        if (name == known) {
+                            out = number;
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                const auto whole = [&row](std::string_view key, int& out, int most) {
+                    const Value* value = row.get(key);
+                    if (value == nullptr) return true;
+                    const double* number = value->number();
+                    if (number == nullptr || !(*number >= 0.0 && *number <= most) || *number != static_cast<double>(static_cast<int>(*number))) return false;
+                    out = static_cast<int>(*number);
+                    return true;
+                };
+                if (!game_form("acts_like", form.acts_like) || !game_form("looks_like", form.looks_like) ||
+                    !whole("color_frame", form.color_frame, 255) || !whole("frames", form.frames, 65535)) {
+                    return std::nullopt;
+                }
+                layer.forms.push_back(std::move(form));
+            }
+        }
         if (const Value* objects = entry.get("objects"); objects != nullptr) {
             if (objects->array() == nullptr) return std::nullopt;
             for (const Value& row : *objects->array()) {
@@ -1085,7 +1124,7 @@ bool rows_set_game(const Rows& rows) noexcept {
 
 bool layer_sets_game(const Layer& layer) noexcept {
     return rows_set_game(layer.rows) || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty() ||
-           !layer.stages.empty() || !layer.player_constants.empty() || !layer.tunables.empty() || !layer.object_classes.empty() ||
+           !layer.stages.empty() || !layer.player_constants.empty() || !layer.tunables.empty() || !layer.object_classes.empty() || !layer.forms.empty() ||
            !layer.objects.empty() || !layer.scripts.empty() || !layer.sound_effects.empty() || !layer.player_animations.empty();
 }
 
@@ -1122,6 +1161,7 @@ std::vector<std::string> setting_keys(const Layer& layer) {
     }
     for (const Tunable& tunable : layer.tunables) keys.push_back(key_of({"tunable", tunable.key}));
     for (const ObjectClass& object : layer.object_classes) keys.push_back(key_of({"class", object.name}));
+    for (const Form& form : layer.forms) keys.push_back(key_of({"form", form.name}));
     for (const ScriptObject& object : layer.objects) keys.push_back(key_of({"class", object.name}));
     for (const std::string& script : layer.scripts) keys.push_back(key_of({"script", script}));
     for (const SoundEffect& sound : layer.sound_effects) keys.push_back(key_of({"sound", sound.name}));

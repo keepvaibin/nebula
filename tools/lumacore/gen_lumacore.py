@@ -730,7 +730,7 @@ def script_events():
     host = (PETARI / 'src' / 'Game' / 'System' / 'LumaHost.cpp').read_text(encoding='utf-8')
     table = re.search(r'cGameEvents\[\] = \{(.*?)\};', host, re.S).group(1)
     game = [n for n in re.findall(r'"(\w*)"', table) if n]
-    own = ['frame', 'enter', 'leave', 'start', 'touch_player', 'attacked', 'appear', 'kill', 'message', 'control', 'touch']
+    own = ['frame', 'enter', 'leave', 'start', 'touch_player', 'attacked', 'appear', 'kill', 'message', 'control', 'touch', 'end']
     text = (INC / 'Game' / 'Util' / 'ActorSensorUtil.hpp').read_text(encoding='utf-8')
     body = re.search(r'enum \{(.*?)\};', text, re.S).group(1)
     messages, at = [], -1

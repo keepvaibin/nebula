@@ -81,6 +81,22 @@ int main() {
     const std::optional<Manifest> plain = parse_manifest(R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[]})");
     check(plain && plain->save_mode == SaveMode::Shared && plain->save_tag == "a" && !plain->save_player_can_change, "normal saves unless it says");
     {
+        // Power-ups from data: the game's forms by name, whole numbers, a script name.
+        const auto forms = [](const char* row) {
+            return parse_manifest(std::string(R"({"format":1,"id":"f","name":"f","game":"RMG","layers":[{"path":"l","forms":[)") + row + "]}]}");
+        };
+        const std::optional<Manifest> gold =
+            forms(R"({"name":"gold","acts_like":"fire","looks_like":"fire","color_frame":2,"frames":600,"music":"BGM_FIRE_A","script":"gold"})");
+        check(gold && gold->layers[0].forms.size() == 1u && gold->layers[0].forms[0].acts_like == 2 && gold->layers[0].forms[0].color_frame == 2 &&
+                  gold->layers[0].forms[0].frames == 600 && gold->layers[0].forms[0].script == "gold",
+              "forms: a power-up from data");
+        check(forms(R"({"name":"plain"})") && forms(R"({"name":"plain"})")->layers[0].forms[0].acts_like == 0, "forms: normal unless it says");
+        check(!forms(R"({"acts_like":"fire"})"), "forms: a name");
+        check(!forms(R"({"name":"x","acts_like":"lava"})"), "forms: only the game's forms");
+        check(!forms(R"({"name":"x","frames":1.5})"), "forms: whole frames");
+        check(!forms(R"({"name":"x","script":"../up"})"), "forms: a script inside the mod");
+    }
+    {
         // A player number past a float's range is held as infinite (the start names it and sets nothing), not cast.
         const std::optional<Manifest> huge = parse_manifest(
             R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"player_constants":{"mario":{"mJumpHeight":1e300},"luigi":{"mJumpHeight":-1e300}}}]})");

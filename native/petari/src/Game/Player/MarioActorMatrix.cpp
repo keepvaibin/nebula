@@ -164,16 +164,21 @@ void MarioActor::initActionMatrix() {
     mFaceHeightTable = new MatrixValueGetter("キャラの身長", talking_head_height);
 }
 
+// The tables have a column for each of the game's eight forms; Tornado (9) reads the normal one's.
+static u8 tableColumn(u16 playerMode) {
+    return playerMode < 8 ? static_cast< u8 >(playerMode) : 0;
+}
+
 bool MarioActor::isActionOk(const char* pName) const {
-    return mMorphActionTable->getValue(pName, mPlayerMode);
+    return mMorphActionTable->getValue(pName, tableColumn(mPlayerMode));
 }
 
 u8 MarioActor::selectAction(const char* pName) const {
-    return mMorphActionTable->getValue(pName, mPlayerMode);
+    return mMorphActionTable->getValue(pName, tableColumn(mPlayerMode));
 }
 
 bool MarioActor::selectAutoBind(const char* pName, u8* pValue) const {
-    return mAutoBindTable->getValueOrNone(pName, mPlayerMode, pValue);
+    return mAutoBindTable->getValueOrNone(pName, tableColumn(mPlayerMode), pValue);
 }
 
 bool MarioActor::selectCustomEffectSpinHitSound(const char* pName) const {

@@ -268,6 +268,8 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mModels = nullptr;
     mModPowerUpModels = nullptr;
     mNumModPowerUps = 0;
+    mModForm = 0;
+    mPrevModForm = 0;
 
     mPreWipeOn = false;
 
@@ -1958,11 +1960,13 @@ void MarioActor::calcAnim() {
         }
 
         // A mod's power-up: a body of its own, or the look of one of the game's.
-        const s32 modSlot = static_cast< s32 >(val) - NebulaMods::cFirstPowerUp;
-        const bool ownModel = modSlot >= 0 && modSlot < mNumModPowerUps && mModels[6 + modSlot] != nullptr;
+        const u16 valForm = (mMorphTimer & 7) < (mMorphTimer >> 3) ? mPrevModForm : mModForm;
+        const u16 look = valForm != 0 ? valForm : val;
+        const s32 modSlot = static_cast< s32 >(valForm) - NebulaMods::cFirstPowerUp;
+        const bool ownModel = valForm != 0 && modSlot >= 0 && modSlot < mNumModPowerUps && mModels[6 + modSlot] != nullptr;
         if (ownModel) {
             changeDisplayMode(6 + modSlot);
-        } else switch (NebulaMods::powerUpLook(val)) {
+        } else switch (NebulaMods::powerUpLook(look)) {
         case 1:
             changeDisplayMode(4);
             mInvincibleModel->calcAnim();
@@ -1986,7 +1990,7 @@ void MarioActor::calcAnim() {
         default:
             changeDisplayMode(0);
             MR::startBtp(this, "ColorChange");
-            MR::setBtpFrameAndStop(this, static_cast< f32 >(NebulaMods::powerUpColorFrame(val)));
+            MR::setBtpFrameAndStop(this, static_cast< f32 >(NebulaMods::powerUpColorFrame(look)));
             break;
         }
 

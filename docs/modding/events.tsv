@@ -9,6 +9,7 @@ kill	own
 message	own
 control	own
 touch	own
+end	own
 stage_frame	game
 stage_start	game
 player_damage	game

@@ -3,6 +3,7 @@
 #include "Game/System/LumaClass.hpp"
 #include "Game/System/LumaHost.hpp"
 #include "Game/System/LumaRegistry.hpp"
+#include "Game/System/LumaScript.hpp"
 #include "Game/System/NebulaModCalls.hpp"
 #include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
@@ -156,6 +157,13 @@ namespace {
     };
     List< ModText > sTexts;
     List< NebulaPowerUpClass > sPowerUps;
+    // Each power-up's script (add_form; -1: none) and its instance on the player while he is in it.
+    struct FormScript {
+        s32 mScript;
+        lumascript::Instance* mInstance;
+        u32 mGeneration;  // the scene it started in (scriptsSceneGeneration)
+    };
+    List< FormScript > sFormScripts;
     int sStageFrames = 0;
 
     // A plugin's text kept: for the run (the root arena: tables, and names the next scene reads), or with pArena.
@@ -744,7 +752,13 @@ namespace {
         power.name = copyText(pClass->name);
         power.music = copyText(pClass->music);
         power.model = copyText(power.model);
+        // Under it, one of the game's forms (an older plugin's class has none: the normal player).
+        const s32 acts = power.acts_like;
+        if (!((acts >= 0 && acts <= 7) || acts == 9)) {
+            power.acts_like = 0;
+        }
         sPowerUps.add(power);
+        sFormScripts.add(FormScript{-1, nullptr, 0});
         const s32 id = NebulaMods::cFirstPowerUp + sPowerUps.mCount - 1;
         if (power.name != nullptr) {
             lumacore::registryAdd(lumacore::RegistryKind_Form, power.name, nullptr, addingMod(), -1, id);
@@ -824,7 +838,7 @@ namespace {
         switch (what) {
         case NEBULA_VALUE_LIFE: return pPlayer != nullptr ? static_cast< s32 >(pPlayer->mHealth) : 0;
         case NEBULA_VALUE_MAX_LIFE: return pPlayer != nullptr ? static_cast< s32 >(pPlayer->mMaxHealth) : 0;
-        case NEBULA_VALUE_POWER_UP: return pPlayer != nullptr ? pPlayer->mPlayerMode : 0;
+        case NEBULA_VALUE_POWER_UP: return pPlayer != nullptr ? (pPlayer->mModForm != 0 ? pPlayer->mModForm : pPlayer->mPlayerMode) : 0;
         case NEBULA_VALUE_ON_GROUND: return pPlayer != nullptr && MR::isOnGroundPlayer() ? 1 : 0;
         case NEBULA_VALUE_STAR_BITS: return MR::getStarPieceNum();
         case NEBULA_VALUE_COINS: return sStageFrames > 0 ? MR::getCoinNum() : 0;
@@ -2774,6 +2788,33 @@ namespace {
         return pMod != nullptr ? lumacore::addClassHooks(pMod, pName, pHooks) : -1;
     }
 
+    // A power-up from a mod's row (luma.json "forms") or a plugin, with its script on the player.
+    s32 apiAddForm(const NebulaPlugin* pMod, const NebulaPowerUpClass* pForm, const char* pScript) {
+        if (pMod == nullptr || pForm == nullptr) {
+            return -1;
+        }
+        s32 script = -1;
+        if (pScript != nullptr && pScript[0] != '\0') {
+            char path[256];
+            nebula_snprintf(path, sizeof(path), "/LumaScripts/%s/%s.lumascript", pMod->id, pScript);
+            char message[256];
+            message[0] = '\0';
+            script = lumacore::loadScript(pMod, path, message, sizeof(message));
+            if (script < 0) {
+                nebula_log("mods: %s: the form %s has no script: %s\n", pMod->id, pForm->name != nullptr ? pForm->name : "?", message);
+                return -1;
+            }
+        }
+        const NebulaPlugin* const pBefore = sAddingMod;
+        sAddingMod = pMod;
+        const s32 id = apiAddPowerUp(pForm);
+        sAddingMod = pBefore;
+        if (id >= 0) {
+            sFormScripts.mItems[id - NebulaMods::cFirstPowerUp].mScript = script;
+        }
+        return id;
+    }
+
     // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set, setting, store_get_text, store_set_text.
     // Set once any mod's rows or code have started.
     bool sAskedForApi = false;
@@ -2981,6 +3022,7 @@ namespace {
         apiRegistryMod,
         apiSetClassScript,
         apiSetClassHooks,
+        apiAddForm,
     };
 }  // namespace
 
@@ -3147,10 +3189,32 @@ namespace NebulaMods {
         }
     }
 
+    // A form's script instance, while the scene it started in lasts.
+    FormScript* formScript(u16 mode) {
+        const int index = static_cast< int >(mode) - NebulaMods::cFirstPowerUp;
+        return index >= 0 && index < sFormScripts.mCount ? &sFormScripts.mItems[index] : nullptr;
+    }
+
+    lumascript::Instance* formInstance(u16 mode) {
+        FormScript* const pForm = formScript(mode);
+        return pForm != nullptr && pForm->mInstance != nullptr && pForm->mGeneration == lumacore::scriptsSceneGeneration() ? pForm->mInstance : nullptr;
+    }
+
     s32 powerUpStart(u16 mode, LiveActor* pPlayer) {
         const NebulaPowerUpClass* pPower = powerUpOf(mode);
         if (pPower == nullptr) {
             return 0;
+        }
+        if (FormScript* const pForm = formScript(mode); pForm != nullptr && pForm->mScript >= 0) {
+            // Got again: a new instance, its vars from their start.
+            if (lumascript::Instance* const pOld = formInstance(mode)) {
+                lumacore::endInstance(pOld);
+            }
+            pForm->mInstance = lumacore::startInstance(pForm->mScript, lumacore::handle(pPlayer));
+            pForm->mGeneration = lumacore::scriptsSceneGeneration();
+            if (pForm->mInstance != nullptr) {
+                (void)lumascript::dispatch(pForm->mInstance, lumascript::Event_Start, -1, nullptr, 0, nullptr);
+            }
         }
         if (pPower->music != nullptr) {
             MR::startSubBGM(pPower->music, false);
@@ -3170,12 +3234,20 @@ namespace NebulaMods {
         if (pPower != nullptr && pPower->update != nullptr) {
             pPower->update(pPower->user);
         }
+        if (lumascript::Instance* const pInstance = formInstance(mode)) {
+            lumascript::frame(pInstance);
+        }
     }
 
     void powerUpEnd(u16 mode, LiveActor* pPlayer) {
         const NebulaPowerUpClass* pPower = powerUpOf(mode);
         if (pPower == nullptr) {
             return;
+        }
+        if (lumascript::Instance* const pInstance = formInstance(mode)) {
+            (void)lumascript::dispatch(pInstance, lumascript::Event_End, -1, nullptr, 0, nullptr);
+            lumacore::endInstance(pInstance);
+            formScript(mode)->mInstance = nullptr;
         }
         if (pPower->music != nullptr) {
             MR::stopSubBGM(30);
@@ -3195,6 +3267,15 @@ namespace NebulaMods {
 
     const char* powerUpModel(s32 index) {
         return index >= 0 && index < sPowerUps.mCount ? sPowerUps.mItems[index].model : nullptr;
+    }
+
+    bool isPowerUp(u16 mode) {
+        return powerUpOf(mode) != nullptr;
+    }
+
+    u16 powerUpActsLike(u16 mode) {
+        const NebulaPowerUpClass* pPower = powerUpOf(mode);
+        return pPower != nullptr ? static_cast< u16 >(pPower->acts_like) : mode;
     }
 
     u16 powerUpLook(u16 mode) {

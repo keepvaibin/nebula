@@ -1817,6 +1817,10 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 for (const luma::ObjectClass& object : layer.object_classes) {
                     plan.rows.object_classes.push_back({mod.id, mod.luma->version, object.name, object.like, object.script});
                 }
+                for (const luma::Form& form : layer.forms) {
+                    plan.rows.forms.push_back({mod.id, mod.luma->version, form.name, form.acts_like, form.looks_like, form.color_frame, form.frames, form.model,
+                                               form.music, form.script});
+                }
                 for (const luma::ScriptObject& object : layer.objects) {
                     plan.rows.script_objects.push_back({mod.id, mod.luma->version, object.name, object.script, object.archive, object.radius,
                                                          object.kind, object.collision, object.shadow_radius, object.clip_radius});

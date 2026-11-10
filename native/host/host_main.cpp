@@ -3353,6 +3353,9 @@ std::string json_text(std::string_view text) {
 }
 
 
+// The game's language folders: the disc's, and the language packs' among the mods on at the start.
+std::vector<std::string> gGameLanguages;
+
 // The mods' disc files, cooked once into a store the game reads over its own (cook/overlay.rs): by the cooker beside
 // this program, again when what they change has changed. A failure leaves the game as it is and says why in the log.
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id);
@@ -3913,9 +3916,41 @@ int main(int argc, char** argv) {
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
             galaxy::mods::set_mods_store_file(gPak.store_file);
             // One scan for the start, in the language played (a .luma's layers and text follow it): the mods
-            // mods.ini has on give their packs and movies from the first frame, and the same list is planned.
-            galaxy::mods::set_played_language(static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+            // mods.ini has on give their packs and movies from the first frame, and the same list is planned. The
+            // language played is one the disc or a language pack on has (a Japanese disc plays Japanese unless a
+            // pack brings the chosen one): the disc's are known first, a pack's after the scan finds it.
+            std::vector<std::string> game_languages = gPak.store.language_folders();
+#if defined(NEBULA_HOST_RENDERER)
+            galaxy::set_game_languages(game_languages);
+#endif
+            const auto played = [] {
+                return static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language));
+            };
+            const unsigned scanned_in = played();
+            galaxy::mods::set_played_language(scanned_in);
             std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
+            bool added_language = false;
+            for (const galaxy::mods::ModInfo& mod : mods) {
+                if (!mod.enabled) continue;
+                for (const std::string& language : mod.languages) {
+                    if (std::find(game_languages.begin(), game_languages.end(), language) == game_languages.end()) {
+                        game_languages.push_back(language);
+                        added_language = true;
+                    }
+                }
+            }
+#if defined(NEBULA_HOST_RENDERER)
+            if (added_language) {
+                galaxy::set_game_languages(game_languages);
+                if (played() != scanned_in) {
+                    galaxy::mods::set_played_language(played());
+                    mods = galaxy::mods::scan_mods(game_id);
+                }
+            }
+#else
+            (void)added_language;
+#endif
+            gGameLanguages = game_languages;
             galaxy::render::set_texture_pack_mod_folders(galaxy::mods::texture_folders(mods),
                                                          galaxy::mods::texture_folder_categories_off(mods));
             galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
@@ -3939,8 +3974,9 @@ int main(int argc, char** argv) {
             galaxy::crash::set_session_mods(lines, change_game);
         }
         {
-            // The game's version and its languages, which the language setting offers.
-            const std::vector<std::string> languages = gPak.store.language_folders();
+            // The game's version and its languages (the disc's and the language packs' on), which the language
+            // setting offers.
+            const std::vector<std::string> languages = gGameLanguages.empty() ? gPak.store.language_folders() : gGameLanguages;
             std::string list;
             for (const std::string& language : languages) list += (list.empty() ? "" : ", ") + language;
             const std::string text = game_id + " revision " + std::to_string(gPak.store.revision()) + ": " +
