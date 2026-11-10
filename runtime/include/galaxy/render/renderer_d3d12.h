@@ -31,6 +31,7 @@
 #include "galaxy/render/scene_camera.h"
 #include "galaxy/render/game_bloom.h"
 #include "galaxy/render/rt_types.h"
+#include "galaxy/render/rt/rt_backend.h"
 #include "galaxy/render/gpu_placed_textures.h"
 #include "galaxy/render/texture_sampler.h"
 #include "galaxy/render/gpu_types.h"
@@ -173,6 +174,12 @@ public:
     // heap goes to take_replaced().
     Persistent allocate_persistent(unsigned count);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE persistent_cpu(std::uint32_t index) const noexcept;
+    // Called when a frame segment's growth (allocate) has put a new heap in place of the current one: its texture
+    // region is empty, and whoever fills that region fills it again.
+    void on_frames_grown(void (*fn)(void*), void* owner) noexcept {
+        replaced_fn_ = fn;
+        replaced_owner_ = owner;
+    }
     // The heaps growth replaced, for the renderer to free once the GPU is past the commands that may read them.
     [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::move(replaced_); }
     // The most a frame's segment and the persistent region have held (diagnostics). A segment that a frame fills doubles, as the
@@ -210,6 +217,8 @@ public:
 private:
     void grow_persistent(unsigned persistent);
     void grow_frames(unsigned per_frame);
+    void (*replaced_fn_)(void*) = nullptr;
+    void* replaced_owner_ = nullptr;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_at(unsigned index) const noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE heap_cpu_at(unsigned index) const noexcept;  // a ring index, past the textures
     void fill_null(unsigned index, unsigned count);
@@ -373,9 +382,20 @@ public:
     // The scene's models (ambient_occlusion_objects.h).
     void set_scene_ao_objects(std::vector<ao::ObjectOccluder>& objects) noexcept { scene_ao_objects_.swap(objects); }
     void record_scene_ao();
-    // Where the tracer records its builds (no pass open), timed as the ray tracing pass until rt_commands_end.
-    [[nodiscard]] void* rt_commands_begin();
+    // What the tracer records through (rt_backend.h Backend::begin: the frame's commands, no pass open, and where a
+    // pass's views go), timed as the ray tracing pass until rt_commands_end.
+    struct RtCommands {
+        void* commands = nullptr;
+        void* descriptors = nullptr;
+    };
+    [[nodiscard]] RtCommands rt_commands_begin();
     void rt_commands_end();
+    // The scene's depth as a pass reads it, until rt_depth_end, with its size and the format an image must have to be
+    // copied over the scene's colour (rt_copy_to_scene). False when no pass can read it now (a multisampled scene).
+    [[nodiscard]] bool rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color);
+    void rt_depth_end();
+    // An image of the tracer's (Backend::image_to_copy) over the scene's colour: the tracer's views.
+    void rt_copy_to_scene(void* image);
     // The game's bloom (game_bloom.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
@@ -1054,6 +1074,8 @@ private:
     [[nodiscard]] DescriptorRing::Persistent allocate_persistent_descriptors(unsigned count);
     void fill_sampler_heap(const RenderConfig& cfg);
     void grow_texture_heap(std::uint32_t index);
+    // The descriptor ring grew a frame's segment into a new heap: the texture views go into it again.
+    void texture_heap_replaced();
     const void* mirrored_backend_ = nullptr;
     TextureStore* mirrored_store_ = nullptr;
     // The texture lists (t18): one upload buffer per frame in flight, written from the start each frame; a full one is

@@ -47,8 +47,9 @@ struct GeometryStats {
     std::uint64_t page_bytes = 0u;         // the pages those lie in, and the scratch
     std::uint32_t compacted = 0u;          // structures in their compacted form
     std::uint64_t built_triangles = 0u;    // by this frame's builds
-    std::uint64_t refit_triangles = 0u;    // by this frame's refits
-    std::uint32_t builds = 0u, refits = 0u, compactions = 0u;  // this frame
+    std::uint32_t builds = 0u, compactions = 0u;  // this frame
+    std::uint64_t refit_triangles = 0u;    // under the moving meshes of the last refit()
+    std::uint32_t refits = 0u, rebuilds = 0u;  // of the last refit(): refitted, and built anew
     std::uint64_t most_built_triangles = 0u;  // the most one budgeted frame built, since the start
 };
 
@@ -62,19 +63,23 @@ public:
     // A mesh that does not move wants a structure of its vertices as they are: queued once. `key`: the caller's name
     // for it, kept until forget.
     void want(std::uint64_t key, const TriangleInput& input);
-    // A mesh whose vertices move: built on its first frame, refitted from then on, rebuilt every `kRefitsToRebuild`
-    // refits or when its triangles change. Named each frame it is to be traced; one not named for kFramesToForget
-    // frames is forgotten.
-    void move(std::uint64_t key, const TriangleInput& input);
+    // A mesh whose vertices move: built by the first refit() after it is named, refitted from then on, rebuilt every
+    // `kRefitsToRebuild` refits or when its triangles change. Named each frame it is to be traced; one not named for
+    // kFramesToForget frames is forgotten.
+    // `rebuild`: its triangles are not last frame's moved (a mesh made anew each frame): built, never refitted.
+    void move(std::uint64_t key, const TriangleInput& input, bool rebuild = false);
+    // The moving meshes named since the last call are built or refitted from their vertices as they lie now, ending
+    // with a barrier: after frame(), once the frame's vertices are written, before anything names them.
+    void refit();
     // The mesh is gone: its structure is released once no frame can name it.
     void forget(std::uint64_t key);
     // Everything goes now, before the back end stops (the device is lost, or ray tracing is turned off and the GPU has
     // finished what named the structures): nothing is recorded.
     void clear() noexcept;
 
-    // Once a frame, before anything names a structure: the builds, refits and compactions the budget allows, into
-    // `commands`, ending with a barrier, so a structure built here can be named in this frame. `budget_triangles`: 0 for
-    // no limit (nothing is on screen); else at least one build happens however large.
+    // Once a frame, before anything names a structure: the builds and compactions the budget allows, into `commands`,
+    // ending with a barrier, so a structure built here can be named in this frame. `budget_triangles`: 0 for no limit
+    // (nothing is on screen); else at least one build happens however large.
     void frame(void* commands, unsigned frame_slot, std::uint64_t frame_index, std::uint64_t budget_triangles);
 
     // What an instance names the mesh by, or 0 while it has no structure.

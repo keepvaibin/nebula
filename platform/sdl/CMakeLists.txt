@@ -111,6 +111,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/rt/rt_shaders.cpp
     ${rt}/render/vk/rt_backend_vk.cpp
     ${rt}/render/rt/rt_geometry.cpp
+    ${rt}/render/rt/rt_scene.cpp
     $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:${rt}/frame_telemetry.cpp>
     ${rt}/perf_hint.cpp
     ${rt}/render/vk/vk_context.cpp

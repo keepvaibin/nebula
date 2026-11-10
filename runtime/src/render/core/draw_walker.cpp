@@ -1212,9 +1212,16 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
         display_pictures_.set_frame_map(renderer_.frame_map());
     }
     ++walk_view_stamp_;
+    if (rt_backend_.started()) {
+        rt_scene(pass);
+    }
 }
 
 void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
+    if (rt_backend_.started() && scene_phase_ && pass.scene_view != NEBULA_NONE32 &&
+        ::galaxy::diagnosing(::galaxy::kDiagnoseRtView | ::galaxy::kDiagnoseRtCheck)) {
+        rt_view(pass);
+    }
     if (!ambient_occlusion_ || !scene_phase_ || pass.scene_view == NEBULA_NONE32) {
         return;
     }

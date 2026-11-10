@@ -2034,6 +2034,11 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         matrix_bytes += std::size_t{core::light_set_rows(list.light_sets[s].count)} * 16u;
     }
     matrix_bytes += std::size_t{list.instance_row_count} * 16u;
+    if (rt_backend_.started()) {
+        // The scene's instances, and the ring draws' triangles as the tracer takes them.
+        matrix_bytes += std::size_t{list.item_count} * sizeof(rt::Instance) + 64u;
+        matrix_bytes += std::size_t{list.ring_index_count} * 12u + static_cast<std::size_t>(list.ring_vertex_bytes);
+    }
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
         const auto& constants = list.constants[c];
@@ -2042,6 +2047,9 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     renderer_.matrix_ring().require_frame_bytes(matrix_bytes);
     renderer_.vertex_ring().require_frame_bytes(list.ring_vertex_bytes);
     renderer_.index_ring().require_frame_bytes(std::size_t{list.ring_index_count} * sizeof(std::uint32_t));
+    if (rt_backend_.started()) {
+        constant_bytes += 1024u + std::size_t{list.item_count} * 256u;  // the tracer's passes' constants (a skinned draw's)
+    }
     renderer_.constant_ring().require_frame_bytes(constant_bytes);
     renderer_.begin_frame();
     picture_made_in_chunk_ = false;
