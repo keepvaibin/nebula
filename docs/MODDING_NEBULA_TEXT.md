@@ -1,6 +1,6 @@
 # Changing Nebula's text and graphics
 
-Nebula adds a few things to the game's screens: the Quit to desktop button, the quit and cutscene questions, the
+Nebula adds a few things to the game's screens: the Quit button, the quit and cutscene questions, the
 achievement pop-up, the achievement board, the Observatory's Achievement Luma and the settings menu. They are built from the game's own
 layouts, fonts and textures, and their text comes from one table in every language the game was released in. A mod can change any of it, and a translation into a language the game
 never had can bring its own.
@@ -9,14 +9,14 @@ never had can bring its own.
 
 | Element | Text ids | Layout and art (from the game files) |
 |---|---|---|
-| Quit to desktop button (file select) | `QuitToDesktop` | `LayoutData/FileSelect.arc`, its Start button |
+| Quit button (file select) | `Quit` | `LayoutData/FileSelect.arc`, its Start button |
 | The same button on Android | `Quit` | `LayoutData/FileSelect.arc`, its Start button |
 | Quit question | `QuitQuestion` | the game's question window (`LayoutData/SysInfoWindow.arc`), its own Yes and No |
 | Cutscene question | `SkipCutsceneQuestion` | the same window |
 | Achievement pop-up | `AchievementGet`, `Achievement.<id>` (`Achievement.<id>.Luigi` instead on a Luigi file, when there is one), `AchievementsUnlocked` (three or more at once, `{n}` their number) | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, glyph icons `ConfirmU`); icons below |
 | Achievement board | `BoardTitle`, `TabAll`, `TabStory`, `TabChallenges`, `TabExtras`, `TabStats`, `FilterAll`, `FilterUnlocked`, `FilterLocked`, `BoardCount`, `BoardPercent`, `BoardEmptyUnlocked`, `BoardEmptyLocked`, `Achievement.<id>`, `AchievementHint.<id>` (once unlocked), `AchievementLocked`, `StatsFile`, `StatsAllTime`, `Stat...`, `PlayTime`, `DateFormat`, `DigitGroup`, `HintTabs`, `HintMove`, `BoardBack` | `LayoutData/InformationWindow.arc` (text), `SysInfoWindowMini.arc` (windows), `BackButton.arc` (buttons), `MapGalaxyBg.arc` (the galaxy map's backdrop, its frame hidden) |
 | Achievement Luma's talk (the Observatory) | `LumaGreeting`, then `LumaBoard` on the next page | the game's talk balloon (`LayoutData/TalkBalloonEvent.arc`) |
-| HOME Menu | `HomeMenuTitle`, `HomeMenuReturn`, `HomeMenuReset`, `QuitToDesktop`; asking: `ResetQuestion` or `QuitQuestion`, then `UnsavedLost`, answered `HomeMenuNo` and `HomeMenuYes` (the game's own No and Yes) | the settings menu's question window and buttons (below) |
+| HOME Menu | `HomeMenuTitle`, `HomeMenuReturn`, `HomeMenuReset`, `Quit`; asking: `ResetQuestion` or `QuitQuestion`, then `UnsavedLost`, answered `HomeMenuNo` and `HomeMenuYes` (the game's own No and Yes) | the settings menu's question window and buttons (below) |
 | Settings menu (`F1`, the pause menu's Settings) | `SettingsTitle`, `SettingsApply`, `SettingsBack`, `SettingsHint...`, `Key...`, `Settings...` (the line under the page, the questions and their answers), `SettingsJoin...`, and `S.<text>` for each of the host's texts (below) | `LayoutData/SysInfoWindow.arc` (the dimmer and window), `InformationWindow.arc` (text), `SysInfoWindowMini.arc` (the highlight), `BackButton.arc` (buttons), `PauseMenu.arc` (its Settings button) |
 
 The ids and every built-in translation are in [`localization/NebulaText.tsv`](../localization/NebulaText.tsv).
@@ -68,7 +68,7 @@ UTF-8, one text per line:
 ```
 # Lines starting with # are comments.
 AchievementGet = Achievement unlocked!
-QuitToDesktop = Leave the game
+Quit = Leave the game
 SkipCutsceneQuestion = Skip this scene?
 Achievement.first_star = Your First Power Star
 ```

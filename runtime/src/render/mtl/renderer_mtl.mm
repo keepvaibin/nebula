@@ -138,9 +138,6 @@ bool RendererMtl::create_layouts() {
     // Every texture and sampler in one array each where the device reads them so, and holds as many distinct
     // samplers as a scene of the game names; else each draw binds its table of sixteen.
     bindless_ = caps.texture_arrays && caps.sampler_array_max >= 512u;
-    if (const char* forced = std::getenv("NEBULA_METAL_BOUND_TABLES"); forced != nullptr && forced[0] == '1') {
-        bindless_ = false;
-    }
     program_use_bound_tables(!bindless_);
     std::cout << "[metal] draws read their textures from " << (bindless_ ? "one array" : "bound tables") << '\n';
     draw_layout_ = mtl::RenderLayout{};

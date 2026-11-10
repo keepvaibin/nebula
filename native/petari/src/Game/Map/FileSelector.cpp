@@ -385,7 +385,7 @@ void FileSelector::createCornerButtons() {
     mQuitWindow->setBackAnswersNo(true);
 }
 
-// Quit to desktop and Settings show while a file is being chosen and nothing else holds the top of the screen: a
+// Quit and Settings show while a file is being chosen and nothing else holds the top of the screen: a
 // file's information (while the pointer is on a file) or the frame asking to point at the screen.
 void FileSelector::updateCornerButtons() {
     const bool isChoosing = isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect));
@@ -420,7 +420,7 @@ void FileSelector::offerFilesToMenuFocus() {
         }
     }
 
-    // Up from a file at the top: the nearer of Quit to desktop (top left) and Settings (top right), in the top a file's
+    // Up from a file at the top: the nearer of Quit (top left) and Settings (top right), in the top a file's
     // information holds. The information goes (no file is pointed at), the buttons show, the highlight moves to it.
     // Another press first keeps the files.
     if (isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect)) && mPointCandidate != nullptr &&

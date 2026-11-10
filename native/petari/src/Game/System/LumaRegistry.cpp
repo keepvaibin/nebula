@@ -1,6 +1,11 @@
 // LumaCore registries (LumaRegistry.hpp).
 #include "Game/System/LumaRegistry.hpp"
 #include "Game/System/LumaHost.hpp"
+#include "Game/System/LumaCore.hpp"
+#include "Game/NameObj/NameObjFactory.hpp"
+#include "Game/AreaObj/AreaObjContainer.hpp"
+#include "Game/Camera/CameraHolder.hpp"
+#include "Game/Util/EventUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_module.h>
 
@@ -22,6 +27,8 @@ namespace {
     s32* sKindRows[lumacore::RegistryKind_Count];
     u32 sKindCount[lumacore::RegistryKind_Count];
     u32 sKindRoom[lumacore::RegistryKind_Count];
+
+    bool sGameRowsIn = false;
 
     u32 hashOf(u16 kind, const char* pName) {
         u32 h = 2166136261u ^ kind;
@@ -74,6 +81,59 @@ namespace {
 }  // namespace
 
 namespace lumacore {
+    extern const NameRow kMessageNames[];
+    extern const u32 kMessageNamesCount;
+    extern const NameRow kFloorNames[];
+    extern const u32 kFloorNamesCount;
+    extern const NameRow kFormNames[];
+    extern const u32 kFormNamesCount;
+    extern const NameRow kHudNames[];
+    extern const u32 kHudNamesCount;
+
+    s32 addRow(u16 kind, const char* pName, const void* pData, const NebulaPlugin* pMod, s32 like, s32 value);
+
+    // The game's own rows of every kind, from its tables and enums: once, before the first mod row, find or listing,
+    // so nothing is spent on them in a run no mod asks about. Kinds whose rows come with their domains (player
+    // states, attacks, stars, rides, items, projectiles) are empty until then.
+    void addGameRows() {
+        if (sGameRowsIn) {
+            return;
+        }
+        sGameRowsIn = true;
+        for (u32 i = 0; i < NameObjFactory::getCreateTableNum(); i++) {
+            if (const char* const pName = NameObjFactory::getCreateTableName(i)) {
+                addRow(RegistryKind_Object, pName, nullptr, nullptr, -1, static_cast< s32 >(i));
+            }
+        }
+        for (u32 i = 0; i < AreaObjContainer::getKindNum(); i++) {
+            addRow(RegistryKind_Area, AreaObjContainer::getKindName(i), nullptr, nullptr, -1, static_cast< s32 >(i));
+        }
+        for (u32 i = 0; i < CameraHolder::getTypeNum(); i++) {
+            addRow(RegistryKind_Camera, CameraHolder::getTypeName(i), nullptr, nullptr, -1, static_cast< s32 >(i));
+        }
+        // Gravity: the shapes a level places (the factory's Global...Gravity names), numbered as objects are.
+        for (u32 i = 0; i < NameObjFactory::getCreateTableNum(); i++) {
+            const char* const pName = NameObjFactory::getCreateTableName(i);
+            const u32 length = pName != nullptr ? static_cast< u32 >(strlen(pName)) : 0;
+            if (length > 13 && MR::isEqualStringPrefix(pName, "Global") && MR::isEqualString(pName + length - 7, "Gravity")) {
+                addRow(RegistryKind_Gravity, pName, nullptr, nullptr, -1, static_cast< s32 >(i));
+            }
+        }
+        const NameRow* const cTables[] = {kMessageNames, kFloorNames, kFormNames, kHudNames};
+        const u32 cCounts[] = {kMessageNamesCount, kFloorNamesCount, kFormNamesCount, kHudNamesCount};
+        const u16 cKinds[] = {RegistryKind_Message, RegistryKind_Floor, RegistryKind_Form, RegistryKind_Hud};
+        for (u32 t = 0; t < sizeof(cKinds) / sizeof(cKinds[0]); t++) {
+            for (u32 i = 0; i < cCounts[t]; i++) {
+                addRow(cKinds[t], cTables[t][i].name, nullptr, nullptr, -1, cTables[t][i].value);
+            }
+        }
+        for (s32 i = 0; MR::getCometNameFromId(i) != nullptr; i++) {
+            addRow(RegistryKind_Comet, MR::getCometNameFromId(i), nullptr, nullptr, -1, i);
+        }
+        addRow(RegistryKind_Character, "mario", nullptr, nullptr, -1, 0);
+        addRow(RegistryKind_Character, "luigi", nullptr, nullptr, -1, 1);
+    }
+
     const char* registryKindName(u16 kind) {
         return kind < RegistryKind_Count ? cKindNames[kind] : "";
     }
@@ -92,7 +152,12 @@ namespace lumacore {
         return -1;
     }
 
-    s32 registryAdd(u16 kind, const char* pName, const void* pData, const NebulaPlugin* pMod, s32 like) {
+    s32 registryAdd(u16 kind, const char* pName, const void* pData, const NebulaPlugin* pMod, s32 like, s32 value) {
+        addGameRows();
+        return addRow(kind, pName, pData, pMod, like, value);
+    }
+
+    s32 addRow(u16 kind, const char* pName, const void* pData, const NebulaPlugin* pMod, s32 like, s32 value) {
         if (kind >= RegistryKind_Count || pName == nullptr || pName[0] == '\0') {
             return -1;
         }
@@ -110,7 +175,7 @@ namespace lumacore {
             growSlots();
         }
         const u32 row = sRowCount++;
-        sRows[row] = {pName, pData, pMod, like, kind, 0};
+        sRows[row] = {pName, pData, pMod, like, value, kind, 0};
         const s32 slot = slotOf(kind, pName);
         if (slot >= 0) {
             // The later row wins: it takes the earlier one's place in finds and in the kind's listing.
@@ -146,23 +211,28 @@ namespace lumacore {
         if (kind >= RegistryKind_Count || pName == nullptr) {
             return -1;
         }
+        addGameRows();
         const s32 slot = slotOf(kind, pName);
         return slot < 0 ? -1 : static_cast< s32 >(sSlots[slot] - 1);
     }
 
     const RegistryRow* registryAt(u32 index) {
+        addGameRows();
         return index < sRowCount ? &sRows[index] : nullptr;
     }
 
     u32 registryCount() {
+        addGameRows();
         return sRowCount;
     }
 
     u32 registryKindCount(u16 kind) {
+        addGameRows();
         return kind < RegistryKind_Count ? sKindCount[kind] : 0;
     }
 
     s32 registryKindAt(u16 kind, u32 i) {
+        addGameRows();
         return kind < RegistryKind_Count && i < sKindCount[kind] ? sKindRows[kind][i] : -1;
     }
 

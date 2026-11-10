@@ -183,6 +183,22 @@ int main() {
         }
     }
 
+    // Regions: "any", or the discs a mod is for; elsewhere it is refused, naming them.
+    {
+        const std::string head = R"({"format":1,"id":"r","name":"R","version":"1","game":"RMG",)";
+        const std::optional<Manifest> any = parse_manifest(head + R"("regions":"any"})");
+        check(any && any->regions.empty() && refusal(*any, "RMGJ01", "2.1.0", "windows").empty(), "region-free");
+        const std::optional<Manifest> some = parse_manifest(head + R"("regions":["US","PAL"]})");
+        check(some && refusal(*some, "RMGE01", "2.1.0", "windows").empty() && refusal(*some, "RMGP01", "2.1.0", "windows").empty(),
+              "its regions");
+        check(some && refusal(*some, "RMGJ01", "2.1.0", "windows") == "THIS MOD IS ONLY FOR: US, PAL", "another region");
+        const std::optional<Manifest> kr = parse_manifest(head + R"("regions":["KR"]})");
+        check(kr && refusal(*kr, "RMGK01", "2.1.0", "windows").empty() && !refusal(*kr, "RMGE01", "2.1.0", "windows").empty(), "Korea");
+        for (const char* bad : {R"("regions":"US")", R"("regions":[])", R"("regions":["EU"])", R"("regions":[1])"}) {
+            check(!parse_manifest(head + bad + "}"), (std::string("refused: ") + bad).c_str());
+        }
+    }
+
     // Mod-wide scripts.
     {
         const std::optional<Manifest> wide = parse_manifest(R"({"format":1,"id":"s","name":"S","version":"1","game":"RMGE01","layers":[{"scripts":["main","rules/coins"]}]})");

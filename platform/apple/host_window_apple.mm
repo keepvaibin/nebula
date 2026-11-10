@@ -72,6 +72,7 @@ InputState g_input;  // guarded by g_input_mutex
 NSWindow* g_window = nil;       // the main thread's
 NebulaView* g_view = nil;
 id g_delegate = nil;
+std::vector<std::filesystem::path> g_opened_early;  // files opened before the window (the main thread's)
 std::atomic<void*> g_layer{nullptr};  // the view's CAMetalLayer, for the renderer's thread
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_menu_context{false};
@@ -609,6 +610,24 @@ void on_main(dispatch_block_t block) {
 }
 
 }  // namespace
+// Files dropped on the window or opened with Nebula (the main thread): to the importer once the window is up.
+void files_opened(NSArray<NSURL*>* urls) {
+    std::vector<std::filesystem::path> files;
+    for (NSURL* url in urls) {
+        if (url.isFileURL && url.fileSystemRepresentation != nullptr) {
+            files.emplace_back(url.fileSystemRepresentation);
+        }
+    }
+    if (files.empty()) {
+        return;
+    }
+    if (g_window == nil) {
+        g_opened_early.insert(g_opened_early.end(), files.begin(), files.end());
+        return;
+    }
+    galaxy::render::native_settings_files_dropped(std::move(files));
+}
+
 }  // namespace galaxy::sdl
 
 // The window's view: a Metal layer the size of the window in pixels.
@@ -619,6 +638,7 @@ void on_main(dispatch_block_t block) {
 - (instancetype)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (self != nil) {
+        [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
         self.wantsLayer = YES;
         self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
         [self addTrackingArea:[[NSTrackingArea alloc]
@@ -663,6 +683,16 @@ void on_main(dispatch_block_t block) {
     [super viewDidChangeBackingProperties];
     self.layer.contentsScale = self.window != nil ? self.window.backingScaleFactor : 1.0;
 }
+// Files dropped on the window: mods to the importer, Mii files to the Mii import (native_settings_files_dropped).
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    return NSDragOperationCopy;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    NSArray<NSURL*>* const urls = [sender.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                                           options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+    galaxy::sdl::files_opened(urls);
+    return urls.count != 0u;
+}
 // Keys are the game's: none is passed on to beep.
 - (void)keyDown:(NSEvent*)event {
 }
@@ -686,6 +716,10 @@ void on_main(dispatch_block_t block) {
 - (BOOL)windowShouldClose:(NSWindow*)sender {
     galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
     return NO;  // the host closes it as the game ends
+}
+// "Open With" Nebula, or a .luma opened in Finder (Info.plist's document type).
+- (void)application:(NSApplication*)application openURLs:(NSArray<NSURL*>*)urls {
+    galaxy::sdl::files_opened(urls);
 }
 - (void)windowDidResize:(NSNotification*)notification {
     [self sizeChanged];
@@ -1116,6 +1150,11 @@ void make_window(int width, int height) {
     g_view = view;
     g_layer.store((__bridge void*)((NSView*)view).layer, std::memory_order_release);
     update_window_size();
+    // Files opened before the window was up (Nebula started by opening a .luma): imported now.
+    if (!g_opened_early.empty()) {
+        galaxy::render::native_settings_files_dropped(std::move(g_opened_early));
+        g_opened_early.clear();
+    }
 }
 
 }  // namespace

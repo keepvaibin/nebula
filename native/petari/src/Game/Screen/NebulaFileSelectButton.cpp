@@ -28,11 +28,7 @@ namespace {
     // The labels in the played language (NebulaText; the game's own Yes and No answer Quit's question).
     const char16_t* getQuitLabel() {
         static MR::GrowBuffer< char16_t > label;
-#if defined(__ANDROID__)
-        NebulaUi::getText(label, "Quit");  // no desktop to quit to
-#else
-        NebulaUi::getText(label, "QuitToDesktop");
-#endif
+        NebulaUi::getText(label, "Quit");
         return label.mItems;
     }
 

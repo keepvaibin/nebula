@@ -134,6 +134,14 @@ const char* CameraHolder::getNameStrOf(s32 index) const {
     return ::sCameraTable[index].mName;
 }
 
+u32 CameraHolder::getTypeNum() {
+    return ARRAY_SIZE(::sCameraTable);
+}
+
+const char* CameraHolder::getTypeName(u32 index) {
+    return ::sCameraTable[index].mName;
+}
+
 Camera* CameraHolder::getDefaultCamera() {
     return mCameras[mDefaultCameraIndex];
 }

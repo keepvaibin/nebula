@@ -617,10 +617,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             close_library(module);
             continue;
         }
-        // A plugin built with the game's headers says which ones; any others have other shapes.
-        if (const auto game_abi = reinterpret_cast<std::uint64_t (*)()>(symbol_in(module, "nebula_plugin_game_abi"));
-            game_abi != nullptr && game_abi() != g_api.game_abi) {
-            say(name + " not started: it was built for another version of the game");
+        // A plugin built with the game's own headers (an earlier kit's nebula_game_sdk.h): no longer offered, and its
+        // classes would not match this build.
+        if (symbol_in(module, "nebula_plugin_game_abi") != nullptr) {
+            say(name + " not started: it was built with the game's headers, which plugins no longer use; rebuild it with "
+                       "nebula_mod_api.h only");
             close_library(module);
             continue;
         }

@@ -243,12 +243,7 @@ namespace {
 
     // The HOME Menu (the host's NEBULA_HOME_MENU_VIEW): its rows top to bottom, then "are you sure?" about the choice it asks
     // about (1 leave, 2 reset), answered no or yes as the game's own questions are.
-#if defined(__ANDROID__)
-    const char* const cQuitRow = "Quit";  // no desktop to quit to
-#else
-    const char* const cQuitRow = "QuitToDesktop";
-#endif
-    const char* const cHomeRows[] = {"HomeMenuReturn", "HomeMenuReset", cQuitRow};
+    const char* const cHomeRows[] = {"HomeMenuReturn", "HomeMenuReset", "Quit"};
     const char* const cHomeAnswers[] = {"HomeMenuNo", "HomeMenuYes"};
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);

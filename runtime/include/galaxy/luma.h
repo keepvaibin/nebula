@@ -228,6 +228,8 @@ struct Manifest : Rows {
     std::string version;
     std::string game;
     std::vector<std::string> versions;
+    // "regions": the discs it is made for ("US", "PAL", "JP", "KR"); empty for "any" (region-free) or none given.
+    std::vector<std::string> regions;
     std::string nebula;
     std::vector<std::string> requires_features;
     std::vector<std::string> authors;

@@ -2,7 +2,7 @@
 
 Every game function a script or plugin calls by name, generated from the game's headers (tools/lumacore). Letters: a none, b bool, c int, d float, e vec3, g text, h handle (an object, a sensor...); an upper-case letter is a value that comes back after the result (pass one in, or none for zero).
 
-3547 functions.
+3552 functions.
 
 | Name | Takes | Gives |
 |---|---|---|
@@ -3493,6 +3493,11 @@ Every game function a script or plugin calls by name, generated from the game's 
 | `nebula.rail_length` | h actor | d |
 | `nebula.rail_turn_back` | h actor |  |
 | `nebula.raycast` | e from, e to, E hit | c |
+| `nebula.registry_count` | g kind | c |
+| `nebula.registry_find` | g kind, g name | c |
+| `nebula.registry_mod` | g kind, c index | g |
+| `nebula.registry_name` | g kind, c index | g |
+| `nebula.registry_value` | g kind, g name | c |
 | `nebula.save_game` |  |  |
 | `nebula.screen_position` | e xyz, J xy | c |
 | `nebula.set_animation_frame` | h actor, d frame |  |
@@ -3916,7 +3921,6 @@ What the toolkit cannot offer yet, and why.
 | `nebula.is_a` | parameter type const NebulaValue* |
 | `nebula.list_materials` | parameter type NebulaMaterialCallback |
 | `nebula.luma_start` | parameter type const struct NebulaModApi* |
-| `nebula.register_creator` | parameter type void* (*create)(const char* name) |
 | `nebula.register_object` | parameter type const NebulaObjectClass* |
 | `nebula.release` | parameter type void* |
 | `nebula.set_actor_data` | parameter type void* |

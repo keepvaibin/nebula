@@ -524,7 +524,7 @@ void load_module(const fs::path& path) {
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
 #else
-    // Global: a plugin built with the game's headers finds the game's functions here.
+    // Global: find_function (a native plugin's hook) finds the game's functions here.
     void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_GLOBAL);
 #endif
     if (module == nullptr) {

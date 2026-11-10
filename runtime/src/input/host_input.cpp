@@ -236,8 +236,7 @@ const input::KeyPositionMap& keyboard_position_map(HKL layout) {
 
 // What the layout keys (input::key_icon_layout_key) print on the keyboard the game's window reads: each one's
 // character alone (a dead key's too: a German keyboard's ^ and its acute accent), as a capital; 0 where it prints none.
-// Looked up at most once a second. GALAXY_TEST_KEY_LAYOUT=<hex>,... (13 UCS-2 codes) stands in for them: hidden runs
-// show another country's keyboard.
+// Looked up at most once a second.
 std::array<std::uint16_t, input::kKeyIconLayoutCount> keyboard_layout_labels() noexcept {
     static std::array<std::uint16_t, input::kKeyIconLayoutCount> s_labels{};
     static std::uint64_t s_checked_ms = 0u;

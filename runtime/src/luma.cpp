@@ -521,6 +521,20 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     out.game = text_field(*root, "game");
     if (out.id.empty() || out.name.fallback.empty() || out.game.empty()) return std::nullopt;
     out.versions = string_list(root->get("versions"));
+    // "regions": "any", or the discs it is made for. A name Nebula doesn't know refuses the file (LumaLink's check
+    // names it first).
+    if (const Value* regions = root->get("regions"); regions != nullptr) {
+        const std::string* any = std::get_if<std::string>(&regions->data);
+        if (any != nullptr) {
+            if (*any != "any") return std::nullopt;
+        } else {
+            out.regions = string_list(regions);
+            if (out.regions.empty()) return std::nullopt;
+            for (const std::string& region : out.regions) {
+                if (region != "US" && region != "PAL" && region != "JP" && region != "KR") return std::nullopt;
+            }
+        }
+    }
     out.nebula = text_field(*root, "nebula");
     out.requires_features = string_list(root->get("requires"));
     out.authors = string_list(root->get("authors"));
@@ -881,6 +895,17 @@ std::string refusal(const Manifest& manifest, const std::string& game_id, std::s
     if (!manifest.game.starts_with("RMG")) return "THIS MOD IS FOR ANOTHER GAME";
     if (!manifest.versions.empty() && game_id.size() >= 4u && !contains(manifest.versions, game_id.substr(3, 1))) {
         return "THIS MOD DOESN'T WORK ON THIS VERSION OF THE GAME";
+    }
+    // Made for other discs: the reason names the ones it is for (the game's menu translates the words; the region
+    // names stay as written).
+    if (!manifest.regions.empty() && game_id.size() >= 4u) {
+        const char letter = game_id[3];
+        const std::string_view here = letter == 'E' ? "US" : letter == 'P' ? "PAL" : letter == 'J' ? "JP" : letter == 'K' ? "KR" : "";
+        if (!contains(manifest.regions, std::string(here))) {
+            std::string reason = "THIS MOD IS ONLY FOR: ";
+            for (std::size_t i = 0; i < manifest.regions.size(); ++i) reason += (i != 0u ? ", " : "") + manifest.regions[i];
+            return reason;
+        }
     }
     for (const Plugin& plugin : manifest.plugins) {
         if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
