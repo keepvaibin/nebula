@@ -29,8 +29,9 @@ namespace lumacore {
     void attachClass(NameObj* pObj, const char* pPlacedName);
 
     // The dispatch points (the actor's mModActor is set).
-    // Each frame before the class's control: the scripts' waits, states and "frame", then "control"; true when one
-    // took the class's place (its control is skipped this frame).
+    // Each frame before the class's nerve and control: the scripts' waits, states and "frame", then "control"; true
+    // when one took the class's place (its nerve and control are skipped this frame; the binder still moves it by
+    // its velocity through collision).
     bool classControl(LiveActor* pActor);
     void classAppear(LiveActor* pActor);
     void classKill(LiveActor* pActor);

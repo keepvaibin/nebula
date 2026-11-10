@@ -105,6 +105,9 @@ namespace {
             const Ui::Rect rect = pText->GetTextDrawRect();
             const f32 width = rect.right - rect.left;
             const f32 height = rect.bottom - rect.top;
+            nebula_log("toast-diag: %s %s len %u font %p rect %.1f %.1f %.1f %.1f alpha %u scale %.2f %.2f\n", static_cast< const char* >(pParent->mName),
+                       static_cast< const char* >(pText->mName), static_cast< unsigned >(pText->mTextLen), static_cast< const void* >(pText->mpFont), rect.left,
+                       rect.top, rect.right, rect.bottom, static_cast< unsigned >(pText->mAlpha), pText->mScale.x, pText->mScale.y);
             *pWidth = width > *pWidth ? width : *pWidth;
             *pHeight = height > *pHeight ? height : *pHeight;
         }
