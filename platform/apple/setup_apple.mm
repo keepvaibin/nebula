@@ -6,12 +6,16 @@
 #import <AppKit/AppKit.h>
 
 #include "apple_host.h"
+#include "galaxy/asset_store.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <pthread.h>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -38,6 +42,26 @@ bool import_progress(std::uint64_t done, std::uint64_t total, void*) {
 
 enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
 
+// The game's data, its own size and some to spare: an empty string when the drive has room for it, else the words.
+// `replaced`: the bytes of an earlier game.pak the new one takes the place of.
+std::string room_for_the_game(const std::filesystem::path& folder, double replaced) {
+    constexpr double kNeeded = 4.4e9;  // game.pak is 4.02 GB (the North American disc's; the others' are close)
+    @autoreleasepool {
+        NSURL* const url = [NSURL fileURLWithPath:@(folder.c_str()) isDirectory:YES];
+        NSNumber* free = nil;
+        if (![url getResourceValue:&free forKey:NSURLVolumeAvailableCapacityForImportantUsageKey error:nil] || free == nil) {
+            return {};  // not known: the import itself says if it runs out
+        }
+        if (free.doubleValue + replaced >= kNeeded) {
+            return {};
+        }
+        char words[160];
+        std::snprintf(words, sizeof(words), "Nebula needs %.1f GB free on this Mac to set up the game; %.1f GB is free.",
+                      kNeeded / 1e9, free.doubleValue / 1e9);
+        return words;
+    }
+}
+
 }  // namespace
 
 @interface NebulaSetup : NSObject <NSWindowDelegate>
@@ -53,7 +77,7 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
 
 @implementation NebulaSetup
 
-- (instancetype)initWithPak:(const std::string&)pak {
+- (instancetype)initWithPak:(const std::string&)pak again:(BOOL)again {
     self = [super init];
     if (self == nil) {
         return nil;
@@ -66,13 +90,16 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
                                               defer:NO];
     _window.title = @"Nebula";
     _window.releasedWhenClosed = NO;
+    _window.restorable = NO;
     _window.delegate = self;
     NSView* const content = _window.contentView;
     NSTextField* const title = [NSTextField labelWithString:@"Set up Nebula"];
     title.font = [NSFont boldSystemFontOfSize:17];
     title.frame = NSMakeRect(24, 180, 472, 26);
     [content addSubview:title];
-    _words = [NSTextField wrappingLabelWithString:@"Choose your Super Mario Galaxy disc image. This is done once."];
+    _words = [NSTextField
+        wrappingLabelWithString:again ? @"Nebula's copy of the game is from an earlier version or is damaged. Choose your Super Mario Galaxy disc image to set it up again."
+                                      : @"Choose your Super Mario Galaxy disc image. This is done once."];
     _words.frame = NSMakeRect(24, 92, 472, 80);
     [content addSubview:_words];
     _bar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(24, 66, 472, 16)];
@@ -139,7 +166,16 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
     self.timer = [NSTimer timerWithTimeInterval:0.1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [NSRunLoop.currentRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
     const std::string output = self.pak;
-    std::thread([self, input, output] {
+    // The player asked for it and waits for it: macOS neither slows the app (App Nap, as it does an app whose window
+    // is behind others) nor lets the Mac sleep until it is done.
+    id const activity = [NSProcessInfo.processInfo beginActivityWithOptions:NSActivityUserInitiated
+                                                                     reason:@"Setting up the game from the disc image"];
+    std::thread([self, input, output, activity] {
+        pthread_set_qos_class_self_np(QOS_CLASS_USER_INITIATED, 0);
+        const auto began = std::chrono::steady_clock::now();
+        const auto seconds = [began] {
+            return std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        };
         std::string failure;
         // What the image is first: a wrong disc is said in the importer's own words before anything is written.
         char* const identity = nebula_import_identify(input.c_str());
@@ -160,17 +196,28 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
         if (!supported && failure.empty()) {
             failure = "This disc image can't be used.";
         }
+        std::fprintf(stderr, "[setup] disc image checked in %.1f s\n", seconds());
         if (supported) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self say:@"Setting up…"];
             });
-            // Built beside its place and moved there whole: a stopped import leaves no half of a game.pak.
+            // Built beside its place and moved there whole: a stopped import leaves no half of a game.pak. What an
+            // import that never finished (the Mac turned off) left is cleared first.
             std::error_code error;
             const std::filesystem::path place(output);
             std::filesystem::create_directories(place.parent_path(), error);
             const std::filesystem::path partial = place.string() + ".partial";
             std::filesystem::remove(partial, error);
+            std::filesystem::remove(place.parent_path() / ("." + partial.filename().string() + ".importing"), error);
+            const std::uintmax_t earlier = std::filesystem::file_size(place, error);
+            failure = room_for_the_game(place.parent_path(), error ? 0.0 : static_cast<double>(earlier));
+        }
+        if (supported && failure.empty()) {
+            std::error_code error;
+            const std::filesystem::path place(output);
+            const std::filesystem::path partial = place.string() + ".partial";
             char* const refused = nebula_import_build(input.c_str(), partial.c_str(), &import_progress, nullptr);
+            std::fprintf(stderr, "[setup] game.pak built in %.1f s\n", seconds());
             if (refused != nullptr) {
                 failure = g_cancel.load(std::memory_order_relaxed) ? "Stopped." : refused;
                 nebula_import_free(refused);
@@ -179,10 +226,15 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
                 std::filesystem::rename(partial, place, error);
                 if (error) {
                     failure = "Couldn't save the game's data.";
+                } else if (!galaxy::apple::game_data_opens(output)) {
+                    // Read back as the game reads it: what was written is what the game will find.
+                    std::filesystem::remove(place, error);
+                    failure = "The game's data couldn't be read back from this Mac's drive. Try again.";
                 }
             }
         }
         dispatch_async(dispatch_get_main_queue(), ^{
+            [NSProcessInfo.processInfo endActivity:activity];
             [self finished:failure];
         });
     }).detach();
@@ -214,6 +266,16 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
 
 namespace galaxy::apple {
 
+bool game_data_opens(const std::string& pak) {
+    galaxy::assets::AssetStore store;
+    if (!store.open(pak)) {
+        return false;
+    }
+    // The releases the game plays (host_main.cpp open_pak).
+    const std::string_view id = store.game_id();
+    return id == "RMGE01" || id == "RMGP01" || id == "RMGJ01";
+}
+
 bool ensure_game_data(int argc, char** argv) {
     std::string pak;
     for (int i = 1; i + 1 < argc; ++i) {
@@ -222,21 +284,42 @@ bool ensure_game_data(int argc, char** argv) {
         }
     }
     std::error_code error;
-    if (pak.empty() || std::filesystem::exists(pak, error)) {
+    if (pak.empty()) {
         return true;
     }
-    // A test run or a run with no screen has nobody to ask.
-    for (int i = 1; i < argc; ++i) {
+    // A game.pak the game can open is the game's; one of an earlier store version (an update changed what the
+    // importer writes) or a damaged one is set up again from the disc image, as the game cannot use it.
+    const bool present = std::filesystem::exists(pak, error);
+    if (present && game_data_opens(pak)) {
+        return true;
+    }
+    if (present) {
+        std::fprintf(stderr, "[setup] %s is not a game.pak this version of Nebula reads\n", pak.c_str());
+    }
+    // A test run or a run with no screen has nobody to ask (but a test of the setup itself).
+    bool tested = false;
+#if defined(NEBULA_DEV)
+    tested = std::getenv("NEBULA_TEST_SETUP_IMAGE") != nullptr;
+#endif
+    for (int i = 1; i < argc && !tested; ++i) {
         if (std::string(argv[i]) == "--seconds") {
             return true;
         }
     }
     @autoreleasepool {
-        [NSApplication sharedApplication];
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-        NebulaSetup* const setup = [[NebulaSetup alloc] initWithPak:pak];
+        start_app();  // the app as the game has it, its delegate first
+        NebulaSetup* const setup = [[NebulaSetup alloc] initWithPak:pak again:present];
         [setup.window makeKeyAndOrderFront:nil];
         [NSApp activateIgnoringOtherApps:YES];
+#if defined(NEBULA_DEV)
+        // A test of the first start with nobody at the window: the disc image as if it had been chosen.
+        if (const char* const image = std::getenv("NEBULA_TEST_SETUP_IMAGE"); image != nullptr) {
+            const std::string chosen(image);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [setup importFrom:chosen];
+            });
+        }
+#endif
         const NSModalResponse answer = [NSApp runModalForWindow:setup.window];
         [setup.window orderOut:nil];
         std::fprintf(stderr, "[setup] %s\n", answer == kSetupDone ? "game.pak made from the player's disc image" : "left without setting up");

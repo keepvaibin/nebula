@@ -66,8 +66,11 @@ limits how many compiles run at once, `-r` makes a release build.
 The build machine's own processor is built first: it makes the shader tools (`galaxy_native_spirv`,
 `galaxy_utility_spirv`, `programs_msl`) that the other processor's build takes from its `host-tools` folder. The two
 are joined with `lipo`, and the app is signed for the machine it was built on (an ad-hoc signature). On another Mac the
-app is opened the first time from System Settings, Privacy & Security ("Open Anyway"), unless it is signed with a
-Developer ID and notarized.
+app is opened the first time from System Settings, Privacy & Security ("Open Anyway"; on macOS 14 and earlier also
+Control-click, Open), unless it is signed with a Developer ID and notarized. The script checks the signature over the
+whole bundle (`codesign --verify --deep --strict`) and packs `Nebula-macOS.zip` with `ditto`, the app beside "How to
+open Nebula.txt": `ditto` keeps the bundle as signed, where a zip tool that adds or drops files' attributes leaves a
+signature that no longer holds, which macOS reports as an app that "is damaged".
 
 ## Permissions
 
@@ -82,7 +85,26 @@ permission.
 
 The game's files come from the player's own disc image, once. With no `game.pak` the app's first window asks for the
 image (`setup_apple.mm`), has the importer check it and build `game.pak`, and shows how far that is; the image is only
-read. A command line does the same:
+read. A `game.pak` the game cannot open (an earlier store version after an update, or a damaged file: the same check
+the game makes, `AssetStore::open` and the release's id) brings the window back with words saying so, where the game
+would otherwise end at its start. Before writing, the window makes sure the drive has room (4.4 GB, the space of a
+`game.pak` it replaces counted), clears what an import cut off by a power cut left, and holds an `NSProcessInfo`
+activity for the import, so macOS neither slows it (App Nap, for an app whose window is behind others) nor sleeps. The
+finished file is opened again as the game opens it before the game starts.
+
+The importer reads the disc's files in order on one thread and cooks them on every core, writing each in its turn:
+`game.pak` is the same, byte for byte, as one cooked a file at a time. On a 2017 MacBook Pro (4 cores) the North
+American disc takes 70 s where one core took 190 s.
+
+The app is one AppKit application from its first moment (`galaxy::apple::start_app`, host_window_apple.mm): its
+delegate, menus and launch come before the setup window or the game's window, whichever is first. AppKit asks an app's
+delegate early whether window state is restored with secure coding (`applicationSupportsSecureRestorableState:`), and
+stops a process (SIGILL, "Secure coding for state restoration requested after it was initialized without.
+NSApplicationDelegate was probably established too late.") whose answer arrives after AppKit has started without it, as
+it did when the setup window ran before the game's delegate existed. No window is restored at a start
+(`restorable = NO`, `NSQuitAlwaysKeepsWindows` off): the game opens its window as its settings say.
+
+A command line builds `game.pak` as the window does:
 
 ```
 cargo build --release --locked -p nebula-import
