@@ -13,6 +13,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCompleteDemo_f1, "exeCompleteDemo.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCompleteDemo_f2, "exeCompleteDemo.f2", 360.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFlash_1, "exeFlash.1", 10);
 
@@ -73,12 +76,12 @@ void CollectTico::exeCompleteDemo() {
         mPosition.set(*MR::getPlayerPos());
         MR::calcGravity(this);
 
-        mStarPos.scaleAdd(300.0f, -mGravity, mPosition);
+        mStarPos.scaleAdd(cNum_exeCompleteDemo_f1, -mGravity, mPosition);
         mPosition.set(mStarPos);
 
         for (s32 i = 0; i < mTicoNum; i++) {
             MR::requestMovementOn(mStrayTicos[i]);
-            mStrayTicos[i]->requestCompleteDemo(mStarPos, mGravity, 360.0f * ((f32)i / mTicoNum));
+            mStrayTicos[i]->requestCompleteDemo(mStarPos, mGravity, cNum_exeCompleteDemo_f2 * ((f32)i / mTicoNum));
         }
     }
 

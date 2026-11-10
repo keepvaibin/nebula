@@ -5,6 +5,20 @@
 #include "Game/Player/MarioDamage.hpp"
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.97f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.97f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f7, "update.f7", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f8, "update.f8", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f9, "update.f9", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setVec_f1, "setVec.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setVec_f2, "setVec.f2", 0.75f);
 
 bool Mario::doFlipJump(const Vec3f& rVec) {
     if (isAnimationRun("壁はじき")) {
@@ -51,7 +65,7 @@ bool MarioFlip::start() {
     mTimer = 0;
     mStep = 0;
     mYAngle = 0.0f;
-    mYSpeed = -0.75f;
+    mYSpeed = -cNum_start_f1;
 
     changeAnimation("はねとばされ");
 
@@ -76,7 +90,7 @@ bool MarioFlip::update() {
     MR::normalizeOrZero(&direction);
     f32 control;
     if (mTimer < 30) {
-        control = static_cast< f32 >(mTimer) / 30.0f;
+        control = static_cast< f32 >(mTimer) / cNum_update_f1;
     } else {
         control = 1.0f;
     }
@@ -91,7 +105,7 @@ bool MarioFlip::update() {
     switch (mStep) {
     case 0:
         mYAngle += mYSpeed;
-        mYSpeed *= 0.98f;
+        mYSpeed *= cNum_update_f2;
         playSound("はねとばされ");
         addVelocity(velocity);
         mVelocity.scale(mActor->mConst->getTable()->mFlipFriction1);
@@ -102,7 +116,7 @@ bool MarioFlip::update() {
         break;
     case 1:
         mYAngle += mYSpeed;
-        mYSpeed *= 0.97f;
+        mYSpeed *= cNum_update_f3;
         playSound("はねとばされ");
         if (!getPlayer()->mMovementStates.onGround) {
             return false;
@@ -118,10 +132,10 @@ bool MarioFlip::update() {
     case 2:
         addVelocity(velocity);
         mVelocity.scale(mActor->mConst->getTable()->mFlipFriction2);
-        mYSpeed *= 0.97f;
+        mYSpeed *= cNum_update_f4;
         playSound("はねとばされ");
         mYAngle += mYSpeed;
-        if (MR::isAngleBetween(mYAngle, -0.1f, 0.1f)) {
+        if (MR::isAngleBetween(mYAngle, -cNum_update_f5, cNum_update_f6)) {
             changeAnimation("はねとばされ終了");
             mStep++;
         }
@@ -146,9 +160,9 @@ bool MarioFlip::update() {
             stopAnimation(nullptr);
             changeAnimationNonStop("はねとばされ");
             playEffectTrans("壁ヒット", getPlayer()->getWallPos());
-            mVelocity = tangent + normal * -incoming * 1.2f;
-            addVelocity(mVelocity, 2.0f);
-            mYSpeed *= 1.2f;
+            mVelocity = tangent + normal * -incoming * cNum_update_f7;
+            addVelocity(mVelocity, cNum_update_f8);
+            mYSpeed *= cNum_update_f9;
             getPlayer()->setFrontVecKeepUp(-mVelocity);
         }
     }
@@ -221,11 +235,11 @@ void MarioFlip::setVec(const Vec3f& rVec) {
         mVelocity.setLength(mActor->mConst->getTable()->mSlideDistFlip);
     }
 
-    addVelocity(mVelocity, 5.0f);
+    addVelocity(mVelocity, cNum_setVec_f1);
 
     mTimer = 0;
     mStep = 0;
-    mYSpeed = -0.75f;
+    mYSpeed = -cNum_setVec_f2;
 
     if (getPlayer()->isStatusActive(MarioStatus_Hang)) {
         mVelocity.zero();

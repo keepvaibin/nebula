@@ -6,6 +6,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.f);
 
 namespace NrvHitWallTimerSwitch {
     NEW_NERVE(HitWallTimerSwitchNrvOff, HitWallTimerSwitch, Off);
@@ -27,7 +30,7 @@ void HitWallTimerSwitch::init(const TableIter& rIter) {
     MR::connectToSceneMapObjDecoration(this);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 0x10, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "hit", ATYPE_SWITCH_BIND, 0x10, 50.f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "hit", ATYPE_SWITCH_BIND, 0x10, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "HitWallTimerSwitch", getSensor("body"), nullptr);
     mMoveCollision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Default);
     mConnector = new MapObjConnector(this);

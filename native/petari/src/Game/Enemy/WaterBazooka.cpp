@@ -37,6 +37,25 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoCrackCapsule_f1, "exeDemoCrackCapsule.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoCrackCapsule_f2, "exeDemoCrackCapsule.f2", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoCrackCapsule_f3, "exeDemoCrackCapsule.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f1, "exeDemoAnger.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f2, "exeDemoAnger.f2", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f3, "exeDemoAnger.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStorm_f1, "exeStorm.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStorm_f2, "exeStorm.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStorm_f3, "exeStorm.f3", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_aimAtMario_f1, "aimAtMario.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_aimAtMario_f2, "aimAtMario.f2", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_aimAtMario_f3, "aimAtMario.f3", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_aimAtMario_f4, "aimAtMario.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_switchShowOrHide_f1, "switchShowOrHide.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryShotBullet_f1, "tryShotBullet.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryJumpBackPlayerFromBazooka_f1, "tryJumpBackPlayerFromBazooka.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNearDropPoint_f1, "calcNearDropPoint.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcGunPointFromCannon_f1, "calcGunPointFromCannon.f1", 550.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_control_isNearPlayer_1, "control.isNearPlayer.1", 5000.0f);
 
@@ -427,8 +446,8 @@ void WaterBazooka::exeDemoCrackCapsule() {
         Vec3f starPieceSpawnPos;
         Vec3f up;
         MR::calcUpVec(&up, this);
-        starPieceSpawnPos.scaleAdd(600.0f, up, mPosition);
-        MR::appearStarPiece(this, starPieceSpawnPos, 8, 25.0f, 40.0f, false);
+        starPieceSpawnPos.scaleAdd(cNum_exeDemoCrackCapsule_f1, up, mPosition);
+        MR::appearStarPiece(this, starPieceSpawnPos, 8, cNum_exeDemoCrackCapsule_f2, cNum_exeDemoCrackCapsule_f3, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         MR::validateCollisionParts(mCapsule);
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvWait));
@@ -472,8 +491,8 @@ void WaterBazooka::exeDemoAnger() {
         Vec3f starPieceSpawnPos;
         Vec3f up;
         MR::calcUpVec(&up, this);
-        starPieceSpawnPos.scaleAdd(600.0f, up, mPosition);
-        MR::appearStarPiece(this, starPieceSpawnPos, 16, 25.0f, 40.0f, false);
+        starPieceSpawnPos.scaleAdd(cNum_exeDemoAnger_f1, up, mPosition);
+        MR::appearStarPiece(this, starPieceSpawnPos, 16, cNum_exeDemoAnger_f2, cNum_exeDemoAnger_f3, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         MR::validateCollisionParts(mCapsule);
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvWait));
@@ -613,11 +632,11 @@ void WaterBazooka::exeStorm() {
     mBaseMtx.getTrans(pos);
     mBaseMtx.getXDir(side);
 
-    f32 deg = MR::calcNerveEaseOutValue(this, NebulaFrameClock::stepsOfMilliseconds(2500), 25.0f, 0.0f);
+    f32 deg = MR::calcNerveEaseOutValue(this, NebulaFrameClock::stepsOfMilliseconds(2500), cNum_exeStorm_f1, 0.0f);
     MR::rotateVecDegree(&side, mGravity, deg);
     MR::makeMtxSideUpPos(&mBaseMtx, side, -mGravity, pos);
 
-    MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_STORM", (deg * 100.0f) / 25.0f);
+    MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_STORM", (deg * cNum_exeStorm_f2) / cNum_exeStorm_f3);
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::deleteEffect(this, "Spin");
@@ -719,18 +738,18 @@ bool WaterBazooka::aimAtMario() {
     mBaseMtx.getTrans(cannonPos);
 
     Vec3f aimPos;
-    aimPos.scaleAdd(100.0f, -mGravity, *MR::getPlayerPos());
+    aimPos.scaleAdd(cNum_aimAtMario_f1, -mGravity, *MR::getPlayerPos());
 
     Vec3f aim;
     aim.sub(aimPos, cannonPos);
     MR::normalize(&aim);
-    const f32 turnCos = MR::cosDegree(1.2f);
+    const f32 turnCos = MR::cosDegree(cNum_aimAtMario_f2);
     const Vec3f& rGravity = mGravity;
     MR::turnVecToVecCos(&side, side, aim, turnCos, rGravity);
 
     Vec3f sideOnPlane;
     MR::turnVecToPlane(&sideOnPlane, side, -mGravity);
-    MR::clampVecAngleDeg(&side, sideOnPlane, 15.0f);
+    MR::clampVecAngleDeg(&side, sideOnPlane, cNum_aimAtMario_f3);
 
     if (side.dot(-mGravity) > 0.0f) {
         MR::turnVecToPlane(&side, side, -mGravity);
@@ -740,7 +759,7 @@ bool WaterBazooka::aimAtMario() {
 
     Vec3f side2;
     mBaseMtx.getXDir(side2);
-    return side2.angle(aim) * _180_PI <= 2.0f;
+    return side2.angle(aim) * _180_PI <= cNum_aimAtMario_f4;
 }
 
 void WaterBazooka::switchShowOrHide() {
@@ -749,7 +768,7 @@ void WaterBazooka::switchShowOrHide() {
         return;
     }
 
-    if (MR::isJudgedToClipFrustum(mPosition, 800.0f)) {
+    if (MR::isJudgedToClipFrustum(mPosition, cNum_switchShowOrHide_f1)) {
         if (!MR::isHiddenModel(this)) {
             MR::hideModel(this);
         }
@@ -949,7 +968,7 @@ bool WaterBazooka::tryShotBullet() {
         static_cast< ElectricPressureBullet* >(bullet)->shotElectricBullet(this, posMtx, ::sElectricBulletSpeed);
     } else {
         static_cast< WaterPressureBullet* >(bullet)->shotWaterBullet(
-            this, posMtx, 40.0f, true, true, ::cShotInvalidSpinKill, &mCameraInfo);
+            this, posMtx, cNum_tryShotBullet_f1, true, true, ::cShotInvalidSpinKill, &mCameraInfo);
     }
 
     return true;
@@ -982,7 +1001,7 @@ bool WaterBazooka::tryJumpBackPlayerFromBazooka() const {
 
     MR::offBind(MR::getPlayerDemoActor());
     MR::unlockPlayerAnimation();
-    MR::forceFlyPlayer(dropPoint, rej2, MR::calcDistanceToPlayer(dropPoint) / 20.0f);
+    MR::forceFlyPlayer(dropPoint, rej2, MR::calcDistanceToPlayer(dropPoint) / cNum_tryJumpBackPlayerFromBazooka_f1);
     return true;
 }
 
@@ -1012,7 +1031,7 @@ void WaterBazooka::calcNearDropPoint(Vec3f* pPos) const {
         toPlayer.negate();
     }
 
-    pPos->scaleAdd(800.0f, toPlayer, mPosition);
+    pPos->scaleAdd(cNum_calcNearDropPoint_f1, toPlayer, mPosition);
 }
 
 void WaterBazooka::calcGunPointFromCannon(Pos3f* pMtx) {
@@ -1021,7 +1040,7 @@ void WaterBazooka::calcGunPointFromCannon(Pos3f* pMtx) {
     mtx.getXDir(side);
     Vec3f pos;
     mtx.getTrans(pos);
-    pos.scaleAdd(550.0f, side, pos);
+    pos.scaleAdd(cNum_calcGunPointFromCannon_f1, side, pos);
     pMtx->setInline(mtx);
     Vec3f up;
     mtx.getYDir(up);

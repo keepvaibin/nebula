@@ -3,6 +3,11 @@
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 15.0f);
 
 CameraSlide::CameraSlide(const char* pName)
     : Camera(pName), mAxis(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mAngleA(0.0f), mDist(1000.0f) {
@@ -19,7 +24,7 @@ CameraTargetObj* CameraSlide::calc() {
     MR::normalize(&up);
 
     Quat4f rot;
-    rot.setRotate(front, mAngleA * MR::pi() / 180.0f);
+    rot.setRotate(front, mAngleA * MR::pi() / cNum_calc_f1);
 
     Vec3f side = mAxis;
     rot.transform(side);
@@ -38,7 +43,7 @@ CameraTargetObj* CameraSlide::calc() {
     Vec3f watchPos = side * side.dot(camZ) + watchPoint;
 
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, cNum_calc_f2 / cNum_calc_f3);
     watchPos.add(watchOffset);
 
     Vec3f pos = watchPos + front * mDist;

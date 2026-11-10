@@ -14,6 +14,18 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f1, "exeWaveAttack.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f2, "exeWaveAttack.f2", 1300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f3, "exeWaveAttack.f3", 1260.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f4, "exeWaveAttack.f4", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f5, "exeWaveAttack.f5", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f6, "exeWaveAttack.f6", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f7, "exeWaveAttack.f7", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f8, "exeWaveAttack.f8", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f9, "exeWaveAttack.f9", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 180.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_setBrkRate_1, "exeWaveAttack.setBrkRate.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_setBrkRate_2, "exeWaveAttack.setBrkRate.2", 0.0f);
@@ -42,7 +54,7 @@ void KoopaShockWave::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemy(this);
 
     initHitSensor(1);
-    MR::addHitSensorCallbackEnemyAttack(this, "Attack", 16, 15.0f);
+    MR::addHitSensorCallbackEnemyAttack(this, "Attack", 16, cNum_init_f1);
 
     initSound(8, false);
 
@@ -124,24 +136,24 @@ void KoopaShockWave::exeWaveAttack() {
         MR::validateHitSensors(this);
     }
 
-    mAngle = MR::calcNerveValue(this, NebulaFrameClock::stepsOfSeconds(6), 0.0f, 180.0f);
+    mAngle = MR::calcNerveValue(this, NebulaFrameClock::stepsOfSeconds(6), 0.0f, cNum_exeWaveAttack_f1);
 
     f32 scale = MR::cosDegree(mAngle);
-    ::makeShockWaveMtx(&mBaseMtx, mUp, mFront, KoopaFunction::getPlanetCenterPos(mKoopa), scale, 1300.0f);
-    ::makeShockWaveMtx(&mMtx, mUp, mFront, KoopaFunction::getPlanetCenterPos(mKoopa), scale, 1260.0f);
+    ::makeShockWaveMtx(&mBaseMtx, mUp, mFront, KoopaFunction::getPlanetCenterPos(mKoopa), scale, cNum_exeWaveAttack_f2);
+    ::makeShockWaveMtx(&mMtx, mUp, mFront, KoopaFunction::getPlanetCenterPos(mKoopa), scale, cNum_exeWaveAttack_f3);
 
-    f32 frame = MR::sinDegree(mAngle) * 10.0f;
+    f32 frame = MR::sinDegree(mAngle) * cNum_exeWaveAttack_f4;
     MR::setBckFrameAndStop(this, frame);
     MR::setBckFrameAndStop(mPartsModel, frame);
     MR::setBckFrameAndStop(mShadow, frame);
 
     f32 volume;
-    if (mAngle <= 90.0f) {
-        volume = mAngle / 90.0f;
+    if (mAngle <= cNum_exeWaveAttack_f5) {
+        volume = mAngle / cNum_exeWaveAttack_f6;
     } else {
-        volume = 1.0f - (mAngle - 90.0f) / 90.0f;
+        volume = 1.0f - (mAngle - cNum_exeWaveAttack_f7) / cNum_exeWaveAttack_f8;
     }
-    volume *= 100.0f;
+    volume *= cNum_exeWaveAttack_f9;
     MR::startLevelSound(mKoopa, "SE_BM_LV_KOOPA_SWAVE_MOVE", volume);
 
     if (MR::isStep(this, cStep_exeWaveAttack_1)) {
@@ -159,7 +171,7 @@ void KoopaShockWave::updateHitSensor(HitSensor* pSensor) {
     Vec3f playerPos = *MR::getPlayerPos();
     MR::calcLocalVec(&playerPos, mKoopaMtx);
 
-    f32 degree = MR::toDegree(MR::atan2(-playerPos.z, playerPos.x)) + 180.0f;
+    f32 degree = MR::toDegree(MR::atan2(-playerPos.z, playerPos.x)) + cNum_updateHitSensor_f1;
 
     Pos3f matrix = mKoopaMtx;
     matrix.setTrans(KoopaFunction::getPlanetCenterPos(mKoopa));

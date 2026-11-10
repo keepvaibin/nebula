@@ -8,6 +8,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 LavaGalaxyParts::LavaGalaxyParts(const char* pName) : LiveActor(pName), mLodCtrl(), mMtxSetter() {
 }
@@ -81,7 +84,7 @@ void LavaGalaxyParts::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::initCollisionParts(this, objectName, MR::addBodyMessageSensorMapObj(this), nullptr);
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
 
     pName = objectName;
     bool isNonFloatingOrLavaStep;

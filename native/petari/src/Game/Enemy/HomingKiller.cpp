@@ -22,11 +22,18 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isChaseStart_f1, "isChaseStart.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isValidShowModel_f1, "isValidShowModel.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isValidShowModel_f2, "isValidShowModel.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startMoveLevelSound_f1, "startMoveLevelSound.f1", 100.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFreeze_setBckRate_1, "exeFreeze.setBckRate.1", 0.0f);
 
 namespace {
-    static const Vec cBodyHitSensorOffset = {0.0f, 0.0f, -10.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cBodyHitSensorOffset, {0.0f, 0.0f, -10.0f});
 
     const u32 cSensorTableTarget[] = {
         ATYPE_KILLER_TARGET_ENEMY, ATYPE_KILLER_TARGET_MAPOBJ, ATYPE_BREAKABLE_CAGE, ATYPE_ROCK, ATYPE_WANWAN, ATYPE_PUNCH_BOX};
@@ -177,7 +184,7 @@ void HomingKiller::init(const TableIter& rIter) {
     } else {
         f32 scale = getScale();
         MR::initShadowVolumeOval(this, Vec3f(::cShadowRadiusXY, ::cShadowRadiusXY, ::cShadowRadiusZ) * scale);
-        MR::setShadowDropLength(this, nullptr, 2000.0f);
+        MR::setShadowDropLength(this, nullptr, cNum_init_f1);
     }
 
     MR::addToAttributeGroupSearchTurtle(this);
@@ -372,7 +379,7 @@ void HomingKiller::initMapToolInfo(const TableIter& rIter) {
     } else if (turnRadius > 20000) {
         turnRadius = 20000;
     }
-    mChaseRotateSpeed = 1.0f - turnRadius * 0.0001f;
+    mChaseRotateSpeed = 1.0f - turnRadius * cNum_initMapToolInfo_f1;
 
     MR::getPlacementArg2NoInit(rIter, &mIsLinearShot);
     if (mType == Type_MagnumKiller) {
@@ -517,7 +524,7 @@ bool HomingKiller::isChaseStart() const {
         return false;
     }
 
-    return MR::cosDegree(mChaseStartAngle * 0.5f) < target.dot(mFront);
+    return MR::cosDegree(mChaseStartAngle * cNum_isChaseStart_f1) < target.dot(mFront);
 }
 
 bool HomingKiller::tryChaseStart() {
@@ -638,11 +645,11 @@ void HomingKiller::calcFrontVecToTarget(Vec3f* pFront) const {
 }
 
 bool HomingKiller::isValidShowModel() const {
-    if (MR::isJudgedToClipFrustum(mPosition, 300.0f)) {
+    if (MR::isJudgedToClipFrustum(mPosition, cNum_isValidShowModel_f1)) {
         return false;
     }
 
-    if (MR::isJudgedToNearClip(mPosition, mType == Type_MagnumKiller ? ::cNearClipDistanceMagnum : 200.0f)) {
+    if (MR::isJudgedToNearClip(mPosition, mType == Type_MagnumKiller ? ::cNearClipDistanceMagnum : cNum_isValidShowModel_f2)) {
         return false;
     }
 
@@ -674,7 +681,7 @@ void HomingKiller::startMoveLevelSound(bool playAlarm) {
     } else if (mType == Type_MagnumKiller) {
         f32 pitch = MR::getLinerValueFromMinMax(MR::calcDistanceToPlayer(this), ::cMagnamFlySeDistMin, ::cMagnamFlySeDistMax, ::cMagnamFlySePitchMax,
                                                 ::cMagnamFlySePitchMin);
-        MR::startLevelSound(this, "SE_EM_LV_MAGKILLER_FLY", pitch * 100.0f);
+        MR::startLevelSound(this, "SE_EM_LV_MAGKILLER_FLY", pitch * cNum_startMoveLevelSound_f1);
     } else {
         MR::startLevelSound(this, "SE_EM_LV_KILLER_FLY");
     }

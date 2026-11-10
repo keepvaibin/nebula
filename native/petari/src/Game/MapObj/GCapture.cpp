@@ -29,6 +29,13 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_f1, "exeCapture.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f1, "exeBreak.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_upTractPower_f1, "upTractPower.f1", 0.97f);
+NEBULA_TUNABLE_NAMED(f32, cNum_downTractPower_f1, "downTractPower.f1", 0.12f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillGapBindTrans_f1, "fillGapBindTrans.f1", 0.05f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_reboundVelocityFromCollision_1, "exeCapture.reboundVelocityFromCollision.1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_reboundVelocityFromCollision_2, "exeCapture.reboundVelocityFromCollision.2", 0.0f);
@@ -95,7 +102,7 @@ void GCapture::init(const TableIter& rIter) {
     initSound(8, false);
     initHitSensor(2);
     MR::addHitSensorRide(this, "body", 16, sPointRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "bind", 104, 16, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "bind", 104, 16, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     getSensor("bind")->invalidate();
     initBinder(sMinBindRadius, 0.0f, 8);
     initEffectKeeper(0, "GCapture");
@@ -382,7 +389,7 @@ void GCapture::exeCapture() {
     mPosition.set(*MR::getPlayerCenterPos());
 
     if (MR::isFirstStep(this)) {
-        mRibbonRate = 0.1f;
+        mRibbonRate = cNum_exeCapture_f1;
         mRibbonPointMtx.identity();
         mRibbonPointMtx.setTrans(targetPos);
         MR::emitEffect(this, "RibbonPoint");
@@ -553,7 +560,7 @@ void GCapture::exeBreak() {
     }
 
     if (mEffectBlend > 0.0f) {
-        mEffectBlend -= 0.2f;
+        mEffectBlend -= cNum_exeBreak_f1;
         if (mEffectBlend < 0.0f) {
             mEffectBlend = 0.0f;
         }
@@ -615,18 +622,18 @@ bool GCapture::canCancelBind() const {
 }
 
 void GCapture::upTractPower() {
-    mTractPower += 0.97f;
+    mTractPower += cNum_upTractPower_f1;
     mTractPower = MR::clamp(mTractPower, 0.0f, 1.0f);
 }
 
 void GCapture::downTractPower() {
-    mTractPower -= 0.12f;
+    mTractPower -= cNum_downTractPower_f1;
     mTractPower = MR::clamp(mTractPower, 0.0f, 1.0f);
 }
 
 void GCapture::fillGapBindTrans() {
     if (mEffectBlend > 0.0f) {
-        mEffectBlend -= 0.05f;
+        mEffectBlend -= cNum_fillGapBindTrans_f1;
         if (mEffectBlend < 0.0f) {
             mEffectBlend = 0.0f;
         }

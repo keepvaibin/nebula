@@ -15,6 +15,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sUpperHeight, 1000.0f);
     NEBULA_TUNABLE(s32, sUpperFrame, 180);
@@ -69,7 +71,7 @@ void Dossun::init(const TableIter& rIter) {
     initSound(4, false);
     initShadow();
     initNerve(GET_NERVE(Dossun, DossunNrvUpper));
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     s32 frameMax = MR::getBckFrameMax(this, "FallStart");
     mRisenWaitTime = (mRisenWaitTime - frameMax <= 0) ? 0 : (mRisenWaitTime - frameMax);
     appear();

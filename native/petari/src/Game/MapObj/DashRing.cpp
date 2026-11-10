@@ -12,6 +12,8 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
+
 namespace {
     // Passing: within this far of the ring's plane and this far of its centre.
     NEBULA_TUNABLE(f32, cPassPlaneDistance, 20.0f);
@@ -48,7 +50,7 @@ void DashRing::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     MR::validateClipping(this);
     calcAxis();
 

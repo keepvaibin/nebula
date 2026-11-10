@@ -24,6 +24,31 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initThrowing_f1, "initThrowing.f1", 13.19f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initThrowing_f2, "initThrowing.f2", 41.57f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initThrowing_f3, "initThrowing.f3", 19.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initThrowing_f4, "initThrowing.f4", 3.63f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initThrowing_f5, "initThrowing.f5", 41.69f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initThrowing_f6, "initThrowing.f6", 15.76f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f1, "drawSearchLight.f1", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f2, "drawSearchLight.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f3, "drawSearchLight.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f4, "drawSearchLight.f4", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f5, "drawSearchLight.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f6, "drawSearchLight.f6", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f7, "drawSearchLight.f7", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f8, "drawSearchLight.f8", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f9, "drawSearchLight.f9", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f10, "drawSearchLight.f10", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f11, "drawSearchLight.f11", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f12, "drawSearchLight.f12", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f13, "drawSearchLight.f13", 4.0f);
 
 MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "サーチライト", "SearchLightCone", nullptr, -1, 0), mBeamDistance(), mHitTimer(), mTarget() {
 }
@@ -34,7 +59,7 @@ void MarioSearchLight::init(const TableIter& rParam1) {
     mBeamDistance = 0.0f;
     mTarget = nullptr;
     mHitTimer = 0;
-    MR::addHitSensorCallback(this, "eye", ATYPE_EYE, 4, 100.0f);
+    MR::addHitSensorCallback(this, "eye", ATYPE_EYE, 4, cNum_init_f1);
 }
 
 void MarioSearchLight::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -68,8 +93,8 @@ void MarioSearchLight::updateHitSensor(HitSensor* pSensor) {
     pSensor->mPosition.y = frontPosition.y;
     pSensor->mPosition.z = frontPosition.z;
 
-    mBeamDistance += 80.0f;
-    if (mBeamDistance > 2000.0f) {
+    mBeamDistance += cNum_updateHitSensor_f1;
+    if (mBeamDistance > cNum_updateHitSensor_f2) {
         mBeamDistance = 0.0f;
     }
 
@@ -93,7 +118,7 @@ void MarioSearchLight::calcAndSetBaseMtx() {
     NebulaMtxCopy(getBaseMtx(), baseMtx);
 
     PartsModel::calcAndSetBaseMtx();
-    MR::blendMtxRotateSlerp(baseMtx, getBaseMtx(), 0.1f, baseMtx);
+    MR::blendMtxRotateSlerp(baseMtx, getBaseMtx(), cNum_calcAndSetBaseMtx_f1, baseMtx);
 
     Vec3f trans;
     MR::extractMtxTrans(getBaseMtx(), &trans);
@@ -102,7 +127,7 @@ void MarioSearchLight::calcAndSetBaseMtx() {
 }
 
 void MarioActor::initThrowing() {
-    mSearchLightThrowPos = new FixedPosition(this, "HandR", Vec3f(13.19f, 41.57f, 19.02f), Vec3f(-3.63f, -41.69f, 15.76f));
+    mSearchLightThrowPos = new FixedPosition(this, "HandR", Vec3f(cNum_initThrowing_f1, cNum_initThrowing_f2, cNum_initThrowing_f3), Vec3f(-cNum_initThrowing_f4, -cNum_initThrowing_f5, cNum_initThrowing_f6));
 }
 
 void MarioActor::updateSearchLight() {
@@ -218,7 +243,7 @@ void MarioActor::drawSearchLight() const {
     TDDraw::project2D(&screenPos1, mPosition);
 
     Vec2f screenPos2;
-    TDDraw::project2D(&screenPos2, mPosition + throwVec * 10000.0f);
+    TDDraw::project2D(&screenPos2, mPosition + throwVec * cNum_drawSearchLight_f1);
 
     Vec2f minimum;
     Vec2f maximum;
@@ -238,8 +263,8 @@ void MarioActor::drawSearchLight() const {
         maximum.y = screenPos2.y;
     }
 
-    screenPos1 = minimum + Vec2f(-10.0f, -10.0f);
-    screenPos2 = maximum + Vec2f(10.0f, 10.0f);
+    screenPos1 = minimum + Vec2f(-cNum_drawSearchLight_f2, -cNum_drawSearchLight_f3);
+    screenPos2 = maximum + Vec2f(cNum_drawSearchLight_f4, cNum_drawSearchLight_f5);
 
     // The light model with its own material and the passes over it; setup's view only.
     SiteMaterial view;
@@ -254,12 +279,12 @@ void MarioActor::drawSearchLight() const {
         if (mSearchLightTimer < 30) {
             lightBrightness = 0.0f;
         } else if (mSearchLightTimer < 180) {
-            lightBrightness = (mSearchLightTimer - 30) / 150.0f;
+            lightBrightness = (mSearchLightTimer - 30) / cNum_drawSearchLight_f6;
         }
 
         // The channel colour at alpha A0.
         const u8 volumeAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]));
-        draw.override(2, volumeAlpha / 255.0f, 0.0f, -1.0f);
+        draw.override(2, volumeAlpha / cNum_drawSearchLight_f7, 0.0f, -1.0f);
 
         // Render intersection of light cone with the scene by subtracting
         // visible back faces from front faces.
@@ -302,7 +327,7 @@ void MarioActor::drawSearchLight() const {
 
         // Colour of the light cone: the channel colour at alpha RASA - K(1 - A0), drawn above 4.
         const u8 coneAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel));
-        draw.override(3, coneAlpha / 255.0f, 0.0f, 4.0f);
+        draw.override(3, coneAlpha / cNum_drawSearchLight_f8, 0.0f, cNum_drawSearchLight_f9);
 
         if (res) {
             // Draw central light cone.
@@ -317,7 +342,7 @@ void MarioActor::drawSearchLight() const {
 
             // Cone falloff colour (A0) and end cap falloff colour (A1): the channel colour at (A1 + (A0 - A1) RASA) / 2.
             const u8 blurAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i]));
-            draw.override(4, blurAlpha / 255.0f, 4.0f / 255.0f, 4.0f);
+            draw.override(4, blurAlpha / cNum_drawSearchLight_f10, cNum_drawSearchLight_f11 / cNum_drawSearchLight_f12, cNum_drawSearchLight_f13);
 
             model->simpleDrawShape(material, draw);
         }

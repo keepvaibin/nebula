@@ -9,6 +9,8 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_1, "updateBounceFall.reboundVelocityFromCollision.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateBounceFall_reboundVelocityFromCollision_2, "updateBounceFall.reboundVelocityFromCollision.2", 0.0f);
@@ -95,7 +97,7 @@ void SamboHead::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     f32 scaleY = mScale.y;
     initBinder((cRadius * scaleY), (cRadius * scaleY), 0);
-    MR::initStarPointerTarget(this, cPointerRadius,Vec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, cPointerRadius,Vec3f(0.0f, cNum_init_f1, 0.0f));
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "body", cSensorCount, cRadius * scaleY, Vec3f(0.0f, cRadius * scaleY, 0.0f));
     initEffectKeeper(1, nullptr);

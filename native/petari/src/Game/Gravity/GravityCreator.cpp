@@ -1,5 +1,19 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f1, "settingFromSRT.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f2, "settingFromSRT.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromPlacementArgs_f1, "settingFromPlacementArgs.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f3, "settingFromSRT.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f4, "settingFromSRT.f4", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromPlacementArgs_f2, "settingFromPlacementArgs.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f5, "settingFromSRT.f5", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f6, "settingFromSRT.f6", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f7, "settingFromSRT.f7", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f8, "settingFromSRT.f8", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromSRT_f9, "settingFromSRT.f9", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_settingFromPlacementArgs_f3, "settingFromPlacementArgs.f3", 360.0f);
 
 GravityCreator::GravityCreator() {
 }
@@ -45,7 +59,7 @@ void CubeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotat
 
     Vec3f upVec;
     Vec3f scale;
-    scale.set(rScale * 500.0f);
+    scale.set(rScale * cNum_settingFromSRT_f1);
     mtx.getYDir(upVec);
 
     // The placement point is the bottom face's centre.
@@ -80,7 +94,7 @@ void DiskGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotat
     mGravityInstance->setLocalPosition(rTrans);
     mGravityInstance->setLocalDirection(upVec);
     mGravityInstance->setSideDirection(sideVec);
-    mGravityInstance->setRadius(500.0f * MR::getMaxElement(rScale));
+    mGravityInstance->setRadius(cNum_settingFromSRT_f2 * MR::getMaxElement(rScale));
 }
 
 void DiskGravityCreator::settingFromPlacementArgs(s32 bothSides, s32 edgeGravity, s32 validDegree) {
@@ -91,7 +105,7 @@ void DiskGravityCreator::settingFromPlacementArgs(s32 bothSides, s32 edgeGravity
     if (validDegree >= 0) {
         mGravityInstance->setValidDegree(validDegree);
     } else {
-        mGravityInstance->setValidDegree(360.0f);
+        mGravityInstance->setValidDegree(cNum_settingFromPlacementArgs_f1);
     }
 }
 
@@ -113,7 +127,7 @@ void DiskTorusGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& r
 
     mGravityInstance->setPosition(rTrans);
     mGravityInstance->setDirection(upVec);
-    mGravityInstance->setRadius(500.0f * MR::getMaxElement(rScale));
+    mGravityInstance->setRadius(cNum_settingFromSRT_f3 * MR::getMaxElement(rScale));
 }
 
 void DiskTorusGravityCreator::settingFromPlacementArgs(s32 bothSides, s32 edgeType, s32 diskRadius) {
@@ -141,13 +155,13 @@ PlanetGravity* ConeGravityCreator::createInstance() {
 
 void ConeGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     Pos3f localMtx;
-    MR::makeMtxTRS(localMtx.toMtxPtr(), rTrans, rRotate, rScale * 500.0f);
+    MR::makeMtxTRS(localMtx.toMtxPtr(), rTrans, rRotate, rScale * cNum_settingFromSRT_f4);
     mGravityInstance->setLocalMatrix(localMtx);
 }
 
 void ConeGravityCreator::settingFromPlacementArgs(s32 enableBottom, s32 topCutPermille, s32) {
     mGravityInstance->setEnableBottom(enableBottom != 0);
-    mGravityInstance->setTopCutRate(topCutPermille / 1000.0f);
+    mGravityInstance->setTopCutRate(topCutPermille / cNum_settingFromPlacementArgs_f2);
 }
 
 PlanetGravity* ConeGravityCreator::getGravity() {
@@ -180,7 +194,7 @@ PlanetGravity* PlaneInBoxGravityCreator::createInstance() {
 
 void PlaneInBoxGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     Pos3f mtx;
-    Vec3f scale = rScale * 500.0f;
+    Vec3f scale = rScale * cNum_settingFromSRT_f5;
     MR::makeMtxTR(mtx.toMtxPtr(), rTrans, rRotate);
 
     Vec3f upVec;
@@ -234,7 +248,7 @@ void PlaneInCylinderGravityCreator::settingFromSRT(const Vec3f& rTrans, const Ve
     Vec3f upVec;
     mtx.getYDir(upVec);
     mGravityInstance->setPlane(upVec, rTrans);
-    mGravityInstance->setRangeCylinder(500.0f * rScale.x, 500.0f * rScale.y);
+    mGravityInstance->setRangeCylinder(cNum_settingFromSRT_f6 * rScale.x, cNum_settingFromSRT_f7 * rScale.y);
 }
 
 void PlaneInCylinderGravityCreator::settingFromPlacementArgs(s32 baseDistance, s32, s32) {
@@ -247,7 +261,7 @@ PlanetGravity* PointGravityCreator::createInstance() {
 }
 
 void PointGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& /*rRotate*/, const Vec3f& rScale) {
-    mGravityInstance->mDistant = 500.0f * rScale.x;
+    mGravityInstance->mDistant = cNum_settingFromSRT_f8 * rScale.x;
     mGravityInstance->setOrig(rTrans);
 }
 
@@ -269,7 +283,7 @@ void SegmentGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRo
     mtx.getYDir(upVec);
 
     mGravityInstance->setGravityPoint(0, rTrans);
-    mGravityInstance->setGravityPoint(1, rTrans + upVec * 1000.0f);
+    mGravityInstance->setGravityPoint(1, rTrans + upVec * cNum_settingFromSRT_f9);
     mGravityInstance->setSideVector(sideVec);
 }
 
@@ -298,7 +312,7 @@ void SegmentGravityCreator::settingFromPlacementArgs(s32 validEdges, s32 validSi
     if (validSideDegree >= 0) {
         mGravityInstance->setValidSideDegree(validSideDegree);
     } else {
-        mGravityInstance->setValidSideDegree(360.0f);
+        mGravityInstance->setValidSideDegree(cNum_settingFromPlacementArgs_f3);
     }
 }
 

@@ -16,6 +16,14 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeVibrate_f1, "exeVibrate.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeVibrate_f2, "exeVibrate.f2", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeVibrate_f3, "exeVibrate.f3", 0.1f);
+
 namespace {
     const s32 sWaveSoundStepMin = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sWaveSoundStepMax = NebulaFrameClock::stepsOfMilliseconds(1500);
@@ -41,7 +49,7 @@ void DriftWood::init(const TableIter& rIter) {
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupHitSensor();
-    info.setupHitSensorParam(8, 300.0f, Vec3f(0.0f, -60.0f, 0.0f));
+    info.setupHitSensorParam(8, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
     info.setupEffect(nullptr);
     info.setupSound(4);
     info.setupNerve(GET_NERVE(DriftWood, DriftWoodNrvWait));
@@ -52,7 +60,7 @@ void DriftWood::init(const TableIter& rIter) {
     mWaveSoundTimer = MR::getRandom(::sWaveSoundStepMin, ::sWaveSoundStepMax);
     f32 radius = 0.0f;
     MR::calcModelBoundingRadius(&radius, this);
-    MR::initAndSetRailClipping(&mRailClipping, this, 100.0f, radius);
+    MR::initAndSetRailClipping(&mRailClipping, this, cNum_init_f3, radius);
     MR::tryCreateMirrorActor(this, mObjectName);
 }
 
@@ -62,7 +70,7 @@ void DriftWood::exeWait() {
     }
 
     MR::moveCoordAndFollowTrans(this, ::sRailSpeed);
-    MR::rotateVecDegree(&mRailDirection, mGravity, 0.05f);
+    MR::rotateVecDegree(&mRailDirection, mGravity, cNum_exeWait_f1);
 
     tryVibrate();
 
@@ -82,8 +90,8 @@ void DriftWood::exeVibrate() {
 
     MR::moveCoord(this, ::sRailSpeed);
 
-    f32 wave = 30.0f * MR::sinDegree(16.0f * getNerveStep());
-    f32 nerveValue = MR::calcNerveValue(this, ::sVibrateStep, 0.1f, 1.0f);
+    f32 wave = cNum_exeVibrate_f1 * MR::sinDegree(cNum_exeVibrate_f2 * getNerveStep());
+    f32 nerveValue = MR::calcNerveValue(this, ::sVibrateStep, cNum_exeVibrate_f3, 1.0f);
 
     mVibrateOffset.scale((1.0f - nerveValue) * wave, *getGravity());
     mPosition.add(MR::getRailPos(this), mVibrateOffset);

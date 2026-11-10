@@ -13,6 +13,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.5f);
+
 namespace {
     NEBULA_TUNABLE(f32, sBaseInterpoleRate, 0.2f);
     NEBULA_TUNABLE(f32, sAccel, 2.0f);
@@ -32,25 +37,25 @@ GravityLightRoad::GravityLightRoad(const char* pName) : LiveActor(pName), mHost(
 void GravityLightRoad::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    mRadius = 2500.0f * mScale.y;
+    mRadius = cNum_init_f1 * mScale.y;
 
     initModelManagerWithAnm("GravityLightRoad", nullptr, false);
 
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::addHitSensorCallbackPriorBinder(this, "body", 4, 250.0f);
+    MR::addHitSensorCallbackPriorBinder(this, "body", 4, cNum_init_f2);
 
     f32 boundingRadius;
     MR::calcModelBoundingRadius(&boundingRadius, this);
 
-    boundingRadius += 0.5f * mRadius;
+    boundingRadius += cNum_init_f3 * mRadius;
 
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
-    mEndPos.scaleAdd(0.5f * mRadius, upVec, mPosition);
+    mEndPos.scaleAdd(cNum_init_f4 * mRadius, upVec, mPosition);
 
     MR::setClippingTypeSphere(this, boundingRadius, &mEndPos);
 

@@ -9,6 +9,16 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isStickFull_f1, "isStickFull.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkSquat_f1, "checkSquat.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isSlipPolygon_f1, "isSlipPolygon.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isSlipPolygon_f2, "isSlipPolygon.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAngleD_f1, "calcAngleD.f1", 3.14159f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAngleD_f2, "calcAngleD.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAngleD_f3, "calcAngleD.f3", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAngleD_f4, "calcAngleD.f4", 90.0f);
 
 bool MarioModule::isInputDisable() const {
     if (mActor->mMario->mMovementStates.inputLocked) {
@@ -261,7 +271,7 @@ bool MarioModule::isStickOn() const {
 }
 
 bool MarioModule::isStickFull() const {
-    return mActor->mMario->mStickPos.z > 0.9f;
+    return mActor->mMario->mStickPos.z > cNum_isStickFull_f1;
 }
 
 Vec3f& MarioModule::getWorldPadDir() const {
@@ -494,7 +504,7 @@ bool MarioModule::checkSquat(bool allowWhileRising) {
         }
         return false;
     }
-    if (!allowWhileRising && mActor->mMario->mVerticalSpeed > 100.0f) {
+    if (!allowWhileRising && mActor->mMario->mVerticalSpeed > cNum_checkSquat_f1) {
         return false;
     }
     return mActor->checkButtonType(9, false);
@@ -540,7 +550,7 @@ bool MarioModule::isSlipPolygon(const Triangle* pTri) const {
 
     switch (code) {
     case 2:
-        return !(calcAngleD(*pTri->getNormal(0)) <= 3.0f);
+        return !(calcAngleD(*pTri->getNormal(0)) <= cNum_isSlipPolygon_f1);
     case 3:
     case 0xd:
     case 0x14:
@@ -552,7 +562,7 @@ bool MarioModule::isSlipPolygon(const Triangle* pTri) const {
 
     f32 angle = calcAngleD(*pTri->getNormal(0));
 
-    return angle >= mActor->mConst->getTable()->mFlatAngle - 0.5f;
+    return angle >= mActor->mConst->getTable()->mFlatAngle - cNum_isSlipPolygon_f2;
 }
 
 u32 MarioModule::getFloorCode() const {
@@ -570,12 +580,12 @@ f32 MarioModule::calcPolygonAngleD(const Triangle* pTri) const {
 }
 
 f32 MarioModule::calcAngleD(const Vec3f& rVec) const {
-    f32 angleDeg = (MR::acosEx(-mActor->mMario->getAirGravityVec().dot(rVec)) / 3.14159f) * 180.0f;
+    f32 angleDeg = (MR::acosEx(-mActor->mMario->getAirGravityVec().dot(rVec)) / cNum_calcAngleD_f1) * cNum_calcAngleD_f2;
     if (MR::isNearZero(angleDeg, 1.0f)) {
         angleDeg = 0.0f;
     }
-    if (MR::isNearZero(angleDeg - 90.0f, 1.0f)) {
-        angleDeg = 90.0f;
+    if (MR::isNearZero(angleDeg - cNum_calcAngleD_f3, 1.0f)) {
+        angleDeg = cNum_calcAngleD_f4;
     }
     return angleDeg;
 }

@@ -16,6 +16,8 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_f1, "exeThrow.f1", 200.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, cSensorRadius, 40.0f);
     NEBULA_TUNABLE(f32, cBinderRadius, 60.0f);
@@ -215,7 +217,7 @@ void FireBall::exeThrow() {
         MR::startBck(this, "Spin");
     }
 
-    if (MR::changeShowModelFlagSyncNearClipping(this, 200.0f)) {
+    if (MR::changeShowModelFlagSyncNearClipping(this, cNum_exeThrow_f1)) {
         MR::emitEffect(this, "FireBall");
     } else {
         MR::deleteEffect(this, "FireBall");

@@ -5,6 +5,10 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <string.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_createTarget_f1, "createTarget.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createTarget_f2, "createTarget.f2", 0.5f);
 
 GameTexture::GameTexture(u32 width, u32 height, u8 layout) {
     makeImage(width, height, layout);
@@ -65,8 +69,8 @@ GameTexture* GameTexture::createPixelTarget(u32 width, u32 height) {
 
 GameTexture* GameTexture::createTarget(f32 across, f32 down) {
     GameTexture* const pTexture =
-        createPixelTarget(static_cast< u32 >(across * NebulaFrameClock::cEffectTexelsAcross + 0.5f),
-                          static_cast< u32 >(down * NebulaFrameClock::cScreenHeight + 0.5f));
+        createPixelTarget(static_cast< u32 >(across * NebulaFrameClock::cEffectTexelsAcross + cNum_createTarget_f1),
+                          static_cast< u32 >(down * NebulaFrameClock::cScreenHeight + cNum_createTarget_f2));
     pTexture->mShareAcross = across;
     pTexture->mShareDown = down;
     return pTexture;

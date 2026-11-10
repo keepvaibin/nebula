@@ -19,6 +19,9 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_tryEmitWaitEffect_f1, "tryEmitWaitEffect.f1", 4000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryDeleteWaitEffect_f1, "tryDeleteWaitEffect.f1", 4000.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_tryDeleteWaitEffect_isNearPlayer_1, "tryDeleteWaitEffect.isNearPlayer.1", 4000.0f);
 
@@ -589,7 +592,7 @@ bool MapObjActor::tryEmitWaitEffect() {
         return false;
     }
 
-    if (MR::calcCameraDistanceZ(mPosition) > 4000.0f) {
+    if (MR::calcCameraDistanceZ(mPosition) > cNum_tryEmitWaitEffect_f1) {
         return false;
     }
 
@@ -610,7 +613,7 @@ bool MapObjActor::tryDeleteWaitEffect() {
         return false;
     }
 
-    if (MR::calcCameraDistanceZ(mPosition) <= 4000.0f) {
+    if (MR::calcCameraDistanceZ(mPosition) <= cNum_tryDeleteWaitEffect_f1) {
         return false;
     }
 

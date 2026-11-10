@@ -18,6 +18,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_tryAppearStarPeace_f1, "tryAppearStarPeace.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGotoSleepingMario_f1, "exeGotoSleepingMario.f1", 0.05f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeGotoSleepingMario_checkPassBckFrame_1, "exeGotoSleepingMario.checkPassBckFrame.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeReadyToPerchOnSleepingMario_checkPassBckFrame_1, "exeReadyToPerchOnSleepingMario.checkPassBckFrame.1", 0.0f);
@@ -63,7 +66,7 @@ namespace {
     NEBULA_TUNABLE(f32, sTurnLimit, 0.997f);  // ~4.44 degrees
     NEBULA_TUNABLE(f32, sUpdatePostureMinVel, 0.5f);
 
-    static const Vec sMarioCapPosOffset = {0.0f, 50.2f, 24.9f};
+    NEBULA_TUNABLE_RECORD(Vec, sMarioCapPosOffset, {0.0f, 50.2f, 24.9f});
 
 };  // namespace
 
@@ -300,7 +303,7 @@ bool Butterfly::tryAppearStarPeace(s32 port) {
         return false;
     }
 
-    if (!MR::appearStarPiece(this, mPosition, 1, ::sAppearStarPeaceScreenRadius, 40.0f, false)) {
+    if (!MR::appearStarPiece(this, mPosition, 1, ::sAppearStarPeaceScreenRadius, cNum_tryAppearStarPeace_f1, false)) {
         return false;
     }
 
@@ -425,7 +428,7 @@ void Butterfly::exeGotoSleepingMario() {
 
     Vec3f vel = posOffset - mPosition;
     // This can really only be ::sHiveAccel, but this nerve is only accessible by Wait
-    vel.setLength(0.05f);
+    vel.setLength(cNum_exeGotoSleepingMario_f1);
     mVelocity += vel;
 
     if (::sGotoSleepingMarioSpeedMax < mVelocity.length()) {

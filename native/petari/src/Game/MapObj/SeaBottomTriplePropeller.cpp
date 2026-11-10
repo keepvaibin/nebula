@@ -3,6 +3,9 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace NrvSeaBottomTriplePropeller {
     NEW_NERVE(SeaBottomTriplePropellerNrvWait, SeaBottomTriplePropeller, Wait);
@@ -44,7 +47,7 @@ void SeaBottomTriplePropeller::init(const TableIter& rIter) {
     MR::addJointToSeKeeper(mAudSeKeeper, "Propeller2", nullptr);
     MR::addJointToSeKeeper(mAudSeKeeper, "Propeller3", nullptr);
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::registerDemoActionNerve(this, GET_NERVE(SeaBottomTriplePropeller, SeaBottomTriplePropellerNrvBreak), nullptr);

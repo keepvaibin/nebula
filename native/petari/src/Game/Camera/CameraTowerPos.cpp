@@ -5,6 +5,14 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeHorizontalPose_f1, "arrangeHorizontalPose.f1", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeWatchPos_f1, "arrangeWatchPos.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeWatchPos_f2, "arrangeWatchPos.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeWatchPos_f3, "arrangeWatchPos.f3", 2.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAttenuation, 0.05f);
 };  // namespace
@@ -26,7 +34,7 @@ CameraTargetObj* CameraTowerPos::calc() {
 
 void CameraTowerPos::calcIdealPose(bool arrange) {
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), cNum_calcIdealPose_f1 / cNum_calcIdealPose_f2);
 
     Pos3f inv;
     inv.set(mZoneMatrix);
@@ -60,7 +68,7 @@ void CameraTowerPos::calcIdealPose(bool arrange) {
 
 void CameraTowerPos::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(general->mWPoint, general->mAxis, general->mUp.x, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * 0.5f), general->mUp.y);
+    setParam(general->mWPoint, general->mAxis, general->mUp.x, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * cNum_setParamFromChunk_f1), general->mUp.y);
 }
 
 void CameraTowerPos::arrangeHorizontalPose(const Vec3f& rWatchPos, Vec3f& rPos) {
@@ -79,7 +87,7 @@ void CameraTowerPos::arrangeHorizontalPose(const Vec3f& rWatchPos, Vec3f& rPos) 
 
     f32 newAngleY;
     if (CameraLocalUtil::tryCameraReset()) {
-        roundAngle *= 0.7f;
+        roundAngle *= cNum_arrangeHorizontalPose_f1;
         newAngleY = angleY + roundAngle;
     } else {
         if (MR::abs(roundAngle) > mAngleYMaxSpeed) {
@@ -117,7 +125,7 @@ void CameraTowerPos::arrangeWatchPos(Vec3f& rWatchPos, const Vec3f& rPos) {
     idealOffset.z = idealFront.z;
 
     f32 angleDiff = offset.angle(idealOffset);
-    f32 fovAngle = CameraLocalUtil::getFovy(this) * MR::pi() / 180.0f * 0.5f;
+    f32 fovAngle = CameraLocalUtil::getFovy(this) * MR::pi() / cNum_arrangeWatchPos_f1 * cNum_arrangeWatchPos_f2;
 
     if (angleDiff > fovAngle * mAngleXRate) {
         f32 length, angleX, angleY;
@@ -126,7 +134,7 @@ void CameraTowerPos::arrangeWatchPos(Vec3f& rWatchPos, const Vec3f& rPos) {
         f32 idealLength, idealAngleX, idealAngleY;
         MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), idealOffset, &idealLength, &idealAngleX, &idealAngleY);
 
-        if (angleDiff > fovAngle * mAngleXRate * 2.0f) {
+        if (angleDiff > fovAngle * mAngleXRate * cNum_arrangeWatchPos_f3) {
             if (angleX > idealAngleX) {
                 angleX -= fovAngle * mAngleXRate;
             } else {

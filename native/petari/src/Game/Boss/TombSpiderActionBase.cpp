@@ -16,6 +16,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_updateAttackLoop_f1, "updateAttackLoop.f1", 360.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, cEnergyMax, 3);
     NEBULA_TUNABLE(s32, cStepAttackLoopSensorValidate, 20);
@@ -185,7 +187,7 @@ bool TombSpiderActionBase::updateAttackLoop(s32 minAttackTime, s32 maxAttackTime
     mRotateSpeed += mRotateAccel;
     mRotateSpeed = MR::clamp(mRotateSpeed, -maxRotateSpeed, maxRotateSpeed);
     mParent->mRotation.z += mRotateSpeed;
-    mParent->mRotation.z = MR::repeat(mParent->mRotation.z, 0.0f, 360.0f);
+    mParent->mRotation.z = MR::repeat(mParent->mRotation.z, 0.0f, cNum_updateAttackLoop_f1);
 
     MR::startLevelSound(mParent, "SE_BM_LV_TSPIDER_ACID");
 

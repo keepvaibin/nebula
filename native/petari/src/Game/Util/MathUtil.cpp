@@ -7,6 +7,37 @@
 
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getRandomDegree_f1, "getRandomDegree.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isHalfProbability_f1, "isHalfProbability.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getEaseInValue_f1, "getEaseInValue.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getEaseOutValue_f1, "getEaseOutValue.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getEaseInOutValue_f1, "getEaseInOutValue.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getScaleWithReactionValueZeroToOne_f1, "getScaleWithReactionValueZeroToOne.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getScaleWithReactionValueZeroToOne_f2, "getScaleWithReactionValueZeroToOne.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getScaleWithReactionValueZeroToOne_f3, "getScaleWithReactionValueZeroToOne.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getScaleWithReactionValueZeroToOne_f4, "getScaleWithReactionValueZeroToOne.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getReduceVibrationValue_f1, "getReduceVibrationValue.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_crossOrPerpendicular_f1, "crossOrPerpendicular.f1", 1.0e-12f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeAxisAndCosignVecToVec_f1, "makeAxisAndCosignVecToVec.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcParabolicFunctionParam_f1, "calcParabolicFunctionParam.f1", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcParabolicFunctionParam_f2, "calcParabolicFunctionParam.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcParabolicFunctionParam_f3, "calcParabolicFunctionParam.f3", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcParabolicFunctionParam_f4, "calcParabolicFunctionParam.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendQuatUpFront_f1, "blendQuatUpFront.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendQuatUpFront_f2, "blendQuatUpFront.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendQuatFrontUp_f1, "blendQuatFrontUp.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendQuatFrontUp_f2, "blendQuatFrontUp.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_turnQuat_f1, "turnQuat.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_turnQuat_f2, "turnQuat.f2", 0.015f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRotateY_f1, "calcRotateY.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_turnVecToVecDegree_f1, "turnVecToVecDegree.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendAngle_f1, "blendAngle.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_lerp_f1, "lerp.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_vecBlendSphere_f1, "vecBlendSphere.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_diffAngleSignedHorizontal_f1, "diffAngleSignedHorizontal.f1", 0.00017453293f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNearAngleDegree_f1, "isNearAngleDegree.f1", 180.0f);
 
 
 const Vec gZeroVec = {0.0f, 0.0f, 0.0f};
@@ -32,7 +63,7 @@ namespace MR {
     }
 
     f32 getRandomDegree() {
-        return getRandom(0.0f, 360.0f);
+        return getRandom(0.0f, cNum_getRandomDegree_f1);
     }
 
     void calcRandomVec(Vec3f* pDst, f32 min, f32 max) {
@@ -40,7 +71,7 @@ namespace MR {
     }
 
     bool isHalfProbability() {
-        return getRandom() < 0.5f;
+        return getRandom() < cNum_isHalfProbability_f1;
     }
 
     f32 getSignHalfProbability() {
@@ -88,24 +119,24 @@ namespace MR {
     }
 
     f32 getEaseInValue(f32 x, f32 start, f32 end, f32 max) {
-        return getInterpolateValue(1.0f - Angle::cosRadian(x / max * pi() / 2.0f), start, end);
+        return getInterpolateValue(1.0f - Angle::cosRadian(x / max * pi() / cNum_getEaseInValue_f1), start, end);
     }
 
     f32 getEaseOutValue(f32 x, f32 start, f32 end, f32 max) {
-        f32 t = x / max * pi() / 2.0f;
+        f32 t = x / max * pi() / cNum_getEaseOutValue_f1;
         return getInterpolateValue(Angle::sinRadian(t), start, end);
     }
 
     f32 getEaseInOutValue(f32 x, f32 start, f32 end, f32 max) {
         f32 t = x / max * pi();
-        return getInterpolateValue((1.0f - Angle::cosRadian(t)) / 2.0f, start, end);
+        return getInterpolateValue((1.0f - Angle::cosRadian(t)) / cNum_getEaseInOutValue_f1, start, end);
     }
 
     f32 getScaleWithReactionValueZeroToOne(f32 x, f32 freq, f32 amplitude) {
-        if (x < 0.5f) {
-            return getEaseOutValue(x * 2.0f, 0.0f, 1.0f, 1.0f);
+        if (x < cNum_getScaleWithReactionValueZeroToOne_f1) {
+            return getEaseOutValue(x * cNum_getScaleWithReactionValueZeroToOne_f2, 0.0f, 1.0f, 1.0f);
         } else {
-            f32 t = (x - 0.5f) * 2.0f;
+            f32 t = (x - cNum_getScaleWithReactionValueZeroToOne_f3) * cNum_getScaleWithReactionValueZeroToOne_f4;
             return 1.0f + (1.0f - Angle::cosRadian(pi() * freq * t)) * (1.0f - t) * amplitude;
         }
     }
@@ -124,7 +155,7 @@ namespace MR {
         f32 vibMax = base + amplitude;
 
         f32 vib = Angle::cosRadian(x * (1.0f / freq * PI));
-        f32 vibration = (amplitude * 0.5f) * (vib - 1.0f);
+        f32 vibration = (amplitude * cNum_getReduceVibrationValue_f1) * (vib - 1.0f);
         if (x >= time) {
             return vibration + vibMax;
         } else {
@@ -140,7 +171,7 @@ namespace MR {
         const Vec3f b(rB);
         pDst->cross(a, b);
         const f32 crossSq = pDst->dot(*pDst);
-        if (!(crossSq <= 1.0e-12f * a.dot(a) * b.dot(b))) {
+        if (!(crossSq <= cNum_crossOrPerpendicular_f1 * a.dot(a) * b.dot(b))) {
             return;
         }
 
@@ -204,7 +235,7 @@ namespace MR {
     bool makeAxisAndCosignVecToVec(Vec3f* pAxis, f32* pCos, const Vec3f& rFrom, const Vec3f& rTo) {
         Vec3f from;
         if (isOppositeDirection(rFrom, rTo)) {
-            turnRandomVector(&from, rFrom, 0.01f);
+            turnRandomVector(&from, rFrom, cNum_makeAxisAndCosignVecToVec_f1);
             normalize(&from);
         } else {
             from.set(rFrom);
@@ -337,9 +368,9 @@ namespace MR {
             return;
         }
 
-        if (MR::abs(end) < 0.0001f) {
-            *pAccel = max * -4.0f;
-            *pVel = max * 4.0f;
+        if (MR::abs(end) < cNum_calcParabolicFunctionParam_f1) {
+            *pAccel = max * -cNum_calcParabolicFunctionParam_f2;
+            *pVel = max * cNum_calcParabolicFunctionParam_f3;
             return;
         }
 
@@ -359,7 +390,7 @@ namespace MR {
 
         f32 a = -max / (t * t);
         *pAccel = a;
-        *pVel = -2.0f * t * a;
+        *pVel = -cNum_calcParabolicFunctionParam_f4 * t * a;
     }
 
     void makeQuatRotateRadian(Quat4f* pQuat, const Vec3f& rRot) {
@@ -406,7 +437,7 @@ namespace MR {
 
         bool isUpSame = up.dot(rUp) >= 0.0f ? false : isSameDirection(up, rUp);
         if (isUpSame) {
-            turnRandomVector(&up, up, 0.001f);
+            turnRandomVector(&up, up, cNum_blendQuatUpFront_f1);
         }
 
         Quat4f upRot;
@@ -422,7 +453,7 @@ namespace MR {
 
         bool isFrontSame = front.dot(targetFront) >= 0.0f ? false : isSameDirection(front, targetFront);
         if (isFrontSame) {
-            turnRandomVector(&front, front, 0.001f);
+            turnRandomVector(&front, front, cNum_blendQuatUpFront_f2);
         }
 
         Quat4f frontRot;
@@ -446,7 +477,7 @@ namespace MR {
 
         bool isFrontSame = front.dot(rFront) >= 0.0f ? false : isSameDirection(front, rFront);
         if (isFrontSame) {
-            turnRandomVector(&front, front, 0.001f);
+            turnRandomVector(&front, front, cNum_blendQuatFrontUp_f1);
         }
 
         Quat4f frontRot;
@@ -462,7 +493,7 @@ namespace MR {
 
         bool isUpSame = up.dot(targetUp) >= 0.0f ? false : isSameDirection(up, targetUp);
         if (isUpSame) {
-            turnRandomVector(&up, up, 0.001f);
+            turnRandomVector(&up, up, cNum_blendQuatFrontUp_f2);
         }
 
         Quat4f upRot;
@@ -495,7 +526,7 @@ namespace MR {
 
         bool isSameDir = rFrom.dot(rTo) >= 0.0f ? false : isSameDirection(rFrom, rTo);
         if (isSameDir) {
-            turnRandomVector(&from, rFrom, 0.001f);
+            turnRandomVector(&from, rFrom, cNum_turnQuat_f1);
         } else {
             from.set(rFrom);
         }
@@ -516,7 +547,7 @@ namespace MR {
         pDst->mult(rot, rSrc);
         pDst->normalize();
 
-        return angleBetween < 0.015f;
+        return angleBetween < cNum_turnQuat_f2;
     }
 
     bool turnQuatXDirRad(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rTo, f32 angle) {
@@ -635,7 +666,7 @@ namespace MR {
     }
 
     f32 calcRotateY(f32 x, f32 z) {
-        return MR::repeatDegree(MR::toDegree(MR::atan2(-z, x)) + 90.0f);
+        return MR::repeatDegree(MR::toDegree(MR::atan2(-z, x)) + cNum_calcRotateY_f1);
     }
 
     f32 calcRotateZ(const Vec3f& rVecA, const Vec3f& rVecB) {
@@ -874,7 +905,7 @@ namespace MR {
     }
 
     f32 turnVecToVecDegree(Vec3f* pDst, const Vec3f& rFrom, const Vec3f& rTo, f32 angle, const Vec3f& rAxis) {
-        return turnVecToVecRadian(pDst, rFrom, rTo, angle * (PI / 180.0f), rAxis) * _180_PI;
+        return turnVecToVecRadian(pDst, rFrom, rTo, angle * (PI / cNum_turnVecToVecDegree_f1), rAxis) * _180_PI;
     }
 
     void calcMomentRollBall(Vec3f* pMoment, const Vec3f& rVel, const Vec3f& rUp, f32 radius) {
@@ -1041,7 +1072,7 @@ namespace MR {
         angleA = normalizeAngleAbs(angleA);
         angleB = normalizeAngleAbs(angleB);
 
-        if (!isAngleBetween((angleA + angleB) / 2.0f, angleA, angleB)) {
+        if (!isAngleBetween((angleA + angleB) / cNum_blendAngle_f1, angleA, angleB)) {
             if (angleA < angleB) {
                 angleA += TWO_PI;
             } else {
@@ -1053,7 +1084,7 @@ namespace MR {
     }
 
     u8 lerp(u8 start, u8 end, f32 t) {
-        return (s32)(FloatUtil::clamp(start + (end - start) * t, 0.0f, 255.0f));
+        return (s32)(FloatUtil::clamp(start + (end - start) * t, 0.0f, cNum_lerp_f1));
     }
 
     NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t) {
@@ -1164,7 +1195,7 @@ namespace MR {
             diffAngle = diffAngleAbs(rFrom, rTo);
         }
 
-        if (diffAngle < 0.1f) {
+        if (diffAngle < cNum_vecBlendSphere_f1) {
             vecBlendNormal(rFrom, rTo, pVec, rate);
             pVec->setLength(lenFrom * (1.0f - rate) + lenTo * rate);
             return true;
@@ -1340,7 +1371,7 @@ namespace MR {
         vecKillElement(rB, rAxis, &horizonB);
         f32 angleAbs = diffAngleAbs(horizonA, horizonB);
         Pos3f mtx;
-        NebulaMtxRotAxisRad(mtx, rAxis, 0.00017453293f);
+        NebulaMtxRotAxisRad(mtx, rAxis, cNum_diffAngleSignedHorizontal_f1);
         f32 angle1 = horizonA.dot(horizonB);
         NebulaMtxMultVec(mtx, horizonA, horizonA);
         f32 angle2 = horizonA.dot(horizonB);
@@ -1367,7 +1398,7 @@ namespace MR {
     }
 
     bool isNearAngleDegree(const Vec3f& rA, const Vec3f& rB, f32 angle) {
-        return isNearAngleRadian(rA, rB, angle * (PI / 180.0f));
+        return isNearAngleRadian(rA, rB, angle * (PI / cNum_isNearAngleDegree_f1));
     }
 
     bool isNearAngleRadianHV(const Vec3f& rA, const Vec3f& rB, const Vec3f& rAxis, f32 angleH, f32 angleV) {

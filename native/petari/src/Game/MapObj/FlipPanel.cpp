@@ -9,6 +9,8 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcJointMove_f1, "calcJointMove.f1", 25.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeEndPrepare_1, "exeEndPrepare.1", 20);
 
@@ -227,7 +229,7 @@ bool FlipPanel::calcJointMove(Pos3f* pPos, const JointControllerInfo& /*rInfo*/)
     MR::copyJointPos(this, "Panel", &jointPos);
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    jointPos.scaleAdd(-25.0f, upVec, jointPos);
+    jointPos.scaleAdd(-cNum_calcJointMove_f1, upVec, jointPos);
     pPos->setTrans(jointPos);
     return true;
 }

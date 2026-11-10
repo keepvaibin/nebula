@@ -21,6 +21,15 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 25.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_setVelocityFromCursorMove_f1, "setVelocityFromCursorMove.f1", 40.0);
+NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f1, "generateItem.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f2, "generateItem.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f3, "generateItem.f3", 40.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_1, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_2, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.2", 0.0f);
@@ -123,11 +132,11 @@ void Karikari::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KARIKARI, 32, 100.0f, Vec3f(0.0f, 30.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KARIKARI, 32, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     MR::initShadowVolumeSphere(this, ::sSize);
     MR::onCalcShadowOneTime(this, nullptr);
     initNerve(GET_NERVE(Karikari, HostTypeNrvFall));
-    MR::initStarPointerTarget(this, 40.0f, Vec3f(0.0f, 25.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0.0f, cNum_init_f4, 0.0f));
 
     if (MR::isValidSwitchAppear(this)) {
         makeActorDead();
@@ -791,7 +800,7 @@ void Karikari::setVelocityFromCursorMove(const Vec2f& rVel) {
         MR::vecKillElement(mVelocity, mGravity, &mVelocity);
     }
     mVelocity.setLength(::sScratchStrongVel);
-    mVelocity.sub(mGravity * 40.0);
+    mVelocity.sub(mGravity * cNum_setVelocityFromCursorMove_f1);
 }
 
 void Karikari::makeActorDead() {
@@ -813,10 +822,10 @@ void Karikari::kill() {
 
 void Karikari::generateItem(s32 numStarPieces) {
     Vec3f up = -mGravity;
-    Vec3f pos = up * 80.0f;
+    Vec3f pos = up * cNum_generateItem_f1;
     pos += mPosition;
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
-    MR::appearStarPiece(this, pos, numStarPieces, 10.0f, 40.0f, false);
+    MR::appearStarPiece(this, pos, numStarPieces, cNum_generateItem_f2, cNum_generateItem_f3, false);
 }
 
 void Karikari::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

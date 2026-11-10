@@ -18,6 +18,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapPartsClipping_f1, "initMapPartsClipping.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapPartsShadow_f1, "initMapPartsShadow.f1", 0.70710677f);
 
 namespace {
     const char* cFollowJointName = "Move";
@@ -169,7 +173,7 @@ namespace MR {
         }
 
         if (isConnectedWithRail(rIter) && !ignoreRail) {
-            initAndSetRailClipping(pCenter, pActor, 0.5f * radius, radius);
+            initAndSetRailClipping(pCenter, pActor, cNum_initMapPartsClipping_f1 * radius, radius);
         } else {
             setClippingTypeSphere(pActor, radius);
         }
@@ -211,7 +215,7 @@ namespace MR {
             size.sub(bounds.f, bounds.i);
             initShadowVolumeBox(pActor, size, pActor->getBaseMtx());
         } else {
-            initShadowVolumeSphere(pActor, 0.70710677f * pActor->getSensor("body")->mRadius);
+            initShadowVolumeSphere(pActor, cNum_initMapPartsShadow_f1 * pActor->getSensor("body")->mRadius);
         }
 
         if (isExistJoint(pActor, ::cFollowJointName)) {

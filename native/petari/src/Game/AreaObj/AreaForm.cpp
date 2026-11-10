@@ -1,5 +1,20 @@
 #include "Game/AreaObj/AreaForm.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getBaseSize_f1, "getBaseSize.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f1, "updateBoxParam.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f2, "updateBoxParam.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f3, "updateBoxParam.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f4, "updateBoxParam.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f5, "updateBoxParam.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f6, "updateBoxParam.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBoxParam_f7, "updateBoxParam.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCenterPos_f1, "calcCenterPos.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 500.0f);
 
 AreaFormCube::AreaFormCube(int cubeType) {
     mCubeType = cubeType;
@@ -84,7 +99,7 @@ void AreaFormCube::calcLocalPos(Vec3f* pPos, const Vec3f& rPos) const {
 }
 
 f32 AreaFormCube::getBaseSize() {
-    return 1000.0f;
+    return cNum_getBaseSize_f1;
 }
 
 void AreaFormCube::updateBoxParam() {
@@ -92,14 +107,14 @@ void AreaFormCube::updateBoxParam() {
 
     mBaseMtx.setTrans(mTranslation);
 
-    Vec3f boxMin(0.5f * (-mScale.x * getBaseSize()), 0.5f * (-mScale.y * getBaseSize()), 0.5f * (-mScale.z * getBaseSize()));
-    Vec3f boxMax(0.5f * (mScale.x * getBaseSize()), 0.5f * (mScale.y * getBaseSize()), 0.5f * (mScale.z * getBaseSize()));
+    Vec3f boxMin(cNum_updateBoxParam_f1 * (-mScale.x * getBaseSize()), cNum_updateBoxParam_f2 * (-mScale.y * getBaseSize()), cNum_updateBoxParam_f3 * (-mScale.z * getBaseSize()));
+    Vec3f boxMax(cNum_updateBoxParam_f4 * (mScale.x * getBaseSize()), cNum_updateBoxParam_f5 * (mScale.y * getBaseSize()), cNum_updateBoxParam_f6 * (mScale.z * getBaseSize()));
 
     mBounding.i.set(boxMin);
     mBounding.f.set(boxMax);
 
     if (mCubeType == 1) {
-        Vec3f halfHeight(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
+        Vec3f halfHeight(0.0f, cNum_updateBoxParam_f7 * (mScale.y * getBaseSize()), 0.0f);
 
         mBounding.i += halfHeight;
         mBounding.f += halfHeight;
@@ -160,7 +175,7 @@ void AreaFormBowl::init(const TableIter& rIter) {
     f32 scale_x = 1.0f;
     rIter.getValue< f32 >("scale_x", &scale_x);
     mRadius = scale_x;
-    mRadius *= 500.0f;
+    mRadius *= cNum_init_f1;
 
     Vec3f rotation;
     MR::getPlacementRotate(rIter, &rotation);
@@ -209,7 +224,7 @@ void AreaFormCylinder::calcCenterPos(Vec3f* pCenterPos) const {
 
     Vec3f upVec;
     calcUpVec(&upVec);
-    pCenterPos->add(upVec * mHeight * 0.5f);
+    pCenterPos->add(upVec * mHeight * cNum_calcCenterPos_f1);
 }
 
 void AreaFormCylinder::calcUpVec(Vec3f* pUpVec) const {
@@ -256,7 +271,7 @@ void AreaFormSphere::init(const TableIter& rIter) {
     rIter.getValue< f32 >("scale_x", &scale_x);
 
     mRadius = scale_x;
-    mRadius *= 500.0f;
+    mRadius *= cNum_init_f2;
 
     Vec3f rotation;
     MR::getPlacementRotate(rIter, &rotation);
@@ -280,9 +295,9 @@ void AreaFormCylinder::init(const TableIter& rIter) {
     rIter.getValue< f32 >("scale_x", &scale);
 
     mRadius = scale;
-    mRadius *= 500.0f;
+    mRadius *= cNum_init_f3;
 
     rIter.getValue< f32 >("scale_y", &scale);
     mHeight = scale;
-    mHeight *= 500.0f;
+    mHeight *= cNum_init_f4;
 }

@@ -7,6 +7,10 @@
 #include "Game/Util/NPCUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_resetRacer_f1, "resetRacer.f1", 180.0f);
 
 namespace NrvPenguinRacerLeader {
     NEW_NERVE(PenguinRacerLeaderNrvWait, PenguinRacerLeader, Wait);
@@ -38,7 +42,7 @@ void PenguinRacerLeader::init(const TableIter& rIter) {
     initColor(rIter);
     initEtc(rIter);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacerLeader", Vec3f(0.0f, 130.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacerLeader", Vec3f(0.0f, cNum_init_f1, 0.0f), nullptr);
     MR::onRootNodeAutomatic(mMsgCtrl);
 
     MR::registerBranchFunc(mMsgCtrl, TalkMessageFunc(this, &PenguinRacerLeader::branchFunc));
@@ -142,7 +146,7 @@ void PenguinRacerLeader::exeTakeOutStar() {
 
 void PenguinRacerLeader::resetRacer(const RaceManager* pRaceManager) {
     PenguinRacer::resetRacer(pRaceManager);
-    turnToPlayer(180.0f);
+    turnToPlayer(cNum_resetRacer_f1);
     calcAndSetBaseMtx();
     MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話", 0);
     setNerve(GET_NERVE(PenguinRacerLeader, PenguinRacerLeaderNrvPost));

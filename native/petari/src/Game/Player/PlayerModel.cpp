@@ -6,6 +6,15 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_viewCalcRefPos_f1, "viewCalcRefPos.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawIn_f1, "drawIn.f1", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawIn_f2, "drawIn.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawIn_f3, "drawIn.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawIn_f4, "drawIn.f4", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawIn_f5, "drawIn.f5", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_send_f1, "send.f1", 255.0f);
 
 void PlayerModel::viewCalc2() {
     capturePose(&mPose, mAnmMtx, mModelData->getJointCount(), nullptr, mBaseTransformMtx);
@@ -63,7 +72,7 @@ void PlayerModel::viewCalcRefPos(u32 view, Model* pModel, const Vec3f& rPos, con
         MR::setMtxTrans(jointMtx, 0.0f, 0.0f, 0.0f);
         MR::makeMtxUpNoSupportPos(&orientation, rNormal, Vec3f(0.0f, 0.0f, 0.0f));
         NebulaMtxConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
-        NebulaMtxScale(flatten, 1.0f, 0.1f, 1.0f);
+        NebulaMtxScale(flatten, 1.0f, cNum_viewCalcRefPos_f1, 1.0f);
         NebulaMtxConcat(flatten, jointMtx, jointMtx);
         NebulaMtxInverse(orientation.toMtxPtr(), orientation.toMtxPtr());
         NebulaMtxConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
@@ -112,7 +121,7 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
                 draw.override(1, 0.0f, 0.0f, -1.0f);
             }
             if (pass == Pass_Reflection) {
-                draw.override(5, 0.0f, 0.0f, 32.0f);
+                draw.override(5, 0.0f, 0.0f, cNum_drawIn_f1);
             }
             if (kOverrideColors[i].a != 0) {
                 override = static_cast< s32 >(i);
@@ -142,7 +151,7 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
             draw.setFlatColor(pRegister[0], pRegister[1], pRegister[2], pRegister[3]);
         } else {
             const u8 alpha = (1u << override) == Pass_ShadowCapture && (mDrawPasses & Pass_ShadowLight) != 0 ? 64 : rColor.alpha;
-            draw.setFlatColor(rColor.r / 255.0f, rColor.g / 255.0f, rColor.b / 255.0f, alpha / 255.0f);
+            draw.setFlatColor(rColor.r / cNum_drawIn_f2, rColor.g / cNum_drawIn_f3, rColor.b / cNum_drawIn_f4, alpha / cNum_drawIn_f5);
         }
     }
     simpleDrawShape(pMaterial, draw);
@@ -274,7 +283,7 @@ void MarioModelTint::send(MaterialDraw& rDraw) const {
         rDraw.applyPass(NEBULA_FORM_PASS_PLAYER_OPACITY);
         break;
     case Kind_ConstantAlpha:
-        rDraw.overrideAlpha(alpha / 255.0f);
+        rDraw.overrideAlpha(alpha / cNum_send_f1);
         break;
     case Kind_ReflectAlpha:
         rDraw.setRegister(MaterialRegister_2, color0);

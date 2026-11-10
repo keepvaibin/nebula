@@ -9,6 +9,26 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f1, "getRunAwayBreakTimeRandom.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f2, "getRunAwayBreakTimeRandom.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f3, "getRunAwayBreakTimeRandom.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f4, "getRunAwayBreakTimeRandom.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f5, "getRunAwayBreakTimeRandom.f5", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f1, "getRunAwayTimeRandom.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f2, "getRunAwayTimeRandom.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f3, "getRunAwayTimeRandom.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f4, "getRunAwayTimeRandom.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayTimeRandom_f5, "getRunAwayTimeRandom.f5", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItemPunch_f1, "appearItemPunch.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItemPunch_f2, "appearItemPunch.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerBackward_f1, "isPlayerBackward.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerBackward_f2, "isPlayerBackward.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryFindPlayer_f1, "tryFindPlayer.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryFindPlayer_f2, "tryFindPlayer.f2", 30.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_1, "tryHitWall.reboundVelocityFromCollision.1", 1.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_tryHitWall_reboundVelocityFromCollision_2, "tryHitWall.reboundVelocityFromCollision.2", 0.0f);
@@ -103,15 +123,15 @@ namespace {
 namespace {
     u32 getRunAwayBreakTimeRandom() {
         f32 random = MR::getRandom();
-        if (0.0f <= random && random < 0.25f) {
+        if (0.0f <= random && random < cNum_getRunAwayBreakTimeRandom_f1) {
             return ::sRunAwayIntervalTime1;
         }
 
-        if (0.25f <= random && random < 0.5f) {
+        if (cNum_getRunAwayBreakTimeRandom_f2 <= random && random < cNum_getRunAwayBreakTimeRandom_f3) {
             return ::sRunAwayIntervalTime2;
         }
 
-        if (0.5f <= random && random < 0.75f) {
+        if (cNum_getRunAwayBreakTimeRandom_f4 <= random && random < cNum_getRunAwayBreakTimeRandom_f5) {
             return ::sRunAwayIntervalTime3;
         }
 
@@ -120,15 +140,15 @@ namespace {
 
     u32 getRunAwayTimeRandom() {
         f32 random = MR::getRandom();
-        if (0.0f <= random && random < 0.25f) {
+        if (0.0f <= random && random < cNum_getRunAwayTimeRandom_f1) {
             return ::sRunAwayRunningTime1;
         }
 
-        if (0.25f <= random && random < 0.5f) {
+        if (cNum_getRunAwayTimeRandom_f2 <= random && random < cNum_getRunAwayTimeRandom_f3) {
             return ::sRunAwayRunningTime2;
         }
 
-        if (0.5f <= random && random < 0.75f) {
+        if (cNum_getRunAwayTimeRandom_f4 <= random && random < cNum_getRunAwayTimeRandom_f5) {
             return ::sRunAwayRunningTime3;
         }
 
@@ -151,7 +171,7 @@ void Kanina::init(const TableIter& rIter) {
 
     MR::getObjectName(&objectName, rIter);
     initModelManagerWithAnm(objectName, nullptr, false);
-    mAnimationRandomPlayer = new AnimationRandomPlayer(this, "Blink", "Normal", ::sAnimIntervalBlink, 0.25f);
+    mAnimationRandomPlayer = new AnimationRandomPlayer(this, "Blink", "Normal", ::sAnimIntervalBlink, cNum_init_f1);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initSound(4, false);
@@ -164,7 +184,7 @@ void Kanina::init(const TableIter& rIter) {
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     MR::addToAttributeGroupSearchTurtle(this);
-    mJointRumbler = new JointRumbler(this, "Root", 6.0f, 0.1f, 45, true, 0);
+    mJointRumbler = new JointRumbler(this, "Root", cNum_init_f2, cNum_init_f3, 45, true, 0);
 
     if (MR::isEqualString(objectName, "KaninaRed")) {
         initForType(rIter, KaninaType_Red);
@@ -191,7 +211,7 @@ void Kanina::kill() {
 
 void Kanina::appearItemPunch() {
     if (mType == KaninaType_Red) {
-        MR::appearStarPiece(this, mPosition, ::sStarPieceNum, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, ::sStarPieceNum, cNum_appearItemPunch_f1, cNum_appearItemPunch_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     } else if (mType == KaninaType_Blue) {
         MR::appearKinokoOneUpPop(mKinokoOneUp, getBaseMtx(), ::sKinokoOneUpShootSpeed);
@@ -530,8 +550,8 @@ void Kanina::initForType(const TableIter& /*rIter*/, KaninaType type) {
 bool Kanina::isPlayerBackward(f32 angle) const {
     Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
-    angle = angle * 2.0f;
-    return MR::isInSightFanPlayer(this, -frontVec, ::sSafetyDistance, angle, 30.0f);
+    angle = angle * cNum_isPlayerBackward_f1;
+    return MR::isInSightFanPlayer(this, -frontVec, ::sSafetyDistance, angle, cNum_isPlayerBackward_f2);
 }
 
 bool Kanina::isStatePossibleToAttack() const {
@@ -608,7 +628,7 @@ bool Kanina::tryFindPlayer() {
 
     Vec3f front;
     MR::calcFrontVec(&front, this);
-    if (!MR::isInSightFanPlayer(this, front, ::sSearchRadius, 180.0f, 30.0f)) {
+    if (!MR::isInSightFanPlayer(this, front, ::sSearchRadius, cNum_tryFindPlayer_f1, cNum_tryFindPlayer_f2)) {
         return false;
     }
 

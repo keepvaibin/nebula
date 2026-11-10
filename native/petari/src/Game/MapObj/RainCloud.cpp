@@ -15,6 +15,14 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRainCylinder_f1, "updateRainCylinder.f1", 0.1f);
+
 namespace {
     NEBULA_TUNABLE(f32, sNoShadowDropLengthMax, 2000.0f);
     NEBULA_TUNABLE(f32, sRainCylinderBaseLength, 1000.0f);
@@ -55,7 +63,7 @@ void RainCloud::init(const TableIter& rIter) {
     if (!mNoRain) {
         initHitSensor(2);
         MR::addBodyMessageSensorMapObj(this);
-        MR::addHitSensorCallbackMapObjSimple(this, "drop_water", 4, 150.0f);
+        MR::addHitSensorCallbackMapObjSimple(this, "drop_water", 4, cNum_init_f1);
     } else {
         initHitSensor(1);
         MR::addBodyMessageSensorMapObj(this);
@@ -85,7 +93,7 @@ void RainCloud::init(const TableIter& rIter) {
     if ((dropLength = mShadowDropLength) != -1.0f) {
         mRainLength = dropLength;
         MR::setShadowDropLength(this, nullptr, dropLength);
-        MR::setShadowVolumeEndDropOffset(this, nullptr, 80.0f);
+        MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init_f2);
         MR::excludeCalcShadowToMyCollision(this, nullptr);
         MR::onShadowVolumeCutDropLength(this, nullptr);
         MR::onCalcShadow(this, nullptr);
@@ -98,15 +106,15 @@ void RainCloud::init(const TableIter& rIter) {
     clippingCenter = mPosition;
     f32 boundRadius;
     MR::calcModelBoundingRadius(&boundRadius, this);
-    boundRadius += 0.5f * mRainLength;
+    boundRadius += cNum_init_f3 * mRainLength;
 
     if (mRailMover != nullptr) {
         f32 railRadius;
-        MR::calcRailClippingInfo(&clippingCenter, &railRadius, this, 100.0f, 500.0f);
+        MR::calcRailClippingInfo(&clippingCenter, &railRadius, this, cNum_init_f4, cNum_init_f5);
         boundRadius += railRadius;
     }
 
-    mClippingCenter.scaleAdd(0.5f * mRainLength, mGravity, mPosition);
+    mClippingCenter.scaleAdd(cNum_init_f6 * mRainLength, mGravity, mPosition);
     MR::setClippingTypeSphere(this, boundRadius, &mClippingCenter);
     MR::setGroupClipping(this, rIter, 16);
     MR::joinToGroupArray(this, rIter, "雲集団", 16);
@@ -369,7 +377,7 @@ void RainCloud::updateRainCylinder() {
             widthScale = 1.0f - MR::getBckFrame(this) / MR::getBckFrameMax(this);
         }
 
-        widthScale = MR::clamp(widthScale, 0.1f, 1.0f);
+        widthScale = MR::clamp(widthScale, cNum_updateRainCylinder_f1, 1.0f);
     }
 
     MR::preScaleMtx(mRainCylinderMtx, Vec3f(widthScale, lengthScale, widthScale));

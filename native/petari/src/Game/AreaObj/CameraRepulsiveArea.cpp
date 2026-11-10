@@ -1,5 +1,8 @@
 #include "Game/AreaObj/CameraRepulsiveArea.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getRepulsion_f1, "getRepulsion.f1", 2.0f);
 
 Vec3f CameraRepulsiveSphere::getRepulsion(const Vec3f& /*rRep*/) {
     return Vec3f(0.0f, 0.0f, 0.0f);
@@ -21,7 +24,7 @@ Vec3f CameraRepulsiveCylinder::getRepulsion(const Vec3f& rRep) {
 
     side.cross(ret, upVec);
 
-    f32 base = (side.length() * 2.0f) / MR::getCylinderRadius(this);
+    f32 base = (side.length() * cNum_getRepulsion_f1) / MR::getCylinderRadius(this);
 
     f32 denom = base;
 

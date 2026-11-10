@@ -17,6 +17,11 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWaterInfo_f1, "calcWaterInfo.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f1, "loadMaterial.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f2, "loadMaterial.f2", 2.0f);
+
 namespace {
     const s32 cPointNum = OceanBowl::cPointNum;
     const s32 cCenterPoint = cPointNum / 2;
@@ -85,7 +90,7 @@ void OceanBowl::init(const TableIter& rIter) {
 
     MR::calcActorAxis(&mSide, &mUp, &mFront, this);
 
-    mRadius = 100.0f * mScale.x;
+    mRadius = cNum_init_f1 * mScale.x;
     initPoints();
     WaterAreaFunction::entryOceanBowl(this);
 
@@ -117,7 +122,7 @@ bool OceanBowl::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInf
     // A bowl placed with no scale (radius 0) has no depth, not a division by 0.
     f32 angle = mRadius > 0.0f ? horizontal.length() / mRadius : 1.0f;
     angle *= PI;
-    angle *= 0.5f;
+    angle *= cNum_calcWaterInfo_f1;
 
     pInfo->mDepth = MR::cos(angle) * mRadius;
     pInfo->mDepth += height;
@@ -364,8 +369,8 @@ SiteMaterial OceanBowl::loadMaterial() const {
     material.constants[12] = mTexU2;
     material.constants[13] = mTexV2;
     // The shore mask follows the player: its offset from the bowl's first point, over the mask's extent.
-    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + sMaskExtent / 2.0f) / sMaskExtent;
-    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + sMaskExtent / 2.0f) / sMaskExtent;
+    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + sMaskExtent / cNum_loadMaterial_f1) / sMaskExtent;
+    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + sMaskExtent / cNum_loadMaterial_f2) / sMaskExtent;
     Pos3f screen;
     MR::calcTexProjectionMtx(&screen);
     for (u32 row = 0; row < 3; row++) {

@@ -11,6 +11,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
 
 namespace {
     f32 cSensorRadius = 80.0f;
@@ -38,9 +42,9 @@ void FireMarioBall::init(const TableIter& rIter) {
     initBinder(::cBinderRadius, 0.0f, 0);
     initEffectKeeper(4, "MarioFireBall");
     initSound(4, false);
-    MR::initShadowVolumeCylinder(this, 25.0f);
+    MR::initShadowVolumeCylinder(this, cNum_init_f1);
     MR::onShadowVolumeCutDropLength(this, 0);
-    MR::setShadowVolumeEndDropOffset(this, 0, 50.0f);
+    MR::setShadowVolumeEndDropOffset(this, 0, cNum_init_f2);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(FireMarioBall, FireMarioBallNrvThrow));
     mBindTimer = 0;

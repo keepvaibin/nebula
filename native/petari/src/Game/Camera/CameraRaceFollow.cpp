@@ -4,6 +4,13 @@
 #include "Game/Camera/CameraMan.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 180.0f);
 
 CameraRaceFollow::CameraRaceFollow(const char* pName)
     : Camera(pName), mDistMin(500.0f), mDistMax(1200.0f), mAngleX(MR::toRadian(15.0f)), mIsForcePitch(), mRoundAngleSpeed() {
@@ -22,7 +29,7 @@ CameraTargetObj* CameraRaceFollow::calc() {
     Vec3f camDirPrev = CameraLocalUtil::getPos(this) - CameraLocalUtil::getWatchPos(this);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, cNum_calc_f1 / cNum_calc_f2);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
     CameraLocalUtil::arrangeDistanceByPushAndPull(this, mDistMin, mDistMax);
@@ -34,7 +41,7 @@ CameraTargetObj* CameraRaceFollow::calc() {
     MR::normalize(&offsetDir);
 
     f32 angle = offsetUp.angle(offsetDir);
-    f32 angleTargetDiff = MR::pi() / 2.0f - mAngleX;
+    f32 angleTargetDiff = MR::pi() / cNum_calc_f3 - mAngleX;
 
     if (mIsForcePitch || angle > angleTargetDiff) {
         Quat4f rotX;
@@ -68,7 +75,7 @@ CameraTargetObj* CameraRaceFollow::calc() {
 
     Vec3f up = CameraLocalUtil::getUpVec(this);
     Quat4f rotUp;
-    rotUp.setRotate(CameraLocalUtil::getUpVec(this), camUp, 0.05f);
+    rotUp.setRotate(CameraLocalUtil::getUpVec(this), camUp, cNum_calc_f4);
     rotUp.transform(up);
     CameraLocalUtil::setUpVec(this, up);
 
@@ -81,7 +88,7 @@ CameraTargetObj* CameraRaceFollow::calc() {
 
 void CameraRaceFollow::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(general->mWPoint.x, general->mWPoint.y, general->mAngleA * MR::pi() / 180.0f, general->mNum1 != 0, general->mWPoint.z);
+    setParam(general->mWPoint.x, general->mWPoint.y, general->mAngleA * MR::pi() / cNum_setParamFromChunk_f1, general->mNum1 != 0, general->mWPoint.z);
 }
 
 void CameraRaceFollow::goRound() {

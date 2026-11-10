@@ -23,6 +23,17 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.9999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_faceToMario_f1, "faceToMario.f1", 0.5f);
+
 namespace NrvJellyfish {
     NEW_NERVE(JellyfishNrvWait, Jellyfish, Wait);
     NEW_NERVE(JellyfishNrvWaitWithRightTurn, Jellyfish, WaitWithRightTurn);
@@ -62,17 +73,17 @@ void Jellyfish::init(const TableIter& rIter) {
     MR::addToAttributeGroupSearchTurtle(this);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_ENEMY, 8, 100.0f, Vec3f(0.0f, 30.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_ENEMY, 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
 
-    initBinder(130.0f, 0.0f, 0);
+    initBinder(cNum_init_f3, 0.0f, 0);
     MR::offBind(this);
     initEffectKeeper(2, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initShadowVolumeSphere(this, 100.0f);
-    MR::setShadowDropLength(this, nullptr, 1900.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f4);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f5);
     MR::declareCoin(this, 1);
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, 0.0f, 0.0f));
 
     mController = new AnimScaleController(nullptr);
     mBindStarPtr = new WalkerStateBindStarPointer(this, mController);
@@ -82,7 +93,7 @@ void Jellyfish::init(const TableIter& rIter) {
         mIsConnectedRail = true;
 
         initRailRider(rIter);
-        MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
+        MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f7, cNum_init_f8);
         MR::moveCoordToNearestPos(this, mPosition);
 
         MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
@@ -105,7 +116,7 @@ void Jellyfish::kill() {
 }
 
 void Jellyfish::control() {
-    MR::requestPointLight(this, mPosition, sPointLightColor, 0.9999f, -1);
+    MR::requestPointLight(this, mPosition, sPointLightColor, cNum_control_f1, -1);
     mController->updateNerve();
 
     if (!isNerve(GET_NERVE(Jellyfish, JellyfishNrvDeath))) {
@@ -305,7 +316,7 @@ void Jellyfish::faceToMario() {
     MR::calcSideVec(&side, this);
 
     if (!MR::isNearZero(toPlayer)) {
-        MR::turnVecToVecCosOnPlane(&mFront, toPlayer, side, MR::cosDegree(0.5f));
+        MR::turnVecToVecCosOnPlane(&mFront, toPlayer, side, MR::cosDegree(cNum_faceToMario_f1));
         Vec3f up;
         up.negate(mGravity);
         Vec3f levelFront;

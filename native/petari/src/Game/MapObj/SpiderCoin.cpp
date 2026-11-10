@@ -16,6 +16,11 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.3f);
+
 namespace {
     NEBULA_TUNABLE(f32, sCoinSpeed, 20.0f);
     NEBULA_TUNABLE(s32, sStepToTouch2nd, 5);
@@ -47,15 +52,15 @@ void SpiderCoin::init(const TableIter& rIter) {
     MR::connectToSceneItemStrongLight(this);
 
     initHitSensor(1);
-    MR::addHitSensorCallbackMapObj(this, "body", 8, 50.0f);
+    MR::addHitSensorCallbackMapObj(this, "body", 8, cNum_init_f1);
 
     initEffectKeeper(8, nullptr);
     initNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvWait));
-    MR::initStarPointerTarget(this, 150.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f2, Vec3f(0.0f, cNum_init_f3, 0.0f));
 
     MR::declareCoin(this, 1);
     mCocoonModel = new PartsModel(this, "まゆ", "SpaceCocoon", mBaseMtx, MR::DrawBufferType_NoSilhouettedMapObj, false);
-    mCocoonModel->mScale.set(0.3f);
+    mCocoonModel->mScale.set(cNum_init_f4);
     mCocoonModel->initWithoutIter();
 
     MR::registerDemoSimpleCastAll(this);

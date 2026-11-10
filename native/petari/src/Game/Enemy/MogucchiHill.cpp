@@ -10,6 +10,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_appearPiece_f1, "appearPiece.f1", 2.0f);
+
 namespace {
     const char* const sPieceModelTable[] = {
         "MogucchiHillA",
@@ -422,7 +424,7 @@ void MogucchiHill::appearPiece() {
     }
 
     if (mSizeStep != 0) {
-        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / 2.0f));
+        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / cNum_appearPiece_f1));
         MogucchiHillPiece* pPiece = &mPieces[mPieceIndex];
         pPiece->mMtx.setInline(mReserveMtx);
         pPiece->mMtx.getTrans(pPiece->mPosition);

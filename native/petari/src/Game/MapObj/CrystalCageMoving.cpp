@@ -9,6 +9,16 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 350.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreakBig_f1, "exeBreakBig.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_crashMario_f1, "crashMario.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_crashMario_f2, "crashMario.f2", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDummyModel_f1, "initDummyModel.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDummyModel_f2, "initDummyModel.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDummyModel_f3, "initDummyModel.f3", 3.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoTicoStop_setBckRate_1, "exeDemoTicoStop.setBckRate.1", 1.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoTicoChange_setBckRate_1, "exeDemoTicoChange.setBckRate.1", 1.5f);
@@ -17,7 +27,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoTicoChange_setBckRate_1, "exeDemoTicoChang
 NEBULA_TUNABLE_NAMED(s32, cStep_exeBreakBig_1, "exeBreakBig.1", 10);
 
 namespace {
-    const Vec sDummyModelOffset = {0.0f, -150.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sDummyModelOffset, {0.0f, -150.0f, 0.0f});
 };  // namespace
 
 namespace NrvCrystalCageMoving {
@@ -56,7 +66,7 @@ void CrystalCageMoving::init(const TableIter& rIter) {
     vec.x = 0.0f;
     vec.y = 0.0f;
     vec.z = 0.0f;
-    info.setupHitSensorParam(4, 350.0f, vec);
+    info.setupHitSensorParam(4, cNum_init_f1, vec);
     initialize(rIter, info);
     mStartPos.set(mPosition);
     initDummyModel(rIter);
@@ -75,7 +85,7 @@ void CrystalCageMoving::exeBreakBig() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "CoreWait");
         MR::startActorCameraNoTarget(this, mCameraInfo);
-        MR::setSensorRadius(this, "body", 30.0f);
+        MR::setSensorRadius(this, "body", cNum_exeBreakBig_f1);
         mIsCoreShown = 1;
         MR::emitEffect(this, "BreakOutside");
         MR::startSound(this, "SE_OJ_CRY_CAGE_MV_BREAK_EDG");
@@ -195,7 +205,7 @@ void CrystalCageMoving::crashMario(HitSensor* pSender, HitSensor* pReceiver) {
         f32 sensorDist = pReceiver->mPosition.distance(pSender->mPosition);
         f32 sensorObjDist = mPosition.distance(pSender->mPosition);
 
-        if (sensorDist < 30.0f && sensorObjDist < 450.0f) {
+        if (sensorDist < cNum_crashMario_f1 && sensorObjDist < cNum_crashMario_f2) {
             setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakAll));
         } else {
             setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakBig));
@@ -213,9 +223,9 @@ void CrystalCageMoving::updateHitSensor(HitSensor* pSensor) {
         Vec3f up;
         joint_mtx.getYDir(up);
         Vec3f lineBottom;
-        lineBottom.scaleAdd(-450.0f + radius, up, mPosition);
+        lineBottom.scaleAdd(-cNum_updateHitSensor_f1 + radius, up, mPosition);
         Vec3f lineTop;
-        lineTop.scaleAdd(450.0f - radius, up, mPosition);
+        lineTop.scaleAdd(cNum_updateHitSensor_f2 - radius, up, mPosition);
         MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), lineBottom, lineTop);
     }
 }
@@ -234,9 +244,9 @@ void CrystalCageMoving::initDummyModel(const TableIter& rIter) {
     mTicoModel = new ModelObj("動くクリスタルケージ中身", "Tico", mDummyModelMtx.toMtxPtr(), MR::DrawBufferType_CrystalItem, -2, -2, false);
     mTicoModel->initWithoutIter();
     ModelObj* tico = mTicoModel;
-    tico->mScale.x = 3.0f;
-    tico->mScale.y = 3.0f;
-    tico->mScale.z = 3.0f;
+    tico->mScale.x = cNum_initDummyModel_f1;
+    tico->mScale.y = cNum_initDummyModel_f2;
+    tico->mScale.z = cNum_initDummyModel_f3;
     MR::startBrk(mTicoModel, "ColorChange");
     MR::setBrkFrameAndStop(mTicoModel, 0.0f);
 

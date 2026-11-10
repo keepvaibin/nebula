@@ -15,6 +15,19 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getFirstPolyOnLineCategory_f1, "getFirstPolyOnLineCategory.f1", 1000000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isWallPolygon_f1, "isWallPolygon.f1", 0.34202015f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcMapGroundUpper_f1, "calcMapGroundUpper.f1", 2.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcMapGroundUpper_f2, "calcMapGroundUpper.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_trySetMoveLimitCollision_f1, "trySetMoveLimitCollision.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_trySetMoveLimitCollision_f2, "trySetMoveLimitCollision.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getFirstPolyOnLineBFast_f1, "getFirstPolyOnLineBFast.f1", 1.0e9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getFirstPolyOnLineBFast_f2, "getFirstPolyOnLineBFast.f2", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getFirstPolyOnLineBFast_f3, "getFirstPolyOnLineBFast.f3", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getFirstPolyOnLineBFast_f4, "getFirstPolyOnLineBFast.f4", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getFirstPolyOnLineBFast_f5, "getFirstPolyOnLineBFast.f5", 35.0f);
 
 namespace {
     // getNearPolyOnLineSort's hits, nearest first, in the permanent arena; it grows to the most hits one line has had.
@@ -44,7 +57,7 @@ namespace {
             return false;
         }
 
-        f32 minDistance = 1000000.0f;
+        f32 minDistance = cNum_getFirstPolyOnLineCategory_f1;
         s32 nearest = -1;
         for (u32 i = 0; i < count; i++) {
             pHit = getStrikeInfoCategory(category, i);
@@ -123,7 +136,7 @@ namespace MR {
 
     // normalDotGravity: the polygon's normal dotted with gravity. Within 70 degrees of upright is a wall.
     bool isWallPolygon(f32 normalDotGravity) {
-        return MR::abs(normalDotGravity) < 0.34202015f;  // cos 70
+        return MR::abs(normalDotGravity) < cNum_isWallPolygon_f1;  // cos 70
     }
 
     bool isFloorPolygon(f32 normalDotGravity) {
@@ -314,8 +327,8 @@ namespace MR {
         calcGravityVector(pActor, pActor->mPosition, &gravity, nullptr, 0);
         f32 radius = 0.0f;
         calcModelBoundingRadius(&radius, pActor);
-        f32 upperDistance = 2.5f * radius;
-        f32 length = 4.0f * radius;
+        f32 upperDistance = cNum_calcMapGroundUpper_f1 * radius;
+        f32 length = cNum_calcMapGroundUpper_f2 * radius;
         Vec3f start(pActor->mPosition - gravity * upperDistance);
         Vec3f direction(gravity * length);
         HitInfo hit;
@@ -384,8 +397,8 @@ namespace MR {
     bool trySetMoveLimitCollision(LiveActor* pActor) {
         Vec3f start(pActor->mPosition);
         Vec3f direction(pActor->mGravity);
-        start -= direction * 150.0f;
-        direction *= 1000.0f;
+        start -= direction * cNum_trySetMoveLimitCollision_f1;
+        direction *= cNum_trySetMoveLimitCollision_f2;
         if (getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->checkStrikeLine(start, direction, 0, nullptr, nullptr)) {
             pActor->mBinder->setExCollisionParts(getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->getStrikeInfo(0)->mParentTriangle.mParts);
             return true;
@@ -683,16 +696,16 @@ namespace MR {
     bool getFirstPolyOnLineBFast(const Vec3f& rStart, const Vec3f& rDirection, Vec3f* pPos, Triangle* pTriangle) {
         Triangle triangle;
         f32 remaining = rDirection.length();
-        if (!(remaining < 1.0e9f)) {
+        if (!(remaining < cNum_getFirstPolyOnLineBFast_f1)) {
             return false;
         }
 
         Vec3f direction(rDirection);
         direction.normalize();
         Vec3f start(rStart);
-        Vec3f step(direction * 5000.0f);
+        Vec3f step(direction * cNum_getFirstPolyOnLineBFast_f2);
         do {
-            f32 length = 5000.0f;
+            f32 length = cNum_getFirstPolyOnLineBFast_f3;
             if (remaining < length) {
                 length = remaining;
                 step = direction * remaining;
@@ -707,8 +720,8 @@ namespace MR {
                         continue;
                     }
 
-                    Vec3f backPos(hitPos - *getNormal(&hitTriangle) * 5.0f);
-                    Vec3f normal(*getNormal(&hitTriangle) * 35.0f);
+                    Vec3f backPos(hitPos - *getNormal(&hitTriangle) * cNum_getFirstPolyOnLineBFast_f4);
+                    Vec3f normal(*getNormal(&hitTriangle) * cNum_getFirstPolyOnLineBFast_f5);
                     if (isExistMapCollision(backPos, normal)) {
                         continue;
                     }

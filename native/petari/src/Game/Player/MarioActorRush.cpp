@@ -14,6 +14,10 @@
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_endRush_f1, "endRush.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endRush_f2, "endRush.f2", 200.0f);
 
 void MarioActor::settingRush() {
     rushDropThrowMemoSensor();
@@ -369,7 +373,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
             }
 
             updateGravityVec(true, true);
-            mBinderOffset = mRawGravityVec * -70.0f;
+            mBinderOffset = mRawGravityVec * -cNum_endRush_f1;
             mGravityVec = mRawGravityVec;
             mMario->setGravityVec(mGravityVec);
         }
@@ -399,7 +403,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
 
         mMario->mPushVec.zero();
         mMario->mPushVelocity.zero();
-        if (mRushMove.length() > 200.0f) {
+        if (mRushMove.length() > cNum_endRush_f2) {
             mMario->mHitStates.launchedFar = true;
         }
     }

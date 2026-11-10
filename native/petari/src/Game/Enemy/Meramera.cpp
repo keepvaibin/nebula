@@ -23,6 +23,12 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f1, "addRunawayJumpPower.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f2, "addRunawayJumpPower.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f3, "addRunawayJumpPower.f3", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f4, "addRunawayJumpPower.f4", 0.8f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_1, "exeDamage.reboundVelocityFromEachCollision.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_2, "exeDamage.reboundVelocityFromEachCollision.2", 0.0f);
@@ -57,15 +63,15 @@ namespace {
         f32 mSpeedMax;
     };
 
-    const KeepHeightParam sWaitHeight = {130.0f, 0.5f, 0.1f, 15.0f};
-    const KeepHeightParam sChaseStartHeight = {300.0f, 0.5f, 0.2f, 15.0f};
-    const KeepHeightParam sChaseDashLowHeight = {150.0f, 0.5f, 0.1f, 15.0f};
-    const KeepHeightParam sChaseDashHeight = {190.0f, 0.5f, 0.2f, 20.0f};
-    const KeepHeightParam sChaseTurnHeight = {190.0f, 0.3f, 0.3f, 20.0f};
-    const KeepHeightParam sDamageHeight = {140.0f, 0.0f, 1.2f, 15.0f};
-    const KeepHeightParam sFloatHeight = {100.0f, 0.9f, 0.1f, 50.0f};
-    const KeepHeightParam sIgnitionHeight = {100.0f, 0.5f, 0.1f, 50.0f};
-    const KeepHeightParam sAttackSuccessHeight = {50.0f, 0.5f, 0.1f, 15.0f};
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sWaitHeight, {130.0f, 0.5f, 0.1f, 15.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseStartHeight, {300.0f, 0.5f, 0.2f, 15.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseDashLowHeight, {150.0f, 0.5f, 0.1f, 15.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseDashHeight, {190.0f, 0.5f, 0.2f, 20.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseTurnHeight, {190.0f, 0.3f, 0.3f, 20.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sDamageHeight, {140.0f, 0.0f, 1.2f, 15.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sFloatHeight, {100.0f, 0.9f, 0.1f, 50.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sIgnitionHeight, {100.0f, 0.5f, 0.1f, 50.0f});
+    NEBULA_TUNABLE_RECORD(KeepHeightParam, sAttackSuccessHeight, {50.0f, 0.5f, 0.1f, 15.0f});
 
     NEBULA_TUNABLE(f32, sBodyHitRadius, 55.0f);
     NEBULA_TUNABLE(f32, sBreakHitRadius, 10.0f);
@@ -984,7 +990,7 @@ void Meramera::exeRunaway() {
 
         // Probe for a dive point ahead, sweeping alternately left and right.
         if (!mCanDive) {
-            f32 angleDegree = (getNerveStep() % 5 * ::sRunawayDiveSpread) / 5.0f;
+            f32 angleDegree = (getNerveStep() % 5 * ::sRunawayDiveSpread) / cNum_exeRunaway_f1;
 
             if (getNerveStep() % 2 == 1) {
                 angleDegree = -angleDegree;
@@ -1269,9 +1275,9 @@ void Meramera::addRunawayJumpPower() {
     MR::normalizeOrZero(&dir);
     MR::addRandomVector(&dir, dir, ::sJumpRandom * rate);
 
-    f32 speedH = ::sJumpSpeedH * (0.1f + rate * 0.9f);
+    f32 speedH = ::sJumpSpeedH * (cNum_addRunawayJumpPower_f1 + rate * cNum_addRunawayJumpPower_f2);
     f32 randomSpeedV = MR::getRandom(::sJumpSpeedVMin, ::sJumpSpeedVMax);
-    f32 speedV = (0.2f + rate * 0.8f) * randomSpeedV;
+    f32 speedV = (cNum_addRunawayJumpPower_f3 + rate * cNum_addRunawayJumpPower_f4) * randomSpeedV;
     addMovingAccel(dir, speedH, -1.0f);
     mVelocity -= mGravity * speedV;
 }

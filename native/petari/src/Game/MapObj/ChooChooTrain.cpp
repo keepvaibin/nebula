@@ -5,6 +5,14 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 532.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 532.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_init_moveCoord_1, "init.moveCoord.1", 1080.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_moveCoord_1, "control.moveCoord.1", 1080.0f);
@@ -45,7 +53,7 @@ void ChooChooTrain::init(const TableIter& rIter) {
     initSound(4, false);
     mWhistleTimer = MR::getRandom(::hWhistleStepMin, ::hWhistleStepMax);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, 80.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f1 * mScale.y);
     initHitSensor(1);
     MR::addMessageSensorMapObjMoveCollision(this, "body");
     MR::initCollisionParts(this, "ChooChooTrain", getSensor("body"), 0);
@@ -94,7 +102,7 @@ void ChooChooTrain::init(const TableIter& rIter) {
 
     MR::reverseRailDirection(this);
     MR::setRailCoord(this, railCoord);
-    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f2, cNum_init_f3);
     MR::startBck(this, "Run");
 }
 
@@ -102,22 +110,22 @@ void ChooChooTrain::control() {
     MR::moveCoord(this, mRailSpeed);
     MR::moveTransToCurrentRailPos(this);
     Vec3f dir(MR::getRailDirection(this));
-    MR::turnDirectionAndGravityH(this, dir, 0.5f, 1.0f);
+    MR::turnDirectionAndGravityH(this, dir, cNum_control_f1, 1.0f);
     f32 railCoord = MR::getRailCoord(this);
     Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
     // Each car faces the coupling at the back of the one ahead.
-    Vec3f coupling = mPosition - ((frontVec * 532.0f) * mScale.y);
+    Vec3f coupling = mPosition - ((frontVec * cNum_control_f2) * mScale.y);
     MR::reverseRailDirection(this);
 
     for (int i = 0; i < mModelArray.size(); i++) {
         MR::moveCoord(this, cNum_control_moveCoord_1 * mScale.y);
         MR::moveTransToOtherActorRailPos(mModelArray[i], this);
         dir = coupling - mModelArray[i]->mPosition;
-        MR::turnDirectionAndGravityH(mModelArray[i], dir, 0.5f, 1.0f);
+        MR::turnDirectionAndGravityH(mModelArray[i], dir, cNum_control_f3, 1.0f);
         MR::calcFrontVec(&frontVec, mModelArray[i]);
 
-        coupling = mModelArray[i]->mPosition - ((frontVec * 532.0f) * mScale.y);
+        coupling = mModelArray[i]->mPosition - ((frontVec * cNum_control_f4) * mScale.y);
     }
 
     MR::reverseRailDirection(this);

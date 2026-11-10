@@ -10,6 +10,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f1, "exeBreak.f1", 1000.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sSensorRadius, 500.0f);
     const s32 sRiddleSeStep = NebulaFrameClock::stepsOfMilliseconds(1500);
@@ -50,7 +52,7 @@ void WaterfallCaveCover::exeBreak() {
         MR::invalidateHitSensor(this, "body");
         MR::invalidateCollisionParts(this);
         MapObjActorUtil::startBreak(this);
-        MR::startRumbleWithShakeCameraStrong(this, "中", "弱", 1000.0f, FLOAT_MAX);
+        MR::startRumbleWithShakeCameraStrong(this, "中", "弱", cNum_exeBreak_f1, FLOAT_MAX);
         MR::startSound(this, "SE_OJ_WATERFALL_COVER_BREAK");
     }
 

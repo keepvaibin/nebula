@@ -10,6 +10,22 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f1, "initPoints.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f2, "initPoints.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f3, "initPoints.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f4, "initPoints.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f5, "initPoints.f5", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f6, "initPoints.f6", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f7, "initPoints.f7", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f8, "initPoints.f8", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f9, "initPoints.f9", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f10, "initPoints.f10", 2.0f);
 
 OceanRingPipe::OceanRingPipe(const OceanRing* pRing, f32 a, f32 b)
     : LiveActor("オーシャンリングの側面"), mOceanRing(pRing), mIsCameraInside(), mNumPoints(), mNumSegments(), mNumSides(8), mPositions(), mNormals(), mWidth(a), mWidthArg(b), mPipeInside(),
@@ -27,14 +43,14 @@ void OceanRingPipe::init(const TableIter& rIter) {
     mPipeOutside->initWithoutIter();
 
     if (MR::isName(mOceanRing, "オーシャンリング（旗）")) {
-        f32 flagWidth = 300.0f;
-        f32 flagHeight = 200.0f;
-        f32 stickLength = 500.0f;
+        f32 flagWidth = cNum_init_f1;
+        f32 flagHeight = cNum_init_f2;
+        f32 stickLength = cNum_init_f3;
         Vec3f side(1.0f, 0.0f, 0.0f);
         for (s32 i = 0; i < mNumSegments; i += 7) {
             Vec3f grav(0.0f, -1.0f, 0.0f);
             MR::calcGravityVector(this, mPositions[calcPointIndex(i, 0)], &grav, nullptr, 0);
-            if (grav.y > -0.9f) {
+            if (grav.y > -cNum_init_f4) {
                 continue;
             }
 
@@ -66,7 +82,7 @@ void OceanRingPipe::movement() {
 }
 
 void OceanRingPipe::initPoints() {
-    mNumSegments = static_cast< s32 >(MR::getRailTotalLength(this) / 300.0f) + 1;
+    mNumSegments = static_cast< s32 >(MR::getRailTotalLength(this) / cNum_initPoints_f1) + 1;
     mNumPoints = mNumSegments * mNumSides;
 
     // A rail shorter than one segment (one cross-section) steps its whole length, not a division by 0.
@@ -96,8 +112,8 @@ void OceanRingPipe::initPoints() {
         f32 sumDist = currDist + nextDist;
 
         // A rail point's arg 1 overrides the pipe's width there; between points the width blends by distance.
-        f32 currPointWidth = mWidthArg / 100.0f;
-        f32 nextPointWidth = mWidthArg / 100.0f;
+        f32 currPointWidth = mWidthArg / cNum_initPoints_f2;
+        f32 nextPointWidth = mWidthArg / cNum_initPoints_f3;
         MR::getCurrentRailPointArg1NoInit(this, &currPointWidth);
         MR::getNextRailPointArg1NoInit(this, &nextPointWidth);
 
@@ -105,21 +121,21 @@ void OceanRingPipe::initPoints() {
         Vec3f normal(side);
 
         if (sumDist > 0.0f) {
-            widthScale = ((currPointWidth * nextDist + nextPointWidth * currDist) / sumDist) / (mWidthArg / 100.0f);
+            widthScale = ((currPointWidth * nextDist + nextPointWidth * currDist) / sumDist) / (mWidthArg / cNum_initPoints_f4);
             const f32 widthDiff = currPointWidth - nextPointWidth;
 
             // Where the width changes, the normal is square to the wall line from 300 behind to 300 ahead (and to gravity).
-            if (MR::abs(widthDiff) > 0.0001f) {
+            if (MR::abs(widthDiff) > cNum_initPoints_f5) {
                 Vec3f wallBehind(side);
                 Vec3f wallAhead(side);
                 wallBehind.scale(currPointWidth);
                 wallAhead.scale(nextPointWidth);
 
                 Vec3f railPos;
-                MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) - 300.0f, 0.0f, MR::getRailTotalLength(this)));
+                MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) - cNum_initPoints_f6, 0.0f, MR::getRailTotalLength(this)));
                 wallBehind.add(railPos);
 
-                MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) + 300.0f, 0.0f, MR::getRailTotalLength(this)));
+                MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) + cNum_initPoints_f7, 0.0f, MR::getRailTotalLength(this)));
                 wallAhead.add(railPos);
 
                 wallBehind.sub(wallAhead);
@@ -134,7 +150,7 @@ void OceanRingPipe::initPoints() {
             pos.add(MR::getRailPos(this));
 
             mPositions[idx].set< f32 >(pos.x, pos.y, pos.z);
-            mNormals[idx].set< f32 >(normal.x * 2.0f, normal.y * 2.0f, normal.z * 2.0f);
+            mNormals[idx].set< f32 >(normal.x * cNum_initPoints_f8, normal.y * cNum_initPoints_f9, normal.z * cNum_initPoints_f10);
             idx++;
 
             mtx.mult(side, side);

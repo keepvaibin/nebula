@@ -8,6 +8,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setStateBreak_f1, "setStateBreak.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f1, "appearItem.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f2, "appearItem.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f3, "appearItem.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTryStartDemo_f1, "exeTryStartDemo.f1", 1000.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sDefaultBreakOffsetFrame, 60);
     NEBULA_TUNABLE(s32, sDefaultItemNumCoin, 1);
@@ -183,7 +189,7 @@ void SimpleBreakableObj::setStateBreak() {
         return;
     }
 
-    MR::startRumbleWithShakeCameraWeak(this, "中", "中", 1000.0f, FLOAT_MAX);
+    MR::startRumbleWithShakeCameraWeak(this, "中", "中", cNum_setStateBreak_f1, FLOAT_MAX);
     MR::invalidateCollisionParts(this);
     MR::stopScene(5);
     startBreak();
@@ -243,13 +249,13 @@ void SimpleBreakableObj::appearItem() {
         MR::appearCoinPop(this, mPosition, 1);
         return;
     case 1:
-        MR::appearKinokoOneUpPop(mKinokoOneUp, getBaseMtx(), 15.0f);
+        MR::appearKinokoOneUpPop(mKinokoOneUp, getBaseMtx(), cNum_appearItem_f1);
         return;
     case 2:
         MR::requestAppearPowerStar(this, mPosition);
         return;
     case 3:
-        MR::appearStarPiece(this, mPosition, mItemNum, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, mItemNum, cNum_appearItem_f2, cNum_appearItem_f3, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         return;
     }
@@ -258,7 +264,7 @@ void SimpleBreakableObj::appearItem() {
 void SimpleBreakableObj::exeTryStartDemo() {
     if (MR::tryStartDemoWithoutCinemaFrame(this, ::cDemoName)) {
         MR::startActorCameraTargetSelf(this, mCameraInfo);
-        MR::startRumbleWithShakeCameraWeak(this, "中", "中", 1000.0f, FLOAT_MAX);
+        MR::startRumbleWithShakeCameraWeak(this, "中", "中", cNum_exeTryStartDemo_f1, FLOAT_MAX);
         MR::invalidateCollisionParts(this);
         setNerve(GET_NERVE(SimpleBreakableObj, HostTypeDemo));
     }

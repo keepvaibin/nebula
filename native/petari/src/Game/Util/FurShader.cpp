@@ -7,6 +7,12 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cmath>
 #include <cstring>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_createFurMesh_f1, "createFurMesh.f1", 0.45f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createFurMesh_f2, "createFurMesh.f2", 0.45f);
+NEBULA_TUNABLE_NAMED(f32, cNum_refer_f1, "refer.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getTexelOrder_f1, "getTexelOrder.f1", 65536.0f);
 
 namespace {
     // Corners of a mesh by the bits of their position: a model's seams share a position, and each position grows one way.
@@ -126,8 +132,8 @@ SiteMesh< VertexFur >* createFurMesh(ModelData* pData, u32 shape, const ResTIMG*
             minV = pWinner[5] < minV ? pWinner[5] : minV;
         }
     }
-    const s32 spanU = 0.45f + (maxU - minU);
-    const s32 spanV = 0.45f + (maxV - minV);
+    const s32 spanU = cNum_createFurMesh_f1 + (maxU - minU);
+    const s32 spanV = cNum_createFurMesh_f2 + (maxV - minV);
 
     SiteMesh< VertexFur >* pOut = new SiteMesh< VertexFur >();
     VertexFur* pVertices;
@@ -199,7 +205,7 @@ f32 FurLengthMap::refer(f32 u, f32 v) const {
     u32 y = getTexelOrder(mTexture->mHeight, v, static_cast< u8 >(mTexture->mWrapT));
     x = x < mTexture->mWidth ? x : mTexture->mWidth - 1;
     y = y < mTexture->mHeight ? y : mTexture->mHeight - 1;
-    return f32(mTexels[y * mTexture->mWidth + x]) / 255.0f;
+    return f32(mTexels[y * mTexture->mWidth + x]) / cNum_refer_f1;
 }
 
 u32 FurLengthMap::getTexelOrder(u32 size, f32 coord, u8 wrap) const {
@@ -216,7 +222,7 @@ u32 FurLengthMap::getTexelOrder(u32 size, f32 coord, u8 wrap) const {
         case NEBULA_WRAP_REPEAT:
         case NEBULA_WRAP_MIRROR:
             // Past 65536 or infinite, one subtraction of 1 at a time never ends; the fraction is taken at once.
-            if (!(coord < 65536.0f)) {
+            if (!(coord < cNum_getTexelOrder_f1)) {
                 coord = std::isinf(coord) ? 0.0f : std::fmod(coord, 1.0f);
             }
             while (coord > 1.0f) {

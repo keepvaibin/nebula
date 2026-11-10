@@ -15,6 +15,33 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowControllerVolumeParam_f1, "createShadowControllerVolumeParam.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowControllerSuefaceParam_f1, "createShadowControllerSuefaceParam.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceCircleFromCSV_f1, "createShadowSurfaceCircleFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceOvalFromCSV_f1, "createShadowSurfaceOvalFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceOvalFromCSV_f2, "createShadowSurfaceOvalFromCSV.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceOvalFromCSV_f3, "createShadowSurfaceOvalFromCSV.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceBoxFromCSV_f1, "createShadowSurfaceBoxFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceBoxFromCSV_f2, "createShadowSurfaceBoxFromCSV.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowSurfaceBoxFromCSV_f3, "createShadowSurfaceBoxFromCSV.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeSphereFromCSV_f1, "createShadowVolumeSphereFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeOvalFromCSV_f1, "createShadowVolumeOvalFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeOvalFromCSV_f2, "createShadowVolumeOvalFromCSV.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeOvalFromCSV_f3, "createShadowVolumeOvalFromCSV.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeOvalPoleFromCSV_f1, "createShadowVolumeOvalPoleFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeOvalPoleFromCSV_f2, "createShadowVolumeOvalPoleFromCSV.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeOvalPoleFromCSV_f3, "createShadowVolumeOvalPoleFromCSV.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeCylinderFromCSV_f1, "createShadowVolumeCylinderFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeBoxFromCSV_f1, "createShadowVolumeBoxFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeBoxFromCSV_f2, "createShadowVolumeBoxFromCSV.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeBoxFromCSV_f3, "createShadowVolumeBoxFromCSV.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeLineFromCSV_f1, "createShadowVolumeLineFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createShadowVolumeLineFromCSV_f2, "createShadowVolumeLineFromCSV.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setUpShadowControlFromCSV_f1, "setUpShadowControlFromCSV.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setUpShadowVolumeFromCSV_f1, "setUpShadowVolumeFromCSV.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setUpShadowVolumeFromCSV_f2, "setUpShadowVolumeFromCSV.f2", 100.0f);
 
 namespace {
     const char* const sShadowDefineFileName[] = {"SurfaceCircle",  "SurfaceOval",    "SurfaceBox", "VolumeSphere",    "VolumeOval",
@@ -59,7 +86,7 @@ namespace ActorShadow {
         ShadowController* pController = new ShadowController(pActor, pName);
         pController->setDropPosPtr(&pActor->mPosition);
         pController->setDropDirPtr(&pActor->mGravity);
-        pController->setDropLength(1000.0f);
+        pController->setDropLength(cNum_createShadowControllerVolumeParam_f1);
         pController->setDropTypeNormal();
         pActor->mShadowControllerList->addController(pController);
 
@@ -70,7 +97,7 @@ namespace ActorShadow {
         ShadowController* pController = new ShadowController(pActor, pName);
         pController->setDropPosPtr(&pActor->mPosition);
         pController->setDropDirPtr(&pActor->mGravity);
-        pController->setDropLength(1000.0f);
+        pController->setDropLength(cNum_createShadowControllerSuefaceParam_f1);
         pController->setDropTypeSurface();
         pActor->mShadowControllerList->addController(pController);
 
@@ -142,7 +169,7 @@ namespace ActorShadow {
     ShadowSurfaceCircle* createShadowSurfaceCircleFromCSV(LiveActor* pActor, const TableIter& rIter) {
         ShadowSurfaceCircle* pShadow = ::createShadowDrawer< ShadowSurfaceCircle >(pActor, rIter, true);
 
-        f32 radius = 100.0f;
+        f32 radius = cNum_createShadowSurfaceCircleFromCSV_f1;
         rIter.getValue< f32 >("Radius", &radius);
         pShadow->setRadius(radius);
 
@@ -153,7 +180,7 @@ namespace ActorShadow {
         ShadowSurfaceOval* pShadow = ::createShadowDrawer< ShadowSurfaceOval >(pActor, rIter, true);
 
         Vec3f size;
-        size.set< f32 >(100.0f, 100.0f, 100.0f);
+        size.set< f32 >(cNum_createShadowSurfaceOvalFromCSV_f1, cNum_createShadowSurfaceOvalFromCSV_f2, cNum_createShadowSurfaceOvalFromCSV_f3);
         MR::getPlacementV3f(rIter, "Size", &size);
         pShadow->setSize(size);
 
@@ -164,7 +191,7 @@ namespace ActorShadow {
         ShadowSurfaceBox* pShadow = ::createShadowDrawer< ShadowSurfaceBox >(pActor, rIter, true);
 
         Vec3f size;
-        size.set< f32 >(100.0f, 100.0f, 100.0f);
+        size.set< f32 >(cNum_createShadowSurfaceBoxFromCSV_f1, cNum_createShadowSurfaceBoxFromCSV_f2, cNum_createShadowSurfaceBoxFromCSV_f3);
         MR::getPlacementV3f(rIter, "Size", &size);
         pShadow->setSize(size);
 
@@ -175,7 +202,7 @@ namespace ActorShadow {
         ShadowVolumeSphere* pShadow = ::createShadowDrawer< ShadowVolumeSphere >(pActor, rIter, false);
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
-        f32 radius = 100.0f;
+        f32 radius = cNum_createShadowVolumeSphereFromCSV_f1;
         rIter.getValue< f32 >("Radius", &radius);
         pShadow->setRadius(radius);
 
@@ -187,7 +214,7 @@ namespace ActorShadow {
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
         Vec3f size;
-        size.set< f32 >(100.0f, 100.0f, 100.0f);
+        size.set< f32 >(cNum_createShadowVolumeOvalFromCSV_f1, cNum_createShadowVolumeOvalFromCSV_f2, cNum_createShadowVolumeOvalFromCSV_f3);
         MR::getPlacementV3f(rIter, "Size", &size);
         pShadow->setSize(size);
 
@@ -199,7 +226,7 @@ namespace ActorShadow {
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
         Vec3f size;
-        size.set< f32 >(100.0f, 100.0f, 100.0f);
+        size.set< f32 >(cNum_createShadowVolumeOvalPoleFromCSV_f1, cNum_createShadowVolumeOvalPoleFromCSV_f2, cNum_createShadowVolumeOvalPoleFromCSV_f3);
         MR::getPlacementV3f(rIter, "Size", &size);
         pShadow->setSize(size);
 
@@ -210,7 +237,7 @@ namespace ActorShadow {
         ShadowVolumeCylinder* pShadow = ::createShadowDrawer< ShadowVolumeCylinder >(pActor, rIter, false);
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
-        f32 radius = 100.0f;
+        f32 radius = cNum_createShadowVolumeCylinderFromCSV_f1;
         rIter.getValue< f32 >("Radius", &radius);
         pShadow->setRadius(radius);
 
@@ -222,7 +249,7 @@ namespace ActorShadow {
         setUpShadowVolumeFromCSV(pShadow, rIter);
 
         Vec3f size;
-        size.set< f32 >(100.0f, 100.0f, 100.0f);
+        size.set< f32 >(cNum_createShadowVolumeBoxFromCSV_f1, cNum_createShadowVolumeBoxFromCSV_f2, cNum_createShadowVolumeBoxFromCSV_f3);
         MR::getPlacementV3f(rIter, "Size", &size);
         pShadow->setSize(size);
 
@@ -250,10 +277,10 @@ namespace ActorShadow {
         const char* pLineEnd = nullptr;
         rIter.getValue< const char* >("LineEnd", &pLineEnd);
 
-        f32 lineStartRadius = 100.0f;
+        f32 lineStartRadius = cNum_createShadowVolumeLineFromCSV_f1;
         rIter.getValue< f32 >("LineStartRadius", &lineStartRadius);
 
-        f32 lineEndRadius = 100.0f;
+        f32 lineEndRadius = cNum_createShadowVolumeLineFromCSV_f2;
         rIter.getValue< f32 >("LineEndRadius", &lineEndRadius);
 
         pShadow->setFromWidth(lineStartRadius);
@@ -306,7 +333,7 @@ namespace ActorShadow {
     }
 
     void setUpShadowControlFromCSV(ShadowController* pController, LiveActor* pActor, const TableIter& rIter) {
-        f32 dropLength = 1000.0f;
+        f32 dropLength = cNum_setUpShadowControlFromCSV_f1;
         rIter.getValue("DropLength", &dropLength);
         pController->setDropLength(dropLength);
 
@@ -387,8 +414,8 @@ namespace ActorShadow {
     }
 
     void setUpShadowVolumeFromCSV(ShadowVolumeDrawer* pDrawer, const TableIter& rIter) {
-        f32 volumeStart = 100.0f;
-        f32 volumeEnd = 100.0f;
+        f32 volumeStart = cNum_setUpShadowVolumeFromCSV_f1;
+        f32 volumeEnd = cNum_setUpShadowVolumeFromCSV_f2;
         s32 volumeCut = 0;
         rIter.getValue< f32 >("VolumeStart", &volumeStart);
         rIter.getValue< f32 >("VolumeEnd", &volumeEnd);

@@ -22,6 +22,8 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initMainThreads_f1, "initMainThreads.f1", 360.0f);
+
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
 
@@ -202,7 +204,7 @@ void SpiderThread::cutSpiderThread() {
 
 void SpiderThread::initMainThreads() {
     Rot3f rotMtx;
-    MR::makeMtxRotate(rotMtx.toMtxPtr(), 0.0f, 0.0f, 360.0f / mNumRadialLines);
+    MR::makeMtxRotate(rotMtx.toMtxPtr(), 0.0f, 0.0f, cNum_initMainThreads_f1 / mNumRadialLines);
     Vec3f down(0.0f, -1.0f, 0.0f);
 
     mMainPoint = new SpiderThreadMainPoint(mPosition, mNumRadialLines + 1);

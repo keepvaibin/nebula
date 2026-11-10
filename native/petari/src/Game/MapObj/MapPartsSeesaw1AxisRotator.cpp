@@ -9,6 +9,14 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 1.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRestoreForce_f1, "updateRestoreForce.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRestoreForce_f2, "updateRestoreForce.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDistanceFromRotAxis_f1, "getDistanceFromRotAxis.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addForceHipDrop_f1, "addForceHipDrop.f1", 0.1f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAngularVelocityFric, 0.99f);
     NEBULA_TUNABLE(f32, sAngularAccelHipDrop, 40.0f);
@@ -36,7 +44,7 @@ MapPartsSeesaw1AxisRotator::MapPartsSeesaw1AxisRotator(LiveActor* pHost, const c
 void MapPartsSeesaw1AxisRotator::init(const TableIter& rIter) {
     initNerve(GET_NERVE(MapPartsSeesaw1AxisRotator, HostTypeWait));
     MR::getMapPartsArgRotateSpeed(&mAngularSpeedMax, rIter);
-    mAngularSpeedMax *= 0.01f;
+    mAngularSpeedMax *= cNum_init_f1;
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
     s32 inertia = 0;
     MR::getMapPartsArgRotateAccelType(&inertia, rIter);
@@ -71,7 +79,7 @@ void MapPartsSeesaw1AxisRotator::start() {
     if (isAngleLimited() && mRotateAngle < angle) {
         Pos3f correction;
         correction.identity();
-        correction.setRotate(mRotateAxis, 1.05f * (PI_180 * (angle - mRotateAngle)));
+        correction.setRotate(mRotateAxis, cNum_start_f1 * (PI_180 * (angle - mRotateAngle)));
         mRotateMtx.concat(correction);
     }
 
@@ -168,7 +176,7 @@ void MapPartsSeesaw1AxisRotator::updateVelocity() {
         Vec3f torque;
         torque.cross(offset, gravity);
         f32 direction = MR::sign(torque.dot(mRotateAxis));
-        mAngularVelocity += direction * (getDistanceFromRotAxis() / (0.1f * mInertiaConst));
+        mAngularVelocity += direction * (getDistanceFromRotAxis() / (cNum_updateVelocity_f1 * mInertiaConst));
     }
 
     if (!isNerve(GET_NERVE(MapPartsSeesaw1AxisRotator, HostTypeMoveStart)) && getStep() > ::sMoveStartFrame) {
@@ -194,8 +202,8 @@ void MapPartsSeesaw1AxisRotator::updateRestoreForce() {
     }
 
     f32 direction = MR::sign(force);
-    f32 restoreForce = 0.01f * mRestoreForce;
-    mAngularVelocity += (direction * restoreForce) / (0.1f * mInertiaConst);
+    f32 restoreForce = cNum_updateRestoreForce_f1 * mRestoreForce;
+    mAngularVelocity += (direction * restoreForce) / (cNum_updateRestoreForce_f2 * mInertiaConst);
 }
 
 void MapPartsSeesaw1AxisRotator::clampAngularSpeed() {
@@ -209,7 +217,7 @@ f32 MapPartsSeesaw1AxisRotator::getDistanceFromRotAxis() const {
     baseMtx.getXDir(axis);
     Vec3f projection;
     projection.scale(axis.dot(offset), axis);
-    return 0.001f * projection.length();
+    return cNum_getDistanceFromRotAxis_f1 * projection.length();
 }
 
 void MapPartsSeesaw1AxisRotator::addForceHipDrop() {
@@ -219,7 +227,7 @@ void MapPartsSeesaw1AxisRotator::addForceHipDrop() {
     Vec3f torque;
     torque.cross(offset, gravity);
     f32 direction = MR::sign(torque.dot(mRotateAxis));
-    f32 inertia = 0.1f * mInertiaConst;
+    f32 inertia = cNum_addForceHipDrop_f1 * mInertiaConst;
     mAngularVelocity += direction * ((::sAngularAccelHipDrop * getDistanceFromRotAxis()) / inertia);
 }
 

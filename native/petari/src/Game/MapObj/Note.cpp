@@ -6,6 +6,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sRotateSpeed, 8.0f);
     NEBULA_TUNABLE(s32, sStepFlyUp, 10);
@@ -32,7 +35,7 @@ void Note::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("Note", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(Note, NoteNrvWait));
@@ -43,7 +46,7 @@ void Note::init(const TableIter& /*rIter*/) {
         mGravity.set(0.0f, -1.0f, 0.0);
     }
 
-    MR::initShadowVolumeSphere(this, 30.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f2);
     MR::turnVecToPlane(&mRailDirection, mRailDirection, mGravity);
     MR::invalidateClipping(this);
     makeActorDead();

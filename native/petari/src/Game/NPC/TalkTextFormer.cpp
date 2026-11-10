@@ -9,6 +9,13 @@
 #include "Game/Util/MessageUtil.hpp"
 #include <Game/Ui/TextBox.hpp>
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getLanguageRate_f1, "getLanguageRate.f1", 1.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initTagProcessorRecursive_f1, "initTagProcessorRecursive.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initTagProcessorRecursive_f2, "initTagProcessorRecursive.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initTagProcessorRecursive_f3, "initTagProcessorRecursive.f3", 0.35f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initTagProcessorRecursive_f4, "initTagProcessorRecursive.f4", 0.9f);
 
 namespace {
     Ui::TextBox* getTextBoxPane(LayoutActor* pActor, const char* pPaneName) {
@@ -36,7 +43,7 @@ namespace {
 
 namespace MR {
     inline f32 getLanguageRate() {
-        return getLanguage() == LanguageId_JpJapanese ? 1.0f : 1.25f;
+        return getLanguage() == LanguageId_JpJapanese ? 1.0f : cNum_getLanguageRate_f1;
     }
 
     void initTagProcessorRecursive(LayoutActor* pActor, const char* pPaneName, s32 mode) {
@@ -50,10 +57,10 @@ namespace MR {
                 pProcessor->initAlpha(0.0f, 0.0f, 0, 0);
                 break;
             case TalkTextForm_Talk:
-                pProcessor->initAlpha(0.8f * rate, 0.9f, 0, 0);
+                pProcessor->initAlpha(cNum_initTagProcessorRecursive_f1 * rate, cNum_initTagProcessorRecursive_f2, 0, 0);
                 break;
             case TalkTextForm_Event:
-                pProcessor->initAlpha(0.35f * rate, 0.9f, 0, 0);
+                pProcessor->initAlpha(cNum_initTagProcessorRecursive_f3 * rate, cNum_initTagProcessorRecursive_f4, 0, 0);
                 break;
             }
         }

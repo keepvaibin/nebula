@@ -1,12 +1,17 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_SegmentGravity_f1, "SegmentGravity.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateLocalParam_f1, "updateLocalParam.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateLocalParam_f2, "updateLocalParam.f2", 0.5f);
 
 
 SegmentGravity::SegmentGravity()
     : PlanetGravity(), mSideVector(1, 0, 0), mOppositeSideVecOrtho(1, 0, 0), mWorldOppositeSideVecOrtho(1, 0, 0), mAxis(0, 0, 0) {
     mAxisLength = 0.0f;
-    mValidSideDegree = 360.0f;
+    mValidSideDegree = cNum_SegmentGravity_f1;
     mValidSideCos = -1.0f;
 
     for (u32 i = 0; i < 2; i++) {
@@ -93,7 +98,7 @@ void SegmentGravity::setEdgeValid(u32 index, bool isValid) {
 void SegmentGravity::updateLocalParam() {
     Rot3f rot;
 
-    mValidSideCos = MR::cosDegree(0.5f * mValidSideDegree);
+    mValidSideCos = MR::cosDegree(cNum_updateLocalParam_f1 * mValidSideDegree);
 
     Vec3f localAxis = mGravityPoints[1] - mGravityPoints[0];
     MR::normalizeOrZero(&localAxis);
@@ -110,6 +115,6 @@ void SegmentGravity::updateLocalParam() {
     }
 
     rot.identity();
-    rot.setRotate(localAxis, 0.5f * mValidSideDegree * (PI / 180));
+    rot.setRotate(localAxis, cNum_updateLocalParam_f2 * mValidSideDegree * (PI / 180));
     rot.mult(mOppositeSideVecOrtho, mOppositeSideVecOrtho);
 }

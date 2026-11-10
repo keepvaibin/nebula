@@ -12,13 +12,17 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEven_f1, "exeEven.f1", 30.0f);
+
 namespace {
-    const MR::ActorMoveParam sRunParam = {3.0f, 1.0f, 0.9f, 3.0f};
-    const MR::ActorMoveParam sParamAttackSpin1st = {2.0f, 1.0f, 0.9f, 0.0f};
-    const MR::ActorMoveParam sParamAttackSpin2nd = {3.0f, 1.0f, 0.9f, 0.5f};
-    const MR::ActorMoveParam sParamAttackSpinBrake = {1.0f, 1.0f, 0.9f, 0.0f};
-    const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.9f, 0.0f};
-    const MR::ActorMoveParam sEvenParam = {0.0f, 1.0f, 0.95f, 0.5f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sRunParam, {3.0f, 1.0f, 0.9f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sParamAttackSpin1st, {2.0f, 1.0f, 0.9f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sParamAttackSpin2nd, {3.0f, 1.0f, 0.9f, 0.5f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sParamAttackSpinBrake, {1.0f, 1.0f, 0.9f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sEndParam, {0.0f, 1.0f, 0.9f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sEvenParam, {0.0f, 1.0f, 0.95f, 0.5f});
     const s32 sWaitToStartStep = NebulaFrameClock::stepsOfMilliseconds(500);
     NEBULA_TUNABLE(f32, sDistanceToJump, 1000.0f);
     const s32 sRunStepMax = NebulaFrameClock::stepsOfSeconds(2);
@@ -46,7 +50,7 @@ KoopaStateAttackSpin::KoopaStateAttackSpin(Koopa* pKoopa)
 }
 
 void KoopaStateAttackSpin::init() {
-    MR::addHitSensor(mHost, "AttackSpin", ATYPE_KOOPA_ATTACK, 8, 250.0f, Vec3f(0.0f, 250.0f, 0.0f));
+    MR::addHitSensor(mHost, "AttackSpin", ATYPE_KOOPA_ATTACK, 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
 
     initNerve(GET_NERVE(KoopaStateAttackSpin, KoopaStateAttackSpinNrvStart));
 
@@ -196,7 +200,7 @@ void KoopaStateAttackSpin::exeEven() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "SpinEven");
         MR::calcVecFromPlayerH(&mHost->mVelocity, mHost);
-        MR::scaleVelocity(mHost, 30.0f);
+        MR::scaleVelocity(mHost, cNum_exeEven_f1);
     }
 
     KoopaFunction::moveAndTurnKoopaToPlayer(mHost, ::sEvenParam);

@@ -29,6 +29,8 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_goToPlayer_f1, "goToPlayer.f1", 2.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_2, "exeFall.reboundVelocityFromCollision.2", 1.0f);
@@ -821,7 +823,7 @@ void StarPiece::goToPlayer(Vec3f velocity) {
         f32 dot = mFront.dot(mGravity);
 
         if (0.0f < dot) {
-            mFront -= mGravity * dot * 2.0f;
+            mFront -= mGravity * dot * cNum_goToPlayer_f1;
         }
     }
 

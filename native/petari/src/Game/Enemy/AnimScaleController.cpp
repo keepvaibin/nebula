@@ -2,6 +2,30 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleDefaultParam_f1, "AnimScaleDefaultParam.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleDefaultParam_f2, "AnimScaleDefaultParam.f2", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleDefaultParam_f3, "AnimScaleDefaultParam.f3", 8.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleDefaultParam_f4, "AnimScaleDefaultParam.f4", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleDefaultParam_f5, "AnimScaleDefaultParam.f5", 0.08f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleDefaultParam_f6, "AnimScaleDefaultParam.f6", 2.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f1, "AnimScaleParam.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f2, "AnimScaleParam.f2", 0.91f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f3, "AnimScaleParam.f3", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f4, "AnimScaleParam.f4", 1.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f5, "AnimScaleParam.f5", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f6, "AnimScaleParam.f6", 0.55f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f7, "AnimScaleParam.f7", 0.12f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f8, "AnimScaleParam.f8", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f9, "AnimScaleParam.f9", 0.06f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f10, "AnimScaleParam.f10", 0.12f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f11, "AnimScaleParam.f11", 0.91f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimScaleParam_f12, "AnimScaleParam.f12", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCrush_f1, "exeCrush.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCrush_f2, "exeCrush.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryStop_f1, "tryStop.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryStop_f2, "tryStop.f2", 0.001f);
 
 namespace NrvAnimScaleController {
     NEW_NERVE(AnimScaleControllerNrvAnim, AnimScaleController, Anim);
@@ -21,31 +45,31 @@ namespace {
     };
 
     AnimScaleDefaultParam::AnimScaleDefaultParam() {
-        tightParam.mAnimSpring = 0.5f;
-        tightParam.mAnimDamping = 0.85f;
-        tightParam.mPointerTime = 8.0f;
-        tightParam.mPointerBase = 0.8f;
-        tightParam.mPointerAmplitude = 0.08f;
-        tightParam.mPointerFreq = 2.2f;
+        tightParam.mAnimSpring = cNum_AnimScaleDefaultParam_f1;
+        tightParam.mAnimDamping = cNum_AnimScaleDefaultParam_f2;
+        tightParam.mPointerTime = cNum_AnimScaleDefaultParam_f3;
+        tightParam.mPointerBase = cNum_AnimScaleDefaultParam_f4;
+        tightParam.mPointerAmplitude = cNum_AnimScaleDefaultParam_f5;
+        tightParam.mPointerFreq = cNum_AnimScaleDefaultParam_f6;
     };
 
     AnimScaleDefaultParam sStaticAnimParam;
 };  // namespace
 
 AnimScaleParam::AnimScaleParam() {
-    mAnimSpring = 0.2f;
-    mAnimDamping = 0.91f;
-    mScaleMin = 0.2f;
-    mScaleMax = 1.8f;
-    mPointerTime = 12.0f;
-    mPointerBase = 0.55f;
-    mPointerAmplitude = 0.12f;
-    mPointerFreq = 2.0f;
-    mHitReactionVelocity = 0.06f;
-    mHitReactionSpring = 0.12f;
-    mHitReactionDamping = 0.91f;
+    mAnimSpring = cNum_AnimScaleParam_f1;
+    mAnimDamping = cNum_AnimScaleParam_f2;
+    mScaleMin = cNum_AnimScaleParam_f3;
+    mScaleMax = cNum_AnimScaleParam_f4;
+    mPointerTime = cNum_AnimScaleParam_f5;
+    mPointerBase = cNum_AnimScaleParam_f6;
+    mPointerAmplitude = cNum_AnimScaleParam_f7;
+    mPointerFreq = cNum_AnimScaleParam_f8;
+    mHitReactionVelocity = cNum_AnimScaleParam_f9;
+    mHitReactionSpring = cNum_AnimScaleParam_f10;
+    mHitReactionDamping = cNum_AnimScaleParam_f11;
     mCrushStep = 0x14;
-    mCrushEnd = 0.25f;
+    mCrushEnd = cNum_AnimScaleParam_f12;
 }
 
 AnimScaleController::AnimScaleController(AnimScaleParam* pScaleParam) : NerveExecutor("スケールアニメコントロール\000" /* スケールアニメコントロール\00 */) {
@@ -54,12 +78,14 @@ AnimScaleController::AnimScaleController(AnimScaleParam* pScaleParam) : NerveExe
     mScaleVelocity = 0.0f;
 
     if (pScaleParam == nullptr) {
+        ::sStaticAnimParam = AnimScaleDefaultParam();  // again, with a mod's numbers
         mParam = &::sStaticAnimParam;
     }
     initNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvStop));
 }
 
 void AnimScaleController::setParamTight() {
+    ::sStaticAnimParam = AnimScaleDefaultParam();  // again, with a mod's numbers
     mParam = &::sStaticAnimParam.tightParam;
 }
 
@@ -129,7 +155,7 @@ void AnimScaleController::exeCrush() {
     mScaleVelocity = 0.0f;
 
     f32 nerveRate = MR::calcNerveRate(this, mParam->mCrushStep);
-    f32 crushValue = MR::getConvergeVibrationValue(nerveRate, 1.0f, mParam->mCrushEnd, 0.3f, 4.0f);
+    f32 crushValue = MR::getConvergeVibrationValue(nerveRate, 1.0f, mParam->mCrushEnd, cNum_exeCrush_f1, cNum_exeCrush_f2);
 
     mScale.y = crushValue;
     mScale.x = MR::sqrt(1.0f / mScale.y);
@@ -152,7 +178,7 @@ bool AnimScaleController::isHitReaction(s32 maxStep) const {
 }
 
 bool AnimScaleController::tryStop() {
-    if (MR::abs(1.0f - mScale.y) < 0.001f && MR::abs(mScaleVelocity) < 0.001f) {
+    if (MR::abs(1.0f - mScale.y) < cNum_tryStop_f1 && MR::abs(mScaleVelocity) < cNum_tryStop_f2) {
         resetScale();
         setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvStop));
         return true;

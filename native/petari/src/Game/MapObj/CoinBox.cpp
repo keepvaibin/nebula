@@ -2,6 +2,11 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f1, "exeHit.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f2, "exeHit.f2", 10.0f);
 
 namespace NrvCoinBox {
     NEW_NERVE(CoinBoxNrvWait, CoinBox, Wait);
@@ -21,7 +26,7 @@ void CoinBox::init(const TableIter& rIter) {
     box.x = 0.0f;
     box.y = 0.0f;
     box.z = 0.0f;
-    MR::addHitSensorMapObj(this, "body", 8, 5.0f, box);
+    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, box);
     makeActorAppeared();
     setNerve(GET_NERVE(CoinBox, CoinBoxNrvWait));
     MR::declareCoin(this, 1);
@@ -44,7 +49,7 @@ void CoinBox::exeHit() {
         MR::calcGravityOrZero(this);
         Vec3f horiz;
         f32 alongGravity = MR::vecKillElement(axis_y, mGravity, &horiz);
-        axis_y = (mGravity * alongGravity) * 30.0f + horiz * 10.0f;
+        axis_y = (mGravity * alongGravity) * cNum_exeHit_f1 + horiz * cNum_exeHit_f2;
         MR::appearCoinToVelocity(this, mPosition, axis_y, 1);
         kill();
     }

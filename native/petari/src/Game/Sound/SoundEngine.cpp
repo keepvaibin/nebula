@@ -5,6 +5,12 @@
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <new>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setOutputLevel_f1, "setOutputLevel.f1", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f1, "setEffectLine.f1", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f2, "setEffectLine.f2", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f3, "setEffectLine.f3", 32768.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -550,7 +556,7 @@ void SoundEngine::applyPlayer(SoundPlayer* pPlayer, const SoundCommand& rCommand
 
 void SoundEngine::setOutputLevel(f32 level) {
     mOutputLevel = level;
-    mMixerGain = 4.0f * level;
+    mMixerGain = cNum_setOutputLevel_f1 * level;
 }
 
 // Settings change, the line's delay kept; with settings and a restart the line starts over, silent. Without settings the line
@@ -558,13 +564,13 @@ void SoundEngine::setOutputLevel(f32 level) {
 void SoundEngine::setEffectLine(const EffectLineCommand& rLine) {
     NebulaEffectLine& rEffect = mEffects[rLine.mLine];
     if (rLine.mHasConfig) {
-        rEffect.volume_a = rLine.mVolumeA / 32768.0f;
+        rEffect.volume_a = rLine.mVolumeA / cNum_setEffectLine_f1;
         rEffect.bus_a = cEffectDestinations[rLine.mBusA];
-        rEffect.volume_b = rLine.mVolumeB / 32768.0f;
+        rEffect.volume_b = rLine.mVolumeB / cNum_setEffectLine_f2;
         rEffect.bus_b = cEffectDestinations[rLine.mBusB];
         rEffect.subframes = static_cast< u16 >(rLine.mSubframes);
         for (int i = 0; i < 8; i++) {
-            rEffect.fir[i] = rLine.mFir[i] / 32768.0f;
+            rEffect.fir[i] = rLine.mFir[i] / cNum_setEffectLine_f3;
         }
     }
     if (rLine.mRestart && rLine.mHasConfig) {

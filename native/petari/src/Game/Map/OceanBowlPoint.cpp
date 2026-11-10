@@ -2,6 +2,8 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 255.0f);
+
 NEBULA_TUNABLE(f32, sSinRate0, 0.003f);
 NEBULA_TUNABLE(f32, sSinRate1, 0.003f);
 NEBULA_TUNABLE(f32, sSinRate2, 0.003f);
@@ -34,5 +36,5 @@ void OceanBowlPoint::reset(const Vec3f& rPos, f32 waveScale) {
     mPosition.set(rPos);
     mVertexPosition.set(mPosition);
     mWaveScale = waveScale;
-    mAlpha = (s32)(255.0f * waveScale);
+    mAlpha = (s32)(cNum_reset_f1 * waveScale);
 }

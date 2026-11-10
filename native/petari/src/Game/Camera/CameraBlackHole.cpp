@@ -3,6 +3,10 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.002f);
 
 CameraBlackHole::CameraBlackHole(const char* pName) : Camera(pName), mFovy(1.0f), mRoll(), mWPoint(0.0f, 0.0f, 0.0f), mBasePos(0.0f, 0.0f, 0.0f) {
 }
@@ -20,7 +24,7 @@ void CameraBlackHole::reset() {
     } else {
         f32 camWatchDist = camWatchDir.length();
         f32 targetDist = (CameraLocalUtil::getPos(mCameraMan) - mWPoint).length();
-        f32 targetLength = camWatchDist + (targetDist - camWatchDist) * 0.7f;
+        f32 targetLength = camWatchDist + (targetDist - camWatchDist) * cNum_reset_f1;
         Vec3f up = CameraLocalUtil::getUpVec(mCameraMan);
         Vec3f watchUp = CameraLocalUtil::getWatchUpVec(mCameraMan);
         MR::normalize(&camWatchDir);
@@ -40,7 +44,7 @@ void CameraBlackHole::reset() {
 CameraTargetObj* CameraBlackHole::calc() {
     CameraLocalUtil::setFovy(this, mFovy);
     CameraLocalUtil::setRoll(this, mRoll);
-    mRoll += 0.002f;
+    mRoll += cNum_calc_f1;
     return nullptr;
 }
 

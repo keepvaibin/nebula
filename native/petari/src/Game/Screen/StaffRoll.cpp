@@ -24,6 +24,8 @@
 #include <cstdio>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTitleLogoScroll_f1, "exeTitleLogoScroll.f1", 210.0f);
+
 #define PICTURE_TEXTURE_NUM 20
 #define LINE_NUM 64
 
@@ -375,7 +377,7 @@ void StaffRoll::exeTitleLogoScroll() {
 
     mTitleLogoPos.y -= ::getStaffRollParam()->mScrollSpeed;
 
-    if (mTitleLogoPos.y < -210.0f) {
+    if (mTitleLogoPos.y < -cNum_exeTitleLogoScroll_f1) {
         MR::hidePane(this, ::cPaneNameTitleLogo);
         setNerve(GET_NERVE(StaffRoll, StaffRollNrvLineScroll));
     }

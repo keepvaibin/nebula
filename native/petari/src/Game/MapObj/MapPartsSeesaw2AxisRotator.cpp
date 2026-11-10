@@ -9,6 +9,10 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_rotate_f1, "rotate.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_restoreMove_f1, "restoreMove.f1", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getInertiaConst_f1, "getInertiaConst.f1", 0.1f);
+
 namespace {
     NEBULA_TUNABLE(f32, sInertiaConstDefault, 500.0f);
     NEBULA_TUNABLE(f32, sRestoreForceDefault, 100.0f);
@@ -95,7 +99,7 @@ void MapPartsSeesaw2AxisRotator::rotate() {
     target.zeroTrans();
 
     f32 previousSpeed = mRotateSpeed;
-    f32 speed = MR::clamp((0.001f * distance) / getInertiaConst(), 0.0f, 1.0f);
+    f32 speed = MR::clamp((cNum_rotate_f1 * distance) / getInertiaConst(), 0.0f, 1.0f);
     mRotateSpeed = speed - previousSpeed;
 
     if (mMoveSound != nullptr && mMoveSoundSpeed < MR::abs(mRotateSpeed)) {
@@ -106,7 +110,7 @@ void MapPartsSeesaw2AxisRotator::rotate() {
 }
 
 void MapPartsSeesaw2AxisRotator::restoreMove() {
-    f32 speed = MR::clamp(0.0001f * mRestoreForce, 0.0f, 1.0f);
+    f32 speed = MR::clamp(cNum_restoreMove_f1 * mRestoreForce, 0.0f, 1.0f);
     Pos3f target;
     target.set(mBaseMtx);
     target.zeroTrans();
@@ -115,7 +119,7 @@ void MapPartsSeesaw2AxisRotator::restoreMove() {
 
 f32 MapPartsSeesaw2AxisRotator::getInertiaConst() const {
     if (isNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeHipDrop))) {
-        return 0.1f * mInertiaConst;
+        return cNum_getInertiaConst_f1 * mInertiaConst;
     }
 
     return mInertiaConst;

@@ -4,6 +4,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sNumCoin, 1);
     NEBULA_TUNABLE(f32, sEnableSpoutLength, 2000.0f);
@@ -24,12 +29,12 @@ void TreasureSpot::init(const TableIter& rIter) {
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupHitSensor();
-    info.setupHitSensorParam(4, 80.0f, Vec3f(0.0f, 30.0f, 0.0f));
+    info.setupHitSensorParam(4, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     info.setupNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvWait));
     info.setupSound(4);
     MapObjActor::initialize(rIter, info);
     mIsCoinFlower = isObjectName("CoinFlower");
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0.0f, cNum_init_f4, 0.0f));
     MR::declareCoin(this, ::sNumCoin);
 }
 

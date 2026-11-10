@@ -3,6 +3,9 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_tryCalcNearestPosToPlayer_f1, "tryCalcNearestPosToPlayer.f1", 380.0f);
 
 IceVolcanoUpDownPlane::IceVolcanoUpDownPlane(const char* pName) : RailMoveObj(pName), mNearestPosToPlayer(0.0f, 0.0f, 0.0f) {
 }
@@ -22,7 +25,7 @@ bool IceVolcanoUpDownPlane::tryCalcNearestPosToPlayer(Vec3f* pDst) const {
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    if (dirVec.dot(upVec) <= -380.0f) {
+    if (dirVec.dot(upVec) <= -cNum_tryCalcNearestPosToPlayer_f1) {
         return false;
     }
 

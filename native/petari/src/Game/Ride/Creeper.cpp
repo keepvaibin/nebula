@@ -25,6 +25,12 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHangUp_f1, "updateHangUp.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHangUp_f2, "updateHangUp.f2", 0.4f);
+
 namespace NrvCreeper {
     NEW_NERVE(CreeperNrvFree, Creeper, Free);
     NEW_NERVE(CreeperNrvFreeInvalid, Creeper, FreeInvalid);
@@ -153,7 +159,7 @@ void Creeper::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Creeper);
 
     initHitSensor(3);
-    MR::addHitSensorBinder(this, "bind", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     initRailRider(rIter);
 
     mPosition.set(MR::getRailPos(this));
@@ -163,7 +169,7 @@ void Creeper::init(const TableIter& rIter) {
 
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "掴まり");
 
-    MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClippingCenter, this, cNum_init_f2, cNum_init_f3);
 
     initSound(4, false);
 
@@ -414,11 +420,11 @@ bool Creeper::updateHangUp(f32 rotateSpeed) {
         MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
-    if (MR::isFirstStep(this) && mHangSpeed >= 5.0f) {
+    if (MR::isFirstStep(this) && mHangSpeed >= cNum_updateHangUp_f1) {
         MR::startSound(mRider, "SE_OJ_CREEPER_UP_START");
     }
 
-    mHangSpeed -= 0.4f;
+    mHangSpeed -= cNum_updateHangUp_f2;
 
     mHangSpeed = mHangSpeed >= ::sHangUpSpeedMax ? ::sHangUpSpeedMax : mHangSpeed;
 

@@ -5,6 +5,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_init_setRailCoordSpeed_1, "init.setRailCoordSpeed.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeSetUp_setRailCoordSpeed_1, "exeSetUp.setRailCoordSpeed.1", 0.0f);
@@ -32,11 +35,11 @@ BallRail::BallRail(const char* pName)
 // Arg 0 the gravity acceleration and arg 1 the speed kept each step, both in thousandths.
 void BallRail::init(const TableIter& rIter) {
     if (MR::getPlacementArg0NoInit(rIter, &mAcceleration)) {
-        mAcceleration /= 1000.0f;
+        mAcceleration /= cNum_init_f1;
     }
 
     if (MR::getPlacementArg1NoInit(rIter, &mDeceleration)) {
-        mDeceleration /= 1000.0f;
+        mDeceleration /= cNum_init_f2;
     }
 
     MR::connectToSceneMapObjMovement(this);

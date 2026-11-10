@@ -14,6 +14,21 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRotPos_f1, "calcRotPos.f1", 0.000002f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRotPos_f2, "calcRotPos.f2", 0.000002f);
+NEBULA_TUNABLE_NAMED(f32, cNum_constrainDistance_f1, "constrainDistance.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_constrainAngleX_f1, "constrainAngleX.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_constrainAngleX_f2, "constrainAngleX.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_constrainAngleY_f1, "constrainAngleY.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeHeight_f1, "arrangeHeight.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeHeight_f2, "arrangeHeight.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeLookUp_f1, "arrangeLookUp.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeLookUp_f2, "arrangeLookUp.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeLookDown_f1, "arrangeLookDown.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeLookDown_f2, "arrangeLookDown.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeLookDown_f3, "arrangeLookDown.f3", 0.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startRound_f1, "startRound.f1", 2.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sCameraRadius, 15.0f);  // the move speed that turns the camera at the full round speed
     NEBULA_TUNABLE(f32, sSlopeFrontDist, 500.0f);
@@ -131,7 +146,7 @@ void CameraFollow::calcRotPos() {
     f32 length, angleX, angleY;
     MR::crossToPolar(watchPos, pos, &length, &angleX, &angleY);
     angleY = MR::convergeRadian(angleY, mAngleYTarget, mAngleYSpeed);
-    if (angleY < mAngleYTarget + 0.000002f && angleY > mAngleYTarget - 0.000002f) {
+    if (angleY < mAngleYTarget + cNum_calcRotPos_f1 && angleY > mAngleYTarget - cNum_calcRotPos_f2) {
         mIsRounding = false;
     }
 
@@ -161,7 +176,7 @@ void CameraFollow::constrainDistance(Vec3f* pPos, const Vec3f& rWatchPos) {
     } else if (!(diff.length() < mDistMax)) {
         f32 dist = diff.length();
         MR::normalize(&diff);
-        diff.scale(mDistMax + (dist - mDistMax) * 0.5f);
+        diff.scale(mDistMax + (dist - mDistMax) * cNum_constrainDistance_f1);
     }
 
     *pPos = diff + rWatchPos;
@@ -169,11 +184,11 @@ void CameraFollow::constrainDistance(Vec3f* pPos, const Vec3f& rWatchPos) {
 
 void CameraFollow::constrainAngleX(f32* pAngleX) {
     if (*pAngleX > mAngleXMin + mAngleXRange) {
-        *pAngleX = *pAngleX + (mAngleXMin + mAngleXRange - *pAngleX) * 0.5f;
+        *pAngleX = *pAngleX + (mAngleXMin + mAngleXRange - *pAngleX) * cNum_constrainAngleX_f1;
     }
 
     if (*pAngleX < mAngleXMin) {
-        *pAngleX = *pAngleX + (mAngleXMin - *pAngleX) * 0.5f;
+        *pAngleX = *pAngleX + (mAngleXMin - *pAngleX) * cNum_constrainAngleX_f2;
     }
 }
 
@@ -185,7 +200,7 @@ void CameraFollow::constrainAngleY(f32* pAngleY, const Vec3f& rDir, f32 vecLengt
     if (CameraLocalUtil::tryCameraResetTrigger()) {
         startRound(angleY, ::sRoundResetAddition);
     } else {
-        *pAngleY = MR::convergeRadian(*pAngleY, angleY, getMagnitudeOfMovingRound() * MR::pi() / 180.0f);
+        *pAngleY = MR::convergeRadian(*pAngleY, angleY, getMagnitudeOfMovingRound() * MR::pi() / cNum_constrainAngleY_f1);
     }
 }
 
@@ -222,11 +237,11 @@ void CameraFollow::checkShiftStateToRound(const Vec3f& rWatchPos, const Vec3f& r
 void CameraFollow::arrangeHeight() {
     reflectRotOffset();
     if (!mCheckWall) {
-        mAngleXSpeed *= 0.99f;
+        mAngleXSpeed *= cNum_arrangeHeight_f1;
     } else {
         Vec3f camDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
         if (camDir.dot(CameraLocalUtil::getTarget(this)->getFrontVec()) < 0.0f) {
-            mAngleXSpeed *= 0.99f;
+            mAngleXSpeed *= cNum_arrangeHeight_f2;
         } else {
             if (isWallForward()) {
                 arrangeLookUp();
@@ -260,11 +275,11 @@ bool CameraFollow::isWallForward() const {
 void CameraFollow::arrangeLookUp() {
     Vec3f mapPos;
     if (!checkAscent(&mapPos)) {
-        mAngleXSpeed *= 0.99f;
+        mAngleXSpeed *= cNum_arrangeLookUp_f1;
         return;
     }
 
-    mAngleXSpeed *= 0.99f;
+    mAngleXSpeed *= cNum_arrangeLookUp_f2;
 }
 
 bool CameraFollow::checkAscent(Vec3f* pVec) const {
@@ -284,7 +299,7 @@ bool CameraFollow::checkAscent(Vec3f* pVec) const {
 void CameraFollow::arrangeLookDown() {
     Vec3f mapPos;
     if (checkDescent(&mapPos)) {
-        mAngleXSpeed *= 0.99f;
+        mAngleXSpeed *= cNum_arrangeLookDown_f1;
         return;
     }
 
@@ -292,9 +307,9 @@ void CameraFollow::arrangeLookDown() {
     MR::crossToPolar(CameraLocalUtil::getWatchPos(this), CameraLocalUtil::getPos(this), &length, &angleX, &angleY);
 
     if (angleX > ::sLookDownAngle) {
-        mAngleXSpeed *= 0.99f;
+        mAngleXSpeed *= cNum_arrangeLookDown_f2;
     } else {
-        mAngleXSpeed += (::sLookDownAngle - angleX - mAngleXSpeed) * 0.02f;
+        mAngleXSpeed += (::sLookDownAngle - angleX - mAngleXSpeed) * cNum_arrangeLookDown_f3;
     }
 }
 
@@ -313,7 +328,7 @@ bool CameraFollow::checkDescent(Vec3f* pVec) const {
 }
 
 void CameraFollow::startRound(f32 angle, f32 rate) {
-    mAngleYTarget = MR::repeat(angle, 0.0f, MR::pi() * 2.0f);
+    mAngleYTarget = MR::repeat(angle, 0.0f, MR::pi() * cNum_startRound_f1);
     mAngleYSpeed = rate;
     mIsRounding = true;
 }

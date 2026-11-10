@@ -7,6 +7,11 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <nebula_game_api.h>
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f3, "draw.f3", 1.333f);
 
 BloomEffectSimple::BloomEffectSimple()
     : ImageEffectBase("簡易ブルーム"), mMaskFilter(), mThreshold(205), mIntensity(0.3f) {
@@ -21,9 +26,9 @@ void BloomEffectSimple::draw() const {
 
     // Drawn by the renderer at the frame's own size: the threshold, the channel, the ring's tap weight, the intensity
     // and the ring's vertical radius per unit.
-    const u8 alpha = 255.0f * mIntensity * getFadeLevel();
-    const u32 tap = static_cast< u8 >(static_cast< s32 >(255.0f * 1.0f / 8));
-    const f32 vertical = MR::isScreen16Per9() ? 1.333f : 1.0f;
+    const u8 alpha = cNum_draw_f1 * mIntensity * getFadeLevel();
+    const u32 tap = static_cast< u8 >(static_cast< s32 >(cNum_draw_f2 * 1.0f / 8));
+    const f32 vertical = MR::isScreen16Per9() ? cNum_draw_f3 : 1.0f;
     u32 verticalBits;
     __builtin_memcpy(&verticalBits, &vertical, sizeof(verticalBits));
     Frame::bloom(NEBULA_PASS_BLOOM_SIMPLE,

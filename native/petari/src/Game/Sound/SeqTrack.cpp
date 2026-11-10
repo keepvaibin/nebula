@@ -5,6 +5,33 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_gateOn_f1, "gateOn.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTrack_f1, "updateTrack.f1", 0.333333343267f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTrack_f2, "updateTrack.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTrack_f3, "updateTrack.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTrack_f4, "updateTrack.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTrack_f5, "updateTrack.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTempo_f1, "updateTempo.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_seqTimeToDspTime_f1, "seqTimeToDspTime.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_seqTimeToDspTime_f2, "seqTimeToDspTime.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_seqMain_f1, "seqMain.f1", 60.0);
+NEBULA_TUNABLE_NAMED(f32, cNum_readReg_f1, "readReg.f1", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_readReg_f2, "readReg.f2", 1524.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_readReg_f3, "readReg.f3", 12192.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_readReg_f4, "readReg.f4", 256.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_readReg_f5, "readReg.f5", 64.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_readReg_f6, "readReg.f6", 64.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeReg_f1, "writeReg.f1", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeReg_f2, "writeReg.f2", 1524.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeReg_f3, "writeReg.f3", 12192.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeReg_f4, "writeReg.f4", 256.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeReg_f5, "writeReg.f5", 64.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeReg_f6, "writeReg.f6", 64.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_step_f1, "step.f1", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_step_f2, "step.f2", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_step_f3, "step.f3", 16383.0f);
+
 
 namespace {
     const SeqPoint cDefaultAdsr[4] = {{0, 0, 0x7fff}, {0, 0, 0x7fff}, {0, 0, 0}, {0xe, 0, 0}};
@@ -178,7 +205,7 @@ void SeqTrack::init() {
     mExport = 0;
     mMoveParam[0].mValue = 1.0f;
     mMoveParam[1].mValue = 0.0f;
-    mMoveParam[3].mValue = 0.5f;
+    mMoveParam[3].mValue = cNum_init_f1;
     mMoveParam[2].mValue = 0.0f;
     mMoveParam[4].mValue = 0.0f;
     mMoveParam[5].mValue = 0.0f;
@@ -488,7 +515,7 @@ bool SeqTrack::noteOn(u32 slot, u32 key, u32 velocity) {
 bool SeqTrack::gateOn(u32 key, u32 velocity, f32 seqTime, u32 flags) {
     key += transposeTotal();
     if (mGateRate != 100) {
-        seqTime *= mGateRate / 100.0f;
+        seqTime *= mGateRate / cNum_gateOn_f1;
     }
     const u32 dspTime = seqTimeToDspTime(seqTime);
     const u32 isSweep = flags & 1;
@@ -610,15 +637,15 @@ void SeqTrack::updateTrack(f32 pan) {
         f32 volume = mMoveParam[0].mValue;
         volume *= volume;
         f32 pitch = 1.0f;
-        const f32 bend = mMoveParam[1].mValue * mBendSense * 0.333333343267f;
-        f32 panValue = (mMoveParam[3].mValue - 0.5f) * mPanPower;
+        const f32 bend = mMoveParam[1].mValue * mBendSense * cNum_updateTrack_f1;
+        f32 panValue = (mMoveParam[3].mValue - cNum_updateTrack_f2) * mPanPower;
         f32 fxmix = mMoveParam[2].mValue;
         f32 dolby = mMoveParam[4].mValue;
         const SoundParams* params = rMgr.mSound;
         if (params != nullptr) {
             volume *= params->mVolume;
             pitch *= params->mPitch;
-            panValue += params->mPan - 0.5f;
+            panValue += params->mPan - cNum_updateTrack_f3;
             fxmix += params->mFxMix;
             dolby += params->mDolby;
         }
@@ -634,19 +661,19 @@ void SeqTrack::updateTrack(f32 pan) {
             const ChannelMgr* parent = i < mParent->mMgrCount ? &mParent->mMgrs[i] : &mParent->mMgrs[0];
             rMgr.mParams.mVolume = parent->mParams.mVolume * volume;
             rMgr.mParams.mPitch = parent->mParams.mPitch * pitch;
-            rMgr.mParams.mPan = parent->mParams.mPan - 0.5f + panValue;
+            rMgr.mParams.mPan = parent->mParams.mPan - cNum_updateTrack_f4 + panValue;
             rMgr.mParams.mFxMix = parent->mParams.mFxMix + fxmix;
             rMgr.mParams.mDolby = parent->mParams.mDolby + dolby;
             rMgr.mParams.mBend = parent->mParams.mBend + bend;
         }
-        rMgr.mParams.mPan += 0.5f;
+        rMgr.mParams.mPan += cNum_updateTrack_f5;
     }
 }
 
 void SeqTrack::updateTempo() {
     if (mParent == nullptr) {
         // Sequence ticks a driver tick: beats a minute by ticks a beat.
-        mSampleInterval = mTempoRate * ((mTimebase * mTempo) / (60.0f * SoundEngine::cTicksPerSecond));
+        mSampleInterval = mTempoRate * ((mTimebase * mTempo) / (cNum_updateTempo_f1 * SoundEngine::cTicksPerSecond));
     } else {
         mTempo = mParent->mTempo;
         mTimebase = mParent->mTimebase;
@@ -674,8 +701,8 @@ u32 SeqTrack::seqTimeToDspTime(f32 seqTime) {
     if (mIsDirectlyPlayed) {
         seqTime /= mSampleInterval;
     } else {
-        seqTime *= 120.0f / mTimebase;
-        seqTime *= SoundEngine::cTicksPerStep / 10.0f;
+        seqTime *= cNum_seqTimeToDspTime_f1 / mTimebase;
+        seqTime *= SoundEngine::cTicksPerStep / cNum_seqTimeToDspTime_f2;
     }
     return static_cast< u32 >(seqTime);
 }
@@ -909,7 +936,7 @@ s32 SeqTrack::seqMain() {
     const f64 clockSeconds = mSecondsClock != nullptr ? mSecondsClock(mSecondsClockData) : -1.0;
     if (clockSeconds >= 0.0) {
         // Its place is the clock's: as many ticks as have come due.
-        const f64 due = clockSeconds * mTimebase * mTempo / 60.0;
+        const f64 due = clockSeconds * mTimebase * mTempo / cNum_seqMain_f1;
         // Paused, no tick comes due: it takes up what the clock moved when it plays again.
         while (!mPauseFlag && mClockTicks + 1.0 <= due) {
             mClockTicks += 1.0;
@@ -1097,7 +1124,7 @@ u32 SeqTrack::readReg(u32 reg) const {
     case 0x28:
         return mProgNumber;
     case 0x29:
-        return static_cast< u32 >(mPanPower * 32767.0f);
+        return static_cast< u32 >(mPanPower * cNum_readReg_f1);
     case 0x2a:
         return mReleasePrio | mNoteOnPrio;
     case 0x2b:
@@ -1107,15 +1134,15 @@ u32 SeqTrack::readReg(u32 reg) const {
     case 0x2d:
         return mDirectRelease;
     case 0x2e:
-        return static_cast< u32 >(mVibDepth * 1524.0f);
+        return static_cast< u32 >(mVibDepth * cNum_readReg_f2);
     case 0x2f:
-        return static_cast< u32 >(mVibDepth * 12192.0f);
+        return static_cast< u32 >(mVibDepth * cNum_readReg_f3);
     case 0x30:
-        return static_cast< u32 >(mTremDepth * 256.0f);
+        return static_cast< u32 >(mTremDepth * cNum_readReg_f4);
     case 0x31:
-        return static_cast< u32 >(mVibPitch * 64.0f);
+        return static_cast< u32 >(mVibPitch * cNum_readReg_f5);
     case 0x32:
-        return static_cast< u32 >(mTremPitch * 64.0f);
+        return static_cast< u32 >(mTremPitch * cNum_readReg_f6);
     case 0x33:
         return mVibDelay;
     case 0x34:
@@ -1172,7 +1199,7 @@ void SeqTrack::writeReg(u32 reg, u32 value) {
         mProgNumber = static_cast< u8 >(value);
         break;
     case 0x29:
-        mPanPower = value / 32767.0f;
+        mPanPower = value / cNum_writeReg_f1;
         break;
     case 0x2a:
         mNoteOnPrio = loByte(value);
@@ -1188,19 +1215,19 @@ void SeqTrack::writeReg(u32 reg, u32 value) {
         mDirectRelease = static_cast< u16 >(value);
         break;
     case 0x2e:
-        mVibDepth = value / 1524.0f;
+        mVibDepth = value / cNum_writeReg_f2;
         break;
     case 0x2f:
-        mVibDepth = value / 12192.0f;
+        mVibDepth = value / cNum_writeReg_f3;
         break;
     case 0x30:
-        mTremDepth = value / 256.0f;
+        mTremDepth = value / cNum_writeReg_f4;
         break;
     case 0x31:
-        mVibPitch = value / 64.0f;
+        mVibPitch = value / cNum_writeReg_f5;
         break;
     case 0x32:
-        mTremPitch = value / 64.0f;
+        mTremPitch = value / cNum_writeReg_f6;
         break;
     case 0x33:
         mVibDelay = static_cast< u16 >(value);
@@ -1350,14 +1377,14 @@ s32 SeqTrack::step() {
         }
         break;
     case SEQ_PARAM_RAW:
-        setParam(a[0], static_cast< s16 >(a[1]) / 32767.0f, a[2]);
+        setParam(a[0], static_cast< s16 >(a[1]) / cNum_step_f1, a[2]);
         break;
     case SEQ_PARAM_BYTE: {
         s16 value = static_cast< s16 >(a[1] << 8);
         if ((a[1] & 0x80) == 0) {
             value |= static_cast< s16 >(a[1] << 1);
         }
-        setParam(a[0], value / 32767.0f, a[2]);
+        setParam(a[0], value / cNum_step_f2, a[2]);
         break;
     }
     case SEQ_OPEN_TRACK: {
@@ -1546,7 +1573,7 @@ s32 SeqTrack::step() {
         mProgNumber = loByte(a[0]);
         break;
     case SEQ_ENV_SCALE:
-        mOscParam[a[0] & 1].mScale = a[1] / 16383.0f;
+        mOscParam[a[0] & 1].mScale = a[1] / cNum_step_f3;
         break;
     case SEQ_ENV_SET:
         setOscTable(a[0] & 1, mData + a[1]);

@@ -2,6 +2,12 @@
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_turnToward_f1, "turnToward.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcEscapeDir_f1, "calcEscapeDir.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcEscapeDir_f2, "calcEscapeDir.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcEscapeDir_f3, "calcEscapeDir.f3", 180.0f);
 
 namespace DodoryuUtil {
     bool calcVerticalizedDir(Dodoryu* pDodoryu, Vec3f* pVec, const Vec3f& rVec) {
@@ -27,7 +33,7 @@ namespace DodoryuUtil {
         pDodoryu->mBaseMtx.getZDir(front);
         pDodoryu->mBaseMtx.getTrans(position);
 
-        f32 maxRadian = maxAngle * MR::pi() / 180.0f;
+        f32 maxRadian = maxAngle * MR::pi() / cNum_turnToward_f1;
 
         Pos3f mtx;
         mtx.makeRotate(front, rDirection, maxRadian);
@@ -96,8 +102,8 @@ namespace DodoryuUtil {
         }
 
         pDodoryu->mBaseMtx.getYDir(up);
-        const f32 randomAngle = 2.0f * maxAngle * (MR::getRandom() - 0.5f);
-        f32 angle = randomAngle * MR::pi() / 180.0f;
+        const f32 randomAngle = cNum_calcEscapeDir_f1 * maxAngle * (MR::getRandom() - cNum_calcEscapeDir_f2);
+        f32 angle = randomAngle * MR::pi() / cNum_calcEscapeDir_f3;
         Pos3f rotation;
         rotation.makeRotate(up, angle);
         rotation.mult33(*pDirection);

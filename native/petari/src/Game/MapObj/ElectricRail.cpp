@@ -21,6 +21,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+
 namespace {
     // One per rail level; arg 0 (the level count) is at most this many.
     const char* const cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
@@ -221,7 +224,7 @@ void ElectricRail::init(const TableIter& rIter) {
     initRailRider(rIter);
 
     f32 radius;
-    MR::calcRailClippingInfo(&mPosition, &radius, this, 100.0f, 500.0f);
+    MR::calcRailClippingInfo(&mPosition, &radius, this, cNum_init_f1, cNum_init_f2);
     MR::setClippingTypeSphere(this, radius, &mPosition);
 
     MR::getPlacementArg4NoInit(rIter, &mIsCalcGravity);

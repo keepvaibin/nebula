@@ -31,6 +31,17 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGrowUp_f1, "updateGrowUp.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBindLeaf_f1, "updateBindLeaf.f1", 20.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sDistanceNear, 700.0f);
     NEBULA_TUNABLE(f32, sDistanceBody, 300.0f);
@@ -105,7 +116,7 @@ void Plant::init(const TableIter& pMapInfoIter) {
     initNerve(GET_NERVE(Plant, PlantNrvWaitFar));
 
     initRailRider(pMapInfoIter);
-    MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClippingCenter, this, cNum_init_f1, cNum_init_f2);
     MR::calcRailStartPointPos(&mPosition, this);
 
     mStalk = new PlantStalk();
@@ -113,7 +124,7 @@ void Plant::init(const TableIter& pMapInfoIter) {
 
     mSeedPartsModel = new PartsModel(this, "種（伸び植物）", "PlantSeed", mSeedMtx, -1, false);
     mSeedPartsModel->initWithoutIter();
-    MR::initShadowVolumeSphere(mSeedPartsModel, 50.0f);
+    MR::initShadowVolumeSphere(mSeedPartsModel, cNum_init_f3);
     mSeedPartsModel->mPosition.set(mPosition);
     mSeedMtx.setTrans(mPosition);
 
@@ -124,9 +135,9 @@ void Plant::init(const TableIter& pMapInfoIter) {
 
     initLeaf();
     initHitSensor(3);
-    MR::addHitSensorCallbackBinder(this, "bind", 5, 100.0f);
-    MR::addHitSensorMapObj(this, "seed", 5, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
-    MR::addHitSensorRide(this, "Ride", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorCallbackBinder(this, "bind", 5, cNum_init_f4);
+    MR::addHitSensorMapObj(this, "seed", 5, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
+    MR::addHitSensorRide(this, "Ride", 8, cNum_init_f7, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "出現デモ");
     MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "掴まり");
@@ -141,7 +152,7 @@ void Plant::init(const TableIter& pMapInfoIter) {
 }
 
 void Plant::initAfterPlacement() {
-    MR::makeMtxOnMapCollision(&mSeedMtx, mSeedPartsModel, 1000.0f);
+    MR::makeMtxOnMapCollision(&mSeedMtx, mSeedPartsModel, cNum_initAfterPlacement_f1);
 }
 
 void Plant::appear() {
@@ -536,7 +547,7 @@ bool Plant::updateGrowUp() {
         Vec3f axisY;
         Vec3f pos;
         mStalk->calcPosAndAxisY(&pos, &axisY, mLeaves[leaf]->mLeafCoord * growthPercent);
-        mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, 10.0f);
+        mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, cNum_updateGrowUp_f1);
     }
 
     MR::tryRumblePadWeak(this, PLAYER_1);
@@ -596,7 +607,7 @@ void Plant::updateBindLeaf() {
         springPower *= -1.0f;
     }
 
-    Vec3f railDir = MR::getRailDirection(this) * 20.0f;
+    Vec3f railDir = MR::getRailDirection(this) * cNum_updateBindLeaf_f1;
     if (MR::isRailGoingToEnd(this)) {
         railDir.scale(-1.0f);
     }

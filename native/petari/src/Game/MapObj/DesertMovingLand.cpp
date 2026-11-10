@@ -12,6 +12,8 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveSign_shakeCameraInfinity_1, "exeMoveSign.shakeCameraInfinity.1", 0.15f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveSign_shakeCameraInfinity_2, "exeMoveSign.shakeCameraInfinity.2", 1.2f);
@@ -59,7 +61,7 @@ void DesertMovingLand::init(const TableIter& rIter) {
     else
         MR::validateCollisionParts(this);
 
-    f32 moveDistance = 2000.0f;
+    f32 moveDistance = cNum_init_f1;
     MR::getPlacementArg0NoInit(rIter, &moveDistance);
     MR::getPlacementArg1NoInit(rIter, &mMoveDownTime);
     MR::getPlacementArg2NoInit(rIter, &mMoveUpTime);

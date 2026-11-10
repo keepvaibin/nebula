@@ -6,6 +6,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeMoveA_1, "exeMoveA.1", 55);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeMoveA_2, "exeMoveA.2", 55);
@@ -42,7 +44,7 @@ void PhantomShipBridge::init(const TableIter& rIter) {
     mMoveCollision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("move"), MR::getJointMtx(this, "Move"), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mMoveCollision);
     initSound(4, false);
-    MR::setClippingTypeSphere(this, 2000.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f1);
     makeActorAppeared();
 
     if (MR::useStageSwitchReadB(this, rIter)) {

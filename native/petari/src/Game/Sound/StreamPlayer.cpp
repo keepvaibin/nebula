@@ -2,6 +2,9 @@
 #include <cstring>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_prepare_f1, "prepare.f1", 127.0f);
+
 namespace {
     const SeqPoint cReleaseTable[2] = {
         {0x0000, 0x0002, 0x0000},
@@ -21,7 +24,7 @@ void StreamPlayer::init() {
     mPitch = 1.0f;
     for (u32 i = 0; i < cChannels; i++) {
         mChannelVolume[i] = 1.0f;
-        mChannelPan[i] = 0.5f;
+        mChannelPan[i] = cNum_init_f1;
         mChannelFxMix[i] = 0.0f;
         mChannelDolby[i] = 0.0f;
     }
@@ -36,7 +39,7 @@ void StreamPlayer::prepare(SoundEngine* pEngine, const u8* pData, u32 ownerSound
     mOwnerSound = ownerSound;
     std::memcpy(&mHeader, pData, sizeof(mHeader));
     mData = pData;
-    mVolume = mHeader.volume / 127.0f;
+    mVolume = mHeader.volume / cNum_prepare_f1;
     mLoaded = true;
     mArmed = true;
     mJob.mKind = SoundJob::JOB_STREAM;

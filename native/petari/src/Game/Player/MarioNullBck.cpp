@@ -5,6 +5,9 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_getFramePos_f1, "getFramePos.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getFramePos_f2, "getFramePos.f2", 0.01f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_getFramePos_setBckRate_1, "getFramePos.setBckRate.1", 0.0f);
 
@@ -34,8 +37,8 @@ bool MarioNullBck::getFramePos(f32 frame, Vec3f* pPos, Vec3f* pRot) {
     if (MR::isDead(this)) {
         return true;
     }
-    if (frame > MR::getBckCtrl(this)->getEnd() - 0.01f) {
-        frame = MR::getBckCtrl(this)->getEnd() - 0.01f;
+    if (frame > MR::getBckCtrl(this)->getEnd() - cNum_getFramePos_f1) {
+        frame = MR::getBckCtrl(this)->getEnd() - cNum_getFramePos_f2;
         ret = true;
     }
     if ((f32)mLastFrame >= frame) {

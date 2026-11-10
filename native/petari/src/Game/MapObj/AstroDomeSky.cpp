@@ -14,8 +14,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRotateDisappear_f1, "exeRotateDisappear.f1", 20.0f);
+
 namespace {
-    const Vec cJumpOutDemoRotate = {347.0f, 0.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cJumpOutDemoRotate, {347.0f, 0.0f, 0.0f});
     const char* const cAstroDomeSkyTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
     NEBULA_TUNABLE(s32, cAppearanceBrkTotalFrame, 200);
     NEBULA_TUNABLE(s32, cRotateDisappearBrkFrame, 30);
@@ -186,7 +188,7 @@ void AstroDomeSky::exeRotateDisappear() {
     if (MR::isFirstStep(this)) {
         MR::startBrk(this, "Disappear");
         MR::setBrkFrame(this, mBrkFrame);
-        MR::setBrkRate(this, (::cRotateDisappearBrkFrame - mBrkFrame) / 20.0f);
+        MR::setBrkRate(this, (::cRotateDisappearBrkFrame - mBrkFrame) / cNum_exeRotateDisappear_f1);
     }
 
     if (::cRotateDisappearBrkFrame <= MR::getBrkFrame(this)) {

@@ -7,6 +7,97 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f1, "isNotReflectGlassGround.f1", 1627.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f2, "isNotReflectGlassGround.f2", 783.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f3, "isNotReflectGlassGround.f3", 2152.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f4, "isNotReflectGlassGround.f4", 1.5707964f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f5, "isNotReflectGlassGround.f5", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f6, "isNotReflectGlassGround.f6", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isNotReflectGlassGround_f7, "isNotReflectGlassGround.f7", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isUseFooSpecialGravity_f1, "isUseFooSpecialGravity.f1", 14760.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isUseFooSpecialGravity_f2, "isUseFooSpecialGravity.f2", 10676.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isUseFooSpecialGravity_f3, "isUseFooSpecialGravity.f3", 6770.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f1, "updateOnimasu.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f2, "updateOnimasu.f2", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f3, "updateOnimasu.f3", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f4, "updateOnimasu.f4", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f5, "updateOnimasu.f5", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f6, "updateOnimasu.f6", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f7, "updateOnimasu.f7", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f8, "updateOnimasu.f8", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f9, "updateOnimasu.f9", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f10, "updateOnimasu.f10", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f11, "updateOnimasu.f11", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f12, "updateOnimasu.f12", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f13, "updateOnimasu.f13", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f14, "updateOnimasu.f14", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f15, "updateOnimasu.f15", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f16, "updateOnimasu.f16", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f17, "updateOnimasu.f17", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f18, "updateOnimasu.f18", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f19, "updateOnimasu.f19", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f20, "updateOnimasu.f20", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f21, "updateOnimasu.f21", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f22, "updateOnimasu.f22", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f23, "updateOnimasu.f23", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f24, "updateOnimasu.f24", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f25, "updateOnimasu.f25", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f26, "updateOnimasu.f26", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f27, "updateOnimasu.f27", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f28, "updateOnimasu.f28", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f29, "updateOnimasu.f29", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f30, "updateOnimasu.f30", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f31, "updateOnimasu.f31", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f32, "updateOnimasu.f32", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f33, "updateOnimasu.f33", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f34, "updateOnimasu.f34", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f35, "updateOnimasu.f35", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f36, "updateOnimasu.f36", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f37, "updateOnimasu.f37", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f38, "updateOnimasu.f38", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f39, "updateOnimasu.f39", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f40, "updateOnimasu.f40", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f41, "updateOnimasu.f41", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f42, "updateOnimasu.f42", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f43, "updateOnimasu.f43", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f44, "updateOnimasu.f44", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f45, "updateOnimasu.f45", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f46, "updateOnimasu.f46", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f47, "updateOnimasu.f47", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f48, "updateOnimasu.f48", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f49, "updateOnimasu.f49", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f50, "updateOnimasu.f50", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f51, "updateOnimasu.f51", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f52, "updateOnimasu.f52", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f53, "updateOnimasu.f53", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f54, "updateOnimasu.f54", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f55, "updateOnimasu.f55", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f56, "updateOnimasu.f56", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f57, "updateOnimasu.f57", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f58, "updateOnimasu.f58", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f59, "updateOnimasu.f59", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f60, "updateOnimasu.f60", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f61, "updateOnimasu.f61", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f62, "updateOnimasu.f62", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f63, "updateOnimasu.f63", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f64, "updateOnimasu.f64", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f65, "updateOnimasu.f65", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f66, "updateOnimasu.f66", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f67, "updateOnimasu.f67", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f68, "updateOnimasu.f68", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f69, "updateOnimasu.f69", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f70, "updateOnimasu.f70", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f71, "updateOnimasu.f71", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f72, "updateOnimasu.f72", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f73, "updateOnimasu.f73", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f74, "updateOnimasu.f74", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f75, "updateOnimasu.f75", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f76, "updateOnimasu.f76", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateOnimasu_f77, "updateOnimasu.f77", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isHeadPushEnableArea_f1, "isHeadPushEnableArea.f1", 7020.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isHeadPushEnableArea_f2, "isHeadPushEnableArea.f2", 6920.0f);
 
 void Mario::checkOnimasu(const HitSensor* pSensor) {
     if (!MR::isEqualSubString(pSensor->mHost->mName, "オニマス")) {
@@ -55,21 +146,21 @@ bool Mario::isNotReflectGlassGround() const {
         return false;
     }
 
-    Vec3f vec(1627.0f, 783.0f, -2152.0f);
+    Vec3f vec(cNum_isNotReflectGlassGround_f1, cNum_isNotReflectGlassGround_f2, -cNum_isNotReflectGlassGround_f3);
     Vec3f v10 = mPosition - vec;
 
     f32 v4 = MR::diffAngleAbs(getCamDirZ(), v10);
     f32 v5 = v4;
-    if (v4 >= 1.5707964f) {
+    if (v4 >= cNum_isNotReflectGlassGround_f4) {
         v5 = (PI - v4);
     }
 
-    f32 v7 = (400.0f + (300.0f * (MR::sin(v5) * MR::sin(v5))));
+    f32 v7 = (cNum_isNotReflectGlassGround_f5 + (cNum_isNotReflectGlassGround_f6 * (MR::sin(v5) * MR::sin(v5))));
     MR::vecKillElement(v10, getAirGravityVec(), &v10);
     f32 length = v10.length();
 
     if (length >= v7) {
-        if (length <= 700.0f) {
+        if (length <= cNum_isNotReflectGlassGround_f7) {
             return true;
         }
     }
@@ -99,7 +190,7 @@ bool Mario::isUseFooSpecialGravity(const Vec3f& rPos, Vec3f* pGravity) const {
     }
 
     if (MR::isEqualStageName("HeavensDoorGalaxy") && MR::getCurrentScenarioNo() == 2) {
-        Vec3f center(14760.0f, -10676.2f, 6770.0f);
+        Vec3f center(cNum_isUseFooSpecialGravity_f1, -cNum_isUseFooSpecialGravity_f2, cNum_isUseFooSpecialGravity_f3);
         Vec3f toCenter = center - rPos;
         pGravity->set(toCenter);
         MR::normalizeOrZero(pGravity);
@@ -114,7 +205,7 @@ void Mario::updateOnimasu() {
         return;
     }
 
-    if ((mOnimasuSensor->mPosition - mPosition).length() >= 1000.0f) {
+    if ((mOnimasuSensor->mPosition - mPosition).length() >= cNum_updateOnimasu_f1) {
         mOnimasuSensor = nullptr;
         return;
     }
@@ -132,39 +223,39 @@ void Mario::updateOnimasu() {
     }
 
     if (!mActionStates.onimasuWrapped) {
-        if (previousPosition.y < -400.0f && localPosition.y > -400.0f) {
-            if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
+        if (previousPosition.y < -cNum_updateOnimasu_f2 && localPosition.y > -cNum_updateOnimasu_f3) {
+            if (MR::isInRange(localPosition.x, -cNum_updateOnimasu_f4, cNum_updateOnimasu_f5) && MR::isInRange(localPosition.z, -cNum_updateOnimasu_f6, cNum_updateOnimasu_f7)) {
                 localPosition = mOnimasuLocalPos;
                 Vec3f position;
                 NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
                 setTrans(position);
                 mVelocity.zero();
             }
-        } else if (previousPosition.y > 400.0f && localPosition.y <= 400.0f) {
-            if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
+        } else if (previousPosition.y > cNum_updateOnimasu_f8 && localPosition.y <= cNum_updateOnimasu_f9) {
+            if (MR::isInRange(localPosition.x, -cNum_updateOnimasu_f10, cNum_updateOnimasu_f11) && MR::isInRange(localPosition.z, -cNum_updateOnimasu_f12, cNum_updateOnimasu_f13)) {
                 mActionStates.onimasuWrapped = true;
-                if (previousPosition.x < -320.0f) {
-                    previousPosition.x = -320.0f;
-                } else if (previousPosition.x > 320.0f) {
-                    previousPosition.x = 320.0f;
+                if (previousPosition.x < -cNum_updateOnimasu_f14) {
+                    previousPosition.x = -cNum_updateOnimasu_f15;
+                } else if (previousPosition.x > cNum_updateOnimasu_f16) {
+                    previousPosition.x = cNum_updateOnimasu_f17;
                 }
 
-                if (previousPosition.z < -320.0f) {
-                    previousPosition.z = -320.0f;
-                } else if (previousPosition.z > 320.0f) {
-                    previousPosition.z = 320.0f;
+                if (previousPosition.z < -cNum_updateOnimasu_f18) {
+                    previousPosition.z = -cNum_updateOnimasu_f19;
+                } else if (previousPosition.z > cNum_updateOnimasu_f20) {
+                    previousPosition.z = cNum_updateOnimasu_f21;
                 }
 
                 localPosition = previousPosition;
             }
-        } else if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.y, -400.0f, 400.0f) &&
-                   MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
+        } else if (MR::isInRange(localPosition.x, -cNum_updateOnimasu_f22, cNum_updateOnimasu_f23) && MR::isInRange(localPosition.y, -cNum_updateOnimasu_f24, cNum_updateOnimasu_f25) &&
+                   MR::isInRange(localPosition.z, -cNum_updateOnimasu_f26, cNum_updateOnimasu_f27)) {
             mVelocity.zero();
             localPosition = mOnimasuLocalPos;
             Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
             Vec3f displacement(position - mPosition);
-            f32 height = 10.0f + mVerticalSpeed;
+            f32 height = cNum_updateOnimasu_f28 + mVerticalSpeed;
             if (-displacement.dot(getShadowNorm()) > height) {
                 MR::vecKillElement(displacement, getShadowNorm(), &displacement);
                 displacement += -getShadowNorm() * mVerticalSpeed;
@@ -189,18 +280,18 @@ void Mario::updateOnimasu() {
         f32 absGravityY = MR::abs(gravityY);
         f32 gravityZ = axisZ.dot(*getGravityVec());
         f32 absGravityZ = MR::abs(gravityZ);
-        f32 lower = -500.0f;
-        f32 upper = -300.0f;
+        f32 lower = -cNum_updateOnimasu_f29;
+        f32 upper = -cNum_updateOnimasu_f30;
 
         if (absGravityX > absGravityY && absGravityX > absGravityZ) {
             if (gravityX > 0.0f) {
-                lower = 300.0f;
-                upper = 500.0f;
+                lower = cNum_updateOnimasu_f31;
+                upper = cNum_updateOnimasu_f32;
             }
 
             if (MR::isInRange(localPosition.x, lower, upper)) {
-                bool insideY = MR::isInRange(localPosition.y, -320.0f, 320.0f);
-                bool insideZ = MR::isInRange(localPosition.z, -320.0f, 320.0f);
+                bool insideY = MR::isInRange(localPosition.y, -cNum_updateOnimasu_f33, cNum_updateOnimasu_f34);
+                bool insideZ = MR::isInRange(localPosition.z, -cNum_updateOnimasu_f35, cNum_updateOnimasu_f36);
                 if (insideY && insideZ) {
                     mActor->mPressAxis = axisX;
                     mActor->setPress(0, 0);
@@ -216,13 +307,13 @@ void Mario::updateOnimasu() {
             }
         } else if (absGravityY > absGravityX && absGravityY > absGravityZ) {
             if (gravityY > 0.0f) {
-                lower = 300.0f;
-                upper = 500.0f;
+                lower = cNum_updateOnimasu_f37;
+                upper = cNum_updateOnimasu_f38;
             }
 
             if (MR::isInRange(localPosition.y, lower, upper)) {
-                bool insideX = MR::isInRange(localPosition.x, -320.0f, 320.0f);
-                bool insideZ = MR::isInRange(localPosition.z, -320.0f, 320.0f);
+                bool insideX = MR::isInRange(localPosition.x, -cNum_updateOnimasu_f39, cNum_updateOnimasu_f40);
+                bool insideZ = MR::isInRange(localPosition.z, -cNum_updateOnimasu_f41, cNum_updateOnimasu_f42);
                 if (insideX && insideZ) {
                     mActor->mPressAxis = axisY;
                     if (gravityY < 0.0f) {
@@ -240,13 +331,13 @@ void Mario::updateOnimasu() {
             }
         } else {
             if (gravityZ > 0.0f) {
-                lower = 300.0f;
-                upper = 500.0f;
+                lower = cNum_updateOnimasu_f43;
+                upper = cNum_updateOnimasu_f44;
             }
 
             if (MR::isInRange(localPosition.z, lower, upper)) {
-                bool insideX = MR::isInRange(localPosition.x, -320.0f, 320.0f);
-                bool insideY = MR::isInRange(localPosition.y, -320.0f, 320.0f);
+                bool insideX = MR::isInRange(localPosition.x, -cNum_updateOnimasu_f45, cNum_updateOnimasu_f46);
+                bool insideY = MR::isInRange(localPosition.y, -cNum_updateOnimasu_f47, cNum_updateOnimasu_f48);
                 if (insideX && insideY) {
                     mActor->mPressAxis = axisZ;
                     mActor->setPress(0, 0);
@@ -263,26 +354,26 @@ void Mario::updateOnimasu() {
         }
 
         if (correctX) {
-            if (localPosition.x > -400.0f && localPosition.x < -320.0f) {
-                localPosition.x = -400.0f;
-            } else if (localPosition.x < 400.0f && localPosition.x > 320.0f) {
-                localPosition.x = 400.0f;
+            if (localPosition.x > -cNum_updateOnimasu_f49 && localPosition.x < -cNum_updateOnimasu_f50) {
+                localPosition.x = -cNum_updateOnimasu_f51;
+            } else if (localPosition.x < cNum_updateOnimasu_f52 && localPosition.x > cNum_updateOnimasu_f53) {
+                localPosition.x = cNum_updateOnimasu_f54;
             }
         }
 
         if (correctY) {
-            if (localPosition.y > -400.0f && localPosition.y < -320.0f) {
-                localPosition.y = -400.0f;
-            } else if (localPosition.y < 400.0f && localPosition.y > 320.0f) {
-                localPosition.y = 400.0f;
+            if (localPosition.y > -cNum_updateOnimasu_f55 && localPosition.y < -cNum_updateOnimasu_f56) {
+                localPosition.y = -cNum_updateOnimasu_f57;
+            } else if (localPosition.y < cNum_updateOnimasu_f58 && localPosition.y > cNum_updateOnimasu_f59) {
+                localPosition.y = cNum_updateOnimasu_f60;
             }
         }
 
         if (correctZ) {
-            if (localPosition.z > -400.0f && localPosition.z < -320.0f) {
-                localPosition.z = -400.0f;
-            } else if (localPosition.z < 400.0f && localPosition.z > 320.0f) {
-                localPosition.z = 400.0f;
+            if (localPosition.z > -cNum_updateOnimasu_f61 && localPosition.z < -cNum_updateOnimasu_f62) {
+                localPosition.z = -cNum_updateOnimasu_f63;
+            } else if (localPosition.z < cNum_updateOnimasu_f64 && localPosition.z > cNum_updateOnimasu_f65) {
+                localPosition.z = cNum_updateOnimasu_f66;
             }
         }
 
@@ -298,31 +389,31 @@ void Mario::updateOnimasu() {
                 }
             }
         }
-    } else if (localPosition.y > 400.0f) {
+    } else if (localPosition.y > cNum_updateOnimasu_f67) {
         mActionStates.onimasuWrapped = false;
     } else {
         bool corrected = false;
-        if (previousPosition.y >= -320.0f && localPosition.y < -320.0f) {
+        if (previousPosition.y >= -cNum_updateOnimasu_f68 && localPosition.y < -cNum_updateOnimasu_f69) {
             localPosition.y = previousPosition.y;
             corrected = true;
         }
 
-        if (previousPosition.x >= -320.0f && localPosition.x < -320.0f) {
+        if (previousPosition.x >= -cNum_updateOnimasu_f70 && localPosition.x < -cNum_updateOnimasu_f71) {
             localPosition.x = previousPosition.x;
             corrected = true;
         }
 
-        if (previousPosition.x <= 320.0f && localPosition.x > 320.0f) {
+        if (previousPosition.x <= cNum_updateOnimasu_f72 && localPosition.x > cNum_updateOnimasu_f73) {
             localPosition.x = previousPosition.x;
             corrected = true;
         }
 
-        if (previousPosition.z >= -320.0f && localPosition.z < -320.0f) {
+        if (previousPosition.z >= -cNum_updateOnimasu_f74 && localPosition.z < -cNum_updateOnimasu_f75) {
             localPosition.z = previousPosition.z;
             corrected = true;
         }
 
-        if (previousPosition.z <= 320.0f && localPosition.z > 320.0f) {
+        if (previousPosition.z <= cNum_updateOnimasu_f76 && localPosition.z > cNum_updateOnimasu_f77) {
             localPosition.z = previousPosition.z;
             corrected = true;
         }
@@ -344,7 +435,7 @@ bool Mario::isHeadPushEnableArea() const {
     }
 
     if (MR::isEqualStageName("SandClockGalaxy")) {
-        if (MR::isInRange(mPosition.x, -7020.0f, -6920.0f)) {
+        if (MR::isInRange(mPosition.x, -cNum_isHeadPushEnableArea_f1, -cNum_isHeadPushEnableArea_f2)) {
             return true;
         }
     }

@@ -10,6 +10,19 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f1, "exeFall.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f2, "exeFall.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f3, "exeFall.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryToFallHead_f1, "tryToFallHead.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_f1, "exeAttack.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f1, "exeRecover.f1", 180.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 700.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_2, "exeWait.isNearPlayer.2", 100.0f);
@@ -39,9 +52,9 @@ namespace NrvCocoSamboHead {
 };  // namespace NrvCocoSamboHead
 
 namespace {
-    const Vec cHeadSensorOffset = {60.0f, 0.0f, 0.0f};
-    const Vec cBlowVelocity = {0.0f, 20.0f, -100.0f};
-    const Vec cSensorOffset = {40.0f, 0.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cHeadSensorOffset, {60.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, cBlowVelocity, {0.0f, 20.0f, -100.0f});
+    NEBULA_TUNABLE_RECORD(Vec, cSensorOffset, {40.0f, 0.0f, 0.0f});
     const char* const cPointingJointName[] = {"Spine1", "Spine2", "Spine3", "Head"};
     NEBULA_TUNABLE(f32, cHeadSensorRadius, 100.0f);
     NEBULA_TUNABLE(f32, cTrampleSensorRadius, 150.0f);
@@ -112,7 +125,7 @@ void CocoSamboHead::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addHitSensorAtJoint(this, "body", "Head", ATYPE_SAMBO_HEAD, 8, (::cHeadSensorRadius * mScale.x), sensorOffs);
     MR::addHitSensorAtJoint(this, "trample", "Head", ATYPE_SAMBO_HEAD, 8, (::cTrampleSensorRadius * mScale.x), sensorOffs);
-    initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Head");
+    initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -cNum_init_f1, -cNum_init_f2), "Head");
     initNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadConnectedBody));
     PartsModel::init(rIter);
 }
@@ -231,7 +244,7 @@ void CocoSamboHead::updateFrontVecToPlayer(const Vec3f& rGravity) {
 void CocoSamboHead::exeFall() {
     Vec3f gravity(mHost->mGravity);
     Vec3f acceleration;
-    acceleration.scale(2.0f, gravity);
+    acceleration.scale(cNum_exeFall_f1, gravity);
 
     if (MR::isFirstStep(this)) {
         mFixedPosition->copyTrans(&mPosition);
@@ -250,7 +263,7 @@ void CocoSamboHead::exeFall() {
         verticalOffset.scale(up.dot(offset), up);
         MR::vecKillElement(offset, up, &offset);
         horizontalVelocity.scale(1.0f / fallFrame, offset);
-        verticalVelocity = (verticalOffset * 2.0f - acceleration * fallFrame * fallFrame) / (2.0f * fallFrame);
+        verticalVelocity = (verticalOffset * cNum_exeFall_f2 - acceleration * fallFrame * fallFrame) / (cNum_exeFall_f3 * fallFrame);
         mVelocity.add(horizontalVelocity, verticalVelocity);
     }
 
@@ -344,8 +357,8 @@ void CocoSambo::init(const TableIter& rIter) {
         mPointingActorArray[i] = new LiveActor("ポインティング用アクター");
         mPointingActorArray[i]->initWithoutIter();
         MR::invalidateClipping(mPointingActorArray[i]);
-        MR::initStarPointerTargetAtMtx(mPointingActorArray[i], 80.0f * mScale.x, MR::getJointMtx(this, ::cPointingJointName[i]),
-                                       Vec3f(mScale.x * 100.0f, 0.0f, 0.0f));
+        MR::initStarPointerTargetAtMtx(mPointingActorArray[i], cNum_init_f3 * mScale.x, MR::getJointMtx(this, ::cPointingJointName[i]),
+                                       Vec3f(mScale.x * cNum_init_f4, 0.0f, 0.0f));
         mPointingActorArray[i]->makeActorAppeared();
     }
 
@@ -378,7 +391,7 @@ bool CocoSambo::tryToFallHead(const HitSensor* pReceiver, const HitSensor* pSend
     }
 
     MR::deleteEffectAll(this);
-    mHitEffectScale.lerp(pReceiver->mPosition, pSender->mPosition, 0.75f);
+    mHitEffectScale.lerp(pReceiver->mPosition, pSender->mPosition, cNum_tryToFallHead_f1);
     setNerve(GET_NERVE(CocoSambo, CocoSamboNrvFallHead));
     return true;
 }
@@ -475,7 +488,7 @@ void CocoSambo::initMapToolInfo(const TableIter& rIter) {
 }
 
 void CocoSambo::initSensor() {
-    f32 f = mScale.x * 80.0f;
+    f32 f = mScale.x * cNum_initSensor_f1;
     Vec3f offset(::cSensorOffset);
     offset.scale(mScale.x);
     initHitSensor(3);
@@ -540,7 +553,7 @@ void CocoSambo::exeAppear() {
     if (MR::isFirstStep(this)) {
         startBckThisAndHead("Appear");
         MR::validateHitSensors(mHead);
-        dirToPlayer(180.0f);
+        dirToPlayer(cNum_exeAppear_f1);
         MR::showMaterial(mHead, "SanboNeedleMat_v");
     }
 
@@ -605,7 +618,7 @@ void CocoSambo::exeAttack() {
         startBckThisAndHead("Attack");
     }
 
-    if (MR::getBckFrame(this) < 30.0f) {
+    if (MR::getBckFrame(this) < cNum_exeAttack_f1) {
         dirToPlayer(1.0f);
     }
 
@@ -687,7 +700,7 @@ void CocoSambo::exeRecover() {
         MR::showMaterial(mHead, "SanboNeedleMat_v");
     }
 
-    dirToPlayer(180.0f);
+    dirToPlayer(cNum_exeRecover_f1);
     MR::setNerveAtBckStopped(this, GET_NERVE(CocoSambo, CocoSamboNrvAppear));
 }
 

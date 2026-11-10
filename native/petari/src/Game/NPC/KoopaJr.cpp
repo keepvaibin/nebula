@@ -11,6 +11,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReaction_f1, "exeReaction.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReaction_f2, "exeReaction.f2", 40.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sSensorSize, 175.0f);
     NEBULA_TUNABLE(f32, sShadowRadius, 100.0f);
@@ -65,7 +69,7 @@ void KoopaJr::init(const TableIter& rIter) {
     }
 
     MR::onCalcShadow(this, nullptr);
-    MR::setShadowDropLength(this, nullptr, 200.0f);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f1);
     makeActorAppeared();
     MR::startBva(this, "Apron");
 }
@@ -136,7 +140,7 @@ void KoopaJr::exeReaction() {
         MR::startSound(this, "SE_BV_KOOPAJR_DAMAGE_S");
 
         if (!mIsInvalidAppearStarPiece) {
-            if (MR::appearStarPiece(this, mPosition, 20, 10.0f, 40.0f, false)) {
+            if (MR::appearStarPiece(this, mPosition, 20, cNum_exeReaction_f1, cNum_exeReaction_f2, false)) {
                 MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
             }
         }

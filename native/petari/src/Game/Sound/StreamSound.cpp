@@ -7,6 +7,9 @@
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <new>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_managerMixOut__f1, "managerMixOut_.f1", 0.5f);
 
 StreamSound::StreamSound(StreamManager* streamMgr_) {
     mPrepareState = 0;
@@ -223,7 +226,7 @@ void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity acti
         if (children[i] != nullptr) {
             const SoundParams& rChild = children[i]->mMove.mParams;
             channel.mVolume = rChild.mVolume * mixParams->mVolume;
-            channel.mPan = (rChild.mPan + mixParams->mPan) - 0.5f;
+            channel.mPan = (rChild.mPan + mixParams->mPan) - cNum_managerMixOut__f1;
             channel.mFxMix = rChild.mFxMix + mixParams->mFxMix;
             channel.mDolby = rChild.mDolby + mixParams->mDolby;
         } else {

@@ -18,6 +18,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpToNextPosLoop_f1, "exeJumpToNextPosLoop.f1", 180.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, cAnimCameraInterpoleFrame, 60);
     NEBULA_TUNABLE(s32, cBgmStopFrame, 60);
@@ -228,7 +230,7 @@ void KoopaBattleStairsVs1::exeJumpToNextPosLoop() {
     f32 ease = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
     mKoopa->mPosition.set(mOldPosition * (1.0f - ease) + mNewPosition * ease);
 
-    mKoopa->mPosition.y += ::cJumpHeight * MR::sinDegree(180.0f * rate);
+    mKoopa->mPosition.y += ::cJumpHeight * MR::sinDegree(cNum_exeJumpToNextPosLoop_f1 * rate);
     MR::turnDirectionDegree(mKoopa, &mKoopa->mFront, mNewDirection, ::cTurnSpeed);
 
     if (MR::isStep(this, ::cJumpTime)) {

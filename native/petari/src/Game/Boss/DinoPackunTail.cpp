@@ -3,6 +3,13 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_addAccelKeepBend_f1, "addAccelKeepBend.f1", 1.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addAccelKeepBend_f2, "addAccelKeepBend.f2", 1.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addAccelKeepDistance_f1, "addAccelKeepDistance.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addAccelKeepDistance_f2, "addAccelKeepDistance.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addAccelKeepDistance_f3, "addAccelKeepDistance.f3", 2.0f);
 
 DinoPackunTail::DinoPackunTail(u32 nodeCount)
     : mNodes(new DinoPackunTailNode*[nodeCount]), mNumNodes(0), mBendRate(1.0f), mDistanceRate(1.0f),
@@ -104,9 +111,9 @@ void DinoPackunTail::addAccelKeepBend() {
         MR::normalize(&dir);
         f32 cosine;
         Vec3f axis;
-        if (MR::makeAxisAndCosignVecToVec(&axis, &cosine, prevDir, dir) && cosine < 1.1f) {
+        if (MR::makeAxisAndCosignVecToVec(&axis, &cosine, prevDir, dir) && cosine < cNum_addAccelKeepBend_f1) {
             f32 bendPower = mNodes[i]->getKeepBendPower();
-            f32 rate = 1.0f - MR::normalize(cosine, -1.0f, 1.1f);
+            f32 rate = 1.0f - MR::normalize(cosine, -1.0f, cNum_addAccelKeepBend_f2);
             f32 accel = mBendRate * (rate * bendPower);
             Vec3f push = dir.cross(axis);
             MR::normalize(&push);
@@ -135,13 +142,13 @@ void DinoPackunTail::addAccelKeepDistance() {
         dir.set(pos - prevPos);
 
         if (MR::isNearZero(dir)) {
-            MR::getRandomVector(&dir, 0.1f);
+            MR::getRandomVector(&dir, cNum_addAccelKeepDistance_f1);
         }
 
         f32 distance;
         MR::separateScalarAndDirection(&distance, &dir, dir);
         f32 linkLength = getNode(i)->getLinkLength();
-        f32 accel = (0.9f * (mDistanceRate * (linkLength - distance))) / 2.0f;
+        f32 accel = (cNum_addAccelKeepDistance_f2 * (mDistanceRate * (linkLength - distance))) / cNum_addAccelKeepDistance_f3;
         mNodes[i]->addNodeVelocityHost(dir * accel);
         mNodes[i - 1]->addNodeVelocityHost(-dir * accel);
 

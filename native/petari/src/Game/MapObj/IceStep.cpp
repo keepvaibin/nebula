@@ -7,6 +7,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setOn_f1, "setOn.f1", 0.2f);
 
 namespace NrvIceStep {
     NEW_NERVE(IceStepNrvWait, IceStep, Wait);
@@ -25,7 +29,7 @@ void IceStep::init(const TableIter& rIter) {
     initSound(4, false);
     initEffectKeeper(1, nullptr);
 
-    f32 radius = 90.0f * mScale.x;
+    f32 radius = cNum_init_f1 * mScale.x;
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, radius, Vec3f(0.0f, radius, 0.0f));
 
@@ -95,7 +99,7 @@ void IceStep::setOn(u32 stepIndex, const Vec3f& rPosition, const Vec3f& rRotatio
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
 
-    Vec3f offset = upVec * static_cast< f32 >(scale) * 0.2f;
+    Vec3f offset = upVec * static_cast< f32 >(scale) * cNum_setOn_f1;
     mPosition = rPosition + offset;
 
     MR::startBck(this, "Start");

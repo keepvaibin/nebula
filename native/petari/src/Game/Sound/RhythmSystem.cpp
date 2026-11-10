@@ -4,6 +4,9 @@
 #include "Game/System/NebulaArena.hpp"
 #include <new>
 #include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f64, cNum_sequenceSeconds_f1, "sequenceSeconds.f1", 60.0);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
 namespace {
     // The beat note keys of kinds 0-4.
     NEBULA_TUNABLE_LIST(u8, cRhythmKeys, 5, {0x18, 0x1e, 0x1b, 0x19, 0x1a});
@@ -109,7 +112,7 @@ f64 TempoAdjuster::sequenceSeconds(void* pSelf) {
         const u32 rate = self->mStream->rate();
         return rate != 0 ? static_cast< f64 >(position) / rate : -1.0;
     }
-    const f64 secondsPerBeat = 60.0 / self->mTempo * self->mBeatMul;
+    const f64 secondsPerBeat = cNum_sequenceSeconds_f1 / self->mTempo * self->mBeatMul;
     const f64 intro = self->mIntroBeats * secondsPerBeat;
     const f64 loop = self->mLoopBeats * secondsPerBeat;
     if (loops == 0 && position < self->mLoopStartSamples) {
@@ -120,7 +123,7 @@ f64 TempoAdjuster::sequenceSeconds(void* pSelf) {
 
 void RhythmSeqParser::init() {
     mIsActive = false;
-    mTempo = 120.0f;
+    mTempo = cNum_init_f1;
 }
 
 s32 RhythmSeqParser::rhythmType(u32 key) {

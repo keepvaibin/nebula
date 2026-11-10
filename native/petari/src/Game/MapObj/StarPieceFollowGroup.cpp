@@ -18,6 +18,14 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_followPieces_f1, "followPieces.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_followPieces_f2, "followPieces.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_followPieces_f3, "followPieces.f3", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_followPieces_f4, "followPieces.f4", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollowToPlayer_f1, "exeFollowToPlayer.f1", 0.025f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollowEnd_f1, "exeFollowEnd.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollowEnd_f2, "exeFollowEnd.f2", 10.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFollowEnd_1, "exeFollowEnd.1", 20);
 
@@ -136,13 +144,13 @@ void StarPieceFollowGroup::followPieces() {
     MR::getPlayerFrontVec(&playerFrontVec);
     MR::getPlayerUpVec(&playerUpVec);
 
-    updateAxises(playerSideVec, playerFrontVec, playerUpVec, 0.25f);
+    updateAxises(playerSideVec, playerFrontVec, playerUpVec, cNum_followPieces_f1);
 
     Vec3f playerPos(*MR::getPlayerPos());
     Vec3f playerVelocity(*MR::getPlayerVelocity());
 
     playerPos.add(mLocalYAxis.multInLine(0.0f));
-    playerPos.add(playerVelocity * 10.0f);
+    playerPos.add(playerVelocity * cNum_followPieces_f2);
 
     s32 numPiecesNotFollowingAnymore = 0;
     f32 currentAngle = mAngle;
@@ -160,7 +168,7 @@ void StarPieceFollowGroup::followPieces() {
 
         f32 cos = MR::cos(currentAngle);
         f32 sin = MR::sin(currentAngle);
-        f32 wobble = 1.0f + 0.25f * MR::cos(3.0f * currentAngle);
+        f32 wobble = 1.0f + cNum_followPieces_f3 * MR::cos(cNum_followPieces_f4 * currentAngle);
 
         Vec3f target(playerPos);
         Vec3f offset(0.0f, 0.0f, 0.0f);
@@ -203,7 +211,7 @@ void StarPieceFollowGroup::exeFollowToPlayer() {
     }
 
     followPieces();
-    mAngle += 0.025f;
+    mAngle += cNum_exeFollowToPlayer_f1;
 
     if (MR::isGreaterStep(this, mTimeLimit)) {
         setNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowEnd));
@@ -228,13 +236,13 @@ void StarPieceFollowGroup::exeFollowEnd() {
         }
 
         if (pullBack) {
-            const f32 SCALE = 0.05f;
+            const f32 SCALE = cNum_exeFollowEnd_f1;
             currentPiece->mVelocity += (mPieceOffsets[i] * SCALE);
         }
 
         Vec3f playerDir(*MR::getPlayerVelocity());
         MR::normalizeOrZero(&playerDir);
-        const f32 TEN = 10.0f;
+        const f32 TEN = cNum_exeFollowEnd_f2;
         currentPiece->mVelocity += (playerDir * TEN);
     }
 

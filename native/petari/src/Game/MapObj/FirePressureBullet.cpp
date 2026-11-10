@@ -2,6 +2,12 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 3.0f);
 
 namespace NrvFirePressureBullet {
     NEW_NERVE(FirePressureBulletNrvFly, FirePressureBullet, Fly);
@@ -20,12 +26,12 @@ void FirePressureBullet::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("FireBullet", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(100.0f, 0.0f, 0);
+    MR::addHitSensorEnemyAttack(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(cNum_init_f2, 0.0f, 0);
     MR::onCalcGravity(this);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
-    MR::initShadowVolumeSphere(this, 75.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
     initNerve(GET_NERVE(FirePressureBullet, FirePressureBulletNrvFly));
     makeActorDead();
 }
@@ -69,7 +75,7 @@ void FirePressureBullet::exeFly() {
     MR::startLevelSound(this, "SE_OJ_LV_F_PRESSURE_BULLET");
 
     if (mIsHoming && !(getNerveStep() % 5)) {
-        MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), 3.0f);
+        MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), cNum_exeFly_f1);
         mVelocity.scale(mSpeed, mFront);
     }
 

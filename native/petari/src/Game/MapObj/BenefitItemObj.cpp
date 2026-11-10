@@ -24,6 +24,18 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f1, "initModelAndEfx.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f2, "initModelAndEfx.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f3, "initModelAndEfx.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f4, "initModelAndEfx.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtxInMovement_f1, "calcAndSetBaseMtxInMovement.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtxInMovement_f2, "calcAndSetBaseMtxInMovement.f2", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtxInMovement_f3, "calcAndSetBaseMtxInMovement.f3", 0.2f);
+
 namespace {
     NEBULA_TUNABLE(f32, cAppearThrowUpSpd, 10.0f);
     NEBULA_TUNABLE(f32, cAppearThrowUpSpd2, 15.0f);
@@ -101,9 +113,9 @@ void BenefitItemObj::initModelAndEfx() {
     initModelManagerWithAnm(mModelName, nullptr, false);
     initEffectKeeper(5, mModelName);
 
-    initBinder(50.0f, 50.0f, 0);
+    initBinder(cNum_initModelAndEfx_f1, cNum_initModelAndEfx_f2, 0);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, cNum_initModelAndEfx_f3, Vec3f(0.0f, cNum_initModelAndEfx_f4, 0.0f));
 }
 
 // Unplaced (created by code) it waits for appear. Placed, the args: 0 above 0 turns in place per arg 6; 1 the appear
@@ -142,12 +154,12 @@ void BenefitItemObj::init(const TableIter& rIter) {
 
         s32 railSpeed;
         if (mIsOnRail && MR::getRailArg0NoInit(this, &railSpeed)) {
-            mRailSpeed = railSpeed / 10.0f;
+            mRailSpeed = railSpeed / cNum_init_f1;
         }
     }
 
     MR::setClippingFar100m(this);
-    MR::setClippingTypeSphere(this, 100.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f2);
 
     initNerve(GET_NERVE(BenefitItemObj, HostTypeNrvWait));
 
@@ -253,12 +265,12 @@ void BenefitItemObj::init(const TableIter& rIter) {
         return;
     }
 
-    MR::initShadowVolumeCylinder(this, 50.0f);
+    MR::initShadowVolumeCylinder(this, cNum_init_f3);
     MR::setShadowDropLength(this, nullptr, shadowLength);
 
     if (shadowLengthArg == -1) {
         MR::onShadowVolumeCutDropLength(this, nullptr);
-        MR::setShadowVolumeEndDropOffset(this, nullptr, 50.0f);
+        MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init_f4);
     }
 
     bool isEveryFrame = (mShadowType & ShadowBit_EveryFrame) != 0;
@@ -735,7 +747,7 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
     MR::normalizeOrZero(&front);
 
     if (isNerve(GET_NERVE(BenefitItemObj, HostTypeNrvPreEscape))) {
-        MR::vecBlendSphere(mBlendFront, front, &front, 0.1f);
+        MR::vecBlendSphere(mBlendFront, front, &front, cNum_calcAndSetBaseMtxInMovement_f1);
         mBlendFront = front;
     }
 
@@ -743,14 +755,14 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
         return;
     }
 
-    if (MR::isSameDirection(mUp, front, 0.01f)) {
+    if (MR::isSameDirection(mUp, front, cNum_calcAndSetBaseMtxInMovement_f2)) {
         MR::setMtxTrans(getBaseMtx(), mPosition);
         return;
     }
 
     Pos3f pose;
     MR::makeMtxUpFrontPos(&pose, mUp, front, mPosition);
-    MR::blendMtx(mModelMtx, pose, 0.2f, mModelMtx);
+    MR::blendMtx(mModelMtx, pose, cNum_calcAndSetBaseMtxInMovement_f3, mModelMtx);
     MR::multMtx(getBaseMtx(), MR::tmpMtxRotYRad(mRotateY), mModelMtx);
     MR::setMtxTrans(getBaseMtx(), mPosition);
 }

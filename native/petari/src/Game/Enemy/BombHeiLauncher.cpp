@@ -13,6 +13,8 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 30.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, hThrowVel, 35.0f);
     NEBULA_TUNABLE(f32, hThrowFrontVel, 1.0f);
@@ -91,7 +93,7 @@ void BombHeiLauncher::init(const TableIter& rIter) {
 void BombHeiLauncher::initAfterPlacement() {
     Vec3f up;
     MR::calcUpVec(&up, this);
-    MR::resetPosition(mBomb, mPosition + up * 30.0f);
+    MR::resetPosition(mBomb, mPosition + up * cNum_initAfterPlacement_f1);
     mBomb->mGravity.set(-up);
     mBomb->initAfterPlacement();
     mConnector->attachToUnder();

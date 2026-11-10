@@ -3,6 +3,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setLifeRatio_f1, "setLifeRatio.f1", 128.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 32.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_control_setAnimRate_1, "control.setAnimRate.1", 1.0f);
 
@@ -35,7 +38,7 @@ void SubMeterLayout::setLifeRatio(f32 ratio) {
     } else if (ratio > 1.0f) {
         ratio = 1.0f;
     }
-    f32 mult = 128.0f * ratio;
+    f32 mult = cNum_setLifeRatio_f1 * ratio;
     mLifeFrame = (s32)(mult);
     MR::setPaneAnimFrameAndStop(this, "Count", 0x80 - mLifeFrame, 0);
 }
@@ -87,7 +90,7 @@ void SubMeterLayout::control() {
             MR::setAnimRate(this, cNum_control_setAnimRate_1, 0);
             mPhase = 2;
         } else {
-            MR::setAnimRate(this, ((0x40 - mLifeFrame) * 1.0f / 32.0f) + 1.0f, 0);
+            MR::setAnimRate(this, ((0x40 - mLifeFrame) * 1.0f / cNum_control_f1) + 1.0f, 0);
         }
         break;
     case 4:

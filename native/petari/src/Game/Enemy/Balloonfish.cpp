@@ -16,6 +16,15 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 0.1f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeStarPointerBind_setBckRate_1, "exeStarPointerBind.setBckRate.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_endStarPointerBind_setBckRate_1, "endStarPointerBind.setBckRate.1", 1.0f);
@@ -56,17 +65,17 @@ void Balloonfish::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
 
     f32 scale = mScale.y;
-    initBinder(100.0f * scale, 0.0f, 0);
+    initBinder(cNum_init_f1 * scale, 0.0f, 0);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, 100.0f * scale, Vec3f(0.0f, 60.0f * scale, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 32, cNum_init_f2 * scale, Vec3f(0.0f, cNum_init_f3 * scale, 0.0f));
     initEffectKeeper(0, "Balloonfish");
     initSound(2, false);
     initNerve(GET_NERVE(Balloonfish, HostTypeNrvWait));
     f32 zero = 0.0f;
-    MR::initStarPointerTarget(this, 110.0f, Vec3f(zero, 80.0f, zero));
+    MR::initStarPointerTarget(this, cNum_init_f4, Vec3f(zero, cNum_init_f5, zero));
     mAnimScaleController = new AnimScaleController(nullptr);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, 80.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f6 * mScale.y);
     MR::declareCoin(this, 1);
     MR::invalidateClipping(this);
     makeActorDead();
@@ -107,7 +116,7 @@ void Balloonfish::exeWait() {
     f32 ratio = static_cast< f32 >(mNotBoundStep) / ::hWaitTime;
     f32 scale = (1.0f - ratio) + ratio * ::hWaitMaxScale;
     mScale.set(scale, scale, scale);
-    MR::blendQuatFrontUp(&mQuat, -mGravity, toPredictedPlayerPos, 0.02f, 0.1f);
+    MR::blendQuatFrontUp(&mQuat, -mGravity, toPredictedPlayerPos, cNum_exeWait_f1, cNum_exeWait_f2);
 
     if (mNotBoundStep > ::hWaitTime) {
         setNerve(GET_NERVE(Balloonfish, HostTypeNrvDash));

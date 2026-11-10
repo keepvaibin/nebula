@@ -20,6 +20,9 @@
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_playGo_f1, "playGo.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayCountAnim_f1, "isPlayCountAnim.f1", 180.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeIntro_1, "exeIntro.1", 110);
 
@@ -85,7 +88,7 @@ void RaceManagerLayout::playCountAndGo() {
 void RaceManagerLayout::playGo() {
     MR::showPane(this, "Go");
     MR::startPaneAnim(this, "Go", "Count", 0);
-    MR::setPaneAnimFrame(this, "Go", 180.0f, 0);
+    MR::setPaneAnimFrame(this, "Go", cNum_playGo_f1, 0);
     MR::emitEffect(this, "RaceStart");
 }
 
@@ -138,7 +141,7 @@ void RaceManagerLayout::hideAllPane() {
 }
 
 bool RaceManagerLayout::isPlayCountAnim() const {
-    return MR::getPaneAnimFrame(this, "Go", 0) < 180.0f;
+    return MR::getPaneAnimFrame(this, "Go", 0) < cNum_isPlayCountAnim_f1;
 }
 
 bool RaceManagerLayout::isPlayCountAndGoAnim() const {

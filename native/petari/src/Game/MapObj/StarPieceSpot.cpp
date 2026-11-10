@@ -8,6 +8,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sRandomPieceValue, 15.0f);
     NEBULA_TUNABLE(f32, sLaunchYVel, 40.0f);
@@ -35,7 +37,7 @@ void StarPieceSpot::init(const TableIter& rIter) {
         kill();
     } else {
         initHitSensor(1);
-        MR::addHitSensorMapObjSimple(this, "body", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorMapObjSimple(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
         appear();
     }
 }

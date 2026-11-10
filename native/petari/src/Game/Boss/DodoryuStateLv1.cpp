@@ -15,6 +15,10 @@
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startPop_f1, "startPop.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePop_f1, "updatePop.f1", 2.5f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_shakeCameraInfinity_1, "exeHide.shakeCameraInfinity.1", 0.2f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHide_shakeCameraInfinity_2, "exeHide.shakeCameraInfinity.2", 2.0f);
@@ -259,7 +263,7 @@ void DodoryuStateLv1::exeSpinOut() {
 }
 
 void DodoryuStateLv1::start() {
-    mHost->shiftMoveStateRail(10.0f);
+    mHost->shiftMoveStateRail(cNum_start_f1);
     mHost->endPlayerCenterCamera();
     setNerve(GET_NERVE_ANON(DodoryuStateLv1NrvHide));
     mHost->invalidateStarPieceSensor();
@@ -387,7 +391,7 @@ void DodoryuStateLv1::executeHideJump() {
 
 void DodoryuStateLv1::startPop() {
     mIsValidPop = true;
-    mPopAccel = 30.0f;
+    mPopAccel = cNum_startPop_f1;
     mPopSpeed = 0.0f;
 }
 
@@ -402,7 +406,7 @@ void DodoryuStateLv1::updatePop() {
     trans.add(-mHost->mGravity * mPopAccel);
 
     mPopSpeed += mPopAccel;
-    mPopAccel -= 2.5f;
+    mPopAccel -= cNum_updatePop_f1;
 
     if (mPopSpeed < 0.0f) {
         trans.add(mHost->mGravity * mPopSpeed);

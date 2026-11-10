@@ -12,6 +12,10 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFind_f1, "updateFind.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFind_f2, "updateFind.f2", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFind_f3, "updateFind.f3", 2000.0f);
+
 namespace {
     static MR::ActorMoveParam sFindParam = {0.0f, 1.0f, 0.98f, 3.0f};
     NEBULA_TUNABLE(f32, sChasePlayerJumpSpeed, 15.0f);
@@ -114,7 +118,7 @@ bool KoopaBattleBase::updateFind() {
     MR::moveAndTurnToPlayer(pKoopa, KoopaFunction::getKoopaFrontPtr(pKoopa), ::sFindParam);
 
     if (!MR::isFirstStep(this) && MR::isBindedGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceMiddle(mHost, 800.0f, 1200.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceMiddle(mHost, cNum_updateFind_f1, cNum_updateFind_f2, cNum_updateFind_f3);
         return true;
     }
 

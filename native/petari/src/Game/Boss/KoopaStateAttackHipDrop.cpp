@@ -14,6 +14,20 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f1, "exeJumpAttackDown.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f2, "exeJumpAttackDown.f2", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f3, "exeJumpAttackDown.f3", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f4, "exeJumpAttackDown.f4", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f5, "exeJumpAttackDown.f5", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f6, "exeJumpAttackDown.f6", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f7, "exeJumpAttackDown.f7", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f8, "exeJumpAttackDown.f8", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f9, "exeJumpAttackDown.f9", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f10, "exeJumpAttackDown.f10", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f11, "exeJumpAttackDown.f11", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f12, "exeJumpAttackDown.f12", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpAttackDown_f13, "exeJumpAttackDown.f13", 2000.0f);
+
 namespace {
     static MR::ActorMoveParam sParamRunStart = {3.0f, 1.0f, 0.9f, 3.0f};
     static MR::ActorMoveParam sParamJumpStart = {0.0f, 1.0f, 0.95f, 0.0f};
@@ -216,13 +230,13 @@ void KoopaStateAttackHipDrop::exeJumpAttackDown() {
         Vec3f difference = mGroundPosition;
         difference.sub(mHost->mPosition);
 
-        mJumpTime = static_cast< s32 >(difference.length() / 35.0f) + 10;
+        mJumpTime = static_cast< s32 >(difference.length() / cNum_exeJumpAttackDown_f1) + 10;
 
         MR::normalizeOrZero(&difference);
 
-        difference.x *= 35.0f;
-        difference.y *= 35.0f;
-        difference.z *= 35.0f;
+        difference.x *= cNum_exeJumpAttackDown_f2;
+        difference.y *= cNum_exeJumpAttackDown_f3;
+        difference.z *= cNum_exeJumpAttackDown_f4;
 
         MR::setVelocity(mHost, difference);
 
@@ -247,13 +261,13 @@ void KoopaStateAttackHipDrop::exeJumpAttackDown() {
             if (MR::sendMsgToBindedSensor(ACTMES_KOOPA_PLATE_DAMAGE, KoopaFunction::getKoopaMessageSensor(mHost))) {
                 MR::zeroVelocity(mHost);
 
-                MR::tryRumblePadAndCameraDistanceVeryStrong(mHost, 1500.0f, 3000.0f, 2000.0f);
+                MR::tryRumblePadAndCameraDistanceVeryStrong(mHost, cNum_exeJumpAttackDown_f5, cNum_exeJumpAttackDown_f6, cNum_exeJumpAttackDown_f7);
 
                 MR::startSound(mHost, "SE_OJ_KOOPA_PLATE_LAVA_ST");
 
                 setNerve(GET_NERVE(KoopaStateAttackHipDrop, KoopaStateAttackHipDropNrvDamage));
             } else {
-                MR::tryRumblePadAndCameraDistanceMiddle(mHost, 1500.0f, 3000.0f, 2000.0f);
+                MR::tryRumblePadAndCameraDistanceMiddle(mHost, cNum_exeJumpAttackDown_f8, cNum_exeJumpAttackDown_f9, cNum_exeJumpAttackDown_f10);
             }
 
             return;
@@ -261,7 +275,7 @@ void KoopaStateAttackHipDrop::exeJumpAttackDown() {
     }
 
     MR::zeroVelocity(mHost);
-    MR::tryRumblePadAndCameraDistanceStrong(mHost, 1500.0f, 3000.0f, 2000.0f);
+    MR::tryRumblePadAndCameraDistanceStrong(mHost, cNum_exeJumpAttackDown_f11, cNum_exeJumpAttackDown_f12, cNum_exeJumpAttackDown_f13);
 
     KoopaFunction::emitKoopaShockWave(mHost);
 

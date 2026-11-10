@@ -27,6 +27,28 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBug_f1, "BossStinkBug.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f5, "initSensor.f5", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f6, "initSensor.f6", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f7, "initSensor.f7", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f8, "initSensor.f8", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f9, "initSensor.f9", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f1, "updatePose.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f2, "updatePose.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJointControl_f1, "updateJointControl.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJointControl_f2, "updateJointControl.f2", 0.08f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJointControl_f3, "updateJointControl.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJointControl_f4, "updateJointControl.f4", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f1, "appearStarPiece.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f2, "appearStarPiece.f2", 40.0f);
 
 namespace {
     const char* const sSensorNameList[] = {"Body", "BodyHipDrop"};
@@ -54,7 +76,7 @@ BossStinkBug::BossStinkBug(const char* pName)
     mLegGroundCheckers = new GroundChecker*[::sLegNum];
 
     for (s32 i = 0; i < ::sLegNum; i++) {
-        mLegGroundCheckers[i] = new GroundChecker("地面チェック", 30.0f, 0.0f);
+        mLegGroundCheckers[i] = new GroundChecker("地面チェック", cNum_BossStinkBug_f1, 0.0f);
         mLegGroundCheckers[i]->makeActorDead();
         MR::setBinderExceptActor(mLegGroundCheckers[i], this);
     }
@@ -88,7 +110,7 @@ void BossStinkBug::init(const TableIter& rIter) {
     initSensor();
     initCollision();
     initRailRider(rIter);
-    initBinder(300.0f, 300.0f, false);
+    initBinder(cNum_init_f1, cNum_init_f2, false);
     MR::setBinderExceptActor(this, this);
     initEffectKeeper(0, nullptr);
     MR::onCalcGravity(this);
@@ -137,10 +159,10 @@ void BossStinkBug::initCamera(const TableIter& rIter) {
 
 void BossStinkBug::initSensor() {
     initHitSensor(5);
-    MR::addHitSensorEye(this, "eye", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 8, cNum_initSensor_f1, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "eye");
-    MR::addHitSensorEnemyAttack(this, "attack_left", 8, 200.0f, Vec3f(-120.0f, 50.0f, 300.0f));
-    MR::addHitSensorEnemyAttack(this, "attack_right", 8, 200.0f, Vec3f(120.0f, 50.0f, 300.0f));
+    MR::addHitSensorEnemyAttack(this, "attack_left", 8, cNum_initSensor_f2, Vec3f(-cNum_initSensor_f3, cNum_initSensor_f4, cNum_initSensor_f5));
+    MR::addHitSensorEnemyAttack(this, "attack_right", 8, cNum_initSensor_f6, Vec3f(cNum_initSensor_f7, cNum_initSensor_f8, cNum_initSensor_f9));
     MR::invalidateHitSensor(this, "attack_left");
     MR::invalidateHitSensor(this, "attack_right");
 
@@ -239,7 +261,7 @@ void BossStinkBug::updatePose() {
             MR::normalize(&mFront);
         }
 
-        MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.2f, 0.2f);
+        MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, cNum_updatePose_f1, cNum_updatePose_f2);
         mIsPoseUpdated = true;
     }
 }
@@ -334,9 +356,9 @@ void BossStinkBug::updateJointControl() {
         Vec3f dirGroundCheckToLegJoint = legJointPos - groundCheckPos;
 
         if (MR::isBinded(mLegGroundCheckers[i])) {
-            mLegGroundCheckers[i]->bringFriction(mLegFriction, 0.2f);
+            mLegGroundCheckers[i]->bringFriction(mLegFriction, cNum_updateJointControl_f1);
         } else {
-            mLegGroundCheckers[i]->bringFriction(1.0f, 0.08f);
+            mLegGroundCheckers[i]->bringFriction(1.0f, cNum_updateJointControl_f2);
         }
 
         dirGroundCheckToLegJoint.scale(mLegGroundCheckers[i]->mFriction);
@@ -349,12 +371,12 @@ void BossStinkBug::updateJointControl() {
 
             if (!MR::isNearZero(fix)) {
                 MR::normalize(&fix);
-                jointCtrl->setIKEndDirection(::sLegJointNameList[i], fix, 0.1f * mLegIKRate);
+                jointCtrl->setIKEndDirection(::sLegJointNameList[i], fix, cNum_updateJointControl_f3 * mLegIKRate);
             }
         } else {
             Vec3f yDir;
             MR::extractMtxYDir(MR::getJointMtx(this, ::sLegJointNameList[i]), &yDir);
-            jointCtrl->setIKEndDirection(::sLegJointNameList[i], yDir, 0.05f * mLegIKRate);
+            jointCtrl->setIKEndDirection(::sLegJointNameList[i], yDir, cNum_updateJointControl_f4 * mLegIKRate);
         }
     }
 
@@ -364,7 +386,7 @@ void BossStinkBug::updateJointControl() {
 void BossStinkBug::appearStarPiece(s32 num) {
     Vec3f offsetVec;
     NebulaMtxMultVec(MR::getJointMtx(this, "Body"), ::sAppearStarPieceOffset, offsetVec);
-    MR::appearStarPieceToDirection(this, offsetVec, -mGravity, num, 30.0f, 40.0f, false);
+    MR::appearStarPieceToDirection(this, offsetVec, -mGravity, num, cNum_appearStarPiece_f1, cNum_appearStarPiece_f2, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }
 

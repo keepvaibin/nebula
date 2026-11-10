@@ -4,6 +4,27 @@
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f2, "initMapToolInfo.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f3, "initMapToolInfo.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f1, "initCubeBox.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f2, "initCubeBox.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f3, "initCubeBox.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f4, "initCubeBox.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f5, "initCubeBox.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f6, "initCubeBox.f6", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f7, "initCubeBox.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f8, "initCubeBox.f8", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f9, "initCubeBox.f9", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f10, "initCubeBox.f10", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f11, "initCubeBox.f11", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCubeBox_f12, "initCubeBox.f12", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateModelScale_f1, "updateModelScale.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappear_f1, "exeDisappear.f1", 0.5f);
 
 namespace NrvBlackHole {
     NEW_NERVE(BlackHoleNrvWait, BlackHole, Wait);
@@ -25,13 +46,13 @@ void BlackHole::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "BlackHoleSuction", mSuctionEffectMtx.toMtxPtr());
     f32 radius = mRadius;
-    f32 modelRadius = 500.0f * mModelScale;
+    f32 modelRadius = cNum_init_f1 * mModelScale;
 
     if (radius < modelRadius) {
         radius = modelRadius;
     }
 
-    f32 clippingRadius = 500.0f + radius;
+    f32 clippingRadius = cNum_init_f2 + radius;
     MR::setClippingTypeSphere(this, clippingRadius);
     MR::setClippingTypeSphere(mBlackHoleModel, clippingRadius);
     MR::setClippingFarMax(this);
@@ -133,10 +154,10 @@ void BlackHole::initMapToolInfo(const TableIter& rIter) {
     }
 
     if (mCubeBox == nullptr) {
-        mRadius = 500.0f * mScale.x;
+        mRadius = cNum_initMapToolInfo_f1 * mScale.x;
     } else {
         Vec3f size(mScale);
-        size.scale(500.0f);
+        size.scale(cNum_initMapToolInfo_f2);
 
         mRadius = size.length();
     }
@@ -144,7 +165,7 @@ void BlackHole::initMapToolInfo(const TableIter& rIter) {
     f32 scalePerMille;
 
     if (MR::getPlacementArg0NoInit(rIter, &scalePerMille)) {
-        mModelScale = scalePerMille / 1000.0f;
+        mModelScale = scalePerMille / cNum_initMapToolInfo_f3;
     } else if (mCubeBox == nullptr) {
         mModelScale = mScale.x;
     } else {
@@ -164,8 +185,8 @@ void BlackHole::initCubeBox() {
     mCubeMtx.setTrans(mPosition);
 
     mCubeBox = new Box3f();
-    Vec3f vecStart(0.5f * (1000.0f * -mScale.x), 0.5f * (1000.0f * -mScale.y), 0.5f * (1000.0f * -mScale.z));
-    Vec3f vecEnd(0.5f * (1000.0f * mScale.x), 0.5f * (1000.0f * mScale.y), 0.5f * (1000.0f * mScale.z));
+    Vec3f vecStart(cNum_initCubeBox_f1 * (cNum_initCubeBox_f2 * -mScale.x), cNum_initCubeBox_f3 * (cNum_initCubeBox_f4 * -mScale.y), cNum_initCubeBox_f5 * (cNum_initCubeBox_f6 * -mScale.z));
+    Vec3f vecEnd(cNum_initCubeBox_f7 * (cNum_initCubeBox_f8 * mScale.x), cNum_initCubeBox_f9 * (cNum_initCubeBox_f10 * mScale.y), cNum_initCubeBox_f11 * (cNum_initCubeBox_f12 * mScale.z));
     mCubeBox->set(vecStart, vecEnd);
 }
 
@@ -177,7 +198,7 @@ bool BlackHole::isInCubeBox(const Vec3f& rVec) const {
 
 void BlackHole::updateModelScale(f32 rangeScale, f32 coreScale) {
     mScale.setAll< f32 >(rangeScale);
-    mBlackHoleModel->mScale.setAll< f32 >(0.5f * coreScale);
+    mBlackHoleModel->mScale.setAll< f32 >(cNum_updateModelScale_f1 * coreScale);
 }
 
 void BlackHole::exeWait() {
@@ -211,7 +232,7 @@ void BlackHole::exeDisappear() {
     f32 nerveEaseIn = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(1500), mModelScale, 0.0f);
     f32 blackHoleEase = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(500), NebulaFrameClock::stepsOfMilliseconds(1500), mModelScale, 0.0f);
     mScale.setAll< f32 >(nerveEaseIn);
-    mBlackHoleModel->mScale.setAll< f32 >(0.5f * blackHoleEase);
+    mBlackHoleModel->mScale.setAll< f32 >(cNum_exeDisappear_f1 * blackHoleEase);
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         kill();

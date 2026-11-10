@@ -8,6 +8,8 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_findGround_f1, "findGround.f1", 1.25f);
+
 namespace {
     NEBULA_TUNABLE(s32, sListCapacity, 2560);
     NEBULA_TUNABLE(u32, sTableSize, 8192);
@@ -115,7 +117,7 @@ const ClippingActorInfo* ClippingActorHolder::findGround(const ClippingActorInfo
         if (planet == pInfo) {
             return nullptr;
         }
-        const f32 reach = planet->mRadius * 1.25f;
+        const f32 reach = planet->mRadius * cNum_findGround_f1;
         const f32 x = pos.x - planet->mCenter->x;
         const f32 y = pos.y - planet->mCenter->y;
         const f32 z = pos.z - planet->mCenter->z;

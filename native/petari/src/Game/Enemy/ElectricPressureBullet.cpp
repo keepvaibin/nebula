@@ -13,6 +13,12 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 4.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFly_1, "exeFly.1", 10);
 
@@ -27,12 +33,12 @@ void ElectricPressureBullet::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("ElectricBullet", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(100.0f, 0.0f, 0);
+    MR::addHitSensorEnemyAttack(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(cNum_init_f2, 0.0f, 0);
     initEffectKeeper(0, nullptr);
     initSound(1, false);
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0, 0, 0));
-    MR::initShadowVolumeCylinder(this, 75.0f);
+    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0, 0, 0));
+    MR::initShadowVolumeCylinder(this, cNum_init_f4);
     initNerve(GET_NERVE(ElectricPressureBullet, ElectricPressureBulletNrvFly));
     makeActorDead();
 }
@@ -71,7 +77,7 @@ void ElectricPressureBullet::exeFly() {
                 Vec3f toPlayer;
                 toPlayer.sub(*MR::getPlayerCenterPos(), mPosition);
                 MR::normalize(&toPlayer);
-                MR::turnVecToVecDegree(&mFront, mFront, toPlayer, 4.0f, Vec3f(0, 1, 0));
+                MR::turnVecToVecDegree(&mFront, mFront, toPlayer, cNum_exeFly_f1, Vec3f(0, 1, 0));
                 mVelocity.scale(mSpeed, mFront);
             }
         }

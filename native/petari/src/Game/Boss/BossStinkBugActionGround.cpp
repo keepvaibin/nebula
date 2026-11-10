@@ -12,6 +12,12 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCoolDown_f1, "exeCoolDown.f1", 90.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sWalkSpeed, 5.0f);
     NEBULA_TUNABLE(f32, sFindDegreeH, 45.0f);
@@ -52,7 +58,7 @@ void BossStinkBugActionGround::appear() {
 
 void BossStinkBugActionGround::control() {
     getHost()->updatePose();
-    MR::updateEffectFloorCodeLineToMap(getHost(), 1000.0f, -200.0f);
+    MR::updateEffectFloorCodeLineToMap(getHost(), cNum_control_f1, -cNum_control_f2);
     updateSound();
 }
 
@@ -88,9 +94,9 @@ bool BossStinkBugActionGround::receiveOtherMsg(u32 msg, HitSensor* pSender, HitS
     } else if (MR::isMsgWallTouch(msg) || MR::isMsgCeilTouch(msg)) {
         if (isNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvRun)) ||
             isNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvShakeOffRun))) {
-            if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->mFront, 45.0f)) {
+            if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->mFront, cNum_receiveOtherMsg_f1)) {
                 Vec3f railPosFrontCoord;
-                MR::calcRailPosFrontCoord(&railPosFrontCoord, getHost(), 2000.0f);
+                MR::calcRailPosFrontCoord(&railPosFrontCoord, getHost(), cNum_receiveOtherMsg_f2);
 
                 if (MR::sendMsgEnemyAttackMaximumToDir(pSender, pReceiver, railPosFrontCoord - getHost()->mPosition)) {
                     getHost()->invalidateCollision();
@@ -166,7 +172,7 @@ void BossStinkBugActionGround::exeAttackSuccess() {
 
 void BossStinkBugActionGround::exeCoolDown() {
     if (updateGroundCoolDown()) {
-        if (MR::isFaceToPlayerHorizontalDegree(getHost(), getHost()->mFront, 90.0f)) {
+        if (MR::isFaceToPlayerHorizontalDegree(getHost(), getHost()->mFront, cNum_exeCoolDown_f1)) {
             setNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvWalk));
         } else {
             setNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvTurn));

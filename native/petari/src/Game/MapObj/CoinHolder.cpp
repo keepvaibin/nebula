@@ -7,6 +7,8 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_appearCoinCircle_f1, "appearCoinCircle.f1", 360.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sCreateCoinNum, 32);
     NEBULA_TUNABLE(f32, sRandomizeVel, 4.0f);
@@ -75,7 +77,7 @@ bool CoinHolder::appearCoinCircle(const NameObj* pObj, const Vec3f& rPosition, s
     MR::makeAxisVerticalZX(&axis, gravity);
 
     for (s32 i = 0; i < count; i++) {
-        f32 angle = 360.0f / count;
+        f32 angle = cNum_appearCoinCircle_f1 / count;
 
         Vec3f horizontal;
         MR::rotateVecDegree(&horizontal, axis, gravity, i * angle);

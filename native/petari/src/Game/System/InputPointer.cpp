@@ -2,6 +2,12 @@
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getPointingPosBasedOnScreen_f1, "getPointingPosBasedOnScreen.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPointingPosBasedOnScreen_f2, "getPointingPosBasedOnScreen.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPointingPosBasedOnScreen_f3, "getPointingPosBasedOnScreen.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPointingPosBasedOnScreen_f4, "getPointingPosBasedOnScreen.f4", 0.5f);
 
 InputPointer::InputPointer(const PlayerInput* pPad)
     : mPad(pPad), mPos(0.0f, 0.0f), mHorizon(0.0f, 0.0f), mDistDisplay(0.0f), mIsPointInScreen(false) {
@@ -48,6 +54,6 @@ s32 InputPointer::getEnablePastCount() const {
 }
 
 void InputPointer::getPointingPosBasedOnScreen(Vec2f* pOut) const {
-    pOut->x = (0.5f + (0.5f * mPos.x)) * static_cast< s32 >(MR::getScreenWidth());
-    pOut->y = (0.5f + (0.5f * mPos.y)) * static_cast< s32 >(NebulaFrameClock::cScreenLines);
+    pOut->x = (cNum_getPointingPosBasedOnScreen_f1 + (cNum_getPointingPosBasedOnScreen_f2 * mPos.x)) * static_cast< s32 >(MR::getScreenWidth());
+    pOut->y = (cNum_getPointingPosBasedOnScreen_f3 + (cNum_getPointingPosBasedOnScreen_f4 * mPos.y)) * static_cast< s32 >(NebulaFrameClock::cScreenLines);
 }

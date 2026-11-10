@@ -17,6 +17,10 @@
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Player/RushEndInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_scatterStarPiece_f1, "scatterStarPiece.f1", 24.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_scatterStarPiece_f2, "scatterStarPiece.f2", 24.0f);
 
 namespace MarioAccess {
     void getTakePos(Vec3f* pOut) {
@@ -657,7 +661,7 @@ namespace MarioAccess {
 
             StarPiece* launchPiece = MR::getDeadStarPiece();
 
-            launchPiece->launch(getPlayerActor()->mCenterPos, 24.0f, 24.0f, false, false);
+            launchPiece->launch(getPlayerActor()->mCenterPos, cNum_scatterStarPiece_f1, cNum_scatterStarPiece_f2, false, false);
             MR::addStarPiece(-1);
         }
     }

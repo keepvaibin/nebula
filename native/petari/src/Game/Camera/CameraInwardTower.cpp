@@ -6,6 +6,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f3, "calcIdealPose.f3", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f4, "calcIdealPose.f4", 0.1f);
+
 namespace {
     NEBULA_TUNABLE(f32, sRoundThreshold, 0.3f);
     NEBULA_TUNABLE(f32, sAttenuation, 20.0f);
@@ -96,13 +101,13 @@ void CameraInwardTower::calcIdealPose() {
             if (angle > mAngleMax) {
                 angle = mAngleMax;
             }
-            mAngleY = mAngleY * 0.9f + angle * 0.1f;
+            mAngleY = mAngleY * cNum_calcIdealPose_f1 + angle * cNum_calcIdealPose_f2;
         } else if (rate < -::sRoundThreshold) {
             angle -= speed;
             if (angle < -mAngleMax) {
                 angle = -mAngleMax;
             }
-            mAngleY = mAngleY * 0.9f + angle * 0.1f;
+            mAngleY = mAngleY * cNum_calcIdealPose_f3 + angle * cNum_calcIdealPose_f4;
         }
     }
 

@@ -13,6 +13,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f3, "exeMove.f3", 0.85f);
+
 namespace {
     NEBULA_TUNABLE(f32, cHitSensorRadius, 130.0f);
     NEBULA_TUNABLE(f32, cSwingRange, 250.0f);
@@ -87,7 +92,7 @@ void AirBubble::appearMove(const Vec3f& rTrans, s32 life) {
 
 void AirBubble::exeWait() {
 
-    mBobOffset = MR::sin(MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(2)) * MR::pi() * 2.0f);
+    mBobOffset = MR::sin(MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(2)) * MR::pi() * cNum_exeWait_f1);
 
     if (mIsFollowRail) {
         if (MR::isRailReachedGoal(this)) {
@@ -126,9 +131,9 @@ void AirBubble::exeMove() {
     }
 
     MR::normalizeOrZero(&mDriftDir);
-    mVelocity += mDriftDir * 0.1f;
-    mVelocity -= mGravity * 0.3f;
-    mVelocity.mult(0.85f);
+    mVelocity += mDriftDir * cNum_exeMove_f1;
+    mVelocity -= mGravity * cNum_exeMove_f2;
+    mVelocity.mult(cNum_exeMove_f3);
 
     if (MR::isGreaterStep(this, mLife)) {
         MR::hideModel(this);

@@ -7,6 +7,47 @@
 #include <ModelFileNumbers.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_unit_f1, "unit.f1", 64.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_dimension_f1, "dimension.f1", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_angle_f1, "angle.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_angle_f2, "angle.f2", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f1, "layout.f1", 18.451525f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f2, "layout.f2", 16.549807f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f3, "layout.f3", 29.25885f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f4, "layout.f4", 31.763554f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f5, "layout.f5", 17.766165f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f6, "layout.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f7, "layout.f7", 17.95986f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f8, "layout.f8", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f9, "layout.f9", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f10, "layout.f10", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f11, "layout.f11", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f12, "layout.f12", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f13, "layout.f13", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f14, "layout.f14", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f15, "layout.f15", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_layout_f16, "layout.f16", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f1, "drawQuad.f1", 3.141592653589793f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f2, "drawQuad.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f3, "drawQuad.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f4, "drawQuad.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f5, "drawQuad.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f6, "drawQuad.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawQuad_f7, "drawQuad.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f1, "makeIcon.f1", 43.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f2, "makeIcon.f2", 43.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f3, "makeIcon.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f4, "makeIcon.f4", 57.29578f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f5, "makeIcon.f5", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f6, "makeIcon.f6", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f7, "makeIcon.f7", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f8, "makeIcon.f8", 34.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f9, "makeIcon.f9", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f10, "makeIcon.f10", 34.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f11, "makeIcon.f11", 1600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f12, "makeIcon.f12", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeIcon_f13, "makeIcon.f13", 6000.0f);
+
 namespace {
     // The layout's units: a 64-unit face, its parts' sizes and offsets in those units.
     NEBULA_TUNABLE(f32, cScaleX, 0.88961464f);
@@ -14,15 +55,15 @@ namespace {
     const f32 cStepY = 1.16f * cScaleY;
 
     f32 unit(f32 x) {
-        return x / 64.0f;
+        return x / cNum_unit_f1;
     }
 
     f32 dimension(u32 scale) {
-        return 1.0f + 0.4f * static_cast< f32 >(scale);
+        return 1.0f + cNum_dimension_f1 * static_cast< f32 >(scale);
     }
 
     f32 angle(u32 rotate) {
-        return (360.0f / 32.0f) * static_cast< f32 >(rotate % 32);
+        return (cNum_angle_f1 / cNum_angle_f2) * static_cast< f32 >(rotate % 32);
     }
 
     // Each eye and eyebrow type's own tilt, added to the Mii's.
@@ -97,27 +138,27 @@ namespace {
 
     FaceLayout layout(const Mii::Character& m, const Mii::Parts& rParts, u32 size) {
         const f32 eyeX = cScaleX * m.eye_x;
-        const f32 eyeY = 18.451525f + cStepY * m.eye_y;
+        const f32 eyeY = cNum_layout_f1 + cStepY * m.eye_y;
         const f32 eyeW = unit(342) * dimension(m.eye_scale);
         const f32 eyeH = unit(288) * dimension(m.eye_scale);
         const f32 eyeA = angle(m.eye_rotate + cEyeTilt[m.eye_type]);
 
         const f32 eyebrowX = cScaleX * m.eyebrow_x;
-        const f32 eyebrowY = 16.549807f + cStepY * m.eyebrow_y;
+        const f32 eyebrowY = cNum_layout_f2 + cStepY * m.eyebrow_y;
         const f32 eyebrowW = unit(324) * dimension(m.eyebrow_scale);
         const f32 eyebrowH = unit(288) * dimension(m.eyebrow_scale);
         const f32 eyebrowA = angle(m.eyebrow_rotate + cEyebrowTilt[m.eyebrow_type]);
 
-        const f32 mouthY = 29.25885f + cStepY * m.mouth_y;
+        const f32 mouthY = cNum_layout_f3 + cStepY * m.mouth_y;
         const f32 mouthW = unit(396) * dimension(m.mouth_scale);
         const f32 mouthH = unit(288) * dimension(m.mouth_scale);
 
-        const f32 mustacheY = 31.763554f + cStepY * m.beard_y;
+        const f32 mustacheY = cNum_layout_f4 + cStepY * m.beard_y;
         const f32 mustacheW = unit(288) * dimension(m.beard_scale);
         const f32 mustacheH = unit(576) * dimension(m.beard_scale);
 
-        const f32 moleX = 17.766165f + 2.0f * cScaleX * m.mole_x;
-        const f32 moleY = 17.95986f + cStepY * m.mole_y;
+        const f32 moleX = cNum_layout_f5 + cNum_layout_f6 * cScaleX * m.mole_x;
+        const f32 moleY = cNum_layout_f7 + cStepY * m.mole_y;
         const f32 moleSize = dimension(m.mole_scale);
 
         const f32 r = unit(static_cast< f32 >(size));
@@ -128,13 +169,13 @@ namespace {
         const NebulaTextureInfo* pMole = rParts.texture(Mii::TextureMole, m.mole_type);
 
         FaceLayout f;
-        f.eyeR = {r * (32.0f - eyeX), r * eyeY, r * eyeW, r * eyeH, eyeA, OriginRight, pEye};
-        f.eyeL = {r * (32.0f + eyeX), r * eyeY, r * eyeW, r * eyeH, 360.0f - eyeA, OriginLeft, pEye};
-        f.eyebrowR = {r * (32.0f - eyebrowX), r * eyebrowY, r * eyebrowW, r * eyebrowH, eyebrowA, OriginRight, pEyebrow};
-        f.eyebrowL = {r * (32.0f + eyebrowX), r * eyebrowY, r * eyebrowW, r * eyebrowH, 360.0f - eyebrowA, OriginLeft, pEyebrow};
-        f.mouth = {r * 32.0f, r * mouthY, r * mouthW, r * mouthH, 0.0f, OriginCenter, pMouth};
-        f.mustacheR = {r * 32.0f, r * mustacheY, r * mustacheW, r * mustacheH, 0.0f, OriginRight, pMustache};
-        f.mustacheL = {r * 32.0f, r * mustacheY, r * mustacheW, r * mustacheH, 0.0f, OriginLeft, pMustache};
+        f.eyeR = {r * (cNum_layout_f8 - eyeX), r * eyeY, r * eyeW, r * eyeH, eyeA, OriginRight, pEye};
+        f.eyeL = {r * (cNum_layout_f9 + eyeX), r * eyeY, r * eyeW, r * eyeH, cNum_layout_f10 - eyeA, OriginLeft, pEye};
+        f.eyebrowR = {r * (cNum_layout_f11 - eyebrowX), r * eyebrowY, r * eyebrowW, r * eyebrowH, eyebrowA, OriginRight, pEyebrow};
+        f.eyebrowL = {r * (cNum_layout_f12 + eyebrowX), r * eyebrowY, r * eyebrowW, r * eyebrowH, cNum_layout_f13 - eyebrowA, OriginLeft, pEyebrow};
+        f.mouth = {r * cNum_layout_f14, r * mouthY, r * mouthW, r * mouthH, 0.0f, OriginCenter, pMouth};
+        f.mustacheR = {r * cNum_layout_f15, r * mustacheY, r * mustacheW, r * mustacheH, 0.0f, OriginRight, pMustache};
+        f.mustacheL = {r * cNum_layout_f16, r * mustacheY, r * mustacheW, r * mustacheH, 0.0f, OriginLeft, pMustache};
         f.mole = {r * moleX, r * moleY, r * moleSize, r * moleSize, 0.0f, OriginCenter, pMole};
         return f;
     }
@@ -166,23 +207,23 @@ namespace {
         Mtx pos;
         NebulaMtxIdentity(pos);
         NebulaMtxScaleApply(pos, pos, rQuad.width, rQuad.height, 1.0f);
-        NebulaMtxRotRad(rot, 'z', (3.141592653589793f / 180.0f) * rQuad.angle);
+        NebulaMtxRotRad(rot, 'z', (cNum_drawQuad_f1 / cNum_drawQuad_f2) * rQuad.angle);
         NebulaMtxConcat(rot, pos, pos);
         NebulaMtxScaleApply(pos, pos, cScaleX, cScaleY, 1.0f);
         NebulaMtxTransApply(pos, pos, rQuad.x, rQuad.y, 0.0f);
 
         // The quad's left edge and its texture's side: a left part is the right one mirrored.
-        const f32 left = rQuad.origin == OriginCenter ? -0.5f : rQuad.origin == OriginRight ? -1.0f : 0.0f;
+        const f32 left = rQuad.origin == OriginCenter ? -cNum_drawQuad_f3 : rQuad.origin == OriginRight ? -1.0f : 0.0f;
         const f32 s0 = rQuad.origin == OriginLeft ? 0.0f : 1.0f;
         const f32 s1 = 1.0f - s0;
 
         TypedDraw site = TypedDraw::eyeSpace(material, pos);
         VertexPCT* pOut = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, 4);
         const Rgba8 black(0x000000FFu);
-        *pOut++ = {1.0f + left, -0.5f, 0.0f, black, s0, 0.0f};
-        *pOut++ = {1.0f + left, 0.5f, 0.0f, black, s0, 1.0f};
-        *pOut++ = {left, 0.5f, 0.0f, black, s1, 1.0f};
-        *pOut++ = {left, -0.5f, 0.0f, black, s1, 0.0f};
+        *pOut++ = {1.0f + left, -cNum_drawQuad_f4, 0.0f, black, s0, 0.0f};
+        *pOut++ = {1.0f + left, cNum_drawQuad_f5, 0.0f, black, s0, 1.0f};
+        *pOut++ = {left, cNum_drawQuad_f6, 0.0f, black, s1, 1.0f};
+        *pOut++ = {left, -cNum_drawQuad_f7, 0.0f, black, s1, 0.0f};
     }
 
     void drawFace(const Mii::Character& m, const FaceLayout& rFace, const PassState& rPass) {
@@ -259,20 +300,20 @@ namespace Mii {
 
         // The head 600 units in front, its face filling the picture's height (43.2 units above and below its middle).
         const f32 aspect = static_cast< f32 >(width) / static_cast< f32 >(height);
-        const f32 half = width < height ? 43.2f / aspect : 43.2f;
-        const f32 fovy = 2.0f * 57.29578f * NebulaAtan2(half, 500.0f);
+        const f32 half = width < height ? cNum_makeIcon_f1 / aspect : cNum_makeIcon_f2;
+        const f32 fovy = cNum_makeIcon_f3 * cNum_makeIcon_f4 * NebulaAtan2(half, cNum_makeIcon_f5);
         Mtx44 proj;
-        NebulaMtxPerspective(proj, fovy, aspect, 500.0f, 700.0f);
+        NebulaMtxPerspective(proj, fovy, aspect, cNum_makeIcon_f6, cNum_makeIcon_f7);
         Frame::setPerspective(proj);
 
-        Point3d camera = {0.0f, 34.5f, 600.0f};
-        Point3d target = {0.0f, 34.5f, 0.0f};
+        Point3d camera = {0.0f, cNum_makeIcon_f8, cNum_makeIcon_f9};
+        Point3d target = {0.0f, cNum_makeIcon_f10, 0.0f};
         Vec up = {0.0f, 1.0f, 0.0f};
         Mtx view;
         NebulaMtxLookAt(view, &camera, &up, &target);
         NebulaLight light = {};
         LightValues::color(&light, NebulaColor8{255, 255, 255, 255});
-        Vec lightPos = {1600.0f, 1500.0f, 6000.0f};
+        Vec lightPos = {cNum_makeIcon_f11, cNum_makeIcon_f12, cNum_makeIcon_f13};
         NebulaMtxMultVec(view, &lightPos, &lightPos);
         LightValues::pos(&light, lightPos.x, lightPos.y, lightPos.z);
         Frame::setLight(0, light);
