@@ -36,6 +36,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_addDinoFootPrint_f1, "addDinoFootPrint.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 270.0f);
@@ -109,7 +110,9 @@ namespace {
 DinoPackun::DinoPackun(const char* pName)
     : LiveActor(pName), mTail(), mBall(), mFootPrint(), mShell(), mDemoPos(), mShellBreakModel(), mTailBall(), mCamTargetMtx(), mCameraInfo(),
       mSequence(), mScaleJointCtrl(), mAnimScaleCtrl(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0.0f, 0.0f, 1.0f), mCameraRegisterId(-1),
-      mCameraVec(0.0f, 0.0f, 0.0f), mAimTailRateSpeed(0.0f), mAimTailRate(0.0f), mDamageCameraState(-1), mIsPreCalcAnim(false) {}
+      mCameraVec(0.0f, 0.0f, 0.0f), mAimTailRateSpeed(0.0f), mAimTailRate(0.0f), mDamageCameraState(-1), mIsPreCalcAnim(false) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackun >);
+}
 
 // Vs1 and Vs2 share the models and pick their look by animation name.
 const char* DinoPackun::getVsAnimName() const {

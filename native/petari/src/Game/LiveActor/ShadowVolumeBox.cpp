@@ -6,11 +6,13 @@
 #include "Game/LiveActor/ShadowDrawer.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_makeVertexBuffer_f1, "makeVertexBuffer.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_makeVertexBuffer_f2, "makeVertexBuffer.f2", 2.0f);
 
 ShadowVolumeBox::ShadowVolumeBox() : ShadowVolumeDrawer("影描画[ボリュームボックス]"), mSize(100.0f, 100.0f, 100.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeBox >);
     for (u32 idx = 0; idx < ARRAY_SIZE(mPoints); idx++) {
         mPoints[idx].zero();
     }

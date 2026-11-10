@@ -15,6 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f1, "exeLaunch.f1", 100.0f);
@@ -37,6 +38,7 @@ namespace {
 };  // namespace
 
 BegomanLauncher::BegomanLauncher(const char* pName) : LiveActor(pName), mBegomanCount(), mAppearDelay(), mBegomanArray(), mLaunchType(3) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanLauncher >);
 }
 
 void BegomanLauncher::init(const TableIter& rIter) {

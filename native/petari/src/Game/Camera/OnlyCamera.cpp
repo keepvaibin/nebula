@@ -3,6 +3,7 @@
 #include "Game/Camera/CameraPoseParam.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcStartPose_f1, "calcStartPose.f1", 0.98f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcSafePose_f1, "calcSafePose.f1", 0.98f);
@@ -18,6 +19,7 @@ namespace {
 
 OnlyCamera::OnlyCamera(const char* pName)
     : NameObj(pName), mPoseParam(new CameraPoseParam()), mStartPose(true), mCalcIdeal(), mPos(0.0f, 0.0f, 0.0f), mSpeed(), mIsResetting() {
+    lumacore::setClass(this, lumacore::kClassId< OnlyCamera >);
 }
 
 void OnlyCamera::calcPose(CameraMan* pCameraMan) {

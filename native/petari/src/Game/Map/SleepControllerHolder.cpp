@@ -6,6 +6,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SwitchEventFunctorListener.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     SleepControllerHolder* getSleepControllerHolder() {
@@ -14,6 +15,7 @@ namespace {
 };  // namespace
 
 SleepControllerHolder::SleepControllerHolder() : NameObj("オブジェスリープ管理"), mSleepControl() {
+    lumacore::setClass(this, lumacore::kClassId< SleepControllerHolder >);
     MR::connectToSceneMapObjMovement(this);
 }
 

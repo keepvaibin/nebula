@@ -16,6 +16,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 80.0f);
@@ -45,6 +46,7 @@ namespace NrvMeteorStrike {
 
 MeteorStrike::MeteorStrike(const char* pName)
     : LiveActor(pName), mType(), mStepSize(10.0f), mRailDir(0.0f, -1.0f, 0.0f), mBrokenModel(), mStepsLeft(), mTotalSteps() {
+    lumacore::setClass(this, lumacore::kClassId< MeteorStrike >);
     mLavaColumnPos.identity();
 }
 

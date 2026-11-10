@@ -18,6 +18,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 35.0f);
@@ -60,6 +61,7 @@ namespace NrvJumpBeamer {
 // A spring-headed pillar that rises from the ground with its group and fires rings of beams; trampled, its head is a
 // spring.
 JumpBeamer::JumpBeamer(const char* pName) : JumpEmitter(pName), mBeams() {
+    lumacore::setClass(this, lumacore::kClassId< JumpBeamer >);
 }
 
 // The head follows the body's top joint, turned and scaled by the head model.

@@ -5,6 +5,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeLevelOffReady_f1, "exeLevelOffReady.f1", 85.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeTurnLeftReady_f1, "exeTurnLeftReady.f1", 35.0f);
@@ -25,6 +26,7 @@ namespace {
 };  // namespace
 
 SurfingGuidance::SurfingGuidance() : LayoutActor("サーフィンガイダンス", true) {
+    lumacore::setClass(this, lumacore::kClassId< SurfingGuidance >);
 }
 
 void SurfingGuidance::init(const TableIter& /*rIter*/) {

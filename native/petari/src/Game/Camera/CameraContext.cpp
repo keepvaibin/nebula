@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initParams_f1, "initParams.f1", 3000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initParams_f2, "initParams.f2", 45.0f);
@@ -21,6 +22,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f7, "getRenderFovy.f7", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_getRenderFovy_f8, "getRenderFovy.f8", 180.0f);
 
 CameraContext::CameraContext() : NameObj("カメラコンテキスト") {
+    lumacore::setClass(this, lumacore::kClassId< CameraContext >);
     initParams();
 }
 

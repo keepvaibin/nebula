@@ -17,6 +17,7 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 1000.0f);
@@ -33,6 +34,7 @@ namespace NrvLavaFloater {
 
 LavaFloater::LavaFloater(const char* pName)
     : LiveActor(pName), mFloatingForce(), mMtxSetter(), mLodCtrlPlanet(), mObjectName(), mGroundPos(gZeroVec), mGroundOffset() {
+    lumacore::setClass(this, lumacore::kClassId< LavaFloater >);
 }
 
 void LavaFloater::init(const TableIter& rIter) {

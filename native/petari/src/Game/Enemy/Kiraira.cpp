@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
@@ -65,6 +66,7 @@ namespace NrvKiraira {
 Kiraira::Kiraira(const char* pName)
     : LiveActor(pName), mRailCoordSpeed(5.0f), mRailVec(0.0f, 0.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mDriftStep(0.0f), mIsRail(false),
       mIsForceDetonated(false), mEyesOpen(true), mSharedGroup(nullptr), mChain(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< Kiraira >);
 }
 
 void Kiraira::init(const TableIter& rIter) {

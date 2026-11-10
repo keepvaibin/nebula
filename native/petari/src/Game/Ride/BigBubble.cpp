@@ -17,6 +17,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.8f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 1.2f);
@@ -122,6 +123,7 @@ BigBubble::BigBubble(const char* pName)
       mPushInvalidTime(), mReduceVolumeTimer(), mMergeIndex(-1), mShapeType(-1), mAppearRadius(1.0f), mVolume(1.0f), mDrawZ(),
       mBinderRadius(), mWarningColor(255, 0, 0, 0), mIsObstruct(), mIsHidden(), mIsExitLimitter(), mIsBroken(), mIsShrinkable(true),
       mIsAttached(true) {
+    lumacore::setClass(this, lumacore::kClassId< BigBubble >);
     mSurface = new OctahedronBezierSurface(BezierSurface::FLAG_NORMAL | BezierSurface::FLAG_TEX);
     mEffectMtx.identity();
     mBaseMtx.identity();

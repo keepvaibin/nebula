@@ -25,6 +25,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f1, "NPCActorCaps.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f2, "NPCActorCaps.f2", 50.0f);
@@ -187,6 +188,7 @@ void NPCActorCaps::setIndirect() {
 }
 
 NPCActor::NPCActor(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< NPCActor >);
     mLodCtrl = nullptr;
     mMsgCtrl = nullptr;
     mGoods0 = nullptr;

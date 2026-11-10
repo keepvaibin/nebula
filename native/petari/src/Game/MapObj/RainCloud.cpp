@@ -14,6 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -42,6 +43,7 @@ namespace NrvRainCloud {
 RainCloud::RainCloud(const char* pName)
     : LiveActor(pName), mCloudCylinder(), mRailMover(), mLodCtrl(), mClippingCenter(0.0f, 0.0f, 0.0f), mRainLength(), mShadowDropLength(-1.0f),
       mIsOnPlayer(), mNoRain() {
+    lumacore::setClass(this, lumacore::kClassId< RainCloud >);
     mRainCylinderMtx.identity();
     mSplashMtx.identity();
 }

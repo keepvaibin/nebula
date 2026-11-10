@@ -3,8 +3,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 AudioEffectArea::AudioEffectArea(int formType, const char* pName) : AreaObj(formType, pName), mEffectType(), mEffectParam() {
+    lumacore::setClass(this, lumacore::kClassId< AudioEffectArea >);
 }
 
 void AudioEffectArea::init(const TableIter& rIter) {

@@ -6,6 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setup_f1, "setup.f1", 150.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updatePos_f1, "updatePos.f1", 360.0f);
@@ -47,6 +48,7 @@ namespace NrvScenarioSelectStar {
 ScenarioSelectStar::ScenarioSelectStar(EffectSystem* pSystem)
     : MultiSceneActor("シナリオ選択のスター", "PowerStar", false), mStarCollectedStatus(0), mScenarioNo(1), mStarId(0), mIsPointing(false),
       mRotateSpeed(0.0f), mBasePos(gZeroVec), mTranslationOnSelect(gZeroVec), mAppearFrame(::cAppearFrame), mScaleOnSelect(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ScenarioSelectStar >);
     initEffect(pSystem, 0, "ScenarioStar");
 }
 

@@ -5,8 +5,10 @@
 #include "Game/Screen/WipeRing.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SystemWipeHolder::SystemWipeHolder() : WipeHolderBase(4, "システムワイプ保持"), mIsCapturing(false) {
+    lumacore::setClass(this, lumacore::kClassId< SystemWipeHolder >);
 }
 
 void SystemWipeHolder::init(const TableIter& /*rIter*/) {

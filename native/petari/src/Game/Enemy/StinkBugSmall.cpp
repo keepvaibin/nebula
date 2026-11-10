@@ -18,6 +18,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 110.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
@@ -73,6 +74,7 @@ namespace {
 };  // namespace
 
 StinkBugSmall::StinkBugSmall(const char* pName) : StinkBugBase(pName), mScaleController(nullptr), mBindStarPointer(nullptr), mIsBodyAttack(false) {
+    lumacore::setClass(this, lumacore::kClassId< StinkBugSmall >);
 }
 
 // Arg 0 the territory angle, arg 1 the radius, arg 7 a pushing body sensor instead of a collision body.

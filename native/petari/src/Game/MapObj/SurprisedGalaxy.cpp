@@ -12,6 +12,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvSurprisedGalaxy {
     NEW_NERVE(SurprisedGalaxyNrvExit, SurprisedGalaxy, Exit);
@@ -24,6 +25,7 @@ namespace {
 };  // namespace
 
 SurprisedGalaxy::SurprisedGalaxy(const char* pName) : LiveActor(pName), mGalaxyName() {
+    lumacore::setClass(this, lumacore::kClassId< SurprisedGalaxy >);
 }
 
 void SurprisedGalaxy::init(const TableIter& rIter) {

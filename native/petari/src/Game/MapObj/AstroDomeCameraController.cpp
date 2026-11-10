@@ -9,6 +9,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE_RECORD(Vec, cDefaultUp, {0.0f, 1.0f, 0.0f});
@@ -27,6 +28,7 @@ namespace NrvAstroDomeCameraController {
 };  // namespace NrvAstroDomeCameraController
 
 AstroDomeCameraController::AstroDomeCameraController(const char* pName) : LiveActor(pName), mStartPos(gZeroVec), mEaseRate(), mZeroPos(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeCameraController >);
 }
 
 void AstroDomeCameraController::init(const TableIter& /*rIter*/) {

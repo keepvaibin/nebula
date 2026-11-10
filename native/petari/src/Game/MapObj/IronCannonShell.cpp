@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, cShellBaseScale, 1.3f);
@@ -27,6 +28,7 @@ namespace NrvIronCannonLauncher {
 }  // namespace NrvIronCannonLauncher
 
 IronCannonShell::IronCannonShell(const char* pName) : KoopaJrShipCannonShell(pName) {
+    lumacore::setClass(this, lumacore::kClassId< IronCannonShell >);
 }
 
 f32 IronCannonShell::getBaseScale() const {
@@ -35,6 +37,7 @@ f32 IronCannonShell::getBaseScale() const {
 
 IronCannonLauncherPoint::IronCannonLauncherPoint(const char* pName)
     : LiveActor(pName), mShellHolder(), mShotInterval(::cDefaultShotInterval), mBulletSpeed(::cDefaultBulletSpeed) {
+    lumacore::setClass(this, lumacore::kClassId< IronCannonLauncherPoint >);
 }
 
 void IronCannonLauncherPoint::init(const TableIter& rIter) {
@@ -122,6 +125,7 @@ bool IronCannonLauncherPoint::tryShotBullet(f32 muzzleOffset) {
 }
 
 IronCannonLauncher::IronCannonLauncher(const char* pName) : IronCannonLauncherPoint(pName), mMuzzlePos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< IronCannonLauncher >);
 }
 
 void IronCannonLauncher::init(const TableIter& rIter) {

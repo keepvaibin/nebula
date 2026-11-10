@@ -9,6 +9,7 @@
 #include "Game/NPC/TrickRabbitUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1500.0f);
@@ -49,6 +50,7 @@ namespace NrvTrickRabbitFreeRun {
 TrickRabbitFreeRun::TrickRabbitFreeRun(const char* pName)
     : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mFrontVec(0.0f, 0.0f, 1.0f), mStateWaitStart(), mStateRunaway(), mStateBlowDamage(),
       mStateCaught(), mMsgCtrl(), mFootPrint(), mSpotMarkLight() {
+    lumacore::setClass(this, lumacore::kClassId< TrickRabbitFreeRun >);
 }
 
 void TrickRabbitFreeRun::init(const TableIter& rIter) {

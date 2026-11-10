@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 800.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.7f);
@@ -25,6 +26,7 @@ namespace NrvSubmarineSteam {
 };  // namespace NrvSubmarineSteam
 
 SubmarineSteam::SubmarineSteam(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SubmarineSteam >);
 }
 
 void SubmarineSteam::init(const TableIter& rIter) {

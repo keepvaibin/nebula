@@ -8,6 +8,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cCameraResetFrame, 30);
@@ -18,6 +19,7 @@ namespace {
 
 CameraWonderPlanet::CameraWonderPlanet(const char* pName)
     : Camera(pName), mDistMin(500.0f), mDistMax(2000.0f), mAngleX(MR::pi() / 4.0f), mIsRotating(), mRotateFrame() {
+    lumacore::setClass(this, lumacore::kClassId< CameraWonderPlanet >);
 }
 
 void CameraWonderPlanet::reset() {

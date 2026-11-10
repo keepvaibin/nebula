@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCountToZero_f1, "exeCountToZero.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCountToZero_f2, "exeCountToZero.f2", 0.3f);
@@ -34,6 +35,7 @@ namespace {
 };  // namespace
 
 AstroCountDownPlate::AstroCountDownPlate(const char* pName) : LiveActor(pName), mIsLightOn() {
+    lumacore::setClass(this, lumacore::kClassId< AstroCountDownPlate >);
 }
 
 void AstroCountDownPlate::init(const TableIter& rIter) {

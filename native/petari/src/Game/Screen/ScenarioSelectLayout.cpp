@@ -21,6 +21,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreenPos_f1, "calcWorldPositionFromScreenPos.f1", 180.0f);
@@ -89,6 +90,7 @@ ScenarioSelectLayout::ScenarioSelectLayout(EffectSystem* pEffectSystem, const Ca
     : LayoutActor("シナリオ選択レイアウト", true), mSelectedScenarioNo(-1), mIsDecided(), mStar(), mScenarioSky(), mEffectSystem(pEffectSystem),
       mCameraContext(pCameraContext), mNewTextFollowPos(0.0f, 0.0f), mNewGreenTextFollowPos(0.0f, 0.0f), mStarTopFollowPos(0.0f, 0.0f), mBackButton(),
       mMarioPaneFollowPos(0.0f, 0.0f), mMarioPaneName(), mTextFadeState(), mTextScenarioNo(-1) {
+    lumacore::setClass(this, lumacore::kClassId< ScenarioSelectLayout >);
     mEffectHostMtx.identity();
 
     for (u32 i = 0; i < ARRAY_SIZE(mQuestionPane); i++) {

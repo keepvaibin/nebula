@@ -9,6 +9,7 @@
 #include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sScaleMin, 0.0001f);
@@ -25,6 +26,7 @@ namespace {
 PlantLeaf::PlantLeaf(f32 leafCoord, const Vec3f& rPosition, const Vec3f& rGrowDirection, f32 leafSize)
     : LiveActor("葉（伸び植物）"), mSpringCoord(), mSpringSpeed(), mLeafCoord(leafCoord), mLeafSize(leafSize), mSide(1.0f, 0.0f, 0.0f),
       mUp(0.0f, 1.0f, 0.0f), mFront(rGrowDirection) {
+    lumacore::setClass(this, lumacore::kClassId< PlantLeaf >);
     mPosition.set(rPosition);
     MR::makeAxisFrontUp(&mSide, &mUp, mFront, mUp);
     mBaseMtx.setXYZDir(mSide, mUp, mFront);
@@ -33,6 +35,7 @@ PlantLeaf::PlantLeaf(f32 leafCoord, const Vec3f& rPosition, const Vec3f& rGrowDi
 }
 
 PlantLeafDrawInit::PlantLeafDrawInit(const char* pName) : LiveActor(pName), mMaterial(), mShape() {
+    lumacore::setClass(this, lumacore::kClassId< PlantLeafDrawInit >);
     initModelManagerWithAnm("PlantLeaf", 0, false);
     ModelData* pModelData = MR::getModelData(this);
     mMaterial = MR::getMaterial(pModelData, 0);

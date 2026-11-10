@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_addDodgeTargetVelocity_f1, "addDodgeTargetVelocity.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 5.0f);
@@ -69,6 +70,7 @@ namespace {
 DinoPackunBall::DinoPackunBall(const char* pName, DinoPackun* pParent)
     : DinoPackunTailNode(pName, pParent), mWeakSensor(nullptr), mReboundVelocity(0.0f, 0.0f, 0.0f), mIsBlackDrag(false), mIsOnFire(false),
       mDragSoundStep(-1) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunBall >);
     mDragEffectMtx.identity();
 }
 

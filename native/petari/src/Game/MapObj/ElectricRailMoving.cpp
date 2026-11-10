@@ -12,6 +12,7 @@
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 35.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 35.0f);
@@ -59,6 +60,7 @@ namespace NrvElectricRailMoving {
 };  // namespace NrvElectricRailMoving
 
 ElectricRailMovingPoint::ElectricRailMovingPoint(const char* pName) : LiveActor(pName), mHasShadow(true), mIsElectric(true) {
+    lumacore::setClass(this, lumacore::kClassId< ElectricRailMovingPoint >);
 }
 
 void ElectricRailMovingPoint::init(const TableIter& /*rIter*/) {
@@ -86,6 +88,7 @@ void ElectricRailMovingPoint::attackSensor(HitSensor* pSender, HitSensor* pRecei
 ElectricRailMoving::ElectricRailMoving(const char* pName)
     : ElectricRailDrawn(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), mAlpha(0x80), mSensorOffsets(),
       mRailPosNum(), mRailPositions(), mCoord(), mRailWidth(30.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ElectricRailMoving >);
     mTexMtx.identity();
 }
 

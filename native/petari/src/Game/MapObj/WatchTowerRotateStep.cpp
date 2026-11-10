@@ -4,6 +4,7 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initLift_f1, "initLift.f1", 600.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initLift_f2, "initLift.f2", 200.0f);
@@ -27,6 +28,7 @@ namespace NrvWatchTowerRotateStep {
 };  // namespace NrvWatchTowerRotateStep
 
 WatchTowerRotateStep::WatchTowerRotateStep(const char* pName) : LiveActor(pName), mRotateVec(0.0f, 0.0f, 0.0f), mLift() {
+    lumacore::setClass(this, lumacore::kClassId< WatchTowerRotateStep >);
 }
 
 void WatchTowerRotateStep::init(const TableIter& rIter) {

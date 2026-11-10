@@ -4,11 +4,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.7f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.002f);
 
 CameraBlackHole::CameraBlackHole(const char* pName) : Camera(pName), mFovy(1.0f), mRoll(), mWPoint(0.0f, 0.0f, 0.0f), mBasePos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraBlackHole >);
 }
 
 void CameraBlackHole::reset() {

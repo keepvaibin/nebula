@@ -26,6 +26,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -135,6 +136,7 @@ namespace NrvDharmaSamboParts {
 DharmaSambo::DharmaSambo(const char* pName)
     : LiveActor(pName), mStarPointerBindEndNerve(), mInitialPos(0, 0, 0), mHideTimer(::hAppearTime), mPartsCount(::hBodyPartsNum), mHitSensor(),
       mAnimScaleController() {
+    lumacore::setClass(this, lumacore::kClassId< DharmaSambo >);
 }
 
 void DharmaSambo::init(const TableIter& rIter) {
@@ -762,6 +764,7 @@ DharmaSamboParts::DharmaSamboParts(DharmaSambo* pHost, const char* pName, const 
                                    int calcAnimType)
     : ModelObj(pName, pModelName, pMtx, drawBufferType, movementType, calcAnimType, false), mHost(pHost), mOriginalIndex(-1), mIndex(-1),
       mSpinHitController(), mHitDistance(-1.0f), mIsHead() {
+    lumacore::setClass(this, lumacore::kClassId< DharmaSamboParts >);
 }
 
 void DharmaSamboParts::init(const TableIter& /*rIter*/) {

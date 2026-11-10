@@ -8,6 +8,7 @@
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 3.0f);
@@ -50,6 +51,7 @@ namespace NrvCaretaker {
 };  // namespace NrvCaretaker
 
 Caretaker::Caretaker(const char* pName) : NPCActor(pName), mBombTimerLayout(), mTidyTimeLimit(::sTidyTimeLimit) {
+    lumacore::setClass(this, lumacore::kClassId< Caretaker >);
 }
 
 void Caretaker::init(const TableIter& rIter) {

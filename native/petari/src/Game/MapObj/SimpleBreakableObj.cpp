@@ -7,6 +7,7 @@
 #include "Game/MapObj/StageEffectDataTable.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setStateBreak_f1, "setStateBreak.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f1, "appearItem.f1", 15.0f);
@@ -31,6 +32,7 @@ namespace NrvSimpleBreakableObj {
 SimpleBreakableObj::SimpleBreakableObj(const char* pName)
     : SimpleBreakableObjBase(pName), mCameraInfo(), mBreakOffsetFrame(::sDefaultBreakOffsetFrame), mSwitchDeadDelay(-1), mBreakFlags(1),
       mItemType(-1), mItemNum(-1), mKinokoOneUp(), mPlayRiddleSound(), mBreakEnded() {
+    lumacore::setClass(this, lumacore::kClassId< SimpleBreakableObj >);
 }
 
 void SimpleBreakableObj::init(const TableIter& rIter) {

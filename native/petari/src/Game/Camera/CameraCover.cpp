@@ -3,8 +3,10 @@
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CameraCover::CameraCover(const char* pName) : NameObj(pName), mActor(), mCoverFramesLeft(0), mIsCoverRequested(false), mCoverFrames(1) {
+    lumacore::setClass(this, lumacore::kClassId< CameraCover >);
     mActor = new CaptureScreenActor(MR::DrawType_CaptureScreenCamera, "Camera");
     MR::connectToScene(this, MR::MovementType_CameraCover, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_CameraCover);
     MR::joinToNameObjGroup(this, "IgnorePauseNameObj");

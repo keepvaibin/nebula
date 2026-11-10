@@ -20,6 +20,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -86,6 +87,7 @@ namespace NrvJumpSpider {
 };  // namespace NrvJumpSpider
 
 JumpSpider::JumpSpider(const char* pName) : LiveActor(pName), mSpinHitController(), mScaleController(), mFront(0, 0, 1), mJumpPos(0, 0, 0) {
+    lumacore::setClass(this, lumacore::kClassId< JumpSpider >);
 }
 
 void JumpSpider::init(const TableIter& rIter) {

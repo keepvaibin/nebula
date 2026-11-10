@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide0_f1, "exeGuide0.f1", 100.0f);
 
@@ -32,6 +33,7 @@ namespace NrvRunawayTico {
 };  // namespace NrvRunawayTico
 
 RunawayTico::RunawayTico(const char* pName) : Tico(pName), mCameraInfo(), mRole(), mDemoCastID(), mIsStartRunaway(), mIsAllCaught() {
+    lumacore::setClass(this, lumacore::kClassId< RunawayTico >);
 }
 
 void RunawayTico::init(const TableIter& rIter) {

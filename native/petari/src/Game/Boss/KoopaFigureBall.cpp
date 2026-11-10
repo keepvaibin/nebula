@@ -6,6 +6,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 180.0f);
 
@@ -15,6 +16,7 @@ namespace {
 
 KoopaFigureBall::KoopaFigureBall(const char* pName, Koopa* pKoopa, f32 myFloat, const MR::ActorMoveParam* pMoveParam)
     : LiveActor(pName), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mRadius(myFloat), mAngle(), mMoveParam(pMoveParam) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaFigureBall >);
     mBaseMtx.identity();
 }
 

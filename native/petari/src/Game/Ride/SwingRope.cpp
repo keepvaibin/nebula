@@ -22,6 +22,7 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
@@ -98,6 +99,7 @@ SwingRope::SwingRope(const char* pName)
     : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mRopeLength(), mIsStretched(), mStretchTime(), mAccelTime(), mNumPoints(), mPoints(), mRider(),
       mGrabCoord(), mGrabPointNum(), mSlideSpeed(), mSledPoint(), mCameraInfo(), mFootPos(0.0f, 0.0f, 0.0f),
       mShadowDropPos(0.0f, 0.0f, 0.0f), mPrevSoundLvl() {
+    lumacore::setClass(this, lumacore::kClassId< SwingRope >);
     mRideMtx.identity();
 }
 
@@ -742,6 +744,7 @@ void SwingRope::drawFree(TypedDraw& rDraw) const {
 }
 
 SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SwingRopeGroup >);
     mTexture = new GameTexture(MR::loadTexFromArc("SwingRope", "SwingRope.bti"));
 
     mMaterial = makeMaterial();

@@ -1,9 +1,11 @@
 #include "Game/Screen/GalaxyMapCometIcon.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 GalaxyMapCometIcon::GalaxyMapCometIcon(const char* pName, LayoutActor* pParam2, const char* pParam3)
     : LayoutActor(pName, true), mGalaxyName(pName), mHost(pParam2), mPaneName(pParam3) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapCometIcon >);
 }
 
 void GalaxyMapCometIcon::appear() {

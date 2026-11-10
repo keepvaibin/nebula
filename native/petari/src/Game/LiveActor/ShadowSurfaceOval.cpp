@@ -10,6 +10,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 0.9f);
@@ -20,6 +21,7 @@ ShadowSurfaceOval::~ShadowSurfaceOval() {
 }
 
 ShadowSurfaceOval::ShadowSurfaceOval() : ShadowSurfaceDrawer("影描画[水面楕円影]"), mModelData(), mSize(100.0f, 100.0f, 200.0f), mColor(0, 0, 0, 64) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceOval >);
     mModelData = MR::getModelData("ShadowVolumeSphere");
 }
 

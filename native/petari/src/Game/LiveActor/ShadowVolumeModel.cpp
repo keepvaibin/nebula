@@ -1,7 +1,9 @@
 #include "Game/LiveActor/ShadowVolumeModel.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ShadowVolumeModel::ShadowVolumeModel(const char* pName) : ShadowVolumeDrawer(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeModel >);
     mModelData = 0;
 }
 

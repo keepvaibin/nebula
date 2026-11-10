@@ -2,6 +2,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/PlacementId.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ZoneSwitch::ZoneSwitch() : mFlags(nullptr), mWords(0) {
 }
@@ -226,6 +227,7 @@ StageSwitchCtrl* MR::createStageSwitchCtrl(NameObj*, const TableIter& rIter) {
 }
 
 StageSwitchContainer::StageSwitchContainer() : NameObj("ステージスイッチ"), mSwitches(), mGlobalSwitches() {
+    lumacore::setClass(this, lumacore::kClassId< StageSwitchContainer >);
     mGlobalSwitches = new ZoneSwitch();
 }
 

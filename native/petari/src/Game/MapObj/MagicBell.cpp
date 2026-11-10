@@ -2,6 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -37,7 +38,9 @@ namespace {
 
 MagicBell::MagicBell(const char* pName)
     : LiveActor(pName), mBellSwinger(nullptr), mSurface2Mtx(nullptr), mBellRodSwinger(nullptr), mSurface1Mtx(nullptr),
-      mHitMarkPosition(0.0f, 0.0f, 0.0f) {}
+      mHitMarkPosition(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< MagicBell >);
+}
 
 void MagicBell::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);

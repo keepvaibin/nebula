@@ -1,9 +1,11 @@
 #include "Game/Scene/StopSceneController.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 StopSceneController::StopSceneController()
     : NameObj("StopSceneController"), mDelayRequests(nullptr), mDelayRequestNum(0), mDelayRequestMax(0), mFrame() {
+    lumacore::setClass(this, lumacore::kClassId< StopSceneController >);
 }
 
 void StopSceneController::movementDelayRequests() {

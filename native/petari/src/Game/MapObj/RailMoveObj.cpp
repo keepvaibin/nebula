@@ -19,6 +19,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
@@ -34,6 +35,7 @@ namespace NrvRailMoveObj {
 };  // namespace NrvRailMoveObj
 
 RailMoveObj::RailMoveObj(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RailMoveObj >);
     mRailClippingCenter.setZeroVec();
     mWasRailMoving = 0;
 }
@@ -205,6 +207,7 @@ void RailMoveObj::exeMove() {
 }
 
 RailMoveObjPress::RailMoveObjPress(const char* pName) : RailMoveObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RailMoveObjPress >);
 }
 
 void RailMoveObjPress::init(const TableIter& rIter) {
@@ -213,6 +216,7 @@ void RailMoveObjPress::init(const TableIter& rIter) {
 }
 
 RailMoveObjBreakAtEnd::RailMoveObjBreakAtEnd(const char* pName) : RailMoveObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RailMoveObjBreakAtEnd >);
 }
 
 void RailMoveObjBreakAtEnd::doAtEndPoint() {
@@ -243,6 +247,7 @@ void RailMoveObjSwitchShadow::startOnShadow() {
 }
 
 RailDemoMoveObj::RailDemoMoveObj(const char* pName) : RailMoveObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RailDemoMoveObj >);
     mDemoControl = 0;
 }
 
@@ -299,6 +304,7 @@ bool RailDemoMoveObj::endMove() {
 }
 
 RailRotateMoveObj::RailRotateMoveObj(const char* pName) : RailMoveObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RailRotateMoveObj >);
 }
 
 void RailRotateMoveObj::setupInitInfo(const TableIter& /*rIter*/, MapObjActorInitInfo* pInfo) {

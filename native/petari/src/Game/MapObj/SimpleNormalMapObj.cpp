@@ -6,10 +6,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 SimpleNormalMapObj::SimpleNormalMapObj(const char* pName) : NormalMapBase(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SimpleNormalMapObj >);
 }
 
 void SimpleNormalMapObj::init(const TableIter& rIter) {

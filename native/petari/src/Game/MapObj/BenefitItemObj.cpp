@@ -23,6 +23,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f1, "initModelAndEfx.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f2, "initModelAndEfx.f2", 50.0f);
@@ -91,6 +92,7 @@ void ShadowClipActor::endClipped() {
 }
 
 BenefitItemObj::BenefitItemObj(const char* pName, const char* pModelName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BenefitItemObj >);
     mIsDisabled = false;
     mIsItemMoving = false;
     mIsInAir = false;

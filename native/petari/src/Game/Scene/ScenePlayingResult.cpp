@@ -8,6 +8,7 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cCoinNumMin, 0);
@@ -93,4 +94,5 @@ s32 ScenePlayingResult::getStarPieceNum() const {
 }
 
 ScenePlayingResult::ScenePlayingResult() : NameObj("プレイ結果保持"), mCoinNum(0), mPurpleCoinNum(0) {
+    lumacore::setClass(this, lumacore::kClassId< ScenePlayingResult >);
 }

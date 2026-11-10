@@ -4,6 +4,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(BrosButtonNrvAppear, BrosButton, Appear);
@@ -13,6 +14,7 @@ namespace {
 };  // namespace
 
 BrosButton::BrosButton(const char* pName) : LayoutActor(pName, true), mIsSelectedMario(true), mPaneCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< BrosButton >);
 }
 
 void BrosButton::init(const TableIter& /*rIter*/) {

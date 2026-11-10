@@ -48,6 +48,7 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_MarioActor_f1, "MarioActor.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 360.0f);
@@ -165,6 +166,7 @@ namespace {
 bool gIsLuigi;
 
 MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xFFFFFFFF) {
+    lumacore::setClass(this, lumacore::kClassId< MarioActor >);
     initMember();
     mMario = new Mario(this);
     mRushSensorCount = 0;

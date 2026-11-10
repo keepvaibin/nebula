@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_startJumpOut_f1, "startJumpOut.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_movePlayer_f1, "movePlayer.f1", 0.01f);
@@ -44,6 +45,7 @@ namespace NrvAstroDomeDemoStarter {
 };  // namespace NrvAstroDomeDemoStarter
 
 AstroDomeDemoStarter::AstroDomeDemoStarter(const char* pName) : LiveActor(pName), mShootPath(), mPathDrawer(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeDemoStarter >);
     mBaseMtx.identity();
     mPlayerDemoMtx.identity();
 }

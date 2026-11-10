@@ -10,6 +10,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFloat_f1, "exeFloat.f1", 90.0f);
@@ -22,6 +23,7 @@ namespace NrvPalmIsland {
 };  // namespace NrvPalmIsland
 
 PalmIsland::PalmIsland(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PalmIsland >);
     mFloatStartStep = 0;
     mRipplePos.x = 0.0f;
     mRipplePos.y = 0.0f;

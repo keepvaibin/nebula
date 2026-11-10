@@ -22,6 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 430.0f);
@@ -56,6 +57,7 @@ namespace NrvPenguinCoach {
 };  // namespace NrvPenguinCoach
 
 PenguinCoach::PenguinCoach(const char* pName) : NPCActor(pName), mIsRaceComplete(), mTakeOutStar(), mBehavior(-1), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< PenguinCoach >);
 }
 
 void PenguinCoach::init(const TableIter& rIter) {

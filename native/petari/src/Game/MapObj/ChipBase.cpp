@@ -15,6 +15,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f1, "initShadow.f1", 2000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 100.0f);
@@ -41,6 +42,7 @@ namespace NrvChipBase {
 ChipBase::ChipBase(const char* pName, s32 chipType, const char* pChipName)
     : LiveActor(pName), mFlashingCtrl(), mRailMover(), mAirBubble(), mChipName(pChipName), mHost(), mClippingRange(0.0f, 0.0f, 0.0f), mGroupID(-1),
       mChipType(chipType), mIsCalcShadow() {
+    lumacore::setClass(this, lumacore::kClassId< ChipBase >);
 }
 
 void ChipBase::init(const TableIter& rIter) {

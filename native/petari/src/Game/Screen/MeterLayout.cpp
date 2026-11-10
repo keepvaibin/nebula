@@ -14,6 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
@@ -100,6 +101,7 @@ namespace NrvMeterLayout {
 MeterLayout::MeterLayout(const char* pName, const char* pArcName)
     : LayoutActor(pName, true), mCountUpPaneRumbler(), mFollowPos(0.0f, 0.0f), mFollowPosW(0.0f, 0.0f), mMeterMoveStartPos(0.0f, 0.0f), mCount(3), mAlpha(),
       mVisibleRate(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< MeterLayout >);
     MR::connectToSceneLayout(this);
     initLayoutManager(pArcName, 3);
 }

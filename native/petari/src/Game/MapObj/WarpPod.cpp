@@ -25,6 +25,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f1, "initDraw.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f2, "initDraw.f2", 4.0f);
@@ -116,6 +117,7 @@ namespace MR {
 };  // namespace MR
 
 WarpPodMgr::WarpPodMgr(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< WarpPodMgr >);
     mPods = new LiveActorGroup("ワープポッド群", 128);
     mCameraPod = nullptr;
     mNextPairIndex = 0;

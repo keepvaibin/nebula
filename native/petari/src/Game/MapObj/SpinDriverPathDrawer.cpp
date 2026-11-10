@@ -14,6 +14,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 75.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 20.0f);
@@ -52,6 +53,7 @@ namespace {
 
 SpinDriverPathDrawInit::SpinDriverPathDrawInit()
     : NameObj("スピンドライバーレール描画初期化"), mOrangeTexture(), mGreenTexture(), mPinkTexture(), mMaskTexture(), mIsPathAtOpa() {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriverPathDrawInit >);
     MR::registerPreDrawFunction(MR::Functor(this, &SpinDriverPathDrawInit::initDraw), MR::DrawType_SpinDriverPathDrawer);
 
     mOrangeTexture = new GameTexture(MR::loadTexFromArc("SpinDriverPath", "NormalColor.bti"));
@@ -63,6 +65,7 @@ SpinDriverPathDrawInit::SpinDriverPathDrawInit()
 SpinDriverPathDrawer::SpinDriverPathDrawer(SpinDriverShootPath* pShootPath)
     : LiveActor("パス描画"), mShootPath(pShootPath), mPositions(), mSides(), mUps(), mCoords(), mPositionCount(), mCoord(), mMaxCoord(), mColor(-1), mEndCut(),
       mFadeScale(1.0f), mMaskLength(5000.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriverPathDrawer >);
     MR::createSceneObj(SceneObj_SpinDriverPathDrawInit);
 }
 

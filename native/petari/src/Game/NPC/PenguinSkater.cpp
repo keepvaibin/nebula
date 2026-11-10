@@ -20,6 +20,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeProvoke_isNearPlayer_1, "exeProvoke.isNearPlayer.1", 10000.0f);
@@ -61,6 +62,7 @@ namespace NrvPenguinSkater {
 
 PenguinSkater::PenguinSkater(const char* pName)
     : NPCActor(pName), mCameraInfo(0), mCurrentRail(nullptr), mSwitchRail(nullptr), mRail(nullptr), mNumRails(0) {
+    lumacore::setClass(this, lumacore::kClassId< PenguinSkater >);
     mMarioQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
     mMarioPos.zero();
 }

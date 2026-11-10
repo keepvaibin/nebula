@@ -4,6 +4,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(FileSelectNumberNrvAppear, FileSelectNumber, Appear);
@@ -12,6 +13,7 @@ namespace {
 };  // namespace
 
 FileSelectNumber::FileSelectNumber(const char* pName) : LayoutActor(pName, true), mNumber(-1), mSelectAnimCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectNumber >);
 }
 
 void FileSelectNumber::init(const TableIter& /*rIter*/) {

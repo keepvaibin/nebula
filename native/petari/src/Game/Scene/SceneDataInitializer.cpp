@@ -1,8 +1,10 @@
 #include "Game/Scene/SceneDataInitializer.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Scene/StageDataHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SceneDataInitializer::SceneDataInitializer() : NameObj("SceneDataInitializer") {
+    lumacore::setClass(this, lumacore::kClassId< SceneDataInitializer >);
     mDataHolder = nullptr;
 }
 

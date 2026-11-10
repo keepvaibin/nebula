@@ -11,6 +11,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 4096.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 4096.0f);
@@ -64,6 +65,7 @@ namespace {
 };  // namespace
 
 SnowFloorTile::SnowFloorTile(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SnowFloorTile >);
 }
 
 void SnowFloorTile::init(const TableIter& rIter) {

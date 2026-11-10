@@ -3,6 +3,7 @@
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(GalaxyMapSelectButtonHide, GalaxyMapSelectButton, Hide);
@@ -16,6 +17,7 @@ namespace {
 };  // namespace
 
 GalaxyMapSelectButton::GalaxyMapSelectButton() : LayoutActor("選択用ボタン", true), mNextNerve(nullptr), mPaneCtrl(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapSelectButton >);
 }
 
 void GalaxyMapSelectButton::init(const TableIter& /*rIter*/) {

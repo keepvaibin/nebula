@@ -5,12 +5,14 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 
 CameraCharmedTripodBoss::CameraCharmedTripodBoss(const char* pName)
     : Camera(pName), mJointId(-1), mUp(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 1000.0f), mAngleX(), mAngleY() {
+    lumacore::setClass(this, lumacore::kClassId< CameraCharmedTripodBoss >);
 }
 
 void CameraCharmedTripodBoss::reset() {

@@ -11,6 +11,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     BigBubbleHolder* getBigBubbleHolder() {
@@ -20,6 +21,7 @@ namespace {
 
 BigBubbleHolder::BigBubbleHolder(const char* pName)
     : NameObj(pName), mDrawer(new BigBubbleDrawer()), mBubbles(), mDrawBubbles(), mLimitters(), mNumLimitters(), mNumBubbles(), mIsMarioBinded() {
+    lumacore::setClass(this, lumacore::kClassId< BigBubbleHolder >);
     MR::registerPreDrawFunction(MR::Functor(&MR::setUpBigBubbleDraw), MR::DrawType_BigBubble);
     MR::connectToScene(this, MR::MovementType_EnemyDecoration, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_BigBubble);
 }

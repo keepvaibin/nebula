@@ -8,6 +8,7 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcSoundLevel_f1, "calcSoundLevel.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1500.0f);
@@ -74,6 +75,7 @@ CocoNut::CocoNut(const char* pName)
     : LiveActor(pName), mMoveSpeed(), mFallSpeed(), mFront(0.0f, 0.0f, 1.0f), mRadius(55.0f), mIsBindOff(), mOffGroundStep(), mIsKicked(),
       mSpawnPosition(gZeroVec), mIsOnMoveArea(), mAreaVelocity(gZeroVec), mSphericalShadow(), mRespawnWhenOutOfView(), mIsGroupClipping(),
       mContinueRolling() {
+    lumacore::setClass(this, lumacore::kClassId< CocoNut >);
     mRollMtx.identity();
     mSmokeMtx.identity();
     mSpinHitMtx.identity();

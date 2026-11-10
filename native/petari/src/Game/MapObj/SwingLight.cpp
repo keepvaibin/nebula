@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
 
@@ -32,6 +33,7 @@ namespace {
 
 LightCylinder::LightCylinder(const char* pName, MtxPtr pHostMtx, const Color8& rColor)
     : MapObjActor(pName), mHostMtx(pHostMtx), mLightVolume(), mColor() {
+    lumacore::setClass(this, lumacore::kClassId< LightCylinder >);
     if (rColor == 0) {
         NebulaColor8 color = {255, 218, 100, 160};
         mColor.set(color);
@@ -88,6 +90,7 @@ void LightCylinder::connectToScene(const MapObjActorInitInfo&) {
 }
 
 SwingLight::SwingLight(const char* pName) : MapObjActor(pName), mLightCylinder() {
+    lumacore::setClass(this, lumacore::kClassId< SwingLight >);
 }
 
 void SwingLight::init(const TableIter& rIter) {

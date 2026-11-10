@@ -28,6 +28,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBug_f1, "BossStinkBug.f1", 30.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
@@ -72,6 +73,7 @@ namespace {
 BossStinkBug::BossStinkBug(const char* pName)
     : LiveActor(pName), mBodyCollisions(), mBombHolder(), mJointCtrl(), mCameraInfo(), mActionSequencer(), mWingModel(), mBombLauncher(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0.0f, 0.0f, 1.0f),
       mCameraRegisterPos(0.0f, 0.0f, 0.0f), mCameraRegisterId(-1), mLegFriction(0.15f), mLegIKRate(1.0f), mIsPoseUpdated(), mIsLegBound() {
+    lumacore::setClass(this, lumacore::kClassId< BossStinkBug >);
     mFollowMtx.identity();
     mLegGroundCheckers = new GroundChecker*[::sLegNum];
 

@@ -1,8 +1,10 @@
 #include "Game/AreaObj/PlayerSeArea.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 PlayerSeArea::PlayerSeArea(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< PlayerSeArea >);
 }
 
 void PlayerSeArea::init(const TableIter& rIter) {

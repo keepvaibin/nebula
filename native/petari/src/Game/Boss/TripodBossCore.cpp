@@ -14,6 +14,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sHitSensorRadius, 300.0f);
@@ -30,6 +31,7 @@ namespace NrvTripodBossCore {
 };  // namespace NrvTripodBossCore
 
 TripodBossCore::TripodBossCore(const char* pName) : TripodBossFixPartsBase(pName), mBreakModel(), mBloomModel() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossCore >);
 }
 
 void TripodBossCore::init(const TableIter& rIter) {

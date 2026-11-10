@@ -9,10 +9,12 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 LavaGalaxyParts::LavaGalaxyParts(const char* pName) : LiveActor(pName), mLodCtrl(), mMtxSetter() {
+    lumacore::setClass(this, lumacore::kClassId< LavaGalaxyParts >);
 }
 
 void LavaGalaxyParts::initAfterPlacement() {

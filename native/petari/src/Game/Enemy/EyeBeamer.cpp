@@ -26,6 +26,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
@@ -61,6 +62,7 @@ EyeBeamer::EyeBeamer(const char* pName)
     : LiveActor(pName), mRailMover(nullptr), mBeamBloom(nullptr), mBeamMdl(nullptr), mBeamVolumeDrawer(nullptr), mInitQuat(0, 0, 0, 1),
       mPoseQuat(0, 0, 0, 1), mBasePos(0, 0, 0), mGotoStartPos(0, 0, 0), mRailStartPos(0, 0, 0), mClipCenter(0, 0, 0),
       mBeamLength(cBeamModelLength), mWaterSurfaceHeight(-1.0f), mIsInMercatorCube(false) {
+    lumacore::setClass(this, lumacore::kClassId< EyeBeamer >);
     mWaterSurfaceMtx.identity();
     mBeamMtx.identity();
 }

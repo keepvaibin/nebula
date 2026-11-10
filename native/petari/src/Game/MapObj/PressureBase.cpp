@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
@@ -39,6 +40,7 @@ namespace NrvPressureBase {
 };  // namespace NrvPressureBase
 
 PressureMessenger::PressureMessenger(MsgSharedGroup* pGroup, const char* pName) : LiveActor(pName), mSharedGroup(pGroup), mWaitSyncTime() {
+    lumacore::setClass(this, lumacore::kClassId< PressureMessenger >);
 }
 
 void PressureMessenger::init(const TableIter& /*rIter*/) {
@@ -60,6 +62,7 @@ void PressureMessenger::exeSync() {
 PressureBase::PressureBase(const char* pName)
     : LiveActor(pName), mJointController(), mFront(0.0f, 0.0f, 1.0f), mRelaxAngle(), mBaseAngle(), mWaitTime(::sDefaultShotInterval),
       mBallSpeed(::sDefaultFirstSpeed), mShotType(), mIsShortShot(), mMessenger(), mGroup() {
+    lumacore::setClass(this, lumacore::kClassId< PressureBase >);
 }
 
 void PressureBase::init(const TableIter& rIter) {

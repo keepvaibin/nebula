@@ -15,6 +15,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 0.5f);
@@ -32,6 +33,7 @@ namespace {
 MoviePlayerSimple::MoviePlayerSimple()
     : LayoutActor("ムービープレイヤー", true), ArenaOwned(), mMovieName(""), mStream(nullptr), mLoop(false),
       mInputCheckedBefore(false) {
+    lumacore::setClass(this, lumacore::kClassId< MoviePlayerSimple >);
 }
 
 MoviePlayerSimple::~MoviePlayerSimple() {

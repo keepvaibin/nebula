@@ -29,6 +29,7 @@
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f1, "initPoints.f1", 360.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f1, "drawDirect.f1", 16384.0f);
@@ -430,6 +431,7 @@ WaterRoad::WaterRoad(const char* pName)
     : LiveActor(pName), mModelInfoHigh(), mModelInfoLow(), mRadius(::sDefaultRadius), mAlpha(0xFF), mBaseUp(0.0f, 1.0f, 0.0f), mRider(),
       mTexUV0(0.0f, 0.0f), mTexUV1(0.0f, 0.0f), mTexUV2(0.0f, 0.0f), mTexture(), mIndirect(), mEnvMap(), mClippingCenter(0.0f, 0.0f, 0.0f),
       mCamRailNearestPos(0.0f, 0.0f, 0.0f), mSoundObj(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< WaterRoad >);
     mBaseMtx.identity();
     mRiderMtx.identity();
     mBoundingBox.zero();

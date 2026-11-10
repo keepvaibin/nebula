@@ -9,6 +9,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // NameObjExecuteInfo keeps each list type in an s8.
 static_assert(MR::MovementType_ShadowControllerHolder <= 127 && MR::CalcAnimType_AnimParticleIgnorePause <= 127 && MR::DrawType_CameraCover <= 127 &&
@@ -428,4 +429,5 @@ namespace MR {
 NameObjExecuteHolder::NameObjExecuteHolder(int size)
     : NameObj("connectToScene情報保持"), mExecuteArray(new NameObjExecuteInfo[size]), mExecuteArrayMaxSize(size), mExecuteArraySize(),
       mConnectMovement(), mDisconnectMovement(), mConnectDraw(), mDisconnectDraw() {
+    lumacore::setClass(this, lumacore::kClassId< NameObjExecuteHolder >);
 }

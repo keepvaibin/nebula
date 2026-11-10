@@ -28,6 +28,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -145,6 +146,7 @@ namespace NrvStringSpider {
 StringSpider::StringSpider(const char* pName)
     : LiveActor(pName), mSpinHitController(nullptr), mScaleController(nullptr), mStampController(nullptr), mString(nullptr), mFixedPos(nullptr),
       mPoseQuat(0, 0, 0, 1), mStringLengthMax(300.0f), mStringLength(300.0f), mIsPointerPulled(false), mPointerStep(0), mSwingFront(nullptr), mSwingSide(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< StringSpider >);
 }
 
 // A spider on a fixed swing line (Obj_arg1 == 2) attacks sooner.
@@ -957,6 +959,7 @@ void StringSpider::startSwingLevelSound() {
 }
 
 StringSpiderString::StringSpiderString(const char* pName) : LiveActor(pName), mRotateQuat(0, 0, 0, 1), mRootPos(0, 0, 0) {
+    lumacore::setClass(this, lumacore::kClassId< StringSpiderString >);
     initModelManagerWithAnm("StringSpiderString", nullptr, false);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_Enemy, MR::DrawType_None);
     MR::invalidateClipping(this);

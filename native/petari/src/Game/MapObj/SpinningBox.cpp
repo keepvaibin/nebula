@@ -17,6 +17,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
@@ -101,6 +102,7 @@ namespace NrvSpinningBox {
 SpinningBox::SpinningBox(const char* pName)
     : LiveActor(pName), mRotate(0.0f, 0.0f, 0.0f, 1.0f), mRotateSpeed(0.0f), mSlideSpeed(0.0f), mSlideDir(1.0f, 0.0f, 0.0f), mIsOnGround(false),
       mIsIceBox(false), mSpinAngle(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SpinningBox >);
 }
 
 void SpinningBox::init(const TableIter& rIter) {

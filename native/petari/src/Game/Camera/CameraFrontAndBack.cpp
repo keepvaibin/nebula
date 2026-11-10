@@ -5,6 +5,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -18,6 +19,7 @@ namespace {
 
 CameraFrontAndBack::CameraFrontAndBack(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mRotateRate(), mMaxDipAngle(), mDist(1200.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraFrontAndBack >);
 }
 
 CameraTargetObj* CameraFrontAndBack::calc() {

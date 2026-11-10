@@ -10,8 +10,10 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 RestartCube::RestartCube(int formType, const char* pName) : AreaObj(formType, pName), mIdInfo(), mBgmIndex(-1), mBgmStateIndex(-1), mIsBgmChanged() {
+    lumacore::setClass(this, lumacore::kClassId< RestartCube >);
 }
 
 void RestartCube::init(const TableIter& rIter) {

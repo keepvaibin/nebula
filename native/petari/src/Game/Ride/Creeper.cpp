@@ -24,6 +24,7 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -138,6 +139,7 @@ Creeper::Creeper(const char* pName)
     : LiveActor(pName), mNumPoints(), mPoints(), mRider(), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 1.0f, 0.0f), mHangSpeed(), mCoord(),
       mBendRate(::sDefaultBendRate), mBendRateBee(-1.0f), mBendDirection(0.0f, 0.0f, 0.0f), mJumpSpeedFront(::sDefaultJumpSpeedFront),
       mJumpSpeedUp(::sDefaultJumpSpeedUp), mCameraInfo(), mClippingCenter(0.0f, 0.0f, 0.0f), mTexture(), mFlowerModel(), mLeafModel() {
+    lumacore::setClass(this, lumacore::kClassId< Creeper >);
     mTopMtx.identity();
 }
 

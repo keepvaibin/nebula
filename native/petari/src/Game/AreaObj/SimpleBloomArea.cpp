@@ -1,8 +1,10 @@
 #include "Game/AreaObj/SimpleBloomArea.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SimpleBloomArea::SimpleBloomArea(int formType, const char* pName)
     : ImageEffectArea(IMAGE_EFFECT_TYPE_SIMPLE_BLOOM, formType, pName), mMaskFilterColor(), mThreshold(128), mIntensity(76) {
+    lumacore::setClass(this, lumacore::kClassId< SimpleBloomArea >);
 }
 
 void SimpleBloomArea::init(const TableIter& rIter) {

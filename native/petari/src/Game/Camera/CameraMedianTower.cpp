@@ -5,6 +5,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -21,6 +22,7 @@ namespace {
 CameraMedianTower::CameraMedianTower(const char* pName)
     : Camera(pName), mString(), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleA(MR::toRadian(30.0f)), mDist(1200.0f), mMaxFocusDist(),
       mPartialRate(::sPartialRate), mBaseFront(0.0f, 0.0f, 1.0f), mIsResetting(true), mInterpolateTime(::sInterpolate) {
+    lumacore::setClass(this, lumacore::kClassId< CameraMedianTower >);
 }
 
 void CameraMedianTower::reset() {

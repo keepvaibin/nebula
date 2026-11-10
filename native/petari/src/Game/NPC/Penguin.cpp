@@ -17,6 +17,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_RemovableTurtle_f1, "RemovableTurtle.f1", 5.85f);
 NEBULA_TUNABLE_NAMED(f32, cNum_RemovableTurtle_f2, "RemovableTurtle.f2", 68.0f);
@@ -93,6 +94,7 @@ bool RemovableTurtle::tryAttach() {
 }
 
 Penguin::Penguin(const char* pName) : NPCActor(pName), mBehavior(Behavior_Default), mStepToDive() {
+    lumacore::setClass(this, lumacore::kClassId< Penguin >);
 }
 
 void Penguin::init(const TableIter& rIter) {

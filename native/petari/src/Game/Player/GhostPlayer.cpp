@@ -40,6 +40,7 @@ static_assert(sizeof(GhostFrame) == 32, "GhostFrame is cook/ghost.rs's 32-byte f
 #include <cstdio>
 #include <nebula_format.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -150,6 +151,7 @@ namespace NrvGhostPlayer {
 };  // namespace NrvGhostPlayer
 
 GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), mCameraInfo(), mXanimePlayer() {
+    lumacore::setClass(this, lumacore::kClassId< GhostPlayer >);
     mTargetRotation.zero();
     mKilledByStar = false;
     mPowerStarTarget = nullptr;

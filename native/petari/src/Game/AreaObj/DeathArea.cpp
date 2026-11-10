@@ -1,8 +1,10 @@
 #include "Game/AreaObj/DeathArea.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DeathArea::DeathArea(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< DeathArea >);
 }
 
 void DeathArea::init(const TableIter& rIter) {

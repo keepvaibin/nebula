@@ -11,16 +11,19 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const Vec3f sZeroVec(0.0f, 0.0f, 0.0f);
 };  // namespace
 
 CameraTargetObj::CameraTargetObj(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CameraTargetObj >);
 }
 
 CameraTargetActor::CameraTargetActor(const char* pName)
     : CameraTargetObj(pName), mActor(), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mSide(0.0f, 0.0f, 1.0f), mCameraArea() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTargetActor >);
 }
 
 void CameraTargetActor::movement() {
@@ -87,6 +90,7 @@ Triangle* CameraTargetActor::getGroundTriangle() const {
 CameraTargetPlayer::CameraTargetPlayer(const char* pName)
     : CameraTargetObj(pName), mGravity(0.0f, -1.0f, 0.0f), mGroundPos(0.0f, 0.0f, 0.0f), mCameraArea(), mGroundTriangle(), mPlayerMovementTimer(),
       mIsPlayerMoving(true) {
+    lumacore::setClass(this, lumacore::kClassId< CameraTargetPlayer >);
 }
 
 void CameraTargetPlayer::movement() {
@@ -212,6 +216,7 @@ GravityInfo* CameraTargetPlayer::getGravityInfo() const {
 }
 
 CameraTargetDemoActor::CameraTargetDemoActor(MtxPtr pMtx, const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CameraTargetDemoActor >);
     mMtx.set(pMtx);
 }
 

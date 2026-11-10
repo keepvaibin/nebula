@@ -6,6 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.7f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.001f);
@@ -33,6 +34,7 @@ namespace NrvLavaSteam {
 };  // namespace NrvLavaSteam
 
 LavaSteam::LavaSteam(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f), mEffectScale(1.0f, 1.0f, 1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< LavaSteam >);
 }
 
 void LavaSteam::init(const TableIter& rIter) {

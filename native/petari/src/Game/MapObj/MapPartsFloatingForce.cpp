@@ -9,6 +9,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initForSpringMotion_f1, "initForSpringMotion.f1", 0.001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initForSpringMotion_f2, "initForSpringMotion.f2", 0.001f);
@@ -49,6 +50,7 @@ void SpringStep::setSpringBaseValue(f32 val) {
 MapPartsFloatingForce::MapPartsFloatingForce(LiveActor* pActor)
     : MapPartsFunction(pActor, "浮力"), mSpringStep(), mObjectName(), mMaxDepth(), mRotateAngle(), mRotateSpeed(), mRotateAccelType(), mBasePos(gZeroVec),
       mUpDirection(0.0f, 1.0f, 0.0f), mSinkDepth(), mSinkSpeed(), mVelocity(0.0f, 0.0f, 0.0f), mRideSinkSpeed() {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsFloatingForce >);
 }
 
 void MapPartsFloatingForce::init(const TableIter& rIter) {

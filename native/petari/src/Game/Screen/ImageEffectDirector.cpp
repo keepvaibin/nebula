@@ -13,6 +13,7 @@
 #include "Game/Screen/ImageEffectState.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setBloomSimpleParams_f1, "setBloomSimpleParams.f1", 255.0f);
 
@@ -26,6 +27,7 @@ ImageEffectDirector::ImageEffectDirector(const char* pName)
       mStateNull(new ImageEffectStateImpl::StateNull(this)), mStateBloomNormal(new ImageEffectStateImpl::StateBloomNormal(this)),
       mStateBloomSimple(new ImageEffectStateImpl::StateBloomSimple(this)), mStateScreenBlur(new ImageEffectStateImpl::StateScreenBlur(this)),
       mStateDepthOfField(new ImageEffectStateImpl::StateDepthOfField(this)), mState(mStateNull), mCurrentEffect() {
+    lumacore::setClass(this, lumacore::kClassId< ImageEffectDirector >);
     MR::connectToSceneImageEffectMovement(this);
 }
 

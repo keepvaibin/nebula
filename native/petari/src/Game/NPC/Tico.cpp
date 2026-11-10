@@ -21,6 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f1, "initBase.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f2, "initBase.f2", 1000.0f);
@@ -73,6 +74,7 @@ const f32 Tico::sFloatSeMinVolume = 0.2f;
 
 Tico::Tico(const char* pName)
     : NPCActor(pName), mBehavior(), mPrevPos(0.0f, 0.0f, 0.0f), mFloatOffset(), mDemoGetPower(), mTicoTalkCtrl(), mLightJointMtx(), mLightColor(255, 255, 255, 255), mMetaNerve(), mDemoStarter(this) {
+    lumacore::setClass(this, lumacore::kClassId< Tico >);
 }
 
 void Tico::initBase(s32 color) {

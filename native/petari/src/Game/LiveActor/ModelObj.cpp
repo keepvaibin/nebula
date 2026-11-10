@@ -5,9 +5,11 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, int movementType, int calcAnimType, bool deferMaterials)
     : LiveActor(pName), mMtx(pMtx) {
+    lumacore::setClass(this, lumacore::kClassId< ModelObj >);
     if (drawBufferType < MR::DrawBufferType_None) {
         drawBufferType = MR::DrawBufferType_MapObj;
     }
@@ -67,6 +69,7 @@ void ModelObjNpc::calcAndSetBaseMtx() {
 }
 
 ModelObjNpc::ModelObjNpc(const char* pName, const char* pModelName, MtxPtr pMtx) : LiveActor(pName), mMtx(pMtx), mLodCtrl(), mJointCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< ModelObjNpc >);
     if (mMtx != nullptr) {
         mPosition.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);
     }

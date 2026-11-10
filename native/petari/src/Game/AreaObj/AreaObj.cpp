@@ -6,10 +6,12 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 AreaObj::AreaObj(int formType, const char* pName)
     : NameObj(pName), mFormType(formType), mIsValid(true), mIsFollowValid(true), mIsAwake(true), mObjArg0(-1), mObjArg1(-1), mObjArg2(-1), mObjArg3(-1),
       mObjArg4(-1), mObjArg5(-1), mObjArg6(-1), mObjArg7(-1), mSwitchCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< AreaObj >);
     switch (formType) {
     case AreaForm::Type_Cube1:
         mForm = new AreaFormCube(0);
@@ -95,6 +97,7 @@ Pos3f* AreaObj::getFollowMtx() const {
 }
 
 AreaObjMgr::AreaObjMgr(s32 firstCapacity, const char* pName) : NameObj(pName), mArray(), mFirstCapacity(firstCapacity) {
+    lumacore::setClass(this, lumacore::kClassId< AreaObjMgr >);
 }
 
 void AreaObjMgr::entry(AreaObj* pAreaObj) {

@@ -4,6 +4,7 @@
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 300.0f);
@@ -13,6 +14,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f5, "calcIdealPose.f5", 2.0f);
 
 CameraMtxRegParallel::CameraMtxRegParallel(const char* pName)
     : Camera(pName), mString(), mAngleX(), mAngleY(), mDist(1000.0f), mWPoint(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraMtxRegParallel >);
 }
 
 void CameraMtxRegParallel::reset() {

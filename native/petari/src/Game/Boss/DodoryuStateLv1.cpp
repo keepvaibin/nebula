@@ -14,6 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_startPop_f1, "startPop.f1", 30.0f);
@@ -56,6 +57,7 @@ namespace {
 DodoryuStateLv1::DodoryuStateLv1(Dodoryu* pHost, const char* pName)
     : DodoryuStateBase(pHost, pName), mHideStep(), mAppearStep(), mIsSpinCountered(), mIsValidPop(), mPopAccel(), mPopSpeed(), mRailSpeed(::sSpeed),
       mRailSpeedMax(::sSpeed) {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuStateLv1 >);
     initWithoutIter();
 }
 

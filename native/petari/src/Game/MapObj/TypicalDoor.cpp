@@ -11,6 +11,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const s32 sCollisionChangeTimeOpen = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -23,6 +24,7 @@ namespace NrvTypicalDoor {
 };  // namespace NrvTypicalDoor
 
 TypicalDoor::TypicalDoor(const char* pName) : MapObjActor(pName), mCloseCollision(), mOpenCollision() {
+    lumacore::setClass(this, lumacore::kClassId< TypicalDoor >);
 }
 
 void TypicalDoor::init(const TableIter& rIter) {
@@ -128,6 +130,7 @@ void TypicalDoorOpen::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
 }
 
 DarknessRoomDoor::DarknessRoomDoor(const char* pName) : TypicalDoor(pName), mIsNormalDraw() {
+    lumacore::setClass(this, lumacore::kClassId< DarknessRoomDoor >);
 }
 
 void DarknessRoomDoor::init(const TableIter& rIter) {

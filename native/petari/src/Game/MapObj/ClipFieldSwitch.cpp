@@ -3,11 +3,13 @@
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 
 ClipFieldSwitch::ClipFieldSwitch(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ClipFieldSwitch >);
 }
 
 void ClipFieldSwitch::control() {

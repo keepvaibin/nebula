@@ -6,6 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -14,6 +15,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 30.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 50.0f);
 
 KoopaBattleMapPlate::KoopaBattleMapPlate(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaBattleMapPlate >);
     mBaseMtx.identity();
 }
 

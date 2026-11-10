@@ -9,6 +9,7 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PostureHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvMapPartsAppearController {
     NEW_NERVE(HostTypeWait, MapPartsAppearController, Wait);
@@ -16,6 +17,7 @@ namespace NrvMapPartsAppearController {
 };  // namespace NrvMapPartsAppearController
 
 MapPartsAppearController::MapPartsAppearController(LiveActor* pActor) : MapPartsFunction(pActor, "出現制御") {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsAppearController >);
     mSignMotionType = 0;
     mPostureHolder = nullptr;
     mIsAppeared = 0;

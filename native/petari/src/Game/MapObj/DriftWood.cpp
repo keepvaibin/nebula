@@ -15,6 +15,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
@@ -34,6 +35,7 @@ namespace {
 
 DriftWood::DriftWood(const char* pName)
     : MapObjActor(pName), mRailDirection(0.0f, 0.0f, 1.0f), mRailClipping(0.0f, 0.0f, 0.0f), mVibrateOffset(0.0f, 0.0f, 0.0f), mWaveSoundTimer() {
+    lumacore::setClass(this, lumacore::kClassId< DriftWood >);
 }
 
 namespace NrvDriftWood {

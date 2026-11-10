@@ -28,6 +28,7 @@
 #include "Game/Util/VectorUtil.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f1, "KuriboParam.f1", 1.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f2, "KuriboParam.f2", 0.99f);
@@ -127,6 +128,7 @@ namespace NrvKuribo {
 Kuribo::Kuribo(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mItemGenerator(nullptr), mStateWander(nullptr), mStateFindPlayer(nullptr),
       mBindStarPointer(nullptr), mStateStagger(nullptr), mStateChase(nullptr), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mIsNoGravitySupport(false), mHasItem(true) {
+    lumacore::setClass(this, lumacore::kClassId< Kuribo >);
 }
 
 void Kuribo::init(const TableIter& rIter) {

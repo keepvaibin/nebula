@@ -6,10 +6,12 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcGunPointFromCannon_f1, "calcGunPointFromCannon.f1", 200.0f);
 
 FirePressure::FirePressure(const char* pName) : PressureBase(pName), mIsDisableCollision(false) {
+    lumacore::setClass(this, lumacore::kClassId< FirePressure >);
 }
 
 void FirePressure::init(const TableIter& rIter) {

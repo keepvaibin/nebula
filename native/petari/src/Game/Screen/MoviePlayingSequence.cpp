@@ -21,6 +21,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exePlay_1, "exePlay.1", 3);
@@ -235,6 +236,7 @@ namespace {
 };  // namespace
 
 MoviePlayingSequence::MoviePlayingSequence(const char* pName, s32 movieType) : LayoutActor(pName, true), mInfo(&::sInfoTable[movieType]), mSubtitles() {
+    lumacore::setClass(this, lumacore::kClassId< MoviePlayingSequence >);
     mPadRumbler = new DemoPadRumbler(getMovieName(MovieType(movieType)));
 
     MR::createSceneObj(SceneObj_MoviePlayerSimple);
@@ -464,6 +466,7 @@ namespace {
 };  // namespace
 
 MoviePlayingSequenceHolder::MoviePlayingSequenceHolder(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MoviePlayingSequenceHolder >);
     s32 diff;
 
     mSequence.init(7);

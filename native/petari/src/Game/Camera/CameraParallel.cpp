@@ -5,6 +5,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f2, "setParamFromChunk.f2", 180.0f);
@@ -20,6 +21,7 @@ namespace {
 
 CameraParallel::CameraParallel(const char* pName)
     : Camera(pName), mAngleX(), mAngleY(), mDist(::sDistance), mIsEnableValid(), mIsRounding(), mRoundTarget(), mRoundAngle() {
+    lumacore::setClass(this, lumacore::kClassId< CameraParallel >);
     createVPanObj();
 }
 

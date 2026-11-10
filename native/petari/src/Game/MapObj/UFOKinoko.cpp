@@ -3,6 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvUFOKinoko {
     NEW_NERVE(HostTypeWait, UFOKinoko, Wait)
@@ -11,6 +12,7 @@ namespace NrvUFOKinoko {
 };  // namespace NrvUFOKinoko
 
 UFOKinoko::UFOKinoko(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< UFOKinoko >);
 }
 
 void UFOKinoko::init(const TableIter& rIter) {

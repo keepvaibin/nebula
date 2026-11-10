@@ -8,6 +8,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
@@ -73,6 +74,7 @@ namespace {
 
 SamboHead::SamboHead(const char* pName)
     : LiveActor(pName), mSpinCtrl(), mScaleController(), mBindStarPointer(), mFront(0, 0, 1), mInitPos(0, 0, 0), mIsPursueAlways(false) {
+    lumacore::setClass(this, lumacore::kClassId< SamboHead >);
 }
 
 void SamboHead::init(const TableIter& rIter) {

@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
@@ -52,6 +53,7 @@ LavaProminence::LavaProminence(const char* pName)
     : LiveActor(pName), mWaitTime(::sDefaultTimeWait), mMoveSpeed(::sDefaultMoveSpeed), mMoveRailCoord(), mMoveRailEndOffset(),
       mRailStartDir(0, 0, 0), mRailEndDir(0, 0, 0), mRailStartPos(0.0f), mRailEndPos(0.0f), mClipCenter(0, 0, 0), mBloomModel(),
       mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mRailDir(0, 0, 1), mEmitDropEffect(true) {
+    lumacore::setClass(this, lumacore::kClassId< LavaProminence >);
     mEffectStartMtx.identity();
     mEffectEndMtx.identity();
     mBloomModelMtx.identity();

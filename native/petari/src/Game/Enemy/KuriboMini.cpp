@@ -27,6 +27,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_KuriboMiniParam_f1, "KuriboMiniParam.f1", 1.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_KuriboMiniParam_f2, "KuriboMiniParam.f2", 0.99f);
@@ -112,6 +113,7 @@ namespace NrvKuriboMini {
 };  // namespace NrvKuriboMini
 
 KuriboMini::KuriboMini(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KuriboMini >);
     mScaleController = nullptr;
     mItemGenerator = nullptr;
     mStateWander = nullptr;

@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 77.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 77.0f);
@@ -29,6 +30,7 @@ namespace NrvFlameGun {
 };  // namespace NrvFlameGun
 
 FlameGun::FlameGun(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FlameGun >);
     mState = -1;
 }
 

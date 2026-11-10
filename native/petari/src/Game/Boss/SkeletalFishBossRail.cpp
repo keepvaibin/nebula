@@ -3,8 +3,10 @@
 #include "Game/Boss/SkeletalFishBossRailHolder.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SkeletalFishBossRail::SkeletalFishBossRail(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossRail >);
     mRailId = -1;
     mFillUpFlags = nullptr;
     mNamePosIDs = nullptr;

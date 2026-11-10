@@ -10,6 +10,7 @@
 #include "Game/Render/Clip.hpp"
 #include <cstdio>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(Manual2PNrvAppear, Manual2P, Appear);
@@ -37,6 +38,7 @@ namespace {
 
 Manual2P::Manual2P(const char* pName)
     : LayoutActor(pName, true), mPageIndex(), mPageNum(), mLeftPaneCtrl(), mRightPaneCtrl(), mCanScrollLeft(true), mCanScrollRight(true), mBackButton() {
+    lumacore::setClass(this, lumacore::kClassId< Manual2P >);
 }
 
 void Manual2P::init(const TableIter& /*rIter*/) {

@@ -4,6 +4,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_floaterIsMoving_f1, "floaterIsMoving.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 580.0f);
@@ -26,6 +27,7 @@ namespace NrvPhantomShipBoxFloater {
 
 PhantomShipBoxFloater::PhantomShipBoxFloater(const char* pName)
     : LiveActor(pName), mObjectName(), mFloaterOffset(gZeroVec), mRippleSeCounter(), mSinkDepthUnder(0.0f), mSinkDepthOver(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< PhantomShipBoxFloater >);
 }
 
 inline bool floaterIsMoving(FloaterFloatingForceTypeSpring* force) {

@@ -6,6 +6,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -109,6 +110,7 @@ namespace NrvGesso {
 Gesso::Gesso(const char* pName)
     : LiveActor(pName), mScaleController(), mStateBindStarPointer(), mInitPos(0.0f, 0.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 1.0f, 0.0f),
       mUpTarget(0.0f, 1.0f, 0.0f), mClipStep(), mPushVelocity(0.0f, 0.0f, 0.0f), mIsMarioLeft(), mIsHighSpeedMode() {
+    lumacore::setClass(this, lumacore::kClassId< Gesso >);
 }
 
 void Gesso::init(const TableIter& rIter) {

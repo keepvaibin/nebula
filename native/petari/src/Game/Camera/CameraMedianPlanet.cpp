@@ -8,6 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcWatchPos_f1, "calcWatchPos.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcWatchPos_f2, "calcWatchPos.f2", 15.0f);
@@ -20,6 +21,7 @@ namespace {
 CameraMedianPlanet::CameraMedianPlanet(const char* pName)
     : Camera(pName), mString(), mDistMin(1200.0f), mDistMax(3000.0f), mAngleMin(MR::pi() / 4.0f), mPeepAngle(), mDist(2000.0f),
       mAngleConstrainRate(::sAngleConstrainRate), mPartialRate(::sPartialRate) {
+    lumacore::setClass(this, lumacore::kClassId< CameraMedianPlanet >);
 }
 
 void CameraMedianPlanet::reset() {

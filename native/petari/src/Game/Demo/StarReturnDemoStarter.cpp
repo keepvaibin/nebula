@@ -23,6 +23,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f1, "exeFall.f1", 3000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f2, "exeFall.f2", 1.8f);
@@ -63,6 +64,7 @@ namespace NrvStarReturnDemoStarter {
 
 StarReturnDemoStarter::StarReturnDemoStarter(const char* pName)
     : LiveActor(pName), mReturnDemoRailMove(), mStageResultInformer(), mPosition(gZeroVec), mPowerStar(), mLuma(), mHair(), mFrame() {
+    lumacore::setClass(this, lumacore::kClassId< StarReturnDemoStarter >);
     mTransform.identity();
 }
 

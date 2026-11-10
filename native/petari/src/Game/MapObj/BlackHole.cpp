@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
@@ -33,6 +34,7 @@ namespace NrvBlackHole {
 };  // namespace NrvBlackHole
 
 BlackHole::BlackHole(const char* pName) : LiveActor(pName), mBlackHoleModel(), mModelScale(1.0f), mRadius(500.0f), mCubeBox(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< BlackHole >);
     mCubeMtx.identity();
     mSuctionEffectMtx.identity();
 }

@@ -7,6 +7,7 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -50,6 +51,7 @@ CrystalCage::CrystalCage(const char* pName)
     : LiveActor(pName), mCrystalCageType(CrystalCageType_Small), mBreakObj(nullptr), mHitPoint(1), mHitInvalidTime(0), mRumbleCalc(nullptr),
       mRumbleDir(0.0f, 0.0f, 1.0f), mBasePos(gZeroVec), mSensorPos(gZeroVec), mDisplayModel(nullptr), mGroundPos(gZeroVec), mBreakOnlyIfShown(false),
       mPowerStarId(-1), mVanishOnBreak(false), mPlayRiddleSFX(false), mHasBinding(false), mBinderOffset(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< CrystalCage >);
     mBreakMtx.identity();
 }
 

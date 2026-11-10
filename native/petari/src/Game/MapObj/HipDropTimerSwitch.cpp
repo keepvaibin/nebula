@@ -21,6 +21,7 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_HipDropTimerSwitch_f1, "HipDropTimerSwitch.f1", 0.2f);
 NEBULA_TUNABLE_NAMED(f32, cNum_HipDropTimerSwitch_f2, "HipDropTimerSwitch.f2", 0.9f);
@@ -42,6 +43,7 @@ namespace NrvHipDropSwitch {
 HipDropTimerSwitch::HipDropTimerSwitch(const char* pName)
     : LiveActor(pName), mMapObjConnector(nullptr), mCollisionParts(nullptr), mTimerMax(300), mTimerSFXType(0), mWasLightPressed(false),
       mIsLightPressed(false) {
+    lumacore::setClass(this, lumacore::kClassId< HipDropTimerSwitch >);
     mSpring = new SpringValue;
     mMapObjConnector = new MapObjConnector(this);
     mSpring->setParam(0.0f, 0.0f, cNum_HipDropTimerSwitch_f1, cNum_HipDropTimerSwitch_f2, 0.0f);

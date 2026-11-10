@@ -10,6 +10,7 @@
 #include "Game/MapObj/SpinDriverUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sCanBindTime = NebulaFrameClock::stepsOfMilliseconds(1500);
@@ -74,6 +75,7 @@ SuperSpinDriver::SuperSpinDriver(const char* pName, s32 color)
       mSpaceFlyStartFrame(::sDefaultSpaceFlyStartFrame), mSpaceFlyEndFrame(::sDefaultSpaceFlyEndFrame), mDrawPathRangeIdx(-1),
       mPlayerLandRotation(), mAlreadyDoneFlag(), mAlreadyDoneFlagIdx(-1), mColor(color), mIsPlayerAway(true), mCoolDown(), mIsCoolingDown(),
       mIsPullPlayer(true), mIsDisableJingle() {
+    lumacore::setClass(this, lumacore::kClassId< SuperSpinDriver >);
 }
 
 void SuperSpinDriver::init(const TableIter& rIter) {

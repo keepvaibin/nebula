@@ -3,6 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
@@ -22,6 +23,7 @@ namespace NrvTreasureSpot {
 };  // namespace NrvTreasureSpot
 
 TreasureSpot::TreasureSpot(const char* pName) : MapObjActor(pName), mIsCoinFlower() {
+    lumacore::setClass(this, lumacore::kClassId< TreasureSpot >);
 }
 
 void TreasureSpot::init(const TableIter& rIter) {

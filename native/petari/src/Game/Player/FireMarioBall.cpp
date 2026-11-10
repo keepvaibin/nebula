@@ -12,6 +12,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 25.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
@@ -33,6 +34,7 @@ FireMarioBall::~FireMarioBall() {
 }
 
 FireMarioBall::FireMarioBall(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FireMarioBall >);
 }
 
 void FireMarioBall::init(const TableIter& rIter) {

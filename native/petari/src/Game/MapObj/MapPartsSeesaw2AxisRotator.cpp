@@ -8,6 +8,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_rotate_f1, "rotate.f1", 0.001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_restoreMove_f1, "restoreMove.f1", 0.0001f);
@@ -28,6 +29,7 @@ namespace NrvMapPartsSeesaw2AxisRotator {
 MapPartsSeesaw2AxisRotator::MapPartsSeesaw2AxisRotator(LiveActor* pHost, const char* pMoveSound, f32 moveSoundSpeed)
     : MapPartsRotatorBase(pHost, "シーソー(2軸)"), mRotateAngle(), mInertiaConst(::sInertiaConstDefault), mRestoreForce(::sRestoreForceDefault),
       mUp(0.0f, 1.0f, 0.0f), mHipDrop(), mRotateSpeed(), mMoveSound(pMoveSound), mMoveSoundSpeed(moveSoundSpeed) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsSeesaw2AxisRotator >);
     mRotateMtx.identity();
     mBaseMtx.identity();
     mBaseMtxInv.identity();

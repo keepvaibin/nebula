@@ -5,8 +5,10 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SwitchWatcherHolder::SwitchWatcherHolder() : NameObj("SwitchWatcherHolder"), mSwitchWatcher() {
+    lumacore::setClass(this, lumacore::kClassId< SwitchWatcherHolder >);
     MR::connectToScene(this, MR::MovementType_SwitchWatcherHolder, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 

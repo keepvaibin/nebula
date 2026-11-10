@@ -8,6 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceAppear_f1, "isDistanceAppear.f1", 20.0f);
@@ -41,6 +42,7 @@ namespace {
 };  // namespace
 
 Halo::Halo(const char* pName) : MapObjActor(pName), mDistance(70.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Halo >);
 }
 
 void Halo::init(const TableIter& rIter) {
@@ -155,6 +157,7 @@ void Halo::exeDisappear() {
 }
 
 PowerStarHalo::PowerStarHalo(const char* pName) : Halo(pName), mAppearDuringOpeningCam(-1) {
+    lumacore::setClass(this, lumacore::kClassId< PowerStarHalo >);
 }
 
 void PowerStarHalo::init(const TableIter& rIter) {

@@ -26,6 +26,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeShootStart_f1, "exeShootStart.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeShootStart_f2, "exeShootStart.f2", 0.5f);
@@ -82,6 +83,7 @@ SpinDriver::SpinDriver(const char* pName)
       mClippingCenter(0, 0, 0), mClippingRadius(), mCaptureRate(), mShadowDropLength(-1.0f), mShootTime(300), mFlyShortStep(-1), mFlyEndStep(240),
       mFallStep(270), mSpaceFlyEndFrame(::sDefaultSpaceFlyEndFrame), mInitPoseAngle(), mCanBind(true), mCoolDown(), mIsCoolingDown(),
       mIsPlayerAway(true), mIsAppearSilent() {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriver >);
 }
 
 void SpinDriver::init(const TableIter& rIter) {

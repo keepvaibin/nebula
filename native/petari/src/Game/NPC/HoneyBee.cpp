@@ -15,6 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 20.0f);
@@ -42,6 +43,7 @@ namespace NrvHoneyBee {
 };  // namespace NrvHoneyBee
 
 HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), mRailPointNo(-1), mInitAction(), mFloatOffset() {
+    lumacore::setClass(this, lumacore::kClassId< HoneyBee >);
     mTalkMtx.identity();
     mClippingCenter.zero();
 }

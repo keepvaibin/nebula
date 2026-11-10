@@ -22,6 +22,7 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 30.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 30.0f);
@@ -99,6 +100,7 @@ Rock::Rock(f32 moveSpeed, const char* pName)
       mAppearPos(gZeroVec), mRadius(::cBinderRadius), mRotateSpeed(), mFallVelocity(gZeroVec), mGravityRate(::cGravity), mCurrentRailPoint(-1),
       mPrevPos(gZeroVec), mFront(0.0f, 0.0f, 1.0f), mAirTime(), mIsNormalGravity(), mWanwanVoiceTimer(), mFreezeTime(), mFreezePos(gZeroVec),
       mUnfreezeNerve(), mInvalidBindTime(), mAppearTime(::cAppearMoveFrameRock), mAppearAngle(), mRollSoundTimer(), mSlowDownTimer() {
+    lumacore::setClass(this, lumacore::kClassId< Rock >);
     mBaseMtx.identity();
 }
 

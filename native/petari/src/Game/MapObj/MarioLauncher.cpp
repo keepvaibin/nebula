@@ -29,6 +29,7 @@
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_doAim_f1, "doAim.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_doAim_f2, "doAim.f2", 0.5f);
@@ -85,6 +86,7 @@ namespace NrvMarioLauncher {
 
 MarioLauncher::MarioLauncher(const char* pName)
     : LiveActor(pName), mLayout(), mShell(), mHost(), mIsInAttractor(), mCameraTargetMtx("カメラターゲットダミー") {
+    lumacore::setClass(this, lumacore::kClassId< MarioLauncher >);
     mEffectMtxSmoke.identity();
     mEffectMtxGravity.identity();
     mPlayerBaseMtx.identity();

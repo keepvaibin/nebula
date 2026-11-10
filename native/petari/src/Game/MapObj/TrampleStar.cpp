@@ -11,6 +11,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
@@ -82,6 +83,7 @@ namespace {
 };  // namespace
 
 TrampleStarShare::TrampleStarShare(TrampleStar* pTrampleStar) : LiveActor("TrampleStarShare"), mTrampleStar(pTrampleStar) {
+    lumacore::setClass(this, lumacore::kClassId< TrampleStarShare >);
     makeActorDead();
 }
 
@@ -96,6 +98,7 @@ void TrampleStarShare::copy(TrampleStar* pTrampleStar) const {
 }
 
 TrampleStar::TrampleStar(const char* pName) : LiveActor(pName), mIsLod(false) {
+    lumacore::setClass(this, lumacore::kClassId< TrampleStar >);
 }
 
 void TrampleStar::init(const TableIter& rIter) {

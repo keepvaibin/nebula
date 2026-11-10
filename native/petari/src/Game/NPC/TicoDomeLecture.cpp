@@ -7,6 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "math_types.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTicoDomeLecture {
     NEW_NERVE(TicoDomeLectureNrvWait, TicoDomeLecture, Wait);
@@ -20,6 +21,7 @@ namespace {
 };  // namespace
 
 TicoDomeLecture::TicoDomeLecture(const char* pName) : LiveActor(pName), mInitPos(gZeroVec), mInitRotation(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< TicoDomeLecture >);
 }
 
 void TicoDomeLecture::init(const TableIter& rIter) {

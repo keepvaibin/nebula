@@ -6,12 +6,14 @@
 #include "Game/MapObj/ClipAreaShape.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const Color8 sShapeColor(0, 0, 0, 4);
 };  // namespace
 
 ClipArea::ClipArea(const char* pName) : LiveActor(pName), mShape() {
+    lumacore::setClass(this, lumacore::kClassId< ClipArea >);
     mBaseMtx.identity();
     MR::createClipAreaHolder();
     MR::addClipArea(this);

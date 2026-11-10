@@ -26,6 +26,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f1, "appearStarPiece.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f2, "appearStarPiece.f2", 60.0f);
@@ -149,6 +150,7 @@ void BombTeresaHolder::disperseAll() {
 Polta::Polta(const char* pName)
     : LiveActor(pName), mSensorCtrl(), mLeftArm(), mRightArm(), mSequencer(), mBombTeresaHolder(), mRockHolder(), mGroundRockHolder(), mCameraInfo(),
       mBreakModel(), mFormationModel(), mPoseQuat(0, 0, 0, 1), mFront(0, 0, 1), mStartQuat(0, 0, 0, 1), mStartPos(0, 0, 0), mRotateSpeed() {
+    lumacore::setClass(this, lumacore::kClassId< Polta >);
 }
 
 void Polta::initSensor() {

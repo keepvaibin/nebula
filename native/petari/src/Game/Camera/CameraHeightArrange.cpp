@@ -6,6 +6,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f1, "resetParameter.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_resetParameter_f2, "resetParameter.f2", 15.0f);
@@ -30,6 +31,7 @@ CameraHeightArrange::CameraHeightArrange(Camera* pCamera)
       mUpdateGlobalAxis(), mGlobalAxis(0.0f, 1.0f, 0.0f), mOffsetScale(0.1f), mOffsetScaleMax(15.0f), mFocalScaleUpper(0.3f), mFocalScaleLower(0.1f),
       mGndInt(160), mPosOffsetMinRiseLag(500.0f), mPosOffsetMinDropLag(800.0f), mRiseDelay(120), mDropDelay(120), mMaxRiseEaseTime(120),
       mVPanUse(true), mVPanAxis(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraHeightArrange >);
 }
 
 void CameraHeightArrange::updateJump() {

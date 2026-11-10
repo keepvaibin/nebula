@@ -8,6 +8,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 #include <cstring>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct HasActor {
@@ -35,6 +36,7 @@ namespace {
 
 MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const TableIter& rIter)
     : LiveActorGroup(copyGroupName(pName), numMax), mIdInfo(), mMsg(-1), mSensor(), mSensorName() {
+    lumacore::setClass(this, lumacore::kClassId< MsgSharedGroup >);
     PlacementId* pIdInfo = new PlacementId();
 
     if (pIdInfo != nullptr) {
@@ -75,6 +77,7 @@ void MsgSharedGroup::sendMsgToGroupMember(u32 msg, HitSensor* pSensor, const cha
 }
 
 LiveActorGroupArray::LiveActorGroupArray(const char* pName) : NameObj(pName), mGroups() {
+    lumacore::setClass(this, lumacore::kClassId< LiveActorGroupArray >);
 }
 
 void LiveActorGroupArray::init(const TableIter& /*rIter*/) {

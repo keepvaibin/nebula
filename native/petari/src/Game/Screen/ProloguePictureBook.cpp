@@ -8,6 +8,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE_LIST(s32, sBookPageInfo, , {0, 350, 700, 1050, 1400, 1748, -1});
@@ -21,6 +22,7 @@ namespace NrvProloguePictureBook {
 };  // namespace NrvProloguePictureBook
 
 ProloguePictureBook::ProloguePictureBook() : LayoutActor("プロローグの絵本", true), mIconAButton(), mPage() {
+    lumacore::setClass(this, lumacore::kClassId< ProloguePictureBook >);
 }
 
 void ProloguePictureBook::init(const TableIter& /*rIter*/) {

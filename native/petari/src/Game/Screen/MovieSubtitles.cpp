@@ -5,6 +5,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvMovieSubtitles {
     NEW_NERVE(HostTypeWait, MovieSubtitles, Wait);
@@ -13,6 +14,7 @@ namespace NrvMovieSubtitles {
 };  // namespace NrvMovieSubtitles
 
 MovieSubtitles::MovieSubtitles(const char* pMessageId, s32 appearTime) : LayoutActor("ムービーの字幕", true), mFormerText(), mAppearTime(appearTime) {
+    lumacore::setClass(this, lumacore::kClassId< MovieSubtitles >);
     MR::connectToScene(this, MR::MovementType_MovieSubtitles, MR::CalcAnimType_MovieSubtitles, MR::DrawBufferType_None, MR::DrawType_MovieSubtitles);
     initLayoutManager("CinemaSuper", 1);
 

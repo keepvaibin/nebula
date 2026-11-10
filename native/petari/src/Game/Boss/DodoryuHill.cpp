@@ -1,5 +1,6 @@
 #include "Game/Boss/DodoryuHill.hpp"
 #include "Game/Boss/Dodoryu.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     inline void setHillTable(MogucchiHill* pHill, const char* const* pModelNames, u32 count) {
@@ -19,6 +20,7 @@ namespace {
 };  // namespace
 
 DodoryuHill::DodoryuHill(Dodoryu* pHost) : MogucchiHill(pHost, 50, "ドドリュウ塚"), mHost(pHost) {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuHill >);
     setHillTable(this, ::sDodoryuHillModel, ARRAY_SIZE(::sDodoryuHillModel));
     const char* pJoint = "MogucchiHill";
     const char* pEffect = "DodoryuHill";

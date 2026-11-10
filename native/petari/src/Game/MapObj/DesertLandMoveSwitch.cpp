@@ -22,6 +22,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_DesertLandMoveSwitch_f1, "DesertLandMoveSwitch.f1", 0.35f);
 NEBULA_TUNABLE_NAMED(f32, cNum_DesertLandMoveSwitch_f2, "DesertLandMoveSwitch.f2", 0.75f);
@@ -48,6 +49,7 @@ namespace NrvDesertLandMoveSwitch {
 DesertLandMoveSwitch::DesertLandMoveSwitch(const char* pName)
     : LiveActor(pName), mCollisionParts(nullptr), mSpringValue(new SpringValue()), mMapObjConnector(new MapObjConnector(this)), mIsHipDropped(false),
       mWasOnPlayer(false), mIsOnPlayer(false), mTimer(0), mObjName(nullptr), mTimerLead(0) {
+    lumacore::setClass(this, lumacore::kClassId< DesertLandMoveSwitch >);
     mSpringValue->setParam(0.0f, 0.0f, cNum_DesertLandMoveSwitch_f1, cNum_DesertLandMoveSwitch_f2, 0.0f);
 }
 

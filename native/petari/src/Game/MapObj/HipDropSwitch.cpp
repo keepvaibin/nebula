@@ -15,6 +15,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_HipDropSwitch_f1, "HipDropSwitch.f1", 0.2f);
 NEBULA_TUNABLE_NAMED(f32, cNum_HipDropSwitch_f2, "HipDropSwitch.f2", 0.90f);
@@ -33,6 +34,7 @@ namespace NrvHipDropSwitch {
 };  // namespace NrvHipDropSwitch
 
 HipDropSwitch::HipDropSwitch(const char* pName) : LiveActor(pName), mConnector(), mSpringModel(), mIsHipDropped(), mWasOnPlayer(), mIsOnPlayer() {
+    lumacore::setClass(this, lumacore::kClassId< HipDropSwitch >);
     mSpringValue = new SpringValue();
     mConnector = new MapObjConnector(this);
     mSpringValue->setParam(0.0f, 0.0f, cNum_HipDropSwitch_f1, cNum_HipDropSwitch_f2, 0.0f);

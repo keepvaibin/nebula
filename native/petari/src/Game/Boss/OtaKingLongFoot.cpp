@@ -4,6 +4,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemo_setBckRate_1, "exeAppearDemo.setBckRate.1", 1.0f);
@@ -32,6 +33,7 @@ namespace {
 
 OtaKingLongFoot::OtaKingLongFoot(LiveActor* pHost, s32 demoBckStep, const char* pName)
     : PartsModel(pHost, pName, "OtaKingLongFoot", nullptr, MR::DrawBufferType_Enemy, false), mDemoBckStep(demoBckStep), mScaleController(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< OtaKingLongFoot >);
 }
 
 void OtaKingLongFoot::init(const TableIter& rIter) {

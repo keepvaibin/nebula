@@ -14,6 +14,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 cStepForWait = NebulaFrameClock::stepsOfSeconds(1);
@@ -50,6 +51,7 @@ namespace NrvTicoRail {
 };  // namespace NrvTicoRail
 
 TicoRail::TicoRail(const char* pName) : LiveActor(pName), mFront(0.0f, 0.0f, 1.0f), mTalkPartner(nullptr), mLodCtrl(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< TicoRail >);
 }
 
 void TicoRail::init(const TableIter& rIter) {

@@ -32,6 +32,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f1, "KuriboChiefParam.f1", 1.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f2, "KuriboChiefParam.f2", 0.99f);
@@ -144,6 +145,7 @@ namespace NrvKuriboChief {
 };  // namespace NrvKuriboChief
 
 KuriboChief::KuriboChief(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KuriboChief >);
     mScaleController = nullptr;
     mStateWander = nullptr;
     mStateFindPlayer = nullptr;

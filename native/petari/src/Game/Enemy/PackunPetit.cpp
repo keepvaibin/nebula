@@ -23,6 +23,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initStarPointer_f1, "initStarPointer.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
@@ -84,6 +85,7 @@ namespace NrvPackunPetit {
 
 PackunPetit::PackunPetit(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mStarPointerState(nullptr), mFront(0.0f, 0.0f, 1.0f), mBlownModel(nullptr), mDontTurn(false) {
+    lumacore::setClass(this, lumacore::kClassId< PackunPetit >);
 }
 
 inline void PackunPetit::initStarPointer(const char* hitSensor) {

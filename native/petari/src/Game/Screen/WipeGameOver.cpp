@@ -1,6 +1,7 @@
 #include "Game/Screen/WipeGameOver.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvWipeGameOver {
     NEW_NERVE(WipeGameOverWait, WipeGameOver, Wait);
@@ -8,6 +9,7 @@ namespace NrvWipeGameOver {
 };  // namespace NrvWipeGameOver
 
 WipeGameOver::WipeGameOver() : WipeLayoutBase("ゲームオーバー") {
+    lumacore::setClass(this, lumacore::kClassId< WipeGameOver >);
 }
 
 void WipeGameOver::init(const TableIter& /*rIter*/) {

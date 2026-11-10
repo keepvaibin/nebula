@@ -12,6 +12,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sShadowRadius, 300.0f);
@@ -34,6 +35,7 @@ namespace NrvLotusLeaf {
 };  // namespace NrvLotusLeaf
 
 LotusLeaf::LotusLeaf(const char* pName) : LiveActor(pName), mInitPos(gZeroVec), mShakeSpeed(), mShakePeriod() {
+    lumacore::setClass(this, lumacore::kClassId< LotusLeaf >);
 }
 
 void LotusLeaf::init(const TableIter& rIter) {

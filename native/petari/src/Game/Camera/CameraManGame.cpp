@@ -21,6 +21,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_zoomIn_f1, "zoomIn.f1", 1.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_zoomIn_f2, "zoomIn.f2", 180.0f);
@@ -61,6 +62,7 @@ namespace {
 CameraManGame::CameraManGame(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
     : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mRequestReset(), mKarikari(new CamKarikariEffector()),
       mHeli(new CamHeliEffector()), mTypeState(), mIsStartPosActive(), mInterpolateOffCounter(), mZoomedIn() {
+    lumacore::setClass(this, lumacore::kClassId< CameraManGame >);
     mCamera = mHolder->getDefaultCamera();
     mChunk = nullptr;
     CameraLocalUtil::setWatchPos(this, Vec3f(0.0f, 0.0f, ::sMinDistance));

@@ -11,6 +11,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // By DummyDisplayModelId.
@@ -80,6 +81,7 @@ namespace {
 
 DummyDisplayModel::DummyDisplayModel(LiveActor* pHost, const DummyDisplayModelInfo* pInfo, int drawBufferType, s32 modelId, s32 colorFrame)
     : PartsModel(pHost, pInfo->mName, pInfo->mName, nullptr, drawBufferType, 0) {
+    lumacore::setClass(this, lumacore::kClassId< DummyDisplayModel >);
     mModelInfo = pInfo;
     mItemType = modelId;
     mBrkFrame = colorFrame;

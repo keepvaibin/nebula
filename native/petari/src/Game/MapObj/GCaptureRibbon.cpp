@@ -10,6 +10,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcLineWidth_f1, "calcLineWidth.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcLineWidth_f2, "calcLineWidth.f2", 2000.0f);
@@ -28,6 +29,7 @@ namespace {
 };  // namespace
 
 GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture(nullptr), mIsLineSet(false) {
+    lumacore::setClass(this, lumacore::kClassId< GCaptureRibbon >);
 }
 
 void GCaptureRibbon::draw() const {

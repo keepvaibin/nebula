@@ -5,6 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvOtaKingMagma {
     NEW_NERVE(OtaKingMagmaNrvWait, OtaKingMagma, Wait);
@@ -23,6 +24,7 @@ namespace {
 
 OtaKingMagma::OtaKingMagma(LiveActor* pHost, s32 drawBufferType)
     : PartsModel(pHost, "オタキングマグマ", "OtaKingMagma", nullptr, drawBufferType, true), mBloomModel(), mProjmapSetter(), mBloomProjmapSetter() {
+    lumacore::setClass(this, lumacore::kClassId< OtaKingMagma >);
     mProjmapSetter = MR::initMaterialProjmapEffectMtxSetter(this);
     MR::prepareMaterials(this);
 }

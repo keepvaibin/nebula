@@ -5,9 +5,11 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 PartsModel::PartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool deferMaterials)
     : LiveActor(pName), mHost(pActor), mFixedPosition(), mMtx(pMtx), mIsCalcOwnMtx(true), mIsShownWhileHostHidden(), mIsDead() {
+    lumacore::setClass(this, lumacore::kClassId< PartsModel >);
     if (drawBufferType < 0) {
         drawBufferType = MR::DrawBufferType_MapObj;
     }

@@ -6,8 +6,10 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 TransparentWall::TransparentWall(const char* pName) : InvisiblePolygonObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TransparentWall >);
 }
 
 void TransparentWall::control() {

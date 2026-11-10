@@ -14,6 +14,7 @@
 #include "Game/System/NebulaClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_getOwnDim_f1, "getOwnDim.f1", 255.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_getOwnDim_f2, "getOwnDim.f2", 255.0f);
@@ -59,6 +60,7 @@ SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType ex
       mIsBackAnswersNo(false), mDimPane(nullptr), mDim(0.0f), mDimFloor(0.0f), mDimLinger(0), mDimEpoch(0),
       mDimHandOver(DimHandOver_None), mDimHanding(false), mFadePane(nullptr), mPanelPane(nullptr), mShadowPane(nullptr)
 {
+    lumacore::setClass(this, lumacore::kClassId< SysInfoWindow >);
     switch (windowType) {
     case WindowType_Normal:
         mTextParentPaneName = "InfoWindow";

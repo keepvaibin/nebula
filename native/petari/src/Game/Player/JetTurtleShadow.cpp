@@ -3,8 +3,10 @@
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 JetTurtleShadow::JetTurtleShadow(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< JetTurtleShadow >);
 }
 
 void JetTurtleShadow::calcType0(MtxPtr pMtx) {

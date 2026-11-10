@@ -26,6 +26,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_rotateTest_f1, "rotateTest.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_startAnimHandPaa_f1, "startAnimHandPaa.f1", 2.0f);
@@ -99,6 +100,7 @@ StarPointerLayout::StarPointerLayout(const char* pName)
       mPadChannel(-1), mRadius(::sNormalRadius),
       mDirector(), mBlur(), mCommandStream(), mNumber(), mActor(), mNewTouchedID(), mTouchedID(), mStartTouch(), mStartDisableShoot(), mSingleTouch(),
       mShootDisabled(), mIsPointerValid(true), mIsAppear(true), mAppearTime() {
+    lumacore::setClass(this, lumacore::kClassId< StarPointerLayout >);
 }
 
 void StarPointerLayout::initWithPort(s32 channel) {
@@ -913,6 +915,7 @@ void StarPointerLayout::updateDecoration() {
 
 StarPointerNumber::StarPointerNumber(StarPointerLayout* pParent, s32 padChannel, const char* pName)
     : LayoutActor(pName, true), mParent(pParent), mPadChannel(padChannel), mAnimType(AnimType_NULL), mIsAppear(false), mAppearTime(0) {
+    lumacore::setClass(this, lumacore::kClassId< StarPointerNumber >);
     initLayoutManager("DPDPointerNumber", 1);
     startAnimPosition(0);
 }

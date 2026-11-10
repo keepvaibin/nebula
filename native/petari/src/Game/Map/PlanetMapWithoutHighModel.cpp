@@ -2,8 +2,10 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 PlanetMapWithoutHighModel::PlanetMapWithoutHighModel(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PlanetMapWithoutHighModel >);
 }
 
 void PlanetMapWithoutHighModel::connectToScene(const MapObjActorInitInfo&) {

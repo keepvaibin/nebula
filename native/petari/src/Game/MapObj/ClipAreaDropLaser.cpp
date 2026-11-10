@@ -14,6 +14,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_ClipAreaDropLaser_f1, "ClipAreaDropLaser.f1", 20.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
@@ -26,6 +27,7 @@ namespace NrvClipAreaDropLaser {
 };  // namespace NrvClipAreaDropLaser
 
 ClipAreaDropLaser::ClipAreaDropLaser(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ClipAreaDropLaser >);
     mNumPointsToDraw = 0.0f;
     mPointIndexToSkipDraw = -1;
     mDrawCount = -1;

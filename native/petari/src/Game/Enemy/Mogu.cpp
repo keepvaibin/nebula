@@ -23,6 +23,7 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 55.0f);
@@ -92,6 +93,7 @@ namespace NrvMogu {
 Mogu::Mogu(const char* pName)
     : LiveActor(pName), mAnimScaleController(nullptr), mStoneHoldPos(nullptr), mStone(nullptr), mHole(nullptr), mSight(0, 0, 1), mUp(0, 1, 0), mThrowOnGravity(true),
       mIsCannonFleet(false) {
+    lumacore::setClass(this, lumacore::kClassId< Mogu >);
 }
 
 // Arg 0 other than -1 throws the stone straight instead of along gravity.

@@ -8,10 +8,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 20.0f);
 
 AudCameraWatcher::AudCameraWatcher() : NameObj("AudCameraWatcher") {
+    lumacore::setClass(this, lumacore::kClassId< AudCameraWatcher >);
 }
 
 void AudCameraWatcher::playAtmosphereSE() {

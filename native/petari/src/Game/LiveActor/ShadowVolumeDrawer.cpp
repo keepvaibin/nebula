@@ -7,6 +7,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static Color8 sShapeColor(0xC0, 0xC0, 0, 4);
@@ -16,9 +17,11 @@ namespace {
 };  // namespace
 
 ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("シャドウボリューム描画初期化") {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeDrawInit >);
 }
 
 ShadowVolumeDrawer::ShadowVolumeDrawer(const char* pName) : ShadowDrawer(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeDrawer >);
     mStartDrawShapeOffset = 0.0f;
     mEndDrawShapeOffset = 0.0f;
     mIsCutDropShadow = false;

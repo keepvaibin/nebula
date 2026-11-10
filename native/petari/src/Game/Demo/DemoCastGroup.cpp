@@ -3,8 +3,10 @@
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DemoCastGroup::DemoCastGroup(const char* pName) : NameObj(pName), mInfo(nullptr), mGroup(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< DemoCastGroup >);
 }
 
 bool DemoCastGroup::tryRegisterDemoActor(LiveActor* pActor, const TableIter& rIter, const PlacementId& rInfo) {

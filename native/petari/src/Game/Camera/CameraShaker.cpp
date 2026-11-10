@@ -6,6 +6,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_adjustOffsetToScreen_f1, "adjustOffsetToScreen.f1", 30.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_adjustOffsetToScreen_f2, "adjustOffsetToScreen.f2", 30.0f);
@@ -17,6 +18,7 @@ namespace {
 }  // namespace
 
 CameraShaker::CameraShaker(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CameraShaker >);
     createSinglyVerticalTask();
     createSinglyHorizontalTask();
     createInfinityTask();

@@ -23,6 +23,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE_RECORD(Vec, cNamePlateOffset, {0.0f, 1500.0f, 0.0f});
@@ -102,6 +103,7 @@ MiniatureGalaxy::MiniatureGalaxy(const char* pName)
     : LiveActor(pName), mType(-1), mState(MiniatureGalaxyState_Open), mMysteryModel(), mShadowModel(), mSelectModel(), mStarPlateModel(),
       mProjmapEffectMtxSetter(), mObjectName(), mGalaxyName(), mIsZoomOut(true), mZoomStep(::cZoomFrame), mOnesTexMtx(), mTensTexMtx(), mOrbit(),
       mNamePlate() {
+    lumacore::setClass(this, lumacore::kClassId< MiniatureGalaxy >);
     mPosMtx.identity();
     mShadowBaseMtx.identity();
 }

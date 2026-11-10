@@ -18,6 +18,7 @@
 
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_tryEmitWaitEffect_f1, "tryEmitWaitEffect.f1", 4000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_tryDeleteWaitEffect_f1, "tryDeleteWaitEffect.f1", 4000.0f);
@@ -45,6 +46,7 @@ MapObjActor::MapObjActor(const char* pName)
       mRailPosture(), mRailGuideDrawer(), mIsProjmapEveryFrame(), mIsMirrorFromModel(), mPlayRiddleSE(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
       mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)), mStageEffectName(nullptr),
       mStageEffectMovingSe(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< MapObjActor >);
 }
 
 MapObjActor::MapObjActor(const char* pName, const char* pObjName)
@@ -52,6 +54,7 @@ MapObjActor::MapObjActor(const char* pName, const char* pObjName)
       mRailRotator(), mRailPosture(), mRailGuideDrawer(), mIsProjmapEveryFrame(), mPlayRiddleSE(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
       mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)), mStageEffectName(nullptr),
       mStageEffectMovingSe(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< MapObjActor >);
 }
 
 void MapObjActor::init(const TableIter& rIter) {

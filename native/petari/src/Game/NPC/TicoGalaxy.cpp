@@ -8,12 +8,14 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const char* sInfoMessageID = "InformationGalaxy";
 };  // namespace
 
 TicoGalaxy::TicoGalaxy(const char* pName) : TicoFat(pName), mGalaxyName() {
+    lumacore::setClass(this, lumacore::kClassId< TicoGalaxy >);
 }
 
 void TicoGalaxy::init(const TableIter& rIter) {

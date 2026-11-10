@@ -13,6 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 15.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWaveAttack_f1, "exeWaveAttack.f1", 180.0f);
@@ -40,6 +41,7 @@ namespace NrvKoopaShockWave {
 
 KoopaShockWave::KoopaShockWave(Koopa* pKoopa)
     : LiveActor("球状衝撃波"), mKoopa(pKoopa), mAngle(), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mPartsModel(), mShadow() {
+    lumacore::setClass(this, lumacore::kClassId< KoopaShockWave >);
     mKoopaMtx.identity();
     mBaseMtx.identity();
     mMtx.identity();

@@ -13,6 +13,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
 
@@ -30,6 +31,7 @@ namespace NrvRosettaPictureBook {
 };  // namespace NrvRosettaPictureBook
 
 RosettaPictureBook::RosettaPictureBook(const char* pName) : LiveActor(pName), mLayout(), mIconAButton(), mIsValidOpenIconAButton() {
+    lumacore::setClass(this, lumacore::kClassId< RosettaPictureBook >);
 }
 
 void RosettaPictureBook::init(const TableIter& rIter) {

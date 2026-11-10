@@ -22,6 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 130.0f);
@@ -68,6 +69,7 @@ namespace NrvPenguinRacer {
 };  // namespace NrvPenguinRacer
 
 PenguinRacer::PenguinRacer(const char* pName) : NPCActor(pName), mRaceDisabled(), mMoveSpeed(0.0f), mSpeed(1.0f), mRailPointNo() {
+    lumacore::setClass(this, lumacore::kClassId< PenguinRacer >);
 }
 
 void PenguinRacer::init(const TableIter& rIter) {

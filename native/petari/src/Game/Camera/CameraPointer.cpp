@@ -7,6 +7,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.5f);
@@ -28,6 +29,7 @@ CameraPointer::CameraPointer(const char* pName)
     : Camera(pName), mPointerDistance(), mRealPointPos(0.0f, 0.0f), mBlendPointPos(0.0f, 0.0f), mResetPointingPos(true), mCameraType(), mDist(),
       mFovy(40.0f), mAngleXRange(PI / 2.0f), mAngleYRange(PI / 2.0f), mAngleX(), mSpeedBlendRate(0.05f), mBlendFriction(0.99f),
       mAngleYMin() {
+    lumacore::setClass(this, lumacore::kClassId< CameraPointer >);
     mMtx.identity();
 }
 

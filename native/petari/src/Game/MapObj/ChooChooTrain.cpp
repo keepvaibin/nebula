@@ -4,6 +4,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -23,6 +24,7 @@ namespace {
 };  // namespace
 
 ChooChooTrain::ChooChooTrain(const char* pName) : LiveActor(pName), mModelArray(), mClipCenter(0.0f, 0.0f, 0.0f), mRailSpeed(5.0f), mWhistleTimer() {
+    lumacore::setClass(this, lumacore::kClassId< ChooChooTrain >);
 }
 
 void ChooChooTrain::startClipped() {

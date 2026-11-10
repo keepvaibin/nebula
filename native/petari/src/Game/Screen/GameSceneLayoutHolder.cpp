@@ -18,11 +18,13 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 GameSceneLayoutHolder::GameSceneLayoutHolder()
     : NameObj("ゲームシーンのレイアウト保持"), mCameraInfo(nullptr), mInformationMessage(nullptr), mMarioMeter(nullptr), mMarioSubMeter(nullptr),
       mMissLayout(nullptr), mNoteCounter(nullptr), mYesNoLayout(nullptr), mPurpleCoinCounter(nullptr), mIsStatusInvalidatePending(false),
       mCounterLayoutCtrl(nullptr), mIsActiveDefaultGameLayout(true), mAchievementToast(nullptr), mModText(nullptr), mAchievementBoard(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< GameSceneLayoutHolder >);
     MR::joinToNameObjGroup(this, "IgnorePauseNameObj");
     MR::connectToSceneLayoutMovement(this);
 

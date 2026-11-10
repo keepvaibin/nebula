@@ -6,6 +6,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f1, "loadModelDrawMtx.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f2, "loadModelDrawMtx.f2", 0.01f);
@@ -16,6 +17,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f6, "loadModelDrawMtx.f6", 0.01f
 NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f7, "loadModelDrawMtx.f7", 0.01f);
 
 ShadowVolumeOval::ShadowVolumeOval() : ShadowVolumeModel("影描画[ボリューム楕球]"), mSize(100.0f, 100.0f, 200.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeOval >);
     initVolumeModel("ShadowVolumeSphere");
 }
 

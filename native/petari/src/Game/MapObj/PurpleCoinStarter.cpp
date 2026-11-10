@@ -4,8 +4,10 @@
 #include "Game/MapObj/PurpleCoinHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 PurpleCoinStarter::PurpleCoinStarter(const char* pName) : NameObj(pName), mHost(), mStageSwitchCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< PurpleCoinStarter >);
 }
 
 void PurpleCoinStarter::init(const TableIter& rIter) {

@@ -5,6 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f1, "playRotateSE.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f2, "playRotateSE.f2", 5.0f);
@@ -57,6 +58,7 @@ namespace NrvSphereSelectorHandle {
 SphereSelectorHandle::SphereSelectorHandle(const char* pName)
     : LiveActor(pName), mIsFileSelectMode(), mFront(0.0f, 0.0f, -1.0f), mRotateSpeed(), mTargetRotateSpeed(), mRotateSpeedX(), mPrevRotateSpeedX(), mSide(1.0f, 0.0f, 0.0f),
       mUp(0.0f, 1.0f, 0.0f), mPointerVelocities(), mNotPointingStep(), mIsRotateBgm() {
+    lumacore::setClass(this, lumacore::kClassId< SphereSelectorHandle >);
     clearPointerVelocity();
     mBaseMtx.identity();
 }

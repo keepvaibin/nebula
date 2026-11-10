@@ -10,6 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2600.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 9.090277f);
@@ -49,6 +50,7 @@ namespace NrvFallDownBridge {
 };  // namespace NrvFallDownBridge
 
 FallDownBridge::FallDownBridge(const char* pName) : LiveActor(pName), mClipCenter(0.0f, 1250.0f, 0.0f), mAngle(), mAngleSpeed(), mMinAngle(0.0f), mMaxAngle(90.0f), mIsFallen() {
+    lumacore::setClass(this, lumacore::kClassId< FallDownBridge >);
 }
 
 void FallDownBridge::init(const TableIter& rIter) {

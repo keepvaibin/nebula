@@ -8,6 +8,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvCometRetryButton {
     NEW_NERVE(HostTypeNrvMissLeftWait, CometRetryButton, MissLeftWait);
@@ -19,6 +20,7 @@ namespace NrvCometRetryButton {
 
 CometRetryButton::CometRetryButton(const char* pName)
     : LayoutActor(pName, true), mButtonYesPaneCtrl(nullptr), mButtonNoPaneCtrl(nullptr), mPlayerMissLeft(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< CometRetryButton >);
 }
 
 void CometRetryButton::init(const TableIter& /*rIter*/) {

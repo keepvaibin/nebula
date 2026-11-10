@@ -4,6 +4,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_createLevelStatus_f1, "createLevelStatus.f1", 20.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_createLevelStatus_f2, "createLevelStatus.f2", 2000.0f);
@@ -23,6 +24,7 @@ namespace {
 
 SkeletalFishBossInfo::SkeletalFishBossInfo(SkeletalFishBoss* pBoss, s32 levelNum, s32 guardNum, const char* pName)
     : NameObj(pName), mFishBoss(pBoss), mLevelNum(levelNum), mGuardNum(guardNum), mLevelStatusArray() {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossInfo >);
     createLevelStatus();
 }
 

@@ -15,6 +15,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPosition_f1, "calcScreenPosition.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPosition_f2, "calcScreenPosition.f2", 0.5f);
@@ -202,6 +203,7 @@ void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
 }
 
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {
+    lumacore::setClass(this, lumacore::kClassId< BrightObj >);
 }
 
 void BrightObj::init(const TableIter& rIter) {
@@ -230,6 +232,7 @@ void BrightObj::getNowCenter(Vec2f* pDst) const {
 }
 
 BrightSun::BrightSun(const char* pName) : LiveActor(pName), BrightObjBase(), mSun() {
+    lumacore::setClass(this, lumacore::kClassId< BrightSun >);
 }
 
 void BrightSun::control() {

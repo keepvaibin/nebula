@@ -12,6 +12,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCompleteDemo_f1, "exeCompleteDemo.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCompleteDemo_f2, "exeCompleteDemo.f2", 360.0f);
@@ -28,6 +29,7 @@ namespace NrvCollectTico {
 };  // namespace NrvCollectTico
 
 CollectTico::CollectTico(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CollectTico >);
     mStrayTicos = nullptr;
     mTicoNum = 0;
     mIsDemoCast = 0;

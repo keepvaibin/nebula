@@ -27,6 +27,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_startDemoStarPiece1_f1, "startDemoStarPiece1.f1", 100.0f);
@@ -59,6 +60,7 @@ namespace NrvButler {
 };  // namespace NrvButler
 
 Butler::Butler(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< Butler >);
     mTalkMessage = nullptr;
     mIsStarPieceLecture = false;
     mStarPieceHitCount = 0;

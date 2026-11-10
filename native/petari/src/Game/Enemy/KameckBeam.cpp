@@ -6,6 +6,7 @@
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setKameckBeamCollisionFilter_f1, "setKameckBeamCollisionFilter.f1", 10.0f);
 
@@ -55,6 +56,7 @@ namespace NrvKameckBeam {
 
 KameckBeam::KameckBeam(const char* pName)
     : LiveActor(pName), mEventListener(), mKameckTurtle(), mFollowMtx(), mShootDir(0, 0, 1), mWandLocalPosition(0, 0, 0), mBeamKind(BeamType_FireBall1) {
+    lumacore::setClass(this, lumacore::kClassId< KameckBeam >);
     for (u32 i = 0; i < ARRAY_SIZE(mKameckFireBalls); i++) {
         mKameckFireBalls[i] = nullptr;
     }

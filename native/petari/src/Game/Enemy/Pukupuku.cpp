@@ -23,6 +23,7 @@
 #include "Game/Util/ValueControl.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseByJumpPath_f1, "updatePoseByJumpPath.f1", 0.01f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
@@ -250,6 +251,7 @@ void PukupukuStateLanding::emitGroundHitEffect() {
 Pukupuku::Pukupuku(const char* pName)
     : LiveActor(pName), mStateLanding(nullptr), mScaleCtrl(nullptr), mStarPointer(nullptr), mBckBeforeBind(nullptr), mNerveAfterBind(nullptr),
       mBckFrameBeforeBind(0.0f), mBtpFrameBeforeBind(0.0f), mIsTrampled(false) {
+    lumacore::setClass(this, lumacore::kClassId< Pukupuku >);
     mClipCenter.zero();
     mBinderOffset.zero();
     mPoseQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);

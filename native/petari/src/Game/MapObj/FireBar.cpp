@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 55.0f);
@@ -45,6 +46,7 @@ namespace NrvFireBar {
 };  // namespace NrvFireBar
 
 FireBarBall::FireBarBall(LiveActor* pParent) : ModelObj("ファイアバー玉", "FireBarBall", 0, MR::DrawBufferType_NoShadowedMapObj, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< FireBarBall >);
     mFireBarParent = pParent;
 }
 
@@ -109,6 +111,7 @@ void FireBarBall::controlEmitEffect() {
 }
 
 FireBar::FireBar(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FireBar >);
     mFireBalls = nullptr;
     mFireBallCount = 5;
     mFront.x = 0.0f;

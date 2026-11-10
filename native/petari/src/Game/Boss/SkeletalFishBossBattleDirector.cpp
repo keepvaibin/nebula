@@ -12,8 +12,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SkeletalFishBossBattleDirector::SkeletalFishBossBattleDirector(SkeletalFishBoss* pBoss) : NameObj("スカルシャークボス戦指揮") {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossBattleDirector >);
     mFishBoss = pBoss;
     mColumnNum = 0;
     mClipActorNum = 0;

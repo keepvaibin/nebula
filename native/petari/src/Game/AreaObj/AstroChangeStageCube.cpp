@@ -9,6 +9,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cChangeStageWaitFrame, 5);
@@ -17,6 +18,7 @@ namespace {
 };  // namespace
 
 AstroChangeStageCube::AstroChangeStageCube(int formType, const char* pName) : AreaObj(formType, pName), mDestNo(1), mWaitFrame() {
+    lumacore::setClass(this, lumacore::kClassId< AstroChangeStageCube >);
 }
 
 void AstroChangeStageCube::init(const TableIter& rIter) {

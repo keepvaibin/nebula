@@ -1,8 +1,10 @@
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 AllLiveActorGroup::AllLiveActorGroup() : LiveActorGroup("AllLiveActorGroup", 2560), mActorNum() {
+    lumacore::setClass(this, lumacore::kClassId< AllLiveActorGroup >);
 }
 
 void AllLiveActorGroup::startInitActorSystemInfo() {

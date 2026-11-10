@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -52,6 +53,7 @@ namespace {
 
 TamakoroTutorial::TamakoroTutorial(const char* pName)
     : LiveActor(pName), mHost(), mTalkCtrl(), mTalkCtrlAutomatic(), mPadAccel(0.0f, 0.0f, 0.0f), mIsTrampled(), mCanTalk() {
+    lumacore::setClass(this, lumacore::kClassId< TamakoroTutorial >);
 }
 
 void TamakoroTutorial::init(const TableIter& rIter) {

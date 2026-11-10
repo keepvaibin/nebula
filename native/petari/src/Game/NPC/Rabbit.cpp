@@ -25,6 +25,7 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
@@ -97,6 +98,7 @@ namespace NrvRabbit {
 };  // namespace NrvRabbit
 
 Rabbit::Rabbit(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< Rabbit >);
 }
 
 void Rabbit::init(const TableIter& rIter) {

@@ -6,6 +6,7 @@
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sMoveRadiusDefault, 750.0f);
@@ -47,6 +48,7 @@ void ElectricBall::Ball::activate() {
 
 ElectricBall::ElectricBall(const char* pName)
     : LiveActor(pName), mBalls(), mClosestBallPos(gZeroVec), mRadius(::sMoveRadiusDefault), mAngularSpeed(::sMoveAngularSpeedDefault), mRailMover() {
+    lumacore::setClass(this, lumacore::kClassId< ElectricBall >);
     mBaseMtx.identity();
 }
 

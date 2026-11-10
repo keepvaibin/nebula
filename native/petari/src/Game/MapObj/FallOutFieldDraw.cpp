@@ -18,6 +18,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f1, "FallOutFieldDraw.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f2, "FallOutFieldDraw.f2", 0.5f);
@@ -37,6 +38,7 @@ namespace {
 };  // namespace
 
 FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), mFillInsideVolume() {
+    lumacore::setClass(this, lumacore::kClassId< FallOutFieldDraw >);
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
     mDepthKey = ImageEffectLocalUtil::createFrameKey();

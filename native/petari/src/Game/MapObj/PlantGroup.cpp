@@ -6,6 +6,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f1, "initMember.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f1, "placeOnCollisionFormCircle.f1", 2.0f);
@@ -52,6 +53,7 @@ namespace NrvPlantMember {
 PlantGroup::PlantGroup(const char* pName)
     : LiveActor(pName), mMembers(), mMemberCount(7), mPlantType(), mIsStarPiece(), mHintPosition(0.0f), mHintRotation(0.0f),
       mHintTimer(::sHintEffectEmitInterval), mHintIndex() {
+    lumacore::setClass(this, lumacore::kClassId< PlantGroup >);
 }
 
 void PlantGroup::init(const TableIter& rIter) {

@@ -2,9 +2,11 @@
 #include "Game/Screen/WipeLayoutBase.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include "Game/System/LumaCore.hpp"
 
 WipeHolderBase::WipeHolderBase(u32 num, const char* pName)
     : NameObj(pName), mCurrentWipeLayout(), mWipeLayoutArray(new WipeLayoutBase*[num]), mWipeLayoutCount() {
+    lumacore::setClass(this, lumacore::kClassId< WipeHolderBase >);
 }
 
 void WipeHolderBase::setCurrent(const char* pWipeName) {

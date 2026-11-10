@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
@@ -47,6 +48,7 @@ namespace NrvFireBubble {
 FireBubble::FireBubble(const char* pName)
     : LiveActor(pName), mIsValidInfo(), mAppearPos(gZeroVec), mAppearFront(0.0f, 0.0f, 1.0f), mAppearVelocity(::cAppearVelocity), mFront(0.0f, 0.0f, 1.0f), mActFrame(),
       mChaseCounter() {
+    lumacore::setClass(this, lumacore::kClassId< FireBubble >);
 }
 
 inline void FireBubble::initHitSensors(const char* const hitSensor1, const char* const hitSensor2) {

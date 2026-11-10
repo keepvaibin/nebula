@@ -13,6 +13,7 @@
 #include "Game/Util/VectorUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcRotPos_f1, "calcRotPos.f1", 0.000002f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcRotPos_f2, "calcRotPos.f2", 0.000002f);
@@ -43,6 +44,7 @@ CameraFollow::CameraFollow(const char* pName)
     : Camera(pName), mDistMax(1200.0f), mDistMin(300.0f), mAngleXMin(10.0f * MR::pi() / 180.0f), mAngleXRange(20.0f * MR::pi() / 180.0f),
       mPos(0.0f, 0.0f, 0.0f), mWatchPos(0.0f, 0.0f, 0.0f), mAngleYRoundSpeed(0.15f), mAngleXSpeed(), mCheckWall(true), mIsRounding(), mAngleYTarget(),
       mAngleYSpeed(), mIsRoundLeftValid(), mIsRoundRightValid() {
+    lumacore::setClass(this, lumacore::kClassId< CameraFollow >);
     createVPanObj();
 }
 

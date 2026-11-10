@@ -5,6 +5,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f1, "hitCheck.f1", 0.5f);
@@ -12,6 +13,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f2, "hitCheck.f2", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f3, "hitCheck.f3", 0.5f);
 
 FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("追従コリジョンエリア") {
+    lumacore::setClass(this, lumacore::kClassId< FollowCollisionArea >);
     mSize = rSize;
     mFollowMtx = pMatrix;
     mOffset = offset;

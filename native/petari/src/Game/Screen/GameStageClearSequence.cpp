@@ -10,6 +10,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sClearDemoStopFrame, 10);
@@ -33,6 +34,7 @@ namespace NrvGameStageClearSequence {
 
 GameStageClearSequence::GameStageClearSequence()
     : LayoutActor("ステージクリアシーケンス", true), mEffectLayout(nullptr), mEffectFollowPos(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< GameStageClearSequence >);
 }
 
 void GameStageClearSequence::init(const TableIter& /*rIter*/) {

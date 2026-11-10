@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 
@@ -11,6 +12,7 @@ namespace NrvMarioLauncherAttractor {
 };  // namespace NrvMarioLauncherAttractor
 
 MarioLauncherAttractor::MarioLauncherAttractor(const char* pName) : LiveActor(pName), mGravityCreator() {
+    lumacore::setClass(this, lumacore::kClassId< MarioLauncherAttractor >);
 }
 
 void MarioLauncherAttractor::init(const TableIter& rIter) {

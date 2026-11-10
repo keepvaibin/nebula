@@ -12,6 +12,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 170.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 260.0f);
@@ -36,6 +37,7 @@ namespace NrvPoltaGroundRock {
 
 PoltaGroundRock::PoltaGroundRock(const char* pName)
     : LiveActor(pName), mOwner(nullptr), mBreakModel(nullptr), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mGroundPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< PoltaGroundRock >);
 }
 
 void PoltaGroundRock::init(const TableIter& rIter) {

@@ -24,6 +24,7 @@
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_filterMaterial_f1, "filterMaterial.f1", 0.05f);
 NEBULA_TUNABLE_NAMED(f32, cNum_filterMaterial_f2, "filterMaterial.f2", 0.05f);
@@ -79,6 +80,7 @@ static NebulaColor8 sDefaultColor;
 
 WaterCameraFilter::WaterCameraFilter()
     : LiveActor("水中カメラフィルター"), mWaterAlpha(), mWavePhase(), mWaterColor(::sDefaultColor), mScreenTex(), mFilterTex() {
+    lumacore::setClass(this, lumacore::kClassId< WaterCameraFilter >);
 }
 
 void WaterCameraFilter::init(const TableIter& /*rIter*/) {

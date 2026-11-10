@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraRegisterHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cDummyMtxRegName = "ダミーマトリクス";
@@ -7,6 +8,7 @@ namespace {
 }  // namespace
 
 CameraRegisterHolder::CameraRegisterHolder(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CameraRegisterHolder >);
     mDummyMatrix.identity();
     declareMtxReg(::cDummyMtxRegName, mDummyMatrix.toMtxPtr());
 

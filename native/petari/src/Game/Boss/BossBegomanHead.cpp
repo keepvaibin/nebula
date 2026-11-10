@@ -4,6 +4,7 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, hSpikeRotate, 0.23f);
@@ -23,6 +24,7 @@ namespace NrvBossBegomanHead {
 
 BossBegomanHead::BossBegomanHead(LiveActor* pParent, MtxPtr pMtx)
     : PartsModel(pParent, "スイッチ頭", "BossBegomanHead", pMtx, MR::DrawBufferType_Enemy, false), mAngle(), mJointDelegator() {
+    lumacore::setClass(this, lumacore::kClassId< BossBegomanHead >);
 }
 
 void BossBegomanHead::init(const TableIter& rIter) {

@@ -12,6 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 15.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 15.0f);
@@ -30,6 +31,7 @@ namespace NrvTicoShop {
 };  // namespace NrvTicoShop
 
 TicoShop::TicoShop(const char* pName) : TicoComet(pName), mOneUp(), mLifeUp(), mChoseOneUp(), mChoseLifeUp() {
+    lumacore::setClass(this, lumacore::kClassId< TicoShop >);
 }
 
 void TicoShop::kill() {

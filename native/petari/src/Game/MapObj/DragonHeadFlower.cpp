@@ -13,6 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f1, "initFlowerSensors.f1", 560.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f2, "initFlowerSensors.f2", 300.0f);
@@ -42,6 +43,7 @@ namespace NrvDragonHeadFlower {
 DragonHeadFlower::DragonHeadFlower(const char* pName)
     : LiveActor(pName), mPlayerSensor(), mParabolaProgress(), mParabolaStartPos(0, 0, 0), mTargetVelocity(0, 0, 0), mCurrentGravity(0, -1, 0),
       mEndGravity(0, 0, 0), mParabolaDirection(0, 0, 0), mParabolaSteps(), mParabolaDistance(), mParabolaAccel(), mParabolaVel() {
+    lumacore::setClass(this, lumacore::kClassId< DragonHeadFlower >);
 }
 
 namespace {

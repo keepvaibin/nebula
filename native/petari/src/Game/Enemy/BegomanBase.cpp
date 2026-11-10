@@ -28,6 +28,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initEffectAndStarPointerBind_f1, "initEffectAndStarPointerBind.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 0.5f);
@@ -141,6 +142,7 @@ BegomanBase::BegomanBase(const char* pName)
     : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), mLastGravity(0.0f, 0.0f, -1.0f), mAnimScale(1.0f, 1.0f, 1.0f),
       mPoseQuat(0, 0, 0, 1), mSpinQuat(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
       mIsTouchElectricRail(false), mCanTrySetReturn(), mInvertSideVec(false) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanBase >);
 }
 
 const BegomanSound* BegomanBase::getSoundNormal() {
@@ -978,6 +980,7 @@ bool BegomanBase::requestAttack() {
 }
 
 BegomanAttackPermitter::BegomanAttackPermitter(const char* pName) : LiveActor(pName), mBegoman(), mDistToPlayer(::hPermitterNoDist), mHasRequest() {
+    lumacore::setClass(this, lumacore::kClassId< BegomanAttackPermitter >);
 }
 
 void BegomanAttackPermitter::init(const TableIter&) {

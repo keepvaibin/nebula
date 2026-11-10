@@ -3,6 +3,7 @@
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.05f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f2, "updateVelocity.f2", 0.0001f);
@@ -25,6 +26,7 @@ namespace NrvFloaterFloatingForceTypeNormal {
 
 FloaterFloatingForceTypeNormal::FloaterFloatingForceTypeNormal(LiveActor* pActor, const char* pName)
     : FloaterFloatingForce(pActor, pName), mRiseAccel(), mSinkAccel(), mSinkDepth(), mSinkSpeed() {
+    lumacore::setClass(this, lumacore::kClassId< FloaterFloatingForceTypeNormal >);
 }
 
 void FloaterFloatingForceTypeNormal::init(const TableIter& rIter) {

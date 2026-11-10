@@ -1,8 +1,10 @@
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 LiveActorGroup::LiveActorGroup(const char* pName, int numMax) : NameObjGroup(pName, numMax) {
+    lumacore::setClass(this, lumacore::kClassId< LiveActorGroup >);
 }
 
 void LiveActorGroup::registerActor(LiveActor* pActor) {

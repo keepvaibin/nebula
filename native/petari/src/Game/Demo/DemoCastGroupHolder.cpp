@@ -1,8 +1,10 @@
 #include "Game/Demo/DemoCastGroupHolder.hpp"
 #include "Game/Demo/DemoCastGroup.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DemoCastGroupHolder::DemoCastGroupHolder() : NameObjGroup("デモ関係者グループ保持", 32) {
+    lumacore::setClass(this, lumacore::kClassId< DemoCastGroupHolder >);
 }
 
 bool DemoCastGroupHolder::tryRegisterDemoActor(LiveActor* pActor, const TableIter& rIter, const PlacementId& rInfo) const {

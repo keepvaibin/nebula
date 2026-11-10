@@ -4,8 +4,10 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CollisionDirector::CollisionDirector() : NameObj("地形コリジョン"), mCategoryKeeper(), mCode() {
+    lumacore::setClass(this, lumacore::kClassId< CollisionDirector >);
     mCode = new CollisionCode();
 
     for (s32 i = 0; i < CollisionCategory_Num; i++) {

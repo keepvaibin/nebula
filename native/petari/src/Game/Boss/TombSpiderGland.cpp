@@ -2,6 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTombSpiderGland {
     NEW_NERVE(TombSpiderGlandNrvWait, TombSpiderGland, Wait);
@@ -12,6 +13,7 @@ namespace NrvTombSpiderGland {
 
 TombSpiderGland::TombSpiderGland(LiveActor* pActor, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName)
     : PartsModel(pActor, pName, "TombSpiderGland", nullptr, MR::DrawBufferType_Enemy, false) {
+    lumacore::setClass(this, lumacore::kClassId< TombSpiderGland >);
     MR::initLightCtrl(this);
     initFixedPosition(rPos, rRotate, pJointName);
 }

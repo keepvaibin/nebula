@@ -6,6 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     bool isSensorActive(const HitSensor* pSensor) {
@@ -157,4 +158,5 @@ namespace MR {
 SensorHitChecker::SensorHitChecker(const char* pName)
     : NameObj(pName), mPlayerGroup(new SensorGroup(0x10)), mRideGroup(new SensorGroup(0x80)), mEyeGroup(new SensorGroup(0x200)),
       mSimpleGroup(new SensorGroup(0x800)), mMapObjGroup(new SensorGroup(0x400)), mCharacterGroup(new SensorGroup(0x400)) {
+    lumacore::setClass(this, lumacore::kClassId< SensorHitChecker >);
 }

@@ -19,6 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
@@ -89,6 +90,7 @@ namespace NrvTripodBossLeg {
 TripodBossLeg::TripodBossLeg(const char* pName)
     : LiveActor(pName), mBoss(), mMoveArea(), mPrevStepPoint(), mStepPoint(), mJoint(new IKJoint()), mAnkleStartQuat(0, 0, 0, 1), mAnkleLandingQuat(0, 0, 0, 1), mRootLocalPos(0, 0, 0),
       mForceEndPoint(0, 0, 0), mEndVelocity(0, 0, 0), mEndTarget(0, 0, 0), mPoseMode(1), mLandingHeight(), mIsAttackHit(), mIsPressPlayer(), mDemoEffectTiming() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossLeg >);
     mRootLocalMtx.identity();
     mEndJointMtx.identity();
     mAnkleShadowMtx.identity();

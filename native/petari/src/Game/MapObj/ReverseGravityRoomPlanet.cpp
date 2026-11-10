@@ -2,6 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvReverseGravityRoomPlanet {
     NEW_NERVE(ReverseGravityRoomPlanetNrvDownStart, ReverseGravityRoomPlanet, DownStart);
@@ -11,6 +12,7 @@ namespace NrvReverseGravityRoomPlanet {
 };  // namespace NrvReverseGravityRoomPlanet
 
 ReverseGravityRoomPlanet::ReverseGravityRoomPlanet(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ReverseGravityRoomPlanet >);
 }
 
 void ReverseGravityRoomPlanet::init(const TableIter& rIter) {

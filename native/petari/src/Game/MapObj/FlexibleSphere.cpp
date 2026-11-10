@@ -20,6 +20,7 @@
 #include <nebula_math.h>
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 3000.0f);
@@ -57,6 +58,7 @@ namespace {
 };  // namespace
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {
+    lumacore::setClass(this, lumacore::kClassId< FlexibleSphere >);
 }
 
 // Grows to its max scale and shrinks to its min, quaking at each end, once the player stands on it (or switch A turns

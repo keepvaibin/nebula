@@ -10,6 +10,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 70.0f);
@@ -115,6 +116,7 @@ namespace NrvKoteBug {
 KoteBug::KoteBug(const char* pName)
     : LiveActor(pName), mScaleController(), mStampController(), mSpinHitController(), mStarPointer(), mFront(0, 0, 1), mPosture(0, 0, 0, 1),
       mJointController() {
+    lumacore::setClass(this, lumacore::kClassId< KoteBug >);
 }
 
 void KoteBug::init(const TableIter& rIter) {

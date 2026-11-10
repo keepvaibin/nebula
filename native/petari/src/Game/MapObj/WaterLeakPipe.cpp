@@ -3,6 +3,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
@@ -24,6 +25,7 @@ namespace NrvWaterLeakPipe {
 };  // namespace NrvWaterLeakPipe
 
 IceStepNoSlip::IceStepNoSlip(MtxPtr mtx) : ModelObj("アイス床", "IceStepNoSlip", mtx, MR::DrawBufferType_IndirectMapObjStrongLight, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< IceStepNoSlip >);
 }
 
 void IceStepNoSlip::init(const TableIter& rIter) {
@@ -57,6 +59,7 @@ void IceStepNoSlip::exeBreak() {
 
 WaterLeakPipe::WaterLeakPipe(const char* pName)
     : LiveActor(pName), mIceStep(), mPipeHeight(::sDefaultHeight), mTopMtx(), mBottomMtx(), mClippingCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< WaterLeakPipe >);
 }
 
 void WaterLeakPipe::init(const TableIter& rIter) {

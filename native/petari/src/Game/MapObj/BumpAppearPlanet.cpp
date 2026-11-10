@@ -3,6 +3,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvBumpAppearPlanet {
     NEW_NERVE(BumpAppearPlanetNrvWait, BumpAppearPlanet, Wait);
@@ -11,6 +12,7 @@ namespace NrvBumpAppearPlanet {
 };  // namespace NrvBumpAppearPlanet
 
 BumpAppearPlanet::BumpAppearPlanet(const char* pName) : MapObjActor(pName), mCollisionB(), mCollisionC() {
+    lumacore::setClass(this, lumacore::kClassId< BumpAppearPlanet >);
 }
 
 void BumpAppearPlanet::init(const TableIter& rIter) {

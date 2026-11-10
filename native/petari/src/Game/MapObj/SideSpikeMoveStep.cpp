@@ -6,6 +6,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
@@ -18,6 +19,7 @@ namespace NrvSideSpikeMoveStep {
 
 SideSpikeMoveStep::SideSpikeMoveStep(const char* pName)
     : MapObjActor(pName), mScaleController(nullptr), mStateBindStarPointer(nullptr), mRailClipping(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SideSpikeMoveStep >);
 }
 
 void SideSpikeMoveStep::init(const TableIter& rIter) {

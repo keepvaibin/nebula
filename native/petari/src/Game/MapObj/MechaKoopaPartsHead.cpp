@@ -4,6 +4,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoBreak_shakeCameraInfinity_1, "exeDemoBreak.shakeCameraInfinity.1", 0.2f);
@@ -30,6 +31,7 @@ namespace NrvMechaKoopaPartsHead {
 };  // namespace NrvMechaKoopaPartsHead
 
 MechaKoopaPartsHead::MechaKoopaPartsHead(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MechaKoopaPartsHead >);
 }
 
 void MechaKoopaPartsHead::init(const TableIter& rIter) {

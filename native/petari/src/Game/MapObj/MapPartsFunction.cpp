@@ -1,9 +1,11 @@
 #include "Game/MapObj/MapPartsFunction.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Spine.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MapPartsFunction::MapPartsFunction(LiveActor* pHost, const char* pName)
     : NameObj(pName != nullptr ? pName : "マップパーツ機能"), mSpine(), mHost(pHost), mIsActive(true) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsFunction >);
 }
 
 bool MapPartsFunction::sendMsgToHost(u32 msg) {

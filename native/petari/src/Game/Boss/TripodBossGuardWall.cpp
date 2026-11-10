@@ -18,6 +18,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct WallPartPlacementAngle {
@@ -43,6 +44,7 @@ namespace NrvTriPodBossGuardWall {
 };  // namespace NrvTriPodBossGuardWall
 
 TripodBossGuardWall::TripodBossGuardWall(const char* pName) : LiveActor(pName), mCameraTargetMtx(), mStartTrans(0.0f, 0.0f, 0.0f), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossGuardWall >);
     mBaseMtx.identity();
 }
 

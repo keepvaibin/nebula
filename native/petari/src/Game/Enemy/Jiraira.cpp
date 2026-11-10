@@ -14,6 +14,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -40,6 +41,7 @@ namespace NrvJiraira {
 };  // namespace NrvJiraira
 
 Jiraira::Jiraira(const char* pName) : LiveActor(pName), mBodyCollision(), mExplodeRadius(500.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Jiraira >);
 }
 
 void Jiraira::init(const TableIter& rIter) {

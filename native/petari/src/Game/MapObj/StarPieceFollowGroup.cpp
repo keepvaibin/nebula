@@ -17,6 +17,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_followPieces_f1, "followPieces.f1", 0.25f);
 NEBULA_TUNABLE_NAMED(f32, cNum_followPieces_f2, "followPieces.f2", 10.0f);
@@ -36,6 +37,7 @@ namespace NrvStarPieceFollowGroup {
 
 StarPieceFollowGroup::StarPieceFollowGroup(const char* pName)
     : LiveActor(pName), mPieces(nullptr), mPieceOffsets(nullptr), mNumPiecesTotal(6), mNumPiecesUse(0), mRadius(350.0f), mAngle(0.0f), mTimeLimit(1200) {
+    lumacore::setClass(this, lumacore::kClassId< StarPieceFollowGroup >);
 }
 
 void StarPieceFollowGroup::init(const TableIter& rIter) {

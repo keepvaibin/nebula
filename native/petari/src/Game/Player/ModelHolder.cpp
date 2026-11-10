@@ -4,8 +4,10 @@
 #include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/System/LumaCore.hpp"
 
 ModelHolder::ModelHolder(const char* pName, bool b) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ModelHolder >);
     initModelManagerWithAnm(pName, nullptr, b);
     MR::invalidateClipping(this);
     kill();

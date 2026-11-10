@@ -18,6 +18,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 220.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 25.0f);
@@ -64,6 +65,7 @@ namespace NrvTeresaRacer {
 };  // namespace NrvTeresaRacer
 
 TeresaRacer::TeresaRacer(const char* pName) : NPCActor(pName), mTakeOutStar(), mCameraInfo(), mIsGoal(), mBgmState() {
+    lumacore::setClass(this, lumacore::kClassId< TeresaRacer >);
 }
 
 void TeresaRacer::init(const TableIter& rIter) {

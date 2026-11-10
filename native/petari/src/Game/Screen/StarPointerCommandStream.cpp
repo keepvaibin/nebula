@@ -9,6 +9,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sMinWidth, 6.0f);
@@ -26,6 +27,7 @@ namespace NrvStarPointerCommandStream {
 
 StarPointerCommandStream::StarPointerCommandStream(const Vec2f* pScreenPos)
     : LayoutActor("スターポインタ指示線", true), mOffScreenTime(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
+    lumacore::setClass(this, lumacore::kClassId< StarPointerCommandStream >);
 }
 
 void StarPointerCommandStream::start(const Vec3f* pPos, bool /*b*/) {

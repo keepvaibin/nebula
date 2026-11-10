@@ -22,6 +22,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f1, "exeTurn.f1", 2.0f);
 
@@ -94,6 +95,7 @@ namespace NrvKaron {
 
 Karon::Karon(const char* pName)
     : LiveActor(pName), mTerritoryMover(nullptr), mStopSwAnim(false), mScaleController(nullptr), mStateStarPointer(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< Karon >);
 }
 
 void Karon::init(const TableIter& rIter) {

@@ -5,6 +5,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <NebulaGpu.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeCylinder_f1, "ShadowVolumeCylinder.f1", 100.0f);
 
@@ -16,6 +17,7 @@ ShadowVolumeCylinder::~ShadowVolumeCylinder() {
 }
 
 ShadowVolumeCylinder::ShadowVolumeCylinder() : ShadowVolumeModel("影描画[ボリューム円柱]") {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeCylinder >);
     mRadius = cNum_ShadowVolumeCylinder_f1;
     initVolumeModel("ShadowVolumeCylinder");
 }

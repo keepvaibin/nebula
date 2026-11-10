@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
 
@@ -25,6 +26,7 @@ namespace NrvPrizeRing {
 };  // namespace NrvPrizeRing
 
 PrizeRing::PrizeRing() : ModelObj("PrizeRing", "PrizeRing", nullptr, -2, -2, -2, false), mLifeTime(::sDefaultLifeTime) {
+    lumacore::setClass(this, lumacore::kClassId< PrizeRing >);
 }
 
 void PrizeRing::init(const TableIter& /*rIter*/) {

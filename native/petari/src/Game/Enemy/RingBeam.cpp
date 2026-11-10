@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f1, "drawShape.f1", 0.2026834f);
 NEBULA_TUNABLE_NAMED(f32, cNum_drawShape_f2, "drawShape.f2", 5.0f);
@@ -48,6 +49,7 @@ namespace NrvRingBeam {
 };  // namespace NrvRingBeam
 
 RingBeamShadowDrawer::RingBeamShadowDrawer(const LiveActor* pHost) : ShadowVolumeDrawer("影描画[リングビーム]") {
+    lumacore::setClass(this, lumacore::kClassId< RingBeamShadowDrawer >);
     mHost = pHost;
     mRadius = 0.0f;
 }
@@ -179,6 +181,7 @@ u32 RingBeamShadowDrawer::calcDrawLives() const {
 }
 
 RingBeam::RingBeam(const char* pName, LiveActor* pHost, bool isFollowGravity, bool hasShadow) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RingBeam >);
     mHost = pHost;
     mSpeed = cNum_RingBeam_f1;
     mLife = 100;

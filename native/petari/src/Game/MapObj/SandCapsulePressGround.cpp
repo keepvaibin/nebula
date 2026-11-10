@@ -15,6 +15,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3600.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappearDemo_f1, "exeDisappearDemo.f1", 2.0f);
@@ -47,6 +48,7 @@ namespace NrvSandCapsulePressGround {
 };  // namespace NrvSandCapsulePressGround
 
 SandCapsulePressGround::SandCapsulePressGround(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SandCapsulePressGround >);
     mEffectMtx.identity();
 }
 

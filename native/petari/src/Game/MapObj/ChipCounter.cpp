@@ -8,6 +8,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
@@ -30,6 +31,7 @@ namespace NrvChipCounter {
 };  // namespace NrvChipCounter
 
 ChipCounter::ChipCounter(const char* pName, s32 type) : LayoutActor(pName, true), mCollectCounter(), mCount(), mType(type), mGroupId(-1), mShowRate(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ChipCounter >);
 }
 
 void ChipCounter::init(const TableIter& /*rIter*/) {

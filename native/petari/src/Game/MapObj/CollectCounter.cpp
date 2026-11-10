@@ -2,6 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setPosition_f1, "setPosition.f1", 75.0f);
 
@@ -11,6 +12,7 @@ namespace NrvCollectCounter {
 };  // namespace NrvCollectCounter
 
 CollectCounter::CollectCounter(const char* pName) : LayoutActor(pName, true), mFollowPosition(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CollectCounter >);
 }
 
 void CollectCounter::init(const TableIter& /*rIter*/) {

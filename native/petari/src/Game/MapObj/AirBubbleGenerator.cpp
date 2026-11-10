@@ -9,6 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sGenerateTime, 6);
@@ -21,6 +22,7 @@ namespace NrvAirBubbleGenerator {
 };  // namespace NrvAirBubbleGenerator
 
 AirBubbleGenerator::AirBubbleGenerator(const char* pName) : LiveActor(pName), mWaitTime(180), mBubbleLifeTime(-1) {
+    lumacore::setClass(this, lumacore::kClassId< AirBubbleGenerator >);
 }
 
 void AirBubbleGenerator::init(const TableIter& rIter) {

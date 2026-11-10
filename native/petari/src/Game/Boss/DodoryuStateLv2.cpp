@@ -9,6 +9,7 @@
 
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpOut_f1, "exeJumpOut.f1", 3.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_f1, "exeEscapeJump.f1", 30.0f);
@@ -86,6 +87,7 @@ DodoryuStateLv2::DodoryuStateLv2(Dodoryu* pHost, const DodoryuChaseParam* pChase
     : DodoryuStateBase(pHost, pName), mAttackDir(0.0f, 0.0f, 0.0f), mReadyAppearStep(),
       mChaseAppearStep(), mChaseAppearEndCounter(), mEscapeStepMaxLeft(), mEscapeStepMinLeft(), mFindPosStep(), mChaseMoreCounter(),
       mIsChaseMoreBrake(true), mChaseParam(pChaseParam), mIsPlayerStaggering() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuStateLv2 >);
     initWithoutIter();
 }
 

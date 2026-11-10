@@ -22,6 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 170.0f);
@@ -68,6 +69,7 @@ SkeletalFishGuard::SkeletalFishGuard(SkeletalFishBoss* pFishBoss, const char* pN
     : LiveActor(pName), mFishBoss(pFishBoss), mGuardOffset(0.0f, 0.0f, 0.0f), mAppearWaitStep(), mApartVelocity(0.0f, 0.0f, 0.0f), mApartFallSpeed(),
       mAttackDelay(), mSpeed(), mNumbReturnNerve(), mFront(0.0f, 0.0f, 0.0f), mAppearRandomDir(0.0f, 0.0f, 0.0f), mTargetRailPos(0.0f, 0.0f, 0.0f),
       mTargetPos(0.0f, 0.0f, 0.0f), mTargetRailDir(0.0f, 0.0f, 1.0f), mAppearStartPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishGuard >);
     mScaleController = new AnimScaleController(nullptr);
 }
 

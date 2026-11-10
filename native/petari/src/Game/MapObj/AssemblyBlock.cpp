@@ -17,6 +17,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
@@ -46,6 +47,7 @@ namespace NrvAssemblyBlock {
 AssemblyBlock::AssemblyBlock(const char* pName)
     : LiveActor(pName), mObjArg7(-1), mPlayerSearchDistance(-1.0f), mClipCenter(0.0f, 0.0f, 0.0f), mFloatRotateSpeed(), mTimer(::sDefaultTimer),
       mBloomModel(), mIsTimerType() {
+    lumacore::setClass(this, lumacore::kClassId< AssemblyBlock >);
     mCurrentMtx.identity();
     mAssembledMtx.identity();
     mReturnMtx.identity();

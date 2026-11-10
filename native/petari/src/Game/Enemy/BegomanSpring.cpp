@@ -28,6 +28,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvBegomanSpring {
     NEW_NERVE_ONEND(HostTypeNrvNoCalcWait, BegomanSpring, NoCalcWait, NoCalcWait);
@@ -115,6 +116,7 @@ namespace {
 BegomanSpring::BegomanSpring(const char* pName)
     : BegomanBase(pName), mEventCamera(nullptr), mHead(nullptr), mCameraStartPos(0.0f, 0.0f, 0.0f), mIsCameraActive(false), mCameraInfo(nullptr),
       mIsHideType(false), mBaby(nullptr), mHidePos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanSpring >);
     mHeadMatrix.identity();
     mWaterColumnMatrix.identity();
 }

@@ -24,6 +24,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
@@ -119,6 +120,7 @@ namespace NrvBasaBasa {
 BasaBasa::BasaBasa(const char* pName)
     : LiveActor(pName), mHangModel(nullptr), mScaleController(nullptr), mStampController(nullptr), mSpinHitController(nullptr), mFront(0.0f, 0.0f, 1.0f),
       mChaseDistance(2000.0f), mAttackDistance(0.0f), mTarget(nullptr), mChaseTurnAngle(0.0f), mAttackTarget(0.0f, 0.0f, 0.0f), mIsIceModel(false), mHomePos(0.0f, 0.0f, 0.0f), mHomeDistance(-1.0f), mClipStep(0), mIsOnCeiling(false) {
+    lumacore::setClass(this, lumacore::kClassId< BasaBasa >);
 }
 
 void BasaBasa::init(const TableIter& rIter) {

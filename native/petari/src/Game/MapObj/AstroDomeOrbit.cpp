@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcGalaxyPos_f1, "calcGalaxyPos.f1", 360.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_drawFlat_f1, "drawFlat.f1", 0.5f);
@@ -54,6 +55,7 @@ namespace {
 }  // namespace
 
 AstroDomeOrbit::AstroDomeOrbit() : LiveActor("天文ドームの軌道"), mOrbitRadius(5000.0f), mAngle(), mRingCos(), mRingSin() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeOrbit >);
 }
 
 void AstroDomeOrbit::init(const TableIter& /*rIter*/) {

@@ -7,6 +7,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const Timing sTimingTable[] = {
@@ -35,6 +36,7 @@ namespace NrvTimeLimitLayout {
 
 TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
     : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), mIsNormalDisplay() {
+    lumacore::setClass(this, lumacore::kClassId< TimeLimitLayout >);
     mFlag.mHudPart = NEBULA_HUD_TIMER;
 }
 

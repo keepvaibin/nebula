@@ -3,8 +3,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ScreenPreserver::ScreenPreserver() : NameObj(""), mIsActive(false) {
+    lumacore::setClass(this, lumacore::kClassId< ScreenPreserver >);
 }
 
 void ScreenPreserver::captureIfAllow() {

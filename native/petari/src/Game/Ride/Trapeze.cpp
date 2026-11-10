@@ -22,6 +22,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
@@ -79,6 +80,7 @@ Trapeze::Trapeze(const char* pName)
     : LiveActor(pName), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRopeLength(), mStickPoint(), mTrapezeModel(),
       mRider(), mHangPoint(), mGrabCoord(), mSwingVel(), mSwingReverse(), mIsSwingFront(), mIsSwingBack(), mWasSwingFront(), mWasSwingBack(),
       mCameraInfo(), mPrevSoundLvl() {
+    lumacore::setClass(this, lumacore::kClassId< Trapeze >);
     mPosMtx.identity();
 }
 
@@ -741,6 +743,7 @@ void Trapeze::drawRope(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB,
 }
 
 TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TrapezeRopeDrawInit >);
     mTexture = new GameTexture(MR::loadTexFromArc("Trapeze", "TrapezeRope.bti"));
 
     mMaterial = makeMaterial();

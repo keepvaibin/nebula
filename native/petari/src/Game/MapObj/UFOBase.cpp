@@ -21,6 +21,7 @@
 #include <nebula_geometry.hpp>
 #include <cstddef>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.01f);
@@ -36,6 +37,7 @@ namespace NrvUFOBase {
 };  // namespace NrvUFOBase
 
 UFOBase::UFOBase(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< UFOBase >);
     mCollisionParts = nullptr;
     mLODCtrl = nullptr;
     mModel = nullptr;
@@ -206,9 +208,11 @@ void UFOBase::initSubModel(const TableIter& rIter, const char* name) {
 }
 
 UFOSolid::UFOSolid(const char* pName) : UFOBase(pName) {
+    lumacore::setClass(this, lumacore::kClassId< UFOSolid >);
 }
 
 UFOBreakable::UFOBreakable(const char* pName) : UFOBase(pName) {
+    lumacore::setClass(this, lumacore::kClassId< UFOBreakable >);
 }
 
 void UFOBreakable::initSensorType() {

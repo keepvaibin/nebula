@@ -7,6 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 350.0f);
 
@@ -21,6 +22,7 @@ namespace {
 };  // namespace
 
 KabokuriFire::KabokuriFire(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KabokuriFire >);
     mBaseMtx.identity();
 }
 

@@ -6,6 +6,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -17,6 +18,7 @@ namespace {
 };  // namespace
 
 CameraTwistedPassage::CameraTwistedPassage(const char* pName) : Camera(pName), mRailRider(), mDistMin(500.0f), mDistMax(1300.0f), mIsReversed() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTwistedPassage >);
 }
 
 void CameraTwistedPassage::reset() {

@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 280.0f);
@@ -45,6 +46,7 @@ namespace NrvBossStinkBugBomb {
 };  // namespace NrvBossStinkBugBomb
 
 BossStinkBugBomb::BossStinkBugBomb(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BossStinkBugBomb >);
 }
 
 void BossStinkBugBomb::init(const TableIter& /*rIter*/) {

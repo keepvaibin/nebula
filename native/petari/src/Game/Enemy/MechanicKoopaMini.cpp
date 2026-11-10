@@ -25,6 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 130.0f);
@@ -92,6 +93,7 @@ namespace {
 };  // namespace
 
 MechanicKoopaMini::MechanicKoopaMini(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MechanicKoopaMini >);
     mIsAppearJumping = false;
     mIsForbidPause = false;
     mScaleController = nullptr;

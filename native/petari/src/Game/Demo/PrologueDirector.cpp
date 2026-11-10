@@ -20,6 +20,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const char* sPictureBookDemoName = "プロローグデモ";
@@ -53,6 +54,7 @@ namespace {
 
 PrologueDirector::PrologueDirector(const char* pName)
     : LiveActor(pName), mPictureBook(nullptr), mLetter(nullptr), mScenery(nullptr), mMarioPosDummyModel(nullptr), mCameraTarget(nullptr), mUseSwitchA(false) {
+    lumacore::setClass(this, lumacore::kClassId< PrologueDirector >);
     mPlayerBaseMtx.identity();
 }
 
@@ -300,6 +302,7 @@ void PrologueDirector::pauseOff() {
 }
 
 PrologueHolder::PrologueHolder(const char* pName) : NameObj(pName), mDirector() {
+    lumacore::setClass(this, lumacore::kClassId< PrologueHolder >);
 }
 
 void PrologueHolder::registerPrologueObj(PrologueDirector* pDirector) {

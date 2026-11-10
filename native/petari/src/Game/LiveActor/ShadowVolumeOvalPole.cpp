@@ -6,6 +6,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <NebulaGpu.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeOvalPole_f1, "ShadowVolumeOvalPole.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeOvalPole_f2, "ShadowVolumeOvalPole.f2", 100.0f);
@@ -25,6 +26,7 @@ ShadowVolumeOvalPole::~ShadowVolumeOvalPole() {
 }
 
 ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("影描画[ボリューム楕円柱]") {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeOvalPole >);
     mSize.x = cNum_ShadowVolumeOvalPole_f1;
     mSize.y = cNum_ShadowVolumeOvalPole_f2;
     mSize.z = cNum_ShadowVolumeOvalPole_f3;

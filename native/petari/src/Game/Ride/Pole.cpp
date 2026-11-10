@@ -20,6 +20,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -100,6 +101,7 @@ Pole::Pole(const char* pName)
     : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mTopPos(0.0f, 0.0f, 0.0f), mHeight(), mDisableHandstand(), mIsSquare(), mNoModel(),
       mInvertStick(), mUsePole9mCollision(), mClimbCoord(), mClimbSpeed(), mRider(), mCameraInfo(), mCenterPos(0.0f, 0.0f, 0.0f),
       mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mTopMtx(), mBottomMtx() {
+    lumacore::setClass(this, lumacore::kClassId< Pole >);
     mPosMtx.identity();
     mBaseMtx.identity();
 }

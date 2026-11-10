@@ -14,6 +14,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoWait_f1, "exeDemoWait.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exePlay_f1, "exePlay.f1", 20.0f);
@@ -60,6 +61,7 @@ namespace {
 };  // namespace
 
 DodoryuDemoOpening::DodoryuDemoOpening(Dodoryu* pHost, const char* pName) : DodoryuStateBase(pHost, pName), mActorCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuDemoOpening >);
     initWithoutIter();
 }
 
@@ -235,6 +237,7 @@ void DodoryuDemoOpening::turnToRabbit() {
 }
 
 DodoryuDemoAppear::DodoryuDemoAppear(Dodoryu* pHost, const char* pName) : DodoryuStateBase(pHost, pName), mActorCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuDemoAppear >);
     initWithoutIter();
 }
 
@@ -295,6 +298,7 @@ void DodoryuDemoAppear::exePlay() {
 }
 
 DodoryuDemoAngry::DodoryuDemoAngry(Dodoryu* pHost, const char* pName) : DodoryuStateBase(pHost, pName), mActorCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuDemoAngry >);
     initWithoutIter();
 }
 
@@ -355,6 +359,7 @@ void DodoryuDemoAngry::exePlay() {
 }
 
 DodoryuDemoDown::DodoryuDemoDown(Dodoryu* pHost, const char* pName) : DodoryuStateBase(pHost, pName), mActorCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuDemoDown >);
     initWithoutIter();
 }
 

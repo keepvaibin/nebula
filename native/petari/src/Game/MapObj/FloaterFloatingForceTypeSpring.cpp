@@ -3,6 +3,7 @@
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.001f);
@@ -39,6 +40,7 @@ void FloaterSpringForce::setSpringBaseValue(f32 baseValue) {
 
 FloaterFloatingForceTypeSpring::FloaterFloatingForceTypeSpring(LiveActor* pHost, const char* pName)
     : FloaterFloatingForce(pHost, pName), mSpringForce(), mVelocity(gZeroVec), mRideSinkSpeed() {
+    lumacore::setClass(this, lumacore::kClassId< FloaterFloatingForceTypeSpring >);
 }
 
 void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {

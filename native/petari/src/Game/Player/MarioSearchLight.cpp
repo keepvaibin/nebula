@@ -25,6 +25,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 80.0f);
@@ -51,6 +52,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f12, "drawSearchLight.f12", 255.0
 NEBULA_TUNABLE_NAMED(f32, cNum_drawSearchLight_f13, "drawSearchLight.f13", 4.0f);
 
 MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "サーチライト", "SearchLightCone", nullptr, -1, 0), mBeamDistance(), mHitTimer(), mTarget() {
+    lumacore::setClass(this, lumacore::kClassId< MarioSearchLight >);
 }
 
 void MarioSearchLight::init(const TableIter& rParam1) {

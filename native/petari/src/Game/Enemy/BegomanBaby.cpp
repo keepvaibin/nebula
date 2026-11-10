@@ -17,6 +17,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 45.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 45.0f);
@@ -127,10 +128,12 @@ namespace {
 };  // namespace
 
 BegomanBaby::BegomanBaby(const char* pName) : BegomanBase(pName), mBabyDelegator(), mHost(), mAppearThreeStarPiece() {
+    lumacore::setClass(this, lumacore::kClassId< BegomanBaby >);
     mWaterColumnMatrix.identity();
 }
 
 BegomanBaby::BegomanBaby(NameObj* pHost, const char* pName) : BegomanBase(pName), mBabyDelegator(), mHost(pHost), mAppearThreeStarPiece() {
+    lumacore::setClass(this, lumacore::kClassId< BegomanBaby >);
     mWaterColumnMatrix.identity();
 }
 

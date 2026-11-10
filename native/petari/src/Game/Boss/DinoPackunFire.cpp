@@ -11,6 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -44,6 +45,7 @@ DinoPackunFireHolder::DinoPackunFireHolder(s32 numMax) : DeriveActorGroup< DinoP
 }
 
 DinoPackunFire::DinoPackunFire(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunFire >);
     mRollQuat.x = 0.0f;
     mRollQuat.y = 0.0f;
     mRollQuat.z = 0.0f;

@@ -9,6 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 2.0f);
@@ -27,6 +28,7 @@ namespace NrvSphereRailDash {
 
 SphereRailDash::SphereRailDash(const char* pName)
     : LiveActor(pName), mBinderSensor(), mOffset(0.0f, 0.0f, 0.0f), mEndSpeed(50.0f), mCoordCubic(), mCoordQuadratic(), mCoordLinear(), mMoveStep() {
+    lumacore::setClass(this, lumacore::kClassId< SphereRailDash >);
 }
 
 void SphereRailDash::init(const TableIter& rIter) {

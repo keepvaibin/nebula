@@ -19,6 +19,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_setAnimRate_1, "exeOpen.setAnimRate.1", 1.0f);
@@ -97,6 +98,7 @@ PictureBookLayout::PictureBookLayout(s32 chapterMin, s32 chapterMax, bool isRose
     : LayoutActor("絵本レイアウト", true), mChapterMin(chapterMin), mChapterMax(chapterMax), mChapterRosettaMax(chapterMax), mChapterNo(1), mPageNo(),
       mTextIndex(), mNotReadedChapterNo(-1), mNotReadedPageNo(-1), mNotReadedTextIndex(-1), mTexMaps(), mChapterTexMaps(), mTitleTexMap(), mCoverFrontTexMap(),
       mCoverBackTexMap(), mNextItemDir(1), mIsNextItemFast(), mIconAButton(), mContentsButtonPaneController(), mCloseButton() {
+    lumacore::setClass(this, lumacore::kClassId< PictureBookLayout >);
     if (!isRosettaReading) {
         mContentsButtonPaneController = new ButtonPaneController*[getChapterMax()];
     }

@@ -8,6 +8,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstddef>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(GalaxyMapGalaxyDetailAppear, GalaxyMapGalaxyDetail, Appear);
@@ -16,6 +17,7 @@ namespace {
 };  // namespace
 
 GalaxyMapGalaxyDetail::GalaxyMapGalaxyDetail() : LayoutActor("GalaxyDetail", true) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapGalaxyDetail >);
     mInfoLayoutSetter = nullptr;
 }
 

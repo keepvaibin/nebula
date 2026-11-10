@@ -15,6 +15,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_reboundVelocityFromCollision_1, "exeDown.reboundVelocityFromCollision.1", 1.0f);
@@ -51,6 +52,7 @@ namespace NrvKoopaJrShipCannonShell {
 
 KoopaJrShipCannonShell::KoopaJrShipCannonShell(const char* pName)
     : CannonShellBase(pName), mFreezePos(gZeroVec), mFreezeVelocity(gZeroVec), mFreezeStep() {
+    lumacore::setClass(this, lumacore::kClassId< KoopaJrShipCannonShell >);
     mPoseQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
     mPosition.set(gZeroVec);
 }

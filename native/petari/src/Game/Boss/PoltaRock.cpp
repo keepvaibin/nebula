@@ -16,6 +16,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, cRadius, 120.0f);
@@ -46,6 +47,7 @@ namespace NrvPoltaRock {
 
 PoltaRock::PoltaRock(const char* pName)
     : LiveActor(pName), mOwner(nullptr), mRollQuat(0.0f, 0.0f, 0.0f, 1.0f), mChaseDir(0.0f, 0.0f, 1.0f), mOwnerLocalPos(0.0f, 0.0f, 0.0f), mColor(Color_White) {
+    lumacore::setClass(this, lumacore::kClassId< PoltaRock >);
 }
 
 void PoltaRock::init(const TableIter& rIter) {

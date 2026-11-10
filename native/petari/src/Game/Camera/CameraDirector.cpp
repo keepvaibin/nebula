@@ -38,6 +38,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_format.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_CameraDirector_f1, "CameraDirector.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcSubjective_f1, "calcSubjective.f1", 100.0f);
@@ -62,6 +63,7 @@ namespace {
 };  // namespace
 
 CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CameraDirector >);
     mTargetObj = nullptr;
     mStack = new CameraManStack();
     mOnlyCamera = new OnlyCamera("OnlyCamera");

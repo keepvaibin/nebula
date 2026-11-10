@@ -5,6 +5,7 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvGalaxyConfirmLayout {
     NEW_NERVE(GalaxyConfirmLayoutNrvSelecting, GalaxyConfirmLayout, Selecting);
@@ -13,6 +14,7 @@ namespace NrvGalaxyConfirmLayout {
 };  // namespace NrvGalaxyConfirmLayout
 
 GalaxyConfirmLayout::GalaxyConfirmLayout() : LayoutActor("ギャラクシー確認レイアウト", true), mPaneCtrl(nullptr), mBackButton(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyConfirmLayout >);
 }
 
 void GalaxyConfirmLayout::init(const TableIter& /*rIter*/) {

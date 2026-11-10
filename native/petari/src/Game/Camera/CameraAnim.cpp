@@ -5,6 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 180.0f);
@@ -73,6 +74,7 @@ void CameraAnim::getWatchPos(Vec3f* pWatchPos, f32 key) const {
 
 CameraAnim::CameraAnim(const char* pName)
     : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mIsPaused(), mShownFrame(-1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraAnim >);
 }
 
 void CameraAnim::reset() {

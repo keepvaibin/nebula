@@ -8,6 +8,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_TripodBossBreakMovement_f1, "TripodBossBreakMovement.f1", 0.2f);
 NEBULA_TUNABLE_NAMED(f32, cNum_TripodBossBreakMovement_f2, "TripodBossBreakMovement.f2", 0.9f);
@@ -34,6 +35,7 @@ namespace NrvTripodBossBreakMovement {
 
 TripodBossBreakMovement::TripodBossBreakMovement(const char* pName)
     : LiveActor(pName), mSpring(), mMoment(0, 0, 0), mBreakVelocity(0, 0, 0), mFlyDir(0, 1, 0), mFlyDirRandomRate(0.3f), mFlySpeed(), mDamping(0.9f), mJointIndex(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossBreakMovement >);
     mMtx.identity();
     initNerve(GET_NERVE(TripodBossBreakMovement, TripodBossBreakMovementNrvWait));
     MR::invalidateClipping(this);

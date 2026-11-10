@@ -8,6 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvSimpleEffectObj {
     NEW_NERVE(HostTypeWait, SimpleEffectObj, Wait);
@@ -42,6 +43,7 @@ namespace {
 };  // namespace
 
 SimpleEffectObj::SimpleEffectObj(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SimpleEffectObj >);
     mObjName = nullptr;
     mData = nullptr;
 }

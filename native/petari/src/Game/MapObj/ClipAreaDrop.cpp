@@ -7,6 +7,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sExtendsEndTime, 15);
@@ -19,6 +20,7 @@ namespace NrvClipAreaDrop {
 };  // namespace NrvClipAreaDrop
 
 ClipAreaDrop::ClipAreaDrop(const char* pName) : ClipArea(pName), mShapeSphere(new ClipAreaShapeSphere()), mBaseSize(500.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ClipAreaDrop >);
     setShape(mShapeSphere);
 }
 

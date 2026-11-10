@@ -25,6 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -94,6 +95,7 @@ namespace NrvNokonokoLand {
 NokonokoLand::NokonokoLand(const char* pName)
     : LiveActor(pName), mJetTurtle(new JetTurtle("陸ノコ用ジェット亀")), mRailPointPassChecker(new MapPartsRailPointPassChecker(this)),
       mAnimScaleController(nullptr), mBindStarPointerState(nullptr), mTurtleType(0), mAppearPos(gZeroVec), mTurnAxis(Vec3f(0.0f, 1.0f, 0.0f)) {
+    lumacore::setClass(this, lumacore::kClassId< NokonokoLand >);
     mTargetQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

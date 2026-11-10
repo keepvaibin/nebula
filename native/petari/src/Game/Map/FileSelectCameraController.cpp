@@ -5,6 +5,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeTitle_f1, "exeTitle.f1", 15000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeTitle_f2, "exeTitle.f2", 15000.0f);
@@ -32,6 +33,7 @@ namespace {
 FileSelectCameraController::FileSelectCameraController(const char* pName)
     : LiveActor(pName), mWPoint(0.0f, 0.0f, 0.0f), mPrevWPoint(0.0f, 0.0f, 0.0f), mFovy(::cTitleFovy), mPrevFovy(::cTitleFovy),
       mUpVec(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectCameraController >);
 }
 
 void FileSelectCameraController::init(const TableIter& /*rIter*/) {

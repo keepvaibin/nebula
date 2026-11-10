@@ -9,6 +9,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHoverFront_f1, "exeHoverFront.f1", 0.995f);
@@ -40,6 +41,7 @@ SeaGull::SeaGull(SeaGullGroup* pGroup)
     : LiveActor("カモメ"), mSeaGullGroup(pGroup), mPointIndex(), mIsReverse(), mTargetUpdateTimer(MR::getRandom(0, 180)), mTargetPosition(),
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mBankedUp(0.0f, 1.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mHoverTimer(), mBankAngle(),
       mGlideTimer(), mLiftTimer(), mChirpTimer() {
+    lumacore::setClass(this, lumacore::kClassId< SeaGull >);
 }
 
 void SeaGull::init(const TableIter& rIter) {
@@ -238,6 +240,7 @@ void SeaGull::calcAndSetBaseMtx() {
 }
 
 SeaGullGroup::SeaGullGroup(const char* pName) : LiveActor(pName), mPointCount(), mPoints() {
+    lumacore::setClass(this, lumacore::kClassId< SeaGullGroup >);
 }
 
 void SeaGullGroup::init(const TableIter& rIter) {

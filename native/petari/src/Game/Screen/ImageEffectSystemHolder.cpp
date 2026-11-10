@@ -3,8 +3,10 @@
 #include "Game/Screen/ImageEffectDirector.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ImageEffectSystemHolder::ImageEffectSystemHolder() : NameObj("画像効果管理") {
+    lumacore::setClass(this, lumacore::kClassId< ImageEffectSystemHolder >);
     mResource = new ImageEffectResource();
     mDirector = nullptr;
     mDirector = new ImageEffectDirector("全画面エフェクト管理");

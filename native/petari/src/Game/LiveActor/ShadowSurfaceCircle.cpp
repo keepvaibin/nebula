@@ -6,6 +6,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 6.2831855f);
 
@@ -18,6 +19,7 @@ ShadowSurfaceCircle::~ShadowSurfaceCircle() {
 }
 
 ShadowSurfaceCircle::ShadowSurfaceCircle() : ShadowSurfaceDrawer("影描画[水面円]"), mRadius(100.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceCircle >);
 }
 
 void ShadowSurfaceCircle::setRadius(f32 radius) {

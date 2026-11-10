@@ -5,6 +5,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_reset_f2, "reset.f2", 15.0f);
@@ -13,6 +14,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.05f);
 
 CameraWaterPlanet::CameraWaterPlanet(const char* pName) : Camera(pName), mDistMin(500.0f), mDistMax(2000.0f), mAngleX(MR::pi() / 4.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraWaterPlanet >);
 }
 
 void CameraWaterPlanet::reset() {

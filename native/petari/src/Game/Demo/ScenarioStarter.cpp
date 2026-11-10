@@ -25,6 +25,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRailMove_f1, "exeRailMove.f1", 0.4f);
@@ -49,6 +50,7 @@ ScenarioStarter::ScenarioStarter(const char* pName)
     : LiveActor(pName), mBindActor(), mHeadDir(0.0f, 1.0f, 0.0f), mJumpVec(0.0f, 0.0f, 0.0f), mShootPath(), mSpinDriverCamera(), mInitUp(0.0f, 1.0f, 0.0f), mInitFront(0.0f, 0.0f, 1.0f),
       mSpinAngle(), mSpinAngleMax(), mFallAngle(), mFlightTime(300), mFlyMotionStartStep(), mFlyEndStep(), mFallMotionStartStep(), mInitalPlayerRotation(),
       mWelcomeLayout(), mTitle(), mStartPos(0.0f, 0.0f, 0.0f), mStartRotate(0.0f, 0.0f, 0.0f), mIsSkipped() {
+    lumacore::setClass(this, lumacore::kClassId< ScenarioStarter >);
     mBindQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

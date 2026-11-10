@@ -7,6 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 100.0f);
@@ -28,6 +29,7 @@ namespace {
 LavaProminenceTriple::LavaProminenceTriple(const char* pName)
     : LiveActor(pName), mBloomModel(), mBaseRot(0, 0, 0, 1), mCurrRot(0, 0, 0, 1), mSide(0, 0, 1), mFront(1, 0, 0), mRotateVel(::sInitRotateVel),
       mIsAppearDrop1(), mIsAppearDrop2(), mIsAppearDrop3(), mIsEnvironment(), mDefaultAppearTime() {
+    lumacore::setClass(this, lumacore::kClassId< LavaProminenceTriple >);
     mBloomMtx.identity();
 }
 

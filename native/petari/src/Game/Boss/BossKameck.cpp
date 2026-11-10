@@ -22,6 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 240.0f);
@@ -40,6 +41,7 @@ namespace {
 BossKameck::BossKameck(const char* pName, const char* pModelName)
     : LiveActor(pName), mModelName(pModelName), mPoseQuat(0.0f, 1.0f), mFront(0, 0, 1), mSequencer(), mKameckHolder(), mJointCtrl(), mActorList(),
       mBeamEventListener(), mMoveRail(), mMoveRailNum(), mLastVelocity(0, 0, 0), mObjArg7(-1) {
+    lumacore::setClass(this, lumacore::kClassId< BossKameck >);
     mBeamEventListener = new BossKameckBeamEventListener(this);
     mActorList = new ActiveActorList(8);
 }

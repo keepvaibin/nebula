@@ -48,6 +48,7 @@
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initStep_f1, "initStep.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
@@ -150,6 +151,7 @@ FileSelector::FileSelector(const char* pName)
       ,
       mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mIsQuitFocusWanted(false)
 {
+    lumacore::setClass(this, lumacore::kClassId< FileSelector >);
 }
 
 void FileSelector::init(const TableIter& rIter) {

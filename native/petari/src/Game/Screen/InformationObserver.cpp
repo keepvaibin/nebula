@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 struct InformationObserverAttribute {
     const char* mMessageId;
@@ -47,6 +48,7 @@ namespace NrvInformationObserver {
 };  // namespace NrvInformationObserver
 
 InformationObserver::InformationObserver() : LiveActor("初出監視"), mType(Type_Bee), mIsTimeKeepDemo(false), mDisplayFrame(-1) {
+    lumacore::setClass(this, lumacore::kClassId< InformationObserver >);
 }
 
 void InformationObserver::init(const TableIter& /*rIter*/) {

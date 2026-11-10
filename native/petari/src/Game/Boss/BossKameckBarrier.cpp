@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // Added to the barrier's height where it is placed (0).
@@ -15,6 +16,7 @@ namespace NrvBossKameckBarrier {
 };  // namespace NrvBossKameckBarrier
 
 BossKameckBarrier::BossKameckBarrier(const char* pName, const char* pModelName) : LiveActor(pName), mModelName(pModelName) {
+    lumacore::setClass(this, lumacore::kClassId< BossKameckBarrier >);
 }
 
 void BossKameckBarrier::init(const TableIter& rIter) {

@@ -3,6 +3,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sMaxArrowSwitchMulti, 16);
@@ -13,6 +14,7 @@ namespace {
 };  // namespace
 
 ArrowSwitchMultiHolder::ArrowSwitchMultiHolder() : DeriveActorGroup("複数方向矢印スイッチ管理", ::sMaxArrowSwitchMulti) {
+    lumacore::setClass(this, lumacore::kClassId< ArrowSwitchMultiHolder >);
 }
 
 ArrowSwitchMulti* ArrowSwitchMultiHolder::findSwitch(const PlacementId* pIdInfo) {

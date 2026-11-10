@@ -1,9 +1,11 @@
 #include "Game/NameObj/NameObjGroup.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NameObjGroup::NameObjGroup(const char* pName, int capacity)
     : NameObj(pName), mObjNumMax(capacity), mObjNum(0), mObjArray(new NameObj*[capacity]) {
+    lumacore::setClass(this, lumacore::kClassId< NameObjGroup >);
 }
 
 NameObjGroup::~NameObjGroup() {

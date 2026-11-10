@@ -9,6 +9,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct IsManagerName {
@@ -362,6 +363,7 @@ namespace {
 };  // namespace
 
 AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName), mIndex(), mHashesShared(false) {
+    lumacore::setClass(this, lumacore::kClassId< AreaObjContainer >);
 }
 
 void AreaObjContainer::init(const TableIter& /*rIter*/) {

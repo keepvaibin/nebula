@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
@@ -36,6 +37,7 @@ namespace NrvArrowSwitchMulti {
 };  // namespace NrvArrowSwitchMulti
 
 ArrowSwitchTarget::ArrowSwitchTarget(const char* pName) : NameObj(pName), mIdInfo(), mStageSwitchCtrl(), mTargetIndex(-1) {
+    lumacore::setClass(this, lumacore::kClassId< ArrowSwitchTarget >);
     MR::createArrowSwitchMultiHolder();
 }
 
@@ -75,6 +77,7 @@ void ArrowSwitchTarget::offTarget() {
 
 ArrowSwitchMulti::ArrowSwitchMulti(const char* pName)
     : LiveActor(pName), mIdInfo(), mTargetArray(), mRotAngle(), mRotSpeed(), mActiveTargetIndex(), mRotYTargetIndex(), mIsRotPlus(true) {
+    lumacore::setClass(this, lumacore::kClassId< ArrowSwitchMulti >);
     MR::createArrowSwitchMultiHolder();
 }
 

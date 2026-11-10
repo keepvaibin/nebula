@@ -3,6 +3,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvBattleShipElevator {
     NEW_NERVE(BattleShipElevatorNrvWait, BattleShipElevator, Wait);
@@ -11,6 +12,7 @@ namespace NrvBattleShipElevator {
 };  // namespace NrvBattleShipElevator
 
 BattleShipElevator::BattleShipElevator(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BattleShipElevator >);
 }
 
 void BattleShipElevator::init(const TableIter& rIter) {

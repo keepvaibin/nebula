@@ -4,9 +4,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/System/LumaCore.hpp"
 
 MirrorReflectionModel::MirrorReflectionModel(const LiveActor* pHost, const char* pName, const char* pInternalName, MtxPtr pHostMtx)
     : LiveActor(pName), mHost(pHost), mHostMtx(pHostMtx), mIsHostGone(false) {
+    lumacore::setClass(this, lumacore::kClassId< MirrorReflectionModel >);
     if (pHostMtx) {
         Pos3f pos;
         pos.set(pHostMtx);

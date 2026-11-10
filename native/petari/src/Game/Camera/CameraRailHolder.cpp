@@ -2,6 +2,7 @@
 #include "Game/LiveActor/RailRider.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // A camera rail is a placed rail whose arg 0 (its camera rail id, *pArg) is set and not negative.
@@ -16,6 +17,7 @@ namespace {
 };  // namespace
 
 CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails() {
+    lumacore::setClass(this, lumacore::kClassId< CameraRailHolder >);
     mRails = new ZoneRail[MR::getZoneNum()];
 
     for (s32 zoneId = 0; zoneId < MR::getZoneNum(); zoneId++) {

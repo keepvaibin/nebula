@@ -10,6 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
@@ -82,6 +83,7 @@ Syati::Syati(const char* pName)
     : LiveActor(pName), mClippingRange(), mClippingVec(0.0f, 0.0f, 0.0f), mTalkMessageCtrl(), mActorCameraInfo(), mHideOnShoreMode(-1),
       mPlayerPoseSetterInWater(), mBlinkTimer(0xF0), mJointControlDelegator(), mRaceManagerLayout(), mPrizeRingGroup(), mNumRings(5),
       mStarSpawnType(-1), mSwimMode(-1), mPrizeRingLife(-1), mPrizeRingCount(), mCurrentRailPointNo(-1) {
+    lumacore::setClass(this, lumacore::kClassId< Syati >);
     mPoseQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
     mMarioMoveLocalOffsetVec.zero();
     mBalloonFollowMtx.identity();

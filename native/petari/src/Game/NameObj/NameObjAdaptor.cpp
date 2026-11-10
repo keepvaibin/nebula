@@ -1,7 +1,9 @@
 #include "Game/NameObj/NameObjAdaptor.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NameObjAdaptor::NameObjAdaptor(const char* pName)
     : NameObj(pName), mMovementFunc(nullptr), mCalcAnimFunc(nullptr), mCalcViewFunc(nullptr), mDrawAnimFunc(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< NameObjAdaptor >);
 }
 
 NameObjAdaptor::~NameObjAdaptor() {

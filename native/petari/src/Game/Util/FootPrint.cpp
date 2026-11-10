@@ -12,6 +12,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f1, "initMember.f1", 20.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f2, "initMember.f2", 20.0f);
@@ -26,10 +27,12 @@ namespace {
 };  // namespace
 
 FootPrint::FootPrint(const char* pName, s32 amount, s32 drawType) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FootPrint >);
     initMember(amount, drawType);
 }
 
 FootPrint::FootPrint(const char* pName, s32 amount) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FootPrint >);
     initMember(amount, MR::DrawType_FootPrint);
 }
 

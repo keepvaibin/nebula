@@ -8,6 +8,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <algorithm>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct PlatePriorityLt {
@@ -18,6 +19,7 @@ namespace {
 };  // namespace
 
 GalaxyNamePlateDrawer::GalaxyNamePlateDrawer() : NameObj("ギャラクシー名プレート描画") {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyNamePlateDrawer >);
 }
 
 void GalaxyNamePlateDrawer::init(const TableIter&) {

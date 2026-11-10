@@ -5,6 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
@@ -22,6 +23,7 @@ namespace NrvFountain {
 };  // namespace NrvFountain
 
 Fountain::Fountain(const char* pName) : LiveActor(pName), mFountainName(), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Fountain >);
 }
 
 inline void Fountain::initHitSensors(const char* hitSensor) {

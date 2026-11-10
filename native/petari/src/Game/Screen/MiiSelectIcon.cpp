@@ -10,6 +10,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <Game/Ui/TexMap.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_appearMiiDummy_f1, "appearMiiDummy.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_appearMiiDummy_f2, "appearMiiDummy.f2", 5.0f);
@@ -28,6 +29,7 @@ namespace {
 MiiSelectIcon::MiiSelectIcon(int movementType, int calcAnimType, int drawType, const char* pName)
     : LayoutActor(pName, true), mActiveButton(), mFellowButton(), mMiiButton(), mIcon(), mMiiTexMap(), mFellowTexMap(), mIconID(new FileSelectIconID()), mIsMiiDummy(),
       mIsEnabled(true) {
+    lumacore::setClass(this, lumacore::kClassId< MiiSelectIcon >);
     initLayoutManager("MiiIcon", 1);
     MR::createAndAddPaneCtrl(this, "MarioIcon", 3);
     MR::createAndAddPaneCtrl(this, "MiiIcon", 3);

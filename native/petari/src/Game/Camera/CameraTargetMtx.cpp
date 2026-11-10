@@ -2,10 +2,12 @@
 #include "Game/AreaObj/CubeCamera.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CameraTargetMtx::CameraTargetMtx(const char* pName)
     : CameraTargetObj(pName), mPosition(0.0f, 0.0f, 0.0f), mLastMove(0.0f, 0.0f, 0.0f), mGravityVector(0.0f, -1.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f),
       mFront(0.0f, 0.0f, 1.0f), mSide(0.0f, 0.0f, 1.0f), mInvalidLastMove(), mCameraArea() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTargetMtx >);
     mMatrix.identity();
 }
 

@@ -5,6 +5,7 @@
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sGroupCapacity, 0x40);
@@ -12,6 +13,7 @@ namespace {
 
 ClippingInfoGroup::ClippingInfoGroup(const char* pGroupName, s32 capacity)
     : NameObj(pGroupName), mCount(0), mInfos(), mGroupId(), mIsClipped(false) {
+    lumacore::setClass(this, lumacore::kClassId< ClippingInfoGroup >);
     mInfos.room(capacity > 0 ? static_cast< u32 >(capacity) : 16);
 }
 
@@ -114,4 +116,5 @@ ClippingInfoGroup* ClippingGroupHolder::findGroup(const TableIter& rIter) {
 
 ClippingGroupHolder::ClippingGroupHolder()
     : NameObj("クリッピングアクター保持"), mNumGroups(0), mInfoGroups(new ClippingInfoGroup*[::sGroupCapacity]()), mMaxGroups(::sGroupCapacity) {
+    lumacore::setClass(this, lumacore::kClassId< ClippingGroupHolder >);
 }

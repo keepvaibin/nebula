@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_fadeIn_f1, "fadeIn.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_fadeIn_f2, "fadeIn.f2", 1000.0f);
@@ -64,6 +65,7 @@ namespace NrvDemoRabbit {
 };  // namespace NrvDemoRabbit
 
 DemoRabbit::DemoRabbit(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< DemoRabbit >);
 }
 
 void DemoRabbit::init(const TableIter& rIter) {

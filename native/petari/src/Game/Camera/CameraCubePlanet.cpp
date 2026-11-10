@@ -4,9 +4,11 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/System/LumaCore.hpp"
 
 CameraCubePlanet::CameraCubePlanet(const char* pName)
     : Camera(pName), mDist(3000.0f), mAngleX(MR::pi() / 6.0f), mAngleY(0.35f), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraCubePlanet >);
 }
 
 void CameraCubePlanet::reset() {

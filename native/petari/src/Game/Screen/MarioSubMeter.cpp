@@ -1,7 +1,9 @@
 #include "Game/Screen/MarioSubMeter.hpp"
 #include "Game/Screen/SubMeterLayout.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MarioSubMeter::MarioSubMeter(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MarioSubMeter >);
     mFlyMeter = nullptr;
     mAirMeter = nullptr;
     mActiveMeter = nullptr;

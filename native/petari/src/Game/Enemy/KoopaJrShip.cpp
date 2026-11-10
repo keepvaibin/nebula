@@ -23,6 +23,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initKiller_f1, "initKiller.f1", 5500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initKiller_f2, "initKiller.f2", 6500.0f);
@@ -109,6 +110,7 @@ namespace NrvKoopaJrShip {
 KoopaJrShip::KoopaJrShip(const char* pName)
     : LiveActor(pName), mShellHolder(nullptr), mMainShellHolder(nullptr), mJr(nullptr), mShipBreakModel(nullptr), mPodModel(nullptr), mHitPoint(5),
       mHitPos(gZeroVec), mHitDir(0.0f, 0.0f, 1.0f), mPropAngle(0), mPropRotateSpeed(20.0f), mCoordSpeed(0.0f), mSpeedEaseStep(0), mJrLocalPos(::sKoopaJrPos), mInitPos(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaJrShip >);
     mScrew00Mtx.identity();
     mScrew01Mtx.identity();
     mPropellerMtx.identity();

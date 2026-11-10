@@ -1,8 +1,10 @@
 #include "Game/Map/SunshadeMapParts.hpp"
 #include "Game/Map/SunshadeMapHolder.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SunshadeMapParts::SunshadeMapParts(const char* pName) : GeneralMapParts(pName), mCollision(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< SunshadeMapParts >);
 }
 
 void SunshadeMapParts::calcAnim() {

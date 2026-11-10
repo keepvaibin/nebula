@@ -11,8 +11,10 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 EventSequencer::EventSequencer() : NameObj("イベントシーケンサー"), mNames(cSequenceNum), mSequences(), mNumSequences(0), mSequence() {
+    lumacore::setClass(this, lumacore::kClassId< EventSequencer >);
     MR::connectToSceneMapObjMovement(this);
 }
 

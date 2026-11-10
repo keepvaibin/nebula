@@ -11,6 +11,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // Obj_arg0: what entering the cube does.
@@ -22,6 +23,7 @@ namespace {
 };  // namespace
 
 ChangeBgmCube::ChangeBgmCube(int formType, const char* pName) : AreaObj(formType, pName), mIsInside() {
+    lumacore::setClass(this, lumacore::kClassId< ChangeBgmCube >);
 }
 
 void ChangeBgmCube::init(const TableIter& rIter) {

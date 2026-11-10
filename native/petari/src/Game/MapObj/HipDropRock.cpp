@@ -12,6 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initBreakModel_f1, "initBreakModel.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f1, "appearItem.f1", 10.0f);
@@ -29,6 +30,7 @@ namespace NrvHipDropRock {
 };  // namespace NrvHipDropRock
 
 HipDropRock::HipDropRock(const char* pName) : LiveActor(pName), mBreakModel(), mItemType(-1), mStarPieceNum(-1), mObjArg7() {
+    lumacore::setClass(this, lumacore::kClassId< HipDropRock >);
     mBreakModelMtx.identity();
 }
 

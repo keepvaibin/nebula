@@ -25,6 +25,7 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcTiltMove_f1, "calcTiltMove.f1", 0.0001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 15.0f);
@@ -271,6 +272,7 @@ Tamakoro::Tamakoro(const char* pName)
       mRingUp(0, 1, 0), mKickVel(0, 0, 0), mMarioBindRequestPos(0, 0, 0), mMarioUp(0, 1, 0), mMarioPos(0, 0, 0), mMoment(0, 0, 0),
       mMarioFront(0, 0, 1), mDirectionToMario(0, 0, 0), mAccelDir(0, 0, 0), mAccelRate(0.0f), mMarioRotateYAngle(0.0f), mMarioOffset(0.0f),
       mMarioOffsetVelocity(0.0f), mAirTime(0), mBgmCtrl(nullptr), mControlDisabled(false), mHasTutorial(false) {
+    lumacore::setClass(this, lumacore::kClassId< Tamakoro >);
     mBgmCtrl = new AudTamakoroBgmCtrl();
 }
 

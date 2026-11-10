@@ -14,6 +14,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -27,6 +28,7 @@ namespace NrvStarPieceGroup {
 StarPieceGroup::StarPieceGroup(const char* pName)
     : LiveActor(pName), mPieces(), mRailCoords(), mHasAppeared(), mIsAppearEffect(), mNumPieces(), mCircleRadius(400.0f), mIsRail(), mPlaceAtPathPoints(), mLifeStep(-1),
       mRailSpeed(10.0f), mRailClippingCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< StarPieceGroup >);
 }
 
 bool StarPieceGroup::isExistAnyStarPiece() {

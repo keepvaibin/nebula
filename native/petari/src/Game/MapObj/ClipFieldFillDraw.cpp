@@ -11,10 +11,12 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
+#include "Game/System/LumaCore.hpp"
 
 ClipFieldFillDraw::ClipFieldFillDraw(const char* pName)
     : NameObj(pName), mFillBlendOp(NEBULA_BLEND_ADD), mFillSrcFactor(NEBULA_FACTOR_SRC_ALPHA), mFillDstFactor(NEBULA_FACTOR_ONE),
       mFillColor(255, 230, 80, 200), mFillInsideVolume() {
+    lumacore::setClass(this, lumacore::kClassId< ClipFieldFillDraw >);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipFieldFillDraw);
 }
 

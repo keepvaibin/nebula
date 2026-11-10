@@ -7,6 +7,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
@@ -39,6 +40,7 @@ namespace {
 };  // namespace
 
 JumpStand::JumpStand(const char* pName) : LiveActor(pName), mBindedActor(), mIsMarioJumpingHigh() {
+    lumacore::setClass(this, lumacore::kClassId< JumpStand >);
     mCollisionMtx.identity();
 }
 

@@ -16,6 +16,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_OceanSpherePlane_f1, "OceanSpherePlane.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_OceanSpherePlane_f2, "OceanSpherePlane.f2", 0.5f);
@@ -163,6 +164,7 @@ OceanSphere::OceanSphere(const char* pName)
     : LiveActor(pName), mRadius(), mRadiusTarget(), mPointCount(), mAxisPointPX(), mAxisPointNX(), mAxisPointPY(), mAxisPointNY(), mAxisPointPZ(),
       mAxisPointNZ(), mPlaneLeftUpper(), mPlaneRightUpper(), mPlaneLeftLower(), mPlaneRightLower(), mEdge0(), mEdge1(), mEdge2(), mEdge3(), mEdge4(),
       mEdge5(), mEdge6(), mEdge7(), mWaveTime1(), mWaveTime2(), mTexOffs0X(), mTexOffs0Y(), mTexOffs1X(), mTexOffs1Y(), mWaterTex(), mWaterEnvTex() {
+    lumacore::setClass(this, lumacore::kClassId< OceanSphere >);
     NebulaColor8 front = sOceanSphereStageColor1FrontDefault;
     mStageColor1Front = front;
 

@@ -20,6 +20,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPlayer_f1, "exeWaitPlayer.f1", 18000.0f);
 
@@ -49,6 +50,7 @@ namespace NrvTombSpider {
 TombSpider::TombSpider(const char* pName)
     : LiveActor(pName), mSensorCtrl(nullptr), mParts(nullptr), mEnvironment(nullptr), mActionCocoon(nullptr), mAction1st(nullptr),
       mAction2nd(nullptr), mDemo(nullptr), mNoctilucaActive(false), mCameraInfo(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< TombSpider >);
 }
 
 void TombSpider::init(const TableIter& rIter) {
