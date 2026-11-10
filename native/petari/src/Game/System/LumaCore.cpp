@@ -54,6 +54,14 @@ namespace {
         return static_cast< s32 >(static_cast< u8 >(*a)) - static_cast< s32 >(static_cast< u8 >(*b));
     }
 
+    // Set by refuse(), cleared by takeRefusal().
+    bool sRefusedNow = false;
+
+    // Class ids in name order: built at the first findClass (the class table is in id order, parents first).
+    const u32 cClassSlots = 4096;
+    u16 sClassByName[cClassSlots];
+    u32 sClassByNameCount = 0;
+
     // Each refusal reason once per toolkit row.
     const u32 cRefusedWords = 4096;
     u32 sRefused[cRefusedWords];
@@ -389,7 +397,56 @@ namespace lumacore {
         return v;
     }
 
+    bool takeRefusal() {
+        const bool was = sRefusedNow;
+        sRefusedNow = false;
+        return was;
+    }
+
+    s32 findClass(const char* pName) {
+        if (pName == nullptr) {
+            return -1;
+        }
+        if (sClassByNameCount == 0) {
+            // Insertion sort once: about a thousand rows, at the first lookup a mod makes.
+            const u32 count = kClassRowCount < cClassSlots ? kClassRowCount : cClassSlots;
+            for (u32 i = 0; i < count; i++) {
+                u32 j = i;
+                while (j > 0 && compare(kClassRows[sClassByName[j - 1]].name, kClassRows[i].name) > 0) {
+                    sClassByName[j] = sClassByName[j - 1];
+                    j--;
+                }
+                sClassByName[j] = static_cast< u16 >(i);
+            }
+            sClassByNameCount = count;
+        }
+        u32 lo = 0;
+        u32 hi = sClassByNameCount;
+        while (lo < hi) {
+            const u32 mid = lo + (hi - lo) / 2;
+            const s32 c = compare(kClassRows[sClassByName[mid]].name, pName);
+            if (c == 0) {
+                return sClassByName[mid];
+            }
+            if (c < 0) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        return -1;
+    }
+
+    const FieldRow* fieldRow(u32 index) {
+        return index < kFieldRowCount ? &kFieldRows[index] : nullptr;
+    }
+
+    s32 fieldIndex(const FieldRow* pField) {
+        return pField == nullptr ? -1 : static_cast< s32 >(pField - kFieldRows);
+    }
+
     void refuse(u32 function, const char* pWhy) {
+        sRefusedNow = true;
         if (function < cRefusedWords * 32 && (sRefused[function >> 5] & (1u << (function & 31))) == 0) {
             sRefused[function >> 5] |= 1u << (function & 31);
             nebula_log("mods: %s refused: %s\n", function < kToolkitRowCount ? kToolkitRows[function].name : "?", pWhy);

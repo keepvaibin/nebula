@@ -252,11 +252,11 @@ bool SoundBank::instParams(s32 program, s32 key, s32 velocity, FastRandom* pRand
 }
 
 bool SoundBanks::prepareNote(const SoundBank* pBank, const WaveBank* pWaves, s32 program, u8 key, u8 velocity, u16 priority, FastRandom* pRandom,
-                             Note* pNote) {
+                             SoundNote* pNote) {
     if (program >= 0xf0) {
         pNote->mPriority = priority;
         pNote->mOscillatorWave = static_cast< u32 >(program - 0xf0);
-        pNote->mKind = Note::KIND_OSC;
+        pNote->mKind = SoundNote::KIND_OSC;
         pNote->mSourceRate = cNum_prepareNote_f1;
         pNote->mKey = static_cast< s16 >(key - pNote->mBaseKey);
         pNote->mVelocity = velocity;
@@ -290,7 +290,7 @@ bool SoundBanks::prepareNote(const SoundBank* pBank, const WaveBank* pWaves, s32
     pNote->mWaveLive = live;
     pNote->mWave = wave;
     pNote->mWaveEnd = end;
-    pNote->mKind = Note::KIND_WAVE;
+    pNote->mKind = SoundNote::KIND_WAVE;
     pNote->mSound.mPitch = params.mSound.mPitch;
     pNote->mSourceRate = entry->mSampleRate;
     if (!params.mFixedKey) {

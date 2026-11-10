@@ -60,7 +60,7 @@ public:
     void mix(const StreamMixCommand& rMix);
     enum Message : u32 { MESSAGE_START, MESSAGE_STOP, MESSAGE_PAUSE, MESSAGE_RESUME };
     static void runJob(void* pSelf);
-    static void noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, StreamPlayer* pStream);
+    static void noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, StreamPlayer* pStream);
     u32 ownerSound() const {
         return mOwnerSound;
     }
@@ -72,15 +72,15 @@ private:
     void process();
     void channelStart();
     void channelStop(u16 directRelease);
-    void updateChannel(u32 event, Note* pNote, NebulaVoice* pVoice);
+    void updateChannel(u32 event, SoundNote* pNote, NebulaVoice* pVoice);
     void finish();
 
     SoundEngine* mEngine = nullptr;
     SoundJob mJob;
     const u8* mData = nullptr;
     Header mHeader = {};
-    Note* mChannels[cChannels] = {};
-    Note* mUpdateChannel = nullptr;
+    SoundNote* mChannels[cChannels] = {};
+    SoundNote* mUpdateChannel = nullptr;
     bool mPaused = false;
     bool mLoaded = false;
     bool mArmed = false;

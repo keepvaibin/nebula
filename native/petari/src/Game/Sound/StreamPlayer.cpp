@@ -113,11 +113,11 @@ void StreamPlayer::runJob(void* pSelf) {
     static_cast< StreamPlayer* >(pSelf)->process();
 }
 
-void StreamPlayer::noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, StreamPlayer* pStream) {
+void StreamPlayer::noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, StreamPlayer* pStream) {
     pStream->updateChannel(event, pNote, pVoice);
 }
 
-void StreamPlayer::updateChannel(u32 event, Note* pNote, NebulaVoice* pVoice) {
+void StreamPlayer::updateChannel(u32 event, SoundNote* pNote, NebulaVoice* pVoice) {
     switch (event) {
     case NOTE_START:
         if (mUpdateChannel == nullptr) {
@@ -179,7 +179,7 @@ void StreamPlayer::process() {
         mShownPaused = mPaused;
     }
     for (u32 i = 0; i < mHeader.channels; i++) {
-        Note* note = mChannels[i];
+        SoundNote* note = mChannels[i];
         if (note != nullptr) {
             NoteParams params;
             params.mVolume = mVolume * mChannelVolume[i];
@@ -194,7 +194,7 @@ void StreamPlayer::process() {
 
 void StreamPlayer::channelStart() {
     for (u32 i = 0; i < mHeader.channels; i++) {
-        Note prepared;
+        SoundNote prepared;
         prepared.mOwner = OWNER_STREAM;
         prepared.mOwnerData = this;
         prepared.mPriority = 0x7f7f;
@@ -203,7 +203,7 @@ void StreamPlayer::channelStart() {
         }
         prepared.mSourceRate = static_cast< f32 >(mHeader.rate);
         prepared.mOsc[0].initStart(&cStreamEnv);
-        prepared.mFormat = Note::FORMAT_PCM16;
+        prepared.mFormat = SoundNote::FORMAT_PCM16;
         prepared.mLoop = mHeader.loop != 0 ? 0xffffffffu : 0u;
         prepared.mLoopStart = mHeader.loop_start;
         prepared.mLoopEnd = mHeader.loop_end;
@@ -211,7 +211,7 @@ void StreamPlayer::channelStart() {
         prepared.mWaveLive = &cAlwaysLive;
         prepared.mWave = mData + sizeof(Header) + i * static_cast< size_t >(mHeader.samples) * sizeof(s16);
         prepared.mWaveEnd = prepared.mWave + static_cast< size_t >(mHeader.samples) * sizeof(s16);
-        prepared.mKind = Note::KIND_WAVE;
+        prepared.mKind = SoundNote::KIND_WAVE;
         mChannels[i] = mEngine->voices().play(prepared, true);
     }
     mUpdateChannel = nullptr;
@@ -219,7 +219,7 @@ void StreamPlayer::channelStart() {
 
 void StreamPlayer::channelStop(u16 directRelease) {
     for (u32 i = 0; i < mHeader.channels; i++) {
-        Note* note = mChannels[i];
+        SoundNote* note = mChannels[i];
         if (note != nullptr) {
             mEngine->voices().releaseNote(note, directRelease);
         }

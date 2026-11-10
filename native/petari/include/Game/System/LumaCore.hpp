@@ -27,6 +27,8 @@ namespace lumacore {
     const ClassRow& classRow(u16 id);
     // `id` is `ancestor` or derives from it.
     bool isA(u16 id, u16 ancestor);
+    // By name ("SpinDriver"): the id, or -1. A binary search over a name order built at the first call.
+    s32 findClass(const char* pName);
     // The class of a living object: its factory's id, or the id another object with its vtable had.
     u16 classOf(const NameObj* pObj);
     // The factory sets it as it creates an object; the vtable is remembered for objects made without it.
@@ -122,6 +124,8 @@ namespace lumacore {
 
     // A call refused (a missing handle, a wrong class, too few arguments): logged once per function and reason.
     void refuse(u32 function, const char* pWhy);
+    // Whether a refusal happened since the last call (the API's toolkit_call answers -1 then).
+    bool takeRefusal();
 
     // The toolkit's table: the generated rows. Parameter and result kinds as letters: a none, b bool, c int, d float,
     // e vec3, f matrix, g text, h handle, i vec4, j vec2; upper case is an out-parameter (comes back after the result).
@@ -165,6 +169,9 @@ namespace lumacore {
     };
     enum FieldFlag { FieldFlag_ReadOnly = 1 };
     const FieldRow* findField(u16 classId, const char* pName);
+    // The field table by index (the API's field numbers): null past the last.
+    const FieldRow* fieldRow(u32 index);
+    s32 fieldIndex(const FieldRow* pField);
     bool readField(const NebulaValue& rObject, const FieldRow& rField, u32 index, NebulaValue* pOut);
     bool writeField(const NebulaValue& rObject, const FieldRow& rField, u32 index, const NebulaValue& rValue);
 };  // namespace lumacore

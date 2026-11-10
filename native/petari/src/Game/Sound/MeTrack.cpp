@@ -311,10 +311,10 @@ void MeTrack::noteOffAll(u16 directRelease) {
 bool MeTrack::noteOn(u32 key, u32 velocity) {
     mMgr.releaseNote(0);
     SoundEngine* const engine = mSystem->engine();
-    Note prepared;
+    SoundNote prepared;
     prepared.mOwner = OWNER_ME;
     prepared.mOwnerData = &mMgr;
-    Note* note = nullptr;
+    SoundNote* note = nullptr;
     if (engine->prepareNote(mTrackInfo.mBankNumber, mTrackInfo.mProgNumber, static_cast< u8 >(key), static_cast< u8 >(velocity),
                             static_cast< u16 >(mTrackInfo.mReleasePriority << 8 | mTrackInfo.mPlayPriority), &prepared)) {
         note = engine->voices().play(prepared, false);
@@ -332,7 +332,7 @@ bool MeTrack::noteOn(u32 key, u32 velocity) {
     return note != nullptr;
 }
 
-void MeTrack::overwriteOsc(Note* pNote) {
+void MeTrack::overwriteOsc(SoundNote* pNote) {
     for (u32 i = 0; i < 2; i++) {
         if (mOscParam[i].mTable != nullptr) {
             pNote->mOsc[i].initStart(&mOscParam[i]);
@@ -368,7 +368,7 @@ void MeTrack::startNote() {
 }
 
 // The note's mix values as it starts and each update; its timer is never set (MeChannelMgr).
-void MeTrack::noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, MeChannelMgr* pMgr) {
+void MeTrack::noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, MeChannelMgr* pMgr) {
     (void)pVoice;
     switch (event) {
     case NOTE_PLAY:

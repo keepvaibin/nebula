@@ -1,4 +1,5 @@
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/LumaCore.hpp"
 #include "Game/System/NebulaModCalls.hpp"
 #include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
@@ -2553,6 +2554,92 @@ namespace {
         return 0;
     }
 
+    // Version 3: LumaCore (docs/modding/TOOLKIT.md, FIELDS.md, CLASSES.md).
+    s32 apiToolkitFind(const char* pName) {
+        return pName == nullptr ? -1 : lumacore::findToolkit(pName);
+    }
+
+    s32 apiToolkitCall(s32 index, const NebulaValue* pArgs, u32 count, NebulaValue* pOut, u32 outCount) {
+        const lumacore::ToolkitRow* row = index < 0 ? nullptr : lumacore::toolkitRow(static_cast< u32 >(index));
+        if (row == nullptr || (count != 0 && pArgs == nullptr) || (outCount != 0 && pOut == nullptr)) {
+            return -1;
+        }
+        // The thunk writes its result, then each out-parameter (at most 7: the generator refuses more).
+        u32 results = row->result[0] == 'a' ? 0 : 1;
+        for (const char* c = row->params; *c != '\0'; c++) {
+            results += (*c >= 'A' && *c <= 'Z') ? 1 : 0;
+        }
+        NebulaValue out[8];
+        for (u32 n = 0; n < 8; n++) {
+            out[n] = lumacore::kNone;
+        }
+        lumacore::takeRefusal();
+        row->thunk(pArgs, count, out);
+        if (lumacore::takeRefusal()) {
+            return -1;
+        }
+        const u32 written = results < outCount ? results : outCount;
+        for (u32 n = 0; n < written && n < 8; n++) {
+            pOut[n] = out[n];
+        }
+        return static_cast< s32 >(written);
+    }
+
+    NebulaValue apiActorValue(NebulaActor* pActor) {
+        return pActor == nullptr ? lumacore::kNone : lumacore::handle(static_cast< NameObj* >(asActor(pActor)));
+    }
+
+    NebulaActor* apiValueActor(const NebulaValue* pValue) {
+        if (pValue == nullptr) {
+            return nullptr;
+        }
+        NameObj* const obj = lumacore::object(*pValue, lumacore::kClassId< LiveActor >);
+        return obj == nullptr ? nullptr : asHandle(static_cast< LiveActor* >(obj));
+    }
+
+    s32 apiFieldFind(const NebulaValue* pObject, const char* pName) {
+        if (pObject == nullptr || pName == nullptr) {
+            return -1;
+        }
+        return lumacore::fieldIndex(lumacore::findField(lumacore::classOfValue(*pObject), pName));
+    }
+
+    s32 apiFieldGet(const NebulaValue* pObject, s32 field, u32 element, NebulaValue* pOut) {
+        const lumacore::FieldRow* row = field < 0 ? nullptr : lumacore::fieldRow(static_cast< u32 >(field));
+        if (row == nullptr || pObject == nullptr || pOut == nullptr) {
+            return 0;
+        }
+        return lumacore::readField(*pObject, *row, element, pOut) ? 1 : 0;
+    }
+
+    s32 apiFieldSet(const NebulaValue* pObject, s32 field, u32 element, const NebulaValue* pValue) {
+        const lumacore::FieldRow* row = field < 0 ? nullptr : lumacore::fieldRow(static_cast< u32 >(field));
+        if (row == nullptr || pObject == nullptr || pValue == nullptr) {
+            return 0;
+        }
+        return lumacore::writeField(*pObject, *row, element, *pValue) ? 1 : 0;
+    }
+
+    const char* apiClassName(u32 id, u32* pParent) {
+        if (id >= lumacore::classCount()) {
+            return nullptr;
+        }
+        const lumacore::ClassRow& row = lumacore::classRow(static_cast< u16 >(id));
+        if (pParent != nullptr) {
+            *pParent = row.base;
+        }
+        return row.name;
+    }
+
+    s32 apiIsA(const NebulaValue* pObject, const char* pClass) {
+        const s32 ancestor = lumacore::findClass(pClass);
+        if (pObject == nullptr || ancestor < 0) {
+            return 0;
+        }
+        const u16 id = lumacore::classOfValue(*pObject);
+        return id != 0 && lumacore::isA(id, static_cast< u16 >(ancestor)) ? 1 : 0;
+    }
+
     // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set, setting, store_get_text, store_set_text.
     // Set once any mod's rows or code have started.
     bool sAskedForApi = false;
@@ -2741,6 +2828,15 @@ namespace {
         nebula_mod_water_point,
         nebula_mod_circle_wipe,
         nebula_mod_grant_spin_and_pointer,
+        apiToolkitFind,
+        apiToolkitCall,
+        apiActorValue,
+        apiValueActor,
+        apiFieldFind,
+        apiFieldGet,
+        apiFieldSet,
+        apiClassName,
+        apiIsA,
     };
 }  // namespace
 
