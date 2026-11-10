@@ -141,15 +141,22 @@ void LiveActor::movement() {
         return;
     }
 
-    if (mSpine != nullptr) {
-        mSpine->update();
-    }
+    // A mod class (LumaClass.hpp) runs first and may take the class's place this frame: its nerve and control.
+    const bool classRuns = mModActor == nullptr || !lumacore::classControl(this);
 
     if (mFlag.mIsDead) {
         return;
     }
 
-    if (mModActor == nullptr || !lumacore::classControl(this)) [[likely]] {
+    if (classRuns) [[likely]] {
+        if (mSpine != nullptr) {
+            mSpine->update();
+        }
+
+        if (mFlag.mIsDead) {
+            return;
+        }
+
         control();
     }
 
