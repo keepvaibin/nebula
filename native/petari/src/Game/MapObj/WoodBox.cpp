@@ -111,7 +111,10 @@ void WoodBox::control() {
 }
 
 void WoodBox::calcViewAndEntry() {
-    if (!MR::isDead(this) && !MR::isClipped(this)) {
+    // A box past its distance that the camera still sees stays drawn (ClippingActorInfo::isDrawnWhileClipped), so its
+    // view matrices follow the camera then too: skipped, the box kept the place on the screen it had when it stopped
+    // (Beach Bowl's two sea-floor boxes hung in the sky through the flight in).
+    if (!MR::isDead(this) && (!MR::isClipped(this) || mFlag.mIsDrawnClipped)) {
         LiveActor::calcViewAndEntry();
     }
 }
