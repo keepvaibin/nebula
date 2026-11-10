@@ -13,6 +13,12 @@
 #if !defined(_WIN32)
 #include <pthread.h>
 #include <time.h>
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <pthread/qos.h>
+
+#include <cstdlib>
+#endif
 
 #include <algorithm>
 #include <mutex>
@@ -33,8 +39,15 @@ namespace galaxy::host {
 
 namespace {
 
+#if defined(__APPLE__)
+// Darwin has no CPU clock id for another thread: its time is read through its Mach port.
+using ThreadClock = mach_port_t;
+#else
+using ThreadClock = clockid_t;
+#endif
+
 struct FrameThread {
-    clockid_t clock;
+    ThreadClock clock;
     std::int64_t cpu_ns;
 #if defined(__ANDROID__)
     std::int32_t tid;
@@ -44,10 +57,22 @@ struct FrameThread {
 std::mutex g_mutex;
 std::vector<FrameThread> g_threads;
 
-std::int64_t cpu_time(clockid_t clock) {
+#if defined(__APPLE__)
+std::int64_t cpu_time(ThreadClock thread) {
+    thread_basic_info_data_t info{};
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    if (thread_info(thread, THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&info), &count) != KERN_SUCCESS) {
+        return -1;
+    }
+    return (std::int64_t{info.user_time.seconds} + info.system_time.seconds) * 1000000000 +
+           (std::int64_t{info.user_time.microseconds} + info.system_time.microseconds) * 1000;
+}
+#else
+std::int64_t cpu_time(ThreadClock clock) {
     timespec now{};
     return clock_gettime(clock, &now) == 0 ? std::int64_t{now.tv_sec} * 1000000000 + now.tv_nsec : -1;
 }
+#endif
 
 #if defined(__ANDROID__)
 // APerformanceHint (android/performance_hint.h), looked up at run time: the app also runs on Android 12, before it.
@@ -119,10 +144,20 @@ void report(std::int64_t work_ns) {
 }  // namespace
 
 void perf_hint_add_current_thread() noexcept {
+#if defined(__APPLE__)
+    // The frame's threads are what the player waits on: the system's highest class for them, so their timers are not
+    // gathered with others' (a frame's wake-up a few milliseconds late is a picture a display refresh late) and, on
+    // Apple silicon, they run on the performance cores. NEBULA_NO_QOS=1 leaves them as made, to measure against.
+    if (std::getenv("NEBULA_NO_QOS") == nullptr) {
+        (void)pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    }
+    const ThreadClock clock = pthread_mach_thread_np(pthread_self());
+#else
     clockid_t clock{};
     if (pthread_getcpuclockid(pthread_self(), &clock) != 0) {
         return;
     }
+#endif
     std::lock_guard<std::mutex> lock(g_mutex);
 #if defined(__ANDROID__)
     g_threads.push_back({clock, cpu_time(clock), static_cast<std::int32_t>(gettid())});

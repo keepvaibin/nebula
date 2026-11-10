@@ -22,6 +22,19 @@ namespace {
     const nebula::NerveRecord* end() {
         return hidden(&sLast);
     }
+#elif defined(__APPLE__)
+}  // namespace
+extern "C" {
+    extern const nebula::NerveRecord __start_nebnrv[] __asm__("section$start$__DATA$nebnrv");
+    extern const nebula::NerveRecord __stop_nebnrv[] __asm__("section$end$__DATA$nebnrv");
+}
+namespace {
+    const nebula::NerveRecord* begin() {
+        return __start_nebnrv;
+    }
+    const nebula::NerveRecord* end() {
+        return __stop_nebnrv;
+    }
 #else
 }  // namespace
 extern "C" {

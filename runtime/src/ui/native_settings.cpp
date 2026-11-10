@@ -108,9 +108,10 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
                                        const RenderFeatureCaps& caps);
 bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
 
-// The temporal upscaler this configuration runs (2 FSR 3, 3 DLSS, 4 XeSS, 5 SGSR 2), 0 none.
+// The temporal upscaler this configuration runs (2 FSR 3, 3 DLSS, 4 XeSS, 5 SGSR 2, 6 MetalFX's temporal scaler), 0 none.
 unsigned temporal_upscaler(const RenderConfig& render) {
     if (render.upscaler == 5u && sgsr2_available()) return 5u;
+    if (render.upscaler == 6u && metalfx_temporal_available()) return 6u;
     if (render.upscaler == 2u && fsr3_available()) return 2u;
     if (render.upscaler == 3u && host_window::upscaler_caps().dlss) return 3u;
     if (render.upscaler == 4u && host_window::upscaler_caps().xess) return 4u;
@@ -120,6 +121,7 @@ unsigned temporal_upscaler(const RenderConfig& render) {
 // The upscaler choices this runtime and machine offer, in menu order.
 std::vector<unsigned> available_upscalers() {
     std::vector<unsigned> choices{0u, 1u};
+    if (metalfx_available()) choices.push_back(6u);
     if (sgsr2_available()) choices.push_back(5u);
     if (fsr3_available()) choices.push_back(2u);
     if (host_window::upscaler_caps().dlss || dlss_offered()) choices.push_back(3u);
@@ -2418,6 +2420,10 @@ SettingsRow mods_buttons_row() {
 // The MODS page as the launcher's Mods tab: the mods off, then the mods on (the higher one wins a conflict), each list
 // under its title, then the buttons. A mod's options show instead while they are open.
 std::vector<SettingsRow> mods_page(const RenderConfig&) {
+#if defined(__APPLE__)
+    // Mods are not on Apple's systems yet (docs/APPLE.md): the page says so, and nothing on it is chosen.
+    return {SettingsRow{"THIS IS STILL A WORK IN PROGRESS. PLEASE COME BACK LATER!", {}, nullptr, {}, true}};
+#else
     std::vector<SettingsRow> rows;
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     std::vector<galaxy::mods::ModInfo>& mods = mods_list();
@@ -2444,6 +2450,7 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     }
     rows.push_back(mods_buttons_row());
     return rows;
+#endif
 }
 
 // Back from a mod's options to the lists, on that mod.
@@ -2462,6 +2469,13 @@ void close_mod_options(const RenderConfig& render) {
 // A, Space, Enter or Escape puts it down. On a mod's options, Escape goes back to the lists.
 bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
     if (s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount != kModsTab) return false;
+#if defined(__APPLE__)
+    // The page is one line there (mods_page): its keys are the menu's own.
+    (void)key;
+    (void)accept;
+    (void)was_down;
+    return false;
+#else
     const std::vector<SettingsRow> rows = mods_page(s_settings_draft);
     bool lists = false;
     for (const SettingsRow& row : rows) lists = lists || row.list != 0u;
@@ -2583,6 +2597,7 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
         s_mod_focus = s_mod_held;
     }
     return true;
+#endif
 }
 
 class WindowGeneralPageHost final : public ui::GeneralPageHost {

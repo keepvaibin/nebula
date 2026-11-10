@@ -16,6 +16,7 @@ their code differs (Petari's `VERSION` switches between them, five places), the 
 | `runtime/src`, `runtime/include/galaxy` | Host services: audio, input and controllers, settings, saves, mods, Mii import, crash reports |
 | `runtime/src/render`, `runtime/include/galaxy/render` | The renderer: Direct3D 12 and Vulkan on the game's records ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)) |
 | `platform/sdl`, `platform/android` | The SDL3 host (Linux, Android) and the Android app |
+| `platform/apple` | The Apple build: macOS, iOS and iPadOS ([APPLE.md](APPLE.md)) |
 | `crates/nebula-import` | Disc image reading and `game.pak` packing (Setup and the Android app) |
 | `installer/src` | Setup (`Setup/`), the launcher (`Launcher/`), shared code (`Common/`) |
 | `third_party` | Vendored code; see [PROVENANCE.md](PROVENANCE.md) |

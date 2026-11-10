@@ -103,7 +103,13 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #if defined(NEBULA_HOST_SDL)
 #include "sdl_host.h"
 
+// The host of platform/apple gives the same services without SDL.
+#if !defined(NEBULA_HOST_NATIVE_APPLE)
 #include <SDL3/SDL_main.h>
+#endif
+#endif
+#if defined(NEBULA_HOST_APPLE)
+#include "apple_host.h"
 #endif
 
 #include <algorithm>
@@ -3573,6 +3579,16 @@ void read_launch_args(int argc, char** argv) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if defined(NEBULA_HOST_APPLE)
+    // An app has no command line: the app's own layout names the game, the saves and the module.
+    galaxy::apple::launch_arguments(argc, argv);
+#endif
+#if defined(NEBULA_HOST_NATIVE_APPLE)
+    // The first start: the player's disc image becomes the game's data, or the player leaves.
+    if (!galaxy::apple::ensure_game_data(argc, argv)) {
+        return 0;
+    }
+#endif
     read_launch_args(argc, argv);
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     if (const char* error = galaxy::host::test_data_paths_error(argc, argv)) {

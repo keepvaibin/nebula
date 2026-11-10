@@ -15,7 +15,8 @@ struct RenderConfig;
 
 struct PostProcessSettings {
     enum class Aa : std::uint8_t { kOff = 0, kSmaa = 1, kAuto = 2, kFxaa = 3 };
-    enum class Upscaler : std::uint8_t { kBilinear = 0, kFsr1 = 1 };
+    // kMetalFx: the Metal renderer's (MetalFX's spatial scaler where FSR 1's EASU pass would run).
+    enum class Upscaler : std::uint8_t { kBilinear = 0, kFsr1 = 1, kMetalFx = 2 };
     Aa aa = Aa::kAuto;
     std::uint8_t smaa_quality = 2;  // 0 low, 1 medium, 2 high, 3 ultra
     Upscaler upscaler = Upscaler::kFsr1;
@@ -190,5 +191,9 @@ void set_post_process_status(const PostProcessStatus& status);
 [[nodiscard]] bool fsr3_available() noexcept;
 // Whether this renderer runs Snapdragon Game Super Resolution 2 (upscaler 5; the Vulkan renderer's sgsr2_vk.cpp).
 [[nodiscard]] bool sgsr2_available() noexcept;
+// Whether this renderer and device run Apple's MetalFX (upscaler 6; the Metal renderer's metalfx_mtl.mm), and whether
+// they run its temporal scaler (else the spatial one enlarges the picture). False before there is a device.
+[[nodiscard]] bool metalfx_available() noexcept;
+[[nodiscard]] bool metalfx_temporal_available() noexcept;
 
 }  // namespace galaxy::render

@@ -18,7 +18,18 @@
 
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
+#if defined(NEBULA_GPU_METAL)
+#include <cstdint>
+#include <ctime>
+// The Metal development build: the calling thread's CPU time, which the Vulkan context gives the other builds.
+namespace galaxy::render::vk {
+[[nodiscard]] inline std::int64_t thread_cpu_ns() noexcept {
+    return static_cast<std::int64_t>(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID));
+}
+}  // namespace galaxy::render::vk
+#else
 #include "galaxy/render/vk/vk_context.h"
+#endif
 #include "galaxy/render/render_config.h"
 #include "galaxy/render_api.h"
 #include "galaxy/input_bindings.h"
@@ -30,7 +41,11 @@
 #include "galaxy/virtual_keys.h"
 
 #include <SDL3/SDL.h>
+#if defined(NEBULA_GPU_METAL)
+#include <SDL3/SDL_metal.h>
+#else
 #include <SDL3/SDL_vulkan.h>
+#endif
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -1114,6 +1129,12 @@ void pump_events(int timeout_ms) noexcept {
             g_background.store(false, std::memory_order_release);
             break;
 #endif
+        case SDL_EVENT_WINDOW_MOUSE_ENTER:
+            g_input.mouse_inside = true;
+            break;
+        case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+            g_input.mouse_inside = false;
+            break;
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
             g_input.window_focused = true;
             break;
@@ -1127,16 +1148,22 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_FINGER_CANCELED:
             // Platforms whose touches reach SDL (Android's go to the activity's controls, nativePointer).
             g_last_input.store(kLastNone, std::memory_order_relaxed);
+            g_input.mouse_pointer = false;
             finger_event(event.tfinger.fingerID, event.tfinger.x * static_cast<float>(g_input.window_width),
                          event.tfinger.y * static_cast<float>(g_input.window_height),
                          event.type == SDL_EVENT_FINGER_DOWN,
                          event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED);
             break;
-        case SDL_EVENT_MOUSE_MOTION:
-            g_input.finger_x = event.motion.x;
-            g_input.finger_y = event.motion.y;
+        case SDL_EVENT_MOUSE_MOTION: {
+            // SDL's mouse is in window units; the picture is in pixels (two a unit on a Retina display).
+            const float density = g_window != nullptr ? SDL_GetWindowPixelDensity(g_window) : 1.0f;
+            g_input.finger_x = event.motion.x * (density > 0.0f ? density : 1.0f);
+            g_input.finger_y = event.motion.y * (density > 0.0f ? density : 1.0f);
             g_input.finger_ms = galaxy::steady_ms();
+            g_input.mouse_pointer = true;
+            g_input.mouse_inside = true;
             break;
+        }
         case SDL_EVENT_MOUSE_WHEEL: {
             // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it.
             const float notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
@@ -1155,9 +1182,12 @@ void pump_events(int timeout_ms) noexcept {
             if (down) {
                 g_last_input.store(kLastKeyboard, std::memory_order_relaxed);
             }
-            g_input.finger_x = event.button.x;
-            g_input.finger_y = event.button.y;
+            const float density = g_window != nullptr ? SDL_GetWindowPixelDensity(g_window) : 1.0f;
+            g_input.finger_x = event.button.x * (density > 0.0f ? density : 1.0f);
+            g_input.finger_y = event.button.y * (density > 0.0f ? density : 1.0f);
             g_input.finger_ms = galaxy::steady_ms();
+            g_input.mouse_pointer = true;
+            g_input.mouse_inside = true;
             break;
         }
         case SDL_EVENT_KEY_DOWN:
@@ -1474,7 +1504,11 @@ std::timed_mutex surface_use;
 
 OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
     const bool hidden = hidden_window_mode_enabled();
+#if defined(NEBULA_GPU_METAL)
+    SDL_WindowFlags flags = SDL_WINDOW_METAL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#else
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
 #if defined(__ANDROID__)
     flags |= SDL_WINDOW_FULLSCREEN;
 #endif
@@ -1669,12 +1703,14 @@ bool folders_open() noexcept {
 // (before the device, what the build holds).
 UpscalerCaps upscaler_caps() noexcept {
     UpscalerCaps caps;
+#if !defined(NEBULA_GPU_METAL)
     const vk::Context& context = vk::Context::get();
     caps.fsr_frame_generation =
         fsr_frame_generation_compiled() &&
         (context.device() == VK_NULL_HANDLE ||
          (context.generation_present_queue() != VK_NULL_HANDLE && context.generation_acquire_queue() != VK_NULL_HANDLE &&
           context.temporal_upscaling()));
+#endif
     if (get_render_config().frame_generation == 2u) {
         caps.frames_presented = frame_generation_running() && frame_generation_allowed() ? 2u : 1u;
     }
@@ -1731,6 +1767,16 @@ bool restart_game(bool) {
 #endif
 }
 
+#if defined(NEBULA_GPU_METAL)
+// The Metal renderer on this host (a development build: Apple's own host is platform/apple/host): SDL's Metal view.
+void* metal_layer(NativeWindow window) {
+    static SDL_MetalView view = nullptr;
+    if (view == nullptr) {
+        view = SDL_Metal_CreateView(static_cast<SDL_Window*>(window));
+    }
+    return view != nullptr ? SDL_Metal_GetLayer(view) : nullptr;
+}
+#else
 std::vector<const char*> vulkan_instance_extensions() {
     Uint32 count = 0;
     const char* const* names = SDL_Vulkan_GetInstanceExtensions(&count);
@@ -1777,6 +1823,7 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
 #endif
     return surface;
 }
+#endif
 
 }  // namespace galaxy::render::host_window
 
@@ -1849,7 +1896,7 @@ std::optional<input::DeviceKey> last_input_device() noexcept {
     return std::nullopt;
 }
 
-void arm_controller_binding_capture(input::ControlScheme scheme, std::uint8_t slot) noexcept {
+void arm_controller_binding_capture(input::ControlScheme scheme, std::uint32_t slot) noexcept {
     const std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
     galaxy::sdl::g_capture_result.reset();
     galaxy::sdl::g_capture_device = input::DeviceKey{scheme, slot};

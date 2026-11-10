@@ -115,6 +115,11 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     // Dolphin BUG_BROKEN_D32F_CLEAR: 32-bit depth clears have no effect in Adreno's Vulkan driver, no version known to
     // be fixed; its workaround is D24S8 there.
     quirks.depth_d24 = qualcomm;
+    // MoltenVK 1.4.2 reads a pipeline cache by compiling each of its shaders with Metal, one after another, inside
+    // vkCreatePipelineCache: measured on a Radeon Pro 560, a cache of 6358 pipelines (12.6 MB) kept the first draw
+    // waiting for over a minute, where the same pipelines built by the workers hold nothing up. Metal keeps the shaders
+    // it compiled in the system's own cache, so the file saves nothing there.
+    quirks.no_cache_file = id.driver == DriverKind::MoltenVK;
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
     // 512.829 crashes on SPIR-V 1.4's OpCopyLogical, Adreno 7xx too, ARM before r47 mishandles its OpSelect); no
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
@@ -173,6 +178,7 @@ std::string describe(const DeviceQuirks& quirks) {
     add(quirks.coherent_readback, "coherent-readback");
     add(quirks.clear_by_command, "clear-by-command");
     add(quirks.depth_d24, "depth-d24");
+    add(quirks.no_cache_file, "no-cache-file");
     return text.empty() ? "none" : text;
 }
 

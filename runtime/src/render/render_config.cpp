@@ -164,7 +164,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss", "xess", "sgsr2"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss", "xess", "sgsr2", "metalfx"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
     } else if (std::strcmp(key, "frame_generation") == 0) {
         cfg.frame_generation = std::min(parse_uint(val, cfg.frame_generation), 5u);
@@ -255,7 +255,16 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 5u);  // 5 SGSR 2, the last of the names above
+#if defined(NEBULA_GPU_METAL)
+    // 6 MetalFX, the last of the names above. The other systems' temporal upscalers (FSR 3, DLSS, XeSS) are not on
+    // Apple devices: a configuration that names one runs the system's own.
+    cfg.upscaler = std::min(cfg.upscaler, 6u);
+    if (cfg.upscaler >= 2u && cfg.upscaler <= 4u) {
+        cfg.upscaler = 6u;
+    }
+#else
+    cfg.upscaler = std::min(cfg.upscaler, 5u);  // 5 SGSR 2; MetalFX (6) is the Metal renderer's
+#endif
     cfg.frame_generation = std::min(cfg.frame_generation, 5u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 5u);  // 5 ultra quality, the last of the names above
     cfg.spatial_quality = std::min(cfg.spatial_quality, 5u);

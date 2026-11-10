@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>Nebula</string>
+    <key>CFBundleIconFile</key>
+    <string>Nebula</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.nebula.galaxy</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Nebula</string>
+    <key>CFBundleDisplayName</key>
+    <string>Nebula</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@NEBULA_VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@NEBULA_VERSION@</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <!-- A game: macOS 14's Game Mode follows it while it is full screen. -->
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.action-games</string>
+    <key>LSSupportsGameMode</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- The renderer names its own graphics card (GRAPHICS CARD in the settings); macOS need not switch for it. -->
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <!-- Controllers reach the game through Game Controller. -->
+    <key>GCSupportsControllerUserInteraction</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Nebula is free software under the GNU General Public License, version 3. Not affiliated with Nintendo.</string>
+</dict>
+</plist>

@@ -108,12 +108,15 @@ endif()
 # The same language on every platform: clang enables Microsoft extensions by default only when targeting Windows
 # (__declspec, a static definition after an extern declaration); glibc's GNU interfaces (dladdr, memfd_create, the
 # signal context's registers) are declared only under _GNU_SOURCE, which must precede the prelude's first include.
-target_compile_definitions(smg_game PRIVATE $<$<PLATFORM_ID:Linux,Android>:_GNU_SOURCE>)
+target_compile_definitions(smg_game PRIVATE $<$<PLATFORM_ID:Linux,Android>:_GNU_SOURCE>
+    # Apple's headers turn memcpy, strcpy and the like into checking macros that call the system's library: the module
+    # defines those functions itself (math/src/nebula_libc.c) and calls its own.
+    $<$<PLATFORM_ID:Darwin,iOS>:_FORTIFY_SOURCE=0>)
 target_compile_options(smg_game PRIVATE
     -ffp-contract=off  # the same results on every CPU (A-10)
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fms-extensions>
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
-    $<$<NOT:$<PLATFORM_ID:Windows>>:-fno-plt>
+    $<$<NOT:$<PLATFORM_ID:Windows,Darwin,iOS>>:-fno-plt>
     -fno-ms-compatibility -fno-delayed-template-parsing
     ${diagnostics}
     -Werror=return-type -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast -Werror=format
@@ -144,6 +147,13 @@ endif()
 if(WIN32)
     # The DLL's own operator new/delete are NebulaArena's; the host process keeps its own.
     target_link_options(smg_game PRIVATE -fuse-ld=lld "LINKER:/errorlimit:0")
+elseif(APPLE)
+    # Mach-O binds a library's calls to its own functions already (two-level names). The allocation operators and the
+    # C++ library's own symbols stay inside: dyld would hand an exported operator new to every image that binds one weakly.
+    target_link_options(smg_game PRIVATE -Wl,-bind_at_load
+        -Wl,-unexported_symbol,__Znw* -Wl,-unexported_symbol,__Zna* -Wl,-unexported_symbol,__Zdl* -Wl,-unexported_symbol,__Zda*
+        -Wl,-unexported_symbol,__ZNSt* -Wl,-unexported_symbol,__ZNKSt* -Wl,-unexported_symbol,__ZSt*
+        -Wl,-unexported_symbol,__ZT?St* -Wl,-unexported_symbol,__ZT?NSt* -Wl,-unexported_symbol,___cxa* -Wl,-unexported_symbol,___gxx*)
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
     if(NOT ANDROID)  # Android's C library holds the threads

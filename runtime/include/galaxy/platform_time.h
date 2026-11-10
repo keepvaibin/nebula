@@ -2,7 +2,7 @@
 #pragma once
 
 // The runtime's high-resolution clock in ticks of qpc_frequency() per second: QueryPerformanceCounter on Windows,
-// CLOCK_MONOTONIC nanoseconds elsewhere.
+// CLOCK_MONOTONIC nanoseconds elsewhere (Apple: CLOCK_UPTIME_RAW nanoseconds).
 
 #include <cstdint>
 
@@ -19,6 +19,10 @@ namespace galaxy {
     LARGE_INTEGER now{};
     QueryPerformanceCounter(&now);
     return now.QuadPart;
+#elif defined(__APPLE__)
+    // Mach absolute time in nanoseconds: the clock of the display link, of the presents' times and of steady_clock
+    // there (CLOCK_MONOTONIC on Darwin also counts the time the machine slept).
+    return static_cast<std::int64_t>(clock_gettime_nsec_np(CLOCK_UPTIME_RAW));
 #else
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);

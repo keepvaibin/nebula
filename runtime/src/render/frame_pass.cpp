@@ -2,10 +2,10 @@
 // helpers.
 
 #include "galaxy/render/frame_pass.h"
-#include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
-#if !defined(NEBULA_GPU_VULKAN)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
+#include "barriers_d3d12.h"
 #include "galaxy/render/renderer_d3d12.h"
 #endif
 
@@ -224,7 +224,7 @@ const DisplayTexture* DisplayPictures::picture(std::uint32_t slot) const {
 
 }  // namespace galaxy::render
 
-#if !defined(NEBULA_GPU_VULKAN)
+#if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
 namespace galaxy::render::gpu {
 
 TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height) {
