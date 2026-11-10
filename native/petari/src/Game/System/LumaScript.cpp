@@ -293,19 +293,12 @@ namespace lumascript {
         const lumacore::FieldRow* field;    // null: not found for fieldClass
     };
 
-    // The events the evaluator itself runs; the rest are found by name, once, by the dispatch records.
-    enum HandlerEvent : u8 {
-        HandlerEvent_Other = 0,
-        HandlerEvent_Frame,
-        HandlerEvent_Enter,
-        HandlerEvent_Leave,
-    };
-
     struct Handler {
         u32 name;
         u32 function;
         u32 state;
-        u8 event;
+        s32 number;  // the message, script event or game event it answers (-1: any message)
+        u8 event;    // Event
     };
 
     struct Variable {
@@ -345,6 +338,8 @@ namespace lumascript {
         bool mWaitLogged;
         bool mDepthLogged;
         bool mHasFrame;  // any handler answers "frame", "enter" or "leave"
+        u32 mEvents;     // a bit per Event it answers
+        const void* mOwner;
         // Text a script keeps (in a variable, past this frame): each distinct text once, owned here.
         char** mKept;
         u32 mKeptCount;
@@ -504,7 +499,7 @@ namespace lumascript {
             rImport.index = lumacore::registryIndex(name);
             break;
         case Import_Event:
-            rImport.index = 0;
+            rImport.index = static_cast< s32 >(lumacore::eventId(name));
             return true;
         default:
             rImport.index = -1;
@@ -640,7 +635,8 @@ namespace lumascript {
             p->mHandlers[i].name = r.u32v();
             p->mHandlers[i].function = r.u32v();
             p->mHandlers[i].state = r.u32v();
-            p->mHandlers[i].event = HandlerEvent_Other;
+            p->mHandlers[i].event = Event_Count;
+            p->mHandlers[i].number = -1;
             if (p->mHandlers[i].function >= p->mFunctionCount) {
                 r.mBad = true;
             }
@@ -677,11 +673,43 @@ namespace lumascript {
                 return nullptr;
             }
             const char* const name = p->string(h.name);
-            h.event = MR::isEqualString(name, "frame")   ? HandlerEvent_Frame
-                      : MR::isEqualString(name, "enter") ? HandlerEvent_Enter
-                      : MR::isEqualString(name, "leave") ? HandlerEvent_Leave
-                                                         : HandlerEvent_Other;
-            p->mHasFrame = p->mHasFrame || h.event != HandlerEvent_Other;
+            static const char* const cOwn[] = {"frame", "enter", "leave", "start", "touch_player", "attacked", "appear",
+                                               "kill", "message"};
+            for (u32 e = 0; e < sizeof(cOwn) / sizeof(cOwn[0]); e++) {
+                if (MR::isEqualString(name, cOwn[e])) {
+                    h.event = static_cast< u8 >(e);
+                }
+            }
+            if (h.event == Event_Count && MR::isEqualStringPrefix(name, "message:")) {
+                // message:<number>: LumaLink writes the message's number for its ACTMES_ name.
+                s32 n = 0;
+                const char* c = name + 8;
+                bool digits = *c != '\0';
+                for (; *c != '\0'; c++) {
+                    digits = digits && *c >= '0' && *c <= '9' && n < 100000;
+                    n = n * 10 + (*c - '0');
+                }
+                if (digits) {
+                    h.event = Event_Message;
+                    h.number = n;
+                }
+            } else if (h.event == Event_Count && MR::isEqualStringPrefix(name, "event:")) {
+                h.event = Event_Script;
+                h.number = static_cast< s32 >(lumacore::eventId(name + 6));
+            } else if (h.event == Event_Count) {
+                const s32 game = lumacore::gameEvent(name);
+                if (game >= 0) {
+                    h.event = Event_Game;
+                    h.number = game;
+                }
+            }
+            if (h.event == Event_Count) {
+                say(pMessage, messageSize, "the game has no event", name, 0);
+                freeProgram(p);
+                return nullptr;
+            }
+            p->mEvents |= 1u << h.event;
+            p->mHasFrame = p->mHasFrame || h.event <= Event_Leave;
         }
         // Every step's operands within its function's registers and the program's tables: the evaluator then checks
         // nothing per step but the budget.
@@ -874,13 +902,42 @@ namespace lumascript {
         delete pInstance;
     }
 
-    s32 findHandler(const Program* pProgram, const char* pName) {
+    // The program running now (dispatch and frame set it; an emit's handlers nest and put it back).
+    const Program* sRunning = nullptr;
+
+    struct RunningScope {
+        const Program* mWas;
+        explicit RunningScope(const Program* pProgram) : mWas(sRunning) {
+            sRunning = pProgram;
+        }
+        ~RunningScope() {
+            sRunning = mWas;
+        }
+    };
+
+    bool hasEvent(const Program* pProgram, Event event, s32 number) {
+        if (pProgram == nullptr || (pProgram->mEvents & (1u << event)) == 0) {
+            return false;
+        }
         for (u32 i = 0; i < pProgram->mHandlerCount; i++) {
-            if (MR::isEqualString(pProgram->string(pProgram->mHandlers[i].name), pName)) {
-                return static_cast< s32 >(i);
+            const Handler& h = pProgram->mHandlers[i];
+            if (h.event == event && (number < 0 || h.number == number)) {
+                return true;
             }
         }
-        return -1;
+        return false;
+    }
+
+    void setOwner(Program* pProgram, const void* pOwner) {
+        pProgram->mOwner = pOwner;
+    }
+
+    const void* owner(const Program* pProgram) {
+        return pProgram != nullptr ? pProgram->mOwner : nullptr;
+    }
+
+    const Program* running() {
+        return sRunning;
     }
 
     static void addWaiting(Instance* pInstance, u32 function, u32 pc, u32 frames, const NebulaValue* pRegisters,
@@ -1209,7 +1266,7 @@ namespace lumascript {
                 return none();
             }
             case Op_Emit:
-                lumacore::scriptEmit(p->string(p->mImports[s.imm].name), r[s.a]);
+                lumacore::scriptEmit(static_cast< u32 >(p->mImports[s.imm].index), r[s.a]);
                 break;
             case Op_Format:
                 r[s.dst] = format(p->mConstants[s.imm].u.s, r + s.a, s.b);
@@ -1277,15 +1334,12 @@ namespace lumascript {
         return v;
     }
 
-    NebulaValue run(Instance* pInstance, u32 handler, const NebulaValue* pArgs, u32 count) {
+    bool dispatch(Instance* pInstance, Event event, s32 number, const NebulaValue* pArgs, u32 count, NebulaValue* pResult) {
         Program* const p = pInstance->mProgram;
-        if (handler >= p->mHandlerCount) {
-            return none();
+        if ((p->mEvents & (1u << event)) == 0) {
+            return false;
         }
-        const Handler& h = p->mHandlers[handler];
-        if (h.state != cNoState && h.state != pInstance->mState) {
-            return none();
-        }
+        RunningScope scope(p);
         // Handlers take self and at most 7 values (the dispatch points pass fewer).
         NebulaValue args[8];
         args[0] = pInstance->mSelf;
@@ -1293,14 +1347,37 @@ namespace lumascript {
         for (u32 i = 0; i < n; i++) {
             args[i + 1] = pArgs[i];
         }
-        return callFunction(pInstance, h.function, args, n + 1, 0);
+        bool ran = false;
+        bool answered = false;
+        // The state's own handler first, then the one outside every state.
+        for (u32 pass = 0; pass < 2; pass++) {
+            const u32 state = pass == 0 ? pInstance->mState : cNoState;
+            if (pass == 0 && state == cNoState) {
+                continue;
+            }
+            for (u32 i = 0; i < p->mHandlerCount; i++) {
+                const Handler& h = p->mHandlers[i];
+                if (h.event != event || h.state != state || h.number != number) {
+                    continue;
+                }
+                const NebulaValue result = callFunction(pInstance, h.function, args, n + 1, 0);
+                ran = true;
+                if (!answered && result.kind != NEBULA_KIND_NONE) {
+                    answered = true;
+                    if (pResult != nullptr) {
+                        *pResult = result;
+                    }
+                }
+            }
+        }
+        return ran;
     }
 
     static void runEvent(Instance* pInstance, u8 event, u32 state) {
         Program* const p = pInstance->mProgram;
         for (u32 i = 0; i < p->mHandlerCount; i++) {
             const Handler& h = p->mHandlers[i];
-            if (h.event == event && (h.state == state || (event == HandlerEvent_Frame && h.state == cNoState))) {
+            if (h.event == event && (h.state == state || (event == Event_Frame && h.state == cNoState))) {
                 NebulaValue self = pInstance->mSelf;
                 (void)callFunction(pInstance, h.function, &self, 1, 0);
             }
@@ -1309,6 +1386,7 @@ namespace lumascript {
 
     void frame(Instance* pInstance) {
         Program* const p = pInstance->mProgram;
+        RunningScope scope(p);
         if (pInstance->mNextState != cNoState) {
             const u32 next = pInstance->mNextState;
             pInstance->mNextState = cNoState;
@@ -1317,8 +1395,8 @@ namespace lumascript {
                 pInstance->mState = next;
                 pInstance->mStateFrames = 0;
                 if (p->mHasFrame) {
-                    runEvent(pInstance, HandlerEvent_Leave, old);
-                    runEvent(pInstance, HandlerEvent_Enter, next);
+                    runEvent(pInstance, Event_Leave, old);
+                    runEvent(pInstance, Event_Enter, next);
                 }
             }
         }
@@ -1347,7 +1425,7 @@ namespace lumascript {
             }
         }
         if (p->mHasFrame) {
-            runEvent(pInstance, HandlerEvent_Frame, pInstance->mState);
+            runEvent(pInstance, Event_Frame, pInstance->mState);
         }
         pInstance->mStateFrames++;
     }

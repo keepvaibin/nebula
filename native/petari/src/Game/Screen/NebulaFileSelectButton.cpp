@@ -1,4 +1,4 @@
-#include "Game/Screen/NebulaQuitButton.hpp"
+#include "Game/Screen/NebulaFileSelectButton.hpp"
 
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
@@ -17,17 +17,28 @@
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    // The button waits this long after its corner frees up: a pointer crossing between files does not flash it.
+    // A button waits this long after its corner frees up: a pointer crossing between files does not flash it.
     NEBULA_TUNABLE(s32, cShowDelayFrames, 8);
 
-    // The label in the played language (NebulaText; the game's own Yes and No answer the question).
-    const char16_t* getLabel() {
+    // Each button's own layout name, for the canvas rules (LayoutAspect): Quit follows the left and top edges, Settings
+    // the right and top.
+    const char cQuitLayoutName[] = "NebulaQuitButton";
+    const char cSettingsLayoutName[] = "NebulaSettingsButton";
+
+    // The labels in the played language (NebulaText; the game's own Yes and No answer Quit's question).
+    const char16_t* getQuitLabel() {
         static MR::GrowBuffer< char16_t > label;
 #if defined(__ANDROID__)
         NebulaUi::getText(label, "Quit");  // no desktop to quit to
 #else
         NebulaUi::getText(label, "QuitToDesktop");
 #endif
+        return label.mItems;
+    }
+
+    const char16_t* getSettingsLabel() {
+        static MR::GrowBuffer< char16_t > label;
+        NebulaUi::getText(label, "SettingsTitle");
         return label.mItems;
     }
 
@@ -50,20 +61,20 @@ namespace {
     }
 };  // namespace
 
-NebulaQuitButton::NebulaQuitButton(const char* pName) : LayoutActor(pName, true), mButton(nullptr), mShownFrames(0), mIsDecided(false) {
-    lumacore::setClass(this, lumacore::kClassId< NebulaQuitButton >);
+NebulaFileSelectButton::NebulaFileSelectButton(const char* pName, Role role)
+    : LayoutActor(pName, true), mButton(nullptr), mRole(role), mShownFrames(0), mIsDecided(false) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaFileSelectButton >);
 }
 
-void NebulaQuitButton::init(const TableIter& /*rIter*/) {
+void NebulaFileSelectButton::init(const TableIter& /*rIter*/) {
     initLayoutManager("FileSelect", 1);
 
-    // Its own name for the canvas rules (LayoutAspect): the file select's Start follows the right and bottom edges,
-    // this copy of it the left and top.
     LayoutManager* pManager = getLayoutManager();
-    static const char cLayoutName[] = "NebulaQuitButton";
+    const char* const pLayoutName = mRole == Role_Settings ? cSettingsLayoutName : cQuitLayoutName;
+    const u32 size = static_cast< u32 >(strlen(pLayoutName)) + 1;
     delete[] pManager->mLayoutName;
-    pManager->mLayoutName = new char[sizeof(cLayoutName)];
-    memcpy(pManager->mLayoutName, cLayoutName, sizeof(cLayoutName));
+    pManager->mLayoutName = new char[size];
+    memcpy(pManager->mLayoutName, pLayoutName, size);
 
     MR::hidePane(this, "CopyButton");
     MR::hidePane(this, "MiiButton");
@@ -80,9 +91,9 @@ void NebulaQuitButton::init(const TableIter& /*rIter*/) {
 
 // Every size and place from the layout's own values: the label at the size of the file select's secondary buttons
 // (Copy, Mii, Delete) against its Start; the pill a capsule around it (its straight middle as wide as the label, the
-// rounded caps its padding); its top and left edges as far from the canvas's top-left corner as Start's bottom edge is
-// from the bottom, and the pill grows to the right when pointed, so its left edge never nears the screen's.
-void NebulaQuitButton::layOut() {
+// rounded caps its padding); its top and outer edges as far from the canvas's corner as Start's bottom edge is from
+// the bottom. The pill grows toward the screen's middle when pointed, so its outer edge never nears the screen's.
+void NebulaFileSelectButton::layOut() {
     Ui::Pane* pRoot = getLayoutManager()->mLayout->mpRootPane;
     Ui::Pane* pStart = MR::getPane(this, "StartButton");
     Ui::Pane* pButton = MR::getPane(this, "SButton");
@@ -97,7 +108,7 @@ void NebulaQuitButton::layOut() {
         return;
     }
 
-    MR::setTextBoxMessageRecursive(this, "StartButtonTxt", getLabel());
+    MR::setTextBoxMessageRecursive(this, "StartButtonTxt", mRole == Role_Settings ? getSettingsLabel() : getQuitLabel());
     Ui::TextBox* pLabel = nullptr;
     for (Ui::Pane* pChild : pTextParent->GetChildList()) {
         Ui::TextBox* pText = asTextBox(pChild);
@@ -136,23 +147,30 @@ void NebulaQuitButton::layOut() {
         }
     }
 
-    // The button pane (SButton, which the animations scale) holds the pill by its left edge: the pill's pieces move
-    // right by half its width.
+    // The button pane (SButton, which the animations scale) holds the pill by its outer edge: Quit's pieces move right
+    // by half the pill's width, Settings' left.
     const f32 halfWidth = pictureScale * (middle * 0.5f + cap);
+    const f32 toward = mRole == Role_Settings ? -halfWidth : halfWidth;
     for (Ui::Pane* pChild : pButton->GetChildList()) {
-        pChild->mTranslate.x += halfWidth;
+        pChild->mTranslate.x += toward;
     }
 
-    // Start's pane mirrored through the canvas centre (it follows the left and top edges as Start the right and
-    // bottom), the pill's top and left edges `inset` in from the canvas's.
+    // Quit: Start's pane mirrored through the canvas centre (it follows the left and top edges as Start the right and
+    // bottom). Settings: Start's own side, mirrored top for bottom. Either pill's top and outer edges `inset` in from
+    // the canvas's.
     pStart->mScale.x = scale;
     pStart->mScale.y = scale;
-    pStart->mTranslate.x = -startX;
     pStart->mTranslate.y = pRoot->mSize.height * 0.5f - inset - height * 0.5f * scale;
-    pButton->mTranslate.x = (-pRoot->mSize.width * 0.5f + inset + startX) / scale;
+    if (mRole == Role_Settings) {
+        pStart->mTranslate.x = startX;
+        pButton->mTranslate.x = (pRoot->mSize.width * 0.5f - inset - startX) / scale;
+    } else {
+        pStart->mTranslate.x = -startX;
+        pButton->mTranslate.x = (-pRoot->mSize.width * 0.5f + inset + startX) / scale;
+    }
 }
 
-void NebulaQuitButton::control() {
+void NebulaFileSelectButton::control() {
     if (mButton->isPointingTrigger()) {
         MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
     }
@@ -164,7 +182,7 @@ void NebulaQuitButton::control() {
     mButton->update();
 }
 
-bool NebulaQuitButton::takeMenuFocus() {
+bool NebulaFileSelectButton::takeMenuFocus() {
     if (!mButton->isWait() && !mButton->isNotPointing()) {
         return false;
     }
@@ -172,7 +190,7 @@ bool NebulaQuitButton::takeMenuFocus() {
     return true;
 }
 
-void NebulaQuitButton::setShown(bool shown) {
+void NebulaFileSelectButton::setShown(bool shown) {
     if (!shown) {
         mShownFrames = 0;
         if (!mButton->isHidden() && !mButton->isDisappearing() && !mButton->isAppearing() && !mIsDecided) {
@@ -190,21 +208,21 @@ void NebulaQuitButton::setShown(bool shown) {
     }
 }
 
-bool NebulaQuitButton::isDecided() const {
+bool NebulaFileSelectButton::isDecided() const {
     return mIsDecided;
 }
 
-void NebulaQuitButton::resume() {
+void NebulaFileSelectButton::resume() {
     mIsDecided = false;
     mButton->forceToWait();
 }
 
-bool NebulaQuitButton::isPointing() const {
+bool NebulaFileSelectButton::isPointing() const {
     return mButton->isPointing();
 }
 
-// The question the button asks, in the played language.
-const char16_t* NebulaQuitButton::getQuestion() {
+// The question Quit asks, in the played language.
+const char16_t* NebulaFileSelectButton::getQuitQuestion() {
     static MR::GrowBuffer< char16_t > question;
     NebulaUi::getText(question, "QuitQuestion");
     return question.mItems;

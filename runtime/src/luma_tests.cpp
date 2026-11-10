@@ -183,6 +183,18 @@ int main() {
         }
     }
 
+    // Mod-wide scripts.
+    {
+        const std::optional<Manifest> wide = parse_manifest(R"({"format":1,"id":"s","name":"S","version":"1","game":"RMGE01","layers":[{"scripts":["main","rules/coins"]}]})");
+        check(wide && wide->layers.size() == 1u && wide->layers[0].scripts.size() == 2u && wide->layers[0].scripts[1] == "rules/coins",
+              "mod-wide scripts");
+        check(wide && !wide->layers.empty() && layer_sets_game(wide->layers[0]), "a layer with scripts sets the game");
+        for (const char* bad : {R"("scripts":"main")", R"("scripts":[1])", R"("scripts":["../x"])", R"("scripts":[""])"}) {
+            const std::string text = std::string(R"({"format":1,"id":"s","name":"S","version":"1","game":"RMGE01","layers":[{)") + bad + "}]}";
+            check(!parse_manifest(text), (std::string("refused: ") + bad).c_str());
+        }
+    }
+
     const std::optional<Manifest> newer = parse_manifest(R"({"format":2,"everything":"different"})");
     check(newer && refusal(*newer, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a newer format is named, not damaged");
 

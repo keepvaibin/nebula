@@ -3391,3 +3391,157 @@ PartsModel::makeActorAppeared	h
 PartsModel::makeActorDead	h	
 PartsModel::movement	h	
 PartsModel::offFixedPosNormalizeScale	h	
+nebula.actor_name	h	g
+nebula.actor_placed_name	h	g
+nebula.add_hungry_luma	gcc	c
+nebula.add_player_animation	ggdc	c
+nebula.add_text	gg	c
+nebula.add_text_like	ggg	c
+nebula.animation_frame	h	d
+nebula.animation_length	h	d
+nebula.appear	h	
+nebula.appear_item	hcec	
+nebula.attack_actor	hhc	c
+nebula.back_to_dome		
+nebula.buttons_held		c
+nebula.buttons_pressed		c
+nebula.camera_fov		d
+nebula.camera_position	E	
+nebula.camera_target	E	
+nebula.change_stage	gc	
+nebula.circle_wipe	cc	c
+nebula.declare_item	hcc	
+nebula.distance_to_player	h	d
+nebula.draw_text	cdddcg	c
+nebula.end_camera	gc	
+nebula.end_cutscene	hg	
+nebula.event_value	g	c
+nebula.fade_in	c	
+nebula.fade_out	c	
+nebula.find_actor	gh	h
+nebula.game_camera	EE	c
+nebula.get_front	hE	
+nebula.get_gravity	hE	
+nebula.get_joint_position	hgE	
+nebula.get_position	hE	
+nebula.get_rotation	hE	
+nebula.get_scale	hE	
+nebula.get_tunable	gDD	c
+nebula.get_velocity	hE	
+nebula.give_grand_stars	c	c
+nebula.give_star	gcc	c
+nebula.grant_spin_and_pointer		c
+nebula.gravity_at	eE	
+nebula.gravity_scale		d
+nebula.has_rail	h	c
+nebula.has_star	gc	c
+nebula.has_switch	hc	c
+nebula.hide_message		
+nebula.hit_player	hc	c
+nebula.is_animation_done	h	c
+nebula.is_cutscene_playing		c
+nebula.is_dead	h	c
+nebula.is_event_flag_on	g	c
+nebula.is_in_area	ge	c
+nebula.is_in_water	e	c
+nebula.is_movie_playing		c
+nebula.is_on_ground	h	c
+nebula.is_switch_on	hc	c
+nebula.is_touching_wall	h	c
+nebula.joint_name	hc	g
+nebula.jump_player	e	
+nebula.kill	h	
+nebula.kill_player		
+nebula.layout_is_playing	h	c
+nebula.layout_move_pane	hgdd	
+nebula.layout_open	g	h
+nebula.layout_play	hg	
+nebula.layout_set_alpha	hd	
+nebula.layout_set_number	hgc	
+nebula.layout_set_text	hgg	
+nebula.layout_show	hc	
+nebula.layout_show_pane	hgc	
+nebula.log	g	
+nebula.move_on_rail	hd	
+nebula.nerve	h	g
+nebula.nerve_at	c	g
+nebula.nerve_frames	h	c
+nebula.open_scenario_select	g	
+nebula.option	g	g
+nebula.pause_timer	c	
+nebula.place_talk_box	ddc	
+nebula.placement_number	hgD	c
+nebula.placement_text	hg	g
+nebula.play	hcg	c
+nebula.play_movie	g	c
+nebula.play_music	g	c
+nebula.play_system_sound	g	
+nebula.player		h
+nebula.player_constant	cgc	d
+nebula.player_front	E	
+nebula.pointer	J	c
+nebula.rail_at_end	h	c
+nebula.rail_coord	h	d
+nebula.rail_length	h	d
+nebula.rail_turn_back	h	
+nebula.raycast	eeE	c
+nebula.save_game		
+nebula.screen_position	eJ	c
+nebula.set_animation_frame	hd	
+nebula.set_animation_rate	hd	
+nebula.set_camera	eed	
+nebula.set_camera_near	d	
+nebula.set_comet_time_limit	gcc	c
+nebula.set_event_flag_on	g	
+nebula.set_event_value	gc	
+nebula.set_front	he	
+nebula.set_game_speed	d	
+nebula.set_gravity_scale	d	
+nebula.set_nerve	hg	c
+nebula.set_object_change	cgg	c
+nebula.set_player_character	c	c
+nebula.set_player_constant	cgcd	c
+nebula.set_player_control	c	
+nebula.set_position	he	
+nebula.set_rail_coord	hd	
+nebula.set_rotation	he	
+nebula.set_scale	he	
+nebula.set_star	gcc	
+nebula.set_state	hc	
+nebula.set_switch	hcc	
+nebula.set_timer	d	c
+nebula.set_touchable	hc	
+nebula.set_tunable	gd	c
+nebula.set_value	cc	
+nebula.set_velocity	he	
+nebula.shake_camera		
+nebula.shake_camera_by	c	
+nebula.show_hud	cc	
+nebula.show_joint	hgc	
+nebula.show_message	gc	
+nebula.show_model	hc	
+nebula.spawn	ge	h
+nebula.stage_name		g
+nebula.stars_in_galaxy	g	c
+nebula.stars_won_in_galaxy	g	c
+nebula.start_camera	gc	
+nebula.start_cutscene	hg	c
+nebula.state	h	c
+nebula.state_frames	h	c
+nebula.step_game	c	
+nebula.stick	DD	
+nebula.stop_effect	hg	
+nebula.stop_movie		
+nebula.stop_music	c	
+nebula.stop_scene	c	
+nebula.stop_sound	hg	
+nebula.store_get	gc	c
+nebula.store_set	gc	
+nebula.store_set_text	gg	
+nebula.talking_actor		h
+nebula.timer	DD	c
+nebula.toolkit_find	g	c
+nebula.turn_to_player	hd	
+nebula.unlock_achievement	g	c
+nebula.value	c	c
+nebula.water_point	cE	c

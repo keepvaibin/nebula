@@ -1821,6 +1821,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     plan.rows.script_objects.push_back({mod.id, mod.luma->version, object.name, object.script, object.archive, object.radius,
                                                          object.kind, object.collision, object.shadow_radius, object.clip_radius});
                 }
+                for (const std::string& script : layer.scripts) {
+                    plan.rows.mod_scripts.push_back({mod.id, mod.luma->version, script});
+                }
                 for (const auto& [material, file] : layer.materials) {
                     plan.materials.push_back({material, mod.path / fs::path(from_utf8(file))});
                 }

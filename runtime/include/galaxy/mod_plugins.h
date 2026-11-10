@@ -119,6 +119,13 @@ struct ObjectClassToSet {
     std::string like;
 };
 
+// A mod-wide script (luma.json "scripts"), for the mod that runs it.
+struct ModScriptToAdd {
+    std::string mod_id;
+    std::string mod_version;
+    std::string script;
+};
+
 // An object a script runs (luma::ScriptObject), for the mod that adds it.
 struct ScriptObjectToAdd {
     std::string mod_id;
@@ -166,12 +173,13 @@ struct ModRows {
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
     std::vector<ScriptObjectToAdd> script_objects;
+    std::vector<ModScriptToAdd> mod_scripts;
     std::vector<SoundEffectToAdd> sound_effects;
     std::vector<PlayerAnimationToAdd> player_animations;
     std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && script_objects.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`

@@ -2,7 +2,7 @@
 
 Every game function a script or plugin calls by name, generated from the game's headers (tools/lumacore). Letters: a none, b bool, c int, d float, e vec3, g text, h handle (an object, a sensor...); an upper-case letter is a value that comes back after the result (pass one in, or none for zero).
 
-3393 functions.
+3547 functions.
 
 | Name | Takes | Gives |
 |---|---|---|
@@ -3399,6 +3399,160 @@ Every game function a script or plugin calls by name, generated from the game's 
 | `PartsModel::makeActorDead` | h self (PartsModel) |  |
 | `PartsModel::movement` | h self (PartsModel) |  |
 | `PartsModel::offFixedPosNormalizeScale` | h self (PartsModel) |  |
+| `nebula.actor_name` | h actor | g |
+| `nebula.actor_placed_name` | h actor | g |
+| `nebula.add_hungry_luma` | g galaxy, c slot, c star_bits | c |
+| `nebula.add_player_animation` | g name, g file, d rate, c blend_frames | c |
+| `nebula.add_text` | g id, g utf8 | c |
+| `nebula.add_text_like` | g id, g utf8, g like_id | c |
+| `nebula.animation_frame` | h actor | d |
+| `nebula.animation_length` | h actor | d |
+| `nebula.appear` | h actor |  |
+| `nebula.appear_item` | h actor, c what, e xyz, c count |  |
+| `nebula.attack_actor` | h target, h by?, c how | c |
+| `nebula.back_to_dome` |  |  |
+| `nebula.buttons_held` |  | c |
+| `nebula.buttons_pressed` |  | c |
+| `nebula.camera_fov` |  | d |
+| `nebula.camera_position` | E xyz |  |
+| `nebula.camera_target` | E xyz |  |
+| `nebula.change_stage` | g galaxy, c mission |  |
+| `nebula.circle_wipe` | c open, c frames | c |
+| `nebula.declare_item` | h actor, c what, c count |  |
+| `nebula.distance_to_player` | h actor | d |
+| `nebula.draw_text` | c line, d x, d y, d size, c rgba, g utf8 | c |
+| `nebula.end_camera` | g name, c frames |  |
+| `nebula.end_cutscene` | h actor, g name |  |
+| `nebula.event_value` | g name | c |
+| `nebula.fade_in` | c frames |  |
+| `nebula.fade_out` | c frames |  |
+| `nebula.find_actor` | g name, h after? | h |
+| `nebula.game_camera` | E position, E target | c |
+| `nebula.get_front` | h actor, E xyz |  |
+| `nebula.get_gravity` | h actor, E xyz |  |
+| `nebula.get_joint_position` | h actor, g joint, E xyz |  |
+| `nebula.get_position` | h actor, E xyz |  |
+| `nebula.get_rotation` | h actor, E xyz |  |
+| `nebula.get_scale` | h actor, E xyz |  |
+| `nebula.get_tunable` | g key, D value, D game_value | c |
+| `nebula.get_velocity` | h actor, E xyz |  |
+| `nebula.give_grand_stars` | c count | c |
+| `nebula.give_star` | g galaxy, c star, c grand | c |
+| `nebula.grant_spin_and_pointer` |  | c |
+| `nebula.gravity_at` | e xyz, E out |  |
+| `nebula.gravity_scale` |  | d |
+| `nebula.has_rail` | h actor | c |
+| `nebula.has_star` | g galaxy, c star | c |
+| `nebula.has_switch` | h actor, c which | c |
+| `nebula.hide_message` |  |  |
+| `nebula.hit_player` | h actor, c how | c |
+| `nebula.is_animation_done` | h actor | c |
+| `nebula.is_cutscene_playing` |  | c |
+| `nebula.is_dead` | h actor | c |
+| `nebula.is_event_flag_on` | g name | c |
+| `nebula.is_in_area` | g area, e xyz | c |
+| `nebula.is_in_water` | e xyz | c |
+| `nebula.is_movie_playing` |  | c |
+| `nebula.is_on_ground` | h actor | c |
+| `nebula.is_switch_on` | h actor, c which | c |
+| `nebula.is_touching_wall` | h actor | c |
+| `nebula.joint_name` | h actor, c index | g |
+| `nebula.jump_player` | e velocity |  |
+| `nebula.kill` | h actor |  |
+| `nebula.kill_player` |  |  |
+| `nebula.layout_is_playing` | h layout | c |
+| `nebula.layout_move_pane` | h layout, g pane, d x, d y |  |
+| `nebula.layout_open` | g name | h |
+| `nebula.layout_play` | h layout, g animation |  |
+| `nebula.layout_set_alpha` | h layout, d alpha |  |
+| `nebula.layout_set_number` | h layout, g pane, c number |  |
+| `nebula.layout_set_text` | h layout, g pane, g utf8 |  |
+| `nebula.layout_show` | h layout, c show |  |
+| `nebula.layout_show_pane` | h layout, g pane, c show |  |
+| `nebula.log` | g text |  |
+| `nebula.move_on_rail` | h actor, d speed |  |
+| `nebula.nerve` | h actor | g |
+| `nebula.nerve_at` | c index | g |
+| `nebula.nerve_frames` | h actor | c |
+| `nebula.open_scenario_select` | g galaxy |  |
+| `nebula.option` | g id | g |
+| `nebula.pause_timer` | c paused |  |
+| `nebula.place_talk_box` | d x, d y, c on |  |
+| `nebula.placement_number` | h actor, g column, D value | c |
+| `nebula.placement_text` | h actor, g column | g |
+| `nebula.play` | h actor, c what, g name | c |
+| `nebula.play_movie` | g file | c |
+| `nebula.play_music` | g name | c |
+| `nebula.play_system_sound` | g name |  |
+| `nebula.player` |  | h |
+| `nebula.player_constant` | c character, g name, c index | d |
+| `nebula.player_front` | E xyz |  |
+| `nebula.pointer` | J xy | c |
+| `nebula.rail_at_end` | h actor | c |
+| `nebula.rail_coord` | h actor | d |
+| `nebula.rail_length` | h actor | d |
+| `nebula.rail_turn_back` | h actor |  |
+| `nebula.raycast` | e from, e to, E hit | c |
+| `nebula.save_game` |  |  |
+| `nebula.screen_position` | e xyz, J xy | c |
+| `nebula.set_animation_frame` | h actor, d frame |  |
+| `nebula.set_animation_rate` | h actor, d rate |  |
+| `nebula.set_camera` | e position, e target, d fov |  |
+| `nebula.set_camera_near` | d distance |  |
+| `nebula.set_comet_time_limit` | g galaxy, c mission, c seconds | c |
+| `nebula.set_event_flag_on` | g name |  |
+| `nebula.set_event_value` | g name, c value |  |
+| `nebula.set_front` | h actor, e xyz |  |
+| `nebula.set_game_speed` | d speed |  |
+| `nebula.set_gravity_scale` | d scale |  |
+| `nebula.set_nerve` | h actor, g nerve | c |
+| `nebula.set_object_change` | c where, g object, g becomes | c |
+| `nebula.set_player_character` | c luigi | c |
+| `nebula.set_player_constant` | c character, g name, c index, d value | c |
+| `nebula.set_player_control` | c on |  |
+| `nebula.set_position` | h actor, e xyz |  |
+| `nebula.set_rail_coord` | h actor, d coord |  |
+| `nebula.set_rotation` | h actor, e xyz |  |
+| `nebula.set_scale` | h actor, e xyz |  |
+| `nebula.set_star` | g galaxy, c star, c have |  |
+| `nebula.set_state` | h actor, c state |  |
+| `nebula.set_switch` | h actor, c which, c on |  |
+| `nebula.set_timer` | d seconds_left | c |
+| `nebula.set_touchable` | h actor, c touchable |  |
+| `nebula.set_tunable` | g key, d value | c |
+| `nebula.set_value` | c what, c value |  |
+| `nebula.set_velocity` | h actor, e xyz |  |
+| `nebula.shake_camera` |  |  |
+| `nebula.shake_camera_by` | c how |  |
+| `nebula.show_hud` | c parts, c show |  |
+| `nebula.show_joint` | h actor, g joint, c on |  |
+| `nebula.show_message` | g utf8_or_id, c centre |  |
+| `nebula.show_model` | h actor, c show |  |
+| `nebula.spawn` | g name, e xyz | h |
+| `nebula.stage_name` |  | g |
+| `nebula.stars_in_galaxy` | g galaxy | c |
+| `nebula.stars_won_in_galaxy` | g galaxy | c |
+| `nebula.start_camera` | g name, c frames |  |
+| `nebula.start_cutscene` | h actor, g name | c |
+| `nebula.state` | h actor | c |
+| `nebula.state_frames` | h actor | c |
+| `nebula.step_game` | c steps |  |
+| `nebula.stick` | D x, D y |  |
+| `nebula.stop_effect` | h actor, g name |  |
+| `nebula.stop_movie` |  |  |
+| `nebula.stop_music` | c frames |  |
+| `nebula.stop_scene` | c frames |  |
+| `nebula.stop_sound` | h actor, g name |  |
+| `nebula.store_get` | g key, c missing | c |
+| `nebula.store_set` | g key, c value |  |
+| `nebula.store_set_text` | g key, g text |  |
+| `nebula.talking_actor` |  | h |
+| `nebula.timer` | D seconds_left, D seconds_limit | c |
+| `nebula.toolkit_find` | g name | c |
+| `nebula.turn_to_player` | h actor, d degrees |  |
+| `nebula.unlock_achievement` | g id | c |
+| `nebula.value` | c what | c |
+| `nebula.water_point` | c index, E xyz | c |
 
 ## Left out
 
@@ -3740,3 +3894,41 @@ What the toolkit cannot offer yet, and why.
 | `MR::zeroMemory` | parameter type void * |
 | `MarioActor::cylinderPushCheck` | declared, never defined |
 | `NameObj::initStep` | parameter type uint64_t |
+| `nebula.actor_data` | result type void* |
+| `nebula.actor_value` | result type NebulaValue |
+| `nebula.actors_near` | parameter type NebulaActor** |
+| `nebula.add_galaxy` | only while plugins start |
+| `nebula.add_mod_script` | starts a script (luma.json "scripts" does) |
+| `nebula.add_music` | only while plugins start |
+| `nebula.add_power_up` | parameter type const NebulaPowerUpClass* |
+| `nebula.add_script_object` | adds a script object (luma.json "objects" does) |
+| `nebula.add_sound_effect` | only while plugins start |
+| `nebula.alloc` | result type void* |
+| `nebula.class_name` | parameter type uint32_t* |
+| `nebula.field_find` | parameter type const NebulaValue* |
+| `nebula.field_get` | parameter type const NebulaValue* |
+| `nebula.field_set` | parameter type const NebulaValue* |
+| `nebula.find_function` | result type void* |
+| `nebula.format` | parameter type char* |
+| `nebula.get_joint_matrix` | parameter type float* |
+| `nebula.hook` | parameter type void* |
+| `nebula.hook_nerve` | only while plugins start |
+| `nebula.is_a` | parameter type const NebulaValue* |
+| `nebula.list_materials` | parameter type NebulaMaterialCallback |
+| `nebula.luma_start` | parameter type const struct NebulaModApi* |
+| `nebula.register_creator` | parameter type void* (*create)(const char* name) |
+| `nebula.register_object` | parameter type const NebulaObjectClass* |
+| `nebula.release` | parameter type void* |
+| `nebula.set_actor_data` | parameter type void* |
+| `nebula.set_area_music` | only while plugins start |
+| `nebula.set_comet_schedule` | only while plugins start |
+| `nebula.set_event_flag` | only while plugins start |
+| `nebula.set_object_class` | only while plugins start |
+| `nebula.set_stage_music` | only while plugins start |
+| `nebula.set_stage_rules` | only while plugins start |
+| `nebula.set_story` | only while plugins start |
+| `nebula.store_get_text` | parameter type char* |
+| `nebula.subscribe` | only while plugins start |
+| `nebula.toolkit_call` | parameter type const NebulaValue* |
+| `nebula.tunable_at` | parameter type const char** |
+| `nebula.value_actor` | parameter type const NebulaValue* |

@@ -88,12 +88,36 @@ namespace lumascript {
     NebulaValue zeroOf(u8 kind);
     void destroyInstance(Instance* pInstance);
 
-    // Runs the handler for an event name ("start", "frame", "touch_player", "message:ACTMES_PLAYER_SPIN"...), with
-    // arguments. Returns what it returned (none when it has no such handler or returned nothing). A handler that runs
-    // past the mod's step budget for this frame stops there, logged once.
-    NebulaValue run(Instance* pInstance, u32 handler, const NebulaValue* pArgs, u32 count);
-    // The handler's index by name, or -1 (resolved once, at load, by the dispatch records).
-    s32 findHandler(const Program* pProgram, const char* pName);
+    // What a handler answers, read from its name at load (a name the game has no event for refuses the file):
+    //   frame, enter, leave            the evaluator's own (frame() runs them)
+    //   start, touch_player, attacked, appear, kill    an object's
+    //   message                        any message to the object (number -1); "message:<n>" one message
+    //   event:<name>                   another script's emit (number: the event's id, lumacore::eventId)
+    //   stage_start, coin, ...         the game's events (number: NEBULA_MOD_EVENT_*, lumacore::gameEvent)
+    enum Event : u8 {
+        Event_Frame = 0,
+        Event_Enter,
+        Event_Leave,
+        Event_Start,
+        Event_Touch,
+        Event_Attacked,
+        Event_Appear,
+        Event_Kill,
+        Event_Message,
+        Event_Script,
+        Event_Game,
+        Event_Count
+    };
+    // Whether a program answers an event (number -1: any number of it).
+    bool hasEvent(const Program* pProgram, Event event, s32 number);
+    // Runs the instance's handlers for an event: its state's first, then the one outside any state, each with self and
+    // the arguments. True when one ran; *pResult (when given) is the first result that is not none. A handler that
+    // runs past the mod's step budget for this frame stops there, logged once.
+    bool dispatch(Instance* pInstance, Event event, s32 number, const NebulaValue* pArgs, u32 count, NebulaValue* pResult);
+    // Who loaded a program (the host's mod record), and the program running now (null between scripts).
+    void setOwner(Program* pProgram, const void* pOwner);
+    const void* owner(const Program* pProgram);
+    const Program* running();
     // Each frame: waits count down and continue; the state's "frame" handler runs.
     void frame(Instance* pInstance);
     // Starts a frame: every script's step budget (a tunable, per script file) and the frame's formatted text.
