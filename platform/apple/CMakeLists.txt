@@ -161,7 +161,23 @@ else()
     set(nebula_apple_metal_sdk macosx)
     set(nebula_apple_metal_min_os 12.0)
 endif()
-execute_process(COMMAND xcrun -sdk ${nebula_apple_metal_sdk} -f metal
+# The Xcode whose compiler it is, when that is not the machine's selected one (xcode-select -p): its Developer folder.
+# Only the programs' compile is given it: the rest of the build keeps the compiler and linker it was set up with.
+set(NEBULA_METAL_DEVELOPER_DIR "" CACHE PATH "An Xcode's Contents/Developer folder, for its Metal compiler")
+if(NOT NEBULA_METAL_DEVELOPER_DIR AND EXISTS "/Applications/Xcode.app/Contents/Developer")
+    execute_process(COMMAND xcrun -sdk ${nebula_apple_metal_sdk} -f metal
+        RESULT_VARIABLE nebula_apple_no_selected_metal OUTPUT_QUIET ERROR_QUIET)
+    if(nebula_apple_no_selected_metal)
+        set(NEBULA_METAL_DEVELOPER_DIR "/Applications/Xcode.app/Contents/Developer")
+    endif()
+endif()
+set(nebula_apple_metal_environment)
+set(nebula_apple_metal_developer_argument)
+if(NEBULA_METAL_DEVELOPER_DIR)
+    set(nebula_apple_metal_environment "${CMAKE_COMMAND}" -E env "DEVELOPER_DIR=${NEBULA_METAL_DEVELOPER_DIR}")
+    set(nebula_apple_metal_developer_argument --developer-dir "${NEBULA_METAL_DEVELOPER_DIR}")
+endif()
+execute_process(COMMAND ${nebula_apple_metal_environment} xcrun -sdk ${nebula_apple_metal_sdk} -f metal
     RESULT_VARIABLE nebula_apple_no_metal_compiler OUTPUT_QUIET ERROR_QUIET)
 set(nebula_apple_program_libraries)
 if(nebula_apple_no_metal_compiler)
@@ -178,6 +194,7 @@ else()
                 --programs "${nebula_apple_programs_msl}" --out-blob "${nebula_apple_programs_blob}"
                 --out-dir "${CMAKE_BINARY_DIR}/generated" --work "${CMAKE_BINARY_DIR}/generated/metallib"
                 --sdk ${nebula_apple_metal_sdk} --min-os ${nebula_apple_metal_min_os}
+                ${nebula_apple_metal_developer_argument}
         DEPENDS "${nebula_apple_programs_msl}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/compile_metallib.py"
         USES_TERMINAL VERBATIM)
 endif()

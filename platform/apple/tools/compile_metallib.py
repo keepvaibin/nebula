@@ -9,7 +9,7 @@ disk). This does the first step at build time, with Apple's compiler: the app ca
 machine compiles a text.
 
   compile_metallib.py --programs programs_msl.bin --out-blob programs_metal.bin --out-dir <folder> --work <folder>
-                      [--sdk macosx] [--min-os 12.0] [--jobs N] [--emit-only]
+                      [--sdk macosx] [--min-os 12.0] [--jobs N] [--developer-dir <Xcode's Developer folder>] [--emit-only]
 
 Written to --out-dir: programs_2_4.metallib (MSL 2.4: every vertex program, and the pixel programs' bound-table forms)
 and programs_3_0.metallib (MSL 3.0: the pixel programs' array forms, whose arrays have no length; read only where the
@@ -19,8 +19,9 @@ function.
 
 Many programs go into one source file, each in a namespace of its own (their types have the same names): a function is
 `p<number>::m`. --work keeps the sources and each compiled file by its source's hash, so a build after a change
-compiles the files that changed. --emit-only writes the sources and the table and compiles nothing (the build's check
-compiles them with the system's own compiler, tools/msl_check).
+compiles the files that changed. --emit-only writes the sources and the table and compiles nothing. --developer-dir
+names the Xcode whose compiler is used when it is not the machine's selected one (xcode-select): only this tool's own
+commands see it, so the rest of a build keeps its tools.
 """
 import argparse
 import concurrent.futures
@@ -53,8 +54,11 @@ def body_of(text):
     return ENTRY.sub(b"m", b"\n".join(lines))
 
 
+TOOL_ENVIRONMENT = None  # the commands' environment when --developer-dir names an Xcode
+
+
 def run(command):
-    done = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    done = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=TOOL_ENVIRONMENT)
     return done.returncode, done.stdout.decode("utf-8", "replace")
 
 
@@ -67,8 +71,12 @@ def main():
     parser.add_argument("--sdk", default="macosx")
     parser.add_argument("--min-os", default="12.0")
     parser.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    parser.add_argument("--developer-dir", default="")
     parser.add_argument("--emit-only", action="store_true")
     args = parser.parse_args()
+    if args.developer_dir:
+        global TOOL_ENVIRONMENT
+        TOOL_ENVIRONMENT = dict(os.environ, DEVELOPER_DIR=args.developer_dir)
 
     with open(args.programs, "rb") as file:
         blob = file.read()
