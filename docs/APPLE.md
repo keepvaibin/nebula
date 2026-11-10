@@ -69,6 +69,15 @@ are joined with `lipo`, and the app is signed for the machine it was built on (a
 app is opened the first time from System Settings, Privacy & Security ("Open Anyway"), unless it is signed with a
 Developer ID and notarized.
 
+## Permissions
+
+The app asks the player for nothing. It is signed with the hardened runtime and `Nebula.entitlements`, which names
+none of the things the system guards (microphone, camera, location, contacts, Apple Events), so the system refuses
+them without a question. Without that, macOS asks for the microphone on the game's behalf whenever the sound goes to
+a device that also has inputs (a headset, a controller's audio), though the game only plays. The rumble engine plays
+haptics only. The disc image and a Mii file are read where the player points in the system's own panel, which is the
+permission.
+
 ## Setting up
 
 The game's files come from the player's own disc image, once. With no `game.pak` the app's first window asks for the

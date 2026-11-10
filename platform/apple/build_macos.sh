@@ -134,6 +134,9 @@ fi
 # Signed for this machine (an ad-hoc signature, which Apple silicon requires of every program it runs). An app given
 # to someone else is opened the first time from System Settings > Privacy & Security ("Open Anyway"), or signed with
 # a Developer ID and notarized instead.
-codesign --force --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
-codesign --force --sign - "$app"
+# The hardened runtime, with Nebula.entitlements: the app is refused everything the system guards that it does not
+# name there, without the player being asked (the microphone above all, which macOS otherwise asks for whenever the
+# sound goes to a device that also has inputs).
+codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
+codesign --force --options runtime --entitlements "$here/Nebula.entitlements" --sign - "$app"
 echo "$app"
