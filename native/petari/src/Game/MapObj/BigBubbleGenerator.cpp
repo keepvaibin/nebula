@@ -11,6 +11,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initFromPlacementParam_f1, "initFromPlacementParam.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFromPlacementParam_f2, "initFromPlacementParam.f2", 100.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sActiveDistance, 1500.0f);
     NEBULA_TUNABLE(f32, sNonActiveDistance, 2000.0f);
@@ -46,10 +49,10 @@ void BigBubbleGenerator::init(const TableIter& rIter) {
 void BigBubbleGenerator::initFromPlacementParam(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mSpawnTimer);
     if (MR::getPlacementArg1NoInit(rIter, &mMinSize)) {
-        mMinSize /= 100.0f;
+        mMinSize /= cNum_initFromPlacementParam_f1;
     }
     if (MR::getPlacementArg2NoInit(rIter, &mMaxSize)) {
-        mMaxSize /= 100.0f;
+        mMaxSize /= cNum_initFromPlacementParam_f2;
     }
     MR::getPlacementArg3WithInit(rIter, &mLimitterID);
     MR::getPlacementArg4WithInit(rIter, &mShape);

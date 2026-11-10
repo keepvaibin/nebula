@@ -8,6 +8,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setStickSensor_f1, "setStickSensor.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 1.308997f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 1.308997f);
 
 void Mario::checkBeeStick() {
     return;
@@ -69,7 +76,7 @@ bool MarioStick::setStickSensor(const HitSensor* pSensor) {
         }
 
         v11.setLength(pSensor->mRadius);
-        mStickPos = pSensor->mPosition + v11 * 0.9f;
+        mStickPos = pSensor->mPosition + v11 * cNum_setStickSensor_f1;
         getPlayer()->setTrans(mStickPos);
         clearVelocity();
         MR::normalize(&v11);
@@ -111,12 +118,12 @@ bool MarioStick::update() {
     Mario* player = getPlayer();
     Mtx secondRotMtx;
     Mtx rotMtx;
-    NebulaMtxRotAxisRad(rotMtx, &player->mSideVec, 0.01f * getStickY());
+    NebulaMtxRotAxisRad(rotMtx, &player->mSideVec, cNum_update_f1 * getStickY());
 
     Vec3f fromFlower(mStickPos - mFlowerPos);
     NebulaMtxMultVec(rotMtx, &fromFlower, &fromFlower);
 
-    if (MR::diffAngleAbs(fromFlower, mFlowerUp) < 1.308997f) {
+    if (MR::diffAngleAbs(fromFlower, mFlowerUp) < cNum_update_f2) {
         Vec3f front(-fromFlower);
         if (!MR::normalizeOrZero(&front)) {
             mPoseFront = front;
@@ -125,7 +132,7 @@ bool MarioStick::update() {
         getPlayer()->setFrontVecKeepSide(front);
     }
 
-    const f32 angle = 0.01f * -getStickX();
+    const f32 angle = cNum_update_f3 * -getStickX();
     const Vec3f* gravityVec = getPlayer()->getGravityVec();
     NebulaMtxRotAxisRad(secondRotMtx, gravityVec, angle);
     NebulaMtxMultVec(secondRotMtx, &fromFlower, &fromFlower);
@@ -136,7 +143,7 @@ bool MarioStick::update() {
         stopAnimation("ハチ花移動");
     }
 
-    if (MR::diffAngleAbs(fromFlower, mFlowerUp) < 1.308997f) {
+    if (MR::diffAngleAbs(fromFlower, mFlowerUp) < cNum_update_f4) {
         Vec3f secondFront(-fromFlower);
         if (!MR::normalizeOrZero(&secondFront)) {
             mPoseFront = secondFront;

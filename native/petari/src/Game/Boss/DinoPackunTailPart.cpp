@@ -10,6 +10,10 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_DinoPackunTailPart_f1, "DinoPackunTailPart.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 3.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 0.7f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.88f);
@@ -23,7 +27,7 @@ namespace NrvDinoPackunTailPart {
 };  // namespace NrvDinoPackunTailPart
 
 DinoPackunTailPart::DinoPackunTailPart(const char* pName, DinoPackun* pParent) : DinoPackunTailNode(pName, pParent) {
-    mRadius = 50.0f;
+    mRadius = cNum_DinoPackunTailPart_f1;
 }
 
 void DinoPackunTailPart::init(const TableIter& /*rIter*/) {
@@ -32,7 +36,7 @@ void DinoPackunTailPart::init(const TableIter& /*rIter*/) {
     initBinder(mRadius, 0.0f, 0);
     MR::connectToSceneEnemyDecorationMovement(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 8, 1.25f + mRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1 + mRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateClipping(this);
     makeActorAppeared();
 }
@@ -53,7 +57,7 @@ void DinoPackunTailPart::attackSensor(HitSensor* pSender, HitSensor* pReceiver) 
         Vec3f away;
         MR::calcSensorDirectionNormalize(&away, pReceiver, pSender);
 
-        if (mVelocity.dot(away) < 3.0f) {
+        if (mVelocity.dot(away) < cNum_attackSensor_f1) {
             mVelocity.add(away);
         }
     }

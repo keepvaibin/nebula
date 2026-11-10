@@ -11,6 +11,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 20.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sMarioWorldOffset, 120.0f);
     NEBULA_TUNABLE(f32, sMarioScreenOffsetX, 32.0f);
@@ -53,7 +56,7 @@ void SuddenDeathMeter::init(const TableIter& /*rIter*/) {
     MR::setFollowTypeAdd(this, "HitPointW");
     MR::startAnim(this, "FontPosition2to1", 1);
     MR::startAnim(this, "ShowHide", 2);
-    MR::setAnimFrameAndStop(this, 20.0f, 2);
+    MR::setAnimFrameAndStop(this, cNum_init_f1, 2);
     setCountAnimFrame();
     mCountUpPaneRumbler = new CountUpPaneRumbler(this, "HitPointNumber");
     initNerve(GET_NERVE(SuddenDeathMeter, SuddenDeathMeterNrvWait));
@@ -68,7 +71,7 @@ void SuddenDeathMeter::control() {
 
     mAlpha = MR::clamp(mAlpha, ::sMinAlpha, ::sMaxAlpha);
 
-    MR::setAnimFrameAndStop(this, MR::normalize(mAlpha, 0.0f, 1.0f) * mShowHideRate * 20.0f, 2);
+    MR::setAnimFrameAndStop(this, MR::normalize(mAlpha, 0.0f, 1.0f) * mShowHideRate * cNum_control_f1, 2);
     mCountUpPaneRumbler->update();
 }
 

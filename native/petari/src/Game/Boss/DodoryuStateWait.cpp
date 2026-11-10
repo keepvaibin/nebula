@@ -9,6 +9,9 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 8.0f);
 
 namespace {
     NEW_NERVE(DodoryuStateWaitNrvWait, DodoryuStateWait, Wait);
@@ -31,7 +34,7 @@ void DodoryuStateWait::exeWait() {
         MR::startBtp(mHost, "Normal");
         mHost->setHillAppearNumHalf();
         mHost->startHill();
-        mHost->shiftMoveStateRail(8.0f);
+        mHost->shiftMoveStateRail(cNum_exeWait_f1);
 
         if (MR::isStageSuddenDeathDodoryu() && MR::hasRetryGalaxySequence()) {
             MR::forceCloseWipeCircle();

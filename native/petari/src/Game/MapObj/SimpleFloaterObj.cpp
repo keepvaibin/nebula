@@ -8,6 +8,9 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace {
     const char* cEffectName = "Ripple";
@@ -36,7 +39,7 @@ void SimpleFloaterObj::init(const TableIter& rrIter) {
     mEffectPos.set(mPosition);
     MR::setEffectHostSRT(this, ::cEffectName, &mEffectPos, &mRotation, nullptr);
     initSound(4, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     mFloatingForce = new MapPartsFloatingForce(this);
     mFloatingForce->init(rrIter);
     mFloatingForce->setObjectName(mObjName);

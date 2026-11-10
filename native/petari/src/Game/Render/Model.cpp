@@ -7,6 +7,7 @@
 #include <nebula_cooked_texture.h>
 #include <nebula_geometry.hpp>
 #include <string.h>
+#include "Game/Util/Tunable.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -387,7 +388,7 @@ const Mtx cIdentityMtx = {
 };
 
 namespace {
-    const Vec cOneScale = {1.0f, 1.0f, 1.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cOneScale, {1.0f, 1.0f, 1.0f});
     const Mtx cIdentity = {
         {1.0f, 0.0f, 0.0f, 0.0f},
         {0.0f, 1.0f, 0.0f, 0.0f},

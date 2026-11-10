@@ -8,6 +8,10 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 2.0f);
 
 ShadowSurfaceBox::~ShadowSurfaceBox() {
 }
@@ -43,10 +47,10 @@ void ShadowSurfaceBox::draw() const {
 
     if (controller->isFollowHostScale()) {
         Vec3f scale(controller->getHost()->mScale);
-        scale /= 2.0f;
+        scale /= cNum_draw_f1;
         size *= scale;
     } else {
-        size /= 2.0f;
+        size /= cNum_draw_f2;
     }
 
     side -= normal * sideDot;

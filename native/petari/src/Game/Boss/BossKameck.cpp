@@ -23,6 +23,15 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 240.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceToPlayer_f1, "appearStarPieceToPlayer.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceToPlayer_f2, "appearStarPieceToPlayer.f2", 65.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f1, "updatePose.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f2, "updatePose.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceToUp_f1, "appearStarPieceToUp.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceToUp_f2, "appearStarPieceToUp.f2", 40.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
     NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.04f);
@@ -45,8 +54,8 @@ void BossKameck::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     MR::initShadowFromCSV(this, "Shadow");
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 240.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     MR::createKameckBeamHolder();
     MR::createKameckFireBallHolder();
@@ -125,7 +134,7 @@ void BossKameck::appearStarPieceToPlayer(s32 num) {
     MR::calcVecToPlayerH(&dir, this, nullptr);
     dir.sub(mGravity);
     MR::normalizeOrZero(&dir);
-    MR::appearStarPieceToDirection(this, mPosition, dir, num, 30.0f, 65.0f, false);
+    MR::appearStarPieceToDirection(this, mPosition, dir, num, cNum_appearStarPieceToPlayer_f1, cNum_appearStarPieceToPlayer_f2, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }
 
@@ -193,9 +202,9 @@ void BossKameck::updatePose() {
     f32 mag = sideAccel.length();
 
     if (!MR::isNearZero(mag)) {
-        f32 lean = MR::normalize(mag, 0.0f, 3.0f);
+        f32 lean = MR::normalize(mag, 0.0f, cNum_updatePose_f1);
 
-        up += sideAccel * ((4.0f * lean) / mag);
+        up += sideAccel * ((cNum_updatePose_f2 * lean) / mag);
 
         if (!MR::isNearZero(up)) {
             MR::normalize(&up);
@@ -272,7 +281,7 @@ void BossKameck::initMoveRail(const TableIter& rIter) {
 }
 
 void BossKameck::appearStarPieceToUp(s32 num) {
-    MR::appearStarPieceToDirection(this, mPosition, -mGravity, num, 30.0f, 40.0f, false);
+    MR::appearStarPieceToDirection(this, mPosition, -mGravity, num, cNum_appearStarPieceToUp_f1, cNum_appearStarPieceToUp_f2, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }
 

@@ -13,6 +13,20 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_slerpCamera_f1, "slerpCamera.f1", 0.00001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeGroundWatchPoint_f1, "makeGroundWatchPoint.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeGroundWatchPoint_f2, "makeGroundWatchPoint.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeGroundWatchPoint_f3, "makeGroundWatchPoint.f3", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeGroundWatchPoint_f4, "makeGroundWatchPoint.f4", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRoundTarget_f1, "calcRoundTarget.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRoundTarget_f2, "calcRoundTarget.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRoundTarget_f3, "calcRoundTarget.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateMoveCollision_f1, "updateMoveCollision.f1", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateMoveCollision_f2, "updateMoveCollision.f2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeDistanceByFovy_f1, "arrangeDistanceByFovy.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSafeUpVec_f1, "calcSafeUpVec.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSafeUpVec_f2, "calcSafeUpVec.f2", 0.98f);
+
 namespace CameraLocalUtil {
     const Vec3f& getWatchPos(const CameraMan* pCameraMan) {
         return pCameraMan->mPoseParam->mWatchPos;
@@ -324,7 +338,7 @@ namespace CameraLocalUtil {
         }
 
         f32 sratio;
-        if (1.0f - cos <= 0.00001f) {
+        if (1.0f - cos <= cNum_slerpCamera_f1) {
             sratio = 1.0f - ratio;
         } else {
             f32 angle = MR::acos(cos);
@@ -369,7 +383,7 @@ namespace CameraLocalUtil {
     void makeGroundWatchPoint(Vec3f* pDst, Camera* pCamera, Vec3f* pLastWatchPoint, bool* pIsFirstFrame) {
         CameraTargetObj* pTarget = getTarget(pCamera);
         Vec3f watchPoint;
-        makeWatchPoint(&watchPoint, pCamera, pTarget, 0.1f / 15.0f);
+        makeWatchPoint(&watchPoint, pCamera, pTarget, cNum_makeGroundWatchPoint_f1 / cNum_makeGroundWatchPoint_f2);
 
         watchPoint = watchPoint - pTarget->getPosition() + pTarget->getGroundPos();
 
@@ -382,7 +396,7 @@ namespace CameraLocalUtil {
             Vec3f watchDir = watchPoint - pTarget->getPosition();
             f32 newUp = pTarget->getUpVec().dot(watchDir);
 
-            f32 length = newUp * 0.05f + prevUp * 0.95f;
+            f32 length = newUp * cNum_makeGroundWatchPoint_f3 + prevUp * cNum_makeGroundWatchPoint_f4;
 
             watchPoint.set(pTarget->getPosition() + pTarget->getUpVec() * length);
         }
@@ -410,20 +424,20 @@ namespace CameraLocalUtil {
     }
 
     f32 calcRoundTarget(f32* pAngle, bool isRight, f32 roundDiv) {
-        f32 roundInterval = MR::toRadian(360.0f / roundDiv);
+        f32 roundInterval = MR::toRadian(cNum_calcRoundTarget_f1 / roundDiv);
         s32 divNum = (*pAngle < 0.0f ? -1 : 1) * (s32)(((roundInterval / 2) + MR::abs(*pAngle)) / roundInterval);
 
         if (isRight) {
             divNum += 1;
             if (divNum > roundDiv / 2) {
                 divNum -= roundDiv;
-                *pAngle -= MR::pi() * 2.0f;
+                *pAngle -= MR::pi() * cNum_calcRoundTarget_f2;
             }
         } else {
             divNum -= 1;
             if (divNum < -roundDiv / 2) {
                 divNum += roundDiv;
-                *pAngle += MR::pi() * 2.0f;
+                *pAngle += MR::pi() * cNum_calcRoundTarget_f3;
             }
         }
 
@@ -503,9 +517,9 @@ namespace CameraLocalUtil {
     }
 
     f32 updateMoveCollision(s32* pCount, Vec3f* pLastMoveDir, const CameraTargetObj* pTarget, const Vec3f& rPos, const Vec3f& rLine) {
-        const f32 cCollideRate = 0.03f;
+        const f32 cCollideRate = cNum_updateMoveCollision_f1;
         const s32 cCollideCountMax = 60;
-        const f32 cLastMoveLen = 5.0f;
+        const f32 cLastMoveLen = cNum_updateMoveCollision_f2;
 
         f32 lastMoveLen = pTarget->getLastMove().length();
         if (lastMoveLen > cLastMoveLen) {
@@ -540,7 +554,7 @@ namespace CameraLocalUtil {
         f32 projDist = posDiff.dot(viewDir);
         Vec3f projZ = viewDir * projDist;
 
-        f32 dist = projDist + (offset + posDiff.distance(projZ)) / MR::tanDegree(MR::getFovy() * 0.5f);
+        f32 dist = projDist + (offset + posDiff.distance(projZ)) / MR::tanDegree(MR::getFovy() * cNum_arrangeDistanceByFovy_f1);
         if (dist > viewDist) {
             setPos(pCamera, viewDir * dist + getWatchPos(pCamera));
         }
@@ -587,10 +601,10 @@ namespace CameraLocalUtil {
             MR::normalize(&camWatchDir);
             MR::normalizeOrZero(pUp);
 
-            if (MR::isNearZero(*pUp) || MR::abs(camWatchDir.dot(*pUp)) > 0.98f) {
+            if (MR::isNearZero(*pUp) || MR::abs(camWatchDir.dot(*pUp)) > cNum_calcSafeUpVec_f1) {
                 Vec3f watchDir = getWatchPos(pCameraMan) - getPos(pCameraMan);
                 MR::normalize(&watchDir);
-                if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
+                if (MR::abs(camWatchDir.dot(watchDir)) > cNum_calcSafeUpVec_f2) {
                     pUp->set(getUpVec(pCameraMan));
                 } else {
                     Quat4f rot;

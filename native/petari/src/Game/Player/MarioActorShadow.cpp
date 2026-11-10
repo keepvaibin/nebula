@@ -20,6 +20,38 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/Model.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f1, "calcViewReflectionModel.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f2, "calcViewReflectionModel.f2", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f3, "calcViewReflectionModel.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f4, "calcViewReflectionModel.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f5, "calcViewReflectionModel.f5", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f6, "calcViewReflectionModel.f6", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f7, "calcViewReflectionModel.f7", 1.414f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f8, "calcViewReflectionModel.f8", 64.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f9, "calcViewReflectionModel.f9", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f10, "calcViewReflectionModel.f10", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f11, "calcViewReflectionModel.f11", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f12, "calcViewReflectionModel.f12", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f13, "calcViewReflectionModel.f13", 1.414f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewReflectionModel_f14, "calcViewReflectionModel.f14", 127.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f1, "calcViewWallShadowModel.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f2, "calcViewWallShadowModel.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f3, "calcViewWallShadowModel.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f4, "calcViewWallShadowModel.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f5, "calcViewWallShadowModel.f5", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f6, "calcViewWallShadowModel.f6", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewWallShadowModel_f7, "calcViewWallShadowModel.f7", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideShadowMode_f1, "decideShadowMode.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideShadowMode_f2, "decideShadowMode.f2", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideShadowMode_f3, "decideShadowMode.f3", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideShadowMode_f4, "decideShadowMode.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCylinderToCenter_f1, "calcCylinderToCenter.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCylinderToCenter_f2, "calcCylinderToCenter.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCylinderToCenter_f3, "calcCylinderToCenter.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCylinderToCenter_f4, "calcCylinderToCenter.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewFootPrint_f1, "calcViewFootPrint.f1", 0.1f);
 
 void MarioActor::initShadow() {
     mShadowMode = 1;
@@ -45,9 +77,9 @@ void MarioActor::calcViewReflectionModel() {
     Pos3f offset;
     NebulaMtxIdentity(offset.toMtxPtr());
     f32 factor;
-    f32 distance = 10.0f;
+    f32 distance = cNum_calcViewReflectionModel_f1;
     if (isAnimationRun("ターンジャンプ")) {
-        distance = 25.0f;
+        distance = cNum_calcViewReflectionModel_f2;
     }
 
     if (mShadowMode != 6 && mShadowMode != 7) {
@@ -97,19 +129,19 @@ void MarioActor::calcViewReflectionModel() {
         matrix.mMtx[2][2] = z.z;
         position = mMario->mSwim->mSurfaceNorm - rNormal * distance;
         f32 depth = -mMario->mSwim->mWaterDepth;
-        if (depth < 40.0f) {
+        if (depth < cNum_calcViewReflectionModel_f3) {
             factor = 0.0f;
-        } else if (depth < 200.0f) {
-            factor = (depth - 40.0f) / 160.0f;
+        } else if (depth < cNum_calcViewReflectionModel_f4) {
+            factor = (depth - cNum_calcViewReflectionModel_f5) / cNum_calcViewReflectionModel_f6;
         } else {
             factor = 1.0f;
         }
 
         f32 alpha = mCamDirZ.dot(rNormal);
         MR::clamp01(&alpha);
-        alpha *= 1.414f;
+        alpha *= cNum_calcViewReflectionModel_f7;
         MR::clamp01(&alpha);
-        alpha *= 64.0f;
+        alpha *= cNum_calcViewReflectionModel_f8;
         f32 target = factor * alpha;
         if (mWaterReflectAlpha > static_cast< u8 >((s32)(target))) {
             mWaterReflectAlpha--;
@@ -150,17 +182,17 @@ void MarioActor::calcViewReflectionModel() {
         f32 edgeDistance = mMario->mSwim->getWaterEdgeDist();
         if (edgeDistance < 0.0f) {
             factor = 0.0f;
-        } else if (edgeDistance < 1000.0f) {
-            factor = 0.5f + 0.5f * (edgeDistance / 1000.0f);
+        } else if (edgeDistance < cNum_calcViewReflectionModel_f9) {
+            factor = cNum_calcViewReflectionModel_f10 + cNum_calcViewReflectionModel_f11 * (edgeDistance / cNum_calcViewReflectionModel_f12);
         } else {
             factor = 0.0f;
         }
 
         f32 alpha = mCamDirZ.dot(normal);
         MR::clamp01(&alpha);
-        alpha *= 1.414f;
+        alpha *= cNum_calcViewReflectionModel_f13;
         MR::clamp01(&alpha);
-        alpha *= 127.0f;
+        alpha *= cNum_calcViewReflectionModel_f14;
         f32 target = factor * alpha;
         if (mReflectSimpleAlpha > static_cast< u8 >((s32)(target))) {
             mReflectSimpleAlpha--;
@@ -219,13 +251,13 @@ void MarioActor::calcViewWallShadowModel() {
 
     bool fading = false;
     if (pArea == nullptr || static_cast< f32 >(length) < 0.0f) {
-        if (mWallShadeDist >= 1000.0f) {
+        if (mWallShadeDist >= cNum_calcViewWallShadowModel_f1) {
             return;
         }
 
-        mWallShadeDist += 10.0f;
-        if (mWallShadeDist >= 1000.0f) {
-            mWallShadeDist = 1000.0f;
+        mWallShadeDist += cNum_calcViewWallShadowModel_f2;
+        if (mWallShadeDist >= cNum_calcViewWallShadowModel_f3) {
+            mWallShadeDist = cNum_calcViewWallShadowModel_f4;
         }
 
         switch (mWallShadeAreaKind) {
@@ -250,7 +282,7 @@ void MarioActor::calcViewWallShadowModel() {
     mWallShadePos = position;
     mWallShadeNormal = *triangle.getNormal(0);
     if (!fading) {
-        mWallShadeDist = 0.9f * mWallShadeDist + 0.1f * (position - mCenterPos).length();
+        mWallShadeDist = cNum_calcViewWallShadowModel_f5 * mWallShadeDist + cNum_calcViewWallShadowModel_f6 * (position - mCenterPos).length();
     }
 
     updateRandomTexture(mWallShadeDist);
@@ -272,7 +304,7 @@ void MarioActor::calcViewWallShadowModel() {
     MR::setMtxAxisXYZ(matrix, x, y, z);
     Vec3f horizontal;
     MR::vecKillElement(mPosition - position, getGravityVec(), &horizontal);
-    Vec3f translation = mPosition + normal * (10.0f + horizontal.length());
+    Vec3f translation = mPosition + normal * (cNum_calcViewWallShadowModel_f7 + horizontal.length());
     MR::setMtxTrans(matrix, translation.x, translation.y, translation.z);
     NebulaMtxConcat(matrix, mModelUnbaseMtx.mMtx, matrix);
     pSimple->viewCalcRef(3, pModel);
@@ -348,9 +380,9 @@ void MarioActor::decideShadowMode() {
     if (getMovementStates().shadowFound && !mMario->isNotReflectGlassGround() && !mMario->isStatusActive(MarioStatus_FpView) &&
         (mMario->mPolygonFloorCode == 14 || mMario->mPolygonFloorCode == 33)) {
         mShadowMode = 2;
-        f32 distance = mMario->mVerticalSpeed / 500.0f;
-        if (distance >= 0.75f) {
-            distance = 0.75f;
+        f32 distance = mMario->mVerticalSpeed / cNum_decideShadowMode_f1;
+        if (distance >= cNum_decideShadowMode_f2) {
+            distance = cNum_decideShadowMode_f3;
         }
 
         u32 maximum = 64;
@@ -391,7 +423,7 @@ void MarioActor::decideShadowMode() {
             mShadowMode = 3;
         }
 
-        if (mReflectSimpleAlpha || (mMario->mSwim->getWaterEdgeDist() > 0.0f && mMario->mSwim->getWaterEdgeDist() < 1000.0f)) {
+        if (mReflectSimpleAlpha || (mMario->mSwim->getWaterEdgeDist() > 0.0f && mMario->mSwim->getWaterEdgeDist() < cNum_decideShadowMode_f4)) {
             mShadowMode = 7;
         }
     }
@@ -440,14 +472,14 @@ f32 MarioActor::calcCylinderToCenter(const AreaObj* pAreaObj, Vec3f* pVec) {
     MR::vecKillElement(centerPos - mCenterPos, upVec, pVec);
 
     if (MR::normalizeOrZero(pVec)) {
-        if (mWallShadeDist >= 1000.0f) {
+        if (mWallShadeDist >= cNum_calcCylinderToCenter_f1) {
             return -1.0f;
         }
 
-        mWallShadeDist += 10.0f;
+        mWallShadeDist += cNum_calcCylinderToCenter_f2;
 
-        if (mWallShadeDist >= 1000.0f) {
-            mWallShadeDist = 1000.0f;
+        if (mWallShadeDist >= cNum_calcCylinderToCenter_f3) {
+            mWallShadeDist = cNum_calcCylinderToCenter_f4;
         }
 
         return -1.0f;
@@ -506,7 +538,7 @@ void MarioActor::calcViewBlurModel() {
 
 void MarioActor::calcViewFootPrint() {
     if (!mInRush && mMario->mMovementStates.onGround &&
-        (mMario->mTargetWalkSpeedIndex || getMario()->mHitStates.landed || mMario->mWalkSpeed > 0.1f || mMario->isPlayerModeHopper())) {
+        (mMario->mTargetWalkSpeedIndex || getMario()->mHitStates.landed || mMario->mWalkSpeed > cNum_calcViewFootPrint_f1 || mMario->isPlayerModeHopper())) {
         if (!mMario->mSinkTimer && !mMario->mDrawStates.baseTransPoint && !mMario->mDrawStates.atEdge && mMario->mHitStates.groundSameSensor && mMario->mHitStates.groundEvenSlope &&
             (mMario->checkCurrentFloorCodeSevere(13) || mMario->checkCurrentFloorCodeSevere(26))) {
             mFootPrint->addPrint(mPosition, mMario->mFrontVec, mMario->mGroundNorm, false);

@@ -4,6 +4,8 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWindInfo_f1, "calcWindInfo.f1", 100.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sMaxBigFan, 32);
 
@@ -25,7 +27,7 @@ void BigFanHolder::calcWindInfo(Vec3f* pWindInfo, const Vec3f& rPos, f32* pWindS
         windVec.zero();
         getMember(i)->calcWindInfo(&windVec, rPos);
         f32 speed = getMember(i)->mWindSpeed;
-        totalWind.add(windVec * (speed / 100.0f));
+        totalWind.add(windVec * (speed / cNum_calcWindInfo_f1));
     }
 
     f32 mag = totalWind.length();

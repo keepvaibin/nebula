@@ -15,6 +15,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sHitSensorRadius, 900.0f);
     NEBULA_TUNABLE(s32, sBreakStopStep, 4);
@@ -37,7 +39,7 @@ void TripodBossShell::init(const TableIter& rIter) {
     initModelManagerWithAnm("TripodBossShell", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 16, ::sHitSensorRadius, Vec3f(0.0f, 300.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 16, ::sHitSensorRadius, Vec3f(0.0f, cNum_init_f1, 0.0f));
     MR::addHitSensor(this, "killer_terget", ATYPE_BREAKABLE_CAGE, 8, ::sHitSensorRadius * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "TripodBossShell", getSensor("killer_terget"), nullptr);
     initSound(4, false);

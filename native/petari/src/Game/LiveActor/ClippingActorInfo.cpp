@@ -10,6 +10,8 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_ClippingActorInfo_f1, "ClippingActorInfo.f1", 300.0f);
+
 namespace {
     // Distance a clipping sphere must pass beyond the view volume before an actor that runs is clipped (or stops being
     // drawn while clipped); about the width of a large enemy, more than any camera or actor jitter at an edge.
@@ -19,7 +21,7 @@ namespace {
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor)
     : mActor(pActor), mCenter(), mRadius(0.0f), mInfo(), mFarClipLevel(6), mViewGroupId(-1), mViewGroup(), mGround(), mGroundFound(false), mList(),
       mIndex(-1) {
-    setTypeToSphere(300.0f, nullptr);
+    setTypeToSphere(cNum_ClippingActorInfo_f1, nullptr);
 }
 
 void ClippingActorInfo::judgeClipping() {

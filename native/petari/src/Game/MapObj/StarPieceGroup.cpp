@@ -13,6 +13,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
 
 namespace NrvStarPieceGroup {
     NEW_NERVE(HostTypeNrvGroup, StarPieceGroup, Group);
@@ -86,7 +91,7 @@ void StarPieceGroup::init(const TableIter& rIter) {
 
     if (isFlow) {
         mNumPieces = 1;
-        mRailSpeed = 10.0f;
+        mRailSpeed = cNum_init_f1;
         MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
         MR::getPlacementArg1NoInit(rIter, &mNumPieces);
     } else {
@@ -152,7 +157,7 @@ void StarPieceGroup::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
 
     if (isRail) {
-        MR::initAndSetRailClipping(&mRailClippingCenter, this, 100.0f, 500.0f);
+        MR::initAndSetRailClipping(&mRailClippingCenter, this, cNum_init_f2, cNum_init_f3);
     }
 
     MR::validateClipping(this);

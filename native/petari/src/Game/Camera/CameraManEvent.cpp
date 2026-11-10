@@ -12,6 +12,9 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setSafePose_f1, "setSafePose.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setSafePose_f2, "setSafePose.f2", 0.98f);
+
 namespace {
     NEBULA_TUNABLE(f32, sMinDistance, 300.0f);
     NEBULA_TUNABLE(s32, sDefaultBlendFrame, 60);
@@ -291,10 +294,10 @@ void CameraManEvent::setSafePose() {
     MR::normalize(&camWatchDir);
     MR::normalizeOrZero(&up);
 
-    if (MR::isNearZero(up) || MR::abs(camWatchDir.dot(up)) > 0.98f) {
+    if (MR::isNearZero(up) || MR::abs(camWatchDir.dot(up)) > cNum_setSafePose_f1) {
         Vec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
         MR::normalize(&watchDir);
-        if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
+        if (MR::abs(camWatchDir.dot(watchDir)) > cNum_setSafePose_f2) {
             up.set(CameraLocalUtil::getUpVec(this));
         } else {
             Quat4f rot;

@@ -5,10 +5,20 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Player/MarioSwim.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isFastRise_f1, "isFastRise.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isLongDrop_f1, "isLongDrop.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSpecialMode_f1, "getSpecialMode.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSpecialMode_f2, "getSpecialMode.f2", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTransForCamera_f1, "updateTransForCamera.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTransForCamera_f2, "updateTransForCamera.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTransForCamera_f3, "updateTransForCamera.f3", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTransForCamera_f4, "updateTransForCamera.f4", 0.2f);
 
 bool MarioActor::isFastRise() const {
     if (mInRush) {
-        if (mRushMove.dot(getGravityVec()) < -60.0f) {
+        if (mRushMove.dot(getGravityVec()) < -cNum_isFastRise_f1) {
             return true;
         }
     }
@@ -21,7 +31,7 @@ bool MarioActor::isLongDrop() const {
         return true;
     }
 
-    return mMario->mVerticalSpeed > 1000.0f;
+    return mMario->mVerticalSpeed > cNum_isLongDrop_f1;
 }
 
 bool MarioActor::isFastDrop() const {
@@ -42,11 +52,11 @@ u32 MarioActor::getSpecialMode() const {
         return mode;
     }
 
-    if (mMario->mVerticalSpeed < 300.0f) {
+    if (mMario->mVerticalSpeed < cNum_getSpecialMode_f1) {
         mode = 2;
     }
 
-    if (mMario->mVerticalSpeed > 800.0f) {
+    if (mMario->mVerticalSpeed > cNum_getSpecialMode_f2) {
         return 3;
     }
 
@@ -103,12 +113,12 @@ void MarioActor::updateTransForCamera() {
     }
 
     if (isNerve(GET_NERVE(MarioActor, MarioActorNrvGameOverBlackHole))) {
-        mCameraTrans = mBlackHolePosition * 0.1f + mCameraTrans * 0.9f;
+        mCameraTrans = mBlackHolePosition * cNum_updateTransForCamera_f1 + mCameraTrans * cNum_updateTransForCamera_f2;
         return;
     }
 
     if (mMario->isStatusActive(MarioStatus_Step) || mMario->isStatusActive(MarioStatus_Bump)) {
-        mCameraTrans = mCameraTrans * 0.8f + mPosition * 0.2f;
+        mCameraTrans = mCameraTrans * cNum_updateTransForCamera_f3 + mPosition * cNum_updateTransForCamera_f4;
         return;
     }
 

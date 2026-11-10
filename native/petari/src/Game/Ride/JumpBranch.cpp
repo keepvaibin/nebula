@@ -16,6 +16,13 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 30.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sPointGravity, 0.2f);
     NEBULA_TUNABLE(f32, sPointFrictionRate, 0.995f);
@@ -55,13 +62,13 @@ void JumpBranch::init(const TableIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(1);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, 80.0f);
+    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f1);
 
     initEffectKeeper(0, nullptr);
     MR::onCalcGravity(this);
 
-    MR::initShadowVolumeBox(this, Vec3f(120.0f, 10.0f, 10.0f));
-    MR::setShadowDropLength(this, nullptr, 1500.0f);
+    MR::initShadowVolumeBox(this, Vec3f(cNum_init_f2, cNum_init_f3, cNum_init_f4));
+    MR::setShadowDropLength(this, nullptr, cNum_init_f5);
     MR::onCalcShadowOneTime(this, nullptr);
 
     mSwingPoint = new SwingRopePoint(mPosition);
@@ -151,7 +158,7 @@ bool JumpBranch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         }
 
         Vec3f grabUp = diff;
-        diff.scale(30.0f);
+        diff.scale(cNum_receiveOtherMsg_f1);
         diff.add(mPosition);
 
         f32 speed = MR::getPlayerVelocity()->length();

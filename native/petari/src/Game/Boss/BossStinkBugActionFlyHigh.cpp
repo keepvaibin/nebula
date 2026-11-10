@@ -11,6 +11,16 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionFlyHigh_f1, "BossStinkBugActionFlyHigh.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionFlyHigh_f2, "BossStinkBugActionFlyHigh.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionFlyHigh_f3, "BossStinkBugActionFlyHigh.f3", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyDash_f1, "exeFlyDash.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGroundRun_f1, "exeGroundRun.f1", 25.0f);
 
 namespace NrvBossStinkBugActionFlyHigh {
     NEW_NERVE(BossStinkBugActionFlyHighNrvFlyDash, BossStinkBugActionFlyHigh, FlyDash);
@@ -35,9 +45,9 @@ namespace NrvBossStinkBugActionFlyHigh {
 
 BossStinkBugActionFlyHigh::BossStinkBugActionFlyHigh(BossStinkBug* pStinkBug)
     : BossStinkBugActionBase("ボスカメムシ高空戦", pStinkBug), mRollWaitStep(0), mRollNum(0) {
-    mFlySpeed = 20.0f;
-    mHeightOffset = 1000.0f;
-    mLocalHeightOffset = -400.0f;
+    mFlySpeed = cNum_BossStinkBugActionFlyHigh_f1;
+    mHeightOffset = cNum_BossStinkBugActionFlyHigh_f2;
+    mLocalHeightOffset = -cNum_BossStinkBugActionFlyHigh_f3;
     mRollWaitStep = calcKeepRollTime(60);
     initNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvFly));
 }
@@ -98,8 +108,8 @@ bool BossStinkBugActionFlyHigh::receiveOtherMsg(u32 msg, HitSensor* pSender, Hit
             return true;
         }
     } else if (isEnableAttack() && (MR::isMsgWallTouch(msg) || MR::isMsgCeilTouch(msg))) {
-        if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->mFront, 45.0f)) {
-            if (MR::sendMsgEnemyAttackStrongToDir(pSender, pReceiver, getHost()->mFront * 50.0f)) {
+        if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->mFront, cNum_receiveOtherMsg_f1)) {
+            if (MR::sendMsgEnemyAttackStrongToDir(pSender, pReceiver, getHost()->mFront * cNum_receiveOtherMsg_f2)) {
                 if (isNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvGroundRun))) {
                     getHost()->validateCollisionHitOnly();
                     setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvToFly));
@@ -122,7 +132,7 @@ bool BossStinkBugActionFlyHigh::isValidFollowId(s32 id) const {
 }
 
 void BossStinkBugActionFlyHigh::exeFlyDash() {
-    if (updateFlyDash(15.0f)) {
+    if (updateFlyDash(cNum_exeFlyDash_f1)) {
         setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvFly));
     }
 }
@@ -131,7 +141,7 @@ void BossStinkBugActionFlyHigh::exeFly() {
     throwBomb(40);
     updateFly();
     if (mRollNum >= 2) {
-        if (BossStinkBugFunction::isExistPlayerBack(getHost(), 1500.0f)) {
+        if (BossStinkBugFunction::isExistPlayerBack(getHost(), cNum_exeFly_f1)) {
             setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvTurnSign));
             mRollNum = 0;
         }
@@ -228,7 +238,7 @@ void BossStinkBugActionFlyHigh::exeLand() {
 }
 
 void BossStinkBugActionFlyHigh::exeGroundRun() {
-    if (updateGroundRun(25.0f)) {
+    if (updateGroundRun(cNum_exeGroundRun_f1)) {
         setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvToFly));
     }
 }

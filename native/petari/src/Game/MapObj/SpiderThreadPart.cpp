@@ -13,6 +13,25 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_SpiderThreadPart_f1, "SpiderThreadPart.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SpiderThreadPart_f2, "SpiderThreadPart.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SpiderThreadPart_f3, "SpiderThreadPart.f3", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SpiderThreadPart_f4, "SpiderThreadPart.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SpiderThreadPart_f5, "SpiderThreadPart.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePointerPos_f1, "updatePointerPos.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsUpper_f1, "sendPointsUpper.f1", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsUpper_f2, "sendPointsUpper.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsUpper_f3, "sendPointsUpper.f3", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsUpper_f4, "sendPointsUpper.f4", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsRightLower_f1, "sendPointsRightLower.f1", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsRightLower_f2, "sendPointsRightLower.f2", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsRightLower_f3, "sendPointsRightLower.f3", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsRightLower_f4, "sendPointsRightLower.f4", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsLeftLower_f1, "sendPointsLeftLower.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsLeftLower_f2, "sendPointsLeftLower.f2", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsLeftLower_f3, "sendPointsLeftLower.f3", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPointsLeftLower_f4, "sendPointsLeftLower.f4", 18.0f);
+
 namespace {
     static Color8 sColorPlusX(0x64, 0x64, 0x64, 0xFF);
     static Color8 sColorMinusX(0x96, 0x96, 0x96, 0xFF);
@@ -64,8 +83,8 @@ SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadM
 
         // Friction runs from 0.9 at the ends to 1 in the middle; the length term blends 0.9 with 0.9.
         f32 indexSpring =
-            ((0.9f * (1.0f - MR::getEaseOutValue(indexNormalized, 0.0f, 1.0f, 1.0f))) + MR::getEaseOutValue(indexNormalized, 0.0f, 1.0f, 1.0f));
-        f32 lengthSpring = (0.9f * (1.0f - lengthNormalized) + (0.9f * lengthNormalized));
+            ((cNum_SpiderThreadPart_f1 * (1.0f - MR::getEaseOutValue(indexNormalized, 0.0f, 1.0f, 1.0f))) + MR::getEaseOutValue(indexNormalized, 0.0f, 1.0f, 1.0f));
+        f32 lengthSpring = (cNum_SpiderThreadPart_f2 * (1.0f - lengthNormalized) + (cNum_SpiderThreadPart_f3 * lengthNormalized));
         f32 friction = indexSpring * lengthSpring;
 
         mPoints[idx] = new SpiderThreadPoint(pos, friction);
@@ -83,10 +102,10 @@ SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadM
     padBox(boundBoxPadding);
 
     f32 minZ = mPointA->mPosition.z >= mPointB->mPosition.z ? mPointB->mPosition.z : mPointA->mPosition.z;
-    Vec3f far(mBoundBox.i.x, mBoundBox.i.y, minZ - 1000.0f);
+    Vec3f far(mBoundBox.i.x, mBoundBox.i.y, minZ - cNum_SpiderThreadPart_f4);
 
     f32 maxZ = mPointA->mPosition.z >= mPointB->mPosition.z ? mPointA->mPosition.z : mPointB->mPosition.z;
-    Vec3f near(mBoundBox.f.x, mBoundBox.f.y, maxZ + 100.0f);
+    Vec3f near(mBoundBox.f.x, mBoundBox.f.y, maxZ + cNum_SpiderThreadPart_f5);
     mBoundBox.extend(far);
     mBoundBox.extend(near);
 }
@@ -114,7 +133,7 @@ void SpiderThreadPart::updatePointerPos() {
 
     Vec3f center(mPointA->mPosition);
     center.add(mPointB->mPosition);
-    center.scale(0.5f);
+    center.scale(cNum_updatePointerPos_f1);
 
     if (MR::isStarPointerInScreen(PLAYER_1)) {
         MR::calcStarPointerPosOnPlane(&mPointerPosPad0, center, Vec3f(0.0f, 0.0f, 1.0f), PLAYER_1, false);
@@ -501,15 +520,15 @@ namespace {
     }
 
     void sendPointsUpper(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, -18.0f, 3.0f, sColorMinusX, 18.0f, 3.0f, sColorPlusX);
+        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, -cNum_sendPointsUpper_f1, cNum_sendPointsUpper_f2, sColorMinusX, cNum_sendPointsUpper_f3, cNum_sendPointsUpper_f4, sColorPlusX);
     }
 
     void sendPointsRightLower(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, 18.0f, 18.0f, sColorPlusX, -15.0f, -18.0f, sColorMinusY);
+        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, cNum_sendPointsRightLower_f1, cNum_sendPointsRightLower_f2, sColorPlusX, -cNum_sendPointsRightLower_f3, -cNum_sendPointsRightLower_f4, sColorMinusY);
     }
 
     void sendPointsLeftLower(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, 15.0f, -18.0f, sColorMinusY, -18.0f, 18.0f, sColorMinusX);
+        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, cNum_sendPointsLeftLower_f1, -cNum_sendPointsLeftLower_f2, sColorMinusY, -cNum_sendPointsLeftLower_f3, cNum_sendPointsLeftLower_f4, sColorMinusX);
     }
 };  // namespace
 

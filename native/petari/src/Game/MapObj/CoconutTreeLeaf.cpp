@@ -4,6 +4,8 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sPointInterval, 100.0f);
     NEBULA_TUNABLE(f32, sSpringAccelRateFree, 0.001f);
@@ -171,7 +173,7 @@ void CoconutTreeLeafGroup::init(const TableIter& rIter) {
 
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
-    MR::setClippingTypeSphere(this, 500.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f1);
     makeActorAppeared();
 }
 

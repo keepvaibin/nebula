@@ -12,6 +12,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGenerate_f1, "exeGenerate.f1", 850.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGenerate_f2, "exeGenerate.f2", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGenerate_f3, "exeGenerate.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGenerate_f4, "exeGenerate.f4", 20.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeGenerate_1, "exeGenerate.1", 15);
 
@@ -63,7 +68,7 @@ void PoltaStateGroundRockAttack::exeGenerate() {
         if (rockIndex > 0 && !ringStep) {
             mIsClockwise = !mIsClockwise;
         }
-        PoltaFunction::appearGroundRock(getHost(), (850.0f + (400.0f * ringStep)), mIsClockwise ? 20.0f : -20.0f);
+        PoltaFunction::appearGroundRock(getHost(), (cNum_exeGenerate_f1 + (cNum_exeGenerate_f2 * ringStep)), mIsClockwise ? cNum_exeGenerate_f3 : -cNum_exeGenerate_f4);
     }
     if (MR::isGreaterStep(this, 15 * mRockNum + 90)) {
         setNerve(GET_NERVE(PoltaStateGenerateBombTeresa, PoltaStateGroundRockAttackNrvEnd));

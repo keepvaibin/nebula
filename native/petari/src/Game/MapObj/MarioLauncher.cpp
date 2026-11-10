@@ -30,6 +30,9 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_doAim_f1, "doAim.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doAim_f2, "doAim.f2", 0.5f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_doFlight_reboundVelocityFromEachCollision_1, "doFlight.reboundVelocityFromEachCollision.1", 0.0f);
 
@@ -458,9 +461,9 @@ bool MarioLauncher::doAim() {
     mPlayerMtx.set(mCameraTargetMtx.mMatrix);
 
     if (mLauncherType == LauncherType_Up) {
-        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot, MR::pi() / 2.0f, -1.0f);
+        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot, MR::pi() / cNum_doAim_f1, -1.0f);
     } else {
-        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot + 0.5f, ::sPointerCameraElevation, -1.0f);
+        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot + cNum_doAim_f2, ::sPointerCameraElevation, -1.0f);
     }
 
     if (MR::isValidSwitchB(this)) {

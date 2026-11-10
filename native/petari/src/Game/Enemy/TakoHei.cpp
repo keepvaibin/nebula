@@ -8,6 +8,15 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f1, "updatePose.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f2, "updatePose.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f1, "isFallNextMove.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f2, "isFallNextMove.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f3, "isFallNextMove.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f4, "isFallNextMove.f4", 150.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_isNearPlayer_1, "exePursue.isNearPlayer.1", 700.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", 0.0f);
@@ -152,7 +161,7 @@ void TakoHei::kill() {
         MR::appearCoinPop(this, mPosition, 1);
         break;
     case 2:
-        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         break;
     }
@@ -815,7 +824,7 @@ void TakoHei::exePunchDown() {
 }
 
 void TakoHei::updatePose() {
-    MR::blendQuatUpFront(&mPoseQuat, MR::isBindedGround(this) ? *MR::getGroundNormal(this) : -mGravity, mFront, 0.1f, 0.2f);
+    MR::blendQuatUpFront(&mPoseQuat, MR::isBindedGround(this) ? *MR::getGroundNormal(this) : -mGravity, mFront, cNum_updatePose_f1, cNum_updatePose_f2);
 }
 
 void TakoHei::updateNormalVelocity() {
@@ -904,7 +913,7 @@ bool TakoHei::isFallNextMove() const {
     }
 
     if (MR::isOnGround(this)) {
-        return MR::isFallNextMove(mPosition, mVelocity, mGravity, 150.0f, mScale.x * 90.0f * 2.0f, 150.0f, nullptr);
+        return MR::isFallNextMove(mPosition, mVelocity, mGravity, cNum_isFallNextMove_f1, mScale.x * cNum_isFallNextMove_f2 * cNum_isFallNextMove_f3, cNum_isFallNextMove_f4, nullptr);
     } else {
         return false;
     }

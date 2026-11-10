@@ -8,6 +8,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sDefaultRotateSpeed, 50.0f);
     static const s32 sStepToRecoverStart = NebulaFrameClock::stepsOfSeconds(1);
@@ -48,7 +55,7 @@ void BeeFlowerHover::init(const TableIter& rIter) {
         mRailPosture->start();
     }
 
-    MR::initShadowVolumeCylinder(this, 450.0f);
+    MR::initShadowVolumeCylinder(this, cNum_init_f1);
     MR::onShadowFollowHostScale(this, 0);
 
     if (mRailMover == nullptr) {
@@ -62,9 +69,9 @@ void BeeFlowerHover::init(const TableIter& rIter) {
     }
 
     if (mRailMover != nullptr) {
-        MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
+        MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f2, cNum_init_f3);
     } else {
-        MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+        MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f4);
     }
 
     if (mRailMover != nullptr) {
@@ -74,8 +81,8 @@ void BeeFlowerHover::init(const TableIter& rIter) {
     }
 
     MR::getPlacementArg0NoInit(rIter, &mRotateSpeed);
-    mRotateSpeed /= 100.0f;
-    mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f);
+    mRotateSpeed /= cNum_init_f5;
+    mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, cNum_init_f6);
     mLodCtrlPlanet->validate();
     initNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvWait));
     makeActorAppeared();

@@ -7,6 +7,9 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeHorizontalPose_f1, "arrangeHorizontalPose.f1", 0.7f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAttenuation, 0.05f);
     NEBULA_TUNABLE(f32, sRoundAddition, 0.08f);
@@ -83,7 +86,7 @@ CameraTargetObj* CameraTower::calc() {
 
 void CameraTower::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * 0.5f));
+    setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * cNum_setParamFromChunk_f1));
 }
 
 bool CameraTower::isEnableToRoundLeft() const {
@@ -154,7 +157,7 @@ void CameraTower::arrangeHorizontalPose() {
 
     f32 newAngleY;
     if (CameraLocalUtil::tryCameraReset()) {
-        roundAngle *= 0.7f;
+        roundAngle *= cNum_arrangeHorizontalPose_f1;
         newAngleY = angleY + roundAngle;
     } else {
         if (left) {

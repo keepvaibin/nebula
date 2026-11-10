@@ -18,6 +18,13 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryAttackGround_f1, "tryAttackGround.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryAttackGround_f2, "tryAttackGround.f2", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryAttackGround_f3, "tryAttackGround.f3", 3000.0f);
 
 namespace NrvPoltaBattleLv2 {
     NEW_NERVE(PoltaBattleLv2NrvWait, PoltaBattleLv2, Wait);
@@ -55,7 +62,7 @@ void PoltaBattleLv2::appear() {
 }
 
 void PoltaBattleLv2::control() {
-    getHost()->updatePose(0.2f, 0.4f);
+    getHost()->updatePose(cNum_control_f1, cNum_control_f2);
     if (isNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvWait)) || isNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvGenerateGroundRock)) ||
         isNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvGenerateRock)) || isNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvDamageBody)) ||
         isNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvBreakBody))) {
@@ -134,13 +141,13 @@ bool PoltaBattleLv2::tryAttackGround() {
     if (!PoltaFunction::isEnableAttackLeftArm(getHost()) && !PoltaFunction::isEnableAttackRightArm(getHost())) {
         return false;
     }
-    if (!MR::isFaceToPlayerHorizontalDegree(getHost(), getHost()->mFront, 45.0f)) {
+    if (!MR::isFaceToPlayerHorizontalDegree(getHost(), getHost()->mFront, cNum_tryAttackGround_f1)) {
         return false;
     }
-    if (MR::isNearPlayer(getHost(), 1500.0f)) {
+    if (MR::isNearPlayer(getHost(), cNum_tryAttackGround_f2)) {
         setNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvAttackGround));
         return true;
-    } else if (MR::isNearPlayer(getHost(), 3000.0f)) {
+    } else if (MR::isNearPlayer(getHost(), cNum_tryAttackGround_f3)) {
         if (!PoltaFunction::isEnableAttackRightArm(getHost())) {
             mStatePunch->mIsLeftArmActor = true;
             setNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvPunch));

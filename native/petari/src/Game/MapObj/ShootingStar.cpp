@@ -9,6 +9,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sFallHeight, 2000.0f);
     NEBULA_TUNABLE(f32, sFallRotateYAngle, 10.0f);
@@ -58,14 +61,14 @@ void ShootingStar::init(const TableIter& rIter) {
     MR::getPlacementArg3NoInit(rIter, &totalNum);
     MR::declareStarPiece(this, totalNum);
 
-    initBinder(100.0f, 0.0f, 0);
+    initBinder(cNum_init_f1, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterFunc(MR::isWallCodeNoAction));
     initNerve(GET_NERVE(ShootingStar, HostTypeNrvPreShooting));
     initEffectKeeper(0, "ShootingStar");
     initSound(4, false);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "message", 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initShadowVolumeSphere(this, 30.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f2);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::listenStageSwitchOnOffAppear(this, MR::Functor(this, &ShootingStar::appearPreShooting), MR::Functor< LiveActor >(this, &LiveActor::kill));

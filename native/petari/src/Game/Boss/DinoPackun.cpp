@@ -37,6 +37,27 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_addDinoFootPrint_f1, "addDinoFootPrint.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 270.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initTail_f1, "initTail.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f1, "initFootPrint.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f2, "initFootPrint.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f3, "initFootPrint.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f1, "updatePose.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePose_f2, "updatePose.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFootPrintNerve_f1, "updateFootPrintNerve.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFootPrintNerve_f2, "updateFootPrintNerve.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFootPrintNerve_f3, "updateFootPrintNerve.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFootPrintNerve_f4, "updateFootPrintNerve.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCameraInfo_f1, "updateCameraInfo.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCameraInfo_f2, "updateCameraInfo.f2", 0.60f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f1, "appearStarPiece.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f2, "appearStarPiece.f2", 60.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_addVelocityToGravity_1, "updateNormalVelocity.addVelocityToGravity.1", 1.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", 0.0f);
@@ -49,7 +70,7 @@ namespace {
     inline void addDinoFootPrint(DinoPackun* pActor, const Vec3f& rStart) {
         Vec3f position;
         Vec3f normal;
-        Vec3f ray = pActor->mGravity * 200.0f;
+        Vec3f ray = pActor->mGravity * cNum_addDinoFootPrint_f1;
         if (MR::getFirstPolyNormalOnLineToMap(&normal, rStart, ray, &position, nullptr)) {
             pActor->mFootPrint->addPrint(position, pActor->mFront, normal, IsRight);
         }
@@ -106,14 +127,14 @@ void DinoPackun::init(const TableIter& rIter) {
     initSound(8, false);
     MR::onCalcGravity(this);
     initHitSensor(3);
-    MR::addHitSensorAtJointEnemy(this, "head", "Head", 8, 270.0f, ::sHeadHitOffset);
-    MR::addHitSensorEnemy(this, "body", 8, 200.f, ::sBodyHitOffset);
+    MR::addHitSensorAtJointEnemy(this, "head", "Head", 8, cNum_init_f1, ::sHeadHitOffset);
+    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f2, ::sBodyHitOffset);
 
     if (mSequence->isUseEggShell()) {
-        MR::addHitSensorEnemy(this, "egg", 8, 400.0f, ::sEggHitOffset);
+        MR::addHitSensorEnemy(this, "egg", 8, cNum_init_f3, ::sEggHitOffset);
     }
 
-    initBinder(150.0f, 150.0f, 0);
+    initBinder(cNum_init_f4, cNum_init_f5, 0);
     initEffectKeeper(0, nullptr);
     initCamera(rIter);
     initTail();
@@ -165,7 +186,7 @@ void DinoPackun::initTail() {
 
     mBall = new DinoPackunBall("尻尾先端球", this);
     MR::copyJointPos(this, "TailBall", &mBall->mPosition);
-    mBall->mLinkLength = 120.0f;
+    mBall->mLinkLength = cNum_initTail_f1;
     mBall->setWeakSensor(getSensor("head"));
     mBall->createJointController(this, "TailBall");
     mBall->initWithoutIter();
@@ -176,9 +197,9 @@ void DinoPackun::initFootPrint() {
     mFootPrint = new FootPrint("足跡", 32);
     mFootPrint->setTexture(MR::getTexFromArc("DinoPackunFootprint.bti", this));
     mFootPrint->mSideOffset = 0.0f;
-    mFootPrint->mHeight = 100.0f;
-    mFootPrint->mWidth = 100.0f;
-    mFootPrint->mMinPrintDistance = 10.0f;
+    mFootPrint->mHeight = cNum_initFootPrint_f1;
+    mFootPrint->mWidth = cNum_initFootPrint_f2;
+    mFootPrint->mMinPrintDistance = cNum_initFootPrint_f3;
 }
 
 void DinoPackun::initDemoPosition(const TableIter& rIter) {
@@ -358,7 +379,7 @@ void DinoPackun::updatePose() {
         MR::normalize(&mFront);
     }
 
-    MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.2f);
+    MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, cNum_updatePose_f1, cNum_updatePose_f2);
 }
 
 // One foot lands at the start of each stride of period steps, the other half way.
@@ -367,9 +388,9 @@ void DinoPackun::updateFootPrintNerve(s32 step, s32 period) {
     mPoseQuat.getXDir(side);
     s32 strideStep = step % period;
     if (strideStep == 0) {
-        addDinoFootPrint< false >(this, mPosition + side * -100.0f + mGravity * -100.0f);
+        addDinoFootPrint< false >(this, mPosition + side * -cNum_updateFootPrintNerve_f1 + mGravity * -cNum_updateFootPrintNerve_f2);
     } else if (strideStep == period / 2) {
-        addDinoFootPrint< true >(this, mPosition + side * 100.0f + mGravity * -100.0f);
+        addDinoFootPrint< true >(this, mPosition + side * cNum_updateFootPrintNerve_f3 + mGravity * -cNum_updateFootPrintNerve_f4);
     }
 }
 
@@ -383,12 +404,12 @@ void DinoPackun::updateCameraInfo() {
     Vec3f up;
     mPoseQuat.getYDir(up);
     Vec3f target;
-    target.scaleAdd(300.0f, up, mPosition);
+    target.scaleAdd(cNum_updateCameraInfo_f1, up, mPosition);
 
     if (mAimTailRate > 0.0f) {
         Vec3f tailEnd;
         mTail->getEndTailPosition(&tailEnd);
-        MR::vecBlend(target, tailEnd, &target, (0.60f * mAimTailRate));
+        MR::vecBlend(target, tailEnd, &target, (cNum_updateCameraInfo_f2 * mAimTailRate));
     }
 
     mCameraVec.set(target);
@@ -414,7 +435,7 @@ void DinoPackun::updateRunVelocity() {
 void DinoPackun::appearStarPiece(s32 num) {
     Vec3f pos;
     MR::copyJointPos(this, "Head", &pos);
-    MR::appearStarPieceToDirection(this, pos, -mGravity, num, 50.0f, 60.0f, false);
+    MR::appearStarPieceToDirection(this, pos, -mGravity, num, cNum_appearStarPiece_f1, cNum_appearStarPiece_f2, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }
 

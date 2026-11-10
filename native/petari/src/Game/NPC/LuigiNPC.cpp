@@ -20,6 +20,9 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setWaitAction_f1, "setWaitAction.f1", 1500.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_branchFunc_isNearPlayer_1, "branchFunc.isNearPlayer.1", -1.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_trySetNerveAfraid_isNearPlayer_1, "trySetNerveAfraid.isNearPlayer.1", -1.0f);
@@ -195,7 +198,7 @@ void LuigiNPC::initAfterPlacement() {
 
     MR::calcFrontVec(&front, this);
 
-    if (MR::getFirstPolyOnLineToMap(&result, &poly, mPosition, front * 500.0f)) {
+    if (MR::getFirstPolyOnLineToMap(&result, &poly, mPosition, front * cNum_initAfterPlacement_f1)) {
         mPosition.set(result - (front * ::sTreeDist));
         MR::onCalcShadow(this, nullptr);
         MR::offBind(this);
@@ -225,7 +228,7 @@ void LuigiNPC::setWaitAction() {
     mParam.mTalkAction = "Talk";
     mParam.mTalkTurnAction = turn;
     setDefaults();
-    mSwingReactDist = 1500.0f;
+    mSwingReactDist = cNum_setWaitAction_f1;
     mUseReactionActions = true;
 }
 

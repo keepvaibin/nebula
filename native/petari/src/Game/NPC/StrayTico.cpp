@@ -6,6 +6,28 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f1, "initShadow.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f2, "initShadow.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f3, "initShadow.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLauncherCamera_f1, "exeLauncherCamera.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLauncherCamera_f2, "exeLauncherCamera.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLauncherCamera_f3, "exeLauncherCamera.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLauncherCamera_f4, "exeLauncherCamera.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateWarp_f1, "updateWarp.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateWarp_f2, "updateWarp.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_f1, "updateChase.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_f2, "updateChase.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_f3, "updateChase.f3", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_f4, "updateChase.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChase_f5, "updateChase.f5", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeCompleteDemo_f1, "exeCompleteDemo.f1", 900.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeLauncherCamera_addVelocityMoveToTarget_1, "exeLauncherCamera.addVelocityMoveToTarget.1", 0.5f);
@@ -56,7 +78,7 @@ void StrayTico::init(const TableIter& rIter) {
     initShadow();
     initEffectKeeper(0, nullptr);
     initSound(4, false);
-    initBinder(60.0f, 20.0f, 0);
+    initBinder(cNum_init_f1, cNum_init_f2, 0);
     MR::offBind(this);
 
     mItemBubbleModel = MR::createPartsModelMapObj(this, "アワ", "ItemBubble", nullptr);
@@ -79,8 +101,8 @@ void StrayTico::init(const TableIter& rIter) {
 
 void StrayTico::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorNpc(this, "Bubble", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorNpc(this, "Body", 8, 45.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Bubble", 8, cNum_initSensor_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Body", 8, cNum_initSensor_f2, Vec3f(0.0f, 0.0f, 0.0f));
     MR::validateHitSensor(this, "Bubble");
     MR::invalidateHitSensor(this, "Body");
 }
@@ -91,7 +113,7 @@ inline void StrayTico::setShadowDrop(const char* const pos) {
 }
 
 void StrayTico::initShadow() {
-    MR::initShadowVolumeOval(this, Vec3f(40.0f, 40.0f, 20.0f));
+    MR::initShadowVolumeOval(this, Vec3f(cNum_initShadow_f1, cNum_initShadow_f2, cNum_initShadow_f3));
     setShadowDrop("PowerStarC");
     MR::onCalcShadow(this, nullptr);
 }
@@ -154,7 +176,7 @@ bool StrayTico::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
         if (isNerve(GET_NERVE(StrayTico, StrayTicoNrvChase))) {
             Vec3f sensorDir;
             MR::calcSensorDirectionNormalize(&sensorDir, pSender, pReceiver);
-            MR::setVelocity(this, sensorDir * 10.0f);
+            MR::setVelocity(this, sensorDir * cNum_receiveMsgPlayerAttack_f1);
         }
 
         return true;
@@ -175,7 +197,7 @@ bool StrayTico::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
 
 bool StrayTico::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isEnableSpin() && MR::isMsgSpinStormRange(msg)) {
-        MR::addVelocityClockwiseToTarget(this, MR::getSensorPos(pSender), 2.0f);
+        MR::addVelocityClockwiseToTarget(this, MR::getSensorPos(pSender), cNum_receiveOtherMsg_f1);
         MR::addVelocityMoveToTarget(this, MR::getSensorPos(pSender), 1.0f);
 
         return true;
@@ -256,10 +278,10 @@ void StrayTico::exeLauncherCamera() {
     }
 
     Vec3f vec;
-    vec.scaleAdd(-400.0f, MR::getCamZdir(), *MR::getPlayerPos());
+    vec.scaleAdd(-cNum_exeLauncherCamera_f1, MR::getCamZdir(), *MR::getPlayerPos());
 
     MR::addVelocityMoveToTarget(this, vec, cNum_exeLauncherCamera_addVelocityMoveToTarget_1);
-    MR::addVelocityKeepHeight(this, vec, 150.0f, 0.5f, 200.0f);
+    MR::addVelocityKeepHeight(this, vec, cNum_exeLauncherCamera_f2, cNum_exeLauncherCamera_f3, cNum_exeLauncherCamera_f4);
     MR::attenuateVelocity(this, ::sChaseFric);
 
     if (MR::isActiveLauncherCamera()) {
@@ -286,7 +308,7 @@ void StrayTico::updateWarp() {
         mWarpPos.set(*MR::getPlayerCenterPos());
     }
 
-    if (MR::isJudgedToClipFrustum(mPosition, 200.0f) && MR::isJudgedToClipFrustum(mWarpPos, 200.0f)) {
+    if (MR::isJudgedToClipFrustum(mPosition, cNum_updateWarp_f1) && MR::isJudgedToClipFrustum(mWarpPos, cNum_updateWarp_f2)) {
         MR::resetPosition(this, mWarpPos);
     }
 }
@@ -295,10 +317,10 @@ void StrayTico::updateChase() {
     bool isNotNearPlayer = !MR::isNearPlayerAnyTime(this, ::sChaseDistance);
 
     if (isNotNearPlayer) {
-        MR::addVelocityMoveToTarget(this, *MR::getPlayerPos(), 0.5f);
+        MR::addVelocityMoveToTarget(this, *MR::getPlayerPos(), cNum_updateChase_f1);
         MR::tryStartBck(this, "Chase");
     } else if (MR::isNearPlayerAnyTime(this, ::sAwayDistance)) {
-        MR::addVelocityAwayFromTarget(this, *MR::getPlayerPos(), 0.5f);
+        MR::addVelocityAwayFromTarget(this, *MR::getPlayerPos(), cNum_updateChase_f2);
         MR::tryStartBck(this, "Chase");
     } else {
         MR::tryStartBck(this, "Wait");
@@ -308,7 +330,7 @@ void StrayTico::updateChase() {
     MR::getPlayerFrontVec(&playerFrontVec);
 
     MR::turnDirectionDegree(this, &mFrontVec, playerFrontVec, ::sChaseTurnDegree);
-    MR::addVelocityKeepHeight(this, *MR::getPlayerPos(), 150.0f, 0.5f, 200.0f);
+    MR::addVelocityKeepHeight(this, *MR::getPlayerPos(), cNum_updateChase_f3, cNum_updateChase_f4, cNum_updateChase_f5);
     MR::attenuateVelocity(this, ::sChaseFric);
     MR::reboundVelocityFromCollision(this, cNum_updateChase_reboundVelocityFromCollision_1, cNum_updateChase_reboundVelocityFromCollision_2, cNum_updateChase_reboundVelocityFromCollision_3);
 }
@@ -329,7 +351,7 @@ void StrayTico::exeCompleteDemo() {
     } else if (MR::isGreaterStep(this, ::sCompleteRotateStartTime)) {
         MR::rotateVecDegree(&mPosition, mDemoFront * MR::calcNerveValue(this, ::sCompleteRotateStartTime, ::sCompleteDemoTime, ::sCompleteStartRadius, 0.0f),
                             mDemoUp,
-                            MR::repeatDegree(mDemoAngle +MR::calcNerveEaseInValue(this, ::sCompleteRotateStartTime, ::sCompleteDemoTime, 0.0f, 900.0f)));
+                            MR::repeatDegree(mDemoAngle +MR::calcNerveEaseInValue(this, ::sCompleteRotateStartTime, ::sCompleteDemoTime, 0.0f, cNum_exeCompleteDemo_f1)));
         mPosition.add(mDemoCenter);
     }
 

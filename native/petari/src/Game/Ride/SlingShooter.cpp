@@ -23,6 +23,16 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 210.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAim_f1, "exeAim.f1", 100.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackSuccess_1, "exeAttackSuccess.1", 2);
 
@@ -76,11 +86,11 @@ void SlingShooter::init(const TableIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(3);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, 80.0f);
-    MR::addHitSensorCallback(this, "npc", ATYPE_SPRING_ATTACKER_KINOPIO_BIND, 8, 150.0f);
-    MR::addHitSensor(this, "attack", ATYPE_SPRING_ATTACKER, 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f1);
+    MR::addHitSensorCallback(this, "npc", ATYPE_SPRING_ATTACKER_KINOPIO_BIND, 8, cNum_init_f2);
+    MR::addHitSensor(this, "attack", ATYPE_SPRING_ATTACKER, 8, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
 
-    initBinder(50.0f, 50.0f, 8);
+    initBinder(cNum_init_f4, cNum_init_f5, 8);
     MR::offBind(this);
 
     initEffectKeeper(2, nullptr);
@@ -93,9 +103,9 @@ void SlingShooter::init(const TableIter& rIter) {
     }
 
     MR::calcGravity(this);
-    MR::initShadowVolumeSphere(this, 100.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f6);
 
-    MR::initStarPointerTarget(this, 210.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f7, Vec3f(0.0f, cNum_init_f8, 0.0f));
 
     initNerve(GET_NERVE(SlingShooter, SlingShooterNrvFree));
 
@@ -206,7 +216,7 @@ void SlingShooter::exeAim() {
 
     f32 dist = mPosition.distance(*mNeutralPos);
     if (dist >= ::sAimDistanceMin) {
-        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sAimDistanceMax - ::sAimDistanceMin)) * 100.0f);
+        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sAimDistanceMax - ::sAimDistanceMin)) * cNum_exeAim_f1);
     }
 
     if (tryRelease()) {

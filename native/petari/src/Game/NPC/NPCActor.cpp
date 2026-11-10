@@ -26,6 +26,26 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f1, "NPCActorCaps.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f2, "NPCActorCaps.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f3, "NPCActorCaps.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f4, "NPCActorCaps.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f5, "NPCActorCaps.f5", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActorCaps_f6, "NPCActorCaps.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActor_f1, "NPCActor.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActor_f2, "NPCActor.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActor_f3, "NPCActor.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActor_f4, "NPCActor.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NPCActor_f5, "NPCActor.f5", 0.08f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setBaseMtx_f1, "setBaseMtx.f1", 57.29578f);
+NEBULA_TUNABLE_NAMED(f32, cNum_turnToPlayer_f1, "turnToPlayer.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_turnToPlayer_f2, "turnToPlayer.f2", 0.017453292f);
+NEBULA_TUNABLE_NAMED(f32, cNum_turnToDefault_f1, "turnToDefault.f1", 0.017453292f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setToDefault_f1, "setToDefault.f1", 57.29578f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isScaleAnim_f1, "isScaleAnim.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isScaleAnim_f2, "isScaleAnim.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isScaleAnim_f3, "isScaleAnim.f3", 0.2f);
+
 
 namespace NrvNPCActor {
     NEW_NERVE(NPCActorNrvReaction, NPCActor, Reaction);
@@ -85,10 +105,10 @@ NPCActorCaps::NPCActorCaps(const char* pName) {
     mRailRider = false;
     mSwitchDead = true;
     mSwitchAppear = false;
-    mBinderSize = 50.0f;
-    mSensorSize = 50.0f;
-    mShadowSize = 50.0f;
-    mPointerSize = 80.0f;
+    mBinderSize = cNum_NPCActorCaps_f1;
+    mSensorSize = cNum_NPCActorCaps_f2;
+    mShadowSize = cNum_NPCActorCaps_f3;
+    mPointerSize = cNum_NPCActorCaps_f4;
     mSoundSize = 4;
     mSceneConnectionType = 0;
     mPointer = false;
@@ -100,9 +120,9 @@ NPCActorCaps::NPCActorCaps(const char* pName) {
     mModel = false;
     mMessage = false;
     mMessageOffset.x = 0.0f;
-    mMessageOffset.y = 150.0f;
+    mMessageOffset.y = cNum_NPCActorCaps_f5;
     mMessageOffset.z = 0.0f;
-    mSensorOffset.set< f32 >(0.0f, 50.0f, 0.0f);
+    mSensorOffset.set< f32 >(0.0f, cNum_NPCActorCaps_f6, 0.0f);
     mMessageId = pName;
     mTalkMtx = nullptr;
     mTalkJointName = nullptr;
@@ -191,8 +211,8 @@ NPCActor::NPCActor(const char* pName) : LiveActor(pName) {
     mIsJetTurtleHit = 0;
     mParam.mTurnWhenNear = 1;
     mParam.mTurnOnTalk = 1;
-    mParam.mNearDistance = 2000.0f;
-    mParam.mTurnSpeed = 4.0f;
+    mParam.mNearDistance = cNum_NPCActor_f1;
+    mParam.mTurnSpeed = cNum_NPCActor_f2;
     mParam.mTiltSpeed = 0.0f;
     mParam.mTiltMaxAngle = 0.0f;
     mParam.mWaitAction = nullptr;
@@ -201,9 +221,9 @@ NPCActor::NPCActor(const char* pName) : LiveActor(pName) {
     mParam.mTalkTurnAction = nullptr;
     mMoveAction = nullptr;
     mMoveTalkAction = nullptr;
-    mRailSpeed = 2.0f;
-    mRailAccel = 0.1f;
-    mRailPoseRate = 0.08f;
+    mRailSpeed = cNum_NPCActor_f3;
+    mRailAccel = cNum_NPCActor_f4;
+    mRailPoseRate = cNum_NPCActor_f5;
     mMoveTalkBckRate = 1.0f;
     mIsRailOnGround = 0;
     mUseReactionActions = 1;
@@ -235,7 +255,7 @@ void NPCActor::setBaseMtx(const Pos3f& rPos) {
     mPoseQuat.normalize();
 
     mPosition.set(trans);
-    eulerXYZ = eulerXYZ * 57.29578f;
+    eulerXYZ = eulerXYZ * cNum_setBaseMtx_f1;
     mRotation.set(eulerXYZ);
     mPoseRotation.set(eulerXYZ);
 
@@ -524,7 +544,7 @@ bool NPCActor::calcJointScale(Pos3f* pPos, const JointControllerInfo&) {
 }
 
 bool NPCActor::turnToPlayer() {
-    return turnToPlayer(5.0f);
+    return turnToPlayer(cNum_turnToPlayer_f1);
 }
 
 namespace {
@@ -568,7 +588,7 @@ bool NPCActor::turnToPlayer(f32 turnSpeedDeg, f32 tiltSpeedDeg, f32 maxTiltDeg) 
     Vec3f tiltedUp;
     MR::makeAxisFrontUp(&front, &tiltedUp, toPlayer, yDir);
     MR::clampVecAngleDeg(&tiltedUp, yDir, maxTiltDeg);
-    return MR::turnQuatYDirRad(&mPoseQuat, mPoseQuat, tiltedUp, tiltSpeedDeg * 0.017453292f) & turned;
+    return MR::turnQuatYDirRad(&mPoseQuat, mPoseQuat, tiltedUp, tiltSpeedDeg * cNum_turnToPlayer_f2) & turned;
 }
 
 bool NPCActor::turnToDefault(f32 turnSpeedDeg) {
@@ -586,7 +606,7 @@ bool NPCActor::turnToDefault(f32 turnSpeedDeg) {
     f32 dot = zDir.dot(zDir2);
     dot = MR::clamp(dot, -1.0f, 1.0f);
 
-    f32 rate = MR::abs((turnSpeedDeg * 0.017453292f) / MR::acos(dot));
+    f32 rate = MR::abs((turnSpeedDeg * cNum_turnToDefault_f1) / MR::acos(dot));
     rate = MR::clamp(rate, 0.0f, 1.0f);
 
     MR::blendQuatUpFront(&mPoseQuat, yDir, zDir, rate, rate);
@@ -600,7 +620,7 @@ void NPCActor::setToDefault() {
 
     Vec3f euler;
     mPoseQuat.getEuler(euler);
-    euler = euler * 57.29578f;
+    euler = euler * cNum_setToDefault_f1;
     mRotation = euler;
     mPoseRotation = euler;
 
@@ -692,8 +712,8 @@ bool NPCActor::isScaleAnim() const {
         return false;
     }
 
-    bool isDefaultScale = (MR::isNearZero(1.0f - pScaleController->mScale.x, 0.2f) && MR::isNearZero(1.0f - pScaleController->mScale.y, 0.2f) &&
-                           MR::isNearZero(1.0f - pScaleController->mScale.z, 0.2f));
+    bool isDefaultScale = (MR::isNearZero(1.0f - pScaleController->mScale.x, cNum_isScaleAnim_f1) && MR::isNearZero(1.0f - pScaleController->mScale.y, cNum_isScaleAnim_f2) &&
+                           MR::isNearZero(1.0f - pScaleController->mScale.z, cNum_isScaleAnim_f3));
     if (isDefaultScale) {
         return false;
     }

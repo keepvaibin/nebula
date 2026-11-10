@@ -15,11 +15,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 260.0f);
+
 namespace {
-    const MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
-    const MR::ActorMoveParam sChaseRollParam = {1.1f, 2.0f, 0.95f, 1.5f};
-    const MR::ActorMoveParam sChaseRollParamFast = {1.5f, 2.0f, 0.95f, 1.5f};
-    const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.98f, 1.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sStartParam, {0.0f, 0.5f, 1.0f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sChaseRollParam, {1.1f, 2.0f, 0.95f, 1.5f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sChaseRollParamFast, {1.5f, 2.0f, 0.95f, 1.5f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sEndParam, {0.0f, 1.0f, 0.98f, 1.0f});
     const s32 sWaitToStartStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sWaitToStartStepAngry = NebulaFrameClock::stepsOfSeconds(1);
     NEBULA_TUNABLE(s32, sStartStepToJump, 24);
@@ -59,7 +61,7 @@ void KoopaStateChaseRoll::init() {
 
     KoopaFunction::createKoopaRock(mHost);
 
-    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, 260.0f, &::sChaseRollParam);
+    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, cNum_init_f1, &::sChaseRollParam);
     mFigureBall->initWithoutIter();
 
     kill();

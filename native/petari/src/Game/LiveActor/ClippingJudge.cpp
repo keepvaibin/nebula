@@ -3,6 +3,8 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcViewingVolumes_f1, "calcViewingVolumes.f1", 360.0f);
+
 namespace {
     // Level 0's entry is unused: it ends at the camera's far Z.
     const f32 sFarClipDistance[ClippingJudge::cFarClipLevelNum] = {
@@ -42,7 +44,7 @@ void ClippingJudge::calcViewingVolumes(f32 farZ) {
     f32 fovy = MR::getRenderFovy();
     Pos3f cameraMtx;
     cameraMtx.setPositionFromLookAt(MR::getCameraViewMtx());
-    f32 height = nearClip * static_cast< f32 >(tan(fovy * (FloatUtil::PI() / 360.0f)));
+    f32 height = nearClip * static_cast< f32 >(tan(fovy * (FloatUtil::PI() / cNum_calcViewingVolumes_f1)));
     f32 width = aspect * height;
 
     Vec3f front;

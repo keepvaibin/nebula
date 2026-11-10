@@ -5,6 +5,14 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimStampController_f1, "AnimStampController.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimStampController_f2, "AnimStampController.f2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimStampController_f3, "AnimStampController.f3", 0.125f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimStampController_f4, "AnimStampController.f4", 4.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_AnimStampController_f5, "AnimStampController.f5", 0.12);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimStampController_f6, "AnimStampController.f6", 4.0f);
 
 namespace NrvAnimStampController {
     NEW_NERVE(HostNrvAnim, AnimStampController, Anim);
@@ -12,7 +20,7 @@ namespace NrvAnimStampController {
 };  // namespace NrvAnimStampController
 
 AnimStampController::AnimStampController() : NerveExecutor("つぶれアニメコントローラ"), mDir(0, 0, 1) {
-    init(8, 0.2f, 1.5f, 0.125f, 4.0f, 0.12, 4.0f);
+    init(8, cNum_AnimStampController_f1, cNum_AnimStampController_f2, cNum_AnimStampController_f3, cNum_AnimStampController_f4, cNum_AnimStampController_f5, cNum_AnimStampController_f6);
 }
 
 void AnimStampController::init(s32 animStep, f32 baseY, f32 baseXZ, f32 amplitudeY, f32 freqY, f32 amplitudeXZ, f32 freqXZ) {

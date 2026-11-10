@@ -9,6 +9,9 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sGroundFixAngle, 30.0f);
 };  // namespace
@@ -27,7 +30,7 @@ void CameraFixedThere::reset() {
 CameraTargetObj* CameraFixedThere::calc() {
     Vec3f eyeDir;
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), cNum_calc_f1 / cNum_calc_f2);
     CameraLocalUtil::setWatchPos(this, watchPos);
 
     if (!calcEyeDir(&eyeDir)) {

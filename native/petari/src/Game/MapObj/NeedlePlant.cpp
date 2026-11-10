@@ -12,6 +12,13 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAttackSensorSize, 70.0f);
 };  // namespace
@@ -31,14 +38,14 @@ void NeedlePlant::init(const TableIter& rIter) {
     info.setupConnectToScene();
     info.setupAffectedScale();
     info.setupHitSensor();
-    info.setupHitSensorParam(4, 180.0f, Vec3f(0.0f, mScale.x * 150.0f, 0.0f));
+    info.setupHitSensorParam(4, cNum_init_f1, Vec3f(0.0f, mScale.x * cNum_init_f2, 0.0f));
     info.setupShadow(nullptr);
     info.setupNerve(GET_NERVE(NeedlePlant, NeedlePlantNrvWait));
     initialize(rIter, info);
     initEffectKeeper(1, "NeedlePlant");
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, 0);
-    MR::initStarPointerTarget(this, mScale.x * 150.0f, Vec3f(0.0f, mScale.x * 150.0f, 0.0f));
+    MR::initStarPointerTarget(this, mScale.x * cNum_init_f3, Vec3f(0.0f, mScale.x * cNum_init_f4, 0.0f));
     MR::getPlacementArg0NoInit(rIter, &mObjArg0);
 
     if (mObjArg0 == -1) {
@@ -71,7 +78,7 @@ void NeedlePlant::kill() {
 
     if (mObjArg0 == 0) {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
-        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
     } else if (mObjArg0 == -1) {
         MR::appearCoinPop(this, mPosition, 1);
     }

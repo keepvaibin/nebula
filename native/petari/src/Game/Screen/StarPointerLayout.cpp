@@ -27,6 +27,9 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_rotateTest_f1, "rotateTest.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startAnimHandPaa_f1, "startAnimHandPaa.f1", 2.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_tearDownHide_setAnimRate_1, "tearDownHide.setAnimRate.1", 1.0f);
 
@@ -692,7 +695,7 @@ void StarPointerLayout::setPosition() {
 void StarPointerLayout::rotateTest() {
     Vec2f horiz;
     MR::getPlayerInput(mPadChannel)->mPointer->getHorizonVec(&horiz);
-    f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
+    f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, cNum_rotateTest_f1);
 
     if (mPointerKind == StarPointerKind_StarPointer) {
         angle *= ::sRotateMult;
@@ -878,7 +881,7 @@ void StarPointerLayout::startAnimStarPointer(const char* pAnimName) {
 void StarPointerLayout::startAnimHandPaa() {
     changeToHandPointer();
     MR::startPaneAnim(this, "HandPointer", "HandType", 0);
-    MR::setPaneAnimFrameAndStop(this, "HandPointer", 2.0f, 0);
+    MR::setPaneAnimFrameAndStop(this, "HandPointer", cNum_startAnimHandPaa_f1, 0);
     mAnimType = AnimType_HandPaa;
 }
 

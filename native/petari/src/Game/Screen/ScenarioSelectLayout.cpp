@@ -22,13 +22,24 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreenPos_f1, "calcWorldPositionFromScreenPos.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreenPos_f2, "calcWorldPositionFromScreenPos.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreenPos_f3, "calcWorldPositionFromScreenPos.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreenPos_f4, "calcWorldPositionFromScreenPos.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreenPos_f5, "calcWorldPositionFromScreenPos.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryChangePage_f1, "tryChangePage.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryChangePage_f2, "tryChangePage.f2", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryChangePage_f3, "tryChangePage.f3", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStar_f1, "appearStar.f1", 1000.0f);
+
 namespace {
     const char* const cStarPaneName[] = {"Star1", "Star2", "Star3", "Star4", "Star5", "Star6", "Star7"};
     const char* const cQuestionPaneName[] = {
         "NewStar1",
         "NewStar2",
     };
-    const Vec cSkyTrans = {0.0f, 0.0f, -10000.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cSkyTrans, {0.0f, 0.0f, -10000.0f});
     NEBULA_TUNABLE(f32, cPointingTargetRadius, 60.0f);
     NEBULA_TUNABLE(s32, cDecideFrame, 40);
     const s32 cSelectedAccelStartStep = NebulaFrameClock::stepsOfSeconds(1);
@@ -155,7 +166,7 @@ void ScenarioSelectLayout::appear() {
         MR::setPaneAnimFrameAndStop(this, "StarDown", extraScenarioCompleteNum - 1, 0);
         mStarTopFollowPos.zero();
     } else {
-        mStarTopFollowPos.set(0.0f, 50.0f);
+        mStarTopFollowPos.set(0.0f, cNum_appear_f1);
     }
 
     MR::setTextBoxMessageRecursive(this, "Galaxy", MR::getCurrentGalaxyNameOnCurrentLanguage());
@@ -447,9 +458,9 @@ ScenarioSelectStar* ScenarioSelectLayout::getSelectedStar() const {
 }
 
 void ScenarioSelectLayout::calcWorldPositionFromScreenPos(Vec3f* pWorldPos, const Vec2f& rScreenPos, f32 depth) const {
-    f32 fovy = mCameraContext->getFovy() * (PI / 180.0f);
+    f32 fovy = mCameraContext->getFovy() * (PI / cNum_calcWorldPositionFromScreenPos_f1);
     f32 height = static_cast< s32 >(NebulaFrameClock::cScreenLines);
-    f32 focalLength = (height * 0.5f) / MR::tan(fovy * 0.5f);
+    f32 focalLength = (height * cNum_calcWorldPositionFromScreenPos_f2) / MR::tan(fovy * cNum_calcWorldPositionFromScreenPos_f3);
     f32 distance;
 
     if (depth >= 0.0f) {
@@ -460,7 +471,7 @@ void ScenarioSelectLayout::calcWorldPositionFromScreenPos(Vec3f* pWorldPos, cons
     }
 
     f32 scale = distance / focalLength;
-    Vec3f pos(scale * (rScreenPos.x - MR::getScreenWidth() * 0.5f), scale * -(rScreenPos.y - height * 0.5f), -distance);
+    Vec3f pos(scale * (rScreenPos.x - MR::getScreenWidth() * cNum_calcWorldPositionFromScreenPos_f4), scale * -(rScreenPos.y - height * cNum_calcWorldPositionFromScreenPos_f5), -distance);
     Pos3f invView(mCameraContext->getInvViewMtx());
     invView.mult(pos, *pWorldPos);
 }
@@ -610,9 +621,9 @@ void ScenarioSelectLayout::tryChangePage() {
     }
     const s32 pages = (mListNum + 5) / 6;
     // A pointer: pressing with it at either side of the screen, on no star.
-    const f32 pointerX = MR::isStarPointerInScreen(0) && MR::testPointerMenuPadDecideTrigger() && mSelectedScenarioNo <= 0 ? MR::getStarPointerScreenPosition(0)->x : MR::getScreenWidth() * 0.5f;
-    const bool left = MR::isHeldLeft(0) || MR::isMoveStickPressedLeft(0) || pointerX < MR::getScreenWidth() * 0.15f;
-    const bool right = MR::isHeldRight(0) || MR::isMoveStickPressedRight(0) || pointerX > MR::getScreenWidth() * 0.85f;
+    const f32 pointerX = MR::isStarPointerInScreen(0) && MR::testPointerMenuPadDecideTrigger() && mSelectedScenarioNo <= 0 ? MR::getStarPointerScreenPosition(0)->x : MR::getScreenWidth() * cNum_tryChangePage_f1;
+    const bool left = MR::isHeldLeft(0) || MR::isMoveStickPressedLeft(0) || pointerX < MR::getScreenWidth() * cNum_tryChangePage_f2;
+    const bool right = MR::isHeldRight(0) || MR::isMoveStickPressedRight(0) || pointerX > MR::getScreenWidth() * cNum_tryChangePage_f3;
     if (!left && !right) {
         mPageKeyHeld = false;
         return;
@@ -632,7 +643,7 @@ void ScenarioSelectLayout::appearStar(s32 starId, s32 scenarioNo, int a3) {
     MR::copyPaneTrans(&starPaneTrans, this, ::cStarPaneName[starId]);
 
     Vec3f worldPos;
-    calcWorldPositionFromScreenPos(&worldPos, starPaneTrans, 1000.0f);
+    calcWorldPositionFromScreenPos(&worldPos, starPaneTrans, cNum_appearStar_f1);
 
     pStar->setup(scenarioNo, a3, worldPos, starId);
     pStar->appear();

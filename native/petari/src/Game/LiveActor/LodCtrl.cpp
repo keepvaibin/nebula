@@ -10,6 +10,8 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_createFarModel_f1, "createFarModel.f1", 100.0f);
+
 namespace {
     NEBULA_TUNABLE(bool, sOff, false);
 
@@ -72,7 +74,7 @@ void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimT
     mFarModel = new ModelObj(pObjName, pObjName, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
     mFarModel->initWithoutIter();
     mFarModel->makeActorDead();
-    MR::setClippingTypeSphereContainsModelBoundingBox(mFarModel, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(mFarModel, cNum_createFarModel_f1);
     MR::copyTransRotateScale(mActor, mFarModel);
 }
 

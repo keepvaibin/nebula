@@ -23,6 +23,23 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 430.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f15, "init.f15", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f16, "init.f16", 350.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sTurnSpeed, 180.0f);
 };  // namespace
@@ -46,12 +63,12 @@ void PenguinCoach::init(const TableIter& rIter) {
     caps.setDefault();
     caps.mWaitNerve = GET_NERVE(PenguinCoach, PenguinCoachNrvWait);
     caps.mBinder = false;
-    caps.mShadowSize = 130.0f;
+    caps.mShadowSize = cNum_init_f1;
     caps.mSensor = false;
     caps.mMakeActor = false;
-    caps.mMessageOffset = Vec3f(0.0f, 430.0f, 0.0f);
-    caps.mPointerSize = 180.0f;
-    caps.mStarPointerOffs.set(0.0f, 200.0f, 80.0f);
+    caps.mMessageOffset = Vec3f(0.0f, cNum_init_f2, 0.0f);
+    caps.mPointerSize = cNum_init_f3;
+    caps.mStarPointerOffs.set(0.0f, cNum_init_f4, cNum_init_f5);
 
     MR::getPlacementArg0NoInit(rIter, &mBehavior);
 
@@ -68,8 +85,8 @@ void PenguinCoach::init(const TableIter& rIter) {
     }
 
     initHitSensor(2);
-    MR::addHitSensorPush(this, "body", 8, 160.0f, Vec3f(0.0f, 150.0f, 0.0f));
-    MR::addHitSensorPush(this, "head", 8, 150.0f, Vec3f(0.0f, 300.0f, 40.0f));
+    MR::addHitSensorPush(this, "body", 8, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
+    MR::addHitSensorPush(this, "head", 8, cNum_init_f8, Vec3f(0.0f, cNum_init_f9, cNum_init_f10));
 
     if (mBehavior == Behavior_Tutorial || mBehavior == Behavior_Race) {
         if (mBehavior == Behavior_Tutorial) {
@@ -88,10 +105,10 @@ void PenguinCoach::init(const TableIter& rIter) {
 
     mTutorial = new SurfRayTutorial(this, MR::createTalkCtrlDirect(this, rIter, "Common_SurfingTutorial000", caps.mMessageOffset, nullptr), rIter);
     mTurnJointCtrl = new TurnJointCtrl(this);
-    mTurnJointCtrl->init(90.0f, 10.0f, 40.0f);
+    mTurnJointCtrl->init(cNum_init_f11, cNum_init_f12, cNum_init_f13);
     mTurnJointCtrl->addFace("Head", 1.0f, TurnJointCtrl::X, TurnJointCtrl::Y, TurnJointCtrl::Z);
-    mTurnJointCtrl->mStareRate = 0.1f;
-    mTurnJointCtrl->mStareDist = 800.0f;
+    mTurnJointCtrl->mStareRate = cNum_init_f14;
+    mTurnJointCtrl->mStareDist = cNum_init_f15;
     makeActorAppeared();
 
     mParam.setMoveAction("Wait", "Turn");
@@ -105,7 +122,7 @@ void PenguinCoach::init(const TableIter& rIter) {
     if (mMsgCtrl != nullptr) {
         MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &PenguinCoach::branchFunc));
         MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &PenguinCoach::eventFunc));
-        MR::setDistanceToTalk(mMsgCtrl, 350.0f);
+        MR::setDistanceToTalk(mMsgCtrl, cNum_init_f16);
     }
 }
 

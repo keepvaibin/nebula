@@ -16,6 +16,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 1000.0f);
 
 
 namespace {
@@ -52,7 +56,7 @@ void LavaFloater::init(const TableIter& rIter) {
     initSound(4, false);
     initHitSensor(1);
     MR::initCollisionParts(this, mObjectName, MR::addBodyMessageSensorMapObj(this), nullptr);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     MR::connectToSceneCollisionMapObj(this);
 
     if (MR::isEqualString("LavaFloatingStepA", mObjectName)) {
@@ -70,7 +74,7 @@ void LavaFloater::init(const TableIter& rIter) {
 
 void LavaFloater::initAfterPlacement() {
     Vec3f down(mGravity);
-    down *= 1000.0f;
+    down *= cNum_initAfterPlacement_f1;
 
     if (!MR::getFirstPolyOnLineToMap(&mGroundPos, nullptr, mPosition, down)) {
         MR::calcMapGroundUpper(&mGroundPos, this);

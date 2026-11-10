@@ -8,6 +8,15 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_doFrontStep_f1, "doFrontStep.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doFrontStep_f2, "doFrontStep.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doFrontStep_f3, "doFrontStep.f3", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.866f);
+NEBULA_TUNABLE_NAMED(f32, cNum_postureCtrl_f1, "postureCtrl.f1", 0.25f);
 
 bool Mario::doFrontStep() {
     if (getCurrentStatus() == MarioStatus_FrontStep) {
@@ -46,18 +55,18 @@ bool Mario::doFrontStep() {
         return false;
     }
 
-    if (calcAngleD(mGroundNorm) >= 30.0f) {
+    if (calcAngleD(mGroundNorm) >= cNum_doFrontStep_f1) {
         return false;
     }
 
-    if (mAirGravityVec.dot(mGroundDown) >= 0.25f) {
+    if (mAirGravityVec.dot(mGroundDown) >= cNum_doFrontStep_f2) {
         return false;
     }
 
     Triangle triangle = Triangle();
     MarioActor* pMario = mActor;
     Vec3f* vec = &pMario->mCenterPos;
-    if (!MR::getFirstPolyOnLineToMap(nullptr, &triangle, *vec, mFrontVec * 200.0f)) {
+    if (!MR::getFirstPolyOnLineToMap(nullptr, &triangle, *vec, mFrontVec * cNum_doFrontStep_f3)) {
         return false;
     }
 
@@ -96,11 +105,11 @@ bool MarioFrontStep::update() {
 
     MarioActor* pMario = mActor;
     Vec3f* vec = &pMario->mCenterPos;
-    if (!MR::isExistMapCollision(*vec, getFrontVec() * 200.0f)) {
+    if (!MR::isExistMapCollision(*vec, getFrontVec() * cNum_update_f1)) {
         return false;
     }
 
-    if (!(getStickP() < 0.1f)) {
+    if (!(getStickP() < cNum_update_f2)) {
         Vec3f worldDir(getWorldPadDir());
         MR::vecKillElement(worldDir, getPlayer()->getAirGravityVec(), &worldDir);
 
@@ -108,7 +117,7 @@ bool MarioFrontStep::update() {
 
         Vec3f vec;
         f32 val = MR::vecKillElement(worldDir, -getPlayer()->mFrontVec, &vec);
-        if (!(val < -0.866f) && val > 0.0f) {
+        if (!(val < -cNum_update_f3) && val > 0.0f) {
             return false;
         }
     }
@@ -146,7 +155,7 @@ bool MarioFrontStep::close() {
 
 bool MarioFrontStep::postureCtrl(MtxPtr pMtx) {
     Vec3f blendVec;
-    if (MR::vecBlendSphere(-getPlayer()->getAirGravityVec(), -getPlayer()->mFrontVec, &blendVec, 0.25f)) {
+    if (MR::vecBlendSphere(-getPlayer()->getAirGravityVec(), -getPlayer()->mFrontVec, &blendVec, cNum_postureCtrl_f1)) {
         MR::normalizeOrZero(&blendVec);
     } else {
         blendVec = -getPlayer()->getAirGravityVec();

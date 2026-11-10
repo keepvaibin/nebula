@@ -13,6 +13,17 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_channel_f1, "channel.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointLight_f1, "pointLight.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointLight_f2, "pointLight.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointLight_f3, "pointLight.f3", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointLight_f4, "pointLight.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointRequest_f1, "pointRequest.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointRequest_f2, "pointRequest.f2", 0.999999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointRequest_f3, "pointRequest.f3", 0.999999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointRequest_f4, "pointRequest.f4", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pointRequest_f5, "pointRequest.f5", 15.0f);
+
 namespace {
     // An actor that asked for the point light, with its last request as a world light.
     struct Requester {
@@ -35,7 +46,7 @@ namespace {
     const u64 cSunId = 1;
 
     f32 channel(u8 value) {
-        return static_cast< f32 >(value) / 255.0f;
+        return static_cast< f32 >(value) / cNum_channel_f1;
     }
 
     // One light of an area's light record: its colour, and its place in the world or, when it follows the camera, in
@@ -139,11 +150,11 @@ namespace GameLightSignal {
         f32 half = 0.0f;
         if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function != LIGHT_FALLOFF_NONE) {
             const f32 q = (1.0f - brightness) / brightness;
-            const f32 k1 = function == LIGHT_FALLOFF_GENTLE ? q / reference : function == LIGHT_FALLOFF_MEDIUM ? 0.5f * q / reference : 0.0f;
+            const f32 k1 = function == LIGHT_FALLOFF_GENTLE ? q / reference : function == LIGHT_FALLOFF_MEDIUM ? cNum_pointLight_f1 * q / reference : 0.0f;
             const f32 k2 = function == LIGHT_FALLOFF_STEEP    ? q / (reference * reference)
-                           : function == LIGHT_FALLOFF_MEDIUM ? 0.5f * q / (reference * reference)
+                           : function == LIGHT_FALLOFF_MEDIUM ? cNum_pointLight_f2 * q / (reference * reference)
                                                       : 0.0f;
-            half = k2 > 0.0f ? (-k1 + __builtin_sqrtf(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
+            half = k2 > 0.0f ? (-k1 + __builtin_sqrtf(k1 * k1 + cNum_pointLight_f3 * k2)) / (cNum_pointLight_f4 * k2) : 1.0f / k1;
         }
         const Vec& p = pInfo->mPos;
         const NebulaColor8& c = pInfo->mColor;
@@ -156,10 +167,10 @@ namespace GameLightSignal {
     // LightPointCtrl blends its light with LightValues::distAttn(15, brightness, LIGHT_FALLOFF_GENTLE): it halves at
     // 15 sqrt(b / (1 - b)).
     void pointRequest(const LiveActor* pActor, const Vec3f& rPosition, Color8 color, f32 brightness) {
-        const f32 clamped = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;
+        const f32 clamped = brightness >= cNum_pointRequest_f1 ? (brightness <= cNum_pointRequest_f2 ? brightness : cNum_pointRequest_f3) : cNum_pointRequest_f4;
         const NebulaFrameWorldLight light =
             pointOf(NebulaHost::objectId(pActor), NEBULA_WORLD_LIGHT_REQUEST, rPosition.x, rPosition.y, rPosition.z, channel(color.r),
-                    channel(color.g), channel(color.b), 15.0f * __builtin_sqrtf(clamped / (1.0f - clamped)));
+                    channel(color.g), channel(color.b), cNum_pointRequest_f5 * __builtin_sqrtf(clamped / (1.0f - clamped)));
         Frame::worldLight(light);
         Requester* slot = nullptr;
         for (u32 i = 0; i < sRequesterCount && slot == nullptr; i++) {

@@ -13,6 +13,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 350.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sStarPieceNeed, 30);
     NEBULA_TUNABLE(f32, sMouthSize, 30.0f);
@@ -30,11 +34,11 @@ TicoShop::TicoShop(const char* pName) : TicoComet(pName), mOneUp(), mLifeUp(), m
 
 void TicoShop::kill() {
     if (mOneUp != nullptr && mChoseOneUp) {
-        MR::appearKinokoOneUpPop(mOneUp, getBaseMtx(), 15.0f);
+        MR::appearKinokoOneUpPop(mOneUp, getBaseMtx(), cNum_kill_f1);
     }
 
     if (mLifeUp != nullptr && mChoseLifeUp) {
-        MR::appearKinokoSuper(mLifeUp, getBaseMtx(), 15.0f);
+        MR::appearKinokoSuper(mLifeUp, getBaseMtx(), cNum_kill_f2);
     }
 
     NPCActor::kill();
@@ -71,7 +75,7 @@ void TicoShop::init(const TableIter& rIter) {
     MR::setMessageArg(mMsgCtrl, mStarPieceNeed);
     MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoShop::branchFunc));
     MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoShop::eventFunc));
-    MR::setDistanceToTalk(mMsgCtrl, 350.0f);
+    MR::setDistanceToTalk(mMsgCtrl, cNum_init_f1);
     mMetaNerve = GET_NERVE(TicoShop, TicoShopNrvDemo);
     mOneUp = MR::createKinokoOneUp();
     mLifeUp = MR::createKinokoSuper();

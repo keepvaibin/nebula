@@ -4,6 +4,12 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f1, "hitCheck.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f2, "hitCheck.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f3, "hitCheck.f3", 0.5f);
 
 FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("追従コリジョンエリア") {
     mSize = rSize;
@@ -34,7 +40,7 @@ void FollowCollisionArea::movement() {
         }
 
         if (mIsTeresaPass) {
-            radius += 5.0f;
+            radius += cNum_movement_f1;
         }
 
         Vec3f hitPos;
@@ -83,9 +89,9 @@ bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint,
     MR::normalizeOrZero(&axisY);
     f32 sizeZ = axisZ.length();
     MR::normalizeOrZero(&axisZ);
-    sizeX *= 0.5f * mSize.x;
-    sizeY *= 0.5f * mSize.y;
-    sizeZ *= 0.5f * mSize.z;
+    sizeX *= cNum_hitCheck_f1 * mSize.x;
+    sizeY *= cNum_hitCheck_f2 * mSize.y;
+    sizeZ *= cNum_hitCheck_f3 * mSize.z;
     Vec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
     Vec3f relative(rPos);
     relative.sub(mCenter);

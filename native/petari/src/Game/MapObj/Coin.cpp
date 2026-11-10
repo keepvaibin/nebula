@@ -8,6 +8,12 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRebound_f1, "calcRebound.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attenuateVelocity_f1, "attenuateVelocity.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attenuateVelocity_f2, "attenuateVelocity.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attenuateVelocity_f3, "attenuateVelocity.f3", 0.995f);
+
 namespace {
     // The coin's centre above its position.
     NEBULA_TUNABLE(f32, cCenterHeight, 70.0f);
@@ -62,7 +68,7 @@ void Coin::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensor(this, "coin", ATYPE_COIN, 4, cSensorRadius, Vec3f(0.0f, cCenterHeight, 0.0f));
     initBinder(cSensorRadius, cCenterHeight, 0);
-    MR::setBinderExceptSensorType(this, &mPosition, 10.0f);
+    MR::setBinderExceptSensorType(this, &mPosition, cNum_init_f1);
     MR::setClippingFar100m(this);
     initEffectKeeper(0, nullptr);
     initSound(1, false);
@@ -620,7 +626,7 @@ void Coin::calcRebound() {
             landSpeed = cGroundBounceMaxSpeed;
         }
 
-        s32 volume = (100.0f * landSpeed) / cGroundBounceMaxSpeed;
+        s32 volume = (cNum_calcRebound_f1 * landSpeed) / cGroundBounceMaxSpeed;
 
         if (volume > cBoundSoundMinVolume) {
             MR::startSound(this, "SE_OJ_COIN_BOUND", volume);
@@ -636,11 +642,11 @@ void Coin::attenuateVelocity() {
     f32 keep;
 
     if (mIsInWater) {
-        keep = 0.8f;
+        keep = cNum_attenuateVelocity_f1;
     } else if (MR::isOnGround(this)) {
-        keep = 0.9f;
+        keep = cNum_attenuateVelocity_f2;
     } else {
-        keep = 0.995f;
+        keep = cNum_attenuateVelocity_f3;
     }
 
     MR::attenuateVelocity(this, keep);

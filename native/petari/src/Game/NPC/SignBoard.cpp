@@ -5,6 +5,15 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 80.0f);
 
 namespace NrvSignBoard {
     NEW_NERVE(SignBoardNrvWait, SignBoard, Wait);
@@ -17,10 +26,10 @@ void SignBoard::init(const TableIter& rIter) {
     NPCActorCaps caps("SignBoard");
     caps.setDefault();
     caps.mWaitNerve = GET_NERVE(SignBoard, SignBoardNrvWait);
-    caps.mShadowSize = 30.0f;
-    caps.mSensorSize = 100.0f;
+    caps.mShadowSize = cNum_init_f1;
+    caps.mSensorSize = cNum_init_f2;
     caps.mSensorOffset.x = 0.0f;
-    caps.mSensorOffset.y = 130.0f;
+    caps.mSensorOffset.y = cNum_init_f3;
     caps.mSensorOffset.z = 0.0f;
     caps.mLightCtrl = false;
     caps.mBinder = 0;
@@ -28,7 +37,7 @@ void SignBoard::init(const TableIter& rIter) {
 
     getSensor("Body")->setType(ATYPE_EYE);
 
-    new FollowCollisionArea(Vec3f(130.0f, 160.0f, 20.0f), getBaseMtx(), 80.0f);
+    new FollowCollisionArea(Vec3f(cNum_init_f4, cNum_init_f5, cNum_init_f6), getBaseMtx(), cNum_init_f7);
 
     Vec3f up;
     MR::getUpVecFromQuat(&up, mPoseQuat);

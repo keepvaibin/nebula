@@ -14,6 +14,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 230.0f);
+
 namespace {
     static MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
     static MR::ActorMoveParam sAttackRollParamLv2Slow = {3.0f, 2.0f, 0.9f, 1.0f};
@@ -56,7 +58,7 @@ void KoopaStateAttackRoll::init() {
 
     KoopaFunction::createKoopaRollBall(mHost);
 
-    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, 230.0f, &::sAttackRollParamLv3Slow);
+    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, cNum_init_f1, &::sAttackRollParamLv3Slow);
     mFigureBall->initWithoutIter();
 
     kill();

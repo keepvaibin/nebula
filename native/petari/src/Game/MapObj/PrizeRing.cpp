@@ -5,6 +5,8 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+
 namespace {
     // By the ring's number; the rest play ring 1.
     const char* const sPlaySoundNames[] = {nullptr, "SE_SY_GET_PRIZE_RING_5", "SE_SY_GET_PRIZE_RING_4", "SE_SY_GET_PRIZE_RING_3",
@@ -28,7 +30,7 @@ PrizeRing::PrizeRing() : ModelObj("PrizeRing", "PrizeRing", nullptr, -2, -2, -2,
 void PrizeRing::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(PrizeRing, PrizeRingStart));
     initHitSensor(1);
-    MR::addHitSensorMapObjSimple(this, "body", 4, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "body", 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     makeActorDead();
 }
 

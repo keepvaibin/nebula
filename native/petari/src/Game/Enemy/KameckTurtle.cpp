@@ -7,6 +7,14 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRun_f1, "exeRun.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRun_f2, "exeRun.f2", 0.5f);
+
 namespace {
     // const f32 sBeamRadius =
     NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.2f);
@@ -40,12 +48,12 @@ void KameckTurtle::init(const TableIter& rIter) {
     initJetTurtle();
     initSound(4, false);
     MR::onCalcGravity(this);
-    initBinder(40.0f, 10.0f, 0);
+    initBinder(cNum_init_f1, cNum_init_f2, 0);
     MR::setKameckBeamCollisionFilter(this);
     initHitSensor(1);
-    MR::initShadowVolumeSphere(this, 60.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
     MR::invalidateClipping(this);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 50.0f, Vec3f(0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f4, Vec3f(0.0f));
     initEffectKeeper(0, "BossKameckBeam");
     initNerve(GET_NERVE(KameckTurtle, KameckTurtleNrvWait));
     makeActorAppeared();
@@ -87,7 +95,7 @@ void KameckTurtle::calcAndSetBaseMtx() {
 void KameckTurtle::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (isEnableAttack()) {
         if (MR::isSensorPlayer(pReceiver) && MR::sendMsgEnemyAttackFlipJump(pReceiver, pSender)) {
-            MR::reflectVelocityH(this, pSender, pReceiver, 0.8f);
+            MR::reflectVelocityH(this, pSender, pReceiver, cNum_attackSensor_f1);
 
             if (!MR::isNearZero(mVelocity)) {
                 MR::normalize(mVelocity, &mRunDir);
@@ -167,12 +175,12 @@ void KameckTurtle::exeRun() {
         easeInOut = 1.0f - MR::calcNerveEaseInOutRate(this, ::sDeccelStartTime, ::sDeccelEndTime);
     }
 
-    MR::addVelocityMoveToDirection(this, mRunDir, easeInOut * 0.5f);
+    MR::addVelocityMoveToDirection(this, mRunDir, easeInOut * cNum_exeRun_f1);
     MR::rotateDirectionGravityDegree(this, &mFront, ::sRunSpinDegree * easeInOut);
     MR::turnDirectionToGround(this, &mFront);
     MR::attenuateVelocity(this, ::sRunFric);
 
-    if (MR::isBindedWall(this) && MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), 0.5f)) {
+    if (MR::isBindedWall(this) && MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), cNum_exeRun_f2)) {
         Vec3f dir = MR::getVelocityHorizon(this);
 
         if (!MR::normalizeOrZero(&dir)) {

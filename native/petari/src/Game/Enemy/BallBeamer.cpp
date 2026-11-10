@@ -14,6 +14,12 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 12.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 3000.0f);
 
@@ -34,12 +40,12 @@ BallBeamer::BallBeamer(const char* pName) : LiveActor(pName), mBeams(), mIsSwitc
 void BallBeamer::init(const TableIter& rIter) {
     initModelManagerWithAnm("BallBeamer", nullptr, false);
     MR::initDefaultPos(this, rIter);
-    mPosition.y = mPosition.y - 50.0f;
+    mPosition.y = mPosition.y - cNum_init_f1;
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(1);
-    MR::addHitSensorPush(this, "Body", 8, 120.0f, Vec3f(0.0f, -20.0f, 0.0f));
-    MR::initShadowVolumeSphere(this, 120.0f);
+    MR::addHitSensorPush(this, "Body", 8, cNum_init_f2, Vec3f(0.0f, -cNum_init_f3, 0.0f));
+    MR::initShadowVolumeSphere(this, cNum_init_f4);
     initEffectKeeper(3, nullptr);
     initSound(2, false);
     initNerve(GET_NERVE(BallBeamer, BallBeamerNrvWait));
@@ -53,7 +59,7 @@ void BallBeamer::init(const TableIter& rIter) {
     }
 
     mBeams = new RingBeam*[::sBeamNum];
-    f32 beamSpeed = 12.0f;
+    f32 beamSpeed = cNum_init_f5;
     s32 beamLife = 530;
     s32 shadowMode = -1;
     MR::getPlacementArg0NoInit(rIter, &beamSpeed);

@@ -6,6 +6,9 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_ButlerStateStarPieceReaction_f1, "ButlerStateStarPieceReaction.f1", 180.0f);
 
 namespace NrvButlerStateStarPieceReaction {
     NEW_NERVE(ButlerStateStarPieceReactionNrvWait, ButlerStateStarPieceReaction, Wait);
@@ -13,7 +16,7 @@ namespace NrvButlerStateStarPieceReaction {
 
 ButlerStateStarPieceReaction::ButlerStateStarPieceReaction(LiveActor* pHost, const TableIter& rIter, const char* pName)
     : ActorStateBase< LiveActor >("バトラースターピース反応", pHost), mTalkMessage(nullptr), mIsTalkForce(false) {
-    mTalkMessage = MR::createTalkCtrlDirectOnRootNodeAutomatic(pHost, rIter, pName, Vec3f(0.0f, 180.0f, 0.0f), nullptr);
+    mTalkMessage = MR::createTalkCtrlDirectOnRootNodeAutomatic(pHost, rIter, pName, Vec3f(0.0f, cNum_ButlerStateStarPieceReaction_f1, 0.0f), nullptr);
 }
 
 void ButlerStateStarPieceReaction::init() {

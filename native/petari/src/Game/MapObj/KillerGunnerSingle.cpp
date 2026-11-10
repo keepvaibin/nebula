@@ -12,11 +12,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShoot_f1, "exeShoot.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShoot_f2, "exeShoot.f2", 1000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeShoot_1, "exeShoot.1", 40);
 
 namespace {
-    const Vec sShellPos = {0.0f, 0.0f, 700.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sShellPos, {0.0f, 0.0f, 700.0f});
 };  // namespace
 
 namespace NrvKillerGunnerSingle {
@@ -35,11 +40,11 @@ void KillerGunnerSingle::init(const TableIter& rIter) {
     MR::connectToSceneEnvironment(this);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "shell", 16, 250.0f, Vec3f(::sShellPos));
+    MR::addHitSensorEnemy(this, "shell", 16, cNum_init_f1, Vec3f(::sShellPos));
     MR::initCollisionParts(this, "KillerGunnerSingle", getSensor("body"), nullptr);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f2);
     initNerve(GET_NERVE(KillerGunnerSingle, HostTypeWait));
     makeActorAppeared();
 }
@@ -83,7 +88,7 @@ void KillerGunnerSingle::exeCharge() {
 
 void KillerGunnerSingle::exeShoot() {
     if (MR::isFirstStep(this)) {
-        MR::startRumbleWithShakeCameraWeak(this, "中", "弱", 500.0f, 1000.0f);
+        MR::startRumbleWithShakeCameraWeak(this, "中", "弱", cNum_exeShoot_f1, cNum_exeShoot_f2);
     }
 
     if (MR::isStep(this, 0)) {

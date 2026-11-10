@@ -6,6 +6,15 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f1, "RosettaDemoHeavensDoor1.f1", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f2, "RosettaDemoHeavensDoor1.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f3, "RosettaDemoHeavensDoor1.f3", 25.14f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f4, "RosettaDemoHeavensDoor1.f4", 6.16f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f5, "RosettaDemoHeavensDoor1.f5", 15064.593f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f6, "RosettaDemoHeavensDoor1.f6", 7917.67f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f7, "RosettaDemoHeavensDoor1.f7", 7541.112f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_f8, "RosettaDemoHeavensDoor1.f8", 1500.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor1_exeWait_isNearPlayer_1, "RosettaDemoHeavensDoor1_exeWait.isNearPlayer.1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_RosettaDemoHeavensDoor2_exeWait_isNearPlayer_1, "RosettaDemoHeavensDoor2_exeWait.isNearPlayer.1", 400.0f);
@@ -28,7 +37,7 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const TableIter
 
     mLightDomeModel = MR::createPartsModelNpc(mHost, "ライトドーム", "LightDome", nullptr);
     mLightDomeModel->makeActorAppeared();
-    mLightDomeModel->initFixedPosition(Vec3f(0.0f, -13.0f, -30.0f), Vec3f(0.0f, 0.0f, 0.0f), "Center");
+    mLightDomeModel->initFixedPosition(Vec3f(0.0f, -cNum_RosettaDemoHeavensDoor1_f1, -cNum_RosettaDemoHeavensDoor1_f2), Vec3f(0.0f, 0.0f, 0.0f), "Center");
     MR::startBrk(mLightDomeModel, "LightDome");
     MR::startBck(mLightDomeModel, "Appear");
 
@@ -40,7 +49,7 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const TableIter
     DemoFunction::registerDemoTalkMessageCtrl(mHost, mHost->mMsgCtrl);
 
     mLightHaloModel = MR::createPartsModelNpc(mHost, "ライト後光", "DomeHalo", nullptr);
-    mLightHaloModel->initFixedPosition(Vec3f(0.0f, 25.14f, -6.16f), Vec3f(0.0f, 0.0f, 0.0f), "Center");
+    mLightHaloModel->initFixedPosition(Vec3f(0.0f, cNum_RosettaDemoHeavensDoor1_f3, -cNum_RosettaDemoHeavensDoor1_f4), Vec3f(0.0f, 0.0f, 0.0f), "Center");
     mLightHaloModel->makeActorAppeared();
 
     if (MR::isDemoCast(mHost, nullptr)) {
@@ -48,7 +57,7 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const TableIter
     }
 
     mLightHaloModel->mIsCalcOwnMtx = false;
-    mLightHaloModel->mPosition.set(15064.593f, -7917.67f, 7541.112f);
+    mLightHaloModel->mPosition.set(cNum_RosettaDemoHeavensDoor1_f5, -cNum_RosettaDemoHeavensDoor1_f6, cNum_RosettaDemoHeavensDoor1_f7);
 
     MR::needStageSwitchWriteA(mHost, rIter);
     MR::needStageSwitchWriteB(mHost, rIter);
@@ -61,7 +70,7 @@ RosettaDemoHeavensDoor1::RosettaDemoHeavensDoor1(Rosetta* pHost, const TableIter
         "スピンゲット[デモ1]");
     MR::invalidateShadowAll(mHost);
     MR::invalidateHitSensors(mHost);
-    MR::setClippingTypeSphere(mHost, 1500.0f);
+    MR::setClippingTypeSphere(mHost, cNum_RosettaDemoHeavensDoor1_f8);
     mHost->startDemo(this);
     mHost->makeActorDead();
 }

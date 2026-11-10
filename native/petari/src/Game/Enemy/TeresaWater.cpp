@@ -5,8 +5,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+
 namespace {
-    static const MR::ActorMoveParam sMoveParam = {0.5f, 0.0f, 0.9f, 1.5f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sMoveParam, {0.5f, 0.0f, 0.9f, 1.5f});
     NEBULA_TUNABLE(f32, sDefaultMoveLength, 800.0f);
     NEBULA_TUNABLE(f32, sSideFriction, 0.5f);
     NEBULA_TUNABLE(f32, sTargetRadius, 30.0f);
@@ -35,12 +39,12 @@ void TeresaWater::init(const TableIter& rIter) {
     sensorOffset.x = 0.0f;
     sensorOffset.y = 0.0f;
     sensorOffset.z = 0.0f;
-    MR::addHitSensorAtJointEnemySimple(this, "body", "SklRoot", 8, 60.0f, sensorOffset);
+    MR::addHitSensorAtJointEnemySimple(this, "body", "SklRoot", 8, cNum_init_f1, sensorOffset);
     initEffectKeeper(1, nullptr);
     initSound(4, false);
     Vec3f ptrPos;
     ptrPos.set(0.0f, 0.0f, 0.0f);
-    MR::initStarPointerTargetAtJoint(this, "SklRoot", 100.0f, ptrPos);
+    MR::initStarPointerTargetAtJoint(this, "SklRoot", cNum_init_f2, ptrPos);
 
     mScaleCtrl = new AnimScaleController(nullptr);
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleCtrl);
@@ -51,7 +55,7 @@ void TeresaWater::init(const TableIter& rIter) {
     mInitPos.set(mPosition);
     mFarPos.scaleAdd(moveLength, mFront, mInitPos);
     mTarget = &mFarPos;
-    MR::initShadowVolumeCylinder(this, 100.0f);
+    MR::initShadowVolumeCylinder(this, cNum_init_f3);
     initNerve(GET_NERVE(TeresaWater, TeresaWaterNrvMove));
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {

@@ -22,6 +22,58 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_f1, "receiveMsgPush.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_f2, "receiveMsgPush.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f1, "exeWalk.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTrample_f1, "exeTrample.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBecomeAngry_f1, "exeBecomeAngry.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryPursue_f1, "exeAngryPursue.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryEnd_f1, "exeAngryEnd.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWallHitEnd_f1, "exeWallHitEnd.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOverturn_f1, "exeOverturn.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOverturnBound_f1, "exeOverturnBound.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f1, "exeRecover.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHipDropped_f1, "exeHipDropped.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHipDropped_f2, "exeHipDropped.f2", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f15, "init.f15", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f16, "init.f16", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f17, "init.f17", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f18, "init.f18", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f19, "init.f19", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryPursue_f2, "exeAngryPursue.f2", 0.08f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryEnd_f2, "exeAngryEnd.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryEnd_f3, "exeAngryEnd.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNearestInfectionId_f1, "calcNearestInfectionId.f1", 9999999.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setNerveBlow_f1, "setNerveBlow.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_applyPlayerHipDropReaction_f1, "applyPlayerHipDropReaction.f1", 999999.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadAlongRail_f1, "moveHeadAlongRail.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadAlongRail_f2, "moveHeadAlongRail.f2", 0.04f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadAlongRail_f3, "moveHeadAlongRail.f3", 0.08f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadAlongRail_f4, "moveHeadAlongRail.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadAlongRail_f5, "moveHeadAlongRail.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadToPlayer_f1, "moveHeadToPlayer.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveHeadToPlayer_f2, "moveHeadToPlayer.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveBodyAlongHead_f1, "moveBodyAlongHead.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveBodyAlongHead_f2, "moveBodyAlongHead.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveBodyAlongHead_f3, "moveBodyAlongHead.f3", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveBodyAlongHead_f4, "moveBodyAlongHead.f4", 0.5f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_endStarPointerBind_setBckRate_1, "endStarPointerBind.setBckRate.1", 1.0f);
 
@@ -139,14 +191,14 @@ void HanachanParts::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
 
     if (mPartsType == PartsType_Body) {
-        MR::addHitSensorEnemy(this, "body", 32, 85.0f, Vec3f(0.0f, 100.0f, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 32, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     } else if (mPartsType == PartsType_BodyS) {
-        MR::addHitSensorEnemy(this, "body", 32, 85.0f, Vec3f(0.0f, 85.0f, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 32, cNum_init_f3, Vec3f(0.0f, cNum_init_f4, 0.0f));
     } else if (mPartsType == PartsType_Head) {
-        MR::addHitSensorEnemy(this, "body", 32, 85.0f, Vec3f(0.0f, 100.0f, 0.0f));
+        MR::addHitSensorEnemy(this, "body", 32, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
     }
 
-    initBinder(100.0f, 100.0f, 0);
+    initBinder(cNum_init_f7, cNum_init_f8, 0);
 
     initEffectKeeper(1, mPartsType == PartsType_Head ? "HanachanHead" : "HanachanBody");
     MR::addEffect(this, "PointerTouch");
@@ -154,8 +206,8 @@ void HanachanParts::init(const TableIter& /*rIter*/) {
     initSound(2, false);
     MR::invalidateClipping(this);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, 70.0f);
-    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    MR::initShadowVolumeSphere(this, cNum_init_f9);
+    MR::initStarPointerTarget(this, cNum_init_f10, Vec3f(0.0f, cNum_init_f11, 0.0f));
     MR::startBrk(this, "Normal");
 
     if (mPartsType == PartsType_Head) {
@@ -169,7 +221,7 @@ void HanachanParts::kill() {
     MR::emitEffect(this, mPartsType == PartsType_Head ? "HeadDeath" : "BodyDeath");
 
     if (mPartsType == PartsType_Body || mPartsType == PartsType_Head) {
-        MR::appearStarPiece(mHost, mPosition, 2, 10.0f, 40.0f, false);
+        MR::appearStarPiece(mHost, mPosition, 2, cNum_kill_f1, cNum_kill_f2, false);
         MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
     }
 }
@@ -346,7 +398,7 @@ bool HanachanParts::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     } else {
         f32 senderRadius = pSender->mRadius;
         f32 receiverRadius = pReceiver->mRadius;
-        depth = (receiverRadius / 2.0f + senderRadius / 2.0f) - dir.length();
+        depth = (receiverRadius / cNum_receiveMsgPush_f1 + senderRadius / cNum_receiveMsgPush_f2) - dir.length();
 
         if (depth < 0.0f) {
             return false;
@@ -384,7 +436,7 @@ void HanachanParts::exeWalk() {
         mFallVelocity.zero();
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hCommonGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeWalk_f1);
     }
 }
 
@@ -417,7 +469,7 @@ void HanachanParts::exeTrample() {
         mFallVelocity.zero();
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hCommonGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeTrample_f1);
     }
 }
 
@@ -441,7 +493,7 @@ void HanachanParts::exeBecomeAngry() {
         mFallVelocity.zero();
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hCommonGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeBecomeAngry_f1);
     }
 }
 
@@ -471,7 +523,7 @@ void HanachanParts::exeAngryPursue() {
                 mFallVelocity.zero();
             } else {
                 mFallVelocity.add(mGravity * ::hCommonGravity);
-                mFallVelocity.mult(0.98f);
+                mFallVelocity.mult(cNum_exeAngryPursue_f1);
             }
         }
     }
@@ -513,7 +565,7 @@ void HanachanParts::exeAngryEnd() {
         mFallVelocity.zero();
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hCommonGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeAngryEnd_f1);
     }
 }
 
@@ -539,7 +591,7 @@ void HanachanParts::exeWallHitEnd() {
         mFallVelocity.zero();
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hWallHitEndGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeWallHitEnd_f1);
     }
 }
 
@@ -566,7 +618,7 @@ void HanachanParts::exeOverturn() {
         }
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hOverturnGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeOverturn_f1);
     }
 }
 
@@ -590,7 +642,7 @@ void HanachanParts::exeOverturnBound() {
         }
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hOverturnBoundGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeOverturnBound_f1);
     }
 }
 
@@ -649,7 +701,7 @@ void HanachanParts::exeRecover() {
         mFallVelocity.zero();
     } else {
         mFallVelocity.add(*getCommonGravity() * ::hRecoverGravity);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.mult(cNum_exeRecover_f1);
     }
 }
 
@@ -691,8 +743,8 @@ void HanachanParts::exeHipDropped() {
 
         mFallVelocity.zero();
     } else {
-        mFallVelocity.add(*getCommonGravity() * 2.0f);
-        mFallVelocity.mult(0.98f);
+        mFallVelocity.add(*getCommonGravity() * cNum_exeHipDropped_f1);
+        mFallVelocity.mult(cNum_exeHipDropped_f2);
     }
 }
 
@@ -807,13 +859,13 @@ void Hanachan::init(const TableIter& rIter) {
     MR::moveTransToOtherActorRailPos(mBodyParts[0], this);
     MR::reverseRailDirection(this);
 
-    MR::moveCoord(this, mBodyParts[0]->getSensor("body")->getRadius() / 2.0f + mBodyParts[1]->getSensor("body")->getRadius() / 2.0f);
+    MR::moveCoord(this, mBodyParts[0]->getSensor("body")->getRadius() / cNum_init_f12 + mBodyParts[1]->getSensor("body")->getRadius() / cNum_init_f13);
     MR::moveTransToOtherActorRailPos(mBodyParts[1], this);
-    MR::moveCoord(this, mBodyParts[1]->getSensor("body")->getRadius() / 2.0f + mBodyParts[2]->getSensor("body")->getRadius() / 2.0f);
+    MR::moveCoord(this, mBodyParts[1]->getSensor("body")->getRadius() / cNum_init_f14 + mBodyParts[2]->getSensor("body")->getRadius() / cNum_init_f15);
     MR::moveTransToOtherActorRailPos(mBodyParts[2], this);
-    MR::moveCoord(this, mBodyParts[2]->getSensor("body")->getRadius() / 2.0f + mBodyParts[3]->getSensor("body")->getRadius() / 2.0f);
+    MR::moveCoord(this, mBodyParts[2]->getSensor("body")->getRadius() / cNum_init_f16 + mBodyParts[3]->getSensor("body")->getRadius() / cNum_init_f17);
     MR::moveTransToOtherActorRailPos(mBodyParts[3], this);
-    MR::moveCoord(this, mBodyParts[3]->getSensor("body")->getRadius() / 2.0f + mBodyParts[4]->getSensor("body")->getRadius() / 2.0f);
+    MR::moveCoord(this, mBodyParts[3]->getSensor("body")->getRadius() / cNum_init_f18 + mBodyParts[4]->getSensor("body")->getRadius() / cNum_init_f19);
     MR::moveTransToOtherActorRailPos(mBodyParts[4], this);
     MR::reverseRailDirection(this);
 
@@ -937,7 +989,7 @@ void Hanachan::exeAngryPursue() {
     MR::startLevelSound(this, "SE_EM_LV_HANACHAN_MOVE_ANGRY");
 
     if (mIsChasePlayer) {
-        moveHeadToPlayer(::hAngrySpeed, 0.08f);
+        moveHeadToPlayer(::hAngrySpeed, cNum_exeAngryPursue_f2);
     } else {
         moveHeadAlongRail(::hAngrySpeed);
     }
@@ -965,7 +1017,7 @@ void Hanachan::exeAngryEnd() {
     mBodyParts[0]->mPushVelocity.add(mFrontDir * speed);
 
     HanachanParts* pHead = mBodyParts[0];
-    MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, 0.5f, 0.5f);
+    MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, cNum_exeAngryEnd_f2, cNum_exeAngryEnd_f3);
 
     moveBodyAlongHead();
     applyPlayerHipDropReaction();
@@ -1138,7 +1190,7 @@ void Hanachan::endStarPointerBind() {
 }
 
 s32 Hanachan::calcNearestInfectionId() {
-    f32 nearestDist = 9999999.0f;
+    f32 nearestDist = cNum_calcNearestInfectionId_f1;
     s32 nearestId = -1;
 
     for (s32 i = 0; i < mBodyParts.size(); i++) {
@@ -1177,7 +1229,7 @@ void Hanachan::setNerveBlow(const Vec3f& rPos) {
 
     f32 angle = ::hInitBlowRadian;
     f32 numSegments = mBodyParts.size() > 1 ? static_cast< f32 >(mBodyParts.size() - 1) : 1.0f;
-    f32 angleStep = (MR::pi() - ::hInitBlowRadian * 2.0f) / numSegments;
+    f32 angleStep = (MR::pi() - ::hInitBlowRadian * cNum_setNerveBlow_f1) / numSegments;
     Vec3f blow;
     Vec3f up;
 
@@ -1207,7 +1259,7 @@ void Hanachan::applyPlayerHipDropReaction() {
     if (MR::isPlayerHipDropLand()) {
         mAttackPos.set(*MR::getPlayerCenterPos());
 
-        f32 nearestDist = 999999.0f;
+        f32 nearestDist = cNum_applyPlayerHipDropReaction_f1;
 
         for (s32 i = 0; i < mBodyParts.size(); i++) {
             f32 dist = MR::calcDistanceToPlayer(mBodyParts[i]);
@@ -1267,21 +1319,21 @@ void Hanachan::moveHeadAlongRail(f32 speed) {
     mBodyParts[0]->mRotationQuat.getZDir(mFrontDir);
 
     Vec3f railDir;
-    f32 dist = MR::calcMovingDirectionAlongRail(this, &railDir, mBodyParts[0]->mPosition, 800.0f, false, nullptr);
+    f32 dist = MR::calcMovingDirectionAlongRail(this, &railDir, mBodyParts[0]->mPosition, cNum_moveHeadAlongRail_f1, false, nullptr);
     if (::hFarDistToPursuePlayer < dist) {
-        moveHeadToPlayer(speed, 0.04f);
+        moveHeadToPlayer(speed, cNum_moveHeadAlongRail_f2);
     } else {
         MR::vecKillElement(railDir, mBodyParts[0]->mGravity, &railDir);
         MR::normalizeOrZero(&railDir);
 
         if (!MR::isNearZero(railDir)) {
-            MR::turnVecToVecRadian(&mFrontDir, mFrontDir, railDir, 0.08f, mBodyParts[0]->mGravity);
+            MR::turnVecToVecRadian(&mFrontDir, mFrontDir, railDir, cNum_moveHeadAlongRail_f3, mBodyParts[0]->mGravity);
         }
 
         mBodyParts[0]->mPushVelocity.add(mFrontDir * speed);
 
         HanachanParts* pHead = mBodyParts[0];
-        MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, 0.5f, 0.5f);
+        MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, cNum_moveHeadAlongRail_f4, cNum_moveHeadAlongRail_f5);
     }
 }
 
@@ -1295,7 +1347,7 @@ void Hanachan::moveHeadToPlayer(f32 speed, f32 turnSpeed) {
     mBodyParts[0]->mPushVelocity.add(mFrontDir * speed);
 
     HanachanParts* pHead = mBodyParts[0];
-    MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, 0.5f, 0.5f);
+    MR::blendQuatUpFront(&pHead->mRotationQuat, -pHead->mGravity, mFrontDir, cNum_moveHeadToPlayer_f1, cNum_moveHeadToPlayer_f2);
 }
 
 Vec3f Hanachan::calcSensorDirection(const HitSensor* pSensor, const HitSensor* pTarget) const {
@@ -1311,8 +1363,8 @@ void Hanachan::moveBodyAlongHead() {
         toPrev.sub(mBodyParts[i]->getSensor("body")->mPosition);
 
         Vec3f push = -toPrev;
-        push.setLength(::hCollideRange + mBodyParts[i - 1]->getSensor("body")->getRadius() / 2.0f +
-                       mBodyParts[i]->getSensor("body")->getRadius() / 2.0f);
+        push.setLength(::hCollideRange + mBodyParts[i - 1]->getSensor("body")->getRadius() / cNum_moveBodyAlongHead_f1 +
+                       mBodyParts[i]->getSensor("body")->getRadius() / cNum_moveBodyAlongHead_f2);
 
         mBodyParts[i]->mPushVelocity.add(toPrev + push);
 
@@ -1321,6 +1373,6 @@ void Hanachan::moveBodyAlongHead() {
         HitSensor* pSensor = mBodyParts[i]->getSensor("body");
         Quat4f* pRotation = &mBodyParts[i]->mRotationQuat;
 
-        MR::blendQuatUpFront(pRotation, -*grav, calcSensorDirection(pSensor, pTarget), 0.3f, 0.5f);
+        MR::blendQuatUpFront(pRotation, -*grav, calcSensorDirection(pSensor, pTarget), cNum_moveBodyAlongHead_f3, cNum_moveBodyAlongHead_f4);
     }
 }

@@ -18,6 +18,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_RemovableTurtle_f1, "RemovableTurtle.f1", 5.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RemovableTurtle_f2, "RemovableTurtle.f2", 68.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_RemovableTurtle_f3, "RemovableTurtle.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 500.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_isPullRange_isNearPlayer_1, "isPullRange.isNearPlayer.1", 450.0f);
 
@@ -50,7 +60,7 @@ RemovableTurtle::RemovableTurtle(LiveActor* pHost, bool isGolden) {
     }
 
     mShellModel->mIsShownWhileHostHidden = true;
-    mShellModel->initFixedPosition(Vec3f(-5.85f, -68.0f, 30.0f), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
+    mShellModel->initFixedPosition(Vec3f(-cNum_RemovableTurtle_f1, -cNum_RemovableTurtle_f2, cNum_RemovableTurtle_f3), Vec3f(0.0f, 0.0f, 0.0f), nullptr);
     mShellModel->initWithoutIter();
     mShellModel->makeActorDead();
 
@@ -93,15 +103,15 @@ void Penguin::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
 
     initHitSensor(1);
-    MR::addHitSensorMtxNpc(this, "push", 8, 80.0f, MR::getJointMtx(this, "CenterJoint"), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMtxNpc(this, "push", 8, cNum_init_f1, MR::getJointMtx(this, "CenterJoint"), Vec3f(0.0f, 0.0f, 0.0f));
 
     initEffectKeeper(0, nullptr);
     initSound(4, false);
 
-    MR::initShadowVolumeSphere(this, 50.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f2);
     MR::onCalcShadowOneTime(this, nullptr);
 
-    initTalkCtrl(rIter, "Penguin", Vec3f(0.0f, 150.0f, 0.0f), nullptr);
+    initTalkCtrl(rIter, "Penguin", Vec3f(0.0f, cNum_init_f3, 0.0f), nullptr);
 
     NPCActorCaps caps("");
     caps.mLodCtrl = true;
@@ -139,7 +149,7 @@ void Penguin::init(const TableIter& rIter) {
         mParam.setTalkAction("Talk", "TalkTurn");
         setTalkAction("Walk");
         mRailSpeed = ::sSpeedWalk;
-        mMoveTalkBckRate = 2.0f;  // talkBckRate?
+        mMoveTalkBckRate = cNum_init_f4;  // talkBckRate?
         mIsRailOnGround = true;  // follow rail on ground
         mUseReactionActions = true;
         break;
@@ -192,7 +202,7 @@ void Penguin::initAfterPlacement() {
         Vec3f pos;
         Vec3f grav = mGravity;
         Triangle triangle;
-        if (MR::getFirstPolyOnLineToWaterSurface(&pos, &triangle, mPosition - grav * 100.0f, grav * 500.0f)) {
+        if (MR::getFirstPolyOnLineToWaterSurface(&pos, &triangle, mPosition - grav * cNum_initAfterPlacement_f1, grav * cNum_initAfterPlacement_f2)) {
             mPosition.set(pos);
         }
 

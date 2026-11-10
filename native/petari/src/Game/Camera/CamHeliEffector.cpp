@@ -4,6 +4,12 @@
 #include "Game/Player/MarioActor.hpp"  // DO NOT REMOVE
 #include "Game/Util/MathUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 6.0f);
 
 CamHeliEffector::CamHeliEffector() : mStep(), mRate() {
 }
@@ -16,9 +22,9 @@ void CamHeliEffector::update(CameraMan* pCamera) {
         }
 
         f32 rate = mRate;
-        rate *= 0.98f;
+        rate *= cNum_update_f1;
         mRate = rate;
-        if (rate < 0.001f) {
+        if (rate < cNum_update_f2) {
             mRate = 0.0f;
         }
     } else {
@@ -45,12 +51,12 @@ void CamHeliEffector::update(CameraMan* pCamera) {
     MR::normalize(&direction);
 
     f32 angle = direction.angle(up);
-    if (angle < MR::pi() / 6.0f) {
+    if (angle < MR::pi() / cNum_update_f3) {
         return;
     }
 
     Quat4f quat;
-    const f32 rate = (angle - MR::pi() / 6.0f) / angle;
+    const f32 rate = (angle - MR::pi() / cNum_update_f4) / angle;
     quat.setRotate(direction, up, rate * mRate);
     quat.transform(diff);
 

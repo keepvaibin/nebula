@@ -23,6 +23,12 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_resetPlayerPosTombSpider_f1, "resetPlayerPosTombSpider.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isRotateLeftToPlayer_f1, "isRotateLeftToPlayer.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRotateSpeedToPlayer_f1, "calcRotateSpeedToPlayer.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRotateSpeedToPlayer_f2, "calcRotateSpeedToPlayer.f2", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRotateSpeedToPlayer_f3, "calcRotateSpeedToPlayer.f3", 360.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sPlanetInsideRadius, 1800.0f);
 };  // namespace
@@ -358,7 +364,7 @@ void TombSpiderFunction::resetPlayerPosTombSpider(const TombSpider* pParent, boo
 
     if (useCurrentPos && !MR::isNearZero(dirOut)) {
         MR::normalize(&dirOut);
-        pos.set(pParent->mPosition + dirOut * (::sPlanetInsideRadius - 200.0f));
+        pos.set(pParent->mPosition + dirOut * (::sPlanetInsideRadius - cNum_resetPlayerPosTombSpider_f1));
     }
 
     Vec3f up;
@@ -371,7 +377,7 @@ void TombSpiderFunction::resetPlayerPosTombSpider(const TombSpider* pParent, boo
 
 bool TombSpiderFunction::isRotateLeftToPlayer(const TombSpider* pParent) {
     Vec2f frontXY(1.0f, 0.0f);
-    MR::rotateVecDegree(&frontXY, pParent->mRotation.z - 90.0f);
+    MR::rotateVecDegree(&frontXY, pParent->mRotation.z - cNum_isRotateLeftToPlayer_f1);
     Vec3f front(frontXY.x, frontXY.y, 0.0f);
     Vec3f dir(*MR::getPlayerPos());
     dir.sub(pParent->mPosition);
@@ -382,15 +388,15 @@ bool TombSpiderFunction::isRotateLeftToPlayer(const TombSpider* pParent) {
 // Unwraps the rotation by a turn so the step toward the player's angle goes the way isRotateLeftToPlayer says.
 f32 TombSpiderFunction::calcRotateSpeedToPlayer(TombSpider* pParent, s32 ratio) {
     MR::repeatDegree(&pParent->mRotation.z);
-    f32 angle = MR::repeatDegree(MR::calcRotateZ(pParent->mPosition, *MR::getPlayerPos()) + 90.0f);
+    f32 angle = MR::repeatDegree(MR::calcRotateZ(pParent->mPosition, *MR::getPlayerPos()) + cNum_calcRotateSpeedToPlayer_f1);
 
     if (isRotateLeftToPlayer(pParent)) {
         if (angle < pParent->getRotate()) {
-            pParent->mRotation.z -= 360.0f;
+            pParent->mRotation.z -= cNum_calcRotateSpeedToPlayer_f2;
         }
     } else {
         if (angle > pParent->getRotate()) {
-            pParent->mRotation.z += 360.0f;
+            pParent->mRotation.z += cNum_calcRotateSpeedToPlayer_f3;
         }
     }
 

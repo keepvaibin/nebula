@@ -6,6 +6,9 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace NrvLavaHomeVolcanoFlow {
     NEW_NERVE(HostTypeWait, LavaHomeVolcanoFlow, Wait);
@@ -21,7 +24,7 @@ void LavaHomeVolcanoFlow::init(const TableIter& rIter) {
     initModelManagerWithAnm("LavaHomeVolcanoFlow", nullptr, false);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     initNerve(GET_NERVE(LavaHomeVolcanoFlow, HostTypeWait));
     MR::needStageSwitchReadA(this, rIter);
     MR::connectToSceneMapObj(this);

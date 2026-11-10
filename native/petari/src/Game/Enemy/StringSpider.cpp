@@ -29,6 +29,65 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactPointer_f1, "reactPointer.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactPointer_f2, "reactPointer.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactStringForce_f1, "reactStringForce.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactStringForce_f2, "reactStringForce.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactStringForce_f3, "reactStringForce.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPosture_f1, "calcPosture.f1", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDownStart_f1, "exeDownStart.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDownEnd_f1, "exeDownEnd.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f1, "exeDown.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f2, "exeDown.f2", 230.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeUp_f1, "exeUp.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeUp_f2, "exeUp.f2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_f1, "exeSearch.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_f2, "exeSearch.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_f3, "exeSearch.f3", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_f4, "exeSearch.f4", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_f5, "exeSearch.f5", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_f6, "exeSearch.f6", 1600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_f1, "exeAttack.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_f2, "exeAttack.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_f3, "exeAttack.f3", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f1, "exeHit.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinned_f1, "exeSpinned.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinned_f2, "exeSpinned.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinned_f3, "exeSpinned.f3", 24.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinned_f4, "exeSpinned.f4", 51.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinned_f5, "exeSpinned.f5", 0.6f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinned_f6, "exeSpinned.f6", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTrampleFall_f1, "exeTrampleFall.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerGripped_f1, "exePointerGripped.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerGripped_f2, "exePointerGripped.f2", 0.125f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerGripped_f3, "exePointerGripped.f3", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerGripped_f4, "exePointerGripped.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerGripped_f5, "exePointerGripped.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointerGripped_f6, "exePointerGripped.f6", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_extendString_f1, "extendString.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f3, "attackSensor.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f4, "attackSensor.f4", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f5, "attackSensor.f5", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f6, "attackSensor.f6", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_f1, "receiveMsgPush.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startSwingLevelSound_f1, "startSwingLevelSound.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startSwingLevelSound_f2, "startSwingLevelSound.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 0.063f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_1, "control.reboundVelocityFromCollision.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_reboundVelocityFromCollision_2, "control.reboundVelocityFromCollision.2", 0.0f);
@@ -132,14 +191,14 @@ void StringSpider::init(const TableIter& rIter) {
 
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
-    initBinder(80.0f * mScale.y, 0.0f, 0);
+    initBinder(cNum_init_f1 * mScale.y, 0.0f, 0);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, mScale.y * 80.0f, Vec3f(0.0f, -13.0f, 13.0f));
+    MR::addHitSensorEnemy(this, "body", 32, mScale.y * cNum_init_f2, Vec3f(0.0f, -cNum_init_f3, cNum_init_f4));
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(StringSpider, HostTypeNrvWait));
-    MR::initStarPointerTarget(this, 80.0f, Vec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0, 0, 0));
     MR::declareStarPiece(this, 6);
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
@@ -152,10 +211,10 @@ void StringSpider::init(const TableIter& rIter) {
     s32 shadowLength = -1;
     MR::getPlacementArg2NoInit(rIter, &shadowLength);
     if (shadowLength > 0) {
-        MR::initShadowVolumeCylinder(this, mScale.y * 80.0f);
+        MR::initShadowVolumeCylinder(this, mScale.y * cNum_init_f6);
         MR::setShadowDropLength(this, nullptr, shadowLength);
     } else {
-        MR::initShadowVolumeSphere(this, mScale.y * 80.0f);
+        MR::initShadowVolumeSphere(this, mScale.y * cNum_init_f7);
     }
 
     mFixedPos = new FixedPosition(static_cast< MtxPtr >(nullptr),Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
@@ -172,9 +231,9 @@ void StringSpider::initAfterPlacement() {
     Triangle triangle = Triangle();
     Vec3f rootPos, upVec, localRootPos;
     MR::calcUpVec(&upVec, this);
-    upVec.setLength(200.0f);
+    upVec.setLength(cNum_initAfterPlacement_f1);
 
-    if (MR::getFirstPolyOnLineToMap(&rootPos, &triangle, mPosition - upVec * 0.5f, upVec)) {
+    if (MR::getFirstPolyOnLineToMap(&rootPos, &triangle, mPosition - upVec * cNum_initAfterPlacement_f2, upVec)) {
         triangle.getBaseInvMtx()->mult(rootPos, localRootPos);
         MR::resetPosition(mString, rootPos);
         mFixedPos->setBaseMtx(triangle.getBaseMtx()->mMtx);
@@ -271,13 +330,13 @@ void StringSpider::reactPointer() {
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         if (!mIsPointerPulled && mPointerStep == 0) {
             Vec2f screenVel = *MR::getStarPointerScreenVelocity(1);
-            if (screenVel.length() < 20.0f) {
+            if (screenVel.length() < cNum_reactPointer_f1) {
                 return;
             }
 
             Vec3f flick;
             MR::getStarPointerWorldVelocityDirection(&flick, 1);
-            flick.setLength(15.0f);
+            flick.setLength(cNum_reactPointer_f2);
             mVelocity.add(flick);
             mIsPointerPulled = true;
             Vec3f hitPos(mPosition);
@@ -299,16 +358,16 @@ void StringSpider::reactStringForce() {
     f32 distance;
     Vec3f toRoot;
     if (isOverStringLength(&toRoot, &distance)) {
-        if ((1000.0f + mStringLength) < distance) {
+        if ((cNum_reactStringForce_f1 + mStringLength) < distance) {
             kill();
         } else {
             MR::normalizeOrZero(&toRoot);
             if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvPointerGripped))) {
-                MR::calcReflectionVector(&mVelocity, toRoot, 0.25f, 1.0f);
+                MR::calcReflectionVector(&mVelocity, toRoot, cNum_reactStringForce_f2, 1.0f);
             }
 
             f32 excess = distance - mStringLength;
-            mVelocity += toRoot * excess * 0.1f;
+            mVelocity += toRoot * excess * cNum_reactStringForce_f3;
         }
     }
 }
@@ -374,7 +433,7 @@ void StringSpider::calcPosture(f32 upRate, bool isFacePlayer) {
             }
         }
 
-        MR::blendQuatUpFront(&mPoseQuat, toRoot, front, upRate, 0.03f);
+        MR::blendQuatUpFront(&mPoseQuat, toRoot, front, upRate, cNum_calcPosture_f1);
     }
 }
 
@@ -384,7 +443,7 @@ void StringSpider::exeWait() {
         MR::startBck(this, "Wait");
     }
 
-    calcPosture(0.25f, false);
+    calcPosture(cNum_exeWait_f1, false);
     f32 distance = MR::calcDistanceToPlayer(this);
 
     // Drops on switch A when it has one, else when the player comes near.
@@ -406,7 +465,7 @@ void StringSpider::exeDownStart() {
         MR::startBck(this, "DownStart");
     }
 
-    calcPosture(0.25f, false);
+    calcPosture(cNum_exeDownStart_f1, false);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvDown));
@@ -418,7 +477,7 @@ void StringSpider::exeDownEnd() {
         MR::startBck(this, "DownEnd");
     }
 
-    calcPosture(0.25f, false);
+    calcPosture(cNum_exeDownEnd_f1, false);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
@@ -431,11 +490,11 @@ void StringSpider::exeDown() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_DOWN");
-    calcPosture(0.25f, true);
+    calcPosture(cNum_exeDown_f1, true);
     extendString();
     f32 distance;
     bool isOver = isOverStringLength(nullptr, &distance);
-    if ((mStringLengthMax - 230.0f) < distance) {
+    if ((mStringLengthMax - cNum_exeDown_f2) < distance) {
         MR::tryStartBck(this, "PreDownEnd");
     }
 
@@ -450,12 +509,12 @@ void StringSpider::exeUp() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_UP");
-    calcPosture(0.25f, true);
+    calcPosture(cNum_exeUp_f1, true);
 
     if (MR::calcDistanceToPlayer(this) < cNoticeDistance) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvDownStart));
     } else {
-        shortenString(5.0f);
+        shortenString(cNum_exeUp_f2);
         if (mStringLength == (cMinStringRate * mStringLengthMax)) {
             setNerve(GET_NERVE(StringSpider, HostTypeNrvWait));
         }
@@ -467,27 +526,27 @@ void StringSpider::exeSearch() {
         MR::startBck(this, "Wait");
     }
 
-    calcPosture(0.25f, true);
+    calcPosture(cNum_exeSearch_f1, true);
 
     if (MR::isBindedWallOfMap(this) || MR::isBindedGround(this)) {
-        shortenString(40.0f);
+        shortenString(cNum_exeSearch_f2);
     } else {
         extendString();
     }
 
     // Swings harder within 800 and attacks after a while; goes back up beyond 1600 unless switch A holds it down.
     f32 distance = MR::calcDistanceToPlayer(this);
-    if (distance < 800.0f) {
-        doSwingAction(0.2f, true);
+    if (distance < cNum_exeSearch_f3) {
+        doSwingAction(cNum_exeSearch_f4, true);
         if (MR::isGreaterStep(this, getSearchToAttackTime())) {
             setNerve(GET_NERVE(StringSpider, HostTypeNrvAttack));
             return;
         }
     } else {
-        doSwingAction(0.05f, true);
+        doSwingAction(cNum_exeSearch_f5, true);
     }
 
-    if ((!MR::isValidSwitchA(this) || !MR::isOnSwitchA(this)) && 1600.0f < distance) {
+    if ((!MR::isValidSwitchA(this) || !MR::isOnSwitchA(this)) && cNum_exeSearch_f6 < distance) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvUp));
     }
 }
@@ -497,15 +556,15 @@ void StringSpider::exeAttack() {
         MR::startBck(this, "Wait");
     }
 
-    calcPosture(0.25f, true);
+    calcPosture(cNum_exeAttack_f1, true);
 
     if (MR::isBindedWallOfMap(this) || MR::isBindedGround(this)) {
-        shortenString(40.0f);
+        shortenString(cNum_exeAttack_f2);
     } else {
         extendString();
     }
 
-    doSwingAction(0.8f, false);
+    doSwingAction(cNum_exeAttack_f3, false);
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
@@ -518,7 +577,7 @@ void StringSpider::exeHit() {
         MR::startSound(this, "SE_EV_STRSPIDER_HIT");
     }
 
-    calcPosture(0.25f, true);
+    calcPosture(cNum_exeHit_f1, true);
     extendString();
 
     if (MR::isBckStopped(this)) {
@@ -542,20 +601,20 @@ void StringSpider::exeSpinned() {
         if (circle.dot(mVelocity) < 0.0f) {
             circle = -circle;
         }
-        circle.setLength(0.3f * (rest));
+        circle.setLength(cNum_exeSpinned_f1 * (rest));
         mVelocity.add(circle);
     }
 
-    f32 volume = MR::getLinerValueFromMinMax(rest, 0.0f, 1.0f, cSpinMinVolume, 100.0f);
-    f32 subLevel = MR::getLinerValueFromMinMax(rate, 0.0f, 1.0f, cSpinMinSubLevel, 24.0f);
-    if (volume >= 51.0f) {
+    f32 volume = MR::getLinerValueFromMinMax(rest, 0.0f, 1.0f, cSpinMinVolume, cNum_exeSpinned_f2);
+    f32 subLevel = MR::getLinerValueFromMinMax(rate, 0.0f, 1.0f, cSpinMinSubLevel, cNum_exeSpinned_f3);
+    if (volume >= cNum_exeSpinned_f4) {
         MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_SPIN", volume, subLevel, -1);
     }
 
     Quat4f spin;
-    spin.setRotate(Vec3f(0, 1, 0), (-0.6f * rest));
+    spin.setRotate(Vec3f(0, 1, 0), (-cNum_exeSpinned_f5 * rest));
     NebulaQuatMultiply(mPoseQuat, spin, mPoseQuat);
-    calcPosture(0.25f, false);
+    calcPosture(cNum_exeSpinned_f6, false);
 
     if (MR::isGreaterStep(this, cSpinnedSteps)) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
@@ -567,7 +626,7 @@ void StringSpider::exeTrampleFall() {
         MR::startBck(this, "Press");
         MR::startSound(this, "SE_EM_STOMPED_S");
         MR::startSound(this, "SE_EV_STRSPIDER_DEAD");
-        MR::calcReflectionVector(&mVelocity, mGravity, 0.25f, 1.0f);
+        MR::calcReflectionVector(&mVelocity, mGravity, cNum_exeTrampleFall_f1, 1.0f);
         MR::setBinderRadius(this, cNum_exeTrampleFall_setBinderRadius_1);
     }
 
@@ -613,18 +672,18 @@ void StringSpider::exePointerGripped() {
     if (!MR::isHeldJump(channel)) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
     } else {
-        calcPosture(0.25f, false);
+        calcPosture(cNum_exePointerGripped_f1, false);
         Vec3f pointerPos;
         MR::calcStarPointerWorldPointingPosInsideEdge(&pointerPos, mPosition, channel);
         Vec3f drag(pointerPos);
         drag.sub(mPosition);
-        drag.setLength(MR::clamp(0.125f * drag.length(), 0.0f, 25.0f));
+        drag.setLength(MR::clamp(cNum_exePointerGripped_f2 * drag.length(), 0.0f, cNum_exePointerGripped_f3));
         mVelocity.set(drag);
         f32 distance;
         isOverStringLength(nullptr, &distance);
 
-        if ((100.0f + mStringLength) < distance) {
-            MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
+        if ((cNum_exePointerGripped_f4 + mStringLength) < distance) {
+            MR::appearStarPiece(this, mPosition, 3, cNum_exePointerGripped_f5, cNum_exePointerGripped_f6, false);
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
             setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
             MR::tryRumblePadStrong(this, channel);
@@ -643,7 +702,7 @@ void StringSpider::tearDownPointerGripped() {
 }
 
 void StringSpider::extendString() {
-    mStringLength += 100.0f;
+    mStringLength += cNum_extendString_f1;
     mStringLength = MR::clamp(mStringLength, cMinStringRate * mStringLengthMax, mStringLengthMax);
 }
 
@@ -688,7 +747,7 @@ void StringSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             return;
         }
 
-        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
+        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1)) {
             MR::sendMsgPush(pReceiver, pSender);
             return;
         }
@@ -699,25 +758,25 @@ void StringSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         // Hit the player: bounces back, 10 away along the floor and 13 up.
-        MR::calcReflectionVector(&mVelocity, away, 0.25f, 1.0f);
+        MR::calcReflectionVector(&mVelocity, away, cNum_attackSensor_f2, 1.0f);
         Vec3f bounce(pSender->mPosition);
         bounce.sub(pReceiver->mPosition);
         MR::vecKillElement(bounce, mGravity, &bounce);
         MR::normalizeOrZero(&bounce);
 
         if (!MR::isNearZero(bounce)) {
-            bounce.scale(10.0f);
+            bounce.scale(cNum_attackSensor_f3);
             Vec3f up(mGravity);
-            up.scale(13.0f);
+            up.scale(cNum_attackSensor_f4);
             bounce.sub(up);
             mVelocity.add(bounce);
             setNerve(GET_NERVE(StringSpider, HostTypeNrvHit));
         }
     } else if (MR::isSensorEnemy(pReceiver) && MR::sendMsgPush(pReceiver, pSender)) {
-        MR::calcReflectionVector(&mVelocity, away, 0.25f, 1.0f);
+        MR::calcReflectionVector(&mVelocity, away, cNum_attackSensor_f5, 1.0f);
         f32 speed = mVelocity.length();
 
-        if (speed >= 3.0f) {
+        if (speed >= cNum_attackSensor_f6) {
             MR::startSound(this, "SE_EM_STRSPIDER_COLLISION", MR::getLinerValueFromMinMax(speed, 0.0f, cCollisionFullSpeed, 0.0f, cCollisionMaxVolume),
                            -1);
         }
@@ -800,7 +859,7 @@ bool StringSpider::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     Vec3f push(pReceiver->mPosition);
     push.sub(pSender->mPosition);
     f32 distance = push.length();
-    push.setLength(0.5f * ((pReceiver->mRadius + pSender->mRadius) - distance));
+    push.setLength(cNum_receiveMsgPush_f1 * ((pReceiver->mRadius + pSender->mRadius) - distance));
 
     if (mSwingSide != nullptr) {
         MR::vecKillElement(push, *mSwingSide, &push);
@@ -839,8 +898,8 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
         MR::normalizeOrZero(&bounce);
 
         if (!MR::isNearZero(bounce)) {
-            bounce *= 10.0f;
-            bounce -= mGravity * 13.0f;
+            bounce *= cNum_receiveMsgPlayerAttack_f1;
+            bounce -= mGravity * cNum_receiveMsgPlayerAttack_f2;
             mVelocity += bounce;
         }
 
@@ -891,8 +950,8 @@ bool StringSpider::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSenso
 
 void StringSpider::startSwingLevelSound() {
     f32 speed = mVelocity.length();
-    s32 volume1 = 100.0f * MR::getLinerValueFromMinMax(speed, cSwing1MinSpeed, cSwing1MaxSpeed, 0.0f, 1.0f);
-    s32 volume2 = 100.0f * MR::getLinerValueFromMinMax(speed, cSwing2MinSpeed, cSwing2MaxSpeed, 0.0f, 1.0f);
+    s32 volume1 = cNum_startSwingLevelSound_f1 * MR::getLinerValueFromMinMax(speed, cSwing1MinSpeed, cSwing1MaxSpeed, 0.0f, 1.0f);
+    s32 volume2 = cNum_startSwingLevelSound_f2 * MR::getLinerValueFromMinMax(speed, cSwing2MinSpeed, cSwing2MaxSpeed, 0.0f, 1.0f);
     MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_SWING1", volume1);
     MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_SWING2", volume2);
 }
@@ -909,7 +968,7 @@ void StringSpiderString::calcAndSetBaseMtx() {
     Vec3f toSpider(mPosition);
     toSpider.sub(mRootPos);
     MR::separateScalarAndDirection(&scale.y, &toSpider, toSpider);
-    scale.y *= 0.063f;
+    scale.y *= cNum_calcAndSetBaseMtx_f1;
 
     if (MR::isOppositeDirection(Vec3f(0, 1, 0), toSpider)) {
         mRotateQuat.setRotate(Vec3f(1, 0, 0), MR::pi());

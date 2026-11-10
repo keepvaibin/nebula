@@ -5,6 +5,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setNumber_f1, "setNumber.f1", 128.0f);
 
 namespace NrvFullnessMeter {
     NEW_NERVE(FullnessMeterNrvAppear, FullnessMeter, Appear);
@@ -37,7 +40,7 @@ void FullnessMeter::setNumber(s32 num) {
 
     // A target of 0 or less (placement data) is already full, not a division by 0.
     const f32 fullness = mNumberMax > 0 ? static_cast< f32 >(mNumber) / mNumberMax : 1.0f;
-    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - fullness)));
+    s32 frame = 128 - (u16)(s32)((cNum_setNumber_f1 * (1.0f - fullness)));
 
     MR::startPaneAnim(this, "TargetMeter", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "TargetMeter", frame, 0);

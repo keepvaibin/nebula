@@ -9,6 +9,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
 
 namespace {
     struct LineCheckParam {
@@ -85,9 +90,9 @@ void SandUpDownEffectObj::init(const TableIter& rIter) {
     mLineOffset = pLineParam->mLineOffset;
     mLineLength = pLineParam->mLineLength;
     mTriFilter = MR::createTriangleFilterFunc(&::isNotGroundCodeNoStampSand);
-    mClippingCenter.scaleAdd(mLineOffset - mLineLength * 0.5f, yDir, mPosition);
+    mClippingCenter.scaleAdd(mLineOffset - mLineLength * cNum_init_f1, yDir, mPosition);
 
-    MR::setClippingTypeSphere(this, mLineLength * 0.5f + 100.0f, &mClippingCenter);
+    MR::setClippingTypeSphere(this, mLineLength * cNum_init_f2 + cNum_init_f3, &mClippingCenter);
     initNerve(GET_NERVE(SandUpDownEffectObj, SandUpDownEffectObjNrvWait));
     makeActorAppeared();
 }

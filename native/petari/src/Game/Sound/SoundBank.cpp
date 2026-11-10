@@ -1,5 +1,11 @@
 #include "Game/Sound/SoundBank.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_effects_f1, "effects.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_effects_f2, "effects.f2", 0.9999999f);
+NEBULA_TUNABLE_NAMED(f64, cNum_effects_f3, "effects.f3", 0.5);
+NEBULA_TUNABLE_NAMED(f32, cNum_prepareNote_f1, "prepareNote.f1", 523.0005f);
 
 namespace {
     // The envelope of a drum and of a program with none: full at once, cut at release.
@@ -142,7 +148,7 @@ void SoundBank::effects(u32 first, u32 count, s32 key, s32 velocity, FastRandom*
         const BankEffect& rEffect = mEffects[first + i];
         f32 value;
         if (rEffect.mKind == BankEffect::RANDOM) {
-            value = 2.0f * pRandom->getRandF() - 0.9999999f;
+            value = cNum_effects_f1 * pRandom->getRandF() - cNum_effects_f2;
             value *= rEffect.mRange;
             value += rEffect.mBase;
         } else {
@@ -175,7 +181,7 @@ void SoundBank::effects(u32 first, u32 count, s32 key, s32 velocity, FastRandom*
             pOut->mSound.mPitch *= value;
             break;
         case 2:
-            pOut->mSound.mPan += value - 0.5;
+            pOut->mSound.mPan += value - cNum_effects_f3;
             break;
         case 3:
             pOut->mSound.mFxMix += value;
@@ -251,7 +257,7 @@ bool SoundBanks::prepareNote(const SoundBank* pBank, const WaveBank* pWaves, s32
         pNote->mPriority = priority;
         pNote->mOscillatorWave = static_cast< u32 >(program - 0xf0);
         pNote->mKind = Note::KIND_OSC;
-        pNote->mSourceRate = 523.0005f;
+        pNote->mSourceRate = cNum_prepareNote_f1;
         pNote->mKey = static_cast< s16 >(key - pNote->mBaseKey);
         pNote->mVelocity = velocity;
         pNote->mOsc[0].initStart(&cOscEnvelope);

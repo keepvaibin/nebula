@@ -4,8 +4,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_tryGenItem_f1, "tryGenItem.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryGenItem_f2, "tryGenItem.f2", 40.0f);
+
 namespace {
-    const Vec sSensorOffset = {55.0f, 170.0f, -100.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sSensorOffset, {55.0f, 170.0f, -100.0f});
     NEBULA_TUNABLE(f32, sSensorRadius, 70.0f);
 };  // namespace
 
@@ -65,7 +68,7 @@ bool PomponPlant::tryGenItem() {
     }
 
     if (mItemType == 0) {
-        MR::appearStarPiece(this, getSensor("body")->mPosition, mItemCount, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, getSensor("body")->mPosition, mItemCount, cNum_tryGenItem_f1, cNum_tryGenItem_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     } else {
         MR::appearCoinPop(this, getSensor("body")->mPosition, mItemCount);

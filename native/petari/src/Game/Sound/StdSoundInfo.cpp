@@ -4,6 +4,10 @@
 #include "Game/Sound/StreamSound.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/NebulaMods.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_applySound_f1, "applySound.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_applyStream_f1, "applyStream.f1", 0.5f);
 
 namespace {
     // The item of a sound of this type (the type's top four bits), else null. getTypeID is the item's mType.
@@ -37,7 +41,7 @@ u32 StdSoundInfo::getPriority(SoundID soundID) const {
 void StdSoundInfo::applySound(SoundID soundID, Sound* pSound) const {
     const SoundItem* data = anyItem(soundID);
     if (data != nullptr) {
-        pSound->mParams.mProperty.mVolume = data->mVolume * (1.0f / 255.0f);
+        pSound->mParams.mProperty.mVolume = data->mVolume * (1.0f / cNum_applySound_f1);
     }
 }
 
@@ -65,7 +69,7 @@ void StdSoundInfo::applyStream(SoundID soundID, StreamSound* pStream) const {
 
         switch (ctrl) {
         case 1:
-            child->mMove.mParams.mPan = 0.5f;
+            child->mMove.mParams.mPan = cNum_applyStream_f1;
             break;
         case 2:
             child->mMove.mParams.mPan = 0.0f;

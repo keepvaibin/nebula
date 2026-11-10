@@ -23,6 +23,14 @@
 #include <Game/Ui/Material.hpp>
 #include <Game/Ui/Picture.hpp>
 #include <Game/Ui/TextBox.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setLayoutAlphaFloat_f1, "setLayoutAlphaFloat.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setPaneAlphaFloat_f1, "setPaneAlphaFloat.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_copyLayoutDrawInfoWithAspect_f1, "copyLayoutDrawInfoWithAspect.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getCometColorAnimFrameFromId_f1, "getCometColorAnimFrameFromId.f1", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getCometColorAnimFrameFromId_f2, "getCometColorAnimFrameFromId.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getCometColorAnimFrameFromId_f3, "getCometColorAnimFrameFromId.f3", 3.0f);
 
 
 
@@ -148,7 +156,7 @@ void MR::setLayoutAlpha(const LayoutActor* pActor, u8 alpha) {
 void MR::setLayoutAlphaFloat(const LayoutActor* pActor, f32 alpha) {
     f32 alphaFloat = clamp(alpha, 0.0f, 1.0f);
 
-    setLayoutAlpha(pActor, (s32)(alphaFloat * 255.0f));
+    setLayoutAlpha(pActor, (s32)(alphaFloat * cNum_setLayoutAlphaFloat_f1));
 }
 
 void MR::setPaneAlpha(const LayoutActor* pActor, const char* pPaneName, u8 alpha) {
@@ -161,7 +169,7 @@ void MR::setPaneAlpha(const LayoutActor* pActor, const char* pPaneName, u8 alpha
 void MR::setPaneAlphaFloat(const LayoutActor* pActor, const char* pPaneName, f32 alpha) {
     f32 alphaFloat = MR::clamp(alpha, 0.0f, 1.0f);
 
-    setPaneAlpha(pActor, pPaneName, (s32)(alphaFloat * 255.0f));
+    setPaneAlpha(pActor, pPaneName, (s32)(alphaFloat * cNum_setPaneAlphaFloat_f1));
 }
 
 void MR::executeTextBoxRecursive(LayoutActor* pActor, const char* pPaneName, const TextBoxRecursiveOperation& rOperation) {
@@ -674,7 +682,7 @@ void MR::copyLayoutDrawInfoWithAspect(Ui::DrawInfo* pDrawInfo, const LayoutActor
 
     if (aspect) {
         pDrawInfo->mFlag.locationAdjust = true;
-        pDrawInfo->mLocationAdjustScale = Vec2f(0.75f, 1.0f);
+        pDrawInfo->mLocationAdjustScale = Vec2f(cNum_copyLayoutDrawInfoWithAspect_f1, 1.0f);
     } else {
         pDrawInfo->mFlag.locationAdjust = false;
         pDrawInfo->mLocationAdjustScale = Vec2f(1.0f, 1.0f);
@@ -894,16 +902,16 @@ namespace {
         case 0:
             return frame;
         case 1:
-            frame = 4.0f;
+            frame = cNum_getCometColorAnimFrameFromId_f1;
             break;
         case 2:
             frame = 1.0f;
             break;
         case 3:
-            frame = 2.0f;
+            frame = cNum_getCometColorAnimFrameFromId_f2;
             break;
         case 4:
-            frame = 3.0f;
+            frame = cNum_getCometColorAnimFrameFromId_f3;
             break;
         default:
             break;

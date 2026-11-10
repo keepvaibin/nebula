@@ -1,6 +1,9 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MatrixControl.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getFaceLookHeight_f1, "getFaceLookHeight.f1", 150.0f);
 
 static MatrixMap morph_bitmap[] = {{"ジャンプ系バインド", 0x1111100F},
                                    {"スピンアタック", 0x11231041},
@@ -263,5 +266,5 @@ bool MarioActor::selectDamagePop(const HitSensor* pSensor) const {
 
 f32 MarioActor::getFaceLookHeight(const char* pName) const {
     f32 value;
-    return mFaceHeightTable->getValue(pName, &value) ? value : 150.0f;
+    return mFaceHeightTable->getValue(pName, &value) ? value : cNum_getFaceLookHeight_f1;
 }

@@ -13,6 +13,13 @@
 #include <NebulaGpuTypes.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f1, "initMember.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f2, "initMember.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f3, "initMember.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f4, "initMember.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 5.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sFadeBufferCount, 10);
     static const s32 sFadeOutTime = NebulaFrameClock::stepsOfSeconds(1);
@@ -34,10 +41,10 @@ void FootPrint::initMember(s32 amount, s32 drawType) {
     mRotatingPrintIndex = 0;
     mIsFading = false;
 
-    mSideOffset = 20.0f;
-    mHeight = 20.0f;
-    mWidth = 20.0f;
-    mMinPrintDistance = 80.0f;
+    mSideOffset = cNum_initMember_f1;
+    mHeight = cNum_initMember_f2;
+    mWidth = cNum_initMember_f3;
+    mMinPrintDistance = cNum_initMember_f4;
 
     mLastPrintPos.zero();
 
@@ -140,7 +147,7 @@ void FootPrint::draw() const {
             continue;
         }
 
-        color.a = (s32)(255.0f * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime));
+        color.a = (s32)(cNum_draw_f1 * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime));
         material.setColor(0, color.r, color.g, color.b, color.a);
 
         Vec3f cross = mPrints[i].mUp.cross(mPrints[i].mNormal);
@@ -152,7 +159,7 @@ void FootPrint::draw() const {
             printPos = mPrints[i].mPos - cross * mSideOffset;
         }
 
-        printPos += mPrints[i].mNormal * 5.0f;
+        printPos += mPrints[i].mNormal * cNum_draw_f2;
 
         TypedDraw site = TDDraw::site(material, 0);
         // An expired print draws nothing; each print keeps its own number so the prints after it pair with themselves.

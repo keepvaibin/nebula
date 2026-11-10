@@ -6,6 +6,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_f1, "updateResetToInitPosCheck.f1", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_f2, "updateResetToInitPosCheck.f2", 700.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_f3, "updateResetToInitPosCheck.f3", 700.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_isNearPlayer_1, "updateResetToInitPosCheck.isNearPlayer.1", 3000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_isNearPlayer_2, "updateResetToInitPosCheck.isNearPlayer.2", 1000.0f);
@@ -33,7 +38,7 @@ void SpaceShipStep::init(const TableIter& rIter) {
     initialize(rIter, info);
     f32 radius = 0.0f;
     MR::calcModelBoundingRadius(&radius, this);
-    MR::initAndSetRailClipping(&mRailClippingCenter, this, 100.0f, radius);
+    MR::initAndSetRailClipping(&mRailClippingCenter, this, cNum_init_f1, radius);
 }
 
 void SpaceShipStep::exeWait() {
@@ -96,9 +101,9 @@ bool SpaceShipStep::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSe
 
 void SpaceShipStep::updateResetToInitPosCheck() {
     if (!mHasBeenSeen) {
-        mHasBeenSeen = !MR::isJudgedToClipFrustum(mPosition, 700.0f);
+        mHasBeenSeen = !MR::isJudgedToClipFrustum(mPosition, cNum_updateResetToInitPosCheck_f1);
     } else {
-        if (isNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvWait)) || !MR::isJudgedToClipFrustum(mPosition, 700.0f)) {
+        if (isNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvWait)) || !MR::isJudgedToClipFrustum(mPosition, cNum_updateResetToInitPosCheck_f2)) {
             mHiddenStep = 0;
         } else {
             if (mHiddenStep < NebulaFrameClock::stepsOfSeconds(4)) {
@@ -106,7 +111,7 @@ void SpaceShipStep::updateResetToInitPosCheck() {
             } else {
                 MapObjActorUtil::resetRailMoverToInitPos(this);
 
-                if (!MR::isJudgedToClipFrustum(mPosition, 700.0f) && MR::isNearPlayer(this, cNum_updateResetToInitPosCheck_isNearPlayer_1)) {
+                if (!MR::isJudgedToClipFrustum(mPosition, cNum_updateResetToInitPosCheck_f3) && MR::isNearPlayer(this, cNum_updateResetToInitPosCheck_isNearPlayer_1)) {
                     MR::emitEffect(this, "Appear");
                     MR::startSound(this, "SE_OJ_SPACE_SHIP_STEP_RESET");
                 }

@@ -1,8 +1,12 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_ConeGravity_f1, "ConeGravity.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcOwnGravityVector_f1, "calcOwnGravityVector.f1", 0.01f);
 
 ConeGravity::ConeGravity() : PlanetGravity() {
-    mValidDegree = 360.0f;
+    mValidDegree = cNum_ConeGravity_f1;
     mValidCos = -1.0f;
     mWorldRadius = 0.0f;
     mEnableBottom = true;
@@ -115,7 +119,7 @@ bool ConeGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& 
         }
     }
 
-    if (mTopCutRate < 0.01f) {
+    if (mTopCutRate < cNum_calcOwnGravityVector_f1) {
         MR::calcPerpendicFootToLineInside(&pointOfAttraction, rPos, dirOnDirectrix, apex);
     } else {
         Vec3f generatrixTermination;

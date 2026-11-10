@@ -9,6 +9,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWatchPos_f1, "calcWatchPos.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWatchPos_f2, "calcWatchPos.f2", 15.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAngleConstrainRate, 0.2f);
     NEBULA_TUNABLE(f32, sPartialRate, 0.5f);
@@ -149,7 +152,7 @@ void CameraMedianPlanet::getRegisterUpVec(Vec3f* pUp) {
 void CameraMedianPlanet::calcWatchPos(Vec3f* pWatchPos) {
     Vec3f watchOffset;
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
-    CameraLocalUtil::makeWatchPoint(&watchOffset, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchOffset, this, target, cNum_calcWatchPos_f1 / cNum_calcWatchPos_f2);
     watchOffset.sub(target->getPosition());
 
     pWatchPos->set(target->getPosition() * (1.0f - mPartialRate) + CameraLocalUtil::getVecReg(mString) * mPartialRate + watchOffset);

@@ -30,6 +30,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_processWait_f1, "processWait.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoRise_f1, "exeAppearDemoRise.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoMove_f1, "exeAppearDemoMove.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoMove_f2, "exeAppearDemoMove.f2", 360.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWeakToWait_setBrkRate_1, "exeWeakToWait.setBrkRate.1", 1.0f);
 
@@ -564,7 +569,7 @@ void PowerStar::calcAppearDemoRiseTrans(Vec3f* pOutTrans, f32 height) const {
 }
 
 void PowerStar::processWait(f32 rotateSpeed) {
-    mRotation.y = MR::repeat(mRotation.y + rotateSpeed, 0.0f, 360.0f);
+    mRotation.y = MR::repeat(mRotation.y + rotateSpeed, 0.0f, cNum_processWait_f1);
 
     if (mIsGrandStar) {
         // Hidden inside the near distance, shown only a margin beyond it, so a camera at the line does not toggle the model and its effects.
@@ -631,7 +636,7 @@ void PowerStar::exeAppearDemoRise() {
 
     f32 height = MR::calcNerveEaseOutValue(this, cRiseEaseSteps, 0.0f, cRiseHeight);
     calcAppearDemoRiseTrans(&mPosition, height);
-    mRotation.y = MR::repeat(mRotation.y + cRiseSpinSpeed, 0.0f, 360.0f);
+    mRotation.y = MR::repeat(mRotation.y + cRiseSpinSpeed, 0.0f, cNum_exeAppearDemoRise_f1);
 
     if (MR::isStep(this, cRiseSteps)) {
         setNerve(GET_NERVE(PowerStar, PowerStarNrvAppearDemoMove));
@@ -657,7 +662,7 @@ void PowerStar::exeAppearDemoMove() {
         Vec3f appearH;
         MR::vecKillElement(mAppearPosition, mGravity, &appearH);
 
-        f32 halfDistance = riseH.distance(appearH) * 0.5f;
+        f32 halfDistance = riseH.distance(appearH) * cNum_exeAppearDemoMove_f1;
         f32 arcHeight = MR::clamp(halfDistance, cArcHeightMin, cArcHeightMax);
 
         Vec3f arc(0.0f, 0.0f, 0.0f);
@@ -679,7 +684,7 @@ void PowerStar::exeAppearDemoMove() {
     }
 
     f32 spinSpeed = isMoving ? cMoveSpinSpeed : MR::getEaseOutValue(getNerveStep() - cMoveSteps, cMoveSpinSpeed, getWaitRotateSpeed(), cSpinDownSteps);
-    mRotation.y = MR::repeat(mRotation.y + spinSpeed, 0.0f, 360.0f);
+    mRotation.y = MR::repeat(mRotation.y + spinSpeed, 0.0f, cNum_exeAppearDemoMove_f2);
 
     if (MR::isStep(this, cMoveEndStep)) {
         MR::resetCameraLocalOffset();

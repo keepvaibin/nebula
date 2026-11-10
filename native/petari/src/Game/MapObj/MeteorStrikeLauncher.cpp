@@ -9,6 +9,8 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 4096.0f);
+
 namespace NrvMeteorStrikeLauncher {
     NEW_NERVE(MeteorStrikeLauncherNrvCreate, MeteorStrikeLauncher, Create);
     NEW_NERVE(MeteorStrikeLauncherNrvInterval, MeteorStrikeLauncher, Interval);
@@ -42,7 +44,7 @@ void MeteorStrikeLauncher::init(const TableIter& rIter) {
         f32 speed = MeteorStrike::getSpeed(rIter);
         // A count that is not a number, or is 4096 and over, keeps the one meteor (the cast of such a float is undefined).
         f32 count = MR::getRailTotalLength(this) / (speed * mIntervalStep);
-        mMeteorStrikeCount = (count > -1.0f && count < 4096.0f) ? static_cast< s32 >(count) + 2 : 1;
+        mMeteorStrikeCount = (count > -1.0f && count < cNum_init_f1) ? static_cast< s32 >(count) + 2 : 1;
     } else if (mIsMeteorStrike || mIntervalStep < 0) {
         mMeteorStrikeCount = 1;
     } else {

@@ -10,6 +10,8 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTalk_f1, "exeTalk.f1", 30.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sGravityAccel, 0.1f);
     static const s32 sSmallTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -259,7 +261,7 @@ void RabbitStateWaitStart::exeTalk() {
         MR::zeroVelocity(mHost);
     }
 
-    MR::turnDirectionToPlayerDegreeHorizon(mHost, mHostFrontVec, 30.0f);
+    MR::turnDirectionToPlayerDegreeHorizon(mHost, mHostFrontVec, cNum_exeTalk_f1);
 
     if (MR::tryTalkNearPlayerAtEnd(mTalkCtrl)) {
         if (mIsKillAfterTalk) {

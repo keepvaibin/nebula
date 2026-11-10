@@ -6,6 +6,8 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sDefaultCollapseTime, 140);
     NEBULA_TUNABLE(f32, sScaleMin, 0.7f);
@@ -33,7 +35,7 @@ void CollapsePlane::init(const TableIter& rIter) {
     info.setupNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvWait));
     initialize(rIter, info);
     initEffectKeeper(1, nullptr);
-    MR::initStarPointerTarget(this, mScale.x * 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, mScale.x * cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
 
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();

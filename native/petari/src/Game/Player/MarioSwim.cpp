@@ -16,6 +16,233 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_checkStartSwim_f1, "checkStartSwim.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startSwim_f1, "startSwim.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f2, "start.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f3, "start.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f4, "start.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f5, "start.f5", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f6, "start.f6", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f7, "start.f7", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f8, "start.f8", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f9, "start.f9", 9.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f10, "start.f10", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f11, "start.f11", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f12, "start.f12", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f13, "start.f13", 1.49599659443f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f14, "start.f14", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f15, "start.f15", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f16, "start.f16", 8.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f17, "start.f17", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f18, "start.f18", 2.09439516068f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSurface_f1, "getSurface.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSurface_f2, "getSurface.f2", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSurface_f3, "getSurface.f3", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.196349546313f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f7, "update.f7", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f8, "update.f8", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f9, "update.f9", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f10, "update.f10", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f11, "update.f11", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f12, "update.f12", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f13, "update.f13", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f14, "update.f14", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f15, "update.f15", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f16, "update.f16", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f17, "update.f17", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f18, "update.f18", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f19, "update.f19", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f20, "update.f20", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f21, "update.f21", 0.707000017166f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f22, "update.f22", 2.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f23, "update.f23", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f24, "update.f24", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f25, "update.f25", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f26, "update.f26", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f27, "update.f27", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f28, "update.f28", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f29, "update.f29", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f30, "update.f30", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f31, "update.f31", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f32, "update.f32", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f33, "update.f33", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f34, "update.f34", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f35, "update.f35", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f36, "update.f36", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f37, "update.f37", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f38, "update.f38", 0.523598790169f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f39, "update.f39", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f40, "update.f40", 0.523598790169f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f41, "update.f41", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f42, "update.f42", 0.523598790169f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f43, "update.f43", 0.523598790169f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f44, "update.f44", 0.523598790169f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f45, "update.f45", 0.872664690018f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f46, "update.f46", 2.26892805099f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f47, "update.f47", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f48, "update.f48", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f49, "update.f49", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f50, "update.f50", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f51, "update.f51", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f52, "update.f52", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f53, "update.f53", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f54, "update.f54", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f55, "update.f55", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f56, "update.f56", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f57, "update.f57", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f58, "update.f58", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f59, "update.f59", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f60, "update.f60", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f61, "update.f61", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f62, "update.f62", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f63, "update.f63", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f1, "procBuoyancy.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f2, "procBuoyancy.f2", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f3, "procBuoyancy.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f4, "procBuoyancy.f4", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f5, "procBuoyancy.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f6, "procBuoyancy.f6", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f7, "procBuoyancy.f7", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_procBuoyancy_f8, "procBuoyancy.f8", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_flowOnWave_f1, "flowOnWave.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_flowOnWave_f2, "flowOnWave.f2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f1, "decideVelocity.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f2, "decideVelocity.f2", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f3, "decideVelocity.f3", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f4, "decideVelocity.f4", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f5, "decideVelocity.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f6, "decideVelocity.f6", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f7, "decideVelocity.f7", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f8, "decideVelocity.f8", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f9, "decideVelocity.f9", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f10, "decideVelocity.f10", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f11, "decideVelocity.f11", 0.995f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f12, "decideVelocity.f12", 0.96f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f13, "decideVelocity.f13", 0.96f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideVelocity_f14, "decideVelocity.f14", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f1, "decideAnimation.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f2, "decideAnimation.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f3, "decideAnimation.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f4, "decideAnimation.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f5, "decideAnimation.f5", 1.6534699f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f6, "decideAnimation.f6", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideAnimation_f7, "decideAnimation.f7", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideEffect_f1, "decideEffect.f1", 2.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideEffect_f2, "decideEffect.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_decideEffect_f3, "decideEffect.f3", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f1, "close.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f2, "close.f2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f3, "close.f3", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f4, "close.f4", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f1, "checkWaterCube.f1", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f2, "checkWaterCube.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f3, "checkWaterCube.f3", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f4, "checkWaterCube.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f5, "checkWaterCube.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f6, "checkWaterCube.f6", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f7, "checkWaterCube.f7", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterCube_f8, "checkWaterCube.f8", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f1, "updateUnderWater.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f2, "updateUnderWater.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f3, "updateUnderWater.f3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f4, "updateUnderWater.f4", 210.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f5, "updateUnderWater.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f6, "updateUnderWater.f6", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUnderWater_f7, "updateUnderWater.f7", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkUnderWaterFull_f1, "checkUnderWaterFull.f1", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkUnderWaterFull_f2, "checkUnderWaterFull.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkUnderWaterFull_f3, "checkUnderWaterFull.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkUnderWaterFull_f4, "checkUnderWaterFull.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterBottom_f1, "checkWaterBottom.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterBottom_f2, "checkWaterBottom.f2", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkWaterBottom_f3, "checkWaterBottom.f3", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f1, "getWaterAreaInfo.f1", 0.97f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f2, "getWaterAreaInfo.f2", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f3, "getWaterAreaInfo.f3", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f4, "getWaterAreaInfo.f4", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f5, "getWaterAreaInfo.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f6, "getWaterAreaInfo.f6", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f7, "getWaterAreaInfo.f7", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f8, "getWaterAreaInfo.f8", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f9, "getWaterAreaInfo.f9", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getWaterAreaInfo_f10, "getWaterAreaInfo.f10", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_spin_f1, "spin.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_spin_f2, "spin.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_jet_f1, "jet.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_jet_f2, "jet.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_jet_f3, "jet.f3", 0.96f);
+NEBULA_TUNABLE_NAMED(f32, cNum_jet_f4, "jet.f4", 1.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_jet_f5, "jet.f5", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_jet_f6, "jet.f6", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f1, "updateTilt.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f2, "updateTilt.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f3, "updateTilt.f3", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f4, "updateTilt.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f5, "updateTilt.f5", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f6, "updateTilt.f6", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f7, "updateTilt.f7", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f8, "updateTilt.f8", 8.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f9, "updateTilt.f9", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f10, "updateTilt.f10", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f11, "updateTilt.f11", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f12, "updateTilt.f12", 8.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f13, "updateTilt.f13", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f14, "updateTilt.f14", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f15, "updateTilt.f15", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f16, "updateTilt.f16", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pushedByWaterWall_f1, "pushedByWaterWall.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pushedByWaterWall_f2, "pushedByWaterWall.f2", 0.995f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pushedByWaterWall_f3, "pushedByWaterWall.f3", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pushedByWaterWall_f4, "pushedByWaterWall.f4", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitHead_f1, "hitHead.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitHead_f2, "hitHead.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitHead_f3, "hitHead.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitHead_f4, "hitHead.f4", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitPoly_f1, "hitPoly.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f1, "hitWall.f1", 0.70700002f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f2, "hitWall.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f3, "hitWall.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f4, "hitWall.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f5, "hitWall.f5", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f6, "hitWall.f6", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f7, "hitWall.f7", 1.5707964f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f8, "hitWall.f8", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f9, "hitWall.f9", 2.6179941f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f10, "hitWall.f10", 2.6179941f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f11, "hitWall.f11", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f12, "hitWall.f12", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f13, "hitWall.f13", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f14, "hitWall.f14", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f15, "hitWall.f15", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f16, "hitWall.f16", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f17, "hitWall.f17", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f18, "hitWall.f18", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f19, "hitWall.f19", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_passRing_f1, "passRing.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f1, "calcRingAcc.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f2, "calcRingAcc.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f3, "calcRingAcc.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f4, "calcRingAcc.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ringDash_f1, "ringDash.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ringDash_f2, "ringDash.f2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ringDash_f3, "ringDash.f3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ringDash_f4, "ringDash.f4", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getStickY_f1, "getStickY.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getStickY_f2, "getStickY.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getStickY_f3, "getStickY.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJetJump_f1, "doJetJump.f1", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJetJump_f2, "doJetJump.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJetJump_f3, "doJetJump.f3", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJetJump_f4, "doJetJump.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJetJump_f5, "doJetJump.f5", 1.25f);
 
 namespace {
     static f32 cFrontAcc[] = {-0.2f, -0.2f, -0.2f, -0.1f, -0.1f, -0.1f, -0.1f, -0.1f, -0.0f, -0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -104,7 +331,7 @@ bool Mario::checkStartSwim() {
 
     if (mSwim->checkWaterCube(false)) {
         if (getPlayerMode() == 3) {
-            addTrans(-*getGravityVec() * 100.0f);
+            addTrans(-*getGravityVec() * cNum_checkStartSwim_f1);
             if (getPlayer()->getMovementStates().jumping) {
                 stopJump();
             }
@@ -149,7 +376,7 @@ void Mario::startSwim() {
 
         mMovementStates.launchKind = 0;
         if (mMovementStates.frontWall || mMovementStates.sideWall || mMovementStates.backWall) {
-            addVelocity(getWallNorm(), 50.0f);
+            addVelocity(getWallNorm(), cNum_startSwim_f1);
         }
 
         getPlayer()->lockGroundCheck(mSwim, true);
@@ -283,7 +510,7 @@ bool MarioSwim::start() {
     mSlideOut = false;
     mBuoyancySpeed = 0.0f;
 
-    if (!getPlayer()->getMovementStates().jumping || getPlayer()->mVerticalSpeed <= 100.0f) {
+    if (!getPlayer()->getMovementStates().jumping || getPlayer()->mVerticalSpeed <= cNum_start_f1) {
         mBuoyancySpeed = mActor->getConst().getTable()->mSwimUpMaxSpeed;
     }
 
@@ -294,7 +521,7 @@ bool MarioSwim::start() {
 
     mVerticalAngle = DEG_TO_RAD(30);
     onSurface();
-    if ((mWaterDepth < -200.0f || mActor->mCameraCut) && mIsOnSurface) {
+    if ((mWaterDepth < -cNum_start_f2 || mActor->mCameraCut) && mIsOnSurface) {
         mIsOnSurface = false;
     }
 
@@ -366,7 +593,7 @@ bool MarioSwim::start() {
         mActor->emitEffectWaterColumn(mSurfacePos, mSurfaceNorm);
     }
 
-    if ((getPlayer()->getMovementStates().jumping && getPlayer()->mVerticalSpeed > 100.0f) || diveKind) {
+    if ((getPlayer()->getMovementStates().jumping && getPlayer()->mVerticalSpeed > cNum_start_f3) || diveKind) {
         Vec3f jumpOffGravity;
         mStateTimer = 0;
         Mario* mario = getPlayer();
@@ -377,7 +604,7 @@ bool MarioSwim::start() {
             diveSpeed = 0.0f;
         }
 
-        diveSpeed *= 0.1f;
+        diveSpeed *= cNum_start_f4;
         diveSpeed = MR::clamp(diveSpeed, 0.0f, 1.0f);
 
         if (mIsOnSurface) {
@@ -386,11 +613,11 @@ bool MarioSwim::start() {
 
         if (mSwimState == SWIM_STATE_SURFACE) {
             f32 maxSpeed = mActor->getConst().getTable()->mSwimFrontMaxSpeed;
-            f32 speedRatio = (0.2f + 0.1f * diveSpeed);
+            f32 speedRatio = (cNum_start_f5 + cNum_start_f6 * diveSpeed);
             mJumpDiveTimer = 0x3C;
             mForwardSpeed = speedRatio * maxSpeed;
         } else if (getPlayer()->getMovementStates().hipDrop || diveKind) {
-            mForwardSpeed = 10.0f;
+            mForwardSpeed = cNum_start_f7;
 
             if (mJetTimer != 0) {
                 changeAnimationNonStop("水泳ジェット");
@@ -417,9 +644,9 @@ bool MarioSwim::start() {
             }
 
             f32 sinkAngle = ::cLimitAngleSink * (1.0f - diveSpeed);
-            mVerticalAngle = diveSpeed * (FloatUtil::PI() * 5.0f / 9.0f) + sinkAngle;
+            mVerticalAngle = diveSpeed * (FloatUtil::PI() * cNum_start_f8 / cNum_start_f9) + sinkAngle;
             Vec3f headDown(mFrontVec);
-            headDown.y = -10.0f;
+            headDown.y = -cNum_start_f10;
             MR::normalize(&headDown);
             getPlayer()->forceSetHeadVecKeepSide(headDown);
         } else if (damageEntry) {
@@ -427,7 +654,7 @@ bool MarioSwim::start() {
             mSinkTimer = mActor->getConst().getTable()->mJumpDamageSinkTimer;
             mKnockbackTimer = 0x78;
         } else {
-            mForwardSpeed = (0.2f + 0.1f * diveSpeed) * mActor->getConst().getTable()->mSwimFrontMaxSpeed;
+            mForwardSpeed = (cNum_start_f11 + cNum_start_f12 * diveSpeed) * mActor->getConst().getTable()->mSwimFrontMaxSpeed;
             changeAnimation("水泳ジャンプダイブ");
 
             mActor->setBlendMtxTimer(8);
@@ -435,18 +662,18 @@ bool MarioSwim::start() {
             mSinkTimer = mActor->getConst().getTable()->mJumpSinkTimer;
 
             mIsSwimmingAtSurface = true;
-            mVerticalAngle = 1.49599659443f;
-            if (getPlayer()->mVerticalSpeed < 200.0f) {
-                f32 speedRatio = (getPlayer()->mVerticalSpeed / 200.0f);
+            mVerticalAngle = cNum_start_f13;
+            if (getPlayer()->mVerticalSpeed < cNum_start_f14) {
+                f32 speedRatio = (getPlayer()->mVerticalSpeed / cNum_start_f15);
                 mActionLockTimer *= speedRatio;
                 mSinkTimer *= speedRatio;
-                mActor->setBlendMtxTimer((s32)(8.0f * speedRatio));
+                mActor->setBlendMtxTimer((s32)(cNum_start_f16 * speedRatio));
             }
         }
     } else if (mIsOnSurface) {
         mKnockbackTimer = 0x5A;
         MR::vecKillElement(mActor->getLastMove(), mUpVec, &mKnockbackVel);
-        mKnockbackVel.mult(0.5f);
+        mKnockbackVel.mult(cNum_start_f17);
     }
 
     if (mActor->mTakeCount) {
@@ -461,7 +688,7 @@ bool MarioSwim::start() {
 
                 diveKind = 2;
                 mIsSwimmingAtSurface = false;
-                mVerticalAngle = 2.09439516068f;
+                mVerticalAngle = cNum_start_f18;
 
                 if (mIsOnSurface) {
                     mIsOnSurface = false;
@@ -491,10 +718,10 @@ bool MarioSwim::start() {
 
 f32 MarioSwim::getSurface() const {
     f32 base = getTrans().y - mWaterDepth;
-    f32 amplitude = 40.0f;
+    f32 amplitude = cNum_getSurface_f1;
     f32 wave;
-    f32 swell = 0.01f;
-    f32 phaseWobble = 0.03f;
+    f32 swell = cNum_getSurface_f2;
+    f32 phaseWobble = cNum_getSurface_f3;
     u16 period = 1800;
     wave = 1.0f + swell * MR::sin((mStateTimer * Angle::cRadian360 / period));
     period = 500;
@@ -519,7 +746,7 @@ bool MarioSwim::update() {
 
         Vec3f surfaceOffGravity;
         MR::vecKillElement(mSurfaceNorm - getTrans(), getAirGravityVec(), &surfaceOffGravity);
-        if (surfaceOffGravity.length() > 100.0f || -mWaterDepth >= getPlayer()->mVerticalSpeed || mKnockbackTimer != 0 || mWallStickTimer != 0) {
+        if (surfaceOffGravity.length() > cNum_update_f1 || -mWaterDepth >= getPlayer()->mVerticalSpeed || mKnockbackTimer != 0 || mWallStickTimer != 0) {
             if (!isAnimationRun("水泳ジャンプダイブ")) {
                 if (mJetTimer != 0) {
                     doJetJump(1);
@@ -534,9 +761,9 @@ bool MarioSwim::update() {
         }
     }
 
-    if (getPlayer()->mDrawStates.wallGravity && mWaterDepth > -50.0f &&
-        MR::diffAngleAbsHorizontal(-getTouchedWallNorm(), getWorldPadDir(), getPlayer()->getAirGravityVec()) < 0.196349546313f) {
-        if (calcAngleD(getTouchedWallNorm()) >= 30.0f) {
+    if (getPlayer()->mDrawStates.wallGravity && mWaterDepth > -cNum_update_f2 &&
+        MR::diffAngleAbsHorizontal(-getTouchedWallNorm(), getWorldPadDir(), getPlayer()->getAirGravityVec()) < cNum_update_f3) {
+        if (calcAngleD(getTouchedWallNorm()) >= cNum_update_f4) {
             mNextAction = EXIT_ACTION_SLIDE;
             return false;
         } else {
@@ -556,7 +783,7 @@ bool MarioSwim::update() {
     }
 
     mUpVec = -getPlayer()->getAirGravityVec();
-    f32 fTmp = getSurface() - 30.0f;
+    f32 fTmp = getSurface() - cNum_update_f5;
     if (mWallStickTimer != 0) {
         mWallStickTimer--;
     }
@@ -572,7 +799,7 @@ bool MarioSwim::update() {
                 }
 
                 if (getStickY() <= 0) {
-                    mVerticalAngle = FloatUtil::PI() / 2.0f;
+                    mVerticalAngle = FloatUtil::PI() / cNum_update_f6;
                     mStickInputYInertia = 1.0f;
                 }
             } else {
@@ -632,7 +859,7 @@ bool MarioSwim::update() {
         }
 
         flowOnWave(fTmp);
-    } else if (mWaterDepth > -30.0f) {
+    } else if (mWaterDepth > -cNum_update_f7) {
         if (!mActionLockTimer && !mZSinkTimer && !mSinkTimer && mJetTimer == 0) {
             getAnimator()->forceSetBlendWeight(::cWeightTable);
             changeAnimation("水泳上昇呼吸");
@@ -651,8 +878,8 @@ bool MarioSwim::update() {
             Vec3f lastMove;
             mActor->getLastMove(&lastMove);
             f32 alongGravity = MR::vecKillElement(lastMove, getGravityVec(), &lastMove);
-            if (alongGravity > -10.0f) {
-                alongGravity = -10.0f;
+            if (alongGravity > -cNum_update_f8) {
+                alongGravity = -cNum_update_f9;
             }
 
             lastMove += getGravityVec() * alongGravity;
@@ -667,17 +894,17 @@ bool MarioSwim::update() {
             return false;
         }
 
-        if (mJetTimer != 0 && (getStickY() < -0.1f || checkLvlA()) && getPlayer()->mVerticalSpeed - mWaterDepth > 200.0f) {
+        if (mJetTimer != 0 && (getStickY() < -cNum_update_f10 || checkLvlA()) && getPlayer()->mVerticalSpeed - mWaterDepth > cNum_update_f11) {
             doJetJump(0);
             return false;
         }
 
-        if (mRingDashTimer != 0 && getPlayer()->mVerticalSpeed - mWaterDepth > 200.0f) {
+        if (mRingDashTimer != 0 && getPlayer()->mVerticalSpeed - mWaterDepth > cNum_update_f12) {
             f32 walkSpeed = MR::clamp(mForwardSpeed / mActor->getConst().getTable()->mSwimToWalkSpd, 0.0f, 1.0f);
 
             getPlayer()->mMovementStates.jumpChain = false;
             getPlayer()->mWalkSpeed = walkSpeed;
-            getPlayer()->tryForcePowerJump(mActor->getLastMove() * 2.0f + mUpVec * 10.0f, false);
+            getPlayer()->tryForcePowerJump(mActor->getLastMove() * cNum_update_f13 + mUpVec * cNum_update_f14, false);
 
             mNextAction = EXIT_ACTION_POWER_JUMP;
             changeAnimationNonStop("リングダッシュ");
@@ -685,28 +912,28 @@ bool MarioSwim::update() {
         }
     } else {
         checkWaterBottom();
-        if (getStickY() >= 0.0f && (mWallHit || (mDistToFloor < 60.0f && mForwardSpeed > 1.0f))) {
+        if (getStickY() >= 0.0f && (mWallHit || (mDistToFloor < cNum_update_f15 && mForwardSpeed > 1.0f))) {
             const Vec3f& rShadowNorm = getPlayer()->getShadowNorm();
             Vec3f floorSide = mFrontVec.cross(rShadowNorm);
             Vec3f floorFront = rShadowNorm.cross(floorSide);
 
-            if (-mWaterDepth + mDistToFloor > 1000.0f) {
+            if (-mWaterDepth + mDistToFloor > cNum_update_f16) {
                 mEnteredWater = true;
             }
 
             f32 dot1 = mFrontVec.dot(floorFront);
             f32 dot2 = mFrontVec.dot(rShadowNorm);
             if (dot2 >= 0.0f) {
-                mVerticalAngle = DEG_TO_RAD(90) + 0.9f * marioAcos(dot1);
+                mVerticalAngle = DEG_TO_RAD(90) + cNum_update_f17 * marioAcos(dot1);
             } else if (mForwardSpeed > 1.0f) {
-                mVerticalAngle = DEG_TO_RAD(90) - 0.5f * marioAcos(dot1);
+                mVerticalAngle = DEG_TO_RAD(90) - cNum_update_f18 * marioAcos(dot1);
             } else {
                 f32 angle = marioAcos(dot1);
                 mSurfaceStickTimer = 0x3C;
                 mVerticalAngle = DEG_TO_RAD(90) - angle;
             }
 
-            if (mJetTimer != 0 && getPlayer()->mVerticalSpeed < 100.0f) {
+            if (mJetTimer != 0 && getPlayer()->mVerticalSpeed < cNum_update_f19) {
                 mFloorContactTimer = 2;
                 playEffect("水底接触");
                 mForwardSpeed *= mActor->getConst().getTable()->mTurboReductionHitFloor;
@@ -733,7 +960,7 @@ bool MarioSwim::update() {
     }
 
     f32 slowRatio = 1.0f - MR::clamp(mForwardSpeed / mActor->getConst().getTable()->mSwimFrontMaxSpeed, 0.0f, 1.0f);
-    if (mDistToFloor - mWaterDepth < 400.0f) {
+    if (mDistToFloor - mWaterDepth < cNum_update_f20) {
         slowRatio = 0.0f;
     }
 
@@ -744,7 +971,7 @@ bool MarioSwim::update() {
         if (mIsOnSurface && !mZSinkTimer) {
             if (!mHoldOnSurface) {
                 if (mJetTimer != 0) {
-                    if (getStickY() > 0.707000017166f) {
+                    if (getStickY() > cNum_update_f21) {
                         mVerticalAngle = mActor->getConst().getTable()->mZsinkAngleX;
                         mIsSwimmingAtSurface = false;
                         mUpStrokeAllowed = 0;
@@ -757,10 +984,10 @@ bool MarioSwim::update() {
                     mStickInputYInertia *= b;
                     mStickInputYInertia += a;
 
-                    mStickInputXInertia = 2.5f * (getStickX() * (1.0f - mActor->getConst().getTable()->mSwimRotZIneT));
+                    mStickInputXInertia = cNum_update_f22 * (getStickX() * (1.0f - mActor->getConst().getTable()->mSwimRotZIneT));
                     f32 stickXBoost = 1.0f;
                     if (getStickY() < 0.0f) {
-                        stickXBoost += 2.0f * -getStickY();
+                        stickXBoost += cNum_update_f23 * -getStickY();
                     }
 
                     mStickInputXInertia *= stickXBoost;
@@ -784,7 +1011,7 @@ bool MarioSwim::update() {
 
             mStickInputXInertia *= mActor->getConst().getTable()->mSwimRotZIne;
         } else {
-            if (mRingDashTimer == 0 && mDistToFloor > 200.0f && checkTrgZ() && !mZSinkTimer && !mSinkTimer && mJetTimer == 0 && !isSpinning()) {
+            if (mRingDashTimer == 0 && mDistToFloor > cNum_update_f24 && checkTrgZ() && !mZSinkTimer && !mSinkTimer && mJetTimer == 0 && !isSpinning()) {
                 stopAnimation(nullptr);
                 changeAnimation("水泳潜り");
                 playSound("水中潜り");
@@ -841,9 +1068,9 @@ bool MarioSwim::update() {
             bool worthless;
             bool& worthlesser = worthless;
             funReferenceTime(worthlesser);
-            if (!mIsSwimmingAtSurface && mKnockbackTimer == 0 && mWaterDepth < -400.0f) {
+            if (!mIsSwimmingAtSurface && mKnockbackTimer == 0 && mWaterDepth < -cNum_update_f25) {
                 mIdleWaitTimer++;
-                if (MR::getRandom() < 0.03f) {
+                if (MR::getRandom() < cNum_update_f26) {
                     playSound("水中ウエイト");
                 }
             }
@@ -856,8 +1083,8 @@ bool MarioSwim::update() {
         }
 
         f32 targetAngle = 0.0f;
-        if (MR::isNearZero(getStickY(), 0.1f)) {
-            f32 num = mIdleWaitTimer / 120.0f;
+        if (MR::isNearZero(getStickY(), cNum_update_f27)) {
+            f32 num = mIdleWaitTimer / cNum_update_f28;
             if (num > 1.0f) {
                 num = 1.0f;
             }
@@ -865,16 +1092,16 @@ bool MarioSwim::update() {
             targetAngle = mVerticalAngle + num * (::cNeutralAngleWait - mVerticalAngle);
         } else if (getStickY() > 0.0f) {
             f32 minBlend = 0.0f;
-            f32 num = mIdleWaitTimer / 120.0f;
-            if (mForwardSpeed < 2.0f) {
+            f32 num = mIdleWaitTimer / cNum_update_f29;
+            if (mForwardSpeed < cNum_update_f30) {
                 minBlend = 1.0f;
             } else {
                 bool confusion;
                 bool& confusionion = confusion;
-                if (mForwardSpeed > 10.0f) {
+                if (mForwardSpeed > cNum_update_f31) {
                     confusionion = true;
                 } else {
-                    minBlend = 1.0f - (mForwardSpeed - 2.0f) / 8;
+                    minBlend = 1.0f - (mForwardSpeed - cNum_update_f32) / 8;
                 }
             }
 
@@ -884,7 +1111,7 @@ bool MarioSwim::update() {
 
             f32 numClamped = MR::clamp(num, 0.0f, 1.0f);
             f32 limitAngle = numClamped * ::cLimitAngleWait + (1.0f - numClamped) * ::cLimitAngleSink;
-            if (mDistToFloor < 300.0f && -mWaterDepth < 100.0f) {
+            if (mDistToFloor < cNum_update_f33 && -mWaterDepth < cNum_update_f34) {
                 limitAngle = ::cNeutralAngleWait;
             }
 
@@ -893,8 +1120,8 @@ bool MarioSwim::update() {
             targetAngle = ::cNeutralAngleWait + (::cUpperAngleWait - ::cNeutralAngleWait) * -getStickY();
         }
 
-        f32 angleBlend = 0.05f;
-        if (mForwardSpeed > 5.0f && (angleBlend -= angleBlend * (5.0f / mForwardSpeed)) < 0.0f) {
+        f32 angleBlend = cNum_update_f35;
+        if (mForwardSpeed > cNum_update_f36 && (angleBlend -= angleBlend * (cNum_update_f37 / mForwardSpeed)) < 0.0f) {
             angleBlend = 0.0f;
         }
 
@@ -910,16 +1137,16 @@ bool MarioSwim::update() {
         }
 
         if (mIsSwimmingAtSurface) {
-            targetAngle = 0.523598790169f;
-            angleBlend = 0.01f;
+            targetAngle = cNum_update_f38;
+            angleBlend = cNum_update_f39;
         }
 
         if (mIsOnSurface) {
-            targetAngle = 0.523598790169f;
+            targetAngle = cNum_update_f40;
         }
 
         if (mZSinkTimer != 0) {
-            angleBlend = 0.15f;
+            angleBlend = cNum_update_f41;
             targetAngle = mActor->getConst().getTable()->mZsinkAngleX;
         }
 
@@ -928,7 +1155,7 @@ bool MarioSwim::update() {
         if (mIdleWaitTimer != 0 && mKnockbackTimer == 0 && !mZSinkTimer && getStickY() > 0.0f) {
             f32 tiltLimit = PI / mActor->getConst().getTable()->mSwimTiltReal;
             f32 stickY = getStickY();
-            targetAngle = 0.523598790169f + stickY * (tiltLimit - 0.523598790169f);
+            targetAngle = cNum_update_f42 + stickY * (tiltLimit - cNum_update_f43);
             if (mVerticalAngle < targetAngle) {
                 mVerticalAngle =
                     mVerticalAngle * mActor->getConst().getTable()->mSwimTiltSpd + targetAngle * (1.0f - mActor->getConst().getTable()->mSwimTiltSpd);
@@ -948,13 +1175,13 @@ bool MarioSwim::update() {
         }
 
         if (mZSinkTimer != 0) {
-            mVerticalAngle = MR::clamp(mVerticalAngle, 0.523598790169f, mActor->getConst().getTable()->mZsinkAngleX);
+            mVerticalAngle = MR::clamp(mVerticalAngle, cNum_update_f44, mActor->getConst().getTable()->mZsinkAngleX);
         } else {
             mVerticalAngle = MR::clamp(mVerticalAngle, ::cUpperAngleWait, ::cLimitAngleSink);
         }
 
         if (MR::isStageSwimAngleLimit()) {
-            mVerticalAngle = MR::clamp(mVerticalAngle, 0.872664690018f, 2.26892805099f);
+            mVerticalAngle = MR::clamp(mVerticalAngle, cNum_update_f45, cNum_update_f46);
         }
     }
 
@@ -962,16 +1189,16 @@ bool MarioSwim::update() {
         Vec3f padDir(getWorldPadDir());
         f32 turnRate;
         if (mIsOnSurface) {
-            turnRate = 0.01f * (12.0f - mForwardSpeed);
-            if (turnRate <= 0.01f) {
-                turnRate = 0.01f;
+            turnRate = cNum_update_f47 * (cNum_update_f48 - mForwardSpeed);
+            if (turnRate <= cNum_update_f49) {
+                turnRate = cNum_update_f50;
             }
         } else {
-            turnRate = 0.01f * (10.0f - mForwardSpeed);
+            turnRate = cNum_update_f51 * (cNum_update_f52 - mForwardSpeed);
         }
 
         if (mJetTimer != 0) {
-            turnRate *= 3.0f;
+            turnRate *= cNum_update_f53;
         }
 
         f32 maxTurn = MR::clamp(turnRate * mActor->getConst().getTable()->mSwimRotSpeedRatioSurface, 0.0f, 1.0f);
@@ -997,7 +1224,7 @@ bool MarioSwim::update() {
         getPlayer()->setSideVec(side);
         MR::rotAxisVecRad(mFrontVec, side, &targetFront, mVerticalAngle);
         Vec3f front(getFrontVec());
-        f32 frontBlend = 0.1f;
+        f32 frontBlend = cNum_update_f54;
         if (zSinkStarted) {
             frontBlend = 1.0f;
         }
@@ -1031,9 +1258,9 @@ bool MarioSwim::update() {
     f32 element = MR::vecKillElement(swimVel, mUpVec, &swimVel);
     f32 yAccRamp;
     if (mSwimYAccTimer > 0x19) {
-        yAccRamp = (50 - mSwimYAccTimer) / 25.0f;
+        yAccRamp = (50 - mSwimYAccTimer) / cNum_update_f55;
     } else {
-        yAccRamp = mSwimYAccTimer / 25.0f;
+        yAccRamp = mSwimYAccTimer / cNum_update_f56;
     }
 
     f32 yRatio = yAccRamp + (1.0f - yAccRamp) * mActor->getConst().getTable()->mSwimSpdYratio;
@@ -1042,7 +1269,7 @@ bool MarioSwim::update() {
     addVelocity(swimVel);
     u16 sinkFrames = mSinkTimer;
     if (sinkFrames) {
-        addVelocity(getGravityVec(), 0.25f * sinkFrames);
+        addVelocity(getGravityVec(), cNum_update_f57 * sinkFrames);
         mSinkTimer--;
     }
 
@@ -1057,7 +1284,7 @@ bool MarioSwim::update() {
             mIsOnSurface = false;
         }
     } else if (mIsOnSurface) {
-        AreaObj* obj = MR::getAreaObj("WaterArea", getTrans() + getGravityVec() * 100.0f);
+        AreaObj* obj = MR::getAreaObj("WaterArea", getTrans() + getGravityVec() * cNum_update_f58);
         if (obj != nullptr) {
             Pos3f* followMtx = obj->getFollowMtx();
             if (followMtx != nullptr) {
@@ -1065,7 +1292,7 @@ bool MarioSwim::update() {
                 MR::extractMtxTrans(followMtx->toMtxPtr(), &areaPos);
 
                 if (areaPos != mAreaFollowMtxPos) {
-                    if ((areaPos - mAreaFollowMtxPos).length() < 10.0f) {
+                    if ((areaPos - mAreaFollowMtxPos).length() < cNum_update_f59) {
                         addVelocity(areaPos - mAreaFollowMtxPos);
                     }
 
@@ -1079,7 +1306,7 @@ bool MarioSwim::update() {
         mKnockbackTimer--;
         addVelocity(mKnockbackVel);
         if (mKnockbackTimer < 0x78) {
-            mKnockbackVel.mult(0.98f);
+            mKnockbackVel.mult(cNum_update_f60);
         }
     }
 
@@ -1093,9 +1320,9 @@ bool MarioSwim::update() {
     f32 streamSpeed = streamDir.length();
     if (!MR::normalizeOrZero(&streamDir)) {
         if (MR::diffAngleAbs(streamDir, mFrontVec) < PI / 2) {
-            MR::vecBlendSphere(mFrontVec, streamDir, &mFrontVec, 0.001f * streamSpeed);
+            MR::vecBlendSphere(mFrontVec, streamDir, &mFrontVec, cNum_update_f61 * streamSpeed);
         } else {
-            MR::vecBlendSphere(mFrontVec, -streamDir, &mFrontVec, 0.001f * streamSpeed);
+            MR::vecBlendSphere(mFrontVec, -streamDir, &mFrontVec, cNum_update_f62 * streamSpeed);
         }
     }
 
@@ -1104,7 +1331,7 @@ bool MarioSwim::update() {
         mWaterStreamVel += whirlAccel;
         Vec3f whirlDir(whirlAccel);
         MR::normalizeOrZero(&whirlDir);
-        MR::vecBlendSphere(mFrontVec, whirlDir, &mFrontVec, 0.1f);
+        MR::vecBlendSphere(mFrontVec, whirlDir, &mFrontVec, cNum_update_f63);
     }
 
     if (mJetTimer == 0 && !mIsOnSurface && !MR::isNearZero(mWaterStreamDir)) {
@@ -1166,19 +1393,19 @@ void MarioSwim::procBuoyancy() {
         f32 swimUpBottomDist = table->mSwimUpBottomDist;
         f32 floorDepthSum = waterDepthNeg + mDistToFloor;
 
-        if (floorDepthSum < 2000.0f) {
-            f32 ratio = floorDepthSum / 2000.0f;
+        if (floorDepthSum < cNum_procBuoyancy_f1) {
+            f32 ratio = floorDepthSum / cNum_procBuoyancy_f2;
             swimUpWeakDist = table->mSwimUpWeakDist * ratio;
             swimUpBottomDist = table->mSwimUpBottomDist * ratio;
         }
 
         bool shouldSink = (swimUpWeakDist > mDistToFloor);
-        if (mForwardSpeed > 2.0f && mVerticalAngle > PI / 2) {
+        if (mForwardSpeed > cNum_procBuoyancy_f3 && mVerticalAngle > PI / 2) {
             shouldSink = false;
             mIsSinking = false;
         }
 
-        if (!(mDistToFloor < 300.0f) || !(-mWaterDepth < 100.0f)) {
+        if (!(mDistToFloor < cNum_procBuoyancy_f4) || !(-mWaterDepth < cNum_procBuoyancy_f5)) {
             if (shouldSink) {
                 if (mStateTimer > 300) {
                     f32 distRatio = mDistToFloor / swimUpWeakDist;
@@ -1193,7 +1420,7 @@ void MarioSwim::procBuoyancy() {
                     buoyancyScale =
                         mActor->getConst().getTable()->mSwimUpWeakRatio + (distRatio * (1.0f - mActor->getConst().getTable()->mSwimUpWeakRatio));
                 } else {
-                    buoyancyScale = 1.0f + (1.0f - (static_cast< f32 >(mStateTimer) / 300.0f));
+                    buoyancyScale = 1.0f + (1.0f - (static_cast< f32 >(mStateTimer) / cNum_procBuoyancy_f6));
                 }
 
                 mIsSinking = true;
@@ -1231,9 +1458,9 @@ void MarioSwim::procBuoyancy() {
 
         if (mIsSinking) {
             if (mDistToFloor < mActor->getConst().getTable()->mSwimUpBottomDist) {
-                f32 clampRatio = MR::clamp(1.0f - (static_cast< f32 >(mActionLockTimer) / 50.0f), 0.0f, 1.0f);
+                f32 clampRatio = MR::clamp(1.0f - (static_cast< f32 >(mActionLockTimer) / cNum_procBuoyancy_f7), 0.0f, 1.0f);
                 f32 sinkFactor = ((1.0f - clampRatio) + (clampRatio * mActor->getConst().getTable()->mSwimReverseSinkRatio));
-                sinkFactor *= 0.1f;
+                sinkFactor *= cNum_procBuoyancy_f8;
 
                 if (!MR::isNearZero(mWaterStreamVel)) {
                     sinkFactor = 1.0f;
@@ -1261,13 +1488,13 @@ void MarioSwim::flowOnWave(f32 unused) {
 
         return;
     } else if (mIsOnSurface) {
-        if (mWaterDepth < -25.0f) {
+        if (mWaterDepth < -cNum_flowOnWave_f1) {
             addVelocity(mSurfacePos, mBuoyancySpeed);
         }
 
         if (mWaterDepth > 0.0f) {
             Vec3f inverseFlow = -mSurfacePos;
-            addVelocity(inverseFlow, 5.0f + mWaterDepth);
+            addVelocity(inverseFlow, cNum_flowOnWave_f2 + mWaterDepth);
         }
     }
 
@@ -1283,7 +1510,7 @@ void MarioSwim::decideVelocity() {
         mIsSwimmingAtSurface = false;
     }
 
-    if (mWaterDepth < -400.0f && mSinkTimer == 0) {
+    if (mWaterDepth < -cNum_decideVelocity_f1 && mSinkTimer == 0) {
         mIsSwimmingAtSurface = false;
     }
 
@@ -1296,7 +1523,7 @@ void MarioSwim::decideVelocity() {
             MarioConstTable* table = mActor->getConst().getTable();
             f32 inertia = table->mSwimFrontIne;
             if (mSpinDashTimer == 0 && mForwardSpeed >= (angleFactor * table->mSwimFrontOnWaterSpeed)) {
-                inertia = 0.95f;
+                inertia = cNum_decideVelocity_f2;
             }
 
             mForwardSpeed = mForwardSpeed * inertia + (1.0f - inertia) * (angleFactor * marioConst.getTable()->mSwimFrontOnWaterSpeed);
@@ -1307,15 +1534,15 @@ void MarioSwim::decideVelocity() {
     } else {
         if (!mIsOnSurface && checkTrgA() && mKnockbackTimer == 0 && !isSpinning()) {
             f32 stickX = MR::abs(MarioModule::getStickX());
-            f32 stickFactor = 1.0f - (0.3f * stickX);
-            f32 threshold = 0.75f * stickFactor;
+            f32 stickFactor = 1.0f - (cNum_decideVelocity_f3 * stickX);
+            f32 threshold = cNum_decideVelocity_f4 * stickFactor;
 
             if (mVerticalAngle < PI / 2 && getStickY() > threshold && mActionLockTimer == 0 && mUpStrokeAllowed != 0) {
                 f32 stickY = getStickY();
                 f32 normalizedY = (stickY - threshold) / (1.0f - threshold);
                 mVerticalAngle =
-                    ((1.0f - normalizedY) * (FloatUtil::PI() * 2.0f / 3.0f)) + (normalizedY * (FloatUtil::PI() / 1.2f));
-            } else if (mVerticalAngle < PI / 2 && MR::abs(getStickY()) < 0.1f && mActionLockTimer == 0 && mUpStrokeAllowed != 0) {
+                    ((1.0f - normalizedY) * (FloatUtil::PI() * cNum_decideVelocity_f5 / cNum_decideVelocity_f6)) + (normalizedY * (FloatUtil::PI() / cNum_decideVelocity_f7));
+            } else if (mVerticalAngle < PI / 2 && MR::abs(getStickY()) < cNum_decideVelocity_f8 && mActionLockTimer == 0 && mUpStrokeAllowed != 0) {
                 mVerticalAngle = PI / 2;
             }
 
@@ -1358,13 +1585,13 @@ void MarioSwim::decideVelocity() {
                 }
 
                 if (MarioModule::isAnimationRun("水泳上昇呼吸")) {
-                    mForwardSpeed *= 0.95f;
+                    mForwardSpeed *= cNum_decideVelocity_f9;
                 }
 
                 if (mActor->getConst().getTable()->mSwimUpBottomDist > mDistToFloor) {
-                    mForwardSpeed *= 0.99f;
+                    mForwardSpeed *= cNum_decideVelocity_f10;
                 } else if (mActor->getConst().getTable()->mSwimUpWeakDist > mDistToFloor) {
-                    mForwardSpeed *= 0.995f;
+                    mForwardSpeed *= cNum_decideVelocity_f11;
                 }
             }
         }
@@ -1386,7 +1613,7 @@ void MarioSwim::decideVelocity() {
 
                     playSound("水面スピン");
                 } else {
-                    mForwardSpeed *= 0.96f;
+                    mForwardSpeed *= cNum_decideVelocity_f12;
                 }
             } else {
                 if (mDashTimer < 30) {
@@ -1399,7 +1626,7 @@ void MarioSwim::decideVelocity() {
 
                     playSound("水中スピン");
                 } else {
-                    mForwardSpeed *= 0.96f;
+                    mForwardSpeed *= cNum_decideVelocity_f13;
                 }
             }
         } else if (mDashTimer < 40) {
@@ -1430,7 +1657,7 @@ void MarioSwim::decideVelocity() {
     }
 
     if (mZSinkTimer != 0) {
-        mForwardSpeed *= 0.95f;
+        mForwardSpeed *= cNum_decideVelocity_f14;
     }
 }
 
@@ -1446,13 +1673,13 @@ void MarioSwim::decideAnimation() {
     }
 
     if (isAnimationRun("水泳水面初期移動")) {
-        if (getStickP() < 0.1f) {
+        if (getStickP() < cNum_decideAnimation_f1) {
             stopAnimationUpper(nullptr);
         }
     }
 
     if (isAnimationRun(nullptr) && !isAnimationRun("水泳上昇呼吸")) {
-        if (MR::abs(getStickX()) < 0.1f) {
+        if (MR::abs(getStickX()) < cNum_decideAnimation_f2) {
             stopAnimation("水泳ターン左");
             stopAnimation("水泳ターン右");
         }
@@ -1474,10 +1701,10 @@ void MarioSwim::decideAnimation() {
         } else {
             animIndex = 3;
             if (mIsSwimmingAtSurface != false) {
-                if (getStickP() > 0.1f) {
+                if (getStickP() > cNum_decideAnimation_f3) {
                     animIndex = 1;
                 }
-            } else if (MR::abs(getStickX()) > 0.1f && mVerticalAngle < 1.6534699f && mForwardSpeed < ::cTurnMotionSpeed) {
+            } else if (MR::abs(getStickX()) > cNum_decideAnimation_f4 && mVerticalAngle < cNum_decideAnimation_f5 && mForwardSpeed < ::cTurnMotionSpeed) {
                 if (getStickX() < 0.0f) {
                     changeAnimation("水泳ターン左");
                 } else {
@@ -1489,7 +1716,7 @@ void MarioSwim::decideAnimation() {
         }
     } else {
         // Surface logic
-        if (getStickP() > 0.1f) {
+        if (getStickP() > cNum_decideAnimation_f6) {
             playSound("水面バタ足");
 
             if (isAnimationRun("水泳上昇呼吸")) {
@@ -1508,7 +1735,7 @@ void MarioSwim::decideAnimation() {
                 return;
             }
         } else {
-            if (mDashTimer == 0 && mForwardSpeed < 2.0f) {
+            if (mDashTimer == 0 && mForwardSpeed < cNum_decideAnimation_f7) {
                 mSurfaceStartAnim = true;
             }
 
@@ -1531,7 +1758,7 @@ void MarioSwim::decideAnimation() {
 void MarioSwim::decideEffect(bool isReset) {
     u8 oldState = mEffectState;
     if (mIsOnSurface) {
-        if (isAnimationRun("水泳水面初期移動") || mForwardSpeed > 2.5f) {
+        if (isAnimationRun("水泳水面初期移動") || mForwardSpeed > cNum_decideEffect_f1) {
             mEffectState = 1;
         } else {
             mEffectState = 0;
@@ -1582,7 +1809,7 @@ void MarioSwim::decideEffect(bool isReset) {
         }
 
         case 1:
-            if (mSurfaceOffset > -10.0f) {
+            if (mSurfaceOffset > -cNum_decideEffect_f2) {
                 Vec3f projected;
                 MR::vecKillElement(mActor->mHeadPos - mSurfaceNorm, mSurfacePos, &projected);
 
@@ -1611,7 +1838,7 @@ void MarioSwim::decideEffect(bool isReset) {
 
         playEffectRTW("水面ウエイト波紋", mSurfacePos, mSurfaceNorm + projected + lastMove);
 
-        if (MR::getRandom() < 0.03f) {
+        if (MR::getRandom() < cNum_decideEffect_f3) {
             playSound("水面ウエイト");
         }
     }
@@ -1681,10 +1908,10 @@ bool MarioSwim::close() {
         Vec3f groundPos;
         mActor->getGroundPos(&groundPos);
 
-        if ((groundPos - getTrans()).length() >= 100.0f || isSlipPolygon(getGroundPolygon())) {
+        if ((groundPos - getTrans()).length() >= cNum_close_f1 || isSlipPolygon(getGroundPolygon())) {
             mNextAction = EXIT_ACTION_POWER_JUMP;
 
-            getPlayer()->tryForcePowerJump(mFrontVec * 5.0f - getAirGravityVec() * 15.0f, false);
+            getPlayer()->tryForcePowerJump(mFrontVec * cNum_close_f2 - getAirGravityVec() * cNum_close_f3, false);
             Mario* player = getPlayer();
             player->mSlipInhibitTimer = 120;
         } else {
@@ -1732,7 +1959,7 @@ bool MarioSwim::close() {
 
         MR::vecKillElement(mWaterStreamVel, getGravityVec(), &mWaterStreamVel);
 
-        getPlayer()->mJumpVec = getPlayer()->getJumpVec() + mWaterStreamVel * 0.3f;
+        getPlayer()->mJumpVec = getPlayer()->getJumpVec() + mWaterStreamVel * cNum_close_f4;
     }
 
     getPlayer()->unlockGroundCheck(this);
@@ -1772,12 +1999,12 @@ bool MarioSwim::checkWaterCube(bool checkOnly) {
             getPlayer()->mRippleRotate = bodyWaterInfo.mSurfaceNormal;
         }
 
-        MR::getWaterAreaObj(&headWaterInfo, getTrans() + mUpVec * 110.0f);
+        MR::getWaterAreaObj(&headWaterInfo, getTrans() + mUpVec * cNum_checkWaterCube_f1);
         if (!bodyWaterInfo.isInWater() || !headWaterInfo.isInWater()) {
             return false;
         }
     } else {
-        MR::getWaterAreaObj(&headWaterInfo, getTrans() + mUpVec * 80.0f);
+        MR::getWaterAreaObj(&headWaterInfo, getTrans() + mUpVec * cNum_checkWaterCube_f2);
     }
 
     if (bodyWaterInfo.isInWater()) {
@@ -1785,10 +2012,10 @@ bool MarioSwim::checkWaterCube(bool checkOnly) {
             mSwimState = SWIM_STATE_UNDERWATER;
             mWaterInfo = bodyWaterInfo;
         } else {
-            if (getPlayer()->mVerticalSpeed - mWaterDepth < 80.0f) {
+            if (getPlayer()->mVerticalSpeed - mWaterDepth < cNum_checkWaterCube_f3) {
                 if (mSwimState != SWIM_STATE_NONE) {
                     const Vec3f& shadowNorm = getPlayer()->getShadowNorm();
-                    if (calcAngleD(shadowNorm) >= 30.0f) {
+                    if (calcAngleD(shadowNorm) >= cNum_checkWaterCube_f4) {
                         mNextAction = EXIT_ACTION_SLIDE;
                     } else {
                         mNextAction = EXIT_ACTION_JUMP;
@@ -1832,7 +2059,7 @@ bool MarioSwim::checkWaterCube(bool checkOnly) {
     }
 
     if (!checkOnly) {
-        if (mWaterDepth > 100.0f && getPlayer()->mVerticalSpeed < 200.0f) {
+        if (mWaterDepth > cNum_checkWaterCube_f5 && getPlayer()->mVerticalSpeed < cNum_checkWaterCube_f6) {
             return true;
         }
     }
@@ -1846,8 +2073,8 @@ bool MarioSwim::checkWaterCube(bool checkOnly) {
         mWaterDepth = depthVec.x;
     }
 
-    if (!(mWaterDepth < -500.0f)) {
-        if (mIsOnSurface && getPlayer()->mVerticalSpeed < 30.0f) {
+    if (!(mWaterDepth < -cNum_checkWaterCube_f7)) {
+        if (mIsOnSurface && getPlayer()->mVerticalSpeed < cNum_checkWaterCube_f8) {
             mNextAction = EXIT_ACTION_SLIDE;
         } else if (!MR::isStageSwimAngleLimit()) {
             mNextAction = EXIT_ACTION_SLIDE;
@@ -1858,7 +2085,7 @@ bool MarioSwim::checkWaterCube(bool checkOnly) {
 }
 
 void MarioSwim::updateUnderWater() {
-    if (MarioModule::getPlayerMode() != 4 && MarioModule::getStickP() > 0.1f) {
+    if (MarioModule::getPlayerMode() != 4 && MarioModule::getStickP() > cNum_updateUnderWater_f1) {
         mWaterDistanceTarget = 0.0f;
     }
 
@@ -1875,7 +2102,7 @@ void MarioSwim::updateUnderWater() {
         MR::normalizeOrZero(&searchDir);
     }
 
-    const f32 kOffset = 100.0f;
+    const f32 kOffset = cNum_updateUnderWater_f2;
 
     for (u32 i = 0; i < searchLimit; i++) {
         Vec3f checkPos = MarioModule::getTrans() + searchDir * kOffset + getGravityVec() * (mWaterDistanceTarget - kOffset);
@@ -1886,22 +2113,22 @@ void MarioSwim::updateUnderWater() {
         if (waterInfo.isInWater()) {
             mSurfaceDepth = mWaterDistanceTarget;
 
-            if (mWaterDistanceTarget > 300.0f) {
+            if (mWaterDistanceTarget > cNum_updateUnderWater_f3) {
                 getWaterAreaInfo(&waterInfo, checkPos, nullptr);
                 Vec3f surfacePos = waterInfo.mSurfacePos;
                 mSurfaceDepth = (surfacePos - getTrans()).dot(getGravityVec());
                 mDeepWater = true;
             }
 
-            else if (mWaterDistanceTarget < 210.0f && MarioModule::getPlayerMode() == 3) {
+            else if (mWaterDistanceTarget < cNum_updateUnderWater_f4 && MarioModule::getPlayerMode() == 3) {
                 if (!MR::checkStrikePointToMap(checkPos, nullptr)) {
                     getWaterAreaInfo(&waterInfo, getTrans(), nullptr);
                     Vec3f surfacePos = waterInfo.mSurfacePos;
 
-                    if (waterInfo.mCamWaterDepth < 100.0f) {
+                    if (waterInfo.mCamWaterDepth < cNum_updateUnderWater_f5) {
                         if (!(getPlayer()->mMovementStates.onGround) || getPlayer()->mTargetWalkSpeedIndex) {
                             actor = mActor;
-                            actor->createIceFloor(surfacePos + searchDir * 170.0f);
+                            actor->createIceFloor(surfacePos + searchDir * cNum_updateUnderWater_f6);
                         }
 
                         mWaterDistanceTarget = 0.0f;
@@ -1923,13 +2150,13 @@ void MarioSwim::updateUnderWater() {
             return;
         }
 
-        mWaterDistanceTarget += 40.0f;
+        mWaterDistanceTarget += cNum_updateUnderWater_f7;
     }
 }
 
 f32 MarioSwim::checkUnderWaterFull(const Vec3f& rVec) {
-    for (f32 currentDist = 0.0f; currentDist < 10000.0f; currentDist += 40.0f) {
-        Vec3f checkPos = getTrans() + rVec * 100.0f + getGravityVec() * (currentDist - 100.0f);
+    for (f32 currentDist = 0.0f; currentDist < cNum_checkUnderWaterFull_f1; currentDist += cNum_checkUnderWaterFull_f2) {
+        Vec3f checkPos = getTrans() + rVec * cNum_checkUnderWaterFull_f3 + getGravityVec() * (currentDist - cNum_checkUnderWaterFull_f4);
         if (MR::getAreaObj("ForbidWaterSearchCube", checkPos) != nullptr) {
             return -1.0f;
         }
@@ -1949,9 +2176,9 @@ f32 MarioSwim::checkUnderWaterFull(const Vec3f& rVec) {
 }
 
 bool MarioSwim::checkWaterBottom() {
-    Vec3f rayStart(getTrans() + mUpVec * 50.0f);
+    Vec3f rayStart(getTrans() + mUpVec * cNum_checkWaterBottom_f1);
 
-    u32 hitCount = MR::getNearPolyOnLineSort(rayStart, rayStart, -mUpVec * 2000.0f, nullptr);
+    u32 hitCount = MR::getNearPolyOnLineSort(rayStart, rayStart, -mUpVec * cNum_checkWaterBottom_f2, nullptr);
     for (u32 i = 0; i < hitCount; i++) {
         Triangle tri;
         Vec3f hitPos;
@@ -1961,7 +2188,7 @@ bool MarioSwim::checkWaterBottom() {
         if (!MR::isWaterPolygon(&tri)) {
             mDistToFloor = (getTrans() - hitPos).dot(mUpVec);
 
-            return mDistToFloor > 200.0f;
+            return mDistToFloor > cNum_checkWaterBottom_f3;
         }
     }
 
@@ -1979,13 +2206,13 @@ bool MarioSwim::getWaterAreaInfo(WaterInfo* pInfo, const Vec3f& rPos, Vec2f* pOu
     if (mIsOnSurface) {
         if (mSurfaceOffset > 0.0f) {
             f32 waveHeight = pInfo->mWaveHeight;
-            mSurfaceOffset = 0.97f * mSurfaceOffset + 0.03f * waveHeight;
+            mSurfaceOffset = cNum_getWaterAreaInfo_f1 * mSurfaceOffset + cNum_getWaterAreaInfo_f2 * waveHeight;
         } else {
             f32 waveHeight = pInfo->mWaveHeight;
-            mSurfaceOffset = 0.99f * mSurfaceOffset + 0.01f * (waveHeight * 0.5f);
+            mSurfaceOffset = cNum_getWaterAreaInfo_f3 * mSurfaceOffset + cNum_getWaterAreaInfo_f4 * (waveHeight * cNum_getWaterAreaInfo_f5);
         }
     } else {
-        mSurfaceOffset = 0.8f * mSurfaceOffset;
+        mSurfaceOffset = cNum_getWaterAreaInfo_f6 * mSurfaceOffset;
     }
 
     mWaterEdgePos = pInfo->mEdgePos;
@@ -1993,8 +2220,8 @@ bool MarioSwim::getWaterAreaInfo(WaterInfo* pInfo, const Vec3f& rPos, Vec2f* pOu
     Vec3f currentFlow(pInfo->mStreamVec);
 
     f32 depthFactor = 1.0f;
-    if (mWaterDepth > -500.0f) {
-        depthFactor = -mWaterDepth / 500.0f;
+    if (mWaterDepth > -cNum_getWaterAreaInfo_f7) {
+        depthFactor = -mWaterDepth / cNum_getWaterAreaInfo_f8;
     }
 
     f32 finalScale = MR::clamp(depthFactor, 0.0f, 1.0f);
@@ -2003,7 +2230,7 @@ bool MarioSwim::getWaterAreaInfo(WaterInfo* pInfo, const Vec3f& rPos, Vec2f* pOu
     }
 
     currentFlow.scale(finalScale);
-    mWaterStreamVel = mWaterStreamVel * 0.95f + currentFlow * 0.05f;
+    mWaterStreamVel = mWaterStreamVel * cNum_getWaterAreaInfo_f9 + currentFlow * cNum_getWaterAreaInfo_f10;
     mWaterStreamDir = currentFlow;
 
     return isInWater;
@@ -2054,7 +2281,7 @@ void MarioSwim::spin() {
 
     if (mSpinTimer != 0) {
         mSpinTimer--;
-        mForwardSpeed = 0.95f * mForwardSpeed;
+        mForwardSpeed = cNum_spin_f1 * mForwardSpeed;
         if (mSpinTimer == 0) {
             startSpinDash();
         }
@@ -2082,7 +2309,7 @@ void MarioSwim::spin() {
 
     if (mSpinTimer != 0) {
         mSpinTimer = mActor->getConst().getTable()->mSwimSpinMissOfsTime;
-        mForwardSpeed = 0.5f * mForwardSpeed;
+        mForwardSpeed = cNum_spin_f2 * mForwardSpeed;
 
     } else {
         mSpinTimer = 1;
@@ -2212,12 +2439,12 @@ void MarioSwim::jet() {
             getPlayer()->mHitStates.jet = 1;
 
             if (mForwardSpeed > targetSpeed) {
-                mForwardSpeed *= 0.95f;
+                mForwardSpeed *= cNum_jet_f1;
                 return;
             }
 
-            if (mForwardSpeed > (0.1f * targetSpeed)) {
-                mForwardSpeed *= 0.96f;
+            if (mForwardSpeed > (cNum_jet_f2 * targetSpeed)) {
+                mForwardSpeed *= cNum_jet_f3;
                 return;
             }
 
@@ -2231,14 +2458,14 @@ void MarioSwim::jet() {
                 mForwardSpeed = 1.0f;
             }
 
-            mForwardSpeed *= 1.02f;
+            mForwardSpeed *= cNum_jet_f4;
 
             if (mRingDashTimer != 0) {
-                mForwardSpeed *= 1.5f;
+                mForwardSpeed *= cNum_jet_f5;
             }
         } else {
             if (mForwardSpeed > targetSpeed) {
-                mForwardSpeed *= 0.98f;
+                mForwardSpeed *= cNum_jet_f6;
             } else {
                 mForwardSpeed = targetSpeed;
             }
@@ -2444,13 +2671,13 @@ void MarioSwim::addDamage(const Vec3f& rDamageDir) {
 
 void MarioSwim::updateTilt() {
     f32 targetTiltX = 0.0f;
-    f32 blendX = 0.1f;
+    f32 blendX = cNum_updateTilt_f1;
 
     if (mIsOnSurface) {
-        if (getStickP() > 0.1f) {
+        if (getStickP() > cNum_updateTilt_f2) {
             f32 stickX = getStickX();
 
-            f32 angle = (stickX * FloatUtil::PI()) / 6.0f;
+            f32 angle = (stickX * FloatUtil::PI()) / cNum_updateTilt_f3;
             f32 absAngle = MR::abs(angle);
 
             Vec3f padDir = getWorldPadDir();
@@ -2465,18 +2692,18 @@ void MarioSwim::updateTilt() {
             }
 
             if (MR::abs(mCurrentTiltX) < MR::abs(targetTiltX)) {
-                blendX = 0.1f;
+                blendX = cNum_updateTilt_f4;
             } else {
-                blendX = 0.03f;
+                blendX = cNum_updateTilt_f5;
             }
         }
     } else {
-        targetTiltX = (getStickX() * FloatUtil::PI()) / 5.0f;
+        targetTiltX = (getStickX() * FloatUtil::PI()) / cNum_updateTilt_f6;
     }
 
     if (isAnimationRun("水泳ターン左") || isAnimationRun("水泳ターン右") || isAnimationRun("水泳ターン下")) {
         f32 stickX = getStickX();
-        targetTiltX = (MR::clamp(stickX / 0.7f, -1.0f, 1.0f) * FloatUtil::PI()) / 8.0f;
+        targetTiltX = (MR::clamp(stickX / cNum_updateTilt_f7, -1.0f, 1.0f) * FloatUtil::PI()) / cNum_updateTilt_f8;
     }
 
     f32 targetTiltY = 0.0f;
@@ -2484,10 +2711,10 @@ void MarioSwim::updateTilt() {
     if (!mIsOnSurface) {
         if (mIdleWaitTimer == 0) {
             f32 scaledTilt = (getStickY() * FloatUtil::PI());
-            targetTiltY = scaledTilt / 12.0f;
+            targetTiltY = scaledTilt / cNum_updateTilt_f9;
 
-            if (getStickY() > 0.0f && mVerticalAngle <= 2.0f / 3.0f * FloatUtil::PI()) {
-                targetTiltY = getStickY() * FloatUtil::PI() / 8.0f;
+            if (getStickY() > 0.0f && mVerticalAngle <= cNum_updateTilt_f10 / cNum_updateTilt_f11 * FloatUtil::PI()) {
+                targetTiltY = getStickY() * FloatUtil::PI() / cNum_updateTilt_f12;
             }
         } else if (getStickY() < 0.0f) {
             const MarioConstTable* table = mActor->getConst().getTable();
@@ -2496,19 +2723,19 @@ void MarioSwim::updateTilt() {
             const MarioConstTable* table = mActor->getConst().getTable();
             targetTiltY = (getStickY() * FloatUtil::PI()) / table->mSwimTiltZdown;
         } else if (mIdleWaitTimer != 0) {
-            f32 fade = static_cast< f32 >(mIdleWaitTimer) / 120.0f;
+            f32 fade = static_cast< f32 >(mIdleWaitTimer) / cNum_updateTilt_f13;
             if (fade > 1.0f) {
                 fade = 1.0f;
             }
 
-            targetTiltY = targetTiltY - (fade * (FloatUtil::PI() / 10.0f));
+            targetTiltY = targetTiltY - (fade * (FloatUtil::PI() / cNum_updateTilt_f14));
         } else {
             targetTiltY = 0.0f;
         }
     }
 
     mCurrentTiltX = (blendX * targetTiltX) + ((1.0f - blendX) * mCurrentTiltX);
-    mCurrentTiltY = (0.1f * targetTiltY) + (0.9f * mCurrentTiltY);
+    mCurrentTiltY = (cNum_updateTilt_f15 * targetTiltY) + (cNum_updateTilt_f16 * mCurrentTiltY);
 
     Mtx mtxRotX, mtxRotZ;
     NebulaMtxRotRad(mtxRotX, 'X', mCurrentTiltX);
@@ -2521,7 +2748,7 @@ void MarioSwim::updateTilt() {
 
 void MarioSwim::pushedByWaterWall() {
     if (!(mDistanceToWaterSurface < 0.0f)) {
-        f32 wallDistanceLimit = 80.0f;
+        f32 wallDistanceLimit = cNum_pushedByWaterWall_f1;
         if (mDistanceToWaterSurface < wallDistanceLimit) {
             Vec3f pushDir = getTrans() - mWaterEdgePos;
             pushDir.setLength(wallDistanceLimit - mDistanceToWaterSurface);
@@ -2536,12 +2763,12 @@ void MarioSwim::pushedByWaterWall() {
                 }
 
                 if (!(dot < 0.0f)) {
-                    if (dot < 0.995f) {
+                    if (dot < cNum_pushedByWaterWall_f2) {
                         Vec3f newHead;
                         MR::vecKillElement(headVec, pushDir, &newHead);
                         MR::normalize(&newHead);
 
-                        MR::vecBlendSphere(getPlayer()->mHeadVec, newHead, &newHead, 0.2f);
+                        MR::vecBlendSphere(getPlayer()->mHeadVec, newHead, &newHead, cNum_pushedByWaterWall_f3);
                         getPlayer()->forceSetHeadVecKeepSide(newHead);
                         MR::vecKillElement(newHead, getGravityVec(), &mFrontVec);
 
@@ -2549,7 +2776,7 @@ void MarioSwim::pushedByWaterWall() {
                         mVerticalAngle = MR::diffAngleAbs(player->mHeadVec, -getGravityVec());
 
                     } else {
-                        MR::vecBlendSphere(mFrontVec, pushDir, &mFrontVec, 0.2f);
+                        MR::vecBlendSphere(mFrontVec, pushDir, &mFrontVec, cNum_pushedByWaterWall_f4);
                         mWaterWallTimer = 30;
                     }
                 }
@@ -2590,10 +2817,10 @@ void MarioSwim::hitHead(const HitInfo* pHit) {
             Vec3f velocityPart;
 
             f32 element = MR::vecKillElement(player->mPostureUpVec, -*normal, &velocityPart);
-            velocityPart += *normal * element * 1.5f;
+            velocityPart += *normal * element * cNum_hitHead_f1;
 
-            if (velocityPart.length() < 10.0f) {
-                velocityPart.setLength(10.0f);
+            if (velocityPart.length() < cNum_hitHead_f2) {
+                velocityPart.setLength(cNum_hitHead_f3);
             }
 
             MR::vecKillElement(velocityPart, getGravityVec(), &direction);
@@ -2607,7 +2834,7 @@ void MarioSwim::hitHead(const HitInfo* pHit) {
 
     Vec3f pushBack = getTrans() - pHit->mHitPos;
     MR::vecKillElement(pushBack, *pHit->mParentTriangle.getNormal(0), &pushBack);
-    pushBack.setLength(5.0f);
+    pushBack.setLength(cNum_hitHead_f4);
     addVelocity(pushBack);
 }
 
@@ -2628,7 +2855,7 @@ void MarioSwim::hitPoly(u8 type, const Vec3f& rNormal, HitSensor* pSensor) {
     Vec3f negNormal = -rNormal;
 
     f32 angle = MR::diffAngleAbsHorizontal(negNormal, mFrontVec, swimGravity);
-    if (invDot >= 0.5f && angle <= PI / 4) {
+    if (invDot >= cNum_hitPoly_f1 && angle <= PI / 4) {
         mSlideOut = true;
     }
 }
@@ -2637,7 +2864,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
     if (mActor->mTakenSensor == 0) {
         f32 floorDot = -rNormal.dot(getPlayer()->getAirGravityVec());
 
-        if (!mIsOnSurface && floorDot > 0.70700002f) {
+        if (!mIsOnSurface && floorDot > cNum_hitWall_f1) {
             mWallHit = true;
             return;
         } else if (mIsOnSurface) {
@@ -2647,7 +2874,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
 
             if (mStateTimer > 0x78) {
                 // If on surface and hitting something slope-like, treat as slide/floor interaction
-                if (floorDot >= 0.5f) {
+                if (floorDot >= cNum_hitWall_f2) {
                     mSlideOut = true;
                     return;
                 }
@@ -2664,11 +2891,11 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
 
             if (projectedVelocity.dot(mUpVec) > 0.0f) {
                 if (getStickY() <= 0.0f) {
-                    mVerticalAngle -= 0.1f;
+                    mVerticalAngle -= cNum_hitWall_f3;
                 }
             } else {
                 if (getStickY() >= 0.0f) {
-                    mVerticalAngle += 0.1f;
+                    mVerticalAngle += cNum_hitWall_f4;
                 }
             }
         }
@@ -2694,27 +2921,27 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
                 Mario* player = getPlayer();
                 f32 speedIntoWall = MR::vecKillElement(player->mPostureUpVec, -rNormal, &tangent);
 
-                tangent += rNormal * speedIntoWall * 1.5f;
+                tangent += rNormal * speedIntoWall * cNum_hitWall_f5;
                 MR::vecKillElement(tangent, getGravityVec(), &velocityAfterHit);
 
                 bool isReflect = true;
                 f32 speedReduction = mActor->getConst().getTable()->mTurboReductionHitWall;
 
                 if (!MR::normalizeOrZero(&velocityAfterHit)) {
-                    if (rNormal.dot(getGravityVec()) > 0.1f && mVerticalAngle < 1.5707964f) {
+                    if (rNormal.dot(getGravityVec()) > cNum_hitWall_f6 && mVerticalAngle < cNum_hitWall_f7) {
                         mVerticalAngle = PI - mVerticalAngle;
                     }
 
                     mKnockbackTimer = 20;
-                    mKnockbackVel = rNormal * 6.0f;
+                    mKnockbackVel = rNormal * cNum_hitWall_f8;
 
                     if (MR::isNearZero(mWaterStreamDir)) {
                         f32 impactAngle = MR::diffAngleAbsHorizontal(mFrontVec, rNormal, getAirGravityVec());
 
-                        if (impactAngle >= 2.6179941f) {
+                        if (impactAngle >= cNum_hitWall_f9) {
                             f32 headAngle = MR::diffAngleAbs(getPlayer()->mPostureUpVec, rNormal);
 
-                            if (headAngle <= 2.6179941f) {
+                            if (headAngle <= cNum_hitWall_f10) {
                                 if (headAngle >= 2 * PI) {
                                     Mario* player = getPlayer();
                                     Vec3f cross1 = rNormal.cross(player->mPostureUpVec);
@@ -2733,14 +2960,14 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
 
                             } else {
                                 mKnockbackTimer = 60;
-                                mKnockbackVel = rNormal * 16.0f;
+                                mKnockbackVel = rNormal * cNum_hitWall_f11;
                             }
                         } else {
                             Vec3f glanceDir;
                             MR::vecKillElement(mFrontVec, rNormal, &glanceDir);
                             if (!MR::normalizeOrZero(&glanceDir)) {
                                 mFrontVec = glanceDir;
-                                speedReduction = 0.8f;
+                                speedReduction = cNum_hitWall_f12;
                                 isReflect = false;
                             }
                         }
@@ -2749,7 +2976,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
                             mFrontVec = velocityAfterHit;
                         } else {
                             mKnockbackTimer = 60;
-                            mKnockbackVel = rNormal * 16.0f;
+                            mKnockbackVel = rNormal * cNum_hitWall_f13;
                         }
                     }
                 }
@@ -2777,7 +3004,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
                 playEffectTrans("壁ヒット", getPlayer()->getWallPos());
                 startCamVib(0);
                 mKnockbackTimer = 60;
-                mKnockbackVel = rNormal * 6.0f;
+                mKnockbackVel = rNormal * cNum_hitWall_f14;
             }
 
             isHit = true;
@@ -2788,7 +3015,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
                 playEffectTrans("壁ヒット", getPlayer()->getWallPos());
                 startCamVib(2);
                 mKnockbackTimer = 30;
-                mKnockbackVel = rNormal * 6.0f;
+                mKnockbackVel = rNormal * cNum_hitWall_f15;
             }
 
             isHit = true;
@@ -2805,7 +3032,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
             playEffectTrans("壁ヒット", getPlayer()->getWallPos());
             startCamVib(0);
             mKnockbackTimer = 60;
-            mKnockbackVel = rNormal * 6.0f;
+            mKnockbackVel = rNormal * cNum_hitWall_f16;
             isHit = true;
         }
 
@@ -2817,7 +3044,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
         }
 
         // Wall Push / Kick Logic check
-        if (rNormal.dot(getGravityVec()) > 0.8f) {
+        if (rNormal.dot(getGravityVec()) > cNum_hitWall_f17) {
             Vec3f* worldPadDir = &getWorldPadDir();
             if (getStickP() != 0.0f) {
                 if (checkTrgA()) {
@@ -2825,7 +3052,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
                         mKnockbackTimer = 60;
                     }
 
-                    mKnockbackVel = *worldPadDir * 10.0f + getGravityVec() * 10.0f;
+                    mKnockbackVel = *worldPadDir * cNum_hitWall_f18 + getGravityVec() * cNum_hitWall_f19;
                 }
             }
         }
@@ -3028,7 +3255,7 @@ bool MarioSwim::passRing(const HitSensor* pSensor) {
     }
 
     if (mRingDashChargeTimer != 0) {
-        getPlayer()->push((ringPos - getTrans()) * 0.25f);
+        getPlayer()->push((ringPos - getTrans()) * cNum_passRing_f1);
     }
 
     DashRing* host = static_cast< DashRing* >(pSensor->mHost);
@@ -3070,9 +3297,9 @@ f32 MarioSwim::calcRingAcc() {
 
             return 1.0f;
         } else {
-            mBlurOffset += 0.5f;
-            if (mBlurOffset > 30.0f) {
-                mBlurOffset = 30.0f;
+            mBlurOffset += cNum_calcRingAcc_f1;
+            if (mBlurOffset > cNum_calcRingAcc_f2) {
+                mBlurOffset = cNum_calcRingAcc_f3;
             }
 
             f32 result = mRingDashSpeedScale;
@@ -3086,7 +3313,7 @@ f32 MarioSwim::calcRingAcc() {
         }
     } else {
         if (mBlurOffset > 0.0f) {
-            mBlurOffset -= 0.5f;
+            mBlurOffset -= cNum_calcRingAcc_f4;
         } else {
             mBlurOffset = 0.0f;
         }
@@ -3106,15 +3333,15 @@ void MarioSwim::ringDash() {
                 mForwardSpeed = 1.0f;
             }
 
-            if (targetSpeed / mForwardSpeed > 1.5f) {
-                mForwardSpeed *= 1.5f;
+            if (targetSpeed / mForwardSpeed > cNum_ringDash_f1) {
+                mForwardSpeed *= cNum_ringDash_f2;
             } else {
                 mForwardSpeed = targetSpeed;
             }
         } else {
             if (mForwardSpeed > targetSpeed) {
-                if (targetSpeed / mForwardSpeed < 0.98f) {
-                    mForwardSpeed *= 0.98f;
+                if (targetSpeed / mForwardSpeed < cNum_ringDash_f3) {
+                    mForwardSpeed *= cNum_ringDash_f4;
                 } else {
                     mForwardSpeed = targetSpeed;
                 }
@@ -3151,10 +3378,10 @@ f32 MarioSwim::getStickY() const {
     f32 stickY = MarioModule::getStickY();
 
     if (mIsSinking && stickY < 0.0f) {
-        if (stickY > -0.5f) {
+        if (stickY > -cNum_getStickY_f1) {
             stickY = 0.0f;
         } else {
-            stickY = (0.5f + stickY) / 0.5f;
+            stickY = (cNum_getStickY_f2 + stickY) / cNum_getStickY_f3;
         }
     }
 
@@ -3214,12 +3441,12 @@ void MarioSwim::addVelocity(const Vec3f& rVelocity, f32 scale) {
 void MarioSwim::doJetJump(u8 type) {
     if (!getPlayer()->mHitStates.jumpForbidden && mRingDashChargeTimer == 0) {
         f32 verticalScale;
-        f32 horizontalSpeed = 12.0f;
-        f32 verticalBoost = 15.0f;
+        f32 horizontalSpeed = cNum_doJetJump_f1;
+        f32 verticalBoost = cNum_doJetJump_f2;
 
         if (checkLvlA()) {
-            horizontalSpeed = 18.0f;
-            verticalBoost = 30.0f;
+            horizontalSpeed = cNum_doJetJump_f3;
+            verticalBoost = cNum_doJetJump_f4;
         } else if (type == 0) {
             getPlayer()->mActionStates.jetJumped = true;
         }
@@ -3228,7 +3455,7 @@ void MarioSwim::doJetJump(u8 type) {
         f32 speedRatio = MR::clamp(mForwardSpeed / table->mSwimToWalkSpd, 0.0f, 1.0f);
 
         mUpVec.dot(getPlayer()->mHeadVec);
-        f32 horizontalScale = 1.25f;
+        f32 horizontalScale = cNum_doJetJump_f5;
         verticalScale = 1.0f;
 
         Vec3f jumpDir;

@@ -8,6 +8,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 2.5f);
+
 namespace {
     NEBULA_TUNABLE(f32, sSideSpeed, 30.0f);
     NEBULA_TUNABLE(f32, sHopSpeed, 30.0f);
@@ -33,12 +37,12 @@ void KoopaBattleMapCoinPlate::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::initCollisionParts(this, "KoopaPlateCoin", MR::addHitSensor(this, "Attack", ATYPE_KOOPA_COIN_PLATE, 8, 250.0f, Vec3f(0.0f, -150.0f, 0.0f)),
+    MR::initCollisionParts(this, "KoopaPlateCoin", MR::addHitSensor(this, "Attack", ATYPE_KOOPA_COIN_PLATE, 8, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f)),
                            mBaseMtx);
     initEffectKeeper(1, nullptr);
 
     MR::addEffectHitNormal(this, "Hit");
-    MR::setEffectBaseScale(this, "Hit", 2.5f);
+    MR::setEffectBaseScale(this, "Hit", cNum_init_f3);
 
     initSound(4, false);
 

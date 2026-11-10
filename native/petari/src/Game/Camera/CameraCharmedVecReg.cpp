@@ -7,6 +7,9 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sRate, 0.02f);
 };  // namespace
@@ -25,7 +28,7 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, cNum_calc_f1 / cNum_calc_f2);
 
     Vec3f watchOffs = watchPoint - target->getPosition();
 

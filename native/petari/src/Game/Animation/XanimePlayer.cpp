@@ -4,6 +4,10 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Model.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getMainAnimationTrans_f1, "getMainAnimationTrans.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getMainAnimationTrans_f2, "getMainAnimationTrans.f2", 0.01f);
 
 namespace {
     const char* const cDummyName = "NULL";
@@ -402,11 +406,11 @@ void XanimePlayer::getMainAnimationTrans(u32 joint, Vec3f* pOut) const {
     XanimeTrack* pTracks = mCore->mTrackList;
     const u32 trackCount = mCore->mTrackCount;
     u32 index = 0;
-    f32 threshold = pTracks[0].getWeight() + 0.01f;
+    f32 threshold = pTracks[0].getWeight() + cNum_getMainAnimationTrans_f1;
     for (u32 i = 1; i < trackCount; i++) {
         const XanimeTrack& rTrack = pTracks[i];
         if (rTrack.mClip != nullptr && rTrack.getWeight() > threshold) {
-            threshold = rTrack.getWeight() + 0.01f;
+            threshold = rTrack.getWeight() + cNum_getMainAnimationTrans_f2;
             index = i;
         }
     }

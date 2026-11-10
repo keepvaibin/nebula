@@ -7,6 +7,8 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+
 namespace {
     const s32 sUnizoNumber = 4;
     NEBULA_TUNABLE(s32, sUnizoInter, 300);
@@ -24,7 +26,7 @@ void UnizoLauncher::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemyMovement(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "Body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     initSound(8, false);
     initNerve(GET_NERVE(UnizoLauncher, UnizoLauncherNrvWait));
 

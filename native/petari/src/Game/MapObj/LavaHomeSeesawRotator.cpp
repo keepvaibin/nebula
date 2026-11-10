@@ -10,6 +10,14 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 1.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRestoreForce_f1, "updateRestoreForce.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRestoreForce_f2, "updateRestoreForce.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDistanceFromRotAxis_f1, "getDistanceFromRotAxis.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addForceHipDrop_f1, "addForceHipDrop.f1", 0.1f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAngularVelocityFric, 0.99f);
     NEBULA_TUNABLE(f32, sAngularAccelHipDrop, 40.0f);
@@ -42,7 +50,7 @@ void LavaHomeSeesawRotator::init(const TableIter& rIter) {
     initNerve(GET_NERVE(LavaHomeSeesawRotator, HostTypeWait));
 
     MR::getMapPartsArgRotateSpeed(&mAngularSpeedMax, rIter);
-    mAngularSpeedMax *= 0.01f;
+    mAngularSpeedMax *= cNum_init_f1;
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
     s32 inertia = 0;
     MR::getMapPartsArgRotateAccelType(&inertia, rIter);
@@ -70,7 +78,7 @@ void LavaHomeSeesawRotator::start() {
     if (isAngleLimited() && mRotateAngle < angle) {
         Rot3f reboundMtx;
         reboundMtx.identity();
-        reboundMtx.setRotate(mRotateAxis, 1.05f * MR::toRadian(angle - mRotateAngle));
+        reboundMtx.setRotate(mRotateAxis, cNum_start_f1 * MR::toRadian(angle - mRotateAngle));
         mRotateMtx.concat(reboundMtx);
     }
 
@@ -170,7 +178,7 @@ void LavaHomeSeesawRotator::updateRotateMtx() {
 void LavaHomeSeesawRotator::updateVelocity() {
     if (MR::isOnPlayer(MR::getBodySensor(mHost))) {
         f32 direction = calcPlayerTorqueSign();
-        mAngularVelocity += direction * (getDistanceFromRotAxis() / (0.1f * mInertia));
+        mAngularVelocity += direction * (getDistanceFromRotAxis() / (cNum_updateVelocity_f1 * mInertia));
     }
 
     if (!isNerve(GET_NERVE(LavaHomeSeesawRotator, HostTypeMoveStart)) && getStep() > ::sMoveStartFrame) {
@@ -186,8 +194,8 @@ void LavaHomeSeesawRotator::updateVelocity() {
 
 void LavaHomeSeesawRotator::updateRestoreForce() {
     f32 direction = MR::sign(calcTiltFromRest());
-    f32 restoreForce = 0.01f * mRestoreForce;
-    mAngularVelocity += (direction * restoreForce) / (0.1f * mInertia);
+    f32 restoreForce = cNum_updateRestoreForce_f1 * mRestoreForce;
+    mAngularVelocity += (direction * restoreForce) / (cNum_updateRestoreForce_f2 * mInertia);
 }
 
 void LavaHomeSeesawRotator::updateRotateAxis() {
@@ -209,7 +217,7 @@ f32 LavaHomeSeesawRotator::getDistanceFromRotAxis() const {
 
     Vec3f projection;
     projection.scale(axis.dot(offset), axis);
-    return 0.001f * projection.length();
+    return cNum_getDistanceFromRotAxis_f1 * projection.length();
 }
 
 // The side of the axis the player stands on, as the sign of the torque gravity gives.
@@ -237,7 +245,7 @@ f32 LavaHomeSeesawRotator::calcTiltFromRest() const {
 
 void LavaHomeSeesawRotator::addForceHipDrop() {
     f32 direction = calcPlayerTorqueSign();
-    f32 inertia = 0.1f * mInertia;
+    f32 inertia = cNum_addForceHipDrop_f1 * mInertia;
     mAngularVelocity += direction * (::sAngularAccelHipDrop * getDistanceFromRotAxis() / inertia);
 }
 

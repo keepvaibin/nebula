@@ -4,6 +4,19 @@
 #include "Game/Util/NPCUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 430.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 260.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 350.0f);
 
 namespace NrvPenguinMaster {
     NEW_NERVE(PenguinMasterNrvWait, PenguinMaster, Wait);
@@ -17,16 +30,16 @@ void PenguinMaster::init(const TableIter& rIter) {
     NPCActorCaps caps = "PenguinMaster";
     caps.setDefault();
     caps.mSensor = false;
-    caps.mShadowSize = 130.0f;
-    caps.mMessageOffset = Vec3f(0.0f, 430.0f, 0.0f);
-    caps.mPointerSize = 180.0f;
+    caps.mShadowSize = cNum_init_f1;
+    caps.mMessageOffset = Vec3f(0.0f, cNum_init_f2, 0.0f);
+    caps.mPointerSize = cNum_init_f3;
     caps.mStarPointerOffs.x = 0.0f;
-    caps.mStarPointerOffs.y = 200.0f;
-    caps.mStarPointerOffs.z = 80.0f;
+    caps.mStarPointerOffs.y = cNum_init_f4;
+    caps.mStarPointerOffs.z = cNum_init_f5;
     caps.mWaitNerve = GET_NERVE(PenguinMaster, PenguinMasterNrvWait);
     LiveActor::initHitSensor(2);
-    MR::addHitSensorPush(this, "body", 8, 150.0f, Vec3f(0.0f, 100.0f, 0.0f));
-    MR::addHitSensorPush(this, "head", 8, 150.0f, Vec3f(0.0f, 260.0f, 100.0f));
+    MR::addHitSensorPush(this, "body", 8, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
+    MR::addHitSensorPush(this, "head", 8, cNum_init_f8, Vec3f(0.0f, cNum_init_f9, cNum_init_f10));
     initialize(rIter, caps);
     const char* talk = "Talk";
     mParam.mWaitAction = "Wait";
@@ -41,7 +54,7 @@ void PenguinMaster::init(const TableIter& rIter) {
     mPointingAction = "Pointing";
 
     if (mMsgCtrl != nullptr) {
-        MR::setDistanceToTalk(mMsgCtrl, 350.0f);
+        MR::setDistanceToTalk(mMsgCtrl, cNum_init_f11);
     }
 }
 

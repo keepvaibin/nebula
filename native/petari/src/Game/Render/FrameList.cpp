@@ -6,6 +6,11 @@
 #include <string.h>
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_specularDirHA_f1, "specularDirHA.f1", 1.0e18f);
+NEBULA_TUNABLE_NAMED(f32, cNum_distAttn_f1, "distAttn.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_distAttn_f2, "distAttn.f2", 0.5f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -54,7 +59,7 @@ namespace LightValues {
     }
 
     void specularDirHA(NebulaLight* pLight, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
-        const f32 cInfiniteLightDistance = 1.0e18f;
+        const f32 cInfiniteLightDistance = cNum_specularDirHA_f1;
         pLight->direction[0] = hx;
         pLight->direction[1] = hy;
         pLight->direction[2] = hz;
@@ -89,8 +94,8 @@ namespace LightValues {
             k1 = (1.0f - refBrightness) / (refBrightness * refDistance);
             break;
         case LIGHT_FALLOFF_MEDIUM:
-            k1 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance);
-            k2 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
+            k1 = cNum_distAttn_f1 * (1.0f - refBrightness) / (refBrightness * refDistance);
+            k2 = cNum_distAttn_f2 * (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
             break;
         case LIGHT_FALLOFF_STEEP:
             k2 = (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);

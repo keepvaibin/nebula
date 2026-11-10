@@ -14,6 +14,14 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f1, "initFlowerSensors.f1", 560.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f2, "initFlowerSensors.f2", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f3, "initFlowerSensors.f3", 650.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f4, "initFlowerSensors.f4", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFlowerSensors_f5, "initFlowerSensors.f5", 350.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initParabola_f1, "initParabola.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initParabola_f2, "initParabola.f2", 1.2f);
+
 namespace {
     NEBULA_TUNABLE(f32, sGravityAcc, 0.94f);
     NEBULA_TUNABLE(f32, sBreatheAccel, 3.0f);
@@ -39,8 +47,8 @@ DragonHeadFlower::DragonHeadFlower(const char* pName)
 namespace {
     inline void initFlowerSensors(DragonHeadFlower* pActor) {
         pActor->initHitSensor(2);
-        MR::addHitSensor(pActor, "body", ATYPE_JUMP_HOLE, 8, 560.0f, Vec3f(0.0f, 300.0f, 650.0f));
-        MR::addHitSensorMapObj(pActor, "push", 16, 400.0f, Vec3f(0.0f, 350.0f, 0.0f));
+        MR::addHitSensor(pActor, "body", ATYPE_JUMP_HOLE, 8, cNum_initFlowerSensors_f1, Vec3f(0.0f, cNum_initFlowerSensors_f2, cNum_initFlowerSensors_f3));
+        MR::addHitSensorMapObj(pActor, "push", 16, cNum_initFlowerSensors_f4, Vec3f(0.0f, cNum_initFlowerSensors_f5, 0.0f));
     }
 };  // namespace
 
@@ -221,6 +229,6 @@ void DragonHeadFlower::initParabola(const Vec3f& rStartPos) {
 
     mParabolaStartPos = rStartPos;
 
-    mParabolaSteps = MR::sqrt(MR::abs((mParabolaAccel * 2.0f) / 1.2f));
+    mParabolaSteps = MR::sqrt(MR::abs((mParabolaAccel * cNum_initParabola_f1) / cNum_initParabola_f2));
 }
 

@@ -23,6 +23,35 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 140.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 480.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f15, "init.f15", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f16, "init.f16", 680.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f17, "init.f17", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f18, "init.f18", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f19, "init.f19", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f3, "kill.f3", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 480.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaylay_f1, "exeWaylay.f1", 2.0f);
+
 namespace {
     struct SnakeheadData {
         s32 mWaitStep;
@@ -98,13 +127,13 @@ void Snakehead::init(const TableIter& rIter) {
 
     if (isSmall()) {
         initHitSensor(2);
-        MR::addHitSensorAtJointEnemy(this, "head", "Head", 8, 100.0f, Vec3f(140.0f, -70.0f, 0.0f));
-        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "head", "Head", 8, cNum_init_f1, Vec3f(cNum_init_f2, -cNum_init_f3, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, cNum_init_f4, Vec3f(0.0f, 0.0f, 0.0f));
     } else {
         initHitSensor(3);
-        MR::addHitSensorAtJointEnemy(this, "upper_jaw", "UpperJaw", 8, 250.0f, Vec3f(100.0f, 0.0f, 0.0f));
-        MR::addHitSensorAtJointEnemy(this, "lower_jaw", "LowerJaw", 8, 200.0f, Vec3f(250.0f, 0.0f, 0.0f));
-        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 600.0f, Vec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "upper_jaw", "UpperJaw", 8, cNum_init_f5, Vec3f(cNum_init_f6, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "lower_jaw", "LowerJaw", 8, cNum_init_f7, Vec3f(cNum_init_f8, 0.0f, 0.0f));
+        MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, cNum_init_f9, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     initEffectKeeper(1, nullptr);
@@ -118,9 +147,9 @@ void Snakehead::init(const TableIter& rIter) {
     initSound(4, false);
 
     if (isSmall()) {
-        MR::initStarPointerTarget(this, 250.0f, Vec3f(0.0f, 0.0f, 150.0f));
+        MR::initStarPointerTarget(this, cNum_init_f10, Vec3f(0.0f, 0.0f, cNum_init_f11));
     } else {
-        MR::initStarPointerTarget(this, 500.0f, Vec3f(0.0f, 0.0f, 200.0f));
+        MR::initStarPointerTarget(this, cNum_init_f12, Vec3f(0.0f, 0.0f, cNum_init_f13));
     }
 
     mController = new AnimScaleController(nullptr);
@@ -132,16 +161,16 @@ void Snakehead::init(const TableIter& rIter) {
     if (MR::isEqualString(objectName, "Snakehead")) {
         MR::initShadowController(this, 2);
         MR::addShadowVolumeFlatModel(this, "Head", "SnakeheadShadow", mBodyMtx);
-        MR::addShadowVolumeBox(this, "Body", Vec3f(480.0f, 300.0f, 680.0f));
+        MR::addShadowVolumeBox(this, "Body", Vec3f(cNum_init_f14, cNum_init_f15, cNum_init_f16));
     } else {
         MR::initShadowVolumeFlatModel(this, "SnakeheadSmallShadow", mBodyMtx);
-        MR::setShadowDropLength(this, "SnakeheadSmallShadow", 500.0f);
+        MR::setShadowDropLength(this, "SnakeheadSmallShadow", cNum_init_f17);
     }
 
     MR::initLightCtrl(this);
 
     initRailRider(rIter);
-    MR::initAndSetRailClipping(&mRailCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mRailCenter, this, cNum_init_f18, cNum_init_f19);
     MR::setRailCoord(this, sStartCoord);
     MR::moveTransToCurrentRailPos(this);
 
@@ -172,8 +201,8 @@ void Snakehead::initAfterPlacement() {
     headAtEnd += MR::getRailPointPosEnd(this);
 
     Vec3f rayStart;
-    rayStart.scaleAdd(-50.0f, mGravity, headAtEnd);
-    MR::getFirstPolyOnLineToMapExceptSensor(&mSmokePos, nullptr, rayStart, mGravity * 1000.0f, getSensor("body"));
+    rayStart.scaleAdd(-cNum_initAfterPlacement_f1, mGravity, headAtEnd);
+    MR::getFirstPolyOnLineToMapExceptSensor(&mSmokePos, nullptr, rayStart, mGravity * cNum_initAfterPlacement_f2, getSensor("body"));
 
     mBodyMtx.set(MR::getJointMtx(this, "Body04"));
 }
@@ -185,7 +214,7 @@ void Snakehead::kill() {
     if (isSmall()) {
         Vec3f headPos;
         MR::copyJointPos(this, "Head", &headPos);
-        MR::appearStarPiece(this, headPos, 9, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, headPos, 9, cNum_kill_f1, cNum_kill_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
     } else {
         Vec3f antennaPos;
@@ -194,7 +223,7 @@ void Snakehead::kill() {
         Pos3f itemMtx;
         itemMtx.set(getBaseMtx());
         itemMtx.setTrans(antennaPos);
-        MR::appearKinokoOneUpPop(mItem, itemMtx, 15.0f);
+        MR::appearKinokoOneUpPop(mItem, itemMtx, cNum_kill_f3);
     }
 
     LiveActor::kill();
@@ -216,9 +245,9 @@ void Snakehead::control() {
         f32 length = bodyPos.distance(body01Pos);
         Vec3f bodyMid;
         bodyMid.add(bodyPos, body01Pos);
-        bodyMid.scale(0.5f);
+        bodyMid.scale(cNum_control_f1);
         MR::setShadowDropPosition(this, "Body", bodyMid);
-        MR::setShadowVolumeBoxSize(this, "Body", Vec3f(480.0f, 300.0f, length));
+        MR::setShadowVolumeBoxSize(this, "Body", Vec3f(cNum_control_f2, cNum_control_f3, length));
     }
 }
 
@@ -248,7 +277,7 @@ void Snakehead::exeWaylay() {
         MR::showModel(this);
     }
 
-    if (MR::getBckFrame(this) == 2.0f) {
+    if (MR::getBckFrame(this) == cNum_exeWaylay_f1) {
         MR::validateShadow(this, nullptr);
     }
 

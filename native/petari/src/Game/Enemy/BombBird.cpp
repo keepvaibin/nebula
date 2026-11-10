@@ -10,6 +10,17 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityToUpFromGround_f1, "addVelocityToUpFromGround.f1", 3.4028235e38f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyOnRailSearch_1, "exeFlyOnRailSearch.1", 54);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyOnRailSearch_2, "exeFlyOnRailSearch.2", 54);
@@ -17,8 +28,8 @@ NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyWithAttack_1, "exeFlyWithAttack.1", 130);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeTrample_1, "exeTrample.1", 36);
 
 namespace {
-    const BombBirdParam hFallParam = {0.0f, 1.2f, 0.98f, 0.0f};
-    const BombBirdParam hOnGroundParam = {0.0f, 1.2f, 0.8f, 0.0f};
+    NEBULA_TUNABLE_RECORD(BombBirdParam, hFallParam, {0.0f, 1.2f, 0.98f, 0.0f});
+    NEBULA_TUNABLE_RECORD(BombBirdParam, hOnGroundParam, {0.0f, 1.2f, 0.8f, 0.0f});
 
     NEBULA_TUNABLE(f32, hDamp, 0.96f);
     NEBULA_TUNABLE(f32, hGravity, 1.0f);
@@ -87,17 +98,17 @@ void BombBird::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     initNerve(GET_NERVE(BombBird, HostTypeNrvFlyOnRail));
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 16, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     initSound(4, false);
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, getSensor("body")->getRadius());
-    initBinder(100.0f, 100.0f, 0);
+    initBinder(cNum_init_f3, cNum_init_f4, 0);
     MR::initLightCtrl(this);
     MR::declareCoin(this, 1);
     MR::declareStarPiece(this, 3);
     mFixedPos = new FixedPosition(this, "BombPos", Vec3f(0, 0, 0), Vec3f(0, 0, 0));
     mFixedPos->mNormalizeScale = false;
-    mSpinHitController = new SpinHitController(this, 25, 20, 4, 1.5f, 30.0f, 40.0f, 3, false);
+    mSpinHitController = new SpinHitController(this, 25, 20, 4, cNum_init_f5, cNum_init_f6, cNum_init_f7, 3, false);
 
     for (BombBirdBomb** it = mBombs.begin(); it < mBombs.end(); it++) {
         *it = new BombBirdBomb("バクダン鳥のボム");
@@ -113,7 +124,7 @@ void BombBird::init(const TableIter& rIter) {
     }
 
     initEffectKeeper(1, nullptr);
-    MR::initStarPointerTarget(this, getSensor("body")->getRadius(), Vec3f(0.0f, 0.5f * getSensor("body")->getRadius(), 0.0f));
+    MR::initStarPointerTarget(this, getSensor("body")->getRadius(), Vec3f(0.0f, cNum_init_f8 * getSensor("body")->getRadius(), 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
     if (MR::isValidSwitchAppear(this)) {
@@ -165,7 +176,7 @@ void BombBird::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(BombBird, HostTypeNrvEscape)) || isNerve(GET_NERVE(BombBird, HostTypeNrvDamage)) ||
         isNerve(GET_NERVE(BombBird, HostTypeNrvFall)) || isNerve(GET_NERVE(BombBird, HostTypeNrvSwoonStart)) ||
         isNerve(GET_NERVE(BombBird, HostTypeNrvSwoon)) || isNerve(GET_NERVE(BombBird, HostTypeNrvSwoonEnd)) ||
-        MR::isPlayerExistUp(this, getSensor("body")->getRadius(), 0.25f) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
+        MR::isPlayerExistUp(this, getSensor("body")->getRadius(), cNum_attackSensor_f1) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
         MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender);
     } else if (!MR::sendMsgEnemyAttack(pReceiver, pSender)) {
         MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender);
@@ -244,7 +255,7 @@ void BombBird::doFly() {
 
 void BombBird::addVelocityToUpFromGround(f32 vel) {
     f32 proj = MR::getShadowNearProjectionLength(this);
-    if (3.4028235e38f != proj && proj < ::hSearchKeepHeight) {
+    if (cNum_addVelocityToUpFromGround_f1 != proj && proj < ::hSearchKeepHeight) {
         vel = (::hSearchKeepHeight - proj) >= vel ? vel : (::hSearchKeepHeight - proj);
 
         MR::addVelocityLimit(this, mGravity * -vel);

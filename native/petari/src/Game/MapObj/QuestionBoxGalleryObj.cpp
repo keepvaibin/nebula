@@ -8,6 +8,9 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace NrvQuestionBoxGalleryObj {
     NEW_NERVE(QuestionBoxGalleryObjNrvOnStart, QuestionBoxGalleryObj, OnStart);
@@ -36,7 +39,7 @@ void QuestionBoxGalleryObj::init(const TableIter& rIter) {
     if (MR::isEqualSubString(mObjectName, "PlanetA")) {
         rInitInfo.setupFarClipping(-1.0f);
     } else {
-        rInitInfo.setupFarClipping(100.0f);
+        rInitInfo.setupFarClipping(cNum_init_f1);
     }
 
     f32 rotateSpeed = FLOAT_MAX;

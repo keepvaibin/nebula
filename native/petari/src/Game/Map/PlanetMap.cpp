@@ -12,6 +12,10 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initClipping_f1, "initClipping.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initBloomModel_f1, "initBloomModel.f1", 500.0f);
 
 namespace {
     const char* cFollowJointName = "Move";
@@ -105,7 +109,7 @@ void PlanetMap::initClipping(const TableIter& rIter) {
     } else {
         if (radius <= 0.0f) {
             MR::calcModelBoundingRadius(&radius, this);
-            radius += 100.0f;
+            radius += cNum_initClipping_f1;
         }
 
         MR::setClippingTypeSphere(this, radius);
@@ -136,7 +140,7 @@ void PlanetMap::initBloomModel(const char* pModelName) {
     mBloomModel = MR::createModelObjBloomModel(name, str.c_str(), getBaseMtx());
     mBloomModel->mScale.set(mScale);
 
-    f32 radiusBound = 500.0f;
+    f32 radiusBound = cNum_initBloomModel_f1;
     MR::calcModelBoundingRadius(&radiusBound, this);
     MR::setClippingFarMax(mBloomModel);
     MR::setClippingTypeSphere(mBloomModel, radiusBound);

@@ -24,6 +24,12 @@
 #include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_getFloorMaterialIndex_f1, "getFloorMaterialIndex.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateEffect_f1, "updateEffect.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateEffect_f2, "updateEffect.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateEffect_f3, "updateEffect.f3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateEffect_f4, "updateEffect.f4", 300.0f);
+
 // A table's flags, written 0xAABBCCDD: AA first. By value, on any machine.
 struct EffectFlagWord {
     EffectFlagWord(u32 word) : mWord(word) {
@@ -294,7 +300,7 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
 
     if (!mMario->mMovementStates.onGround) {
         if (mMario->mSwim->mDeepWater != 0) {
-            if (mMario->mSwim->mSurfaceDepth < 400.0f) {
+            if (mMario->mSwim->mSurfaceDepth < cNum_getFloorMaterialIndex_f1) {
                 materialIndex = 1;
             }
         }
@@ -1079,7 +1085,7 @@ void MarioActor::updateEffect() {
         effectA = 1;
     }
 
-    if (mMario->mMovementStates.onGround && mMario->mSpinInertiaBlend > 0.1f) {
+    if (mMario->mMovementStates.onGround && mMario->mSpinInertiaBlend > cNum_updateEffect_f1) {
         effectA = 1;
     }
 
@@ -1088,7 +1094,7 @@ void MarioActor::updateEffect() {
     }
 
     if (getMovementStates().onIce || getMovementStates().onSkatableFloor) {
-        if (mMario->mWalkSpeed > 0.1f) {
+        if (mMario->mWalkSpeed > cNum_updateEffect_f2) {
             effectA = 1;
         }
 
@@ -1162,11 +1168,11 @@ void MarioActor::updateEffect() {
     effectC = 0;
     if (getMovementStates().jumping) {
         if (mPlayerMode == 4 && mMario->checkLvlA() && mMario->mAirWalkTimer != 0 && ((mFrameCount & 3) == 0)) {
-            if (mMario->mVerticalSpeed < 300.0f) {
+            if (mMario->mVerticalSpeed < cNum_updateEffect_f3) {
                 effectC = 1;
             } else if (mMario->mSwim->mDeepWater != 0) {
                 f32 swimSpeed = mMario->mSwim->mSurfaceDepth;
-                if (swimSpeed < 300.0f) {
+                if (swimSpeed < cNum_updateEffect_f4) {
                     effectC = 1;
                 }
             }

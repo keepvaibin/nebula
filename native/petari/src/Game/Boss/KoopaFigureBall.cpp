@@ -7,6 +7,8 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 180.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sWallJumpSpeed, 15.0f);
 };  // namespace
@@ -54,7 +56,7 @@ void KoopaFigureBall::control() {
         MR::addVelocityJump(this, ::sWallJumpSpeed);
     }
 
-    mAngle += (mVelocity.dot(mFront) * 180.0f) / (mRadius * MR::pi());
+    mAngle += (mVelocity.dot(mFront) * cNum_control_f1) / (mRadius * MR::pi());
     MR::makeMtxUpFrontPos(&mBaseMtx, -mGravity, mFront, mPosition + mGravity * mRadius);
 
     Vec3f yDir;

@@ -9,12 +9,22 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 425.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f1, "initModel.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f1, "exeBreak.f1", 150.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_isNearPlayer_1, "exeBreak.isNearPlayer.1", 1500.0f);
 
 namespace {
-    const Vec cHitSensorOffsetCage = {0.0f, 0.0f, 0.0f};
-    const Vec cHitSensorOffsetFixation = {0.0f, 0.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cHitSensorOffsetCage, {0.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, cHitSensorOffsetFixation, {0.0f, 0.0f, 0.0f});
 };  // namespace
 
 namespace NrvBreakableCage {
@@ -32,7 +42,7 @@ BreakableCage::BreakableCage(const char* pName)
 void BreakableCage::init(const TableIter& rIter) {
     Vec3f sensorOffset(::cHitSensorOffsetCage);
     const char* pName;
-    f32 sensorRadius = 300.0f;
+    f32 sensorRadius = cNum_init_f1;
 
     MR::getObjectName(&pName, rIter);
     const char* pModelName = pName;
@@ -41,12 +51,12 @@ void BreakableCage::init(const TableIter& rIter) {
         pModelName = "BreakableCage";
         mCageType = CAGE_NORMAL;
     } else if (MR::isEqualString(pName, "BreakableCageL")) {
-        sensorRadius = 600.0f;
+        sensorRadius = cNum_init_f2;
         mCageType = CAGE_LARGE;
     } else if (MR::isEqualString(pName, "BreakableFixation")) {
         mCageType = CAGE_FIX;
         sensorOffset.set(::cHitSensorOffsetFixation);
-        sensorRadius = 425.0f;
+        sensorRadius = cNum_init_f3;
     } else if (MR::isEqualString(pName, "BreakableTrash")) {
         mCageType = CAGE_TRASH;
         MR::joinToGroupArray(this, rIter, "ゴミ管理", 32);
@@ -66,7 +76,7 @@ void BreakableCage::init(const TableIter& rIter) {
         initEffectKeeper(0, pName);
     }
 
-    MR::setClippingTypeSphere(this, 100.0f + scaledRadius);
+    MR::setClippingTypeSphere(this, cNum_init_f4 + scaledRadius);
     MR::setGroupClipping(this, rIter, 0x20);
     initSound(4, false);
 
@@ -172,7 +182,7 @@ void BreakableCage::initMapToolInfo(const TableIter& rIter) {
 
     if (mCageType == CAGE_NORMAL) {
         MR::getPlacementArg0WithInit(rIter, &mRotationSpeed);
-        mRotationSpeed *= 0.01f;
+        mRotationSpeed *= cNum_initMapToolInfo_f1;
     }
 
     if (isTypeCage()) {
@@ -195,7 +205,7 @@ void BreakableCage::initModel(const char* pName, const TableIter& rIter) {
         MR::invalidateClipping(mBreakModel);
         MR::registerDemoSimpleCastAll(mBreakModel);
         mBreakModel->makeActorDead();
-        mItemModel = MR::createDummyDisplayModel(this, rIter, -1, Vec3f(0.0f, 150.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+        mItemModel = MR::createDummyDisplayModel(this, rIter, -1, Vec3f(0.0f, cNum_initModel_f1, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
         if (mItemModel != nullptr) {
             s32 modelId = MR::getDummyDisplayModelId(rIter, -1);
@@ -264,13 +274,13 @@ bool BreakableCage::tryBreak() {
 
 void BreakableCage::exeWait() {
     if (mCageType == CAGE_NORMAL) {
-        mRotation.y = MR::repeat(mRotation.y + mRotationSpeed, 0.0f, 360.0f);
+        mRotation.y = MR::repeat(mRotation.y + mRotationSpeed, 0.0f, cNum_exeWait_f1);
     }
 
     if (mItemModel != nullptr) {
         if (isAppearPowerStar()) {
             DummyDisplayModel* pModel = mItemModel;
-            mItemModel->mRotation.y = MR::repeat(pModel->mRotation.y + PowerStar::getPowerStarWaitRotateSpeed(), 0.0f, 360.0f);
+            mItemModel->mRotation.y = MR::repeat(pModel->mRotation.y + PowerStar::getPowerStarWaitRotateSpeed(), 0.0f, cNum_exeWait_f2);
         }
     }
 }
@@ -326,7 +336,7 @@ void BreakableCage::exeBreak() {
             if (mItemModel != nullptr) {
                 MR::requestAppearPowerStar(this, mItemModel->mPosition);
             } else {
-                MR::requestAppearPowerStar(this, this, 150.0f);
+                MR::requestAppearPowerStar(this, this, cNum_exeBreak_f1);
             }
 
             MR::requestMovementOn(this);

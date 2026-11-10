@@ -12,6 +12,14 @@
 #include <new>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_GetHermiteCurveValue_f1, "GetHermiteCurveValue.f1", 2.0F);
+NEBULA_TUNABLE_NAMED(f32, cNum_GetHermiteCurveValue_f2, "GetHermiteCurveValue.f2", 3.0F);
+NEBULA_TUNABLE_NAMED(f32, cNum_GetHermiteCurveValue_f3, "GetHermiteCurveValue.f3", 2.0F);
+NEBULA_TUNABLE_NAMED(f32, cNum_GetHermiteCurveValue_f4, "GetHermiteCurveValue.f4", 3.0F);
+NEBULA_TUNABLE_NAMED(f32, cNum_GetHermiteCurveValue_f5, "GetHermiteCurveValue.f5", 2.0F);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimateVertexColor_f1, "AnimateVertexColor.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_AnimateMaterialColor_f1, "AnimateMaterialColor.f1", 0.5f);
+
 NEBULA_TUNABLE(f32, R_FRAME_TOLERANCE, 0.001F);
 
 namespace Ui {
@@ -86,8 +94,8 @@ namespace Ui {
             f32 t1t1t1t2t2 = t1 * t1t1t2t2;
             f32 t1t1t1t2t2t2 = t1t1t1t2t2 * t2;
 
-            return v0 * (2.0F * t1t1t1t2t2t2 - 3.0F * t1t1t2t2 + 1.0F) + v1 * (-2.0F * t1t1t1t2t2t2 + 3.0F * t1t1t2t2) +
-                   s0 * (t1t1t1t2t2 - 2.0F * t1t1t2 + t1) + s1 * (t1t1t1t2t2 - t1t1t2);
+            return v0 * (cNum_GetHermiteCurveValue_f1 * t1t1t1t2t2t2 - cNum_GetHermiteCurveValue_f2 * t1t1t2t2 + 1.0F) + v1 * (-cNum_GetHermiteCurveValue_f3 * t1t1t1t2t2t2 + cNum_GetHermiteCurveValue_f4 * t1t1t2t2) +
+                   s0 * (t1t1t1t2t2 - cNum_GetHermiteCurveValue_f5 * t1t1t2 + t1) + s1 * (t1t1t1t2t2 - t1t1t2);
         }
 
         // One animation's targets and their keys, by offset from the animation file's start.
@@ -124,7 +132,7 @@ namespace Ui {
             for (u32 i = 0; i < rCurves.num; ++i) {
                 const UiAnimTargetData& rTarget = rCurves.pTargets[i];
                 f32 value = rCurves.Hermite(rTarget, frame);
-                value += 0.5f;
+                value += cNum_AnimateVertexColor_f1;
                 pPane->SetColorElement(rTarget.mTarget, nebula_f32_to_u8(value));
             }
         }
@@ -133,7 +141,7 @@ namespace Ui {
             for (u32 i = 0; i < rCurves.num; ++i) {
                 const UiAnimTargetData& rTarget = rCurves.pTargets[i];
                 f32 value = rCurves.Hermite(rTarget, frame);
-                value += 0.5f;
+                value += cNum_AnimateMaterialColor_f1;
                 s16 s16Val = nebula_f32_to_s16(value);
                 s16Val = Min(Max(s16Val, s16(-1024)), s16(1023));
                 pMaterial->SetColorElement(rTarget.mTarget, s16Val);

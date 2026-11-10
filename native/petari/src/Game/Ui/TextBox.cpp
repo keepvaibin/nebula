@@ -9,6 +9,10 @@
 #include "Game/Ui/WideTextWriter.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstdio>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_GetTextMagH_f1, "GetTextMagH.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_GetTextMagV_f1, "GetTextMagV.f1", 0.5f);
 extern "C" {
 }
 
@@ -273,7 +277,7 @@ namespace Ui {
         }
 
         case 1: {
-            mag = 0.5f;
+            mag = cNum_GetTextMagH_f1;
             break;
         }
 
@@ -297,7 +301,7 @@ namespace Ui {
         }
 
         case 1: {
-            mag = 0.5f;
+            mag = cNum_GetTextMagV_f1;
             break;
         }
 

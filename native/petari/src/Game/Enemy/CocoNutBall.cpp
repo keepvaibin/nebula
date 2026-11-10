@@ -6,6 +6,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f1, "calcHitBackVelocityAndGravity.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f2, "calcHitBackVelocityAndGravity.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f3, "calcHitBackVelocityAndGravity.f3", 2.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBackToHost_setBckRate_1, "exeHitBackToHost.setBckRate.1", 1.0f);
 
@@ -15,7 +19,7 @@ NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_2, "exeHitBackToHost.2", 2);
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_3, "exeHitBackToHost.3", 1);
 
 namespace {
-    const Vec cReboundVelocity = {0.0f, 15.0f, 5.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cReboundVelocity, {0.0f, 15.0f, 5.0f});
     NEBULA_TUNABLE(f32, cBodyRadius, 40.0f);
     NEBULA_TUNABLE(f32, cBindRadius, 500.0f);
     NEBULA_TUNABLE(u16, cSensorGroupSize, 8);
@@ -251,14 +255,14 @@ void CocoNutBall::calcHitBackVelocityAndGravity() {
 
     // The vertical speed that lands the rise in flightSteps under mHitBackGravity.
     Vec3f verticalVelocity;
-    verticalVelocity = (rise.scaleInline(2.0f) - mHitBackGravity.scaleInline(flightSteps).scaleInline(flightSteps)).scaleInline(1.0f / (2.0f * flightSteps));
+    verticalVelocity = (rise.scaleInline(cNum_calcHitBackVelocityAndGravity_f1) - mHitBackGravity.scaleInline(flightSteps).scaleInline(flightSteps)).scaleInline(1.0f / (cNum_calcHitBackVelocityAndGravity_f2 * flightSteps));
     mVelocity.add(horizontal, verticalVelocity);
 
     // Off-line hits curve: a side speed that a side pull cancels over the flight.
     if (!hitBackFront) {
         f32 curve = (hitBackRight ? cHitBackCurve : -cHitBackCurve);
         Vec3f sideVelocity;
-        sideVelocity.scale(curve * flightSteps * flightSteps / (flightSteps * 2.0f), side);
+        sideVelocity.scale(curve * flightSteps * flightSteps / (flightSteps * cNum_calcHitBackVelocityAndGravity_f3), side);
         mVelocity.add(sideVelocity);
         sideVelocity.scale(curve, side);
         mHitBackGravity.sub(sideVelocity);

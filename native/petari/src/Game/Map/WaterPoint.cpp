@@ -2,6 +2,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f3, "initAfterPlacement.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f4, "initAfterPlacement.f4", 255.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sSinRate0, 0.003f);
     NEBULA_TUNABLE(f32, sSinRate1, 0.0003f);
@@ -18,13 +23,13 @@ WaterPoint::WaterPoint(const Vec3f& rPos, const Vec3f& rUpVec, f32 coordAcrossRa
 
 void WaterPoint::initAfterPlacement() {
     if (mHeight != 0.0f) {
-        Vec3f startCheckPos(mPosition.x, (::sMapCheckHeight/2.0f + mPosition.y), mPosition.z);
+        Vec3f startCheckPos(mPosition.x, (::sMapCheckHeight/cNum_initAfterPlacement_f1 + mPosition.y), mPosition.z);
         Vec3f mapCheckPos(0.0f, 0.0f, 0.0f);
 
         if (MR::calcMapGround(startCheckPos, &mapCheckPos, ::sMapCheckHeight)) {
-            f32 heightDiff = ((mapCheckPos.y - mPosition.y) / (::sMapCheckHeight / 2.0f));
+            f32 heightDiff = ((mapCheckPos.y - mPosition.y) / (::sMapCheckHeight / cNum_initAfterPlacement_f2));
             f32 waveRate = MR::clamp((::sMapWaveRateMin + MR::abs(heightDiff)), ::sMapWaveRateMin, 1.0f);
-            mAlpha = (s32)(MR::clamp((::sAlphaMin + (255.0f * -heightDiff)), ::sAlphaMin, 255.0f));
+            mAlpha = (s32)(MR::clamp((::sAlphaMin + (cNum_initAfterPlacement_f3 * -heightDiff)), ::sAlphaMin, cNum_initAfterPlacement_f4));
             mHeight = MR::min(waveRate, mHeight);
         }
     }

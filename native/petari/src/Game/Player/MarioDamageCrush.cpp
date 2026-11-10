@@ -2,6 +2,9 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioCrush.hpp"
 #include "Game/Player/MarioState.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.2f);
 
 bool Mario::requestCrush() {
     mActionStates.crushRequested = true;
@@ -52,7 +55,7 @@ bool MarioCrush::start() {
     playSound("声しびれ");
 
     getPlayer()->mMovementStates.scaleBody = true;
-    mActor->mScale.set(1.0f, 0.2f, 1.0f);
+    mActor->mScale.set(1.0f, cNum_start_f1, 1.0f);
     startPadVib(3);
 
     mActor->decLifeLarge();

@@ -8,6 +8,10 @@
 #include <nebula_game_api.h>
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Pane.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getCanvas_f1, "getCanvas.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getCanvas_f2, "getCanvas.f2", 0.5f);
 
 namespace {
     using namespace Ui;
@@ -209,8 +213,8 @@ namespace {
             canvas.mWide = true;
             canvas.mWidth = MR::getDisplay().layout_width;
             canvas.mHeight = NebulaFrameClock::cScreenHeight * MR::getDisplay().vertical_fit;
-            canvas.mHorizontalDelta = (canvas.mWidth - NebulaFrameClock::cLayoutWidth) * 0.5f;
-            canvas.mVerticalDelta = (canvas.mHeight - NebulaFrameClock::cScreenHeight) * 0.5f;
+            canvas.mHorizontalDelta = (canvas.mWidth - NebulaFrameClock::cLayoutWidth) * cNum_getCanvas_f1;
+            canvas.mVerticalDelta = (canvas.mHeight - NebulaFrameClock::cScreenHeight) * cNum_getCanvas_f2;
         }
         canvas.mScaleX = canvas.mWidth / NebulaFrameClock::cLayoutWidth;
         canvas.mScaleY = canvas.mHeight / NebulaFrameClock::cScreenHeight;

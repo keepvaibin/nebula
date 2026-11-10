@@ -4,6 +4,16 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f3, "initAfterPlacement.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doBreak_f1, "doBreak.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doBreak_f2, "doBreak.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doBreak_f3, "doBreak.f3", 40.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, hSize, 100.0f);
     NEBULA_TUNABLE(f32, hBreakSize, 400.0f);
@@ -74,7 +84,7 @@ void SmallStone::initAfterPlacement() {
         Vec3f front;
         front.set(1, 0, 0);
 
-        if (MR::isSameDirection(*pMember->getGravity(), front, 0.01f)) {
+        if (MR::isSameDirection(*pMember->getGravity(), front, cNum_initAfterPlacement_f1)) {
             front.set(0, 1, 0);
         }
 
@@ -129,7 +139,7 @@ void SmallStone::initAfterPlacement() {
         }
     }
 
-    Vec3f center((max + min) / 2.0f);
+    Vec3f center((max + min) / cNum_initAfterPlacement_f2);
     mPosition.set(center);
     f32 radius = 0.0f;
 
@@ -147,7 +157,7 @@ void SmallStone::initAfterPlacement() {
     }
 
     getSensor("Range")->mRadius = radius;
-    MR::setClippingTypeSphere(this, 2.0f * radius);
+    MR::setClippingTypeSphere(this, cNum_initAfterPlacement_f3 * radius);
 }
 
 void SmallStone::control() {
@@ -321,9 +331,9 @@ void SmallStone::init(const TableIter& rIter) {
         f32 x = mRotation.x;
         f32 y = mRotation.y;
         f32 z = mRotation.z;
-        mRotation.x = x * (PI / 180.0f);
-        mRotation.y = y * (PI / 180.0f);
-        mRotation.z = z * (PI / 180.0f);
+        mRotation.x = x * (PI / cNum_init_f1);
+        mRotation.y = y * (PI / cNum_init_f2);
+        mRotation.z = z * (PI / cNum_init_f3);
         Quat4f rotation;
         rotation.setEuler(mRotation.x, mRotation.y, mRotation.z);
         rotation.getYDir(mGravity);
@@ -470,10 +480,10 @@ void SmallStoneMember::doBreak(SmallStone* pHost) {
     }
 
     if (mUseGravity) {
-        MR::appearStarPiece(pHost, mPosition, 1, 0.0f, 40.0f, pHost->mIsStarPiece);
+        MR::appearStarPiece(pHost, mPosition, 1, 0.0f, cNum_doBreak_f1, pHost->mIsStarPiece);
     } else {
-        Vec3f position = mPosition - mGravity * 30.0f;
-        MR::appearStarPiece(pHost, position, 1, 0.0f, 40.0f, pHost->mIsStarPiece);
+        Vec3f position = mPosition - mGravity * cNum_doBreak_f2;
+        MR::appearStarPiece(pHost, position, 1, 0.0f, cNum_doBreak_f3, pHost->mIsStarPiece);
     }
 
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");

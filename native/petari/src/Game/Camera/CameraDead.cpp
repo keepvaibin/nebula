@@ -4,6 +4,9 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 180.0f);
 
 CameraDead::CameraDead(const char* pName) : Camera(pName), mDist(0.5f), mDeadTime(), mCameraType(), mDeadFrame() {
 }
@@ -47,7 +50,7 @@ CameraTargetObj* CameraDead::calc() {
             angle = mFovy;
         }
 
-        angle *= 180.0f / MR::pi();
+        angle *= cNum_calc_f1 / MR::pi();
 
         if (mDeadTime != 0) {
             mFovy += t * (angle - mFovy);

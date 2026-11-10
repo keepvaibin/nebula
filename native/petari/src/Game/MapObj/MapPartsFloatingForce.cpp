@@ -8,6 +8,22 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initForSpringMotion_f1, "initForSpringMotion.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initForSpringMotion_f2, "initForSpringMotion.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initForSpringMotion_f3, "initForSpringMotion.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f2, "updateVelocity.f2", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f3, "updateVelocity.f3", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f4, "updateVelocity.f4", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f5, "updateVelocity.f5", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f6, "updateVelocity.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f7, "updateVelocity.f7", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocitySpring_f1, "updateVelocitySpring.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveReturn_f1, "exeMoveReturn.f1", 0.1f);
 
 namespace NrvMapPartsFloatingForce {
     NEW_NERVE(HostTypeWait, MapPartsFloatingForce, Wait);
@@ -66,13 +82,13 @@ void MapPartsFloatingForce::initForSpringMotion(const TableIter& rIter) {
     mMaxDepth = conditionType;
     f32 rotateSpeed = 0.0f;
     MR::getMapPartsArgRotateSpeed(&rotateSpeed, rIter);
-    rotateSpeed *= 0.001f;
+    rotateSpeed *= cNum_initForSpringMotion_f1;
     f32 rotateAngle = 0.0f;
     MR::getMapPartsArgRotateAngle(&rotateAngle, rIter);
-    rotateAngle *= 0.001f;
+    rotateAngle *= cNum_initForSpringMotion_f2;
     s32 rotateAxis = 0;
     MR::getMapPartsArgRotateAxis(&rotateAxis, rIter);
-    mRideSinkSpeed = 0.1f * rotateAxis;
+    mRideSinkSpeed = cNum_initForSpringMotion_f3 * rotateAxis;
     mSpringStep = new SpringStep(-conditionType, rotateSpeed, rotateAngle);
 }
 
@@ -90,20 +106,20 @@ void MapPartsFloatingForce::start() {
 void MapPartsFloatingForce::updateVelocity() {
     if (MR::isOnPlayer(MR::getBodySensor(mHost))) {
         if (mMaxDepth <= mSinkDepth) {
-            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
+            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, cNum_updateVelocity_f1);
         } else {
-            mSinkSpeed = mSinkSpeed + (0.0001f * mRotateSpeed);
+            mSinkSpeed = mSinkSpeed + (cNum_updateVelocity_f2 * mRotateSpeed);
         }
     } else {
         if (mSinkDepth <= 0.0f) {
-            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
+            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, cNum_updateVelocity_f3);
         } else {
-            mSinkSpeed = mSinkSpeed - (0.0001f * mRotateAngle);
+            mSinkSpeed = mSinkSpeed - (cNum_updateVelocity_f4 * mRotateAngle);
         }
     }
 
-    mSinkSpeed *= 0.98f;
-    mSinkSpeed = MR::clamp(mSinkSpeed, -50.0f, 50.0f);
+    mSinkSpeed *= cNum_updateVelocity_f5;
+    mSinkSpeed = MR::clamp(mSinkSpeed, -cNum_updateVelocity_f6, cNum_updateVelocity_f7);
 }
 
 void MapPartsFloatingForce::updateVelocitySpring() {
@@ -114,7 +130,7 @@ void MapPartsFloatingForce::updateVelocitySpring() {
     }
 
     if (isSwitchOn) {
-        velocity *= 3.0f;
+        velocity *= cNum_updateVelocitySpring_f1;
     }
 
     mVelocity.set(mUpDirection * velocity);
@@ -184,12 +200,12 @@ void MapPartsFloatingForce::exeMove() {
     Vec3f* const pPosition = &mHost->mPosition;
     pPosition->set(mBasePos - mUpDirection * mSinkDepth);
     if (mObjectName != nullptr) {
-        if (mSinkSpeed > 0.1f) {
+        if (mSinkSpeed > cNum_exeMove_f1) {
             const char* pSound = FloaterFunction::getSeMoveDown(mObjectName);
             if (pSound != nullptr) {
                 MR::startLevelSound(mHost, pSound);
             }
-        } else if (mSinkSpeed < -0.1f) {
+        } else if (mSinkSpeed < -cNum_exeMove_f2) {
             const char* pSound = FloaterFunction::getSeMoveUp(mObjectName);
             if (pSound != nullptr) {
                 MR::startLevelSound(mHost, pSound);
@@ -216,7 +232,7 @@ void MapPartsFloatingForce::exeMoveReturn() {
 
     updateVelocitySpring();
     mHost->mVelocity.set(mVelocity);
-    if (mObjectName != nullptr && 0.1f != mSinkSpeed) {
+    if (mObjectName != nullptr && cNum_exeMoveReturn_f1 != mSinkSpeed) {
         const char* pSound = FloaterFunction::getSeMoveUp(mObjectName);
         if (pSound != nullptr) {
             MR::startLevelSound(mHost, pSound);

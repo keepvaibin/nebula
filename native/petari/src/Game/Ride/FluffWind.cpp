@@ -11,6 +11,8 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWindInfo_f1, "calcWindInfo.f1", 1000000.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sEffectEmitterInterval, 600.0f);
     static const s32 sStepBlowWindMin = NebulaFrameClock::stepsOfSeconds(1);
@@ -114,7 +116,7 @@ FluffWindHolder::FluffWindHolder() : LiveActorGroup("わたげ風", 8) {
 }
 
 void FluffWindHolder::calcWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindDistance) const {
-    f32 bestDistance = 1000000.0f;
+    f32 bestDistance = cNum_calcWindInfo_f1;
     Vec3f bestDir(0.0f, 0.0f, 0.0f);
 
     for (s32 i = 0; i < getObjNum(); i++) {

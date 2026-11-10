@@ -28,6 +28,41 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_f1, "exeThrow.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_f2, "exeThrow.f2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExtinguish_f1, "exeExtinguish.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExtinguish_f2, "exeExtinguish.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f1, "exeEscape.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f2, "exeEscape.f2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f3, "exeEscape.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f4, "exeEscape.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f5, "exeEscape.f5", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f6, "exeEscape.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_f1, "exeEscapeJump.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_f2, "exeEscapeJump.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackAfter_f1, "exeAttackAfter.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackAfter_f2, "exeAttackAfter.f2", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackAfter_f3, "exeAttackAfter.f3", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryDemo_f1, "exeAngryDemo.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryDemo_f2, "exeAngryDemo.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAngryDemo_f3, "exeAngryDemo.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityToInitPos_f1, "addVelocityToInitPos.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isEnableThrow_f1, "isEnableThrow.f1", 0.60f);
+NEBULA_TUNABLE_NAMED(f32, cNum_IceMerameraKingShockWave_f1, "IceMerameraKingShockWave.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_IceMerameraKingShockWave_f2, "IceMerameraKingShockWave.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_IceMerameraKingShockWave_f3, "IceMerameraKingShockWave.f3", 24.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_IceMerameraKingShockWave_f4, "IceMerameraKingShockWave.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 24.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 200.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_addVelocityKeepHeightUseShadow_1, "exeSearch.addVelocityKeepHeightUseShadow.1", 400.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeSearch_addVelocityKeepHeightUseShadow_2, "exeSearch.addVelocityKeepHeightUseShadow.2", 1.5f);
@@ -97,17 +132,17 @@ namespace NrvIceMerameraKing {
 };  // namespace NrvIceMerameraKing
 
 namespace {
-    static const MR::ActorMoveParam hOnAirParam = {0.0f, 3.0f, 0.96f, 0.0f};
-    static const MR::ActorMoveParam hOnGroundParam = {0.0f, 1.0f, 0.8f, 0.0f};
-    static const MR::ActorMoveParam hFlyParam = {0.0f, 0.5f, 0.9f, 1.0f};
-    static const MR::ActorMoveParam hAngryDemoParam = {0.0f, 0.5f, 0.9f, 1.5f};
-    static const MR::ActorMoveParam hEscapeOnGroundParam = {-0.7f, 1.0f, 0.96f, 180.0f};
-    static const MR::ActorMoveParam hEscapeOnAirParam = {0.0f, 3.0f, 0.96f, 0.0f};
-    static const MR::ActorMoveParam hPreRecoverJumpParam = {0.0f, 1.0f, 0.96f, 0.0f};
-    static const MR::ActorMoveParam hDamageJumpParam = {0.0f, 1.9f, 0.98f, 0.0f};
-    static const MR::ActorMoveParam hAttackParam = {0.0f, 6.0f, 0.98f, 0.0f};
-    static const MR::ActorMoveParam hExtinguishOnAirParam = {0.0f, 0.125f, 0.96f, 0.0f};
-    static const MR::ActorMoveParam hExtinguishFallOnAirParam = {0.0f, 4.0f, 0.96f, 0.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnAirParam, {0.0f, 3.0f, 0.96f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnGroundParam, {0.0f, 1.0f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hFlyParam, {0.0f, 0.5f, 0.9f, 1.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hAngryDemoParam, {0.0f, 0.5f, 0.9f, 1.5f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hEscapeOnGroundParam, {-0.7f, 1.0f, 0.96f, 180.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hEscapeOnAirParam, {0.0f, 3.0f, 0.96f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hPreRecoverJumpParam, {0.0f, 1.0f, 0.96f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hDamageJumpParam, {0.0f, 1.9f, 0.98f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hAttackParam, {0.0f, 6.0f, 0.98f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hExtinguishOnAirParam, {0.0f, 0.125f, 0.96f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hExtinguishFallOnAirParam, {0.0f, 4.0f, 0.96f, 0.0f});
     static const Vec3f hBinderOffset(-100.586f, 222.65601f, -91.796898f);
 
     NEBULA_TUNABLE(s32, sIceNum, 6);
@@ -136,12 +171,12 @@ void IceMerameraKing::init(const TableIter& rIter) {
         MR::useStageSwitchReadA(this, rIter);
     }
 
-    mScale.set(1.5f, 1.5f, 1.5f);
+    mScale.set(cNum_init_f1, cNum_init_f2, cNum_init_f3);
     initModelManagerWithAnm("IceMerameraKing", nullptr, false);
     MR::calcUpVec(&mUp, this);
     MR::calcFrontVec(&mFront, this);
     MR::connectToSceneEnemy(this);
-    f32 radiusScale = (mScale.y / 1.8f);
+    f32 radiusScale = (mScale.y / cNum_init_f4);
     initBinder((sBodyRadius * radiusScale), (sBodyRadius * radiusScale), 0);
     MR::setBinderOffsetVec(this, &mBinderOffset, true);
     initHitSensor(1);
@@ -151,7 +186,7 @@ void IceMerameraKing::init(const TableIter& rIter) {
     initNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
     MR::calcGravity(this);
     MR::initShadowVolumeSphere(this, (sBodyRadius * mScale.y));
-    MR::setShadowDropLength(this, nullptr, 1500.0f);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f5);
     MR::declarePowerStar(this);
     MR::declareStarPiece(this, 24);
     mFixedPos = new FixedPosition(this, "Top", Vec3f(0, 0, 0), Vec3f(0.0f, 0.0f, 0.0f));
@@ -252,7 +287,7 @@ void IceMerameraKing::control() {
     // Out of the escape roll the body rights itself.
     if (!isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvEscape)) && !isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvEscapeJump))) {
         Quat4f identity(0, 0, 0, 1);
-        mRollQuat.slerp(identity, 0.25f);
+        mRollQuat.slerp(identity, cNum_control_f1);
         MR::startLevelSound(this, "SE_BM_LV_ICEMERAKING_WAIT");
     }
 
@@ -324,7 +359,7 @@ void IceMerameraKing::exeThrow() {
         mFixedPos->mMtx.getTrans(mThrowingIce->mPosition);
         mThrowNum += 1;
         Vec3f& icePos = mThrowingIce->mPosition;
-        mThrowingIce->emitIce(icePos, *MR::getPlayerCenterPos() + *MR::getPlayerVelocity() * 35.0f, -5.0f, mGravity);
+        mThrowingIce->emitIce(icePos, *MR::getPlayerCenterPos() + *MR::getPlayerVelocity() * cNum_exeThrow_f1, -cNum_exeThrow_f2, mGravity);
         mThrowingIce = nullptr;
         MR::startSound(this, "SE_BM_ICEMERAKING_THROW");
     }
@@ -372,8 +407,8 @@ void IceMerameraKing::exeExtinguish() {
         Vec3f awayFromPlayer = mPosition - *MR::getPlayerCenterPos();
         MR::vecKillElement(awayFromPlayer, mGravity, &awayFromPlayer);
         MR::normalizeOrZero(&awayFromPlayer);
-        MR::setVelocitySeparateHV(this, awayFromPlayer, 20.0f, 0.0f);
-        mExtinguishHeight = 200.0f + MR::getShadowNearProjectionLength(this);
+        MR::setVelocitySeparateHV(this, awayFromPlayer, cNum_exeExtinguish_f1, 0.0f);
+        mExtinguishHeight = cNum_exeExtinguish_f2 + MR::getShadowNearProjectionLength(this);
     }
 
     if (MR::isLessStep(this, cStep_exeExtinguish_1)) {
@@ -402,18 +437,18 @@ void IceMerameraKing::exeEscape() {
 
     MR::emitEffect(this, "Rolling");
     if (MR::isOnGround(this)) {
-        f32 rollVolume = MR::getLinerValueFromMinMax(mVelocity.length(), 2.0f, 6.0f, 0.0f, 100.0f);
+        f32 rollVolume = MR::getLinerValueFromMinMax(mVelocity.length(), cNum_exeEscape_f1, cNum_exeEscape_f2, 0.0f, cNum_exeEscape_f3);
         MR::startLevelSound(this, "SE_BM_LV_ICEMERAKING_ROLL", rollVolume, -1, 15);
 
         f32 radius = getSensor("body")->mRadius;
-        MR::rotateQuatRollBall(&mRollQuat, mVelocity, *MR::getGroundNormal(this), (0.5f * radius));
+        MR::rotateQuatRollBall(&mRollQuat, mVelocity, *MR::getGroundNormal(this), (cNum_exeEscape_f4 * radius));
         MR::moveAndTurnToPlayer(this, &mFront, ::hEscapeOnGroundParam);
-        if (MR::isBindedWallFront(this, -mFront, 0.25f)) {
+        if (MR::isBindedWallFront(this, -mFront, cNum_exeEscape_f5)) {
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvEscapeJump));
         }
     } else {
         f32 radius = getSensor("body")->mRadius;
-        MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, 0.5f * radius);
+        MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, cNum_exeEscape_f6 * radius);
         MR::moveAndTurnToPlayer(this, &mFront, ::hEscapeOnAirParam);
     }
 }
@@ -431,7 +466,7 @@ void IceMerameraKing::exeEscapeJump() {
 
     if (MR::isOnGround(this)) {
         f32 radius = getSensor("body")->mRadius;
-        MR::rotateQuatRollBall(&mRollQuat, mVelocity, *MR::getGroundNormal(this), (0.5f * radius));
+        MR::rotateQuatRollBall(&mRollQuat, mVelocity, *MR::getGroundNormal(this), (cNum_exeEscapeJump_f1 * radius));
         MR::moveAndTurnToPlayer(this, &mFront, ::hEscapeOnGroundParam);
 
         if (MR::isGreaterStep(this, cStep_exeEscapeJump_2)) {
@@ -441,7 +476,7 @@ void IceMerameraKing::exeEscapeJump() {
         }
     } else {
         f32 radius = getSensor("body")->mRadius;
-        MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, (0.5f * radius));
+        MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, (cNum_exeEscapeJump_f2 * radius));
         MR::moveAndTurnToPlayer(this, &mFront, ::hEscapeOnAirParam);
     }
 }
@@ -557,7 +592,7 @@ void IceMerameraKing::exeAttackAfter() {
         MR::emitEffect(this, "Land");
         MR::startAction(this, "AttackEnd");
         MR::startSound(this, "SE_BM_ICEMERAKING_HIP_DROP");
-        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceStrong(this, cNum_exeAttackAfter_f1, cNum_exeAttackAfter_f2, cNum_exeAttackAfter_f3);
     }
     MR::moveAndTurnToPlayer(this, &mFront, ::hOnAirParam);
 
@@ -598,7 +633,7 @@ void IceMerameraKing::exeAngryDemo() {
     MR::playLevelMarioPinchBGM(true);
 
     if (MR::isDemoPartLastStep("怒りデモ")) {
-        MR::appearStarPiece(this, mPosition - mGravity * 200.0f, mHitPoint <= 2 ? 8 : 16, 15.0f, 70.0f, false);
+        MR::appearStarPiece(this, mPosition - mGravity * cNum_exeAngryDemo_f1, mHitPoint <= 2 ? 8 : 16, cNum_exeAngryDemo_f2, cNum_exeAngryDemo_f3, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
     }
@@ -719,7 +754,7 @@ bool IceMerameraKing::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, Hi
 
 bool IceMerameraKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     // A spin storm within 600 blows the fire out, unless the player is under or over the body.
-    if (!MR::isInSpinStormRange(msg, pSender, pReceiver, 600.0f)) {
+    if (!MR::isInSpinStormRange(msg, pSender, pReceiver, cNum_receiveOtherMsg_f1)) {
         return false;
     }
 
@@ -749,7 +784,7 @@ void IceMerameraKing::addVelocityToInitPos() {
     if (0.0f < mGravity.dot(toInit)) {
         MR::vecKillElement(toInit, mGravity, &toInit);
     }
-    toInit.setLength(0.5f);
+    toInit.setLength(cNum_addVelocityToInitPos_f1);
     mVelocity.add(toInit);
 }
 
@@ -784,7 +819,7 @@ bool IceMerameraKing::isEnableThrow() {
     MR::normalizeOrZero(&toPlayer);
     Vec3f up;
     MR::calcUpVec(&up, this);
-    return -0.60f < up.dot(toPlayer);
+    return -cNum_isEnableThrow_f1 < up.dot(toPlayer);
 }
 
 // The first dead ice from mWeaponIndex on, appeared at the body; the next search starts one past the last start.
@@ -818,8 +853,8 @@ bool IceMerameraKing::calcJoint(Pos3f* pJointMtx, const JointControllerInfo& /*r
 
 IceMerameraKingShockWave::IceMerameraKingShockWave() : ModelObj("衝撃", "IceMerameraKingShock", nullptr, -2, -2, -2, false) {
     initHitSensor(2);
-    MR::addHitSensorEnemyAttack(this, "circle", 16, 15.0f, Vec3f(0.0f, -100.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "circle_end", 16, 24.0f, Vec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "circle", 16, cNum_IceMerameraKingShockWave_f1, Vec3f(0.0f, -cNum_IceMerameraKingShockWave_f2, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "circle_end", 16, cNum_IceMerameraKingShockWave_f3, Vec3f(0.0f, -cNum_IceMerameraKingShockWave_f4, 0.0f));
 }
 
 void IceMerameraKingShockWave::appear() {
@@ -832,10 +867,10 @@ void IceMerameraKingShockWave::appear() {
 void IceMerameraKingShockWave::control() {
     Vec3f jointScale;
     MR::copyJointScale(this, sShockCircleJoint, &jointScale);
-    f32 circleRadius = 15.0f * jointScale.y;
+    f32 circleRadius = cNum_control_f2 * jointScale.y;
     getSensor("circle")->mRadius = circleRadius;
     MR::copyJointScale(this, sShockCircleEndJoint, &jointScale);
-    f32 endRadius = 24.0f * jointScale.y;
+    f32 endRadius = cNum_control_f3 * jointScale.y;
     getSensor("circle_end")->mRadius = endRadius;
     if (MR::isActionEnd(this)) {
         kill();
@@ -858,7 +893,7 @@ void IceMerameraKingShockWave::attackSensor(HitSensor* pSender, HitSensor* pRece
     Vec3f up;
     MR::calcUpVec(&up, this);
 
-    if (MR::abs(outward.dot(up)) < 200.0f) {
+    if (MR::abs(outward.dot(up)) < cNum_attackSensor_f1) {
         MR::vecKillElement(outward, up, &outward);
         MR::sendMsgEnemyAttackFlipMaximumToDir(pReceiver, pSender, outward);
     }

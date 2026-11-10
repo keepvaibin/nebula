@@ -25,6 +25,25 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBeeWingAnimation_f1, "updateBeeWingAnimation.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBeeWingAnimation_f2, "updateBeeWingAnimation.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTakingPosition_f1, "updateTakingPosition.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateTakingPosition_f2, "updateTakingPosition.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootFireBall_f1, "shootFireBall.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootFireBall_f2, "shootFireBall.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootFireBall_f3, "shootFireBall.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootFireBall_f4, "shootFireBall.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFairyStar_f1, "updateFairyStar.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateThrowVector_f1, "updateThrowVector.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateThrowVector_f2, "updateThrowVector.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createIceFloor_f1, "createIceFloor.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createIceWall_f1, "createIceWall.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBaseMtxTeresa_f1, "updateBaseMtxTeresa.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBaseMtxTeresa_f2, "updateBaseMtxTeresa.f2", 0.3926991f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBaseMtxTeresa_f3, "updateBaseMtxTeresa.f3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBaseMtxTeresa_f4, "updateBaseMtxTeresa.f4", 0.02f);
 
 void MarioActor::init2D() {
     MR::getGameSceneLayoutHolder()->initLifeCount(mMaxHealth);
@@ -65,8 +84,8 @@ void MarioActor::updateBeeWingAnimation() {
         return;
     }
 
-    getJointCtrl("HandR")->setLocalScale(0.9f);
-    getJointCtrl("HandL")->setLocalScale(0.9f);
+    getJointCtrl("HandR")->setLocalScale(cNum_updateBeeWingAnimation_f1);
+    getJointCtrl("HandL")->setLocalScale(cNum_updateBeeWingAnimation_f2);
 
     if (mMario->checkLvlA() && mMario->mAirWalkTimer && getMovementStates().jumping) {
         if (mBeeWingAnim != 1) {
@@ -224,9 +243,9 @@ void MarioActor::updateTakingPosition() {
         mNullAnimation->getLastPos(&position);
         NebulaMtxMultVec(mBaseCorrectionMtx.toMtxPtr(), &position, &position);
         NebulaMtxMultVec(getBaseMtx(), &position, &position);
-        f32 offset = 10.0f * (mMario->mWalkSpeed * mMario->mWalkSpeed);
+        f32 offset = cNum_updateTakingPosition_f1 * (mMario->mWalkSpeed * mMario->mWalkSpeed);
         offset *= Angle::sinRadian(mTakingWobble);
-        mTakingWobble += MR::getRandom(0.1f, 1.0f);
+        mTakingWobble += MR::getRandom(cNum_updateTakingPosition_f2, 1.0f);
         position.y += offset;
         mTakeSensors[0]->mHost->mPosition = position;
         Vec3f& carryRotation = mTakeSensors[0]->mHost->mRotation;
@@ -328,7 +347,7 @@ void MarioActor::shootFireBall() {
     MR::normalize(&direction);
     Vec3f position;
     getRealPos("HandR", &position);
-    position += mMario->mFrontVec * 30.0f;
+    position += mMario->mFrontVec * cNum_shootFireBall_f1;
     ball->appearAndThrow(position, direction);
     playSound("声投げ", -1);
     if (!isJumping()) {
@@ -348,9 +367,9 @@ void MarioActor::shootFireBall() {
     mMario->mFireShotCount++;
     f32 gravitySpeed = mMario->cutGravityElementFromJumpVec(true);
     Mario* mario = mMario;
-    mario->mJumpVec.x *= 0.5f;
-    mario->mJumpVec.y *= 0.5f;
-    mario->mJumpVec.z *= 0.5f;
+    mario->mJumpVec.x *= cNum_shootFireBall_f2;
+    mario->mJumpVec.y *= cNum_shootFireBall_f3;
+    mario->mJumpVec.z *= cNum_shootFireBall_f4;
     mMario->mJumpVec += mGravityVec * gravitySpeed;
 }
 
@@ -387,7 +406,7 @@ void MarioActor::updateFairyStar() {
         Vec3f position;
         MR::copyJointPos(mSpinTico, "Center", &position);
         Color8 color(255, 225, 225, 255);
-        f32 power = 0.001f;
+        f32 power = cNum_updateFairyStar_f1;
         MR::requestPointLight(mSpinTico, position, color, power, 0);
         return;
     }
@@ -426,7 +445,7 @@ void MarioActor::updateThrowVector() {
                 mThrowProbePos = mCenterPos;
             mThrowVecTimer++;
             Vec3f direction = mTakeCandidate->mPosition - mThrowProbePos;
-            if (direction.length() <= 40.0f + mTakeCandidate->getRadius()) {
+            if (direction.length() <= cNum_updateThrowVector_f1 + mTakeCandidate->getRadius()) {
                 mThrowProbePos = mTakeCandidate->mPosition;
                 mThrowTarget = mTakeCandidate;
                 if (MR::isSensorEnemy(mTakeCandidate)) {
@@ -437,7 +456,7 @@ void MarioActor::updateThrowVector() {
                 return;
             }
             MR::normalize(&direction);
-            mThrowProbePos += direction * 40.0f;
+            mThrowProbePos += direction * cNum_updateThrowVector_f2;
             if (MR::checkStrikePointToMap(mThrowProbePos, nullptr)) {
                 mThrowVecTimer = 0;
                 mThrowTarget = nullptr;
@@ -463,7 +482,7 @@ void MarioActor::createIceFloor(const Vec3f& rVec) {
     Vec3f vec;
     mtx.getEuler(vec);
 
-    vec *= 180.0f / PI;
+    vec *= cNum_createIceFloor_f1 / PI;
     createIceFloor(rVec, vec);
 }
 
@@ -487,7 +506,7 @@ void MarioActor::createIceWall(const Vec3f& rPos, const Vec3f& rNormal) {
 
     Vec3f vec;
     mtx.getEuler(vec);
-    vec *= 180.0f / PI;
+    vec *= cNum_createIceWall_f1 / PI;
     mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rPos, vec);
 
     mIceStepIndex = (mIceStepIndex + 1) % cIceStepNum;
@@ -499,13 +518,13 @@ void MarioActor::createIceWall(const Vec3f& rPos, const Vec3f& rNormal) {
 
 void MarioActor::updateBaseMtxTeresa(MtxPtr mtx) {
     Vec3f horizontal;
-    f32 tilt = MR::clamp(MR::vecKillElement(mVelocity, getGravityVec(), &horizontal) / 10.0f, -1.0f, 1.0f);
+    f32 tilt = MR::clamp(MR::vecKillElement(mVelocity, getGravityVec(), &horizontal) / cNum_updateBaseMtxTeresa_f1, -1.0f, 1.0f);
     if (!MR::isNearZero(mMario->getWorldPadDir())) {
         const Vec3f& front = mMario->mFrontVec;
-        if (MR::diffAngleAbsHorizontal(mMario->getWorldPadDir(), front, getGravityVec()) > 0.3926991f)
+        if (MR::diffAngleAbsHorizontal(mMario->getWorldPadDir(), front, getGravityVec()) > cNum_updateBaseMtxTeresa_f2)
             tilt = 0.0f;
     }
-    mTeresaTilt = 0.98f * mTeresaTilt + 0.02f * tilt;
+    mTeresaTilt = cNum_updateBaseMtxTeresa_f3 * mTeresaTilt + cNum_updateBaseMtxTeresa_f4 * tilt;
     f32 angle = mConst->getTable()->mTeresaAngleDown;
     if (mTeresaTilt > 0.0f)
         angle = mConst->getTable()->mTeresaAngleUp;

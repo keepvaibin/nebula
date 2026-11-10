@@ -7,6 +7,10 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
 
 MirrorActor::MirrorActor(LiveActor* pActor, const char* pName, const char* pArcName) : LiveActor(pName), mHost(pActor), mIsDisconnected() {
     initModelManagerWithAnm(pArcName, nullptr, false);
@@ -22,8 +26,8 @@ void MirrorActor::init(const TableIter& /*rIter*/) {
     MR::calcModelBoundingBox(&box, mHost);
 
     Vec3f center;
-    center.lerp(box.f, box.i, 0.5f);
-    mRadius = 0.5f * (box.f - box.i).length();
+    center.lerp(box.f, box.i, cNum_init_f1);
+    mRadius = cNum_init_f2 * (box.f - box.i).length();
     mCenter = center;
 
     makeActorAppeared();

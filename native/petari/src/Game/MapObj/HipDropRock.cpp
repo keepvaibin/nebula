@@ -13,6 +13,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initBreakModel_f1, "initBreakModel.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f1, "appearItem.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f2, "appearItem.f2", 40.0f);
+
 namespace {
     static const s32 sStepToSwitchOn = NebulaFrameClock::stepsOfMilliseconds(500);
     NEBULA_TUNABLE(s32, sDefaultStarPeaceNum, 6);
@@ -119,7 +123,7 @@ void HipDropRock::initBreakModel() {
     mBreakModelMtx.set(getBaseMtx());
     // The broken model turns a random 0-180 about y.
     Vec3f moment;
-    moment.scale(MR::getRandom(0.0f, 180.0f), Vec3f(0.0f, 1.0f, 0.0f));
+    moment.scale(MR::getRandom(0.0f, cNum_initBreakModel_f1), Vec3f(0.0f, 1.0f, 0.0f));
     Pos3f mtx;
     MR::makeMtxMoment(&mtx, moment);
     mBreakModelMtx.concat(mtx);
@@ -153,7 +157,7 @@ void HipDropRock::appearItem() {
     if (mItemType == 0) {
         MR::appearCoinPop(this, mPosition, 1);
     } else if (mItemType == 1) {
-        MR::appearStarPiece(this, mPosition, mStarPieceNum, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, mStarPieceNum, cNum_appearItem_f1, cNum_appearItem_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 }

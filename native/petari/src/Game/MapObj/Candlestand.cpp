@@ -7,6 +7,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f1, "appearItem.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearItem_f2, "appearItem.f2", 40.0f);
+
 namespace NrvCandlestand {
     NEW_NERVE(HostTypeWaitFire, Candlestand, WaitFire);
     NEW_NERVE(HostTypeFire, Candlestand, Fire);
@@ -210,7 +213,7 @@ void Candlestand::appearItem() {
             MR::appearCoinPopToDirection(this, position, up, 1);
         }
     } else if (mItem == 0) {
-        if (MR::appearStarPiece(this, position, 1, 10.0f, 40.0f, false)) {
+        if (MR::appearStarPiece(this, position, 1, cNum_appearItem_f1, cNum_appearItem_f2, false)) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         }
     }

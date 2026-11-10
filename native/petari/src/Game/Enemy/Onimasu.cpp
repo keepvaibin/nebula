@@ -20,6 +20,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTargetPose_f1, "calcTargetPose.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTargetPose_f2, "calcTargetPose.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTurnDirection_f1, "calcTurnDirection.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTurnDirection_f2, "calcTurnDirection.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateStompVelocity_f1, "updateStompVelocity.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_emitEffectLand_f1, "emitEffectLand.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPolygonOnRailPoint_f1, "getPolygonOnRailPoint.f1", 2000.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeMove_1, "exeMove.1", 1);
 
@@ -69,7 +79,7 @@ void Onimasu::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "Onimasu", MR::addHitSensor(this, "body", ATYPE_MAP_OBJ_PRESS, 8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f)),
                            nullptr);
 
-    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f1, cNum_init_f2);
 
     MR::setGroupClipping(this, rIter, 16);
 
@@ -157,7 +167,7 @@ void Onimasu::calcTargetPose() {
 
     Quat4f quarterTurn;
     quarterTurn.set(0.0f, 0.0f, 0.0f, 1.0f);
-    quarterTurn.setRotate(mRotateAxis, MR::pi() / 2.0f);
+    quarterTurn.setRotate(mRotateAxis, MR::pi() / cNum_calcTargetPose_f1);
     rotationChange.mult(quarterTurn);
     mTargetQuat.mult(rotationChange);
 
@@ -169,7 +179,7 @@ void Onimasu::calcTargetPose() {
 
     if (MR::isSameDirection(startFront, targetFront)) {
         Quat4f adjustment;
-        adjustment.setRotate(mRotateAxis, MR::pi() * 0.001f);
+        adjustment.setRotate(mRotateAxis, MR::pi() * cNum_calcTargetPose_f2);
         mStartQuat.mult(adjustment);
     }
 }
@@ -215,12 +225,12 @@ bool Onimasu::calcTurnDirection(f32* pTurnDir) const {
     }
 
     if (turnType == 0) {
-        *pTurnDir = 0.5f;
+        *pTurnDir = cNum_calcTurnDirection_f1;
         return true;
     }
 
     if (turnType == 1) {
-        *pTurnDir = -0.5f;
+        *pTurnDir = -cNum_calcTurnDirection_f2;
         return true;
     }
 
@@ -233,7 +243,7 @@ bool Onimasu::calcTurnDirection(f32* pTurnDir) const {
 }
 
 void Onimasu::updateStompVelocity() {
-    f32 speed = getGravityScalar() * getTimeToNextPoint() * 0.5f;
+    f32 speed = getGravityScalar() * getTimeToNextPoint() * cNum_updateStompVelocity_f1;
 
     Vec3f gravityDir;
     gravityDir.set(-getNextPointNormal());
@@ -262,7 +272,7 @@ void Onimasu::emitEffectLand() {
     Vec3f railPointPos;
     MR::calcRailPointPos(&railPointPos, this, getNextPointNo());
 
-    railPointPos.add((-getNextPointNormal() * ::sSensorRadius) * 0.5f);
+    railPointPos.add((-getNextPointNormal() * ::sSensorRadius) * cNum_emitEffectLand_f1);
 
     if (MR::isSameDirection(mRotateAxis, getNextPointNormal())) {
         MR::makeMtxUpNoSupportPos(&mMoveEffectMtx, getNextPointNormal(), railPointPos);
@@ -349,7 +359,7 @@ namespace OnimasuFunction {
         Vec3f gravity(0.0f, 1.0f, 0.0f);
         MR::calcGravityVector(pActor, railPosition, &gravity, nullptr, 0);
         Vec3f direction(gravity);
-        gravity.setLength(2000.0f);
+        gravity.setLength(cNum_getPolygonOnRailPoint_f1);
 
         Triangle triangle;
         if (!MR::getFirstPolyOnLineToMapExceptSensor(pPosition, &triangle, railPosition, gravity, pActor->getSensor("body"))) {

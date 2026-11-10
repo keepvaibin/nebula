@@ -12,6 +12,45 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.4142f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1.414f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 1024.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSetup_f1, "drawSetup.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSetup_f2, "drawSetup.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initLocalPoint_f1, "initLocalPoint.f1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initLocalPoint_f2, "initLocalPoint.f2", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createReduceMap_f1, "createReduceMap.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createReduceMap_f2, "createReduceMap.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f1, "digPlayerWalk.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f2, "digPlayerWalk.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f3, "digPlayerWalk.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f4, "digPlayerWalk.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f5, "digPlayerWalk.f5", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f6, "digPlayerWalk.f6", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f7, "digPlayerWalk.f7", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPlayerWalk_f8, "digPlayerWalk.f8", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPointer_f1, "digPointer.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPointer_f2, "digPointer.f2", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPointer_f3, "digPointer.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPointer_f4, "digPointer.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPointer_f5, "digPointer.f5", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_digPointer_f6, "digPointer.f6", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doErase_f1, "doErase.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doErase_f2, "doErase.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doMove_f1, "doMove.f1", 1.732051f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCheckList_f1, "updateCheckList.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCheckList_f2, "updateCheckList.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCheckList_f3, "updateCheckList.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCoverSnow_f1, "calcCoverSnow.f1", 1.732051f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 20.0f);
+
 namespace {
     const u16 sTextureSize = 128;
     // log2(sTextureSize): row offset of a cell in the depth arrays.
@@ -47,15 +86,15 @@ SnowFloor::SnowFloor(const char* pName) : LiveActor(pName) {
 
 void SnowFloor::init(const TableIter& rIter) {
     initHitSensor(1);
-    MR::addHitSensorEye(this, "eye", 16, 1.4142f * (::sTextureSize * ::sCellSize), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEye(this, "eye", 16, cNum_init_f1 * (::sTextureSize * ::sCellSize), Vec3f(0.0f, 0.0f, 0.0f));
     mSnowDepth = new f32[::sTextureSize * ::sTextureSize];
     mBaseDepth = new u8[::sTextureSize * ::sTextureSize];
 
     for (u32 y = 0; y < ::sTextureSize; y++) {
         for (u32 x = 0; x < ::sTextureSize; x++) {
-            mSnowDepth[(y << ::sTextureShift) + x] = 32.0f + 120.0f * MR::getRandom();
+            mSnowDepth[(y << ::sTextureShift) + x] = cNum_init_f2 + cNum_init_f3 * MR::getRandom();
             mBaseDepth[(y << ::sTextureShift) + x] = (s32)(mSnowDepth[(y << ::sTextureShift) + x]);
-            mSnowDepth[(y << ::sTextureShift) + x] += 80.0f;
+            mSnowDepth[(y << ::sTextureShift) + x] += cNum_init_f4;
         }
     }
 
@@ -78,7 +117,7 @@ void SnowFloor::init(const TableIter& rIter) {
     mLastPlayerPoint.zero();
     MR::connectToSceneNormalMapObj(this);
     MR::validateClipping(this);
-    MR::setClippingTypeSphere(this, 1.414f * 1024.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f5 * cNum_init_f6);
     MR::setClippingFar100m(this);
     initSound(4, false);
     makeActorAppeared();
@@ -90,7 +129,7 @@ void SnowFloor::drawSetup() {
     mTexCoords = new f32[::sStripCount + 1];
     mDirections = new Vec3f[::sStripCount];
     f32 halfStripAngle = mHalfAngle / ::sStripCount;
-    f32 angleRange = 2.0f * mHalfAngle - 2.0f * halfStripAngle;
+    f32 angleRange = cNum_drawSetup_f1 * mHalfAngle - cNum_drawSetup_f2 * halfStripAngle;
     u32 i;
 
     for (i = 0; i < ::sStripCount; i++) {
@@ -114,9 +153,9 @@ void SnowFloor::initLocalPoint(const TableIter& rIter) {
     NebulaMtxMultVecSR(mtx, &mUp, &mUp);
     NebulaMtxMultVecSR(mtx, &mAxis, &mAxis);
     f32 halfLength = ::sTextureSize * ::sCellSize;
-    mRadius = 900.0f;
+    mRadius = cNum_initLocalPoint_f1;
     mHalfLength = halfLength;
-    mHalfAngle = halfLength / 900.0f;
+    mHalfAngle = halfLength / cNum_initLocalPoint_f2;
 }
 
 bool SnowFloor::calcLocalPoint(const Vec3f& rPosition, Vec3f* pPoint) {
@@ -157,7 +196,7 @@ void SnowFloor::createReduceMap(u16 size) {
                 continue;
             }
 
-            f32 value = distance + 0.5f * (distance * MR::getRandom());
+            f32 value = distance + cNum_createReduceMap_f1 * (distance * MR::getRandom());
             samples++;
             total += value;
             mReduceMap[y * size + x] = value;
@@ -172,7 +211,7 @@ void SnowFloor::createReduceMap(u16 size) {
                 mReduceMap[y * size + x] = 0.0f;
             } else {
                 mReduceMap[y * size + x] -= average;
-                mReduceMap[y * size + x] /= 0.2f * average;
+                mReduceMap[y * size + x] /= cNum_createReduceMap_f2 * average;
             }
         }
     }
@@ -181,32 +220,32 @@ void SnowFloor::createReduceMap(u16 size) {
 void SnowFloor::digPlayerWalk(const Vec3f& rPoint) {
     Vec2f point(rPoint.x, rPoint.y);
 
-    if (rPoint.z < mRadius - 50.0f) {
+    if (rPoint.z < mRadius - cNum_digPlayerWalk_f1) {
         return;
     }
 
-    if (rPoint.z > 50.0f + mRadius) {
+    if (rPoint.z > cNum_digPlayerWalk_f2 + mRadius) {
         return;
     }
 
     point.x += 1.0f;
     point.y += 1.0f;
-    point.x *= 0.5f;
-    point.y *= 0.5f;
+    point.x *= cNum_digPlayerWalk_f3;
+    point.y *= cNum_digPlayerWalk_f4;
     point.y = 1.0f - point.y;
-    f32 depth = doMove(mLastPlayerPoint, point, 20.0f / ::sCellSize, ::cPlayerDigAmount);
+    f32 depth = doMove(mLastPlayerPoint, point, cNum_digPlayerWalk_f5 / ::sCellSize, ::cPlayerDigAmount);
     mLastPlayerPoint = point;
-    f32 excess = depth - 200.0f;
+    f32 excess = depth - cNum_digPlayerWalk_f6;
 
     if (excess < 0.0f) {
         if (mResistFrames != 0) {
             MR::setPlayerWalkingResist(mWalkingResist);
-            mWalkingResist *= 0.8f;
+            mWalkingResist *= cNum_digPlayerWalk_f7;
         } else {
             MR::setPlayerWalkingResist(0.0f);
         }
     } else {
-        f32 resist = MR::clamp(excess / 500.0f, 0.0f, 1.0f);
+        f32 resist = MR::clamp(excess / cNum_digPlayerWalk_f8, 0.0f, 1.0f);
         resist *= ::cPlayerWalkResist;
         MR::setPlayerWalkingResist(resist);
 
@@ -229,20 +268,20 @@ void SnowFloor::digPlayerWalk(const Vec3f& rPoint) {
 void SnowFloor::digPointer(const Vec3f& rPoint) {
     Vec2f point(rPoint.x, rPoint.y);
 
-    if (rPoint.z < mRadius - 250.0f) {
+    if (rPoint.z < mRadius - cNum_digPointer_f1) {
         return;
     }
 
-    if (rPoint.z > 250.0f + mRadius) {
+    if (rPoint.z > cNum_digPointer_f2 + mRadius) {
         return;
     }
 
     point.x += 1.0f;
     point.y += 1.0f;
-    point.x *= 0.5f;
-    point.y *= 0.5f;
+    point.x *= cNum_digPointer_f3;
+    point.y *= cNum_digPointer_f4;
     point.y = 1.0f - point.y;
-    s32 volume = doMove(mLastPointerPoint, point, 50.0f / ::sCellSize, ::cPointerDigAmount) / 200.0f;
+    s32 volume = doMove(mLastPointerPoint, point, cNum_digPointer_f5 / ::sCellSize, ::cPointerDigAmount) / cNum_digPointer_f6;
 
     if (volume > 100) {
         volume = 100;
@@ -301,12 +340,12 @@ void SnowFloor::control() {
         for (u32 x = 0; x < ::sTextureSize; x++) {
             u32 index = row + x;
 
-            if (mSnowDepth[index] < 10.0f) {
+            if (mSnowDepth[index] < cNum_control_f1) {
                 mSnowDepth[index] += ::cSnowFallRateFirst * MR::getRandom();
             } else if (mSnowDepth[index] < ::cSnowFallRateBottom) {
                 mSnowDepth[index] += ::cSnowFallRateQuick * MR::getRandom();
             } else {
-                f32 limit = 50.0f + mBaseDepth[index];
+                f32 limit = cNum_control_f2 + mBaseDepth[index];
                 f32 deficit = limit - mSnowDepth[index];
 
                 if (deficit > 0.0f) {
@@ -315,7 +354,7 @@ void SnowFloor::control() {
                 }
             }
 
-            mSnowDepth[index] = MR::clamp(mSnowDepth[index], 0.0f, 100.0f + mBaseDepth[index]);
+            mSnowDepth[index] = MR::clamp(mSnowDepth[index], 0.0f, cNum_control_f3 + mBaseDepth[index]);
             changed = true;
         }
     }
@@ -342,8 +381,8 @@ bool SnowFloor::doErase(const Vec3f& rPosition, f32 radius, f32 amount) {
         Vec2f point(localPoint.x, localPoint.y);
         point.x += 1.0f;
         point.y += 1.0f;
-        point.x *= 0.5f;
-        point.y *= 0.5f;
+        point.x *= cNum_doErase_f1;
+        point.y *= cNum_doErase_f2;
         point.y = 1.0f - point.y;
         doErase(point, localRadius / ::sCellSize, amount);
         return true;
@@ -367,7 +406,7 @@ f32 SnowFloor::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
     u32 count = 0;
     Vec2f unitDirection(to - from);
     unitDirection.normalize();
-    f32 outerRadius = 1.732051f * radius;
+    f32 outerRadius = cNum_doMove_f1 * radius;
     to.x *= ::sTextureSize;
     to.y *= ::sTextureSize;
     s32 left = static_cast< s16 >((s32)(to.x - outerRadius)) - 1;
@@ -515,14 +554,14 @@ void SnowFloor::updateCheckList() {
             Vec2f point(localPoint.x, localPoint.y);
             point.x += 1.0f;
             point.y += 1.0f;
-            point.x *= 0.5f;
-            point.y *= 0.5f;
+            point.x *= cNum_updateCheckList_f1;
+            point.y *= cNum_updateCheckList_f2;
             point.y = 1.0f - point.y;
             f32 cellSize = ::sCellSize;
             f32 radius = sensor->mRadius;
             f32 cover = calcCoverSnow(point, radius / cellSize);
             f32 sensorRadius = sensor->mRadius;
-            f32 threshold = 100.0f * sensorRadius;
+            f32 threshold = cNum_updateCheckList_f3 * sensorRadius;
 
             if (cover < threshold) {
                 discovered = MR::sendArbitraryMsg(ACTMES_NOTIFY_DISCOVER_SNOW, sensor, getSensor("eye"));
@@ -545,7 +584,7 @@ void SnowFloor::updateCheckList() {
 f32 SnowFloor::calcCoverSnow(const Vec2f& rPoint, f32 radius) {
     f32 total = 0.0f;
     Vec2f point(rPoint);
-    f32 outerRadius = 1.732051f * radius;
+    f32 outerRadius = cNum_calcCoverSnow_f1 * radius;
     point.x *= ::sTextureSize;
     point.y *= ::sTextureSize;
     s32 left = static_cast< s16 >((s32)(point.x - outerRadius)) - 1;
@@ -599,8 +638,8 @@ void SnowFloor::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         if (pReceiver->mHost->getBaseMtx()) {
             Vec3f up;
             MR::calcUpVec(&up, pReceiver->mHost);
-            Vec3f position(pReceiver->mPosition - up * (pReceiver->mRadius - 20.0f));
-            doErase(position, 20.0f, ::cFireballDigAmount);
+            Vec3f position(pReceiver->mPosition - up * (pReceiver->mRadius - cNum_attackSensor_f1));
+            doErase(position, cNum_attackSensor_f2, ::cFireballDigAmount);
         }
     }
 

@@ -9,6 +9,14 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_Air_f1, "Air.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeIn_f1, "exeIn.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeIn_f2, "exeIn.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOut_f1, "exeOut.f1", 100.0f);
 
 namespace NrvAir {
     NEW_NERVE(HostTypeIn, Air, In);
@@ -18,7 +26,7 @@ namespace NrvAir {
 Air::Air(const char* pName) : LiveActor(pName) {
     mIsChanged = 0;
     mIsWaitStartCamera = 0;
-    mDistance = 70.0f;
+    mDistance = cNum_Air_f1;
 }
 
 void Air::init(const TableIter& rIter) {
@@ -33,7 +41,7 @@ void Air::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &waitStartCamera);
     mIsWaitStartCamera = waitStartCamera + 1;
     MR::tryStartAllAnim(this, object_name);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     setFarClipping();
     MR::setGroupClipping(this, rIter, 0x10);
     initNerve(GET_NERVE(Air, HostTypeOut));
@@ -56,7 +64,7 @@ void Air::init(const TableIter& rIter) {
 void Air::appear() {
     LiveActor::appear();
 
-    f32 appearDist = 100.0f * mDistance;
+    f32 appearDist = cNum_appear_f1 * mDistance;
     f32 dist = MR::calcDistanceToPlayer(this);
 
     if (dist < appearDist) {
@@ -118,7 +126,7 @@ void Air::exeIn() {
 
     if (!isCameraNotEnd) {
         tryChange();
-        f32 disappearDist = (100.0f * (20.0f + mDistance));
+        f32 disappearDist = (cNum_exeIn_f1 * (cNum_exeIn_f2 + mDistance));
         if (disappearDist < MR::calcDistanceToPlayer(this)) {
             MR::tryStartAllAnim(this, "Disappear");
             setNerve(GET_NERVE(Air, HostTypeOut));
@@ -136,7 +144,7 @@ void Air::exeOut() {
             MR::hideModel(this);
         }
 
-        f32 distMult = (100.0f * mDistance);
+        f32 distMult = (cNum_exeOut_f1 * mDistance);
 
         if (MR::calcDistanceToPlayer(this) < distMult) {
             MR::showModel(this);

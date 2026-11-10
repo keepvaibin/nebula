@@ -18,6 +18,23 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setShapeType_f1, "setShapeType.f1", 0.6f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setShapeType_f2, "setShapeType.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setShapeType_f3, "setShapeType.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setScale_f1, "setScale.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setScale_f2, "setScale.f2", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestAssimilate_f1, "requestAssimilate.f1", 8.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addDeformVelocityInternalPressure_f1, "addDeformVelocityInternalPressure.f1", 0.125f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addDeformVelocityInternalPressure_f2, "addDeformVelocityInternalPressure.f2", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addAccelPointing_f1, "addAccelPointing.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureReduceVolume_f1, "updateCaptureReduceVolume.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureReduceVolume_f2, "updateCaptureReduceVolume.f2", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureWarningColor_f1, "updateCaptureWarningColor.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCaptureWarningColor_f2, "updateCaptureWarningColor.f2", 128.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_control_setBinderRadius_1, "control.setBinderRadius.1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_setBinderRadius_2, "control.setBinderRadius.2", 0.9f);
@@ -127,7 +144,7 @@ void BigBubble::init(const TableIter& rIter) {
     MR::setEffectHostMtx(this, "PushWind", mEffectMtx);
     initSound(6, false);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, getBaseRadius() * 0.8f);
+    MR::initShadowVolumeSphere(this, getBaseRadius() * cNum_init_f1);
     MR::initStarPointerTarget(this, getBaseRadius(), Vec3f(0.0f, 0.0f, 0.0f));
     if (MR::isValidInfo(rIter))
         makeActorAppeared();
@@ -176,7 +193,7 @@ void BigBubble::makeActorDead() {
 }
 
 void BigBubble::control() {
-    mIsHidden = MR::isJudgedToClipFrustum(mPosition, getSize() * 1.2f);
+    mIsHidden = MR::isJudgedToClipFrustum(mPosition, getSize() * cNum_control_f1);
 
     if (!isNerve(GET_NERVE(BigBubble, BigBubbleNrvMerged))) {
         doMoveLimit();
@@ -280,13 +297,13 @@ void BigBubble::setShapeType(s32 shapeType) {
     mShapeType = shapeType;
     switch (mShapeType) {
     case ShapeType_Sphere:
-        mSurface->setDiagonalRate(0.6f);
+        mSurface->setDiagonalRate(cNum_setShapeType_f1);
         break;
     case ShapeType_Cube:
-        mSurface->setDiagonalRate(0.9f);
+        mSurface->setDiagonalRate(cNum_setShapeType_f2);
         break;
     case ShapeType_Octahedron:
-        mSurface->setDiagonalRate(0.1f);
+        mSurface->setDiagonalRate(cNum_setShapeType_f3);
         break;
     default:
         break;
@@ -314,8 +331,8 @@ void BigBubble::setScale(f32 scale) {
     f32 radius = getBaseRadius();
     mScale.set(Vec3f(scale, scale, scale));
     MR::setStarPointerTargetRadius3d(this, radius * scale);
-    MR::setShadowVolumeSphereRadius(this, nullptr, 0.8f * radius * scale);
-    mBinderRadius = radius * scale * 0.95f;
+    MR::setShadowVolumeSphereRadius(this, nullptr, cNum_setScale_f1 * radius * scale);
+    mBinderRadius = radius * scale * cNum_setScale_f2;
     MR::setBinderRadius(this, radius * scale * cNum_setScale_setBinderRadius_1);
     MR::setSensorRadius(this, "body", radius * scale);
     MR::setSensorRadius(this, "bind", radius * scale);
@@ -489,7 +506,7 @@ bool BigBubble::requestAssimilate(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     setScale(getRadius(mVolume));
-    addDeformVelocityOuter(dir * scale * 8.0f, true);
+    addDeformVelocityOuter(dir * scale * cNum_requestAssimilate_f1, true);
 
     for (s32 idx = 0; idx < 6; idx++) {
         if (mMergeBubbles[idx] == pReceiver->mHost) {
@@ -652,7 +669,7 @@ void BigBubble::exeAppear() {
         MR::startSound(this, "SE_OJ_BIG_BUBBLE_APPEAR");
     }
 
-    f32 scale = MR::calcNerveValue(this, ::sAppearTime, 0.01f, mAppearRadius);
+    f32 scale = MR::calcNerveValue(this, ::sAppearTime, cNum_exeAppear_f1, mAppearRadius);
     setScale(scale);
 
     mPosition.set(mSpawnPosition + mGravity * (-scale * getBaseRadius()));
@@ -872,12 +889,12 @@ void BigBubble::addDeformVelocityInternalPressure() {
     f32 size = getSize();
     // BUG: pressure should be from opposing faces.
     f32 pressure = (mDeformCoeff[Side_Top] + mDeformCoeff[Side_Left]) * (mDeformCoeff[Side_Back] + mDeformCoeff[Side_Front]) *
-                   (mDeformCoeff[Side_Right] + mDeformCoeff[Side_Bottom]) * 0.125f;
+                   (mDeformCoeff[Side_Right] + mDeformCoeff[Side_Bottom]) * cNum_addDeformVelocityInternalPressure_f1;
     if (pressure < 0.0f) {
         pressure = 0.0f;
     }
 
-    if (size > 0.01f) {
+    if (size > cNum_addDeformVelocityInternalPressure_f2) {
         for (s32 idx = 0; idx < 6; idx++) {
             mDeformSpeed[idx] += (1.0f - pressure / (size * size * size)) * ::sPressPower;
         }
@@ -939,7 +956,7 @@ bool BigBubble::addAccelPointing(s32 padChannel) {
 
     mPointAccel = 1.0f - (pointerDist - ::sPointAccelDistanceMin) / (::sPointAccelDistanceMax - ::sPointAccelDistanceMin);
     mPointAccel = mPointAccel * (::sPointAccelMax - ::sPointAccelMin) + ::sPointAccelMin;
-    MR::startSystemLevelSE("SE_SY_LV_BIG_BUBBLE_WIND", mPointAccel * 100.0f);
+    MR::startSystemLevelSE("SE_SY_LV_BIG_BUBBLE_WIND", mPointAccel * cNum_addAccelPointing_f1);
 
     Vec3f accelDir;
     MR::normalizeOrZero(mPosition - mPointerPos, &accelDir);
@@ -1037,8 +1054,8 @@ void BigBubble::updateCaptureReduceVolume() {
     if (mReduceVolumeTimer >= ::sReduceSizeInterval * 3) {
         mVolume -= ::sReduceVolume;
 
-        if (::sCaptureEndVolume <= mVolume && mVolume < ::sCaptureStartVolume * 0.98f) {
-            mVolume = ::sCaptureStartVolume * 0.98f;
+        if (::sCaptureEndVolume <= mVolume && mVolume < ::sCaptureStartVolume * cNum_updateCaptureReduceVolume_f1) {
+            mVolume = ::sCaptureStartVolume * cNum_updateCaptureReduceVolume_f2;
         }
 
         if (mVolume < 0.0f) {
@@ -1068,9 +1085,9 @@ void BigBubble::updateCaptureWarningColor() {
         s32 warningCycle = getCycle();
 
         f32 flashPhase = static_cast< f32 >(mReduceVolumeTimer % warningCycle) / static_cast< f32 >(warningCycle - 1);
-        f32 color = (MR::cos(TWO_PI * flashPhase) + 1.0f) * 0.5f;
+        f32 color = (MR::cos(TWO_PI * flashPhase) + 1.0f) * cNum_updateCaptureWarningColor_f1;
 
-        mWarningColor.a = (s32)(color * 128.0f);
+        mWarningColor.a = (s32)(color * cNum_updateCaptureWarningColor_f2);
     } else {
         mWarningColor.a = 0;
     }

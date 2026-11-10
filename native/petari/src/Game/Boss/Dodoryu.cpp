@@ -39,13 +39,17 @@
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f1, "DodoryuRabbit.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f2, "DodoryuRabbit.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f3, "DodoryuRabbit.f3", 100.0f);
+
 namespace {
-    const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
-    const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
-    const Vec sLegOffset = {40.0f, 0.0f, 0.0f};
-    const Vec sArmOffset = {0.0f, 0.0f, 0.0f};
-    const Vec sTailOffset = {50.0f, 0.0f, 0.0f};
-    const Vec sStarPieceSensorOffset = {-150.0f, 0.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sHeadOffset, {50.0f, 30.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sBodyOffset, {0.0f, 0.0f, 30.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sLegOffset, {40.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sArmOffset, {0.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sTailOffset, {50.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sStarPieceSensorOffset, {-150.0f, 0.0f, 0.0f});
     const char* const sHeadSensorName = "head";
     const char* const sHeadJointName = "Head";
     NEBULA_TUNABLE(f32, sHeadRadius, 210.0f);
@@ -822,7 +826,7 @@ DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
     mTalkMtx.identity();
     mTalkMtx.setTrans(mPosition);
 
-    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(100.0f, 150.0f, 100.0f), mTalkMtx);
+    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(cNum_DodoryuRabbit_f1, cNum_DodoryuRabbit_f2, cNum_DodoryuRabbit_f3), mTalkMtx);
     MR::setDistanceToTalk(mTalkCtrl, ::sRabbitTalkDistance);
 }
 

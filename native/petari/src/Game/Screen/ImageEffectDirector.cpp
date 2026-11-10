@@ -14,6 +14,8 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setBloomSimpleParams_f1, "setBloomSimpleParams.f1", 255.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sIntensityCountMax, 60);
     NEBULA_TUNABLE(f32, sDOFIntensity, 1.0f);
@@ -177,7 +179,7 @@ void ImageEffectDirector::setBloomSimpleParams(ImageEffectArea* pArea) {
     }
 
     mStateBloomSimple->setThreshold(pSimpleBloomArea->mThreshold);
-    mStateBloomSimple->setIntensity(pSimpleBloomArea->mIntensity / 255.0f);
+    mStateBloomSimple->setIntensity(pSimpleBloomArea->mIntensity / cNum_setBloomSimpleParams_f1);
 }
 
 void ImageEffectDirector::setScreenBlurParams(ImageEffectArea* pArea) {

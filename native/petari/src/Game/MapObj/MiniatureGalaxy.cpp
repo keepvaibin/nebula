@@ -25,7 +25,7 @@
 #include "Game/Util/Tunable.hpp"
 
 namespace {
-    const Vec cNamePlateOffset = {0.0f, 1500.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cNamePlateOffset, {0.0f, 1500.0f, 0.0f});
     NEBULA_TUNABLE(f32, cPointingRadius, 2500.0f);
     NEBULA_TUNABLE(f32, cZoomInScale, 1.0f);
     NEBULA_TUNABLE(f32, cZoomOutScale, 0.65f);

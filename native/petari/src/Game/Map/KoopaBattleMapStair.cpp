@@ -34,8 +34,8 @@ namespace {
     NEBULA_TUNABLE(f32, cBigClippingRadius, 800.0f);
     NEBULA_TUNABLE(f32, cDisappearBrkRate, 0.25f);
     // The eight edge and corner points round the stair top, in units of the half widths.
-    const EdgeOffset cEdgeOffset[] = {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
-                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}};
+    NEBULA_TUNABLE_RECORDS(EdgeOffset, cEdgeOffset, , {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
+                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}});
 }  // namespace
 
 namespace NrvKoopaBattleMapStair {

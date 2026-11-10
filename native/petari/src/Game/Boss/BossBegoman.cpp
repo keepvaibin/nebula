@@ -28,16 +28,16 @@
 NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
 
 namespace {
-    const MR::ActorMoveParam hWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
-    const MR::ActorMoveParam hSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
-    const MR::ActorMoveParam hPursueParam = {1.3f, 3.0f, 0.97f, 3.0f};
-    const MR::ActorMoveParam hTurnParam = {0.4f, 3.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam hHitReactionParam = {0.0f, 3.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam hOnWeakParam = {-0.5f, 3.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hOnWeakNoMoveParam = {0.0f, 3.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hTrampleReactionParam = {0.0f, 3.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hAwareParam = {0.0f, 3.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam hElectricReturnParam = {0.0f, 3.0f, 0.8f, 0.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hWaitParam, {0.0f, 3.0f, 0.95f, 1.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hSignAttackParam, {0.0f, 3.0f, 0.8f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hPursueParam, {1.3f, 3.0f, 0.97f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTurnParam, {0.4f, 3.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hHitReactionParam, {0.0f, 3.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnWeakParam, {-0.5f, 3.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnWeakNoMoveParam, {0.0f, 3.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTrampleReactionParam, {0.0f, 3.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hAwareParam, {0.0f, 3.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hElectricReturnParam, {0.0f, 3.0f, 0.8f, 0.0f});
     NEBULA_TUNABLE(f32, sLaunchRadius, 100.0f);
     NEBULA_TUNABLE(f32, sBabyLaunchVelH, 10.0f);
     NEBULA_TUNABLE(f32, sBabyLaunchVelV, 15.0f);

@@ -10,6 +10,30 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_trySetLockOnTarget_f1, "trySetLockOnTarget.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f1, "tryPullTrans.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f2, "tryPullTrans.f2", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f3, "tryPullTrans.f3", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f4, "tryPullTrans.f4", 400000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f5, "tryPullTrans.f5", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f6, "tryPullTrans.f6", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f7, "tryPullTrans.f7", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f8, "tryPullTrans.f8", 0.04f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f9, "tryPullTrans.f9", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f10, "tryPullTrans.f10", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f11, "tryPullTrans.f11", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f12, "tryPullTrans.f12", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPullTrans_f13, "tryPullTrans.f13", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_releaseThrowMemoSensor_f1, "releaseThrowMemoSensor.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_releaseThrowMemoSensor_f2, "releaseThrowMemoSensor.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryTornadoPull_f1, "tryTornadoPull.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryTornadoPull_f2, "tryTornadoPull.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryTornadoPull_f3, "tryTornadoPull.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryTornadoPull_f4, "tryTornadoPull.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryTornadoPull_f5, "tryTornadoPull.f5", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryTornadoPull_f6, "tryTornadoPull.f6", 120.0f);
 
 void MarioActor::memorizeSensorThrow(HitSensor* pSensor) {
     mTakeSensors.at(mTakeCount) = pSensor;
@@ -143,7 +167,7 @@ void MarioActor::trySetLockOnTarget(HitSensor* pSensor) {
     }
 
     Vec3f vec = pSensor->mPosition - mPosition;
-    if (vec.length() > 500.0f) {
+    if (vec.length() > cNum_trySetLockOnTarget_f1) {
         return;
     }
 
@@ -222,7 +246,7 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
     Vec3f ground;
     getGroundPos(&ground);
     if (IsMarioSwimming()) {
-        ground = center - mBodyUp * 600.0f;
+        ground = center - mBodyUp * cNum_tryPullTrans_f1;
     } else if (mMario->mMovementStates.onGround) {
         Vec3f offset = ground - center;
         f32 height = MR::vecKillElement(offset, mMario->mGroundNorm, &offset);
@@ -233,12 +257,12 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
     f32 projection = MR::getFootPoint(center, ground, rPosition, &foot);
     Vec3f inward = foot - rPosition;
     f32 radius = inward.length();
-    if (radius > 600.0f) {
-        radius = 600.0f;
+    if (radius > cNum_tryPullTrans_f2) {
+        radius = cNum_tryPullTrans_f3;
     }
 
     Vec3f speed;
-    speed.y = 400000.0f / (10000.0f + radius * radius);
+    speed.y = cNum_tryPullTrans_f4 / (cNum_tryPullTrans_f5 + radius * radius);
     f32 height = MR::abs(projection * (ground - center).length());
     if (height < speed.y) {
         speed.y = height;
@@ -249,7 +273,7 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
     }
 
     if (!IsMarioSwimming()) {
-        speed.y = 0.4f * speed.y;
+        speed.y = cNum_tryPullTrans_f6 * speed.y;
     }
 
     Vec3f axis = ground - center;
@@ -257,14 +281,14 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
     MR::normalizeOrZero(&inward);
     Vec3f tangent;
     tangent.cross(axis, inward);
-    speed.z = (0.01f + 0.04f * (600.0f - radius) / 600.0f) * (2.0f * (MR::pi() * radius)) * getConst().getTable()->mCoinPullAngleSpeedRatio;
+    speed.z = (cNum_tryPullTrans_f7 + cNum_tryPullTrans_f8 * (cNum_tryPullTrans_f9 - radius) / cNum_tryPullTrans_f10) * (cNum_tryPullTrans_f11 * (MR::pi() * radius)) * getConst().getTable()->mCoinPullAngleSpeedRatio;
     Vec3f nextPosition = rPosition + tangent * speed.z;
     Vec3f pull = foot - nextPosition;
     f32 nextRadius = pull.length();
     MR::normalizeOrZero(&pull);
-    f32 pullSpeed = radius / 25.0f;
+    f32 pullSpeed = radius / cNum_tryPullTrans_f12;
     if (mInRush) {
-        pullSpeed += 50.0f;
+        pullSpeed += cNum_tryPullTrans_f13;
     }
 
     pullSpeed *= getConst().getTable()->mCoinPullDistSpeedRatio;
@@ -293,10 +317,10 @@ bool MarioActor::releaseThrowMemoSensor() {
             if (mMario->isSwimming()) {
                 Vec3f throwVec;
                 getThrowVec(&throwVec);
-                if (MR::diffAngleAbs(diff, throwVec) > PI / 3.0f) {
+                if (MR::diffAngleAbs(diff, throwVec) > PI / cNum_releaseThrowMemoSensor_f1) {
                     mThrowTarget = nullptr;
                 }
-            } else if (MR::diffAngleAbs(diff, mMario->mFrontVec) > PI / 3.0f) {
+            } else if (MR::diffAngleAbs(diff, mMario->mFrontVec) > PI / cNum_releaseThrowMemoSensor_f2) {
                 mThrowTarget = nullptr;
             }
         }
@@ -404,23 +428,23 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
             Vec3f ground;
             getGroundPos(&ground);
             if (IsMarioSwimming()) {
-                ground = center - mBodyUp * 600.0f;
+                ground = center - mBodyUp * cNum_tryTornadoPull_f1;
             }
 
-            center += mMario->mHeadVec * 200.0f;
+            center += mMario->mHeadVec * cNum_tryTornadoPull_f2;
             Vec3f position(pSensor->mPosition);
             Vec3f foot;
             f32 projection = MR::getFootPoint(center, ground, position, &foot);
-            if (projection < -0.1f) {
+            if (projection < -cNum_tryTornadoPull_f3) {
                 return;
             }
 
-            if (projection > 2.0f) {
+            if (projection > cNum_tryTornadoPull_f4) {
                 return;
             }
 
             Vec3f offset = foot - position;
-            if (offset.length() > 600.0f) {
+            if (offset.length() > cNum_tryTornadoPull_f5) {
                 return;
             }
 
@@ -450,7 +474,7 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
     case ATYPE_JET_TURTLE:
     case ATYPE_JET_TURTLE_SLOW:
         if (isActionOk("カメ持ち") && pSensor->receiveMessage(ACTMES_IS_PULL_ENABLE, getSensor("body"))) {
-            if ((pSensor->mPosition - mPosition).length() < 120.0f) {
+            if ((pSensor->mPosition - mPosition).length() < cNum_tryTornadoPull_f6) {
                 tryGetItem(pSensor);
                 return;
             }

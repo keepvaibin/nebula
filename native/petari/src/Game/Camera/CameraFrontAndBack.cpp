@@ -6,6 +6,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f2, "setParamFromChunk.f2", 180.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sInterpolation, 120);
     NEBULA_TUNABLE(f32, sWarpDistance, 500.0f);
@@ -31,7 +36,7 @@ CameraTargetObj* CameraFrontAndBack::calc() {
     }
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, cNum_calc_f1 / cNum_calc_f2);
     Vec3f front, up;
     mZoneMatrix.getZDir(front);
     mZoneMatrix.getYDir(up);
@@ -58,7 +63,7 @@ CameraTargetObj* CameraFrontAndBack::calc() {
 
 void CameraFrontAndBack::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(general->mWPoint, CameraLocalUtil::getNormalizedOr(general->mAxis, Vec3f(1.0f, 0.0f, 0.0f)), MR::pi() * general->mAngleA / 180.0f, MR::pi() * general->mAngleB / 180.0f, general->mDist);
+    setParam(general->mWPoint, CameraLocalUtil::getNormalizedOr(general->mAxis, Vec3f(1.0f, 0.0f, 0.0f)), MR::pi() * general->mAngleA / cNum_setParamFromChunk_f1, MR::pi() * general->mAngleB / cNum_setParamFromChunk_f2, general->mDist);
 }
 
 void CameraFrontAndBack::calcBaseQuat(Quat4f* pQuat, const Vec3f& rAxis) {

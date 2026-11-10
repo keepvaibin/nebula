@@ -7,6 +7,11 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 3.0f);
 
 namespace {
     const static s32 sBreakStep = 180;
@@ -39,12 +44,12 @@ void KoopaBattleMapDamagePlate::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "Attack", ATYPE_KOOPA_DAMAGE_PLATE, 8, 250.0f, Vec3f(0.0f, -150.0f, 0.0f));
+    MR::addHitSensor(this, "Attack", ATYPE_KOOPA_DAMAGE_PLATE, 8, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
     MR::initCollisionParts(this, "KoopaPlateDamage", getSensor("Attack"), mBaseMtx);
     initEffectKeeper(1, nullptr);
 
     MR::addEffectHitNormal(this, "Hit");
-    MR::setEffectBaseScale(this, "Hit", 3.0f);
+    MR::setEffectBaseScale(this, "Hit", cNum_init_f3);
 
     initSound(4, false);
     initNerve(GET_NERVE(KoopaBattleMapDamagePlate, KoopaBattleMapDamagePlateNrvWait));

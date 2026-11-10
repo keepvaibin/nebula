@@ -33,6 +33,44 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f1, "KuriboChiefParam.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f2, "KuriboChiefParam.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f3, "KuriboChiefParam.f3", 0.93f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f4, "KuriboChiefParam.f4", 1400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f5, "KuriboChiefParam.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f6, "KuriboChiefParam.f6", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f7, "KuriboChiefParam.f7", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f8, "KuriboChiefParam.f8", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f9, "KuriboChiefParam.f9", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f10, "KuriboChiefParam.f10", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f11, "KuriboChiefParam.f11", 0.6f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f12, "KuriboChiefParam.f12", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f13, "KuriboChiefParam.f13", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f14, "KuriboChiefParam.f14", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f15, "KuriboChiefParam.f15", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f16, "KuriboChiefParam.f16", 0.6f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f17, "KuriboChiefParam.f17", 0.06f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f18, "KuriboChiefParam.f18", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboChiefParam_f19, "KuriboChiefParam.f19", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 350.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 350.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f5, "initSensor.f5", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f6, "initSensor.f6", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f7, "initSensor.f7", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f8, "initSensor.f8", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f9, "initSensor.f9", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f10, "initSensor.f10", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f11, "initSensor.f11", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f12, "initSensor.f12", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f13, "initSensor.f13", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestBlowDown_f1, "requestBlowDown.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestBlowDown_f2, "requestBlowDown.f2", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBlowDown_f1, "exeBlowDown.f1", 30.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sBinderSize, 300.0f);
     NEBULA_TUNABLE(f32, sBinderYOffset, 300.0f);
@@ -62,32 +100,32 @@ namespace {
     };
 
     KuriboChiefParam::KuriboChiefParam() {
-        mStateParam1.mGravityAccel = 1.5f;
-        mStateParam1.mAirFriction = 0.99f;
-        mStateParam1.mGroundFriction = 0.93f;
-        mStateParam1.mPlayerNearDistance = 1400.0f;
-        mStateParam1.mPlayerSightFanDegreeH = 80.0f;
-        mStateParam1.mPlayerSightFanDegreeV = 40.0f;
-        mWanderParam.mSpeed = 0.1f;
+        mStateParam1.mGravityAccel = cNum_KuriboChiefParam_f1;
+        mStateParam1.mAirFriction = cNum_KuriboChiefParam_f2;
+        mStateParam1.mGroundFriction = cNum_KuriboChiefParam_f3;
+        mStateParam1.mPlayerNearDistance = cNum_KuriboChiefParam_f4;
+        mStateParam1.mPlayerSightFanDegreeH = cNum_KuriboChiefParam_f5;
+        mStateParam1.mPlayerSightFanDegreeV = cNum_KuriboChiefParam_f6;
+        mWanderParam.mSpeed = cNum_KuriboChiefParam_f7;
         mWanderParam.mWaitTime = NebulaFrameClock::stepsOfSeconds(2);
         mWanderParam.mWalkTime = NebulaFrameClock::stepsOfSeconds(5);
         mWanderParam.mTurnMaxRateDegree = 1.0f;
-        mChaseParam.mChaseSpeed = 0.2f;
-        mStateParam2.mGravityAccel = 1.5f;
-        mStateParam2.mAirFriction = 0.99f;
-        mStateParam2.mGroundFriction = 0.6f;
+        mChaseParam.mChaseSpeed = cNum_KuriboChiefParam_f8;
+        mStateParam2.mGravityAccel = cNum_KuriboChiefParam_f9;
+        mStateParam2.mAirFriction = cNum_KuriboChiefParam_f10;
+        mStateParam2.mGroundFriction = cNum_KuriboChiefParam_f11;
         mStaggerParam.mStaggerTime = NebulaFrameClock::stepsOfSeconds(4);
         mStaggerParam.mRotateRateDegree = 0.0f;
         mStaggerParam.mKickEnableStep = 70;
         mFindPlayerParam.mJumpStartStep = 56;
-        mFindPlayerParam.mTurnMaxRateDegree = 2.0f;
-        mFindPlayerParam.mJumpVelocity = 35.0f;
-        mScaleParam.mAnimSpring = 0.1f;
-        mScaleParam.mPointerTime = 30.0f;
-        mScaleParam.mPointerBase = 0.6f;
-        mScaleParam.mPointerAmplitude = 0.06f;
-        mScaleParam.mPointerFreq = 3.0f;
-        mScaleParam.mHitReactionSpring = 0.1f;
+        mFindPlayerParam.mTurnMaxRateDegree = cNum_KuriboChiefParam_f12;
+        mFindPlayerParam.mJumpVelocity = cNum_KuriboChiefParam_f13;
+        mScaleParam.mAnimSpring = cNum_KuriboChiefParam_f14;
+        mScaleParam.mPointerTime = cNum_KuriboChiefParam_f15;
+        mScaleParam.mPointerBase = cNum_KuriboChiefParam_f16;
+        mScaleParam.mPointerAmplitude = cNum_KuriboChiefParam_f17;
+        mScaleParam.mPointerFreq = cNum_KuriboChiefParam_f18;
+        mScaleParam.mHitReactionSpring = cNum_KuriboChiefParam_f19;
     }
 
     static KuriboChiefParam sParam;
@@ -130,8 +168,9 @@ void KuriboChief::init(const TableIter& rIter) {
     mItemGenerator = new ItemGenerator();
     initEffectKeeper(1, nullptr);
     MR::initShadowFromCSV(this, "Shadow");
+    ::sParam = KuriboChiefParam();  // again, with a mod's numbers
     mScaleController = new AnimScaleController(&::sParam.mScaleParam);
-    MR::initStarPointerTargetAtJoint(this, "Body", 350.0f, Vec3f(350.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Body", cNum_init_f1, Vec3f(cNum_init_f2, 0.0f, 0.0f));
     initSensor();
     initBinder(::sBinderSize, ::sBinderYOffset, 0);
     initNerve(GET_NERVE(KuriboChief, KuriboChiefNrvWander));
@@ -163,12 +202,12 @@ void KuriboChief::initAfterPlacement() {
 
 void KuriboChief::initSensor() {
     LiveActor::initHitSensor(8);
-    MR::addHitSensorAtJointEnemy(this, "Body", "Body", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Head1", "Head", 8, 300.0f, Vec3f(120.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Head2", "Head", 8, 150.0f, Vec3f(360.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "LegL", "LegL", 8, 130.0f, Vec3f(60.0f, -50.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "LegR", "LegR", 8, 130.0f, Vec3f(60.0f, -50.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "Punch", 8, 400.0f, Vec3f(0.0f, 150.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Body", "Body", 8, cNum_initSensor_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Head1", "Head", 8, cNum_initSensor_f2, Vec3f(cNum_initSensor_f3, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Head2", "Head", 8, cNum_initSensor_f4, Vec3f(cNum_initSensor_f5, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "LegL", "LegL", 8, cNum_initSensor_f6, Vec3f(cNum_initSensor_f7, -cNum_initSensor_f8, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "LegR", "LegR", 8, cNum_initSensor_f9, Vec3f(cNum_initSensor_f10, -cNum_initSensor_f11, 0.0f));
+    MR::addHitSensorEnemy(this, "Punch", 8, cNum_initSensor_f12, Vec3f(0.0f, cNum_initSensor_f13, 0.0f));
 }
 
 void KuriboChief::initState() {
@@ -297,7 +336,7 @@ bool KuriboChief::requestBlowDown(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    MR::setVelocityBlowAttack(this, pSender, pReceiver, 25.0f, 35.0f, 4);
+    MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_requestBlowDown_f1, cNum_requestBlowDown_f2, 4);
     setNerve(GET_NERVE(KuriboChief, KuriboChiefNrvBlowDown));
     return true;
 }
@@ -422,7 +461,7 @@ void KuriboChief::exeBlowDown() {
     }
 
     WalkerStateFunction::calcPassiveMovement(this, &::sParam.mStateParam1);
-    MR::turnDirectionDegree(this, &mFront, -mVelocity, 30.0f);
+    MR::turnDirectionDegree(this, &mFront, -mVelocity, cNum_exeBlowDown_f1);
 
     if (MR::isGreaterStep(this, ::sBlowDownLandTime) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(KuriboChief, KuriboChiefNrvBlowDownLand));

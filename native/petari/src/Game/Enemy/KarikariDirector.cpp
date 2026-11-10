@@ -7,6 +7,8 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_clearScratchInfo_f1, "clearScratchInfo.f1", 100000000.0f);
+
 namespace {
 
     const ClingData cling_data[] = {{"FacePosition", {-5.86f, 35.0f, 17.0f}, {-18.63f, 8.09f, -23.03f}},
@@ -104,7 +106,7 @@ void KarikariDirector::movement() {
 
 void KarikariDirector::clearScratchInfo() {
     mReleaseKarikari = nullptr;
-    mLowestReleaseDist = 100000000.0f;
+    mLowestReleaseDist = cNum_clearScratchInfo_f1;
     mReleaseVel.y = 0.0f;
     mReleaseVel.x = 0.0f;
     mNoReleaseTime = ::sNoReleaseTime;

@@ -11,6 +11,16 @@
 #include "Game/Render/Model.hpp"
 #include "Game/Particle/EmitterManager.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f1, "draw2D.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f2, "draw2D.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f3, "draw2D.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f4, "draw2D.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f5, "draw2D.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f6, "draw2D.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f7, "draw2D.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw2D_f8, "draw2D.f8", 0.5f);
 
 namespace {
     // The scene owns the adaptor.
@@ -39,13 +49,13 @@ void ParticleDrawExecutor::draw2D() const {
     f32 width;
     f32 height = static_cast< s32 >(NebulaFrameClock::cScreenLines);
     width = MR::isScreen16Per9() ? MR::getScreenWidth() : NebulaFrameClock::cLayoutWidth;
-    width *= 0.5f;
-    height *= 0.5f;
+    width *= cNum_draw2D_f1;
+    height *= cNum_draw2D_f2;
 
     Mtx44 projection;
-    NebulaMtxOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
+    NebulaMtxOrtho(projection, height, -height, -width, width, -cNum_draw2D_f3, cNum_draw2D_f4);
     Frame::setOrthographic(projection);
-    NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
+    NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, cNum_draw2D_f5, cNum_draw2D_f6, cNum_draw2D_f7, cNum_draw2D_f8);
     mHost->mEmitterManager->draw(&drawInfo, 6);
     mHost->mEmitterManager->draw(&drawInfo, 7);
 }

@@ -10,6 +10,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f1, "exeJump.f1", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f2, "exeJump.f2", 2500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f3, "exeJump.f3", 2000.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sJumpSpeed1st, 50.0f);
     NEBULA_TUNABLE(f32, sJumpSpeed, 40.0f);
@@ -147,7 +151,7 @@ void KoopaStateAttackShockWave::exeJump() {
     }
 
     if (!MR::sendMsgEnemyAttackToBindedSensor(mHost, mHost->getSensor("Body")) && MR::isOnGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceMiddle(mHost, 1500.0f, 2500.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceMiddle(mHost, cNum_exeJump_f1, cNum_exeJump_f2, cNum_exeJump_f3);
         MR::shakeCameraWeak();
 
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");

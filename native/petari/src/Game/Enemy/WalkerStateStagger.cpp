@@ -10,6 +10,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_reboundWall_f1, "reboundWall.f1", 0.9f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_isUpsideDown_1, "isUpsideDown.1", 15);
 NEBULA_TUNABLE_NAMED(s32, cStep_isStaggerStart_1, "isStaggerStart.1", 1);
@@ -97,7 +99,7 @@ void WalkerStateStagger::exeStaggerEnd() {
 }
 
 void WalkerStateStagger::reboundWall() {
-    if (MR::isBindedWall(getHost()) && MR::calcReboundVelocity(&getHost()->mVelocity, *MR::getWallNormal(getHost()), 0.9f)) {
+    if (MR::isBindedWall(getHost()) && MR::calcReboundVelocity(&getHost()->mVelocity, *MR::getWallNormal(getHost()), cNum_reboundWall_f1)) {
         Vec3f velH;
         velH.killElement(getHost()->mVelocity, getHost()->mGravity);
         if (!MR::normalizeOrZero(&velH)) {

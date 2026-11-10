@@ -18,6 +18,8 @@
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 39.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, cBackSequenceFadeFrame, 90);
 
@@ -201,7 +203,7 @@ void PauseMenu::control() {
         mLetterButton->update();
     }
 
-    mStageTitleOffset.y = 39.0f;
+    mStageTitleOffset.y = cNum_control_f1;
 }
 
 void PauseMenu::updateStarPane() {

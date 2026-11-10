@@ -10,6 +10,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerInTerritory_f1, "isPlayerInTerritory.f1", 180.0f);
 
 StinkBugBase::StinkBugBase(const char* pName)
     : LiveActor(pName), mFront(0.0f, 0.0f, 1.0f), mInitPos(0.0f, 0.0f, 0.0f), mInitFront(0.0f, 0.0f, 1.0f), mTerritoryAngle(180.0f), mRadius(1000.0f), mIsTurnLeft(false) {
@@ -75,7 +78,7 @@ bool StinkBugBase::isPlayerInTerritory(f32 reachMargin, f32 sideHalfSize, f32 up
         return toPlayer.dot(mFront) > 0.0f;
     }
 
-    if (mTerritoryAngle == 180.0f) {
+    if (mTerritoryAngle == cNum_isPlayerInTerritory_f1) {
         return true;
     }
 

@@ -9,6 +9,11 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_feedSound_f1, "feedSound.f1", 6.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_pickFrameAtPosition_f1, "pickFrameAtPosition.f1", 0.5);
+NEBULA_TUNABLE_NAMED(f64, cNum_pickFrameAtPosition_f2, "pickFrameAtPosition.f2", 0.5);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -136,7 +141,7 @@ void MovieStream::feedSound(s32 track) {
 
     // A sixth of a second ahead, whatever the frame rate.
     const NebulaHostServices* const host = nebula_host();
-    s32 ahead = static_cast< s32 >(mHeader.mFrameRate / 6.0f) + 1;
+    s32 ahead = static_cast< s32 >(mHeader.mFrameRate / cNum_feedSound_f1) + 1;
     if (ahead > NEBULA_MOVIE_AUDIO_QUEUE_FRAMES) {
         ahead = NEBULA_MOVIE_AUDIO_QUEUE_FRAMES;
     }
@@ -198,13 +203,13 @@ s32 MovieStream::pickFrameAtPosition() {
     }
 
     const f64 position = getPosition();
-    if (position < mPicturesTaken - 0.5) {
+    if (position < mPicturesTaken - cNum_pickFrameAtPosition_f1) {
         return 0;
     }
 
     // Every frame stands alone, so those passed over cost nothing.
     if (position >= mPicturesTaken + 1.0) {
-        const s32 nearest = static_cast< s32 >(position + 0.5);
+        const s32 nearest = static_cast< s32 >(position + cNum_pickFrameAtPosition_f2);
         while (mPicturesTaken < nearest) {
             stepPicture();
         }

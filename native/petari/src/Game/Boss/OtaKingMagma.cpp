@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvOtaKingMagma {
     NEW_NERVE(OtaKingMagmaNrvWait, OtaKingMagma, Wait);
@@ -17,7 +18,7 @@ namespace NrvOtaKingMagma {
 };  // namespace NrvOtaKingMagma
 
 namespace {
-    const Vec cBloomModelOffset = {0.0, 10.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cBloomModelOffset, {0.0, 10.0f, 0.0f});
 };  // namespace
 
 OtaKingMagma::OtaKingMagma(LiveActor* pHost, s32 drawBufferType)

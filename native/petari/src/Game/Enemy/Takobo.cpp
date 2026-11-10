@@ -22,6 +22,23 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_generateCoin_f1, "generateCoin.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_exeMove_f1, "exeMove.f1", 1.3);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_setBckRate_1, "exeAttack.setBckRate.1", 1.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeStunStart_setBckRate_1, "exeStunStart.setBckRate.1", 2.0f);
@@ -106,15 +123,15 @@ void Takobo::init(const TableIter& rIter) {
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     initSound(4, false);
-    initBinder(80.0f * mScale.y, 60.0f * mScale.y, 0);
+    initBinder(cNum_init_f1 * mScale.y, cNum_init_f2 * mScale.y, 0);
     initEffectKeeper(0, nullptr);
     initSensor();
-    MR::initShadowVolumeSphere(this, 70.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f3 * mScale.y);
     MR::onCalcShadow(this, nullptr);
     initNerve(GET_NERVE(Takobo, HostTypeNrvWait));
 
-    mSpinController = new SpinHitController(this, 22, 21, 3, 1.5f, 20.0f, 35.0f, 3, false);
-    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    mSpinController = new SpinHitController(this, 22, 21, 3, cNum_init_f4, cNum_init_f5, cNum_init_f6, 3, false);
+    MR::initStarPointerTarget(this, cNum_init_f7, Vec3f(0.0f, cNum_init_f8, 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     MR::initLightCtrl(this);
     appear();
@@ -133,9 +150,9 @@ void Takobo::initSensor() {
     f32 yScale = mScale.y;
     initHitSensor(4);
     // The body sphere sits on the ground: its radius is its height.
-    Vec3f bodyOffset(0.0f, 70.0f * yScale, 0.0f);
+    Vec3f bodyOffset(0.0f, cNum_initSensor_f1 * yScale, 0.0f);
     MR::addHitSensor(this, "body", ATYPE_TAKOBO, 32, bodyOffset.y, bodyOffset);
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Hear", 0x10, (80.0f * yScale), Vec3f(10.0f, 2.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "Hear", 0x10, (cNum_initSensor_f2 * yScale), Vec3f(cNum_initSensor_f3, cNum_initSensor_f4, 0.0f));
 }
 
 void Takobo::kill() {
@@ -177,7 +194,7 @@ void Takobo::control() {
 
         if (MR::isOnGround(this)) {
             Vec3f lift(rNormal);
-            lift *= 5.0f;
+            lift *= cNum_control_f1;
             mPosition += lift;
         }
 
@@ -186,7 +203,7 @@ void Takobo::control() {
 }
 
 void Takobo::generateCoin() {
-    MR::appearCoinPop(this, mPosition - mGravity * 80.0f, 1);
+    MR::appearCoinPop(this, mPosition - mGravity * cNum_generateCoin_f1, 1);
 }
 
 bool Takobo::tryPress() {
@@ -215,7 +232,7 @@ void Takobo::exeMove() {
         }
 
         mMoveStep = (mMoveEnd - mMoveStart) / mMoveSpeed;
-        mMoveStep *= 1.3;
+        mMoveStep *= cNum_exeMove_f1;
     }
 
     f32 rate = MR::calcNerveRate(this, mMoveStep);
@@ -402,7 +419,7 @@ void Takobo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         if (isNerve(GET_NERVE(Takobo, HostTypeNrvMove)) || isNerve(GET_NERVE(Takobo, HostTypeNrvAttack))) {
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1)) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }

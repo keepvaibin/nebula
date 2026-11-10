@@ -13,6 +13,13 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApproach_f1, "exeApproach.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sDefaultFishNum, 10);
     NEBULA_TUNABLE(f32, sDefaultGroupSpeed, 5.0f);
@@ -121,7 +128,7 @@ void Fish::exeApproach() {
             mFront.y = currFront.y * (1.0f - ::sRotateRate) + front.y * ::sRotateRate;
             mFront.z = currFront.z * (1.0f - ::sRotateRate) + front.z * ::sRotateRate;
 
-            if (MR::isNearZero(mFront, 0.01f)) {
+            if (MR::isNearZero(mFront, cNum_exeApproach_f1)) {
                 mFront.set(front);
             } else {
                 MR::normalize(&mFront);
@@ -187,16 +194,16 @@ void Fish::control() {
 
     if (MR::abs(mFront.y) > ::sDirectionMaxY) {
         if (mFront.x > 0.0f) {
-            mFront.x += 0.1f;
+            mFront.x += cNum_control_f1;
         } else {
-            mFront.x -= 0.1f;
+            mFront.x -= cNum_control_f2;
         }
         MR::normalize(&mFront);
     }
 
     updateFollowPointPos();
 
-    if (MR::isJudgedToClipFrustum300m(mPosition, 100.0f)) {
+    if (MR::isJudgedToClipFrustum300m(mPosition, cNum_control_f3)) {
         if (!MR::isHiddenModel(this)) {
             MR::hideModel(this);
         }
@@ -277,7 +284,7 @@ void FishGroup::init(const TableIter& rIter) {
         mFish[i]->initWithoutIter();
     }
 
-    MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClippingCenter, this, cNum_init_f1, cNum_init_f2);
     makeActorAppeared();
 }
 

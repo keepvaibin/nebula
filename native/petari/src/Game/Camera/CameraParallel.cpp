@@ -6,6 +6,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f2, "setParamFromChunk.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f3, "calcIdealPose.f3", 90.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sDistance, 3000.0f);
     NEBULA_TUNABLE(f32, sRoundDiv, 8.0f);
@@ -38,7 +44,7 @@ CameraTargetObj* CameraParallel::calc() {
 
 void CameraParallel::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(Vec2f(180.0f * general->mAngleB / MR::pi(), 180.0f * general->mAngleA / MR::pi()), general->mDist, general->mNum1 == 1);
+    setParam(Vec2f(cNum_setParamFromChunk_f1 * general->mAngleB / MR::pi(), cNum_setParamFromChunk_f2 * general->mAngleA / MR::pi()), general->mDist, general->mNum1 == 1);
 }
 
 bool CameraParallel::isEnableToRoundLeft() const {
@@ -54,14 +60,14 @@ bool CameraParallel::isEnableToReset() const {
 }
 
 void CameraParallel::calcIdealPose() {
-    if (mDist < 300.0f) {
-        mDist = 300.0f;
+    if (mDist < cNum_calcIdealPose_f1) {
+        mDist = cNum_calcIdealPose_f2;
     }
 
     Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
 
     Vec3f pos;
-    MR::polarToCrossDegree(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, mAngleY - 90.0f);
+    MR::polarToCrossDegree(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, mAngleY - cNum_calcIdealPose_f3);
 
     Vec3f up;
     up.set< f32 >(0.0f, 1.0f, 0.0f);

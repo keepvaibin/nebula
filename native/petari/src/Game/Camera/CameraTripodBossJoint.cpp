@@ -6,6 +6,14 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f2, "reset.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f2, "setParamFromChunk.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f3, "calcIdealPose.f3", 15.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sDistance, 300.0f);
     NEBULA_TUNABLE(f32, sAttenuation, 0.7f);
@@ -19,7 +27,7 @@ CameraTripodBossJoint::CameraTripodBossJoint(const char* pName)
 
 void CameraTripodBossJoint::reset() {
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), cNum_reset_f1 / cNum_reset_f2);
     CameraLocalUtil::setWatchPos(this, watchPos);
     calcIdealPose();
     mIsRounding = false;
@@ -34,7 +42,7 @@ CameraTargetObj* CameraTripodBossJoint::calc() {
 
 void CameraTripodBossJoint::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(Vec2f(180.0f * general->mAngleB / MR::pi(), 180.0f * general->mAngleA / MR::pi()), general->mDist, general->mNum1, general->mAxis);
+    setParam(Vec2f(cNum_setParamFromChunk_f1 * general->mAngleB / MR::pi(), cNum_setParamFromChunk_f2 * general->mAngleA / MR::pi()), general->mDist, general->mNum1, general->mAxis);
 }
 
 void CameraTripodBossJoint::calcIdealPose() {
@@ -56,7 +64,7 @@ void CameraTripodBossJoint::calcIdealPose() {
     }
 
     Vec3f pos;
-    MR::polarToCrossDegree(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, (mAngleY - 90.0f) + mRoundAngle);
+    MR::polarToCrossDegree(Vec3f(0.0f, 0.0f, 0.0f), &pos, mDist, mAngleX, (mAngleY - cNum_calcIdealPose_f1) + mRoundAngle);
 
     Vec3f up;
     if (MR::isCreatedTripodBoss()) {
@@ -69,7 +77,7 @@ void CameraTripodBossJoint::calcIdealPose() {
     }
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_calcIdealPose_f2 / cNum_calcIdealPose_f3);
 
     if (MR::isCreatedTripodBoss()) {
         Pos3f mtx;

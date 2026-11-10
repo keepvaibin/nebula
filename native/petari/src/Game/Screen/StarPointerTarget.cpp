@@ -12,6 +12,13 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRadius2d_f1, "calcRadius2d.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRadius2d_f2, "calcRadius2d.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPositionFromView_f1, "calcScreenPositionFromView.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPositionFromView_f2, "calcScreenPositionFromView.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPositionFromView_f3, "calcScreenPositionFromView.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenPositionFromView_f4, "calcScreenPositionFromView.f4", 0.5f);
+
 namespace {
     NEBULA_TUNABLE(f32, hZCheckAddDepth, 60.0f);
 
@@ -80,7 +87,7 @@ void StarPointerTarget::calcPosition(Vec3f* pWorldPos) const {
 
 f32 StarPointerTarget::calcRadius2d(f32 radius3d, f32 margin, f32 z) const {
     f32 fovyRad = MR::getRenderFovy() * PI_180;
-    f32 radius2d = (radius3d * ((MR::getScreenHeight() * 0.5f) / MR::tan(fovyRad * 0.5f)) / z);
+    f32 radius2d = (radius3d * ((MR::getScreenHeight() * cNum_calcRadius2d_f1) / MR::tan(fovyRad * cNum_calcRadius2d_f2)) / z);
     return radius2d + margin;
 }
 
@@ -112,7 +119,7 @@ bool StarPointerTarget::calcScreenPositionFromView(Vec2f* pScreenPos, const Vec3
 
     f32 width = MR::getScreenWidth();
     f32 height = MR::getScreenHeight();
-    pScreenPos->set< f32 >(width * 0.5f + pos.x * width * 0.5f, height * 0.5f + pos.y * height * 0.5f);
+    pScreenPos->set< f32 >(width * cNum_calcScreenPositionFromView_f1 + pos.x * width * cNum_calcScreenPositionFromView_f2, height * cNum_calcScreenPositionFromView_f3 + pos.y * height * cNum_calcScreenPositionFromView_f4);
     return true;
 }
 

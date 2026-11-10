@@ -13,6 +13,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeStartLoop_f1, "exeEscapeStartLoop.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeStartLoop_f2, "exeEscapeStartLoop.f2", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeStartLoop_f3, "exeEscapeStartLoop.f3", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f1, "exeDown.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f2, "exeDown.f2", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f3, "exeDown.f3", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_f4, "exeDown.f4", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDownLand_f1, "exeDownLand.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDownLand_f2, "exeDownLand.f2", 60.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_1, "isDownEnd.1", 45);
 NEBULA_TUNABLE_NAMED(s32, cStep_isDownEnd_2, "isDownEnd.2", 45);
@@ -295,7 +305,7 @@ void KoopaStateDamageEscape::exeEscapeStartLoop() {
     }
 
     if (!KoopaFunction::escapeKoopaFromPlayer(mHost, ::sEscapeStartParam) && MR::isBindedGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceStrong(mHost, 800.0f, 1200.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceStrong(mHost, cNum_exeEscapeStartLoop_f1, cNum_exeEscapeStartLoop_f2, cNum_exeEscapeStartLoop_f3);
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");
 
         setNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvEscapeStartLand));
@@ -483,7 +493,7 @@ void KoopaStateDamageEscape::exeDamageTailRunEnd() {
 void KoopaStateDamageEscape::exeDown() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "Down");
-        MR::setVelocityJumpAwayFromPlayer(mHost, 35.0f, mJumpAwayVelocity);
+        MR::setVelocityJumpAwayFromPlayer(mHost, cNum_exeDown_f1, mJumpAwayVelocity);
         KoopaFunction::startKoopaCamera(mHost, "逃走ダウン");
         MR::emitEffect(mHost, "DownSmoke");
     }
@@ -500,7 +510,7 @@ void KoopaStateDamageEscape::exeDown() {
 
     Koopa* pKoopa = mHost;
     if (!MR::sendMsgEnemyAttackToBindedSensor(pKoopa, pKoopa->getSensor("Body")) && !MR::isFirstStep(this) && MR::isBindedGround(mHost)) {
-        MR::tryRumblePadAndCameraDistanceStrong(mHost, 1500.0f, 2000.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceStrong(mHost, cNum_exeDown_f2, cNum_exeDown_f3, cNum_exeDown_f4);
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");
 
         if (!MR::sendMsgToBindedSensor(ACTMES_KOOPA_PLATE_DAMAGE, KoopaFunction::getKoopaMessageSensor(mHost))) {
@@ -524,7 +534,7 @@ void KoopaStateDamageEscape::exeDownLand() {
         MR::startAction(mHost, "DownLand");
 
         if (KoopaFunction::isKoopaVs3(mHost) && !KoopaFunction::isKoopaLv3(mHost) && !KoopaFunction::isKoopaAngry(mHost)) {
-            MR::appearStarPieceToDirection(mHost, mHost->mPosition, -mHost->mGravity, 10, 50.0f, 60.0f, false);
+            MR::appearStarPieceToDirection(mHost, mHost->mPosition, -mHost->mGravity, 10, cNum_exeDownLand_f1, cNum_exeDownLand_f2, false);
             MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
         }
     }

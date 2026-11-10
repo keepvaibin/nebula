@@ -20,6 +20,16 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointable_f1, "exePointable.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointable_f2, "exePointable.f2", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointable_f3, "exePointable.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointable_f4, "exePointable.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitPointer_f1, "exeHitPointer.f1", 0.2f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeHitPointer_1, "exeHitPointer.1", 3);
 
@@ -46,8 +56,8 @@ void GCaptureTarget::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvWait));
-    MR::initShadowVolumeSphere(this, 50.0f);
-    MR::setShadowDropLength(this, nullptr, 300.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f1);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f2);
     MR::onCalcShadowOneTime(this, nullptr);
     MR::calcGravity(this);
 
@@ -60,7 +70,7 @@ void GCaptureTarget::init(const TableIter& rIter) {
         mRailMover->init(rIter);
     }
 
-    MR::initStarPointerTarget(this, 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         makeActorDead();
@@ -186,7 +196,7 @@ void GCaptureTarget::exeWait() {
         MR::setBrkFrameAndStop(this, frame);
     }
 
-    mStarAnimSpeed -= 0.05f;
+    mStarAnimSpeed -= cNum_exeWait_f1;
     if (mStarAnimSpeed < 0.0f) {
         mStarAnimSpeed = 0.0f;
     }
@@ -203,13 +213,13 @@ void GCaptureTarget::exePointable() {
         MR::setBrkFrameAndStop(this, 1.0f);
     }
 
-    if (!MR::isJudgedToClipFrustum(mPosition, 50.0f)) {
+    if (!MR::isJudgedToClipFrustum(mPosition, cNum_exePointable_f1)) {
         MR::noticeInTouchableRange();
     }
 
-    mStarAnimSpeed += 0.05f;
-    if (mStarAnimSpeed > 0.5f) {
-        mStarAnimSpeed = 0.5f;
+    mStarAnimSpeed += cNum_exePointable_f2;
+    if (mStarAnimSpeed > cNum_exePointable_f3) {
+        mStarAnimSpeed = cNum_exePointable_f4;
     }
     MR::setBckRate(this, mStarAnimSpeed);
 
@@ -243,7 +253,7 @@ void GCaptureTarget::exeHitPointer() {
         MR::noticeInTouchableRange();
         MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_POINT");
 
-        mStarAnimSpeed += 0.2f;
+        mStarAnimSpeed += cNum_exeHitPointer_f1;
         if (mStarAnimSpeed > 1.0f) {
             mStarAnimSpeed = 1.0f;
         }

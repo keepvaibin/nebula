@@ -3,6 +3,10 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_syncPosDir_f1, "syncPosDir.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_syncPosDir_f2, "syncPosDir.f2", 0.1f);
 
 RailRider::RailRider(const TableIter& rIter)
     : mBezierRail(), mCoord(), mSpeed(), mIsNotReverse(true), mCurPos(0.0f), mCurDirection(1.0f, 0.0f, 0.0f), mStartPos(0.0f), mEndPos(0.0f) {
@@ -235,10 +239,10 @@ void RailRider::syncPosDir() {
     } else {
         if (mCoord == 0.0f) {
             mBezierRail->calcPos(&mCurPos, mCoord);
-            mBezierRail->calcDirection(&mCurDirection, 0.1f);
+            mBezierRail->calcDirection(&mCurDirection, cNum_syncPosDir_f1);
         } else {
             mBezierRail->calcPos(&mCurPos, mCoord);
-            mBezierRail->calcDirection(&mCurDirection, mBezierRail->getTotalLength() - 0.1f);
+            mBezierRail->calcDirection(&mCurDirection, mBezierRail->getTotalLength() - cNum_syncPosDir_f2);
         }
     }
 

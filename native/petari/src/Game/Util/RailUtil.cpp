@@ -6,6 +6,10 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRailClippingInfo_f1, "calcRailClippingInfo.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRailClippingInfo_f2, "calcRailClippingInfo.f2", 0.5f);
 
 namespace {
     const char* getRailPointArgName(s32 argNum);
@@ -207,11 +211,11 @@ namespace MR {
         padVec.set(padding);
         clipBox.i.sub(padVec);
         clipBox.f.add(padVec);
-        pCenter->lerp(clipBox.f, clipBox.i, 0.5f);
+        pCenter->lerp(clipBox.f, clipBox.i, cNum_calcRailClippingInfo_f1);
 
         Vec3f diameterVec;
         diameterVec.sub(clipBox.f, clipBox.i);
-        *pRadius = diameterVec.length() * 0.5f;
+        *pRadius = diameterVec.length() * cNum_calcRailClippingInfo_f2;
     }
 
     void initAndSetRailClipping(Vec3f* pCenter, LiveActor* pActor, f32 delta, f32 padding) {

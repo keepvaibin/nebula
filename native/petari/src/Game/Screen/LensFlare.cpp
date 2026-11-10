@@ -16,6 +16,15 @@
 #include "Game/Util/TriggerChecker.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f1, "LensFlareRing.f1", 0.135f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f2, "LensFlareRing.f2", 0.135f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f3, "LensFlareRing.f3", 0.135f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f4, "LensFlareRing.f4", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareGlow_f1, "LensFlareGlow.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareLine_f1, "LensFlareLine.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlFlare_f1, "controlFlare.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlFlare_f2, "controlFlare.f2", 2.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_controlAnim_setBrkRate_1, "LensFlareRing_controlAnim.setBrkRate.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareGlow_controlAnim_setBrkRate_1, "LensFlareGlow_controlAnim.setBrkRate.1", 0.0f);
@@ -133,10 +142,10 @@ void LensFlareModel::notifyInArea() {
 }
 
 LensFlareRing::LensFlareRing() : LensFlareModel("レンズフレアリング", "LensFlare"), mRingFrame() {
-    mScale.x = 0.135f;
-    mScale.y = 0.135f;
-    mScale.z = 0.135f;
-    mFadeStep = 0.05f;
+    mScale.x = cNum_LensFlareRing_f1;
+    mScale.y = cNum_LensFlareRing_f2;
+    mScale.z = cNum_LensFlareRing_f3;
+    mFadeStep = cNum_LensFlareRing_f4;
 }
 
 void LensFlareRing::appearAnim() {
@@ -157,7 +166,7 @@ void LensFlareRing::controlAnim() {
 }
 
 LensFlareGlow::LensFlareGlow() : LensFlareModel("グレア（円形）", "GlareGlow") {
-    mFadeStep = 0.05f;
+    mFadeStep = cNum_LensFlareGlow_f1;
 }
 
 void LensFlareGlow::appearAnim() {
@@ -171,7 +180,7 @@ void LensFlareGlow::controlAnim() {
 }
 
 LensFlareLine::LensFlareLine() : LensFlareModel("グレア（ライン）", "GlareLine") {
-    mFadeStep = 0.05f;
+    mFadeStep = cNum_LensFlareLine_f1;
 }
 
 void LensFlareLine::appearAnim() {
@@ -304,7 +313,7 @@ void LensFlareDirector::controlFlare(s32 area, bool hasBrightObj) {
     mGlow->mPosition.set(flarePos);
     mLine->mPosition.set(flarePos);
 
-    Vec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cScreenLines) / 2.0f);
+    Vec2f screenCenter(MR::getScreenWidth() / cNum_controlFlare_f1, static_cast< s32 >(NebulaFrameClock::cScreenLines) / cNum_controlFlare_f2);
 
     f32 screenRadius = screenCenter.length();
     Vec2f offset(screenCenter - position);

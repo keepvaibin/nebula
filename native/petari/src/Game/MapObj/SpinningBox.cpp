@@ -18,6 +18,27 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 140.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f3, "kill.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_f1, "exeSliding.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_f2, "exeSliding.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSliding_f3, "exeSliding.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f1, "exeSpinning.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f2, "exeSpinning.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f3, "exeSpinning.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f4, "exeSpinning.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f5, "exeSpinning.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinning_f6, "exeSpinning.f6", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPlanarProjectedVec_f1, "calcPlanarProjectedVec.f1", 0.0001f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_2, "exeFall.reboundVelocityFromCollision.2", 0.0f);
@@ -98,7 +119,7 @@ void SpinningBox::init(const TableIter& rIter) {
 
     f32 scale = getScale();
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 32, scale * 160.0f, Vec3f(0.0f, -40.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 32, scale * cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
 
     if (mIsIceBox) {
         MR::initCollisionParts(this, "IceBox", getSensor("body"), nullptr);
@@ -107,13 +128,13 @@ void SpinningBox::init(const TableIter& rIter) {
         MR::initCollisionPartsAutoEqualScaleOne(this, "SpinningBox", getSensor("body"), nullptr);
     }
 
-    initBinder(140.0f, 80.0f, 0);
+    initBinder(cNum_init_f3, cNum_init_f4, 0);
     MR::setBinderExceptActor(this, this);
     initEffectKeeper(0, "SpinningBox");
     initSound(6, false);
 
     MR::onCalcGravity(this);
-    MR::initShadowVolumeBox(this, Vec3f(::sShadowSize, -70.0f, ::sShadowSize) * scale, getBaseMtx());
+    MR::initShadowVolumeBox(this, Vec3f(::sShadowSize, -cNum_init_f5, ::sShadowSize) * scale, getBaseMtx());
     MR::excludeCalcShadowToMyCollision(this, nullptr);
 
     if (MR::isValidInfo(rIter)) {
@@ -121,7 +142,7 @@ void SpinningBox::init(const TableIter& rIter) {
     }
 
     MR::addToAttributeGroupReflectSpinningBox(this);
-    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
     MR::declareStarPiece(this, 3);
     if (mIsIceBox) {
         makeActorDead();
@@ -135,7 +156,7 @@ void SpinningBox::kill() {
     MR::startSound(this, "SE_OJ_SPIN_BOX_BREAK");
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     LiveActor::kill();
-    MR::appearStarPiece(this, mPosition - mGravity * 50.0f, MR::getDeclareRemnantStarPieceCount(this), 10.0f, 40.0f, false);
+    MR::appearStarPiece(this, mPosition - mGravity * cNum_kill_f1, MR::getDeclareRemnantStarPieceCount(this), cNum_kill_f2, cNum_kill_f3, false);
     MR::emitEffect(this, "Break");
 }
 
@@ -238,9 +259,9 @@ void SpinningBox::exeSliding() {
 
     mRotateSpeed = MR::clamp(mRotateSpeed - ::hSlidingRotateSub, ::hSlidingRotVelMin, ::hSlidingRotVelMax);
     mSlideSpeed = MR::clamp(mSlideSpeed - ::hSlidingVelocitySub, 0.0f, ::hSlidingVelMax);
-    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * 100.0f;
-    if (slideSoundLvl > 100.0f) {
-        slideSoundLvl = 100.0f;
+    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * cNum_exeSliding_f1;
+    if (slideSoundLvl > cNum_exeSliding_f2) {
+        slideSoundLvl = cNum_exeSliding_f3;
     }
     MR::startLevelSound(this, "SE_OJ_LV_SPIN_BOX_SLIDE", slideSoundLvl);
 
@@ -292,16 +313,16 @@ void SpinningBox::exeSpinning() {
             mSpinAngle -= ::hSpinningAngle;
         }
 
-        f32 spinSoundLvl = (mRotateSpeed / ::hSpinningRotVelMax) * 100.0f;
-        if (spinSoundLvl > 100.0f) {
-            spinSoundLvl = 100.0f;
+        f32 spinSoundLvl = (mRotateSpeed / ::hSpinningRotVelMax) * cNum_exeSpinning_f1;
+        if (spinSoundLvl > cNum_exeSpinning_f2) {
+            spinSoundLvl = cNum_exeSpinning_f3;
         }
         MR::startSound(this, "SE_OJ_SPIN_BOX_SPIN", spinSoundLvl);
     }
 
-    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * 100.0f;
-    if (slideSoundLvl > 100.0f) {
-        slideSoundLvl = 100.0f;
+    f32 slideSoundLvl = (mSlideSpeed / ::hSlidingVelMax) * cNum_exeSpinning_f4;
+    if (slideSoundLvl > cNum_exeSpinning_f5) {
+        slideSoundLvl = cNum_exeSpinning_f6;
     }
     MR::startLevelSound(this, "SE_OJ_LV_SPIN_BOX_SLIDE", slideSoundLvl);
 
@@ -352,7 +373,7 @@ void SpinningBox::calcPlanarProjectedVec(Vec3f* pProj, const Vec3f& rNorm, const
     // No gravity (or none along the ground) leaves the direction as it is.
     const f32 along = rNorm.dot(rGrav);
 
-    if (MR::isNearZero(along, 0.0001f)) {
+    if (MR::isNearZero(along, cNum_calcPlanarProjectedVec_f1)) {
         return;
     }
 

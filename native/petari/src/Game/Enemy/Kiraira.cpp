@@ -20,6 +20,18 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 4000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDead_f1, "exeDead.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f1, "exeRecover.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f2, "exeRecover.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drift_f1, "drift.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drift_f2, "drift.f2", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drift_f3, "drift.f3", 2.0f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_turnDirectionToTargetDegree_1, "attackSensor.turnDirectionToTargetDegree.1", 20.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_turnDirectionToTargetDegree_1, "receiveOtherMsg.turnDirectionToTargetDegree.1", 20.0f);
@@ -60,13 +72,13 @@ void Kiraira::init(const TableIter& rIter) {
     initModelManagerWithAnm("Kiraira", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(3);
-    MR::addHitSensorEnemy(this, "body", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEye(this, "eye", 16, ::sEyeHitSize, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEye(this, "mind_eye", 8, ::sMindEyeHitSize, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(6, false);
-    MR::initShadowVolumeSphere(this, 90.0f);
-    MR::setShadowDropLength(this, nullptr, 4000.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f2);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f3);
     MR::onCalcShadowOneTime(this, nullptr);
     MR::initLightCtrl(this);
     const char* objName;
@@ -74,7 +86,7 @@ void Kiraira::init(const TableIter& rIter) {
     mIsRail = MR::isEqualString(objName, "KirairaRail");
     if (mIsRail) {
         initRailRider(rIter);
-        MR::initAndSetRailClipping(&mRailVec, this, 100.0f, 500.0f);
+        MR::initAndSetRailClipping(&mRailVec, this, cNum_init_f4, cNum_init_f5);
         MR::getPlacementArg0NoInit(rIter, &mRailCoordSpeed);
         MR::setRailCoordSpeed(this, mRailCoordSpeed);
     }
@@ -164,7 +176,7 @@ void Kiraira::exeDead() {
             MR::startBck(this, "Down");
         }
         MR::startBrk(this, "Down");
-        MR::setShadowVolumeSphereRadius(this, nullptr, 50.0f);
+        MR::setShadowVolumeSphereRadius(this, nullptr, cNum_exeDead_f1);
     }
     if (mSharedGroup != nullptr) {
         mSharedGroup->sendMsgToGroupMember(ACTMES_GROUP_ATTACK, getSensor("body"), "body");
@@ -206,11 +218,11 @@ void Kiraira::exeRecover() {
         if (MR::isNearPlayer(this, ::sEyeSensorOutRadius)) {
             openEyes();
         }
-        MR::setShadowVolumeSphereRadius(this, nullptr, 90.0f);
+        MR::setShadowVolumeSphereRadius(this, nullptr, cNum_exeRecover_f1);
         mIsForceDetonated = false;
     }
     if (MR::isNearPlayer(this, ::sEyeSensorOutRadius)) {
-        MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), 20.0f);
+        MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), cNum_exeRecover_f2);
     }
     if (MR::isBckStopped(this)) {
         if (mChain != nullptr) {
@@ -335,7 +347,7 @@ void Kiraira::drift() {
             mPosition.set(*mChain->getCutPos());
         }
     } else {
-        mVelocity.scale(1.5f * MR::sinDegree(45.0f + 2.0f * mDriftStep), mGravity);
+        mVelocity.scale(cNum_drift_f1 * MR::sinDegree(cNum_drift_f2 + cNum_drift_f3 * mDriftStep), mGravity);
     }
 
     mDriftStep++;

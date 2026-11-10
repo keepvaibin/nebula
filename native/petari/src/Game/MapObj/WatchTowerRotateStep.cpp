@@ -5,6 +5,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initLift_f1, "initLift.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initLift_f2, "initLift.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initLift_f3, "initLift.f3", 400.0f);
+
 namespace {
     // Lifts ride joints 1..cLiftNum.
     const s32 cLiftNum = 4;
@@ -106,7 +110,7 @@ void WatchTowerRotateStep::initLift(const TableIter& rIter) {
         pLift->mIsCalcOwnMtx = false;
 
         MR::initCollisionParts(pLift, "WatchTowerRotateStepLift", getSensor(nullptr), nullptr);
-        MR::initShadowVolumeBox(pLift, Vec3f(600.0f, 200.0f, 400.0f), pLift->getBaseMtx());
+        MR::initShadowVolumeBox(pLift, Vec3f(cNum_initLift_f1, cNum_initLift_f2, cNum_initLift_f3), pLift->getBaseMtx());
         MR::setShadowVolumeStartDropOffset(pLift, "WatchTowerRotateStepLift", ::cLiftShadowStartDropOffset);
         MR::setShadowDropLength(pLift, "WatchTowerRotateStepLift", ::cLiftShadowDropLength);
 

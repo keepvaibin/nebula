@@ -16,6 +16,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sStepForAdjust, 3);
     static const s32 sStepToRumbleCamera = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -47,8 +50,8 @@ void ScrewSwitch::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
     Vec3f offset;
-    offset.scale(-150.0f, mGravity);
-    MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, 150.0f, offset);
+    offset.scale(-cNum_init_f1, mGravity);
+    MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, cNum_init_f2, offset);
     MtxPtr jointMtx = MR::getJointMtx(this, "Screw");
     HitSensor* Sensor = getSensor("binder");
     MR::initCollisionParts(this, "ScrewCol", Sensor, jointMtx);

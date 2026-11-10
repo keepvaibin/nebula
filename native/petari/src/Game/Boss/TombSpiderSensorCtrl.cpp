@@ -9,6 +9,27 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_updateAttackSensor_f1, "updateAttackSensor.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 280.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f5, "initSensor.f5", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f6, "initSensor.f6", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f7, "initSensor.f7", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f8, "initSensor.f8", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f9, "initSensor.f9", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f10, "initSensor.f10", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f11, "initSensor.f11", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f12, "initSensor.f12", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f13, "initSensor.f13", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f14, "initSensor.f14", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f15, "initSensor.f15", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f16, "initSensor.f16", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f17, "initSensor.f17", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f18, "initSensor.f18", 750.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f19, "initSensor.f19", 50.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sAttackSensorDistanceOffset, 100.0f);
     NEBULA_TUNABLE(f32, sEyeSensorPosOffset, -100.0f);
@@ -115,7 +136,7 @@ bool TombSpiderSensorCtrl::updateAttackSensor(HitSensor* pSensor) {
 
         Vec2f pos(1.0f, 0.0f);
 
-        MR::rotateVecDegree(&pos, mParent->getRotate() - 90.0f);
+        MR::rotateVecDegree(&pos, mParent->getRotate() - cNum_updateAttackSensor_f1);
         pos.scale(dist);
         pos.x += mParent->mPosition.x;
         pos.y += mParent->mPosition.y;
@@ -147,25 +168,25 @@ bool TombSpiderSensorCtrl::updateAttackSensor(HitSensor* pSensor) {
 }
 
 void TombSpiderSensorCtrl::initSensor() {
-    MR::addHitSensor(mParent, "body", ATYPE_TOMB_SPIDER_BODY, 8, 600.0f, Vec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensor(mParent, "body", ATYPE_TOMB_SPIDER_BODY, 8, cNum_initSensor_f1, Vec3f(0.0f, -cNum_initSensor_f2, 0.0f));
 
-    MR::addHitSensorCallback(mParent, "eye", ATYPE_TOMB_SPIDER_EYE, 8, 280.0f);
-    MR::addHitSensorCallback(mParent, "hip", ATYPE_TOMB_SPIDER_HIP, 8, 600.0f);
-    MR::addHitSensorCallback(mParent, "mouth", ATYPE_TOMB_SPIDER_MOUTH, 8, 150.0f);
-    MR::addHitSensorCallback(mParent, "gland_front_l", ATYPE_TOMB_SPIDER_GLAND_FRONT_L, 8, 200.0f);
-    MR::addHitSensorCallback(mParent, "gland_front_r", ATYPE_TOMB_SPIDER_GLAND_FRONT_R, 8, 200.0f);
-    MR::addHitSensorCallback(mParent, "gland_rear_l", ATYPE_TOMB_SPIDER_GLAND_REAR_L, 8, 200.0f);
-    MR::addHitSensorCallback(mParent, "gland_rear_r", ATYPE_TOMB_SPIDER_GLAND_REAR_R, 8, 200.0f);
-    MR::addHitSensorCallback(mParent, "attacker", ATYPE_ENEMY_ATTACK, 8, 100.0f);
-    MR::addHitSensorCallback(mParent, "front_l_attacker", ATYPE_TOMB_SPIDER_GLAND_FRONT_L_ATTACKER, 8, 100.0f);
-    MR::addHitSensorCallback(mParent, "front_r_attacker", ATYPE_TOMB_SPIDER_GLAND_FRONT_R_ATTACKER, 8, 100.0f);
-    MR::addHitSensorCallback(mParent, "rear_l_attacker", ATYPE_TOMB_SPIDER_GLAND_REAR_L_ATTACKER, 8, 100.0f);
-    MR::addHitSensorCallback(mParent, "rear_r_attacker", ATYPE_TOMB_SPIDER_GLAND_REAR_R_ATTACKER, 8, 100.0f);
-    MR::addHitSensorCallback(mParent, "vital_spot_c", ATYPE_TOMB_SPIDER_VITAL_SPOT_C, 8, 200.0f);
-    MR::addHitSensorCallback(mParent, "vital_spot_l", ATYPE_TOMB_SPIDER_VITAL_SPOT_L, 8, 200.0f);
-    MR::addHitSensorCallback(mParent, "vital_spot_r", ATYPE_TOMB_SPIDER_VITAL_SPOT_R, 8, 200.0f);
+    MR::addHitSensorCallback(mParent, "eye", ATYPE_TOMB_SPIDER_EYE, 8, cNum_initSensor_f3);
+    MR::addHitSensorCallback(mParent, "hip", ATYPE_TOMB_SPIDER_HIP, 8, cNum_initSensor_f4);
+    MR::addHitSensorCallback(mParent, "mouth", ATYPE_TOMB_SPIDER_MOUTH, 8, cNum_initSensor_f5);
+    MR::addHitSensorCallback(mParent, "gland_front_l", ATYPE_TOMB_SPIDER_GLAND_FRONT_L, 8, cNum_initSensor_f6);
+    MR::addHitSensorCallback(mParent, "gland_front_r", ATYPE_TOMB_SPIDER_GLAND_FRONT_R, 8, cNum_initSensor_f7);
+    MR::addHitSensorCallback(mParent, "gland_rear_l", ATYPE_TOMB_SPIDER_GLAND_REAR_L, 8, cNum_initSensor_f8);
+    MR::addHitSensorCallback(mParent, "gland_rear_r", ATYPE_TOMB_SPIDER_GLAND_REAR_R, 8, cNum_initSensor_f9);
+    MR::addHitSensorCallback(mParent, "attacker", ATYPE_ENEMY_ATTACK, 8, cNum_initSensor_f10);
+    MR::addHitSensorCallback(mParent, "front_l_attacker", ATYPE_TOMB_SPIDER_GLAND_FRONT_L_ATTACKER, 8, cNum_initSensor_f11);
+    MR::addHitSensorCallback(mParent, "front_r_attacker", ATYPE_TOMB_SPIDER_GLAND_FRONT_R_ATTACKER, 8, cNum_initSensor_f12);
+    MR::addHitSensorCallback(mParent, "rear_l_attacker", ATYPE_TOMB_SPIDER_GLAND_REAR_L_ATTACKER, 8, cNum_initSensor_f13);
+    MR::addHitSensorCallback(mParent, "rear_r_attacker", ATYPE_TOMB_SPIDER_GLAND_REAR_R_ATTACKER, 8, cNum_initSensor_f14);
+    MR::addHitSensorCallback(mParent, "vital_spot_c", ATYPE_TOMB_SPIDER_VITAL_SPOT_C, 8, cNum_initSensor_f15);
+    MR::addHitSensorCallback(mParent, "vital_spot_l", ATYPE_TOMB_SPIDER_VITAL_SPOT_L, 8, cNum_initSensor_f16);
+    MR::addHitSensorCallback(mParent, "vital_spot_r", ATYPE_TOMB_SPIDER_VITAL_SPOT_R, 8, cNum_initSensor_f17);
 
-    MR::addHitSensor(mParent, "cocoon", ATYPE_TOMB_SPIDER_COCOON, 8, 750.0f, Vec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensor(mParent, "cocoon", ATYPE_TOMB_SPIDER_COCOON, 8, cNum_initSensor_f18, Vec3f(0.0f, -cNum_initSensor_f19, 0.0f));
 
     TombSpiderFunction::invalidateAllPartsSensor(mParent);
 }
