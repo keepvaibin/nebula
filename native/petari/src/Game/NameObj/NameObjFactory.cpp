@@ -4828,6 +4828,10 @@ namespace NameObjFactory {
         if (pName == nullptr) {
             return nullptr;
         }
+        // A change into a mod's own object (luma.json "objects", a plugin's class).
+        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
+            return pPlugin;
+        }
 
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
