@@ -59,6 +59,7 @@ public:
         Object pipeline = nullptr;  // id<MTLRenderPipelineState>; null: the renderer draws with its blit
         Object input = nullptr;     // id<MTLTexture>
         PostConstants constants{};
+        bool ten_bit = false;       // the target keeps the scene's ten bits a channel: the last write is plain
     };
     PresentStep prepare_present(Object commands, const Texture& source, unsigned source_width, unsigned source_height,
                                 unsigned target_width, unsigned target_height, Format target_format);

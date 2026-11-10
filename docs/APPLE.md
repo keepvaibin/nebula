@@ -118,6 +118,8 @@ line's own `--data`, `--pak`, `--saves` and `--module` stay ([COMMAND_LINE.md](C
   frame waits for a drawable); that frame's picture is then not handed over, and the line stays one shorter: 37 ms,
   the render thread never waiting (`present`, `renderer_mtl.mm`). Two drawables instead of three would do the same
   by blocking, but one slow frame then holds every frame after it to every second refresh.
+- A Mac's window has ten bits a channel (`BGR10A2`), as the scene has: the picture goes to it as it is, where an 8-bit
+  window takes it rounded and dithered.
 - A first start on a Mac whose GPU is not Apple's, on a Retina display, draws the scene at the display's size in
   points and enlarges it with FSR 1 (the UPSCALER row; `choose_first_start_scale`). A 2017 MacBook Pro's full screen
   is 3360 by 2100, which its Radeon Pro 560 draws at 39 frames a second in the heavier galaxies and at 60 this way

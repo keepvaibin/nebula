@@ -265,7 +265,13 @@ bool RendererMtl::configure_layer() {
     const bool vsync = wants_vsync();
     @autoreleasepool {
         layer.device = metal_device();
+#if TARGET_OS_OSX
+        // Ten bits a channel, as the scene is: the picture goes to the window as it is, where an 8-bit window takes
+        // it rounded and dithered (post_process.hlsl FinalWrite), a pass's work for every pixel of the display.
+        layer.pixelFormat = MTLPixelFormatBGR10A2Unorm;
+#else
         layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+#endif
         layer.framebufferOnly = YES;
         layer.opaque = YES;
         layer.presentsWithTransaction = NO;
@@ -283,12 +289,16 @@ bool RendererMtl::configure_layer() {
         layer.maximumDrawableCount = 3u;
     }
     if (layer_.width != width || layer_.height != height || layer_.vsync != vsync || layer_.layer == nullptr) {
-        std::fprintf(stderr, "[metal] layer %ux%u BGRA8 vsync=%d\n", width, height, vsync ? 1 : 0);
+        std::fprintf(stderr, "[metal] layer %ux%u %s vsync=%d\n", width, height, TARGET_OS_OSX ? "BGR10A2" : "BGRA8", vsync ? 1 : 0);
     }
     layer_.layer = (__bridge void*)layer;
     layer_.width = width;
     layer_.height = height;
+#if TARGET_OS_OSX
+    layer_.format = mtl::Format::Bgr10a2;
+#else
     layer_.format = mtl::Format::Bgra8;
+#endif
     layer_.vsync = vsync;
     layer_.hdr_asked = wants_hdr();
     layer_.hdr = false;
