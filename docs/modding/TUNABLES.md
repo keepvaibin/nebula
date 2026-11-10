@@ -2432,7 +2432,7 @@ plugin with `set_tunable`; `get_tunable` reads one. A list's place is `key[i]`. 
 | Key | Type | Game's value |
 |---|---|---|
 | `BezierRail.cDirectionStep` | f32 | `0.01f` |
-| `BezierRail.cLengthSegments` | int | `10` |
+| `BezierRail.cLengthSegments` | s32 | `10` |
 | `BezierRail.cNearestSampleStep` | f32 | `100.0f` |
 | `BezierRail.cParamIterations` | s32 | `5` |
 | `BezierRail.cParamTolerance` | f32 | `0.01f` |

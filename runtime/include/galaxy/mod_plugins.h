@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace galaxy::mods {
@@ -17,7 +18,12 @@ struct PluginFile {
     std::string mod_id;
     std::string version;
     std::map<std::string, std::string> options;  // each option's choice
+    std::string code;  // code_hash of it as the start read it: a library that differs when it loads is not run
 };
+
+// A plugin library as it is: a hash of the files in its folder (their names and bytes: what it brings beside it too),
+// as hex; empty when the folder can't be read. The player's permission names these.
+[[nodiscard]] std::string code_hash(const std::filesystem::path& library);
 
 // A .luma's galaxies, from its luma.json.
 struct GalaxyToAdd {
@@ -91,7 +97,7 @@ struct PlayerConstantToSet {
 };
 struct TunableToSet {
     std::string mod_id;
-    std::string key;  // "Kuribo.cWalkSpeed"
+    std::string key;  // "GameRules.cPlayerHealth"
     double value = 0.0;
 };
 struct SoundEffectToAdd {
@@ -110,6 +116,20 @@ struct ObjectClassToSet {
     std::string mod_id;
     std::string name;
     std::string like;
+};
+
+// A mod's achievement for this run (luma::Achievement), its words in the language of play.
+struct AchievementToAdd {
+    std::string mod_id;  // the mod's folder: the plugin's NebulaPlugin id
+    std::string key;     // "mod:<the .luma's id>/<id>": kept in achievements.ini by it
+    std::string name;
+    std::string description;
+    std::string mod_name;
+    bool hidden = false;
+    std::string event;
+    std::string event_name;
+    bool has_value = false;
+    std::int64_t event_value = 0;
 };
 
 // What .luma files say in their luma.json, for the game before it starts.
@@ -132,9 +152,10 @@ struct ModRows {
     std::vector<ObjectClassToSet> object_classes;
     std::vector<SoundEffectToAdd> sound_effects;
     std::vector<PlayerAnimationToAdd> player_animations;
+    std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that
@@ -145,6 +166,17 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
 // Every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each (a list's places as <key>[i]),
 // written to `list_file` (--dump-tunables). False when the game module has no list or the file can't be written.
 bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file);
+// Where a mod's achievement is kept once unlocked (galaxy::achievements::unlock_mod: true when it is new). Unset (the
+// headless host), an unlock lasts the run.
+void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;
+// The running mods' achievements, as start_plugins was given them, in their order.
+[[nodiscard]] std::size_t mod_achievement_count() noexcept;
+[[nodiscard]] const AchievementToAdd* mod_achievement(std::size_t index) noexcept;
+// One unlocked since the last call (a plugin's unlock_achievement, or its event), for its pop-up: its index; -1: none.
+[[nodiscard]] std::int32_t next_mod_achievement_unlocked() noexcept;
+// The event an achievement's "when" names, by its name ("star_get"): NEBULA_MOD_EVENT_*, or -1.
+[[nodiscard]] int mod_event_by_name(std::string_view name) noexcept;
+
 // The plugin an address is in: its mod's id, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;
 

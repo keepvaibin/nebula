@@ -21,12 +21,15 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <map>
 #include <system_error>
 
 #if defined(_WIN32)
 #include <shellapi.h>
 #else
+#include <cerrno>
+#include <signal.h>
 #include <unistd.h>
 #endif
 
@@ -63,7 +66,9 @@ std::string folder_name(std::string name) {
     }
     while (!out.empty() && (out.back() == '.' || out.back() == ' ')) out.pop_back();
     while (!out.empty() && (out.front() == '.' || out.front() == ' ')) out.erase(out.begin());
-    return out.empty() ? std::string("Mod") : out;
+    if (out.empty()) return "Mod";
+    // A name the system keeps for a device (CON, NUL.arc...) can't be a folder.
+    return safe_path_part(out) ? out : "_" + out;
 }
 
 // Files a system leaves in folders and archives, never part of a mod.
@@ -102,10 +107,30 @@ unsigned long long process_id() {
 #endif
 }
 
+// Whether the run with that process id is still going (its import may be too).
+bool process_running(unsigned long long id) {
+#if defined(_WIN32)
+    if (id > 0xFFFFFFFFull) return false;
+    const HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, static_cast<DWORD>(id));
+    if (process == nullptr) return GetLastError() == ERROR_ACCESS_DENIED;
+    const bool running = WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+    CloseHandle(process);
+    return running;
+#else
+    if (id == 0u || id > static_cast<unsigned long long>(std::numeric_limits<pid_t>::max())) return false;
+    return kill(static_cast<pid_t>(id), 0) == 0 || errno == EPERM;
+#endif
+}
+
 fs::path staging_folder(const fs::path& mods_folder, const std::string& id) {
     static std::atomic<unsigned> counter{0};
     return mods_folder / from_utf8(".importing-" + id + "-" + std::to_string(process_id()) + "-" +
                                    std::to_string(counter.fetch_add(1u)));
+}
+
+// Where an update waits while its mod's folder is in use.
+fs::path pending_folder(const fs::path& mods_folder, const std::string& id) {
+    return mods_folder / from_utf8(".update-" + id);
 }
 
 // Notes that may sit beside an archive's one top folder (it is still the mod's folder).
@@ -245,13 +270,9 @@ void describe(ImportResult& result) {
     for (const ModInfo& mod : scan_mods()) {
         if (mod.id != result.id) continue;
         if (!mod.pack_title.empty()) result.title = mod.pack_title;
-        for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files || mod.loose, "FILES"},
-                                       std::pair{mod.textures, "TEXTURES"}, std::pair{mod.movies, "MOVIES"}}) {
-            if (on) result.kinds += result.kinds.empty() ? name : std::string(", ") + name;
-        }
-        if (result.kinds.empty() && !mod.problem.empty() && !result.already) {
-            result.message = "IMPORTED " + result.id + ", BUT " + mod.problem;
-        }
+        result.kinds = change_kinds(mod);
+        // As the menu translates it: the words before ": ", the name, then the line of its own.
+        if (!mod.problem.empty() && !result.already) result.message = "IMPORTED: " + result.title + ". " + mod.problem;
     }
 }
 
@@ -342,7 +363,7 @@ bool extract_archive(const fs::path& source, Writer& writer, ImportResult& resul
         fs::create_directories(target.parent_path(), error);
         std::ofstream out(target, std::ios::binary | std::ios::trunc);
         if (!out) {
-            result.message = "CANNOT WRITE " + utf8(relative.filename()) + " (IS THE DISK FULL?)";
+            result.message = "CANNOT WRITE: " + utf8(relative.filename()) + ". IS THE DISK FULL?";
             return false;
         }
         writer.state.current = utf8(relative);
@@ -351,12 +372,12 @@ bool extract_archive(const fs::path& source, Writer& writer, ImportResult& resul
             if (read == 0) break;
             if (read < 0) {
                 const char* why = archive_error_string(reader);
-                result.message = "CANNOT READ " + utf8(relative.filename()) + ": " + (why ? why : "");
+                result.message = "CANNOT READ: " + utf8(relative.filename()) + (why != nullptr && why[0] != '\0' ? " (" + std::string(why) + ")" : std::string());
                 return false;
             }
             out.write(buffer.data(), read);
             if (!out) {
-                result.message = "CANNOT WRITE " + utf8(relative.filename()) + " (IS THE DISK FULL?)";
+                result.message = "CANNOT WRITE: " + utf8(relative.filename()) + ". IS THE DISK FULL?";
                 return false;
             }
             result.bytes += static_cast<std::uint64_t>(read);
@@ -402,7 +423,7 @@ bool copy_folder(const fs::path& source, Writer& writer, ImportResult& result) {
         std::error_code copy_error;
         fs::copy_file(it->path(), target, fs::copy_options::overwrite_existing, copy_error);
         if (copy_error) {
-            result.message = "CANNOT COPY " + utf8(relative.filename()) + ": " + copy_error.message();
+            result.message = "CANNOT COPY: " + utf8(relative.filename()) + " (" + copy_error.message() + ")";
             return false;
         }
         const std::uint64_t size = it->file_size(error);
@@ -478,14 +499,37 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
     }
     const bool copied = folder ? copy_folder(source, writer, result) : extract_archive(source, writer, result);
     if (!copied || result.files == 0u) {
-        if (copied) result.message = "THE " + std::string(folder ? "FOLDER" : "ARCHIVE") + " HOLDS NO FILES";
+        if (copied) result.message = folder ? "THE FOLDER HOLDS NO FILES" : "THE ARCHIVE HOLDS NO FILES";
         fs::remove_all(writer.staging, error);
         result.ok = false;
         return result;
     }
     if (!folder) lift_top_folder(writer.staging);
     if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging); manifest && !manifest->id.empty()) {
+        // A .luma is its id: the folder holding that id is the one updated, whatever its name (copied in by hand, or
+        // renamed). A folder of its name holding another mod is left alone: this one takes a name of its own.
+        result.new_version = manifest->version;
+        const auto id_in = [&](const fs::path& folder) {
+            const std::optional<galaxy::luma::Manifest> there = galaxy::luma::read_manifest(folder);
+            return there && there->id == manifest->id ? std::optional<std::string>(there->version) : std::nullopt;
+        };
         result.id = folder_name(manifest->id);
+        std::error_code walk_error;
+        std::optional<std::string> found;
+        if (fs::is_directory(mods_folder / from_utf8(result.id), error)) found = id_in(mods_folder / from_utf8(result.id));
+        for (auto it = fs::directory_iterator(mods_folder, walk_error); !found && !walk_error && it != fs::directory_iterator();
+             it.increment(walk_error)) {
+            const std::string name = utf8(it->path().filename());
+            if (name.empty() || name.front() == '.' || !it->is_directory(error)) continue;
+            if ((found = id_in(it->path()))) result.id = name;
+        }
+        if (found) {
+            result.old_version = *found;
+        } else {
+            for (unsigned n = 2u; fs::exists(mods_folder / from_utf8(result.id), error); ++n) {
+                result.id = folder_name(manifest->id) + "-" + std::to_string(n);
+            }
+        }
     }
     // A Dolphin texture pack takes the game's texture names here, once (dolphin_pack.h); compared and kept converted.
     if (galaxy::textures::has_dolphin_files(writer.staging) && galaxy::textures::wait_for_index()) {
@@ -513,13 +557,23 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         previous = staging_folder(mods_folder, result.id + "-previous");
         fs::rename(final_folder, previous, error);
         if (error) {
-            fs::remove_all(writer.staging, error);
-            result.message = "THE MOD " + result.id + " IS IN USE: CLOSE WHAT HAS ITS FILES OPEN AND TRY AGAIN";
-            return result;
+            // In use (Windows: a program has a file of it open): the update waits beside it for the next start.
+            const fs::path waiting = pending_folder(mods_folder, result.id);
+            std::error_code pending_error;
+            fs::remove_all(waiting, pending_error);
+            fs::rename(writer.staging, waiting, pending_error);
+            if (pending_error) {
+                fs::remove_all(writer.staging, error);
+                result.message = "IN USE: " + result.id + ". CLOSE WHAT HAS ITS FILES OPEN AND TRY AGAIN";
+                return result;
+            }
+            previous.clear();
+            error.clear();
+            result.pending = true;
         }
         result.replaced = true;
     }
-    fs::rename(writer.staging, final_folder, error);
+    if (!result.pending) fs::rename(writer.staging, final_folder, error);
     if (error) {
         if (!previous.empty()) fs::rename(previous, final_folder, error);
         fs::remove_all(writer.staging, error);
@@ -528,24 +582,37 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         return result;
     }
     if (!previous.empty()) fs::remove_all(previous, error);
+    // An update that waited from before is older than this one.
+    if (!result.pending) fs::remove_all(pending_folder(mods_folder, result.id), error);
     writer.state.done = writer.state.total;
     writer.report(true);
     describe(result);
     result.ok = true;
     if (result.message.empty()) {
-        result.message = (result.replaced ? "UPDATED " : "IMPORTED ") + result.id +
-                         (result.kinds.empty() ? std::string() : " (" + result.kinds + ")");
+        const std::string name = result.title.empty() ? result.id : result.title;
+        if (result.replaced && !result.old_version.empty() && !result.new_version.empty()) {
+            const int order = galaxy::luma::compare_versions(result.new_version, result.old_version);
+            // As the menu translates it: the words before ": ", the name, the versions in brackets.
+            result.message = order > 0   ? "UPDATED: " + name + " (" + result.old_version + " TO " + result.new_version + ")"
+                             : order < 0 ? "OLDER VERSION: " + name + " (" + result.old_version + " TO " + result.new_version + ")"
+                                         : "REPLACED: " + name + " (" + result.new_version + ")";
+        } else {
+            result.message = (result.replaced ? "UPDATED: " : "IMPORTED: ") + name +
+                             (result.kinds.empty() ? std::string() : " (" + result.kinds + ")");
+        }
     }
     return result;
 }
 
 bool remove_mod(const fs::path& mods_folder, const std::string& id, std::string* message) {
-    const fs::path folder = mods_folder / from_utf8(id);
+    // A folder in the mods folder by its name: nothing else (no path, no folder Nebula keeps there).
     std::error_code error;
-    if (id.empty() || id.front() == '.' || !fs::is_directory(folder, error)) {
-        if (message != nullptr) *message = "NO MOD " + id;
+    if (id.empty() || id.front() == '.' || id.find_first_of("/\\:") != std::string::npos ||
+        !fs::is_directory(mods_folder / from_utf8(id), error)) {
+        if (message != nullptr) *message = "NO MOD: " + id;
         return false;
     }
+    const fs::path folder = mods_folder / from_utf8(id);
 #if defined(_WIN32)
     // To the recycle bin, so it can be restored.
     std::wstring from = folder.wstring();
@@ -555,17 +622,81 @@ bool remove_mod(const fs::path& mods_folder, const std::string& id, std::string*
     operation.pFrom = from.c_str();
     operation.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
     if (SHFileOperationW(&operation) == 0 && !operation.fAnyOperationsAborted && !fs::exists(folder, error)) {
-        if (message != nullptr) *message = "MOVED " + id + " TO THE RECYCLE BIN";
+        if (message != nullptr) *message = "MOVED TO THE RECYCLE BIN: " + id;
         return true;
     }
 #endif
-    fs::remove_all(folder, error);
+    // Moved aside first, so a folder whose files are open is left whole rather than half removed.
+    const fs::path aside = staging_folder(mods_folder, id + "-removed");
+    fs::rename(folder, aside, error);
     if (error) {
-        if (message != nullptr) *message = "CANNOT REMOVE " + id + ": " + error.message();
+        if (message != nullptr) *message = "IN USE: " + id + ". CLOSE WHAT HAS ITS FILES OPEN AND TRY AGAIN";
         return false;
     }
-    if (message != nullptr) *message = "REMOVED " + id;
+    fs::remove_all(pending_folder(mods_folder, id), error);
+    fs::remove_all(aside, error);
+    if (message != nullptr) *message = "REMOVED: " + id;
     return true;
+}
+
+void apply_pending_updates(const fs::path& mods_folder) {
+    std::error_code error;
+    std::vector<std::pair<fs::path, std::string>> waiting;
+    // What an import or removal that was cut off (the game closed or crashed during it) left, by another run: its
+    // staging folders (".importing-<id>-<run>-<n>"). A mod moved aside for its update ("<id>-previous") goes back when
+    // the update never took its place; the rest is removed.
+    std::vector<fs::path> leftovers;
+    std::vector<std::pair<fs::path, std::string>> set_aside;
+    for (auto it = fs::directory_iterator(mods_folder, error); !error && it != fs::directory_iterator(); it.increment(error)) {
+        const std::string name = utf8(it->path().filename());
+        std::error_code type_error;
+        if (name.starts_with(".update-") && name.size() > 8u && it->is_directory(type_error)) {
+            waiting.emplace_back(it->path(), name.substr(8u));
+            continue;
+        }
+        if (!name.starts_with(".importing-")) continue;
+        const std::size_t counter = name.rfind('-');
+        const std::size_t run = counter == std::string::npos || counter == 0u ? std::string::npos : name.rfind('-', counter - 1u);
+        if (run == std::string::npos || run < 11u) continue;
+        const std::string run_text = name.substr(run + 1u, counter - run - 1u);
+        if (run_text.empty() || run_text.size() > 19u || run_text.find_first_not_of("0123456789") != std::string::npos ||
+            process_running(std::stoull(run_text))) {
+            continue;  // not a staging folder's name, or a run still going (this one's own import too)
+        }
+        const std::string what = name.substr(11u, run - 11u);
+        if (what.ends_with("-previous") && what.size() > 9u) {
+            set_aside.emplace_back(it->path(), what.substr(0u, what.size() - 9u));
+        } else {
+            leftovers.push_back(it->path());
+        }
+    }
+    for (const auto& [aside, id] : set_aside) {
+        std::error_code move_error;
+        if (!fs::exists(mods_folder / from_utf8(id), move_error) && !move_error) {
+            fs::rename(aside, mods_folder / from_utf8(id), move_error);
+            if (!move_error) continue;
+        }
+        leftovers.push_back(aside);
+    }
+    for (const fs::path& leftover : leftovers) {
+        std::error_code remove_error;
+        fs::remove_all(leftover, remove_error);
+    }
+    for (const auto& [update, id] : waiting) {
+        const fs::path folder = mods_folder / from_utf8(id);
+        const fs::path previous = staging_folder(mods_folder, id + "-previous");
+        std::error_code move_error;
+        if (fs::exists(folder, move_error)) {
+            fs::rename(folder, previous, move_error);
+            if (move_error) continue;  // still in use: the next start
+        }
+        fs::rename(update, folder, move_error);
+        if (move_error) {
+            fs::rename(previous, folder, move_error);
+            continue;
+        }
+        fs::remove_all(previous, move_error);
+    }
 }
 
 }  // namespace galaxy::mods

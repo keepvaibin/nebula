@@ -20,13 +20,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLE = os.path.join(ROOT, 'localization', 'NebulaText.tsv')
 OUTPUT = os.path.join(ROOT, 'native', 'petari', 'src', 'Game', 'System', 'NebulaTextTable.inc')
 CRASH_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'crash_text_table.inc')
-HOST_TEXT = ['runtime/src/ui/settings_*_page.cpp', 'runtime/src/ui/settings_model.cpp', 'runtime/src/render/host_window_win32.cpp']
+HOST_TEXT = ['runtime/src/ui/settings_*_page.cpp', 'runtime/src/ui/settings_model.cpp', 'runtime/src/render/host_window_win32.cpp',
+             'runtime/src/ui/native_settings.cpp', 'runtime/src/mod_import.cpp', 'runtime/src/mods.cpp', 'runtime/src/luma.cpp',
+             'runtime/src/mod_plugins.cpp']
 INSTALLER_TEXT = 'installer/src/**/*.cs'
 # Capitals the menu does not show as text: pad names, a disc id, the home overlay and the DLSS footer the game replaces.
-HOST_NOT_SHOWN = {'SSAO', 'GTAO', '(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
+HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
                   'VIEW+MENU OR MINUS+PLUS', 'DLSS READY', 'DLSS WAS NOT INSTALLED', 'DOWNLOAD NVIDIA DLSS (',
                   'INSTALLING NVIDIA DLSS...', 'RESTART NOW? ENTER/Y YES  ESC/B LATER', 'HOME MENU', 'NO', 'YES',
-                  'QUIT TO DESKTOP', 'QUIT TO DESKTOP?', 'RESET?', 'RETURN TO GAME'}
+                  'QUIT TO DESKTOP', 'QUIT TO DESKTOP?', 'RESET?', 'RETURN TO GAME',
+                  # the mods: unavailable buttons, hex digits, the game's id, the head of "ON (1 OF 2)"
+                  '-ABOUT', '-DETAILS', '0123456789ABCDEF', 'RMG', 'ON ('}
 
 
 def unescape(cell):

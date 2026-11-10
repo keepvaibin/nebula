@@ -124,6 +124,7 @@ void MarioActor::initMember() {
     mHiddenByDemo = 0;
     mHidden = 0;
     mMorphHidden = 0;
+    mModHidden = false;
     mThrowProbePos.zero();
     mTakingFixedPos = 0;
     mTakingWobble = 0.0f;

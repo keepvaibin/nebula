@@ -9,7 +9,7 @@
 #include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(int, cLengthSegments, 10);        // Simpson pairs per length integral
+    NEBULA_TUNABLE(s32, cLengthSegments, 10);        // Simpson pairs per length integral
     NEBULA_TUNABLE(f32, cParamTolerance, 0.01f);     // getParam stops within this length
     NEBULA_TUNABLE(s32, cParamIterations, 5);
     NEBULA_TUNABLE(f32, cDirectionStep, 0.01f);      // param step for a zero-velocity direction

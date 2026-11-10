@@ -346,6 +346,13 @@ void CameraDirector::endEvent(s32 zoneID, const char* pName, bool resetView, s32
             }
 
             mViewInterpolator->mIsInterpolationOff = true;
+
+            // The area's camera has the view again: plugins hear it as one (value 0), by its name.
+            if (getCurrentCameraMan() == mCameraManGame) {
+                const CameraParamChunk* chunk = mCameraManGame->mChunk;
+                NebulaMods::fire(NEBULA_MOD_EVENT_CAMERA_CHANGE, 0, nullptr,
+                                 chunk != nullptr && chunk->mParamChunkID != nullptr ? chunk->mParamChunkID->mName : nullptr);
+            }
         }
     }
 }

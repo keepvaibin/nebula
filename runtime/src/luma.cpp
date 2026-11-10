@@ -8,7 +8,10 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <cstdlib>
+#include <initializer_list>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -331,14 +334,17 @@ When read_when(const Value* value) {
     return when;
 }
 
-// A path that stays in the mod's folder.
+// A path that stays in the mod's folder. A control character (a NUL ends the path where the system reads it) or a part
+// of dots and spaces past "." (Windows drops a part's last dots and spaces: ".. " is "..") is refused too.
 bool path_stays_inside(const std::string& path) {
     if (path.empty() || path[0] == '/' || path[0] == '\\' || path.find(':') != std::string::npos) return false;
+    if (std::any_of(path.begin(), path.end(), [](char c) { return static_cast<unsigned char>(c) < 0x20u || c == 0x7F; })) return false;
     std::size_t at = 0;
     while (at <= path.size()) {
         std::size_t end = path.find_first_of("/\\", at);
         if (end == std::string::npos) end = path.size();
-        if (path.compare(at, end - at, "..") == 0) return false;
+        const std::string_view part = std::string_view(path).substr(at, end - at);
+        if (!part.empty() && part != "." && part.find_first_not_of(". ") == std::string_view::npos) return false;
         at = end + 1u;
     }
     return true;
@@ -511,6 +517,33 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     out.homepage = text_field(*root, "homepage");
     out.icon = text_field(*root, "icon");
     if (!out.icon.empty() && !path_stays_inside(out.icon)) out.icon.clear();
+    for (std::string& picture : string_list(root->get("pictures"))) {
+        if (out.pictures.size() < kMaxPictures && !picture.empty() && path_stays_inside(picture)) out.pictures.push_back(std::move(picture));
+    }
+    if (const Value* list = root->get("achievements"); list != nullptr && list->array() != nullptr) {
+        for (const Value& entry : *list->array()) {
+            Achievement achievement;
+            achievement.id = text_field(entry, "id");
+            achievement.name = read_text(entry.get("name"));
+            achievement.description = read_text(entry.get("description"));
+            if (const Value* hidden = entry.get("hidden"); hidden != nullptr) {
+                if (const bool* flag = std::get_if<bool>(&hidden->data)) achievement.hidden = *flag;
+            }
+            if (const Value* when = entry.get("when"); when != nullptr && when->object() != nullptr) {
+                achievement.event = text_field(*when, "event");
+                achievement.event_name = text_field(*when, "name");
+                if (const Value* value = when->get("value"); value != nullptr && value->number() != nullptr) {
+                    achievement.has_value = true;
+                    achievement.event_value = whole_int(*value->number());
+                }
+            }
+            const bool taken = std::any_of(out.achievements.begin(), out.achievements.end(),
+                                           [&](const Achievement& other) { return other.id == achievement.id; });
+            if (valid_id(achievement.id) && !achievement.name.fallback.empty() && !taken && out.achievements.size() < kMaxAchievements) {
+                out.achievements.push_back(std::move(achievement));
+            }
+        }
+    }
     out.needs = dependency_list(root->get("needs"), "version");
     out.conflicts = dependency_list(root->get("conflicts"), "below");
     out.load_after = string_list(root->get("load_after"));
@@ -616,8 +649,12 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 if (fields.object() == nullptr || (who != "mario" && who != "luigi" && who != "both")) return std::nullopt;
                 for (const auto& [name, value] : *fields.object()) {
                     const auto add = [&, name = name](int index, double number) {
-                        if (who != "luigi") layer.player_constants.push_back({0, name, index, static_cast<float>(number), {}});
-                        if (who != "mario") layer.player_constants.push_back({1, name, index, static_cast<float>(number), {}});
+                        // Past a float's range is infinite (a cast would be undefined): the start names it and sets nothing.
+                        const float held = std::fabs(number) <= static_cast<double>(std::numeric_limits<float>::max())
+                                               ? static_cast<float>(number)
+                                               : (number > 0.0 ? 1.0f : -1.0f) * std::numeric_limits<float>::infinity();
+                        if (who != "luigi") layer.player_constants.push_back({0, name, index, held, {}});
+                        if (who != "mario") layer.player_constants.push_back({1, name, index, held, {}});
                     };
                     if (const double* number = value.number()) {
                         add(0, *number);
@@ -634,7 +671,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
             }
         }
         if (const Value* tunables = entry.get("tunables"); tunables != nullptr) {
-            // { "Kuribo.cWalkSpeed": 2.0, "Kuribo.cIsDead": true, "Kuribo.cTurn": {"option": "turn"}, "Kuribo.cSteps": [4, null, 9] }
+            // { "GameRules.cPlayerHealth": 6, "GameRules.cDodoryuShellOnly": true, "GameRules.cMaxCoins": {"option": "coins"}, "JetTurtle.sGravityLevel": [0.02, null, 0.01] }
             if (tunables->object() == nullptr) return std::nullopt;
             for (const auto& [key, value] : *tunables->object()) {
                 if (key.find('.') == std::string::npos) return std::nullopt;
@@ -725,6 +762,8 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         out.save_player_can_change = can != nullptr && *can;
     }
     if (out.save_tag.empty()) out.save_tag = out.id;
+    // The tag names a folder of saves: an id's letters keep it in mods/.saves.
+    if (!valid_id(out.save_tag)) return std::nullopt;
     if (!read_rows(*root, out)) return std::nullopt;
     if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {
         for (const Value& entry : *plugins->array()) {
@@ -898,6 +937,149 @@ SwitchTunable switch_tunable(std::string_view name) noexcept {
         if (known == name) return tunable;
     }
     return {};
+}
+
+namespace {
+
+// Every language folder a game of the series has messages in (nebula-import's cook/overlay.rs MESSAGE_LANGUAGES).
+constexpr std::string_view kMessageLanguages[] = {
+    "UsEnglish", "UsFrench", "UsSpanish", "EuEnglish", "EuFrench", "EuGerman", "EuItalian", "EuSpanish", "EuDutch",
+    "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese", "UsPortuguese",
+};
+
+std::string key_of(std::initializer_list<std::string_view> fields) {
+    std::string key;
+    for (const std::string_view field : fields) {
+        if (!key.empty()) key += '\t';
+        key += field;
+    }
+    return key;
+}
+
+std::string lower_text(std::string_view text) {
+    std::string out(text);
+    for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+}
+
+// A JSON value as one piece of a key: a number as the shortest text that reads back as it.
+std::string value_text(const Value& value) {
+    if (const std::string* text = value.string()) return *text;
+    if (const double* number = value.number()) {
+        char out[32];
+        std::snprintf(out, sizeof(out), "%.17g", *number);
+        return out;
+    }
+    if (const bool* flag = std::get_if<bool>(&value.data)) return *flag ? "true" : "false";
+    return "null";
+}
+
+// A table row named by its "where" columns, sorted, so that two mods naming them in another order name one row.
+std::string row_text(const Value& where) {
+    const Object* fields = where.object();
+    if (fields == nullptr) return value_text(where);
+    std::vector<std::string> parts;
+    for (const auto& [column, value] : *fields) parts.push_back(column + "=" + value_text(value));
+    std::sort(parts.begin(), parts.end());
+    std::string out;
+    for (const std::string& part : parts) out += (out.empty() ? "" : ",") + part;
+    return out;
+}
+
+void add_lines(std::vector<std::string>& keys, std::string_view kind, std::string_view id, std::string_view language) {
+    if (!language.empty()) {
+        keys.push_back(key_of({kind, id, language}));
+        return;
+    }
+    for (const std::string_view folder : kMessageLanguages) keys.push_back(key_of({kind, id, folder}));
+}
+
+}  // namespace
+
+bool rows_set_game(const Rows& rows) noexcept {
+    return !rows.galaxies.empty() || !rows.music.empty() || !rows.event_flags.empty() || !rows.comet_schedule.empty() ||
+           !rows.text.empty() || !rows.text_like.empty() || !rows.story.empty();
+}
+
+bool layer_sets_game(const Layer& layer) noexcept {
+    return rows_set_game(layer.rows) || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty() ||
+           !layer.stages.empty() || !layer.player_constants.empty() || !layer.tunables.empty() || !layer.object_classes.empty() ||
+           !layer.sound_effects.empty() || !layer.player_animations.empty();
+}
+
+bool manifest_sets_game(const Manifest& manifest) noexcept {
+    if (rows_set_game(manifest) || !manifest.achievements.empty() || manifest.save_mode != SaveMode::Shared) return true;
+    const std::string target(plugin_target());
+    return std::any_of(manifest.plugins.begin(), manifest.plugins.end(),
+                       [&target](const Plugin& plugin) { return plugin.binaries.find(target) != plugin.binaries.end(); });
+}
+
+std::vector<std::string> setting_keys(const Rows& rows) {
+    std::vector<std::string> keys;
+    for (const Galaxy& galaxy : rows.galaxies) keys.push_back(key_of({"galaxy", galaxy.name}));
+    for (const Music& music : rows.music) keys.push_back(key_of({"music", music.name}));
+    for (const EventFlag& flag : rows.event_flags) keys.push_back(key_of({"event flag", flag.name}));
+    for (const CometSchedule& schedule : rows.comet_schedule) keys.push_back(key_of({"comet schedule", std::to_string(schedule.dome)}));
+    for (const auto& [id, words] : rows.text) add_lines(keys, "line", id, {});
+    for (const auto& [part, value] : rows.story) keys.push_back(key_of({"story", part}));
+    return keys;
+}
+
+std::vector<std::string> setting_keys(const Layer& layer) {
+    std::vector<std::string> keys = setting_keys(layer.rows);
+    for (const auto& [material, file] : layer.materials) keys.push_back(key_of({"material", lower_text(material)}));
+    for (const ObjectChange& change : layer.object_changes) {
+        keys.push_back(key_of({"object", std::to_string(change.where), change.object}));
+    }
+    for (const CometLimit& limit : layer.comet_time_limits) {
+        keys.push_back(key_of({"comet limit", limit.galaxy, std::to_string(limit.mission)}));
+    }
+    for (const StageRule& rule : layer.stages) keys.push_back(key_of({"stage", rule.stage, std::to_string(rule.scenario)}));
+    for (const PlayerConstant& constant : layer.player_constants) {
+        keys.push_back(key_of({"constant", std::to_string(constant.character), constant.name, std::to_string(constant.index)}));
+    }
+    for (const Tunable& tunable : layer.tunables) keys.push_back(key_of({"tunable", tunable.key}));
+    for (const ObjectClass& object : layer.object_classes) keys.push_back(key_of({"class", object.name}));
+    for (const SoundEffect& sound : layer.sound_effects) keys.push_back(key_of({"sound", sound.name}));
+    for (const PlayerAnimation& animation : layer.player_animations) keys.push_back(key_of({"animation", animation.name}));
+    return keys;
+}
+
+std::vector<std::string> merge_keys(std::string_view path, std::string_view json) {
+    std::vector<std::string> keys;
+    const std::string lower = lower_text(path.substr(path.starts_with('/') ? 1u : 0u));
+    if (!lower.ends_with(".json") || lower.ends_with(".jpc.json") || lower.ends_with("particlenames.bcsv.json")) return keys;
+    const std::optional<Value> root = Parser(json).whole();
+    if (!root || root->object() == nullptr) return keys;
+    // Messages: every language the game has, or the one its folder names.
+    std::string language;
+    bool messages = lower == "messagedata/messages.json";
+    if (!messages && lower.ends_with("/messagedata/message.arc/message.bmg.json") && std::count(lower.begin(), lower.end(), '/') == 3) {
+        messages = true;
+        language = std::string(path.substr(path.starts_with('/') ? 1u : 0u, lower.find('/')));
+    }
+    if (messages) {
+        for (const char* part : {"lines", "flows"}) {
+            if (const Value* entries = root->get(part); entries != nullptr && entries->object() != nullptr) {
+                for (const auto& [id, value] : *entries->object()) add_lines(keys, part[0] == 'l' ? "line" : "flow", id, language);
+            }
+        }
+        return keys;
+    }
+    const std::string table = lower.substr(0, lower.size() - 5u);
+    if (const Value* removes = root->get("remove"); removes != nullptr && removes->array() != nullptr) {
+        for (const Value& where : *removes->array()) keys.push_back(key_of({"row", table, row_text(where)}));
+    }
+    if (const Value* changes = root->get("change"); changes != nullptr && changes->array() != nullptr) {
+        for (const Value& change : *changes->array()) {
+            const Value* where = change.get("where");
+            const Value* set = change.get("set");
+            if (where == nullptr || set == nullptr || set->object() == nullptr) continue;
+            const std::string row = row_text(*where);
+            for (const auto& [column, value] : *set->object()) keys.push_back(key_of({"cell", table, row, column}));
+        }
+    }
+    return keys;
 }
 
 }  // namespace galaxy::luma

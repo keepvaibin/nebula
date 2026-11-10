@@ -116,6 +116,13 @@ namespace Ui {
                     break;
                 }
             } else {
+                // The space is used up by the line break.
+                if (bUseLimit && code == ' ' && prevStreamPos != NULL && IsWordBreak(reader, end, x, bCharSpace)) {
+                    bOverLimit = true;
+                    code = '\n';
+                    continue;
+                }
+
                 f32 dx = 0.0f;
 
                 if (bCharSpace) {
@@ -153,6 +160,27 @@ namespace Ui {
         *pStr = reinterpret_cast< StreamType >(reader.GetCurrentPos());
 
         return bOverLimit;
+    }
+
+    template < typename CharType >
+    f32 TextWriterBase< CharType >::CalcWordWidth(CharStrmReader reader, StreamType end) const {
+        f32 width = 0.0f;
+        for (CharCode code = reader.Next(); reinterpret_cast< StreamType >(reader.GetCurrentPos()) <= end && code > ' ';
+             code = reader.Next()) {
+            width += GetCharSpace() + (IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(code) * GetScaleH());
+        }
+        return width;
+    }
+
+    template < typename CharType >
+    bool TextWriterBase< CharType >::IsWordBreak(const CharStrmReader& reader, StreamType end, f32 lineWidth,
+                                                 bool bCharSpace) const {
+        const f32 word = CalcWordWidth(reader, end);
+        if (word <= 0.0f || word > mWidthLimit) {
+            return false;
+        }
+        const f32 space = (bCharSpace ? GetCharSpace() : 0.0f) + (IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(' ') * GetScaleH());
+        return lineWidth + space + word > mWidthLimit;
     }
 
     template < typename CharType >

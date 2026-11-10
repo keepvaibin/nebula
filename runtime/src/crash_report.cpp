@@ -173,6 +173,16 @@ Report classify(const Facts& facts) noexcept {
         return r;
     }
 
+    // A mod's code: the fault in its plugin, or in the game's code a call of its plugin reached.
+    if (facts.kind == Facts::Kind::Fault && !facts.plugin_mod.empty()) {
+        set(r, "NEB-M03", "A mod's code crashed the game",
+            "Turn this mod off in Settings > Mods or in the launcher's Mods tab, and send its author the report file.");
+        put(r.detail, sizeof(r.detail),
+            facts.in_plugin ? "The game crashed in the code of the mod %.*s." : "The game crashed in a call the code of the mod %.*s made.",
+            static_cast<int>(facts.plugin_mod.size()), facts.plugin_mod.data());
+        return r;
+    }
+
     // The game's own code: the mods that change it come first.
     const bool game = (facts.kind == Facts::Kind::Fault && facts.in_game) || facts.kind == Facts::Kind::GameFatal;
     if (game) {

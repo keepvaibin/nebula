@@ -232,6 +232,13 @@ namespace Ui {
 
                 const f32 baseY = GetCursorY();
 
+                // The space is used up by the line break (CalcLineRectImpl breaks the line there too).
+                if (bUseLimit && code == ' ' && (prevStreamPos != prevNewLinePos) &&
+                    IsWordBreak(reader, str + length, GetCursorX() - xOrigin, bCharSpace)) {
+                    code = '\n';
+                    continue;
+                }
+
                 if (bUseLimit && (prevStreamPos != prevNewLinePos)) {
                     f32 baseX = GetCursorX();
                     f32 charSpace = bCharSpace ? GetCharSpace() : 0.0f;

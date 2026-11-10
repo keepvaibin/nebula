@@ -677,6 +677,7 @@ public:
     u8 mHiddenByDemo;  // hidden (isAllHidden, the shadow, the silhouette) (?)
     bool mHidden;  // the model is hidden (init2, the black hole)
     bool mMorphHidden;  // the model is hidden during the morph
+    bool mModHidden;  // a plugin hid the model (show_model): it stays hidden; he still moves, animates and plays effects
     Vec3f mThrowProbePos;  // the throw vector's probe point (updateThrowVector)
     f32 mTakingWobble;  // the taken item's wobble phase
     FixedPosition* mTakingFixedPos;  // the hand point the taken item follows

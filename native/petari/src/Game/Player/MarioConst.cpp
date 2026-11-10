@@ -1016,21 +1016,36 @@ namespace {
     MarioConstTable* constTable(s32 character) {
         return character == 1 ? &gMarioConstDefault2 : &gMarioConstDefault;
     }
+
+    // A whole number of the field's kind: held at its ends (a cast past them is undefined), halves away from zero, as
+    // tunables store (Tunable.cpp).
+    template < typename T >
+    T clampTo(f32 value, f64 low, f64 high) {
+        const f64 wide = value;
+        if (!(wide >= low)) {
+            return static_cast< T >(low);
+        }
+        if (wide > high) {
+            return static_cast< T >(high);
+        }
+        return static_cast< T >(wide < 0.0 ? wide - 0.5 : wide + 0.5);
+    }
 }  // namespace
 
 // `character`: 0 Mario, 1 Luigi. A number of the player's table by its name, as a mod names it. False: no such number.
 bool setMarioConstant(s32 character, const char* pName, s32 index, f32 value) {
     const ConstField* pField = findConstField(pName);
-    if (pField == nullptr || index < 0 || index >= pField->mCount) {
+    // No such number, or not a number (NaN or infinite: the player's motion would go with it).
+    if (pField == nullptr || index < 0 || index >= pField->mCount || !(value - value == 0.0f)) {
         return false;
     }
     u8* pPlace = reinterpret_cast< u8* >(constTable(character)) + pField->mOffset;
     switch (pField->mKind) {
     case 'f': reinterpret_cast< f32* >(pPlace)[index] = value; break;
-    case 'H': reinterpret_cast< u16* >(pPlace)[index] = static_cast< u16 >(value); break;
-    case 'h': reinterpret_cast< s16* >(pPlace)[index] = static_cast< s16 >(value); break;
-    case 'B': reinterpret_cast< u8* >(pPlace)[index] = static_cast< u8 >(value); break;
-    default: reinterpret_cast< s32* >(pPlace)[index] = static_cast< s32 >(value); break;
+    case 'H': reinterpret_cast< u16* >(pPlace)[index] = clampTo< u16 >(value, 0.0, 65535.0); break;
+    case 'h': reinterpret_cast< s16* >(pPlace)[index] = clampTo< s16 >(value, -32768.0, 32767.0); break;
+    case 'B': reinterpret_cast< u8* >(pPlace)[index] = clampTo< u8 >(value, 0.0, 255.0); break;
+    default: reinterpret_cast< s32* >(pPlace)[index] = clampTo< s32 >(value, -2147483648.0, 2147483647.0); break;
     }
     return true;
 }
