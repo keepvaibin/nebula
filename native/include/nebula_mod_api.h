@@ -357,7 +357,8 @@ typedef struct NebulaModApi {
     /* A game function by its symbol (on Windows, as dumpbin /exports names it). Null: not found. */
     void* (*find_function)(const char* symbol);
 
-    /* The player. Null when no stage is running, or outside a stage frame. */
+    /* The player. Null when no stage is running, or outside its update, animation and drawing (a hook on
+       GameScene::draw is inside; "In a stage" calls below work there too). */
     NebulaActor* (*player)(void);
     /* Position: x, y, z in level units. */
     void (*get_position)(NebulaActor* actor, float* xyz);

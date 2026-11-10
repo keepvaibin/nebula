@@ -28,6 +28,14 @@ namespace NebulaMods {
         ~StageFrame();
     };
 
+    // A game scene's animation or drawing: in a stage for the mod API as its update is (a plugin's hook on
+    // GameScene::draw changes the stage, sets flags and places the player), with no frame events.
+    struct InStage {
+        explicit InStage(bool on);
+        ~InStage();
+        bool mOn;
+    };
+
     // Power-ups plugins add. Numbers from here on are theirs; a mode below is the game's and these do nothing.
     const u16 cFirstPowerUp = 32;
     // How long it lasts, once started on the player.
