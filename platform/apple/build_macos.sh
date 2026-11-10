@@ -3,7 +3,7 @@
 # Builds Nebula for macOS and packs it as Nebula.app (docs/APPLE.md, "Build"): the Metal renderer and Apple's own
 # host, the game module beside it. Nothing of another system's is in the app.
 #
-#   build_macos.sh -t <tools> -w <work folder> [-a "x86_64 arm64"] [-r] [-s <macOS SDK>] [-j <jobs>]
+#   build_macos.sh -t <tools> -w <work folder> [-a "x86_64 arm64"] [-r] [-s <macOS SDK>] [-j <jobs>] [-x <Xcode>]
 #
 #   <tools>  holds toolchain/llvm (LLVM 19+), toolchain/libcxx (build_libcxx.sh's output) and deps (the dependency
 #            checkouts platform/apple/CMakeLists.txt names). cmake, ninja and cargo are taken from PATH.
@@ -12,6 +12,8 @@
 #            shaders, which the other one takes.
 #   -r       a release build (no test hooks).
 #   -j       how many compiles run at once (default: the build tool's own choice).
+#   -x       an Xcode's Contents/Developer folder, for its Metal compiler, when it is not the machine's selected one:
+#            the programs are then compiled into the app's Metal libraries (docs/APPLE.md, "Shaders").
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -22,7 +24,8 @@ archs=$(uname -m)
 release=OFF
 sdk=
 jobs=
-while getopts "t:w:a:rs:j:" option; do
+xcode=
+while getopts "t:w:a:rs:j:x:" option; do
     case "$option" in
     t) tools=$OPTARG ;;
     w) work=$OPTARG ;;
@@ -30,11 +33,12 @@ while getopts "t:w:a:rs:j:" option; do
     r) release=ON ;;
     s) sdk=$OPTARG ;;
     j) jobs="--parallel $OPTARG" ;;
-    *) sed -n '6,16p' "$0" >&2; exit 2 ;;
+    x) xcode=$OPTARG ;;
+    *) sed -n '6,18p' "$0" >&2; exit 2 ;;
     esac
 done
 if [ -z "$tools" ] || [ -z "$work" ]; then
-    sed -n '6,16p' "$0" >&2
+    sed -n '6,18p' "$0" >&2
     exit 2
 fi
 [ -n "$sdk" ] || sdk=$(xcrun --sdk macosx --show-sdk-path)
@@ -59,7 +63,7 @@ for arch in $ordered; do
     tree="$work/macos-$arch/host"
     if [ "$arch" = "$host_arch" ]; then
         # shellcheck disable=SC2086
-        cmake -S "$here" -B "$tree" $common "-DNEBULA_DEPS=$tools/deps"
+        cmake -S "$here" -B "$tree" $common "-DNEBULA_DEPS=$tools/deps" "-DNEBULA_METAL_DEVELOPER_DIR=$xcode"
         host_tree=$tree
     else
         if [ -z "$host_tree" ]; then
@@ -72,7 +76,8 @@ for arch in $ordered; do
         cp -Rp "$host_tree/sdl/generated/." "$tree/sdl/generated/"
         cp -Rp "$host_tree/generated/." "$tree/generated/"
         # shellcheck disable=SC2086
-        cmake -S "$here" -B "$tree" $common "-DNEBULA_DEPS=$tools/deps" "-DNEBULA_HOST_TOOLS=$host_tree/host-tools"
+        cmake -S "$here" -B "$tree" $common "-DNEBULA_DEPS=$tools/deps" "-DNEBULA_HOST_TOOLS=$host_tree/host-tools" \
+            "-DNEBULA_METAL_DEVELOPER_DIR=$xcode"
     fi
     # shellcheck disable=SC2086
     cmake --build "$tree" --target nebula_native $jobs

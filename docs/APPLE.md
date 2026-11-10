@@ -110,6 +110,19 @@ line's own `--data`, `--pak`, `--saves` and `--module` stay ([COMMAND_LINE.md](C
   MacBook Pro a frame's wake-up came 1.7 ms after its vsync on average (6.8 at worst) without it, 0.2 ms with it. The
   threads that prepare pipelines ask for the utility class (`core/pipelines.cpp`), so they never take a core a frame
   wants: frames keep their 16.67 ms through a whole first start's compiling.
+- The layer is synchronised with the display unless VSYNC is turned off (it is on by default on Apple's systems): each
+  picture goes up at a refresh, and the display's own times (`--diagnostics present-stats`, `shown-for-refreshes`)
+  show every one up for exactly one. A synchronised layer shows what it is handed in order and never replaces a
+  waiting picture, so pictures that once queued stay queued and every later one is seen late: 48.6 ms from hand-over
+  to screen with the line left full, in a window on a 2017 MacBook Pro. The layer says when the line is full (the
+  frame waits for a drawable); that frame's picture is then not handed over, and the line stays one shorter: 37 ms,
+  the render thread never waiting (`present`, `renderer_mtl.mm`). Two drawables instead of three would do the same
+  by blocking, but one slow frame then holds every frame after it to every second refresh.
+- A first start on a Mac whose GPU is not Apple's, on a Retina display, draws the scene at the display's size in
+  points and enlarges it with FSR 1 (the UPSCALER row; `choose_first_start_scale`). A 2017 MacBook Pro's full screen
+  is 3360 by 2100, which its Radeon Pro 560 draws at 39 frames a second in the heavier galaxies and at 60 this way
+  (10 ms a frame). MetalFX's spatial scaler is slow on such GPUs (10.9 ms for the pass to the screen at that size,
+  against FSR 1's 6.5), so it is offered and not chosen there. An Apple GPU keeps the display's own pixels.
 - Letter keys are reported twice, as on Windows: by the letter the keyboard's layout prints on them, and by their place
   (a Mac's key codes are the hardware's), which is what the default layout binds movement to.
 

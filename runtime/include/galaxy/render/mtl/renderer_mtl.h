@@ -20,9 +20,11 @@
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/mtl/draw_types.h"
 #include "galaxy/render/mtl/fx_mtl.h"
 #include "galaxy/render/mtl/mtl_context.h"
+#include "galaxy/render/rt/rt_backend.h"
 #include "galaxy/render/mtl/temporal_upscaler_mtl.h"
 #include "galaxy/render/mtl/utility_msl.h"
 #include "galaxy/render/post_process_settings.h"
@@ -165,6 +167,17 @@ public:
     // GPU time by pass (render_api.h GpuPassTime): any thread.
     void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
     [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
+    // What the ray tracer records through on the other renderers (renderer_vk.h). There is no tracer on Metal yet
+    // (mtl/rt_backend_mtl.cpp: it never starts), so the render core never comes here; they say there is nothing.
+    struct RtCommands {
+        void* commands = nullptr;
+        void* descriptors = nullptr;
+    };
+    [[nodiscard]] RtCommands rt_commands_begin() { return {}; }
+    void rt_commands_end() {}
+    [[nodiscard]] bool rt_depth_begin(rt::TextureView&, unsigned&, unsigned&, rt::ImageFormat&) { return false; }
+    void rt_depth_end() {}
+    void rt_copy_to_scene(void*) {}
     [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
     void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
         index = scene_jitter_index_;
@@ -740,6 +753,12 @@ private:
         std::uint64_t count = 0;
     };
     std::shared_ptr<Shown> shown_ = std::make_shared<Shown>();
+    void choose_first_start_scale();
+    // The layer's line of pictures (present): a frame that waited this long for a drawable waited for a refresh, the
+    // line full; whether the last frame's picture was held back for it; and how many have been.
+    static constexpr double kDrawableWaitMs = 1.5;
+    bool held_last_ = false;
+    std::uint64_t pictures_held_ = 0;
     struct PresentStats {
         std::int64_t window_start_qpc = 0;
         std::int64_t last_present_qpc = 0;
@@ -751,6 +770,9 @@ private:
         double pace_wait_max_ms = 0.0;
         double present_ms = 0.0;
         double present_max_ms = 0.0;
+        double handed_phase_ms = 0.0;
+        double drawable_wait_ms = 0.0;
+        double drawable_wait_max_ms = 0.0;
         double gpu_ms = 0.0;
         std::uint64_t gpu_samples = 0;
     } stats_;

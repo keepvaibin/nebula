@@ -27,7 +27,14 @@ struct RenderConfig {
 
     // DXGI Present sync interval: 0 off, 1 every vblank, 2 every other vblank. 1 can back-pressure the command
     // stream through DWM and lower the frame rate on some systems.
+    // On Apple's systems it is on unless turned off: a Metal layer that is not synchronised puts each picture up the
+    // moment it is drawn, part way down a refresh (torn in full screen, uneven in a window), and synchronised it costs
+    // no frame rate there (the game's frames already keep the display's vsync).
+#if defined(__APPLE__)
+    unsigned vsync_interval      = 1;
+#else
     unsigned vsync_interval      = 0;
+#endif
 
     // Swap-chain options, read once at start.
 

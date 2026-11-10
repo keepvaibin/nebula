@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -65,6 +66,7 @@ bool RendererMtl::initialize(int window_width, int window_height, const FrameMap
             return false;
         }
         report_adapter();
+        choose_first_start_scale();
         if (!create_scene_targets(scene_map_, wanted_msaa_samples())) {
             shutdown();
             return false;
@@ -224,6 +226,34 @@ void RendererMtl::read_display_hdr() {
 
 // The window's layer for this device at the window's size in pixels: 8-bit drawables whose values are the display's
 // own (the programs write display values), shown as sRGB.
+// A first start (no settings file yet) on a Mac whose GPU is not Apple's, on a display with more pixels than points.
+// Every Intel Mac has a Retina panel and a GPU of its years: a 2017 MacBook Pro shows 3360 by 2100 in full screen on a
+// Radeon Pro 560, which draws the heavier galaxies there in 15 to 17 ms a frame (39 frames a second). So the scene is
+// drawn at the display's size in points and enlarged to its pixels: the UPSCALER row's FSR 1 at PERFORMANCE, written
+// to the settings like any choice and the player's to change. FSR 1 and not MetalFX, whose spatial scaler is slow on
+// these GPUs: at that size the pass to the screen took 10.9 ms with MetalFX, 6.5 with FSR 1 (the frame 10 ms in all),
+// 3.9 with nothing enlarged. An Apple GPU keeps the display's own pixels.
+void RendererMtl::choose_first_start_scale() {
+#if TARGET_OS_OSX
+    std::error_code ignored;
+    const std::filesystem::path settings = render_config_path();
+    if (settings.empty() || std::filesystem::exists(settings, ignored) || mtl::Context::get().caps().apple_gpu ||
+        layer_.layer == nullptr) {
+        return;
+    }
+    RenderConfig cfg = get_render_config();
+    if (cfg.upscaler != 0u || cfg.internal_height != 0u || cfg.spatial_quality != 0u ||
+        ((__bridge CAMetalLayer*)layer_.layer).contentsScale < 1.5) {
+        return;  // a choice made another way (a test's), or a display whose pixels are its points
+    }
+    cfg.upscaler = 1u;         // FSR 1
+    cfg.spatial_quality = 3u;  // performance: half the output's size each way
+    set_render_config(cfg);
+    (void)save_render_config_to_file();
+    std::fprintf(stderr, "[metal] first start, not an Apple GPU: the scene at the display's size in points, FSR 1 to its pixels\n");
+#endif
+}
+
 bool RendererMtl::configure_layer() {
     CAMetalLayer* const layer = (__bridge CAMetalLayer*)host_window::metal_layer(window_);
     if (layer == nil) {
@@ -247,6 +277,10 @@ bool RendererMtl::configure_layer() {
 #if TARGET_OS_OSX
         layer.displaySyncEnabled = vsync ? YES : NO;
 #endif
+        // Three drawables, Metal's default. With two (the one on the screen and the one being drawn) nothing can
+        // wait in line, but a frame whose drawable is still up waits for it: measured in a window, one slow frame
+        // then held every frame after it to every second refresh. The line is kept short in present().
+        layer.maximumDrawableCount = 3u;
     }
     if (layer_.width != width || layer_.height != height || layer_.vsync != vsync || layer_.layer == nullptr) {
         std::fprintf(stderr, "[metal] layer %ux%u BGRA8 vsync=%d\n", width, height, vsync ? 1 : 0);
@@ -680,6 +714,16 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
             present_start = galaxy::qpc_now();
             if (trace_present_stats_enabled()) {
+                // Where in a refresh the picture is handed over.
+                std::int64_t vblank = 0, period = 0;
+                if (vblank_grid(vblank, period) && period > 0) {
+                    const std::int64_t after = (galaxy::qpc_now() - vblank) % period;
+                    stats_.handed_phase_ms += static_cast<double>(after < 0 ? after + period : after) * 1000.0 /
+                                              static_cast<double>(galaxy::qpc_frequency());
+                }
+            }
+            if (trace_present_stats_enabled()) {
+                // When the picture reaches the screen (the display's own time).
                 const std::shared_ptr<Shown> shown = shown_;
                 const double handed = CACurrentMediaTime();
                 const double refresh = display_refresh_hz_ > 1.0 ? 1.0 / static_cast<double>(display_refresh_hz_) : 1.0 / 60.0;
@@ -843,7 +887,8 @@ void RendererMtl::report_present_stats() {
             << static_cast<double>(copies - pictures_made_start) / seconds << " frame-ms(avg/max)="
             << (stats_.intervals != 0u ? stats_.interval_ms / stats_.intervals : 0.0) << '/' << stats_.interval_max_ms
             << " pace-wait-ms(avg/max)=" << stats_.pace_wait_ms / presents << '/' << stats_.pace_wait_max_ms
-            << " present-ms(avg/max)=" << stats_.present_ms / presents << '/' << stats_.present_max_ms << " vsync="
+            << " present-ms(avg/max)=" << stats_.present_ms / presents << '/' << stats_.present_max_ms
+            << " handed-after-vsync-ms(avg)=" << stats_.handed_phase_ms / presents << " drawable-wait-ms(avg/max)=" << stats_.drawable_wait_ms / presents << '/' << stats_.drawable_wait_max_ms << " vsync="
             << get_render_config().vsync_interval << " gpu-ms(avg)=";
     if (stats_.gpu_samples != 0u) {
         message << stats_.gpu_ms / static_cast<double>(stats_.gpu_samples);
@@ -859,7 +904,7 @@ void RendererMtl::report_present_stats() {
                 << shown_->refreshes[2] << '/' << shown_->refreshes[3] << '/' << shown_->refreshes[4]
                 << " never-shown=" << shown_->never << " to-screen-ms(avg/max)="
                 << (shown_->count != 0u ? shown_->latency * 1000.0 / static_cast<double>(shown_->count) : 0.0) << '/'
-                << shown_->latency_max * 1000.0;
+                << shown_->latency_max * 1000.0 << " held-back=" << pictures_held_;
         shown_->refreshes = {};
         shown_->never = 0u;
         shown_->latency = shown_->latency_max = 0.0;
@@ -1098,11 +1143,32 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     (void)galaxy::g_presentation_content.publish(bb_w, bb_h, content);
     @autoreleasepool {
         // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown.
+        const std::int64_t asked = galaxy::qpc_now();
         id<CAMetalDrawable> const drawable = [(__bridge CAMetalLayer*)layer_.layer nextDrawable];
+        const double waited = static_cast<double>(galaxy::qpc_now() - asked) * 1000.0 / static_cast<double>(galaxy::qpc_frequency());
+        stats_.drawable_wait_ms += waited;
+        stats_.drawable_wait_max_ms = std::max(stats_.drawable_wait_max_ms, waited);
         if (drawable == nil) {
             surface_lock_ = {};
             return false;
         }
+        // A synchronised layer puts up one picture a refresh, in the order handed over, and nothing handed over is
+        // ever replaced (Direct3D's swap chains and Android's compositor take a newer picture in place of a waiting
+        // one). The game makes one picture a refresh, so pictures that once queued (a start's first frames come
+        // faster than the display; after a slow frame the late picture and the next come together) stay queued:
+        // every picture after them is seen a refresh late for each one waiting. The layer says when its line is
+        // full: it has no drawable to give, and the frame waits for one to come off the screen at the next refresh.
+        // That frame's picture is then not handed over (the drawable goes back unused), which takes one picture out
+        // of the line; never two frames running, so a GPU too slow for the display still shows every second frame.
+        // Measured in a window on a 2017 MacBook Pro: 48.6 ms from hand-over to screen with the line left full,
+        // 37.6 ms kept so, every picture up for exactly one refresh either way.
+        if (layer_.vsync && !capture_backbuffer && waited > kDrawableWaitMs && !held_last_) {
+            held_last_ = true;
+            ++pictures_held_;
+            surface_lock_ = {};
+            return false;
+        }
+        held_last_ = false;
         drawable_ = own(drawable);
         draw_presented_picture((__bridge void*)drawable.texture, layer_.format, shown, content, true);
     }
