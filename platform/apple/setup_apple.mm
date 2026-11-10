@@ -315,12 +315,8 @@ bool ensure_game_data(int argc, char** argv) {
     if (present) {
         std::fprintf(stderr, "[setup] %s is not a game.pak this version of Nebula reads\n", pak.c_str());
     }
-    // A test run or a run with no screen has nobody to ask (but a test of the setup itself).
-    bool tested = false;
-#if defined(NEBULA_DEV)
-    tested = std::getenv("NEBULA_TEST_SETUP_IMAGE") != nullptr;
-#endif
-    for (int i = 1; i < argc && !tested; ++i) {
+    // A run with no screen has nobody to ask.
+    for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) == "--seconds") {
             return true;
         }
@@ -330,15 +326,6 @@ bool ensure_game_data(int argc, char** argv) {
         NebulaSetup* const setup = [[NebulaSetup alloc] initWithPak:pak again:present];
         [setup.window makeKeyAndOrderFront:nil];
         [NSApp activateIgnoringOtherApps:YES];
-#if defined(NEBULA_DEV)
-        // A test of the first start with nobody at the window: the disc image as if it had been chosen.
-        if (const char* const image = std::getenv("NEBULA_TEST_SETUP_IMAGE"); image != nullptr) {
-            const std::string chosen(image);
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [setup importFrom:chosen];
-            });
-        }
-#endif
         const NSModalResponse answer = [NSApp runModalForWindow:setup.window];
         [setup.window orderOut:nil];
         std::fprintf(stderr, "[setup] %s\n", answer == kSetupDone ? "game.pak made from the player's disc image" : "left without setting up");
