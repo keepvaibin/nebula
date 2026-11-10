@@ -1904,10 +1904,14 @@ UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, 
     const bool local = place == UploadPlace::GpuLocal && context.device_mapped_memory();
     // One buffer serves any ring: vertices, indices, constants (uniform) and rows (storage). A binding's whole range must
     // lie in its buffer at any offset an allocation can have, hence the room past the end.
+    // With ray tracing on, an acceleration structure is built from the vertices and indices where they lie.
+    const VkBufferUsageFlags traced = context.rt_caps().enabled ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                                                      VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+                                                                : VkBufferUsageFlags{0u};
     std::shared_ptr<vk::Buffer> buffer = context.create_buffer(
         bytes + kBindingRoom,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | traced,
         name, local ? vk::BufferPlace::DeviceMapped : vk::BufferPlace::Host);
     if (!buffer) {
         return {};

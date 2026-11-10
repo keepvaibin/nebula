@@ -96,6 +96,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/affine.cpp
     ${rt}/render/core/compose.cpp
     ${rt}/render/core/draw_walker.cpp
+    ${rt}/render/core/rt_walk.cpp
     ${rt}/render/core/pairing.cpp
     ${rt}/render/core/pipelines.cpp
     ${rt}/render/core/program_table.cpp
@@ -109,6 +110,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/rt_caps.cpp
     ${rt}/render/rt/rt_shaders.cpp
     ${rt}/render/vk/rt_backend_vk.cpp
+    ${rt}/render/rt/rt_geometry.cpp
     $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:${rt}/frame_telemetry.cpp>
     ${rt}/perf_hint.cpp
     ${rt}/render/vk/vk_context.cpp

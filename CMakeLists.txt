@@ -424,6 +424,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/rt_caps.cpp
     runtime/src/render/rt/rt_shaders.cpp
     runtime/src/render/rt/rt_backend_d3d12.cpp
+    runtime/src/render/rt/rt_geometry.cpp
     ${galaxy_rt_dxil}
     runtime/src/render/streamline_bridge.cpp
     runtime/src/render/fsr_frame_generation.cpp
@@ -433,6 +434,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/affine.cpp
     runtime/src/render/core/compose.cpp
     runtime/src/render/core/draw_walker.cpp
+    runtime/src/render/core/rt_walk.cpp
     runtime/src/render/core/pairing.cpp
     runtime/src/render/core/pipelines.cpp
     runtime/src/render/core/program_table.cpp
@@ -623,6 +625,9 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
 target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/include)
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
 galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
+galaxy_test(galaxy_rt_geometry_tests SOURCES ${render_src}/rt/rt_geometry_tests.cpp ${render_src}/rt/rt_geometry.cpp
+    ${render_src}/rt/rt_backend_fake.cpp)
+target_include_directories(galaxy_rt_geometry_tests PRIVATE runtime/src)
 target_include_directories(galaxy_core_world_lights_tests PRIVATE runtime/src native/include)
 # The pipeline cache files' headers (header-only; both backends' caches).
 galaxy_test(galaxy_pipeline_cache_file_tests SOURCES ${render_src}/core/pipeline_cache_file_tests.cpp)
@@ -699,6 +704,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/affine.cpp
         runtime/src/render/core/compose.cpp
         runtime/src/render/core/draw_walker.cpp
+        runtime/src/render/core/rt_walk.cpp
         runtime/src/render/core/pairing.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp
@@ -712,6 +718,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/rt_caps.cpp
         runtime/src/render/rt/rt_shaders.cpp
         runtime/src/render/vk/rt_backend_vk.cpp
+        runtime/src/render/rt/rt_geometry.cpp
         runtime/src/render/streamline_bridge.cpp
         $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
         runtime/src/perf_hint.cpp

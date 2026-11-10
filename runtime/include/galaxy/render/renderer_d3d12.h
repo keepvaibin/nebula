@@ -373,6 +373,9 @@ public:
     // The scene's models (ambient_occlusion_objects.h).
     void set_scene_ao_objects(std::vector<ao::ObjectOccluder>& objects) noexcept { scene_ao_objects_.swap(objects); }
     void record_scene_ao();
+    // Where the tracer records its builds (no pass open), timed as the ray tracing pass until rt_commands_end.
+    [[nodiscard]] void* rt_commands_begin();
+    void rt_commands_end();
     // The game's bloom (game_bloom.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
@@ -788,6 +791,7 @@ private:
     std::array<std::array<GpuPass, kGpuPassSlots>, kFramesInFlight> pass_marks_{};
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
+    GpuPass rt_outer_pass_ = GpuPass::Scene;
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics

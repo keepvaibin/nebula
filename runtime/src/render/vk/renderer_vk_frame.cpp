@@ -1584,6 +1584,15 @@ void RendererVk::record_scene_aa() {
     reset_draw_bindings();
 }
 
+void* RendererVk::rt_commands_begin() {
+    end_scene_pass();
+    rt_outer_pass_ = current_pass_;
+    gpu_pass(GpuPass::RayTracing);
+    return commands_;
+}
+
+void RendererVk::rt_commands_end() { gpu_pass(rt_outer_pass_); }
+
 // The occlusion of the opaque scene: the scene target pass ends for its compute passes, which read the depth, and the
 // multiply draws in it again.
 void RendererVk::record_scene_ao() {
