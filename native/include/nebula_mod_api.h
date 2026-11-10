@@ -252,6 +252,10 @@ typedef struct NebulaObjectClass {
     float clip_radius;    /* not updated or drawn when this far off screen; 0: always */
     void (*appeared)(NebulaActor* actor, void* user);
     void (*killed)(NebulaActor* actor, void* user);
+    /* Any message another object sends it (an attack, a push, a grab: docs/modding/EVENTS.md lists the numbers), from
+       `from` (null when it has no sender). Return 1 to take it; 0 leaves it to the game's own handling (attacked_by for
+       the player's attacks). */
+    int32_t (*message)(NebulaActor* actor, int32_t message, NebulaActor* from, void* user);
 } NebulaObjectClass;
 
 /* The kind of a plugin's object. */
@@ -877,6 +881,9 @@ typedef struct NebulaModApi {
     /* An object a script runs (luma.json "objects"): the mod's /LumaScripts/<mod id>/<script>.lumascript on `shape`,
        whose callbacks the script's handlers take. 0: added; -1: refused (logged with the reason). */
     int32_t (*add_script_object)(const NebulaPlugin* mod, const NebulaObjectClass* shape, const char* script);
+    /* The host's: a mod-wide script (luma.json "scripts"), the mod's /LumaScripts/<mod id>/<script>.lumascript, one
+       instance for the whole run. 0: started; -1: refused (logged with the reason). */
+    int32_t (*add_mod_script)(const NebulaPlugin* mod, const char* script);
 } NebulaModApi;
 
 /* True when this Nebula has `field` (fields are added at the end over time):

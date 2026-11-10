@@ -345,6 +345,9 @@ def toolkit_rows(enums, class_names, defined):
             rows.append({'name': name, 'call': f'::{cls}::{mname}' if static else mname,
                          'self': None if static else cls, 'params': ps, 'rk': rk, 'rhow': rhow, 'rbase': rbase,
                          'rtype_ptr': ret.endswith('*') or ret in ('MtxPtr',)})
+    api, api_left = api_rows(enums)
+    rows += api
+    left += api_left
     # Overloads: each gets its parameter letters after ':'; a name with one row keeps the plain name too.
     by_name = {}
     for r in rows:
@@ -364,6 +367,168 @@ def toolkit_rows(enums, class_names, defined):
         final.extend(group)
     final.sort(key=lambda r: r['row'].encode('utf-8'))
     return final, left
+
+
+# The plugin API (nebula_mod_api.h NebulaModApi) as toolkit rows "nebula.<name>", called through the host's table.
+API_SKIP = {
+    'add_mod_script': 'starts a script (luma.json "scripts" does)',
+    'add_script_object': 'adds a script object (luma.json "objects" does)',
+}
+# Pointer parameters a script passes or gets back: (type, name) -> (kind, role, how).
+API_FLOAT_NAMES = {'x', 'y', 'seconds_left', 'seconds_limit'}
+API_ENUMS = set(re.findall(r'typedef enum \w* ?\{[^}]*\} (\w+);',
+                           (NATIVE / 'include' / 'nebula_mod_api.h').read_text(encoding='utf-8')))
+
+
+def api_fields():
+    """(name, result type, [(type, name)], why it is left out or None) for every NebulaModApi function, in order."""
+    text = (NATIVE / 'include' / 'nebula_mod_api.h').read_text(encoding='utf-8')
+    body = text[text.index('typedef struct NebulaModApi {'):text.index('} NebulaModApi;')]
+    body = body[body.index('{') + 1:]
+    out = []
+    for m in re.finditer(r'((?:\s*/\*.*?\*/)*)\s*([^;{}/]+?)\(\s*\*\s*(\w+)\s*\)\s*\(([^;]*)\)\s*;', body, re.S):
+        comment, ret, name, args = m.group(1), ' '.join(m.group(2).split()), m.group(3), ' '.join(m.group(4).split())
+        params = []
+        if args not in ('void', ''):
+            for a in args.split(','):
+                a = a.strip()
+                pm = re.match(r'^(.*?)\s*(\w+)$', a)
+                params.append((pm.group(1).replace(' *', '*').strip(), pm.group(2)) if pm and pm.group(1) else (a, ''))
+        why = API_SKIP.get(name)
+        if why is None and 'Only in nebula_plugin_start' in comment:
+            why = 'only while plugins start'
+        out.append((name, ret, params, why))
+    return out
+
+
+def api_param(t, name, enums):
+    """-> (kind, role, how) for a script argument, ('self', ...) for the running mod, or None."""
+    if t == 'const NebulaPlugin*':
+        return ('self', None, None)
+    if t == 'NebulaActor*':
+        return (K_HANDLE, 'in', 'actor')
+    if t == 'NebulaLayout*':
+        opaque_tag('NebulaLayout')
+        return (K_HANDLE, 'in', 'layout')
+    if t == 'const char*':
+        return (K_TEXT, 'in', 'text')
+    if t == 'const float*':
+        return (K_VEC3, 'in', 'vec3')
+    if t == 'float*':
+        if name in API_FLOAT_NAMES:
+            return (K_FLOAT, 'inout', 'f32')
+        if name == 'xy':
+            return (K_VEC2, 'inout', 'vec2')
+        if name in ('xyz', 'out', 'hit', 'position', 'target'):
+            return (K_VEC3, 'inout', 'vec3')
+        return None
+    if t == 'double*':
+        return (K_FLOAT, 'inout', 'f64')
+    if t in ('int32_t', 'uint32_t') or t in API_ENUMS:
+        return (K_INT, 'in', t)
+    if t in ('float', 'double'):
+        return (K_FLOAT, 'in', t)
+    return None
+
+
+def api_rows(enums):
+    rows, left = [], []
+    for name, ret, params, why in api_fields():
+        row = f'nebula.{name}'
+        if why is not None:
+            left.append((row, why))
+            continue
+        res = {'void': None, 'int32_t': K_INT, 'uint32_t': K_INT, 'float': K_FLOAT, 'const char*': K_TEXT,
+               'NebulaActor*': K_HANDLE, 'NebulaLayout*': K_HANDLE}
+        if ret not in res:
+            left.append((row, f'result type {ret}'))
+            continue
+        ps, bad, uses_self = [], None, False
+        for t, pname in params:
+            c = api_param(t, pname, enums)
+            if c is None:
+                bad = f'parameter type {t}'
+                break
+            if c[0] == 'self':
+                uses_self = True
+                continue
+            kind, role, how = c
+            # An actor a call takes as "after" or "by" may be none.
+            ps.append(Param(kind, role, how, t, pname, kind == K_HANDLE and pname in ('after', 'by')))
+        if bad:
+            left.append((row, bad))
+            continue
+        if ret == 'NebulaLayout*':
+            opaque_tag('NebulaLayout')
+        rows.append({'name': row, 'api': name, 'self': None, 'params': ps, 'rk': res[ret], 'rhow': 'value',
+                     'rbase': ret, 'uses_self': uses_self, 'rtype_ptr': False})
+    return rows, left
+
+
+def api_thunk(i, r):
+    """The lines of a nebula.<name> row's thunk."""
+    ps = r['params']
+    required = sum(1 for p in ps if not p.has_default and p.role != 'inout')
+    lines = [f'    // {r["row"]}', f'    void lc{i}(const NebulaValue* a, uint32_t n, NebulaValue* o) {{',
+             f'        if (n < {required}u) {{ lumacore::refuse({i}, "too few arguments"); return; }}',
+             '        const NebulaModApi* const api = lumacore::api();',
+             f'        if (api == nullptr || api->{r["api"]} == nullptr) {{ lumacore::refuse({i}, "the host has no such call"); return; }}']
+    args = []
+    if r['uses_self']:
+        lines.append('        const NebulaPlugin* const mod = lumacore::runningMod();')
+        lines.append(f'        if (mod == nullptr) {{ lumacore::refuse({i}, "no mod is running"); return; }}')
+        args.append('mod')
+    outs = []
+    for j, p in enumerate(ps):
+        given = f'(n > {j}u ? a[{j}] : lumacore::kNone)'
+        if p.passing == 'actor':
+            lines.append(f'        ::LiveActor* const p{j} = n > {j}u ? lumacore::as< ::LiveActor >(a[{j}]) : nullptr;')
+            if not p.has_default:
+                lines.append(f'        if (p{j} == nullptr) {{ lumacore::refuse({i}, "argument {j + 1}: no actor"); return; }}')
+            args.append(f'reinterpret_cast< NebulaActor* >(p{j})')
+        elif p.passing == 'layout':
+            lines.append(f'        NebulaLayout* const p{j} = static_cast< NebulaLayout* >(lumacore::opaque({given}, {OPAQUE["NebulaLayout"]}));')
+            lines.append(f'        if (p{j} == nullptr) {{ lumacore::refuse({i}, "argument {j + 1}: no layout"); return; }}')
+            args.append(f'p{j}')
+        elif p.passing == 'text':
+            lines.append(f'        const char* const p{j} = lumacore::asText({given});')
+            args.append(f'p{j}')
+        elif p.passing == 'vec3':
+            lines.append(f'        Vec3f p{j} = lumacore::asVec3({given});')
+            args.append(f'&p{j}.x')
+            if p.role == 'inout':
+                outs.append(f'lumacore::fromVec3(p{j})')
+        elif p.passing == 'vec2':
+            lines.append(f'        Vec2f p{j} = lumacore::asVec2({given});')
+            args.append(f'&p{j}.x')
+            outs.append(f'lumacore::fromVec2(p{j})')
+        elif p.passing in ('f32', 'f64'):
+            t = 'float' if p.passing == 'f32' else 'double'
+            lines.append(f'        {t} p{j} = static_cast< {t} >(lumacore::asFloat({given}));')
+            args.append(f'&p{j}')
+            outs.append(f'lumacore::fromFloat(static_cast< f64 >(p{j}))')
+        elif p.kind == K_INT:
+            lines.append(f'        const {p.base} p{j} = static_cast< {p.base} >(lumacore::asInt({given}));')
+            args.append(f'p{j}')
+        elif p.kind == K_FLOAT:
+            lines.append(f'        const {p.base} p{j} = static_cast< {p.base} >(lumacore::asFloat({given}));')
+            args.append(f'p{j}')
+        else:
+            raise ValueError(p.passing)
+    call = f'api->{r["api"]}({", ".join(args)})'
+    rk = r['rk']
+    if not rk:
+        lines.append(f'        {call};')
+    elif r['rbase'] == 'NebulaActor*':
+        lines.append(f'        o[0] = lumacore::handle(reinterpret_cast< ::LiveActor* >({call}));')
+    elif r['rbase'] == 'NebulaLayout*':
+        lines.append(f'        o[0] = lumacore::opaqueHandle(static_cast< const void* >({call}), {OPAQUE["NebulaLayout"]});')
+    else:
+        lines.append(f'        o[0] = {out_expr(rk, r["rbase"], call)};')
+    for k, e in enumerate(outs):
+        lines.append(f'        o[{k + (1 if rk else 0)}] = {e};')
+    lines.append('    }')
+    return lines
 
 
 def conv_expr(p, value):
@@ -438,13 +603,17 @@ def emit_toolkit(rows):
                     if rel not in extra and rel not in headers:
                         extra.append(rel)
                     break
-    lines = [HEADER, "// Every MR:: utility and the listed classes' public methods: one thunk shape for scripts and plugins.",
-             '', '#include "Game/System/LumaCore.hpp"', '#include "Game/LiveActor/HitSensor.hpp"']
+    lines = [HEADER, "// Every MR:: utility, the listed classes' public methods and the plugin API (nebula.<name>): one thunk",
+             '// shape for scripts and plugins.', '', '#include "Game/System/LumaCore.hpp"', '#include "Game/System/LumaHost.hpp"',
+             '#include "Game/LiveActor/HitSensor.hpp"', '#include "nebula_mod_api.h"']
     lines += [f'#include "{h}"' for h in headers + extra]
     lines += ['', '#pragma clang diagnostic ignored "-Wunused-variable"', '',
               "// Inside MR: a type the headers spell as MR's own code does (FormattedName) resolves the same.",
               'namespace MR {', 'namespace {']
     for i, r in enumerate(rows):
+        if r.get('api'):
+            lines += api_thunk(i, r)
+            continue
         ps = r['params']
         offset = 1 if r['self'] else 0
         required = offset + sum(1 for p in ps if not p.has_default and p.role != 'inout')
@@ -555,12 +724,37 @@ def emit_docs(rows, left, class_rows, field_count, layouts):
     (DOCS / 'FIELDS.md').write_text('\n'.join(fl) + '\n', encoding='utf-8')
 
 
+def script_events():
+    """The names a script's handlers answer: (name, what) rows for the compiler, and the messages (ACTMES name ->
+    number, from ActorSensorUtil.hpp's enum)."""
+    host = (PETARI / 'src' / 'Game' / 'System' / 'LumaHost.cpp').read_text(encoding='utf-8')
+    table = re.search(r'cGameEvents\[\] = \{(.*?)\};', host, re.S).group(1)
+    game = [n for n in re.findall(r'"(\w*)"', table) if n]
+    own = ['frame', 'enter', 'leave', 'start', 'touch_player', 'attacked', 'appear', 'kill', 'message']
+    text = (INC / 'Game' / 'Util' / 'ActorSensorUtil.hpp').read_text(encoding='utf-8')
+    body = re.search(r'enum \{(.*?)\};', text, re.S).group(1)
+    messages, at = [], -1
+    for m in re.finditer(r'\b(ACTMES_\w+)\s*(?:=\s*(0x[0-9A-Fa-f]+|\d+))?\s*,', body):
+        at = int(m.group(2), 0) if m.group(2) else at + 1
+        messages.append((m.group(1), at))
+    return own, game, messages
+
+
+def emit_events(own, game, messages):
+    # For the script compiler (LumaLink's SDK): every handler name ("own" an object's or the evaluator's, "game" the
+    # game's events, which pass (value, name, actor)), and every message's number.
+    (DOCS / 'events.tsv').write_text(''.join(f'{n}\town\n' for n in own) + ''.join(f'{n}\tgame\n' for n in game),
+                                     encoding='utf-8', newline='\n')
+    (DOCS / 'messages.tsv').write_text(''.join(f'{n}\t{v}\n' for n, v in messages), encoding='utf-8', newline='\n')
+
+
 CLASS_ROWS = []
 
 
 def main():
     global CLASS_ROWS
     inputs = sorted(list(INC.rglob('*.hpp')) + list(INC.rglob('*.h'))) + [NATIVE / 'include' / 'nebula_mod_api.h',
+                                                                           PETARI / 'src' / 'Game' / 'System' / 'LumaHost.cpp',
                                                                            pathlib.Path(__file__)]
     digest = hashlib.sha256()
     for h in inputs:
@@ -592,6 +786,8 @@ def main():
     (OUT / 'lumacore_toolkit.cpp').write_text(emit_toolkit(rows), encoding='utf-8')
     hash_file.write_text(digest + '\n')
     emit_docs(rows, left, CLASS_ROWS, field_count, layouts)
+    own, game, messages = script_events()
+    emit_events(own, game, messages)
     print(f'classes {len(CLASS_ROWS)} ({len(dupes)} names in two headers: {", ".join(dupes)}); fields {field_count}; '
           f'toolkit {len(rows)} rows, {len(left)} left out')
 

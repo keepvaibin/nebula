@@ -846,9 +846,9 @@
 #include "Game/Screen/MovieSubtitles.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
+#include "Game/Screen/NebulaFileSelectButton.hpp"
 #include "Game/Screen/NebulaModText.hpp"
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
-#include "Game/Screen/NebulaQuitButton.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
 #include "Game/Screen/PauseMenu.hpp"
@@ -1544,9 +1544,9 @@ namespace {
     void* lc_cast642(NameObj* p) { return static_cast< ::Tico* >(p); }
     void* lc_cast643(NameObj* p) { return static_cast< ::NebulaAchievementLuma* >(p); }
     void* lc_cast644(NameObj* p) { return static_cast< ::NebulaAchievementToast* >(p); }
-    void* lc_cast645(NameObj* p) { return static_cast< ::NebulaModText* >(p); }
-    void* lc_cast646(NameObj* p) { return static_cast< ::NebulaPauseSettingsButton* >(p); }
-    void* lc_cast647(NameObj* p) { return static_cast< ::NebulaQuitButton* >(p); }
+    void* lc_cast645(NameObj* p) { return static_cast< ::NebulaFileSelectButton* >(p); }
+    void* lc_cast646(NameObj* p) { return static_cast< ::NebulaModText* >(p); }
+    void* lc_cast647(NameObj* p) { return static_cast< ::NebulaPauseSettingsButton* >(p); }
     void* lc_cast648(NameObj* p) { return static_cast< ::NeedlePlant* >(p); }
     void* lc_cast649(NameObj* p) { return static_cast< ::NokonokoLand* >(p); }
     void* lc_cast650(NameObj* p) { return static_cast< ::NormalMapBase* >(p); }
@@ -2609,9 +2609,9 @@ namespace lumacore {
         {"Tico", 126, static_cast< u32 >(sizeof(::Tico)), lc_cast642},
         {"NebulaAchievementLuma", 642, static_cast< u32 >(sizeof(::NebulaAchievementLuma)), lc_cast643},
         {"NebulaAchievementToast", 52, static_cast< u32 >(sizeof(::NebulaAchievementToast)), lc_cast644},
-        {"NebulaModText", 52, static_cast< u32 >(sizeof(::NebulaModText)), lc_cast645},
-        {"NebulaPauseSettingsButton", 52, static_cast< u32 >(sizeof(::NebulaPauseSettingsButton)), lc_cast646},
-        {"NebulaQuitButton", 52, static_cast< u32 >(sizeof(::NebulaQuitButton)), lc_cast647},
+        {"NebulaFileSelectButton", 52, static_cast< u32 >(sizeof(::NebulaFileSelectButton)), lc_cast645},
+        {"NebulaModText", 52, static_cast< u32 >(sizeof(::NebulaModText)), lc_cast646},
+        {"NebulaPauseSettingsButton", 52, static_cast< u32 >(sizeof(::NebulaPauseSettingsButton)), lc_cast647},
         {"NeedlePlant", 10, static_cast< u32 >(sizeof(::NeedlePlant)), lc_cast648},
         {"NokonokoLand", 1, static_cast< u32 >(sizeof(::NokonokoLand)), lc_cast649},
         {"NormalMapBase", 1, static_cast< u32 >(sizeof(::NormalMapBase)), lc_cast650},
@@ -3671,9 +3671,9 @@ static_assert(__is_base_of(::LayoutActor, ::NebulaAchievementBoard), "NebulaAchi
 static_assert(__is_base_of(::NPCActor, ::Tico), "Tico does not derive from NPCActor");
 static_assert(__is_base_of(::Tico, ::NebulaAchievementLuma), "NebulaAchievementLuma does not derive from Tico");
 static_assert(__is_base_of(::LayoutActor, ::NebulaAchievementToast), "NebulaAchievementToast does not derive from LayoutActor");
+static_assert(__is_base_of(::LayoutActor, ::NebulaFileSelectButton), "NebulaFileSelectButton does not derive from LayoutActor");
 static_assert(__is_base_of(::LayoutActor, ::NebulaModText), "NebulaModText does not derive from LayoutActor");
 static_assert(__is_base_of(::LayoutActor, ::NebulaPauseSettingsButton), "NebulaPauseSettingsButton does not derive from LayoutActor");
-static_assert(__is_base_of(::LayoutActor, ::NebulaQuitButton), "NebulaQuitButton does not derive from LayoutActor");
 static_assert(__is_base_of(::MapObjActor, ::NeedlePlant), "NeedlePlant does not derive from MapObjActor");
 static_assert(__is_base_of(::LiveActor, ::NokonokoLand), "NokonokoLand does not derive from LiveActor");
 static_assert(__is_base_of(::LiveActor, ::NormalMapBase), "NormalMapBase does not derive from LiveActor");

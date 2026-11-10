@@ -1,6 +1,6 @@
 # Fields
 
-4618 fields a script reads (`object.mVelocity`) or writes. Handles, text and pointers are read-only; a class has its bases' fields too.
+4620 fields a script reads (`object.mVelocity`) or writes. Handles, text and pointers are read-only; a class has its bases' fields too.
 
 ## NameObj
 
@@ -2272,23 +2272,25 @@
 - `mCameraController`: FileSelectCameraController (an object, read-only)
 - `mDecidedItem`: FileSelectItem (an object, read-only)
 - `mFileInfo`: FileSelectInfo (an object, read-only)
+- `mFocusWanted`: NebulaFileSelectButton (an object, read-only)
 - `mInfoMessage`: InformationMessage (an object, read-only)
 - `mInitItem`: int (unsigned int)
 - `mInitStep`: int (unsigned int)
 - `mIsAskingQuit`: bool
 - `mIsMiiSelectStartFirst`: bool
-- `mIsQuitFocusWanted`: bool
 - `mManual`: Manual2P (an object, read-only)
 - `mMiiConfirmIcon`: MiiConfirmIcon (an object, read-only)
 - `mMiiSelect`: MiiSelect (an object, read-only)
 - `mOperationButton`: FileSelectButton (an object, read-only)
 - `mPointCandidate`: FileSelectItem (an object, read-only)
 - `mPointedItem`: FileSelectItem (an object, read-only)
-- `mQuitButton`: NebulaQuitButton (an object, read-only)
+- `mQuitButton`: NebulaFileSelectButton (an object, read-only)
 - `mQuitFrames`: int (s32)
 - `mQuitWindow`: SysInfoWindow (an object, read-only)
 - `mSelectEffect`: FileSelectEffect (an object, read-only)
 - `mSelectedItem`: FileSelectItem (an object, read-only)
+- `mSettingsButton`: NebulaFileSelectButton (an object, read-only)
+- `mSettingsFrames`: int (s32)
 - `mSky`: FileSelectSky (an object, read-only)
 - `mSysInfoWindow`: SysInfoWindow (an object, read-only)
 - `mSysInfoWindowMini`: SysInfoWindow (an object, read-only)
@@ -4336,6 +4338,11 @@
 - `mStep`: int (s32)
 - `mWidth`: float
 
+## NebulaFileSelectButton
+
+- `mIsDecided`: bool
+- `mShownFrames`: int (s32)
+
 ## NebulaModText
 
 - `mAny`: bool
@@ -4343,11 +4350,6 @@
 - `mRevision`: int (u32)
 - `mScaleX`: float
 - `mWidth`: float
-
-## NebulaQuitButton
-
-- `mIsDecided`: bool
-- `mShownFrames`: int (s32)
 
 ## NeedlePlant
 

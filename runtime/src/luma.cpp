@@ -778,6 +778,14 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.objects.push_back(std::move(object));
             }
         }
+        if (const Value* scripts = entry.get("scripts"); scripts != nullptr) {
+            if (scripts->array() == nullptr) return std::nullopt;
+            for (const Value& row : *scripts->array()) {
+                const std::string* name = std::get_if<std::string>(&row.data);
+                if (name == nullptr || !script_name_ok(*name)) return std::nullopt;
+                layer.scripts.push_back(*name);
+            }
+        }
         // "switches" gave way to "tunables": the mod is refused, naming the tunable for its first switch.
         if (const Value* switches = entry.get("switches"); switches != nullptr && out.retired.empty()) {
             out.retired = "\"SWITCHES\" ARE NOW \"TUNABLES\"";
@@ -1051,7 +1059,7 @@ bool rows_set_game(const Rows& rows) noexcept {
 bool layer_sets_game(const Layer& layer) noexcept {
     return rows_set_game(layer.rows) || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty() ||
            !layer.stages.empty() || !layer.player_constants.empty() || !layer.tunables.empty() || !layer.object_classes.empty() ||
-           !layer.objects.empty() || !layer.sound_effects.empty() || !layer.player_animations.empty();
+           !layer.objects.empty() || !layer.scripts.empty() || !layer.sound_effects.empty() || !layer.player_animations.empty();
 }
 
 bool manifest_sets_game(const Manifest& manifest) noexcept {
@@ -1088,6 +1096,7 @@ std::vector<std::string> setting_keys(const Layer& layer) {
     for (const Tunable& tunable : layer.tunables) keys.push_back(key_of({"tunable", tunable.key}));
     for (const ObjectClass& object : layer.object_classes) keys.push_back(key_of({"class", object.name}));
     for (const ScriptObject& object : layer.objects) keys.push_back(key_of({"class", object.name}));
+    for (const std::string& script : layer.scripts) keys.push_back(key_of({"script", script}));
     for (const SoundEffect& sound : layer.sound_effects) keys.push_back(key_of({"sound", sound.name}));
     for (const PlayerAnimation& animation : layer.player_animations) keys.push_back(key_of({"animation", animation.name}));
     return keys;

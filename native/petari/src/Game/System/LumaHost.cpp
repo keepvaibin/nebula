@@ -57,8 +57,86 @@ namespace {
         lumascript::Program* mProgram;
         Living* mNext;
         Living* mPrev;
+        bool mGlobal;  // a mod-wide script's: lives for the run
     };
     Living* sLiving = nullptr;
+
+    // Script events by name, one id each for every script (resolved as scripts load).
+    Rows< const char* > sEventNames;
+
+    // The game's events by their script names, in NebulaModEvent order ("frame" is the scripts' own: no name here).
+    const char* const cGameEvents[] = {
+        "",                  "stage_frame",    "stage_start",     "player_damage", "player_miss",       "power_up",
+        "coin",              "star_bit",       "star_get",        "cutscene_start", "cutscene_end",     "actor_appear",
+        "actor_kill",        "player_spin",    "player_jump",     "player_land",   "pause",             "stage_end",
+        "game_save",         "power_star_appear", "talk_line",    "talk_choice",   "cutscene_part",     "camera_change",
+        "sound_start",       "effect_start",   "screen",          "actor_message", "player_action",
+    };
+    static_assert(sizeof(cGameEvents) / sizeof(cGameEvents[0]) == NEBULA_MOD_EVENT_COUNT,
+                  "a script name for every game event");
+    bool sGameSubscribed[NEBULA_MOD_EVENT_COUNT] = {};
+    bool sFrameSubscribed = false;
+
+    NebulaValue noneValue() {
+        NebulaValue v;
+        std::memset(&v, 0, sizeof(v));
+        return v;
+    }
+
+    // A game event for every script that answers it: (value, name, actor). What a handler returns (a number or a
+    // bool) becomes the event's value, as a plugin's callback's does.
+    int32_t onGameEvent(const NebulaModEventData* pData, void* pUser) {
+        const s32 event = static_cast< s32 >(reinterpret_cast< uintptr_t >(pUser));
+        int32_t value = pData->value;
+        NebulaValue args[3];
+        args[1] = noneValue();
+        if (pData->name != nullptr) {
+            args[1].kind = NEBULA_KIND_TEXT;
+            args[1].u.s = pData->name;
+        }
+        args[2] = pData->actor != nullptr && sApi != nullptr ? sApi->actor_value(pData->actor) : noneValue();
+        for (Living* l = sLiving; l != nullptr;) {
+            Living* const next = l->mNext;
+            args[0] = noneValue();
+            args[0].kind = NEBULA_KIND_INT;
+            args[0].u.i = value;
+            NebulaValue result = noneValue();
+            if (lumascript::dispatch(l->mInstance, lumascript::Event_Game, event, args, 3, &result)) {
+                if (result.kind == NEBULA_KIND_INT || result.kind == NEBULA_KIND_BOOL) {
+                    value = static_cast< int32_t >(result.u.i);
+                } else if (result.kind == NEBULA_KIND_FLOAT) {
+                    value = static_cast< int32_t >(result.u.f);
+                }
+            }
+            l = next;
+        }
+        return value;
+    }
+
+    // Every frame (menus too): the mod-wide scripts' waits, states and "frame".
+    int32_t onFrame(const NebulaModEventData* pData, void*) {
+        for (Living* l = sLiving; l != nullptr;) {
+            Living* const next = l->mNext;
+            if (l->mGlobal) {
+                lumascript::frame(l->mInstance);
+            }
+            l = next;
+        }
+        return pData->value;
+    }
+
+    // The game's events a program answers: subscribed once each, for every script.
+    void subscribeGameEvents(const lumascript::Program* pProgram) {
+        if (sApi == nullptr) {
+            return;
+        }
+        for (s32 e = 1; e < NEBULA_MOD_EVENT_COUNT; e++) {
+            if (!sGameSubscribed[e] && lumascript::hasEvent(pProgram, lumascript::Event_Game, e)) {
+                sGameSubscribed[e] = true;
+                sApi->subscribe(static_cast< NebulaModEvent >(e), onGameEvent, reinterpret_cast< void* >(static_cast< uintptr_t >(e)));
+            }
+        }
+    }
 
     char* copyText(const char* pText) {
         const u32 length = static_cast< u32 >(std::strlen(pText));
@@ -76,6 +154,33 @@ namespace {
 namespace lumacore {
     void setApi(const NebulaModApi* pApi) {
         sApi = pApi;
+    }
+
+    const NebulaModApi* api() {
+        return sApi;
+    }
+
+    const NebulaPlugin* runningMod() {
+        return static_cast< const NebulaPlugin* >(lumascript::owner(lumascript::running()));
+    }
+
+    u32 eventId(const char* pName) {
+        for (u32 i = 0; i < sEventNames.mCount; i++) {
+            if (MR::isEqualString(sEventNames.mItems[i], pName)) {
+                return i;
+            }
+        }
+        sEventNames.add(copyText(pName));
+        return sEventNames.mCount - 1;
+    }
+
+    s32 gameEvent(const char* pName) {
+        for (s32 e = 1; e < NEBULA_MOD_EVENT_COUNT; e++) {
+            if (MR::isEqualString(cGameEvents[e], pName)) {
+                return e;
+            }
+        }
+        return -1;
     }
 
     s32 loadScript(const NebulaPlugin* pMod, const char* pPath, char* pMessage, u32 messageSize) {
@@ -100,6 +205,8 @@ namespace lumacore {
         if (program == nullptr) {
             return -1;
         }
+        lumascript::setOwner(program, pMod);
+        subscribeGameEvents(program);
         ScriptFile file;
         file.mMod = pMod;
         file.mPath = copyText(pPath);
@@ -140,6 +247,7 @@ namespace lumacore {
         Living* const living = new (NebulaArena::root(), 0) Living();
         living->mInstance = instance;
         living->mProgram = program;
+        living->mGlobal = false;
         living->mPrev = nullptr;
         living->mNext = sLiving;
         if (sLiving != nullptr) {
@@ -167,24 +275,19 @@ namespace lumacore {
         lumascript::destroyInstance(pInstance);
     }
 
-    void scriptEmit(const char* pName, const NebulaValue& rValue) {
+    void scriptEmit(u32 event, const NebulaValue& rValue) {
         if (sEmitDepth >= ::cEmitDepth) {
             if (!sEmitLogged) {
                 sEmitLogged = true;
                 nebula_log("mods: events started events %u deep (\"%s\"); the deeper ones are dropped\n", ::cEmitDepth,
-                           pName);
+                           event < sEventNames.mCount ? sEventNames.mItems[event] : "?");
             }
             return;
         }
-        char handler[96];
-        nebula_snprintf(handler, sizeof(handler), "event:%s", pName);
         sEmitDepth++;
         for (Living* l = sLiving; l != nullptr;) {
             Living* const next = l->mNext;  // a handler may end its own instance (never another's mid-walk)
-            const s32 h = lumascript::findHandler(l->mProgram, handler);
-            if (h >= 0) {
-                (void)lumascript::run(l->mInstance, static_cast< u32 >(h), &rValue, 1);
-            }
+            (void)lumascript::dispatch(l->mInstance, lumascript::Event_Script, static_cast< s32 >(event), &rValue, 1, nullptr);
             l = next;
         }
         sEmitDepth--;
@@ -290,11 +393,6 @@ namespace {
     struct ScriptObject {
         NebulaObjectClass mClass;
         s32 mScript;
-        s32 mStart;
-        s32 mTouch;
-        s32 mAttacked;
-        s32 mAppear;
-        s32 mKill;
     };
 
     lumascript::Instance* instanceOf(NebulaActor* pActor) {
@@ -305,22 +403,17 @@ namespace {
         return lumacore::handle(reinterpret_cast< NameObj* >(pActor));
     }
 
-    void runHandler(NebulaActor* pActor, s32 handler, const NebulaValue* pArgs, u32 count, NebulaValue* pResult) {
+    bool runHandler(NebulaActor* pActor, lumascript::Event event, s32 number, const NebulaValue* pArgs, u32 count,
+                    NebulaValue* pResult) {
         lumascript::Instance* const instance = instanceOf(pActor);
-        if (instance == nullptr || handler < 0) {
-            return;
-        }
-        const NebulaValue result = lumascript::run(instance, static_cast< u32 >(handler), pArgs, count);
-        if (pResult != nullptr) {
-            *pResult = result;
-        }
+        return instance != nullptr && lumascript::dispatch(instance, event, number, pArgs, count, pResult);
     }
 
     void scriptStart(NebulaActor* pActor, void* pUser) {
         const ScriptObject* const object = static_cast< const ScriptObject* >(pUser);
         lumascript::Instance* const instance = lumacore::startInstance(object->mScript, actorValue(pActor));
         sApi->set_actor_data(pActor, instance);
-        runHandler(pActor, object->mStart, nullptr, 0, nullptr);
+        runHandler(pActor, lumascript::Event_Start, -1, nullptr, 0, nullptr);
     }
 
     void scriptUpdate(NebulaActor* pActor, void*) {
@@ -330,27 +423,45 @@ namespace {
         }
     }
 
-    void scriptTouch(NebulaActor* pActor, void* pUser) {
-        runHandler(pActor, static_cast< const ScriptObject* >(pUser)->mTouch, nullptr, 0, nullptr);
+    void scriptTouch(NebulaActor* pActor, void*) {
+        runHandler(pActor, lumascript::Event_Touch, -1, nullptr, 0, nullptr);
     }
 
-    int32_t scriptAttacked(NebulaActor* pActor, int32_t how, void* pUser) {
-        NebulaValue arg;
-        std::memset(&arg, 0, sizeof(arg));
+    bool truthyResult(const NebulaValue& rResult) {
+        return (rResult.kind == NEBULA_KIND_BOOL || rResult.kind == NEBULA_KIND_INT) && rResult.u.i != 0;
+    }
+
+    int32_t scriptAttacked(NebulaActor* pActor, int32_t how, void*) {
+        NebulaValue arg = noneValue();
         arg.kind = NEBULA_KIND_INT;
         arg.u.i = how;
-        NebulaValue result;
-        std::memset(&result, 0, sizeof(result));
-        runHandler(pActor, static_cast< const ScriptObject* >(pUser)->mAttacked, &arg, 1, &result);
-        return (result.kind == NEBULA_KIND_BOOL || result.kind == NEBULA_KIND_INT) && result.u.i != 0 ? 1 : 0;
+        NebulaValue result = noneValue();
+        runHandler(pActor, lumascript::Event_Attacked, -1, &arg, 1, &result);
+        return truthyResult(result) ? 1 : 0;
     }
 
-    void scriptAppear(NebulaActor* pActor, void* pUser) {
-        runHandler(pActor, static_cast< const ScriptObject* >(pUser)->mAppear, nullptr, 0, nullptr);
+    void scriptAppear(NebulaActor* pActor, void*) {
+        runHandler(pActor, lumascript::Event_Appear, -1, nullptr, 0, nullptr);
     }
 
-    void scriptKill(NebulaActor* pActor, void* pUser) {
-        runHandler(pActor, static_cast< const ScriptObject* >(pUser)->mKill, nullptr, 0, nullptr);
+    void scriptKill(NebulaActor* pActor, void*) {
+        runHandler(pActor, lumascript::Event_Kill, -1, nullptr, 0, nullptr);
+    }
+
+    // A message to the object: "message:<n>" (from) for that message, else "message" (kind, from). True takes it.
+    int32_t scriptMessage(NebulaActor* pActor, int32_t message, NebulaActor* pFrom, void*) {
+        NebulaValue args[2];
+        args[0] = noneValue();
+        args[0].kind = NEBULA_KIND_INT;
+        args[0].u.i = message;
+        args[1] = pFrom != nullptr ? actorValue(pFrom) : noneValue();
+        NebulaValue result = noneValue();
+        if (runHandler(pActor, lumascript::Event_Message, message, &args[1], 1, &result)) {
+            return truthyResult(result) ? 1 : 0;
+        }
+        result = noneValue();
+        runHandler(pActor, lumascript::Event_Message, -1, args, 2, &result);
+        return truthyResult(result) ? 1 : 0;
     }
 }  // namespace
 
@@ -370,22 +481,40 @@ namespace lumacore {
         object->mClass.update = scriptUpdate;
         object->mClass.attacked = nullptr;
         object->mScript = script;
-        object->mStart = lumascript::findHandler(program, "start");
-        object->mTouch = lumascript::findHandler(program, "touch_player");
-        object->mAttacked = lumascript::findHandler(program, "attacked");
-        object->mAppear = lumascript::findHandler(program, "appear");
-        object->mKill = lumascript::findHandler(program, "kill");
         // Only what the script answers: an object that ignores touches stays as plain as the game's.
-        object->mClass.touch_player = object->mTouch >= 0 ? scriptTouch : nullptr;
-        object->mClass.attacked_by = object->mAttacked >= 0 ? scriptAttacked : nullptr;
-        object->mClass.appeared = object->mAppear >= 0 ? scriptAppear : nullptr;
-        object->mClass.killed = object->mKill >= 0 ? scriptKill : nullptr;
+        object->mClass.touch_player = lumascript::hasEvent(program, lumascript::Event_Touch, -1) ? scriptTouch : nullptr;
+        object->mClass.attacked_by = lumascript::hasEvent(program, lumascript::Event_Attacked, -1) ? scriptAttacked : nullptr;
+        object->mClass.appeared = lumascript::hasEvent(program, lumascript::Event_Appear, -1) ? scriptAppear : nullptr;
+        object->mClass.killed = lumascript::hasEvent(program, lumascript::Event_Kill, -1) ? scriptKill : nullptr;
+        object->mClass.message = lumascript::hasEvent(program, lumascript::Event_Message, -1) ? scriptMessage : nullptr;
         return sApi->register_object(&object->mClass);
     }
 
+    s32 addModScript(s32 script) {
+        lumascript::Program* const program = lumacore::script(script);
+        if (program == nullptr || sApi == nullptr) {
+            return -1;
+        }
+        lumascript::Instance* const instance = startInstance(script, noneValue());
+        if (instance == nullptr) {
+            return -1;
+        }
+        sLiving->mGlobal = true;  // startInstance put it first
+        if (!sFrameSubscribed) {
+            sFrameSubscribed = true;
+            sApi->subscribe(NEBULA_MOD_EVENT_FRAME, onFrame, nullptr);
+        }
+        (void)lumascript::dispatch(instance, lumascript::Event_Start, -1, nullptr, 0, nullptr);
+        return 0;
+    }
+
     void scriptsSceneEnded() {
-        while (sLiving != nullptr) {
-            endInstance(sLiving->mInstance);
+        for (Living* l = sLiving; l != nullptr;) {
+            Living* const next = l->mNext;
+            if (!l->mGlobal) {
+                endInstance(l->mInstance);
+            }
+            l = next;
         }
     }
 }  // namespace lumacore

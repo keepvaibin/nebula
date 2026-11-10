@@ -649,9 +649,9 @@
 | Tico | NPCActor | Game/NPC/Tico.hpp |
 | NebulaAchievementLuma | Tico | Game/NPC/NebulaAchievementLuma.hpp |
 | NebulaAchievementToast | LayoutActor | Game/Screen/NebulaAchievementToast.hpp |
+| NebulaFileSelectButton | LayoutActor | Game/Screen/NebulaFileSelectButton.hpp |
 | NebulaModText | LayoutActor | Game/Screen/NebulaModText.hpp |
 | NebulaPauseSettingsButton | LayoutActor | Game/Screen/NebulaPauseSettingsButton.hpp |
-| NebulaQuitButton | LayoutActor | Game/Screen/NebulaQuitButton.hpp |
 | NeedlePlant | MapObjActor | Game/MapObj/NeedlePlant.hpp |
 | NokonokoLand | LiveActor | Game/Enemy/NokonokoLand.hpp |
 | NormalMapBase | LiveActor | Game/MapObj/NormalMapBase.hpp |

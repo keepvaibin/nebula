@@ -557,6 +557,19 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(row.mod_id + ": the object " + row.name + " can't be added (its script " + row.script + ")");
         }
     }
+    // Mod-wide scripts after the objects: a script that names a class finds it.
+    for (const ModScriptToAdd& row : rows.mod_scripts) {
+        auto loaded = std::make_unique<Loaded>();
+        loaded->mod_id = row.mod_id;
+        loaded->version = row.mod_version;
+        loaded->self.size = sizeof(NebulaPlugin);
+        loaded->self.id = loaded->mod_id.c_str();
+        loaded->self.version = loaded->version.c_str();
+        Loaded* const mod = data_mod(std::move(loaded));
+        if (g_api.add_mod_script == nullptr || g_api.add_mod_script(&mod->self, row.script.c_str()) != 0) {
+            say(row.mod_id + ": the script " + row.script + " can't start");
+        }
+    }
     for (const MusicToAdd& track : rows.music) {
         if (g_api.add_music(track.name.c_str(), track.file.c_str()) != 0) {
             say(track.mod_id + ": the music " + track.name + " can't be added: its name is the game's");

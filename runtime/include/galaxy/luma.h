@@ -197,6 +197,7 @@ struct Layer {
     std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
     std::vector<ScriptObject> objects;
+    std::vector<std::string> scripts;  // mod-wide scripts ("scripts"): scripts/<name>.lumascript, one instance each
     std::vector<SoundEffect> sound_effects;
     std::vector<PlayerAnimation> player_animations;
     When when;

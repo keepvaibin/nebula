@@ -321,6 +321,18 @@ namespace {
             }
         }
 
+        // Its own handling first (a script's "message"); what it leaves goes the game's way.
+        virtual bool receiveMessage(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+            if (mClass->message != nullptr) {
+                LiveActor* const pFrom = pSender != nullptr ? MR::getSensorHost(pSender) : nullptr;
+                if (mClass->message(asHandle(this), static_cast< int32_t >(msg), pFrom != nullptr ? asHandle(pFrom) : nullptr,
+                                    mClass->user) != 0) {
+                    return true;
+                }
+            }
+            return LiveActor::receiveMessage(msg, pSender, pReceiver);
+        }
+
         virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             if (mClass->attacked_by != nullptr) {
                 s32 how = NEBULA_ATTACK_OTHER;
@@ -2651,6 +2663,22 @@ namespace {
         lumacore::setApi(pApi);
     }
 
+    s32 apiAddModScript(const NebulaPlugin* pMod, const char* pScript) {
+        if (pMod == nullptr || pScript == nullptr) {
+            return -1;
+        }
+        char path[256];
+        nebula_snprintf(path, sizeof(path), "/LumaScripts/%s/%s.lumascript", pMod->id, pScript);
+        char message[256];
+        message[0] = '\0';
+        const s32 script = lumacore::loadScript(pMod, path, message, sizeof(message));
+        if (script < 0) {
+            nebula_log("mods: %s: the script %s can't start: %s\n", pMod->id, pScript, message);
+            return -1;
+        }
+        return lumacore::addModScript(script);
+    }
+
     s32 apiAddScriptObject(const NebulaPlugin* pMod, const NebulaObjectClass* pShape, const char* pScript) {
         if (pMod == nullptr || pShape == nullptr || pScript == nullptr) {
             return -1;
@@ -2867,6 +2895,7 @@ namespace {
         apiIsA,
         apiLumaStart,
         apiAddScriptObject,
+        apiAddModScript,
     };
 }  // namespace
 
