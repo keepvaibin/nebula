@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- What the app may do under the hardened runtime (build_macos.sh signs with it). The system's guarded things are
+     each a key here, and an app without the key is refused without the player being asked. Nebula asks for none of
+     them: no microphone (the game only plays sound; without this, an output device that also has inputs, a headset
+     or a controller's, has macOS ask for the microphone on the game's behalf), no camera, no location, no contacts,
+     calendars or photos, no Apple Events.
+     The one key: the game module (Contents/Frameworks/libsmg_game.dylib) is signed as the app is, by no team, and the
+     hardened runtime loads another team's or no team's library only with this. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <false/>
+    <key>com.apple.security.device.camera</key>
+    <false/>
+</dict>
+</plist>

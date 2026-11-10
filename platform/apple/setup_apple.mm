@@ -72,9 +72,7 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
     title.font = [NSFont boldSystemFontOfSize:17];
     title.frame = NSMakeRect(24, 180, 472, 26);
     [content addSubview:title];
-    _words = [NSTextField wrappingLabelWithString:
-                              @"Nebula plays your own copy of Super Mario Galaxy (the American disc, RMGE01). Choose its disc "
-                              @"image and Nebula sets itself up from it. The image is only read, and this is done once."];
+    _words = [NSTextField wrappingLabelWithString:@"Choose your Super Mario Galaxy disc image. This is done once."];
     _words.frame = NSMakeRect(24, 92, 472, 80);
     [content addSubview:_words];
     _bar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(24, 66, 472, 16)];
@@ -119,7 +117,7 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
     panel.canChooseFiles = YES;
     panel.canChooseDirectories = YES;  // a folder the disc was extracted to
     panel.allowsMultipleSelection = NO;
-    panel.message = @"Choose the Super Mario Galaxy disc image (ISO, WBFS, RVZ, CISO, GCZ, WIA) or an extracted folder";
+    panel.message = @"Choose your Super Mario Galaxy disc image";
     [panel beginSheetModalForWindow:self.window
                   completionHandler:^(NSModalResponse result) {
                       if (result == NSModalResponseOK && panel.URL.fileSystemRepresentation != nullptr) {
@@ -134,7 +132,7 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
     self.leave.title = @"Cancel";
     self.bar.hidden = NO;
     self.bar.doubleValue = 0.0;
-    [self say:@"Checking the disc image…"];
+    [self say:@"Checking…"];
     g_cancel.store(false, std::memory_order_relaxed);
     g_done.store(0, std::memory_order_relaxed);
     g_total.store(0, std::memory_order_relaxed);
@@ -160,11 +158,11 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
             nebula_import_free(identity);
         }
         if (!supported && failure.empty()) {
-            failure = "This is not a disc image Nebula can read.";
+            failure = "This disc image can't be used.";
         }
         if (supported) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self say:@"Setting up from your disc image. This takes a few minutes…"];
+                [self say:@"Setting up…"];
             });
             // Built beside its place and moved there whole: a stopped import leaves no half of a game.pak.
             std::error_code error;
@@ -180,7 +178,7 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
             } else {
                 std::filesystem::rename(partial, place, error);
                 if (error) {
-                    failure = "The game's data could not be put in place: " + error.message();
+                    failure = "Couldn't save the game's data.";
                 }
             }
         }
@@ -209,7 +207,7 @@ enum : NSInteger { kSetupDone = 1, kSetupQuit = 2 };
     self.choose.enabled = YES;
     self.leave.enabled = YES;
     self.leave.title = @"Quit";
-    [self say:[NSString stringWithFormat:@"%s\n\nChoose another disc image, or quit.", failure.c_str()]];
+    [self say:@(failure.c_str())];
 }
 
 @end

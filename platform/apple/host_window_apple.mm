@@ -517,6 +517,10 @@ void set_rumble(Pad& pad, std::uint32_t level) {
                 return;
             }
             pad.engine = [haptics createEngineWithLocality:GCHapticsLocalityDefault];
+            // Rumble only: the engine starts no audio of its own on the controller (a controller with a speaker and
+            // a microphone is an audio device too, and audio started on it is what has the system ask for the
+            // microphone).
+            pad.engine.playsHapticsOnly = YES;
             if (pad.engine == nil || ![pad.engine startAndReturnError:&error]) {
                 pad.engine = nil;
                 return;
