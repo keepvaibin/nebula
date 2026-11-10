@@ -670,10 +670,16 @@ void Registries::apply(RegistryOps& ops, std::uint64_t submitted_fence) {
         const GpuModel& model = models_[id];
         retired_.push_back({submitted_fence, model.arena, id, model.first_mesh, model.mesh_count, model.arena_size != 0u,
                             model.arena_offset, model.arena_size});
+        for (std::uint32_t m = 0; tell_retired_meshes_ && m < model.mesh_count; ++m) {
+            retired_meshes_.push_back(model.first_mesh + m);
+        }
     }
     for (const std::uint32_t id : held_freed_meshes_) {
         const GpuMesh& mesh = meshes_[id];
         retired_.push_back({submitted_fence, mesh.arena, 0u, id, 1u, mesh.arena_size != 0u, mesh.arena_offset, mesh.arena_size});
+        if (tell_retired_meshes_) {
+            retired_meshes_.push_back(id);
+        }
     }
     held_freed_models_ = std::move(ops.freed_models);
     held_freed_meshes_ = std::move(ops.freed_meshes);

@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#pragma once
+
+// The tracer's bottom-level structures: one for each mesh that asks, built in the frame's commands within a budget,
+// compacted once its size is known, and released with its mesh. All policy is here and none of the API: the back end
+// (rt_backend.h) only builds, copies and holds memory, so this is tested offline against a stand-in.
+
+#include "galaxy/render/rt/rt_backend.h"
+
+#include <cstdint>
+#include <deque>
+#include <map>
+#include <unordered_map>
+#include <vector>
+
+namespace galaxy::render::rt {
+
+// Free ranges of pages of memory, best fit, aligned to kRangeAlign. A page is the back end's, named by its number there.
+class RangePages {
+public:
+    // `bytes` in the fullest page with room; none (size 0) when no page has it.
+    [[nodiscard]] Range take(std::uint64_t bytes);
+    void give_back(const Range& range);
+    void add_page(std::uint32_t page, std::uint64_t bytes);
+    // A page nothing lies in, or ~0u; `drop_page` forgets it once the back end has freed it.
+    [[nodiscard]] std::uint32_t empty_page() const noexcept;
+    void drop_page(std::uint32_t page);
+    [[nodiscard]] std::uint64_t page_bytes() const noexcept;  // of every page
+    [[nodiscard]] std::uint64_t used_bytes() const noexcept;  // of them, in ranges
+    [[nodiscard]] std::uint32_t pages() const noexcept;
+
+private:
+    struct Page {
+        std::uint64_t bytes = 0u, free_bytes = 0u;
+        std::map<std::uint64_t, std::uint64_t> free;  // offset -> size
+        bool here = false;
+    };
+    std::vector<Page> pages_;
+};
+
+// What the structures hold and what a frame did.
+struct GeometryStats {
+    std::uint32_t structures = 0u;         // built, static and moving
+    std::uint32_t waiting = 0u;            // asked for, not built yet
+    std::uint64_t triangles = 0u;          // under the built ones
+    std::uint64_t structure_bytes = 0u;    // in ranges
+    std::uint64_t page_bytes = 0u;         // the pages those lie in, and the scratch
+    std::uint32_t compacted = 0u;          // structures in their compacted form
+    std::uint64_t built_triangles = 0u;    // by this frame's builds
+    std::uint64_t refit_triangles = 0u;    // by this frame's refits
+    std::uint32_t builds = 0u, refits = 0u, compactions = 0u;  // this frame
+    std::uint64_t most_built_triangles = 0u;  // the most one budgeted frame built, since the start
+};
+
+class Geometry {
+public:
+    explicit Geometry(Backend& backend) noexcept : backend_(backend) {}
+    Geometry(const Geometry&) = delete;
+    Geometry& operator=(const Geometry&) = delete;
+    ~Geometry() { clear(); }
+
+    // A mesh that does not move wants a structure of its vertices as they are: queued once. `key`: the caller's name
+    // for it, kept until forget.
+    void want(std::uint64_t key, const TriangleInput& input);
+    // A mesh whose vertices move: built on its first frame, refitted from then on, rebuilt every `kRefitsToRebuild`
+    // refits or when its triangles change. Named each frame it is to be traced; one not named for kFramesToForget
+    // frames is forgotten.
+    void move(std::uint64_t key, const TriangleInput& input);
+    // The mesh is gone: its structure is released once no frame can name it.
+    void forget(std::uint64_t key);
+    // Everything goes now, before the back end stops (the device is lost, or ray tracing is turned off and the GPU has
+    // finished what named the structures): nothing is recorded.
+    void clear() noexcept;
+
+    // Once a frame, before anything names a structure: the builds, refits and compactions the budget allows, into
+    // `commands`, ending with a barrier, so a structure built here can be named in this frame. `budget_triangles`: 0 for
+    // no limit (nothing is on screen); else at least one build happens however large.
+    void frame(void* commands, unsigned frame_slot, std::uint64_t frame_index, std::uint64_t budget_triangles);
+
+    // What an instance names the mesh by, or 0 while it has no structure.
+    [[nodiscard]] std::uint64_t name(std::uint64_t key) const noexcept;
+    [[nodiscard]] const GeometryStats& stats() const noexcept { return stats_; }
+
+    static constexpr std::uint64_t kStructurePage = 16ull << 20u;
+    static constexpr std::uint64_t kScratchPage = 4ull << 20u;
+    static constexpr std::uint32_t kRefitsToRebuild = 30u;
+    static constexpr std::uint64_t kFramesToForget = 4u;
+
+private:
+    enum class State : std::uint8_t { Waiting, Built, SizeAsked, Compacted };
+    struct Entry {
+        TriangleInput input{};
+        BuildKind kind = BuildKind::Static;
+        State state = State::Waiting;
+        Structure structure{};
+        std::uint64_t built_bytes = 0u;        // the range a refit and a rebuild of the same shape fit
+        std::uint64_t asked_frame = 0u;       // Static: the frame its compacted size was asked in
+        std::uint32_t refits = 0u;
+        std::uint64_t named_frame = 0u;        // Moving: the last frame move() named it
+        bool moved = false;                    // Moving: named this frame, to refit
+        bool queued = false;
+    };
+    struct Retired {
+        std::uint64_t frame = 0u;
+        Structure structure{};
+    };
+    // The compacted sizes asked in one frame: slot n is keys[n]'s, read in the next frame of the same frame slot.
+    struct Asked {
+        std::uint64_t frame = 0u;
+        unsigned frame_slot = 0u;
+        std::vector<std::uint64_t> keys;
+    };
+
+    [[nodiscard]] Range take_structure(std::uint64_t bytes);
+    [[nodiscard]] Range take_scratch(std::uint64_t bytes);
+    void retire(Entry& entry);
+    void release_retired();
+    bool build(Entry& entry, bool refit);
+
+    Backend& backend_;
+    std::unordered_map<std::uint64_t, Entry> entries_;
+    std::deque<std::uint64_t> queue_;        // Static meshes waiting, oldest first
+    std::vector<std::uint64_t> moving_;      // keys of Moving entries
+    std::vector<Retired> retired_;
+    std::deque<std::uint64_t> to_ask_;       // built, their compacted size not asked yet
+    std::deque<Asked> asked_;
+    RangePages pages_;
+    std::uint32_t scratch_page_ = ~0u;
+    std::uint64_t scratch_bytes_ = 0u, scratch_used_ = 0u;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> retired_scratch_;  // frame, page
+    std::uint64_t frame_index_ = 0u;
+    bool built_since_barrier_ = false;
+    GeometryStats stats_{};
+};
+
+}  // namespace galaxy::render::rt

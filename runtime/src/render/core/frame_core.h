@@ -28,6 +28,7 @@
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace galaxy::render {
@@ -234,6 +235,14 @@ public:
     // more than once, with them named), then wait for `submitted_fence` of that call to complete (reclaim).
     void apply(RegistryOps& ops, std::uint64_t submitted_fence);
     void reclaim(std::uint64_t completed_fence);
+    // The meshes apply has retired since the last call (render thread): no list names them again, and their vertices
+    // go once the GPU is past the work submitted so far, so nothing recorded from here on may read them.
+    // Kept only while `tell_retired_meshes(true)`.
+    [[nodiscard]] std::vector<std::uint32_t> take_retired_meshes() noexcept { return std::exchange(retired_meshes_, {}); }
+    void tell_retired_meshes(bool on) noexcept {
+        tell_retired_meshes_ = on;
+        retired_meshes_.clear();
+    }
     // Tables naming a freed texture go; their descriptor tables join `retired`.
     void forget_textures(std::span<const std::uint32_t> freed, std::vector<gpu::Table>& retired);
     // Render thread, every kTableSweepFrames: the one rule for a table's life. A table no walk has named for kTableIdleFrames
@@ -339,6 +348,8 @@ private:
     std::vector<Retired> retired_;
     // The frees the list walking now came with (render thread).
     std::vector<std::uint32_t> held_freed_models_, held_freed_meshes_;
+    std::vector<std::uint32_t> retired_meshes_;
+    bool tell_retired_meshes_ = false;
 
     // Written under lock_ by services.
     RegistryOps incoming_;

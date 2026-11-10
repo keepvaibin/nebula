@@ -213,6 +213,7 @@ bool RenderCore::initialize(int w, int h) {
     registries_.initialize(renderer_.device(), device_gate_);
     pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
     boot_step("pipelines");
+    rt_start();
 
     initialized_ = true;
     stop_render_thread_ = false;
@@ -1503,6 +1504,7 @@ bool RenderCore::restart_device() {
         pipelines_.shutdown();
         movie_playback_.shutdown();
         texture_store_.shutdown();
+        rt_stop();
         registries_.lose_device();
         display_pictures_.shutdown();
         drop_device_state();
@@ -1523,6 +1525,7 @@ bool RenderCore::restart_device() {
         texture_store_.restart(renderer_.device());
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
+        rt_start();
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
         device_gate_.give_up();
@@ -2100,7 +2103,19 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 g_snapshot_presents = entry.snapshot_number - 1u;
             }
         }
+        if (rt_backend_.started()) {
+            for (const auto& [id, mesh] : entry.registry_ops.meshes) {
+                rt_want(id, mesh);
+            }
+        }
         registries_.apply(entry.registry_ops, renderer_.submitted_fence_value());
+        if (rt_backend_.started()) {
+            // A retired mesh's vertices go once the GPU is past the work submitted so far: nothing is built from them now.
+            for (const std::uint32_t id : registries_.take_retired_meshes()) {
+                rt_geometry_.forget(std::uint64_t{id} * 2u);
+                rt_geometry_.forget(std::uint64_t{id} * 2u + 1u);
+            }
+        }
         freed_textures_.clear();
         if (entry.texture_ops != nullptr) {
             texture_store_.apply_ops(*entry.texture_ops, freed_textures_);
@@ -2190,6 +2205,9 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
     }
     registries_.reclaim(renderer_.completed_fence_value());
+    if (rt_backend_.started()) {
+        rt_frame(list);
+    }
     // Finished replacements upload here and take the place of their originals.
     texture_store_.apply_texture_packs();
     // The movie frame this walk draws, as the movie quad's planes.

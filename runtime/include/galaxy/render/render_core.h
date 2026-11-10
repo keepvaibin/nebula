@@ -14,6 +14,7 @@
 #include "galaxy/render/renderer_d3d12.h"
 #endif
 #include "galaxy/render/renderer_common.h"
+#include "galaxy/render/rt/rt_backend.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/frame_interpolation.h"
@@ -25,6 +26,7 @@
 #include "render/core/frame_core.h"
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
+#include "render/rt/rt_geometry.h"
 
 #include <array>
 #include <atomic>
@@ -290,6 +292,16 @@ private:
     core::Registries registries_;
     core::Pairing pairing_;
     core::WorldLightStats world_light_stats_;  // --diagnostics rt-inputs
+    // Ray tracing (render/rt): the device's builder and the structures of the meshes one matrix places. Started with the
+    // device when the setting is on and the device can trace; render thread.
+    rt::Backend rt_backend_;
+    rt::Geometry rt_geometry_{rt_backend_};
+    std::uint64_t rt_log_at_ = 0u;
+    bool rt_building_ = false;  // meshes wait for their structures
+    void rt_start();
+    void rt_stop() noexcept;
+    void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
+    void rt_frame(const NebulaFrameList& list);
     core::Pipelines pipelines_;
     NebulaFrameList* producer_list_ = nullptr;
     std::deque<std::unique_ptr<ListEntry>> lists_;

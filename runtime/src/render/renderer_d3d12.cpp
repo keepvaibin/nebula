@@ -5453,6 +5453,14 @@ void RendererD3D12::record_hdr_end() {
     bind_scene();
 }
 
+void* RendererD3D12::rt_commands_begin() {
+    rt_outer_pass_ = current_pass_;
+    gpu_pass(GpuPass::RayTracing);
+    return command_list_.Get();
+}
+
+void RendererD3D12::rt_commands_end() { gpu_pass(rt_outer_pass_); }
+
 // The scene target's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
 // scene target's own colour target, every sample of a multisampled one.
 void RendererD3D12::record_scene_ao() {
