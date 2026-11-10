@@ -495,6 +495,7 @@ PostProcessor::PresentStep PostProcessor::prepare_present(Object commands, const
     PostProcessPlan plan = plan_post_process(source_width, source_height, target_width, target_height, scaling, status_.smaa_ok,
                                              status_.fxaa_ok);
     PresentStep step{};
+    step.ten_bit = target_format == Format::Bgr10a2 || target_format == Format::Rgb10a2;
     set_post_input_size(step.constants, source_width, source_height);
     const Object input = source.texture;
     step.input = input;
@@ -619,6 +620,10 @@ void PostProcessor::finish_present(Object encoder, const PresentStep& step, cons
     constants.origin[0] = viewport.left;
     constants.origin[1] = viewport.top;
     set_post_output(constants, output);
+    if (step.ten_bit && !output.hdr) {
+        // A target with the scene's ten bits takes the picture as it is: nothing to round, so nothing to dither.
+        constants.origin[2] = 0;
+    }
     draw(encoder, step.pipeline, Stencil::None, &step.input, 1u, viewport, constants);
 }
 
