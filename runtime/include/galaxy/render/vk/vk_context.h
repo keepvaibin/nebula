@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <volk.h>
 
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/vk/device_quirks_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
 
@@ -104,11 +105,12 @@ public:
     // `chosen_gpu`: the GPU chosen in Nebula Settings (RenderConfig::gpu, gpu_identity), taken first when present.
     // A discrete GPU comes first otherwise. `validation` (--gpu-validation) loads the
     // Khronos validation layer when present. `create_surface`, when given, makes the window's surface once the
-    // instance exists (returned in `surface`); the device chosen then presents to it.
+    // instance exists (returned in `surface`); the device chosen then presents to it. `ray_tracing`: the device is made
+    // with what the tracer needs, where it has it (rt_caps()).
     bool initialize(const std::string& chosen_gpu, bool validation,
                     std::vector<const char*> instance_extensions,
                     const std::function<VkSurfaceKHR(VkInstance)>& create_surface = {},
-                    VkSurfaceKHR* surface = nullptr);
+                    VkSurfaceKHR* surface = nullptr, bool ray_tracing = false);
     void shutdown() noexcept;
     [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
@@ -199,6 +201,9 @@ public:
     // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports VK_ERROR_DEVICE_LOST without reaching the driver, as a
     // lost device would; no API removes a Vulkan device. The fault report is skipped (the device is not lost).
     void simulate_device_loss() noexcept { simulated_loss_.store(true, std::memory_order_release); }
+    // What the device reports for ray tracing (acceleration structures, ray queries, device addresses on Vulkan 1.2),
+    // and whether it was made with them: `enabled` only when initialize was asked to and the device has it all.
+    [[nodiscard]] const RtCaps& rt_caps() const noexcept { return rt_caps_; }
     // VK_EXT_device_fault was enabled (the device has the extension and its feature).
     [[nodiscard]] bool device_fault() const noexcept { return device_fault_; }
     // After VK_ERROR_DEVICE_LOST (`where` names the call): what vkGetDeviceFaultInfoEXT knows, to the log, once per device.
@@ -341,6 +346,7 @@ private:
     bool hdr_metadata_ = false;             // VK_EXT_hdr_metadata, enabled on the device
     bool host_image_copy_ = false;      // VK_EXT_host_image_copy, enabled, with the layout the textures rest in
     bool device_mapped_memory_ = false; // see device_mapped_memory()
+    RtCaps rt_caps_{};
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
     bool device_fault_binary_ = false;  // and its vendor binary feature
     std::atomic<bool> fault_reported_{false};

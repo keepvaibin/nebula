@@ -20,6 +20,8 @@
 #include "galaxy/render/host_window_win32.h"
 #endif
 #include "galaxy/render/program_table.h"
+#include "galaxy/render/rt/rt_backend.h"
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/game_paths.h"
 
@@ -251,7 +253,17 @@ void RendererVk::report_adapter() {
                                                                   : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false,
                                           "motion vectors, jitter, and history resources are not built");
-    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
+    const RtCaps rt = context.rt_caps();
+    const bool rt_wanted = get_render_config().ray_tracing_enabled;
+    set_rt_caps(rt);
+    log_rt_caps("vulkan", rt, rt_wanted);
+    host_window::ray_tracing_offered.store(kRayTracingRowOffered && rt_capable(rt), std::memory_order_relaxed);
+    if (rt_wanted && rt_capable(rt)) {
+        (void)rt::shaders_load(context.device());
+    }
+    caps.dxr = make_render_feature_status(true, rt.ray_queries && rt.acceleration_structures, rt_capable(rt),
+                                          kRayTracingRowOffered && rt_capable(rt),
+                                          rt_refusal(rt) != nullptr ? rt_refusal(rt) : "ray tracing is not offered yet");
 #if defined(_WIN32)
     const bool dlss_ready = streamline::dlss_supported();
 #else
@@ -277,7 +289,8 @@ bool RendererVk::create_surface_and_device() {
         return host_window::create_vulkan_surface(instance, window);
     };
     if (!vk::Context::get().initialize(get_render_config().gpu.data(), validation,
-                                       host_window::vulkan_instance_extensions(), make_surface, &surface_)) {
+                                       host_window::vulkan_instance_extensions(), make_surface, &surface_,
+                                       get_render_config().ray_tracing_enabled)) {
         return false;
     }
     const vk::Context& context = vk::Context::get();

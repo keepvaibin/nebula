@@ -1,0 +1,2 @@
+name	file	profile	entry
+probe	rt_probe.hlsl	cs_6_5	main

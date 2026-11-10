@@ -14,6 +14,9 @@
 #include "galaxy/render/galaxy_select.h"
 #include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/rt/rt_backend.h"
+#include "galaxy/render/rt/rt_shaders.h"
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/xess_library.h"
 #include "galaxy/render/texture_store.h"
@@ -2018,18 +2021,30 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 sizeof(options5))) &&
             options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
         {
-            // What the ray tracer starts with (SceneRayTracer::create_lighting_pipelines): DXR 1.1, and its textures,
-            // material records and buffers read straight from the descriptor heap (shader model 6.6, resource binding
-            // tier 3), on dedicated video memory.
-            D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_6};
+            // What the tracer needs of the device (rt_caps.h): inline ray queries (DXR 1.1 with the shader model its
+            // shaders are compiled for, 6.5) and every texture in one table (resource binding tier 3).
+            D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_5};
             D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
-            const bool offered =
-                !kRayTracingParked && dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
-                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shader_model,
-                                                       sizeof(shader_model))) &&
-                shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
-                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
-                options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 && !adapter_is_unified_memory();
+            RtCaps rt{};
+            rt.acceleration_structures = dxr_runtime_supported;
+            rt.ray_queries = dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
+                             SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shader_model,
+                                                                    sizeof(shader_model))) &&
+                             shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5;
+            rt.bindless = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                          options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3;
+            rt.micromaps = static_cast<int>(options5.RaytracingTier) >= 12;  // D3D12_RAYTRACING_TIER_1_2
+            D3D12_FEATURE_DATA_ARCHITECTURE1 architecture{};
+            rt.unified_memory = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &architecture, sizeof(architecture))) &&
+                                architecture.UMA != FALSE;
+            rt.shaders = rt_shaders_present();
+            rt.enabled = true;  // Direct3D 12 enables nothing per device
+            set_rt_caps(rt);
+            log_rt_caps("d3d12", rt, get_render_config().ray_tracing_enabled);
+            if (get_render_config().ray_tracing_enabled && rt_capable(rt)) {
+                (void)rt::shaders_load(device_.Get());
+            }
+            const bool offered = kRayTracingRowOffered && rt_capable(rt);
             host_window::ray_tracing_offered.store(offered, std::memory_order_relaxed);
             std::array<char, 128> description{};
             copy_adapter_description(adapter_desc, description);
@@ -2074,10 +2089,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             dxr_runtime_supported,
             host_window::ray_tracing_offered.load(std::memory_order_relaxed),
             host_window::ray_tracing_offered.load(std::memory_order_relaxed),
-            host_window::ray_tracing_offered.load(std::memory_order_relaxed)
-                ? "ray-traced ambient occlusion (GRAPHICS: RAY TRACING)"
-            : dxr_runtime_supported ? "needs DXR 1.1, shader model 6.6, binding tier 3 and dedicated memory"
-                                    : "D3D12 raytracing tier is unsupported");
+            host_window::ray_tracing_offered.load(std::memory_order_relaxed) ? "ray tracing (GRAPHICS: RAY TRACING)"
+            : rt_refusal(rt_caps()) != nullptr                                ? rt_refusal(rt_caps())
+                                                                              : "ray tracing is not offered yet");
         caps.streamline = make_render_feature_status(
             caps.streamline_bridge_built,
             streamline::active(),

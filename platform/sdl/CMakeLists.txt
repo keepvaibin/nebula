@@ -106,6 +106,9 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/galaxy_select.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/rt_materials.cpp
+    ${rt}/render/rt_caps.cpp
+    ${rt}/render/rt/rt_shaders.cpp
+    ${rt}/render/vk/rt_backend_vk.cpp
     $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:${rt}/frame_telemetry.cpp>
     ${rt}/perf_hint.cpp
     ${rt}/render/vk/vk_context.cpp
@@ -183,6 +186,15 @@ endif()
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/src")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
 target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_utility_spirv_dir}")
+# The tracer's SPIR-V, where a dxc that writes it is named (cmake/rt_shaders.cmake).
+include("${nebula_root}/cmake/rt_shaders.cmake")
+galaxy_find_dxc_spirv(galaxy_dxc_spirv)
+if(galaxy_dxc_spirv)
+    galaxy_rt_shaders(galaxy_rt_spirv spirv "${galaxy_dxc_spirv}")
+    target_sources(galaxy_render_vk PRIVATE "${galaxy_rt_spirv}")
+    target_include_directories(galaxy_render_vk PRIVATE "${galaxy_rt_shader_dir}")
+    target_compile_definitions(galaxy_render_vk PRIVATE GALAXY_RT_SPIRV=1)
+endif()
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
