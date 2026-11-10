@@ -22,7 +22,9 @@ Files go to `diagnostics` in the data folder (COMMAND_LINE.md `--data`), named w
 | `scene-loads` | Each scene change's phases, presses and placed objects (`tools/verify/loads.py`) |
 | `file-reads` | Each read and map of the game's files, and the sound clock, with its frame |
 | `pipelines` | The pipelines the run created, at exit, into `pipelines-<pid>.bin` (`tools/dev/site_pipelines.py`) |
-| `rt-inputs` | What ray tracing reads of each frame list, checked against its rules and counted every 300 lists: the world's lights (`[rt-inputs] lights` lines) |
+| `rt-inputs` | What ray tracing reads of each frame list, checked against its rules and counted every 300 lists: the world's lights (`[rt-inputs] lights` lines) and, with ray tracing on, the traced scene (`[rt-inputs] scene` lines) and each frame's builds (`[rt]` lines) |
+| `rt-view` | With ray tracing on: the traced scene drawn over the game's opaque scene, each instance in its own colour (a scene without multisampling) |
+| `rt-check` | With ray tracing on: a camera ray a pixel against the depth the game drew, coloured by class (green: the same surface; blue: drawn but not traced; orange: traced behind; red: traced in front; magenta: traced where nothing was drawn) and counted every 300 frames (`[rt-check]` lines) |
 
 Sets: `frames` (timeline, frame-tails, pointer-latency, present-stats, frame-times), `gpu` (gpu-passes), `threads`
 (thread-cpu, profile), `loads` (scene-loads, file-reads), `1` (the launcher's recording: timeline, frame-tails,

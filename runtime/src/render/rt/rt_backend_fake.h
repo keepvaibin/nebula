@@ -10,6 +10,9 @@ namespace galaxy::render::rt::fake {
 
 struct Log {
     std::uint32_t builds = 0u, refits = 0u, barriers = 0u, compactions = 0u, asks = 0u;
+    std::uint32_t scenes = 0u;           // top-level builds
+    std::uint32_t images = 0u, passes = 0u, buffers = 0u;
+    std::uint32_t scene_instances = 0u;  // of the last one
     std::uint32_t structures = 0u;  // alive now
     std::uint32_t pages = 0u;       // alive now
     // What must stay zero: two builds between barriers sharing scratch, a build outside its pages, a refit or a copy of
@@ -23,5 +26,6 @@ struct Log {
 // answers for a structure in a range of `bytes`.
 [[nodiscard]] std::uint64_t structure_bytes(std::uint32_t triangles) noexcept;
 [[nodiscard]] std::uint64_t compacted_bytes(std::uint64_t bytes) noexcept;
+[[nodiscard]] std::uint64_t scene_bytes(std::uint32_t instances) noexcept;
 
 }  // namespace galaxy::render::rt::fake

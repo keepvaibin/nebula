@@ -580,6 +580,9 @@ void DescriptorRing::grow_frames(unsigned per_frame) {
     flush();
     bound_list_ = nullptr;
     bound_heap_ = nullptr;
+    if (replaced_fn_ != nullptr) {
+        replaced_fn_(replaced_owner_);
+    }
 }
 
 DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
@@ -2339,6 +2342,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             return false;
         }
         srv_ring_.set_sampler_heap(sampler_heap_.Get());
+        srv_ring_.on_frames_grown([](void* renderer) { static_cast<RendererD3D12*>(renderer)->texture_heap_replaced(); }, this);
         retired_heaps_.clear();
         null_texture_slot_ = 0u;
         mirrored_backend_ = nullptr;
@@ -2427,6 +2431,17 @@ DescriptorRing::Persistent RendererD3D12::allocate_persistent_descriptors(unsign
         invalidate_draw_bindings();
     }
     return table;
+}
+
+// A frame took more transient descriptors than its segment held (DescriptorRing::allocate): the ring's new heap has an
+// empty texture region, so the views made so far are copied into it and the texture backend writes its next views
+// there, as after the persistent region's growth. Commands already recorded keep the heap they were recorded with.
+void RendererD3D12::texture_heap_replaced() {
+    if (mirrored_store_ != nullptr) {
+        install_texture_heap(*mirrored_store_, srv_ring_.texture_slots());
+    }
+    ++sampler_generation_;
+    invalidate_draw_bindings();
 }
 
 // A view index reached the null slot (TextureBackend::publish_view): a heap twice as large, or as large as the views
@@ -5453,13 +5468,54 @@ void RendererD3D12::record_hdr_end() {
     bind_scene();
 }
 
-void* RendererD3D12::rt_commands_begin() {
+RendererD3D12::RtCommands RendererD3D12::rt_commands_begin() {
     rt_outer_pass_ = current_pass_;
     gpu_pass(GpuPass::RayTracing);
-    return command_list_.Get();
+    return {command_list_.Get(), &srv_ring_};
 }
 
-void RendererD3D12::rt_commands_end() { gpu_pass(rt_outer_pass_); }
+// A pass leaves its own pipeline bound: the next draw binds the scene's again.
+void RendererD3D12::rt_commands_end() {
+    gpu_pass(rt_outer_pass_);
+    invalidate_draw_bindings();
+}
+
+bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color) {
+    if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
+        return false;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
+    uses.issue();
+    const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
+    depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
+    width = static_cast<unsigned>(desc.Width);
+    height = desc.Height;
+    color = scene_color_->GetDesc().Format == kSceneHdrColorFormat ? rt::ImageFormat::Rgba16f : rt::ImageFormat::Rgb10a2;
+    return true;
+}
+
+void RendererD3D12::rt_depth_end() {
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
+    uses.issue();
+}
+
+void RendererD3D12::rt_copy_to_scene(void* image) {
+    auto* const source = static_cast<ID3D12Resource*>(image);
+    if (source == nullptr || !scene_color_) {
+        return;
+    }
+    const D3D12_RESOURCE_DESC from = source->GetDesc(), to = scene_color_->GetDesc();
+    if (from.Width != to.Width || from.Height != to.Height || from.Format != to.Format || to.SampleDesc.Count != 1u) {
+        return;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopyDest);
+    uses.issue();
+    command_list_->CopyResource(scene_color_.Get(), source);
+    uses.undo();
+}
 
 // The scene target's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
 // scene target's own colour target, every sample of a multisampled one.

@@ -27,6 +27,7 @@
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
 #include "render/rt/rt_geometry.h"
+#include "render/rt/rt_scene.h"
 
 #include <array>
 #include <atomic>
@@ -301,7 +302,57 @@ private:
     void rt_start();
     void rt_stop() noexcept;
     void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
+    void rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool refined);
     void rt_frame(const NebulaFrameList& list);
+    // The scene a frame traces: its instances from the list's scene passes, at the walk's time.
+    rt::Scene rt_scene_{rt_backend_};
+    rt::SceneCensus rt_census_;  // --diagnostics rt-inputs
+    struct RtPlace {
+        std::uint64_t mesh = 0u;
+        std::uint32_t block = 0u, matrix = 0u;
+        [[nodiscard]] bool operator==(const RtPlace&) const noexcept = default;
+    };
+    struct RtPlaceHash {
+        [[nodiscard]] std::size_t operator()(const RtPlace& place) const noexcept {
+            return static_cast<std::size_t>((place.mesh * 0x9E3779B97F4A7C15ull) ^ (std::uint64_t{place.block} << 32u | place.matrix));
+        }
+    };
+    std::unordered_map<RtPlace, std::uint32_t, RtPlaceHash> rt_seen_;  // a place's instance in this frame's scene
+    void rt_scene(const NebulaFramePass& begin);
+    // A draw whose vertices carry their own matrices: skinned by a pass into the tracer's vertex buffer each frame.
+    struct RtSkin {
+        std::uint64_t key = 0u;
+        gpu::Address positions = 0u, matrices = 0u, rows = 0u;
+        std::uint32_t vertices = 0u, rows_bytes = 0u;
+        std::uint32_t item = 0u, mask = 0u;
+        rt::Faces faces = rt::Faces::Both;
+        std::uint32_t kind = 0u;
+        std::uint64_t out = 0u;  // its vertices' byte in the buffer
+        float root[3][4]{};      // the eye's space from the root's: its instance's matrix
+        float root_inverse[3][4]{};
+        rt::TriangleInput input{};
+    };
+    std::vector<RtSkin> rt_skins_;
+    std::uint32_t rt_skin_buffer_ = rt::kNoBuffer;
+    std::uint64_t rt_skin_bytes_ = 0u;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_skin_retired_;  // frame, buffer
+    void rt_skin();
+    // The frame's ring draws (vertices made this frame), by what they are to a ray: their triangles in the eye's space,
+    // one structure a kind, built each frame.
+    struct RtRing {
+        std::vector<float> positions;  // three a vertex, three vertices a triangle
+        std::uint32_t item = 0u;
+        bool regenerated = false;      // a draw whose vertices are not last frame's moved
+    };
+    RtRing rt_rings_[3];
+    // The tracer's views (--diagnostics rt-view, rt-check): the scene drawn by rays over the game's opaque scene.
+    void rt_view(const NebulaFramePass& pass);
+    std::uint32_t rt_view_image_ = rt::kNoImage;
+    unsigned rt_view_width_ = 0u, rt_view_height_ = 0u;
+    rt::ImageFormat rt_view_format_ = rt::ImageFormat::Rgb10a2;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_view_retired_;  // frame, image
+    std::uint64_t rt_check_sum_[8]{};
+    std::uint32_t rt_check_frames_ = 0u;
     core::Pipelines pipelines_;
     NebulaFrameList* producer_list_ = nullptr;
     std::deque<std::unique_ptr<ListEntry>> lists_;

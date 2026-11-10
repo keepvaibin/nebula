@@ -3,9 +3,11 @@
 // merge when given back; a mesh is built once, named in the frame it is built, compacted when its size is known and
 // released only when no frame can name it; a budget spreads builds over frames but never starves; a moving mesh is
 // refitted, rebuilt now and then, and forgotten when no frame names it; and nothing a real back end would refuse is
-// ever recorded.
+// ever recorded. And the scene (rt_scene.h): its structure grows with its instances and the one it leaves goes only
+// when no frame can read it.
 #include "render/rt/rt_backend_fake.h"
 #include "render/rt/rt_geometry.h"
+#include "render/rt/rt_scene.h"
 
 #include <iostream>
 
@@ -39,6 +41,7 @@ struct Run {
     void step(std::uint64_t budget = 0u) {
         ++frame;
         geometry.frame(nullptr, static_cast<unsigned>(frame % kFramesInFlight), frame, budget);
+        geometry.refit();
     }
 };
 
@@ -145,8 +148,13 @@ bool a_moving_mesh_is_refitted_and_forgotten() {
     Run run;
     const fake::Log& log = fake::log();
     for (unsigned i = 0; i < Geometry::kRefitsToRebuild + 2u; ++i) {
-        run.geometry.move(7u, mesh(500u, 0x5000u + i * 0x100u));
-        run.step(1u);
+        // Named after the frame began, as the scene's walk does.
+        ++run.frame;
+        run.geometry.frame(nullptr, static_cast<unsigned>(run.frame % kFramesInFlight), run.frame, 1u);
+        TriangleInput moved = mesh(500u, i * 0x100u);
+        moved.own_buffer = 0u;  // vertices a pass wrote, at byte 0 on the first frame
+        run.geometry.move(7u, moved);
+        run.geometry.refit();
     }
     bool ok = expect(log.builds == 2u && log.refits == Geometry::kRefitsToRebuild, "built, refitted each frame, and rebuilt after its refits");
     ok &= expect(log.structures == 1u && log.asks == 0u, "in one structure, never compacted");
@@ -178,6 +186,49 @@ bool an_answer_waits_for_its_frame_slot() {
     return ok;
 }
 
+bool a_scene_is_built_over_its_instances() {
+    Run run;
+    const fake::Log& log = fake::log();
+    Scene scene{run.backend};
+    const float rows[3][4] = {{1.0f, 0.0f, 0.0f, 5.0f}, {0.0f, 1.0f, 0.0f, 6.0f}, {0.0f, 0.0f, 1.0f, 7.0f}};
+    scene.begin();
+    bool ok = expect(!scene.build(0x4000u, 1u) && scene.name() == 0u && log.scenes == 0u, "no instance, no scene");
+    scene.add(rows, 7u, kMaskOpaque, 0x1234u);
+    scene.also(0u, kMaskBlended);
+    const Instance& instance = scene.instances()[0];
+    ok &= expect(instance.id_mask == (7u | 3u << 24u) && instance.structure == 0x1234u && instance.transform[1][3] == 6.0f,
+                 "an instance carries its place, its id and what it is to a ray");
+    // Faces: a draw's front is clockwise on screen, a ray's is the side its triangle's normal points to.
+    const float mirrored[3][4] = {{-1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    scene.add(rows, 8u, kMaskOpaque, 0x1234u, Faces::Front);
+    scene.add(rows, 9u, kMaskOpaque, 0x1234u, Faces::Back);
+    scene.add(mirrored, 10u, kMaskOpaque, 0x1234u, Faces::Front);
+    ok &= expect(scene.instances()[0].flags == kInstanceNoCull << 24u, "a draw of both faces is met from both sides");
+    ok &= expect(scene.instances()[1].flags == kInstanceFlip << 24u && scene.instances()[2].flags == 0u,
+                 "a draw of its front faces turns the ray's facing over, one of its back faces does not");
+    ok &= expect(scene.instances()[3].flags == 0u, "and a mirrored instance's facing is the other way");
+    ok &= expect(scene.build(0x4000u, 1u) && scene.name() != 0u && log.scenes == 1u && log.scene_instances == 4u,
+                 "the instances are built into a scene");
+    ok &= expect(scene.capacity() == Scene::kLeastCapacity, "with room for the scenes after it");
+    const std::uint64_t first = scene.name();
+    scene.begin();
+    ok &= expect(scene.name() == 0u, "a new frame has no scene until it is built");
+    for (std::uint32_t i = 0; i < 300u; ++i) {
+        scene.add(rows, i, kMaskOpaque, 0x1234u);
+    }
+    ok &= expect(scene.build(0x4000u, 2u) && scene.capacity() == 512u && scene.name() != first && log.scene_instances == 300u,
+                 "more instances than its room take a larger structure");
+    ok &= expect(log.structures == 2u && log.pages == 4u, "the one it leaves stays while a frame in flight may read it");
+    scene.begin();
+    scene.add(rows, 1u, kMaskOpaque, 0x1234u);
+    ok &= expect(scene.build(0x4000u, 2u + kFramesToRelease) && log.structures == 1u && log.pages == 2u && scene.capacity() == 512u,
+                 "and goes after, the larger one kept");
+    ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
+    scene.clear();
+    ok &= expect(log.structures == 0u && log.pages == 0u && scene.name() == 0u, "cleared, it holds nothing");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -187,6 +238,7 @@ int main() {
     ok &= scratch_is_used_again_only_after_a_barrier();
     ok &= a_moving_mesh_is_refitted_and_forgotten();
     ok &= an_answer_waits_for_its_frame_slot();
+    ok &= a_scene_is_built_over_its_instances();
     if (ok) {
         std::cout << "rt geometry tests passed\n";
     }

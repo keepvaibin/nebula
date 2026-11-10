@@ -17,7 +17,11 @@ bool same_shape(const TriangleInput& a, const TriangleInput& b) noexcept {
 }
 
 bool same_input(const TriangleInput& a, const TriangleInput& b) noexcept {
-    return same_shape(a, b) && a.positions == b.positions && a.indices == b.indices;
+    return same_shape(a, b) && a.positions == b.positions && a.indices == b.indices && a.own_buffer == b.own_buffer;
+}
+
+bool nothing(const TriangleInput& input) noexcept {
+    return input.triangles() == 0u || (input.positions == 0u && input.own_buffer == kNoBuffer);
 }
 
 }  // namespace
@@ -213,7 +217,7 @@ void Geometry::release_retired() {
 }
 
 void Geometry::want(std::uint64_t key, const TriangleInput& input) {
-    if (input.triangles() == 0u || input.positions == 0u) {
+    if (nothing(input)) {
         return;
     }
     Entry& entry = entries_[key];
@@ -229,8 +233,8 @@ void Geometry::want(std::uint64_t key, const TriangleInput& input) {
     ++stats_.waiting;
 }
 
-void Geometry::move(std::uint64_t key, const TriangleInput& input) {
-    if (input.triangles() == 0u || input.positions == 0u) {
+void Geometry::move(std::uint64_t key, const TriangleInput& input, bool rebuild) {
+    if (nothing(input)) {
         return;
     }
     const auto [found, fresh] = entries_.try_emplace(key);
@@ -243,6 +247,10 @@ void Geometry::move(std::uint64_t key, const TriangleInput& input) {
     }
     entry.input = input;
     entry.moved = true;
+    entry.named_frame = frame_index_;
+    if (rebuild) {
+        entry.refits = kRefitsToRebuild;
+    }
 }
 
 void Geometry::forget(std::uint64_t key) {
@@ -307,34 +315,20 @@ bool Geometry::build(Entry& entry, bool refit) {
 
 void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_index, std::uint64_t budget_triangles) {
     frame_index_ = frame_index;
-    stats_.built_triangles = stats_.refit_triangles = 0u;
-    stats_.builds = stats_.refits = stats_.compactions = 0u;
+    stats_.built_triangles = 0u;
+    stats_.builds = stats_.compactions = 0u;
     release_retired();
     backend_.begin(commands, frame_slot);
     scratch_used_ = 0u;
     built_since_barrier_ = false;
 
-    // What moves: built on its first frame, refitted after, rebuilt now and then; forgotten when no frame names it.
+    // What moves and no frame has named for a while is forgotten.
     for (std::size_t i = 0; i < moving_.size();) {
-        const std::uint64_t key = moving_[i];
-        Entry& entry = entries_[key];
-        if (!entry.moved) {
-            if (frame_index - entry.named_frame > kFramesToForget) {
-                forget(key);  // takes it out of moving_
-                continue;
-            }
+        if (frame_index - entries_[moving_[i]].named_frame > kFramesToForget) {
+            forget(moving_[i]);  // takes it out of moving_
+        } else {
             ++i;
-            continue;
         }
-        entry.moved = false;
-        entry.named_frame = frame_index;
-        const bool refit = entry.structure && entry.refits + 1u < kRefitsToRebuild;
-        if (build(entry, refit)) {
-            entry.refits = refit ? entry.refits + 1u : 0u;
-            ++(refit ? stats_.refits : stats_.builds);
-            (refit ? stats_.refit_triangles : stats_.built_triangles) += entry.input.triangles();
-        }
-        ++i;
     }
 
     // What stands still: oldest first, within the budget (one build at least).
@@ -435,6 +429,30 @@ void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_in
     }
     backend_.end_size_asks();
 
+    stats_.structure_bytes = pages_.used_bytes();
+    stats_.page_bytes = pages_.page_bytes() + scratch_bytes_;
+}
+
+void Geometry::refit() {
+    stats_.refits = stats_.rebuilds = 0u;
+    stats_.refit_triangles = 0u;
+    for (const std::uint64_t key : moving_) {
+        Entry& entry = entries_[key];
+        if (!entry.moved) {
+            continue;
+        }
+        entry.moved = false;
+        const bool refit = entry.structure && entry.refits + 1u < kRefitsToRebuild;
+        if (build(entry, refit)) {
+            entry.refits = refit ? entry.refits + 1u : 0u;
+            ++(refit ? stats_.refits : stats_.rebuilds);
+            stats_.refit_triangles += entry.input.triangles();
+        }
+    }
+    if (built_since_barrier_) {
+        backend_.barrier();
+        built_since_barrier_ = false;
+    }
     stats_.structure_bytes = pages_.used_bytes();
     stats_.page_bytes = pages_.page_bytes() + scratch_bytes_;
 }

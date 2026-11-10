@@ -1584,14 +1584,59 @@ void RendererVk::record_scene_aa() {
     reset_draw_bindings();
 }
 
-void* RendererVk::rt_commands_begin() {
+RendererVk::RtCommands RendererVk::rt_commands_begin() {
     end_scene_pass();
     rt_outer_pass_ = current_pass_;
     gpu_pass(GpuPass::RayTracing);
-    return commands_;
+    return {commands_, nullptr};
 }
 
 void RendererVk::rt_commands_end() { gpu_pass(rt_outer_pass_); }
+
+bool RendererVk::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color) {
+    if (!scene_.color || !scene_.depth || scene_.samples > 1u || (scene_.color->usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u ||
+        (scene_.color->format != vk::kSceneColorFormat && scene_.color->format != VK_FORMAT_R16G16B16A16_SFLOAT)) {
+        return false;
+    }
+    end_scene_pass();
+    settle_depth_clear();
+    image_barrier(commands_, scene_.depth->image, depth_aspects(depth_format_), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  kDepthSampleLayout, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    depth = {scene_.depth->view, static_cast<std::uint32_t>(kDepthSampleLayout)};
+    width = scene_.depth->width;
+    height = scene_.depth->height;
+    color = scene_.color->format == vk::kSceneColorFormat ? rt::ImageFormat::Rgb10a2 : rt::ImageFormat::Rgba16f;
+    return true;
+}
+
+void RendererVk::rt_depth_end() {
+    image_barrier(commands_, scene_.depth->image, depth_aspects(depth_format_), kDepthSampleLayout,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
+                  VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+}
+
+void RendererVk::rt_copy_to_scene(void* image) {
+    const auto* const source = static_cast<const vk::Texture*>(image);
+    if (source == nullptr || !scene_.color || source->width != scene_.color->width || source->height != scene_.color->height ||
+        source->format != scene_.color->format) {
+        return;
+    }
+    end_scene_pass();
+    const vk::Texture& color = *scene_.color;
+    vk::BarriersVk before(commands_);
+    before.image(color.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopyDest);
+    before.issue();
+    VkImageCopy region{};
+    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+    region.dstSubresource = region.srcSubresource;
+    region.extent = {color.width, color.height, 1u};
+    vkCmdCopyImage(commands_, source->image, VK_IMAGE_LAYOUT_GENERAL, color.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
+    vk::BarriersVk after(commands_);
+    after.image(color.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopyDest, gpu::Use::ColorWrite);
+    after.issue();
+}
 
 // The occlusion of the opaque scene: the scene target pass ends for its compute passes, which read the depth, and the
 // multiply draws in it again.

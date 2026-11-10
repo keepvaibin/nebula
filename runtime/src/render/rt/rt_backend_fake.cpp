@@ -23,6 +23,8 @@ std::uint64_t fake::structure_bytes(std::uint32_t triangles) noexcept { return s
 
 std::uint64_t fake::compacted_bytes(std::uint64_t bytes) noexcept { return bytes * 2u / 5u; }
 
+std::uint64_t fake::scene_bytes(std::uint32_t instances) noexcept { return std::uint64_t{instances} * 100u + 1000u; }
+
 bool shaders_load(gpu::Device*) { return true; }
 
 struct Backend::State {
@@ -92,7 +94,9 @@ void Backend::free_structure(Structure& structure) noexcept {
     structure = Structure{};
 }
 
-void Backend::begin(void*, unsigned frame_slot) noexcept {
+void Backend::frame(unsigned) noexcept {}
+
+void Backend::begin(void*, unsigned frame_slot, void*) noexcept {
     state_->frame_slot = frame_slot % kFramesInFlight;
     // A frame's commands follow the frame before's: what that built is whole.
     barrier();
@@ -120,6 +124,21 @@ void Backend::build(const TriangleInput& input, BuildKind, const Structure& to, 
         ++g_log.faults;  // one structure built twice with no barrier between
     }
     state_->finished.erase(to.name);
+}
+
+BuildSizes Backend::scene_sizes(std::uint32_t instances) const {
+    return {fake::scene_bytes(instances), std::uint64_t{instances} * 20u + 100u, 0u};
+}
+
+void Backend::build_scene(gpu::Address instances, std::uint32_t count, const Structure& to, const Range& scratch) {
+    ++g_log.scenes;
+    g_log.scene_instances = count;
+    if (instances == 0u || count == 0u || !state_->alive.contains(to.name) || to.range.size < fake::scene_bytes(count) ||
+        scratch.size < std::uint64_t{count} * 20u + 100u || scratch.page >= state_->pages.size() ||
+        scratch.offset + scratch.size > state_->pages[scratch.page] || !state_->building.empty()) {
+        ++g_log.faults;  // no room, or over structures no barrier finished
+    }
+    state_->building.insert(to.name);
 }
 
 void Backend::barrier() {
@@ -150,6 +169,35 @@ void Backend::compact(const Structure& from, const Structure& to) {
         ++g_log.faults;
     }
     state_->building.insert(to.name);
+}
+
+std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_t height, const char*) {
+    return width != 0u && height != 0u ? g_log.images++ : kNoImage;
+}
+
+void Backend::free_image(std::uint32_t) noexcept {}
+
+void* Backend::image_to_copy(std::uint32_t) { return nullptr; }
+
+void Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) { ++g_log.passes; }
+
+void Backend::end_counters() {}
+
+void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
+    for (unsigned i = 0; i < kCounters; ++i) {
+        out[i] = 0u;
+    }
+}
+
+std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char*) { return bytes != 0u ? g_log.buffers++ : kNoBuffer; }
+
+void Backend::free_buffer(std::uint32_t) noexcept {}
+
+void Backend::buffer_for(std::uint32_t, bool) {}
+
+BufferView Backend::view_of(gpu::Address at, std::uint64_t bytes, std::uint32_t& offset) const {
+    offset = 0u;
+    return {at, bytes};
 }
 
 }  // namespace galaxy::render::rt

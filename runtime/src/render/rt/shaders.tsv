@@ -1,2 +1,4 @@
 name	file	profile	entry
 probe	rt_probe.hlsl	cs_6_5	main
+view	rt_view.hlsl	cs_6_5	main
+skin	rt_skin.hlsl	cs_6_0	main

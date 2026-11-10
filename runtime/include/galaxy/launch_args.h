@@ -25,6 +25,8 @@ enum Diagnostic : unsigned {
     kDiagnoseFileReads = 1u << 11u,      // file-reads: each read and map of the game's files, with its frame
     kDiagnosePipelines = 1u << 12u,      // pipelines: the pipelines the run created (pipelines-<process>.txt)
     kDiagnoseRtInputs = 1u << 13u,       // rt-inputs: what ray tracing reads of each frame list, checked and counted
+    kDiagnoseRtView = 1u << 14u,         // rt-view: the tracer's scene drawn over the game's, each instance its own colour
+    kDiagnoseRtCheck = 1u << 15u,        // rt-check: the tracer's scene against the depth the game drew, coloured and counted
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -49,6 +51,8 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"file-reads", kDiagnoseFileReads},
     {"pipelines", kDiagnosePipelines},
     {"rt-inputs", kDiagnoseRtInputs},
+    {"rt-view", kDiagnoseRtView},
+    {"rt-check", kDiagnoseRtCheck},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
