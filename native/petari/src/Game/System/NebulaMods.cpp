@@ -2566,7 +2566,7 @@ namespace {
             return -1;
         }
         // The thunk writes its result, then each out-parameter (at most 7: the generator refuses more).
-        u32 results = row->result[0] == 'a' ? 0 : 1;
+        u32 results = row->result[0] == '\0' || row->result[0] == 'a' ? 0 : 1;  // empty: gives nothing
         for (const char* c = row->params; *c != '\0'; c++) {
             results += (*c >= 'A' && *c <= 'Z') ? 1 : 0;
         }
@@ -2639,6 +2639,27 @@ namespace {
         }
         const u16 id = lumacore::classOfValue(*pObject);
         return id != 0 && lumacore::isA(id, static_cast< u16 >(ancestor)) ? 1 : 0;
+    }
+
+    void apiLumaStart(const NebulaModApi* pApi) {
+        lumacore::setApi(pApi);
+    }
+
+    s32 apiAddScriptObject(const NebulaPlugin* pMod, const NebulaObjectClass* pShape, const char* pScript) {
+        if (pMod == nullptr || pShape == nullptr || pScript == nullptr) {
+            return -1;
+        }
+        char path[256];
+        nebula_snprintf(path, sizeof(path), "/LumaScripts/%s/%s.lumascript", pMod->id, pScript);
+        char message[256];
+        message[0] = '\0';
+        const s32 script = lumacore::loadScript(pMod, path, message, sizeof(message));
+        if (script < 0) {
+            nebula_log("mods: %s: the object %s has no script: %s\n", pMod->id,
+                       pShape->name != nullptr ? pShape->name : "?", message);
+            return -1;
+        }
+        return lumacore::addScriptObject(pShape, script);
     }
 
     // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set, setting, store_get_text, store_set_text.
@@ -2838,6 +2859,8 @@ namespace {
         apiFieldSet,
         apiClassName,
         apiIsA,
+        apiLumaStart,
+        apiAddScriptObject,
     };
 }  // namespace
 

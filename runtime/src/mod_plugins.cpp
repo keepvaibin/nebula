@@ -45,6 +45,16 @@ struct Loaded {
 };
 
 std::vector<std::unique_ptr<Loaded>> g_loaded;
+// Data mods with scripts: their records, one per mod, for the run.
+std::vector<std::unique_ptr<Loaded>> g_data_mods;
+
+Loaded* data_mod(std::unique_ptr<Loaded> made) {
+    for (const auto& mod : g_data_mods) {
+        if (mod->mod_id == made->mod_id) return mod.get();
+    }
+    g_data_mods.push_back(std::move(made));
+    return g_data_mods.back().get();
+}
 NebulaModApi g_api{};
 void* (*g_find_symbol)(const char*) = nullptr;
 void (*g_log)(const char*) = nullptr;
@@ -403,6 +413,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.release = api_release;
     g_api.format = api_format;
     g_api.unlock_achievement = api_unlock_achievement;
+    // The game's scripts log, keep values and format through the completed table.
+    if (g_api.luma_start != nullptr) g_api.luma_start(&g_api);
     g_achievements = rows.achievements;
     g_achievement_done = std::make_unique<std::atomic<bool>[]>(g_achievements.size());
     {
@@ -521,6 +533,28 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     for (const ObjectClassToSet& object : rows.object_classes) {
         if (g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
             say(object.mod_id + ": the object " + object.name + " can't be added");
+        }
+    }
+    for (const ScriptObjectToAdd& row : rows.script_objects) {
+        // A data mod has no plugin record of its own: the scripts' mod is this one (its id names their folder and store).
+        auto loaded = std::make_unique<Loaded>();
+        loaded->mod_id = row.mod_id;
+        loaded->version = row.mod_version;
+        loaded->self.size = sizeof(NebulaPlugin);
+        loaded->self.id = loaded->mod_id.c_str();
+        loaded->self.version = loaded->version.c_str();
+        Loaded* const mod = data_mod(std::move(loaded));
+        NebulaObjectClass shape{};
+        shape.size = sizeof(NebulaObjectClass);
+        shape.name = row.name.c_str();
+        shape.archive = row.archive.empty() ? nullptr : row.archive.c_str();
+        shape.radius = static_cast<float>(row.radius);
+        shape.kind = row.kind;
+        shape.collision = row.collision ? 1 : 0;
+        shape.shadow_radius = static_cast<float>(row.shadow_radius);
+        shape.clip_radius = static_cast<float>(row.clip_radius);
+        if (g_api.add_script_object == nullptr || g_api.add_script_object(&mod->self, &shape, row.script.c_str()) != 0) {
+            say(row.mod_id + ": the object " + row.name + " can't be added (its script " + row.script + ")");
         }
     }
     for (const MusicToAdd& track : rows.music) {

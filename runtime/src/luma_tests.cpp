@@ -159,9 +159,29 @@ int main() {
     check(refusal(later, "RMGE01", "2.1.0", "windows").empty(), "a plugin with a build for this device");
     later.plugins[0].api = kPluginApi + 1u;
     check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a plugin for a later game");
-    later.plugins[0].api = kPluginApi - 1u;
+    later.plugins[0].api = kOldestPluginApi;
+    check(refusal(later, "RMGE01", "2.1.0", "windows").empty(), "a plugin for the oldest API still running");
+    later.plugins[0].api = kOldestPluginApi - 1u;
     check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H",
           "a plugin for plugin API 1 names the replacement");
+
+    // Objects a script runs.
+    {
+        const std::optional<Manifest> scripted = parse_manifest(R"({"format":1,"id":"s","name":"S","version":"1","game":"RMGE01","layers":[{"objects":[{"name":"GlideBlock","script":"blocks/glide","archive":"Kinopio","kind":"map","radius":120,"collision":true,"clip_radius":2000}]}]})");
+        check(scripted && scripted->layers.size() == 1u && scripted->layers[0].objects.size() == 1u, "an object with a script");
+        if (scripted && !scripted->layers.empty() && !scripted->layers[0].objects.empty()) {
+            const ScriptObject& o = scripted->layers[0].objects[0];
+            check(o.name == "GlideBlock" && o.script == "blocks/glide" && o.archive == "Kinopio" && o.kind == 1 &&
+                      o.radius == 120.0 && o.collision && o.clip_radius == 2000.0 && o.shadow_radius == 0.0,
+                  "its fields");
+            check(layer_sets_game(scripted->layers[0]), "a layer with objects sets the game");
+        }
+        for (const char* bad : {R"("script":"../x")", R"("script":"/x")", R"("script":"a//b")", R"("script":"")",
+                                R"("script":"x","kind":"boss")", R"("script":"x","radius":-1)", R"("script":"x","collision":1)"}) {
+            const std::string text = std::string(R"({"format":1,"id":"s","name":"S","version":"1","game":"RMGE01","layers":[{"objects":[{"name":"A",)") + bad + "}]}]}";
+            check(!parse_manifest(text), (std::string("refused: ") + bad).c_str());
+        }
+    }
 
     const std::optional<Manifest> newer = parse_manifest(R"({"format":2,"everything":"different"})");
     check(newer && refusal(*newer, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a newer format is named, not damaged");

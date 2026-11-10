@@ -872,6 +872,11 @@ typedef struct NebulaModApi {
     /* A class's name and its parent's id, by id (0 is NameObj; null past the last), and whether an object is one. */
     const char* (*class_name)(uint32_t id, uint32_t* parent);
     int32_t (*is_a)(const NebulaValue* object, const char* class_name);
+    /* The host's: the table it completed (log, store, format), once, before any mod row. Plugins never call it. */
+    void (*luma_start)(const struct NebulaModApi* api);
+    /* An object a script runs (luma.json "objects"): the mod's /LumaScripts/<mod id>/<script>.lumascript on `shape`,
+       whose callbacks the script's handlers take. 0: added; -1: refused (logged with the reason). */
+    int32_t (*add_script_object)(const NebulaPlugin* mod, const NebulaObjectClass* shape, const char* script);
 } NebulaModApi;
 
 /* True when this Nebula has `field` (fields are added at the end over time):
