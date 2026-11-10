@@ -861,7 +861,7 @@ void MarioActor::drawReflectModel() const {
 }
 
 void MarioActor::drawModelBlur() const {
-    if (isAllHidden()) {
+    if (isAllHidden() || mModHidden) {
         return;
     }
 

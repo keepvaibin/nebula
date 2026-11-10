@@ -3,10 +3,17 @@
    native library for the device can build against it.
 
    A plugin exports the two functions NEBULA_PLUGIN_ENTRY makes. Fields are only ever added at the end of NebulaModApi:
-   a plugin built against this header keeps working on every later Nebula. */
+   a plugin built against this header keeps working on every later Nebula. On an earlier one, a field added after it
+   is not there: NEBULA_MOD_API_HAS(api, field) says whether it is, before the plugin calls it.
+
+   A null object, layout, point or name where a call needs one makes the call do nothing: it returns 0, null, or -1
+   where -1 means "no such". Where null means something (find_actor's `name`, stop_effect's), the call says so. A
+   number that is NaN or infinite, where a position, motion, angle, scale, time or tuning number is set, does the same:
+   the call changes nothing. */
 #ifndef NEBULA_MOD_API_H
 #define NEBULA_MOD_API_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -84,8 +91,8 @@ typedef enum NebulaModEvent {
     /* A part of a cutscene starts. value: the part's number in the cutscene, from 0. name: the part, as the
        cutscene's time sheet names it. */
     NEBULA_MOD_EVENT_CUTSCENE_PART,
-    /* The camera changes. value: 0 an area's camera, 1 an event camera (a cutscene's, start_camera's). name: its
-       id, as the stage's camera table names it. */
+    /* The camera changes. value: 0 an area's camera (also when the last event camera ends and the area's takes the view
+       back), 1 an event camera (a cutscene's, a talk's, start_camera's). name: its id, as the stage's camera table names it. */
     NEBULA_MOD_EVENT_CAMERA_CHANGE,
     /* A sound effect is about to start. value: its number; name: its name. What you return plays: that number, another
        sound's, or -1 for none. Subscribing costs a call per sound. */
@@ -352,7 +359,8 @@ typedef struct NebulaModApi {
     void (*kill)(NebulaActor* actor);
     /* 1 while it's out of the level (killed, or not yet appeared). */
     int32_t (*is_dead)(NebulaActor* actor);
-    /* Its model drawn (1) or not (0); it still moves and touches. Nothing for an object with no model. */
+    /* Its model drawn (1) or not (0); it still moves and touches. Nothing for an object with no model. The player: his
+       hands, face and power-up suit with it; his shadow stays. */
     void (*show_model)(NebulaActor* actor, int32_t show);
     /* 1: it started. 0: the object has no such thing, or nothing to play it with. */
     int32_t (*play)(NebulaActor* actor, NebulaModPlay what, const char* name);
@@ -368,7 +376,7 @@ typedef struct NebulaModApi {
     uint32_t (*buttons_held)(void);
     /* The controls pressed on this frame only: NEBULA_BUTTON_*. */
     uint32_t (*buttons_pressed)(void);
-    /* The stick, each from -1 to 1. */
+    /* The stick, each from -1 to 1 (either may be null). */
     void (*stick)(float* x, float* y);
     /* In a stage: the camera shakes, as when something heavy lands (shake_camera_by chooses how hard). */
     void (*shake_camera)(void);
@@ -507,7 +515,8 @@ typedef struct NebulaModApi {
     /* The rail's whole length. */
     float (*rail_length)(NebulaActor* actor);
 
-    /* The world. 1 and where (`hit`) if the line from `from` to `to` meets the map's collision; 0 if it's clear. */
+    /* The world. 1 and where (`hit`, which may be null) if the line from `from` to `to` meets the map's collision; 0 if
+       it's clear. */
     int32_t (*raycast)(const float* from, const float* to, float* hit);
     /* 1 while it stands on the map: the player, or an object with collision of its own. */
     int32_t (*is_on_ground)(NebulaActor* actor);
@@ -537,7 +546,9 @@ typedef struct NebulaModApi {
     int32_t (*start_cutscene)(NebulaActor* actor, const char* name);
     /* The actor's part in that cutscene ends; the cutscene ends when every part has. */
     void (*end_cutscene)(NebulaActor* actor, const char* name);
-    /* 1 while any cutscene plays. */
+    /* 1 while any cutscene plays, while the stage starts (its opening camera and the player's arrival) and while a star's
+       get sequence plays ("You got a Star!"), which send no NEBULA_MOD_EVENT_CUTSCENE: the player has control when it is
+       0. A message is best shown then. */
     int32_t (*is_cutscene_playing)(void);
     /* In a stage: the camera shakes, as hard as `how` (NEBULA_SHAKE_*). */
     void (*shake_camera_by)(NebulaShake how);
@@ -555,15 +566,17 @@ typedef struct NebulaModApi {
     void (*change_stage)(const char* galaxy, int32_t mission);
     /* In a stage: the player goes back to the dome, as when a galaxy is left. */
     void (*back_to_dome)(void);
-    /* 1 if the save has that event flag (a name of the game's progression, or one set_event_flag added) on. */
+    /* 1 if the save has that event flag (a name of the game's progression, or one set_event_flag added) on.
+       "SpinAndStarPointer" is the spin and the Star Pointer the Gateway's Luma grants. */
     int32_t (*is_event_flag_on)(const char* name);
-    /* Turns it on in the save (written with the next save). */
+    /* Turns it on in the save (written with the next save). "SpinAndStarPointer" grants the spin and the Star Pointer
+       at once, in the stage being played too. */
     void (*set_event_flag_on)(const char* name);
     /* 1 if the save has that galaxy's star of that number. */
     int32_t (*has_star)(const char* galaxy, int32_t star);
-    /* In a stage: the game's information box (at the bottom, or the middle with `centre` 1) shows a message
-       by its id (the game's or add_text's), else these words (with the game's message tags). It stays until
-       hide_message. */
+    /* In a stage: the game's information box (at the top, or the middle with `centre` 1) shows a message
+       by its id (the game's or add_text's), else these words (with the game's message tags; lines wrap between
+       words). It stays until hide_message. Asked for while the stage starts, it appears when the player has control. */
     void (*show_message)(const char* utf8_or_id, int32_t centre);
     /* The information box goes. */
     void (*hide_message)(void);
@@ -668,7 +681,7 @@ typedef struct NebulaModApi {
     int32_t (*set_story)(const char* key, const char* value);
     /* The game writes the save, as it does after a star. */
     void (*save_game)(void);
-    /* A file's tuning number by "<file stem>.<name>" ("Kuribo.cWalkSpeed"), or a list's place by "<file stem>.<name>[<i>]", as luma.json's
+    /* A file's tuning number by "<file stem>.<name>" ("GameRules.cPlayerHealth"), or a list's place by "<file stem>.<name>[<i>]", as luma.json's
        "tunables" set them. Any time; most are read when an object starts, so the host sets luma.json's before the first stage. Whole kinds
        round and clamp. 0: done; -1: no such number. */
     int32_t (*set_tunable)(const char* key, double value);
@@ -727,7 +740,14 @@ typedef struct NebulaModApi {
     /* The camera's near plane in units: nothing closer to the camera is drawn. 0: the game's (100; 10 in its own
        first-person view). Kept until set again. */
     void (*set_camera_near)(float distance);
+    /* One of the mod's achievements (its luma.json "achievements", by id) is unlocked: 1 now, 0 when it was already or
+       the mod has none of that id. Its pop-up shows; the board keeps it under Mods. */
+    int32_t (*unlock_achievement)(const NebulaPlugin* self, const char* id);
 } NebulaModApi;
+
+/* Whether this Nebula's interface has `field` (one added at the end since the plugin's oldest Nebula):
+   if (NEBULA_MOD_API_HAS(api, unlock_achievement)) api->unlock_achievement(self, "coins"); */
+#define NEBULA_MOD_API_HAS(api, field) ((api)->size >= offsetof(NebulaModApi, field) + sizeof((api)->field) && (api)->field != 0)
 
 /* The HUD's parts, for show_hud: any together. */
 typedef enum NebulaHudPart {

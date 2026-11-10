@@ -44,7 +44,8 @@ using namespace NebulaUi;
 
 namespace {
 
-    enum { TabAll, TabStory, TabChallenges, TabExtras, TabStats, TabNum };
+    // Mods: the running mods' own achievements, a tab only while there are any.
+    enum { TabAll, TabStory, TabChallenges, TabExtras, TabStats, TabMods, TabNum };
     enum { FilterAll, FilterUnlocked, FilterLocked, FilterNum };
     enum { ZoneTabs, ZoneFilter, ZoneList };
 
@@ -317,6 +318,7 @@ struct NebulaBoardParts {
     Window* mSummaryBar;
     TextBox* mPercent;
     Chip mTabs[TabNum];
+    s32 mTabNum;  // the tabs shown: Mods only with mods' achievements
     Chip mFilters[FilterNum];
     TextBox* mTabCount;  // the tab's own count, right of the filters
     Chip mBack;
@@ -443,7 +445,8 @@ namespace {
     }
 
     bool isInGroup(s32 tab, s32 group) {
-        return tab == TabAll || (tab == TabStory && group == 0) || (tab == TabChallenges && group == 1) || (tab == TabExtras && group == 2);
+        return tab == TabAll || (tab == TabStory && group == 0) || (tab == TabChallenges && group == 1) || (tab == TabExtras && group == 2) ||
+               (tab == TabMods && group == 3);
     }
 
 
@@ -575,8 +578,8 @@ namespace {
         wrapWords(p->mEmpty, empty.c_str(),p->mListRight - p->mListLeft - 40.0f, &width, &height);
 
         // The tabs across the panel's whole width, each the same; a label too long for its tab narrows.
-        const f32 tabWidth = (right - left - cTabGap * (TabNum - 1)) / TabNum;
-        for (s32 i = 0; i < TabNum; i++) {
+        const f32 tabWidth = (right - left - cTabGap * (p->mTabNum - 1)) / p->mTabNum;
+        for (s32 i = 0; i < p->mTabNum; i++) {
             Chip& rChip = p->mTabs[i];
             rChip.mText->mScale = Vec2f(1.0f, 1.0f);
             measure(rChip.mText, 4000.0f, &width, &height);
@@ -707,7 +710,7 @@ namespace {
             const bool chosen = tab ? k == p->mTab : k == p->mFilterMode;
             const bool focused = (tab ? p->mZone == ZoneTabs && p->mTabFocus == k : p->mZone == ZoneFilter && p->mFilterMode == k) &&
                                  (!p->mPointerMode || p->mPointerIn);
-            rChip.mRoot->SetVisible(tab || filters);
+            rChip.mRoot->SetVisible(tab ? k < p->mTabNum : filters);
             placeChip(rChip, rChip.mX, tab ? p->mTabY : p->mFilterY, chosen, focused, pulse);
             rChip.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, tab ? cTabSize : cFilterSize), 0.0f);
             rChip.mText->mAlpha = toAlpha(chosen ? 1.0f : 0.8f);
@@ -889,7 +892,7 @@ namespace {
     }
 
     void selectTab(NebulaBoardParts* p, s32 tab) {
-        if (tab < 0 || tab >= TabNum || tab == p->mTab) {
+        if (tab < 0 || tab >= p->mTabNum || tab == p->mTab) {
             return;
         }
         p->mSwitchDirection = tab > p->mTab ? 1 : -1;
@@ -906,7 +909,7 @@ namespace {
 
     // A row of tabs or filters wraps: past the last comes the first. The list slides in from the side moved toward.
     void stepTab(NebulaBoardParts* p, s32 delta) {
-        selectTab(p, (p->mTab + delta + TabNum) % TabNum);
+        selectTab(p, (p->mTab + delta + p->mTabNum) % p->mTabNum);
         p->mSwitchDirection = delta;
     }
 
@@ -1021,7 +1024,7 @@ namespace {
 
         const bool inList = x >= p->mListLeft - 4.0f && x <= p->mListRight + 14.0f && y <= p->mListTop + 4.0f && y >= p->mListBottom - 4.0f;
         s32 overTab = -1;
-        for (s32 i = 0; i < TabNum; i++) {
+        for (s32 i = 0; i < p->mTabNum; i++) {
             if (isInside(x, y, p->mTabs[i].mX, p->mTabY, p->mTabs[i].mWidth, cTabHeight + 4.0f)) {
                 overTab = i;
             }
@@ -1195,7 +1198,8 @@ void NebulaAchievementBoard::init(const TableIter& /*rIter*/) {
     setGlyph(p->mTitleGlyph, cGlyphCrown, cTitleGlyph);
 
     // The tabs and the filter.
-    static const char* const cTabIds[TabNum] = {"TabAll", "TabStory", "TabChallenges", "TabExtras", "TabStats"};
+    static const char* const cTabIds[TabNum] = {"TabAll", "TabStory", "TabChallenges", "TabExtras", "TabStats", "TabMods"};
+    p->mTabNum = NebulaAchievements::getModNum() > 0 ? TabNum : TabMods;
     for (s32 i = 0; i < TabNum; i++) {
         MR::FormattedName name;
         name.format("NbTab%d", i);
@@ -1462,7 +1466,20 @@ void NebulaAchievementBoard::open() {
         if (!rCard.mUnlocked && !NebulaAchievements::getProgress(i, file, &rCard.mCurrent, &rCard.mGoal)) {
             rCard.mGoal = 0;
         }
-        if (rCard.mUnlocked) {
+        if (NebulaAchievements::isMod(i)) {
+            // A mod's says what earns it, locked or not (a hidden one is listed only once unlocked).
+            MR::Text16 description;
+            NebulaAchievements::getModDescription(description, i);
+            const char16_t* pDescription = description.c_str();
+            u32 units = 1;
+            while (pDescription[units - 1] != 0) {
+                units++;
+            }
+            char16_t* pHint = rCard.mHintText.room(units);
+            for (u32 k = 0; k < units; k++) {
+                pHint[k] = pDescription[k];
+            }
+        } else if (rCard.mUnlocked) {
             MR::FormattedName id("AchievementHint.%s", NebulaAchievements::getId(i));
             getText(rCard.mHintText, id.c_str());
         } else if (rCard.mGoal > 0) {

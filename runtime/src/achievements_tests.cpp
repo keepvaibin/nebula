@@ -85,6 +85,19 @@ int main() {
     ach::set_path_for_tests(path);
     expect(ach::unlocked("comets") && ach::unlocked_date("comets") == 1, "unlocked on an unreadable day: 1");
 
+    // A mod's achievements: keys under "mod:", kept in the same file beside the game's own.
+    expect(!ach::unlock("mod:example/first"), "unlock() takes only the game's own ids");
+    expect(!ach::unlock_mod("example/first"), "a mod's key needs the mod: prefix");
+    expect(!ach::unlock_mod("mod:"), "an empty mod key is refused");
+    expect(!ach::unlock_mod("mod:a=b") && !ach::unlock_mod("mod:a\nb") && !ach::unlock_mod("mod:a\rb"),
+           "a key that would read back as another line is refused");
+    expect(ach::unlock_mod("mod:example/first"), "a mod's achievement unlocks");
+    expect(!ach::unlock_mod("mod:example/first"), "and only once");
+    expect(ach::unlocked("mod:example/first") && ach::unlocked_date("mod:example/first") >= 20260101, "with its day");
+    ach::set_path_for_tests(path);
+    expect(ach::unlocked("mod:example/first") && ach::unlocked("comets"), "both kept across sessions");
+    expect(!ach::unlocked("mod:example/second"), "another of the mod's is still locked");
+
     std::filesystem::remove(path);
     if (s_failures == 0) std::printf("achievements: all passed\n");
     return s_failures == 0 ? 0 : 1;

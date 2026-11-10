@@ -25,6 +25,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -53,12 +54,22 @@ struct ModOption {
     bool must_choose = false;
 };
 
-// Where two enabled mods change the same things: `files` game files and `textures` textures.
+// Where two enabled mods change the same things: `files` game files, `textures` textures, and `settings` what their rows
+// and merges set (tunables, table cells, lines, constants...: luma::setting_keys).
 struct ModOverlap {
     std::string other;       // the other mod's id
     bool other_above = false;  // it is higher in the list (it wins these)
     unsigned files = 0;
     unsigned textures = 0;
+    unsigned settings = 0;
+};
+
+// What a mod changes, for its overlaps with the others: disc paths ("name:x.arc" for a file name alone), texture names,
+// and what its rows and merges set (luma::setting_keys, luma::merge_keys).
+struct ModChanges {
+    std::set<std::string> paths;
+    std::set<std::string> textures;
+    std::set<std::string> settings;
 };
 
 // A texture of a pack: its name hash (galaxy::textures::pack_file_key) and what its folder's words say
@@ -80,7 +91,7 @@ struct ModInfo {
     bool loose = false;
     bool package = false;  // a .luma: luma.json, and layers of the mod's files
     std::shared_ptr<const galaxy::luma::Manifest> luma;
-    bool luma_changes_game = false;  // its layers in use set files or tunables
+    bool luma_changes_game = false;  // it, or its layers in use, set anything the game takes as it starts (luma::manifest_sets_game)
     std::vector<std::filesystem::path> luma_textures;  // its layers' textures/ and movies/ in use, in order
     std::vector<std::filesystem::path> luma_movies;
     //                       // loose files placed by name
@@ -104,10 +115,15 @@ struct ModInfo {
     std::string pack_title;
     std::string pack_author;
     std::string pack_description;
-    std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
+    std::string problem;  // why it does nothing for this game (for another game, unreadable XML), or what the list makes of it
+    std::string own_problem;  // its own problem, before what the other mods on the list make of it (settle_mods)
+    std::shared_ptr<const ModChanges> changes;
     bool unreadable = false;  // a folder of the mod could not be read in full (problem says so when nothing else does)
 };
 
+// What kinds of things a mod changes, as the MODS page names them ("FILES, SETTINGS, TEXTURES"): Riivolution choices,
+// files, settings (tunables, rows, lines, merges), textures, movies and code. Empty when nothing.
+[[nodiscard]] std::string change_kinds(const ModInfo& mod);
 // Whether a mod changes the game's files (its files, code patches, saves): such changes take a restart.
 [[nodiscard]] bool changes_game_files(const ModInfo& mod) noexcept;
 // The enabled mods' textures/ and movies/ folders, lowest in the list first (the last wins), for the live renderer.
@@ -133,6 +149,9 @@ void set_code_off_after_crash() noexcept;
 [[nodiscard]] std::vector<ModInfo> scan_mods(const std::string& game_id = {});
 // Saves the mods' order, on/off state and choices (for the next start); false when the file could not be written.
 bool save_mod_settings(std::span<const ModInfo> mods);
+// The list's relations again, after the player turned mods on or off or moved them: places, the same mod twice, needs,
+// saves and conflicts (each mod's problem from its own), and the overlaps. scan_mods ends with it.
+void settle_mods(std::vector<ModInfo>& mods);
 // A mod of a scan_mods list turned on (to the top of the enabled ones) or off (among the disabled ones by name); the
 // orders renumbered.
 void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled);

@@ -79,6 +79,12 @@ std::vector<fs::directory_entry> entries_of(const fs::path& dir, bool* unreadabl
 
 constexpr const char* kUnreadableMod = "A FOLDER OF THIS MOD COULD NOT BE READ IN FULL";
 
+// Whether what a mod brings is used: it is on, and it is no .luma with a problem (such a mod is used for nothing; another
+// kind's problem says what of it can't work, and the rest does).
+bool in_use(const ModInfo& mod) noexcept {
+    return mod.enabled && (!mod.package || mod.problem.empty());
+}
+
 // A child of `dir` named `name` whatever its case (Riivolution assumes an SD card's case-insensitive names).
 std::optional<fs::path> child_any_case(const fs::path& dir, std::string_view name, bool want_directory) {
     std::error_code error;
@@ -412,9 +418,6 @@ constexpr const char* kDiscFolders[] = {"AudioRes", "LayoutData", "MapPartsData"
                                          "UsSpanish", "EuEnglish", "EuFrench", "EuGerman", "EuItalian", "EuSpanish",
                                          "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese", "HomeButton2"};
 
-// The package format this build reads (LumaLink's PACKAGE_FORMAT); old ones keep working.
-constexpr long long kPackageFormat = 1;
-
 struct ModLayout {
     fs::path package;  // luma.json of a converted mod
     fs::path sd_root;           // Riivolution: where riivolution/ is
@@ -622,20 +625,16 @@ std::string own_saves_tag(const ModInfo& mod) {
     return mod.luma->save_tag;
 }
 
-// A mod's libraries for this device as they are: changed files ask the player again.
+// A mod's libraries for this device as they are, each with the files beside it (code_hash): changed files ask the
+// player again.
 std::string plugin_token(const fs::path& mod, const luma::Manifest& manifest) {
     std::uint64_t hash = 14695981039346656037ull;
     bool any = false;
     for (const luma::Plugin& plugin : manifest.plugins) {
         const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
         if (binary == plugin.binaries.end()) continue;
-        std::ifstream in(mod / fs::path(from_utf8(binary->second)), std::ios::binary);
-        char buffer[65536];
-        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) {
-            for (std::streamsize i = 0; i < in.gcount(); ++i) {
-                hash = (hash ^ static_cast<unsigned char>(buffer[i])) * 1099511628211ull;
-            }
-        }
+        const std::string code = code_hash(mod / fs::path(from_utf8(binary->second)));
+        for (const char c : code.empty() ? std::string("unreadable") : code) hash = (hash ^ static_cast<unsigned char>(c)) * 1099511628211ull;
         any = true;
     }
     if (!any) return {};
@@ -798,7 +797,7 @@ Session& session() {
     return s;
 }
 
-// What a restart would change: the enabled mods, their order and their choices.
+// What a restart would change: the enabled mods, their order, their choices and whether their code may run.
 std::string mods_signature(std::span<const ModInfo> mods) {
     std::vector<const ModInfo*> sorted;
     for (const ModInfo& m : mods) sorted.push_back(&m);
@@ -806,7 +805,7 @@ std::string mods_signature(std::span<const ModInfo> mods) {
     std::string out;
     for (const ModInfo* m : sorted) {
         if (!m->enabled || !changes_game_files(*m)) continue;
-        out += m->id + (m->own_text ? "" : " text=game") + '\n';
+        out += m->id + (m->own_text ? "" : " text=game") + (m->code_allowed ? " code" : "") + '\n';
         for (const ModOption& o : m->options) out += o.key + '=' + std::to_string(o.selected) + '\n';
     }
     return out;
@@ -939,6 +938,46 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
 
 }  // namespace
 
+std::string change_kinds(const ModInfo& mod) {
+    const bool files = mod.files || mod.loose || (mod.changes != nullptr && !mod.changes->paths.empty());
+    const bool settings = mod.changes != nullptr && !mod.changes->settings.empty();
+    std::string kinds;
+    for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{files, "FILES"},
+                                   std::pair{settings, "SETTINGS"}, std::pair{mod.textures, "TEXTURES"},
+                                   std::pair{mod.movies, "MOVIES"}, std::pair{!mod.code_token.empty(), "CODE"}}) {
+        if (on) kinds += kinds.empty() ? name : std::string(", ") + name;
+    }
+    return kinds;
+}
+
+std::string code_hash(const fs::path& library) {
+    std::error_code error;
+    std::vector<fs::path> files;
+    for (auto it = fs::directory_iterator(library.parent_path(), error); !error && it != fs::directory_iterator(); it.increment(error)) {
+        std::error_code status_error;
+        if (it->is_regular_file(status_error)) files.push_back(it->path());
+    }
+    if (error || files.empty()) return {};
+    std::sort(files.begin(), files.end());
+    std::uint64_t hash = 14695981039346656037ull;
+    const auto add = [&hash](const char* bytes, std::size_t size) {
+        for (std::size_t i = 0; i < size; ++i) hash = (hash ^ static_cast<unsigned char>(bytes[i])) * 1099511628211ull;
+    };
+    for (const fs::path& file : files) {
+        const std::u8string name = file.filename().u8string();
+        add(reinterpret_cast<const char*>(name.c_str()), name.size() + 1u);
+        std::ifstream in(file, std::ios::binary);
+        if (!in) return {};
+        char buffer[65536];
+        while (in.read(buffer, sizeof(buffer)) || in.gcount() > 0) add(buffer, static_cast<std::size_t>(in.gcount()));
+        const char end = 0;
+        add(&end, 1u);
+    }
+    char text[17];
+    std::snprintf(text, sizeof(text), "%016llx", static_cast<unsigned long long>(hash));
+    return text;
+}
+
 bool safe_path_part(std::string_view part) {
     if (part.empty() || part.find_first_of(":/\\") != std::string_view::npos ||
         part.find_first_not_of(". ") == std::string_view::npos) {
@@ -1017,6 +1056,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
     // What each mod changes, by its id: disc paths ("name:x.arc" for a file name alone) and texture names.
     std::map<std::string, std::set<std::string>> changed_paths;
     std::map<std::string, std::set<std::string>> changed_textures;
+    // And what its rows and merges set (luma::setting_keys, luma::merge_keys).
+    std::map<std::string, std::set<std::string>> changed_settings;
     std::set<std::string> new_mods;
     for (const fs::path& dir : dirs) {
         ModInfo mod;
@@ -1181,9 +1222,12 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     mod.options.push_back(std::move(option));
                 }
                 const luma::Situation situation = situation_of(mod, region_id, playing);
+                std::set<std::string>& settings_set = changed_settings[mod.id];
+                for (std::string& key : luma::setting_keys(static_cast<const luma::Rows&>(*manifest))) settings_set.insert(std::move(key));
                 for (const luma::Layer& layer : manifest->layers) {
                     if (!luma::layer_used(layer, situation)) continue;
-                    mod.luma_changes_game = mod.luma_changes_game || !layer.tunables.empty() ||!layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty();
+                    for (std::string& key : luma::setting_keys(layer)) settings_set.insert(std::move(key));
+                    mod.luma_changes_game = mod.luma_changes_game || luma::layer_sets_game(layer);
                     if (layer.path.empty()) continue;
                     const fs::path place = dir / fs::path(from_utf8(layer.path));
                     std::error_code place_error;
@@ -1191,7 +1235,17 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         mod.problem = "THIS FILE IS DAMAGED";
                         continue;
                     }
-                    if (child_any_case(place, "merge", true)) mod.luma_changes_game = true;
+                    if (const std::optional<fs::path> merge = child_any_case(place, "merge", true)) {
+                        mod.luma_changes_game = true;
+                        std::error_code walk_error;
+                        std::error_code status_error;
+                        for (auto walk = fs::recursive_directory_iterator(*merge, walk_error);
+                             !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
+                            if (!walk->is_regular_file(status_error)) continue;
+                            const std::string under = galaxy::path_text(walk->path().lexically_relative(*merge).generic_string());
+                            for (std::string& key : luma::merge_keys(under, read_text(walk->path()))) settings_set.insert(std::move(key));
+                        }
+                    }
                     if (std::optional<fs::path> files = child_any_case(place, "files", true)) {
                         mod.luma_changes_game = true;
                         list_files(*files, std::string(), changed_paths[mod.id]);
@@ -1208,6 +1262,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     }
                     if (std::optional<fs::path> movies = child_any_case(place, "movies", true)) mod.luma_movies.push_back(*movies);
                 }
+                mod.luma_changes_game = mod.luma_changes_game || luma::manifest_sets_game(*manifest);
                 if (!mod.luma_textures.empty()) {
                     const std::string title = mod.pack_title;
                     const std::string author = mod.pack_author;
@@ -1275,39 +1330,81 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             if (them != mods.end() && self < them) std::rotate(self, self + 1, them + 1);
         }
     }
-    // What a mod needs of the others on the list.
+    // What each mod changes, kept with it: the list settles again whenever the player changes it (settle_mods).
     for (ModInfo& mod : mods) {
-        if (!mod.luma || !mod.problem.empty()) continue;
-        const auto title = [](const ModInfo& other) { return other.pack_title.empty() ? other.id : other.pack_title; };
-        for (const luma::Dependency& need : mod.luma->needs) {
-            const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) { return m.luma && m.luma->id == need.id; });
-            if (them == mods.end() || !them->enabled || !them->problem.empty()) {
-                mod.problem = "THIS MOD NEEDS: " + (them == mods.end() ? need.id : title(*them));
-                break;
-            }
-            if (!need.version.empty() && luma::compare_versions(them->luma->version, need.version) < 0) {
-                mod.problem = "THIS MOD NEEDS A NEWER VERSION OF: " + title(*them);
-                break;
-            }
-        }
-        if (!mod.problem.empty()) continue;
-        // One family of saves at a time: the higher on the list has them.
-        if (const std::string tag = own_saves_tag(mod); !tag.empty() && mod.enabled) {
-            for (const ModInfo& above : mods) {
-                if (&above == &mod) break;
-                const std::string theirs = above.enabled && above.problem.empty() ? own_saves_tag(above) : std::string();
-                if (!theirs.empty() && theirs != tag) {
-                    mod.problem = "THIS MOD CAN'T RUN WITH: " + title(above);
+        mod.own_problem = mod.problem;
+        auto changes = std::make_shared<ModChanges>();
+        changes->paths = std::move(changed_paths[mod.id]);
+        changes->textures = std::move(changed_textures[mod.id]);
+        changes->settings = std::move(changed_settings[mod.id]);
+        mod.changes = std::move(changes);
+    }
+    settle_mods(mods);
+    return mods;
+}
+
+void settle_mods(std::vector<ModInfo>& mods) {
+    static const ModChanges kNone;
+    const auto changes_of = [](const ModInfo& mod) -> const ModChanges& { return mod.changes ? *mod.changes : kNone; };
+    for (ModInfo& mod : mods) {
+        mod.problem = mod.own_problem;
+        mod.overlaps.clear();
+    }
+    const auto title = [](const ModInfo& other) { return other.pack_title.empty() ? other.id : other.pack_title; };
+    // The same mod twice (two folders holding one id, as a copy made by hand): the one higher on the list is used.
+    for (auto it = mods.begin(); it != mods.end(); ++it) {
+        if (!it->luma || !it->enabled || !it->problem.empty()) continue;
+        const auto twin = std::find_if(mods.begin(), it, [&](const ModInfo& m) {
+            return m.luma && m.enabled && m.problem.empty() && m.luma->id == it->luma->id;
+        });
+        if (twin != it) it->problem = "ANOTHER COPY OF THIS MOD IS ON: " + twin->id;
+    }
+    // What a mod needs of the others on the list, again until nothing changes: a mod that loses what it needs takes
+    // with it the mods that need it.
+    const auto problems = [&mods] { return std::count_if(mods.begin(), mods.end(), [](const ModInfo& m) { return !m.problem.empty(); }); };
+    for (auto before = problems() - 1; before != problems();) {
+        before = problems();
+        for (ModInfo& mod : mods) {
+            if (!mod.luma || !mod.problem.empty()) continue;
+            for (const luma::Dependency& need : mod.luma->needs) {
+                const auto any = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) { return m.luma && m.luma->id == need.id; });
+                const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) {
+                    return m.luma && m.luma->id == need.id && m.enabled && m.problem.empty();
+                });
+                if (them == mods.end()) {
+                    mod.problem = "THIS MOD NEEDS: " + (any == mods.end() ? need.id : title(*any));
+                    break;
+                }
+                if (!need.version.empty() && luma::compare_versions(them->luma->version, need.version) < 0) {
+                    mod.problem = "THIS MOD NEEDS A NEWER VERSION OF: " + title(*them);
                     break;
                 }
             }
-        }
-        if (!mod.problem.empty()) continue;
-        for (const luma::Dependency& conflict : mod.luma->conflicts) {
-            const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) { return m.luma && m.luma->id == conflict.id && m.enabled; });
-            if (them != mods.end() && (conflict.version.empty() || luma::compare_versions(them->luma->version, conflict.version) < 0)) {
-                mod.problem = "THIS MOD CAN'T RUN WITH: " + title(*them);
-                break;
+            if (!mod.problem.empty()) continue;
+            // One family of saves at a time: the higher on the list has them.
+            if (const std::string tag = own_saves_tag(mod); !tag.empty() && mod.enabled) {
+                for (const ModInfo& above : mods) {
+                    if (&above == &mod) break;
+                    const std::string theirs = above.enabled && above.problem.empty() ? own_saves_tag(above) : std::string();
+                    if (!theirs.empty() && theirs != tag) {
+                        mod.problem = "THIS MOD CAN'T RUN WITH: " + title(above);
+                        break;
+                    }
+                }
+            }
+            if (!mod.problem.empty()) continue;
+            for (const luma::Dependency& conflict : mod.luma->conflicts) {
+                // A mod refused for its own reason is no conflict. Of two that can't run together the lower on the list is
+                // left off, whichever of them says so: the top of the list wins.
+                const auto them = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) {
+                    return &m != &mod && m.luma && m.luma->id == conflict.id && m.enabled && m.problem.empty();
+                });
+                if (mod.enabled && them != mods.end() &&
+                    (conflict.version.empty() || luma::compare_versions(them->luma->version, conflict.version) < 0)) {
+                    ModInfo& lower = &*them > &mod ? *them : mod;
+                    lower.problem = "THIS MOD CAN'T RUN WITH: " + title(&lower == &mod ? *them : mod);
+                    if (&lower == &mod) break;
+                }
             }
         }
     }
@@ -1319,14 +1416,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         return slash == std::string::npos ? path : path.substr(slash + 1u);
     };
     for (std::size_t i = 0; i < mods.size(); ++i) {
-        if (!mods[i].enabled) continue;
+        if (!in_use(mods[i])) continue;
         for (std::size_t j = 0; j < mods.size(); ++j) {
-            if (i == j || !mods[j].enabled) continue;
+            if (i == j || !in_use(mods[j])) continue;
             ModOverlap overlap;
             overlap.other = mods[j].id;
             overlap.other_above = j < i;
-            const std::set<std::string>& mine = changed_paths[mods[i].id];
-            const std::set<std::string>& theirs = changed_paths[mods[j].id];
+            const std::set<std::string>& mine = changes_of(mods[i]).paths;
+            const std::set<std::string>& theirs = changes_of(mods[j]).paths;
             for (const std::string& path : mine) {
                 if (theirs.count(path) != 0u) {
                     ++overlap.files;
@@ -1342,13 +1439,26 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     }
                 }
             }
-            const std::set<std::string>& my_textures = changed_textures[mods[i].id];
-            const std::set<std::string>& their_textures = changed_textures[mods[j].id];
+            const std::set<std::string>& my_textures = changes_of(mods[i]).textures;
+            const std::set<std::string>& their_textures = changes_of(mods[j]).textures;
             for (const std::string& name : my_textures) overlap.textures += their_textures.count(name) != 0u ? 1u : 0u;
-            if (overlap.files != 0u || overlap.textures != 0u) mods[i].overlaps.push_back(std::move(overlap));
+            // Settings: the same key, or a row one of them removes and the other changes a cell of.
+            const std::set<std::string>& my_settings = changes_of(mods[i]).settings;
+            const std::set<std::string>& their_settings = changes_of(mods[j]).settings;
+            const auto has_cell_of = [](const std::set<std::string>& keys, const std::string& row) {
+                const std::string prefix = "cell" + row.substr(3) + "\t";
+                const auto at = keys.lower_bound(prefix);
+                return at != keys.end() && at->starts_with(prefix);
+            };
+            for (const std::string& key : my_settings) {
+                bool shared = their_settings.count(key) != 0u;
+                if (!shared && key.starts_with("cell\t")) shared = their_settings.count("row" + key.substr(4, key.rfind('\t') - 4)) != 0u;
+                if (!shared && key.starts_with("row\t")) shared = has_cell_of(their_settings, key);
+                overlap.settings += shared ? 1u : 0u;
+            }
+            if (overlap.files != 0u || overlap.textures != 0u || overlap.settings != 0u) mods[i].overlaps.push_back(std::move(overlap));
         }
     }
-    return mods;
 }
 
 void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled) {
@@ -1399,7 +1509,7 @@ bool changes_game_files(const ModInfo& mod) noexcept {
 std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods) {
     std::vector<std::filesystem::path> out;
     for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
-        if (!it->enabled || !it->textures) continue;
+        if (!in_use(*it) || !it->textures) continue;
         out.insert(out.end(), it->luma_textures.begin(), it->luma_textures.end());
         const ModLayout layout = layout_of(it->path);
         if (!layout.textures.empty()) out.push_back(layout.textures);
@@ -1410,7 +1520,7 @@ std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods
 std::vector<std::uint32_t> texture_folder_categories_off(std::span<const ModInfo> mods) {
     std::vector<std::uint32_t> out;
     for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
-        if (!it->enabled || !it->textures) continue;
+        if (!in_use(*it) || !it->textures) continue;
         out.insert(out.end(), it->luma_textures.size(), it->categories_off);
         if (!layout_of(it->path).textures.empty()) out.push_back(it->categories_off);
     }
@@ -1437,8 +1547,9 @@ bool update_pack_categories(ModInfo& mod) {
     mod.game_textures = game_textures;
     mod.categories_final = sorted;
     // A pack with none of this game's textures is for another game (or another release's other art).
-    if (sorted && game_textures == 0u && !mod.pack_textures->empty() && mod.problem.empty()) {
-        mod.problem = "THESE TEXTURES ARE FOR ANOTHER GAME";
+    if (sorted && game_textures == 0u && !mod.pack_textures->empty() && mod.own_problem.empty()) {
+        mod.own_problem = "THESE TEXTURES ARE FOR ANOTHER GAME";
+        if (mod.problem.empty()) mod.problem = mod.own_problem;
     }
     return changed || sorted;
 }
@@ -1452,7 +1563,9 @@ void set_mods_store_file(const std::filesystem::path& store) {
 std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods) {
     std::vector<std::filesystem::path> out;
     for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
-        if (!it->enabled || !it->movies) continue;
+        if (!in_use(*it) || !it->movies) continue;
+        // A .luma's layers' movies/ in its order (the last wins), then a folder's own.
+        out.insert(out.end(), it->luma_movies.begin(), it->luma_movies.end());
         const ModLayout layout = layout_of(it->path);
         if (!layout.movies.empty()) out.push_back(layout.movies);
     }
@@ -1533,6 +1646,8 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
     }
     ModPlan plan;
     std::vector<std::string> active;
+    // Saves a mod gets for adding a galaxy give way to a higher mod's, and to saves a mod asks for.
+    bool saves_for_galaxy = false;
     std::map<std::string, ModPlan::File> chosen;  // by the lower-case store path, the last set winning
     struct Placed {
         std::string disc;
@@ -1549,7 +1664,10 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             plan.notes.push_back(mod.id + ": " + mod.problem);
             continue;
         }
+        bool own_saves = false;
         if (const std::string tag = own_saves_tag(mod); !tag.empty()) {
+            own_saves = true;
+            saves_for_galaxy = false;
             plan.save_folder = saves_of(tag);
             plan.save_clone = mod.luma->save_mode == luma::SaveMode::Copy;
             plan.save_start = mod.luma->save_path.empty() ? fs::path() : mod.path / fs::path(from_utf8(mod.luma->save_path));
@@ -1557,6 +1675,13 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         if (mod.package) plan.luma_folders.push_back(mod.path);
         if (mod.package && mod.luma) {
             add_layer_rows(plan, mod, language, *mod.luma);
+            const std::string words = luma::language_code(language);
+            for (const luma::Achievement& achievement : mod.luma->achievements) {
+                plan.rows.achievements.push_back({mod.id, "mod:" + mod.luma->id + "/" + achievement.id, achievement.name.in(words),
+                                                  achievement.description.in(words), mod.luma->name.in(words), achievement.hidden,
+                                                  achievement.event, achievement.event_name, achievement.has_value,
+                                                  achievement.event_value});
+            }
             const luma::Situation situation = situation_of(mod, game_id, language);
             for (const luma::Plugin& plugin : mod.luma->plugins) {
                 if (!luma::when_holds(plugin.when, situation)) continue;
@@ -1566,7 +1691,8 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     plan.notes.push_back(mod.id + ": its code isn't run: the player hasn't allowed it");
                     break;
                 }
-                plan.plugins.push_back({mod.path / fs::path(from_utf8(binary->second)), mod.id, mod.luma->version, situation.options});
+                const fs::path library = mod.path / fs::path(from_utf8(binary->second));
+                plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library)});
             }
         }
         if (!changes_game_files(mod)) continue;
@@ -1740,8 +1866,11 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     for (const SavePatch& save : p.saves) {
                         // One save folder for the game: the mod higher in the list has it.
                         if (const std::optional<fs::path> folder = loader.resolve(save.external)) {
+                            own_saves = true;
+                            saves_for_galaxy = false;
                             plan.save_folder = *folder;
                             plan.save_clone = save.clone;
+                            plan.save_start.clear();
                         }
                     }
                 }
@@ -1806,9 +1935,12 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             // The game's own tables, but for the one that says where each galaxy is and what opens it.
             if (lower(p.disc).starts_with("/nebuladata/") && lower(p.disc) != "/nebuladata/galaxyinfotable.bcsv") continue;
             // A save's shape follows the galaxy list: a mod that adds a galaxy never plays on normal saves.
-            if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(galaxy::assets::store_path(p.disc))) {
+            if (!own_saves && (plan.save_folder.empty() || saves_for_galaxy) && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(galaxy::assets::store_path(p.disc))) {
                 plan.save_folder = saves_of(mod.luma ? mod.luma->save_tag : mod.id);
                 plan.save_clone = false;
+                plan.save_start.clear();
+                own_saves = true;
+                saves_for_galaxy = true;
                 note("it adds a galaxy, so it keeps its own saves");
             }
             chosen[lower(galaxy::assets::store_path(p.disc))] = {p.disc, p.host};

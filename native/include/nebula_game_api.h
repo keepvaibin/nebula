@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 150u
+#define NEBULA_GAME_API_VERSION 151u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -574,7 +574,8 @@ enum {
                                                 next start): restart now? yes: APPLY, later: CLOSE */
     NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK,  /* restart and record a diagnostics run (the launcher's recording)? yes:
                                                 APPLY, no: CLOSE */
-    NEBULA_SETTINGS_STATUS_MODS_CODE_ASK,    /* a mod turned on brings code: allow it? yes: APPLY, no: CLOSE */
+    NEBULA_SETTINGS_STATUS_MODS_CODE_ASK,    /* a mod turned on brings code (`status_text`: its name): allow it? yes:
+                                                APPLY, no: CLOSE */
     NEBULA_SETTINGS_STATUS_XESS_ASK,         /* download XeSS? yes: APPLY, its license: REVERT, no: CLOSE */
     NEBULA_SETTINGS_STATUS_XESS_INSTALLING,  /* XeSS downloads (`status_number` percent); CLOSE stops it */
     NEBULA_SETTINGS_STATUS_XESS_RESTART,     /* XeSS installed: restart now? yes: APPLY, later: CLOSE */
@@ -585,6 +586,13 @@ enum {
     NEBULA_SETTINGS_STATUS_ARRANGE,          /* the phone's on-screen controls are dragged where they go (the page under it
                                                 hidden): save: APPLY, every control where the game places it: REVERT,
                                                 cancel: CLOSE */
+    NEBULA_SETTINGS_STATUS_MOD_ABOUT,        /* a mod's description and pictures, a page at a time: `long_text` the page's
+                                                text, `picture` its picture (either may be empty), `status_number` its
+                                                number from 1, or for a picture page whose picture is not shown
+                                                -(number * 4 + 1 it loads, 2 it can't be read, 3 it is missing);
+                                                next: APPLY, before: REVERT, back: CLOSE */
+    NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK,   /* remove the mod whose page is open? `status_number` 1: it goes to the
+                                                recycle bin, 0: it is deleted. yes: APPLY, no: CLOSE */
 };
 /* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
 enum {
@@ -635,6 +643,12 @@ typedef struct NebulaSettingsView {
     int32_t status_number;
     const char* status_text;
     const char* long_text; /* a license's page */
+    /* A picture over the page (NEBULA_SETTINGS_STATUS_MOD_ABOUT): RGBA8 rows of picture_width texels, tightly packed,
+       straight alpha; NULL when there is none. The same pointer holds the same picture; it stays until the revision
+       changes. */
+    const uint8_t* picture;
+    uint32_t picture_width;
+    uint32_t picture_height;
 } NebulaSettingsView;
 
 /* The player's input to the settings menu (settings_input); the keyboard and controllers reach it through the host. */
@@ -814,6 +828,16 @@ typedef struct NebulaHostServices {
     /* The day an achievement was unlocked in the player's time zone (year * 10000 + month * 100 + day); 0 when it is
        locked; 1 when it is unlocked on a day that cannot be read. */
     int32_t (*achievement_date)(void* user, const char* id);
+    /* The achievements the running mods add (their luma.json "achievements"): how many, for this run. */
+    int32_t (*mod_achievement_count)(void* user);
+    /* One of them by its place: its key for achievement_date ("mod:<mod>/<id>"), its name, what earns it and its mod's
+       name (UTF-8, in the played language, kept for the run), and in `hidden` 1 when the board lists it only once
+       unlocked. 0 past the last. */
+    int32_t (*mod_achievement)(void* user, int32_t index, const char** key, const char** name, const char** description,
+                               const char** mod, int32_t* hidden);
+    /* A mod achievement unlocked since the last call (a plugin's unlock_achievement, or the event it waits for), for
+       its pop-up: its place; -1 when none. */
+    int32_t (*mod_achievement_unlocked)(void* user);
     /* Nebula's all-time counters across save files (galaxy::stats: "jumps", "spins", "deaths"...): `delta` added, or
        the count. */
     void (*stat_add)(void* user, const char* name, uint64_t delta);

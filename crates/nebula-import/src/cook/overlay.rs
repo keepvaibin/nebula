@@ -194,7 +194,12 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
     complete_archives(changes, base, &mut pak, &mut at, &mut placed, &mut failed, stats)?;
     if placed.is_empty() {
         let _ = fs::remove_file(&temporary);
-        bail!("no file of the mods could be used");
+        // Nothing is written beside the store now, so each file's reason goes with the error.
+        let why: Vec<String> = failed.iter().map(|(path, reason)| format!("{path}: {reason}")).collect();
+        if why.is_empty() {
+            bail!("no file of the mods could be used");
+        }
+        bail!("no file of the mods could be used: {}", why.join("; "));
     }
     let mut id = [0u8; 8];
     id[..6].copy_from_slice(game_id.as_bytes());
@@ -257,10 +262,13 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
         let path = c.path.to_ascii_lowercase();
         path.ends_with(".jpc") || path.ends_with(".jpc.json")
     });
+    // Each file merged so far, by its place in the store (StageData/X.arc/y and StageData/X/y, in any case, are one):
+    // a merge starts from it and replaces it only when the merge works, so one that fails loses no other's.
     let mut merged: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut first_particle: BTreeMap<PathBuf, u16> = BTreeMap::new();
     let mut cased: BTreeMap<String, String> = BTreeMap::new();
     let lower = |text: &str| text.to_ascii_lowercase();
+    let place_of = |text: &str| store::store_path(text.trim_start_matches('/')).to_ascii_lowercase();
     for change in merges {
         let result = (|| -> Result<()> {
             // A picture beside particles written as JSON is one of their textures: their cook reads it.
@@ -275,7 +283,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 for language in languages {
                     let folder = format!("{language}/MessageData/Message.arc");
                     let (file_path, ids_path) = (format!("{folder}/message.bmg"), format!("{folder}/messageid.tbl"));
-                    let mut current = |path: &str| match merged.get(&lower(path)) {
+                    let mut current = |path: &str| match merged.get(&place_of(path)) {
                         Some(bytes) => Ok(bytes.clone()),
                         None => merge_start(path, base, temporary, pak, placed),
                     };
@@ -285,8 +293,8 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                     done.push((ids_path, ids));
                 }
                 for (path, bytes) in done {
-                    merged.insert(lower(&path), bytes);
-                    cased.insert(lower(&path), path);
+                    merged.insert(place_of(&path), bytes);
+                    cased.insert(place_of(&path), path);
                 }
             } else if lower(&change.path).ends_with(".jpc.json") {
                 // Particles written as JSON: cooked over the game's particles (`like`, its textures by name), then added as a
@@ -294,13 +302,13 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
                 let first = *first_particle.get(&folder).context("new particles need their names: ParticleNames.bcsv.json beside them")?;
                 let jpc_path = change.path[..change.path.len() - ".json".len()].to_string();
-                let key = lower(&jpc_path);
-                let current = match merged.remove(&key) {
-                    Some(current) => current,
+                let key = place_of(&jpc_path);
+                let current = match merged.get(&key) {
+                    Some(current) => current.clone(),
                     None => merge_start(&jpc_path, base, temporary, pak, placed)?,
                 };
                 let names_path = format!("{}/ParticleNames.bcsv", jpc_path.rsplit_once('/').map_or("", |(folder, _)| folder));
-                let names = match merged.get(&lower(&names_path)) {
+                let names = match merged.get(&place_of(&names_path)) {
                     Some(names) => names.clone(),
                     None => merge_start(&names_path, base, temporary, pak, placed)?,
                 };
@@ -308,17 +316,19 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let mine = super::particle_json::read(&bytes, &folder, &game, &super::particle_json::names_index(&names)?)?;
                 merged.insert(key, super::merge::add_particles(&current, &super::particles::write(&mine), first)?);
             } else if let Some(table) = lower(&change.path).strip_suffix(".json") {
-                let table_key = table.to_string();
                 let path = change.path[..table.len()].to_string();
-                let current = match merged.remove(&table_key) {
-                    Some(current) => current,
+                let table_key = place_of(&path);
+                let current = match merged.get(&table_key) {
+                    Some(current) => current.clone(),
                     None => merge_start(&path, base, temporary, pak, placed)?,
                 };
                 let mut rows = super::table::read_rows(&bytes)?;
+                // New particles' names: the particles beside them start after the game's (and other mods') last name.
+                let mut names_start = None;
                 if table_key.ends_with("particlenames.bcsv") {
                     let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
                     let first = super::table::row_count(&current)?;
-                    first_particle.insert(folder, u16::try_from(first).context("too many particles")?);
+                    names_start = Some((folder, u16::try_from(first).context("too many particles")?));
                     for (i, row) in rows.iter_mut().enumerate() {
                         if let Some(fields) = row.as_object_mut() {
                             fields.insert("id".to_string(), serde_json::Value::from(first + i));
@@ -330,13 +340,16 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 for words in unmatched {
                     failed.push((format!("merge/{}", change.path), words));
                 }
+                if let Some((folder, first)) = names_start {
+                    first_particle.insert(folder, first);
+                }
                 merged.insert(table_key, table);
             } else if lower(&change.path).ends_with(".jpc") {
                 let folder = change.source.parent().map(Path::to_path_buf).unwrap_or_default();
                 let first = *first_particle.get(&folder).context("new particles need their names: ParticleNames.bcsv.json beside them")?;
-                let key = lower(&change.path);
-                let current = match merged.remove(&key) {
-                    Some(current) => current,
+                let key = place_of(&change.path);
+                let current = match merged.get(&key) {
+                    Some(current) => current.clone(),
                     None => merge_start(&change.path, base, temporary, pak, placed)?,
                 };
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
@@ -410,9 +423,27 @@ fn complete_archives(changes: &[Change], base: Option<&Path>, pak: &mut File, at
 static PROGRESS: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
 
 /// A plan file into a store: the C entry of Android and the command of the desktop program.
-/// As `cook_plan_inner`, and what couldn't be cooked goes in a file beside the store: the game logs each.
+/// As `cook_plan_inner`, and what couldn't be cooked goes in a file beside the store: the game logs each. When nothing
+/// could be, why goes in `<store>.why`: the desktop's cooker has no console and Android's stderr goes nowhere.
 pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, String)>)> {
-    let (stats, failed) = cook_plan_inner(plan, output)?;
+    let why = output.with_extension("why");
+    fs::remove_file(&why).ok();
+    let cooked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cook_plan_inner(plan, output)))
+        .unwrap_or_else(|panic| {
+            let text = panic
+                .downcast_ref::<&str>()
+                .map(|t| t.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_default();
+            Err(anyhow::anyhow!("the converter stopped: {text}"))
+        });
+    let (stats, failed) = match cooked {
+        Ok(done) => done,
+        Err(error) => {
+            fs::write(&why, format!("{error:#}")).ok();
+            return Err(error);
+        }
+    };
     let mut words = String::new();
     for (path, reason) in &failed {
         words.push_str(&format!("{path}: {reason}\n"));
@@ -471,6 +502,22 @@ mod tests {
             assert!(files[0].2);
             assert_eq!(&files[0].1[..4], b"NMDL");
         }
+    }
+
+    #[test]
+    fn a_failed_cook_says_why_beside_the_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("mods.pak");
+        fs::write(out.with_extension("why"), "an older failure").unwrap();
+        assert!(cook_plan(&dir.path().join("missing.plan"), &out).is_err());
+        let why = fs::read_to_string(out.with_extension("why")).unwrap();
+        assert!(why.contains("missing.plan") && why.contains("cannot be read"), "{why}");
+        // When every file fails, each one's reason is in it.
+        let plan = dir.path().join("mods.plan");
+        fs::write(&plan, format!("RMGE01\nStageData/A.arc\t{}\n", dir.path().join("gone.arc").display())).unwrap();
+        assert!(cook_plan(&plan, &out).is_err());
+        let why = fs::read_to_string(out.with_extension("why")).unwrap();
+        assert!(why.contains("no file of the mods could be used: StageData/A.arc: "), "{why}");
     }
 
     #[test]
@@ -570,6 +617,43 @@ mod tests {
             let next = nmsg.nodes[0].next as usize;
             assert_eq!(words[nmsg.nodes[next].index as usize], hello, "{language}");
         }
+    }
+
+    #[test]
+    fn a_failed_merge_loses_no_other_and_both_names_of_a_table_are_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("game.pak");
+        let table = super::super::table::TableIr::from_json(br#"{"rows":[{"name":"Game"}]}"#).unwrap().to_ntbl();
+        let mut pak = File::create(&base).unwrap();
+        pak.write_all(&vec![0u8; 0x100]).unwrap();
+        let position = pak.stream_position().unwrap();
+        pak.write_all(&table).unwrap();
+        let placed = vec![store::Placed { path: "ObjectData/Things/Things.bcsv".into(), position, size: table.len() as u64, folder: false }];
+        let end = pak.stream_position().unwrap();
+        store::write_index(&mut pak, end, &placed, b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let file = |name: &str, text: &str| {
+            let path = dir.path().join(name);
+            fs::write(&path, text).unwrap();
+            path
+        };
+        let changes = vec![
+            Change { path: "ObjectData/Things.arc/Things.bcsv.json".into(), source: file("a.json", r#"{"rows":[{"name":"A"}]}"#), merge: true },
+            // The same table by its store name, in another case.
+            Change { path: "objectdata/things/things.bcsv.json".into(), source: file("b.json", r#"{"rows":[{"name":"B"}]}"#), merge: true },
+            // A column the table lacks: this merge fails, the two before it stand.
+            Change {
+                path: "ObjectData/Things.arc/Things.bcsv.json".into(),
+                source: file("c.json", r#"{"change":[{"where":{"name":"A"},"set":{"nope":1}}]}"#),
+                merge: true,
+            },
+        ];
+        let output = dir.path().join("mods.pak");
+        let failed = write_overlay("RMGE01", &changes, Some(&base), &output, &mut Stats::default()).unwrap();
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert!(failed[0].1.contains("nope"), "{failed:?}");
+        let merged = store::read_file(&output, "ObjectData/Things.arc/Things.bcsv").unwrap();
+        assert_eq!(super::super::table::row_count(&merged).unwrap(), 3);
     }
 
     /// A disc table with one row: one long column.

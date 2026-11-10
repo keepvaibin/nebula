@@ -2,10 +2,15 @@
 // Mods (mods.h, virtual_disc.h, mod_xml.h): the XML reader, the disc's patching and reads, Riivolution mods, files
 // mods, load order, saved choices, savegames, main.dol's memory patches, the mods' layouts and languages, and importing.
 
+#if defined(_WIN32)
+#include "galaxy/windows_api.h"
+#endif
+
 #include "galaxy/asset_store.h"
 #include "galaxy/dolphin_pack.h"
 #include "galaxy/texture_categories.h"
 #include "galaxy/mod_import.h"
+#include "galaxy/luma.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/mod_xml.h"
 #include "galaxy/mods.h"
@@ -20,6 +25,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -57,6 +63,13 @@ bool xml() {
                  "a mismatched tag is refused, its line said");
     // A numeric reference that is no character (zero, past U+10FFFF, half a surrogate pair) gives U+FFFD, valid UTF-8;
     // one that is a character is itself.
+    // UTF-16 (both orders, with the mark) and Latin-1 read as LumaLink reads them; a number at the type's end reads.
+    const auto wide = galaxy::mods::parse_xml(std::string("\xFF\xFE<\0a\0 \0k\0=\0\"\0\xE9\0\"\0/\0>\0", 22), &error);
+    const auto wide_big = galaxy::mods::parse_xml(std::string("\xFE\xFF\0<\0a\0 \0k\0=\0\"\0\xE9\0\"\0/\0>", 22), &error);
+    const auto latin = galaxy::mods::parse_xml("<a k=\"\xE9\" n=\"-9223372036854775808\"/>", &error);
+    ok &= expect(wide && wide->attribute("k") == "\xC3\xA9" && wide_big && wide_big->attribute("k") == "\xC3\xA9" && latin &&
+                     latin->attribute("k") == "\xC3\xA9" && latin->attribute_int("n", 0) == std::numeric_limits<long long>::min(),
+                 "UTF-16, Latin-1 and the lowest number");
     const auto refs = galaxy::mods::parse_xml("<a k=\"&#0;|&#x110000;|&#xFFFFFFFF;|&#xD800;|&#x10FFFF;|&#x20AC;\"/>", &error);
     ok &= expect(refs.has_value(), "a document with character references");
     if (refs) {
@@ -168,6 +181,11 @@ bool importing() {
     std::sort(left.begin(), left.end());
     ok &= expect(left == std::vector<std::string>{"Cool Mod", "Pack"}, "no staging folders left behind");
     std::string message;
+    for (const char* outside : {"../mods", "Pack/../../x", "..", ".cooked", "", "C:x"}) {
+        const std::string what = std::string("no remove outside a mod's folder: ") + outside;
+        ok &= expect(!galaxy::mods::remove_mod(root / "mods", outside, &message) && fs::exists(root / "mods" / "Pack"),
+                     what.c_str());
+    }
     ok &= expect(galaxy::mods::remove_mod(root / "mods", "Pack", &message) && !fs::exists(root / "mods" / "Pack"),
                  "a mod removed");
     fs::remove_all(root, ec);
@@ -205,6 +223,259 @@ bool code_patch_notes() {
     const std::string signature = galaxy::mods::plan_signature(galaxy::mods::ModPlan{}, "RMGE01");
     ok &= expect(signature.find(" store " + std::to_string(galaxy::assets::kStoreVersion) + "\n") != std::string::npos,
                  "the plan's signature holds the store version");
+    return ok;
+}
+
+// Two .luma mods setting the same things: a tunable, a table row one removes and the other changes a cell of, a line of
+// one language against a line of every language. Each counts them against the other, and their own new rows count none.
+bool setting_overlaps() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_setting_overlaps");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const auto manifest = [](const char* id, const char* tunables) {
+        return std::string(R"({"format":1,"id":")") + id + R"(","name":"n","version":"1.0.0","game":"RMG","layers":[{"path":"layer","tunables":)" +
+               tunables + "}]}";
+    };
+    write(root / "mods" / "A" / "luma.json", manifest("mod-a", R"({"Kuribo.cWalkSpeed": 2, "Kuribo.cRunSpeed": 3})"));
+    write(root / "mods" / "A" / "layer" / "merge" / "ObjectData" / "Things.bcsv.json",
+          R"({"change":[{"where":{"name":"Kuribo","id":1},"set":{"scale":2.5}}],"rows":[{"name":"New"}]})");
+    write(root / "mods" / "A" / "layer" / "merge" / "UsEnglish" / "MessageData" / "Message.arc" / "message.bmg.json",
+          R"({"lines":{"Talk_A":"Hi"}})");
+    write(root / "mods" / "B" / "luma.json", manifest("mod-b", R"({"Kuribo.cWalkSpeed": 4})"));
+    write(root / "mods" / "B" / "layer" / "merge" / "objectdata" / "things.bcsv.json",
+          R"({"remove":[{"id":1,"name":"Kuribo"}],"rows":[{"name":"New"}]})");
+    write(root / "mods" / "B" / "layer" / "merge" / "MessageData" / "messages.json", R"({"lines":{"Talk_A":"Yo","Talk_B":"Hey"}})");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto find = [&](const char* id) {
+        return std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+    };
+    const auto a = find("A");
+    const auto b = find("B");
+    ok &= expect(a != mods.end() && b != mods.end() && a->problem.empty() && b->problem.empty(), "two .luma mods read");
+    if (a != mods.end() && b != mods.end()) {
+        ok &= expect(a->overlaps.size() == 1u && a->overlaps[0].other == "B" && a->overlaps[0].settings == 3u &&
+                         a->overlaps[0].files == 0u,
+                     "A shares a tunable, a cell of a removed row and an English line with B");
+        ok &= expect(b->overlaps.size() == 1u && b->overlaps[0].other == "A" && b->overlaps[0].settings == 3u,
+                     "B shares the same three with A");
+    }
+    const std::vector<std::string> cells = galaxy::luma::merge_keys("ObjectData/Things.bcsv.json",
+                                                                    R"({"change":[{"where":{"id":1.5},"set":{"a":1,"b":"x"}}]})");
+    ok &= expect(cells == std::vector<std::string>{"cell\tobjectdata/things.bcsv\tid=1.5\ta", "cell\tobjectdata/things.bcsv\tid=1.5\tb"},
+                 "a change's cells by table, row and column");
+    ok &= expect(galaxy::luma::merge_keys("ObjectData/Things.bcsv.json", "not json").empty() &&
+                     galaxy::luma::merge_keys("Effect/Particles.jpc.json", R"({"change":[]})").empty(),
+                 "no keys from what isn't JSON or adds particles");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+// A .luma that only sets the player's numbers, or only adds an object, is in the plan and asks for a restart; one with an
+// empty layer folder sets nothing.
+bool layer_only_mods() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_layer_only");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const auto manifest = [](const char* id, const char* layer) {
+        return std::string(R"({"format":1,"id":")") + id + R"(","name":"n","version":"1.0.0","game":"RMG","layers":[)" + layer + "]}";
+    };
+    write(root / "mods" / "consts" / "luma.json", manifest("consts", R"({"player_constants":{"both":{"mSpinIntervalTime":0}}})"));
+    write(root / "mods" / "classes" / "luma.json", manifest("classes", R"({"object_classes":[{"name":"BigKuribo","like":"Kuribo"}]})"));
+    write(root / "mods" / "hollow" / "luma.json", manifest("hollow", R"({"path":"layer"})"));
+    fs::create_directories(root / "mods" / "hollow" / "layer", ec);
+    write(root / "mods.ini", "[consts]\nenabled=1\norder=1\n[classes]\nenabled=1\norder=2\n[hollow]\nenabled=1\norder=3\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto sets = [&](const char* id) {
+        const auto it = std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+        return it != mods.end() && it->enabled && it->problem.empty() && galaxy::mods::changes_game_files(*it);
+    };
+    ok &= expect(sets("consts") && sets("classes") && !sets("hollow"), "the player's numbers and a new object set the game; an empty layer doesn't");
+    const galaxy::assets::AssetStore store;
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
+    ok &= expect(plan.rows.player_constants.size() == 2u && plan.rows.object_classes.size() == 1u,
+                 "the plan has the number for Mario and Luigi, and the object");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+// Two folder mods that each add a galaxy: the saves are the higher one's, as for every other choice of saves.
+bool galaxy_saves() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_galaxy_saves");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    write(root / "mods" / "Top" / "StageData" / "TopGalaxy" / "TopGalaxyScenario.arc", "a");
+    write(root / "mods" / "Low" / "StageData" / "LowGalaxy" / "LowGalaxyScenario.arc", "b");
+    write(root / "mods.ini", "[Top]\nenabled=1\norder=1\n[Low]\nenabled=1\norder=2\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const galaxy::assets::AssetStore store;
+    galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", galaxy::mods::scan_mods());
+    ok &= expect(plan.save_folder.filename() == "Top" && plan.files.size() == 2u, "two new galaxies play on the higher mod's saves");
+    write(root / "mods.ini", "[Top]\nenabled=1\norder=2\n[Low]\nenabled=1\norder=1\n");
+    plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", galaxy::mods::scan_mods());
+    ok &= expect(plan.save_folder.filename() == "Low", "and the other's when the order turns");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+// Importing a .luma: a new one by its id; the same id in a folder of another name is the one updated, with both versions
+// named; an older version says it goes back; a folder of its name holding another mod is left alone.
+bool luma_import() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_luma_import");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "mods");
+    const auto make = [&](const fs::path& file, const char* version) {
+        archive* w = archive_write_new();
+        archive_write_set_format(w, ARCHIVE_FORMAT_ZIP);
+        archive_write_open_filename(w, file.string().c_str());
+        const std::string manifest = std::string(R"({"format":1,"id":"kaizo","name":"Kaizo","version":")") + version +
+                                     R"(","game":"RMG","layers":[{"path":"layer"}]})";
+        for (const auto& [name, data] : std::vector<std::pair<std::string, std::string>>{{"luma.json", manifest}, {"layer/files/a.txt", version}}) {
+            archive_entry* e = archive_entry_new();
+            archive_entry_set_pathname(e, name.c_str());
+            archive_entry_set_size(e, static_cast<la_int64_t>(data.size()));
+            archive_entry_set_filetype(e, AE_IFREG);
+            archive_entry_set_perm(e, 0644);
+            archive_write_header(w, e);
+            archive_write_data(w, data.data(), data.size());
+            archive_entry_free(e);
+        }
+        archive_write_close(w);
+        archive_write_free(w);
+    };
+    make(root / "Kaizo v1.luma", "1.0.0");
+    make(root / "Kaizo v2.luma", "1.1.0");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const galaxy::mods::ImportResult first = galaxy::mods::import_mod(root / "Kaizo v1.luma", root / "mods");
+    ok &= expect(first.ok && first.id == "kaizo" && !first.replaced && fs::exists(root / "mods" / "kaizo" / "luma.json"),
+                 "a .luma goes to the folder of its id");
+    // A file made read-only (as an unpacker or a copy from a disc leaves them) does not stop the update.
+    fs::permissions(root / "mods" / "kaizo" / "layer" / "files" / "a.txt",
+                    fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write, fs::perm_options::remove, ec);
+    fs::rename(root / "mods" / "kaizo", root / "mods" / "My Kaizo", ec);
+    write(root / "mods" / "kaizo" / "riivolution" / "other.xml", "<wiidisc version=\"1\"><id game=\"RMG\"/></wiidisc>");
+    const galaxy::mods::ImportResult update = galaxy::mods::import_mod(root / "Kaizo v2.luma", root / "mods");
+    ok &= expect(update.ok && update.replaced && update.id == "My Kaizo" && update.old_version == "1.0.0" &&
+                     update.new_version == "1.1.0" && update.message == "UPDATED: Kaizo (1.0.0 TO 1.1.0)",
+                 "the folder holding its id is updated, and the versions named");
+    ok &= expect(fs::exists(root / "mods" / "kaizo" / "riivolution" / "other.xml"), "a folder of its name holding another mod stays");
+    {
+        // Another run cut off during an update (its mod moved aside, the new one still staged) and during an import: the
+        // mod goes back, the staging goes; a moved-aside copy whose mod is in place goes too.
+        const fs::path tidy = root / "tidy";
+        fs::create_directories(tidy / ".importing-cut-previous-4000000000-0", ec);
+        write(tidy / ".importing-cut-previous-4000000000-0" / "luma.json", "{}");
+        write(tidy / ".importing-cut-4000000000-1" / "half.txt", "x");
+        write(tidy / ".importing-kept-previous-4000000000-2" / "old.txt", "x");
+        write(tidy / "kept" / "luma.json", "{}");
+        write(tidy / ".importing-odd" / "a.txt", "x");
+        galaxy::mods::apply_pending_updates(tidy);
+        ok &= expect(fs::exists(tidy / "cut" / "luma.json") && !fs::exists(tidy / ".importing-cut-previous-4000000000-0") &&
+                         !fs::exists(tidy / ".importing-cut-4000000000-1") && !fs::exists(tidy / ".importing-kept-previous-4000000000-2") &&
+                         fs::exists(tidy / "kept" / "luma.json") && fs::exists(tidy / ".importing-odd" / "a.txt"),
+                     "a cut-off update's mod goes back and its staging goes");
+    }
+    const galaxy::mods::ImportResult back = galaxy::mods::import_mod(root / "Kaizo v1.luma", root / "mods");
+    ok &= expect(back.ok && back.id == "My Kaizo" && back.message == "OLDER VERSION: Kaizo (1.1.0 TO 1.0.0)", "an older version says so");
+    fs::remove_all(root / "mods" / "My Kaizo", ec);
+    const galaxy::mods::ImportResult beside = galaxy::mods::import_mod(root / "Kaizo v2.luma", root / "mods");
+    ok &= expect(beside.ok && beside.id == "kaizo-2" && !beside.replaced, "with its name taken by another mod, a name of its own");
+    ok &= expect(galaxy::mods::import_mod(root / "Kaizo v2.luma", root / "mods").already, "the same .luma again: nothing added");
+#if defined(_WIN32)
+    // A mod whose folder Windows won't move (a file in it open in another program): the update waits as
+    // .update-<name> and takes its place at the next start; removing it leaves it whole.
+    const fs::path held = root / "mods" / "kaizo-2" / "layer" / "files" / "a.txt";
+    const HANDLE open = CreateFileW(held.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    ok &= expect(open != INVALID_HANDLE_VALUE, "a file of the mod held open");
+    const galaxy::mods::ImportResult waits = galaxy::mods::import_mod(root / "Kaizo v1.luma", root / "mods");
+    ok &= expect(waits.ok && waits.pending && waits.replaced && waits.id == "kaizo-2" &&
+                     fs::exists(root / "mods" / ".update-kaizo-2" / "luma.json"),
+                 "an update of a mod in use waits beside it");
+    std::string message;
+    ok &= expect(!galaxy::mods::remove_mod(root / "mods", "kaizo-2", &message) && fs::exists(root / "mods" / "kaizo-2" / "luma.json") &&
+                     fs::exists(held) && message.starts_with("IN USE: kaizo-2"),
+                 "a mod in use is not removed, nor half removed");
+    galaxy::mods::apply_pending_updates(root / "mods");
+    ok &= expect(fs::exists(root / "mods" / ".update-kaizo-2"), "still in use at the start: the update waits on");
+    CloseHandle(open);
+    galaxy::mods::apply_pending_updates(root / "mods");
+    std::ifstream now(held);
+    const std::string text((std::istreambuf_iterator<char>(now)), std::istreambuf_iterator<char>());
+    now.close();
+    ok &= expect(text == "1.0.0" && !fs::exists(root / "mods" / ".update-kaizo-2"), "at the next start the update takes its place");
+#endif
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+// Which .luma mods run: one copy of a mod, a chain of needs that loses its end, two mods that can't run together (the
+// higher on the list runs, whichever says so), and a .luma's movies used while it runs.
+bool luma_rules() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_luma_rules");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const auto manifest = [](const char* id, const char* more) {
+        return std::string(R"({"format":1,"id":")") + id + R"(","name":"n","version":"1.0.0","game":"RMG",)" + more +
+               R"("layers":[{"path":"layer"}]})";
+    };
+    const auto mod = [&](const char* folder, const char* id, const char* more) {
+        write(root / "mods" / folder / "luma.json", manifest(id, more));
+        fs::create_directories(root / "mods" / folder / "layer", ec);
+    };
+    mod("A", "mod-a", "");
+    mod("A copy", "mod-a", "");
+    mod("C1", "c1", R"("needs":[{"id":"c2"}],)");
+    mod("C2", "c2", R"("needs":[{"id":"c3"}],)");
+    mod("X", "x", "");
+    mod("Y", "y", R"("conflicts":[{"id":"x"}],)");
+    mod("M", "m", "");
+    write(root / "mods" / "M" / "layer" / "movies" / "opening.mp4", "movie");
+    // Each refusal in its own words: a cut-off luma.json, a later format, a layer folder missing, the second game.
+    write(root / "mods" / "Cut" / "luma.json", R"({"format":1,"id":"cut","na)");
+    write(root / "mods" / "Later" / "luma.json", R"({"format":2,"anything":[1,2]})");
+    write(root / "mods" / "Hollow" / "luma.json", manifest("hollow", ""));
+    write(root / "mods" / "Two" / "luma.json",
+          R"({"format":1,"id":"two","name":"n","version":"1.0.0","game":"SB4E01","layers":[{"path":"layer"}]})");
+    fs::create_directories(root / "mods" / "Two" / "layer", ec);
+    // Where new mods ask to go: one loading after P goes above it (the top wins), one loading before P below it.
+    mod("P", "p", "");
+    mod("Q after P", "q", R"("load_after":["p"],)");
+    mod("0 before P", "r", R"("load_before":["p"],)");
+    // A folder named in any script, with spaces.
+    const std::string unicode = reinterpret_cast<const char*>(u8"Ünïcode ☆ mod");
+    write(root / "mods" / fs::path(u8"Ünïcode ☆ mod") / "luma.json", manifest("unicode", ""));
+    fs::create_directories(root / "mods" / fs::path(u8"Ünïcode ☆ mod") / "layer", ec);
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto problem = [&](const char* id) {
+        const auto it = std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+        return it == mods.end() ? std::string("(missing)") : it->problem;
+    };
+    ok &= expect(problem("A").empty() && problem("A copy") == "ANOTHER COPY OF THIS MOD IS ON: A", "one copy of a mod runs");
+    ok &= expect(problem("C2") == "THIS MOD NEEDS: c3" && problem("C1").starts_with("THIS MOD NEEDS: "),
+                 "a mod that loses what it needs takes the mods needing it along");
+    ok &= expect(problem("X").empty() && problem("Y").starts_with("THIS MOD CAN'T RUN WITH: "),
+                 "of two that can't run together, the higher runs");
+    ok &= expect(problem("Cut") == "THIS FILE IS DAMAGED", "a cut-off luma.json is damaged");
+    ok &= expect(problem("Later") == "THIS MOD NEEDS A NEWER NEBULA", "a later format asks for a newer Nebula");
+    ok &= expect(problem("Hollow") == "THIS FILE IS DAMAGED", "a layer folder missing is damaged");
+    ok &= expect(problem("Two") == "THIS MOD IS FOR SUPER MARIO GALAXY 2", "the second game is named");
+    ok &= expect(problem(unicode.c_str()).empty(), "a folder named in any script runs");
+    const auto place = [&](const char* id) {
+        return std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; }) - mods.begin();
+    };
+    ok &= expect(place("Q after P") < place("P") && place("0 before P") > place("P"), "load_after and load_before place a new mod");
+    const std::vector<fs::path> movies = galaxy::mods::movie_folders(mods);
+    ok &= expect(movies.size() == 1u && movies[0].filename() == "movies" && movies[0].parent_path().filename() == "layer",
+                 "a .luma's movies are used");
+    fs::remove_all(root, ec);
     return ok;
 }
 
@@ -397,7 +668,11 @@ bool texture_names() {
 
 int main() {
     test_texture_categories();
-    const bool ok = texture_names() & xml() & importing() & code_patch_notes();
+    // Every test runs, whichever fail.
+    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), layer_only_mods(), galaxy_saves(),
+                            luma_rules(), luma_import()};
+    bool ok = true;
+    for (const bool passed : results) ok = ok && passed;
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';
     return ok ? 0 : 1;
 }

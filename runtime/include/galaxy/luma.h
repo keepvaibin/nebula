@@ -34,6 +34,19 @@ struct Option {
     std::vector<Choice> choices;
 };
 
+// An achievement of the mod's own: on the achievement board's Mods tab, kept with Nebula's in achievements.ini as
+// "mod:<mod id>/<id>". A plugin unlocks it (unlock_achievement), or the game does when the event `when` names comes.
+struct Achievement {
+    std::string id;
+    Text name;
+    Text description;  // what earns it: shown on its card
+    bool hidden = false;  // listed only once unlocked
+    std::string event;       // "star_get" (NEBULA_MOD_EVENT_STAR_GET, lower case); empty: only a plugin unlocks it
+    std::string event_name;  // the event's name must be this (a galaxy, a cutscene, an object); empty: any
+    bool has_value = false;
+    std::int64_t event_value = 0;  // ... and its value this
+};
+
 struct When {
     std::vector<std::string> versions;   // E, P, J, K, W, C
     std::vector<std::string> languages;  // the game's folders: UsEnglish
@@ -76,7 +89,7 @@ struct PlayerConstant {
     std::string option;  // when set: the number is this option's choice
 };
 
-// A file's tuning number by "<file stem>.<name>" ("Kuribo.cWalkSpeed").
+// A file's tuning number by "<file stem>.<name>" ("GameRules.cPlayerHealth").
 struct Tunable {
     std::string key;
     double value = 0.0;
@@ -146,7 +159,7 @@ struct CometSchedule {
     std::vector<std::pair<std::string, int>> comets;  // a galaxy, and 1 for the hundred purple coins
 };
 
-// What a whole mod, or one of its layers, adds beside files.
+// What a whole mod, or one of its layers, adds beside files. A new kind here is one rows_set_game counts.
 struct Rows {
     std::vector<Galaxy> galaxies;
     std::vector<Music> music;
@@ -159,6 +172,7 @@ struct Rows {
     std::map<std::string, std::string> story;  // first_stage, first_mission, hub, story_scenes
 };
 
+// A new kind here is one layer_sets_game counts.
 struct Layer {
     std::string path;
     Rows rows;
@@ -206,6 +220,8 @@ struct Manifest : Rows {
     std::string license;
     std::string homepage;
     std::string icon;
+    std::vector<std::string> pictures;  // more pictures of it (PNG files in it), shown after the icon; kMaxPictures
+    std::vector<Achievement> achievements;  // kMaxAchievements, each id once
     std::vector<Dependency> needs;
     std::vector<Dependency> conflicts;
     std::vector<std::string> load_after;
@@ -223,6 +239,10 @@ struct Manifest : Rows {
 
 // What this game reads.
 inline constexpr std::uint32_t kFormat = 1;
+// The pictures a mod's page shows besides its icon: the first ones listed.
+inline constexpr std::size_t kMaxPictures = 16;
+// The achievements one mod adds: the first ones listed.
+inline constexpr std::size_t kMaxAchievements = 64;
 // The plugin interface this game has: NEBULA_MOD_API_VERSION.
 inline constexpr std::uint32_t kPluginApi = 2;
 
@@ -263,5 +283,22 @@ struct SwitchTunable {
     bool opposite = false;
 };
 [[nodiscard]] SwitchTunable switch_tunable(std::string_view name) noexcept;
+
+// Whether rows, a layer (besides its folder's files) or a whole mod (besides its layers) set anything the game takes as
+// it starts: a mod that does is in the plan, and turning it on or off asks for a restart. A mod's own: its rows, its
+// achievements, its own saves, and code for this device.
+[[nodiscard]] bool rows_set_game(const Rows& rows) noexcept;
+[[nodiscard]] bool layer_sets_game(const Layer& layer) noexcept;
+[[nodiscard]] bool manifest_sets_game(const Manifest& manifest) noexcept;
+
+// What a mod sets that another mod could set too, one key per thing, fields apart by tabs: "tunable\tGameRules.cPlayerHealth",
+// "line\t<message id>\t<language folder>", "cell\t<table>\t<row>\t<column>". Two mods with a key in common change the same
+// thing; the one higher in the list wins it. Rows that add something new (a table's new rows, particles) have none.
+[[nodiscard]] std::vector<std::string> setting_keys(const Rows& rows);
+[[nodiscard]] std::vector<std::string> setting_keys(const Layer& layer);
+// The same for a file of a layer's merge/ folder at `path` (as under merge/, folders apart by "/"): a table's cells a
+// "change" sets, the rows a "remove" takes ("row\t<table>\t<row>"), the lines and flows of a messages merge. A row is its
+// "where" columns. A file that does not read as JSON has none.
+[[nodiscard]] std::vector<std::string> merge_keys(std::string_view path, std::string_view json);
 
 }  // namespace galaxy::luma

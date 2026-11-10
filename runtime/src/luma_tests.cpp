@@ -5,6 +5,7 @@
 #include "nebula_text_tags.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -79,6 +80,44 @@ int main() {
     check(m.save_path == "save" && m.save_mode == SaveMode::Copy && m.save_tag == "family" && m.save_player_can_change, "save");
     const std::optional<Manifest> plain = parse_manifest(R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[]})");
     check(plain && plain->save_mode == SaveMode::Shared && plain->save_tag == "a" && !plain->save_player_can_change, "normal saves unless it says");
+    {
+        // A player number past a float's range is held as infinite (the start names it and sets nothing), not cast.
+        const std::optional<Manifest> huge = parse_manifest(
+            R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"player_constants":{"mario":{"mJumpHeight":1e300},"luigi":{"mJumpHeight":-1e300}}}]})");
+        check(huge && huge->layers.size() == 1u && huge->layers[0].player_constants.size() == 2u &&
+                  std::isinf(huge->layers[0].player_constants[0].value) && huge->layers[0].player_constants[0].value > 0.0f &&
+                  std::isinf(huge->layers[0].player_constants[1].value) && huge->layers[0].player_constants[1].value < 0.0f,
+              "a player number past a float's range is infinite");
+    }
+    {
+        // The page's metadata: the icon and pictures stay inside the mod, at most kMaxPictures of them.
+        std::string text = R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[],"license":"MIT","homepage":"https://x.example",)"
+                           R"("icon":"../icon.png","pictures":["p/1.png","../2.png","/abs.png","C:/x.png","",3)";
+        for (int i = 0; i < 20; ++i) text += ",\"many/" + std::to_string(i) + ".png\"";
+        text += "]}";
+        const std::optional<Manifest> pictured = parse_manifest(text);
+        check(pictured && pictured->icon.empty(), "an icon outside the mod is dropped");
+        check(pictured && pictured->license == "MIT" && pictured->homepage == "https://x.example", "license and homepage");
+        check(pictured && pictured->pictures.size() == kMaxPictures && pictured->pictures[0] == "p/1.png" &&
+                  pictured->pictures[1] == "many/0.png",
+              "pictures: inside the mod only, the first kMaxPictures");
+    }
+    {
+        // Achievements: each id once, a name needed; an event with its name and value, or none (a plugin's).
+        const std::optional<Manifest> earned = parse_manifest(
+            R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[],"achievements":[)"
+            R"({"id":"first","name":{"default":"First","fr":"Premier"},"description":"Win a star","when":{"event":"star_get","name":"EggStarGalaxy","value":1}},)"
+            R"({"id":"first","name":"Again"},{"id":"Bad Id","name":"x"},{"id":"nameless"},)"
+            R"({"id":"secret","name":"Secret","hidden":true}]})");
+        check(earned && earned->achievements.size() == 2u, "achievements: two of five kept");
+        if (earned && earned->achievements.size() == 2u) {
+            const Achievement& first = earned->achievements[0];
+            check(first.id == "first" && first.name.in("fr") == "Premier" && first.description.fallback == "Win a star" &&
+                      first.event == "star_get" && first.event_name == "EggStarGalaxy" && first.has_value && first.event_value == 1 && !first.hidden,
+                  "an achievement's name, description and event");
+            check(earned->achievements[1].hidden && earned->achievements[1].event.empty(), "a hidden one a plugin unlocks");
+        }
+    }
 
     Situation s;
     s.version = "E";
@@ -130,6 +169,10 @@ int main() {
     for (const char* bad : {"", "{", "[]", "not json", R"({"format":1})", R"({"format":0,"id":"a","name":"b","game":"RMG","layers":[]})",
                             R"({"format":1,"id":"a","name":"b","game":"RMG"})", R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"path":"../up"}]})",
                             R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"path":"C:/up"}]})", R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"path":"/up"}]})",
+                            R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"path":"a/.. /up"}]})",
+                            R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"path":"..\u0000/up"}]})",
+                            R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[{"path":"a/.../up"}]})",
+                            R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[],"save":{"mode":"own","tag":"../../up"}})",
                             R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[]} trailing)", R"({"a":"\ud800"})", R"({"a":"unterminated)"}) {
         check(!parse_manifest(bad).has_value(), bad);
     }

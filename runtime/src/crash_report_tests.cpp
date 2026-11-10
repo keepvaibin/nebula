@@ -59,6 +59,21 @@ int main() {
     old_read.last_mod_seconds = 600.0;
     expect(code_of(old_read) == "NEB-M01", "a mod read long before is not named");
 
+    // A plugin's code ahead of a mod's file: the fault is where the code was.
+    Facts plugin = recent;
+    plugin.plugin_mod = "coin-bank";
+    plugin.in_plugin = true;
+    const Report in_plugin = classify(plugin);
+    expect(std::string(in_plugin.code) == "NEB-M03", "a crash in a plugin's code");
+    expect(std::strstr(in_plugin.detail, "in the code of the mod coin-bank") != nullptr, "the plugin's mod is named");
+    plugin.in_plugin = false;
+    expect(std::strstr(classify(plugin).detail, "a call the code of the mod coin-bank made") != nullptr,
+           "the game's code a plugin called");
+    Facts nebula_fault;
+    nebula_fault.plugin_mod = "coin-bank";
+    nebula_fault.in_plugin = true;
+    expect(code_of(nebula_fault) == "NEB-M03", "a fault outside the game's code, in a plugin");
+
     Facts game_fatal;
     game_fatal.kind = Facts::Kind::GameFatal;
     game_fatal.text = "fatal: a stage table has no entry";

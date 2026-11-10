@@ -13,6 +13,8 @@ from collections import defaultdict
 ONE = re.compile(r"NEBULA_TUNABLE\(\s*(\w+)\s*,\s*(\w+)\s*,\s*(.+?)\);")
 NAMED = re.compile(r"NEBULA_TUNABLE_NAMED\(\s*(\w+)\s*,\s*\w+\s*,\s*\"([^\"]+)\"\s*,\s*(.+?)\);")
 LIST = re.compile(r"NEBULA_TUNABLE_LIST\(\s*(\w+)\s*,\s*(\w+)\s*,\s*([^,]*),\s*\{(.*?)\}\s*\);", re.S)
+# The kinds the game's list names (--dump-tunables); a tunable of another type would be listed under a name it doesn't use.
+KINDS = {"f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"}
 
 
 def main():
@@ -46,6 +48,9 @@ def main():
         "`<file>.<function>.<k>` is the k-th step count (frames) in that function; `<file>.<function>.<call>.<k>` the k-th number it gives that call.",
         "",
     ]
+    odd = [f"{key}: {kind}" for rows in by_folder.values() for key, kind, _ in rows if kind.split("[")[0] not in KINDS]
+    if odd:
+        sys.exit("types the game's list doesn't name (write f32, s32, bool...): " + ", ".join(odd))
     for folder in sorted(by_folder):
         lines += [f"## {folder}", "", "| Key | Type | Game's value |", "|---|---|---|"]
         for key, kind, value in sorted(by_folder[folder], key=lambda r: r[0].lower()):

@@ -87,6 +87,11 @@ namespace Ui {
         f32 PrintImpl(StreamType, int);
         f32 CalcLineWidth(StreamType, int);
         bool CalcLineRectImpl(Rect*, StreamType*, int);
+        // The width of the word the reader is at (up to a space, a tag or the end), each letter with its char space.
+        f32 CalcWordWidth(CharStrmReader reader, StreamType end) const;
+        // A line breaks at a space whose next word would pass the width limit, so a sentence with no line breaks of
+        // its own (a mod's message or dialogue) wraps between words; a word longer than a line still breaks inside.
+        bool IsWordBreak(const CharStrmReader& reader, StreamType end, f32 lineWidth, bool bCharSpace) const;
         void CalcStringRectImpl(Rect*, StreamType, int);
         f32 AdjustCursor(f32*, f32*, StreamType, int);
 

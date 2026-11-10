@@ -191,7 +191,7 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 Text(
                     if (result.title != null) result.message
                     else if (result.already) "Nothing was added. It is under Mods in the game's settings."
-                    else if (result.ok) "Turn it on under Mods in the game's settings." +
+                    else if (result.ok) "It's on from the next start. Mods in the game's settings turns it off or moves it." +
                         (if (result.message.contains(", BUT ")) "\n\n${result.message}" else "")
                     else result.message,
                 )
@@ -619,7 +619,7 @@ private fun SettingsScreen(
                         Icons.Rounded.Add,
                         "Import a mod or texture pack",
                         if (progress != null) "Importing... ${(progress * 100).roundToInt()}%"
-                        else "A .luma, .zip, .7z or .rar file. Turn it on under Mods in the game's settings",
+                        else "A .luma, .zip, .7z or .rar file. It's on from the next start",
                     ) { if (progress == null) onChooseMod() }
                     if (progress != null) {
                         LinearProgressIndicator(

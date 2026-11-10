@@ -64,8 +64,13 @@ namespace NebulaAchievements {
     // Tests (GALAXY_TEST_EVENT_FLAGS=Achievement:<id>): its pop-up, whether unlocked or not.
     void showForTest(const char* pId);
 
-    // The catalogue: each achievement's id, group (0 story, 1 challenge, 2 extra) and icon.
+    // The catalogue: each achievement's id, group (0 story, 1 challenge, 2 extra, 3 a mod's) and icon. The running mods'
+    // own come after the game's (their id is the host's key, "mod:<mod>/<id>").
     s32 getNum();
+    s32 getModNum();
+    bool isMod(s32 index);
+    // What earns a mod's achievement, in the played language (its card shows it, locked or not); empty for the game's.
+    void getModDescription(MR::Text16& rText, s32 index);
     const char* getId(s32 index);
     // Its name in the played language: Achievement.<id>, or Achievement.<id>.Luigi on a Luigi file when there is one.
     s32 getName(MR::Text16& rText, const char* pId);

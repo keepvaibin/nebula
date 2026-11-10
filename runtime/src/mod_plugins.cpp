@@ -5,6 +5,7 @@
 #include "galaxy/luma.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <cstring>
 #include <string>
@@ -16,6 +17,9 @@
 #include <cstdio>
 #include <map>
 #include <memory>
+#include <atomic>
+#include <mutex>
+#include <string_view>
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -47,6 +51,55 @@ void (*g_log)(const char*) = nullptr;
 bool g_starting = false;
 // The last replacement on each hooked function: the next plugin's hook goes in front of it.
 std::map<void*, void*> g_hook_tops;
+// The running mods' achievements; those unlocked and not yet shown, in order.
+std::vector<AchievementToAdd> g_achievements;
+// Each one known to be unlocked (now or in an earlier run): an event that matches it again costs nothing.
+std::unique_ptr<std::atomic<bool>[]> g_achievement_done;
+bool (*g_achievement_store)(std::string_view key) = nullptr;
+std::mutex g_unlocked_mutex;
+std::vector<std::int32_t> g_unlocked;
+
+// NebulaModEvent's names in lower case, in its order: what an achievement's "when" names.
+constexpr const char* kEventNames[] = {
+    "frame", "stage_frame", "stage_start", "player_damage", "player_miss", "power_up", "coin", "star_bit", "star_get",
+    "cutscene_start", "cutscene_end", "actor_appear", "actor_kill", "player_spin", "player_jump", "player_land", "pause",
+    "stage_end", "game_save", "power_star_appear", "talk_line", "talk_choice", "cutscene_part", "camera_change",
+    "sound_start", "effect_start", "screen", "actor_message", "player_action",
+};
+static_assert(sizeof(kEventNames) / sizeof(kEventNames[0]) == NEBULA_MOD_EVENT_COUNT, "an event without its name");
+
+bool unlock_achievement_at(std::size_t index) {
+    if (index >= g_achievements.size() || g_achievement_done[index].exchange(true)) return false;
+    if (g_achievement_store != nullptr && !g_achievement_store(g_achievements[index].key)) return false;
+    const std::lock_guard<std::mutex> lock(g_unlocked_mutex);
+    g_unlocked.push_back(static_cast<std::int32_t>(index));
+    return true;
+}
+
+// 1 when it was unlocked now; 0 when it was already, or the mod has no achievement of that id.
+int32_t api_unlock_achievement(const NebulaPlugin* self, const char* id) {
+    if (self == nullptr || self->id == nullptr || id == nullptr) return 0;
+    for (std::size_t i = 0; i < g_achievements.size(); ++i) {
+        const AchievementToAdd& achievement = g_achievements[i];
+        const std::string_view key = achievement.key;
+        if (achievement.mod_id != self->id || !key.ends_with(id) || key.size() <= std::strlen(id) || key[key.size() - std::strlen(id) - 1u] != '/') continue;
+        return unlock_achievement_at(i) ? 1 : 0;
+    }
+    return 0;
+}
+
+// An event some achievement's "when" names: each one it matches is unlocked. What the event carries is not changed.
+int32_t achievement_event(const NebulaModEventData* data, void* user) {
+    const int event = static_cast<int>(reinterpret_cast<std::intptr_t>(user));
+    for (std::size_t i = 0; i < g_achievements.size(); ++i) {
+        const AchievementToAdd& achievement = g_achievements[i];
+        if (mod_event_by_name(achievement.event) != event) continue;
+        if (!achievement.event_name.empty() && (data->name == nullptr || achievement.event_name != data->name)) continue;
+        if (achievement.has_value && achievement.event_value != data->value) continue;
+        (void)unlock_achievement_at(i);
+    }
+    return data->value;
+}
 
 void say(const std::string& text) {
     if (g_log != nullptr) g_log(text.c_str());
@@ -59,6 +112,40 @@ void* open_library(const std::filesystem::path& path) {
 #else
     return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
+}
+
+// The library a plugin runs from. On Windows, a copy of its folder's files (mods/.cooked/code/<process>-<n>): Windows
+// holds a loaded library's file, and the mod's own folder then stays free to update or remove while the game runs.
+// The copies of runs that have ended go when the first plugin starts; a copy that can't be made runs the mod's own.
+std::filesystem::path running_copy(const std::filesystem::path& library, std::size_t index) {
+#if defined(_WIN32)
+    namespace fs = std::filesystem;
+    std::error_code error;
+    const fs::path root = galaxy::mods::mods_folder() / ".cooked" / "code";
+    const std::string mine = std::to_string(GetCurrentProcessId()) + "-";
+    if (index == 0u) {
+        for (auto it = fs::directory_iterator(root, error); !error && it != fs::directory_iterator(); it.increment(error)) {
+            std::error_code remove_error;
+            fs::remove_all(it->path(), remove_error);  // a running game's copies are held and stay
+        }
+        error.clear();
+    }
+    const fs::path folder = root / (mine + std::to_string(index));
+    fs::remove_all(folder, error);
+    fs::create_directories(folder, error);
+    if (error) return library;
+    for (auto it = fs::directory_iterator(library.parent_path(), error); !error && it != fs::directory_iterator(); it.increment(error)) {
+        std::error_code copy_error;
+        if (it->is_regular_file(copy_error)) {
+            fs::copy_file(it->path(), folder / it->path().filename(), fs::copy_options::overwrite_existing, copy_error);
+            if (copy_error) return library;
+        }
+    }
+    if (!error && fs::is_regular_file(folder / library.filename(), error)) return folder / library.filename();
+#else
+    (void)index;
+#endif
+    return library;
 }
 
 void close_library(void* module) {
@@ -315,6 +402,25 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.alloc = api_alloc;
     g_api.release = api_release;
     g_api.format = api_format;
+    g_api.unlock_achievement = api_unlock_achievement;
+    g_achievements = rows.achievements;
+    g_achievement_done = std::make_unique<std::atomic<bool>[]>(g_achievements.size());
+    {
+        bool subscribed[NEBULA_MOD_EVENT_COUNT] = {};
+        for (const AchievementToAdd& achievement : g_achievements) {
+            if (achievement.event.empty()) continue;
+            const int event = mod_event_by_name(achievement.event);
+            if (event < 0) {
+                say(achievement.mod_id + ": the achievement " + achievement.key + " waits for an event the game has not: " + achievement.event);
+                continue;
+            }
+            if (subscribed[event]) continue;
+            subscribed[event] = true;
+            if (g_api.subscribe(static_cast<NebulaModEvent>(event), achievement_event, reinterpret_cast<void*>(static_cast<std::intptr_t>(event))) != 0) {
+                say(achievement.mod_id + ": the achievement " + achievement.key + " cannot wait for " + achievement.event);
+            }
+        }
+    }
     for (const ModRows::TextToAdd& text : rows.texts) {
         if (text.like.empty()) {
             g_api.add_text(text.id.c_str(), text.words.c_str());
@@ -384,13 +490,18 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         for (const std::string& name : rule.acts_as) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, name.c_str(), 1);
         if (!rule.own_rules) g_api.set_stage_rules(rule.stage.c_str(), rule.scenario, nullptr, 0);
     }
+    // A number past what a number holds (1e999 in luma.json reads as infinite) changes nothing, and is named as such.
     for (const PlayerConstantToSet& constant : rows.player_constants) {
-        if (g_api.set_player_constant(constant.character, constant.name.c_str(), constant.index, constant.value) != 0) {
+        if (!std::isfinite(constant.value)) {
+            say(constant.mod_id + ": " + constant.name + " is set to a number too large to hold");
+        } else if (g_api.set_player_constant(constant.character, constant.name.c_str(), constant.index, constant.value) != 0) {
             say(constant.mod_id + ": the player has no number " + constant.name);
         }
     }
     for (const TunableToSet& tunable : rows.tunables) {
-        if (g_api.set_tunable(tunable.key.c_str(), tunable.value) != 0) {
+        if (!std::isfinite(tunable.value)) {
+            say(tunable.mod_id + ": " + tunable.key + " is set to a number too large to hold");
+        } else if (g_api.set_tunable(tunable.key.c_str(), tunable.value) != 0) {
             say(tunable.mod_id + ": the game has no tuning number " + tunable.key);
         }
     }
@@ -426,9 +537,15 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
     }
     g_starting = true;
-    for (const PluginFile& file : plugins) {
+    for (std::size_t index = 0; index < plugins.size(); ++index) {
+        const PluginFile& file = plugins[index];
         const std::string name = file.mod_id + " (" + file.path.filename().string() + ")";
-        void* const module = open_library(file.path);
+        const std::filesystem::path running = running_copy(file.path, index);
+        if (file.code.empty() || code_hash(running) != file.code) {
+            say(name + (file.code.empty() ? " not started: its code can't be read" : " not started: its code changed after it was allowed"));
+            continue;
+        }
+        void* const module = open_library(running);
         if (module == nullptr) {
             say(name + " not started: " + load_error());
             continue;
@@ -476,6 +593,33 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     return g_loaded.size();
 }
 
+void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept {
+    g_achievement_store = unlock;
+}
+
+std::size_t mod_achievement_count() noexcept {
+    return g_achievements.size();
+}
+
+const AchievementToAdd* mod_achievement(std::size_t index) noexcept {
+    return index < g_achievements.size() ? &g_achievements[index] : nullptr;
+}
+
+std::int32_t next_mod_achievement_unlocked() noexcept {
+    const std::lock_guard<std::mutex> lock(g_unlocked_mutex);
+    if (g_unlocked.empty()) return -1;
+    const std::int32_t index = g_unlocked.front();
+    g_unlocked.erase(g_unlocked.begin());
+    return index;
+}
+
+int mod_event_by_name(std::string_view name) noexcept {
+    for (int i = 0; i < NEBULA_MOD_EVENT_COUNT; ++i) {
+        if (name == kEventNames[i]) return i;
+    }
+    return -1;
+}
+
 const char* plugin_at(const void* address) noexcept {
 #if defined(_WIN32)
     HMODULE module = nullptr;
@@ -487,10 +631,11 @@ const char* plugin_at(const void* address) noexcept {
     }
 #else
     Dl_info info{};
-    if (dladdr(address, &info) == 0) return nullptr;
+    if (dladdr(address, &info) == 0 || info.dli_fname == nullptr) return nullptr;
+    void* const here = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD);
+    if (here == nullptr) return nullptr;
+    dlclose(here);
     for (const std::unique_ptr<Loaded>& loaded : g_loaded) {
-        void* const here = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD);
-        if (here != nullptr) dlclose(here);
         if (here == loaded->module) return loaded->mod_id.c_str();
     }
 #endif

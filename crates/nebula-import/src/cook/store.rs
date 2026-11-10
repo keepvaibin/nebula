@@ -228,6 +228,14 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
     Ok(end)
 }
 
+/// Room for `size` bytes of a store, when the store is that large: a damaged one may say any size.
+fn room(pak: &File, size: u64) -> Result<Vec<u8>> {
+    if size > pak.metadata()?.len() {
+        bail!("the store is damaged: it says it holds more than it does");
+    }
+    Ok(vec![0u8; usize::try_from(size)?])
+}
+
 /// A file of a store on disk, by path.
 pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     use anyhow::Context;
@@ -242,7 +250,7 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
     let count = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
     let (nodes_at, hashes_at) = (word(16), word(24));
     let wanted = path_hash(&store_path(path));
-    let mut hashes = vec![0u8; (count * 16) as usize];
+    let mut hashes = room(&pak, count * 16)?;
     pak.seek(SeekFrom::Start(hashes_at))?;
     pak.read_exact(&mut hashes)?;
     let entry = hashes
@@ -251,11 +259,11 @@ pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
         .with_context(|| format!("the store has no {path}"))?;
     let node = u32::from_le_bytes(entry[8..12].try_into().unwrap()) as u64;
     let mut record = [0u8; 16];
-    pak.seek(SeekFrom::Start(nodes_at + node * 40))?;
+    pak.seek(SeekFrom::Start(nodes_at.saturating_add(node * 40)))?;
     pak.read_exact(&mut record)?;
     let position = u64::from_le_bytes(record[..8].try_into().unwrap());
     let size = u64::from_le_bytes(record[8..16].try_into().unwrap());
-    let mut bytes = vec![0u8; size as usize];
+    let mut bytes = room(&pak, size)?;
     pak.seek(SeekFrom::Start(position))?;
     pak.read_exact(&mut bytes)?;
     Ok(bytes)
@@ -281,9 +289,9 @@ pub fn visit_folder(pak_path: &std::path::Path, path: &str, visit: &mut dyn FnMu
     let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
     let count = u64::from(u32::from_le_bytes(header[12..16].try_into().unwrap()));
     let (nodes_at, hashes_at) = (word(16), word(24));
-    let names_at = hashes_at + count * 16;
+    let names_at = hashes_at.saturating_add(count * 16);
     let wanted = path_hash(&store_path(path));
-    let mut hashes = vec![0u8; (count * 16) as usize];
+    let mut hashes = room(&pak, count * 16)?;
     pak.seek(SeekFrom::Start(hashes_at))?;
     pak.read_exact(&mut hashes)?;
     let entry = hashes
@@ -292,21 +300,27 @@ pub fn visit_folder(pak_path: &std::path::Path, path: &str, visit: &mut dyn FnMu
         .with_context(|| format!("the store has no {path}"))?;
     let top = u64::from(u32::from_le_bytes(entry[8..12].try_into().unwrap()));
     let mut folders = vec![(top, String::new())];
+    // Each node is read once in a whole store: more means a damaged one whose folders hold themselves.
+    let mut read = 0u64;
     while let Some((node, prefix)) = folders.pop() {
+        read += 1;
+        if read > count {
+            bail!("the store is damaged: its folders hold themselves");
+        }
         let mut record = [0u8; 40];
-        pak.seek(SeekFrom::Start(nodes_at + node * 40))?;
+        pak.seek(SeekFrom::Start(nodes_at.saturating_add(node * 40)))?;
         pak.read_exact(&mut record)?;
         let first = u64::from(u32::from_le_bytes(record[28..32].try_into().unwrap()));
         let children = u64::from(u32::from_le_bytes(record[32..36].try_into().unwrap()));
         for child in first..first + children {
             let mut item = [0u8; 40];
-            pak.seek(SeekFrom::Start(nodes_at + child * 40))?;
+            pak.seek(SeekFrom::Start(nodes_at.saturating_add(child * 40)))?;
             pak.read_exact(&mut item)?;
             let position = u64::from_le_bytes(item[..8].try_into().unwrap());
             let size = u64::from_le_bytes(item[8..16].try_into().unwrap());
             let name_at = u64::from(u32::from_le_bytes(item[16..20].try_into().unwrap()));
             let folder = u32::from_le_bytes(item[24..28].try_into().unwrap()) & 1 != 0;
-            pak.seek(SeekFrom::Start(names_at + name_at))?;
+            pak.seek(SeekFrom::Start(names_at.saturating_add(name_at)))?;
             let mut name = Vec::new();
             let mut byte = [0u8; 1];
             while pak.read_exact(&mut byte).is_ok() && byte[0] != 0 {
@@ -316,7 +330,7 @@ pub fn visit_folder(pak_path: &std::path::Path, path: &str, visit: &mut dyn FnMu
             if folder {
                 folders.push((child, format!("{relative}/")));
             } else {
-                let mut bytes = vec![0u8; size as usize];
+                let mut bytes = room(&pak, size)?;
                 pak.seek(SeekFrom::Start(position))?;
                 pak.read_exact(&mut bytes)?;
                 visit(&relative, bytes);
@@ -412,5 +426,29 @@ mod tests {
         assert_eq!(node(2), (0, 0, 3));
         assert_eq!(node(3), (0x140, 2, 0));
         assert_eq!(node(4), (0x100, 3, 1));
+    }
+
+    /// A damaged store is refused: a file larger than the store, a folder that holds itself.
+    #[test]
+    fn a_damaged_store_is_refused() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("store");
+        let mut pak = File::create(&path).unwrap();
+        pak.write_all(&vec![0u8; 0x200]).unwrap();
+        let file = |path: &str, position, size| Placed { path: path.to_string(), position, size, folder: false };
+        write_index(&mut pak, 0x200, &[file("x.arc/a.bin", 0x140, 2), file("x.arc/sub/b.bin", 0x100, 3)], b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let good = std::fs::read(&path).unwrap();
+        let nodes = u64::from_le_bytes(good[16..24].try_into().unwrap()) as usize;
+        // Breadth first: the root, x, a.bin, sub, b.bin.
+        let mut huge = good.clone();
+        huge[nodes + 2 * 40 + 8..nodes + 2 * 40 + 16].copy_from_slice(&(1u64 << 40).to_le_bytes());
+        std::fs::write(&path, &huge).unwrap();
+        assert!(read_file(&path, "x.arc/a.bin").is_err());
+        assert!(read_folder(&path, "x.arc").is_err());
+        let mut looped = good;
+        looped[nodes + 3 * 40 + 28..nodes + 3 * 40 + 32].copy_from_slice(&3u32.to_le_bytes());
+        std::fs::write(&path, &looped).unwrap();
+        assert!(read_folder(&path, "x.arc").is_err());
     }
 }

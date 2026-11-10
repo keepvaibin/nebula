@@ -11,6 +11,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <span>
@@ -234,7 +235,7 @@ enum class NativeSettingsStatus : unsigned {
     JoyCon,           // Pair Joy-Con: status_number has the halves (kJoyCon* bits); Close leaves
     RtRestartAsk,     // ray tracing turned on before its shaders are prepared: restart now? (yes: Apply, later: Close)
     DiagnosticsAsk,   // restart and record a diagnostics run? (yes: Apply, no: Close)
-    ModsCodeAsk,      // a mod turned on brings code: allow it? (yes: Apply, no: Close)
+    ModsCodeAsk,      // a mod turned on brings code: allow it? (status_text: its name; yes: Apply, no: Close)
     XessAsk,          // download XeSS? (yes: Apply, its license: Revert, no: Close)
     XessInstalling,   // XeSS downloads (status_number percent; Close stops it)
     XessRestart,      // XeSS installed: restart now? (yes: Apply, later: Close)
@@ -243,6 +244,16 @@ enum class NativeSettingsStatus : unsigned {
     Preparing,        // pipelines the settings in use want are still being made (status_number percent)
     Arrange,          // the phone's on-screen controls are dragged where they go (save: Apply, the game's places: Revert,
                       // cancel: Close)
+    ModAbout,         // a mod's description and pictures, a page at a time: long_text and picture, status_number the
+                      // page's from 1, or -(page * 4 + 1 loading, 2 unreadable, 3 missing) for a picture not shown
+                      // (next: Apply, before: Revert, back: Close)
+    ModRemoveAsk,     // remove the mod whose page is open? status_number 1: to the recycle bin (yes: Apply, no: Close)
+};
+// A picture the menu shows (a mod's icon or one of its pictures): RGBA8 rows, tightly packed, straight alpha.
+struct NativeSettingsPicture {
+    unsigned width = 0u;
+    unsigned height = 0u;
+    std::vector<std::uint8_t> rgba;
 };
 // The Pair Joy-Con screen's status_number (nebula_game_api.h's NEBULA_JOYCON_*, checked alike in host_main.cpp).
 inline constexpr int kJoyConLeftBit = 1;       // a left half is connected
@@ -266,6 +277,7 @@ struct NativeSettingsView {
     int status_number = 0;
     std::string status_text;
     std::string long_text;
+    std::shared_ptr<const NativeSettingsPicture> picture;
 };
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();

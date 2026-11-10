@@ -4,6 +4,7 @@
 
 #include "galaxy/cpu_count.h"
 #include "galaxy/frame_timeline.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/run_options.h"

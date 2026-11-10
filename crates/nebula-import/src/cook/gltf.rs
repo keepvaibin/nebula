@@ -110,7 +110,12 @@ impl Document {
     /// An accessor's numbers, each element as `width` floats.
     fn floats(&self, index: usize, width: usize) -> Result<Vec<f32>> {
         let accessor = &self.root["accessors"][index];
-        let count = accessor["count"].as_u64().context("an accessor with no count")? as usize;
+        let count = accessor["count"].as_u64().context("an accessor with no count")?;
+        // Far past any model the game draws: a damaged count would ask for memory no device has.
+        if count > MAX_ELEMENTS {
+            bail!("an accessor of {count} elements: a model has up to {MAX_ELEMENTS}");
+        }
+        let count = count as usize;
         let kind = accessor["componentType"].as_u64().context("an accessor with no type")?;
         let normalized = accessor["normalized"].as_bool().unwrap_or(false);
         let (size, read): (usize, fn(&[u8]) -> f32) = match kind {
@@ -283,6 +288,13 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
     Ok((super::kcl::from_triangles(&triangles)?, table))
 }
 
+/// The most elements one accessor of a model may have: a primitive's vertices, far past any the game draws.
+const MAX_ELEMENTS: u64 = 1 << 22;
+
+/// The widest and tallest image a mod may bring: past any GPU's textures, and a damaged header can't ask for more
+/// memory than a gigabyte of pixels.
+const MAX_IMAGE_SIDE: u32 = 16384;
+
 /// A PNG as RGBA, top row first.
 pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -294,6 +306,10 @@ pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
     let mut decoder = png::Decoder::new(bytes);
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16 | png::Transformations::ALPHA);
     let mut reader = decoder.read_info().context("the PNG can't be read")?;
+    let (width, height) = reader.info().size();
+    if width > MAX_IMAGE_SIDE || height > MAX_IMAGE_SIDE {
+        bail!("a {width} by {height} image: images go up to {MAX_IMAGE_SIDE} pixels a side");
+    }
     let mut pixels = vec![0u8; reader.output_buffer_size()];
     let info = reader.next_frame(&mut pixels).context("the PNG can't be read")?;
     let mut rgba = Vec::with_capacity(info.width as usize * info.height as usize * 4);
@@ -312,7 +328,7 @@ pub fn decode_image(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
 /// A JPEG as RGBA, top row first.
 fn decode_jpeg(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
     use zune_jpeg::zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
-    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA).set_max_width(1 << 16).set_max_height(1 << 16);
+    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA).set_max_width(MAX_IMAGE_SIDE as usize).set_max_height(MAX_IMAGE_SIDE as usize);
     let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(bytes), options);
     let rgba = decoder.decode().map_err(|e| anyhow::anyhow!("the JPEG can't be read: {e:?}"))?;
     let info = decoder.info().context("the JPEG can't be read")?;
@@ -751,6 +767,9 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             });
             let read = source.images.iter().map(|&(_, uv)| usize::from(uv) + 1).max().unwrap_or(0);
             let room = named.max(read);
+            if room > super::limits::MATERIAL_SLOTS {
+                bail!("TEXCOORD_{}: a model has up to {} sets of texture coordinates", room - 1, super::limits::MATERIAL_SLOTS);
+            }
             let mut coordinate_present = vec![false; room];
             let mut coordinate_values = Vec::with_capacity(room);
             for (k, present) in coordinate_present.iter_mut().enumerate() {
@@ -1809,6 +1828,26 @@ mod tests {
         let document = Document::parse(&serde_json::to_vec(&json).unwrap(), None).unwrap();
         assert_eq!(document.floats(0, 1).unwrap(), [1.0, -1.0]);
         assert_eq!(document.floats(1, 1).unwrap(), [0.0, 7.0, 0.0]);
+    }
+
+    #[test]
+    fn a_damaged_count_is_refused() {
+        let json = serde_json::json!({ "asset": { "version": "2.0" },
+            "accessors": [ { "componentType": 5126, "count": 1u64 << 40, "type": "SCALAR" } ] });
+        let document = Document::parse(&serde_json::to_vec(&json).unwrap(), None).unwrap();
+        assert!(document.floats(0, 1).is_err());
+    }
+
+    #[test]
+    fn an_image_past_the_largest_side_is_refused() {
+        let mut png = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut png, MAX_IMAGE_SIDE + 1, 1);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.write_header().unwrap().write_image_data(&vec![0u8; (MAX_IMAGE_SIDE as usize + 1) * 4]).unwrap();
+        }
+        let error = format!("{:#}", decode_image(&png).unwrap_err());
+        assert!(error.contains("pixels a side"), "{error}");
     }
 
     #[test]

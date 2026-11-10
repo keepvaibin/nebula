@@ -58,6 +58,8 @@ struct Facts {
     std::string_view last_mod_read;  // "<mod>: <game path>"
     double last_mod_seconds = -1.0;  // since that read; below 0: none
     bool mods_change_game = false;
+    std::string_view plugin_mod;  // Fault: the mod whose code was running (Windows): its plugin, or the game's code it called
+    bool in_plugin = false;       // the fault is in the plugin's own code
 };
 
 struct Report {

@@ -31,7 +31,7 @@ returns. An event no plugin subscribes to costs the game one load and one branch
 | `NEBULA_MOD_EVENT_TALK_LINE` | A line of talk opens in its balloon. actor: who talks. name: the line's message id, as luma.json "text" and add_text name it (null for a line with no id). |
 | `NEBULA_MOD_EVENT_TALK_CHOICE` | The player answered a talk's yes/no question. value: 1 yes, 0 no. actor: who asked. name: the question's message id. |
 | `NEBULA_MOD_EVENT_CUTSCENE_PART` | A part of a cutscene starts. value: the part's number in the cutscene, from 0. name: the part, as the cutscene's time sheet names it. |
-| `NEBULA_MOD_EVENT_CAMERA_CHANGE` | The camera changes. value: 0 an area's camera, 1 an event camera (a cutscene's, start_camera's). name: its id, as the stage's camera table names it. |
+| `NEBULA_MOD_EVENT_CAMERA_CHANGE` | The camera changes. value: 0 an area's camera (also when the last event camera ends and the area's takes the view back), 1 an event camera (a cutscene's, a talk's, start_camera's). name: its id, as the stage's camera table names it. |
 | `NEBULA_MOD_EVENT_SOUND_START` | A sound effect is about to start. value: its number; name: its name. What you return plays: that number, another sound's, or -1 for none. Subscribing costs a call per sound. |
 | `NEBULA_MOD_EVENT_EFFECT_START` | An object starts one of its effects. actor: the object. name: the effect, as the object's effect table names it. Subscribing costs a call per effect. |
 | `NEBULA_MOD_EVENT_SCREEN` | A screen layout (a counter, a menu, a message box) is shown or goes away. value: 1 shown, 0 gone. name: its name in the game's code. |

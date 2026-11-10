@@ -18,6 +18,7 @@ mods that were on and the technical details, and a `.dmp` for the developers). T
 |---|---|---|
 | NEB-M01 | The game crashed while mods changed its files or code (Riivolution or file mods). The report lists them. | Turn the mods off and play again; if it no longer happens, turn them on one at a time to find the one. |
 | NEB-M02 | The game crashed within 15 seconds of reading a file a mod supplies. The report names the mod and the file. | Turn that mod off, or check that it is made for this game's region and version. |
+| NEB-M03 | The game crashed in a mod's code (its plugin), or in the game's code a call of that plugin reached. The report names the mod. Windows. | Turn that mod off and send its author the report file. |
 | NEB-T01 | A texture pack image stopped Nebula while it loaded. The report names the file. | Remove the image from the pack or save it again as a PNG. |
 | NEB-V01 | A replacement movie stopped Nebula while it played. The report names the file. | Remove the video or convert it to an H.264 MP4. |
 

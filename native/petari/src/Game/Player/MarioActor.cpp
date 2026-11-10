@@ -123,6 +123,7 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mHiddenByDemo = 0;
     mHidden = 0;
     mMorphHidden = 0;
+    mModHidden = false;
 
     mThrowProbePos.zero();
 
@@ -1949,7 +1950,7 @@ void MarioActor::calcAnim() {
         MR::updateModelDiffMaterials(this);
     }
 
-    if (MR::isHiddenModel(this) && mHidden == 0) {
+    if (MR::isHiddenModel(this) && mHidden == 0 && !mModHidden) {
         MR::showModel(this);
     }
 

@@ -22,6 +22,8 @@ struct Info {
 // True when `id` is in the catalogue and was not unlocked yet; it is then unlocked, and written to the file in the
 // background (several unlocked together, once).
 bool unlock(std::string_view id);
+// A mod's achievement ("mod:<mod id>/<id>"): as unlock, for any key of that form.
+bool unlock_mod(std::string_view key);
 [[nodiscard]] bool unlocked(std::string_view id);
 // The day it was unlocked, in the player's time zone: year * 10000 + month * 100 + day; 0 when locked; 1 when
 // unlocked on a day that cannot be read.

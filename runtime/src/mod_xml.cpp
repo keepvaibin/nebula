@@ -4,7 +4,9 @@
 #include "galaxy/mod_xml.h"
 
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
+#include <vector>
 
 namespace galaxy::mods {
 namespace {
@@ -226,8 +228,9 @@ long long XmlNode::attribute_int(std::string_view key, long long fallback) const
     const bool negative = *s == '-';
     if (negative || *s == '+') ++s;
     const bool hex = s[0] == '0' && (s[1] == 'x' || s[1] == 'X');
-    const long long v = static_cast<long long>(std::strtoull(hex ? s + 2 : s, nullptr, hex ? 16 : 10));
-    return negative ? -v : v;
+    // Negated as unsigned and wrapped: "-9223372036854775808" has no positive twin to negate.
+    const unsigned long long v = std::strtoull(hex ? s + 2 : s, nullptr, hex ? 16 : 10);
+    return static_cast<long long>(negative ? 0ull - v : v);
 }
 
 bool XmlNode::attribute_bool(std::string_view key, bool fallback) const {
@@ -244,8 +247,74 @@ const XmlNode* XmlNode::child(std::string_view child_name) const {
     return nullptr;
 }
 
+namespace {
+
+void put_utf8(std::string& out, std::uint32_t code) {
+    if (code < 0x80u) {
+        out.push_back(static_cast<char>(code));
+    } else if (code < 0x800u) {
+        out.push_back(static_cast<char>(0xC0u | (code >> 6u)));
+        out.push_back(static_cast<char>(0x80u | (code & 0x3Fu)));
+    } else if (code < 0x10000u) {
+        out.push_back(static_cast<char>(0xE0u | (code >> 12u)));
+        out.push_back(static_cast<char>(0x80u | ((code >> 6u) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | (code & 0x3Fu)));
+    } else {
+        out.push_back(static_cast<char>(0xF0u | (code >> 18u)));
+        out.push_back(static_cast<char>(0x80u | ((code >> 12u) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | ((code >> 6u) & 0x3Fu)));
+        out.push_back(static_cast<char>(0x80u | (code & 0x3Fu)));
+    }
+}
+
+bool is_utf8(std::string_view text) {
+    for (std::size_t i = 0; i < text.size();) {
+        const auto c = static_cast<unsigned char>(text[i]);
+        const std::size_t more = c < 0x80u ? 0u : (c >> 5u) == 6u ? 1u : (c >> 4u) == 14u ? 2u : (c >> 3u) == 30u ? 3u : 4u;
+        if (more == 4u || i + more >= text.size()) return false;
+        for (std::size_t k = 1; k <= more; ++k) {
+            if ((static_cast<unsigned char>(text[i + k]) & 0xC0u) != 0x80u) return false;
+        }
+        i += more + 1u;
+    }
+    return true;
+}
+
+// The encodings patch files turn up in, as LumaLink reads them (riivolution.rs decode): UTF-8 with or without its mark,
+// UTF-16 with its mark, else Latin-1.
+std::string as_utf8(std::string_view bytes) {
+    const bool little = bytes.size() >= 2u && bytes[0] == '\xFF' && bytes[1] == '\xFE';
+    const bool big = bytes.size() >= 2u && bytes[0] == '\xFE' && bytes[1] == '\xFF';
+    std::string out;
+    if (little || big) {
+        std::vector<std::uint32_t> units;
+        for (std::size_t i = 2; i + 1u < bytes.size(); i += 2u) {
+            const auto a = static_cast<unsigned char>(bytes[i]);
+            const auto b = static_cast<unsigned char>(bytes[i + 1u]);
+            units.push_back(little ? (a | (b << 8u)) : ((a << 8u) | b));
+        }
+        for (std::size_t i = 0; i < units.size(); ++i) {
+            std::uint32_t code = units[i];
+            if (code >= 0xD800u && code < 0xDC00u && i + 1u < units.size() && units[i + 1u] >= 0xDC00u && units[i + 1u] < 0xE000u) {
+                code = 0x10000u + ((code - 0xD800u) << 10u) + (units[++i] - 0xDC00u);
+            } else if (code >= 0xD800u && code < 0xE000u) {
+                code = 0xFFFDu;  // half of a pair
+            }
+            put_utf8(out, code);
+        }
+        return out;
+    }
+    if (bytes.substr(0, 3) == "\xEF\xBB\xBF") bytes.remove_prefix(3);
+    if (is_utf8(bytes)) return std::string(bytes);
+    for (const char c : bytes) put_utf8(out, static_cast<unsigned char>(c));
+    return out;
+}
+
+}  // namespace
+
 std::optional<XmlNode> parse_xml(std::string_view text, std::string* error) {
-    return Reader(text).document(error);
+    const std::string utf8 = as_utf8(text);
+    return Reader(utf8).document(error);
 }
 
 }  // namespace galaxy::mods

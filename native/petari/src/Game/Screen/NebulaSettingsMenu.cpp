@@ -31,6 +31,8 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/Render/RenderTexture.hpp"
+#include <nebula_cooked_texture.h>
 
 using namespace NebulaUi;
 
@@ -214,7 +216,20 @@ namespace {
          {"SettingsChoiceSave", "SettingsChoiceReset", "SettingsChoiceCancel"},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_REVERT, NEBULA_SETTINGS_CLOSE},
          {KeyApply, KeyUndo, KeyBack}},
+        // A mod's description and pictures, paged as a license: its text the page the host sends, its picture under it
+        // (fillTexts, placeModPicture).
+        {NEBULA_SETTINGS_STATUS_MOD_ABOUT, "SettingsModPictureLoading", "SettingsModPictureLoading", 3,
+         {"SettingsChoicePrevious", "SettingsChoiceNext", "SettingsBack"},
+         {NEBULA_SETTINGS_REVERT, NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE},
+         {KeyUndo, KeyApply, KeyBack}},
+        // To the recycle bin (1) or deleted (0).
+        {NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK, "SettingsModRemoveAsk", "SettingsModRemoveAskBin", 2,
+         {"SettingsChoiceRemove", "SettingsChoiceKeep", nullptr},
+         {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
+         {KeyApply, KeyBack, 0}},
     };
+    // The ABOUT window's pictures: at most this many texels a side (the host fits them so).
+    const u32 cModPictureSide = 1024;
     const s32 cQuestionNum = sizeof(cQuestions) / sizeof(cQuestions[0]);
 
     // A half of the Pair Joy-Con picture: its texture (made when the screen first shows) and its shoulder's letter.
@@ -937,6 +952,8 @@ private:
     void fillButton(Button& rButton, const char* pWordId);
     void setQuestion(s32 question);
     void placeJoyCon(f32 top);
+    void takeModPicture(const NebulaSettingsView& rView);
+    void placeModPicture(bool shown, f32 width, f32 top, f32 bottom);
     void paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const;
     void fillHome(s32 homeView);
     void readPointer(const NebulaSettingsView& rView);
@@ -1042,6 +1059,16 @@ private:
     bool mJoyConPaired;  // the pair's chime played
     s32 mJoyConBits;     // the Pair Joy-Con screen's status_number this frame (NEBULA_JOYCON_*)
     f32 mQuestionInk;    // the question text's height from its first capitals' tops to its last baseline
+    // The ABOUT window's picture (a mod's icon or one of its pictures): its pane, made when first shown, and the game's
+    // copy of the host's pixels in a texture record of its own (cModPictureSide a side at most, taken once).
+    Picture* mModPicture;
+    Ui::TexMap mModPictureMap;
+    u8* mModPictureRecord;
+    const u8* mModPictureFrom;  // the host's pixels last copied (the same pointer: the same picture)
+    u32 mModPictureWidth;
+    u32 mModPictureHeight;
+    bool mModPictureReady;  // copied: shown on an ABOUT page
+    bool mModPictureNew;    // copied since the pane last took it
 
     NebulaSettingsView mRead;   // the host's view this step
     ShownView mShown;           // the host's view as drawn, copied
@@ -1115,7 +1142,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     : LayoutActor("NebulaSettingsMenu", true), mBuilt(false), mRoot(nullptr), mDim(nullptr), mMenu(nullptr), mPage(nullptr), mShadow(nullptr),
       mPanel(nullptr), mTitle(nullptr), mList(nullptr), mHighlight(nullptr), mTrack(nullptr), mThumb(nullptr), mStatus(nullptr),
       mStatusWidth(0.0f), mStatusRoom(-1.0f), mQuestion(nullptr), mQuestionDim(nullptr), mQuestionShadow(nullptr), mQuestionPanel(nullptr),
-      mQuestionText(nullptr), mProgressTrack(nullptr), mProgressFill(nullptr), mChoiceCount(0), mJoyCon(nullptr), mJoyConPaired(false), mJoyConBits(0), mQuestionInk(0.0f), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
+      mQuestionText(nullptr), mProgressTrack(nullptr), mProgressFill(nullptr), mChoiceCount(0), mJoyCon(nullptr), mJoyConPaired(false), mJoyConBits(0), mQuestionInk(0.0f), mModPicture(nullptr), mModPictureRecord(nullptr), mModPictureFrom(nullptr), mModPictureWidth(0), mModPictureHeight(0), mModPictureReady(false), mModPictureNew(false), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
       mFocusButton(nullptr), mFrame(0), mScroll(0.0f),
       mScrollTarget(0.0f), mHighlightY(0.0f), mPointerMode(false), mPointerX(0.0f), mPointerY(0.0f), mPointerRow(-1), mHoverRow(-1),
       mHoverTab(-1), mPressing(false), mPressRow(-1), mPressArrow(0), mPressSlider(false), mPressX(0.0f), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mSwipeFrames(0), mDraggedAt(-1), mHoverArrow(0),
@@ -1811,7 +1838,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         return;
     }
     const Question& rQuestion = cQuestions[question];
-    if (rView.status == NEBULA_SETTINGS_STATUS_LICENSE) {
+    if (rView.status == NEBULA_SETTINGS_STATUS_LICENSE || rView.status == NEBULA_SETTINGS_STATUS_MOD_ABOUT) {
         static MR::GrowBuffer< char16_t > shown;
         MR::Text16 pageText;
         if (rView.status_number > 0) {
@@ -1823,6 +1850,28 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
             pNumber[used++] = u'\n';
             pNumber[used] = 0;
             fromUtf8(pageText, used, rView.long_text);
+        } else if (rView.status == NEBULA_SETTINGS_STATUS_MOD_ABOUT) {
+            // A picture page without its picture: its number, then why (it loads, can't be read, is missing).
+            const s32 code = -rView.status_number;
+            const char* const pState = code % 4 == 3   ? "SettingsModPictureMissing"
+                                       : code % 4 == 2 ? "SettingsModPictureFailed"
+                                                       : "SettingsModPictureLoading";
+            if (code / 4 > 0) {
+                MR::Text16 state;
+                getText(state, pState);
+                getNumbered(pageText, "SettingsLicensePage", code / 4);
+                u32 used = static_cast< u32 >(MR::textLength(pageText.c_str()));
+                const u32 stateLength = static_cast< u32 >(MR::textLength(state.c_str()));
+                char16_t* const pText = pageText.grow(used + 1, used + stateLength + 3);
+                pText[used++] = u'\n';
+                pText[used++] = u'\n';
+                for (u32 i = 0; i < stateLength; i++) {
+                    pText[used++] = state.c_str()[i];
+                }
+                pText[used] = 0;
+            } else {
+                getText(pageText, pState);
+            }
         } else {
             getText(pageText, rView.status_number == -2 ? "SettingsLicenseFailed" : "SettingsLicenseLoading");
         }
@@ -1887,6 +1936,21 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                                                                : "SettingsJoyConConnect";
     }
     getNumbered(text, pText, rView.status_number);
+    if (rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK && rView.status_text != nullptr && rView.status_text[0] != 0) {
+        // The mod's name above the question: more than one can wait for an answer.
+        MR::Text16 asked;
+        getNumbered(asked, pText, rView.status_number);
+        fromUtf8(text, 0, rView.status_text);
+        u32 used = static_cast< u32 >(MR::textLength(text.c_str()));
+        const u32 askedLength = static_cast< u32 >(MR::textLength(asked.c_str()));
+        char16_t* const pNamed = text.grow(used, used + askedLength + 3);
+        pNamed[used++] = u'\n';
+        pNamed[used++] = u'\n';
+        for (u32 i = 0; i < askedLength; i++) {
+            pNamed[used++] = asked.c_str()[i];
+        }
+        pNamed[used] = 0;
+    }
     setTextSize(mQuestionText, cTextSize + 1.0f);
     setText(mQuestionText, text.c_str());
     // Too long for its window: broken at its spaces (or, written without spaces, in two), then smaller if need be.
@@ -2997,7 +3061,8 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         const f32 picture = cCapHeight * cTextSize + cJoyConLetterGap +
                             (NebulaIcons::cJoyConShoulder + NebulaIcons::cJoyConBody[1]) * cJoyConUnit;
         const f32 gap = cQuestionMargin - cQuestionRing;
-        const bool license = rView.status == NEBULA_SETTINGS_STATUS_LICENSE;
+        const bool about = rView.status == NEBULA_SETTINGS_STATUS_MOD_ABOUT;
+        const bool license = rView.status == NEBULA_SETTINGS_STATUS_LICENSE || about;
         const bool bar = rView.status == NEBULA_SETTINGS_STATUS_DLSS_INSTALLING || rView.status == NEBULA_SETTINGS_STATUS_XESS_INSTALLING;
         const f32 panelWidth = license ? mPanelWidth - cLicenseInset * 2.0f : cQuestionWidth;
         const f32 height = joycon    ? cQuestionMargin * 2.0f + gap * 2.0f + picture + mQuestionInk + cButtonHeight
@@ -3017,6 +3082,9 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         if (joycon) {
             placeJoyCon(top);
         }
+        // Between the page's text and the answers.
+        placeModPicture(about, panelWidth - cQuestionMargin * 2.0f, top - mQuestionInk - gap,
+                        answersY + cButtonHeight * 0.5f + gap);
         if (bar) {
             const f32 barWidth = cQuestionWidth - cQuestionMargin * 2.0f;
             const f32 barY = textY - (cTextSize + 1.0f) * 0.5f - cSliderHeight * 2.0f;
@@ -3030,6 +3098,79 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
             placeButton(mChoices[i], -panelWidth * 0.5f + cQuestionMargin + width * 0.5f + i * (width + cButtonGap), answersY, width);
         }
     }
+}
+
+// The ABOUT window's picture from the host's view, copied into the game's own texture when it is another one; none on
+// another screen. Read while the host's pointer is good (the view of this step).
+void NebulaSettingsScreen::takeModPicture(const NebulaSettingsView& rView) {
+    const bool about = rView.open && rView.status == NEBULA_SETTINGS_STATUS_MOD_ABOUT;
+    const u8* const pFrom = about ? rView.picture : nullptr;
+    const u32 width = pFrom != nullptr ? rView.picture_width : 0;
+    const u32 height = pFrom != nullptr ? rView.picture_height : 0;
+    if (pFrom == mModPictureFrom && width == mModPictureWidth && height == mModPictureHeight) {
+        return;
+    }
+    mModPictureFrom = pFrom;
+    mModPictureWidth = width;
+    mModPictureHeight = height;
+    mModPictureReady = false;
+    if (pFrom == nullptr || width == 0 || height == 0 || width > cModPictureSide || height > cModPictureSide) {
+        return;
+    }
+    const u32 room = NEBULA_TEXTURE_HEADER + cModPictureSide * cModPictureSide * 4;
+    if (mModPictureRecord == nullptr) {
+        mModPictureRecord = static_cast< u8* >(NebulaArena::alloc(room, 16, NebulaArena::root()));
+        if (mModPictureRecord == nullptr) {
+            return;
+        }
+    }
+    nebula_texture_init(mModPictureRecord, width, height, 1, NEBULA_TEXTURE_RGBA8, 0);
+    memcpy(mModPictureRecord + NEBULA_TEXTURE_HEADER, pFrom, static_cast< size_t >(width) * height * 4);
+    RenderTexture::rewritten(mModPictureRecord, room);
+    mModPictureMap.SetImage(mModPictureRecord);
+    mModPictureMap.SetSize(static_cast< u16 >(width), static_cast< u16 >(height));
+    mModPictureMap.SetTexelFormat(Ui::TexMap::TEXEL_RGBA8);
+    mModPictureMap.SetWrapMode(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    mModPictureMap.SetMipMap(false);
+    mModPictureMap.SetFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
+    mModPictureMap.SetLOD(0.0f, 0.0f);
+    mModPictureReady = true;
+    mModPictureNew = true;
+}
+
+// The ABOUT window's picture centred in the room from `top` down to `bottom`, `width` wide, its shape kept; a small one
+// grows to three of the screen's pixels a texel at most.
+void NebulaSettingsScreen::placeModPicture(bool shown, f32 width, f32 top, f32 bottom) {
+    shown = shown && mModPictureReady && top - bottom > 1.0f && width > 1.0f;
+    if (shown && mModPicture == nullptr) {
+        mModPicture = makePicture(mQuestion, "NsModPic", &mModPictureMap);
+        if (mModPicture == nullptr) {
+            return;
+        }
+        mModPicture->mBasePosition = 4;
+        mModPictureNew = false;
+    }
+    if (mModPicture == nullptr) {
+        return;
+    }
+    mModPicture->SetVisible(shown);
+    if (!shown) {
+        return;
+    }
+    if (mModPictureNew) {
+        mModPicture->GetMaterial()->SetTexture(0, mModPictureMap);
+        mModPictureNew = false;
+    }
+    const u32 lines = NebulaHost::layer2DLines();
+    const f32 pixels = (lines != 0u ? static_cast< f32 >(lines) : 1368.0f) / mHeight;  // the screen's pixels a unit
+    const f32 w = static_cast< f32 >(mModPictureWidth);
+    const f32 h = static_cast< f32 >(mModPictureHeight);
+    f32 scale = width / w < (top - bottom) / h ? width / w : (top - bottom) / h;
+    if (scale > 3.0f / pixels) {
+        scale = 3.0f / pixels;
+    }
+    mModPicture->mSize = Ui::Size(w * scale, h * scale);
+    mModPicture->mTranslate = Vec3f(0.0f, (top + bottom) * 0.5f, 0.0f);
 }
 
 // The Pair Joy-Con picture under `top` (the letters' cap tops): the halves side by side, their rails cJoyConGap apart,
@@ -3228,6 +3369,7 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     // it says (which halves are here, paired).
     NebulaSettingsView& view = mRead;
     memcpy(&view, &rView, sizeof(view));
+    takeModPicture(rView);
     mJoyConBits = view.status == NEBULA_SETTINGS_STATUS_JOYCON ? view.status_number : 0;
     if (view.status == NEBULA_SETTINGS_STATUS_JOYCON) {
         view.status_number &= NEBULA_JOYCON_LEFT | NEBULA_JOYCON_RIGHT | NEBULA_JOYCON_PAIRED;

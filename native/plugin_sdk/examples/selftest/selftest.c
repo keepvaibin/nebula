@@ -102,7 +102,7 @@ static int32_t any_nerve(NebulaActor* actor, const char* nerve, NebulaNervePhase
     return 1;
 }
 
-/* The game's rules as Gecko codes change them (MOD-PLAN M9). */
+/* The game's rules as popular Gecko codes change them. */
 static int refuse_miss;
 static int misses_refused;
 static int speed_from;

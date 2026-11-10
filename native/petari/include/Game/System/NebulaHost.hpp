@@ -55,6 +55,23 @@ namespace NebulaHost {
         return nebula_host()->achievement_date(nebula_host()->user, pId);
     }
 
+    inline s32 modAchievementCount() {
+        return nebula_host()->mod_achievement_count(nebula_host()->user);
+    }
+
+    inline bool modAchievement(s32 index, const char** ppKey, const char** ppName, const char** ppDescription, bool* pHidden) {
+        s32 hidden = 0;
+        const bool found = nebula_host()->mod_achievement(nebula_host()->user, index, ppKey, ppName, ppDescription, nullptr, &hidden) != 0;
+        if (pHidden != nullptr) {
+            *pHidden = hidden != 0;
+        }
+        return found;
+    }
+
+    inline s32 modAchievementUnlocked() {
+        return nebula_host()->mod_achievement_unlocked(nebula_host()->user);
+    }
+
     inline void statAdd(const char* pName, u64 delta) {
         nebula_host()->stat_add(nebula_host()->user, pName, delta);
     }
