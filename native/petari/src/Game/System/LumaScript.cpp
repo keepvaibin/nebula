@@ -11,6 +11,7 @@
 #include "Game/System/LumaScript.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHost.hpp"
+#include "Game/System/LumaRegistry.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
@@ -1099,7 +1100,8 @@ namespace lumascript {
                 break;
             }
             case Op_Registry:
-                r[s.dst] = fromInt(p->mImports[s.imm].index);
+                // The row's number: the game's for it (a form id, a message, a floor code), found at load.
+                r[s.dst] = fromInt(lumacore::registryAt(static_cast< u32 >(p->mImports[s.imm].index))->value);
                 break;
             case Op_CallScript:
                 r[s.dst] = callFunction(pInstance, s.imm, r + s.a, s.b, depth + 1);

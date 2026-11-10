@@ -4856,6 +4856,14 @@ namespace NameObjFactory {
         return false;
     }
 
+    u32 getCreateTableNum() {
+        return ARRAY_SIZEU(cCreateTable);
+    }
+
+    const char* getCreateTableName(u32 index) {
+        return index < ARRAY_SIZEU(cCreateTable) ? cCreateTable[index].mName : nullptr;
+    }
+
     const Name2CreateFunc* getName2CreateFunc(const char* pName) {
         if (!::sCreateIndexBuilt) {
             ::buildCreateIndex();

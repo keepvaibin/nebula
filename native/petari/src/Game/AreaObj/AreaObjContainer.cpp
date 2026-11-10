@@ -385,6 +385,14 @@ void AreaObjContainer::init(const TableIter& /*rIter*/) {
     }
 }
 
+u32 AreaObjContainer::getKindNum() {
+    return ARRAY_SIZE(::cCreateTable);
+}
+
+const char* AreaObjContainer::getKindName(u32 index) {
+    return ::cCreateTable[index].mName;
+}
+
 // The first manager in table order whose name heads pName; null for none. Each prefix of pName is looked up by its
 // hash, taken a character at a time as MR::getHashCode steps.
 AreaObjMgr* AreaObjContainer::getManager(const char* pName) const {

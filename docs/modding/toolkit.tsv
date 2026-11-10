@@ -3485,6 +3485,11 @@ nebula.rail_coord	h	d
 nebula.rail_length	h	d
 nebula.rail_turn_back	h	
 nebula.raycast	eeE	c
+nebula.registry_count	g	c
+nebula.registry_find	gg	c
+nebula.registry_mod	gc	g
+nebula.registry_name	gc	g
+nebula.registry_value	gg	c
 nebula.save_game		
 nebula.screen_position	eJ	c
 nebula.set_animation_frame	hd	

@@ -3,6 +3,7 @@ package dev.nebula.galaxy
 
 import android.content.Intent
 import android.hardware.usb.UsbManager
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -10,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.content.FileProvider
+import androidx.core.content.IntentCompat
 import dev.nebula.galaxy.ui.NebulaApp
 import dev.nebula.galaxy.ui.NebulaTheme
 
@@ -45,6 +47,29 @@ class LauncherActivity : ComponentActivity() {
             NebulaTheme {
                 NebulaApp(model, onShareLog = ::shareLog)
             }
+        }
+        if (savedInstanceState == null) {
+            opened(intent)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        opened(intent)
+    }
+
+    /** "Open with Nebula" and Share to Nebula (the manifest's filters): the files go where a drop would. */
+    private fun opened(intent: Intent?) {
+        val uris: List<Uri> = when (intent?.action) {
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
+            Intent.ACTION_SEND_MULTIPLE ->
+                IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()
+            else -> emptyList()
+        }
+        if (uris.isNotEmpty()) {
+            model.dropped(uris)
         }
     }
 

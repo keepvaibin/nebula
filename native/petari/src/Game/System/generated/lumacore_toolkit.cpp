@@ -27254,147 +27254,191 @@ namespace {
         o[0] = lumacore::fromInt(static_cast< s64 >(api->raycast(&p0.x, &p1.x, &p2.x)));
         o[1] = lumacore::fromVec3(p2);
     }
-    // nebula.save_game
+    // nebula.registry_count
     void lc3487(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3487, "too few arguments"); return; }
+        if (n < 1u) { lumacore::refuse(3487, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->save_game == nullptr) { lumacore::refuse(3487, "the host has no such call"); return; }
+        if (api == nullptr || api->registry_count == nullptr) { lumacore::refuse(3487, "the host has no such call"); return; }
+        const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
+        o[0] = lumacore::fromInt(static_cast< s64 >(api->registry_count(p0)));
+    }
+    // nebula.registry_find
+    void lc3488(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3488, "too few arguments"); return; }
+        const NebulaModApi* const api = lumacore::api();
+        if (api == nullptr || api->registry_find == nullptr) { lumacore::refuse(3488, "the host has no such call"); return; }
+        const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
+        const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
+        o[0] = lumacore::fromInt(static_cast< s64 >(api->registry_find(p0, p1)));
+    }
+    // nebula.registry_mod
+    void lc3489(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3489, "too few arguments"); return; }
+        const NebulaModApi* const api = lumacore::api();
+        if (api == nullptr || api->registry_mod == nullptr) { lumacore::refuse(3489, "the host has no such call"); return; }
+        const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
+        const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
+        o[0] = lumacore::fromText(api->registry_mod(p0, p1));
+    }
+    // nebula.registry_name
+    void lc3490(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3490, "too few arguments"); return; }
+        const NebulaModApi* const api = lumacore::api();
+        if (api == nullptr || api->registry_name == nullptr) { lumacore::refuse(3490, "the host has no such call"); return; }
+        const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
+        const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
+        o[0] = lumacore::fromText(api->registry_name(p0, p1));
+    }
+    // nebula.registry_value
+    void lc3491(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3491, "too few arguments"); return; }
+        const NebulaModApi* const api = lumacore::api();
+        if (api == nullptr || api->registry_value == nullptr) { lumacore::refuse(3491, "the host has no such call"); return; }
+        const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
+        const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
+        o[0] = lumacore::fromInt(static_cast< s64 >(api->registry_value(p0, p1)));
+    }
+    // nebula.save_game
+    void lc3492(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3492, "too few arguments"); return; }
+        const NebulaModApi* const api = lumacore::api();
+        if (api == nullptr || api->save_game == nullptr) { lumacore::refuse(3492, "the host has no such call"); return; }
         api->save_game();
     }
     // nebula.screen_position
-    void lc3488(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3488, "too few arguments"); return; }
+    void lc3493(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3493, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->screen_position == nullptr) { lumacore::refuse(3488, "the host has no such call"); return; }
+        if (api == nullptr || api->screen_position == nullptr) { lumacore::refuse(3493, "the host has no such call"); return; }
         Vec3f p0 = lumacore::asVec3((n > 0u ? a[0] : lumacore::kNone));
         Vec2f p1 = lumacore::asVec2((n > 1u ? a[1] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->screen_position(&p0.x, &p1.x)));
         o[1] = lumacore::fromVec2(p1);
     }
     // nebula.set_animation_frame
-    void lc3489(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3489, "too few arguments"); return; }
+    void lc3494(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3494, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_animation_frame == nullptr) { lumacore::refuse(3489, "the host has no such call"); return; }
+        if (api == nullptr || api->set_animation_frame == nullptr) { lumacore::refuse(3494, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3489, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3494, "argument 1: no actor"); return; }
         const float p1 = static_cast< float >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         api->set_animation_frame(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.set_animation_rate
-    void lc3490(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3490, "too few arguments"); return; }
+    void lc3495(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3495, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_animation_rate == nullptr) { lumacore::refuse(3490, "the host has no such call"); return; }
+        if (api == nullptr || api->set_animation_rate == nullptr) { lumacore::refuse(3495, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3490, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3495, "argument 1: no actor"); return; }
         const float p1 = static_cast< float >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         api->set_animation_rate(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.set_camera
-    void lc3491(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 3u) { lumacore::refuse(3491, "too few arguments"); return; }
+    void lc3496(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 3u) { lumacore::refuse(3496, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_camera == nullptr) { lumacore::refuse(3491, "the host has no such call"); return; }
+        if (api == nullptr || api->set_camera == nullptr) { lumacore::refuse(3496, "the host has no such call"); return; }
         Vec3f p0 = lumacore::asVec3((n > 0u ? a[0] : lumacore::kNone));
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         const float p2 = static_cast< float >(lumacore::asFloat((n > 2u ? a[2] : lumacore::kNone)));
         api->set_camera(&p0.x, &p1.x, p2);
     }
     // nebula.set_camera_near
-    void lc3492(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3492, "too few arguments"); return; }
+    void lc3497(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3497, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_camera_near == nullptr) { lumacore::refuse(3492, "the host has no such call"); return; }
+        if (api == nullptr || api->set_camera_near == nullptr) { lumacore::refuse(3497, "the host has no such call"); return; }
         const float p0 = static_cast< float >(lumacore::asFloat((n > 0u ? a[0] : lumacore::kNone)));
         api->set_camera_near(p0);
     }
     // nebula.set_comet_time_limit
-    void lc3493(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 3u) { lumacore::refuse(3493, "too few arguments"); return; }
+    void lc3498(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 3u) { lumacore::refuse(3498, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_comet_time_limit == nullptr) { lumacore::refuse(3493, "the host has no such call"); return; }
+        if (api == nullptr || api->set_comet_time_limit == nullptr) { lumacore::refuse(3498, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         const int32_t p2 = static_cast< int32_t >(lumacore::asInt((n > 2u ? a[2] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_comet_time_limit(p0, p1, p2)));
     }
     // nebula.set_event_flag_on
-    void lc3494(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3494, "too few arguments"); return; }
+    void lc3499(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3499, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_event_flag_on == nullptr) { lumacore::refuse(3494, "the host has no such call"); return; }
+        if (api == nullptr || api->set_event_flag_on == nullptr) { lumacore::refuse(3499, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         api->set_event_flag_on(p0);
     }
     // nebula.set_event_value
-    void lc3495(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3495, "too few arguments"); return; }
+    void lc3500(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3500, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_event_value == nullptr) { lumacore::refuse(3495, "the host has no such call"); return; }
+        if (api == nullptr || api->set_event_value == nullptr) { lumacore::refuse(3500, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->set_event_value(p0, p1);
     }
     // nebula.set_front
-    void lc3496(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3496, "too few arguments"); return; }
+    void lc3501(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3501, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_front == nullptr) { lumacore::refuse(3496, "the host has no such call"); return; }
+        if (api == nullptr || api->set_front == nullptr) { lumacore::refuse(3501, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3496, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3501, "argument 1: no actor"); return; }
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         api->set_front(reinterpret_cast< NebulaActor* >(p0), &p1.x);
     }
     // nebula.set_game_speed
-    void lc3497(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3497, "too few arguments"); return; }
+    void lc3502(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3502, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_game_speed == nullptr) { lumacore::refuse(3497, "the host has no such call"); return; }
+        if (api == nullptr || api->set_game_speed == nullptr) { lumacore::refuse(3502, "the host has no such call"); return; }
         const float p0 = static_cast< float >(lumacore::asFloat((n > 0u ? a[0] : lumacore::kNone)));
         api->set_game_speed(p0);
     }
     // nebula.set_gravity_scale
-    void lc3498(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3498, "too few arguments"); return; }
+    void lc3503(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3503, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_gravity_scale == nullptr) { lumacore::refuse(3498, "the host has no such call"); return; }
+        if (api == nullptr || api->set_gravity_scale == nullptr) { lumacore::refuse(3503, "the host has no such call"); return; }
         const float p0 = static_cast< float >(lumacore::asFloat((n > 0u ? a[0] : lumacore::kNone)));
         api->set_gravity_scale(p0);
     }
     // nebula.set_nerve
-    void lc3499(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3499, "too few arguments"); return; }
+    void lc3504(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3504, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_nerve == nullptr) { lumacore::refuse(3499, "the host has no such call"); return; }
+        if (api == nullptr || api->set_nerve == nullptr) { lumacore::refuse(3504, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3499, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3504, "argument 1: no actor"); return; }
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_nerve(reinterpret_cast< NebulaActor* >(p0), p1)));
     }
     // nebula.set_object_change
-    void lc3500(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 3u) { lumacore::refuse(3500, "too few arguments"); return; }
+    void lc3505(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 3u) { lumacore::refuse(3505, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_object_change == nullptr) { lumacore::refuse(3500, "the host has no such call"); return; }
+        if (api == nullptr || api->set_object_change == nullptr) { lumacore::refuse(3505, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         const char* const p2 = lumacore::asText((n > 2u ? a[2] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_object_change(p0, p1, p2)));
     }
     // nebula.set_player_character
-    void lc3501(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3501, "too few arguments"); return; }
+    void lc3506(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3506, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_player_character == nullptr) { lumacore::refuse(3501, "the host has no such call"); return; }
+        if (api == nullptr || api->set_player_character == nullptr) { lumacore::refuse(3506, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_player_character(p0)));
     }
     // nebula.set_player_constant
-    void lc3502(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 4u) { lumacore::refuse(3502, "too few arguments"); return; }
+    void lc3507(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 4u) { lumacore::refuse(3507, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_player_constant == nullptr) { lumacore::refuse(3502, "the host has no such call"); return; }
+        if (api == nullptr || api->set_player_constant == nullptr) { lumacore::refuse(3507, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         const int32_t p2 = static_cast< int32_t >(lumacore::asInt((n > 2u ? a[2] : lumacore::kNone)));
@@ -27402,266 +27446,266 @@ namespace {
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_player_constant(p0, p1, p2, p3)));
     }
     // nebula.set_player_control
-    void lc3503(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3503, "too few arguments"); return; }
+    void lc3508(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3508, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_player_control == nullptr) { lumacore::refuse(3503, "the host has no such call"); return; }
+        if (api == nullptr || api->set_player_control == nullptr) { lumacore::refuse(3508, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         api->set_player_control(p0);
     }
     // nebula.set_position
-    void lc3504(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3504, "too few arguments"); return; }
+    void lc3509(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3509, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_position == nullptr) { lumacore::refuse(3504, "the host has no such call"); return; }
+        if (api == nullptr || api->set_position == nullptr) { lumacore::refuse(3509, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3504, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3509, "argument 1: no actor"); return; }
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         api->set_position(reinterpret_cast< NebulaActor* >(p0), &p1.x);
     }
     // nebula.set_rail_coord
-    void lc3505(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3505, "too few arguments"); return; }
+    void lc3510(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3510, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_rail_coord == nullptr) { lumacore::refuse(3505, "the host has no such call"); return; }
+        if (api == nullptr || api->set_rail_coord == nullptr) { lumacore::refuse(3510, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3505, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3510, "argument 1: no actor"); return; }
         const float p1 = static_cast< float >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         api->set_rail_coord(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.set_rotation
-    void lc3506(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3506, "too few arguments"); return; }
+    void lc3511(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3511, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_rotation == nullptr) { lumacore::refuse(3506, "the host has no such call"); return; }
+        if (api == nullptr || api->set_rotation == nullptr) { lumacore::refuse(3511, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3506, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3511, "argument 1: no actor"); return; }
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         api->set_rotation(reinterpret_cast< NebulaActor* >(p0), &p1.x);
     }
     // nebula.set_scale
-    void lc3507(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3507, "too few arguments"); return; }
+    void lc3512(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3512, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_scale == nullptr) { lumacore::refuse(3507, "the host has no such call"); return; }
+        if (api == nullptr || api->set_scale == nullptr) { lumacore::refuse(3512, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3507, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3512, "argument 1: no actor"); return; }
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         api->set_scale(reinterpret_cast< NebulaActor* >(p0), &p1.x);
     }
     // nebula.set_star
-    void lc3508(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 3u) { lumacore::refuse(3508, "too few arguments"); return; }
+    void lc3513(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 3u) { lumacore::refuse(3513, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_star == nullptr) { lumacore::refuse(3508, "the host has no such call"); return; }
+        if (api == nullptr || api->set_star == nullptr) { lumacore::refuse(3513, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         const int32_t p2 = static_cast< int32_t >(lumacore::asInt((n > 2u ? a[2] : lumacore::kNone)));
         api->set_star(p0, p1, p2);
     }
     // nebula.set_state
-    void lc3509(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3509, "too few arguments"); return; }
+    void lc3514(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3514, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_state == nullptr) { lumacore::refuse(3509, "the host has no such call"); return; }
+        if (api == nullptr || api->set_state == nullptr) { lumacore::refuse(3514, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3509, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3514, "argument 1: no actor"); return; }
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->set_state(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.set_switch
-    void lc3510(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 3u) { lumacore::refuse(3510, "too few arguments"); return; }
+    void lc3515(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 3u) { lumacore::refuse(3515, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_switch == nullptr) { lumacore::refuse(3510, "the host has no such call"); return; }
+        if (api == nullptr || api->set_switch == nullptr) { lumacore::refuse(3515, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3510, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3515, "argument 1: no actor"); return; }
         const NebulaSwitch p1 = static_cast< NebulaSwitch >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         const int32_t p2 = static_cast< int32_t >(lumacore::asInt((n > 2u ? a[2] : lumacore::kNone)));
         api->set_switch(reinterpret_cast< NebulaActor* >(p0), p1, p2);
     }
     // nebula.set_timer
-    void lc3511(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3511, "too few arguments"); return; }
+    void lc3516(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3516, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_timer == nullptr) { lumacore::refuse(3511, "the host has no such call"); return; }
+        if (api == nullptr || api->set_timer == nullptr) { lumacore::refuse(3516, "the host has no such call"); return; }
         const float p0 = static_cast< float >(lumacore::asFloat((n > 0u ? a[0] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_timer(p0)));
     }
     // nebula.set_touchable
-    void lc3512(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3512, "too few arguments"); return; }
+    void lc3517(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3517, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_touchable == nullptr) { lumacore::refuse(3512, "the host has no such call"); return; }
+        if (api == nullptr || api->set_touchable == nullptr) { lumacore::refuse(3517, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3512, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3517, "argument 1: no actor"); return; }
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->set_touchable(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.set_tunable
-    void lc3513(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3513, "too few arguments"); return; }
+    void lc3518(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3518, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_tunable == nullptr) { lumacore::refuse(3513, "the host has no such call"); return; }
+        if (api == nullptr || api->set_tunable == nullptr) { lumacore::refuse(3518, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const double p1 = static_cast< double >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->set_tunable(p0, p1)));
     }
     // nebula.set_value
-    void lc3514(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3514, "too few arguments"); return; }
+    void lc3519(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3519, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_value == nullptr) { lumacore::refuse(3514, "the host has no such call"); return; }
+        if (api == nullptr || api->set_value == nullptr) { lumacore::refuse(3519, "the host has no such call"); return; }
         const NebulaModSet p0 = static_cast< NebulaModSet >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->set_value(p0, p1);
     }
     // nebula.set_velocity
-    void lc3515(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3515, "too few arguments"); return; }
+    void lc3520(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3520, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->set_velocity == nullptr) { lumacore::refuse(3515, "the host has no such call"); return; }
+        if (api == nullptr || api->set_velocity == nullptr) { lumacore::refuse(3520, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3515, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3520, "argument 1: no actor"); return; }
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         api->set_velocity(reinterpret_cast< NebulaActor* >(p0), &p1.x);
     }
     // nebula.shake_camera
-    void lc3516(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3516, "too few arguments"); return; }
+    void lc3521(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3521, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->shake_camera == nullptr) { lumacore::refuse(3516, "the host has no such call"); return; }
+        if (api == nullptr || api->shake_camera == nullptr) { lumacore::refuse(3521, "the host has no such call"); return; }
         api->shake_camera();
     }
     // nebula.shake_camera_by
-    void lc3517(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3517, "too few arguments"); return; }
+    void lc3522(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3522, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->shake_camera_by == nullptr) { lumacore::refuse(3517, "the host has no such call"); return; }
+        if (api == nullptr || api->shake_camera_by == nullptr) { lumacore::refuse(3522, "the host has no such call"); return; }
         const NebulaShake p0 = static_cast< NebulaShake >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         api->shake_camera_by(p0);
     }
     // nebula.show_hud
-    void lc3518(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3518, "too few arguments"); return; }
+    void lc3523(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3523, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->show_hud == nullptr) { lumacore::refuse(3518, "the host has no such call"); return; }
+        if (api == nullptr || api->show_hud == nullptr) { lumacore::refuse(3523, "the host has no such call"); return; }
         const uint32_t p0 = static_cast< uint32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->show_hud(p0, p1);
     }
     // nebula.show_joint
-    void lc3519(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 3u) { lumacore::refuse(3519, "too few arguments"); return; }
+    void lc3524(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 3u) { lumacore::refuse(3524, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->show_joint == nullptr) { lumacore::refuse(3519, "the host has no such call"); return; }
+        if (api == nullptr || api->show_joint == nullptr) { lumacore::refuse(3524, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3519, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3524, "argument 1: no actor"); return; }
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         const int32_t p2 = static_cast< int32_t >(lumacore::asInt((n > 2u ? a[2] : lumacore::kNone)));
         api->show_joint(reinterpret_cast< NebulaActor* >(p0), p1, p2);
     }
     // nebula.show_message
-    void lc3520(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3520, "too few arguments"); return; }
+    void lc3525(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3525, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->show_message == nullptr) { lumacore::refuse(3520, "the host has no such call"); return; }
+        if (api == nullptr || api->show_message == nullptr) { lumacore::refuse(3525, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->show_message(p0, p1);
     }
     // nebula.show_model
-    void lc3521(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3521, "too few arguments"); return; }
+    void lc3526(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3526, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->show_model == nullptr) { lumacore::refuse(3521, "the host has no such call"); return; }
+        if (api == nullptr || api->show_model == nullptr) { lumacore::refuse(3526, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3521, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3526, "argument 1: no actor"); return; }
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->show_model(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.spawn
-    void lc3522(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3522, "too few arguments"); return; }
+    void lc3527(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3527, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->spawn == nullptr) { lumacore::refuse(3522, "the host has no such call"); return; }
+        if (api == nullptr || api->spawn == nullptr) { lumacore::refuse(3527, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         o[0] = lumacore::handle(reinterpret_cast< ::LiveActor* >(api->spawn(p0, &p1.x)));
     }
     // nebula.stage_name
-    void lc3523(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3523, "too few arguments"); return; }
+    void lc3528(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3528, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stage_name == nullptr) { lumacore::refuse(3523, "the host has no such call"); return; }
+        if (api == nullptr || api->stage_name == nullptr) { lumacore::refuse(3528, "the host has no such call"); return; }
         o[0] = lumacore::fromText(api->stage_name());
     }
     // nebula.stars_in_galaxy
-    void lc3524(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3524, "too few arguments"); return; }
+    void lc3529(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3529, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stars_in_galaxy == nullptr) { lumacore::refuse(3524, "the host has no such call"); return; }
+        if (api == nullptr || api->stars_in_galaxy == nullptr) { lumacore::refuse(3529, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->stars_in_galaxy(p0)));
     }
     // nebula.stars_won_in_galaxy
-    void lc3525(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3525, "too few arguments"); return; }
+    void lc3530(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3530, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stars_won_in_galaxy == nullptr) { lumacore::refuse(3525, "the host has no such call"); return; }
+        if (api == nullptr || api->stars_won_in_galaxy == nullptr) { lumacore::refuse(3530, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->stars_won_in_galaxy(p0)));
     }
     // nebula.start_camera
-    void lc3526(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3526, "too few arguments"); return; }
+    void lc3531(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3531, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->start_camera == nullptr) { lumacore::refuse(3526, "the host has no such call"); return; }
+        if (api == nullptr || api->start_camera == nullptr) { lumacore::refuse(3531, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->start_camera(p0, p1);
     }
     // nebula.start_cutscene
-    void lc3527(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3527, "too few arguments"); return; }
+    void lc3532(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3532, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->start_cutscene == nullptr) { lumacore::refuse(3527, "the host has no such call"); return; }
+        if (api == nullptr || api->start_cutscene == nullptr) { lumacore::refuse(3532, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3527, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3532, "argument 1: no actor"); return; }
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->start_cutscene(reinterpret_cast< NebulaActor* >(p0), p1)));
     }
     // nebula.state
-    void lc3528(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3528, "too few arguments"); return; }
+    void lc3533(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3533, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->state == nullptr) { lumacore::refuse(3528, "the host has no such call"); return; }
+        if (api == nullptr || api->state == nullptr) { lumacore::refuse(3533, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3528, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3533, "argument 1: no actor"); return; }
         o[0] = lumacore::fromInt(static_cast< s64 >(api->state(reinterpret_cast< NebulaActor* >(p0))));
     }
     // nebula.state_frames
-    void lc3529(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3529, "too few arguments"); return; }
+    void lc3534(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3534, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->state_frames == nullptr) { lumacore::refuse(3529, "the host has no such call"); return; }
+        if (api == nullptr || api->state_frames == nullptr) { lumacore::refuse(3534, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3529, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3534, "argument 1: no actor"); return; }
         o[0] = lumacore::fromInt(static_cast< s64 >(api->state_frames(reinterpret_cast< NebulaActor* >(p0))));
     }
     // nebula.step_game
-    void lc3530(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3530, "too few arguments"); return; }
+    void lc3535(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3535, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->step_game == nullptr) { lumacore::refuse(3530, "the host has no such call"); return; }
+        if (api == nullptr || api->step_game == nullptr) { lumacore::refuse(3535, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         api->step_game(p0);
     }
     // nebula.stick
-    void lc3531(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3531, "too few arguments"); return; }
+    void lc3536(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3536, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stick == nullptr) { lumacore::refuse(3531, "the host has no such call"); return; }
+        if (api == nullptr || api->stick == nullptr) { lumacore::refuse(3536, "the host has no such call"); return; }
         float p0 = static_cast< float >(lumacore::asFloat((n > 0u ? a[0] : lumacore::kNone)));
         float p1 = static_cast< float >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         api->stick(&p0, &p1);
@@ -27669,93 +27713,93 @@ namespace {
         o[1] = lumacore::fromFloat(static_cast< f64 >(p1));
     }
     // nebula.stop_effect
-    void lc3532(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3532, "too few arguments"); return; }
+    void lc3537(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3537, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stop_effect == nullptr) { lumacore::refuse(3532, "the host has no such call"); return; }
+        if (api == nullptr || api->stop_effect == nullptr) { lumacore::refuse(3537, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3532, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3537, "argument 1: no actor"); return; }
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         api->stop_effect(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.stop_movie
-    void lc3533(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3533, "too few arguments"); return; }
+    void lc3538(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3538, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stop_movie == nullptr) { lumacore::refuse(3533, "the host has no such call"); return; }
+        if (api == nullptr || api->stop_movie == nullptr) { lumacore::refuse(3538, "the host has no such call"); return; }
         api->stop_movie();
     }
     // nebula.stop_music
-    void lc3534(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3534, "too few arguments"); return; }
+    void lc3539(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3539, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stop_music == nullptr) { lumacore::refuse(3534, "the host has no such call"); return; }
+        if (api == nullptr || api->stop_music == nullptr) { lumacore::refuse(3539, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         api->stop_music(p0);
     }
     // nebula.stop_scene
-    void lc3535(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3535, "too few arguments"); return; }
+    void lc3540(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3540, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stop_scene == nullptr) { lumacore::refuse(3535, "the host has no such call"); return; }
+        if (api == nullptr || api->stop_scene == nullptr) { lumacore::refuse(3540, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         api->stop_scene(p0);
     }
     // nebula.stop_sound
-    void lc3536(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3536, "too few arguments"); return; }
+    void lc3541(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3541, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->stop_sound == nullptr) { lumacore::refuse(3536, "the host has no such call"); return; }
+        if (api == nullptr || api->stop_sound == nullptr) { lumacore::refuse(3541, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3536, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3541, "argument 1: no actor"); return; }
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         api->stop_sound(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.store_get
-    void lc3537(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3537, "too few arguments"); return; }
+    void lc3542(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3542, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->store_get == nullptr) { lumacore::refuse(3537, "the host has no such call"); return; }
+        if (api == nullptr || api->store_get == nullptr) { lumacore::refuse(3542, "the host has no such call"); return; }
         const NebulaPlugin* const mod = lumacore::runningMod();
-        if (mod == nullptr) { lumacore::refuse(3537, "no mod is running"); return; }
+        if (mod == nullptr) { lumacore::refuse(3542, "no mod is running"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->store_get(mod, p0, p1)));
     }
     // nebula.store_set
-    void lc3538(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3538, "too few arguments"); return; }
+    void lc3543(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3543, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->store_set == nullptr) { lumacore::refuse(3538, "the host has no such call"); return; }
+        if (api == nullptr || api->store_set == nullptr) { lumacore::refuse(3543, "the host has no such call"); return; }
         const NebulaPlugin* const mod = lumacore::runningMod();
-        if (mod == nullptr) { lumacore::refuse(3538, "no mod is running"); return; }
+        if (mod == nullptr) { lumacore::refuse(3543, "no mod is running"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const int32_t p1 = static_cast< int32_t >(lumacore::asInt((n > 1u ? a[1] : lumacore::kNone)));
         api->store_set(mod, p0, p1);
     }
     // nebula.store_set_text
-    void lc3539(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3539, "too few arguments"); return; }
+    void lc3544(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3544, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->store_set_text == nullptr) { lumacore::refuse(3539, "the host has no such call"); return; }
+        if (api == nullptr || api->store_set_text == nullptr) { lumacore::refuse(3544, "the host has no such call"); return; }
         const NebulaPlugin* const mod = lumacore::runningMod();
-        if (mod == nullptr) { lumacore::refuse(3539, "no mod is running"); return; }
+        if (mod == nullptr) { lumacore::refuse(3544, "no mod is running"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         const char* const p1 = lumacore::asText((n > 1u ? a[1] : lumacore::kNone));
         api->store_set_text(mod, p0, p1);
     }
     // nebula.talking_actor
-    void lc3540(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3540, "too few arguments"); return; }
+    void lc3545(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3545, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->talking_actor == nullptr) { lumacore::refuse(3540, "the host has no such call"); return; }
+        if (api == nullptr || api->talking_actor == nullptr) { lumacore::refuse(3545, "the host has no such call"); return; }
         o[0] = lumacore::handle(reinterpret_cast< ::LiveActor* >(api->talking_actor()));
     }
     // nebula.timer
-    void lc3541(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 0u) { lumacore::refuse(3541, "too few arguments"); return; }
+    void lc3546(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 0u) { lumacore::refuse(3546, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->timer == nullptr) { lumacore::refuse(3541, "the host has no such call"); return; }
+        if (api == nullptr || api->timer == nullptr) { lumacore::refuse(3546, "the host has no such call"); return; }
         float p0 = static_cast< float >(lumacore::asFloat((n > 0u ? a[0] : lumacore::kNone)));
         float p1 = static_cast< float >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->timer(&p0, &p1)));
@@ -27763,46 +27807,46 @@ namespace {
         o[2] = lumacore::fromFloat(static_cast< f64 >(p1));
     }
     // nebula.toolkit_find
-    void lc3542(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3542, "too few arguments"); return; }
+    void lc3547(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3547, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->toolkit_find == nullptr) { lumacore::refuse(3542, "the host has no such call"); return; }
+        if (api == nullptr || api->toolkit_find == nullptr) { lumacore::refuse(3547, "the host has no such call"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->toolkit_find(p0)));
     }
     // nebula.turn_to_player
-    void lc3543(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 2u) { lumacore::refuse(3543, "too few arguments"); return; }
+    void lc3548(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 2u) { lumacore::refuse(3548, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->turn_to_player == nullptr) { lumacore::refuse(3543, "the host has no such call"); return; }
+        if (api == nullptr || api->turn_to_player == nullptr) { lumacore::refuse(3548, "the host has no such call"); return; }
         ::LiveActor* const p0 = n > 0u ? lumacore::as< ::LiveActor >(a[0]) : nullptr;
-        if (p0 == nullptr) { lumacore::refuse(3543, "argument 1: no actor"); return; }
+        if (p0 == nullptr) { lumacore::refuse(3548, "argument 1: no actor"); return; }
         const float p1 = static_cast< float >(lumacore::asFloat((n > 1u ? a[1] : lumacore::kNone)));
         api->turn_to_player(reinterpret_cast< NebulaActor* >(p0), p1);
     }
     // nebula.unlock_achievement
-    void lc3544(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3544, "too few arguments"); return; }
+    void lc3549(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3549, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->unlock_achievement == nullptr) { lumacore::refuse(3544, "the host has no such call"); return; }
+        if (api == nullptr || api->unlock_achievement == nullptr) { lumacore::refuse(3549, "the host has no such call"); return; }
         const NebulaPlugin* const mod = lumacore::runningMod();
-        if (mod == nullptr) { lumacore::refuse(3544, "no mod is running"); return; }
+        if (mod == nullptr) { lumacore::refuse(3549, "no mod is running"); return; }
         const char* const p0 = lumacore::asText((n > 0u ? a[0] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->unlock_achievement(mod, p0)));
     }
     // nebula.value
-    void lc3545(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3545, "too few arguments"); return; }
+    void lc3550(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3550, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->value == nullptr) { lumacore::refuse(3545, "the host has no such call"); return; }
+        if (api == nullptr || api->value == nullptr) { lumacore::refuse(3550, "the host has no such call"); return; }
         const NebulaModValue p0 = static_cast< NebulaModValue >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->value(p0)));
     }
     // nebula.water_point
-    void lc3546(const NebulaValue* a, uint32_t n, NebulaValue* o) {
-        if (n < 1u) { lumacore::refuse(3546, "too few arguments"); return; }
+    void lc3551(const NebulaValue* a, uint32_t n, NebulaValue* o) {
+        if (n < 1u) { lumacore::refuse(3551, "too few arguments"); return; }
         const NebulaModApi* const api = lumacore::api();
-        if (api == nullptr || api->water_point == nullptr) { lumacore::refuse(3546, "the host has no such call"); return; }
+        if (api == nullptr || api->water_point == nullptr) { lumacore::refuse(3551, "the host has no such call"); return; }
         const int32_t p0 = static_cast< int32_t >(lumacore::asInt((n > 0u ? a[0] : lumacore::kNone)));
         Vec3f p1 = lumacore::asVec3((n > 1u ? a[1] : lumacore::kNone));
         o[0] = lumacore::fromInt(static_cast< s64 >(api->water_point(p0, &p1.x)));
@@ -31304,68 +31348,73 @@ namespace lumacore {
         {"nebula.rail_length", "h", "d", MR::lc3484},
         {"nebula.rail_turn_back", "h", "", MR::lc3485},
         {"nebula.raycast", "eeE", "c", MR::lc3486},
-        {"nebula.save_game", "", "", MR::lc3487},
-        {"nebula.screen_position", "eJ", "c", MR::lc3488},
-        {"nebula.set_animation_frame", "hd", "", MR::lc3489},
-        {"nebula.set_animation_rate", "hd", "", MR::lc3490},
-        {"nebula.set_camera", "eed", "", MR::lc3491},
-        {"nebula.set_camera_near", "d", "", MR::lc3492},
-        {"nebula.set_comet_time_limit", "gcc", "c", MR::lc3493},
-        {"nebula.set_event_flag_on", "g", "", MR::lc3494},
-        {"nebula.set_event_value", "gc", "", MR::lc3495},
-        {"nebula.set_front", "he", "", MR::lc3496},
-        {"nebula.set_game_speed", "d", "", MR::lc3497},
-        {"nebula.set_gravity_scale", "d", "", MR::lc3498},
-        {"nebula.set_nerve", "hg", "c", MR::lc3499},
-        {"nebula.set_object_change", "cgg", "c", MR::lc3500},
-        {"nebula.set_player_character", "c", "c", MR::lc3501},
-        {"nebula.set_player_constant", "cgcd", "c", MR::lc3502},
-        {"nebula.set_player_control", "c", "", MR::lc3503},
-        {"nebula.set_position", "he", "", MR::lc3504},
-        {"nebula.set_rail_coord", "hd", "", MR::lc3505},
-        {"nebula.set_rotation", "he", "", MR::lc3506},
-        {"nebula.set_scale", "he", "", MR::lc3507},
-        {"nebula.set_star", "gcc", "", MR::lc3508},
-        {"nebula.set_state", "hc", "", MR::lc3509},
-        {"nebula.set_switch", "hcc", "", MR::lc3510},
-        {"nebula.set_timer", "d", "c", MR::lc3511},
-        {"nebula.set_touchable", "hc", "", MR::lc3512},
-        {"nebula.set_tunable", "gd", "c", MR::lc3513},
-        {"nebula.set_value", "cc", "", MR::lc3514},
-        {"nebula.set_velocity", "he", "", MR::lc3515},
-        {"nebula.shake_camera", "", "", MR::lc3516},
-        {"nebula.shake_camera_by", "c", "", MR::lc3517},
-        {"nebula.show_hud", "cc", "", MR::lc3518},
-        {"nebula.show_joint", "hgc", "", MR::lc3519},
-        {"nebula.show_message", "gc", "", MR::lc3520},
-        {"nebula.show_model", "hc", "", MR::lc3521},
-        {"nebula.spawn", "ge", "h", MR::lc3522},
-        {"nebula.stage_name", "", "g", MR::lc3523},
-        {"nebula.stars_in_galaxy", "g", "c", MR::lc3524},
-        {"nebula.stars_won_in_galaxy", "g", "c", MR::lc3525},
-        {"nebula.start_camera", "gc", "", MR::lc3526},
-        {"nebula.start_cutscene", "hg", "c", MR::lc3527},
-        {"nebula.state", "h", "c", MR::lc3528},
-        {"nebula.state_frames", "h", "c", MR::lc3529},
-        {"nebula.step_game", "c", "", MR::lc3530},
-        {"nebula.stick", "DD", "", MR::lc3531},
-        {"nebula.stop_effect", "hg", "", MR::lc3532},
-        {"nebula.stop_movie", "", "", MR::lc3533},
-        {"nebula.stop_music", "c", "", MR::lc3534},
-        {"nebula.stop_scene", "c", "", MR::lc3535},
-        {"nebula.stop_sound", "hg", "", MR::lc3536},
-        {"nebula.store_get", "gc", "c", MR::lc3537},
-        {"nebula.store_set", "gc", "", MR::lc3538},
-        {"nebula.store_set_text", "gg", "", MR::lc3539},
-        {"nebula.talking_actor", "", "h", MR::lc3540},
-        {"nebula.timer", "DD", "c", MR::lc3541},
-        {"nebula.toolkit_find", "g", "c", MR::lc3542},
-        {"nebula.turn_to_player", "hd", "", MR::lc3543},
-        {"nebula.unlock_achievement", "g", "c", MR::lc3544},
-        {"nebula.value", "c", "c", MR::lc3545},
-        {"nebula.water_point", "cE", "c", MR::lc3546},
+        {"nebula.registry_count", "g", "c", MR::lc3487},
+        {"nebula.registry_find", "gg", "c", MR::lc3488},
+        {"nebula.registry_mod", "gc", "g", MR::lc3489},
+        {"nebula.registry_name", "gc", "g", MR::lc3490},
+        {"nebula.registry_value", "gg", "c", MR::lc3491},
+        {"nebula.save_game", "", "", MR::lc3492},
+        {"nebula.screen_position", "eJ", "c", MR::lc3493},
+        {"nebula.set_animation_frame", "hd", "", MR::lc3494},
+        {"nebula.set_animation_rate", "hd", "", MR::lc3495},
+        {"nebula.set_camera", "eed", "", MR::lc3496},
+        {"nebula.set_camera_near", "d", "", MR::lc3497},
+        {"nebula.set_comet_time_limit", "gcc", "c", MR::lc3498},
+        {"nebula.set_event_flag_on", "g", "", MR::lc3499},
+        {"nebula.set_event_value", "gc", "", MR::lc3500},
+        {"nebula.set_front", "he", "", MR::lc3501},
+        {"nebula.set_game_speed", "d", "", MR::lc3502},
+        {"nebula.set_gravity_scale", "d", "", MR::lc3503},
+        {"nebula.set_nerve", "hg", "c", MR::lc3504},
+        {"nebula.set_object_change", "cgg", "c", MR::lc3505},
+        {"nebula.set_player_character", "c", "c", MR::lc3506},
+        {"nebula.set_player_constant", "cgcd", "c", MR::lc3507},
+        {"nebula.set_player_control", "c", "", MR::lc3508},
+        {"nebula.set_position", "he", "", MR::lc3509},
+        {"nebula.set_rail_coord", "hd", "", MR::lc3510},
+        {"nebula.set_rotation", "he", "", MR::lc3511},
+        {"nebula.set_scale", "he", "", MR::lc3512},
+        {"nebula.set_star", "gcc", "", MR::lc3513},
+        {"nebula.set_state", "hc", "", MR::lc3514},
+        {"nebula.set_switch", "hcc", "", MR::lc3515},
+        {"nebula.set_timer", "d", "c", MR::lc3516},
+        {"nebula.set_touchable", "hc", "", MR::lc3517},
+        {"nebula.set_tunable", "gd", "c", MR::lc3518},
+        {"nebula.set_value", "cc", "", MR::lc3519},
+        {"nebula.set_velocity", "he", "", MR::lc3520},
+        {"nebula.shake_camera", "", "", MR::lc3521},
+        {"nebula.shake_camera_by", "c", "", MR::lc3522},
+        {"nebula.show_hud", "cc", "", MR::lc3523},
+        {"nebula.show_joint", "hgc", "", MR::lc3524},
+        {"nebula.show_message", "gc", "", MR::lc3525},
+        {"nebula.show_model", "hc", "", MR::lc3526},
+        {"nebula.spawn", "ge", "h", MR::lc3527},
+        {"nebula.stage_name", "", "g", MR::lc3528},
+        {"nebula.stars_in_galaxy", "g", "c", MR::lc3529},
+        {"nebula.stars_won_in_galaxy", "g", "c", MR::lc3530},
+        {"nebula.start_camera", "gc", "", MR::lc3531},
+        {"nebula.start_cutscene", "hg", "c", MR::lc3532},
+        {"nebula.state", "h", "c", MR::lc3533},
+        {"nebula.state_frames", "h", "c", MR::lc3534},
+        {"nebula.step_game", "c", "", MR::lc3535},
+        {"nebula.stick", "DD", "", MR::lc3536},
+        {"nebula.stop_effect", "hg", "", MR::lc3537},
+        {"nebula.stop_movie", "", "", MR::lc3538},
+        {"nebula.stop_music", "c", "", MR::lc3539},
+        {"nebula.stop_scene", "c", "", MR::lc3540},
+        {"nebula.stop_sound", "hg", "", MR::lc3541},
+        {"nebula.store_get", "gc", "c", MR::lc3542},
+        {"nebula.store_set", "gc", "", MR::lc3543},
+        {"nebula.store_set_text", "gg", "", MR::lc3544},
+        {"nebula.talking_actor", "", "h", MR::lc3545},
+        {"nebula.timer", "DD", "c", MR::lc3546},
+        {"nebula.toolkit_find", "g", "c", MR::lc3547},
+        {"nebula.turn_to_player", "hd", "", MR::lc3548},
+        {"nebula.unlock_achievement", "g", "c", MR::lc3549},
+        {"nebula.value", "c", "c", MR::lc3550},
+        {"nebula.water_point", "cE", "c", MR::lc3551},
     };
-    const u32 kToolkitRowCount = 3547;
+    const u32 kToolkitRowCount = 3552;
     // The opaque handles' types by tag (tag 0 is none).
     const char* const kOpaqueNames[] = {
         "",

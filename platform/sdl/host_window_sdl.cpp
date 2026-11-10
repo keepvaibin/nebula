@@ -1104,6 +1104,7 @@ void pump_events(int timeout_ms) noexcept {
     };
     std::vector<MenuKey> menu_keys;
     int menu_wheel = 0;
+    std::vector<std::filesystem::path> dropped;
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
@@ -1217,6 +1218,15 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_GAMEPAD_REMOVED:
             close_gamepad(event.gdevice.which);
             break;
+#if !defined(__ANDROID__)
+        // Files dropped on the window: mods to the importer, Mii files to the Mii import (native_settings_files_dropped,
+        // after the input lock). Android's launcher takes files there ("Open with", share, drag and drop).
+        case SDL_EVENT_DROP_FILE:
+            if (event.drop.data != nullptr) {
+                dropped.emplace_back(galaxy::text_path(event.drop.data));
+            }
+            break;
+#endif
         default:
             break;
         }
@@ -1263,6 +1273,9 @@ void pump_events(int timeout_ms) noexcept {
             std::lock_guard<std::mutex> lock(g_input_mutex);
             set_key(key.key, key.down);
         }
+    }
+    if (!dropped.empty()) {
+        galaxy::render::native_settings_files_dropped(std::move(dropped));
     }
     run_requests();
 }

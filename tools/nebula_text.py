@@ -28,7 +28,9 @@ INSTALLER_TEXT = 'installer/src/**/*.cs'
 HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
                   'VIEW+MENU OR MINUS+PLUS', 'DLSS READY', 'DLSS WAS NOT INSTALLED', 'DOWNLOAD NVIDIA DLSS (',
                   'INSTALLING NVIDIA DLSS...', 'RESTART NOW? ENTER/Y YES  ESC/B LATER', 'HOME MENU', 'NO', 'YES',
-                  'QUIT TO DESKTOP', 'QUIT TO DESKTOP?', 'RESET?', 'RETURN TO GAME',
+                  'RESET?', 'RETURN TO GAME',
+                  # pieces joined at run time whose whole texts have rows: "INPUT: AUTO (<device>)", "THE GAME RUNS AT 60. INTERPOLATION ..."
+                  'INPUT: AUTO (', '. INTERPOLATION ADDS FRAMES BETWEEN',
                   # the mods: unavailable buttons, hex digits, the game's id, the head of "ON (1 OF 2)"
                   '-ABOUT', '-DETAILS', '0123456789ABCDEF', 'RMG', 'ON ('}
 

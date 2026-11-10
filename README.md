@@ -64,7 +64,7 @@ None of these are in 1.0.2. They are in this branch and change until 2.0 is rele
 - More controllers: PlayStation (DualShock 4, DualSense, DualSense Edge), the Steam Controller and generic HID
   controllers; gyro pointing and tilt on any controller with motion sensors.
 - MSAA, AMD FSR 3, ambient occlusion.
-- Skippable cutscenes (+ during a cutscene) and Quit to desktop on the file select.
+- Skippable cutscenes (+ during a cutscene) and Quit on the file select.
 - 34 achievements, each with a pop-up when it is reached. From the Gateway's Grand Star on, a Luma near Mario's start
   in the Comet Observatory shows them all: tabs, filters and play stats.
 - Instant text speed.

@@ -41,7 +41,7 @@ namespace lumascript {
         Op_Emit,        // event string imm with value a, to every script that answers it
         Op_Format,      // dst = text: format string const imm with a .. a+b-1
         Op_ToInt, Op_ToFloat,
-        Op_Registry,    // dst = registry row import[imm]: its index (an int), resolved at load
+        Op_Registry,    // dst = registry row import[imm]: its number (an int), the row found at load
         Op_Count
     };
 

@@ -338,7 +338,7 @@ close or at shutdown.
 ## HOME Menu
 
 Home (`H`; Home on Switch, PS on PlayStation, Steam on Steam controllers) opens the HOME Menu over the paused game:
-Return to game, Reset and Quit to desktop; Reset and Quit ask first. Up
+Return to game, Reset and Quit; Reset and Quit ask first. Up
 and Down (or Left and Right) select, `Enter`/`Space`/A chooses, `Esc`/`Backspace`/B goes back (from the list: closes
 it); the pointer selects what it is over and a click chooses it. The game draws it in its own style, in
 the played language, with its own sounds.

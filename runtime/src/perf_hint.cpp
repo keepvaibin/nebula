@@ -147,10 +147,8 @@ void perf_hint_add_current_thread() noexcept {
 #if defined(__APPLE__)
     // The frame's threads are what the player waits on: the system's highest class for them, so their timers are not
     // gathered with others' (a frame's wake-up a few milliseconds late is a picture a display refresh late) and, on
-    // Apple silicon, they run on the performance cores. NEBULA_NO_QOS=1 leaves them as made, to measure against.
-    if (std::getenv("NEBULA_NO_QOS") == nullptr) {
-        (void)pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
-    }
+    // Apple silicon, they run on the performance cores.
+    (void)pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     const ThreadClock clock = pthread_mach_thread_np(pthread_self());
 #else
     clockid_t clock{};

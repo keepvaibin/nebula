@@ -748,6 +748,97 @@ def emit_events(own, game, messages):
     (DOCS / 'messages.tsv').write_text(''.join(f'{n}\t{v}\n' for n, v in messages), encoding='utf-8', newline='\n')
 
 
+def enum_rows(text, start, prefix):
+    """(name, value) of the enum whose body follows `start` in text, names without `prefix`; a name without a value
+    counts on from the one before. Lines with // comments are read past."""
+    body = text[text.index(start):]
+    body = body[body.index('{') + 1:body.index('}')]
+    body = re.sub(r'/\*.*?\*/', '', body, flags=re.S)
+    body = re.sub(r'//[^\n]*', '', body)
+    rows, at = [], -1
+    for m in re.finditer(r'\b(\w+)\s*(?:=\s*([^,]+))?\s*(?:,|$)', body):
+        if not m.group(1).startswith(prefix):
+            continue
+        value = m.group(2)
+        if value is not None:
+            value = value.strip()
+            shift = re.match(r'^1u?\s*<<\s*(\d+)$', value)
+            at = (1 << int(shift.group(1))) if shift else int(value.rstrip('uU'), 0)
+        else:
+            at += 1
+        rows.append((m.group(1)[len(prefix):], at))
+    return rows
+
+
+def emit_names(messages):
+    """The registries' generated game rows (LumaRegistry.cpp fills each kind from them): messages, floor codes, the
+    player's forms, HUD parts."""
+    api = (NATIVE / 'include' / 'nebula_mod_api.h').read_text(encoding='utf-8')
+    codes = (INC / 'Game' / 'Map' / 'CollisionCode.hpp').read_text(encoding='utf-8')
+    floors = enum_rows(codes, 'enum CollisionFloorCode', 'CollisionFloorCode_')
+    forms = [('normal' if n == 'NONE' else n.lower(), v)
+             for n, v in enum_rows(api, 'typedef enum NebulaPowerUp', 'NEBULA_POWER_UP_')]
+    huds = [(n.lower(), v) for n, v in enum_rows(api, 'typedef enum NebulaHudPart', 'NEBULA_HUD_') if n != 'ALL']
+    tables = [('kMessageNames', messages), ('kFloorNames', floors), ('kFormNames', forms), ('kHudNames', huds)]
+    lines = [HEADER, "// The registries' game rows read from the game's enums (LumaRegistry.cpp).", '',
+             '#include "Game/System/LumaRegistry.hpp"', '', 'namespace lumacore {']
+    for name, rows in tables:
+        lines.append(f'    extern const NameRow {name}[];')
+        lines.append(f'    extern const u32 {name}Count;')
+        lines.append(f'    const NameRow {name}[] = {{')
+        lines += [f'        {{"{n}", {v}}},' for n, v in rows]
+        lines.append('    };')
+        lines.append(f'    const u32 {name}Count = {len(rows)};')
+    lines += ['}  // namespace lumacore', '']
+    (OUT / 'lumacore_names.cpp').write_text('\n'.join(lines), encoding='utf-8')
+    return {'message': messages, 'floor': floors, 'form': forms, 'hud': huds}
+
+
+def table_names(path, start):
+    """The quoted first names of a table's rows ({"Name", ...}) after `start` in a source file."""
+    text = path.read_text(encoding='utf-8')
+    body = text[text.index(start):]
+    body = body[:body.index('};')]
+    return re.findall(r'\{\s*"([^"]+)"', body)
+
+
+def emit_registries(generated):
+    """docs/modding/REGISTRIES.md: every kind and the game's rows in it, as LumaRegistry.cpp fills them."""
+    src = PETARI / 'src' / 'Game'
+    objects = table_names(src / 'NameObj' / 'NameObjFactory.cpp', 'cCreateTable[] = {')
+    areas = table_names(src / 'AreaObj' / 'AreaObjContainer.cpp', 'cCreateTable[] = {')
+    cameras = table_names(src / 'Camera' / 'CameraHolder.cpp', 'sCameraTable[] = {')
+    gravity = [(n, i) for i, n in enumerate(objects) if n.startswith('Global') and n.endswith('Gravity') and len(n) > 13]
+    comets = [n for n, _ in enum_rows((INC / 'Game' / 'Util' / 'EventUtil.hpp').read_text(encoding='utf-8'),
+                                      'enum CometNameId', 'CometNameId_')]
+    kinds = [
+        ('object', 'Objects levels place, by the name a level uses. Number: its place in the factory table.',
+         [(n, i) for i, n in enumerate(objects)]),
+        ('form', "The player's forms. Number: the form id (`power_up` events, `set_value`). A mod's `add_power_up` "
+         'adds one.', generated['form']),
+        ('area', 'Kinds of area a level places. Number: its place in the table.', [(n, i) for i, n in enumerate(areas)]),
+        ('camera', 'Camera types a level or cutscene names. Number: its place in the table.',
+         [(n, i) for i, n in enumerate(cameras)]),
+        ('gravity', 'Gravity shapes a level places. Number: its place in the factory table, as an object.', gravity),
+        ('message', 'Messages objects send each other (`on message`). Number: the message.', generated['message']),
+        ('floor', 'Floor codes of collision. Number: the code.', generated['floor']),
+        ('comet', 'Comet kinds a galaxy\'s scenario names. Number: its id.', [(n, i) for i, n in enumerate(comets)]),
+        ('hud', 'HUD parts (`show_hud`). Number: its bit.', generated['hud']),
+        ('character', 'Who the player plays. Number: 1 for Luigi.', [('mario', 0), ('luigi', 1)]),
+    ]
+    out = ['# Registries', '', 'Every kind of thing the game has is a registry: its own rows and the ones mods add, '
+           'by name. Scripts read a row\'s number with `registry("kind/name")` (`registry("form/fire")`); plugins and '
+           'scripts list and find rows with `registry_count`, `registry_name`, `registry_find`, `registry_value` and '
+           '`registry_mod`. A later row of the same name replaces an earlier one: the later mod wins, and the log '
+           'says so.', '', 'The kinds `player_state`, `attack`, `star`, `ride`, `item` and `projectile` take mod rows '
+           'as their parts of the game become moddable; they hold none of the game\'s yet.', '']
+    for kind, what, rows in kinds:
+        out += [f'## {kind}', '', f'{what} {len(rows)} rows.', '', '| Name | Number |', '|---|---|']
+        out += [f'| `{n}` | {v} |' for n, v in rows]
+        out.append('')
+    (DOCS / 'REGISTRIES.md').write_text('\n'.join(out), encoding='utf-8')
+
+
 CLASS_ROWS = []
 
 
@@ -755,6 +846,10 @@ def main():
     global CLASS_ROWS
     inputs = sorted(list(INC.rglob('*.hpp')) + list(INC.rglob('*.h'))) + [NATIVE / 'include' / 'nebula_mod_api.h',
                                                                            PETARI / 'src' / 'Game' / 'System' / 'LumaHost.cpp',
+                                                                           PETARI / 'src' / 'Game' / 'System' / 'LumaRegistry.cpp',
+                                                                           PETARI / 'src' / 'Game' / 'NameObj' / 'NameObjFactory.cpp',
+                                                                           PETARI / 'src' / 'Game' / 'AreaObj' / 'AreaObjContainer.cpp',
+                                                                           PETARI / 'src' / 'Game' / 'Camera' / 'CameraHolder.cpp',
                                                                            pathlib.Path(__file__)]
     digest = hashlib.sha256()
     for h in inputs:
@@ -788,6 +883,7 @@ def main():
     emit_docs(rows, left, CLASS_ROWS, field_count, layouts)
     own, game, messages = script_events()
     emit_events(own, game, messages)
+    emit_registries(emit_names(messages))
     print(f'classes {len(CLASS_ROWS)} ({len(dupes)} names in two headers: {", ".join(dupes)}); fields {field_count}; '
           f'toolkit {len(rows)} rows, {len(left)} left out')
 

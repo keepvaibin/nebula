@@ -4,7 +4,7 @@
 
 class ButtonPaneController;
 
-// Nebula's buttons on the file select: Quit to desktop in the top-left corner and Settings in the top-right. Each is
+// Nebula's buttons on the file select: Quit in the top-left corner and Settings in the top-right. Each is
 // the file select's own Start button (its art, animations and pointer behaviour) at the size of the file select's
 // secondary buttons, its pill as wide as its label needs, growing toward the screen's middle when pointed.
 // FileSelector shows them while a file is being chosen and nothing else holds the top of the screen.

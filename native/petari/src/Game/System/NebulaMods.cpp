@@ -1,6 +1,7 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHost.hpp"
+#include "Game/System/LumaRegistry.hpp"
 #include "Game/System/NebulaModCalls.hpp"
 #include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
@@ -392,6 +393,15 @@ namespace {
         return 0;
     }
 
+    // The mod adding rows now, for the registries: a data mod's scripts name theirs; a plugin's register_object does not
+    // say which plugin it is.
+    const NebulaPlugin cSomePlugin = {sizeof(NebulaPlugin), "a plugin", ""};
+    const NebulaPlugin* sAddingMod = nullptr;
+
+    const NebulaPlugin* addingMod() {
+        return sAddingMod != nullptr ? sAddingMod : &cSomePlugin;
+    }
+
     int32_t apiRegisterObject(const NebulaObjectClass* pObject) {
         // A class of an older header ends at `attacked_by`, and the rest is zero.
         if (pObject == nullptr || pObject->size < offsetof(NebulaObjectClass, kind) || pObject->name == nullptr || findObject(pObject->name) != nullptr) {
@@ -406,18 +416,7 @@ namespace {
         entry.mClass.archive = entry.mArchive;
         entry.mCreator = createPluginActor;
         sObjects.add(entry);
-        return 0;
-    }
-
-    int32_t apiRegisterCreator(const char* pName, void* (*create)(const char*), const char* pArchive) {
-        if (pName == nullptr || create == nullptr || findObject(pName) != nullptr) {
-            return -1;
-        }
-        ObjectEntry entry = {};
-        entry.mName = copyText(pName);
-        entry.mArchive = copyText(pArchive);
-        entry.mCreator = reinterpret_cast< NebulaMods::CreatorFuncPtr >(create);
-        sObjects.add(entry);
+        lumacore::registryAdd(lumacore::RegistryKind_Object, entry.mName, nullptr, addingMod(), -1, -1);
         return 0;
     }
 
@@ -745,7 +744,11 @@ namespace {
         power.music = copyText(pClass->music);
         power.model = copyText(power.model);
         sPowerUps.add(power);
-        return NebulaMods::cFirstPowerUp + sPowerUps.mCount - 1;
+        const s32 id = NebulaMods::cFirstPowerUp + sPowerUps.mCount - 1;
+        if (power.name != nullptr) {
+            lumacore::registryAdd(lumacore::RegistryKind_Form, power.name, nullptr, addingMod(), -1, id);
+        }
+        return id;
     }
 
     const NebulaPowerUpClass* powerUpOf(u16 mode) {
@@ -2679,6 +2682,56 @@ namespace {
         return lumacore::addModScript(script);
     }
 
+    // The registries (LumaRegistry) by kind name.
+    s32 registryKindOf(const char* pKind) {
+        return pKind != nullptr ? lumacore::registryKind(pKind, static_cast< u32 >(strlen(pKind))) : -1;
+    }
+
+    const lumacore::RegistryRow* registryRowAt(const char* pKind, int32_t index) {
+        const s32 kind = registryKindOf(pKind);
+        if (kind < 0 || index < 0) {
+            return nullptr;
+        }
+        const s32 row = lumacore::registryKindAt(static_cast< u16 >(kind), static_cast< u32 >(index));
+        return row >= 0 ? lumacore::registryAt(static_cast< u32 >(row)) : nullptr;
+    }
+
+    int32_t apiRegistryCount(const char* pKind) {
+        const s32 kind = registryKindOf(pKind);
+        return kind < 0 ? 0 : static_cast< int32_t >(lumacore::registryKindCount(static_cast< u16 >(kind)));
+    }
+
+    const char* apiRegistryName(const char* pKind, int32_t index) {
+        const lumacore::RegistryRow* const pRow = registryRowAt(pKind, index);
+        return pRow != nullptr ? pRow->name : nullptr;
+    }
+
+    int32_t apiRegistryFind(const char* pKind, const char* pName) {
+        const s32 kind = registryKindOf(pKind);
+        const s32 row = kind < 0 ? -1 : lumacore::registryFind(static_cast< u16 >(kind), pName);
+        if (row < 0) {
+            return -1;
+        }
+        const u32 count = lumacore::registryKindCount(static_cast< u16 >(kind));
+        for (u32 i = 0; i < count; i++) {
+            if (lumacore::registryKindAt(static_cast< u16 >(kind), i) == row) {
+                return static_cast< int32_t >(i);
+            }
+        }
+        return -1;
+    }
+
+    int32_t apiRegistryValue(const char* pKind, const char* pName) {
+        const s32 kind = registryKindOf(pKind);
+        const s32 row = kind < 0 ? -1 : lumacore::registryFind(static_cast< u16 >(kind), pName);
+        return row < 0 ? -1 : lumacore::registryAt(static_cast< u32 >(row))->value;
+    }
+
+    const char* apiRegistryMod(const char* pKind, int32_t index) {
+        const lumacore::RegistryRow* const pRow = registryRowAt(pKind, index);
+        return pRow != nullptr && pRow->mod != nullptr ? pRow->mod->id : nullptr;
+    }
+
     s32 apiAddScriptObject(const NebulaPlugin* pMod, const NebulaObjectClass* pShape, const char* pScript) {
         if (pMod == nullptr || pShape == nullptr || pScript == nullptr) {
             return -1;
@@ -2693,7 +2746,10 @@ namespace {
                        pShape->name != nullptr ? pShape->name : "?", message);
             return -1;
         }
-        return lumacore::addScriptObject(pShape, script);
+        sAddingMod = pMod;
+        const s32 added = lumacore::addScriptObject(pShape, script);
+        sAddingMod = nullptr;
+        return added;
     }
 
     // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set, setting, store_get_text, store_set_text.
@@ -2703,12 +2759,12 @@ namespace {
     const NebulaModApi sApi = {
         sizeof(NebulaModApi),
         NEBULA_MOD_API_VERSION,
-        NEBULA_GAME_ABI,
+        0,
         nullptr,
         nullptr,
         apiSubscribe,
         apiRegisterObject,
-        apiRegisterCreator,
+        nullptr,
         nullptr,
         nullptr,
         apiPlayer,
@@ -2896,6 +2952,11 @@ namespace {
         apiLumaStart,
         apiAddScriptObject,
         apiAddModScript,
+        apiRegistryCount,
+        apiRegistryName,
+        apiRegistryFind,
+        apiRegistryValue,
+        apiRegistryMod,
     };
 }  // namespace
 

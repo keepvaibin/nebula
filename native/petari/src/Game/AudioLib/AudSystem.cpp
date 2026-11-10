@@ -503,7 +503,7 @@ void AudSystem::silenceSeForCutsceneSkip(bool silent) {
     mSeMgr.getParams()->moveVolume(silent ? 0.0f : AudParams::masterVolSe, silent ? 0 : 30);
 }
 
-// Quit to desktop (NebulaFileSelectButton): everything fades with the picture (the game's 30 frames).
+// Quit (NebulaFileSelectButton): everything fades with the picture (the game's 30 frames).
 void AudSystem::fadeOutForQuit() {
     mSeqMgr.getParams()->moveVolume(0.0f, 30);
     mStreamMgr.getParams()->moveVolume(0.0f, 30);
