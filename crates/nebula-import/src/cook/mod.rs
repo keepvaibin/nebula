@@ -65,6 +65,18 @@ impl Stats {
         *self.images.entry(format!("{:?}", image.format)).or_default() += 1;
     }
 
+    /// Adds another cook's counts (a file cooked on a thread of its own).
+    fn merge(&mut self, other: Stats) {
+        for (format, count) in other.images {
+            *self.images.entry(format).or_default() += count;
+        }
+        self.cooked_files += other.cooked_files;
+        self.expanded_files += other.expanded_files;
+        self.bytes_in += other.bytes_in;
+        self.bytes_out += other.bytes_out;
+        self.left_out += other.left_out;
+    }
+
     pub fn summary(&self) -> String {
         let images: Vec<String> = self.images.iter().map(|(k, v)| format!("{k} {v}")).collect();
         #[allow(unused_mut)]
@@ -442,34 +454,98 @@ pub fn write_cooked_pak(
     let mut order: Vec<&PakFile> = files.iter().collect();
     order.sort_by_key(|f| f.offset);
     let mut disc_rows = Vec::with_capacity(files.len() + 1);
-    for file in order {
-        if console_only(&file.path) {
-            stats.left_out += 1;
-            done += file.length;
-            continue;
-        }
-        let bytes = read(file)?;
-        if bytes.len() as u64 != file.length {
-            bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
-        }
-        disc_rows.push((file.path.clone(), file.length, texture::xxh64(&bytes)));
-        stats.bytes_in += file.length;
+    // The files are read here, one after another, and cooked on every core at once; each is written in its turn,
+    // so game.pak is the same, byte for byte, as one cooked a file at a time.
+    let waves = &waves;
+    let cook_one = move |path: &str, bytes: Vec<u8>, stats: &mut Stats| -> Result<(Vec<StoreItem>, u64)> {
+        let hash = texture::xxh64(&bytes);
+        stats.bytes_in += bytes.len() as u64;
         // Whatever its name, a compressed file is expanded here: the game has no decompressor.
-        let items = if cooks(&file.path) || archive::is_compressed(&bytes) {
-            cook_entry(&file.path, bytes, stats)?
-        } else if let Some(places) = waves.get(&audio_data::wave_archive_key(&file.path)) {
+        let items = if cooks(path) || archive::is_compressed(&bytes) {
+            cook_entry(path, bytes, stats)?
+        } else if let Some(places) = waves.get(&audio_data::wave_archive_key(path)) {
             stats.cooked_files += 1;
-            let cooked = audio_data::wave_archive(&bytes, places).with_context(|| format!("{}: wave archive", file.path))?;
+            let cooked = audio_data::wave_archive(&bytes, places).with_context(|| format!("{path}: wave archive"))?;
             vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]
         } else {
             vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }]
         };
-        placed.extend(place(&mut pak, &mut at, &file.path, items, stats)?.into_iter().map(|p| (file.node, p)));
-        done += file.length;
-        if !progress(done, total) {
-            bail!("the import was cancelled");
+        Ok((items, hash))
+    };
+    let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 16);
+    // What is read and not yet written stays within this, the file being written next always let in.
+    const IN_FLIGHT_BYTES: u64 = 256 << 20;
+    type Cooked = (usize, Result<(Vec<StoreItem>, u64)>, Stats);
+    let (job_tx, job_rx) = std::sync::mpsc::channel::<(usize, &PakFile, Vec<u8>)>();
+    let (done_tx, done_rx) = std::sync::mpsc::channel::<Cooked>();
+    let job_rx = std::sync::Mutex::new(job_rx);
+    let job_rx = &job_rx;
+    let cook_one = &cook_one;
+    std::thread::scope(|scope| -> Result<()> {
+        for _ in 0..workers {
+            let done_tx = done_tx.clone();
+            scope.spawn(move || loop {
+                let job = job_rx.lock().unwrap_or_else(|e| e.into_inner()).recv();
+                let Ok((index, file, bytes)) = job else { break };
+                let mut stats = Stats::default();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cook_one(&file.path, bytes, &mut stats)))
+                    .unwrap_or_else(|_| Err(anyhow::anyhow!("{} could not be cooked", file.path)));
+                if done_tx.send((index, result, stats)).is_err() {
+                    break;
+                }
+            });
         }
-    }
+        drop(done_tx);
+        // Ends with the job sender dropped, however it ends: the workers then stop and the scope can end.
+        let job_tx = job_tx;
+        let mut ready: BTreeMap<usize, (Result<(Vec<StoreItem>, u64)>, Stats)> = BTreeMap::new();
+        let (mut next_read, mut next_write, mut in_flight) = (0usize, 0usize, 0u64);
+        while next_write < order.len() {
+            while next_read < order.len() && (next_read == next_write || in_flight < IN_FLIGHT_BYTES) {
+                let file = order[next_read];
+                if console_only(&file.path) {
+                    ready.insert(next_read, (Ok((Vec::new(), 0)), Stats { left_out: 1, ..Stats::default() }));
+                } else {
+                    let bytes = read(file)?;
+                    if bytes.len() as u64 != file.length {
+                        bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
+                    }
+                    in_flight += file.length;
+                    job_tx.send((next_read, file, bytes)).map_err(|_| anyhow::anyhow!("the cook's workers stopped"))?;
+                }
+                next_read += 1;
+                // Each one cooked meanwhile is written as soon as its turn comes.
+                while let Ok((index, result, stats)) = done_rx.try_recv() {
+                    ready.insert(index, (result, stats));
+                }
+                if ready.contains_key(&next_write) {
+                    break;
+                }
+            }
+            while !ready.contains_key(&next_write) {
+                let (index, result, stats) = done_rx.recv().map_err(|_| anyhow::anyhow!("the cook's workers stopped"))?;
+                ready.insert(index, (result, stats));
+            }
+            while let Some((result, file_stats)) = ready.remove(&next_write) {
+                let file = order[next_write];
+                stats.merge(file_stats);
+                if console_only(&file.path) {
+                    done += file.length;
+                } else {
+                    let (items, hash) = result?;
+                    in_flight -= file.length;
+                    disc_rows.push((file.path.clone(), file.length, hash));
+                    placed.extend(place(&mut pak, &mut at, &file.path, items, stats)?.into_iter().map(|p| (file.node, p)));
+                    done += file.length;
+                    if !progress(done, total) {
+                        bail!("the import was cancelled");
+                    }
+                }
+                next_write += 1;
+            }
+        }
+        Ok(())
+    })?;
     // A folder lists its files in the file table's order, whatever order their bytes are in.
     placed.sort_by_key(|(node, _)| *node);
     let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();

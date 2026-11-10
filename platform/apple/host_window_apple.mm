@@ -31,6 +31,7 @@
 #include "galaxy/steam_controller.h"
 #include "galaxy/switch_controller.h"
 #include "galaxy/virtual_keys.h"
+#include "apple_host.h"
 #include "sdl_host.h"
 
 #include <algorithm>
@@ -745,7 +746,12 @@ void on_main(dispatch_block_t block) {
     galaxy::sdl::update_cursor();
 }
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
-    // Quit from the menu, the Dock or the system: the host ends the game and leaves by itself.
+    // Quit from the menu, the Dock or the system. While the first start's setup window is up it is that window's
+    // Quit (it stops an import under way first); else the host ends the game and leaves by itself.
+    if (NSWindow* const modal = NSApp.modalWindow; modal != nil) {
+        [modal performClose:nil];
+        return NSTerminateCancel;
+    }
     galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
     return NSTerminateCancel;
 }
@@ -852,13 +858,8 @@ bool key_event(NSEvent* event, std::vector<std::tuple<int, bool, bool, int>>& me
 
 bool start() noexcept {
     g_main_thread = std::this_thread::get_id();
+    galaxy::apple::start_app();
     @autoreleasepool {
-        [NSApplication sharedApplication];
-        g_delegate = [NebulaDelegate new];
-        NSApp.delegate = g_delegate;
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-        make_menus();
-        [NSApp finishLaunching];
         NSNotificationCenter* const center = NSNotificationCenter.defaultCenter;
         [center addObserver:g_delegate selector:@selector(controllerConnected:) name:GCControllerDidConnectNotification object:nil];
         [center addObserver:g_delegate
@@ -871,6 +872,35 @@ bool start() noexcept {
     }
     return true;
 }
+
+}  // namespace galaxy::sdl
+
+namespace galaxy::apple {
+
+void start_app() noexcept {
+    static bool started = false;
+    if (started) {
+        return;
+    }
+    started = true;
+    @autoreleasepool {
+        // The delegate is the app's before anything of AppKit runs: it is asked at the app's first moments whether
+        // the windows' saved state is kept by secure coding, and AppKit stops a process whose answer changes after it
+        // has started without one (as when the first start's setup window came up before the game's delegate).
+        // Nothing of a window is restored at the next start either: the game opens its own as its settings say.
+        [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSQuitAlwaysKeepsWindows" : @NO}];
+        [NSApplication sharedApplication];
+        galaxy::sdl::g_delegate = [NebulaDelegate new];
+        NSApp.delegate = galaxy::sdl::g_delegate;
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        galaxy::sdl::make_menus();
+        [NSApp finishLaunching];
+    }
+}
+
+}  // namespace galaxy::apple
+
+namespace galaxy::sdl {
 
 #if defined(NEBULA_DEV)
 // A test of the keyboard's whole path with nobody at the keys (NEBULA_TEST_KEY=<Mac key code>,<from ms>,<to ms>, counted
@@ -1108,6 +1138,7 @@ void make_window(int width, int height) {
     NSWindow* const window = [[NSWindow alloc] initWithContentRect:content styleMask:style backing:NSBackingStoreBuffered defer:NO
                                                             screen:screen];
     window.releasedWhenClosed = NO;
+    window.restorable = NO;  // the settings say how the game's window opens, not the last run's
     window.title = @"Nebula";
     window.contentMinSize = NSMakeSize(320, 240);
     window.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;

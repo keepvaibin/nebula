@@ -139,4 +139,31 @@ fi
 # sound goes to a device that also has inputs).
 codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
 codesign --force --options runtime --entitlements "$here/Nebula.entitlements" --sign - "$app"
+# A signature that does not hold over every file is what makes macOS call a downloaded app "damaged".
+codesign --verify --deep --strict "$app"
+
+# What is given to another Mac: the app zipped by ditto, which keeps the bundle and its signature as they are, and
+# how to open it the first time.
+package="$work/Nebula-macOS"
+rm -rf "$package" "$work/Nebula-macOS.zip"
+mkdir -p "$package"
+ditto --norsrc --noextattr "$app" "$package/Nebula.app"
+cat > "$package/How to open Nebula.txt" <<'TEXT'
+Nebula for Mac (Intel and Apple silicon, macOS 12 or later)
+
+1. Move Nebula.app to your Applications folder.
+2. Open it. macOS says it cannot check the app for malicious software (it is not from the App Store or a registered
+   developer): choose Done, then open System Settings > Privacy & Security, scroll down, and choose "Open Anyway"
+   next to Nebula. On macOS 14 or earlier you can instead Control-click the app and choose Open.
+3. The first start asks for your Super Mario Galaxy disc image (.iso, or a folder it was extracted to) and sets the
+   game up from it, once. Then the game prepares its graphics for your Mac (a bar shows how far) and starts.
+
+The game's data, saves and settings are in ~/Library/Application Support/Nebula.
+TEXT
+# No file's extended attributes go in: an unzip tool other than macOS's own writes them as "._" files inside the app,
+# which breaks its signature. The signature needs none of them.
+xattr -cr "$package"
+ditto -c -k --norsrc --noextattr --keepParent "$package" "$work/Nebula-macOS.zip"
+codesign --verify --deep --strict "$package/Nebula.app"
 echo "$app"
+echo "$work/Nebula-macOS.zip"
