@@ -72,5 +72,5 @@ private:
 namespace SoundBanks {
     // A note of program `program` (0xf0 and up: an oscillator) from `pBank` (null: none loaded), ready for Voices::play.
     bool prepareNote(const SoundBank* pBank, const WaveBank* pWaves, s32 program, u8 key, u8 velocity, u16 priority, FastRandom* pRandom,
-                     Note* pNote);
+                     SoundNote* pNote);
 }  // namespace SoundBanks

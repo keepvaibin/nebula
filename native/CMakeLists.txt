@@ -40,7 +40,7 @@ set(NEBULA_GAME_ABI "0x${nebula_abi_hash}ull")
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sdk/nebula_game_abi.h" CONTENT "#define NEBULA_GAME_ABI ${NEBULA_GAME_ABI}\n" @ONLY)
 set_source_files_properties("${petari}/src/Game/System/NebulaMods.cpp" PROPERTIES COMPILE_DEFINITIONS "NEBULA_GAME_ABI=${NEBULA_GAME_ABI}")
 # LumaCore's field rows (tools/lumacore) name private fields too: offsetof reads them with no access check.
-set_source_files_properties("${petari}/src/Game/System/generated/lumacore_fields.cpp" PROPERTIES COMPILE_OPTIONS "SHELL:-Xclang -fno-access-control")
+set_source_files_properties("${petari}/src/Game/System/generated/lumacore_fields.cpp" PROPERTIES COMPILE_OPTIONS "-Xclang;-fno-access-control")
 
 add_library(smg_game SHARED
     ${game_sources}

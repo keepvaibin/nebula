@@ -77,7 +77,7 @@ void ChannelMgr::init() {
 void ChannelMgr::releaseAll() {
     Voices& rVoices = mTrack->engine()->voices();
     for (u32 i = 0; i < mSlots; i++) {
-        Note* note = mNotes[i];
+        SoundNote* note = mNotes[i];
         if (note != nullptr) {
             rVoices.releaseNote(note, 0);
             note->free();
@@ -90,7 +90,7 @@ bool ChannelMgr::noteOff(u32 slot, u16 directRelease) {
     if (slot >= mSlots) {
         return false;
     }
-    Note* note = mNotes[slot];
+    SoundNote* note = mNotes[slot];
     if (note == nullptr) {
         return false;
     }
@@ -111,7 +111,7 @@ void ChannelMgr::setPauseFlag(bool pause) {
 // A record: the track, its channel managers, their note slots, its call and loop entries (s32 operations, u32 look-ahead
 // offsets), its two envelopes, then the u16 loop counts.
 u32 TrackArena::recordBytes(u32 mgrCount, const TrackRoom& rRoom) {
-    const u32 bytes = sizeof(SeqTrack) + mgrCount * sizeof(ChannelMgr) + mgrCount * rRoom.mSlots * sizeof(Note*) +
+    const u32 bytes = sizeof(SeqTrack) + mgrCount * sizeof(ChannelMgr) + mgrCount * rRoom.mSlots * sizeof(SoundNote*) +
                       rRoom.mStack * (sizeof(s32) + sizeof(u32)) + 2 * rRoom.mEnvelope * sizeof(SeqPoint) + rRoom.mStack * sizeof(u16);
     return (bytes + 15) & ~15u;
 }
@@ -150,7 +150,7 @@ void TrackArena::free(SeqTrack* pTrack) {
 
 void SeqTrack::construct(SoundEngine* pEngine, TrackArena* pArena, u8* pTail, u32 mgrCapacity, const TrackRoom& rRoom) {
     ChannelMgr* const mgrs = reinterpret_cast< ChannelMgr* >(pTail);
-    Note** const slots = reinterpret_cast< Note** >(mgrs + mgrCapacity);
+    SoundNote** const slots = reinterpret_cast< SoundNote** >(mgrs + mgrCapacity);
     s32* const stack = reinterpret_cast< s32* >(slots + mgrCapacity * rRoom.mSlots);
     u32* const scanStack = reinterpret_cast< u32* >(stack + rRoom.mStack);
     SeqPoint* const envelopes = reinterpret_cast< SeqPoint* >(scanStack + rRoom.mStack);
@@ -454,14 +454,14 @@ bool SeqTrack::isMute() const {
     return mIsMute;
 }
 
-Note* SeqTrack::channelStart(ChannelMgr* pMgr, u32 key, u32 velocity, u32 updateTimer) {
-    Note prepared;
+SoundNote* SeqTrack::channelStart(ChannelMgr* pMgr, u32 key, u32 velocity, u32 updateTimer) {
+    SoundNote prepared;
     prepared.mOwner = OWNER_TRACK;
     prepared.mOwnerData = pMgr;
     if (!mEngine->prepareNote(mBankNumber, mProgNumber, loByte(key), loByte(velocity), static_cast< u16 >(mNoteOnPrio | mReleasePrio << 8), &prepared)) {
         return nullptr;
     }
-    Note* note = mEngine->voices().play(prepared, false);
+    SoundNote* note = mEngine->voices().play(prepared, false);
     if (note == nullptr) {
         return nullptr;
     }
@@ -480,7 +480,7 @@ Note* SeqTrack::channelStart(ChannelMgr* pMgr, u32 key, u32 velocity, u32 update
     return note;
 }
 
-void SeqTrack::overwriteOsc(Note* pNote) {
+void SeqTrack::overwriteOsc(SoundNote* pNote) {
     for (u32 i = 0; i < 2; i++) {
         if (mOscParam[i].mTable != nullptr) {
             pNote->mOsc[i].initStart(&mOscParam[i]);
@@ -501,7 +501,7 @@ bool SeqTrack::noteOn(u32 slot, u32 key, u32 velocity) {
     for (u32 i = 0; i < mMgrCount; i++) {
         ChannelMgr& rMgr = mMgrs[i];
         rMgr.noteOff(slot, 0);
-        Note* note = channelStart(&rMgr, key, velocity, 0);
+        SoundNote* note = channelStart(&rMgr, key, velocity, 0);
         if (note == nullptr) {
             isAllStarted = false;
         }
@@ -530,14 +530,14 @@ bool SeqTrack::gateOn(u32 key, u32 velocity, f32 seqTime, u32 flags) {
                 rMgr.mNotes[0] = channelStart(&rMgr, pitch, velocity, updateTimer);
             }
         } else {
-            Note* note = rMgr.mNotes[0];
+            SoundNote* note = rMgr.mNotes[0];
             if (note != nullptr) {
                 note->mKey = static_cast< s16 >(pitch - note->mBaseKey);
                 note->mVelocity = static_cast< u16 >(velocity);
                 note->mUpdateTimer = updateTimer;
             }
         }
-        Note* note;
+        SoundNote* note;
         if (isSweep && (note = rMgr.mNotes[0]) != nullptr) {
             if (dspTime == 0) {
                 note->mKeySweep = static_cast< f32 >(pitchDelta);
@@ -793,7 +793,7 @@ u16 SeqTrack::readPort(u32 port) {
     return mPorts[port];
 }
 
-void SeqTrack::updateChannel(Note* pNote, NebulaVoice* pVoice) {
+void SeqTrack::updateChannel(SoundNote* pNote, NebulaVoice* pVoice) {
     pNote->mVibrato.mDepth = mVibDepth;
     pNote->mVibrato.mPitch = mVibPitch;
     pNote->mTremolo.mDepth = mTremDepth;
@@ -807,7 +807,7 @@ void SeqTrack::updateChannel(Note* pNote, NebulaVoice* pVoice) {
     VoiceFilter::setMode(pVoice, mFilterMode);
 }
 
-void SeqTrack::noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, ChannelMgr* pMgr) {
+void SeqTrack::noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, ChannelMgr* pMgr) {
     SeqTrack* track = pMgr->mTrack;
     switch (event) {
     case NOTE_PLAY:

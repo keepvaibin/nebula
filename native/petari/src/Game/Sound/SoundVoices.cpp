@@ -164,11 +164,11 @@ namespace {
 
     // `skip`: samples to start into the wave (1: from its loop start). A wave stored as PCM16 in the game's data is music unless a sound
     // names the voice.
-    void setVoiceWave(NebulaVoice* pVoice, const Note& rNote, u32 skip) {
-        const u8 kind = rNote.mFormat & Note::FORMAT_MASK;
+    void setVoiceWave(NebulaVoice* pVoice, const SoundNote& rNote, u32 skip) {
+        const u8 kind = rNote.mFormat & SoundNote::FORMAT_MASK;
         pVoice->wave = rNote.mWave;
-        pVoice->format = kind < Note::FORMAT_SAMPLED_NUM ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
-        pVoice->category = kind == Note::FORMAT_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
+        pVoice->format = kind < SoundNote::FORMAT_SAMPLED_NUM ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
+        pVoice->category = kind == SoundNote::FORMAT_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
         pVoice->restart = 0;
         if (pVoice->format == NEBULA_AUDIO_SILENT) {
             return;
@@ -345,7 +345,7 @@ void Lfo::incCounter(f32 step) {
     }
 }
 
-void Voices::setup(SoundEngine* pEngine, NebulaVoice* pVoices, u32 count, Slot* pSlots, Note* pNotes) {
+void Voices::setup(SoundEngine* pEngine, NebulaVoice* pVoices, u32 count, Slot* pSlots, SoundNote* pNotes) {
     mEngine = pEngine;
     mVoices = pVoices;
     mCount = count;
@@ -381,7 +381,7 @@ s32 Voices::lowestSlot(int priority) {
 void Voices::endNote(s32 slot) {
     Slot& rSlot = mSlots[slot];
     rSlot.mHasNote = false;
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     rNote.mSlot = -1;
     if (rNote.mOwner != OWNER_NONE) {
         mEngine->noteEvent(&rNote, NOTE_STOP, nullptr);
@@ -407,13 +407,13 @@ void Voices::drop(s32 slot) {
     }
 }
 
-Note* Voices::play(const Note& rPrepared, bool force) {
+SoundNote* Voices::play(const SoundNote& rPrepared, bool force) {
     const u8 priority = rPrepared.mPriority & 0xff;
     const s32 slot = lowestSlot(priority);
     if (slot < 0) {
         // The note never played: its owner hears it stop.
         if (rPrepared.mOwner != OWNER_NONE) {
-            Note dead = rPrepared;
+            SoundNote dead = rPrepared;
             mEngine->noteEvent(&dead, NOTE_STOP, nullptr);
         }
         return nullptr;
@@ -426,16 +426,16 @@ Note* Voices::play(const Note& rPrepared, bool force) {
     rSlot.mPriority = priority;
     rSlot.mAge = 0;
     rSlot.mHasNote = true;
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     rNote = rPrepared;
     rNote.mSlot = slot;
     rSlot.mFlags |= 1;
-    rNote.mStatus = Note::STATUS_PLAY;
+    rNote.mStatus = SoundNote::STATUS_PLAY;
     return &rNote;
 }
 
-void Voices::releaseNote(Note* pNote, u16 directRelease) {
-    if (pNote->mStatus != Note::STATUS_PLAY) {
+void Voices::releaseNote(SoundNote* pNote, u16 directRelease) {
+    if (pNote->mStatus != SoundNote::STATUS_PLAY) {
         return;
     }
     if (directRelease != 0) {
@@ -447,7 +447,7 @@ void Voices::releaseNote(Note* pNote, u16 directRelease) {
         }
     }
     mSlots[pNote->mSlot].mPriority = pNote->mPriority >> 8;
-    pNote->mStatus = Note::STATUS_RELEASE;
+    pNote->mStatus = SoundNote::STATUS_RELEASE;
 }
 
 s32 Voices::noteCallback(s32 slot, u32 type) {
@@ -523,7 +523,7 @@ void Voices::forgetOwners(const void* pBegin, const void* pEnd) {
     const u8* const begin = static_cast< const u8* >(pBegin);
     const u8* const end = static_cast< const u8* >(pEnd);
     for (u32 i = 0; i < mUsed; i++) {
-        Note& rNote = mNotes[i];
+        SoundNote& rNote = mNotes[i];
         const u8* const owner = static_cast< const u8* >(rNote.mOwnerData);
         if (mSlots[i].mHasNote && rNote.mOwner != OWNER_NONE && owner >= begin && owner < end) {
             rNote.free();
@@ -552,7 +552,7 @@ void Voices::nameSound(s32 slot) {
 }
 
 s32 Voices::initialUpdate(s32 slot) {
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     NebulaVoice* voice = &mVoices[slot];
     if (rNote.isDolbyMode()) {
         if (voice->panner) {
@@ -571,11 +571,11 @@ s32 Voices::initialUpdate(s32 slot) {
         return -1;
     }
     switch (rNote.mKind) {
-    case Note::KIND_WAVE:
+    case SoundNote::KIND_WAVE:
         setVoiceWave(voice, rNote, rNote.mSkipSamples);
         voice->wave_end = rNote.mWaveEnd;
         break;
-    case Note::KIND_OSC:
+    case SoundNote::KIND_OSC:
         voice->wave = nullptr;
         voice->format = NEBULA_AUDIO_OSCILLATOR;
         voice->category = NEBULA_SOUND_EFFECT;
@@ -625,7 +625,7 @@ s32 Voices::initialUpdate(s32 slot) {
 }
 
 s32 Voices::update(s32 slot) {
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     NebulaVoice* voice = &mVoices[slot];
     if (rNote.mOwner != OWNER_NONE) {
         mEngine->noteEvent(&rNote, NOTE_PLAY, voice);
@@ -684,7 +684,7 @@ s32 Voices::update(s32 slot) {
     return 0;
 }
 
-void Voices::effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, const OscEffect& rEffect) {
+void Voices::effectorParams(SoundNote& rNote, NebulaVoice* pVoice, f32* pVolumes, const OscEffect& rEffect) {
     f32 pan = cNum_effectorParams_f1;
     f32 dolby = 0.0f;
     switch (mEngine->outputMode()) {
@@ -723,7 +723,7 @@ void Voices::effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, con
     }
 }
 
-void Voices::mixerVolumes(const Note& rNote, f32 volumeIn, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes) {
+void Voices::mixerVolumes(const SoundNote& rNote, f32 volumeIn, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes) {
     const bool flat = mEngine->outputMode() == 0;
     for (u32 i = 0; i < 6; i++) {
         f32 volume = volumeIn;
