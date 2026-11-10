@@ -359,9 +359,15 @@ namespace {
         return pLive != nullptr && *reinterpret_cast< void** >(pLive) == sPluginActorTable ? static_cast< PluginActor* >(pLive) : nullptr;
     }
 
+    // Made by its own name, or by a placed object's that a change turns into it (object_changes: the creator is
+    // handed the placement's name): either way the actor carries the class's name.
     NameObj* createPluginActor(const char* pName) {
         const ObjectEntry* pEntry = findObject(pName);
-        return pEntry != nullptr ? new PluginActor(pName, &pEntry->mClass) : nullptr;
+        if (pEntry == nullptr) {
+            const char* const pBecomes = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, NebulaMods::objectLike(pName));
+            pEntry = pBecomes != nullptr ? findObject(pBecomes) : nullptr;
+        }
+        return pEntry != nullptr ? new PluginActor(pEntry->mName, &pEntry->mClass) : nullptr;
     }
 
     int32_t apiSubscribe(NebulaModEvent event, NebulaModCallback callback, void* user) {
@@ -3271,6 +3277,11 @@ namespace NebulaMods {
         }
         const ObjectClass* pClass = sObjectClasses.mCount != 0 ? findObjectClass(pName) : nullptr;
         const ObjectEntry* pEntry = sObjects.mCount != 0 ? findObject(pName) : nullptr;
+        if (pEntry == nullptr && sObjects.mCount != 0) {
+            // What a change turns it into: that object's files.
+            const char* const pBecomes = objectBecomes(NEBULA_OBJECTS_PLACED, objectLike(pName));
+            pEntry = pBecomes != nullptr ? findObject(pBecomes) : nullptr;
+        }
         const char* const archives[] = {pClass != nullptr ? pClass->mName : nullptr, pEntry != nullptr ? pEntry->mArchive : nullptr};
         for (const char* pArchive : archives) {
             if (pArchive != nullptr && !MR::isExistObjectOrLayoutArchive(pArchive)) {
