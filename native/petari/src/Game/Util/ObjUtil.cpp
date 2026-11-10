@@ -46,6 +46,7 @@
 
 #include <cstdarg>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 bool MR::isJudgedToClipFrustum(const Vec3f& rCenter, f32 radius) {
     return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius);
@@ -59,10 +60,15 @@ bool MR::isJudgedToClipFrustum300m(const Vec3f& rCenter, f32 radius) {
     return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius, 4);
 }
 
+namespace {
+    // Scales every distance objects hide within near the camera (rocks, bullets, a grand star); 0: none hide.
+    NEBULA_TUNABLE(f32, cNearClipScale, 1.0f);
+}  // namespace
+
 bool MR::isJudgedToNearClip(const Vec3f& rPos, f32 distance) {
     Vec3f camPos = MR::getCamPos();
 
-    return rPos.distance(camPos) < distance;
+    return rPos.distance(camPos) < distance * ::cNearClipScale;
 }
 
 bool MR::isInWater(const Vec3f& rPos) {

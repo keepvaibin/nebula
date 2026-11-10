@@ -1,4 +1,4 @@
-The program's four numbers, from this repository alone (owner, 10-30: proofs rerunnable from the repository).
+The program's four numbers, from this repository alone, so anyone can run them again.
 
     python -I native/tools/native_inventory.py . OUT
     python -I tools/progress/census.py . GAME_BUILD_DIR SNAPSHOT

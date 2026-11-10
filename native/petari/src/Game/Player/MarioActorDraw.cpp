@@ -7,6 +7,8 @@
 #include "Game/MapObj/IceStep.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
 #include "Game/Player/PlayerModel.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Player/MarioParts.hpp"
@@ -307,6 +309,48 @@ void MarioActor::initBoneMario() {
     MR::hideModel(mBoneModel);
 }
 
+namespace {
+    void showWholeModel(ModelHolder* pHolder, bool show) {
+        if (pHolder != nullptr) {
+            Model* pModel = MR::getModel(pHolder);
+            MR::showJointAndChildrenOn(pModel, pModel->mModelData->getJointAt(0), show);
+        }
+    }
+}  // namespace
+
+// show_joint on the player: each of his body models with the joint, and the face and hand models with the joint
+// they hang from.
+void MarioActor::showJointByPlugin(const char* pName, bool show) {
+    for (s32 i = 0; i < 6 + mNumModPowerUps; i++) {
+        PlayerModel* model = mModels[i];
+        if (model == nullptr) {
+            continue;
+        }
+        const s32 idx = model->mModelData->findJoint(pName);
+        if (idx < 0) {
+            continue;
+        }
+        Joint* pTop = model->mModelData->getJointAt(static_cast< u32 >(idx));
+        MR::showJointAndChildrenOn(model, pTop, show);
+        if (i != 0) {
+            continue;
+        }
+        if (MR::isJointUnder(pTop, MR::getJoint(model, "Face0"))) {
+            showWholeModel(mFaceModel, show);
+        }
+        if (MR::isJointUnder(pTop, MR::getJoint(model, "HandL0"))) {
+            showWholeModel(mHandL, show);
+            showWholeModel(mInvincibleHandL, show);
+            showWholeModel(mIceHandL, show);
+        }
+        if (MR::isJointUnder(pTop, MR::getJoint(model, "HandR0"))) {
+            showWholeModel(mHandR, show);
+            showWholeModel(mInvincibleHandR, show);
+            showWholeModel(mIceHandR, show);
+        }
+    }
+}
+
 void MarioActor::initModPowerUpModels() {
     for (s32 i = 0; i < mNumModPowerUps; i++) {
         const char* pName = NebulaMods::powerUpModel(i);
@@ -517,7 +561,7 @@ void MarioActor::drawMarioModel() const {
 
 bool MarioActor::isAllHidden() const {
     bool hidden = false;
-    if (mHidden || mMorphHidden || mHiddenByDemo) {
+    if (mHidden || mMorphHidden || mHiddenByDemo || mModHidden) {
         hidden = true;
     }
 
@@ -861,7 +905,7 @@ void MarioActor::drawReflectModel() const {
 }
 
 void MarioActor::drawModelBlur() const {
-    if (isAllHidden() || mModHidden) {
+    if (isAllHidden()) {
         return;
     }
 

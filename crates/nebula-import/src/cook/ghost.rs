@@ -11,7 +11,7 @@
 //! - names: UTF-8, each ending in a 0 (offset 0 is "").
 //!
 //! The disc's names are Shift-JIS and its hashes are of those bytes; the cook turns both to UTF-8, the hashes through
-//! the names of Mario's animations (ghost_names.txt, from MarioAnimatorData.hpp by agents/native-q/string_literals.py).
+//! the names of Mario's animations (ghost_names.txt, taken from MarioAnimatorData.hpp).
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;

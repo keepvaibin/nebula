@@ -113,7 +113,7 @@ void set_game_languages(std::span<const std::string> folders) noexcept;
 
 // The host sets this while the window is in the background with FocusLoss::Mute: the game's sound is silent (master gain 0,
 // ramped as any gain change) until it is cleared. Any thread; not a setting, never saved. The mixer reads background_muted()
-// where it reads the master gain (native_audio.cpp: Lane Q, helpers/q01.md).
+// where it reads the master gain (native_audio.cpp).
 void set_background_muted(bool muted) noexcept;
 [[nodiscard]] bool background_muted() noexcept;
 
