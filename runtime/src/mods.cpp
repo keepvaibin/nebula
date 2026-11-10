@@ -1574,19 +1574,24 @@ std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods) 
 
 std::string language_folder(const std::string& game_id, unsigned language) {
     if (game_id.size() < 4u) return {};
+    if (game_id[3] == 'K') return "KrKorean";
+    if (game_id[3] != 'E' && game_id[3] != 'P' && game_id[3] != 'J') return {};  // no other release's folders are known
+    // The game's own choice (Language.cpp): a language its release lacks comes from the release that has it, as a
+    // language pack mod supplies it.
+    switch (language) {
+    case 0u: return "JpJapanese";
+    case 2u: return "EuGerman";
+    case 5u: return "EuItalian";
+    case 6u: return "EuDutch";
+    default: break;
+    }
     switch (game_id[3]) {
     case 'E':
         return language == 3u ? "UsFrench" : language == 4u ? "UsSpanish" : "UsEnglish";
     case 'P':
-        switch (language) {
-        case 2u: return "EuGerman";
-        case 3u: return "EuFrench";
-        case 4u: return "EuSpanish";
-        case 5u: return "EuItalian";
-        case 6u: return "EuDutch";
-        default: return "EuEnglish";
-        }
-    case 'J': return "JpJapanese";
+        return language == 3u ? "EuFrench" : language == 4u ? "EuSpanish" : "EuEnglish";
+    case 'J':
+        return language == 1u ? "UsEnglish" : language == 3u ? "EuFrench" : language == 4u ? "EuSpanish" : "EuEnglish";
     case 'K': return "KrKorean";
     default: return {};  // no other release's folders are known
     }
