@@ -105,7 +105,17 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
             if (mInitializing == nullptr) {
                 NebulaLoadTrace::placed(set->mName, MR::getPlacedZoneId(iter));
-                mInitializing = creator(MR::getJapaneseObjectName(set->mName));
+                // A mod's object (placed by its name, or what a change turns the placed one into) is made by its own
+                // name; the game's by their Japanese names, as the game's creators take them.
+                const char* const pModObject = set->mShapeId == -1 ? NebulaMods::modObjectName(set->mName) : nullptr;
+                mInitializing = creator(pModObject != nullptr ? pModObject : MR::getJapaneseObjectName(set->mName));
+                if (mInitializing == nullptr) {
+                    // Nothing made (a mod's object it could not make): this placement is left out.
+                    MR::clearCurrentPlacementZoneId();
+                    mPlacementLink = mPlacementLink->getNext();
+                    if (mPlacementLink == nullptr) ++mPlacementSet;
+                    continue;
+                }
             }
             MR::initLiveActorSystemInfo(iter);
             const bool ready = mInitializing->initStep(iter, deadline);

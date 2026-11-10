@@ -3310,4 +3310,16 @@ namespace NebulaMods {
         return pEntry != nullptr ? pEntry->mCreator : nullptr;
     }
 
+    const char* modObjectName(const char* pPlacedName) {
+        if (sObjects.mCount == 0) {
+            return nullptr;
+        }
+        const ObjectEntry* pEntry = findObject(pPlacedName);
+        if (pEntry == nullptr) {
+            const char* const pBecomes = objectBecomes(NEBULA_OBJECTS_PLACED, objectLike(pPlacedName));
+            pEntry = pBecomes != nullptr ? findObject(pBecomes) : nullptr;
+        }
+        return pEntry != nullptr ? pEntry->mName : nullptr;
+    }
+
 }  // namespace NebulaMods
