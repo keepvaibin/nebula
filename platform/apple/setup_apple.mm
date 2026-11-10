@@ -8,6 +8,7 @@
 #include "apple_host.h"
 #include "galaxy/asset_store.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -93,28 +94,46 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
     _window.restorable = NO;
     _window.delegate = self;
     NSView* const content = _window.contentView;
-    NSTextField* const title = [NSTextField labelWithString:@"Set up Nebula"];
-    title.font = [NSFont boldSystemFontOfSize:17];
-    title.frame = NSMakeRect(24, 180, 472, 26);
-    [content addSubview:title];
-    _words = [NSTextField
-        wrappingLabelWithString:again ? @"Nebula's copy of the game is from an earlier version or is damaged. Choose your Super Mario Galaxy disc image to set it up again."
-                                      : @"Choose your Super Mario Galaxy disc image. This is done once."];
-    _words.frame = NSMakeRect(24, 92, 472, 80);
-    [content addSubview:_words];
-    _bar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(24, 66, 472, 16)];
+    // Placed by their alignment rects (what is drawn, without a control's own margins), so that the text, the bar and
+    // the buttons' edges line up: Apple's 20 points from the window's edges, 12 between buttons, 8 between lines.
+    const CGFloat width = frame.size.width;
+    const CGFloat height = frame.size.height;
+    const CGFloat margin = 20.0;
+    const auto place = [](NSView* view, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
+        view.frame = [view frameForAlignmentRect:NSMakeRect(x, y, w, h)];
+    };
+    _choose = [NSButton buttonWithTitle:@"Choose Disc Image…" target:self action:@selector(chooseImage:)];
+    _choose.keyEquivalent = @"\r";
+    _leave = [NSButton buttonWithTitle:@"Quit" target:self action:@selector(leave:)];
+    const NSSize choose = _choose.intrinsicContentSize;
+    const NSSize leave = _leave.intrinsicContentSize;
+    const CGFloat chooseWidth = std::max<CGFloat>(choose.width, 96.0);
+    const CGFloat leaveWidth = std::max<CGFloat>(leave.width, 96.0);
+    place(_choose, width - margin - chooseWidth, margin, chooseWidth, choose.height);
+    place(_leave, width - margin - chooseWidth - 12.0 - leaveWidth, margin, leaveWidth, leave.height);
+    [content addSubview:_choose];
+    [content addSubview:_leave];
+    _bar = [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
+    _bar.style = NSProgressIndicatorStyleBar;
     _bar.indeterminate = NO;
     _bar.minValue = 0.0;
     _bar.maxValue = 1.0;
     _bar.hidden = YES;
+    const CGFloat barY = margin + choose.height + margin;
+    place(_bar, margin, barY, width - margin * 2.0, std::max<CGFloat>(_bar.intrinsicContentSize.height, 6.0));
     [content addSubview:_bar];
-    _choose = [NSButton buttonWithTitle:@"Choose Disc Image…" target:self action:@selector(chooseImage:)];
-    _choose.frame = NSMakeRect(316, 16, 184, 32);
-    _choose.keyEquivalent = @"\r";
-    [content addSubview:_choose];
-    _leave = [NSButton buttonWithTitle:@"Quit" target:self action:@selector(leave:)];
-    _leave.frame = NSMakeRect(212, 16, 100, 32);
-    [content addSubview:_leave];
+    NSTextField* const title = [NSTextField labelWithString:@"Set up Nebula"];
+    title.font = [NSFont boldSystemFontOfSize:17];
+    const CGFloat titleHeight = title.intrinsicContentSize.height;
+    place(title, margin, height - margin - titleHeight, width - margin * 2.0, titleHeight);
+    [content addSubview:title];
+    _words = [NSTextField
+        wrappingLabelWithString:again ? @"Nebula's copy of the game is from an earlier version or is damaged. Choose your Super Mario Galaxy disc image to set it up again."
+                                      : @"Choose your Super Mario Galaxy disc image. This is done once."];
+    const CGFloat wordsTop = height - margin - titleHeight - 8.0;
+    const CGFloat wordsBottom = barY + [_bar alignmentRectForFrame:_bar.frame].size.height + 12.0;
+    place(_words, margin, wordsBottom, width - margin * 2.0, wordsTop - wordsBottom);
+    [content addSubview:_words];
     [_window center];
     return self;
 }

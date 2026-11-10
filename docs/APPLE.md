@@ -104,6 +104,10 @@ NSApplicationDelegate was probably established too late.") whose answer arrives 
 it did when the setup window ran before the game's delegate existed. No window is restored at a start
 (`restorable = NO`, `NSQuitAlwaysKeepsWindows` off): the game opens its window as its settings say.
 
+The window's controls are placed by their alignment rects (`frameForAlignmentRect:`), not their frames: a push
+button's frame holds a margin around what is drawn, so frames at equal distances look uneven. Text and buttons stand 20
+points from the window's edges and the buttons 12 apart, as Apple's layout guidance has them.
+
 A command line builds `game.pak` as the window does:
 
 ```
@@ -126,6 +130,17 @@ target/release/nebula-import import <disc image> --output "$HOME/Library/Applica
 An app opened from the Finder has no command line: `galaxy::apple::launch_arguments` (`apple_host.mm`) names the data
 folder, the game, the saves and the module from the app's own layout, and the system's language as `LANG`. A command
 line's own `--data`, `--pak`, `--saves` and `--module` stay ([COMMAND_LINE.md](COMMAND_LINE.md)).
+
+Discord's status (General, "Discord status") reaches the Discord app over its local socket, `discord-ipc-0` to `9`
+in the user's temporary folder (`$TMPDIR`; `XDG_RUNTIME_DIR`, `TMP` and `TEMP` first where set), as Discord's own
+libraries find it on a Mac, with the same frames as Windows' pipe (`discord_presence.cpp`). Without the Discord app
+nothing is sent and the game is unaffected.
+
+The menu centres its pictures (a setting's arrows, a controller's button letters) by their ink, read from the font's
+sheets. The importer stores the game's text fonts as signed distance fields at twice their size
+(`cook::distance`): the ink is measured there as the font's shader draws it, where the field crosses one half between
+two texels (`NebulaUi::glyphInkBox`). Read as plain pictures at their original size, the arrows sat 4 units off their
+buttons' middles (a game.pak cooked with distance fonts, any platform).
 
 ## Runtime
 

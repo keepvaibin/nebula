@@ -904,17 +904,18 @@ namespace galaxy::sdl {
 
 #if defined(NEBULA_DEV)
 // A test of the keyboard's whole path with nobody at the keys (NEBULA_TEST_KEY=<Mac key code>,<from ms>,<to ms>, counted
-// from the first event pump): the key goes down and comes up as events in the app's own queue, which the pump takes
-// like a keyboard's.
+// from the first event pump, and more presses after a ';'): each key goes down and comes up as events in the app's own
+// queue, which the pump takes like a keyboard's.
 void post_test_key() {
     static const char* const spec = std::getenv("NEBULA_TEST_KEY");
     if (spec == nullptr) {
         return;
     }
     static const std::uint64_t began = galaxy::steady_ms();
-    static int state = 0;  // 0 before, 1 held, 2 done
+    static const char* press = spec;  // the press under way
+    static int state = 0;             // 0 before, 1 held
     unsigned code = 0, from = 0, to = 0;
-    if (std::sscanf(spec, "%u,%u,%u", &code, &from, &to) != 3) {
+    if (press == nullptr || std::sscanf(press, "%u,%u,%u", &code, &from, &to) != 3) {
         return;
     }
     const std::uint64_t now = galaxy::steady_ms() - began;
@@ -923,7 +924,11 @@ void post_test_key() {
     if (!down && !up) {
         return;
     }
-    state += 1;
+    state = down ? 1 : 0;
+    if (up) {
+        press = std::strchr(press, ';');
+        press = press != nullptr ? press + 1 : nullptr;
+    }
     NSEvent* const event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
                                             location:NSZeroPoint
                                        modifierFlags:0

@@ -4,11 +4,30 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <thread>
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#elif defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
+// Discord on a Mac listens on a Unix socket in the user's temporary folder (discord-ipc-0 to 9), with the same frames as
+// Windows' pipe.
+#define NEBULA_DISCORD_SOCKET 1
+#include <cerrno>
+#include <cstdlib>
+#include <fcntl.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#endif
+#endif
+#if !defined(NEBULA_DISCORD_SOCKET)
+#define NEBULA_DISCORD_SOCKET 0
 #endif
 
 namespace galaxy::discord {
@@ -90,8 +109,11 @@ std::string set_activity_json(std::uint32_t pid, const Activity& activity, std::
     return json;
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || NEBULA_DISCORD_SOCKET
 namespace {
+#if defined(_WIN32)
+std::uint32_t process_id() { return static_cast<std::uint32_t>(GetCurrentProcessId()); }
+
 // The pipe is opened for overlapped I/O: a write or a read waits on an event with a time limit, not on a sleep.
 class Pipe {
 public:
@@ -166,6 +188,97 @@ private:
     HANDLE handle_ = INVALID_HANDLE_VALUE;
     HANDLE event_ = nullptr;
 };
+#else
+std::uint32_t process_id() { return static_cast<std::uint32_t>(getpid()); }
+
+// Discord's socket, non-blocking once connected: a write or a read waits in poll() with a time limit, not on a sleep.
+class Pipe {
+public:
+    Pipe() = default;
+    ~Pipe() { close(); }
+    Pipe(const Pipe&) = delete;
+    Pipe& operator=(const Pipe&) = delete;
+    bool open() {
+        // Where Discord makes it: the folder in TMPDIR on a Mac (XDG_RUNTIME_DIR, TMP and TEMP where those are set).
+        const char* const folders[] = {std::getenv("XDG_RUNTIME_DIR"), std::getenv("TMPDIR"), std::getenv("TMP"),
+                                       std::getenv("TEMP"), "/tmp"};
+        for (const char* folder : folders) {
+            if (folder == nullptr || folder[0] == 0) continue;
+            std::string base = folder;
+            while (base.size() > 1u && base.back() == '/') base.pop_back();
+            for (int i = 0; i < 10; ++i) {
+                const std::string path = base + "/discord-ipc-" + std::to_string(i);
+                sockaddr_un address{};
+                if (path.size() >= sizeof(address.sun_path)) continue;
+                address.sun_family = AF_UNIX;
+                std::memcpy(address.sun_path, path.c_str(), path.size() + 1u);
+                const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+                if (fd < 0) return false;
+                const int on = 1;
+                (void)setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));  // a closed socket is an error, not a signal
+                if (connect(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 &&
+                    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == 0) {
+                    fd_ = fd;
+                    return true;
+                }
+                ::close(fd);
+            }
+        }
+        return false;
+    }
+    bool is_open() const { return fd_ >= 0; }
+    void close() {
+        if (fd_ >= 0) ::close(fd_);
+        fd_ = -1;
+    }
+    bool write(const std::string& bytes) {
+        std::size_t sent = 0u;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (sent < bytes.size()) {
+            const ssize_t n = ::send(fd_, bytes.data() + sent, bytes.size() - sent, 0);
+            if (n > 0) {
+                sent += static_cast<std::size_t>(n);
+                continue;
+            }
+            if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) return false;
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+            if (left.count() <= 0 || !wait(POLLOUT, static_cast<int>(left.count()))) return false;
+        }
+        return true;
+    }
+    // Waits up to `milliseconds` for Discord to send something and appends it to `out`; false when the socket broke.
+    bool read_wait(std::string* out, unsigned milliseconds) {
+        pollfd ready{fd_, POLLIN, 0};
+        const int got = poll(&ready, 1, static_cast<int>(milliseconds));
+        if (got < 0) return errno == EINTR;
+        if (got == 0) return true;
+        char buffer[4096];
+        const ssize_t n = ::recv(fd_, buffer, sizeof(buffer), 0);
+        if (n == 0) return false;  // Discord closed it
+        if (n < 0) return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR;
+        if (out != nullptr) out->append(buffer, static_cast<std::size_t>(n));
+        return true;
+    }
+    // Reads whatever Discord has sent (its replies), without waiting; false when the socket broke.
+    bool drain(std::string* first_frame) {
+        for (;;) {
+            pollfd ready{fd_, POLLIN, 0};
+            const int got = poll(&ready, 1, 0);
+            if (got < 0) return errno == EINTR;
+            if (got == 0) return true;
+            if (!read_wait(first_frame, 1000)) return false;
+        }
+    }
+
+private:
+    bool wait(short events, int milliseconds) {
+        pollfd ready{fd_, events, 0};
+        const int got = poll(&ready, 1, milliseconds);
+        return got > 0 && (ready.revents & (POLLERR | POLLHUP | POLLNVAL)) == 0;
+    }
+    int fd_ = -1;
+};
+#endif
 
 void worker() {
     Pipe pipe;
@@ -190,7 +303,7 @@ void worker() {
         if (!enabled || client_id.empty()) {
             if (pipe.is_open()) {
                 // Leaving: Discord is told on a best effort, the pipe closes either way.
-                if (shown) (void)pipe.write(frame(kOpFrame, set_activity_json(GetCurrentProcessId(), {}, start, nonce++, true)));
+                if (shown) (void)pipe.write(frame(kOpFrame, set_activity_json(process_id(), {}, start, nonce++, true)));
                 (void)pipe.write(frame(kOpClose, "{}"));
                 pipe.close();
                 std::fprintf(stderr, "[discord] status off\n");
@@ -218,7 +331,7 @@ void worker() {
             dirty = true;
         }
         if (dirty) {
-            if (!pipe.write(frame(kOpFrame, set_activity_json(GetCurrentProcessId(), activity, start, nonce++, false)))) {
+            if (!pipe.write(frame(kOpFrame, set_activity_json(process_id(), activity, start, nonce++, false)))) {
                 pipe.close();
                 shown = false;
                 continue;
@@ -247,6 +360,13 @@ void start(std::string client_id) {
     std::thread thread(worker);
     (void)SetThreadPriority(thread.native_handle(), THREAD_PRIORITY_BELOW_NORMAL);
     thread.detach();  // ends with the process
+#elif NEBULA_DISCORD_SOCKET
+    if (s_client_id.empty()) return;
+    std::thread([] {
+        (void)pthread_setname_np("Nebula Discord");
+        (void)pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);  // below the game's threads
+        worker();
+    }).detach();  // ends with the process
 #endif
 }
 
