@@ -61,8 +61,9 @@ public:
         PostConstants constants{};
         bool ten_bit = false;       // the target keeps the scene's ten bits a channel: the last write is plain
     };
+    // `hdr`: the target is written as HDR10 (finish_present's `output`), never as a plain copy.
     PresentStep prepare_present(Object commands, const Texture& source, unsigned source_width, unsigned source_height,
-                                unsigned target_width, unsigned target_height, Format target_format);
+                                unsigned target_width, unsigned target_height, Format target_format, bool hdr = false);
     void finish_present(Object encoder, const PresentStep& step, const gpu::Rect& viewport,
                         const PostOutput& output = PostOutput{});
 

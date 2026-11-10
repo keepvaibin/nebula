@@ -87,19 +87,29 @@ void BoxCS(uint3 id : SV_DispatchThreadID) {
 }
 
 // A normalised Gaussian of `sigma` texels along `step` (UV per texel) about `uv`, two texels a bilinear tap.
+// The weights are w(i) = exp(k i^2). Each is the one before times exp(k (2 i + 1)), and that factor is the one before
+// it times exp(2 k): two exponentials for the whole kernel and two products a texel, where an exponential a texel was
+// most of the chain's work (at 3360 by 2100 its kernels take 55 million taps a frame).
 float3 gaussian(Texture2D<float4> source, float2 uv, float2 step, float sigma) {
     const int radius = int(ceil(3.0f * sigma));
     const float k = -0.5f / max(sigma * sigma, 1e-4f);
+    const float grow = exp(2.0f * k);
+    float weight = exp(k);        // w(1)
+    float ratio = weight * grow;  // w(2) / w(1)
     float3 sum = source.SampleLevel(s_linear, uv, 0.0f).rgb;
     float weights = 1.0f;
     [loop] for (int i = 1; i <= radius; i += 2) {
-        const float w0 = exp(k * float(i * i));
-        const float w1 = i + 1 <= radius ? exp(k * float((i + 1) * (i + 1))) : 0.0f;
+        const float w0 = weight;
+        const float next = weight * ratio;  // w(i + 1)
+        const float w1 = i + 1 <= radius ? next : 0.0f;
         const float w = w0 + w1;
-        const float offset = (float(i) * w0 + float(i + 1) * w1) / w;
+        const float offset = float(i) + w1 / w;
         sum += (source.SampleLevel(s_linear, uv + step * offset, 0.0f).rgb +
                 source.SampleLevel(s_linear, uv - step * offset, 0.0f).rgb) * w;
         weights += 2.0f * w;
+        ratio *= grow;
+        weight = next * ratio;  // w(i + 2)
+        ratio *= grow;
     }
     return sum / weights;
 }

@@ -226,18 +226,20 @@ void RendererMtl::read_display_hdr() {
 
 // The window's layer for this device at the window's size in pixels: 8-bit drawables whose values are the display's
 // own (the programs write display values), shown as sRGB.
-// A first start (no settings file yet) on a Mac whose GPU is not Apple's, on a display with more pixels than points.
-// Every Intel Mac has a Retina panel and a GPU of its years: a 2017 MacBook Pro shows 3360 by 2100 in full screen on a
-// Radeon Pro 560, which draws the heavier galaxies there in 15 to 17 ms a frame (39 frames a second). So the scene is
-// drawn at the display's size in points and enlarged to its pixels: the UPSCALER row's FSR 1 at PERFORMANCE, written
-// to the settings like any choice and the player's to change. FSR 1 and not MetalFX, whose spatial scaler is slow on
-// these GPUs: at that size the pass to the screen took 10.9 ms with MetalFX, 6.5 with FSR 1 (the frame 10 ms in all),
-// 3.9 with nothing enlarged. An Apple GPU keeps the display's own pixels.
+// A first start (no settings file yet) on an Intel Mac that draws with its integrated graphics, on a display with more
+// pixels than points. Those Macs have Retina panels and no GPU for them: Intel HD Graphics 630 takes 8 ms for a frame
+// of 1708 by 960, and a 15-inch panel has four times those pixels. So the scene is drawn at the display's size in
+// points and enlarged to its pixels: the UPSCALER row's FSR 1 at PERFORMANCE, written to the settings like any choice
+// and the player's to change. FSR 1 and not MetalFX, whose spatial scaler is slow on Intel Macs' GPUs (measured on a
+// Radeon Pro 560 at 3360 by 2100: 10.9 ms for the pass to the screen, FSR 1's 6.5). A Mac's discrete GPU and every
+// Apple GPU keep the display's own pixels: the Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms.
 void RendererMtl::choose_first_start_scale() {
 #if TARGET_OS_OSX
     std::error_code ignored;
     const std::filesystem::path settings = render_config_path();
-    if (settings.empty() || std::filesystem::exists(settings, ignored) || mtl::Context::get().caps().apple_gpu ||
+    const mtl::DeviceCaps& caps = mtl::Context::get().caps();
+    // Integrated graphics on an Intel Mac: not Apple's GPU, and one memory with the CPU.
+    if (settings.empty() || std::filesystem::exists(settings, ignored) || caps.apple_gpu || !caps.unified_memory ||
         layer_.layer == nullptr) {
         return;
     }
@@ -250,7 +252,7 @@ void RendererMtl::choose_first_start_scale() {
     cfg.spatial_quality = 3u;  // performance: half the output's size each way
     set_render_config(cfg);
     (void)save_render_config_to_file();
-    std::fprintf(stderr, "[metal] first start, not an Apple GPU: the scene at the display's size in points, FSR 1 to its pixels\n");
+    std::fprintf(stderr, "[metal] first start on integrated graphics: the scene at the display's size in points, FSR 1 to its pixels\n");
 #endif
 }
 
@@ -1103,7 +1105,7 @@ void RendererMtl::draw_presented_picture(mtl::Object target, mtl::Format format,
     mtl::PostProcessor::PresentStep step{};
     if (post_.ready() && !present_black_) {
         step = post_.prepare_present(commands_, picture, picture.width, picture.height, static_cast<unsigned>(content.width),
-                                     static_cast<unsigned>(content.height), format);
+                                     static_cast<unsigned>(content.height), format, layer_.hdr);
     }
     const mtl::Object pass = begin_color_pass(target, true, "present");
     if (step.pipeline != nullptr) {

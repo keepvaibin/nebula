@@ -82,6 +82,8 @@ std::atomic<int> g_panels{0};
 bool g_cursor_hidden = false;
 // The display mode the window was last put in (RenderConfig::display_mode; ~0: none yet).
 unsigned g_applied_mode = ~0u;
+// The system refused the last change to full screen (the main thread's).
+bool g_full_screen_owed = false;
 
 // Keys the settings menu takes from other threads and from the pads, in order, on the main thread.
 std::mutex g_menu_keys_mutex;
@@ -581,6 +583,8 @@ void run_requests() {
         if (mode != g_applied_mode && g_window.visible) {
             const bool wanted = mode != 0u;
             const bool full = (g_window.styleMask & NSWindowStyleMaskFullScreen) != 0u;
+            std::fprintf(stderr, "[window] display mode %u: %s\n", mode,
+                         wanted == full ? "as the window is" : wanted ? "to full screen" : "to a window");
             if (wanted != full) {
                 [g_window toggleFullScreen:nil];
             }
@@ -696,10 +700,19 @@ void on_main(dispatch_block_t block) {
 }
 - (void)windowDidEnterFullScreen:(NSNotification*)notification {
     galaxy::render::host_window::borderless_active.store(true, std::memory_order_relaxed);
+    std::fprintf(stderr, "[window] full screen\n");
     [self sizeChanged];
 }
 - (void)windowDidExitFullScreen:(NSNotification*)notification {
     galaxy::render::host_window::borderless_active.store(false, std::memory_order_relaxed);
+    std::fprintf(stderr, "[window] left full screen\n");
+    [self sizeChanged];
+}
+- (void)windowDidFailToEnterFullScreen:(NSWindow*)window {
+    // The system takes no window to full screen while the screen is locked or another such change is under way. The
+    // mode is still the one asked for: it is put in again when the window next comes to the front.
+    std::fprintf(stderr, "[window] the system did not take the window to full screen\n");
+    galaxy::sdl::g_full_screen_owed = true;
     [self sizeChanged];
 }
 // A minimised window: the host stops the game's clocks and sound as for an app out of sight.
@@ -713,6 +726,9 @@ void on_main(dispatch_block_t block) {
     {
         const std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
         galaxy::sdl::g_input.window_focused = true;
+    }
+    if (std::exchange(galaxy::sdl::g_full_screen_owed, false)) {
+        galaxy::sdl::g_applied_mode = ~0u;  // the next pump puts the display mode in again
     }
     galaxy::sdl::update_cursor();
 }

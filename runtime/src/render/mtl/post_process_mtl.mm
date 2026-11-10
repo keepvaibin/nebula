@@ -488,7 +488,7 @@ void PostProcessor::finish_scene_aa(Object encoder, AaRun pass, unsigned width, 
 
 PostProcessor::PresentStep PostProcessor::prepare_present(Object commands, const Texture& source, unsigned source_width,
                                                           unsigned source_height, unsigned target_width,
-                                                          unsigned target_height, Format target_format) {
+                                                          unsigned target_height, Format target_format, bool hdr) {
     // The scene was antialiased before the 2D layer (prepare_scene_aa).
     PostProcessSettings scaling = settings_;
     scaling.aa = PostProcessSettings::Aa::kOff;
@@ -496,6 +496,13 @@ PostProcessor::PresentStep PostProcessor::prepare_present(Object commands, const
                                              status_.fxaa_ok);
     PresentStep step{};
     step.ten_bit = target_format == Format::Bgr10a2 || target_format == Format::Rgb10a2;
+    if (step.ten_bit && plan.resample_to_target && source_width == target_width && source_height == target_height &&
+        !hdr) {
+        // The picture at the target's own size, into a target that keeps its ten bits: every pixel is its source's,
+        // unchanged. The renderer's plain copy draws that (no pipeline here), without the box filter's arithmetic for
+        // each pixel of the display.
+        return step;
+    }
     set_post_input_size(step.constants, source_width, source_height);
     const Object input = source.texture;
     step.input = input;

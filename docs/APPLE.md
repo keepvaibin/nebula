@@ -120,11 +120,15 @@ line's own `--data`, `--pak`, `--saves` and `--module` stay ([COMMAND_LINE.md](C
   by blocking, but one slow frame then holds every frame after it to every second refresh.
 - A Mac's window has ten bits a channel (`BGR10A2`), as the scene has: the picture goes to it as it is, where an 8-bit
   window takes it rounded and dithered.
-- A first start on a Mac whose GPU is not Apple's, on a Retina display, draws the scene at the display's size in
-  points and enlarges it with FSR 1 (the UPSCALER row; `choose_first_start_scale`). A 2017 MacBook Pro's full screen
-  is 3360 by 2100, which its Radeon Pro 560 draws at 39 frames a second in the heavier galaxies and at 60 this way
-  (10 ms a frame). MetalFX's spatial scaler is slow on such GPUs (10.9 ms for the pass to the screen at that size,
-  against FSR 1's 6.5), so it is offered and not chosen there. An Apple GPU keeps the display's own pixels.
+- A first start on an Intel Mac drawing with its integrated graphics, on a Retina display, draws the scene at the
+  display's size in points and enlarges it with FSR 1 (the UPSCALER row; `choose_first_start_scale`): Intel HD
+  Graphics 630 takes 8 ms for a frame of 1708 by 960, a quarter of a 15-inch panel's pixels. MetalFX's spatial scaler
+  is slow on Intel Macs' GPUs (10.9 ms for the pass to the screen at 3360 by 2100 on a Radeon Pro 560, against FSR 1's
+  6.5), so it is offered and not chosen there. A discrete GPU and every Apple GPU keep the display's own pixels: the
+  Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms with the GPU kept busy, every picture up for
+  one refresh.
+- At the target's own size, into a window that keeps the scene's ten bits, the picture is copied plainly: 0.6 ms at
+  3360 by 1856 where the box filter's pass took 2.1.
 - Letter keys are reported twice, as on Windows: by the letter the keyboard's layout prints on them, and by their place
   (a Mac's key codes are the hardware's), which is what the default layout binds movement to.
 
