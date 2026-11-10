@@ -651,8 +651,10 @@ public:
     bool mRemoteDemo;  // a remote demo drives him (pad reads stop; readyRemoteDemo)
     Vec3f mRushEndFront;  // the front a rush ends facing
     u16 mRushEndFrontMode;  // 0 keep the base's, 1 keep the up, more: the turn's frames
-    u16 mPlayerMode;
+    u16 mPlayerMode;  // always one of the game's forms (a mod's power-up: the form it acts like)
     u16 mPrevPlayerMode;  // the form before the morph (setPlayerMode)
+    u16 mModForm;  // a mod's power-up (NebulaMods::cFirstPowerUp on), over mPlayerMode; 0: none
+    u16 mPrevModForm;  // the mod power-up before the morph
     u16 mMorphTimer;  // frames left of the morph flash
     u16 mMorphEndTimer;  // frames left after a morph from control
     u16 mPlayerModeTimer;  // frames left of the form (setPlayerMode, updatePlayerMode)

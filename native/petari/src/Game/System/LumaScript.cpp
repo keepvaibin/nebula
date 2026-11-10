@@ -681,7 +681,7 @@ namespace lumascript {
             static const OwnEvent cOwn[] = {{"frame", Event_Frame},     {"enter", Event_Enter},       {"leave", Event_Leave},
                                             {"start", Event_Start},     {"touch_player", Event_Touch}, {"attacked", Event_Attacked},
                                             {"appear", Event_Appear},   {"kill", Event_Kill},         {"message", Event_Message},
-                                            {"control", Event_Control}, {"touch", Event_TouchActor}};
+                                            {"control", Event_Control}, {"touch", Event_TouchActor},     {"end", Event_End}};
             for (const OwnEvent& own : cOwn) {
                 if (MR::isEqualString(name, own.name)) {
                     h.event = static_cast< u8 >(own.event);

@@ -121,6 +121,20 @@ struct ObjectClassToSet {
     std::string script;  // empty: none
 };
 
+// A power-up from data (luma::Form), for the mod that adds it.
+struct FormToAdd {
+    std::string mod_id;
+    std::string mod_version;
+    std::string name;
+    int acts_like = 0;
+    int looks_like = 0;
+    int color_frame = 0;
+    int frames = 0;
+    std::string model;
+    std::string music;
+    std::string script;
+};
+
 // A mod-wide script (luma.json "scripts"), for the mod that runs it.
 struct ModScriptToAdd {
     std::string mod_id;
@@ -174,6 +188,7 @@ struct ModRows {
     std::vector<PlayerConstantToSet> player_constants;
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
+    std::vector<FormToAdd> forms;
     std::vector<ScriptObjectToAdd> script_objects;
     std::vector<ModScriptToAdd> mod_scripts;
     std::vector<SoundEffectToAdd> sound_effects;
@@ -181,7 +196,7 @@ struct ModRows {
     std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`

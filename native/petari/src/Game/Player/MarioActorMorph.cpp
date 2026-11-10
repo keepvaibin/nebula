@@ -16,6 +16,11 @@
 #include "Game/Util/SoundUtil.hpp"
 
 bool MarioActor::canTakePowerUp(s32 playerMode) const {
+    // A mod's: the game's form it acts like.
+    if (playerMode >= NebulaMods::cFirstPowerUp) {
+        const u16 mode = static_cast< u16 >(playerMode);
+        return playerMode <= 0xFFFF && NebulaMods::isPowerUp(mode) && canTakePowerUp(NebulaMods::powerUpActsLike(mode));
+    }
     switch (playerMode) {
     case PlayerMode_Invincible: return mModels[4] != nullptr;
     case PlayerMode_Ice: return mModels[3] != nullptr;
@@ -30,11 +35,25 @@ bool MarioActor::canTakePowerUp(s32 playerMode) const {
 void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
     playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
 
-    if (mPlayerMode == playerMode) {
-        // A mod's power-up again: its time starts over.
-        if (playerMode >= NebulaMods::cFirstPowerUp) {
-            mPlayerModeTimer = NebulaMods::powerUpStart(playerMode, this);
+    // A mod's power-up: the player is in the game's form it acts like, so every table read by his form sees one of the
+    // game's; the mod's own form is kept beside it.
+    u16 modForm = 0;
+    if (playerMode >= NebulaMods::cFirstPowerUp) {
+        if (!NebulaMods::isPowerUp(playerMode)) {
             return;
+        }
+        modForm = playerMode;
+        playerMode = NebulaMods::powerUpActsLike(modForm);
+    }
+
+    if (mPlayerMode == playerMode && mModForm == modForm) {
+        // A mod's power-up again: its time starts over (the form's under it when it gives none).
+        if (modForm != 0) {
+            const s32 frames = NebulaMods::powerUpStart(modForm, this);
+            if (frames > 0) {
+                mPlayerModeTimer = static_cast< u16 >(frames);
+                return;
+            }
         }
 
         if (playerMode == 1) {
@@ -143,13 +162,13 @@ void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
     }
 
     mPrevPlayerMode = mPlayerMode;
-    NebulaMods::powerUpEnd(mPlayerMode, this);
+    mPrevModForm = mModForm;
+    NebulaMods::powerUpEnd(mModForm, this);
     mPlayerMode = playerMode;
-    if (playerMode >= NebulaMods::cFirstPowerUp) {
-        mPlayerModeTimer = NebulaMods::powerUpStart(playerMode, this);
-    }
+    mModForm = modForm;
 
-    switch (playerMode) {
+    // The game's form starts (a mod's power-up on the normal player: none, so no "back to normal").
+    switch (modForm != 0 && playerMode == 0 ? 0xFFFF : playerMode) {
     case 9:
         mPlayerModeTimer = mConst->getTable()->mTornadoHoldTime;
 
@@ -331,6 +350,13 @@ void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
         updateFairyStar();
     }
 
+    if (modForm != 0) {
+        const s32 frames = NebulaMods::powerUpStart(modForm, this);
+        if (frames > 0) {
+            mPlayerModeTimer = static_cast< u16 >(frames);
+        }
+    }
+
     updateHandAtMorph();
 }
 
@@ -347,7 +373,7 @@ void MarioActor::resetPlayerModeOnNoDamage() {
 }
 
 void MarioActor::updatePlayerMode() {
-    NebulaMods::powerUpUpdate(mPlayerMode);
+    NebulaMods::powerUpUpdate(mModForm);
 
     if (mPlayerModeTimer == 0) {
         return;
@@ -401,7 +427,8 @@ const char* MarioActor::changeMorphString(const char* name) const {
             break;
         }
         if (item->mHash == hash) {
-            const char* morph = item->mNames[mPlayerMode];
+            // By the game's eight forms (Tornado, 9, has no column: the normal one's).
+            const char* morph = mPlayerMode < 8 ? item->mNames[mPlayerMode] : nullptr;
             if (morph == nullptr || mPlayerMode == PlayerMode_Normal) {
                 if (gIsLuigi) {
                     if (item->mNames[8] != nullptr) {

@@ -103,6 +103,19 @@ struct ObjectClass {
     std::string script;  // what runs on every actor of it (scripts/<script>.lumascript); empty: none
 };
 
+// A power-up from data ("forms"): the game's form it acts like and looks like (NEBULA_POWER_UP_*), its colour frame,
+// whole-body model, time, music and script on the player.
+struct Form {
+    std::string name;
+    int acts_like = 0;
+    int looks_like = 0;
+    int color_frame = 0;
+    int frames = 0;
+    std::string model;   // ObjectData/<model>.arc; empty: the player's own
+    std::string music;   // a BGM_ name; empty: the acts_like form's
+    std::string script;  // empty: none
+};
+
 // An object a script runs ("objects"): its shape, and the script (scripts/<script>.lumascript, compiled by LumaLink
 // into files/LumaScripts/<mod id>/<script>.lumascript).
 struct ScriptObject {
@@ -197,6 +210,7 @@ struct Layer {
     std::vector<PlayerConstant> player_constants;
     std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
+    std::vector<Form> forms;
     std::vector<ScriptObject> objects;
     std::vector<std::string> scripts;  // mod-wide scripts ("scripts"): scripts/<name>.lumascript, one instance each
     std::vector<SoundEffect> sound_effects;

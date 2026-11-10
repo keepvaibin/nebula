@@ -85,6 +85,21 @@ namespace {
     void fitText(Ui::Pane* pParent, f32 fontSize, f32 lineSpace, f32* pWidth, f32* pHeight) {
         *pWidth = 0.0f;
         *pHeight = 0.0f;
+        // The Japanese boxes (InformationWindow's "JpJa" ones) sit by their top centre, 251 to the right; the others by
+        // their top-left. Every language's at the top-left, the shadow kept at its offset from the text.
+        Vec3f textAt(0.0f, 0.0f, 0.0f);
+        for (Ui::Pane* pChild : pParent->GetChildList()) {
+            if (asTextBox(pChild) != nullptr && MR::isEqualStringPrefix(pChild->mName, "Inf")) {
+                textAt = pChild->mTranslate;
+            }
+        }
+        for (Ui::Pane* pChild : pParent->GetChildList()) {
+            if (asTextBox(pChild) != nullptr) {
+                pChild->mBasePosition = 0;
+                pChild->mTranslate.x -= textAt.x;
+                pChild->mTranslate.y -= textAt.y;
+            }
+        }
         for (Ui::Pane* pChild : pParent->GetChildList()) {
             Ui::TextBox* pText = asTextBox(pChild);
             if (pText == nullptr || !pText->IsVisible()) {
@@ -105,9 +120,6 @@ namespace {
             const Ui::Rect rect = pText->GetTextDrawRect();
             const f32 width = rect.right - rect.left;
             const f32 height = rect.bottom - rect.top;
-            nebula_log("toast-diag: %s %s len %u font %p rect %.1f %.1f %.1f %.1f alpha %u scale %.2f %.2f\n", static_cast< const char* >(pParent->mName),
-                       static_cast< const char* >(pText->mName), static_cast< unsigned >(pText->mTextLen), static_cast< const void* >(pText->mpFont), rect.left,
-                       rect.top, rect.right, rect.bottom, static_cast< unsigned >(pText->mAlpha), pText->mScale.x, pText->mScale.y);
             *pWidth = width > *pWidth ? width : *pWidth;
             *pHeight = height > *pHeight ? height : *pHeight;
         }

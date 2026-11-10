@@ -3902,6 +3902,7 @@ What the toolkit cannot offer yet, and why.
 | `nebula.actor_data` | result type void* |
 | `nebula.actor_value` | result type NebulaValue |
 | `nebula.actors_near` | parameter type NebulaActor** |
+| `nebula.add_form` | only while plugins start |
 | `nebula.add_galaxy` | only while plugins start |
 | `nebula.add_mod_script` | starts a script (luma.json "scripts" does) |
 | `nebula.add_music` | only while plugins start |

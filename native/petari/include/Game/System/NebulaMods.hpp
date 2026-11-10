@@ -46,6 +46,9 @@ namespace NebulaMods {
     const char* powerUpModel(s32 index);
     // The game's power-up a mode looks like: itself, if it's the game's.
     u16 powerUpLook(u16 mode);
+    // A mod's power-up: whether `mode` is one, and the game's form the player is in under it (what he can do).
+    bool isPowerUp(u16 mode);
+    u16 powerUpActsLike(u16 mode);
     // The frame of Mario.arc's ColorChange the player wears in mode (a game's or a mod's power-up).
     u32 powerUpColorFrame(u16 mode);
     // A mod's words for a message: nullptr if none has any. ppLike, if given: the game message whose talk a new line takes

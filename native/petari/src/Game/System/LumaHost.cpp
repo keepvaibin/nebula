@@ -508,7 +508,14 @@ namespace lumacore {
         return 0;
     }
 
+    u32 sSceneGeneration = 0;
+
+    u32 scriptsSceneGeneration() {
+        return sSceneGeneration;
+    }
+
     void scriptsSceneEnded() {
+        sSceneGeneration++;
         for (Living* l = sLiving; l != nullptr;) {
             Living* const next = l->mNext;
             if (!l->mGlobal) {

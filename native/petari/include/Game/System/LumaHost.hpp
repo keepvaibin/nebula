@@ -42,6 +42,8 @@ namespace lumacore {
     s32 addModScript(s32 script);
     // The scene ends: every object's instance goes (handles into it read as none from here on); mod-wide ones stay.
     void scriptsSceneEnded();
+    // Counts the scenes ended: an instance kept by its start's generation is gone when this differs.
+    u32 scriptsSceneGeneration();
     // A registry row by "<kind>/<name>": its index, or -1.
     s32 registryIndex(const char* pName);
 }  // namespace lumacore

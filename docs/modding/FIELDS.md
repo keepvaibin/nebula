@@ -1,6 +1,6 @@
 # Fields
 
-4620 fields a script reads (`object.mVelocity`) or writes. Handles, text and pointers are read-only; a class has its bases' fields too.
+4622 fields a script reads (`object.mVelocity`) or writes. Handles, text and pointers are read-only; a class has its bases' fields too.
 
 ## NameObj
 
@@ -3806,6 +3806,7 @@
 - `mMaterialEffects.mMask`: int (u32)
 - `mMaxHealth`: int (u32)
 - `mMessageEffectTable`: MatrixControl (an object, read-only)
+- `mModForm`: int (u16)
 - `mModHidden`: bool
 - `mModelUnbaseMtx.mMtx`: float (array)
 - `mMorphActionTable`: MatrixControl (an object, read-only)
@@ -3839,6 +3840,7 @@
 - `mPrevCamDirZ`: vec3
 - `mPrevControlPos`: vec3
 - `mPrevHeadVec`: vec3
+- `mPrevModForm`: int (u16)
 - `mPrevPlayerMode`: int (u16)
 - `mPrevViewMtx.mMtx`: float (array)
 - `mPullSensors.mArr`: HitSensor (an object, read-only) (array)
