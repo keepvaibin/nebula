@@ -550,7 +550,7 @@ def emit_docs(rows, left, class_rows, field_count, layouts):
         if own:
             fl.append(f'## {q}')
             fl.append('')
-            fl += [f'- `{n}`: {t}{" (array)" if arr else ""}' for (n, t, arr) in own]
+            fl += [f'- `{n}`: {gen_fields.plain_type(t)}{" (array)" if arr else ""}' for (n, t, arr) in own]
             fl.append('')
     (DOCS / 'FIELDS.md').write_text('\n'.join(fl) + '\n', encoding='utf-8')
 

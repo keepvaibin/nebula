@@ -33,7 +33,7 @@ namespace lumacore {
         } else if constexpr (std::is_same_v< T, double >) {
             return FieldType_F64;
         } else if constexpr (std::is_class_v< T > && sizeof(T) == 12 && alignof(T) == 4) {
-            return FieldType_Vec3;  // the generator lets only TVec3f, Vec3f and Vec through
+            return FieldType_Vec3;  // the generator lets only Vec3<f32> (Vec3f, TVec3f) and Vec through
         } else if constexpr (std::is_pointer_v< T > &&
                              std::is_same_v< std::remove_cv_t< std::remove_pointer_t< T > >, char >) {
             return FieldType_Text;
