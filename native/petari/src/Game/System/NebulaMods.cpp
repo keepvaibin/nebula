@@ -1,5 +1,6 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/System/LumaHost.hpp"
 #include "Game/System/NebulaModCalls.hpp"
 #include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
@@ -2909,6 +2910,9 @@ namespace NebulaMods {
     }
 
     void sceneEnded() {
+        // Scripts on the scene's objects end first, then every handle made in it reads as none.
+        lumacore::scriptsSceneEnded();
+        lumacore::nextGeneration();
         sCountdown = nullptr;
         sMessagePending = false;
         sTalkBoxPlaced = false;

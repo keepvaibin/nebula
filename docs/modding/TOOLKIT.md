@@ -2,7 +2,7 @@
 
 Every game function a script or plugin calls by name, generated from the game's headers (tools/lumacore). Letters: a none, b bool, c int, d float, e vec3, g text, h handle (an object, a sensor...); an upper-case letter is a value that comes back after the result (pass one in, or none for zero).
 
-3360 functions.
+3393 functions.
 
 | Name | Takes | Gives |
 |---|---|---|
@@ -43,10 +43,12 @@ Every game function a script or plugin calls by name, generated from the game's 
 | `LayoutActor::setNerve` | h self (LayoutActor), h  |  |
 | `LayoutActor::setTrans` | h self (LayoutActor), j  |  |
 | `LayoutActor::updateSpine` | h self (LayoutActor) |  |
+| `LiveActor::addToSoundObjHolder` | h self (LiveActor) |  |
 | `LiveActor::appear` | h self (LiveActor) |  |
 | `LiveActor::attackSensor` | h self (LiveActor), h pSender, h pReceiver |  |
 | `LiveActor::calcAndSetBaseMtx` | h self (LiveActor) |  |
 | `LiveActor::calcAnim` | h self (LiveActor) |  |
+| `LiveActor::calcAnmMtx` | h self (LiveActor) |  |
 | `LiveActor::calcViewAndEntry` | h self (LiveActor) |  |
 | `LiveActor::control` | h self (LiveActor) |  |
 | `LiveActor::editPosition` | h self (LiveActor) | e |
@@ -54,15 +56,31 @@ Every game function a script or plugin calls by name, generated from the game's 
 | `LiveActor::getBaseMtx` | h self (LiveActor) | f |
 | `LiveActor::getBinder` | h self (LiveActor) | h |
 | `LiveActor::getGravity` | h self (LiveActor) | e |
+| `LiveActor::getNerveStep` | h self (LiveActor) | c |
 | `LiveActor::getPosition` | h self (LiveActor) | e |
+| `LiveActor::getSensor` | h self (LiveActor), g pSensorName | h |
 | `LiveActor::getSensorKeeper` | h self (LiveActor) | h |
 | `LiveActor::getTakingMtx` | h self (LiveActor) | f |
 | `LiveActor::getVelocity` | h self (LiveActor) | e |
 | `LiveActor::init` | h self (LiveActor), h rIter |  |
+| `LiveActor::initActorCollisionParts` | h self (LiveActor), g , h , h , F , b , b  |  |
+| `LiveActor::initActorLightCtrl` | h self (LiveActor) |  |
+| `LiveActor::initActorStarPointerTarget` | h self (LiveActor), d , e , F , e  |  |
+| `LiveActor::initBinder` | h self (LiveActor), d radius, d offsetY, c planeNum |  |
+| `LiveActor::initEffectKeeper` | h self (LiveActor), c extraEmitterNum, g pResourceName |  |
+| `LiveActor::initHitSensor` | h self (LiveActor), c  |  |
+| `LiveActor::initModelManagerWithAnm` | h self (LiveActor), g pModelArcName, g pAnimArcName, b deferMaterials |  |
+| `LiveActor::initNerve` | h self (LiveActor), h  |  |
+| `LiveActor::initRailRider` | h self (LiveActor), h rIter |  |
+| `LiveActor::initShadowControllerList` | h self (LiveActor), c  |  |
+| `LiveActor::initSound` | h self (LiveActor), c numHandles, b is2D |  |
+| `LiveActor::initStageSwitch` | h self (LiveActor), h rIter |  |
+| `LiveActor::isNerve` | h self (LiveActor), h pNerve | b |
 | `LiveActor::kill` | h self (LiveActor) |  |
 | `LiveActor::makeActorAppeared` | h self (LiveActor) |  |
 | `LiveActor::makeActorDead` | h self (LiveActor) |  |
 | `LiveActor::movement` | h self (LiveActor) |  |
+| `LiveActor::prepareDrawClipped` | h self (LiveActor) |  |
 | `LiveActor::receiveMessage` | h self (LiveActor), c msg, h pSender, h pReceiver | b |
 | `LiveActor::receiveMsgApart` | h self (LiveActor), h pSender, h pReceiver | b |
 | `LiveActor::receiveMsgEnemyAttack` | h self (LiveActor), c , h , h  | b |
@@ -72,7 +90,9 @@ Every game function a script or plugin calls by name, generated from the game's 
 | `LiveActor::receiveMsgTaken` | h self (LiveActor), h , h  | b |
 | `LiveActor::receiveMsgThrow` | h self (LiveActor), h , h  | b |
 | `LiveActor::receiveOtherMsg` | h self (LiveActor), c , h , h  | b |
+| `LiveActor::setNerve` | h self (LiveActor), h pNerve |  |
 | `LiveActor::startClipped` | h self (LiveActor) |  |
+| `LiveActor::updateBinder` | h self (LiveActor) |  |
 | `LiveActor::updateHitSensor` | h self (LiveActor), h  |  |
 | `MR::MOD` | d x, d y | d |
 | `MR::abs:c` | c x | c |
@@ -2886,15 +2906,28 @@ Every game function a script or plugin calls by name, generated from the game's 
 | `MapObjActor::connectToScene` | h self (MapObjActor), h rInfo |  |
 | `MapObjActor::control` | h self (MapObjActor) |  |
 | `MapObjActor::endClipped` | h self (MapObjActor) |  |
+| `MapObjActor::endMapPartsFunctions` | h self (MapObjActor) |  |
+| `MapObjActor::exeDone` | h self (MapObjActor) |  |
+| `MapObjActor::exeMove` | h self (MapObjActor) |  |
+| `MapObjActor::exeWait` | h self (MapObjActor) |  |
 | `MapObjActor::init` | h self (MapObjActor), h rIter |  |
 | `MapObjActor::initAfterPlacement` | h self (MapObjActor) |  |
 | `MapObjActor::initCaseNoUseSwitchA` | h self (MapObjActor), h rInfo |  |
 | `MapObjActor::initCaseNoUseSwitchB` | h self (MapObjActor), h rInfo |  |
 | `MapObjActor::initCaseUseSwitchA` | h self (MapObjActor), h rInfo |  |
 | `MapObjActor::initCaseUseSwitchB` | h self (MapObjActor), h rInfo |  |
+| `MapObjActor::initialize` | h self (MapObjActor), h rIter, h rInfo |  |
+| `MapObjActor::isObjectName` | h self (MapObjActor), g pName | b |
 | `MapObjActor::kill` | h self (MapObjActor) |  |
 | `MapObjActor::makeSubModels` | h self (MapObjActor), h , h  |  |
+| `MapObjActor::pauseMapPartsFunctions` | h self (MapObjActor) |  |
+| `MapObjActor::setStateWait` | h self (MapObjActor) |  |
 | `MapObjActor::startClipped` | h self (MapObjActor) |  |
+| `MapObjActor::startMapPartsFunctions` | h self (MapObjActor) |  |
+| `MapObjActor::tryCreateBreakModel` | h self (MapObjActor), h rInfo | b |
+| `MapObjActor::tryDeleteWaitEffect` | h self (MapObjActor) | b |
+| `MapObjActor::tryEmitWaitEffect` | h self (MapObjActor) | b |
+| `MapObjActor::updateProjmapMtx` | h self (MapObjActor) |  |
 | `MarioActor::IsMarioSwimming` | h self (MarioActor) | b |
 | `MarioActor::MarioStopWalk` | h self (MarioActor) |  |
 | `MarioActor::addRushSensor` | h self (MarioActor), h , b  |  |
@@ -3373,26 +3406,6 @@ What the toolkit cannot offer yet, and why.
 
 | Name | Why |
 |---|---|
-| `LiveActor::addToSoundObjHolder` | declared, never defined |
-| `LiveActor::calcAnmMtx` | declared, never defined |
-| `LiveActor::getNerveStep` | declared, never defined |
-| `LiveActor::getSensor` | declared, never defined |
-| `LiveActor::initActorCollisionParts` | declared, never defined |
-| `LiveActor::initActorLightCtrl` | declared, never defined |
-| `LiveActor::initActorStarPointerTarget` | declared, never defined |
-| `LiveActor::initBinder` | declared, never defined |
-| `LiveActor::initEffectKeeper` | declared, never defined |
-| `LiveActor::initHitSensor` | declared, never defined |
-| `LiveActor::initModelManagerWithAnm` | declared, never defined |
-| `LiveActor::initNerve` | declared, never defined |
-| `LiveActor::initRailRider` | declared, never defined |
-| `LiveActor::initShadowControllerList` | declared, never defined |
-| `LiveActor::initSound` | declared, never defined |
-| `LiveActor::initStageSwitch` | declared, never defined |
-| `LiveActor::isNerve` | declared, never defined |
-| `LiveActor::prepareDrawClipped` | declared, never defined |
-| `LiveActor::setNerve` | declared, never defined |
-| `LiveActor::updateBinder` | declared, never defined |
 | `MR::Functor` | parameter type void (*)() |
 | `MR::addNewLine` | parameter type char16_t * |
 | `MR::addNumberFontTag` | parameter type char16_t * |
@@ -3725,18 +3738,5 @@ What the toolkit cannot offer yet, and why.
 | `MR::validateCollisionParts:h` | two overloads with the same value kinds |
 | `MR::validateCollisionParts:h` | two overloads with the same value kinds |
 | `MR::zeroMemory` | parameter type void * |
-| `MapObjActor::endMapPartsFunctions` | declared, never defined |
-| `MapObjActor::exeDone` | declared, never defined |
-| `MapObjActor::exeMove` | declared, never defined |
-| `MapObjActor::exeWait` | declared, never defined |
-| `MapObjActor::initialize` | declared, never defined |
-| `MapObjActor::isObjectName` | declared, never defined |
-| `MapObjActor::pauseMapPartsFunctions` | declared, never defined |
-| `MapObjActor::setStateWait` | declared, never defined |
-| `MapObjActor::startMapPartsFunctions` | declared, never defined |
-| `MapObjActor::tryCreateBreakModel` | declared, never defined |
-| `MapObjActor::tryDeleteWaitEffect` | declared, never defined |
-| `MapObjActor::tryEmitWaitEffect` | declared, never defined |
-| `MapObjActor::updateProjmapMtx` | declared, never defined |
 | `MarioActor::cylinderPushCheck` | declared, never defined |
 | `NameObj::initStep` | parameter type uint64_t |

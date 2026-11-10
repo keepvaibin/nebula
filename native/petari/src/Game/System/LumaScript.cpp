@@ -239,8 +239,14 @@ namespace {
             return fromFloat(x * y);
         case Op_Div:
             return y == 0.0 ? none() : fromFloat(x / y);
-        case Op_Mod:
-            return y == 0.0 ? none() : fromFloat(std::fmod(x, y));
+        case Op_Mod: {
+            if (y == 0.0) {
+                return none();
+            }
+            // fmod without the C runtime: x - trunc(x / y) * y.
+            const f64 q = x / y;
+            return fromFloat(x - (q < 0.0 ? -std::floor(-q) : std::floor(q)) * y);
+        }
         default:
             return none();
         }
@@ -307,6 +313,10 @@ namespace lumascript {
         u8 kind;
     };
 
+    struct Matrix12 {
+        f32 m[12];
+    };
+
     class Program {
     public:
         const char* mMod;
@@ -325,6 +335,7 @@ namespace lumascript {
         Variable* mLocals;
         u32 mLocalCount;
         NebulaValue* mGlobals;
+        Matrix12* mGlobalMatrices;
         Variable* mGlobalNames;
         u32 mGlobalCount;
         Variable* mSaved;
@@ -351,6 +362,7 @@ namespace lumascript {
         u32 pc;
         u32 frames;
         NebulaValue* registers;  // the function's registers, owned
+        Matrix12* matrices;      // their own matrices (made only when one holds a script's matrix)
     };
 
     // Registers of the running calls: one stack for every script (they all run on the game's thread).
@@ -370,6 +382,7 @@ namespace lumascript {
         Program* mProgram;
         NebulaValue mSelf;
         NebulaValue* mLocals;
+        Matrix12* mLocalMatrices;  // each local's own matrix, when it holds one a script made
         u32 mState;       // string index; cNoState before the first set_state
         u32 mNextState;   // set by Op_SetState, taken at the next frame
         u32 mStateFrames;
@@ -393,6 +406,7 @@ namespace lumascript {
         delete[] p->mHandlers;
         delete[] p->mLocals;
         delete[] p->mGlobals;
+        delete[] p->mGlobalMatrices;
         delete[] p->mGlobalNames;
         delete[] p->mSaved;
         for (u32 i = 0; i < p->mKeptCount; i++) {
@@ -402,8 +416,25 @@ namespace lumascript {
         delete p;
     }
 
-    // A copy of text that outlives the frame, shared by equal texts. None when the script's kept text is full (logged once).
-    static NebulaValue keep(Program* p, const NebulaValue& rValue) {
+    // A matrix a script made (the ring, or a variable's own): generation 0. The game's matrices are views into the
+    // scene and stay views.
+    static bool scriptMatrix(const NebulaValue& rValue) {
+        return rValue.kind == NEBULA_KIND_HANDLE && (rValue.type & 0xFFFF) == lumacore::HandleType_Matrix &&
+               rValue.u.h.generation == 0 && rValue.u.h.p != nullptr;
+    }
+
+    // A value a variable keeps past this frame. Text: a copy that outlives the frame, shared by equal texts (none when
+    // the script's kept text is full, logged once). A script's matrix: copied into the variable's own 12 floats, so
+    // the ring turning over or another variable changing never changes it.
+    static NebulaValue keep(Program* p, const NebulaValue& rValue, Matrix12* pMatrix) {
+        if (pMatrix != nullptr && scriptMatrix(rValue)) {
+            if (rValue.u.h.p != pMatrix) {
+                std::memcpy(pMatrix->m, rValue.u.h.p, sizeof(pMatrix->m));
+            }
+            NebulaValue v = rValue;
+            v.u.h.p = pMatrix;
+            return v;
+        }
         if (rValue.kind != NEBULA_KIND_TEXT || rValue.u.s == nullptr) {
             return rValue;
         }
@@ -502,7 +533,7 @@ namespace lumascript {
         if (sStack == nullptr) {
             sStack = new NebulaValue[cStackValues];
         }
-        Program* p = new (std::nothrow) Program();
+        Program* p = new Program();
         if (p == nullptr) {
             return nullptr;
         }
@@ -620,6 +651,7 @@ namespace lumascript {
             p->mLocals[i].kind = r.u8v();
         }
         p->mGlobals = new NebulaValue[p->mGlobalCount];
+        p->mGlobalMatrices = new Matrix12[p->mGlobalCount > 0 ? p->mGlobalCount : 1];
         p->mGlobalNames = new Variable[p->mGlobalCount];
         for (u32 i = 0; i < p->mGlobalCount; i++) {
             p->mGlobalNames[i].name = r.u32v();
@@ -784,13 +816,14 @@ namespace lumascript {
     }
 
     Instance* createInstance(Program* pProgram, const NebulaValue& rSelf) {
-        Instance* i = new (std::nothrow) Instance();
+        Instance* i = new Instance();
         if (i == nullptr) {
             return nullptr;
         }
         i->mProgram = pProgram;
         i->mSelf = rSelf;
         i->mLocals = new NebulaValue[pProgram->mLocalCount > 0 ? pProgram->mLocalCount : 1];
+        i->mLocalMatrices = new Matrix12[pProgram->mLocalCount > 0 ? pProgram->mLocalCount : 1];
         for (u32 n = 0; n < pProgram->mLocalCount; n++) {
             i->mLocals[n] = none();
         }
@@ -808,8 +841,10 @@ namespace lumascript {
             return;
         }
         delete[] pInstance->mLocals;
+        delete[] pInstance->mLocalMatrices;
         for (u32 i = 0; i < pInstance->mWaitingCount; i++) {
             delete[] pInstance->mWaiting[i].registers;
+            delete[] pInstance->mWaiting[i].matrices;
         }
         delete[] pInstance->mWaiting;
         delete pInstance;
@@ -841,8 +876,13 @@ namespace lumascript {
         w.pc = pc;
         w.frames = frames;
         w.registers = new NebulaValue[count > 0 ? count : 1];
+        w.matrices = nullptr;
         for (u32 n = 0; n < count; n++) {
-            w.registers[n] = keep(pInstance->mProgram, pRegisters[n]);  // formatted text lasts one frame
+            if (w.matrices == nullptr && scriptMatrix(pRegisters[n])) {
+                w.matrices = new Matrix12[count];
+            }
+            // Formatted text lasts one frame and the matrix ring turns over: the wait keeps its own copies.
+            w.registers[n] = keep(pInstance->mProgram, pRegisters[n], w.matrices != nullptr ? &w.matrices[n] : nullptr);
         }
     }
 
@@ -987,7 +1027,7 @@ namespace lumascript {
                 break;
             case Op_SetLocal:
                 if (s.imm < p->mLocalCount) {
-                    pInstance->mLocals[s.imm] = keep(p, r[s.a]);
+                    pInstance->mLocals[s.imm] = keep(p, r[s.a], &pInstance->mLocalMatrices[s.imm]);
                 }
                 break;
             case Op_GetGlobal:
@@ -995,12 +1035,12 @@ namespace lumascript {
                 break;
             case Op_SetGlobal:
                 if (s.imm < p->mGlobalCount) {
-                    p->mGlobals[s.imm] = keep(p, r[s.a]);
+                    p->mGlobals[s.imm] = keep(p, r[s.a], &p->mGlobalMatrices[s.imm]);
                 }
                 break;
             case Op_GetSaved:
                 r[s.dst] = s.imm < p->mSavedCount ? keep(p, lumacore::scriptSaved(p->mMod, p->string(p->mSaved[s.imm].name),
-                                                                                p->mSaved[s.imm].kind))
+                                                                                p->mSaved[s.imm].kind), nullptr)
                                                   : none();
                 break;
             case Op_SetSaved:
