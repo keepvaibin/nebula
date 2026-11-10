@@ -1719,7 +1719,6 @@ bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) 
     return budget != 0u;
 }
 
-#if defined(NEBULA_DEV)
 bool Context::heap_stats(HeapStats& device_local, HeapStats& other) const noexcept {
     device_local = HeapStats{};
     other = HeapStats{};
@@ -1748,7 +1747,6 @@ bool Context::heap_stats(HeapStats& device_local, HeapStats& other) const noexce
     }
     return true;
 }
-#endif
 
 MappedBuffer Context::create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
                                            BufferPlace place) {
