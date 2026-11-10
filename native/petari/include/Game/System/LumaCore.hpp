@@ -153,7 +153,7 @@ namespace lumacore {
         FieldType_U32,
         FieldType_F32,
         FieldType_F64,
-        FieldType_Vec3,    // three f32 (TVec3f, Vec3f)
+        FieldType_Vec3,    // three f32 (Vec3f)
         FieldType_Object,  // a pointer to a NameObj (read-only)
         FieldType_Sensor,  // a pointer to a HitSensor (read-only)
         FieldType_Text,    // const char* (read-only)
