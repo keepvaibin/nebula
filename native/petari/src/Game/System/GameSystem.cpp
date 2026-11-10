@@ -1,3 +1,4 @@
+#include "Game/System/LumaScript.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -227,6 +228,7 @@ void GameSystem::update() {
     mObjHolder->update();
     NebulaMenuFocus::update();
     NebulaPrepare::update();
+    lumascript::beginFrame();  // the scripts' step budgets; nothing when no mod has a script
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();
