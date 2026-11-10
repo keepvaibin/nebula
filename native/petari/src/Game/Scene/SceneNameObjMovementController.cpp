@@ -19,6 +19,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     void executeStopCategoriesDemoCommon() {
@@ -137,6 +138,7 @@ void StopSceneStateControl::exeStopped() {
 
 SceneNameObjMovementController::SceneNameObjMovementController()
     : NameObj("SceneNameObjMovementController"), mIsSyncRequested(false), mStopSceneStateControl(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< SceneNameObjMovementController >);
     mStopSceneStateControl = new StopSceneStateControl();
 }
 

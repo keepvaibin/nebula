@@ -3,8 +3,10 @@
 #include "Game/Screen/MeterLayout.hpp"
 #include "Game/Screen/SuddenDeathMeter.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MarioMeter::MarioMeter(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MarioMeter >);
     mHitPointMeter = nullptr;
     mSuddenDeathMeter = nullptr;
     mUseSuddenDeath = false;

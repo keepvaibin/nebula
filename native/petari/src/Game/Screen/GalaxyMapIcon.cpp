@@ -6,6 +6,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 #define ICON_STATUS_CLOSED 0
 #define ICON_STATUS_NEW 1
@@ -18,6 +19,7 @@
 
 GalaxyMapIcon::GalaxyMapIcon(const char* pName, LayoutActor* pHost, const char* pPaneName)
     : LayoutActor(pName, true), mButtonPaneController(nullptr), mGalaxyName(pName), mHost(pHost), mPaneName(pPaneName), mMode(MODE_NORMAL) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapIcon >);
 }
 
 void GalaxyMapIcon::appear() {

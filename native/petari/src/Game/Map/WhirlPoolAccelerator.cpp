@@ -7,6 +7,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -55,6 +56,7 @@ WhirlPoolPoint::WhirlPoolPoint(const Vec3f& rPosition, const Vec3f& rDirection, 
 WhirlPoolAccelerator::WhirlPoolAccelerator(const char* pName)
     : LiveActor(pName), mRadius(100.0f), mHeight(100.0f), mAxis(0.0f, 1.0f, 0.0f), mPointCount(), mPoints(), mRotation(),
       mTexOffsetU0(MR::getRandom()), mTexOffsetV0(MR::getRandom()), mTexture(), mClippingCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< WhirlPoolAccelerator >);
 }
 
 void WhirlPoolAccelerator::init(const TableIter& rIter) {

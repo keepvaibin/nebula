@@ -5,6 +5,7 @@
 #include "Game/NPC/CollectTico.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 20.0f);
@@ -64,6 +65,7 @@ namespace NrvStrayTico {
 StrayTico::StrayTico(const char* pName, CollectTico* pHost)
     : LiveActor(pName), mHost(pHost), mItemBubbleModel(), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mFrontVec(0.0f, 0.0f, 1.0f), mWarpPos(0.0f, 0.0f, 0.0f),
       mDemoCenter(0.0f, 0.0f, 0.0f), mDemoUp(0.0f, 1.0f, 0.0f), mDemoFront(0.0f, 0.0f, 1.0f), mDemoAngle() {
+    lumacore::setClass(this, lumacore::kClassId< StrayTico >);
 }
 
 void StrayTico::init(const TableIter& rIter) {

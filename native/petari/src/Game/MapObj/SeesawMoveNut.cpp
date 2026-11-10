@@ -4,6 +4,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHalfway_f1, "exeHalfway.f1", 0.01f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHalfway_f2, "exeHalfway.f2", 0.001f);
@@ -18,6 +19,7 @@ namespace NrvSeesawMoveNut {
 };  // namespace NrvSeesawMoveNut
 
 SeesawMoveNut::SeesawMoveNut(const char* pName) : MapObjActor(pName), mSpeed(100.0f), mPrevAngularSpeed(), mBackHomeStep() {
+    lumacore::setClass(this, lumacore::kClassId< SeesawMoveNut >);
 }
 
 void SeesawMoveNut::init(const TableIter& rIter) {

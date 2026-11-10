@@ -20,6 +20,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
@@ -90,6 +91,7 @@ namespace NrvElectricRail {
 };  // namespace NrvElectricRail
 
 ElectricRailPoint::ElectricRailPoint(const char* pName) : LiveActor(pName), mHasShadow(true), mIsActive(true) {
+    lumacore::setClass(this, lumacore::kClassId< ElectricRailPoint >);
 }
 
 void ElectricRailPoint::init(const TableIter& /*rIter*/) {
@@ -138,6 +140,7 @@ void ElectricRailSeparator::setup(const Vec3f& rPos, const Vec3f& rRailDir, cons
 
 ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, ElectricRailSeparator* pSeparators, s32 separatorCount)
     : ShadowVolumeDrawer("影描画[電撃レールボリューム]"), mHost(pActor) {
+    lumacore::setClass(this, lumacore::kClassId< ElectricRailShadowDrawer >);
     mMesh.init(separatorCount * 8 + 2);
     writeShadowVolumeShape(pSeparators, separatorCount);
     mMesh.send();
@@ -208,6 +211,7 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 ElectricRail::ElectricRail(const char* pName)
     : ElectricRailDrawn(pName), mPoints(nullptr), mPointCount(0), mSensorPositions(nullptr), mSeparators(nullptr), mSeparatorCount(0), mRailHeight(1),
       mEaseIn(cRailRadius), mShadowDrawer(nullptr), mIsCalcGravity(false) {
+    lumacore::setClass(this, lumacore::kClassId< ElectricRail >);
 }
 
 // Args: 0 levels stacked up the gravity (posts and sensors on each), 1 line shadow drop length, 2 volume shadow drop

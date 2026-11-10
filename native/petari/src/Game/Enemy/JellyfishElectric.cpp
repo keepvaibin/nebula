@@ -20,6 +20,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_JellyfishElectric_f1, "JellyfishElectric.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
@@ -54,6 +55,7 @@ namespace {
 };  // namespace
 
 JellyfishElectric::JellyfishElectric(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< JellyfishElectric >);
     mController = nullptr;
     mBindStarPtr = nullptr;
     mWaveStep = 0;

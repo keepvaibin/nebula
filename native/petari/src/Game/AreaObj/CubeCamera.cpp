@@ -5,8 +5,10 @@
 #include "Game/Util/StringUtil.hpp"
 
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CubeCameraArea::CubeCameraArea(int formType, const char* pName) : AreaObj(formType, pName), mCategoryMask(), mZoneID() {
+    lumacore::setClass(this, lumacore::kClassId< CubeCameraArea >);
 }
 
 s32 CubeCameraArea::sCubeCategory = 0;
@@ -78,6 +80,7 @@ s32 CubeCameraArea::getCategoryArg() const {
 }
 
 CubeCameraMgr::CubeCameraMgr(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName) {
+    lumacore::setClass(this, lumacore::kClassId< CubeCameraMgr >);
     CubeCameraArea::sCubeCategory = 1;
 }
 

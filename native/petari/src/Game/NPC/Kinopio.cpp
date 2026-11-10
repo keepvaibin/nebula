@@ -8,6 +8,7 @@
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_Param_f1, "Param.f1", 15.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_Param_f2, "Param.f2", 1.4f);
@@ -75,6 +76,7 @@ namespace {
 
 Kinopio::Kinopio(const char* pName)
     : NPCActor(pName), mObjArg0(), mBehavior(-1), mAppearBehavior(-1), mGoodsIndex(-1), mConnector(), mTakeOutStar(), mIsSpawnPowerStarMode(), mIsBgmStarted() {
+    lumacore::setClass(this, lumacore::kClassId< Kinopio >);
     mConnectQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

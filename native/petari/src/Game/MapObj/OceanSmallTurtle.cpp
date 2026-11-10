@@ -5,6 +5,7 @@
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -46,6 +47,7 @@ OceanSmallTurtle::OceanSmallTurtle(const char* pName)
     : LiveActor(pName), mRailMover(), mFloatUpSpeed(), mAccelRate(::sDefaultAccelRate), mStartNearestRailPos(0.0f), mFloatDelayTimer(), mArg1(),
       mBoundTimer(), mMercatorPos(0.0f), mBoundDisplacement(), mRailClippingPos(0.0f), mRailClippingRadius(), mStartRotationX(), mIsOnPlayer(),
       isBound(), isStartFloat() {
+    lumacore::setClass(this, lumacore::kClassId< OceanSmallTurtle >);
     mEffectMtx.identity();
 }
 

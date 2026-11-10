@@ -3,6 +3,7 @@
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -19,6 +20,7 @@ namespace NrvStarPieceMother {
 };  // namespace NrvStarPieceMother
 
 StarPieceMother::StarPieceMother(const char* pName) : LiveActor(pName), mStarPieceArray(), mRailCoords(), mNumPieces(6), mNextPiece(), mRailSpeed(10.0f) {
+    lumacore::setClass(this, lumacore::kClassId< StarPieceMother >);
 }
 
 void StarPieceMother::init(const TableIter& rIter) {

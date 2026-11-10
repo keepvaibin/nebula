@@ -10,6 +10,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeReaction_f1, "exeReaction.f1", 10.0f);
@@ -34,6 +35,7 @@ namespace NrvKoopaJr {
 };  // namespace NrvKoopaJr
 
 KoopaJr::KoopaJr(const char* pName) : NPCActor(pName), mIsInvalidAppearStarPiece(), mIsShipBattleTalk() {
+    lumacore::setClass(this, lumacore::kClassId< KoopaJr >);
 }
 
 void KoopaJr::init(const TableIter& rIter) {

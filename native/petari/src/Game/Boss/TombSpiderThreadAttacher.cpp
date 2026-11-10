@@ -4,6 +4,7 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTombSpiderThreadAttacher {
     NEW_NERVE(TombSpiderThreadAttacherNrvFree, TombSpiderThreadAttacher, Free);
@@ -12,6 +13,7 @@ namespace NrvTombSpiderThreadAttacher {
 
 TombSpiderThreadAttacher::TombSpiderThreadAttacher(LiveActor* pActor, const char* pJointName, f32 radius, f32 offset)
     : LiveActor("巣の付着点"), mJointMtx(MR::getJointMtx(pActor, pJointName)), mRadius(radius), mZOffset(offset) {
+    lumacore::setClass(this, lumacore::kClassId< TombSpiderThreadAttacher >);
 }
 
 void TombSpiderThreadAttacher::init(const TableIter& /*rIter*/) {

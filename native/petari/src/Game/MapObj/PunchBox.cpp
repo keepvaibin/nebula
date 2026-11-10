@@ -13,6 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -30,6 +31,7 @@ namespace NrvPunchBox {
 };  // namespace NrvPunchBox
 
 PunchBox::PunchBox(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PunchBox >);
 }
 
 void PunchBox::init(const TableIter& rIter) {

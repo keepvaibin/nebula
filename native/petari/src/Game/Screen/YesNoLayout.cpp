@@ -6,12 +6,14 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvYesNoLayout {
     NEW_NERVE(YesNoLayoutNrvSelecting, YesNoLayout, Selecting);
 };  // namespace NrvYesNoLayout
 
 YesNoLayout::YesNoLayout() : SimpleLayout("Yes/Noレイアウト", "SelectButton", 1, MR::DrawType_TalkPartsLayout), mController(nullptr), mHasInformationMessage(false) {
+    lumacore::setClass(this, lumacore::kClassId< YesNoLayout >);
 }
 
 void YesNoLayout::init(const TableIter& /*rIter*/) {

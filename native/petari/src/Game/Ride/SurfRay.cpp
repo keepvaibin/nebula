@@ -25,6 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcWaterShadowPos_f1, "calcWaterShadowPos.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 260.0f);
@@ -191,6 +192,7 @@ SurfRay::SurfRay(const char* pName, s32 channel)
       mGroundNormal(0.0f, 1.0f, 0.0f), mWarpPos(0.0f, 0.0f, 0.0f), mRider(nullptr), mPadChannel(channel), mRayTilt(0.0f), mInWater(false),
       mAirTime(0), mWaterNormal(0.0f, 1.0f, 0.0f), mWaterShadowPos(0.0f, 0.0f, 0.0f), mShadowAlpha(0.0f), mTwistBufferSize(8), mTwistBuffer(nullptr),
       mInTutorialArea(false), mInTutorial(false), mLectureIdx(0), mActorJointCtrl(nullptr), mProjmapFxMtxSetter(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< SurfRay >);
     mEffectHostMtx.identity();
 }
 

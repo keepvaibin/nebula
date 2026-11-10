@@ -28,6 +28,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initLegIKPlacement_f1, "initLegIKPlacement.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_requestEndDamageDemo_f1, "requestEndDamageDemo.f1", 50.0f);
@@ -97,6 +98,7 @@ TripodBoss::TripodBoss(const char* pName)
     : LiveActor(pName), mMovableArea(), mStepSequenceNum(0), mDummyModel(), mDummyModelOffset(0.0f, 3200.0f), mWeightPos(0, 0, 0), mBodyPos(0, 0, 0), mBodyVelocity(0, 0, 0), mClipCenter(0, 0, 0),
       mClipRadius(7500.0f), mWeightHeightOffset(), mDemoBlendRate(1.0f), mBodyHeight(3000.0f), mLegRootLength(4000.0f), mLegMiddleLength(4000.0f), mLegReach(2400.0f), mLegLift(), mLegHeightRate(0.1f), mMovableAreaRadius(3000.0f), mDummyModelSpinSpeed(2.0f),
       mCurrentStepSeq(-1), mNextStepSeq(-1), mRideMarioTimer(), mRideMarioState(RIDE_OFF), mIsPartsHidden(false), mBgmState(sBgmStateNormal), mIsBgmChangePending(false), mEventCamera() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBoss >);
     mBodyMtx.identity();
     mDemoStartMtx.identity();
 

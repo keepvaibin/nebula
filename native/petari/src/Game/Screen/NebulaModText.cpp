@@ -8,10 +8,12 @@
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
 #include <cstring>
+#include "Game/System/LumaCore.hpp"
 
 NebulaModText::NebulaModText()
     : LayoutActor("NebulaModText", true), mKit(nullptr), mGroup(nullptr), mLines(), mRevision(0), mScaleX(1.0f), mWidth(0.0f),
       mHeight(0.0f), mAny(false) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaModText >);
 }
 
 void NebulaModText::init(const TableIter& /*rIter*/) {

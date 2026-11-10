@@ -7,9 +7,11 @@
 #include "Game/Map/LightZoneDataHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 LightDirector::LightDirector()
     : NameObj("ライト指揮"), mAreaHolder(), mDataHolder(), mZoneDataHolder(), mDefaultAreaLight(), mPlayerLightCtrl(), mPointCtrl(), mResourceHolder() {
+    lumacore::setClass(this, lumacore::kClassId< LightDirector >);
     GameLightSignal::sceneStart();
 }
 

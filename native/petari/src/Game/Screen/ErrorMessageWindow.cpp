@@ -5,6 +5,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(ErrorMessageWindowHide, ErrorMessageWindow, Hide);
@@ -15,6 +16,7 @@ namespace {
 };  // namespace
 
 ErrorMessageWindow::ErrorMessageWindow() : LayoutActor("エラーメッセージ表示", false), mMessageId(nullptr), mTexture(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< ErrorMessageWindow >);
 }
 
 void ErrorMessageWindow::init(const TableIter& /*rIter*/) {

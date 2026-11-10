@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.1f);
 
@@ -12,6 +13,7 @@ namespace {
 };  // namespace
 
 PhantomShipHandle::PhantomShipHandle(const char* pName) : LiveActor(pName), mRotator() {
+    lumacore::setClass(this, lumacore::kClassId< PhantomShipHandle >);
 }
 
 void PhantomShipHandle::control() {

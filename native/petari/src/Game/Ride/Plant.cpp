@@ -30,6 +30,7 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
@@ -98,6 +99,7 @@ Plant::Plant(const char* pName)
     : LiveActor(pName), mSeedPartsModel(), mStalk(), mTopPartsModel(), mNumLeaves(), mLeaves(), mRider(), mRailCoord(),
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRideVelocity(), mAccelTimer(), mJumpSpeed(::sDefaultJumpSpeed),
       mJumpSpeedOffsetY(::sDefaultJumpSpeedOffsetY), mClippingCenter(0.0f, 0.0f, 0.0f), mCameraInfo(), mPlayAppearDemo(), mGrabbedTop() {
+    lumacore::setClass(this, lumacore::kClassId< Plant >);
     mSeedMtx.identity();
     mTopMtx.identity();
 }

@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
@@ -26,6 +27,7 @@ namespace NrvFountainBig {
 };  // namespace NrvFountainBig
 
 FountainBig::FountainBig(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FountainBig >);
     mClippingRadius.x = 0.0f;
     mClippingRadius.y = 0.0f;
     mClippingRadius.z = 0.0f;

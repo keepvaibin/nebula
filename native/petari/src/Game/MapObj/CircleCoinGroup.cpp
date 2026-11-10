@@ -2,8 +2,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/System/LumaCore.hpp"
 
 CircleCoinGroup::CircleCoinGroup(const char* pName) : CoinGroup(pName), mCoinRadius(200.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CircleCoinGroup >);
 }
 
 void CircleCoinGroup::initCoinArray(const TableIter& rIter) {

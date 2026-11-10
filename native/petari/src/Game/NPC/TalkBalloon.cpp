@@ -22,6 +22,7 @@
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Ui/Pane.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateBalloon_f1, "updateBalloon.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateBalloon_f2, "updateBalloon.f2", 0.5f);
@@ -47,6 +48,7 @@ namespace NrvTalkBalloonEvent {
 };  // namespace NrvTalkBalloonEvent
 
 TalkBalloon::TalkBalloon(const char* pName) : LayoutActor(pName, true), mMessageCtrl(), mTextFormer(), mHasBeak(), mIsBeakMoving() {
+    lumacore::setClass(this, lumacore::kClassId< TalkBalloon >);
 }
 
 void TalkBalloon::create(const char* pLayoutName, bool hasBeak, bool isTalkLayout) {
@@ -176,6 +178,7 @@ void TalkBalloon::pauseOff() {
 }
 
 TalkBalloonShort::TalkBalloonShort(const char* pName) : TalkBalloon(pName), mInterval() {
+    lumacore::setClass(this, lumacore::kClassId< TalkBalloonShort >);
     initNerve(GET_NERVE(TalkBalloonShort, TalkBalloonShortNrvOpen));
 }
 
@@ -266,6 +269,7 @@ void TalkBalloonShort::exeOpen() {
 
 TalkBalloonEvent::TalkBalloonEvent(const char* pName)
     : TalkBalloon(pName), mFormMode(TalkTextForm_Event), mAButton(), mPlaced(false), mHome(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< TalkBalloonEvent >);
     initNerve(GET_NERVE(TalkBalloonEvent, TalkBalloonEventNrvWait));
 }
 
@@ -434,6 +438,7 @@ void TalkBalloonEvent::exeClose() {
 }
 
 TalkBalloonSign::TalkBalloonSign(const char* pName) : TalkBalloonEvent(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TalkBalloonSign >);
     mFormMode = TalkTextForm_Whole;
 }
 
@@ -443,6 +448,7 @@ void TalkBalloonSign::init(const TableIter& rIter) {
 }
 
 TalkBalloonInfo::TalkBalloonInfo(const char* pName) : TalkBalloon(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TalkBalloonInfo >);
 }
 
 void TalkBalloonInfo::open(TalkMessageCtrl* pCtrl) {
@@ -456,6 +462,7 @@ void TalkBalloonInfo::close() {
 }
 
 TalkBalloonIcon::TalkBalloonIcon(const char* pName) : TalkBalloonShort(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TalkBalloonIcon >);
 }
 
 void TalkBalloonIcon::init(const TableIter& rIter) {

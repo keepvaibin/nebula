@@ -9,6 +9,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.01f);
 NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 1.05f);
@@ -42,6 +43,7 @@ LavaHomeSeesawRotator::LavaHomeSeesawRotator(LiveActor* pHost, const char* pMove
     : MapPartsRotatorBase(pHost, "シーソー(1軸)"), mAngularSpeedMax(), mInertia(::sInertiaConstDefault), mRotateAngle(), mRestoreForce(),
       mIsHipDropped(), mRotateAxis(0.0f, 0.0f, 1.0f), mAngularVelocity(), mInitialUp(0.0f, 1.0f, 0.0f), mMoveSound(pMoveSound),
       mMoveSoundSpeed(moveSoundSpeed) {
+    lumacore::setClass(this, lumacore::kClassId< LavaHomeSeesawRotator >);
     mRotateMtx.identity();
     mRotateQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }

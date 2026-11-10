@@ -11,11 +11,13 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerInTerritory_f1, "isPlayerInTerritory.f1", 180.0f);
 
 StinkBugBase::StinkBugBase(const char* pName)
     : LiveActor(pName), mFront(0.0f, 0.0f, 1.0f), mInitPos(0.0f, 0.0f, 0.0f), mInitFront(0.0f, 0.0f, 1.0f), mTerritoryAngle(180.0f), mRadius(1000.0f), mIsTurnLeft(false) {
+    lumacore::setClass(this, lumacore::kClassId< StinkBugBase >);
 }
 
 // Toward the end of the dash (the radius ahead of home), never past it.

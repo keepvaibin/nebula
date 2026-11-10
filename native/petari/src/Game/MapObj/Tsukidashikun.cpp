@@ -12,6 +12,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sDefaultMoveSpeed, 10.0f);
@@ -31,6 +32,7 @@ namespace NrvTsukidashikun {
 };  // namespace NrvTsukidashikun
 
 Tsukidashikun::Tsukidashikun(const char* pName) : MapObjActor(pName), mMoveSpeed(::sDefaultMoveSpeed), mWaitTimer(::sDefaultWaitTime) {
+    lumacore::setClass(this, lumacore::kClassId< Tsukidashikun >);
 }
 
 void Tsukidashikun::init(const TableIter& rIter) {

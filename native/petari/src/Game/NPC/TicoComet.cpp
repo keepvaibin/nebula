@@ -20,6 +20,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_TicoEatParam_f1, "TicoEatParam.f1", 0.12f);
 NEBULA_TUNABLE_NAMED(f32, cNum_TicoEatParam_f2, "TicoEatParam.f2", 0.12f);
@@ -67,6 +68,7 @@ namespace {
 };  // namespace
 
 TicoEat::TicoEat(const char* pName) : Tico(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TicoEat >);
     mStarPieceNeed = 0;
     mStarPieceLeft = 0;
 }
@@ -207,6 +209,7 @@ void TicoEat::exeEatEnd() {
 }
 
 TicoComet::TicoComet(const char* pName) : TicoEat(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TicoComet >);
 }
 
 void TicoComet::init(const TableIter& rIter) {

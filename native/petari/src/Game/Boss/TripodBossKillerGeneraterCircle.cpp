@@ -6,6 +6,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 struct SetUpData {
     const char* mName;
@@ -41,6 +42,7 @@ namespace {
 
 TripodBossKillerGeneraterCircle::TripodBossKillerGeneraterCircle(const char* pName)
     : NameObj(pName), mGenerater(), mPosition(0.0f, 0.0f, 0.0f), mAngleTable(), mAngleNum(), mHeight(), mRadius(), mCirclePitch(), mCannonPitch() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossKillerGeneraterCircle >);
 }
 
 void TripodBossKillerGeneraterCircle::init(const TableIter& rIter) {

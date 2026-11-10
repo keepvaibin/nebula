@@ -11,6 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct EdgeOffset {
@@ -49,6 +50,7 @@ namespace NrvKoopaBattleMapStair {
 KoopaBattleMapStair::KoopaBattleMapStair(const char* pName)
     : LiveActor(pName), mTimeToBreak(::cDefaultTimeToBreak), mFireAttackStep(-1), mLevel(), mTargetCorner(-1), mIsJumpAfterAttack(), mType(), mIsBig(),
       mIsTurn(), mIsKoopaAttack(), mTargetPos(0.0f, 0.0f, 0.0f), mWaitFallStep(::cDefaultStepWaitFall), mFallStep(::cDefaultStepFall) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaBattleMapStair >);
 }
 
 void KoopaBattleMapStair::init(const TableIter& rIter) {

@@ -12,6 +12,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Mii/Mii.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(MiiSelectNrvAppear, MiiSelect, Appear);
@@ -33,6 +34,7 @@ static u32 sCollectedMiiGeneration = 0;
 MiiSelect::MiiSelect(const char* pName)
     : LayoutActor(pName, true), mFellowEnabled(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), mMiiIndices(), mMiiIndexRoom(), mPageBaseIndex(), mSelectedIndex(), mSelectedTexMap(), mCurrentPage(), mOtherPage(),
       mIsIconProhibited(), mProhibitedIconID(new FileSelectIconID()) {
+    lumacore::setClass(this, lumacore::kClassId< MiiSelect >);
     for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
         mArrowButtons[i] = nullptr;
     }

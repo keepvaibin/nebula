@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -12,6 +13,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 200.0f);
 
 CameraCharmedVecRegTower::CameraCharmedVecRegTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 0.0f, 0.0f), mAngleX(), mAngleYMax(), mDist(), mArrange(), mName(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< CameraCharmedVecRegTower >);
 }
 
 void CameraCharmedVecRegTower::reset() {

@@ -17,6 +17,7 @@
 #include <nebula_game_api.h>
 #include <cstring>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_finalMaterial_f1, "finalMaterial.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_finalMaterial_f2, "finalMaterial.f2", 2.0f);
@@ -81,6 +82,7 @@ namespace {
 
 DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     : ImageEffectBase(pName), mFrameKey(), mFrameDepthKey(), mHalfTexture(), mQuarterTexture(), mDepthRampTexture(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
+    lumacore::setClass(this, lumacore::kClassId< DepthOfFieldBlur >);
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createDOFTexture();

@@ -14,6 +14,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
 
@@ -32,6 +33,7 @@ namespace NrvTripodBossShell {
 };  // namespace NrvTripodBossShell
 
 TripodBossShell::TripodBossShell(const char* pName) : TripodBossFixPartsBase(pName), mBreakModel() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossShell >);
 }
 
 void TripodBossShell::init(const TableIter& rIter) {

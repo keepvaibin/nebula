@@ -29,6 +29,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f1, "setQuatXYZ.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f2, "setQuatXYZ.f2", 0.5f);
@@ -144,6 +145,7 @@ Unizo::Unizo(const char* pName)
     : LiveActor(pName), mType(TypeSea), mFrame(0), mBlinkCount(0), mBlinkFrame(0), mSpinAnimTimer(0), mRadiusScale(sRadiusScale), mBreakModel(nullptr),
       mAnimScaleController(nullptr), mBindStarPointerState(nullptr), mJumpCount(0), mGravityRate(sGravityRateSea), mRollHeight(sRollHeightSea),
       mRollSoundTimer(0) {
+    lumacore::setClass(this, lumacore::kClassId< Unizo >);
     mBaseMtx.identity();
     mRippleMtx.identity();
     mQuat.set(0.0f, 0.0f, 0.0f, 1.0f);

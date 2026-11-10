@@ -13,6 +13,7 @@
 #include <cstring>
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_postDraw_f1, "postDraw.f1", 255.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_postDraw_f2, "postDraw.f2", 255.0f);
@@ -35,6 +36,7 @@ namespace {
 };  // namespace
 
 BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), mBloomIntensity(255), mIntensity1(1.0f / ::sL1RoundPoints), mIntensity2(1.0f / ::sL2RoundPoints), mThreshold(128) {
+    lumacore::setClass(this, lumacore::kClassId< BloomEffect >);
     MR::connectToSceneNormalBloom(this);
     MR::createImageEffectSystemHolder();
 }

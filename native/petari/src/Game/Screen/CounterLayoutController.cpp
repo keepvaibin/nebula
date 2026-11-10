@@ -15,6 +15,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cJudgeNotMovingFrame, 60);
@@ -29,6 +30,7 @@ namespace NrvCounterLayoutController {
 CounterLayoutController::CounterLayoutController()
     : LayoutActor("カウンタ系レイアウト制御", true), mPlayerNotMovingFrame(), mIsTicoEatRequested(), mCoinCounter(), mStarPieceCounter(), mPlayerLeft(),
       mStarCounter(), mHPMeter() {
+    lumacore::setClass(this, lumacore::kClassId< CounterLayoutController >);
 }
 
 void CounterLayoutController::init(const TableIter& /*rIter*/) {

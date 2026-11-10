@@ -3,9 +3,11 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 GroupSwitchWatcher::GroupSwitchWatcher(const char* pName)
     : LiveActor(pName), mSwitchCtrl(nullptr), mNumSwitches(-1), mLogicType(-1), mActionType(-1) {
+    lumacore::setClass(this, lumacore::kClassId< GroupSwitchWatcher >);
 }
 
 void GroupSwitchWatcher::init(const TableIter& rIter) {

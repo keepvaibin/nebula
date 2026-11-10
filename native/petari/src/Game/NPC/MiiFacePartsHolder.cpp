@@ -13,8 +13,10 @@
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <ModelFileNumbers.h>
+#include "Game/System/LumaCore.hpp"
 
 MiiFacePartsHolder::MiiFacePartsHolder(int partsNumMax) : LiveActorGroup("Mii顔モデル保持", partsNumMax), mReady(false) {
+    lumacore::setClass(this, lumacore::kClassId< MiiFacePartsHolder >);
 }
 
 MiiFacePartsHolder::~MiiFacePartsHolder() {

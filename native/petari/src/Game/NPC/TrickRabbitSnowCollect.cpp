@@ -5,6 +5,7 @@
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initTalk_f1, "initTalk.f1", 120.0f);
 
@@ -33,6 +34,7 @@ namespace NrvTrickRabbitFreeRunCollect {
 
 TrickRabbitSnowCollect::TrickRabbitSnowCollect(const char* pName)
     : LiveActor(pName), mCameraInfo(), mPowerStarDemoModel(), mMsgCtrl(), mTimerLayout(), mRabbit(), mRabbitNum(), mTimeLimit(180), mIsDemo() {
+    lumacore::setClass(this, lumacore::kClassId< TrickRabbitSnowCollect >);
     mBaseMtx.identity();
 }
 

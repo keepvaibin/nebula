@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyDir_f1, "calcBodyDir.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyDir_f2, "calcBodyDir.f2", 0.1f);
@@ -24,6 +25,7 @@ namespace NrvGreenCaterpillarBig {
 
 GreenCaterpillarBigBody::GreenCaterpillarBigBody(LiveActor* pCaterpillar, MtxPtr mtx)
     : ModelObj("オオムイムイ体", "GreenCaterpillarBigBody", mtx, -2, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< GreenCaterpillarBigBody >);
     mCaterpillar = pCaterpillar;
     mFrontVec.x = 0.0f;
     mFrontVec.y = 0.0f;
@@ -83,6 +85,7 @@ void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, Vec3f* pOutDir) {
 }
 
 GreenCaterpillarBig::GreenCaterpillarBig(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< GreenCaterpillarBig >);
     mBodyArray = nullptr;
     mBodyArrayLength = 0;
     mCurBodyParts = 0;

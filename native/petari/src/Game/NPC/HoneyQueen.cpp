@@ -15,6 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeItch_f1, "exeItch.f1", 0.2f);
@@ -48,6 +49,7 @@ namespace NrvHoneyQueen {
 };  // namespace NrvHoneyQueen
 
 HoneyQueen::HoneyQueen(const char* pName) : NPCActor(pName), mWing() {
+    lumacore::setClass(this, lumacore::kClassId< HoneyQueen >);
 }
 
 void HoneyQueen::init(const TableIter& rIter) {

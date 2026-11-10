@@ -10,6 +10,7 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
@@ -47,6 +48,7 @@ namespace {
 TreasureBoxCracked::TreasureBoxCracked(const char* pName)
     : LiveActor(pName), mBoxCollider(), mBoxType(), mOpenCondition(), mItem(), mItemType(1), mItemVelocity(0.0f), mItemTargetPos(0.0f),
       mIsItemMoving(), mWaitForSwitchOn(::sDefaultWaitForSwitchOn), mPowerStarId(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TreasureBoxCracked >);
     mTopMtx.identity();
 }
 

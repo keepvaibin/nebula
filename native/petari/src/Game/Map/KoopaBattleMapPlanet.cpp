@@ -15,6 +15,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f1, "createPlate.f1", 180.0f);
@@ -57,6 +58,7 @@ namespace NrvKoopaBattleMapPlanet {
 KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool isFinalPlanet, bool isNoPlate)
     : LiveActor(pName), mModelName(pModelName), mRotateMoment(0.0f, 0.0f, 0.0f), mDamagePlateGroup(), mCoinPlateGroup(), mPlateGroup(), mDamagePlate(),
       mIsFinalPlanet(isFinalPlanet), mIsNoPlate(isNoPlate) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaBattleMapPlanet >);
     mBaseMtx.identity();
 }
 

@@ -24,6 +24,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <Game/Ui/DrawInfo.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
@@ -74,6 +75,7 @@ namespace {
 GalaxyMapController::GalaxyMapController()
     : LayoutActor("GalaxyMapController", true), mMap(), mMapBackground(), mPowerStarList(), mBackButton(), mWipe(), mCaptureTexture(), mMode(),
       mWipeFrame(::sMapFadeinoutFrame) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapController >);
 }
 
 void GalaxyMapController::init(const TableIter& /*rIter*/) {

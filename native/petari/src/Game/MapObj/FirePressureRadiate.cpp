@@ -7,6 +7,7 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_FirePressureRadiate_f1, "FirePressureRadiate.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
@@ -34,6 +35,7 @@ namespace NrvFirePressureRadiate {
 };  // namespace NrvFirePressureRadiate
 
 FirePressureRadiate::FirePressureRadiate(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FirePressureRadiate >);
     mJointController = nullptr;
     mCannonRotation = 0.0f;
     mWaitTime = NebulaFrameClock::stepsOfSeconds(5);

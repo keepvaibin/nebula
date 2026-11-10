@@ -25,6 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.2f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
@@ -103,6 +104,7 @@ namespace NrvMetbo {
 Metbo::Metbo(const char* pName)
     : LiveActor(pName), mSpinHitController(nullptr), mAnimScaleController(nullptr), mStarPointerBind(nullptr), mWalkCenter(0.0f, 0.0f, 0.0f),
       mFront(0.0f, 0.0f, 1.0f), mWalkDir(0.0f, 0.0f, 0.0f), mIsClipped(false) {
+    lumacore::setClass(this, lumacore::kClassId< Metbo >);
 }
 
 void Metbo::init(const TableIter& rIter) {

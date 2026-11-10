@@ -8,6 +8,7 @@
 #include "Game/Util/JointRumbler.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f1, "getRunAwayBreakTimeRandom.f1", 0.25f);
 NEBULA_TUNABLE_NAMED(f32, cNum_getRunAwayBreakTimeRandom_f2, "getRunAwayBreakTimeRandom.f2", 0.25f);
@@ -159,6 +160,7 @@ namespace {
 Kanina::Kanina(const char* pName)
     : LiveActor(pName), mJointRumbler(), mKinokoOneUp(), mAnimationRandomPlayer(), mInitPos(gZeroVec), mRunAwayStep(15), mRunAwayBreakStep(10), mRunAwaySide(1.0f), mHitWallDir(0.0f, 0.0f, 1.0f),
       mType(KaninaType_Blue), mFront(0.0f, 0.0f, 1.0f), mWalkCount() {
+    lumacore::setClass(this, lumacore::kClassId< Kanina >);
     mPoseQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

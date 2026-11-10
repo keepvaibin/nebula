@@ -13,6 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cFollowJointName = "Move";
@@ -27,6 +28,7 @@ namespace NrvAnmModelObj {
 };  // namespace NrvAnmModelObj
 
 AnmModelObj::AnmModelObj(const char* pName) : MapObjActor(pName), mJointPos(0.0f, 0.0f, 0.0f), mDoneLevelSe(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< AnmModelObj >);
 }
 
 void AnmModelObj::init(const TableIter& rIter) {
@@ -133,6 +135,7 @@ void AnmModelObj::exeDone() {
 }
 
 AnmModelSwitchMove::AnmModelSwitchMove(const char* pName) : AnmModelObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AnmModelSwitchMove >);
 }
 
 void AnmModelSwitchMove::init(const TableIter& rIter) {
@@ -158,6 +161,7 @@ bool AnmModelSwitchMove::isOnStartAnmTrigger() const {
 }
 
 AnmModelGroundOnMove::AnmModelGroundOnMove(const char* pName) : AnmModelObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AnmModelGroundOnMove >);
 }
 
 void AnmModelGroundOnMove::init(const TableIter& rIter) {
@@ -176,6 +180,7 @@ bool AnmModelGroundOnMove::isOnStartAnmTrigger() const {
 }
 
 AnmModelBindMove::AnmModelBindMove(const char* pName) : AnmModelObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AnmModelBindMove >);
 }
 
 void AnmModelBindMove::init(const TableIter& rIter) {
@@ -204,6 +209,7 @@ bool AnmModelBindMove::isOnStartAnmTrigger() const {
 }
 
 AnmModelSwitchMoveEventCamera::AnmModelSwitchMoveEventCamera(const char* pName) : AnmModelSwitchMove(pName), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< AnmModelSwitchMoveEventCamera >);
 }
 
 void AnmModelSwitchMoveEventCamera::init(const TableIter& rIter) {

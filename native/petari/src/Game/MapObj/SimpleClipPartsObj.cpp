@@ -5,8 +5,10 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SimpleClipPartsObj::SimpleClipPartsObj(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SimpleClipPartsObj >);
 }
 
 void SimpleClipPartsObj::init(const TableIter& rIter) {

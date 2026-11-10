@@ -5,6 +5,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100000.0f);
@@ -17,6 +18,7 @@ namespace NrvRockCreator {
 RockCreator::RockCreator(const char* pName)
     : LiveActor(pName), mRocks(nullptr), mRockSpeed(10.0f), mBreakModelOnRailGoal(false), mSpawnDelay(-1), mNumRocks(0), mSpawnTimer(0),
       mIsValid(true) {
+    lumacore::setClass(this, lumacore::kClassId< RockCreator >);
 }
 
 void RockCreator::init(const TableIter& rIter) {

@@ -21,6 +21,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_createLetterIcon_f1, "createLetterIcon.f1", 122.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_startDemo_f1, "startDemo.f1", 180.0f);
@@ -36,6 +37,7 @@ namespace {
 
 KinopioAstro::KinopioAstro(const char* pName)
     : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), mHasPeachLetter(), mHasLuigiLetter(), mIsPlayerLuigi() {
+    lumacore::setClass(this, lumacore::kClassId< KinopioAstro >);
 }
 
 bool KinopioAstro::dispLetter(LayoutActor* pLayout) const {

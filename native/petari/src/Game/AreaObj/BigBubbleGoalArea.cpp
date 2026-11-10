@@ -9,6 +9,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 150.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 150.0f);
@@ -19,6 +20,7 @@ namespace {
 
 BigBubbleGoalArea::BigBubbleGoalArea(int formType, const char* pName)
     : AreaObj(formType, pName), mTrans(0.0f, 0.0f, 0.0f), mMeterCapacity(1.0f), mMeterDisplayAmount(), mMeterAmount() {
+    lumacore::setClass(this, lumacore::kClassId< BigBubbleGoalArea >);
 }
 
 void BigBubbleGoalArea::init(const TableIter& rIter) {

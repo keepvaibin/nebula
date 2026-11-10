@@ -5,8 +5,10 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ClipFieldMapParts::ClipFieldMapParts(const char* pName) : GeneralMapParts(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ClipFieldMapParts >);
 }
 
 void ClipFieldMapParts::control() {

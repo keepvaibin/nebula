@@ -4,8 +4,10 @@
 #include "Game/System/MessageHolder.hpp"
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/Table.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DemoCastSubGroup::DemoCastSubGroup(const char* pName) : DemoCastGroup(pName), mExecutor(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< DemoCastSubGroup >);
 }
 
 void DemoCastSubGroup::init(const TableIter& rIter) {

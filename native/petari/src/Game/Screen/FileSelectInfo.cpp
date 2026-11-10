@@ -7,6 +7,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_disappear_setAnimRate_1, "disappear.setAnimRate.1", 0.0f);
@@ -51,6 +52,7 @@ namespace FileSelectInfoSub {
 FileSelectInfo::FileSelectInfo(s32 nameBufferSize, const char* pName)
     : LayoutActor(pName, 1), mNumber(), mStarNum(), mStarPieceNum(), mNameBufferSize(nameBufferSize), mName(new char16_t[nameBufferSize]),
       mMissNum(-1), mIsSelectedMarioPrev(true), mIsSelectedMario(true), mIsViewNormalEnding(), mIsViewCompleteEnding() {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectInfo >);
     mSlideState = new FileSelectInfoSub::SlideState(this);
     mCharaState = new FileSelectInfoSub::CharaState(this);
 

@@ -7,6 +7,7 @@
 #include <nebula_format.h>
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f1, "initModelAndEfx.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f2, "initModelAndEfx.f2", 50.0f);
@@ -15,6 +16,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f4, "initModelAndEfx.f4", 50.0f);
 
 // Never on a stage where a dark comet shows.
 BenefitItemLifeUp::BenefitItemLifeUp(const char* pName) : BenefitItemObj(pName, "KinokoLifeUp") {
+    lumacore::setClass(this, lumacore::kClassId< BenefitItemLifeUp >);
     if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
         mIsDisabled = true;
     }

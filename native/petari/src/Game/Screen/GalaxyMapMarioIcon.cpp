@@ -1,8 +1,10 @@
 #include "Game/Screen/GalaxyMapMarioIcon.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 GalaxyMapMarioIcon::GalaxyMapMarioIcon(LayoutActor* pParam1, const char* pParam2) : LayoutActor("マリオ", true), mTargetLayout(pParam1), mTargetPaneName(pParam2) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapMarioIcon >);
 }
 
 void GalaxyMapMarioIcon::init(const TableIter& /*rIter*/) {

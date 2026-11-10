@@ -1,8 +1,10 @@
 #include "Game/AreaObj/SwitchArea.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SwitchArea::SwitchArea(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< SwitchArea >);
 }
 
 void SwitchArea::init(const TableIter& rIter) {

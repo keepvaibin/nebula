@@ -1,11 +1,13 @@
 #include "Game/Enemy/OnimasuPivot.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_startMoveInner_f1, "startMoveInner.f1", 0.001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseInner_f1, "updatePoseInner.f1", 565.6854f);
 
 OnimasuPivot::OnimasuPivot(const char* pName) : Onimasu(pName), mCurNormal(), mNormals() {
+    lumacore::setClass(this, lumacore::kClassId< OnimasuPivot >);
     mLastPointQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
     mNextPointQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }

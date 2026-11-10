@@ -7,6 +7,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvAstroDome {
     NEW_NERVE(AstroDomeNrvWait, AstroDome, Wait);
@@ -15,6 +16,7 @@ namespace NrvAstroDome {
 };  // namespace NrvAstroDome
 
 AstroDome::AstroDome(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AstroDome >);
 }
 
 void AstroDome::init(const TableIter& rIter) {

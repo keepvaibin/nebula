@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstring>
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct GalaxyNameSortLt {
@@ -159,6 +160,7 @@ GalaxyStatusAccessor ScenarioDataIter::makeAccessor() const {
 }
 
 ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ScenarioDataParser >);
     // The galaxies are the scenario archives in /StageData (mods add more, so there is no fixed number).
     GameAssets::FolderEntry dirent;
     u32 galaxyNum = 0;

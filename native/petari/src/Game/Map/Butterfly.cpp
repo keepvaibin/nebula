@@ -17,6 +17,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_tryAppearStarPeace_f1, "tryAppearStarPeace.f1", 40.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeGotoSleepingMario_f1, "exeGotoSleepingMario.f1", 0.05f);
@@ -71,6 +72,7 @@ namespace {
 };  // namespace
 
 Butterfly::Butterfly(const char* pName) : LiveActor(pName), mHomePos(gZeroVec), mColorIndex(), mPerchTarget(), mStarPieceAppeared() {
+    lumacore::setClass(this, lumacore::kClassId< Butterfly >);
     mQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

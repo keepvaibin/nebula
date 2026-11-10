@@ -6,6 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
@@ -21,6 +22,7 @@ namespace NrvPurpleCoinCounter {
 PurpleCoinCounter::PurpleCoinCounter(const char* pName)
     : LayoutActor(pName, true), mPurpleCoinNum(0), mPurpleCoinDisplayNum(0), mInvalidCountUpFrame(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr),
       mIsValid(false) {
+    lumacore::setClass(this, lumacore::kClassId< PurpleCoinCounter >);
 }
 
 void PurpleCoinCounter::init(const TableIter& /*rIter*/) {

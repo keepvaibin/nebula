@@ -9,6 +9,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -75,6 +76,7 @@ SearchBeamer::SearchBeamer(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mBindStarPointer(nullptr), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 0.0f, 0.0f), mPropellerAngle(0.0f),
       mPropellerSpeed(0.0f), mPropellerJointCtrl(nullptr), mBeamStartJointCtrl(nullptr), mBeamEndJointCtrl(nullptr), mBeamStart(0.0f, 0.0f, 0.0f),
       mBeamEnd(0.0f, 0.0f, 0.0f), mBeamAimSpeed(8.0f), mTerritoryRadius(1000.0f), mBeamLength(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SearchBeamer >);
     mCollisionMtx.identity();
 }
 

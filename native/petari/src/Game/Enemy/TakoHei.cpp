@@ -7,6 +7,7 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
@@ -111,6 +112,7 @@ namespace NrvTakoHei {
 TakoHei::TakoHei(const char* pName)
     : LiveActor(pName), mScaleCtrl(0), mBindStarPointer(0), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mWalkTarget(0, 0, 0), mInitPos(0, 0, 0), mDeathItem(0),
       mNoPushStep(0), mHasMoveLimit(0) {
+    lumacore::setClass(this, lumacore::kClassId< TakoHei >);
     MR::createTakoHeiInkHolder();
 }
 

@@ -5,6 +5,7 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateHostRotateMtx_f1, "updateHostRotateMtx.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_f1, "updateInfo.f1", 0.01f);
@@ -18,6 +19,7 @@ namespace NrvMapPartsRailRotator {
 
 MapPartsRailRotator::MapPartsRailRotator(LiveActor* pHost)
     : MapPartsFunction(pHost, "レイル回転"), mRotateAxis(), mRotateType(), mRotateSpeed(), mTargetAngle(), mAngle(), mHostRotateMtx() {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailRotator >);
     mBaseRotateMtx.identity();
     mRotateMtx.identity();
 }

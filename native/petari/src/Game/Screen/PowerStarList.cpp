@@ -21,6 +21,7 @@
 #include <Game/Ui/DrawInfo.hpp>
 #include <Game/Ui/Pane.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 
 #define ITEMS_PER_PAGE 15
@@ -203,6 +204,7 @@ namespace NrvPowerStarList {
 
 PowerStarList::PowerStarList()
     : LayoutActor("全パワースターリスト", true), mArrowUpButtonCtrl(), mArrowDownButtonCtrl(), mSysInfoWindow(), mPageNo() {
+    lumacore::setClass(this, lumacore::kClassId< PowerStarList >);
     mSeparatorArray = new Separator[4]();
 }
 

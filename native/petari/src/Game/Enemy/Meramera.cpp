@@ -22,6 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f1, "addRunawayJumpPower.f1", 0.1f);
@@ -229,6 +230,7 @@ Meramera::Meramera(const char* pName)
     : LiveActor(pName), mAnimScaleController(), mWalkerStateBindStarPointer(), mPoseQuat(0.0f, 1.0f), mFront(0, 0, 1), mFireUp(0, 1, 0), mHomePosition(0, 0, 0),
       mDashDir(0, 0, 1), mWalkTarget(0, 0, 0), mDivePos(0, 0, 0), mDiveDir(0, 0, 1), mDiveUp(0, 1, 0), mTargetDistance(-1.0f), mChaseDistance(::sChaseDistance),
       mAppearStatus(-1), mElementType(), mEffectType(), mBodyEffectType(), mRunawayTimer(), mCanDive(), mIsValidRestart() {
+    lumacore::setClass(this, lumacore::kClassId< Meramera >);
     mEffectMtx.identity();
     mExtinguishMtx.identity();
     mFallEffectMtx.identity();

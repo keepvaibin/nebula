@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, cBaseScale, 1.2f);
@@ -28,6 +29,7 @@ namespace NrvKoopaJrShipCannonMainShell {
 }  // namespace NrvKoopaJrShipCannonMainShell
 
 KoopaJrShipCannonMainShell::KoopaJrShipCannonMainShell(const char* pName) : CannonShellBase(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaJrShipCannonMainShell >);
     mRotateQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
 }
 

@@ -12,6 +12,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.1f);
@@ -37,6 +38,7 @@ namespace NrvAirBubble {
 };  // namespace NrvAirBubble
 
 AirBubble::AirBubble(const char* pName) : LiveActor(pName), mDriftDir(0.0f, 0.0f, 1.0f), mBobOffset(), mLife(::cDefaultLife) {
+    lumacore::setClass(this, lumacore::kClassId< AirBubble >);
 }
 
 void AirBubble::init(const TableIter& rIter) {

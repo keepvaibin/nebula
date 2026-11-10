@@ -15,6 +15,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -50,6 +51,7 @@ namespace NrvMoguStone {
 MoguStone::MoguStone(const char* pName, const char* pModelName)
     : ModelObj(pName, pModelName, nullptr, -2, -2, -2, false), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mThrowDir(0.0f, 0.0f, 1.0f), mThrowSpeed(0.0f),
       mIsThrowHorizontal(true) {
+    lumacore::setClass(this, lumacore::kClassId< MoguStone >);
 }
 
 void MoguStone::init(const TableIter& rIter) {
@@ -199,6 +201,7 @@ void MoguStone::calcAndSetBaseMtx() {
 }
 
 ThrowingIce::ThrowingIce(const char* pName) : MoguStone(pName, "IceManIce"), mPath(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< ThrowingIce >);
     mPath = new ParabolicPath();
     mScale.set(cNum_ThrowingIce_f1, cNum_ThrowingIce_f2, cNum_ThrowingIce_f3);
 }

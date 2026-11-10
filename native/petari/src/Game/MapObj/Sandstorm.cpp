@@ -4,6 +4,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
@@ -46,6 +47,7 @@ namespace NrvSunakazeKunTrap {
 
 SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rLocalPos)
     : ModelObj("スナカゼ用トラップ", "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), mLocalPos(rLocalPos) {
+    lumacore::setClass(this, lumacore::kClassId< SunakazeKunTrap >);
 }
 
 void SunakazeKunTrap::init(const TableIter& /*rIter*/) {
@@ -97,6 +99,7 @@ Sandstorm::Sandstorm(const char* pName)
     : LiveActor(pName), mCameraInfo(), mBindActor(), mFront(0.0f, 0.0f, 1.0f), mClippingCenter(0.0f, 0.0f, 0.0f), mType(), mSpiralRot(), mSpiralRadius(), mSpiralAngle(), mBindRadius(),
       mAdjustStartRadius(), mBindOffsetY(), mBindStep(), mBindStartStep(), mSensorHeight(), mSizeUpRate(), mSensorMin(), mStepStorm(), mStepAdjust(), mStepFix(), mStepEnd(), mBindHeight(),
       mTrapModel() {
+    lumacore::setClass(this, lumacore::kClassId< Sandstorm >);
 }
 
 void Sandstorm::init(const TableIter& rIter) {

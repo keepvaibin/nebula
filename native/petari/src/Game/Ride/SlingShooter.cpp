@@ -22,6 +22,7 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -73,6 +74,7 @@ SlingShooter::SlingShooter(const char* pName)
     : LiveActor(pName), mIsKinopioCameraFocused(), mPlayerZ(), mIsKinopioAttached(), mIsKinopioTalkEnabled(true), mIsLastDamage(), mBasePos(),
       mNeutralPos(), mUp(), mPointerPos(0.0f, 0.0f, 0.0f), mPadChannel(-1), mPassThroughEnable(), mAttackVelocity(0.0f, 0.0f, 0.0f), mRider(),
       mCameraTargetMtx(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< SlingShooter >);
     mBaseMtx.identity();
 }
 

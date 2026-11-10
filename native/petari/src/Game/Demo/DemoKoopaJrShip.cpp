@@ -13,6 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5.0f);
 
@@ -49,6 +50,7 @@ namespace {
 };  // namespace
 
 DemoKoopaJrShip::DemoKoopaJrShip(const char* pName) : LiveActor(pName), mKoopaJrObj(), mAnimCameraIndex(-1) {
+    lumacore::setClass(this, lumacore::kClassId< DemoKoopaJrShip >);
 }
 
 void DemoKoopaJrShip::init(const TableIter& rIter) {

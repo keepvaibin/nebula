@@ -11,6 +11,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sTexRateU0, 0.08f);
@@ -29,6 +30,7 @@ namespace {
 
 OceanRingPipeInside::OceanRingPipeInside(const OceanRingPipe* pPipe)
     : LiveActor("オーシャンリングの内側"), mRingPipe(pPipe), mTexU0(), mTexV0(), mTexU1(), mTexV1(), mWaterPipeInsideTex() {
+    lumacore::setClass(this, lumacore::kClassId< OceanRingPipeInside >);
 }
 
 void OceanRingPipeInside::init(const TableIter& /*rIter*/) {

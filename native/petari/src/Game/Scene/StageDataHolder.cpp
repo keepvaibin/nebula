@@ -14,6 +14,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // One per bit of a layer mask.
@@ -64,6 +65,7 @@ namespace {
 StageDataHolder::StageDataHolder(const char* pStageName, int zoneID, bool loadCommon)
     : NameObj("StageDataHolder"), mObjNameTbl(), mStageDataHolderCount(), mArchive(MR::getStageArchive(pStageName)), mStageName(pStageName), mZoneID(zoneID),
       mLoadCommon(loadCommon), mCommonPriorityOrder(), mCommonNormalOrder(), mScenarioPriorityOrder(), mScenarioNormalOrder(), mAfterScenarioOrder() {
+    lumacore::setClass(this, lumacore::kClassId< StageDataHolder >);
     mPlacementMtx.identity();
 }
 

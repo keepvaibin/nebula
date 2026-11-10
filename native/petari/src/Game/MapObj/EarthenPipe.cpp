@@ -8,6 +8,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 70.0f);
@@ -70,6 +71,7 @@ EarthenPipe::EarthenPipe(const char* pName)
     : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mPipeLength(100.0f), mIsIgnoreGravity(false), mPipeMode(PIPE_NORMAL),
       mTargetPipe(nullptr), mTopJointMtx(nullptr), mBottomJointMtx(nullptr), mHostActor(nullptr), mHorizExitForce(5.0f), mVertExitForce(20.0f),
       mMusicChangeIdx(-1), mMusicState(-1), mIsRabbitWait(false), mPipeStreamModel(nullptr), mIsWaterFlowing(false), mCameraInfo(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< EarthenPipe >);
     mPlayerMtx.identity();
     mPlayerInStartMtx.identity();
     mPlayerInEndMtx.identity();
@@ -519,6 +521,7 @@ void EarthenPipe::processBgmPlayerOut() {
 }
 
 EarthenPipeMediator::EarthenPipeMediator() : NameObj("土管仲介者") {
+    lumacore::setClass(this, lumacore::kClassId< EarthenPipeMediator >);
     mNumEntries = 0;
     mPipeEntries = nullptr;
     mPipeEntryRoom = 32;

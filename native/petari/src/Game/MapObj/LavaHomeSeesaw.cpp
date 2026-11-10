@@ -14,12 +14,14 @@
 
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.1f);
 
 LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), mGroundPos(gZeroVec), mYOffset() {
+    lumacore::setClass(this, lumacore::kClassId< LavaHomeSeesaw >);
 }
 
 void LavaHomeSeesaw::initAfterPlacement() {

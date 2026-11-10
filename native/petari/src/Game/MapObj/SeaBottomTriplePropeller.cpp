@@ -4,6 +4,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
@@ -13,6 +14,7 @@ namespace NrvSeaBottomTriplePropeller {
 };  // namespace NrvSeaBottomTriplePropeller
 
 SeaBottomTriplePropeller::SeaBottomTriplePropeller(const char* pName) : LiveActor(pName), mAudSeKeeper() {
+    lumacore::setClass(this, lumacore::kClassId< SeaBottomTriplePropeller >);
     for (u16 i = 0; i < 3; i++) {
         mPropellerCollision[i] = nullptr;
     }

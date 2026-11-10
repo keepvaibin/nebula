@@ -4,9 +4,11 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CameraGround::CameraGround(const char* pName)
     : Camera(pName), mAngleA(), mAngleB(), mDist(1000.0f), mUp(0.0f, 1.0f, 0.0f), mLastWatchPoint(0.0f, 0.0f, 0.0f), mIsNotInitialized(true) {
+    lumacore::setClass(this, lumacore::kClassId< CameraGround >);
 }
 
 void CameraGround::reset() {

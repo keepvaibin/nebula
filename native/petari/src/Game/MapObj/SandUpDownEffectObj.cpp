@@ -10,6 +10,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
@@ -56,6 +57,7 @@ namespace NrvSandUpDownEffectObj {
 };  // namespace NrvSandUpDownEffectObj
 
 SandUpDownEffectObj::SandUpDownEffectObj(const char* pName) : LiveActor(pName), mLineOffset(), mLineLength(), mClippingCenter(0.0f, 0.0f, 0.0f), mTriFilter() {
+    lumacore::setClass(this, lumacore::kClassId< SandUpDownEffectObj >);
     mEffectMtx.identity();
 }
 

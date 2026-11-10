@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 400.0f);
@@ -22,6 +23,7 @@ namespace NrvBigFan {
 
 BigFan::BigFan(const char* pName)
     : LiveActor(pName), mWindModel(), mClippingCenter(0.0f, 0.0f, 0.0f), mWindLength(4000.0f), mWindSpeed(100.0f), mIsTeresaGalaxy() {
+    lumacore::setClass(this, lumacore::kClassId< BigFan >);
     BigFanFunction::createBigFanHolder();
     BigFanFunction::registerBigFan(this);
 }

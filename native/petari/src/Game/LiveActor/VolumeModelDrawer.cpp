@@ -9,12 +9,15 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 VolumeModelDrawInit::VolumeModelDrawInit() : NameObj("ボリュームモデル描画初期化") {
+    lumacore::setClass(this, lumacore::kClassId< VolumeModelDrawInit >);
 }
 
 VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, MtxPtr mtx)
     : NameObj(pName), mMtx(), mModelData(), mColor(0xFF, 0xA9, 0, 0xFF) {
+    lumacore::setClass(this, lumacore::kClassId< VolumeModelDrawer >);
     MR::createSceneObj(SceneObj_VolumeModelDrawInit);
     mMtx = mtx;
     mModelData = (ModelData*)MR::createAndAddResourceHolder(pFileName)->mModelResTable->getRes(pFileName);

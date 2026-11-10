@@ -9,6 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cCometBrkName[] = {"Red", "Blue", "White", "Yellow", "Purple"};
@@ -24,6 +25,7 @@ namespace NrvAstroDomeComet {
 };  // namespace NrvAstroDomeComet
 
 AstroDomeComet::AstroDomeComet(const char* pName) : LiveActor(pName), mBloomModel(), mMiniGalaxy(), mPointingActors() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeComet >);
 }
 
 void AstroDomeComet::init(const TableIter& rIter) {

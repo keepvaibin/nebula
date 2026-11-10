@@ -11,6 +11,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWipeIn_f1, "exeWipeIn.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWipeOut_f1, "exeWipeOut.f1", 0.5f);
@@ -47,6 +48,7 @@ namespace {
 
 WipeRing::WipeRing(bool isCenterOnPlayer, const char* pName)
     : WipeLayoutBase(pName), mCenterPos(0.0f, 0.0f), mAnimFrame(::sAnimFrame), mWipeOutFrame(), mWipeInFrame(), mIsCenterOnPlayer(isCenterOnPlayer) {
+    lumacore::setClass(this, lumacore::kClassId< WipeRing >);
 }
 
 void WipeRing::init(const TableIter& /*rIter*/) {

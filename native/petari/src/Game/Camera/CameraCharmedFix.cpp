@@ -4,12 +4,14 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 
 CameraCharmedFix::CameraCharmedFix(const char* pName)
     : Camera(pName), mBasePos(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 1000.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraCharmedFix >);
 }
 
 void CameraCharmedFix::reset() {

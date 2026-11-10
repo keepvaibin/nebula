@@ -21,6 +21,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 85.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -174,6 +175,7 @@ namespace NrvHanachan {
 HanachanParts::HanachanParts(Hanachan* pHost, s32 partsIndex, const char* pName, const char* pModelName)
     : LiveActor(pName), mHost(pHost), mPushVelocity(0.0f), mFallVelocity(0.0f), mPartsType(PartsType_Body), mRotationQuat(0.0f, 0.0f, 0.0f, 1.0f),
       mPartsIndex(partsIndex), mActionStartStep(-1), mIsLanded() {
+    lumacore::setClass(this, lumacore::kClassId< HanachanParts >);
     initModelManagerWithAnm(pModelName, nullptr, false);
 
     if (MR::isEqualString(pModelName, "HanachanBody")) {
@@ -817,6 +819,7 @@ void HanachanParts::changeHeadCalmDown() {
 }
 
 Hanachan::Hanachan(const char* pName) : LiveActor(pName), mAttackPos(0, 0, 0), mFrontDir(0, 0, 1), mIsChasePlayer(true), mScaleController() {
+    lumacore::setClass(this, lumacore::kClassId< Hanachan >);
 }
 
 void Hanachan::init(const TableIter& rIter) {

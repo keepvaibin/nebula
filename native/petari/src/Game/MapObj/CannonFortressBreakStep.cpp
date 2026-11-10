@@ -3,6 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sFallSpeed, 15.0f);
@@ -17,6 +18,7 @@ namespace NrvCannonFortressBreakStep {
 };  // namespace NrvCannonFortressBreakStep
 
 CannonFortressBreakStep::CannonFortressBreakStep(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CannonFortressBreakStep >);
 }
 
 void CannonFortressBreakStep::init(const TableIter& rIter) {

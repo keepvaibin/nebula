@@ -1,13 +1,16 @@
 #pragma once
 
-class NameObj;
+#include "Game/System/LumaCore.hpp"
 
 typedef NameObj* (*CreatorFuncPtr)(const char*);
 
 namespace {
     template < typename T >
     NameObj* createNameObj(const char* pName) {
-        return new T(pName);
+        T* const pObj = new T(pName);
+        // Its exact class for mods (the class rows are generated from the headers: tools/lumacore).
+        lumacore::setClass(pObj, lumacore::kClassId< T >);
+        return pObj;
     }
 };  // namespace
 

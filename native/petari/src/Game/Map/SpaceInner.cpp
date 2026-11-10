@@ -4,6 +4,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvSpaceInner {
     NEW_NERVE(HostTypeAppear, SpaceInner, Appear);
@@ -11,6 +12,7 @@ namespace NrvSpaceInner {
 };  // namespace NrvSpaceInner
 
 SpaceInner::SpaceInner(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SpaceInner >);
 }
 
 void SpaceInner::init(const TableIter& rIter) {

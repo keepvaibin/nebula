@@ -22,6 +22,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDead_f1, "exeDead.f1", 10.0f);
@@ -63,6 +64,7 @@ namespace {
 SkeletalFishBaby::SkeletalFishBaby(const char* pName)
     : LiveActor(pName), mJointIndicies(), mSpeedMax(::sSpeed), mSpeed(::sSpeed), mRailControl(new SkeletalFishRailControl()),
       mScaleController(new AnimScaleController(nullptr)) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBaby >);
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
         mControllers[i] = nullptr;
     }

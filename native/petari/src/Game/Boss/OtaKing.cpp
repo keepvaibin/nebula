@@ -15,6 +15,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f1, "initModel.f1", 5000.0f);
@@ -174,6 +175,7 @@ namespace {
 OtaKing::OtaKing(const char* pName)
     : LiveActor(pName), mMagma(), mCocoNutBallArray(), mFireBallArray(), mFireBubbleArray(), mThrowPos(), mHits(), mThrowNum(), mTurnSpeed(), mSoundObj(),
       mSoundObjPos(gZeroVec), mBubbleAppearPos(), mDownCocoNut(), mAnimCamera(), mIsLv2(), mScaleController() {
+    lumacore::setClass(this, lumacore::kClassId< OtaKing >);
     MR::zeroMemory(mFeet, sizeof(mFeet));
     MR::zeroMemory(mLongFeet, sizeof(mLongFeet));
     mLongFootMtx.identity();

@@ -3,6 +3,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeActive_1, "exeActive.1", 18);
@@ -14,6 +15,7 @@ namespace {
 };  // namespace
 
 MissLayout::MissLayout() : LayoutActor("ミス!", true) {
+    lumacore::setClass(this, lumacore::kClassId< MissLayout >);
 }
 
 void MissLayout::init(const TableIter& /*rIter*/) {

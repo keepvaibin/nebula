@@ -6,6 +6,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -45,6 +46,7 @@ namespace NrvMarblePlanetElectron {
 };  // namespace NrvMarblePlanetElectron
 
 MarblePlanet::MarblePlanet(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MarblePlanet >);
     mCorePlanetModel = 0;
     mPlanetElectrons = 0;
     mWatermelonCollision = 0;
@@ -216,6 +218,7 @@ void MarblePlanet::initCoreAndElectron() {
 
 MarblePlanetElectron::MarblePlanetElectron(LiveActor* pPlanet, const Vec3f& rPosition, const Vec3f& rRotation, const char* pName)
     : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MarblePlanetElectron >);
     mParentPlanet = static_cast< MarblePlanet* >(pPlanet);
     mElectronShadow = 0;
     mFront.x = 0.0f;
@@ -337,6 +340,7 @@ void MarblePlanetElectron::crashElectron(HitSensor* pSensor) {
 }
 
 MarblePlanetElectronShadow::MarblePlanetElectronShadow(LiveActor* pElectronPtr, const Vec3f& rVec, const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MarblePlanetElectronShadow >);
     mParentElectron = static_cast< MarblePlanetElectron* >(pElectronPtr);
     mGroundPos = &rVec;
 }

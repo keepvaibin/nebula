@@ -6,6 +6,7 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initGuidePoints_f1, "initGuidePoints.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initGuidePoints_f2, "initGuidePoints.f2", 2.0f);
@@ -18,6 +19,7 @@ namespace NrvMapPartsRailGuideDrawer {
 
 MapPartsRailGuideDrawer::MapPartsRailGuideDrawer(LiveActor* pHost, const char* pModelName)
     : MapPartsFunction(pHost, "ガイド描画"), mGuidePoints(), mGuideType(), mRailId(-1), mModelName(pModelName) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailGuideDrawer >);
 }
 
 void MapPartsRailGuideDrawer::init(const TableIter& rIter) {

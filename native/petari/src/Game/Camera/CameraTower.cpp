@@ -6,6 +6,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_arrangeHorizontalPose_f1, "arrangeHorizontalPose.f1", 0.7f);
@@ -43,6 +44,7 @@ namespace {
 CameraTower::CameraTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleX(), mAngleYRoundSpeed(), mDist(2000.0f), mPos(0.0f, 0.0f, 0.0f),
       mIsRounding(), mRoundIntervalNum(), mAngleYSpeed(), mIsRoundLeftValid(), mIsRoundRightValid() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTower >);
     createVPanObj();
 }
 

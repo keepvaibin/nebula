@@ -7,6 +7,7 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sDefaultTimeLimit = NebulaFrameClock::stepsOfSeconds(10);
@@ -18,6 +19,7 @@ namespace NrvSimpleTimerObj {
 };  // namespace NrvSimpleTimerObj
 
 SimpleTimerObj::SimpleTimerObj(const char* pName) : MapObjActor(pName), mFlashingCtrl(), mTimeLimit(::sDefaultTimeLimit), mTimeLeft() {
+    lumacore::setClass(this, lumacore::kClassId< SimpleTimerObj >);
 }
 
 void SimpleTimerObj::init(const TableIter& rIter) {

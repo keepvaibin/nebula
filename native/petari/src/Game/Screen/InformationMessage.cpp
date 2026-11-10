@@ -5,6 +5,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvInformationMessage {
     NEW_NERVE(InformationMessageNrvAppear, InformationMessage, Appear);
@@ -13,6 +14,7 @@ namespace NrvInformationMessage {
 };  // namespace NrvInformationMessage
 
 InformationMessage::InformationMessage() : LayoutActor("インフォメーションメッセージ", true), mAButtonIcon(nullptr), mIsCenter(false) {
+    lumacore::setClass(this, lumacore::kClassId< InformationMessage >);
 }
 
 void InformationMessage::init(const TableIter& /*rIter*/) {

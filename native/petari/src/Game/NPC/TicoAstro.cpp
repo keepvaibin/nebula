@@ -2,8 +2,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 TicoAstro::TicoAstro(const char* pName) : Tico(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TicoAstro >);
 }
 
 void TicoAstro::init(const TableIter& rIter) {

@@ -8,6 +8,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -19,6 +20,7 @@ namespace {
 };  // namespace
 
 BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("ビームゴーラウンドビーム") {
+    lumacore::setClass(this, lumacore::kClassId< BeamGoRoundBeam >);
     mModelDrawer = nullptr;
     mBloomModel = nullptr;
     mBeamJointMtx = pMtx;
@@ -71,6 +73,7 @@ namespace NrvBeamGoRoundPlanet {
 };  // namespace NrvBeamGoRoundPlanet
 
 BeamGoRoundPlanet::BeamGoRoundPlanet(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BeamGoRoundPlanet >);
     mBeams = nullptr;
     mMove1Collision = nullptr;
     mMove2Collision = nullptr;

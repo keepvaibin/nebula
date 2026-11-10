@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sScale, 30.0f);
@@ -17,6 +18,7 @@ namespace {
 };  // namespace
 
 FileSelectModel::FileSelectModel(const char* pModelName, MtxPtr pHostMtx, const char* pName) : LiveActor(pName), mHostMtx(pHostMtx) {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectModel >);
     initModelManagerWithAnm(pModelName, nullptr, false);
     MR::connectToSceneNpc(this);
     initEffectKeeper(0, nullptr);

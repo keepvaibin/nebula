@@ -20,6 +20,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cDemoNameDomeLecture = "ドームレクチャー２";
@@ -47,6 +48,7 @@ namespace NrvAstroDomeGalaxySelector {
 
 AstroDomeGalaxySelector::AstroDomeGalaxySelector(const char* pName)
     : LiveActor(pName), mCameraController(), mBackButton(), mInfo(), mConfirmLayout(), mIsBackButtonPointed() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeGalaxySelector >);
 }
 
 void AstroDomeGalaxySelector::init(const TableIter& rIter) {

@@ -19,6 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f1, "updateRotate.f1", 90.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f2, "updateRotate.f2", 90.0f);
@@ -79,6 +80,7 @@ namespace NrvJumpGuarder {
 
 JumpEmitter::JumpEmitter(const char* pName)
     : LiveActor(pName), mBodyJointMtx(), mHeadModel(), mCameraCenter(0.0f, 0.0f, 0.0f), mIsEventCamera(), mCameraInfo(), mMultEventCamera() {
+    lumacore::setClass(this, lumacore::kClassId< JumpEmitter >);
     mHeadMtx.identity();
 }
 
@@ -479,6 +481,7 @@ void JumpGuarder::exeInter() {
 JumpGuarder::JumpGuarder(const char* pName)
     : JumpEmitter(pName), mBabies(), mNumBabies(::sBabyNum), mBumpCooldown(), mActiveBabies(), mNumActiveBabies(), mNumCoins(::sCoinDefault),
       mBabyVelocity(::sBabyVelocity) {
+    lumacore::setClass(this, lumacore::kClassId< JumpGuarder >);
     mNumActiveBabies = 0;
 }
 
@@ -546,6 +549,7 @@ void JumpGuarder::init(const TableIter& rIter) {
 
 // "Baby Begoman"
 JumpGuarderBaby::JumpGuarderBaby() : BegomanBaby("ベビーベーゴマン") {
+    lumacore::setClass(this, lumacore::kClassId< JumpGuarderBaby >);
 }
 
 void JumpGuarder::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

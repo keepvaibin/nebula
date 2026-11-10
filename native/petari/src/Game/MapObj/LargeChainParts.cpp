@@ -4,8 +4,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 LargeChainParts::LargeChainParts(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< LargeChainParts >);
 }
 
 void LargeChainParts::breakChainParts() {

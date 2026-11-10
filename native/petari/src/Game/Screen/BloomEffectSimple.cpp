@@ -8,6 +8,7 @@
 #include <nebula_game_api.h>
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 255.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 255.0f);
@@ -15,6 +16,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_draw_f3, "draw.f3", 1.333f);
 
 BloomEffectSimple::BloomEffectSimple()
     : ImageEffectBase("簡易ブルーム"), mMaskFilter(), mThreshold(205), mIntensity(0.3f) {
+    lumacore::setClass(this, lumacore::kClassId< BloomEffectSimple >);
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
 }

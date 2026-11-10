@@ -21,6 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvBegomanSpike {
     NEW_NERVE_ONEND(HostTypeNrvNoCalcWait, BegomanSpike, NoCalcWait, NoCalcWait);
@@ -92,6 +93,7 @@ namespace {
 }  // namespace
 
 BegomanSpike::BegomanSpike(const char* pName) : BegomanBase(pName), mHead(nullptr), mBrokenModel(nullptr), mTurnAfterBlow(false) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanSpike >);
     mHeadMatrix.identity();
     mWaterColumnMatrix.identity();
 }

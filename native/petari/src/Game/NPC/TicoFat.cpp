@@ -39,6 +39,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_getScaledActionName_f1, "getScaledActionName.f1", 1.6f);
 NEBULA_TUNABLE_NAMED(f32, cNum_getScaledActionName_f2, "getScaledActionName.f2", 1.3f);
@@ -158,6 +159,7 @@ namespace {
 };  // namespace
 
 TicoFat::TicoFat(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TicoFat >);
     mCameraInfo = nullptr;
     mItem = nullptr;
     mShootPath = nullptr;

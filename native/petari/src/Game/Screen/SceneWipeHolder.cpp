@@ -5,8 +5,10 @@
 #include "Game/Screen/WipeKoopa.hpp"
 #include "Game/Screen/WipeRing.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SceneWipeHolder::SceneWipeHolder() : WipeHolderBase(8, "シーンワイプ保持") {
+    lumacore::setClass(this, lumacore::kClassId< SceneWipeHolder >);
     WipeLayoutBase* pWipeLayout;
 
     pWipeLayout = new WipeRing(1, "円ワイプ");

@@ -3,8 +3,10 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 BackButton::BackButton(const char* pName, bool connectToDecoration) : LayoutActor(pName, true), mPaneCtrl(), mIsSelected() {
+    lumacore::setClass(this, lumacore::kClassId< BackButton >);
     if (connectToDecoration) {
         MR::connectToSceneLayoutDecoration(this);
     }

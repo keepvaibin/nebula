@@ -5,6 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcMinMaxAndRadius_f1, "calcMinMaxAndRadius.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_addAndUpdateMinMax_f1, "addAndUpdateMinMax.f1", 0.1f);
@@ -12,6 +13,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_addAndUpdateMinMax_f1, "addAndUpdateMinMax.f1", 0
 CollisionCategorizedKeeper::CollisionCategorizedKeeper(s32 category)
     : NameObj("地形コリジョンカテゴリキーパー"), mHitInfoArray(), mNumHits(), mPartsCount(), mCategory(category), mZonesInitialized(),
       mUpdateZoneBounds(true) {
+    lumacore::setClass(this, lumacore::kClassId< CollisionCategorizedKeeper >);
     mHitInfoRoom = 32;
     mHitInfoArray = new HitInfo[mHitInfoRoom];
 }

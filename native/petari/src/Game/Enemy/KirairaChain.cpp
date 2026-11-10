@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_KirairaChain_f1, "KirairaChain.f1", 0.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_KirairaChain_f2, "KirairaChain.f2", 0.5f);
@@ -54,6 +55,7 @@ KirairaChain::KirairaChain(const LiveActor* pHost)
       mFixPointTopDir(1.0f, 0.0f, 0.0f), mFixPointBottomDir(1.0f, 0.0f, 0.0f), mPointCount(), mPoints(), mAccelPointIdx(),
       mAccelTimer(), mAccel(0.0f, 0.0f, 0.0f), mClippingCenter(0.0f, 0.0f, 0.0f), mModelDrawer(), mFixPointTop(),
       mFixPointBottom() {
+    lumacore::setClass(this, lumacore::kClassId< KirairaChain >);
     mFixPointTopMtx.identity();
     mFixPointBottomMtx.identity();
 

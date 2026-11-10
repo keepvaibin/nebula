@@ -4,6 +4,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
 #include "Game/Screen/NebulaIcons.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvIconAButton {
     NEW_NERVE(IconAButtonNrvOpen, IconAButton, Open);
@@ -12,6 +13,7 @@ namespace NrvIconAButton {
 };  // namespace NrvIconAButton
 
 IconAButton::IconAButton(bool connectToScene, bool connectToPause) : LayoutActor("Aボタンアイコン", true), mFollowPos(0.0f, 0.0f), mFollowActor() {
+    lumacore::setClass(this, lumacore::kClassId< IconAButton >);
     if (connectToScene) {
         if (connectToPause) {
             MR::connectToSceneLayoutOnPause(this);

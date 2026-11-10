@@ -7,6 +7,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.f);
 
@@ -18,6 +19,7 @@ namespace NrvHitWallTimerSwitch {
 };  // namespace NrvHitWallTimerSwitch
 
 HitWallTimerSwitch::HitWallTimerSwitch(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< HitWallTimerSwitch >);
     mMoveCollision = nullptr;
     mConnector = nullptr;
     mTimer = NebulaFrameClock::stepsOfSeconds(5);

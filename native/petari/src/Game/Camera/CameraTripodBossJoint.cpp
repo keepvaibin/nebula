@@ -5,6 +5,7 @@
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_reset_f2, "reset.f2", 15.0f);
@@ -23,6 +24,7 @@ namespace {
 
 CameraTripodBossJoint::CameraTripodBossJoint(const char* pName)
     : Camera(pName), mAngleX(), mAngleY(), mDist(3000.0f), mIsRounding(), mRoundTarget(), mRoundAngle() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTripodBossJoint >);
 }
 
 void CameraTripodBossJoint::reset() {

@@ -5,6 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 struct AudEffectData {
     f32 mFxSend;
@@ -20,6 +21,7 @@ namespace {
 };  // namespace
 
 AudEffectDirector::AudEffectDirector() : NameObj("オーディオエフェクトディレクター"), mEffectType(0), mAppliedType(0), mPriority(0) {
+    lumacore::setClass(this, lumacore::kClassId< AudEffectDirector >);
 }
 
 void AudEffectDirector::init(const TableIter& /*rIter*/) {

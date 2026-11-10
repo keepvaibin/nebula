@@ -14,6 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
@@ -47,6 +48,7 @@ namespace NrvKoopaFireShort {
 
 KoopaFireShort::KoopaFireShort(const Koopa* pKoopa)
     : LiveActor("クッパの炎（ショート）"), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mSpeed(), mDuration(), mOffset() {
+    lumacore::setClass(this, lumacore::kClassId< KoopaFireShort >);
 }
 
 void KoopaFireShort::init(const TableIter& /*rIter*/) {

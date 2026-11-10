@@ -14,6 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 400.0f);
@@ -36,6 +37,7 @@ namespace NrvBirikyu {
 
 Birikyu::Birikyu(const char* pName)
     : LiveActor(pName), mObjName(), mClipCenter(gZeroVec), mCircleCenter(gZeroVec), mHasShadow(), mHasRail(), mCircleAxis(0.0f, 1.0f, 0.0f), mCircleFront(0.0f, 0.0f, 1.0f), mCircleAngle(), mSpeed(10.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Birikyu >);
 }
 
 void Birikyu::init(const TableIter& rIter) {
@@ -280,6 +282,7 @@ void Birikyu::exeStopPointing() {
 }
 
 BirikyuWithFace::BirikyuWithFace(const char* pName) : Birikyu(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BirikyuWithFace >);
     mIsFaceReversed = false;
 }
 

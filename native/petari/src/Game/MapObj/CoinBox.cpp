@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f1, "exeHit.f1", 30.0f);
@@ -14,6 +15,7 @@ namespace NrvCoinBox {
 };  // namespace NrvCoinBox
 
 CoinBox::CoinBox(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CoinBox >);
 }
 
 void CoinBox::init(const TableIter& rIter) {

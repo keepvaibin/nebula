@@ -9,6 +9,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 2.0f);
@@ -17,6 +18,7 @@ ShadowSurfaceBox::~ShadowSurfaceBox() {
 }
 
 ShadowSurfaceBox::ShadowSurfaceBox() : ShadowSurfaceDrawer("影描画[水面ボックス]"), mSize(100.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceBox >);
 }
 
 void ShadowSurfaceBox::setSize(const Vec3f& pSize) {

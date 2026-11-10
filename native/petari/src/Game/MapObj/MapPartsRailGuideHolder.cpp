@@ -1,8 +1,10 @@
 #include "Game/MapObj/MapPartsRailGuideHolder.hpp"
 #include "Game/MapObj/MapPartsRailGuideDrawer.hpp"
 #include "Game/Util/Table.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MapPartsRailGuideHolder::MapPartsRailGuideHolder() : NameObj("レールガイド保持"), mNumRailGuides() {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailGuideHolder >);
 }
 
 MapPartsRailGuideDrawer* MapPartsRailGuideHolder::createRailGuide(LiveActor* pHost, const char* pModelName, const TableIter& rIter) {

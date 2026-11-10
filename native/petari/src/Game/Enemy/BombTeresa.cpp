@@ -30,6 +30,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
@@ -159,6 +160,7 @@ BombTeresa::BombTeresa(const char* pName)
     : LiveActor(pName), mJointDelegator(), mJointDelegator2(), mScaleController(), mBindStarPointer(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1),
       mTonguePos(0, 0, 0), mInitPos(0, 0, 0), mTongueRate(), mDriftPullSpeed(), mDriftSpinSpeed(), mDriftStep(), mIsDriftRelease(), mDisableRespawning(),
       mIsWanderAfterWait(false) {
+    lumacore::setClass(this, lumacore::kClassId< BombTeresa >);
 }
 
 void BombTeresa::init(const TableIter& rIter) {

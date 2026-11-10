@@ -6,8 +6,10 @@
 #include "Game/MapObj/MapPartsRailRotator.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MercatorRailMoveParts::MercatorRailMoveParts(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MercatorRailMoveParts >);
     mRailMover = nullptr;
     mRailRotator = nullptr;
     mAppearController = nullptr;

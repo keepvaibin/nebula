@@ -2,11 +2,13 @@
 #include "Game/Map/GravityDust.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_getClippingRadius_f1, "getClippingRadius.f1", 500.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_getClippingCenterOffset_f1, "getClippingCenterOffset.f1", 500.0f);
 
 EffectObjGravityDust::EffectObjGravityDust(const char* pName) : SimpleEffectObj(pName), mParticleCallBack() {
+    lumacore::setClass(this, lumacore::kClassId< EffectObjGravityDust >);
 }
 
 void EffectObjGravityDust::init(const TableIter& rIter) {

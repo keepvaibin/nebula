@@ -1,8 +1,10 @@
 #include "Game/Camera/CameraMan.hpp"
 #include "Game/Camera/CameraPoseParam.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CameraMan::CameraMan(const char* pName)
     : NameObj(pName), mDirector(nullptr), mPoseParam(new CameraPoseParam()), mIsActivated(false), mRequestLOfsReset(false) {
+    lumacore::setClass(this, lumacore::kClassId< CameraMan >);
     mMatrix.identity();
 }
 

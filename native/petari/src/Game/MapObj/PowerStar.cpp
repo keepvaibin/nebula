@@ -29,6 +29,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_processWait_f1, "processWait.f1", 360.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoRise_f1, "exeAppearDemoRise.f1", 360.0f);
@@ -178,6 +179,7 @@ PowerStar::PowerStar(const char* pName)
     : LiveActor(pName), mPowerStarId(-1), mIsInDemo(false), mAppearPosition(gZeroVec), mInitRotation(gZeroVec), mInitPosition(gZeroVec),
       mPowerStarModelObj(nullptr), mIsForceAppear(false), mColor(Color_Gold), mIsGrandStar(false), mIsRiseOnGravity(false), mIsNoPostureFront(false),
       mIsCameraActorPose(false), mCameraInfo(nullptr), mCameraActor(nullptr), mLuigiNPC(nullptr), mIsWeak(false) {
+    lumacore::setClass(this, lumacore::kClassId< PowerStar >);
     mPostureMtx.identity();
     mBaseMtx.identity();
     mPlayerMtx.identity();

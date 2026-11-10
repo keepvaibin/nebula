@@ -6,12 +6,14 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateViewMtx_f1, "updateViewMtx.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateViewMtx_f2, "updateViewMtx.f2", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateViewMtx_f3, "updateViewMtx.f3", 2.0f);
 
 MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), mMirrorPos(0.0f, 0.0f, 0.0f), mMirrorNormal(0.0f, 1.0f, 0.0f), mPlaneD() {
+    lumacore::setClass(this, lumacore::kClassId< MirrorCamera >);
     mViewMtx.identity();
     mModelTexMtx.identity();
 }

@@ -38,12 +38,14 @@ namespace {
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sScale, 10000.0f);
 };  // namespace
 
 ScreenBlurEffect::ScreenBlurEffect(const char* pName) : ImageEffectBase(pName), mFullTexture(), mHalfTexture(), mScale(::sScale), mSkipDraw(true), mIntensity(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ScreenBlurEffect >);
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createBlurTexture();

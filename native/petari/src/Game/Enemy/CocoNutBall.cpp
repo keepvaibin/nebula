@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f1, "calcHitBackVelocityAndGravity.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcHitBackVelocityAndGravity_f2, "calcHitBackVelocityAndGravity.f2", 2.0f);
@@ -69,6 +70,7 @@ namespace NrvCocoNutBall {
 CocoNutBall::CocoNutBall(const char* pName)
     : LiveActor(pName), mHost(), mHitBackGravity(0.0f, -1.0f, 0.0f), mRallyNum(), mFreezeStep(), mFreezePos(gZeroVec), mFreezeVelocity(gZeroVec), mIsThrowRight(),
       mIsHeightLimited(), mHeightMax(cDefaultHeightMax), mHeightMin(), mUp(0.0f, 1.0f, 0.0f), mKillDistance(cDefaultKillDistance), mIsRallyBgm() {
+    lumacore::setClass(this, lumacore::kClassId< CocoNutBall >);
 }
 
 void CocoNutBall::init(const TableIter& /*rIter*/) {

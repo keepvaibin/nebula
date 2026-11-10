@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -30,6 +31,7 @@ namespace NrvCrystalSwitch {
 };  // namespace NrvCrystalSwitch
 
 CrystalSwitch::CrystalSwitch(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CrystalSwitch >);
     mRotateSpeed = 0.0f;
     mIsHit = 0;
 }

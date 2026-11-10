@@ -11,6 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_doEscape_addVelocityToGravity_1, "doEscape.addVelocityToGravity.1", 1.0f);
@@ -29,6 +30,7 @@ namespace {
 
 // Never on a stage where a dark comet shows.
 BenefitItemInvincible::BenefitItemInvincible(const char* pName) : BenefitItemObj(pName, "PowerupInvincible") {
+    lumacore::setClass(this, lumacore::kClassId< BenefitItemInvincible >);
     if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
         mIsDisabled = true;
     }

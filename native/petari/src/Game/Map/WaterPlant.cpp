@@ -12,6 +12,7 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 180.0f);
@@ -81,6 +82,7 @@ namespace {
 WaterPlant::WaterPlant(const char* pName)
     : LiveActor(pName), mPlantNum(::cDefaultPlantNum), mPlantDataArray(), mAreaRadius(::cDefaultAreaRadius), mIsSpin(),
       mHalfWidth(::cDefaultHalfWidth), mHeight(), mType() {
+    lumacore::setClass(this, lumacore::kClassId< WaterPlant >);
 }
 
 void WaterPlant::init(const TableIter& rIter) {
@@ -297,6 +299,7 @@ void WaterPlant::drawDirect(TypedDraw& rDraw, const Vec3f& rSide) const {
 WaterPlantDrawInit::WaterPlantDrawInit()
     : NameObj("水草の描画初期化"), mAngleOffset(), mSwingPosTable(), mCameraSide(::cInitialCameraSide), mPlantATex(), mPlantBTex(),
       mPlantCTex(), mPlantDTex() {
+    lumacore::setClass(this, lumacore::kClassId< WaterPlantDrawInit >);
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, -1);
 
     mPlantATex = new GameTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantA.bti"));

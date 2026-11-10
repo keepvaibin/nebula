@@ -6,6 +6,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 180.0f);
@@ -32,6 +33,7 @@ namespace NrvQuestionCoin {
 QuestionCoin::QuestionCoin(const char* pName)
     : LiveActor(pName), mBoundActor(), mCameraInfo(), mLaunchSpeed(), mIsWeakGravity(), mCalcShadow(), mPoseType(), mShadowDropLengthType(),
       mShadowPos(gZeroVec), mShadowDropLength() {
+    lumacore::setClass(this, lumacore::kClassId< QuestionCoin >);
     mBaseMtx.identity();
     mActorMtx.identity();
     mLaunchQuat.set(0.0f, 0.0f, 0.0f, 1.0f);

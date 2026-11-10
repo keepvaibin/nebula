@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sModelSize, 50.0f);
@@ -17,6 +18,7 @@ namespace NrvTakoHeiInk {
 };  // namespace NrvTakoHeiInk
 
 TakoHeiInk::TakoHeiInk(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TakoHeiInk >);
 }
 
 void TakoHeiInk::init(const TableIter& rIter) {

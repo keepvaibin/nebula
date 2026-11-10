@@ -11,6 +11,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
@@ -30,6 +31,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f10, "initPoints.f10", 2.0f);
 OceanRingPipe::OceanRingPipe(const OceanRing* pRing, f32 a, f32 b)
     : LiveActor("オーシャンリングの側面"), mOceanRing(pRing), mIsCameraInside(), mNumPoints(), mNumSegments(), mNumSides(8), mPositions(), mNormals(), mWidth(a), mWidthArg(b), mPipeInside(),
       mPipeOutside() {
+    lumacore::setClass(this, lumacore::kClassId< OceanRingPipe >);
 }
 
 void OceanRingPipe::init(const TableIter& rIter) {

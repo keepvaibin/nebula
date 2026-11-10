@@ -15,6 +15,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -86,6 +87,7 @@ namespace NrvStinkBugParent {
 };  // namespace NrvStinkBugParent
 
 StinkBugParent::StinkBugParent(const char* pName) : StinkBugBase(pName), mParentOnlyParts(nullptr), mIsChildAlive(true) {
+    lumacore::setClass(this, lumacore::kClassId< StinkBugParent >);
 }
 
 void StinkBugParent::init(const TableIter& rIter) {

@@ -46,6 +46,7 @@
 #include "Game/Camera/CameraWaterPlanetBoss.hpp"
 #include "Game/Camera/CameraWonderPlanet.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 struct CameraTableEntry {
     const char* mName;
@@ -109,6 +110,7 @@ namespace {
 };  // namespace
 
 CameraHolder::CameraHolder(const char* pName) : NameObj(pName), mIndex() {
+    lumacore::setClass(this, lumacore::kClassId< CameraHolder >);
     createCameras();
 
     mIndex.reset(static_cast< u32 >(getNum()));

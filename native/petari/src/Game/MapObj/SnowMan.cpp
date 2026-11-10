@@ -10,6 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.95f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1.05f);
@@ -31,6 +32,7 @@ namespace NrvSnowMan {
 };  // namespace NrvSnowMan
 
 SnowMan::SnowMan(const char* pName) : LiveActor(pName), mHeadCollisionParts(), mBodyCollisionParts(), mAnimScaleCtrl(), mAnimScaleParam() {
+    lumacore::setClass(this, lumacore::kClassId< SnowMan >);
 }
 
 void SnowMan::init(const TableIter& rrIter) {

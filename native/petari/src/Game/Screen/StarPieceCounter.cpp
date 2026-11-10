@@ -9,6 +9,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
 
@@ -33,6 +34,7 @@ namespace NrvStarPieceCounter {
 StarPieceCounter::StarPieceCounter(const char* pName)
     : LayoutActor(pName, true), mStarPieceNum(0), mStarPieceDisplayNum(0), mInvalidCountUpFrame(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr),
       mFollowPos(0.0f, 0.0f), mForcedAppear(0), mMode(0) {
+    lumacore::setClass(this, lumacore::kClassId< StarPieceCounter >);
 }
 
 void StarPieceCounter::init(const TableIter& /*rIter*/) {

@@ -8,6 +8,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 350.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeBreakBig_f1, "exeBreakBig.f1", 30.0f);
@@ -42,6 +43,7 @@ namespace NrvCrystalCageMoving {
 };  // namespace NrvCrystalCageMoving
 
 CrystalCageMoving::CrystalCageMoving(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< CrystalCageMoving >);
     mTicoModel = nullptr;
     mCameraInfo = nullptr;
     mStartPos.x = 0.0f;

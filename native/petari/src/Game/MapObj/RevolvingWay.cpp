@@ -10,6 +10,7 @@
 #include <nebula_math.h>
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sDecayHeld, 0.98f);
@@ -23,6 +24,7 @@ namespace NrvRevolvingWay {
 };  // namespace NrvRevolvingWay
 
 RevolvingWay::RevolvingWay(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 1.0f), mRotateMoment(0.0f, 0.0f, 0.0f), mRadius(500.0f) {
+    lumacore::setClass(this, lumacore::kClassId< RevolvingWay >);
 }
 
 void RevolvingWay::init(const TableIter& rIter) {

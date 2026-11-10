@@ -4,11 +4,14 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 GlaringLightAreaMgr::GlaringLightAreaMgr(s32 maxNum, const char* pName) : AreaObjMgr(maxNum, pName) {
+    lumacore::setClass(this, lumacore::kClassId< GlaringLightAreaMgr >);
 }
 
 GlaringLightArea::GlaringLightArea(int formType, const char* pName) : AreaObj(formType, pName), mSoundObj(), mPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< GlaringLightArea >);
 }
 
 void GlaringLightArea::init(const TableIter& rIter) {

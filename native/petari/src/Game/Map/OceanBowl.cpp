@@ -16,6 +16,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcWaterInfo_f1, "calcWaterInfo.f1", 0.5f);
@@ -76,6 +77,7 @@ OceanBowl::OceanBowl(const char* pName)
     : LiveActor(pName), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRadius(), mWaveX(), mWaveZ(), mTexU0(), mTexV0(),
       mTexU1(), mTexV1(), mTexU2(), mTexV2(), mTexStep(5.0f / 120.0f), mVtxTex0Array(), mVtxTex1Array(), mVtxTex2Array(), mVtxTex3Array(), mWaterTex(),
       mWaterIndirectTex(), mMaskTex(), mBloomDrawer(), mIsClipped() {
+    lumacore::setClass(this, lumacore::kClassId< OceanBowl >);
     for (s32 x = 0; x < cPointNum; x++) {
         for (s32 y = 0; y < cPointNum; y++) {
             setPoint(x, y, nullptr);

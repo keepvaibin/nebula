@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_tryGenItem_f1, "tryGenItem.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_tryGenItem_f2, "tryGenItem.f2", 40.0f);
@@ -19,6 +20,7 @@ namespace NrvPomponPlant {
 };  // namespace NrvPomponPlant
 
 PomponPlant::PomponPlant(const char* pName) : LiveActor(pName), mItemType(-1), mItemCount(1), mCanGenItem(true) {
+    lumacore::setClass(this, lumacore::kClassId< PomponPlant >);
 }
 
 void PomponPlant::init(const TableIter& rIter) {

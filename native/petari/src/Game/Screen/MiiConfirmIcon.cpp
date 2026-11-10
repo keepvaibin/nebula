@@ -1,6 +1,7 @@
 #include "Game/Screen/MiiConfirmIcon.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(MiiConfirmIconNrvAppear, MiiConfirmIcon, Appear);
@@ -9,6 +10,7 @@ namespace {
 };  // namespace
 
 MiiConfirmIcon::MiiConfirmIcon(const char* pName) : LayoutActor(pName, true) {
+    lumacore::setClass(this, lumacore::kClassId< MiiConfirmIcon >);
 }
 
 void MiiConfirmIcon::init(const TableIter& /*rIter*/) {

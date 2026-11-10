@@ -6,6 +6,7 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 70.0f);
@@ -81,6 +82,7 @@ namespace {
 PunchingKinoko::PunchingKinoko(const char* pName)
     : LiveActor(pName), mGroundChecker(nullptr), mScaleController(nullptr), mDelegator(nullptr), mCameraVecId(-1), mCameraTarget(0, 0, 0),
       mShadowNormal(0, 1, 0), mStarPointerHitCoolDown(0), mIsPointerHeld(true), mInvincibleHitCoolDown(-1) {
+    lumacore::setClass(this, lumacore::kClassId< PunchingKinoko >);
 }
 
 // The head is its own actor (mGroundChecker) on a spring to the rest point; the stem is a shadow line between the two.

@@ -8,6 +8,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 600.0f);
@@ -36,6 +37,7 @@ namespace NrvBreakableCage {
 BreakableCage::BreakableCage(const char* pName)
     : LiveActor(pName), mBreakModel(), mCageType(CAGE_INVALID), mRotationSpeed(), mItemModel(), mIgnoreGravity(), mDelayDeadActivate(),
       mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< BreakableCage >);
     mMtx.identity();
 }
 

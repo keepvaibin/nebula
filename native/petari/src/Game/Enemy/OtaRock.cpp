@@ -8,6 +8,7 @@
 #include "Game/MapObj/CocoNut.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f1, "initModel.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f2, "initModel.f2", 90.0f);
@@ -46,6 +47,7 @@ namespace NrvOtaRock {
 OtaRock::OtaRock(const char* pName)
     : LiveActor(pName), mNoThrowCocoNut(false), mCocoNutArray(nullptr), mFireBallArray(nullptr), mFixedPosition(nullptr),
       mThrowCocoNutCounter(0), mWaitFrame(0), mBaseMtx(), mFront(0.0f, 0.0f, 1.0f), mAnimScaleController(0) {
+    lumacore::setClass(this, lumacore::kClassId< OtaRock >);
     mBaseMtx.identity();
 }
 

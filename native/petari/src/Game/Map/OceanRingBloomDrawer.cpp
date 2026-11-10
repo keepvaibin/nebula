@@ -5,8 +5,10 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 OceanRingBloomDrawer::OceanRingBloomDrawer(OceanRing* pRing) : NameObj("オーシャンリング[ブルーム描画]"), mRing(pRing) {
+    lumacore::setClass(this, lumacore::kClassId< OceanRingBloomDrawer >);
 }
 
 void OceanRingBloomDrawer::init(const TableIter& /*rIter*/) {

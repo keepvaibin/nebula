@@ -23,6 +23,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
@@ -137,6 +138,7 @@ BombHei::BombHei(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mBindStarPointerState(nullptr), mRotQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1),
       mBinderOffset(0, 1, 0), mTargetFront(0, 0, 1), mCountdown(-1), mFuseTime(hStartBrkTime), mCarrySensor(nullptr), mExplodeRadius(500.0f), mBodyJoint(nullptr),
       mType(BOMB_HEI), mExplosionIgnoreCollision(false) {
+    lumacore::setClass(this, lumacore::kClassId< BombHei >);
 }
 
 void BombHei::init(const TableIter& rIter) {

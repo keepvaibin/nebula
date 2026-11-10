@@ -6,6 +6,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -25,6 +26,7 @@ void BegomanHead::calcAndSetBaseMtx() {
 }
 
 BegomanSpringHead::BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx) : BegomanHead(pActor, "バネ頭", "BegomanSpringHead", pMtx, MR::DrawBufferType_MapObjStrongLight, false) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanSpringHead >);
 }
 
 void BegomanSpringHead::init(const TableIter& rIter) {

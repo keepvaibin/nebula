@@ -19,6 +19,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
@@ -44,6 +45,7 @@ namespace NrvGCaptureTarget {
 
 GCaptureTarget::GCaptureTarget(const char* pName)
     : LiveActor(pName), mRailMover(), mStarAnimSpeed(1.0f), mCameraInfo(), mReleaseDistance(-1.0f), mPointableRange(2500.0f), mFarAwayColor(true) {
+    lumacore::setClass(this, lumacore::kClassId< GCaptureTarget >);
     MR::createGCapture();
 }
 

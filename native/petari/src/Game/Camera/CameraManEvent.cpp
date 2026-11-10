@@ -11,6 +11,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setSafePose_f1, "setSafePose.f1", 0.98f);
 NEBULA_TUNABLE_NAMED(f32, cNum_setSafePose_f2, "setSafePose.f2", 0.98f);
@@ -22,6 +23,7 @@ namespace {
 
 CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
     : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mCamera(), mChunk(), mRequestReset() {
+    lumacore::setClass(this, lumacore::kClassId< CameraManEvent >);
     for (u32 i = 0; i < cPriorityNum; i++) {
         mSlots[i].mActive.mChunk = nullptr;
         mSlots[i].mRequested.mChunk = nullptr;

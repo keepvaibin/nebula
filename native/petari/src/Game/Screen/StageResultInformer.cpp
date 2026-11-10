@@ -18,6 +18,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // A skipped star return (NebulaCutsceneSkip) closes each panel as soon as it is up.
@@ -115,6 +116,7 @@ void DisplayInformationForResult::exeIdle() {
 
 StageResultInformer::StageResultInformer()
     : LayoutActor("リザルト通知", true), mInformationDisplayer(), mSequenceChecker(), mIconAButton(), mHasBufferedDecide(), mIsNewBestCoin() {
+    lumacore::setClass(this, lumacore::kClassId< StageResultInformer >);
     mInformationDisplayer = new DisplayInformationForResult(this);
     mSequenceChecker = new StageResultSequenceChecker();
 }

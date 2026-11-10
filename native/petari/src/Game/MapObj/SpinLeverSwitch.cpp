@@ -3,6 +3,7 @@
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
@@ -19,6 +20,7 @@ namespace NrvSpinLeverSwitch {
 };  // namespace NrvSpinLeverSwitch
 
 SpinLeverSwitch::SpinLeverSwitch(const char* pName) : LiveActor(pName), mConnector() {
+    lumacore::setClass(this, lumacore::kClassId< SpinLeverSwitch >);
     mConnector = new MapObjConnector(this);
 }
 

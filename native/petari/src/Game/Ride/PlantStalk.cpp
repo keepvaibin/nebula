@@ -15,6 +15,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerCoord_f1, "calcPlayerCoord.f1", 100000000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerCoord_f2, "calcPlayerCoord.f2", 15.0f);
@@ -46,6 +47,7 @@ PlantStalk::PlantStalk()
     : LiveActor("茎"), mNumPlantPoints(), mPlantPoints(), mRailInfo(), mStalkLength(), mGrowthPercent(),
       mGrowSpeed(MR::getRandom(::sGrowSpeedMin, ::sGrowSpeedMax)), mGrowAccelTime(MR::getRandom(::sGrowAccelTimeMin, ::sGrowAccelTimeMax)),
       mGrownPlantPoints() {
+    lumacore::setClass(this, lumacore::kClassId< PlantStalk >);
 }
 
 void PlantStalk::init(const TableIter& rIter) {
@@ -204,6 +206,7 @@ void PlantStalk::drawGrowUp(TypedDraw& rDraw) const {
 }
 
 PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PlantStalkDrawInit >);
     mTexture = nullptr;
     mTexture = new GameTexture(MR::loadTexFromArc("Plant", "PlantStalk.bti"));
 

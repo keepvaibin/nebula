@@ -3,8 +3,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MercatorRotateParts::MercatorRotateParts(const char* pName) : LiveActor(pName), mRotator(nullptr), mAppearController(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< MercatorRotateParts >);
 }
 
 void MercatorRotateParts::initAfterPlacement() {

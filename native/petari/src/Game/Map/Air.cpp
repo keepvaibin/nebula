@@ -10,6 +10,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_Air_f1, "Air.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
@@ -24,6 +25,7 @@ namespace NrvAir {
 };  // namespace NrvAir
 
 Air::Air(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< Air >);
     mIsChanged = 0;
     mIsWaitStartCamera = 0;
     mDistance = cNum_Air_f1;
@@ -155,6 +157,7 @@ void Air::exeOut() {
 }
 
 ProjectionMapAir::ProjectionMapAir(const char* pName) : Air(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ProjectionMapAir >);
 }
 
 void ProjectionMapAir::initModel(const char* pModelName) {
@@ -169,6 +172,7 @@ void Air::setFarClipping() {
 }
 
 AirFar100m::AirFar100m(const char* pName) : Air(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AirFar100m >);
 }
 
 void AirFar100m::setFarClipping() {
@@ -176,11 +180,13 @@ void AirFar100m::setFarClipping() {
 }
 
 PriorDrawAir::PriorDrawAir(const char* pName) : Air(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PriorDrawAir >);
     MR::createSceneObj(SceneObj_PriorDrawAirHolder);
     MR::getSceneObj< PriorDrawAirHolder >(SceneObj_PriorDrawAirHolder)->add(this);
 }
 
 PriorDrawAirHolder::PriorDrawAirHolder() : NameObj("先描画大気保持") {
+    lumacore::setClass(this, lumacore::kClassId< PriorDrawAirHolder >);
     mAirCount = 0;
 }
 

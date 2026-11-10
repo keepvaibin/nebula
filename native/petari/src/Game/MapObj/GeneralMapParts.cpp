@@ -8,6 +8,7 @@
 #include "Game/MapObj/MapPartsRailRotator.hpp"
 #include "Game/MapObj/MapPartsRotator.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvGeneralMapParts {
     NEW_NERVE(HostTypeWait, GeneralMapParts, Wait);
@@ -19,6 +20,7 @@ namespace NrvGeneralMapParts {
 GeneralMapParts::GeneralMapParts(const char* pName)
     : MapParts(pName), mCameraInfo(), mMoveConditionType(), mSignMotionType(), mShadowType(), mFunctionArray(), mAppearController(), mRailRotator(),
       mRailMover(), mRotator(), mGuideDrawer(), mRailPosture(), mIsCameraEnded(), mIsPaused() {
+    lumacore::setClass(this, lumacore::kClassId< GeneralMapParts >);
 }
 
 void GeneralMapParts::init(const TableIter& rIter) {

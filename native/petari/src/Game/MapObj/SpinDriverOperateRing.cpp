@@ -4,6 +4,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sOperateAccel, 0.5f);
@@ -33,6 +34,7 @@ namespace {
 SpinDriverOperateRing::SpinDriverOperateRing(const char* pName)
     : LiveActor(pName), mCenter(0, 0, 0), mOffset(0, 0, 0), mAccelerate(0, 0, 0), mDirection(0, 0, 0), mPointerPos(0.0f, 0.0f, 0.0f), mRadiusRate(),
       mOffsetLength(), mOffsetRate(), mOperateState(OperateState_None) {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriverOperateRing >);
 }
 
 void SpinDriverOperateRing::init(const TableIter& /*rIter*/) {

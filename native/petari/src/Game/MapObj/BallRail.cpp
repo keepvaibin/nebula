@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
@@ -30,6 +31,7 @@ namespace {
 
 BallRail::BallRail(const char* pName)
     : LiveActor(pName), mBindSensor(nullptr), mAcceleration(1.5f), mDeceleration(0.995f), mBindSensorRadius(100.0f) {
+    lumacore::setClass(this, lumacore::kClassId< BallRail >);
 }
 
 // Arg 0 the gravity acceleration and arg 1 the speed kept each step, both in thousandths.

@@ -14,6 +14,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -159,6 +160,7 @@ void GameSystemRestartProcess::control() {
 
 GameSystemRestartProcess::GameSystemRestartProcess()
     : LayoutActor("リセット・電源", false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart) {
+    lumacore::setClass(this, lumacore::kClassId< GameSystemRestartProcess >);
     mFadeinoutControl = new ValueControl(::sFadeinoutFrame);
     mFadeinoutControl->setOne();
 }

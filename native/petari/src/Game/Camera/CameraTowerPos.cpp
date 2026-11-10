@@ -4,6 +4,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 15.0f);
@@ -20,6 +21,7 @@ namespace {
 CameraTowerPos::CameraTowerPos(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleYMaxSpeed(), mAngleX(), mDist(1000.0f), mAngleXRate(0.5f),
       mPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraTowerPos >);
 }
 
 void CameraTowerPos::reset() {

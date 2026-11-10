@@ -15,6 +15,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/System/LumaCore.hpp"
 
 FurMulti* FurBank::check(ModelData* pModelData, u32 layer) {
     for (u32 i = 0; i < mCount; i++) {
@@ -137,6 +138,7 @@ namespace MR {
 };  // namespace MR
 
 FurDrawManager::FurDrawManager(u32 capacity) : NameObj("ファー描画マネージャ") {
+    lumacore::setClass(this, lumacore::kClassId< FurDrawManager >);
     mFurCtrls[0].init(capacity);
     mFurCtrls[1].init(capacity);
     mBank = new FurBank;

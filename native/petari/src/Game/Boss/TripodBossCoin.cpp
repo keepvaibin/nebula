@@ -5,6 +5,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTripodBossCoin {
     NEW_NERVE(TripodBossCoinNrvNonActive, TripodBossCoin, NonActive);
@@ -13,6 +14,7 @@ namespace NrvTripodBossCoin {
 };  // namespace NrvTripodBossCoin
 
 TripodBossCoin::TripodBossCoin(const char* pName) : NameObj(pName), mCoin(), mSpine(), mJointID(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossCoin >);
     mPlacementMtx.identity();
 }
 

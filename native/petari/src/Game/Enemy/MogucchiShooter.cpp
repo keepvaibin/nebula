@@ -16,6 +16,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exePanic_setBckRate_1, "exePanic.setBckRate.1", 2.0f);
@@ -49,6 +50,7 @@ namespace NrvMogucchiShooter {
 
 MogucchiShooter::MogucchiShooter(LiveActor* pActor, const char* pName)
     : PartsModel(pActor, pName, "MogucchiShooter", nullptr, MR::DrawBufferType_Enemy, false), mFront(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< MogucchiShooter >);
 }
 
 void MogucchiShooter::init(const TableIter& /*rIter*/) {

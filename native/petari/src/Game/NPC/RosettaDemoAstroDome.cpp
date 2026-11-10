@@ -15,6 +15,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 
 namespace NrvRosettaDemoAstroDomeExplain {
@@ -41,6 +42,7 @@ static void EntryDemo(T* caller, const char* pDemoName, const char* pRootName, c
 }
 
 RosettaMonologue::RosettaMonologue() : SimpleLayout("ロゼッタの語り", "PrologueStarSteward", 2, -1), mTextFormer(this, "Text00") {
+    lumacore::setClass(this, lumacore::kClassId< RosettaMonologue >);
     MR::createAndAddPaneCtrl(this, "TalkBalloon", 1);
     MR::createAndAddPaneCtrl(this, "CrossFade1", 1);
     MR::createAndAddPaneCtrl(this, "CrossFade2", 1);

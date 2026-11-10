@@ -19,6 +19,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_playGo_f1, "playGo.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_isPlayCountAnim_f1, "isPlayCountAnim.f1", 180.0f);
@@ -64,6 +65,7 @@ namespace {
 };  // namespace
 
 RaceManagerLayout::RaceManagerLayout(const char* pName) : LayoutActor(pName, true) {
+    lumacore::setClass(this, lumacore::kClassId< RaceManagerLayout >);
 }
 
 void RaceManagerLayout::init(const TableIter& /*rIter*/) {
@@ -176,6 +178,7 @@ namespace NrvRaceManager {
 
 RaceManager::RaceManager()
     : LiveActor("レース管理"), mLayout(nullptr), mRacerNum(0), mAudienceNum(0), mRank(0), mBestTime(0), mTime(0), mPlayerRacer(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< RaceManager >);
     mGoalInvMtx.identity();
 }
 

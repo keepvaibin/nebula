@@ -9,6 +9,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
@@ -115,6 +116,7 @@ bool CocoSambo::isNerveDying() {
 }
 
 CocoSamboHead::CocoSamboHead(LiveActor* pHost) : PartsModel(pHost, "ココサンボ[頭]", "CocoSamboHead", nullptr, MR::DrawBufferType_Enemy, false) {
+    lumacore::setClass(this, lumacore::kClassId< CocoSamboHead >);
     mFrontVec.set(0.0f, 0.0f, 1.0f);
 }
 
@@ -333,6 +335,7 @@ void CocoSamboHead::exeBlow() {
 CocoSambo::CocoSambo(const char* pName)
     : LiveActor(pName), mHead(), mHitEffectScale(gZeroVec), mFrontVec(0.0f, 0.0f, 1.0f), mUpVec(0.0f, 1.0f, 0.0f), mPlayerSearchDistance(1800.0f),
       mAnimScaleParam(), mAnimScaleController(), mPointerAimingEndNerve(), mPointingActorArray() {
+    lumacore::setClass(this, lumacore::kClassId< CocoSambo >);
 }
 
 void CocoSambo::init(const TableIter& rIter) {

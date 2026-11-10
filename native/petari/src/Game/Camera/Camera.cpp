@@ -4,8 +4,10 @@
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraPoseParam.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 Camera::Camera(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< Camera >);
     mPoseParam = new CameraPoseParam();
     mVPan = nullptr;
     mIsLOfsErpOff = false;

@@ -8,6 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_resetRacer_f1, "resetRacer.f1", 180.0f);
@@ -22,6 +23,7 @@ namespace NrvPenguinRacerLeader {
 };  // namespace NrvPenguinRacerLeader
 
 PenguinRacerLeader::PenguinRacerLeader(const char* pName) : PenguinRacer(pName), mTakeOutStar(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< PenguinRacerLeader >);
 }
 
 void PenguinRacerLeader::init(const TableIter& rIter) {

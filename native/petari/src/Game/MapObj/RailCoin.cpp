@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_placementMercatorRail_f1, "placementMercatorRail.f1", 10.0f);
 
@@ -20,6 +21,7 @@ namespace {
 };  // namespace
 
 RailCoin::RailCoin(const char* pName) : CoinGroup(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RailCoin >);
 }
 
 void RailCoin::initCoinArray(const TableIter& rIter) {

@@ -4,6 +4,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sDangerTransFrame, 600);
@@ -18,6 +19,7 @@ namespace NrvBombTimerLayout {
 
 BombTimerLayout::BombTimerLayout(bool isConnectToScene)
     : LayoutActor("ボムタイマーレイアウト", true), mTimeLimit(), mDangerTransFrame(::sDangerTransFrame), mFrame(), mIsSuspend() {
+    lumacore::setClass(this, lumacore::kClassId< BombTimerLayout >);
     if (isConnectToScene) {
         MR::connectToSceneLayout(this);
     }

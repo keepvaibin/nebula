@@ -6,6 +6,7 @@
 #include "math_types.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndCollision_f1, "initModelAndCollision.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndCollision_f2, "initModelAndCollision.f2", 0.5f);
@@ -16,6 +17,7 @@ namespace {
 };  // namespace
 
 MapParts::MapParts(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MapParts >);
     mClipCenter.setZeroVec();
 }
 

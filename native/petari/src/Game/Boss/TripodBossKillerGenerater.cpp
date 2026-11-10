@@ -17,6 +17,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const s32 sDemoAnimStartDelayTime = NebulaFrameClock::stepsOfMilliseconds(1500);
@@ -39,6 +40,7 @@ namespace NrvTripodBossKillerGenerater {
 
 TripodBossKillerGenerater::TripodBossKillerGenerater(const char* pName)
     : TripodBossFixPartsBase(pName), mKiller(), mCanShootSettingPlayerDistance(2000.0f), mActiveLabel(), mHasCollision(true), mIsWaitPlayerAway() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossKillerGenerater >);
     mLocalMtx.identity();
 }
 

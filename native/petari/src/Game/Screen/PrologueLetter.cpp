@@ -5,6 +5,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(PrologueLetterNrvAppear, PrologueLetter, Appear);
@@ -13,6 +14,7 @@ namespace {
 };  // namespace
 
 PrologueLetter::PrologueLetter(const char* pName) : LayoutActor(pName, true), mAButtonIcon() {
+    lumacore::setClass(this, lumacore::kClassId< PrologueLetter >);
 }
 
 void PrologueLetter::init(const TableIter& /*rIter*/) {

@@ -5,6 +5,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvPeachLetter {
     NEW_NERVE(PeachLetterNrvAppear, PeachLetter, Appear);
@@ -13,6 +14,7 @@ namespace NrvPeachLetter {
 };  // namespace NrvPeachLetter
 
 PeachLetter::PeachLetter(const char* pName) : LayoutActor(pName, true), mAButtonIcon() {
+    lumacore::setClass(this, lumacore::kClassId< PeachLetter >);
 }
 
 void PeachLetter::init(const TableIter&) {

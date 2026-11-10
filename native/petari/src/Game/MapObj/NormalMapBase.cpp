@@ -23,6 +23,7 @@
 #include <cstring>
 #include <nebula_format.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f1, "updateLightMtx.f1", 100000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateLightMtx_f2, "updateLightMtx.f2", 0.5f);
@@ -74,6 +75,7 @@ namespace {
 }  // namespace
 
 NormalMapBase::NormalMapBase(const char* pName) : LiveActor(pName), mTextures(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< NormalMapBase >);
     mTexFlags = 0;
     mGradTexMode = 0;
     mBackLightMode = 0;

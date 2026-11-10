@@ -36,6 +36,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoCrackCapsule_f1, "exeDemoCrackCapsule.f1", 600.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoCrackCapsule_f2, "exeDemoCrackCapsule.f2", 25.0f);
@@ -96,6 +97,7 @@ namespace {
 WaterBazooka::WaterBazooka(const char* pName)
     : LiveActor(pName), mShooter(), mCapsule(), mBreakModel(), mDemoActor(), mCameraInfo(), mAlreadyDoneFlag(-1), mLife(3), mShotNum(),
       mCannonCollisionParts(), mJointCtrl(), mIsPinchBGMStarted(), mHasPowerStar(), mIsElectric(), mBullets(), mElectricTime(-1) {
+    lumacore::setClass(this, lumacore::kClassId< WaterBazooka >);
     mBaseMtx.identity();
 }
 

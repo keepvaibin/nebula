@@ -6,6 +6,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setNumber_f1, "setNumber.f1", 128.0f);
 
@@ -16,6 +17,7 @@ namespace NrvFullnessMeter {
 };  // namespace NrvFullnessMeter
 
 FullnessMeter::FullnessMeter(LiveActor* pHost, s32 a2, s32 a3) : LayoutActor("満腹計", true), mNumber(a3), mNumberMax(a2), mHost(pHost) {
+    lumacore::setClass(this, lumacore::kClassId< FullnessMeter >);
     MR::connectToSceneTalkLayout(this);
     initLayoutManager("StarPieceTargetMeter", 1);
     MR::createAndAddPaneCtrl(this, "TargetMeter", 1);

@@ -6,9 +6,11 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MiiFaceIconHolder::MiiFaceIconHolder(u32 iconNum, const char* pName)
     : NameObj(pName), mIconNumMax(iconNum), mIconNum(0), mIcon(new MiiFaceIcon*[iconNum]) {
+    lumacore::setClass(this, lumacore::kClassId< MiiFaceIconHolder >);
     MR::connectToScene(MR::createDrawAdaptor("Miiアイコン生成", MR::Functor(this, &MiiFaceIconHolder::drawIcons)), MR::MovementType_None,
                        MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_MiiFaceIcon);
 }

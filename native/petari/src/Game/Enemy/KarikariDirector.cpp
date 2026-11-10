@@ -6,6 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_clearScratchInfo_f1, "clearScratchInfo.f1", 100000000.0f);
 
@@ -29,6 +30,7 @@ namespace {
 KarikariDirector::KarikariDirector(const char* pName)
     : LiveActorGroup(pName, 128), mClingNum(0), mClingJointMtxs(nullptr), mClingPositions(nullptr), mClingingKarikari(nullptr),
       mReleaseKarikari(nullptr), mReleaseVel(0.0f, 0.0f), mLowestReleaseDist(999999.0f), mNoReleaseTime(0), mRumbleTime(1) {
+    lumacore::setClass(this, lumacore::kClassId< KarikariDirector >);
     MR::connectToSceneEnemyMovement(this);
     mClingJointMtxs = new Pos3f[::hKarikariHoldingMax];
     mClingPositions = new FixedPosition*[::hKarikariHoldingMax];

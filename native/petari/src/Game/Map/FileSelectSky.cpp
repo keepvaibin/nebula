@@ -5,6 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.8f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.8f);
@@ -26,6 +27,7 @@ FileSelectSky::~FileSelectSky() {
 }
 
 FileSelectSky::FileSelectSky(const char* pName) : LiveActor(pName), mAngleX(), mAngleY(), mProjmapEffectMtxSetter() {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectSky >);
 }
 
 void FileSelectSky::init(const TableIter& /*rIter*/) {

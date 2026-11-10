@@ -6,6 +6,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cDummyTexName = "MapDummy";
@@ -16,6 +17,7 @@ namespace NrvAstroMapBoard {
 };  // namespace NrvAstroMapBoard
 
 AstroMapBoard::AstroMapBoard(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AstroMapBoard >);
 }
 
 void AstroMapBoard::init(const TableIter& rIter) {

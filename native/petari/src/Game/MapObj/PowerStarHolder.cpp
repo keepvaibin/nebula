@@ -4,8 +4,10 @@
 #include "Game/NPC/EventDirector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 PowerStarHolder::PowerStarHolder(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PowerStarHolder >);
     mNumInfos = 0;
 }
 

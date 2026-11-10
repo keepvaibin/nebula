@@ -6,8 +6,10 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 OceanBowlBloomDrawer::OceanBowlBloomDrawer(OceanBowl* pHost) : NameObj("オーシャンボウル[ブルーム描画]"), mHost(pHost) {
+    lumacore::setClass(this, lumacore::kClassId< OceanBowlBloomDrawer >);
 }
 
 void OceanBowlBloomDrawer::init(const TableIter& /*rIter*/) {

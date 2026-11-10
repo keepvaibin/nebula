@@ -10,6 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcWindInfo_f1, "calcWindInfo.f1", 1000000.0f);
 
@@ -29,6 +30,7 @@ namespace NrvFluffWindEffect {
 };  // namespace NrvFluffWindEffect
 
 FluffWindEffect::FluffWindEffect(const char* pName) : LiveActor(pName), mEffectName(), mTimer(-1) {
+    lumacore::setClass(this, lumacore::kClassId< FluffWindEffect >);
     mMtx.identity();
 }
 
@@ -71,6 +73,7 @@ void FluffWindEffect::exeBlowWind() {
 }
 
 FluffWind::FluffWind(const char* pName) : LiveActor(pName), mNumEffects(), mEffects() {
+    lumacore::setClass(this, lumacore::kClassId< FluffWind >);
 }
 
 void FluffWind::init(const TableIter& rIter) {
@@ -113,6 +116,7 @@ void FluffWind::makeActorDead() {
 }
 
 FluffWindHolder::FluffWindHolder() : LiveActorGroup("わたげ風", 8) {
+    lumacore::setClass(this, lumacore::kClassId< FluffWindHolder >);
 }
 
 void FluffWindHolder::calcWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindDistance) const {

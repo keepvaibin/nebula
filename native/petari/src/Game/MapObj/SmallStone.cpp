@@ -3,6 +3,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 0.01f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 2.0f);
@@ -30,6 +31,7 @@ namespace {
 };  // namespace
 
 SmallStone::SmallStone(const char* pName) : LiveActor(pName), mMembers(), mMemberCount(), mPlacementOffset(), mStoneType(), mUseGravity(true) {
+    lumacore::setClass(this, lumacore::kClassId< SmallStone >);
 }
 
 SmallStone::~SmallStone() {
@@ -446,6 +448,7 @@ void SmallStone::initMember(const char* pModelName, bool useGravity) {
 SmallStoneMember::SmallStoneMember(const char* pModelName)
     : ModelObj("SmallStoneMember", pModelName, nullptr, MR::DrawBufferType_MapObjStrongLight, MR::MovementType_None, -2, false), mAnimRate(1.0f),
       mShakeRequested(), mAnimStopped(), mBreakTimer(-1), mBreakEffectName(), mUseGravity(true) {
+    lumacore::setClass(this, lumacore::kClassId< SmallStoneMember >);
 }
 
 void SmallStoneMember::animControl() {

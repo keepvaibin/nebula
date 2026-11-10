@@ -6,6 +6,7 @@
 #include "Game/MapObj/JetTurtle.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
@@ -37,6 +38,7 @@ namespace NrvKameckTurtle {
 
 KameckTurtle::KameckTurtle(const char* pName)
     : LiveActor(pName), mTurtle(), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0.0f, 0.0f, 1.0f), mRunDir(0.0f, 0.0f, 1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< KameckTurtle >);
 }
 
 void KameckTurtle::init(const TableIter& rIter) {

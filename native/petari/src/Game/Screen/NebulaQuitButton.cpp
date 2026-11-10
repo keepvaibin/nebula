@@ -14,6 +14,7 @@
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // The button waits this long after its corner frees up: a pointer crossing between files does not flash it.
@@ -50,6 +51,7 @@ namespace {
 };  // namespace
 
 NebulaQuitButton::NebulaQuitButton(const char* pName) : LayoutActor(pName, true), mButton(nullptr), mShownFrames(0), mIsDecided(false) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaQuitButton >);
 }
 
 void NebulaQuitButton::init(const TableIter& /*rIter*/) {

@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeSetCenter_f1, "exeSetCenter.f1", 0.0001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f1, "bindHole.f1", 0.1f);
@@ -32,6 +33,7 @@ namespace NrvBallOpener {
 
 BallOpener::BallOpener(const char* pName)
     : LiveActor(pName), mBoundSensor(), mInitialVelocity(0, 0, 0), mBindVelocity(0, 0, 0), mSettledFrames() {
+    lumacore::setClass(this, lumacore::kClassId< BallOpener >);
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 

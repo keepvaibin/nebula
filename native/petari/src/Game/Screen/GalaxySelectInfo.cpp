@@ -7,6 +7,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cFadeinoutFrame, 5);
@@ -19,6 +20,7 @@ namespace NrvGalaxySelectInfo {
 
 GalaxySelectInfo::GalaxySelectInfo(bool param1)
     : LayoutActor("ギャラクシー選択情報", true), mIsOnPause(param1), mShownGalaxyName(nullptr), mIsShownThisFrame(false), mFadeinoutControl(nullptr), mInfoLayoutSetter(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxySelectInfo >);
     mFadeinoutControl = new ValueControl(::cFadeinoutFrame);
     mFadeinoutControl->setZero();
 }

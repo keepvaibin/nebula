@@ -10,6 +10,7 @@
 #include "Game/NPC/TurnJointCtrl.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 160.0f);
@@ -33,6 +34,7 @@ namespace NrvRosetta {
 };  // namespace NrvRosetta
 
 Rosetta::Rosetta(const char* pName) : NPCActor(pName), mFadeStarter(this, -1), mDemoExecutor(), mObjArg0(-1) {
+    lumacore::setClass(this, lumacore::kClassId< Rosetta >);
 }
 
 void Rosetta::init(const TableIter& rIter) {

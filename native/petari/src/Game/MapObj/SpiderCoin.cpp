@@ -15,6 +15,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -42,6 +43,7 @@ namespace NrvSpiderCoin {
 SpiderCoin::SpiderCoin(const char* pName)
     : LiveActor(pName), mPointPos(nullptr), mNeutralPos(nullptr), mUp(nullptr), mThreadZ(0.0f), mPad0Velocity(0.0f, 0.0f), mPad1Velocity(0.0f, 0.0f),
       mCocoonModel(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< SpiderCoin >);
     mBaseMtx.identity();
 }
 

@@ -8,6 +8,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
@@ -26,6 +27,7 @@ namespace NrvCoinCounter {
 CoinCounter::CoinCounter(const char* pName)
     : LayoutActor(pName, true), mCoinNum(0), mCoinDisplayNum(0), mInvalidCountUpFrame(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr),
       mIsForceAppear(false), mFollowPos(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CoinCounter >);
 }
 
 void CoinCounter::init(const TableIter& /*rIter*/) {

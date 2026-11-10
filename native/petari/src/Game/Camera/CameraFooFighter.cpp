@@ -6,6 +6,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -18,6 +19,7 @@ namespace {
 CameraFooFighter::CameraFooFighter(const char* pName)
     : Camera(pName), mDistMin(300.0f), mDistMax(1200.0f), mAngleXRateMin(0.03f), mAngleXRate(0.03f), mCollideCount(),
       mTargetLastMoveDir(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraFooFighter >);
 }
 
 void CameraFooFighter::reset() {

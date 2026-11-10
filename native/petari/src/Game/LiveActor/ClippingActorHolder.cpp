@@ -7,6 +7,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_findGround_f1, "findGround.f1", 1.25f);
 
@@ -32,6 +33,7 @@ ClippingActorHolder::ClippingActorHolder()
       mInvalid(new ClippingActorInfoList(::sListCapacity)), mNonTargets(new ClippingActorInfoList(::sListCapacity)),
       mGroupTargets(new ClippingActorInfoList(::sListCapacity)), mViewGroupCtrl(new ViewGroupCtrl()), mPlanets(), mPlanetNum(),
       mTable(new ClippingActorInfo*[::sTableSize]()), mTableMask(::sTableSize - 1) {
+    lumacore::setClass(this, lumacore::kClassId< ClippingActorHolder >);
 }
 
 void ClippingActorHolder::movement() {

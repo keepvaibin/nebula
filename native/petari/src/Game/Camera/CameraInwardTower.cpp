@@ -5,6 +5,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 0.9f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 0.1f);
@@ -20,6 +21,7 @@ namespace {
 CameraInwardTower::CameraInwardTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleX(), mAngleMax(), mDist(2000.0f), mPos(0.0f, 10.0f, 0.0f), mAngleY(),
       mIsResetting() {
+    lumacore::setClass(this, lumacore::kClassId< CameraInwardTower >);
     createVPanObj();
 }
 

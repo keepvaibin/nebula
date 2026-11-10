@@ -8,6 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -18,6 +19,7 @@ namespace {
 
 CameraFixedThere::CameraFixedThere(const char* pName)
     : Camera(pName), mCameraType(), mIsFovyFixed(), mUp(0.0f, 1.0f, 0.0f), mAxis(0.0f, 0.0f, 1.0f), mRoll() {
+    lumacore::setClass(this, lumacore::kClassId< CameraFixedThere >);
 }
 
 void CameraFixedThere::reset() {

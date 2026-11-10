@@ -4,6 +4,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -13,6 +14,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_calc_f5, "calc.f5", 10.0f);
 
 CameraSpiral::CameraSpiral(const char* pName)
     : Camera(pName), mEndTime(60), mTimer(), mStartTime(), mDistStart(1000.0f), mDistEnd(1000.0f), mAngleStart(), mAngleEnd() {
+    lumacore::setClass(this, lumacore::kClassId< CameraSpiral >);
 }
 
 void CameraSpiral::reset() {

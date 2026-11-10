@@ -11,6 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
@@ -29,6 +30,7 @@ namespace NrvNeedlePlant {
 };  // namespace NrvNeedlePlant
 
 NeedlePlant::NeedlePlant(const char* pName) : MapObjActor(pName), mObjArg0(-1) {
+    lumacore::setClass(this, lumacore::kClassId< NeedlePlant >);
 }
 
 void NeedlePlant::init(const TableIter& rIter) {

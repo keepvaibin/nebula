@@ -10,6 +10,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 5.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f1, "hitCheck.f1", 0.5f);
@@ -29,6 +30,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f11, "setSurface.f11", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f12, "setSurface.f12", 10.0f);
 
 CollisionArea::CollisionArea(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< CollisionArea >);
     mOutsideAxisCount = 0;
     mInsideDepth = 0.0f;
     mCenter.zero();
@@ -454,6 +456,7 @@ void AreaPolygon::validate() {
 }
 
 AreaPolygon::AreaPolygon() : DynamicCollisionObj("エリアポリゴン") {
+    lumacore::setClass(this, lumacore::kClassId< AreaPolygon >);
     mForm = nullptr;
     mFollowMtx = nullptr;
     mSize.zero();

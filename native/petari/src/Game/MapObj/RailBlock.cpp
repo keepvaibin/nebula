@@ -5,6 +5,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sStartSignTime = NebulaFrameClock::stepsOfSeconds(1);
@@ -19,6 +20,7 @@ namespace NrvRailBlock {
 };  // namespace NrvRailBlock
 
 RailBlock::RailBlock(const char* pName) : LiveActor(pName), mRailSpeed(10), mMoveTime(100), mIsConnectedToRail() {
+    lumacore::setClass(this, lumacore::kClassId< RailBlock >);
 }
 
 void RailBlock::init(const TableIter& rIter) {

@@ -21,6 +21,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
@@ -73,7 +74,9 @@ namespace {
 Takobo::Takobo(const char* pName)
     : LiveActor(pName), mFront(0, 0, 1), mIsCheckFireGround(false), mMoveDir(1, 0, 0), mIsMoveBack(false), mMoveSpeed(5.0f),
       mMoveRange(500.0f), mMoveStart(-500.0f), mMoveEnd(500.0f), mMoveStep(0), mBox(nullptr), mScaleController(nullptr),
-      mSpinController(nullptr) {}
+      mSpinController(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< Takobo >);
+}
 
 void Takobo::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);

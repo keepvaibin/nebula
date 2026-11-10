@@ -13,6 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
@@ -51,6 +52,7 @@ namespace {
 
 TripodBossFixParts::TripodBossFixParts(const char* pName)
     : TripodBossFixPartsBase(pName), mBreakType(-1), mBreakKillStep(180), mHasCollision(), mHasBreakMovement(true), mIsMarioOn(), mIsPlayingWarning() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossFixParts >);
 }
 
 void TripodBossFixParts::init(const TableIter& rIter) {

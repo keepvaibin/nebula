@@ -3,8 +3,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CutBushModelObj::CutBushModelObj(const char* pName, const char* pModelName, bool useLight, MtxPtr pMtx) : LiveActor(pName), mMtx(pMtx) {
+    lumacore::setClass(this, lumacore::kClassId< CutBushModelObj >);
     initModelManagerWithAnm(pModelName, nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjWeakLightNoMovement(this);
 

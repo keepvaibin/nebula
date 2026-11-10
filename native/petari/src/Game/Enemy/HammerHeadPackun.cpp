@@ -27,6 +27,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 169.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
@@ -64,6 +65,7 @@ NEBULA_TUNABLE_NAMED(s32, cStep_isAttackSensorValid_1, "isAttackSensorValid.1", 
 NEBULA_TUNABLE_NAMED(s32, cStep_isChance_1, "isChance.1", 50);
 
 HammerHeadPackun::HammerHeadPackun(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< HammerHeadPackun >);
     mLeafModel = nullptr;
     mImmunityTime = 0;
     mUp.x = 0.0f;

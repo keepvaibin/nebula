@@ -5,11 +5,13 @@
 #include "Game/Camera/CameraRailHolder.hpp"
 #include "Game/LiveActor/RailRider.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_placeOnRail_f1, "placeOnRail.f1", 1000.0f);
 
 CameraRailDemo::CameraRailDemo(const char* pName)
     : Camera(pName), mRailRider(), mCalcType(), mDemoTime(), mDemoTimer(), mDampRatio(), mCoord() {
+    lumacore::setClass(this, lumacore::kClassId< CameraRailDemo >);
 }
 
 void CameraRailDemo::reset() {

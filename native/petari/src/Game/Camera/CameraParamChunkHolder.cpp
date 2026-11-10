@@ -10,6 +10,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f1, "arrangeChunk.f1", 0.17453294f);
 NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f2, "arrangeChunk.f2", 0.34906587f);
@@ -27,6 +28,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_arrangeChunk_f12, "arrangeChunk.f12", 0.5f);
 CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, const char* pName)
     : NameObj(pName), mCameraHolder(pCameraHolder), mChunkCapacity(cInitialCapacity), mNrChunks(),
       mChunks(new CameraParamChunk*[cInitialCapacity]), mIsSorted() {
+    lumacore::setClass(this, lumacore::kClassId< CameraParamChunkHolder >);
 }
 
 CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, NebulaArena* pArena) {

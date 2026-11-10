@@ -2,6 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvMechaKoopaPartsArm {
     NEW_NERVE(MechaKoopaPartsArmNrvWaitFront, MechaKoopaPartsArm, Wait);
@@ -15,6 +16,7 @@ namespace NrvMechaKoopaPartsArm {
 };  // namespace NrvMechaKoopaPartsArm
 
 MechaKoopaPartsArm::MechaKoopaPartsArm(const char* pName) : MapObjActor(pName), mIsRightArm() {
+    lumacore::setClass(this, lumacore::kClassId< MechaKoopaPartsArm >);
 }
 
 void MechaKoopaPartsArm::init(const TableIter& rIter) {

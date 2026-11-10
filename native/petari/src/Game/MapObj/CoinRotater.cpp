@@ -4,6 +4,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 8.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f2, "movement.f2", 360.0f);
@@ -13,6 +14,7 @@ NEBULA_TUNABLE_NAMED(f32, cNum_movement_f5, "movement.f5", 16.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f6, "movement.f6", 360.0f);
 
 CoinRotater::CoinRotater(const char* pName) : NameObj(pName), mRotateY(), mWaterRotateY(), mHiSpeedRotateY() {
+    lumacore::setClass(this, lumacore::kClassId< CoinRotater >);
     mRotateYMtx.identity();
     mHiSpeedRotateYMtx.identity();
     mWaterRotateMtx.identity();

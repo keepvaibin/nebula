@@ -2,6 +2,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setLifeRatio_f1, "setLifeRatio.f1", 128.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 32.0f);
@@ -15,6 +16,7 @@ namespace {
 };  // namespace
 
 SubMeterLayout::SubMeterLayout(const char* pName, const char* pLayoutName) : LayoutActor(pName, true) {
+    lumacore::setClass(this, lumacore::kClassId< SubMeterLayout >);
     MR::connectToSceneLayout(this);
     initLayoutManager(pLayoutName, 1);
     MR::createAndAddPaneCtrl(this, "Count", 1);

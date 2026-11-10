@@ -6,6 +6,7 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_NoteFairy_f1, "NoteFairy.f1", 13.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_NoteFairy_f2, "NoteFairy.f2", 150.0f);
@@ -38,6 +39,7 @@ namespace NrvNoteFairy {
 };  // namespace NrvNoteFairy
 
 NoteFairy::NoteFairy(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< NoteFairy >);
     mInitPos.x = 0.0f;
     mInitPos.y = 0.0f;
     mInitPos.z = 0.0f;

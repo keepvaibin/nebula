@@ -22,6 +22,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 900.0f);
@@ -120,6 +121,7 @@ namespace FileSelectItemSub {
 };  // namespace FileSelectItemSub
 
 FileSelectItem::FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconID& rID, const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectItem >);
     mIsNewFile = isNewFile;
     mPlanetMapObj = nullptr;
     mIconID = new FileSelectIconID(rID);

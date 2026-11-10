@@ -22,6 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
@@ -64,6 +65,7 @@ namespace {
 Jellyfish::Jellyfish(const char* pName)
     : LiveActor(pName), mController(nullptr), mBindStarPtr(nullptr), mWaveStep(0), mFront(0.0f, 0.0f, 1.0f), mIsConnectedRail(false), mRailSpeed(5.0f),
       mRailGoalWaitStep(60), mIsRailTurnBack(false), mClipCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Jellyfish >);
 }
 
 void Jellyfish::init(const TableIter& rIter) {

@@ -12,6 +12,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeApproach_f1, "exeApproach.f1", 0.01f);
 NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.1f);
@@ -70,6 +71,7 @@ Fish::Fish(const char* pName, FishGroup* pGroup, int fishType, bool canEscape)
                        MR::getRandom(-::sFollowPosOffsetMax, ::sFollowPosOffsetMax)),
       mFront(1.0f, 0.0f, 0.0f), mDistanceToApproach(MR::getRandom(::sDistanceToApproachMin, ::sDistanceToApproachMax)),
       mTimeToSearchPlayer(MR::getRandom(::sTimeToSearchPlayerMin, ::sTimeToSearchPlayerMax)), mStepToMove(), mEscapePos() {
+    lumacore::setClass(this, lumacore::kClassId< Fish >);
 }
 
 void Fish::init(const TableIter& /*rIter*/) {
@@ -246,6 +248,7 @@ void Fish::updateFollowPointPos() {
 
 FishGroup::FishGroup(const char* pName)
     : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f), mFishNum(::sDefaultFishNum), mFish(), mSpeed(::sDefaultGroupSpeed), mClippingCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< FishGroup >);
 }
 
 void FishGroup::init(const TableIter& rIter) {

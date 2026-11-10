@@ -12,6 +12,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 2.0f);
@@ -33,6 +34,7 @@ namespace NrvKoopaFireStairs {
 KoopaFireStairs::KoopaFireStairs(const char* pName, bool isKoopaJr)
     : LiveActor(pName), mIsKoopaJr(isKoopaJr), mStair(nullptr), mFront(0.0f, 0.0f, 1.0f), mStartPos(0.0f, 0.0f, 0.0f), mFlyUpDir(0.0f, 1.0f, 0.0f),
       mBreakModel(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaFireStairs >);
 }
 
 void KoopaFireStairs::init(const TableIter& /*rIter*/) {

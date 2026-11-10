@@ -8,6 +8,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 4096.0f);
 
@@ -22,6 +23,7 @@ namespace {
 
 MeteorStrikeLauncher::MeteorStrikeLauncher(const char* pName)
     : LiveActor(pName), mMeteorStrikeArray(), mMeteorStrikeCount(), mIntervalStep(-1), mCreateStep(), mIsMeteorStrike(), mIsValidMultiMeteor() {
+    lumacore::setClass(this, lumacore::kClassId< MeteorStrikeLauncher >);
 }
 
 void MeteorStrikeLauncher::init(const TableIter& rIter) {

@@ -3,6 +3,7 @@
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // A step in which a shape's anchor moves farther than this is a jump (a ledge, a warp): nothing blends across it.
@@ -11,6 +12,7 @@ namespace {
 };  // namespace
 
 ShadowDrawer::ShadowDrawer(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowDrawer >);
     mController = 0;
     mDrawAnchor.zero();
     mAnchorJumps = 0;

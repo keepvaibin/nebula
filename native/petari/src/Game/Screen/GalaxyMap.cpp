@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstdio>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sFocusKeepFrame, 30);
@@ -44,6 +45,7 @@ namespace {
 GalaxyMap::GalaxyMap()
     : LayoutActor("ギャラクシー・天文台マップ", true), mMarioIcon1(), mMarioIcon2(), mGalaxyPlain(), mGalaxyDetail(), mPointingIcon(), mGalaxyName(),
       mIsPointingNew(), mIsFocusEnabled(true) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMap >);
 }
 
 template <>

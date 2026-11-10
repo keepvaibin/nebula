@@ -25,6 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_Teresa_f1, "Teresa.f1", 600.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
@@ -125,6 +126,7 @@ namespace NrvTeresa {
 Teresa::Teresa(const char* pName)
     : LiveActor(pName), mDisplayModel(), mKeySwitch(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mWallNormal(0, 0, 1), mWallHitPos(0, 0, 0),
       mInitPos(0, 0, 0), mAnimScale(1, 1, 1), mWalkTarget(0, 0, 0) {
+    lumacore::setClass(this, lumacore::kClassId< Teresa >);
     mWalkRange = cNum_Teresa_f1;
     mTransparency = 1.0f;
     mAppearanceType = -1;

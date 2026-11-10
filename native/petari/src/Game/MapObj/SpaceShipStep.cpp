@@ -5,6 +5,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateResetToInitPosCheck_f1, "updateResetToInitPosCheck.f1", 700.0f);
@@ -23,6 +24,7 @@ namespace NrvSpaceShipStep {
 };  // namespace NrvSpaceShipStep
 
 SpaceShipStep::SpaceShipStep(const char* pName) : MapObjActor(pName), mRailClippingCenter(0.0f, 0.0f, 0.0f), mHiddenStep(), mHasBeenSeen() {
+    lumacore::setClass(this, lumacore::kClassId< SpaceShipStep >);
 }
 
 void SpaceShipStep::init(const TableIter& rIter) {

@@ -1,9 +1,11 @@
 #include "Game/MapObj/MapPartsRailPointPassChecker.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MapPartsRailPointPassChecker::MapPartsRailPointPassChecker(LiveActor* pActor)
     : MapPartsFunction(pActor, "レール点通過チェッカー"), mRailPointNo(-1) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailPointPassChecker >);
 }
 
 void MapPartsRailPointPassChecker::movement() {

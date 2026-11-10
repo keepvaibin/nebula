@@ -24,6 +24,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeScatter_f1, "exeScatter.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_makeEulerRotation_f1, "makeEulerRotation.f1", 180.0f);
@@ -67,6 +68,7 @@ namespace {
 Mogucchi::Mogucchi(const char* pName)
     : LiveActor(pName), mHill(), mHole(), mScatterUpSpeed(), mScatterDir(0.0f, 0.0f, 1.0f), mStrollSpeed(), mMaxStrollSpeed(::cDefaultMaxStrollSpeed),
       mIsStoppedByP2() {
+    lumacore::setClass(this, lumacore::kClassId< Mogucchi >);
     mHoleMtx.identity();
 }
 

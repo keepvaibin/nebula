@@ -3,10 +3,12 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CameraInnerCylinder::CameraInnerCylinder(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 0.0f, 0.0f), mAngleA(), mAngleB(), mDist(), mLastWatchPoint(0.0f, 0.0f, 0.0f),
       mIsNotInitialized() {
+    lumacore::setClass(this, lumacore::kClassId< CameraInnerCylinder >);
 }
 
 void CameraInnerCylinder::reset() {

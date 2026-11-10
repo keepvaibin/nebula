@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_setMode_f1, "setMode.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_setMode_f2, "setMode.f2", 150.0f);
@@ -126,6 +127,7 @@ void CollisionShadow::setMode(u32 mode) {
 }
 
 CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャドウ") {
+    lumacore::setClass(this, lumacore::kClassId< CollisionShadow >);
     mCenter.zero();
     mCaptureTex = nullptr;
     mSnapDirection = false;

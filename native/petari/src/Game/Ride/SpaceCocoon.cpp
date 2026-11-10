@@ -28,6 +28,7 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -112,6 +113,7 @@ SpaceCocoon::SpaceCocoon(const char* pName)
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mHeight(::sDefaultHeight), mPointerPos(0.0f, 0.0f, 0.0f), mPadChannel(-1),
       mCocoonPos(0.0f, 0.0f, 0.0f), mSpringVel(0.0f, 0.0f, 0.0f), mAttackTime(::sDefaultStepBindAttack), mTouchTime(), mRider(), mNumPoints(),
       mPlantPoints(), mCameraTargetMtx(), mCameraInfo(), mCocoonModel(), mTexture() {
+    lumacore::setClass(this, lumacore::kClassId< SpaceCocoon >);
     mBaseMtx.identity();
     mTopMtx.identity();
 }

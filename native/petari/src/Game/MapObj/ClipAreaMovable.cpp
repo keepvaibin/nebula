@@ -10,10 +10,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1400.0f);
 
 ClipAreaMovable::ClipAreaMovable(const char* pName) : ClipArea(pName), mMapPartsRailMover(), mMapPartsRotator() {
+    lumacore::setClass(this, lumacore::kClassId< ClipAreaMovable >);
 }
 
 void ClipAreaMovable::init(const TableIter& rIter) {

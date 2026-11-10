@@ -26,6 +26,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 1.3f);
@@ -113,6 +114,7 @@ RunawayRabbit::RunawayRabbit(const char* pName, RunawayRabbitCollect* pCollect)
     : LiveActor(pName), mStateRunaway(), mStateBlowDamage(), mCollect(pCollect), mFootPrint(), mSpotMarkLight(), mMsgCtrl(), mPoseQuat(0, 0, 0, 1),
       mFrontVec(0, 0, 1), mPlayerPoseQuat(0, 0, 0, 1), mPlayerBindPos(0, 0, 1), mGroupId(-1), mRunawayLevel(), mHideLocation(HideLocation_None),
       mPressureTimer(), mNotCaughtableTimer(), mIsActive(true), mIsLinked(), mNearSoundRadius(-1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< RunawayRabbit >);
 }
 
 void RunawayRabbit::init(const TableIter& rIter) {

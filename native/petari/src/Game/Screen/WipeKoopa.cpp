@@ -3,6 +3,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sAnimFrame, 90);
@@ -15,6 +16,7 @@ namespace {
 };  // namespace
 
 WipeKoopa::WipeKoopa() : WipeLayoutBase("クッパ"), mFrame(::sAnimFrame) {
+    lumacore::setClass(this, lumacore::kClassId< WipeKoopa >);
 }
 
 void WipeKoopa::init(const TableIter& /*rIter*/) {

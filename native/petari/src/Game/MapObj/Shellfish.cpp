@@ -9,6 +9,7 @@
 #include "Game/MapObj/YellowChip.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 400.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
@@ -52,6 +53,7 @@ namespace NrvShellfish {
 
 Shellfish::Shellfish(const char* pName)
     : LiveActor(pName), mScaleController(), mStarPointerState(), mItem(), mItemType(), mIsItemBound(), mLowCollision() {
+    lumacore::setClass(this, lumacore::kClassId< Shellfish >);
 }
 
 void Shellfish::init(const TableIter& rIter) {

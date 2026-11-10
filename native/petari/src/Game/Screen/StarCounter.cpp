@@ -6,6 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
@@ -17,6 +18,7 @@ namespace NrvStarCounter {
 };  // namespace NrvStarCounter
 
 StarCounter::StarCounter() : LayoutActor("スターカウンタ", true), mPowerStarNum(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< StarCounter >);
 }
 
 void StarCounter::init(const TableIter& /*rIter*/) {

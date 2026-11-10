@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init2_f1, "init2.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init2_f2, "init2.f2", 50.0f);
@@ -63,6 +64,7 @@ namespace NrvJetTurtle {
 };  // namespace NrvJetTurtle
 
 JetTurtle::JetTurtle(const char* pName) : LiveActor(pName), mIsResetRequested(false) {
+    lumacore::setClass(this, lumacore::kClassId< JetTurtle >);
 }
 
 void JetTurtle::init(const TableIter& rIter) {

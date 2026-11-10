@@ -8,6 +8,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvLuigiLetter {
     NEW_NERVE(HostTypeNrvAppear, LuigiLetter, Appear);
@@ -17,6 +18,7 @@ namespace NrvLuigiLetter {
 
 LuigiLetter::LuigiLetter(bool param1, const char* pParam2)
     : LayoutActor("ルイージの手紙", true), mTexture(nullptr), mAButtonIcon(nullptr), mGalaxyName(pParam2), mIsForTalk(param1) {
+    lumacore::setClass(this, lumacore::kClassId< LuigiLetter >);
 }
 
 void LuigiLetter::init(const TableIter& /*rIter*/) {

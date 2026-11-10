@@ -11,6 +11,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // A player further than this from the rail is not judged; a coord jump this long is not taken.
@@ -24,6 +25,7 @@ namespace {
 }  // namespace
 
 RaceRail::RaceRail(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< RaceRail >);
 }
 
 void RaceRail::init(const TableIter& rIter) {
@@ -33,6 +35,7 @@ void RaceRail::init(const TableIter& rIter) {
 }
 
 PlayerRacer::PlayerRacer(const char* pName) : LiveActor(pName), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< PlayerRacer >);
 }
 
 void PlayerRacer::appear() {

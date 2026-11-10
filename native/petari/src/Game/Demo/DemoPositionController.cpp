@@ -3,8 +3,10 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DemoPositionController::DemoPositionController(const char* pName, const TableIter& rIter) : LiveActor("デモアクター位置"), pCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< DemoPositionController >);
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(pName, nullptr, false);
     pCameraInfo = new ActorCameraInfo(rIter);

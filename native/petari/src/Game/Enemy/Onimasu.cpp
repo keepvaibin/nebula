@@ -19,6 +19,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
@@ -54,6 +55,7 @@ namespace NrvOnimasu {
 };  // namespace NrvOnimasu
 
 Onimasu::Onimasu(const char* pName) : LiveActor(pName), mRotateAxis(1.0f, 0.0f, 0.0f), mClipCenter(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< Onimasu >);
     mMoveEffectMtx.identity();
     mStartQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
     mTargetQuat.set(0.0f, 0.0f, 0.0f, 1.0f);

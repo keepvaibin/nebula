@@ -27,6 +27,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.5f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1.5f);
@@ -160,6 +161,7 @@ IceMerameraKing::IceMerameraKing(const char* pName)
     : LiveActor(pName), mFixedPos(nullptr), mThrowingIce(nullptr), mMeramera(nullptr), mIce(), mShockWave(nullptr), mBreakModel(nullptr), mFront(0, 0, 1), mUp(0, 1, 0),
       mInitPos(0, 0, 0), mInitRotation(0, 0, 0), mThrowNum(0), mWeaponIndex(0), mHitPoint(3), mWeaponNum(0), mModelArray(nullptr), mCameraTarget(nullptr), mJointController(nullptr),
       mRollQuat(0, 0, 0, 1), mBinderOffset(0.0f, 0.0f, 0.0f), mExtinguishHeight(0.0f), mIsPinchBgmOn(false), mIsPinchBgmAllowed(false) {
+    lumacore::setClass(this, lumacore::kClassId< IceMerameraKing >);
 }
 
 void IceMerameraKing::init(const TableIter& rIter) {
@@ -852,6 +854,7 @@ bool IceMerameraKing::calcJoint(Pos3f* pJointMtx, const JointControllerInfo& /*r
 }
 
 IceMerameraKingShockWave::IceMerameraKingShockWave() : ModelObj("衝撃", "IceMerameraKingShock", nullptr, -2, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< IceMerameraKingShockWave >);
     initHitSensor(2);
     MR::addHitSensorEnemyAttack(this, "circle", 16, cNum_IceMerameraKingShockWave_f1, Vec3f(0.0f, -cNum_IceMerameraKingShockWave_f2, 0.0f));
     MR::addHitSensorEnemyAttack(this, "circle_end", 16, cNum_IceMerameraKingShockWave_f3, Vec3f(0.0f, -cNum_IceMerameraKingShockWave_f4, 0.0f));

@@ -13,6 +13,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRotateDisappear_f1, "exeRotateDisappear.f1", 20.0f);
 
@@ -40,6 +41,7 @@ namespace NrvAstroDomeSky {
 };  // namespace NrvAstroDomeSky
 
 AstroDomeSky::AstroDomeSky(const char* pName) : LiveActor(pName), mBrkFrame(), mColor(0x00, 0x00, 0x00, 0xFF), mProjmap() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeSky >);
 }
 
 void AstroDomeSky::init(const TableIter& rIter) {

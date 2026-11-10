@@ -7,6 +7,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_createChainParts_f1, "createChainParts.f1", 90.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_createChainParts_f2, "createChainParts.f2", 180.0f);
@@ -23,6 +24,7 @@ namespace NrvLargeChain {
 };  // namespace NrvLargeChain
 
 LargeChain::LargeChain(const char* pName) : LiveActor(pName), mBottomFixParts(), mTopFixParts(), mChainArray(), mChainCount(1) {
+    lumacore::setClass(this, lumacore::kClassId< LargeChain >);
 }
 
 void LargeChain::init(const TableIter& rIter) {

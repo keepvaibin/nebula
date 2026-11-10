@@ -10,10 +10,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 LavaSunPlanet::LavaSunPlanet(const char* pName) : LiveActor(pName), mRotator(), mObjName(), mLodCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< LavaSunPlanet >);
 }
 
 void LavaSunPlanet::control() {

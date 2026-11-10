@@ -5,6 +5,7 @@
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
@@ -22,6 +23,7 @@ namespace NrvNote {
 };  // namespace NrvNote
 
 Note::Note(const char* pName, const Vec3f& rRailDirection, NoteFairy* pParent) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< Note >);
     mParentFairy = pParent;
     mRailDirection = rRailDirection;
     mCounter = 0;
@@ -121,6 +123,7 @@ void Note::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
 }
 
 NoteGroup::NoteGroup() : LiveActorGroup("音符グループ", 0x100) {
+    lumacore::setClass(this, lumacore::kClassId< NoteGroup >);
     mRotation = 0.0f;
 }
 

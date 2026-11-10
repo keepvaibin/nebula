@@ -12,6 +12,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
@@ -33,6 +34,7 @@ namespace NrvScrewSwitchReverse {
 };  // namespace NrvScrewSwitchReverse
 
 ScrewSwitchReverse::ScrewSwitchReverse(const char* pName) : LiveActor(pName), mHost(), mIsForceJump() {
+    lumacore::setClass(this, lumacore::kClassId< ScrewSwitchReverse >);
 }
 
 void ScrewSwitchReverse::init(const TableIter& rIter) {

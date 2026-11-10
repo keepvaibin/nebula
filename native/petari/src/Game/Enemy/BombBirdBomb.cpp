@@ -11,6 +11,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 5.5f);
@@ -41,6 +42,7 @@ namespace NrvBombBirdBomb {
 };  // namespace NrvBombBirdBomb
 
 BombBirdBomb::BombBirdBomb(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mRotateMoment(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< BombBirdBomb >);
 }
 
 void BombBirdBomb::init(const TableIter& /*rIter*/) {

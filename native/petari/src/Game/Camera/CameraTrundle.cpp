@@ -4,12 +4,14 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 
 CameraTrundle::CameraTrundle(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(1.0f, 0.0f, 0.0f), mDist(2000.0f), mAngleX(), mAngleY(), mDotMax() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTrundle >);
 }
 
 CameraTargetObj* CameraTrundle::calc() {

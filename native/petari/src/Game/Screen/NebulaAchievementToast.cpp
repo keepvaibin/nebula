@@ -23,6 +23,7 @@
 #include <Game/Ui/Window.hpp>
 #include <Game/Ui/Font.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     enum {
@@ -133,6 +134,7 @@ namespace {
 NebulaAchievementToast::NebulaAchievementToast()
     : LayoutActor("NebulaAchievementToast", true), mToast(nullptr), mWindow(nullptr), mText(nullptr), mGlyph(nullptr), mIcon(nullptr),
       mPicture(nullptr), mTextures(nullptr), mStep(StepIdle), mFrame(0), mHoldFrames(cHoldFrames), mWidth(0.0f), mHeight(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaAchievementToast >);
 }
 
 void NebulaAchievementToast::init(const TableIter& /*rIter*/) {

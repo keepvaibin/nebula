@@ -15,10 +15,12 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DemoExecutor::DemoExecutor(const char* pName)
     : DemoCastGroup(pName), mSheetName(), mTimeKeeper(), mSubPartKeeper(), mPlayerKeeper(), mCameraKeeper(), mActionKeeper(), mWipeKeeper(),
       mSoundKeeper(), mSheetKeeper(), mStageSwitchCtrl(), mDemoStarter(), mDemoName(), mMovementType(MR::MovementControlType_None), mUnclippedCasts(),mTalkAnimCtrl(), mTalkMessageCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< DemoExecutor >);
 }
 
 void DemoExecutor::init(const TableIter& rIter) {

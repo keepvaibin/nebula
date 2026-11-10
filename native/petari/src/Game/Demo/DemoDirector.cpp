@@ -18,10 +18,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 DemoDirector::DemoDirector(const char* pName)
     : NameObj(pName), mIsActive(), mExecutor(), mIsWaitingCamera(), mCastGroupHolder(), mSimpleCastHolder(new DemoSimpleCastHolder(512, 64, 128)), mResourceHolder(),
       mStartRequestHolder(new DemoStartRequestHolder()), mDemoStarter(), mDemoName(), mMovementType(MR::MovementControlType_None), mUseCinemaFrame(true) {
+    lumacore::setClass(this, lumacore::kClassId< DemoDirector >);
     MR::connectToScene(this, MR::MovementType_DemoDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 
     mCastGroupHolder = new DemoCastGroupHolder();

@@ -9,8 +9,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ShadowControllerHolder::ShadowControllerHolder() : NameObj("影管理"), mControllers(), mRequested() {
+    lumacore::setClass(this, lumacore::kClassId< ShadowControllerHolder >);
     mControllers.init(0x500);
     mRequested.init(0x400);
     MR::connectToScene(this, MR::MovementType_ShadowControllerHolder, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);

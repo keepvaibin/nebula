@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 105.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 105.0f);
@@ -34,6 +35,7 @@ namespace NrvKeySwitch {
 };  // namespace NrvKeySwitch
 
 KeySwitch::KeySwitch(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KeySwitch >);
     mCameraInfo = 0;
     mCurDemoFrame = -1;
 }

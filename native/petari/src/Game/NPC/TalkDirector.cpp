@@ -27,6 +27,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     TalkDirector* getTalkDirector() {
@@ -128,6 +129,7 @@ TalkDirector::TalkDirector(const char* pName)
     : LayoutActor(pName, true), mMsgControls(), mPeekZ(), mBalloonHolder(), mStateHolder(), mMsgCtrl(), mBalloonCtrl(), mRequestCtrl(), mLastTalkCtrl(),
       mTalkState(), mIsTalkStart(), mIsTalkEnd(), mIsInvalidTalk(), mIsInvalidClipping(), mIsNext(), mDemoType(TalkDemo_None), mIsSkipTerm(),
       mIsPlayerTalk(), mMessageInfo(), mCameraInfo(), mHostActor(), mBranchResult() {
+    lumacore::setClass(this, lumacore::kClassId< TalkDirector >);
 }
 
 void TalkDirector::init(const TableIter& /*rIter*/) {

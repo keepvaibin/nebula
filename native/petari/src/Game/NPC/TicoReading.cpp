@@ -6,12 +6,14 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTicoReading {
     NEW_NERVE(TicoReadingNrvWait, TicoReading, Wait);
 };  // namespace NrvTicoReading
 
 TicoReading::TicoReading(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TicoReading >);
 }
 
 void TicoReading::init(const TableIter& rIter) {

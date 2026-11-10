@@ -1,8 +1,10 @@
 #include "Game/Map/SwitchSynchronizer.hpp"
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SwitchSynchronizer::SwitchSynchronizer(const char* pName) : NameObj(pName), mSwitchCtrl(), mIsCheckSameSwitchState(true) {
+    lumacore::setClass(this, lumacore::kClassId< SwitchSynchronizer >);
 }
 
 void SwitchSynchronizer::init(const TableIter& rIter) {

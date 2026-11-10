@@ -7,6 +7,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 450.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -30,6 +31,7 @@ namespace NrvBeeFlowerHover {
 
 BeeFlowerHover::BeeFlowerHover(const char* pName)
     : LiveActor(pName), mRotateSpeed(::sDefaultRotateSpeed), mLodCtrlPlanet(), mRailMover(), mRailPosture(), mClipCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< BeeFlowerHover >);
     mRotateMtx.identity();
 }
 

@@ -15,6 +15,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f1, "LensFlareRing.f1", 0.135f);
 NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f2, "LensFlareRing.f2", 0.135f);
@@ -46,6 +47,7 @@ namespace {
 
 LensFlareModel::LensFlareModel(const char* pName, const char* pArcName)
     : LiveActor(pName), mFlareStrength(), mFadeLevel(), mFadeStep(), mAreaChecker(new TriggerChecker()), mVisibleChecker(new TriggerChecker()) {
+    lumacore::setClass(this, lumacore::kClassId< LensFlareModel >);
     initModelManagerWithAnm(pArcName, nullptr, false);
 
     MR::connectToScene3DModelFor2D(this);
@@ -142,6 +144,7 @@ void LensFlareModel::notifyInArea() {
 }
 
 LensFlareRing::LensFlareRing() : LensFlareModel("レンズフレアリング", "LensFlare"), mRingFrame() {
+    lumacore::setClass(this, lumacore::kClassId< LensFlareRing >);
     mScale.x = cNum_LensFlareRing_f1;
     mScale.y = cNum_LensFlareRing_f2;
     mScale.z = cNum_LensFlareRing_f3;
@@ -166,6 +169,7 @@ void LensFlareRing::controlAnim() {
 }
 
 LensFlareGlow::LensFlareGlow() : LensFlareModel("グレア（円形）", "GlareGlow") {
+    lumacore::setClass(this, lumacore::kClassId< LensFlareGlow >);
     mFadeStep = cNum_LensFlareGlow_f1;
 }
 
@@ -180,6 +184,7 @@ void LensFlareGlow::controlAnim() {
 }
 
 LensFlareLine::LensFlareLine() : LensFlareModel("グレア（ライン）", "GlareLine") {
+    lumacore::setClass(this, lumacore::kClassId< LensFlareLine >);
     mFadeStep = cNum_LensFlareLine_f1;
 }
 
@@ -194,6 +199,7 @@ void LensFlareLine::controlAnim() {
 
 LensFlareDirector::LensFlareDirector()
     : NameObj("レンズフレア管理"), mRing(), mGlow(), mLine(), mBrightObjCount(), mAsker(Frame::newProbeAsker()), mBrightCenter(0.0f, 0.0f), mBrightLevel(), mObjCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< LensFlareDirector >);
 }
 
 LensFlareDirector::~LensFlareDirector() {

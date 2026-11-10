@@ -21,6 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 0.0001f);
@@ -115,6 +116,7 @@ HomingKiller::HomingKiller(const char* pName)
       mChaseStartAngle(::cChaseStartAngle), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 1.0f, 0.0f), mBasePos(gZeroVec), mBaseFront(0.0f, 0.0f, 1.0f),
       mBaseUp(0.0f, 1.0f, 0.0f), mFreezeTime(0), mFreezePos(gZeroVec), mUnfreezeNerve(), mChaseInvalidTime(0), mMoveTime(0), mTargetSensor(),
       mDisableChase(), mIsLinearShot(), mUseFullSightAngle(), mPropeller(), mTorpedoLight() {
+    lumacore::setClass(this, lumacore::kClassId< HomingKiller >);
     mBaseMtx.identity();
     mEffectMtx.identity();
 }
@@ -934,6 +936,7 @@ void HomingKiller::exeGoToTarget() {
 }
 
 HomingKillerLauncher::HomingKillerLauncher(const char* pName) : LiveActor("ホーミングキラーランチャー"), mKiller() {
+    lumacore::setClass(this, lumacore::kClassId< HomingKillerLauncher >);
 }
 
 void HomingKillerLauncher::init(const TableIter& rIter) {

@@ -23,6 +23,7 @@
 #include "Game/Util/TextString.hpp"
 #include <cstdio>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_exeTitleLogoScroll_f1, "exeTitleLogoScroll.f1", 210.0f);
 
@@ -128,6 +129,7 @@ namespace NrvStaffRollLine {
 };  // namespace NrvStaffRollLine
 
 StaffRollLine::StaffRollLine(const char* pName) : LayoutActor(pName, true), mPosition(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< StaffRollLine >);
 }
 
 void StaffRollLine::init(const TableIter& /*rIter*/) {
@@ -161,6 +163,7 @@ namespace NrvStaffRollPicture {
 };  // namespace NrvStaffRollPicture
 
 StaffRollPicture::StaffRollPicture(const char* pName) : LayoutActor(pName, true), mReplaceTexture() {
+    lumacore::setClass(this, lumacore::kClassId< StaffRollPicture >);
 }
 
 void StaffRollPicture::init(const TableIter& /*rIter*/) {
@@ -260,6 +263,7 @@ namespace NrvStaffRoll {
 StaffRoll::StaffRoll(const char* pName)
     : LayoutActor(pName, true), mInfo(), mLine(), mPicture(), mMsg(), mMsgLineNum(), mMsgLine(), mTitleLogoPos(0.0f, 0.0f), mEndLogoPos(0.0f, 0.0f),
       mLineStep(-1), mBgmFrame() {
+    lumacore::setClass(this, lumacore::kClassId< StaffRoll >);
 }
 
 void StaffRoll::init(const TableIter& /*rIter*/) {

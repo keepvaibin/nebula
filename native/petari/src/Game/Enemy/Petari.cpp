@@ -21,6 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initHitSensors_f1, "initHitSensors.f1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_initHitSensors_f2, "initHitSensors.f2", 100.0f);
@@ -115,6 +116,7 @@ namespace {
 Petari::Petari(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(nullptr), mFootPrint(nullptr), mFootprintYOffs(0.0f), mRequestSmoke(true), mFront(0.0f, 0.0f, 1.0f),
       mTargetDir(0.0f, 0.0f, 1.0f), mMeanderStep(0), mMeanderAngle(0.0f), mStarPieceTotal(20), mStarPieceRemaining(20) {
+    lumacore::setClass(this, lumacore::kClassId< Petari >);
     mHeadMtx.identity();
 }
 

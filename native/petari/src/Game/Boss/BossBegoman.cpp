@@ -23,6 +23,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
@@ -178,6 +179,7 @@ namespace NrvBossBegoman {
 BossBegoman::BossBegoman(const char* pName)
     : BegomanBase(pName), mBabyFollowers(), mSpikeFollowers(), mBabyFollowerNum(), mSpikeFollowerNum(), mFollowerKind(FollowerKind_BothFollower),
       mPath(), mHead(), mHealth(::sDefaultLife), mPursueSpeedRate(::hPursueSpeedRateMin), mOpeningDemoInfo() {
+    lumacore::setClass(this, lumacore::kClassId< BossBegoman >);
     mHeadMtx.identity();
 }
 

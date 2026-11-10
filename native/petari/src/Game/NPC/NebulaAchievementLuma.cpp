@@ -12,6 +12,7 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvNebulaAchievementLuma {
     NEW_NERVE(NebulaAchievementLumaNrvWait, NebulaAchievementLuma, NebulaWait);
@@ -30,6 +31,7 @@ namespace {
 };  // namespace
 
 NebulaAchievementLuma::NebulaAchievementLuma() : Tico("NebulaAchievementLuma") {
+    lumacore::setClass(this, lumacore::kClassId< NebulaAchievementLuma >);
 }
 
 bool NebulaAchievementLuma::isHere() {

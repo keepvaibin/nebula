@@ -9,6 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_DinoPackunTailPart_f1, "DinoPackunTailPart.f1", 50.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.25f);
@@ -27,6 +28,7 @@ namespace NrvDinoPackunTailPart {
 };  // namespace NrvDinoPackunTailPart
 
 DinoPackunTailPart::DinoPackunTailPart(const char* pName, DinoPackun* pParent) : DinoPackunTailNode(pName, pParent) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunTailPart >);
     mRadius = cNum_DinoPackunTailPart_f1;
 }
 

@@ -13,6 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sStartRunAwayBgmState, 2);
@@ -32,6 +33,7 @@ namespace NrvRunawayRabbitCollect {
 
 RunawayRabbitCollect::RunawayRabbitCollect(const char* pName)
     : LiveActor(pName), mRabbit(), mRabbitNum(), mCaughtRabbitCount(), mCompleteRabbitCount(), mBgmState() {
+    lumacore::setClass(this, lumacore::kClassId< RunawayRabbitCollect >);
 }
 
 void RunawayRabbitCollect::init(const TableIter& rIter) {

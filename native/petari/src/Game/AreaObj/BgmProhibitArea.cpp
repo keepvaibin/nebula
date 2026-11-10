@@ -5,6 +5,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 10000.0f);
 
@@ -30,6 +31,7 @@ namespace {
 
 BgmProhibitArea::BgmProhibitArea(int formType, const char* pName)
     : AreaObj(formType, pName), mMuteSet(), mIsMuteSet(), mIsUnmuteSet(), mPrevPlayerPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< BgmProhibitArea >);
 }
 
 void BgmProhibitArea::init(const TableIter& rIter) {

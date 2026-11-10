@@ -5,8 +5,10 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MovieStarter::MovieStarter(const char* pName) : LiveActor(pName), mMovieType(-1) {
+    lumacore::setClass(this, lumacore::kClassId< MovieStarter >);
 }
 
 void MovieStarter::init(const TableIter& rIter) {

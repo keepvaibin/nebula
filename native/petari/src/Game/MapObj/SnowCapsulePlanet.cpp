@@ -3,6 +3,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvSnowCapsulePlanet {
     NEW_NERVE(SnowCapsulePlanetNrvCloseWait, SnowCapsulePlanet, CloseWait);
@@ -11,6 +12,7 @@ namespace NrvSnowCapsulePlanet {
 };  // namespace NrvSnowCapsulePlanet
 
 SnowCapsulePlanet::SnowCapsulePlanet(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SnowCapsulePlanet >);
     mDoor1 = nullptr;
     mDoor2 = nullptr;
 }

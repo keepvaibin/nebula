@@ -12,6 +12,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exePlaySound_f1, "exePlaySound.f1", 1000.0f);
@@ -28,6 +29,7 @@ namespace NrvSoundEmitter {
 };  // namespace NrvSoundEmitter
 
 SoundEmitter::SoundEmitter(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SoundEmitter >);
     mSoundType = -1;
 }
 

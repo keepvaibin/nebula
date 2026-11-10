@@ -4,10 +4,12 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
+#include "Game/System/LumaCore.hpp"
 
 MiiFaceIcon::MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName)
     : NameObj(pName), mImageBuffer(), mIsFavoriteColorBG(), mIsRequestMakeIcon(), mIsCreated(), mRecipe(rRecipe), mWidth(width),
       mHeight(height) {
+    lumacore::setClass(this, lumacore::kClassId< MiiFaceIcon >);
     createImageBuffer();
     MR::registerMiiFaceIcon(this);
 }

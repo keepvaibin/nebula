@@ -6,6 +6,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
@@ -19,6 +20,7 @@ namespace {
 CameraWaterFollow::CameraWaterFollow(const char* pName)
     : Camera(pName), mDistMin(300.0f), mDistMax(1200.0f), mSideBlendRateMin(0.01f), mSideBlendRate(0.01f), mCollideCount(),
       mLastMoveDir(0.0f, 0.0f, 0.0f), mIsRounding(), mRoundingFrame(), mSide(1.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraWaterFollow >);
 }
 
 void CameraWaterFollow::reset() {

@@ -7,12 +7,14 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 3000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
 
 TornadoMario::TornadoMario(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< TornadoMario >);
 }
 
 void TornadoMario::init(const TableIter& rIter) {

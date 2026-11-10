@@ -22,6 +22,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 140.0f);
@@ -102,6 +103,7 @@ namespace NrvSnakehead {
 Snakehead::Snakehead(const char* pName)
     : LiveActor(pName), mController(nullptr), mStarPointer(nullptr), mSmokePos(0.0f, 0.0f, 0.0f), mForwardSpeed(sDefaultForwardSpeed),
       mBackwardSpeed(sDefaultBackSpeed), mActivationRadius(1000.0f), mRailCenter(0.0f, 0.0f, 0.0f), mType(SnakeheadType_BigWait), mItem(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< Snakehead >);
     mBodyMtx.identity();
 }
 

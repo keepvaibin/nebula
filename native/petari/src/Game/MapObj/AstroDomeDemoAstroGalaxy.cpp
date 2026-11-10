@@ -3,10 +3,12 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
 
 AstroDomeDemoAstroGalaxy::AstroDomeDemoAstroGalaxy(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeDemoAstroGalaxy >);
 }
 
 void AstroDomeDemoAstroGalaxy::init(const TableIter& rIter) {

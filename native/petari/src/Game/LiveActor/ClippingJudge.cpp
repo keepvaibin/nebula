@@ -2,6 +2,7 @@
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcViewingVolumes_f1, "calcViewingVolumes.f1", 360.0f);
 
@@ -16,6 +17,7 @@ namespace {
 };  // namespace
 
 ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustums() {
+    lumacore::setClass(this, lumacore::kClassId< ClippingJudge >);
 }
 
 void ClippingJudge::movement() {

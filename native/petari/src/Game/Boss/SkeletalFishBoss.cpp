@@ -42,6 +42,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f1, "calcAnim.f1", 1.8325958f);
@@ -129,6 +130,7 @@ namespace {
 };  // namespace
 
 SkeletalFishBoss::SkeletalFishBoss(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBoss >);
     mJointIndicies = nullptr;
     mPartsArray = nullptr;
     mBossHead = nullptr;
@@ -1075,6 +1077,7 @@ bool SkeletalFishBoss::isEnableToBeDamaged() const {
 
 SkeletalFishBossHead::SkeletalFishBossHead(LiveActor* pActor)
     : PartsModel(pActor, "スカルシャーク頭", "SkeletalFishBossHeadA", nullptr, MR::DrawBufferType_Enemy, false), mIsEyeLightOn(true) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossHead >);
     initFixedPosition("Head");
     // The body and one sensor per wound.
     initHitSensor(1 + ARRAY_SIZE(::sHitPosData));
@@ -1200,6 +1203,7 @@ void SkeletalFishBossHead::createSubModel() {
 
 SkeletalFishBossScarFlash::SkeletalFishBossScarFlash(LiveActor* pActor)
     : PartsModel(pActor, "スカルシャーク傷跡エフェクトモデル", "SkeletalFishBossScarFlash", nullptr, MR::DrawBufferType_Enemy, false) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossScarFlash >);
     initFixedPosition("Head");
 }
 

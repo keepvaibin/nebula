@@ -1,9 +1,12 @@
 #include "Game/AreaObj/ImageEffectArea.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ImageEffectArea::ImageEffectArea(EImageEffectType effectType, int formType, const char* pName) : AreaObj(formType, pName), mEffectType(effectType) {
+    lumacore::setClass(this, lumacore::kClassId< ImageEffectArea >);
 }
 
 ImageEffectAreaMgr::ImageEffectAreaMgr(s32 maxNum, const char* pName) : AreaObjMgr(maxNum, pName) {
+    lumacore::setClass(this, lumacore::kClassId< ImageEffectAreaMgr >);
 }
 
 void ImageEffectAreaMgr::initAfterPlacement() {

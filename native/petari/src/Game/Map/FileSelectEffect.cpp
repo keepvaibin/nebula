@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(FileSelectEffectNrvAppear, FileSelectEffect, Appear);
@@ -12,6 +13,7 @@ namespace {
 };  // namespace
 
 FileSelectEffect::FileSelectEffect(const char* pName) : LiveActor(pName), mEffectFrame() {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectEffect >);
 }
 
 void FileSelectEffect::init(const TableIter& /*rIter*/) {

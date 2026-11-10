@@ -5,6 +5,7 @@
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_initStarPointer_f1, "initStarPointer.f1", 120.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
@@ -20,6 +21,7 @@ namespace NrvBanekiti {
 };  // namespace NrvBanekiti
 
 Banekiti::Banekiti(const char* pName) : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mRailMover() {
+    lumacore::setClass(this, lumacore::kClassId< Banekiti >);
 }
 
 inline void Banekiti::initStarPointer() {

@@ -4,6 +4,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 255.0f);
 
@@ -13,6 +14,7 @@ namespace {
 
 WipeFade::WipeFade(const char* pName, const Color8& rFillColor)
     : WipeLayoutBase(pName), mIsWipeIn(false), mFrame(::sFadeFrame), mStep(::sFadeFrame), mFillColor(rFillColor) {
+    lumacore::setClass(this, lumacore::kClassId< WipeFade >);
 }
 
 void WipeFade::init(const TableIter& /*rIter*/) {

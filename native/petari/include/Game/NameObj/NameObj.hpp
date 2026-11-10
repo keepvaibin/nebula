@@ -43,6 +43,8 @@ public:
     const char* mName;
     // MovementFlag bits.
     u16 mMovementFlag;
+    // Its class for mods (lumacore::classOf): bit 15 set when it is the object's own class, else a base's.
+    u16 mLumaClass;
     // The index into the NameObjExecuteInfo array (which grows past any 16-bit count).
     s32 mExecutorIdx;
     // Names its draws from frame to frame.

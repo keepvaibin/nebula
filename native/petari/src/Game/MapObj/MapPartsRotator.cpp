@@ -7,6 +7,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_updateBaseHostMtx_f1, "updateBaseHostMtx.f1", 180.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.5f);
@@ -24,6 +25,7 @@ namespace NrvMapPartsRotator {
 };  // namespace NrvMapPartsRotator
 
 MapPartsRotator::MapPartsRotator(LiveActor* pActor) : MapPartsRotatorBase(pActor, "自身回転") {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRotator >);
     mTargetRotateSpeed = 0.0f;
     mRotateAngle = 0.0f;
     mRotateStopTime = 0;

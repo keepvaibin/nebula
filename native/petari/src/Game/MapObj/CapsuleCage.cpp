@@ -4,6 +4,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cDemoCameraName = "注目カメラ";
@@ -19,6 +20,7 @@ namespace NrvCapsuleCage {
 };  // namespace NrvCapsuleCage
 
 CapsuleCage::CapsuleCage(const char* pName) : MapObjActor(pName), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< CapsuleCage >);
 }
 
 void CapsuleCage::init(const TableIter& rIter) {

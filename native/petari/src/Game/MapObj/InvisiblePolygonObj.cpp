@@ -6,8 +6,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 InvisiblePolygonObj::InvisiblePolygonObj(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< InvisiblePolygonObj >);
     mBaseMtx.identity();
 }
 

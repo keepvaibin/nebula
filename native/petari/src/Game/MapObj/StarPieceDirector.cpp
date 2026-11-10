@@ -10,6 +10,7 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcPosCameraShoot_f1, "calcPosCameraShoot.f1", 300.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcPosCameraShoot_f2, "calcPosCameraShoot.f2", 300.0f);
@@ -59,6 +60,7 @@ bool MR::giftStarPieceToTarget(HitSensor* pGiftSensor, u32 numGift) {
 StarPieceDirector::StarPieceDirector(const char* pName)
     : LiveActorGroup(pName, 128), mColorIndex(), mNumStarPiecesLaunched(),
       mResetChasingStarPiece(), mGetSounds(), mSoundStep(), mQueueNewGetSound() {
+    lumacore::setClass(this, lumacore::kClassId< StarPieceDirector >);
     MR::connectToSceneMapObjMovement(this);
 
     for (int i = 0; i < ARRAY_SIZE(mStarPieceShooters); i++) {
@@ -346,6 +348,7 @@ void StarPieceDirector::createStarPieces(unsigned count) {
 
 StarPieceShooter::StarPieceShooter(s32 port, const char* pName)
     : LiveActor(pName), mShootSpeed(), mSearchSensor(), mSearchDist(999999.0f), mLockOnSensor(), mPort(port), mChargeStep(), mEffectPos(0, 0, 0), mEffectRot(0, 0, 0) {
+    lumacore::setClass(this, lumacore::kClassId< StarPieceShooter >);
 }
 
 void StarPieceShooter::init(const TableIter& /*rIter*/) {

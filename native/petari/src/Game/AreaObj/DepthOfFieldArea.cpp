@@ -1,10 +1,12 @@
 #include "Game/AreaObj/DepthOfFieldArea.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_getIntensity_f1, "getIntensity.f1", 255.0f);
 
 DepthOfFieldArea::DepthOfFieldArea(int formType, const char* pName) : ImageEffectArea(IMAGE_EFFECT_TYPE_DOF, formType, pName), mIsPlayerSync() {
+    lumacore::setClass(this, lumacore::kClassId< DepthOfFieldArea >);
 }
 
 void DepthOfFieldArea::init(const TableIter& rIter) {

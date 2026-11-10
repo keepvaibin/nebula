@@ -3,6 +3,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 cPlacementBoneIDToBoneIndexTable[] = {0,  1, 2, 7,  8,  9, 14, 15, 16, 21, 3,  4,  0,  1,  5,  6,  2,  -1, -1, -1, 10,
@@ -19,6 +20,7 @@ namespace {
 };  // namespace
 
 TripodBossAccesser::TripodBossAccesser(const char* pName) : NameObj(pName), mBoss(), mPartsNum() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossAccesser >);
 }
 
 TripodBoss* TripodBossAccesser::getTriPodBoss() const {

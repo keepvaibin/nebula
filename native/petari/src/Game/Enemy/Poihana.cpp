@@ -22,6 +22,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
@@ -113,6 +114,7 @@ namespace NrvPoihana {
 Poihana::Poihana(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mCamInfo(), mBindedActor(), mLaunchIntensity(), mRespawnPos(0.0f), mHomePos(0.0f),
       mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(Behavior_Normal), mCanDrown(), mWaterColumn(), mIsActive() {
+    lumacore::setClass(this, lumacore::kClassId< Poihana >);
 }
 
 void Poihana::init(const TableIter& rIter) {

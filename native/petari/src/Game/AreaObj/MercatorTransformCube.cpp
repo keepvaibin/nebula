@@ -9,6 +9,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_convertTransAndRotate_f1, "convertTransAndRotate.f1", 0.01f);
 NEBULA_TUNABLE_NAMED(f32, cNum_getSphereRadius_f1, "getSphereRadius.f1", 3000.0f);
@@ -42,6 +43,7 @@ namespace {
 };  // namespace
 
 MercatorTransformCube::MercatorTransformCube(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< MercatorTransformCube >);
     mPlacementMtx.identity();
 }
 

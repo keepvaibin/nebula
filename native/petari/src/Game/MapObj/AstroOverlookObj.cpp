@@ -4,8 +4,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 AstroOverlookObj::AstroOverlookObj(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AstroOverlookObj >);
     mIsLayoutHidden = 0;
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);

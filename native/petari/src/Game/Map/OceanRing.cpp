@@ -19,6 +19,7 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_OceanRing_f1, "OceanRing.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_OceanRing_f2, "OceanRing.f2", 100.0f);
@@ -59,6 +60,7 @@ namespace {
 };  // namespace
 
 OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< OceanRing >);
     mWaterPointNum = 0;
     mSegCount = 0;
     mStride = cPointsAcross;

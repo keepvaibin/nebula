@@ -35,6 +35,7 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 45.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
@@ -152,6 +153,7 @@ namespace NrvTrickRabbit {
 TrickRabbit::TrickRabbit(const char* pName)
     : LiveActor(pName), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mRabbitStateWaitStart(), mRabbitStateCaught(), mMultiEventCamera(),
       mTalkMessageCtrl(), mFootPrint(), mRailGraphIter(), mSpotMarkLight(), mPhaseSteps(), mNextNodeDistance(), mRouteLevelStep(), mRouteLevel(), mRouteLevelTarget(), mIsRouteLevelControl(), mIsGhost() {
+    lumacore::setClass(this, lumacore::kClassId< TrickRabbit >);
     mParabolicPath = new ParabolicPath();
 }
 

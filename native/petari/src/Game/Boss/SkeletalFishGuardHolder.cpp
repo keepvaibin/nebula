@@ -7,8 +7,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SkeletalFishGuardHolder::SkeletalFishGuardHolder(SkeletalFishBoss* pBoss, s32 numGuards, const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishGuardHolder >);
     mFishBoss = pBoss;
     mBossRail = nullptr;
     mNumGuards = numGuards;

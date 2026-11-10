@@ -1,6 +1,7 @@
 #include "Game/Screen/GalaxyMapTitle.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(GalaxyMapTitleHide, GalaxyMapTitle, Hide);
@@ -10,6 +11,7 @@ namespace {
 };  // namespace
 
 GalaxyMapTitle::GalaxyMapTitle() : LayoutActor("MapTitle", true), mMessageID(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapTitle >);
 }
 
 void GalaxyMapTitle::init(const TableIter& /*rIter*/) {

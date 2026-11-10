@@ -7,6 +7,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcRebound_f1, "calcRebound.f1", 100.0f);
@@ -59,6 +60,7 @@ Coin::Coin(const char* pName)
     : LiveActor(pName), mHostInfo(nullptr), mFlashCtrl(nullptr), mAirBubble(nullptr), mDropPosition(0.0f, 0.0f, 0.0f), mClippingRange(0.0f, 0.0f, 0.0f),
       mLife(cDefaultLife), mCannotTime(0), mIsInWater(false), mIsCalcShadowAlways(false), mIsPoseFromRotation(false), mIsPurpleCoin(false),
       mIsNeedBubble(false) {
+    lumacore::setClass(this, lumacore::kClassId< Coin >);
 }
 
 void Coin::init(const TableIter& rIter) {

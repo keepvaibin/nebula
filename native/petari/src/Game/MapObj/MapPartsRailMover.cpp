@@ -5,6 +5,7 @@
 #include "Game/MapObj/MapPartsRailPointPassChecker.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_calcTimeToNextRailPoint_f1, "calcTimeToNextRailPoint.f1", 0.0001f);
 NEBULA_TUNABLE_NAMED(f32, cNum_calcTimeToNextRailPoint_f2, "calcTimeToNextRailPoint.f2", 0.5f);
@@ -34,6 +35,7 @@ namespace NrvMapPartsRailMover {
 
 MapPartsRailMover::MapPartsRailMover(LiveActor* pActor)
     : MapPartsFunction(pActor, "レイル移動"), mRailPointPassChecker(), mMoveConditionType(), mMoveStopType(1), mSignMotionType(), mStartPos(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailMover >);
     mInitCoord = 0.0f;
     mStopTime = 0;
     mSpeed = 0.0f;

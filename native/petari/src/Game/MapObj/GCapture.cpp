@@ -28,6 +28,7 @@
 
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeCapture_f1, "exeCapture.f1", 0.1f);
@@ -91,6 +92,7 @@ GCapture::GCapture(const char* pName)
     : LiveActor(pName), mBindQuat(0.0f, 0.0f, 0.0f, 1.0f), mEffectPos(0, 0, 0), mEffectOffset(0, 0, 0), mRotateVelocity(0, 0, 0), mRotateAxis(0, 0, 1), mBindActor(nullptr),
       mTarget(nullptr), mTractTarget(nullptr), mCaptureRibbon(nullptr), mTargetMtx(nullptr), mTractPower(0.0f), mEffectBlend(0.0f), mRibbonRate(0.1f), mTargetKeepTime(0),
       mTargetDist(FLOAT_MAX), mGuidanceTime(0) {
+    lumacore::setClass(this, lumacore::kClassId< GCapture >);
     mCaptureRibbon = new GCaptureRibbon("Gキャプチャーリボン");
     mTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
     mRibbonPointMtx.identity();
