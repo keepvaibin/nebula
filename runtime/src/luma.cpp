@@ -246,6 +246,18 @@ private:
     std::size_t at_ = 0;
 };
 
+// A script's name: letters, digits, _ and -, in folders split by /; never empty, absolute or climbing out.
+bool script_name_ok(std::string_view name) {
+    if (name.empty() || name.size() > 128 || name.front() == '/' || name.back() == '/') return false;
+    char last = '/';
+    for (const char c : name) {
+        const bool plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
+        if (!plain && !(c == '/' && last != '/')) return false;
+        last = c;
+    }
+    return true;
+}
+
 std::string text_field(const Value& value, std::string_view key) {
     const Value* field = value.get(key);
     const std::string* text = field != nullptr ? field->string() : nullptr;
@@ -731,6 +743,41 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 layer.object_classes.push_back(std::move(object));
             }
         }
+        if (const Value* objects = entry.get("objects"); objects != nullptr) {
+            if (objects->array() == nullptr) return std::nullopt;
+            for (const Value& row : *objects->array()) {
+                ScriptObject object;
+                object.name = text_field(row, "name");
+                object.script = text_field(row, "script");
+                object.archive = text_field(row, "archive");
+                if (object.name.empty() || !script_name_ok(object.script)) return std::nullopt;
+                const std::string kind = text_field(row, "kind");
+                static constexpr std::string_view kinds[] = {"enemy", "map", "npc", "ride", "decoration"};
+                object.kind = -1;
+                for (int k = 0; k < 5; ++k) {
+                    if (kind.empty() ? k == 0 : kind == kinds[k]) object.kind = k;
+                }
+                if (object.kind < 0) return std::nullopt;
+                const auto distance = [&row](std::string_view key, double& out) {
+                    const Value* value = row.get(key);
+                    if (value == nullptr) return true;
+                    const double* number = value->number();
+                    if (number == nullptr || !(*number >= 0.0 && *number <= 100000.0)) return false;
+                    out = *number;
+                    return true;
+                };
+                if (!distance("radius", object.radius) || !distance("shadow_radius", object.shadow_radius) ||
+                    !distance("clip_radius", object.clip_radius)) {
+                    return std::nullopt;
+                }
+                if (const Value* collision = row.get("collision"); collision != nullptr) {
+                    const bool* solid = std::get_if<bool>(&collision->data);
+                    if (solid == nullptr) return std::nullopt;
+                    object.collision = *solid;
+                }
+                layer.objects.push_back(std::move(object));
+            }
+        }
         // "switches" gave way to "tunables": the mod is refused, naming the tunable for its first switch.
         if (const Value* switches = entry.get("switches"); switches != nullptr && out.retired.empty()) {
             out.retired = "\"SWITCHES\" ARE NOW \"TUNABLES\"";
@@ -829,7 +876,7 @@ std::string refusal(const Manifest& manifest, const std::string& game_id, std::s
     }
     for (const Plugin& plugin : manifest.plugins) {
         if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
-        if (plugin.api != 0u && plugin.api < kPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H";
+        if (plugin.api != 0u && plugin.api < kOldestPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H";
         if (plugin.binaries.find(std::string(plugin_target())) == plugin.binaries.end()) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
     }
     return {};
@@ -1004,7 +1051,7 @@ bool rows_set_game(const Rows& rows) noexcept {
 bool layer_sets_game(const Layer& layer) noexcept {
     return rows_set_game(layer.rows) || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty() ||
            !layer.stages.empty() || !layer.player_constants.empty() || !layer.tunables.empty() || !layer.object_classes.empty() ||
-           !layer.sound_effects.empty() || !layer.player_animations.empty();
+           !layer.objects.empty() || !layer.sound_effects.empty() || !layer.player_animations.empty();
 }
 
 bool manifest_sets_game(const Manifest& manifest) noexcept {
@@ -1040,6 +1087,7 @@ std::vector<std::string> setting_keys(const Layer& layer) {
     }
     for (const Tunable& tunable : layer.tunables) keys.push_back(key_of({"tunable", tunable.key}));
     for (const ObjectClass& object : layer.object_classes) keys.push_back(key_of({"class", object.name}));
+    for (const ScriptObject& object : layer.objects) keys.push_back(key_of({"class", object.name}));
     for (const SoundEffect& sound : layer.sound_effects) keys.push_back(key_of({"sound", sound.name}));
     for (const PlayerAnimation& animation : layer.player_animations) keys.push_back(key_of({"animation", animation.name}));
     return keys;

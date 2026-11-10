@@ -535,6 +535,9 @@ def emit_docs(rows, left, class_rows, field_count, layouts):
     out += ['', '## Left out', '', 'What the toolkit cannot offer yet, and why.', '', '| Name | Why |', '|---|---|']
     out += [f'| `{n}` | {w} |' for n, w in sorted(left)]
     (DOCS / 'TOOLKIT.md').write_text('\n'.join(out) + '\n', encoding='utf-8')
+    # For the script compiler (LumaLink's SDK): name, the value letters it takes (self first), the result letter.
+    (DOCS / 'toolkit.tsv').write_text(''.join(f'{r["row"]}\t{r["sig"]}\t{r["res"]}\n' for r in rows), encoding='utf-8',
+                                      newline='\n')
     names = {q for (q, _, _, _) in class_rows}
     cls = ['# Classes', '', f'{len(class_rows)} classes derive from NameObj. `like` names one of them; scripts '
            'check an object with `is(object, "Kuribo")`.', '', '| Class | Parent | Header |', '|---|---|---|']

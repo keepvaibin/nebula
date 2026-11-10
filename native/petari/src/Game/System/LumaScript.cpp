@@ -788,6 +788,9 @@ namespace lumascript {
                 case Op_Emit:
                     ok = a && s.imm < p->mImportCount && p->mImports[s.imm].kind == Import_Event;
                     break;
+                case Op_Registry:
+                    ok = dst && s.imm < p->mImportCount && p->mImports[s.imm].kind == Import_Registry;
+                    break;
                 case Op_Format:
                     ok = dst && range && s.imm < p->mConstantCount && p->mConstants[s.imm].kind == NEBULA_KIND_TEXT;
                     break;
@@ -1017,6 +1020,9 @@ namespace lumascript {
                 }
                 break;
             }
+            case Op_Registry:
+                r[s.dst] = fromInt(p->mImports[s.imm].index);
+                break;
             case Op_CallScript:
                 r[s.dst] = callFunction(pInstance, s.imm, r + s.a, s.b, depth + 1);
                 break;
@@ -1316,6 +1322,7 @@ namespace lumascript {
             for (u32 i = 0; i < dueCount; i++) {
                 (void)execute(pInstance, due[i].function, due[i].pc, due[i].registers, 0);
                 delete[] due[i].registers;
+                delete[] due[i].matrices;
             }
         }
         if (p->mHasFrame) {

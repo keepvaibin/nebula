@@ -102,6 +102,19 @@ struct ObjectClass {
     std::string like;
 };
 
+// An object a script runs ("objects"): its shape, and the script (scripts/<script>.lumascript, compiled by LumaLink
+// into files/LumaScripts/<mod id>/<script>.lumascript).
+struct ScriptObject {
+    std::string name;
+    std::string script;
+    std::string archive;  // model and animations: ObjectData/<archive>.arc; empty: invisible
+    double radius = 60.0;
+    int kind = 0;  // NEBULA_OBJECT_*: "enemy", "map", "npc", "ride", "decoration"
+    bool collision = false;
+    double shadow_radius = 0.0;
+    double clip_radius = 0.0;
+};
+
 // A named sound effect loaded from a file.
 struct SoundEffect {
     std::string name;
@@ -183,6 +196,7 @@ struct Layer {
     std::vector<PlayerConstant> player_constants;
     std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
+    std::vector<ScriptObject> objects;
     std::vector<SoundEffect> sound_effects;
     std::vector<PlayerAnimation> player_animations;
     When when;
@@ -244,7 +258,9 @@ inline constexpr std::size_t kMaxPictures = 16;
 // Most achievements one mod can add; extra ones are ignored.
 inline constexpr std::size_t kMaxAchievements = 64;
 // The plugin API version this game provides (NEBULA_MOD_API_VERSION).
-inline constexpr std::uint32_t kPluginApi = 2;
+inline constexpr std::uint32_t kPluginApi = 3;
+// The oldest plugin API this game runs: each version only adds calls at the end of the table.
+inline constexpr std::uint32_t kOldestPluginApi = 2;
 
 [[nodiscard]] std::optional<Manifest> parse_manifest(std::string_view text);
 [[nodiscard]] std::optional<Manifest> read_manifest(const std::filesystem::path& folder);

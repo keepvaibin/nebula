@@ -119,6 +119,20 @@ struct ObjectClassToSet {
     std::string like;
 };
 
+// An object a script runs (luma::ScriptObject), for the mod that adds it.
+struct ScriptObjectToAdd {
+    std::string mod_id;
+    std::string mod_version;
+    std::string name;
+    std::string script;
+    std::string archive;
+    double radius = 60.0;
+    int kind = 0;
+    bool collision = false;
+    double shadow_radius = 0.0;
+    double clip_radius = 0.0;
+};
+
 // A mod's achievement for this run (luma::Achievement), with text in the language played.
 struct AchievementToAdd {
     std::string mod_id;  // the mod's folder name, which is also its plugin's NebulaPlugin id
@@ -151,12 +165,13 @@ struct ModRows {
     std::vector<PlayerConstantToSet> player_constants;
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
+    std::vector<ScriptObjectToAdd> script_objects;
     std::vector<SoundEffectToAdd> sound_effects;
     std::vector<PlayerAnimationToAdd> player_animations;
     std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && script_objects.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`
