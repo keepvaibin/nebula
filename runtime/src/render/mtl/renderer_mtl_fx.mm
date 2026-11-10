@@ -96,6 +96,10 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        if (p.strength <= 0.0f) {
+            // Turned off: the kept scene alone comes back, and none of the chain's passes run.
+            p.kind = mtl::GameBloom::Kind::Restore;
+        }
         if (bloom_.prepare(commands_, in, p)) {
             // The composite writes every channel of each pixel it covers, unblended (from the kept scene and the
             // levels): over the whole target the pass opens without loading the colour it replaces.
