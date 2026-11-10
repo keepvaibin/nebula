@@ -106,6 +106,8 @@ namespace lumascript {
         Event_Message,
         Event_Script,
         Event_Game,
+        Event_Control,     // a mod class's: in place of the class's own update when it returns true
+        Event_TouchActor,  // a mod class's: (other, own sensor) when one of its sensors touches another's
         Event_Count
     };
     // Whether a program answers an event (number -1: any number of it).

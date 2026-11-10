@@ -115,8 +115,10 @@ struct PlayerAnimationToAdd {
 };
 struct ObjectClassToSet {
     std::string mod_id;
+    std::string mod_version;
     std::string name;
-    std::string like;
+    std::string like;    // empty: one of the game's classes
+    std::string script;  // empty: none
 };
 
 // A mod-wide script (luma.json "scripts"), for the mod that runs it.

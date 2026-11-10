@@ -3925,6 +3925,8 @@ What the toolkit cannot offer yet, and why.
 | `nebula.release` | parameter type void* |
 | `nebula.set_actor_data` | parameter type void* |
 | `nebula.set_area_music` | only while plugins start |
+| `nebula.set_class_hooks` | parameter type const NebulaClassHooks* |
+| `nebula.set_class_script` | only while plugins start |
 | `nebula.set_comet_schedule` | only while plugins start |
 | `nebula.set_event_flag` | only while plugins start |
 | `nebula.set_object_class` | only while plugins start |

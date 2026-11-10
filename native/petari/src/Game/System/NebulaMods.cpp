@@ -1,5 +1,6 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/System/LumaClass.hpp"
 #include "Game/System/LumaHost.hpp"
 #include "Game/System/LumaRegistry.hpp"
 #include "Game/System/NebulaModCalls.hpp"
@@ -2752,6 +2753,27 @@ namespace {
         return added;
     }
 
+    // A mod's script, or a plugin's hooks, on every actor placed by a name (LumaClass).
+    s32 apiSetClassScript(const NebulaPlugin* pMod, const char* pName, const char* pScript) {
+        if (pMod == nullptr || pName == nullptr || pScript == nullptr) {
+            return -1;
+        }
+        char path[256];
+        nebula_snprintf(path, sizeof(path), "/LumaScripts/%s/%s.lumascript", pMod->id, pScript);
+        char message[256];
+        message[0] = '\0';
+        const s32 script = lumacore::loadScript(pMod, path, message, sizeof(message));
+        if (script < 0) {
+            nebula_log("mods: %s: the class %s has no script: %s\n", pMod->id, pName, message);
+            return -1;
+        }
+        return lumacore::addClassScript(pMod, pName, script);
+    }
+
+    s32 apiSetClassHooks(const NebulaPlugin* pMod, const char* pName, const NebulaClassHooks* pHooks) {
+        return pMod != nullptr ? lumacore::addClassHooks(pMod, pName, pHooks) : -1;
+    }
+
     // The fields the host fills are its own: log, option, hook, find_function, store_get, store_set, setting, store_get_text, store_set_text.
     // Set once any mod's rows or code have started.
     bool sAskedForApi = false;
@@ -2957,6 +2979,8 @@ namespace {
         apiRegistryFind,
         apiRegistryValue,
         apiRegistryMod,
+        apiSetClassScript,
+        apiSetClassHooks,
     };
 }  // namespace
 

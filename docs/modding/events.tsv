@@ -7,6 +7,8 @@ attacked	own
 appear	own
 kill	own
 message	own
+control	own
+touch	own
 stage_frame	game
 stage_start	game
 player_damage	game

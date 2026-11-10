@@ -2,6 +2,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/LumaClass.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/Map/PlanetMapCreator.hpp"
@@ -122,6 +123,10 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::initLiveActorSystemInfo(iter);
             MR::clearCurrentPlacementZoneId();
             if (!ready) return false;
+            // The mods' classes on what this placement made (luma.json "object_classes" with a script, plugins' hooks).
+            if (lumacore::sClassRowCount != 0) [[unlikely]] {
+                lumacore::attachClass(mInitializing, set->mName);
+            }
             mInitializing = nullptr;
         }
         mPlacementLink = mPlacementLink->getNext();

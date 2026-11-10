@@ -2292,7 +2292,8 @@ void select_mods_row(const RenderConfig& render, const std::string& key) {
 
 // What a mod changes, its conflicts by the draft's order, or why it does nothing: the line under the page.
 std::string mod_details(const galaxy::mods::ModInfo& mod) {
-    if (!mod.problem.empty() && (mod.unreadable || mod.pack_textures != nullptr || mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
+    // A .luma's problem is why it is refused (another region, a newer Nebula...): it does nothing, whatever it holds.
+    if (!mod.problem.empty() && (mod.package || mod.unreadable || mod.pack_textures != nullptr || mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
         return mods_ui_text(mod.problem, 120u);
     }
     std::string kinds = galaxy::mods::change_kinds(mod);

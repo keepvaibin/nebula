@@ -42,7 +42,7 @@ namespace {
     NEBULA_TUNABLE(f32, cIconSize, 60.0f);
     NEBULA_TUNABLE(f32, cLineSpace, 8.0f);
     NEBULA_TUNABLE(f32, cTextMax, 440.0f);
-    NEBULA_TUNABLE(f32, cScale, 0.5f);
+    NEBULA_TUNABLE(f32, cScale, 0.65f);
     NEBULA_TUNABLE(f32, cMargin, 8.0f);
 
     NEBULA_TUNABLE(s32, cRiseFrames, 24);

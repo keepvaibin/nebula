@@ -531,7 +531,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
     }
     for (const ObjectClassToSet& object : rows.object_classes) {
-        if (g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
+        if (!object.like.empty() && g_api.set_object_class(object.name.c_str(), object.like.c_str()) != 0) {
             say(object.mod_id + ": the object " + object.name + " can't be added");
         }
     }
@@ -555,6 +555,20 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         shape.clip_radius = static_cast<float>(row.clip_radius);
         if (g_api.add_script_object == nullptr || g_api.add_script_object(&mod->self, &shape, row.script.c_str()) != 0) {
             say(row.mod_id + ": the object " + row.name + " can't be added (its script " + row.script + ")");
+        }
+    }
+    // Class scripts once every class exists (a mod's "like" classes above).
+    for (const ObjectClassToSet& object : rows.object_classes) {
+        if (object.script.empty()) continue;
+        auto loaded = std::make_unique<Loaded>();
+        loaded->mod_id = object.mod_id;
+        loaded->version = object.mod_version;
+        loaded->self.size = sizeof(NebulaPlugin);
+        loaded->self.id = loaded->mod_id.c_str();
+        loaded->self.version = loaded->version.c_str();
+        Loaded* const mod = data_mod(std::move(loaded));
+        if (g_api.set_class_script == nullptr || g_api.set_class_script(&mod->self, object.name.c_str(), object.script.c_str()) != 0) {
+            say(object.mod_id + ": the script " + object.script + " can't run on " + object.name);
         }
     }
     // Mod-wide scripts after the objects: a script that names a class finds it.

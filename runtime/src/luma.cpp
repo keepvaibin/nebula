@@ -752,8 +752,10 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         }
         if (const Value* classes = entry.get("object_classes"); classes != nullptr && classes->array() != nullptr) {
             for (const Value& row : *classes->array()) {
-                ObjectClass object{text_field(row, "name"), text_field(row, "like")};
-                if (object.name.empty() || object.like.empty()) return std::nullopt;
+                ObjectClass object{text_field(row, "name"), text_field(row, "like"), text_field(row, "script")};
+                // A new name made like a game class, or a script on a class (the game's own name, no "like").
+                if (object.name.empty() || (object.like.empty() && object.script.empty())) return std::nullopt;
+                if (!object.script.empty() && !script_name_ok(object.script)) return std::nullopt;
                 layer.object_classes.push_back(std::move(object));
             }
         }

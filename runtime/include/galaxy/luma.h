@@ -99,7 +99,8 @@ struct Tunable {
 // A new object class that is built like one of the game's.
 struct ObjectClass {
     std::string name;
-    std::string like;
+    std::string like;    // the game's class it is made like; empty: `name` is one of the game's own classes
+    std::string script;  // what runs on every actor of it (scripts/<script>.lumascript); empty: none
 };
 
 // An object a script runs ("objects"): its shape, and the script (scripts/<script>.lumascript, compiled by LumaLink

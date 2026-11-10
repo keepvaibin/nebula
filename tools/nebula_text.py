@@ -2,7 +2,7 @@
 
     python tools/nebula_text.py            writes native/petari/src/Game/System/NebulaTextTable.inc
     python tools/nebula_text.py --check    exits 1 when the .inc does not match the table, or a text has no row
-    python tools/nebula_text.py --fonts <LayoutData/Font.arc>
+    python tools/nebula_text.py --fonts <LayoutData/Font.arc, or the folder lumalink extract writes>
                                            exits 1 when a game row of a disc's language has a character the disc's
                                            message font lacks (it would draw as the font's alternate, '?')
 
@@ -300,9 +300,14 @@ def font_codes(font):
 
 
 def font_gaps(font_arc):
-    """Each game row's characters, in the columns a disc carries, that the message font lacks."""
-    with open(font_arc, 'rb') as f:
-        codes = font_codes(archive_files(yaz0(f.read()))[MESSAGE_FONT]) | AS_SPACE
+    """Each game row's characters, in the columns a disc carries, that the message font lacks. `font_arc`: the archive,
+    or the folder `lumalink extract` writes it to."""
+    if os.path.isdir(font_arc):
+        with open(os.path.join(font_arc, MESSAGE_FONT), 'rb') as f:
+            codes = font_codes(f.read()) | AS_SPACE
+    else:
+        with open(font_arc, 'rb') as f:
+            codes = font_codes(archive_files(yaz0(f.read()))[MESSAGE_FONT]) | AS_SPACE
     with open(TABLE, encoding='utf-8') as f:
         header = f.readline().rstrip('\r\n').split('\t')
     gaps = []
