@@ -269,6 +269,10 @@ public:
     [[nodiscard]] const PipelineEntry& pipeline(std::uint32_t id) const noexcept { return pipelines_[id]; }
     void write_pipeline_list(const std::filesystem::path& path);
     [[nodiscard]] std::uint32_t pipeline_count() const noexcept { return static_cast<std::uint32_t>(pipelines_.size()); }
+    // Every pipeline the game has registered (any thread), those the render thread has not been handed yet among them.
+    [[nodiscard]] std::uint32_t registered_pipeline_count() const noexcept {
+        return registered_pipelines_.load(std::memory_order_acquire);
+    }
     [[nodiscard]] TextureTable& table(std::uint32_t id) noexcept {
         return id < tables_.size() && tables_[id] != nullptr ? *tables_[id] : no_table_;
     }
@@ -368,6 +372,7 @@ private:
     std::uint32_t next_model_ = 1u, next_mesh_ = 1u, next_slot_ = 0u, next_table_ = 1u;
     // Every pipeline the game registered, with its inputs (the entries' copies, in registration order).
     std::vector<PipelineEntry> all_pipelines_;
+    std::atomic<std::uint32_t> registered_pipelines_{0u};  // all_pipelines_'s size, read without the lock
     std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> pipeline_by_hash_;
     std::unordered_map<std::uint64_t, std::vector<TableKey>> table_by_hash_;
     std::unordered_map<std::uint64_t, std::vector<SlotRecord>> slot_by_hash_;

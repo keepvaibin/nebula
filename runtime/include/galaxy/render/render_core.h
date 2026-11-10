@@ -10,6 +10,8 @@
 #include "galaxy/render/movie_playback.h"
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/renderer_vk.h"
+#elif defined(NEBULA_GPU_METAL)
+#include "galaxy/render/mtl/renderer_mtl.h"
 #else
 #include "galaxy/render/renderer_d3d12.h"
 #endif
@@ -77,7 +79,9 @@ public:
     [[nodiscard]] core::Registries& registries() noexcept { return registries_; }
     [[nodiscard]] PipelineProgress pipeline_progress() const noexcept {
         const std::uint32_t queued = pipelines_queued_.load(std::memory_order_relaxed);
-        const std::uint32_t count = registries_.pipeline_count();
+        // Registered counts from the moment the game names a pipeline: the cook's list, registered at the start, is
+        // still to make before the render thread has been handed it (the title's wait asks in those first frames).
+        const std::uint32_t count = registries_.registered_pipeline_count();
         return {static_cast<std::uint32_t>(pipelines_.created()), pipelines_.pending() + (count > queued ? count - queued : 0u)};
     }
     [[nodiscard]] TextureStore& textures() noexcept { return texture_store_; }
@@ -254,7 +258,7 @@ private:
     void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
     std::vector<TextureHandle> walk_handles_;
     std::vector<std::uint32_t> walk_pairs_;
-#if defined(NEBULA_GPU_VULKAN)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
     // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
     void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
     std::vector<SamplerKey> walk_keys_;

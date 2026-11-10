@@ -590,6 +590,7 @@ std::uint32_t Registries::pipeline_register(const NebulaPipelineDesc& desc, cons
     }
     const std::uint32_t id = static_cast<std::uint32_t>(all_pipelines_.size());
     all_pipelines_.push_back(entry_of(desc, inputs));
+    registered_pipelines_.store(static_cast<std::uint32_t>(all_pipelines_.size()), std::memory_order_release);
     incoming_.pipelines.push_back(all_pipelines_.back());
     bucket.push_back(id);
     return id;
