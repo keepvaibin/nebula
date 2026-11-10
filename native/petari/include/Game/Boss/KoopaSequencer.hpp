@@ -21,9 +21,6 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-#if defined(NEBULA_DEV)
-    virtual void testHit(HitSensor* /*pPlayer*/) {}
-#endif
 
     void startBattleLevel2();
     void startBattleLevel3();

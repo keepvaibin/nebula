@@ -115,10 +115,3 @@ bool KoopaSequencerVs2::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* 
     return isBattleActive() && mBattleMain->receiveOtherMsg(msg, pSender, pReceiver);
 }
 
-#if defined(NEBULA_DEV)
-void KoopaSequencerVs2::testHit(HitSensor* pPlayer) {
-    if (isBattleActive()) {
-        mBattleMain->testHit(pPlayer);
-    }
-}
-#endif

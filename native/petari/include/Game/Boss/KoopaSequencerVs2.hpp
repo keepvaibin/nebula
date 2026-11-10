@@ -13,9 +13,6 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
-#if defined(NEBULA_DEV)
-    virtual void testHit(HitSensor* pPlayer) override;
-#endif
 
     void exeWaitDemoBattleStart();
     void exeDemoBattleStart();

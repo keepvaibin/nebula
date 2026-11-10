@@ -10,7 +10,6 @@
 #   -a       the processors to build for (default: this machine's). Two make a universal app, which runs on Intel
 #            Macs and on Apple silicon. The build machine's own comes first: its build makes the shader tools and the
 #            shaders, which the other one takes.
-#   -r       a release build (no test hooks).
 #   -j       how many compiles run at once (default: the build tool's own choice).
 #   -x       an Xcode's Contents/Developer folder, for its Metal compiler, when it is not the machine's selected one:
 #            the programs are then compiled into the app's Metal libraries (docs/APPLE.md, "Shaders").
@@ -21,7 +20,6 @@ root=$(cd "$here/../.." && pwd)
 tools=
 work=
 archs=$(uname -m)
-release=OFF
 sdk=
 jobs=
 xcode=
@@ -30,7 +28,6 @@ while getopts "t:w:a:rs:j:x:" option; do
     t) tools=$OPTARG ;;
     w) work=$OPTARG ;;
     a) archs=$OPTARG ;;
-    r) release=ON ;;
     s) sdk=$OPTARG ;;
     j) jobs="--parallel $OPTARG" ;;
     x) xcode=$OPTARG ;;
@@ -55,7 +52,7 @@ done
 
 host_tree=
 for arch in $ordered; do
-    common="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$here/toolchain.cmake -DNEBULA_APPLE_LLVM=$tools/toolchain/llvm -DNEBULA_APPLE_LIBCXX=$tools/toolchain/libcxx -DNEBULA_APPLE_PLATFORM=macos -DNEBULA_APPLE_ARCH=$arch -DNEBULA_APPLE_SDK=$sdk -DNEBULA_RELEASE=$release"
+    common="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$here/toolchain.cmake -DNEBULA_APPLE_LLVM=$tools/toolchain/llvm -DNEBULA_APPLE_LIBCXX=$tools/toolchain/libcxx -DNEBULA_APPLE_PLATFORM=macos -DNEBULA_APPLE_ARCH=$arch -DNEBULA_APPLE_SDK=$sdk"
     # shellcheck disable=SC2086
     cmake -S "$root/native" -B "$work/macos-$arch/game" $common
     # shellcheck disable=SC2086

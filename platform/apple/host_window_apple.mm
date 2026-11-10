@@ -902,57 +902,11 @@ void start_app() noexcept {
 
 namespace galaxy::sdl {
 
-#if defined(NEBULA_DEV)
-// A test of the keyboard's whole path with nobody at the keys (NEBULA_TEST_KEY=<Mac key code>,<from ms>,<to ms>, counted
-// from the first event pump, and more presses after a ';'): each key goes down and comes up as events in the app's own
-// queue, which the pump takes like a keyboard's.
-void post_test_key() {
-    static const char* const spec = std::getenv("NEBULA_TEST_KEY");
-    if (spec == nullptr) {
-        return;
-    }
-    static const std::uint64_t began = galaxy::steady_ms();
-    static const char* press = spec;  // the press under way
-    static int state = 0;             // 0 before, 1 held
-    unsigned code = 0, from = 0, to = 0;
-    if (press == nullptr || std::sscanf(press, "%u,%u,%u", &code, &from, &to) != 3) {
-        return;
-    }
-    const std::uint64_t now = galaxy::steady_ms() - began;
-    const bool down = state == 0 && now >= from;
-    const bool up = state == 1 && now >= to;
-    if (!down && !up) {
-        return;
-    }
-    state = down ? 1 : 0;
-    if (up) {
-        press = std::strchr(press, ';');
-        press = press != nullptr ? press + 1 : nullptr;
-    }
-    NSEvent* const event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
-                                            location:NSZeroPoint
-                                       modifierFlags:0
-                                           timestamp:NSProcessInfo.processInfo.systemUptime
-                                        windowNumber:g_window != nil ? g_window.windowNumber : 0
-                                             context:nil
-                                          characters:@""
-                         charactersIgnoringModifiers:@""
-                                           isARepeat:NO
-                                             keyCode:static_cast<unsigned short>(code)];
-    if (event != nil) {
-        [NSApp postEvent:event atStart:NO];
-        std::fprintf(stderr, "[input] test key %u %s at %llu ms\n", code, down ? "down" : "up", static_cast<unsigned long long>(now));
-    }
-}
-#endif
 
 void pump_events(int timeout_ms) noexcept {
     std::vector<std::tuple<int, bool, bool, int>> menu_keys;  // key, down, repeat, the letter at its place
     int menu_wheel = 0;
     @autoreleasepool {
-#if defined(NEBULA_DEV)
-        post_test_key();
-#endif
         NSDate* const until = [NSDate dateWithTimeIntervalSinceNow:static_cast<double>(std::max(timeout_ms, 0)) / 1000.0];
         NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:until inMode:NSDefaultRunLoopMode dequeue:YES];
         while (event != nil) {

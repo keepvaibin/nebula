@@ -350,15 +350,6 @@ bool KoopaBattleMain::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
     return false;
 }
 
-#if defined(NEBULA_DEV)
-void KoopaBattleMain::testHit(HitSensor* pPlayer) {
-    if (isNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvDamageEscape))) {
-        receiveMsgPlayerAttack(ACTMES_PLAYER_PUNCH, pPlayer, mHost->getSensor("DamageEscapeBody"));
-    } else {
-        setNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvDamageEscape));
-    }
-}
-#endif
 
 bool KoopaBattleMain::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_KOOPA_PLAYER_DAMAGE) {

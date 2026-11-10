@@ -673,13 +673,13 @@ NebulaHostExtension g_extension{};
 
 }  // namespace
 
-// The test plugin in the game (the same library, loaded again by the mods): each scene frame and stop, and the picture
-// number for the game frame it is in (0: none until the next).
+// The test plugin in the game (test_plugin.cpp, this library loaded again by the mods): each scene frame and stop, and
+// the picture number for the game frame it is in (0: none until the next; ~0: no number, outside a tour).
 NEBULA_EXTENSION_EXPORT void nebula_test_scene_frame(std::uint64_t scene_frames, std::uint64_t stop_frames,
                                                      std::uint64_t picture_number) {
     g_scene_frames.store(scene_frames, std::memory_order_relaxed);
     g_stop_frames.store(stop_frames, std::memory_order_relaxed);
-    if (g_pictures.by_stop) {
+    if (g_pictures.by_stop && picture_number != kNoStop) {
         const std::uint64_t game_frame = g_game_frames.load(std::memory_order_relaxed);
         Numbered& entry = g_numbers[game_frame % std::size(g_numbers)];
         entry.number.store(picture_number, std::memory_order_relaxed);

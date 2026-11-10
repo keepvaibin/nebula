@@ -126,8 +126,13 @@ galaxy_host_options(galaxy_host_extension)
 # The test runs' extension (run.sh: --extension): scripted controls, pictures, sound, menus and device losses from the
 # run's GALAXY_* environment. Never in an install.
 add_library(nebula_test_extension MODULE tools/test_driver/extension/test_extension.cpp
-    tools/test_driver/extension/data_guard.cpp runtime/src/hidden_start.cpp)
-target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi shell32)
+    tools/test_driver/extension/test_plugin.cpp tools/test_driver/extension/data_guard.cpp runtime/src/hidden_start.cpp)
+target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi)
+if(WIN32)
+    target_link_libraries(nebula_test_extension PRIVATE shell32)
+else()
+    target_link_libraries(nebula_test_extension PRIVATE ${CMAKE_DL_LIBS})
+endif()
 target_compile_features(nebula_test_extension PRIVATE cxx_std_20)
 if(MSVC)
     target_compile_options(nebula_test_extension PRIVATE /W4 /WX /permissive- /EHsc)
