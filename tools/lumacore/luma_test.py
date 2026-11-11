@@ -235,6 +235,9 @@ def read_setup(t, bare, seed, language):
             if key in t:
                 raise HarnessError("a bare test has no %s" % key)
         return lines
+    # User file 1 first (contract harness 3.2): created through the game's new-file path, or, continuing from an
+    # earlier test, loaded from the saves that test left, as the file select does.
+    lines.append("setup file 1")
     if "save" in t:
         s = t["save"]
         keys_known(s, "save", {"character", "spin", "stars", "grand_stars", "flags", "values", "from"})
@@ -290,7 +293,8 @@ def read_setup(t, bare, seed, language):
             at = text(p, "at", "player")
             if not re.fullmatch(r"[^\s#]+#\d+", at):
                 raise HarnessError("player.at is <object name>#<n>")
-            lines.append("setup player.at %s" % at)
+            name, number = at.split("#")
+            lines.append("setup player.at %s %s" % (name, number))
         if "form" in p:
             form = text(p, "form", "player")
             if form not in FORMS:

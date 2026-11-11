@@ -42,6 +42,13 @@ static const LumaFunction* game_data;       /* GameDataHolder *GameDataFunction:
 static const LumaFunction* is_luigi;        /* bool MR::isPlayerLuigi() */
 static const LumaFunction* is_dead;         /* bool MR::isDead(const LiveActor *) */
 static const LumaFunction* language_name;   /* const char *MR::getCurrentLanguagePrefix() */
+static const LumaFunction* demo_active;     /* bool MR::isDemoActive() */
+static const LumaFunction* save_sequence;   /* SaveDataHandleSequence *getSaveDataHandleSequence() (file-local) */
+static const LumaFunction* current_file;    /* UserFile *SaveDataHandleSequence::getCurrentUserFile() */
+static const LumaFunction* file_created;    /* bool UserFile::isCreated() const */
+static const LumaFunction* load_file;       /* void GameSequenceFunction::startGameDataLoadSequence(int, bool) */
+static const LumaFunction* create_file;     /* void GameSequenceFunction::startCreateUserFileSequence(int) */
+static const LumaFunction* save_busy;       /* bool GameSequenceFunction::isActiveSaveDataHandleSequence() */
 
 static int32_t field_name = -1;      /* NameObj.mName */
 static int32_t field_position = -1; /* LiveActor.mPosition */
@@ -320,7 +327,7 @@ static void* object_of(const char* ref) {
 
 /* --- What a line asks ------------------------------------------------------------------------------------------------ */
 
-typedef enum Pending { Pending_None, Pending_Stage } Pending;
+typedef enum Pending { Pending_None, Pending_Stage, Pending_File } Pending;
 static Pending pending;
 static char pending_stage[64];
 static int32_t pending_scenario;
@@ -333,12 +340,83 @@ static const char* const kForms[] = {"normal", "rainbow", "fire", "ice", "bee", 
 static int stage_ready(void) {
     const char* name = 0;
     int32_t scenario = 0;
-    unsigned char opening = 1, starting = 1;
+    unsigned char opening = 1, starting = 1, demo = 1;
     call0(stage_name, &name);
     call0(scenario_no, &scenario);
     call0(opening_camera, &opening);
     call0(scenario_start, &starting);
-    return name != 0 && same(name, pending_stage) && scenario == pending_scenario && opening == 0 && starting == 0 && player() != 0;
+    /* The stage-start demo (the scenario starter's "Welcome" layout, run 6) holds the player's input: ready once no
+       demo runs. */
+    call0(demo_active, &demo);
+    return name != 0 && same(name, pending_stage) && scenario == pending_scenario && opening == 0 && starting == 0 &&
+           demo == 0 && player() != 0;
+}
+
+/* User file <n> made current as the file select does: loaded when the saves hold it, else made through the game's
+   new-file path (which also writes it, so the next test continuing from this one finds it). */
+static int32_t pending_file;
+static void* the_current_file(void) {
+    void* sequence = 0;
+    call0(save_sequence, &sequence);
+    if (sequence == 0) {
+        return 0;
+    }
+    void* file = 0;
+    void* args[] = {sequence};
+    current_file->invoke(args, &file);
+    return file;
+}
+
+static int file_is_created(void* file) {
+    unsigned char created = 0;
+    void* args[] = {file};
+    file_created->invoke(args, &created);
+    return created != 0;
+}
+
+static void setup_file(const char* text) {
+    int good = 0;
+    const int64_t n = to_int(text, &good);
+    if (!good || n < 1 || n > 3) {
+        harness->done(0, "file: a user file is 1, 2 or 3");
+        return;
+    }
+    pending_file = (int32_t)n;
+    void* const file = the_current_file();
+    if (file == 0) {
+        harness->done(0, "file: the game has no current user file yet");
+        return;
+    }
+    int32_t index = pending_file;
+    unsigned char mario = 1;
+    void* load_args[] = {0, &index, &mario};
+    load_file->invoke(load_args, 0);
+    if (file_is_created(file)) {
+        fact_text("setup.file", "loaded");
+        harness->done(1, 0);
+        return;
+    }
+    void* create_args[] = {0, &index};
+    create_file->invoke(create_args, 0);
+    pending_frames = 0;
+    pending = Pending_File;
+}
+
+static void file_tick(void) {
+    unsigned char busy = 1;
+    call0(save_busy, &busy);
+    if (busy != 0) {
+        if (++pending_frames > 60u * 60u) {
+            pending = Pending_None;
+            harness->done(0, "file: the new file was not written within 3,600 frames");
+        }
+        return;
+    }
+    pending = Pending_None;
+    void* const file = the_current_file();
+    const int created = file != 0 && file_is_created(file);
+    fact_text("setup.file", created ? "created" : "not created");
+    harness->done(created, "file: the game's new-file path left the file not created");
 }
 
 static void start_stage(const char* name, const char* scenario_text, int is_step) {
@@ -799,7 +877,9 @@ static void do_line(const char* line) {
     }
     if (same(w.word[0], "setup") && w.count >= 2u) {
         const char* const item = w.word[1];
-        if (same(item, "stage") && w.count == 4u) {
+        if (same(item, "file") && w.count == 3u) {
+            setup_file(w.word[2]);
+        } else if (same(item, "stage") && w.count == 4u) {
             start_stage(w.word[2], w.word[3], 0);
         } else if (item[0] == 's' && item[1] == 'a' && item[2] == 'v' && item[3] == 'e' && item[4] == '.') {
             setup_save(&w);
@@ -843,6 +923,12 @@ static void do_line(const char* line) {
 static int32_t on_frame(LumaCall* call, void* user) {
     (void)call;
     (void)user;
+    if (pending == Pending_File) {
+        file_tick();
+        if (pending == Pending_File) {
+            return 0;
+        }
+    }
     if (pending == Pending_Stage) {
         if (stage_ready()) {
             finish_stage();
@@ -901,6 +987,13 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(is_luigi, "MR::isPlayerLuigi", "bool()"),
     LUMA_FUNCTION(is_dead, "MR::isDead", "bool(const LiveActor *)"),
     LUMA_FUNCTION(language_name, "MR::getCurrentLanguagePrefix", "const char *()"),
+    LUMA_FUNCTION(demo_active, "MR::isDemoActive", "bool()"),
+    LUMA_FUNCTION(save_sequence, "Game/System/GameSequenceFunction.cpp#getSaveDataHandleSequence", "SaveDataHandleSequence *()"),
+    LUMA_FUNCTION(current_file, "SaveDataHandleSequence::getCurrentUserFile", "UserFile *()"),
+    LUMA_FUNCTION(file_created, "UserFile::isCreated", "bool() const"),
+    LUMA_FUNCTION(load_file, "GameSequenceFunction::startGameDataLoadSequence", "void(int, bool)"),
+    LUMA_FUNCTION(create_file, "GameSequenceFunction::startCreateUserFileSequence", "void(int)"),
+    LUMA_FUNCTION(save_busy, "GameSequenceFunction::isActiveSaveDataHandleSequence", "bool()"),
     LUMA_FIELD(field_name, "NameObj.mName", "const char *"),
     LUMA_FIELD(field_position, "LiveActor.mPosition", "TVec3f"),
     /* Optional: a class outside the game's object tree may have no fields by name yet (census D3, task 1.2); the item
