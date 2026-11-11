@@ -17,7 +17,7 @@
 RaytracingAccelerationStructure g_scene : register(t0);
 Texture2D<float> g_depth_map : register(t5);
 RT_FORMAT(unknown) RWTexture2D<float4> g_view : register(u0);
-RWStructuredBuffer<uint> g_counters : register(u6);
+RWStructuredBuffer<uint> g_counters : register(u8);
 
 cbuffer ViewConstants : register(b0) {
     float4 g_ray;       // rt_eye_ray

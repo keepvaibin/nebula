@@ -3,9 +3,12 @@
 //   t0       the scene: every instance of the frame, in the scene camera's eye space
 //   t1-t4    buffers of the renderer's
 //   t5-t8    textures of the renderer's
-//   t9-t13   images of the tracer's, read
-//   u0-u4    images of the tracer's, written
-//   b0       the pass's constants
+//   t9-t20   images of the tracer's, read
+//   t21-t29  the mesh memory: eight arenas, then the frame's rows
+//   t0 up in space1, s0: every texture of the renderer's, and one sampler
+//   u0-u7    images of the tracer's, written
+//   u8       the counters; u9 a buffer of the tracer's, written
+//   b0       the frame's constants (rt_frame.hlsli), or the pass's where it has its own; b1 the pass's (rt_frame.hlsli)
 // A written image names its format for Vulkan (RT_FORMAT), which Direct3D 12 takes from the view.
 #ifndef NEBULA_RT_BINDINGS_HLSLI
 #define NEBULA_RT_BINDINGS_HLSLI

@@ -443,6 +443,9 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/compose.cpp
     runtime/src/render/core/draw_walker.cpp
     runtime/src/render/core/rt_walk.cpp
+    runtime/src/render/core/rt_pass_indirect.cpp
+    runtime/src/render/core/rt_pass_reflect.cpp
+    runtime/src/render/core/rt_pass_volume.cpp
     runtime/src/render/core/pairing.cpp
     runtime/src/render/core/pipelines.cpp
     runtime/src/render/core/program_table.cpp
@@ -719,6 +722,9 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/core/compose.cpp
         runtime/src/render/core/draw_walker.cpp
         runtime/src/render/core/rt_walk.cpp
+        runtime/src/render/core/rt_pass_indirect.cpp
+        runtime/src/render/core/rt_pass_reflect.cpp
+        runtime/src/render/core/rt_pass_volume.cpp
         runtime/src/render/core/pairing.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp

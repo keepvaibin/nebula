@@ -15,12 +15,13 @@
 // (rt_lights_space.hlsl) weigh their taps by. A pixel with fewer than four frames behind it takes the variance of
 // this frame's rays around it instead.
 #include "rt_bindings.hlsli"
+#include "rt_frame.hlsli"
 
 Texture2D<float4> g_raw : register(t9);            // this frame's shares, one ray each
 Texture2D<float4> g_history : register(t10);       // the frame before's averages
 Texture2D<float4> g_guide : register(t11);         // this frame: eye distance, the object's slot in two parts, 1 on a surface
 Texture2D<float4> g_guide_before : register(t12);  // the frame before's
-Texture2D<float4> g_motion : register(t13);        // where each pixel's point was: its move in pixels, its distance there, 1 known
+Texture2D<float4> g_motion : register(t13);        // where each pixel's point was: its move in pixels, its distance there (0: not known)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments_before : register(t14);            // the frame before's moments
@@ -28,13 +29,6 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_moments : register(u1);  // r, g: the l
                                                                   // b: the variance of the average
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
-
-cbuffer TimeConstants : register(b0) {
-    float4 g_ray;          // rt_eye_ray, this frame
-    float4 g_ray_before;   // and the frame before
-    float4 g_before[3];    // the frame before's eye space from this frame's (rows of a 3x4 matrix)
-    uint4 g_flags;         // x 1: there is a frame before to read
-};
 
 static const float kMostFrames = 32.0f;
 
@@ -87,9 +81,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float around = dot(spread, kLuminance) * dot(spread, kLuminance);  // the variance of this frame's rays about the pixel
     float2 moments = float2(0.0f, 0.0f);
 #endif
-    if (g_flags.x != 0u) {
+    if (g_kept.z != 0u) {
         const float4 motion = g_motion.Load(int3(pixel, 0));
-        if (motion.w != 0.0f) {
+        if (motion.z > 0.0f) {
             const float away = motion.z;
             const float2 at = float2(id.xy) + motion.xy;  // the pixel's middle, moved, less the half a tap's middle stands at
             const float2 corner = floor(at);

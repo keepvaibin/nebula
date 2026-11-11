@@ -7,3 +7,6 @@ light_time	rt_light_time.hlsl	cs_6_0	main
 light_space	rt_light_space.hlsl	cs_6_0	main
 lights_time	rt_lights_time.hlsl	cs_6_0	main
 lights_space	rt_lights_space.hlsl	cs_6_0	main
+surface	rt_surface.hlsl	cs_6_5	main
+sun	rt_sun.hlsl	cs_6_5	main
+lights	rt_lights.hlsl	cs_6_5	main

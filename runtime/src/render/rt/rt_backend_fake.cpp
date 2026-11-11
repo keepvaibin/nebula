@@ -171,7 +171,7 @@ void Backend::compact(const Structure& from, const Structure& to) {
     state_->building.insert(to.name);
 }
 
-std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_t height, const char*) {
+std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_t height, const char*, std::uint32_t) {
     return width != 0u && height != 0u ? g_log.images++ : kNoImage;
 }
 
