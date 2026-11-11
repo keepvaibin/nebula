@@ -8,6 +8,9 @@ use std::io::{Read, Seek, SeekFrom};
 /// Where a `.luma`'s bytes come from: a file, or bytes in memory (the game's import may pass either).
 pub trait Bytes {
     fn len(&self) -> u64;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     /// Reads exactly `out.len()` bytes at `offset`; false when they are not all there.
     fn read_at(&mut self, offset: u64, out: &mut [u8]) -> bool;
 }
