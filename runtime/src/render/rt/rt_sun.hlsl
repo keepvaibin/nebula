@@ -47,7 +47,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         // From a place within the pixel: where the eye's ray through that place meets the surface's own plane, no
         // farther than two pixels' width at this distance.
         float3 within_pixel = float3(0.0f, 0.0f, 0.0f);
-        if (!second) {
+        {
             const float3 through = rt_eye_ray(g_ray, centre + rt_sample(id.xy, g_more.y, kSampleSunPixel) - 0.5f);
             const float slant = dot(s.normal, through);
             if (abs(slant) > 1e-4f) {

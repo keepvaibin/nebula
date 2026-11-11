@@ -80,7 +80,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float distance_now = hits > 0.0f ? distance_sum / hits : 0.0f;
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     float frames = 0.0f, weight = 0.0f, distance_was = 0.0f, distance_weight = 0.0f;
-    if (g_kept.z != 0u) {
+    if (rt_history()) {
         const float4 motion = g_motion.Load(int3(pixel, 0));
         if (motion.z > 0.0f) {
             const float2 at = float2(id.xy) + motion.xy;

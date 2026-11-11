@@ -17,8 +17,8 @@
 // On gloss, metal and glass the kept light also gives its highlight (GGX, Schlick; the lobe widened by the source's
 // size as it is seen, Karis 2013), by the same weight: LightsSpec, which the reflection's raw image takes before its
 // filter.
-// The second layer (g_pass.x 1) has no filter after it: there up to 32 of the lights are summed as they are, unshadowed,
-// straight into the picture the programs read.
+// The second layer (g_pass.x 1: the nearest blended surface a pixel) is done the same way, with its own reservoirs; its
+// filter is the lights' time pass and one step over space.
 #include "rt_common.hlsli"
 
 Texture2D<float4> g_guide : register(t9);
@@ -34,7 +34,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights : register(u0);
 // float; 0: none); b its weight (what its unshadowed light is multiplied by; 0 where it was found in shadow); a how
 // many candidates stand behind it (no more than 20).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_reservoirs : register(u1);
-// The kept light's highlight, rgb (the opaque layer).
+// The kept light's highlight, rgb.
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights_spec : register(u2);
 
 [numthreads(8, 8, 1)]
@@ -49,10 +49,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (second && g_item_map.Load(int3(pixel, 0)).x == 0u) {
         return;
     }
-    if (!second) {
-        g_reservoirs[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // none, until the lights say otherwise
-        g_lights_spec[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    }
+    g_reservoirs[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // none, until the lights say otherwise
+    g_lights_spec[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     const float4 guide = g_guide.Load(int3(pixel, 0));
     const uint2 tile = id.xy / max(g_grid.z, 1u);
     float3 added = float3(0.0f, 0.0f, 0.0f);
@@ -63,14 +61,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         const uint lights = run.y;
         float4 place;
         uint slot;
-        if (second) {
-            const uint tries = min(lights, 32u);
-            const float each = float(lights) / float(max(tries, 1u));
-            for (uint k = 0u; k < tries; ++k) {
-                const uint index = g_tiles.Load(g_glow.z + (run.x + min(uint(float(k) * each), lights - 1u)) * 4u);
-                added += emitter_light(g_glow.x + index * 48u, s.at, s.smooth_, s.slot, place, slot) * each;
-            }
-        } else {
+        {
             uint seed = rt_hash(id.x + id.y * 8192u + g_more.y * 9781u + 4099u);
             float sum = 0.0f;      // of the weights: what each would add here, over its chance of being tried
             float counted = 0.0f;  // the candidates behind what is combined
@@ -114,7 +105,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             // The frame before's reservoirs.
             float3 others[3] = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f)};
             float others_count[3] = {0.0f, 0.0f, 0.0f};
-            if (g_kept.z != 0u && motion.z > 1.0f) {
+            if (rt_history() && motion.z > 1.0f) {
                 uint wide, high;
                 g_reservoirs_before.GetDimensions(wide, high);
                 const float away_before = motion.z;
@@ -214,7 +205,8 @@ void main(uint3 id : SV_DispatchThreadID) {
                 // light without its wrap of facing), by the same weight.
                 const float4 material = g_material.Load(int3(pixel, 0));
                 const uint class_ = uint(material.b * 255.0f + 0.5f) & 15u;
-                if (weight > 0.0f && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass)) {
+                if (weight > 0.0f && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass ||
+                                         class_ == kClassWater)) {
                     const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
                     const float3 v = -normalize(s.at);
                     const float nl = dot(s.smooth_, l), nv = dot(s.smooth_, v);
@@ -225,7 +217,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                         const float a2 = a * a;
                         const float lobe = nh * nh * (a2 - 1.0f) + 1.0f;
                         const float d = a2 / (3.14159265f * lobe * lobe);
-                        const float f0 = class_ == kClassMetal ? 0.55f : 0.04f;
+                        const float f0 = class_ == kClassMetal ? 0.55f : class_ == kClassWater ? 0.02f : 0.04f;
                         const float glance = 1.0f - vh;
                         const float f = f0 + (1.0f - f0) * glance * glance * glance * glance * glance;
                         const float3 arriving = kept_light / (0.25f + 0.75f * saturate(nl));
@@ -237,5 +229,5 @@ void main(uint3 id : SV_DispatchThreadID) {
             g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, 20.0f));
         }
     }
-    g_lights[id.xy] = second ? float4(added, 0.0f) : float4(added.r, 0.0f, added.g, added.b);
+    g_lights[id.xy] = float4(added.r, 0.0f, added.g, added.b);
 }

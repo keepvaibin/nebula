@@ -227,7 +227,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
     }
-    if (!second && guide.a != 0.0f) {
+    if (guide.a != 0.0f) {
         mirror.rgb += highlight_near(pixel, guide);
     }
     if ((g_more.z & 128u) != 0u && item != 0u && guide.a != 0.0f) {

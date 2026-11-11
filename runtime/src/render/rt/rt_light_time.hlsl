@@ -105,7 +105,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float around = dot(spread, kLuminance) * dot(spread, kLuminance);  // the variance of this frame's rays about the pixel
     float2 moments = float2(0.0f, 0.0f);
 #endif
-    if (g_kept.z != 0u) {
+    if (rt_history()) {
         const float4 motion = g_motion.Load(int3(pixel, 0));
         if (motion.z > 0.0f) {
             const float away = motion.z;
