@@ -11,18 +11,17 @@ namespace galaxy::render {
 
 namespace {
 
-// kAirDensity (15.4), per unit: none in space, where there is no air; thin air in an atmosphere. A stage is in an
-// atmosphere when its sky dome as the bounce rays see it is bright (a day's sky; space's domes are dark).
-constexpr float kAirDensity = 0.00002f;
-constexpr float kAirDome = 0.25f;  // the dome's mean luminance from which a stage has air
+// The air (15.4) is a stage's number (rt_stages.tsv's air column, per unit: 0.00002 thin air, more in fog and dust),
+// none in space. A stage without a row has none: most stages are in space, and a sky's brightness does not tell
+// (Ghostly's and Melty Molten's domes are bright and in space).
 
 }  // namespace
 
 bool RenderCore::rt_pass_volume_on() const { return rt_levels_[kFbVolume] != 0u && !rt_fb_reference(); }
 
-// The stage's air: kAirDensity under a bright dome, 0 under a dark one or before the dome is known.
+// The stage's air: its row's (b34, after the stage table's air column lands); none without one.
 float RenderCore::rt_air_density() const {
-    return rt_dome_mean_ >= kAirDome ? kAirDensity : 0.0f;
+    return 0.0f;
 }
 
 void RenderCore::rt_pass_volume() {

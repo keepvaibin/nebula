@@ -19,6 +19,8 @@ RT_FORMAT(rgba16f) RWTexture3D<float4> g_scatter : register(u0);
 static const uint3 kCells = uint3(96u, 54u, 48u);
 static const float kNear = 50.0f, kFar = 20000.0f;
 static const float kForward = 0.6f;  // Henyey-Greenstein's g for the sun: air scatters forward
+static const float kAirReach = 6000.0f;  // how far the air goes (a volumetric fog's view distance): the sky behind
+                                         // everything takes no more than this much air
 
 float slice_depth(float k) {
     return kNear * pow(kFar / kNear, k / float(kCells.z));
@@ -45,9 +47,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     float3 light = float3(0.0f, 0.0f, 0.0f);
     float through = 1.0f, from = 0.0f;
     for (uint z = 0u; z < kCells.z; ++z) {
-        const float to = slice_depth(float(z) + 0.5f);
-        // The eye ray's length in the slice (its distances are along the view's axis).
-        const float d = (to - from) / max(-look.z, 0.05f);
+        const float to = min(slice_depth(float(z) + 0.5f), kAirReach);
+        // The eye ray's length in the slice (its distances are along the view's axis); 0 past the air's reach.
+        const float d = max(to - from, 0.0f) / max(-look.z, 0.05f);
         const float4 air = g_air.Load(int4(id.xy, z, 0));
         float3 source = (a + k) * air.rgb;
         if (sun) {
