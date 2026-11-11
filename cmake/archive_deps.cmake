@@ -39,6 +39,9 @@ function(nebula_archive_dep name source)
                 "-DCMAKE_INSTALL_PREFIX=${NEBULA_ARCHIVE_PREFIX}"
                 "-DCMAKE_PREFIX_PATH=${NEBULA_ARCHIVE_PREFIX}"
                 "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+                # libarchive's top level installs libarchive.pc to ${CMAKE_INSTALL_LIBDIR}/pkgconfig but only its
+                # libarchive/ folder defaults that variable: unset, the file went to /pkgconfig.
+                "-DCMAKE_INSTALL_LIBDIR=lib"
                 "-DBUILD_SHARED_LIBS=OFF"
                 ${toolchain} ${ARGN}
         RESULT_VARIABLE result OUTPUT_QUIET ERROR_VARIABLE errors)

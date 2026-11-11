@@ -137,7 +137,8 @@ jobs:
         with:
           arch: x64
       # The libraries CMake builds at configure time (zlib, xz, libarchive, the FidelityFX SDK) and the downloaded
-      # Vulkan sources: each is skipped when its files are already in the build tree.
+      # Vulkan sources: each is skipped when its files are already in the build tree. The Vulkan backend's library is
+      # built into fidelityfx-sdk-vulkan-fixed, so that folder is kept with its stamp.
       - name: Cache configure-time dependencies
         uses: actions/cache@v6
         with:
@@ -145,6 +146,7 @@ jobs:
             build/host/archive-deps
             build/host/fidelityfx-fg.built
             build/host/fidelityfx-fg-vk-luma16.built
+            build/host/fidelityfx-sdk-vulkan-fixed
             build/host/_deps
           key: host-deps-${{ matrix.vulkan }}-${{ hashFiles('cmake/**', 'third_party/archive/**') }}
       - uses: mozilla-actions/sccache-action@v0.0.9
