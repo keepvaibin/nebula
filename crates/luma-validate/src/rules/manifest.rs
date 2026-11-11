@@ -1042,7 +1042,7 @@ pub fn save_problem(data: &[u8]) -> Option<&'static str> {
     }
     let entries = read32(8, big);
     let size = read32(12, big);
-    if size < 16 || size > u32::MAX - 31 || ((size as usize + 31) & !31usize) != data.len() {
+    if !(16..=u32::MAX - 31).contains(&size) || ((size as usize + 31) & !31usize) != data.len() {
         return Some("Save.Length");
     }
     if entries == 0 || entries >= 24 || entries > (size - 16) / 16 {

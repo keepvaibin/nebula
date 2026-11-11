@@ -444,18 +444,18 @@ mod types_tests {
     /// Rows in the form the generator writes (tools/lumacore/gen_types.py), one of each case the readers take.
     const SAMPLE: &str = r#"{
       "types": [
-        {"kind": "struct", "name": "TVec3<f32>", "size": 12, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "bases": [],
+        {"kind": "struct", "name": "TVec3<f32>", "size": 12, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": false, "bases": [],
          "fields": [{"name": "x", "type": "f32", "offset": 0, "count": 1, "extents": null, "access": "public", "bits": null}], "reachable": []},
-        {"kind": "class", "name": "NameObj", "size": 12, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false, "bases": [],
+        {"kind": "class", "name": "NameObj", "size": 12, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false, "no_copy": false, "bases": [],
          "fields": [{"name": "mName", "type": "const char *", "offset": 4, "count": 1, "extents": null, "access": "public", "bits": null}], "reachable": []},
-        {"kind": "class", "name": "LiveActor", "size": 140, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false,
+        {"kind": "class", "name": "LiveActor", "size": 140, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false, "no_copy": false,
          "bases": [{"name": "NameObj", "offset": 0, "virtual": false}],
          "fields": [{"name": "mFlags", "type": "u32 : 3", "offset": 12, "count": 1, "extents": null, "access": "protected",
                      "bits": {"width": 3, "offset": 0}},
                     {"name": "mGrid", "type": "f32", "offset": 16, "count": 12, "extents": [3, 4], "access": "public", "bits": null},
                     {"name": "mRow", "type": "f32", "offset": 64, "count": 4, "extents": null, "access": "private", "bits": null}],
          "reachable": [{"name": "mName", "from": "NameObj", "offset": 4, "type": "const char *"}]},
-        {"kind": "union", "name": "Both", "size": 4, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "bases": [], "fields": [], "reachable": []},
+        {"kind": "union", "name": "Both", "size": 4, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": true, "bases": [], "fields": [], "reachable": []},
         {"kind": "alias", "name": "TVec3f", "of": "TVec3<f32>", "record": "TVec3<f32>"},
         {"kind": "spelling", "name": "JGeometry::TVec3<float>", "of": "TVec3<f32>", "record": "TVec3<f32>"},
         {"kind": "alias", "name": "s8", "of": "signed char", "record": null},
@@ -513,6 +513,8 @@ mod types_tests {
         assert_eq!((actor.kind, actor.align, actor.polymorphic, actor.is_abstract), (RecordKind::Class, 4, true, false));
         assert_eq!((actor.trivial_copy, actor.trivial_destroy), (false, false));
         assert!(types.records["TVec3<f32>"].trivial_copy && types.records["TVec3<f32>"].trivial_destroy);
+        // TY-10b: the third fact, read as the file gives it.
+        assert!(types.records["Both"].no_copy && !types.records["TVec3<f32>"].no_copy && !actor.no_copy);
         assert_eq!(actor.bases, vec![Base { name: "NameObj".into(), offset: 0, is_virtual: false }]);
         assert_eq!(actor.reached, vec![Reached { name: "mName".into(), from: "NameObj".into(), offset: 4, ty: "const char *".into() }]);
         let own: Vec<_> = actor.own.iter().map(|f| (f.name.as_str(), f.ty.as_str(), f.offset, f.extents.clone(), f.bits, f.access)).collect();
@@ -545,13 +547,13 @@ mod types_tests {
         assert_eq!(refused(r#"{"globals": [], "left_out": []}"#), "types: missing, or not a list");
         // A record row with every key draft 2 gives, and the fields given.
         let record = |name: &str, kind: &str, fields: &str| {
-            format!(r#"{{"kind": "{kind}", "name": "{name}", "size": 1, "align": 1, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "bases": [], "fields": [{fields}], "reachable": []}}"#)
+            format!(r#"{{"kind": "{kind}", "name": "{name}", "size": 1, "align": 1, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": false, "bases": [], "fields": [{fields}], "reachable": []}}"#)
         };
         let file = |types: &str, globals: &str| format!(r#"{{"types": [{types}], "globals": [{globals}], "left_out": []}}"#);
         assert_eq!(refused(&file(&record("A", "struct", "").replace("\"size\": 1", "\"size\": -1"), "")), "types[0].size: missing, or not a whole number from 0");
         assert_eq!(refused(&file(&record("A", "struct", "").replace("\"align\": 1, ", ""), "")), "types[0].align: missing, or not a whole number from 0");
-        for key in ["trivial_copy", "trivial_destroy"] {
-            let without = record("A", "struct", "").replace(&format!("\"{key}\": true, "), "");
+        for (key, value) in [("trivial_copy", "true"), ("trivial_destroy", "true"), ("no_copy", "false")] {
+            let without = record("A", "struct", "").replace(&format!("\"{key}\": {value}, "), "");
             assert_eq!(refused(&file(&without, "")), format!("types[0].{key}: missing, or not true or false"));
         }
         assert_eq!(

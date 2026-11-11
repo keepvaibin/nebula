@@ -23,6 +23,9 @@
 //!
 //! A report cut short or changed in any byte does not read (then the mod is checked in full).
 
+// The form above is written as it is, tabs and all.
+#![allow(clippy::tabs_in_doc_comments)]
+
 use crate::{level_of, text, Arg, Finding, Installed, NotChecked, Report, Touches};
 
 /// What the mod is, from its luma.json, for the other mods' checks.
