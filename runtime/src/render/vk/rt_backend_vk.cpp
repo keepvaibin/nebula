@@ -9,6 +9,7 @@
 
 #include <vk_mem_alloc.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -106,6 +107,7 @@ struct Backend::State {
     VkDescriptorSetLayout images_layout = VK_NULL_HANDLE;
     VkPipeline pipelines[static_cast<unsigned>(RtShader::Count)]{};
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
     // Counters: the GPU adds to `counters`; a frame slot's copy is read a frame later.
     VkBuffer counters = VK_NULL_HANDLE;
     VmaAllocation counters_allocation = nullptr;
@@ -324,6 +326,34 @@ Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
 
+bool Backend::State::make_pipeline(unsigned index) {
+    if (refused[index]) {
+        return false;
+    }
+    const RtShaderBytes code = rt_shader(static_cast<RtShader>(index));
+    VkShaderModule module = VK_NULL_HANDLE;
+    VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    module_info.codeSize = code.size;
+    module_info.pCode = static_cast<const std::uint32_t*>(code.data);
+    bool made = code.size != 0u && layout != VK_NULL_HANDLE && vkCreateShaderModule(device, &module_info, nullptr, &module) == VK_SUCCESS;
+    if (made) {
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = module;
+        info.stage.pName = "main";
+        info.layout = layout;
+        made = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1u, &info, nullptr, &pipelines[index]) == VK_SUCCESS;
+        vkDestroyShaderModule(device, module, nullptr);
+    }
+    if (!made) {
+        pipelines[index] = VK_NULL_HANDLE;
+        refused[index] = true;
+        std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
+    }
+    return made;
+}
+
 bool Backend::start(gpu::Device* device) {
     stop();
     const vk::Context& context = vk::Context::get();
@@ -367,6 +397,18 @@ bool Backend::start(gpu::Device* device) {
             state->times = VK_NULL_HANDLE;
         }
     }
+    // Every pass's pipeline now (plan 26: a pass's first use in a frame never waits on the driver's compile).
+    const auto making = std::chrono::steady_clock::now();
+    unsigned made = 0u, wanted = 0u;
+    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
+        if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
+            continue;
+        }
+        ++wanted;
+        made += state->pipelines[index] != VK_NULL_HANDLE || state->make_pipeline(index) ? 1u : 0u;
+    }
+    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
     return true;
 }
 
@@ -774,29 +816,8 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         s.layout == VK_NULL_HANDLE) {
         return;
     }
-    if (s.pipelines[index] == VK_NULL_HANDLE) {
-        const RtShaderBytes code = rt_shader(shader);
-        VkShaderModule module = VK_NULL_HANDLE;
-        VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        module_info.codeSize = code.size;
-        module_info.pCode = static_cast<const std::uint32_t*>(code.data);
-        bool made = code.size != 0u && vkCreateShaderModule(s.device, &module_info, nullptr, &module) == VK_SUCCESS;
-        if (made) {
-            VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-            info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-            info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-            info.stage.module = module;
-            info.stage.pName = "main";
-            info.layout = s.layout;
-            made = vkCreateComputePipelines(s.device, VK_NULL_HANDLE, 1u, &info, nullptr, &s.pipelines[index]) == VK_SUCCESS;
-            vkDestroyShaderModule(s.device, module, nullptr);
-        }
-        if (!made) {
-            s.pipelines[index] = VK_NULL_HANDLE;
-            s.refused[index] = true;
-            std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
-            return;
-        }
+    if (s.pipelines[index] == VK_NULL_HANDLE && !s.make_pipeline(index)) {
+        return;  // made at the start; here only after a refusal there
     }
     const VkCommandBuffer commands = s.commands;
     const auto image_of = [&](std::uint32_t image) -> vk::Texture* {

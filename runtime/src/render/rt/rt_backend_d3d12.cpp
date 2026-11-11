@@ -10,6 +10,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -80,6 +81,7 @@ struct Backend::State {
     ComPtr<ID3D12RootSignature> pass_root;
     ComPtr<ID3D12PipelineState> pipelines[static_cast<unsigned>(RtShader::Count)];
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
     // Counters: the GPU adds to `counters`; `counters_zero` clears it; a frame slot's copy is read a frame later.
     ComPtr<ID3D12Resource> counters, counters_zero;
     ComPtr<ID3D12Resource> counters_read[kFramesInFlight];
@@ -222,6 +224,24 @@ Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
 
+bool Backend::State::make_pipeline(unsigned index) {
+    if (refused[index]) {
+        return false;
+    }
+    const RtShaderBytes code = rt_shader(static_cast<RtShader>(index));
+    D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+    desc.pRootSignature = pass_root.Get();
+    desc.CS = {code.data, code.size};
+    desc.Flags = pipeline_flags;  // its ray queries meet micromaps where there are any
+    const HRESULT made = code.size != 0u ? device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&pipelines[index])) : E_FAIL;
+    if (FAILED(made)) {
+        refused[index] = true;
+        std::fprintf(stderr, "[rt] pass %u: no pipeline (%08lx); the pass is left out\n", index, static_cast<unsigned long>(made));
+        return false;
+    }
+    return true;
+}
+
 bool Backend::start(gpu::Device* device) {
     stop();
     auto state = new State{};
@@ -261,6 +281,19 @@ bool Backend::start(gpu::Device* device) {
     }
     std::fprintf(stderr, "[rt] d3d12: raytracing tier %u.%u; opacity micromaps %s\n", static_cast<unsigned>(options5.RaytracingTier) / 10u,
                  static_cast<unsigned>(options5.RaytracingTier) % 10u, state->micromaps ? "on" : "off");
+    // Every pass's pipeline now, the micromaps' opt-in settled (plan 26: a pass's first use in a frame never waits on
+    // the driver's compile).
+    const auto making = std::chrono::steady_clock::now();
+    unsigned made = 0u, wanted = 0u;
+    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
+        if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
+            continue;
+        }
+        ++wanted;
+        made += state->pipelines[index] != nullptr || state->make_pipeline(index) ? 1u : 0u;
+    }
+    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
     D3D12_QUERY_HEAP_DESC times_desc{};
     times_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
     times_desc.Count = 2u * kTimedStretches * kFramesInFlight;
@@ -599,18 +632,8 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || s.descriptors == nullptr || groups_x == 0u || groups_y == 0u) {
         return;
     }
-    if (s.pipelines[index] == nullptr) {
-        const RtShaderBytes code = rt_shader(shader);
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
-        desc.pRootSignature = s.pass_root.Get();
-        desc.CS = {code.data, code.size};
-        desc.Flags = s.pipeline_flags;  // its ray queries meet micromaps where there are any
-        const HRESULT made = code.size != 0u ? s.device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&s.pipelines[index])) : E_FAIL;
-        if (FAILED(made)) {
-            s.refused[index] = true;
-            std::fprintf(stderr, "[rt] pass %u: no pipeline (%08lx); the pass is left out\n", index, static_cast<unsigned long>(made));
-            return;
-        }
+    if (s.pipelines[index] == nullptr && !s.make_pipeline(index)) {
+        return;  // made at the start; here only after a refusal there
     }
     ID3D12GraphicsCommandList4* const list = s.commands.Get();
     const auto image_of = [&](std::uint32_t image) -> State::Image* {
