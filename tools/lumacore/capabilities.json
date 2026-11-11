@@ -5,6 +5,8 @@
     "kernel.bind": "A mod's library is bound by name before its first line runs: every import or none, a missing name refused with a message naming it (0.2, 1.1)",
     "kernel.call": "A mod calls any function of the game by name and signature (0.2, 1.1)",
     "kernel.field": "A mod reads and writes any field of the game's types by Class.field and type (0.2, 1.2)",
+  "kernel.global": "A mod reads and writes any global the game defines, by its qualified name and type (1.2)",
+  "kernel.type": "A mod knows the size of any record of the game by its name or an alias's (1.2)",
     "kernel.hook.before": "A before hook on any function: runs first, may skip the function (0.2, 1.1)",
     "kernel.hook.after": "An after hook on any function: runs last, may change the result (0.2, 1.1)",
     "kernel.hook.wrap": "A wrap on any function: runs around it and calls proceed (0.2, 1.1)",
