@@ -8,7 +8,7 @@
 // too often inside a penumbra, and the history then jumps: speckles).
 // Channels (rt_light.hlsl): r V (filtered already by the sun's own filter), b how the surface faces the sun, a the
 // sky's share: a alone is averaged here, r and b go through as this frame has them; g here is how many frames the
-// average holds, over kMostFrames.
+// average holds, over most_frames().
 // Compiled a second time as rt_lights_time.hlsl (RT_LIGHTS) for the local lights' share: red, green, blue in r, b, a,
 // light of any size. One ray to one light chosen of many is noisier than a coin toss and by no fixed amount, so that
 // kind also keeps what its noise is (Schied et al. 2017, "Spatiotemporal Variance-Guided Filtering"): the first and
@@ -34,7 +34,11 @@ Texture2D<float4> g_reservoirs_now : register(t15);           // this frame's re
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
 
-static const float kMostFrames = 32.0f;
+
+// The most frames a history holds: 32 at 60 frames a second, as many seconds at any rate (plan 16.5).
+float most_frames() {
+    return 32.0f * rt_history_scale();
+}
 
 bool same_surface(float4 guide, float4 before, float away) {
     return before.a != 0.0f && before.g == guide.g && before.b == guide.b && abs(before.r - away) < 0.02f * away + 1.0f;
@@ -134,27 +138,27 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
     if (weight < 0.01f) {
-        g_out[id.xy] = float4(raw.x, 1.0f / kMostFrames, raw.y, raw.z);
+        g_out[id.xy] = float4(raw.x, 1.0f / most_frames(), raw.y, raw.z);
 #ifdef RT_LIGHTS
         g_moments[id.xy] = float4(bright, bright * bright, around, 0.0f);
 #endif
         return;
     }
     const float3 history = clamp(sum / weight, low, high);
-    float count = min(frames / weight * kMostFrames + 1.0f, kMostFrames);
+    float count = min(frames / weight * most_frames() + 1.0f, most_frames());
 #ifdef RT_LIGHTS
     if (bright > 4.0f * dot(history, kLuminance) + 0.02f) {
-        count = min(count, 8.0f);  // a flash
+        count = min(count, 8.0f * rt_history_scale());  // a flash
     }
 #endif
-    const float3 now = lerp(history, raw, max(1.0f / count, 0.06f));
+    const float3 now = lerp(history, raw, max(1.0f / count, 0.06f / rt_history_scale()));
 #ifdef RT_LIGHTS
-    g_out[id.xy] = float4(now.x, count / kMostFrames, now.y, now.z);
+    g_out[id.xy] = float4(now.x, count / most_frames(), now.y, now.z);
 #else
-    g_out[id.xy] = float4(raw.x, count / kMostFrames, raw.y, now.z);
+    g_out[id.xy] = float4(raw.x, count / most_frames(), raw.y, now.z);
 #endif
 #ifdef RT_LIGHTS
-    const float2 both = lerp(moments / weight, float2(bright, bright * bright), max(1.0f / count, 0.06f));
+    const float2 both = lerp(moments / weight, float2(bright, bright * bright), max(1.0f / count, 0.06f / rt_history_scale()));
     const float over_time = max(both.y - both.x * both.x, 0.0f);
     g_moments[id.xy] = float4(both, (count < 4.0f ? max(over_time, around) : over_time) / min(count, 16.0f), 0.0f);
 #endif

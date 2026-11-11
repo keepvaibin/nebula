@@ -8,6 +8,7 @@
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt_caps.h"
+#include "galaxy/platform_time.h"
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
 
@@ -1553,6 +1554,17 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         std::memcpy(constants.ray_before, rt_light_ray_before_, sizeof(constants.ray_before));
         constants.kept[2] = 1u;  // the filters' history and the frame before's reservoirs count
     }
+    // The rate frames are traced at, smoothed: the filters count frames, so at 30 a second each history holds half as
+    // many and at 120 twice as many, as many seconds either way (plan 16.5).
+    const std::int64_t ticks = ::galaxy::qpc_now();
+    if (rt_light_ticks_before_ != 0) {
+        const double seconds = static_cast<double>(ticks - rt_light_ticks_before_) / static_cast<double>(::galaxy::qpc_frequency());
+        if (seconds > 1e-4 && seconds < 0.25) {
+            rt_frame_rate_ += (static_cast<float>(1.0 / seconds) - rt_frame_rate_) * 0.1f;
+        }
+    }
+    rt_light_ticks_before_ = ticks;
+    constants.kept[3] = std::bit_cast<std::uint32_t>(std::clamp(rt_frame_rate_ / 60.0f, 0.5f, 2.0f));
     std::memcpy(constants.before, before_from_now.data(), sizeof(constants.before));
     if (::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded)) {
         // The scene under its emitters alone: no sun, no sky, no mirror, no tint.

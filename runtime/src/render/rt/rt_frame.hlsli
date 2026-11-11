@@ -35,7 +35,8 @@ cbuffer FrameConstants : register(b0) {
                            // this frame's list (a uint each; past the list: gone), then (from x + max(y, 1) x 4)
                            // where each emitter of this frame's list was in the frame before (float4 each: centre in
                            // that frame's eye space, reach; reach 0: it was not there); y: how many the frame before had;
-                           // z 1: there is a frame before to read (the filters' history and the reservoirs')
+                           // z 1: there is a frame before to read (the filters' history and the reservoirs'); w the
+                           // histories' length factor (a float: rt_history_scale)
 };
 
 cbuffer PassConstants : register(b1) {
@@ -59,6 +60,14 @@ static const float kNoOccluder = 65504.0f;
 
 bool rt_second_layer() {
     return g_pass.x != 0u;
+}
+
+// How long the filters' histories are against 60 frames a second: clamp(frames a second / 60, 0.5, 2), so a history
+// lasts as many seconds at 30 or 120 frames a second (plan 16.5).
+#define NEBULA_RT_HISTORY_SCALE 1
+float rt_history_scale() {
+    const float scale = asfloat(g_kept.w);
+    return scale > 0.0f ? scale : 1.0f;
 }
 
 // Whether the layer's images of the frame before hold its surfaces (the camera did not cut; the second layer was

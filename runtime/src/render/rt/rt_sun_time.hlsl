@@ -19,7 +19,6 @@ Texture2D<float> g_distance_before : register(t15); // the frame before's averag
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 RT_FORMAT(r16f) RWTexture2D<float> g_distance : register(u1);
 
-static const float kMostFrames = 16.0f;
 
 bool in_penumbra(uint2 pixel) {
     uint across, down;
@@ -33,6 +32,11 @@ bool in_penumbra(uint2 pixel) {
         }
     }
     return most > 0.75f;
+}
+
+// The most frames a history holds: 16 at 60 frames a second, as many seconds at any rate (plan 16.5).
+float most_frames() {
+    return 16.0f * rt_history_scale();
 }
 
 bool same_surface(float4 guide, float4 before, float away) {
@@ -109,14 +113,14 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
     if (weight < 0.01f) {
-        g_out[id.xy] = float4(raw.rgb, 1.0f / kMostFrames);
+        g_out[id.xy] = float4(raw.rgb, 1.0f / most_frames());
         g_distance[id.xy] = distance_now;
         return;
     }
-    const float count = min(frames / weight * kMostFrames + 1.0f, kMostFrames);
-    const float share = max(1.0f / count, 1.0f / kMostFrames);
+    const float count = min(frames / weight * most_frames() + 1.0f, most_frames());
+    const float share = max(1.0f / count, 1.0f / most_frames());
     const float3 now = lerp(clamp(sum / weight, low, high), raw.rgb, share);
-    g_out[id.xy] = float4(now, count / kMostFrames);
+    g_out[id.xy] = float4(now, count / most_frames());
     const float before = distance_weight > 0.01f ? distance_was / distance_weight : 0.0f;
     g_distance[id.xy] = before > 0.0f && distance_now > 0.0f ? lerp(before, distance_now, max(share, 0.2f)) : max(before, distance_now);
 }

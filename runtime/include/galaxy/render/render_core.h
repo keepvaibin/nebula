@@ -521,6 +521,8 @@ private:
     Affine34 rt_light_view_before_{};
     float rt_light_ray_before_[4]{};
     std::uint64_t rt_light_walk_before_ = 0u;
+    std::int64_t rt_light_ticks_before_ = 0;  // when the light pass ran last (qpc)
+    float rt_frame_rate_ = 60.0f;             // the rate it runs at, smoothed: the filters' histories follow it
     bool rt_light_history_ = false;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
     std::vector<std::uint32_t> rt_item_words_;
