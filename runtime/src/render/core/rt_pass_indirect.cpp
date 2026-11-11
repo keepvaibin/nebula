@@ -120,7 +120,7 @@ void RenderCore::rt_pass_indirect() {
         rt_backend_.dispatch(RtShader::LightsSpace, over_space, half_across, half_down);
     }
     // To full resolution by the picture's edges.
-    const float values[3][4] = {{kIndirectSkyMin, kIndirectBounceMax, 0.0f, 0.0f}};
+    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kIndirectSkyMin), rt_dev(RtDev::BounceMax, kIndirectBounceMax), 0.0f, 0.0f}};
     rt::PassBinds up;
     up.constants = frame.binds.constants;
     up.pass_constants = rt_bounce_constants(0u, 0u, 0u, values);

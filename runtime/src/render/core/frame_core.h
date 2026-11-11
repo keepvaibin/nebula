@@ -188,13 +188,15 @@ struct ViewRows {
                            // (picture 9), 2 the opaque layer's (picture 8), 0 none
     float look[4];  // with view_flags bit 3: the painted composite's look (program.hlsli traced_painted; RenderCore
                     // rt_look_): kForm, the stage's m, kDebake, kAmbientLook
+    float dev[2][4];  // with view_flags bit 3: the programs' development tunables (rt_dev.h from BaseFloor): [0] the
+                      // values, [1] 1 where the run gave one
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
               offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
               offsetof(ViewRows, volume) == 208 &&
               offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && offsetof(ViewRows, look) == 288 &&
-              sizeof(ViewRows) == 304);
+              offsetof(ViewRows, dev) == 304 && sizeof(ViewRows) == 336);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

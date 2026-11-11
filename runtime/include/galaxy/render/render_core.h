@@ -24,6 +24,7 @@
 #include "galaxy/frame_telemetry.h"
 #include "render/core/draw_record.h"
 #include "render/core/frame_core.h"
+#include "render/core/rt_dev.h"
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
 #include "render/rt/rt_geometry.h"
@@ -422,6 +423,9 @@ private:
     void rt_prepass(const NebulaFramePass& begin);
     void rt_light();
     void rt_light_end() noexcept;
+    void rt_dev_read();                         // rt_dev.h: the run's tunables, as ray tracing starts
+    [[nodiscard]] bool rt_share_due() const noexcept;  // this walk of a hold shows the share (signal S)
+    void rt_share_signal();                     // at the scene's end: the share read back (signal S)
     void rt_reactive();  // the reactive mask where the added light changed (plan 16.4)
     bool rt_physical_ = false;   // the relight (DIRECTOR.md D1; the setting's "physical"): rt_look_'s kForm and gains
     bool rt_lamps_own_ = false;  // local lights off (plan 19.1): the programs light by their own lamp (view_flags bit 32)
@@ -533,6 +537,14 @@ private:
     // The painted composite's look (program.hlsli traced_painted, view row `look`): kForm, the stage's m, kDebake,
     // kAmbientLook. Set every walk from the style (rt_walk.cpp); FA's dev block sets them by name.
     float rt_look_[4]{0.0f, 0.7f, 0.0f, 1.0f};
+    // The development tunables (rt_dev.h, l63): the values a run gave, a bit each in rt_dev_set_.
+    float rt_dev_[kRtDevCount]{};
+    std::uint32_t rt_dev_set_ = 0u;
+    bool rt_share_walk_ = false;  // this walk's scene shows the share (view_flags bit 64; signal S)
+    [[nodiscard]] float rt_dev(RtDev which, float otherwise) const noexcept {
+        const unsigned i = static_cast<unsigned>(which);
+        return (rt_dev_set_ >> i & 1u) != 0u ? rt_dev_[i] : otherwise;
+    }
     float rt_stage_air_ = 0.0f;  // the stage row's air (rt_stages.tsv), per unit; 0: none (rt_air_density)
     // What glows in the scene: a draw of a mesh whose material glows (nebula_model.h NebulaModelHit.glow, from the
     // cooker's table of glowing models and from surfaces added to what is behind them). One a block; the light pass

@@ -11,6 +11,8 @@
 #ifndef NEBULA_RT_MIRROR_HLSLI
 #define NEBULA_RT_MIRROR_HLSLI
 
+#include "rt_frame.hlsli"  // rt_dev_or (l63)
+
 static const uint kMirrorGloss = 1u, kMirrorMetal = 2u, kMirrorGlass = 3u, kMirrorWater = 9u;
 static const uint kMirrorPainted = 64u;  // S.material: a painted reflection (NEBULA_HIT_ENVIRONMENT)
 
@@ -33,20 +35,20 @@ float4 mirror_weight(uint bits, float rough, float share, float3 colour, float g
         float head_on = 0.0f;
         float3 tint = float3(1.0f, 1.0f, 1.0f);
         if (klass == kMirrorGlass) {
-            head_on = 0.1f;
+            head_on = rt_dev_or(kDevPaintedGlass, 0.1f);
         } else if (klass == kMirrorMetal) {
-            head_on = 0.55f;
+            head_on = rt_dev_or(kDevPaintedMetal, 0.55f);
             tint = lerp(float3(1.0f, 1.0f, 1.0f), colour, 0.5f);
         } else if (klass == kMirrorGloss) {
-            head_on = 0.05f * (1.0f - rough);
+            head_on = rt_dev_or(kDevPaintedGloss, 0.05f) * (1.0f - rough);
         }
-        return float4(tint * saturate(head_on * terms.x + terms.y), 1.0f - 0.6f * share);
+        return float4(tint * saturate(head_on * terms.x + terms.y), 1.0f - rt_dev_or(kDevPaintedMirror, 0.6f) * share);
     }
     float3 f0 = float3(0.04f, 0.04f, 0.04f);
     if (klass == kMirrorGlass) {
-        f0 = (0.04f * 2.0f).xxx;    // ior 1.5, kShine 2.0
+        f0 = (0.04f * rt_dev_or(kDevGlassShine, 2.0f)).xxx;    // ior 1.5, kShine 2.0
     } else if (klass == kMirrorWater) {
-        f0 = (0.0201f * 1.5f).xxx;  // ior 1.33, kShine 1.5
+        f0 = (0.0201f * rt_dev_or(kDevWaterShine, 1.5f)).xxx;  // ior 1.33, kShine 1.5
     } else if (klass == kMirrorMetal) {
         f0 = colour;
     }

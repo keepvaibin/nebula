@@ -10,6 +10,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt_caps.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/platform_paths.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/rt_materials.h"
 #include "render/core/pipelines.h"
@@ -20,7 +21,11 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
+#include <filesystem>
 #include <map>
+#include <string>
+#include <string_view>
 
 namespace galaxy::render {
 
@@ -88,6 +93,70 @@ constexpr bool item_is_sky(const NebulaFrameItem& item) noexcept {
 
 // Ray tracing starts with the device when the setting is on and the device can trace (rt_caps.h). A change of the
 // setting takes a new device (Vulkan makes its device with the tracer's extensions or without them).
+// The development tunables (rt_dev.h): a run with --diagnostics reads rt_dev.txt in its settings folder each time ray
+// tracing starts; a player's run reads nothing and every number stays the code's.
+void RenderCore::rt_dev_read() {
+    rt_dev_set_ = 0u;
+    if (::galaxy::launch_args().diagnostics == 0u) {
+        return;
+    }
+    const std::filesystem::path& named = ::galaxy::launch_args().settings;
+    const std::filesystem::path folder = named.empty() ? ::galaxy::nebula_data_directory() : named;
+    std::FILE* const file = folder.empty() ? nullptr : ::galaxy::open_path(folder / "rt_dev.txt", "r");
+    if (file == nullptr) {
+        return;
+    }
+    std::string text;
+    char chunk[512];
+    for (std::size_t got = 0; (got = std::fread(chunk, 1u, sizeof(chunk), file)) != 0u;) {
+        text.append(chunk, got);
+    }
+    std::fclose(file);
+    constexpr std::string_view kBlank = " \t\r\n";
+    std::string_view rest = text;
+    while (!rest.empty()) {
+        const std::size_t end = rest.find('\n');
+        std::string_view line = rest.substr(0u, end).substr(0u, rest.substr(0u, end).find('#'));
+        rest = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 1u);
+        for (;;) {
+            const std::size_t start = line.find_first_not_of(kBlank);
+            if (start == std::string_view::npos) {
+                break;
+            }
+            line.remove_prefix(start);
+            const std::size_t stop = line.find_first_of(kBlank);
+            const std::string_view item = line.substr(0u, stop);
+            line = stop == std::string_view::npos ? std::string_view{} : line.substr(stop);
+            const std::size_t eq = item.find('=');
+            unsigned which = kRtDevCount;
+            for (unsigned i = 0; eq != std::string_view::npos && i < kRtDevCount; ++i) {
+                if (kRtDevNames[i] == item.substr(0u, eq)) {
+                    which = i;
+                }
+            }
+            const std::string number(eq != std::string_view::npos ? item.substr(eq + 1u) : std::string_view{});
+            char* after = nullptr;
+            const float value = number.empty() ? 0.0f : std::strtof(number.c_str(), &after);
+            if (which == kRtDevCount || number.empty() || after == nullptr || *after != '\0' || !std::isfinite(value)) {
+                std::fprintf(stderr, "[rt-dev] not understood: %.*s\n", static_cast<int>(item.size()), item.data());
+                continue;
+            }
+            rt_dev_[which] = value;
+            rt_dev_set_ |= 1u << which;
+        }
+    }
+    std::string taken;
+    for (unsigned i = 0; i < kRtDevCount; ++i) {
+        if ((rt_dev_set_ >> i & 1u) != 0u) {
+            char one[64];
+            std::snprintf(one, sizeof(one), " %.*s=%g", static_cast<int>(kRtDevNames[i].size()), kRtDevNames[i].data(),
+                          static_cast<double>(rt_dev_[i]));
+            taken += one;
+        }
+    }
+    std::fprintf(stderr, "[rt-dev]%s\n", taken.empty() ? " none taken" : taken.c_str());
+}
+
 void RenderCore::rt_start() {
     if (!get_render_config().ray_tracing_enabled || !rt_capable(rt_caps()) ||
         (::galaxy::diagnosing(::galaxy::kDiagnoseRtToggle) && rt_setting_ == 0)) {
@@ -98,6 +167,7 @@ void RenderCore::rt_start() {
         return;
     }
     registries_.tell_retired_meshes(true);
+    rt_dev_read();
     rt_log_at_ = 0u;
     rt_building_ = false;
     set_render_tracing(true, fsr3_available());  // single-sampled, anti-aliased temporally (plan 16.3)
@@ -1143,6 +1213,8 @@ struct RtFrameConstants {
     float before[3][4];         // the frame before's eye space from this frame's
     std::uint32_t kept[4];      // the reservoirs' way from the frame before's emitters to this frame's
     std::uint32_t clip[4];      // the clip areas' volumes: first byte in the items' buffer, how many, the rule
+    float dev[8][4];            // the tracer's development tunables (rt_dev.h from GlassShine; rt_frame.hlsli rt_dev_or)
+    std::uint32_t dev_set[4];   // [0]: a bit a dev slot the run gave
 };
 // A pass's own (rt_frame.hlsli PassConstants): b1.
 struct RtPassConstants {
@@ -1708,9 +1780,12 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     }
     // The stage's own numbers where its row gives them (rt_stages.tsv, RT-MASTER-PLAN 23.2).
     const RtStage& stage_row = rt_stage(list.stage_hash) != nullptr ? *rt_stage(list.stage_hash) : kRtStageDefaults;
-    key *= stage_row.sun_gain;
+    // A run's stage gains over the row's (rt_dev.h ambient_gain, sun_gain: the look's dials per run, D4).
+    const float ambient_gain = rt_dev(RtDev::AmbientGain, stage_row.ambient_gain);
+    const float sun_gain = rt_dev(RtDev::SunGain, stage_row.sun_gain);
+    key *= sun_gain;
     rt_stage_air_ = stage_row.air > 0.0f ? stage_row.air : 0.0f;  // the light in the air's density (FB, 15.4)
-    ambient *= stage_row.ambient_gain / kRtStageDefaults.ambient_gain;
+    ambient *= ambient_gain / kRtStageDefaults.ambient_gain;
     // The stage's ambient and key colours for the programs' painted composite (RT-MASTER-PLAN 3.4): a shadow takes
     // the sky's colour, a channel at a time, by kShadowTint. By the row's gains; an even grey where the stage names
     // no light of its own.
@@ -1720,10 +1795,10 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         for (unsigned c = 0; c < 3u; ++c) {
             const float a = key_light != nullptr ? list.stage_ambient[c] : 0.5f;
             const float k = key_light != nullptr ? key_light->color[c] : 0.5f;
-            rt_stage_a_[c] = a * stage_row.ambient_gain / kRtStageDefaults.ambient_gain;
-            rt_stage_k_[c] = k * stage_row.sun_gain;
+            rt_stage_a_[c] = a * ambient_gain / kRtStageDefaults.ambient_gain;
+            rt_stage_k_[c] = k * sun_gain;
         }
-        rt_stage_a_[3] = kShadowTint;
+        rt_stage_a_[3] = rt_dev(RtDev::ShadowTint, kShadowTint);
         rt_stage_k_[3] = 0.0f;
     }
     if (!rt_drops_.empty()) {
@@ -1867,7 +1942,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.stage[3] = kDropTan;
     constants.look[0] = kSkyInShadow;
     constants.look[1] = kPaintedStyle;
-    constants.look[2] = kFullFacing;
+    constants.look[2] = rt_dev(RtDev::FullFacing, kFullFacing);
     constants.look[3] = 0.0f;  // retired: the sky rays' reach (22.10)
     // The mesh memory: the arenas the items named, and the frame's rows. A slot no arena fills reads the
     // first (a bound buffer the pass never indexes).
@@ -1917,6 +1992,11 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         rt_look_[1] = kArtFacing;
         rt_look_[2] = rt_physical_ ? kDebake : 0.0f;
         rt_look_[3] = rt_physical_ ? kAmbientLook : 1.0f;
+        // A run's own (rt_dev.h form, art_facing, debake, ambient_look), over the style's.
+        rt_look_[0] = rt_dev(RtDev::Form, rt_look_[0]);
+        rt_look_[1] = rt_dev(RtDev::ArtFacing, rt_look_[1]);
+        rt_look_[2] = rt_dev(RtDev::Debake, rt_look_[2]);
+        rt_look_[3] = rt_dev(RtDev::AmbientLook, rt_look_[3]);
     }
     constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) |
                         (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
@@ -1950,6 +2030,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         }
     }
     rt_light_ticks_before_ = ticks;
+    if (const float pinned = rt_dev(RtDev::Rate, 0.0f); pinned > 0.0f) {
+        rt_frame_rate_ = pinned;  // rt_dev.h rate: a picture run on a busy machine filters as at this rate
+    }
     constants.more[2] |= rt_raw_ ? 2048u : 0u;  // FB (22.20): the signals raw, for an outside denoiser
     constants.kept[3] = std::bit_cast<std::uint32_t>(std::clamp(rt_frame_rate_ / 60.0f, 0.5f, 2.0f));
     std::memcpy(constants.before, before_from_now.data(), sizeof(constants.before));
@@ -1966,6 +2049,15 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     for (unsigned c = 0; c < 3u; ++c) {
         constants.sky[c] = list.stage_light_known != 0u ? list.stage_ambient[c] : 0.25f;
     }
+    for (unsigned i = 0; i < kRtDevTracerSlots; ++i) {
+        const unsigned which = kRtDevTracerFirst + i;
+        if ((rt_dev_set_ >> which & 1u) != 0u) {
+            constants.dev[i / 4u][i % 4u] = rt_dev_[which];
+            constants.dev_set[0] |= 1u << i;
+        }
+    }
+    static_assert(kRtDevTracerSlots == 9u, "rt_frame.hlsli names each tracer slot (kDev*)");
+    static_assert(offsetof(RtFrameConstants, dev) == 336u && offsetof(RtFrameConstants, dev_set) == 464u);
     static_assert(sizeof(RtFrameConstants) <= 512u && offsetof(RtFrameConstants, more) == 64u);
     static_assert(offsetof(RtFrameConstants, kept) == 304u);  // rt_pass_indirect.cpp HalfFrameConstants
     const UploadRing::Allocation at = renderer_.constant_ring().allocate(512u, 256u);
@@ -2099,8 +2191,10 @@ void RenderCore::rt_light() {
                 }
                 rt_light_on_ = true;
                 rt_guides_publish();
+                rt_share_walk_ = rt_share_due();
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
-                               (rt_lamps_own_ ? 32u : 0u);  // local lights off: the programs' own lamp (FC)
+                               (rt_lamps_own_ ? 32u : 0u) |  // local lights off: the programs' own lamp (FC)
+                               (rt_share_walk_ ? 64u : 0u);  // signal S: the share in place of the colour (FC c36)
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {
@@ -2269,7 +2363,7 @@ void RenderCore::rt_reactive() {
 void RenderCore::rt_light_end() noexcept {
     if (rt_light_on_) {
         rt_light_on_ = false;
-        view_flags_ &= ~56u;
+        view_flags_ &= ~120u;  // bits 3 to 6
     }
 }
 

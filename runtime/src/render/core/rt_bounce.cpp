@@ -44,7 +44,7 @@ constexpr std::uint32_t kRefMostSamples = 4096u;
 // The walks a kept picture is held for (the same list walked again): enough for 1,024 samples of the reference, and
 // for the real-time filters to settle when only the signals are taken.
 constexpr unsigned kRefHoldWalks = 256u;
-constexpr unsigned kSignalHoldWalks = 40u;
+constexpr unsigned kSignalHoldWalks = 60u;  // the signals from 25 walks in, the kept picture 35 walks after S (l63)
 // The dome's mean (11.1) is measured over the first walks of a hold, then kept while the reference adds up.
 constexpr unsigned kDomeWalks = 16u;
 
@@ -56,7 +56,7 @@ struct BouncePassConstants {
 
 // The signals a kept picture is given (the plan's 2.2 names): which signal, its channels (0 r, 1 rgb, 2 a), and 1
 // when it goes over 1 (written as x / (1 + x)).
-enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect };
+enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect, LightsSpec, Share };
 struct Signal {
     const char* name;
     SignalOf of;
@@ -66,7 +66,9 @@ constexpr Signal kSignals[] = {{"V", SignalOf::Light, 0u, 0u},
                                {"G", SignalOf::Light, 2u, 0u},
                                {"D", SignalOf::Added, 1u, 1u},
                                {"R", SignalOf::Mirror, 1u, 1u},
-                               {"I", SignalOf::Indirect, 1u, 1u}};
+                               {"I", SignalOf::Indirect, 1u, 1u},
+                               {"H", SignalOf::LightsSpec, 1u, 1u},  // the local lights' highlight alone (l63)
+                               {"S", SignalOf::Share, 1u, 1u}};      // the programs' share (rt_share_signal; l63)
 constexpr unsigned kSignalApart = 5u;  // walks between two signals (a readback is one at a time)
 
 }  // namespace
@@ -95,21 +97,21 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
         std::fill_n(key, 3u, 0.5f);
     }
     for (unsigned c = 0; c < 3u; ++c) {
-        frame.ambient[c] = ambient[c] * kAmbientGain;
+        frame.ambient[c] = ambient[c] * rt_dev(RtDev::BounceAmbient, kAmbientGain);
         frame.authored[c] = ambient[c];
         frame.key[c] = key[c];
         frame.fill[c] = fill[c];
     }
-    frame.key[3] = kShadowTint;
-    frame.fill[3] = kWrap;
-    frame.sky[3] = kSkyGain;
-    frame.gains[0] = kAreaEmission;
-    frame.gains[1] = kHitSky;
-    frame.gains[2] = kBounce;
-    frame.gains[3] = kBounceMax;
+    frame.key[3] = rt_dev(RtDev::ShadowTint, kShadowTint);  // rt_dev.h: one key with the programs' view_stage_a.w
+    frame.fill[3] = rt_dev(RtDev::Wrap, kWrap);
+    frame.sky[3] = rt_dev(RtDev::SkyGain, kSkyGain);
+    frame.gains[0] = rt_dev(RtDev::AreaEmission, kAreaEmission);
+    frame.gains[1] = rt_dev(RtDev::HitSky, kHitSky);
+    frame.gains[2] = rt_dev(RtDev::Bounce, kBounce);
+    frame.gains[3] = rt_dev(RtDev::BounceMax, kBounceMax);
     std::memcpy(frame.axis, rt_grid_axis_, sizeof(frame.axis));
-    frame.look[0] = kSkyMin;
-    frame.look[1] = kHitDark;
+    frame.look[0] = rt_dev(RtDev::SkyMin, kSkyMin);
+    frame.look[1] = rt_dev(RtDev::HitDark, kHitDark);
     frame.look[2] = rt_dome_mean_ > 1e-3f ? 1.0f / rt_dome_mean_ : 0.0f;
     // The sky against its own mean colour (b48): a channel's mean at least a tenth of the mean luminance.
     if (rt_dome_mean_ > 1e-3f && rt_dome_colour_[0] + rt_dome_colour_[1] + rt_dome_colour_[2] > 0.0f) {
@@ -120,8 +122,9 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
     }
     // A surface met counts as it is (b51: b46's gain against the running mean of such hits is held at 1; the mean
     // is still measured, for the sheet).
-    frame.authored[3] = 1.0f;
-    frame.look[3] = kSunGlint;
+    // rt_dev.h hit_gain 1: b46's gain against that mean again, for the sheet's comparison.
+    frame.authored[3] = rt_dev(RtDev::HitGain, 0.0f) > 0.5f && rt_hit_mean_ > 1.0f ? 1.0f / rt_hit_mean_ : 1.0f;
+    frame.look[3] = rt_dev(RtDev::SunGlint, kSunGlint);
     frame.grid[3] = rt_light_frame_.turn;
 }
 
@@ -456,7 +459,7 @@ void RenderCore::rt_reference_publish() {
     if (!rt_ref_ready_ || rt_light_frame_.layer != 0u) {
         return;
     }
-    const float values[3][4] = {{kSkyMin, kBounceMax, 0.0f, 0.0f}};
+    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kSkyMin), rt_dev(RtDev::BounceMax, kBounceMax), 0.0f, 0.0f}};
     rt::PassBinds means;
     means.constants = rt_light_frame_.binds.constants;
     means.pass_constants = rt_bounce_constants(0u, 0u, 0u, values);
@@ -505,6 +508,8 @@ void RenderCore::rt_signals() {
     case SignalOf::Light: source = rt_image(RtImage::Light); break;
     case SignalOf::Added: source = rt_image(RtImage::Added); break;
     case SignalOf::Mirror: source = rt_image(RtImage::Mirror); break;
+    case SignalOf::LightsSpec: source = rt_image(RtImage::LightsSpec); break;
+    case SignalOf::Share: return;  // the programs draw it (rt_share_signal)
     case SignalOf::Indirect:
         // The reference's mean, or the preset's own (the sky and bounce light pass, when it runs).
         if (rt_fb_reference()) {
@@ -550,6 +555,31 @@ void RenderCore::rt_signals() {
         renderer_.set_debug_capture_paths({}, {});
         rt_signal_waiting_ = true;
     }
+}
+
+// Signal S, the share traced_painted gives (program.hlsli traced_colour, view_flags bit 64; FC c36): its walk of the
+// hold draws the scene with the share in place of the colour, read back at the scene's end (walk_scene_end), before
+// anything drawn after the scene. The scene's later walks draw as ever; the kept picture is 35 walks on.
+bool RenderCore::rt_share_due() const noexcept {
+    if (!::galaxy::diagnosing(::galaxy::kDiagnoseRtSignals) || rt_hold_left_ == 0u || rt_hold_left_ % kSignalApart != 0u) {
+        return false;
+    }
+    const unsigned which = rt_hold_left_ / kSignalApart - 1u;
+    return which < std::size(kSignals) && kSignals[which].of == SignalOf::Share;
+}
+
+void RenderCore::rt_share_signal() {
+    if (!rt_share_walk_) {
+        return;
+    }
+    rt_share_walk_ = false;
+    renderer_.set_debug_capture_paths(rt_hold_folder_ + "signal_S_" + rt_hold_number_ + ".ppm", {});
+    if (!renderer_.debug_copy_scene_to_readback()) {
+        std::fprintf(stderr, "[rt-signals] S of picture %s not taken (the scene's colour cannot be read now)\n",
+                     rt_hold_number_.c_str());
+    }
+    renderer_.set_debug_capture_paths({}, {});
+    rt_signal_waiting_ = true;
 }
 
 // Whether a kept picture is held (rt_hold) before it is shown.

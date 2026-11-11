@@ -85,8 +85,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         const bool captured = item != 0u && (g_items.Load(at + 44u) & (kCaptured << 8u)) != 0u;
         const float3 tint = (word & 0xFFFu) != 0u ? float3(word & 15u, (word >> 4u) & 15u, (word >> 8u) & 15u) / 15.0f
                                                   : float3(1.0f, 1.0f, 1.0f);
-        const float gain = klass == kMirrorGlass ? 1.3f : 1.0f;
-        const float keep = captured ? 0.0f : klass == kMirrorMetal ? 0.5f : klass == kMirrorGloss ? 0.25f : 0.0f;
+        const float gain = klass == kMirrorGlass ? rt_dev_or(kDevSubstituteGlass, 1.3f) : 1.0f;
+        const float keep = captured ? 0.0f : klass == kMirrorMetal ? rt_dev_or(kDevKeepMetal, 0.5f)
+                                           : klass == kMirrorGloss ? rt_dev_or(kDevKeepGloss, 0.25f) : 0.0f;
         const float seen = dot(r.rgb, float3(0.2126f, 0.7152f, 0.0722f));
         g_mirror[id.xy] = float4(r.rgb * tint * gain, -(1.0f + keep * (1.0f - saturate(seen / 0.25f))));
         return;

@@ -44,6 +44,8 @@ cbuffer View : register(b0) {
                                // (traced_by_air, traced_mirror_own), y 1 the second layer's, 2 the opaque layer's, 0 none
     float4 view_look;          // with bit 3: the painted composite's look (traced_painted): x kForm, y the stage's m
                                // (what the art is taken to hold of the sun's facing), z kDebake, w kAmbientLook
+    float4 view_dev[2];        // with bit 3: the development tunables (rt_dev.h from base_floor): [0] the values, [1] 1
+                               // where the run gave one; x base_floor
 };
 
 cbuffer Draw : register(b3) {
@@ -410,10 +412,11 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float3 o3 = g_traced_lit ? light.aaa : traced_o(light, pixel, coloured);
     const float3 share = g_traced_lit ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl, o3, !g_traced_lit && coloured);
     if ((view_flags & 64u) != 0u) {
-        return float4(share, c.a);  // the share alone (--diagnostics rt-signals, S: FA's sheet); a lit program's is 1
+        // The share alone (--diagnostics rt-signals, S; a lit program's is 1), as x / (1 + x): the scene target is unorm.
+        return float4(share / (1.0 + share), c.a);
     }
     // The added light by the surface's colour before lighting (a painted program's colour is that already).
-    const float kBaseFloor = 0.2;
+    const float kBaseFloor = view_dev[1].x > 0.5 ? view_dev[0].x : 0.2;  // rt_dev.h base_floor
     const float3 base = g_traced_lit ? c.rgb / max(g_traced_level, kBaseFloor) : c.rgb;
     return traced_mirror(c.rgb * share + base * added, c.a, pixel);
 }

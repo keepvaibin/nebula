@@ -44,7 +44,17 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_clip;          // the clip areas' volumes (plan 26 M10, clip_shows): x their first byte in the items' buffer
                            // (after the items; 64 each: the rows from the eye to the unit shape, then the shape), y how
                            // many, z where the clipped map parts show: 1 inside a volume, 2 outside every one, 0 whole
+    float4 g_dev[8];       // the tracer's development tunables (rt_dev.h from glass_shine, kDev* below; rt_dev_or)
+    uint4 g_dev_set;       // x: a bit a g_dev slot, set where the run gave it
 };
+
+// A development tunable (rt_dev.h; FA l63): the run's value where it gave one, else the code's own number.
+static const uint kDevGlassShine = 0u, kDevWaterShine = 1u, kDevPaintedGlass = 2u, kDevPaintedMetal = 3u,
+                  kDevPaintedGloss = 4u, kDevPaintedMirror = 5u, kDevSubstituteGlass = 6u, kDevKeepMetal = 7u,
+                  kDevKeepGloss = 8u;
+float rt_dev_or(uint slot, float otherwise) {
+    return ((g_dev_set.x >> slot) & 1u) != 0u ? g_dev[slot >> 2u][slot & 3u] : otherwise;
+}
 
 cbuffer PassConstants : register(b1) {
     uint4 g_pass;          // x: the layer (0 the opaque surfaces, 1 the nearest blended surface a pixel); y: a filter's

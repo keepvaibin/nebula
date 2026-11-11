@@ -495,6 +495,12 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
         std::memcpy(rows.stage_a, rt_stage_a_, sizeof(rows.stage_a));
         std::memcpy(rows.stage_k, rt_stage_k_, sizeof(rows.stage_k));
         std::memcpy(rows.look, rt_look_, sizeof(rows.look));
+        for (unsigned i = 0; i < kRtDevProgramSlots; ++i) {  // rt_dev.h: program.hlsli view_dev
+            const unsigned which = kRtDevProgramFirst + i;
+            const bool given = (rt_dev_set_ >> which & 1u) != 0u;
+            rows.dev[0][i] = given ? rt_dev_[which] : 0.0f;
+            rows.dev[1][i] = given ? 1.0f : 0.0f;
+        }
     }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
@@ -1346,6 +1352,7 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 }
 
 void RenderCore::walk_scene_end() {
+    rt_share_signal();  // signal S: the scene as the share drew it, before anything after the scene
     rt_reactive();
     rt_light_end();
     scene_phase_ = false;
