@@ -303,6 +303,8 @@ private:
     // The setting changed while the game runs (plan 5.3 G-6): the tracer starts or stops at the start of a walk.
     void rt_follow_setting(const RenderConfig& render);
     int rt_setting_ = -1;  // what the tracer last followed (-1: the device's start)
+    std::uint32_t rt_image_failures_ = 0u;  // walks running whose light images could not be made
+    bool rt_gave_up_ = false;               // stopped for want of memory, until the setting is turned on again
     std::uint32_t rt_toggle_walks_ = 0u;
     void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
     void rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool refined);

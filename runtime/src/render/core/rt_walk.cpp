@@ -112,6 +112,23 @@ void RenderCore::rt_follow_setting(const RenderConfig& render) {
         wanted = (rt_toggle_walks_++ / 90u) % 2u == 0u;
     }
     const int now = wanted ? 1 : 0;
+    // Plan 26: the light images could not be made for 30 walks running (the device's memory is full): ray tracing
+    // turns itself off until the player turns the setting off and on again; the game goes on as without it.
+    if (rt_image_failures_ >= 30u && rt_backend_.started()) {
+        std::fprintf(stderr, "[rt] the device has no memory for the light images: ray tracing is off until the setting is turned on again\n");
+        renderer_.rt_wait_idle();
+        renderer_.rt_unpublish_lights(texture_store_);
+        rt_stop();
+        rt_gave_up_ = true;
+    }
+    if (rt_gave_up_) {
+        rt_image_failures_ = 0u;
+        if (!wanted) {
+            rt_gave_up_ = false;
+            rt_setting_ = 0;
+        }
+        return;
+    }
     if (rt_setting_ < 0 || now == rt_setting_) {
         rt_setting_ = now;  // the device started as the setting said
         return;
@@ -1852,7 +1869,9 @@ void RenderCore::rt_light() {
         rt_light_wanted_ = wanted & ~kRtPassBlend;
         ao::Constants eye{};
         bool lit = false;
-        if (rt_images(width, height, wanted) && ao::make_constants(camera, width, height, 1u, false, eye)) {
+        const bool images = rt_images(width, height, wanted);
+        rt_image_failures_ = images ? 0u : rt_image_failures_ + 1u;
+        if (images && ao::make_constants(camera, width, height, 1u, false, eye)) {
             RtFrame& frame = rt_light_frame_;
             frame.binds = rt::PassBinds{};
             frame.binds.scene = scene;
