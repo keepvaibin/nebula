@@ -101,14 +101,20 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     // A temporal upscaler antialiases the scene itself: anti-aliasing and MSAA have no part in its picture (the
     // renderers skip both under it), so their rows go while it runs.
     const bool temporal = state.temporal_upscaling;
-    if (!temporal) {
+    // With ray tracing on and no temporal upscaler chosen, FSR 3 anti-aliases the scene (plan 16.3): the row says so,
+    // and MSAA and SMAA have no part in the picture until ray tracing is off again.
+    const bool traced_temporal = rt_on && !temporal && state.traced_temporal;
+    if (traced_temporal) {
+        rows.push_back({"ANTI-ALIASING", "TEMPORAL (RAY TRACING)", nullptr, "SMOOTHED OVER SEVERAL FRAMES WHILE RAY TRACING IS ON"});
+    }
+    if (!temporal && !traced_temporal) {
         std::string value = state.anti_aliasing_text;
         if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
         rows.push_back({"ANTI-ALIASING", value,
                         [&host](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
                         "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
     }
-    if (!temporal && (render.aa_mode == 1u || render.aa_mode == 2u)) {
+    if (!temporal && !traced_temporal && (render.aa_mode == 1u || render.aa_mode == 2u)) {
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
         rows.push_back({"SMAA QUALITY", kQuality[std::min(render.smaa_quality, 3u)],
                         [&host](RenderConfig& draft, int delta) {

@@ -281,8 +281,15 @@ struct RenderFeatureCaps {
     bool settings_exposed,
     const char* reason);
 
-// A copy taken under the lock, never a partial update.
+// The settings as the renderer runs them, a copy taken under the lock (never a partial update): the player's, except
+// while the tracer runs, when the scene renders single-sampled and is anti-aliased temporally (plan 16.3: the tracer
+// reads one depth and one item a pixel): MSAA is set aside and, without a temporal upscaler chosen, FSR 3 runs, in its
+// native anti-aliasing mode or at FSR 1's chosen scale.
 [[nodiscard]] RenderConfig get_render_config();
+// The player's settings as chosen and saved (Nebula Settings, config.ini): ray tracing off gives them back whole.
+[[nodiscard]] RenderConfig get_render_config_chosen();
+// Set as the tracer starts (with whether FSR 3 runs on this device) and stops.
+void set_render_tracing(bool tracing, bool fsr3) noexcept;
 
 // FSR 3 frame generation is built into this renderer (RenderConfig::frame_generation 2; 1 is DLSS).
 [[nodiscard]] bool fsr_frame_generation_compiled() noexcept;

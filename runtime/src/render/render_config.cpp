@@ -330,11 +330,36 @@ static std::filesystem::path config_path() {
 
 }  // namespace
 
-RenderConfig get_render_config() {
+namespace {
+// Bit 0: the tracer runs; bit 1: FSR 3 runs on the device.
+std::atomic<unsigned> s_tracing{0u};
+}  // namespace
+
+RenderConfig get_render_config_chosen() {
     s_lock.lock_shared();
     const RenderConfig copy = s_config;
     s_lock.unlock_shared();
     return copy;
+}
+
+RenderConfig get_render_config() {
+    RenderConfig copy = get_render_config_chosen();
+    const unsigned tracing = s_tracing.load(std::memory_order_relaxed);
+    if ((tracing & 1u) != 0u) {
+        copy.msaa_samples = 1u;
+#if !defined(NEBULA_GPU_METAL)
+        if ((tracing & 2u) != 0u && copy.upscaler <= 1u) {
+            // FSR 1's scales are the temporal modes' (1-5); 0, the output's size, is FSR 3's native anti-aliasing.
+            copy.temporal_quality = copy.upscaler == 1u ? copy.spatial_quality : 0u;
+            copy.upscaler = 2u;
+        }
+#endif
+    }
+    return copy;
+}
+
+void set_render_tracing(bool tracing, bool fsr3) noexcept {
+    s_tracing.store((tracing ? 1u : 0u) | (tracing && fsr3 ? 2u : 0u), std::memory_order_relaxed);
 }
 
 namespace {
@@ -458,7 +483,7 @@ void set_render_feature_caps(const RenderFeatureCaps& caps) {
 }
 
 void load_render_config_from_file() {
-    RenderConfig cfg = get_render_config();
+    RenderConfig cfg = get_render_config_chosen();
     // A file without the key is the automatic choice.
     cfg.gpu.fill('\0');
 
@@ -494,7 +519,7 @@ bool reload_render_config_if_changed() {
     if (write_time == 0u || write_time == known) {
         return false;
     }
-    RenderConfig cfg = get_render_config();
+    RenderConfig cfg = get_render_config_chosen();
     FILE* f = galaxy::open_path(path, "r");
     if (f == nullptr) {
         return false;  // Being replaced; the next check reads it.

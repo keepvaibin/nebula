@@ -13,6 +13,7 @@ class Host final : public galaxy::ui::GraphicsPageHost {
 public:
     bool rt = false;
     bool temporal = false;
+    bool traced = false;  // FSR 3 runs: with ray tracing on it anti-aliases the scene
     bool folders = true;
     unsigned refresh_hz = 144;
     mutable int opened = -1;
@@ -23,6 +24,7 @@ public:
         state.frame_rates.refresh_hz = refresh_hz;
         state.ray_tracing_offered = rt;
         state.temporal_upscaling = temporal;
+        state.traced_temporal = traced;
         state.folders_open = folders;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";
         state.texture_packs = {7, 2, true, {}, {}};
@@ -96,6 +98,16 @@ int main() {
         rows = galaxy::ui::graphics_page(config, host);
         check(row(rows, "RAY TRACING").value == "ON", "ray tracing capability row");
         check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "MSAA" || r.label == "AMBIENT OCCLUSION"; }), "exclusive graphics row visibility");
+        host.traced = true;
+        config.aa_mode = 1u;
+        rows = galaxy::ui::graphics_page(config, host);
+        check(row(rows, "ANTI-ALIASING").value == "TEMPORAL (RAY TRACING)" && !row(rows, "ANTI-ALIASING").change &&
+                  !has(rows, "SMAA QUALITY") && !has(rows, "MSAA"),
+              "with ray tracing on FSR 3 anti-aliases the scene and the row says so");
+        config.ray_tracing_enabled = false;
+        rows = galaxy::ui::graphics_page(config, host);
+        check(row(rows, "ANTI-ALIASING").value != "TEMPORAL (RAY TRACING)" && has(rows, "SMAA QUALITY") && has(rows, "MSAA"),
+              "ray tracing off gives the anti-aliasing rows back");
         std::cout << "graphics page: passed\n";
         return 0;
     } catch (const std::exception& error) {
