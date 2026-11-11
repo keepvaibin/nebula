@@ -2,10 +2,10 @@
 // The reference's means (rt_reference.hlsl) as the pictures the programs read, in the light pass's own encodings
 // (rt_sun.hlsl, rt_light.hlsl): so a reference picture differs from a preset's only by its signals. Runs after the
 // filters, over what they wrote.
-//   Light: r the sun's share V; g 1; b 0; a the ground share: a lit surface keeps its ambient, a painted one falls to
-//     the shadow's share as the sun leaves it, and either takes the sky and the bounce light by mean(I) where the sun
-//     does not reach (the interim of work list 22.10, until the programs take I themselves).
-//   Added: rgb D.   Mirror: rgb, a as the first cut.
+//   Light: rgb V, a O: the sky and the bounce light's ratio, mean(I) held to [kSkyMin, kBounceMax] (the light pass's
+//     contract since FA's l26: the programs put the shares together with the Facing picture's n.l).
+//   Added: rgb D.   Mirror: not written here: under Medium the light pass's (the local lights' highlights, as in a
+//     preset); at Medium and High rt_reflect_out.hlsl composites the reference's R (rt_bounce.cpp rt_reference_publish).
 // Pass constants: g_pass_value[0].x kSkyMin, .y kBounceMax.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
@@ -26,26 +26,15 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const int3 here = int3(id.xy, 0);
-    const float4 v = g_v.Load(here), d = g_d.Load(here), i = g_i.Load(here), r = g_r.Load(here);
+    const float4 v = g_v.Load(here), d = g_d.Load(here), i = g_i.Load(here);
     if (i.a == 0.0f || v.a == 0.0f) {
         g_light[id.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
         g_added[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         g_mirror[id.xy] = float4(0.0f, 0.0f, 0.0f, 1.0f);
         return;
     }
-    const bool lit = i.a > 1.5f;
-    const float sun = v.r;
-    const float lambert = saturate(d.a);
-    float share = 1.0f, in_sun = 1.0f;
-    if ((g_more.z & 1u) != 0u) {
-        const float sunlit = sun * saturate(lambert / g_look.z);
-        share = lit ? 1.0f : lerp(g_look.x, 1.0f, sunlit);
-        in_sun = lit ? sun * lambert : sunlit;
-    }
     const float3 ratio = clamp(i.rgb, g_pass_value[0].x, g_pass_value[0].y);
     const float seen = (ratio.r + ratio.g + ratio.b) / 3.0f;
-    share *= lerp(seen, 1.0f, 0.65f * in_sun);
-    g_light[id.xy] = float4(sun.xxx, seen);  // l26: V rgb, O (the programs put the shares together)
+    g_light[id.xy] = float4(v.rgb, seen);  // l26: V rgb (in colour, as the sun pass), O
     g_added[id.xy] = float4(min(d.rgb, 32.0f), 0.0f);
-    g_mirror[id.xy] = r;
 }

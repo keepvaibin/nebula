@@ -469,14 +469,16 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     rows.traced[2] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_mirror_slot_) : 0.0f;
     if ((view_flags_ & 8u) != 0u && rt_volume_drawn_ && index == rt_scene_view_) {
         // The light volume over the scene camera's view (program.hlsli traced_air): the depth's eye terms and the
-        // viewport the volume spans (rt_light_frame_'s), its picture and sampler, 1 it is there.
+        // viewport the volume spans (rt_light_frame_'s), its picture's place + 1 and its sampler.
         std::memcpy(rows.volume[0], rt_light_frame_.depth, sizeof(rows.volume[0]));
         std::memcpy(rows.volume[1], rt_light_frame_.viewport, sizeof(rows.volume[1]));
-        rows.volume[2][0] = static_cast<float>(rt_volume_slot_);
+        rows.volume[2][0] = static_cast<float>(rt_volume_slot_) + 1.0f;
         rows.volume[2][1] = static_cast<float>(rt_volume_sampler_);
-        rows.volume[2][2] = 1.0f;
         rows.volume[2][3] = rt_scatter_drawn_ ? static_cast<float>(rt_scatter_slot_) + 1.0f : 0.0f;
     }
+    // The indirect ratio's place + 1 (program.hlsli traced_o): the scene view's, where the pass ran.
+    rows.volume[2][2] = (view_flags_ & 8u) != 0u && rt_indirect_shown_ && index == rt_scene_view_
+                            ? static_cast<float>(rt_indirect_slot_) + 1.0f : 0.0f;
     rows.traced[3] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_facing_slot_) : 0.0f;
     if ((view_flags_ & 8u) != 0u && rt_transmit_drawn_ && index == rt_scene_view_) {
         rows.transmit[0] = static_cast<float>(rt_transmit_slot_);  // program.hlsli traced_mirror: glass and water, High

@@ -184,7 +184,9 @@ private:
 // stage: the game's stage name (EggStarGalaxy). sun: auto (the sun the stage shows, else its key light held in the
 //   world, else none where the key is off), object (the sun it shows only), key (its key light only), none, or three
 //   numbers: the world direction toward the sun. shadow sets: keep (the zones' shadow light sets stay as the artists
-//   made them while the tracer shadows; empty: they give way to their lit partners). Empty fields keep the defaults;
+//   made them while the tracer shadows; empty: they give way to their lit partners). air: the density of the air
+//   that scatters light toward the eye (15.4), per unit: 0.00002 a clear day's, more in haze and dust (at most 0.01);
+//   empty or no row: none (space). Empty fields keep the defaults;
 //   a row exists only where a picture showed a default wrong, and a `note` column says what.
 struct RtStage {
     enum class Sun : std::uint8_t { Auto = 0, Object = 1, Key = 2, None = 3, Fixed = 4 };
@@ -196,7 +198,7 @@ struct RtStage {
     float sky_gain = 1.0f;                    // multiplies the sky dome as light
     float exposure_low = 40.0f;               // the stage's exposure's limits, lux (3.1)
     float exposure_high = 150.0f;
-    float air = -1.0f;                        // light shafts' density (kAirDensity); below 0: by the stage's sky
+    float air = 0.0f;                         // the air's density, per unit (15.4); 0: none (space, no row)
     float water_clear = 600.0f;               // units of water to mostly opaque (kWaterClear)
     bool shadow_sets_kept = false;
 };

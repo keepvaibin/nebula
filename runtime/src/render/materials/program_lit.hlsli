@@ -29,11 +29,16 @@ bool enh_on() { return (view_flags & 2u) != 0u; }
 // of its point light (light 4: an emitter, in the added light; all of it when view_flags bit 32 says the local lights
 // are off); all of lights 2 and 3 (alpha tricks). Its ambient by O.
 static float4 g_traced = float4(1.0, 1.0, 1.0, 1.0);
+static float3 g_traced_o = float3(1.0, 1.0, 1.0);  // O a channel at a time (program.hlsli traced_o; FB 22.10)
 float3 traced_light(uint n) {
     const float lamp = (view_flags & 32u) != 0u ? 1.0 : 0.0;
-    return n == 0u ? g_traced.rgb : n == 1u ? g_traced.aaa : n == 4u ? float3(lamp, lamp, lamp) : float3(1.0, 1.0, 1.0);
+    return n == 0u ? g_traced.rgb : n == 1u ? g_traced_o : n == 4u ? float3(lamp, lamp, lamp) : float3(1.0, 1.0, 1.0);
 }
-#define AMBIENT_TERM(x) ((x) * g_traced.a)
+// The ambient by O: a colour's a channel at a time, an alpha's by O itself.
+float ambient_term(float x) { return x * g_traced.a; }
+float3 ambient_term(float3 x) { return x * g_traced_o; }
+float4 ambient_term(float4 x) { return float4(x.rgb * g_traced_o, x.a * g_traced.a); }
+#define AMBIENT_TERM(x) ambient_term(x)
 #else
 #define AMBIENT_TERM(x) (x)
 #endif
@@ -215,6 +220,8 @@ float4 enh_env(float4 t) {
 // traced form reads the pixel's light there, and every light_term after it is taken by its share.
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);
+    bool coloured = false;
+    g_traced_o = traced_o(g_traced, pixel, coloured);
     g_traced_lit = true;
     return enh_begin(P, n);
 }

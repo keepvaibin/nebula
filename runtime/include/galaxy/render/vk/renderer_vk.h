@@ -1140,6 +1140,7 @@ private:
     [[nodiscard]] VkFramebuffer item_framebuffer();
     void destroy_item_framebuffer();
     static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
+    static constexpr unsigned kRtLightPictures = 8u;  // its pictures, kRtLightPicture + 0 to 7 (rt_publish_light's which)
     bool pass_recording_ = false;  // between begin_frame and end_frame
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running

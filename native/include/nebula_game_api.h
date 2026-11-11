@@ -391,6 +391,9 @@ enum {
     NEBULA_RAY_TRACING_SHADOW_SETS = 1u << 1, /* a zone's shadow light set (the artists' darker lights for actors in a
                                                  shade) gives way to the lit set it darkens: the traced shadow darkens
                                                  them, once */
+    NEBULA_RAY_TRACING_MIRROR = 1u << 2,      /* reflections are traced at High: the game draws no mirror pass (a
+                                                 mirror's own view, captured for its surface); the surface's fetch of
+                                                 the capture takes the traced reflection in its place (12.5) */
 };
 
 /* The movie player's sound (movie_audio_control). */

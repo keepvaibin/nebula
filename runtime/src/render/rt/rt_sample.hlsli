@@ -15,7 +15,7 @@ Texture2D<float4> g_blue_noise : register(t20);  // bound by every pass that sam
 // pair (zw) at the same place as use - 16.
 static const uint kSampleSun = 0u;          // a point of the sun's disc
 static const uint kSampleSunPixel = 1u;     // the place within the pixel a sun ray leaves from
-static const uint kSampleSky = 2u;          // the sky ray's direction (zw: which of the two rays)
+// 2: retired (the light pass's sky rays, 22.10)
 static const uint kSampleLightTry = 3u;     // the local lights' candidates (x) and the neighbours' turn (y)
 static const uint kSampleLightNear = 4u;    // the frame before's neighbour reservoirs (xy one, zw the other)
 static const uint kSampleBlur = 5u;         // the turn of the sun filter's disc

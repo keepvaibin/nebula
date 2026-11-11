@@ -127,7 +127,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     // What the programs read: V as a colour and the sky's share.
-    // O: the sky and bounce light's mean ratio where that pass runs (bit 8), else the sky rays' share.
+    // O: the sky and bounce light's mean ratio where that pass runs (bit 8), else 1 (the light pass's: that part off).
     float sky = now.z;
     if ((g_more.z & 256u) != 0u) {
         const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;

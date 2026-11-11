@@ -90,7 +90,7 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     case 7u: f = 1.0 - f; f = exp2(-8.0 * f * f); break;
     default: break;
     }
-    return lerp(c, fog_color.rgb, f);
+    return program_fog(c, fog_color.rgb, f);  // a traced form fogs after its light (program.hlsli, 15.3)
 }
 
 #if NATIVE_LIT && NATIVE_TRACED
@@ -255,6 +255,8 @@ NativeOut native_ps(NativeVaryings i) {
     if ((view_flags & 8u) != 0u) {
         g_light_base = i.lit_light;
         g_traced = traced_at(i.pos);
+        bool coloured = false;
+        g_traced_o = traced_o(g_traced, i.pos, coloured);  // O a channel at a time (FB 22.10), as enh_begin_traced
         g_traced_lit = material_relight(i, dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : i.lit_nrm);
     }
 #endif

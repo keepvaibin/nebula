@@ -233,6 +233,20 @@ bool stage_table() {
     ok &= expect(beach != nullptr && beach->sun == RtStage::Sun::Key && near(beach->sun_gain, 4.0f), "the key; gain clamped");
     const RtStage* bad = table.find(galaxy::render::rt_stage_hash("BadGalaxy"));
     ok &= expect(bad != nullptr && bad->sun == RtStage::Sun::Auto, "no direction in three zeros: auto");
+    // The air (FB, 15.4): a number as it is, held to 0.01; empty, below 0 or no row: none.
+    galaxy::render::RtStageTable air;
+    ok &= expect(air.read("stage\tair\tnote\nHoneyBeeKingdomGalaxy\t0.00002\tshafts\nSandClockGalaxy\t0.5\t\n"
+                          "PhantomGalaxy\t\tspace\nStarDustGalaxy\t-1\t\n") == 4u,
+                 "four air rows");
+    const RtStage* thin = air.find(galaxy::render::rt_stage_hash("HoneyBeeKingdomGalaxy"));
+    const RtStage* sand = air.find(galaxy::render::rt_stage_hash("SandClockGalaxy"));
+    const RtStage* empty = air.find(galaxy::render::rt_stage_hash("PhantomGalaxy"));
+    const RtStage* below = air.find(galaxy::render::rt_stage_hash("StarDustGalaxy"));
+    ok &= expect(thin != nullptr && thin->air == 0.00002f, "the air as given");
+    ok &= expect(sand != nullptr && sand->air == 0.01f, "the air held to 0.01");
+    ok &= expect(empty != nullptr && empty->air == 0.0f && below != nullptr && below->air == 0.0f &&
+                     galaxy::render::kRtStageDefaults.air == 0.0f,
+                 "empty, below 0 or no row: no air");
     ok &= expect(table.find(galaxy::render::rt_stage_hash("Missing")) == nullptr, "no row");
     ok &= expect(galaxy::render::rt_stage_hash("EggStarGalaxy") == 0x099E9A42u, "FNV-1a of the stage's name, as the game's");
     ok &= expect(galaxy::render::rt_stage_hash("") == 0u, "no stage");

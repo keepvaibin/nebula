@@ -131,6 +131,9 @@ struct RenderConfig {
     // low) unless the player chose one: rt_chosen, set by the Settings rows.
     float    rt_probe_ms         = 0.0f;
     bool     rt_chosen           = false;
+    // The lighting style (plan 14.6): 0 painted (the art's own light, relit by the tracer's ratios), 1 physical (where
+    // a painted mesh's paint is one light, the real sun takes its place).
+    unsigned rt_style            = 0;
     // Light the lens scatters around every bright surface.
     bool     rt_lens_bloom       = true;
 

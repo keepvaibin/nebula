@@ -10,7 +10,7 @@ cbuffer FrameConstants : register(b0) {
     float4 g_viewport;  // the scene's viewport in target pixels
     uint4 g_at;         // where each buffer's first byte is: items, sets, drops, tiles
     uint4 g_more;       // x: the drops' entries' first byte (in the tiles' buffer); y: the frame's number (the noise's
-                        // turn); z: bit 0 the sun is traced, bit 3 the sky's light near the surface, bit 5 mirrors (what
+                        // turn); z: bit 0 the sun is traced, bit 3 retired (the sky rays: 22.10), bit 5 mirrors (what
                         // glass, metal and gloss show of the scene), bit 6 the actors' point lights are emitters (the
                         // light set's own lamp is put out), bit 7 the emitters alone (--diagnostics rt-added: no sun, no
                         // sky), bit 9 the point's motion shown (--diagnostics rt-motion), bit 12 the camera under water
@@ -26,7 +26,7 @@ cbuffer FrameConstants : register(b0) {
                         // sun's shadows read); y 1: a painted surface whose model's paint holds its shadows (hit
                         // flag NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only (the painted style, 14.6),
                         // 0: every painted surface by everything solid; z: the facing (n.l) from which a painted surface keeps
-                        // its authored brightness; w: how far the sky's ray looks for what stands near
+                        // its authored brightness; w: retired (the sky rays' reach: 22.10)
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many
     uint4 g_mesh_at[3]; // where each arena's first byte is in its buffer (eight of them), then the rows'

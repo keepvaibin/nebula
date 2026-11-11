@@ -213,6 +213,10 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
     else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_milliseconds(val, cfg.rt_probe_ms);
     else if (std::strcmp(key, "rt_chosen") == 0) cfg.rt_chosen = parse_bool(val, cfg.rt_chosen);
+    else if (std::strcmp(key, "rt_style") == 0) {
+        static constexpr const char* kNames[] = {"painted", "physical"};
+        cfg.rt_style = parse_choice(val, kNames, cfg.rt_style);
+    }
     else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
     else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
     else if (std::strcmp(key, "texture_dump") == 0) cfg.texture_dump = parse_bool(val, cfg.texture_dump);
@@ -300,6 +304,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.msaa_samples = std::bit_floor(std::clamp(cfg.msaa_samples, 1u, 8u));
     cfg.taa_enabled = false;
     cfg.rt_quality = std::min(cfg.rt_quality, kRtPresetCustom);
+    cfg.rt_style = std::min(cfg.rt_style, 1u);
     cfg.rt_probe_ms = cfg.rt_probe_ms > 0.0f ? std::min(cfg.rt_probe_ms, 1000.0f) : 0.0f;  // NaN too: not measured
     for (std::uint8_t& part : cfg.rt_parts) {
         part = static_cast<std::uint8_t>(std::min<unsigned>(part, 3u));
@@ -638,6 +643,7 @@ bool save_render_config_to_file() {
              << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
              << "rt_probe_ms=" << cfg.rt_probe_ms << '\n'
              << "rt_chosen=" << (cfg.rt_chosen ? 1u : 0u) << '\n'
+             << "rt_style=" << (cfg.rt_style == 1u ? "physical" : "painted") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'

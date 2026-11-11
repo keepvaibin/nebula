@@ -1984,8 +1984,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
     rt_follow_setting(render);
-    // Ray tracing's sky and bounce light shades what screen-space occlusion would darken a second time.
-    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready() && !(render.ray_tracing_enabled && rt_backend_.started());
+    // Ray tracing's sky and bounce light shades what screen-space occlusion would darken a second time; with that part
+    // off nothing traced darkens it (the light pass's O is 1: 22.10), so the occlusion runs as without ray tracing.
+    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready() &&
+                         !(render.ray_tracing_enabled && rt_backend_.started() && rt_part(render, RtPart::Indirect) != 0u);
     rt_quality_ = render.rt_quality;
     for (unsigned part = 0; part < 6u; ++part) {
         rt_levels_[part] = static_cast<std::uint8_t>(rt_part(render, static_cast<RtPart>(part)));

@@ -1757,7 +1757,7 @@ void RendererVk::rt_reactive_end() {
 
 void RendererVk::rt_unpublish_lights(TextureStore& textures) {
     const VkDevice device = vk::Context::get().device();
-    for (unsigned which = 0u; which < 7u; ++which) {  // the light, added, mirror, facing, volume, scatter, transmit
+    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // the light, added, mirror, facing, volume, scatter, transmit, indirect
         const auto found = pictures_.find(kRtLightPicture + which);
         if (found == pictures_.end()) {
             continue;

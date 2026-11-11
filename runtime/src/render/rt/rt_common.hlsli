@@ -136,29 +136,6 @@ float3 within(float3 toward, float spread, float2 noise) {
     return normalize(toward + (side * cos(turn) + up * sin(turn)) * out_);
 }
 
-// A direction over the half-space `n` faces, more often near `n` (by the cosine), by two numbers in 0-1.
-float3 around(float3 n, float2 noise) {
-    const float turn = 6.2831853f * noise.x;
-    const float out_ = sqrt(noise.y);
-    const float3 side = normalize(abs(n.y) < 0.9f ? cross(n, float3(0.0f, 1.0f, 0.0f)) : cross(n, float3(1.0f, 0.0f, 0.0f)));
-    const float3 up = cross(side, n);
-    return normalize(side * (out_ * cos(turn)) + up * (out_ * sin(turn)) + n * sqrt(max(1.0f - noise.y, 0.0f)));
-}
-
-// How far the ray goes before something solid stands on it: `reach` when nothing does.
-float clear_to(float3 origin, float3 direction, float reach) {
-    RayDesc ray;
-    ray.Origin = origin;
-    ray.Direction = direction;
-    ray.TMin = 0.0f;
-    ray.TMax = reach;
-    RayQuery<RAY_FLAG_NONE> query;
-    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_OPAQUE, kMaskSolid, ray);
-    query.Proceed();
-    InterlockedAdd(g_counters[17], 1u);
-    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? query.CommittedRayT() : reach;
-}
-
 // The alpha of item `item`'s first map where a ray meets its triangle `triangle_` at `where_` (1: no map to read).
 float alpha_there(uint item, uint triangle_, float2 where_) {
     const uint at = g_at.x + item * kItemBytes;

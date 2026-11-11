@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 7u
+#define NEBULA_MODEL_VERSION 8u
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -57,8 +57,16 @@ typedef struct NebulaModelHeader {
     uint32_t meshes_at, materials_at, textures_at;
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
     uint32_t hits_at;  /* material_count NebulaModelHit, in the materials' order */
-    uint32_t reserved;
+    uint32_t paint_lights_at; /* mesh_count NebulaModelPaintLight, in the meshes' order; 0: none */
 } NebulaModelHeader;
+
+/* A painted mesh whose paint is one light (ray tracing's Physical style, RT-MASTER-PLAN 14.6): its vertex light fitted
+   as a + b max(n.d, 0); the share b / (a + b) (0: the mesh stays as painted) and d in the model's space, octahedral,
+   signed 16-bit (x, y; -32767 to 32767 for -1 to 1). */
+typedef struct NebulaModelPaintLight {
+    float share;
+    int16_t direction[2];
+} NebulaModelPaintLight;
 
 /* Joints by number, the number animation tracks and the game use. */
 typedef struct NebulaModelJoint {

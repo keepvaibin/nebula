@@ -2,7 +2,7 @@
 // The reflections (rt_reflect.hlsl; the master plan's section 12): what glass, water, metal and glossy things mirror,
 // one ray a pixel of the opaque layer; over time by the mirror image's own point (rt_reflect_time), over space by the
 // reflection's lobe (rt_reflect_space, two steps; mirrors stay sharp); then into the mirror picture the programs read
-// (rt_reflect_out: ADD by Fresnel, or the first cut's multiply where a painted environment map is until 22.13). The
+// (rt_reflect_out: ADD by Fresnel, or where a painted environment map is, R in its place: the SUBSTITUTE). The
 // light pass leaves the opaque layer's mirror to this pass (bit 10 of the frame's flags). Off at the part's levels
 // off and low (the painted maps stay), with the reference and with the emitters alone; high: every reflecting class.
 #include "galaxy/render/render_core.h"

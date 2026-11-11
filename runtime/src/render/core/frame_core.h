@@ -98,6 +98,10 @@ struct GpuMesh {
     std::uint16_t map0_form_rows = 0u;
     std::uint8_t map0_uv = 0u;
     float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
+    // Its paint as one light (nebula_model.h NebulaModelPaintLight; the Physical style, plan 14.6): the share b / (a + b)
+    // (0: it stays painted) and the light's direction in the model's space, octahedral.
+    float paint_share = 0.0f;
+    std::int16_t paint_direction[2]{};
     float min[3]{}, max[3]{};
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
     std::uint32_t arena = 0u;

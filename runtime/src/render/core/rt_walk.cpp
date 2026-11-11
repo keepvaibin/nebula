@@ -1086,7 +1086,7 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Blend Lights B", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Blend Moments A", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Blend Moments B", kHalf4, kRtFull, kForBlend},
-    {"Nebula RT Facing", rt::ImageFormat::R8, kRtFull, kForLight},
+    {"Nebula RT Facing", rt::ImageFormat::Rgba8, kRtFull, kForLight},
     {"Nebula RT Blend Body", rt::ImageFormat::R8, kRtFull, kForBlend},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
@@ -1598,13 +1598,32 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                 std::memcpy(&words[9], &mesh.hit_alpha, sizeof(float));
             }
             const auto byte_of = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
-            words[11] = std::uint32_t{mesh.hit_class} | std::uint32_t{mesh.hit_flags} << 8u | byte_of(mesh.hit_roughness) << 16u |
-                        byte_of(mesh.hit_metal) << 24u;
+            // Its maps include a picture the renderer made (a capture of the scene, as the frozen lake's mirror):
+            // hit flag 128 (the cooker's flags use bits 0-6), and the reflection that takes its painted map's place
+            // keeps none of that map (rt_reflect_out.hlsl, FB).
+            std::uint32_t captured = 0u;
+            if (const core::TextureTable& maps = registries_.table(item.textures); maps.count != 0u) {
+                const std::size_t listed = std::min<std::size_t>(maps.count, maps.list.size());
+                for (std::size_t k = 0; k < listed && captured == 0u; ++k) {
+                    captured = TextureStore::is_target(maps.list[k].texture) ? 128u : 0u;
+                }
+            }
+            words[11] = std::uint32_t{mesh.hit_class} | (std::uint32_t{mesh.hit_flags} | captured) << 8u |
+                        byte_of(mesh.hit_roughness) << 16u | byte_of(mesh.hit_metal) << 24u;
             words[12] = byte_of(mesh.hit_base[0]) | byte_of(mesh.hit_base[1]) << 8u | byte_of(mesh.hit_base[2]) << 16u |
                         byte_of(mesh.hit_environment) << 24u;
             // What it shows with no light, and whether it glows (rt_shade.hlsli rt_hit_read).
             words[14] = byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u | byte_of(mesh.hit_emission[2]) << 16u |
                         (mesh.glow[3] != 0.0f ? 1u << 24u : 0u);
+            // Its paint as one light (the Physical style, FB 22.19): the share in bits 0-7, the direction in the
+            // model's space as two signed 12-bit octahedral numbers (8-19, 20-31). 0: it stays painted.
+            if (mesh.paint_share > 0.0f) {
+                const auto twelve = [](std::int16_t v) {
+                    return static_cast<std::uint32_t>(static_cast<std::int32_t>(std::lround(v * (2047.0 / 32767.0)))) & 0xFFFu;
+                };
+                words[16] = std::max(byte_of(mesh.paint_share), 1u) | twelve(mesh.paint_direction[0]) << 8u |
+                            twelve(mesh.paint_direction[1]) << 20u;
+            }
             // Its mirror and see-through numbers (FA and FB read them): bits 0-11 its painted environment map's own
             // colour, 4 bits a channel, the largest 15 (all 0: no painted map): what tints the real reflection that
             // takes the map's place (12.4); bits 12-19 its index of refraction, (ior - 1) * 100; bits 20-25 its
@@ -1639,7 +1658,6 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     // The sun, the stage's ambient and key as brightness, and the drops by tile.
     constexpr float kSunTan = 0.014f;    // 0.8 of a degree: three times the real sun's, for a penumbra that reads soft
     constexpr float kDropTan = 0.035f;   // the drop light's 2 degrees (decision D1)
-    constexpr float kSkyReach = 260.0f;   // how far the sky's ray looks for what stands near: a little over the player's height
     constexpr float kSkyInShadow = 0.5f;  // what the sun's shadow keeps of the sky's light: the sky turned down (the
                                           // view's tint gives back up to 0.3 of the rest in the sky's colour)
     constexpr float kFullFacing = 0.6f;  // a painted surface keeps its authored brightness from this n.l up
@@ -1661,6 +1679,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     // The stage's own numbers where its row gives them (rt_stages.tsv, RT-MASTER-PLAN 23.2).
     const RtStage& stage_row = rt_stage(list.stage_hash) != nullptr ? *rt_stage(list.stage_hash) : kRtStageDefaults;
     key *= stage_row.sun_gain;
+    rt_stage_air_ = stage_row.air > 0.0f ? stage_row.air : 0.0f;  // the light in the air's density (FB, 15.4)
     ambient *= stage_row.ambient_gain / kRtStageDefaults.ambient_gain;
     // The stage's ambient and key colours for the programs' painted composite (RT-MASTER-PLAN 3.4): a shadow takes
     // the sky's colour, a channel at a time, by kShadowTint. By the row's gains; an even grey where the stage names
@@ -1815,7 +1834,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.look[0] = kSkyInShadow;
     constants.look[1] = kPaintedStyle;
     constants.look[2] = kFullFacing;
-    constants.look[3] = kSkyReach;
+    constants.look[3] = 0.0f;  // retired: the sky rays' reach (22.10)
     // The mesh memory: the arenas the items named, and the frame's rows. A slot no arena fills reads the
     // first (a bound buffer the pass never indexes).
     for (unsigned a = 0; a < rt::kPassMeshArenas; ++a) {
@@ -1850,15 +1869,16 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     }
     constants.more[3] |= render.rt_quality == kRtPresetReference ? 4096u : 0u;
     rt_lamps_own_ = rt_part(render, RtPart::Lights) == 0u;
-    constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) | 8u |
+    rt_physical_ = render.rt_style == 1u;
+    constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) |
                         (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
     // Bit 12: the camera under water, as the game reports it: water is seen from inside (rt_light.hlsl clear_surface).
     constants.more[2] |= camera_water_depth() >= 0.0f ? 4096u : 0u;
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
     if (rt_pass_indirect_on()) {
-        // The sky and bounce light pass gives the sky's share (bit 8): no sky rays here. A painted surface keeps
-        // kShadowTint of its colour from it (traced_painted: plan 11.4's faint cast; the light pass takes none back).
-        constants.more[2] = (constants.more[2] & ~8u) | 256u;
+        // The sky and bounce light pass gives the sky's share (bit 8; the light pass traces none: 22.10). A painted
+        // surface keeps kShadowTint of its colour from it (traced_painted: plan 11.4's faint cast).
+        constants.more[2] |= 256u;
     }
     if (rt_pass_reflect_on()) {
         constants.more[2] |= 1024u;  // the reflections pass writes the opaque layer's mirror (rt_pass_reflect.cpp)
@@ -2015,10 +2035,19 @@ void RenderCore::rt_light() {
                         rt_scatter_drawn_ = false;
                     }
                 }
+                // The sky and bounce light's ratio a channel at a time (FB 22.10): picture 7 (program.hlsli traced_o).
+                rt_indirect_shown_ = false;
+                if (rt_pass_indirect_on()) {
+                    if (void* const ratio = rt_backend_.image_to_sample(rt_image(RtImage::Indirect)); ratio != nullptr) {
+                        rt_indirect_slot_ = renderer_.rt_publish_light(ratio, texture_store_, 7u);
+                        rt_indirect_shown_ = true;
+                    }
+                }
                 rt_light_on_ = true;
                 rt_guides_publish();
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
-                               (rt_lamps_own_ ? 32u : 0u);  // local lights off: the programs' own lamp (FC)
+                               (rt_lamps_own_ ? 32u : 0u) |  // local lights off: the programs' own lamp (FC)
+                               (rt_physical_ ? 64u : 0u);  // the Physical style (FB 22.19): program.hlsli traced_colour
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {

@@ -336,6 +336,7 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
     meshes.resize(header.mesh_count);
     const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
     const auto* hits = header.hits_at != 0u ? at<NebulaModelHit>(file, header.hits_at) : nullptr;
+    const auto* paint_lights = header.paint_lights_at != 0u ? at<NebulaModelPaintLight>(file, header.paint_lights_at) : nullptr;
     for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
@@ -432,6 +433,10 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
                 gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
             }
+        }
+        if (paint_lights != nullptr) {
+            gpu_mesh.paint_share = paint_lights[m].share;
+            std::copy_n(paint_lights[m].direction, 2u, gpu_mesh.paint_direction);
         }
         gpu_mesh.vertex_count = mesh.vertex_count;
         gpu_mesh.refined_vertex_count = mesh.refined_vertex_count;

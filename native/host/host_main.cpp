@@ -2540,7 +2540,16 @@ uint32_t svc_option(void*, uint32_t what) {
         }
         // A stage's row may keep its shadow light sets as the artists made them (rt_stages.tsv `shadow sets`).
         const galaxy::render::RtStage* stage = galaxy::render::rt_stage(galaxy::render::rt_stage_hash(gSceneStage));
-        return NEBULA_RAY_TRACING_ON | (stage != nullptr && stage->shadow_sets_kept ? 0u : NEBULA_RAY_TRACING_SHADOW_SETS);
+        // Reflections traced at High show what a mirror shows: the game's mirror pass is not drawn (FB, RT-MASTER-PLAN
+        // 12.5). The reflections pass's own rule (rt_pass_reflect.cpp rt_pass_reflect_on): not under the reference
+        // (its preset or rt-reference) nor rt-added or rt-motion, which leave the pass out.
+        const galaxy::render::RenderConfig config = galaxy::render::get_render_config();
+        const bool mirror = galaxy::render::rt_part(config, galaxy::render::RtPart::Reflect) >= 3u &&
+                            config.rt_quality != galaxy::render::kRtPresetReference &&
+                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtReference) && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
+                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
+        return NEBULA_RAY_TRACING_ON | (stage != nullptr && stage->shadow_sets_kept ? 0u : NEBULA_RAY_TRACING_SHADOW_SETS) |
+               (mirror ? NEBULA_RAY_TRACING_MIRROR : 0u);
     }
 #else
         return 0u;

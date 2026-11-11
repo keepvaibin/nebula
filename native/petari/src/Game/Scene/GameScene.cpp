@@ -686,6 +686,11 @@ bool GameScene::isDrawMirror() const {
         return false;
     }
 
+    // Reflections traced at High: the mirror's surface takes the traced reflection in its capture's place (12.5).
+    if ((NebulaHost::option(NEBULA_OPTION_RAY_TRACING) & static_cast< u32 >(NEBULA_RAY_TRACING_MIRROR)) != 0) {
+        return false;
+    }
+
     return MR::isPlayerInAreaObj("MirrorArea");
 }
 

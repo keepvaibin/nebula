@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 7;
+pub const VERSION: u32 = 8;
 pub const HEADER_WORDS: usize = 30;
 pub const HIT_BYTES: usize = 120;
 pub const STAGE_BYTES: usize = 36;
@@ -445,6 +445,21 @@ impl Measure {
 
 /// Below this share of smooth residual a model's paint holds detail shadows of its own (RT-MASTER-PLAN 14.6).
 const PAINTED_SHADOW_SMOOTH: f64 = 0.5;
+/// From this share of a painted mesh's vertex light that one ambient and one directional light explain, its paint is
+/// one light: the Physical style puts the real sun in its place (14.6, the study's r2_one_light).
+const PAINT_LIGHT_FIT: f64 = 0.6;
+
+/// A unit direction as two signed 16-bit octahedral numbers (nebula_model.h NebulaModelPaintLight).
+fn octahedral(d: [f32; 3]) -> [i16; 2] {
+    let sum = d[0].abs() + d[1].abs() + d[2].abs();
+    let (mut x, mut y) = if sum > 0.0 { (d[0] / sum, d[1] / sum) } else { (0.0, 0.0) };
+    if d[2] < 0.0 {
+        let (ox, oy) = (x, y);
+        x = (1.0 - oy.abs()) * if ox >= 0.0 { 1.0 } else { -1.0 };
+        y = (1.0 - ox.abs()) * if oy >= 0.0 { 1.0 } else { -1.0 };
+    }
+    [(x.clamp(-1.0, 1.0) * 32767.0).round() as i16, (y.clamp(-1.0, 1.0) * 32767.0).round() as i16]
+}
 
 /// The painted light of a model's vertex-coloured meshes (RT-MASTER-PLAN 14.6; agents/rt/tools/debake_study.py does the
 /// same over a pak): each mesh's vertex luminance fitted by an ambient and one directional light (least squares over
@@ -454,10 +469,13 @@ const PAINTED_SHADOW_SMOOTH: f64 = 0.5;
 struct PaintedLight {
     weight: f64,
     smooth: f64,
+    /// The mesh last added, where its paint is one light (PAINT_LIGHT_FIT): b / (a + b) and d.
+    last: Option<(f32, [f32; 3])>,
 }
 
 impl PaintedLight {
     fn add(&mut self, s: &MeshStreams) {
+        self.last = None;
         let count = s.positions.len();
         if count < 16 || s.normals.len() != count || s.colors.len() != count {
             return;
@@ -512,6 +530,19 @@ impl PaintedLight {
             if all_variance > 0.0 {
                 smooth = (means_variance / all_variance).min(1.0);
             }
+        }
+        // How much of the vertex light the fit explains; where it is most of it, the light it found (a and the
+        // directional part g = b d): one placed by a single matrix, as the tracer turns d by the item's.
+        let (mut y_sum, mut y_sum2) = (0.0f64, 0.0f64);
+        for (_, y) in rows.iter().flatten() {
+            y_sum += y;
+            y_sum2 += y * y;
+        }
+        let total = y_sum2 - y_sum * y_sum / good as f64;
+        let explained = if total > 1e-9 { 1.0 - sum2 / total } else { 0.0 };
+        let gain = (fit[1] * fit[1] + fit[2] * fit[2] + fit[3] * fit[3]).sqrt();
+        if explained >= PAINT_LIGHT_FIT && fit[0] > 0.0 && gain > 1e-6 && s.single_matrix != NONE {
+            self.last = Some(((gain / (fit[0] + gain)) as f32, [(fit[1] / gain) as f32, (fit[2] / gain) as f32, (fit[3] / gain) as f32]));
         }
         self.weight += good as f64;
         self.smooth += smooth * good as f64;
@@ -731,6 +762,12 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     // The painted light of the model's vertex-coloured meshes (14.6): whether its paint holds shadows of its own.
     let vertex_coloured: Vec<bool> = ir.materials.iter().map(|m| super::hit_record::read(m).signals.vertex_colour).collect();
     let mut painted = PaintedLight::default();
+    // Each mesh's paint light (22.19): painted materials only (vertex colour, not lit).
+    let painted_unlit: Vec<bool> = ir.materials.iter().map(|m| {
+        let s = super::hit_record::read(m).signals;
+        s.vertex_colour && !s.lit
+    }).collect();
+    let mut paint_lights: Vec<Option<(f32, [f32; 3])>> = Vec::with_capacity(ir.shapes.len());
     let mut mesh_slots = Vec::with_capacity(ir.shapes.len());
     let mut meshes = Vec::with_capacity(ir.shapes.len());
     for shape in &ir.shapes {
@@ -746,9 +783,14 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         if let Some(m) = measures.get_mut(shape.material as usize) {
             m.add(&streams.positions, &streams.indices);
         }
+        let mut paint_light = None;
         if vertex_coloured.get(shape.material as usize).copied().unwrap_or(false) {
             painted.add(&streams);
+            if painted_unlit.get(shape.material as usize).copied().unwrap_or(false) {
+                paint_light = painted.last;
+            }
         }
+        paint_lights.push(paint_light);
         let (min, max) = mesh_bounds(&streams.positions);
         b.fs(&min);
         b.fs(&max);
@@ -1153,6 +1195,21 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             b.u8(0);
         }
     }
+    // Each mesh's paint light (nebula_model.h NebulaModelPaintLight), where any mesh's paint is one light.
+    b.align(4);
+    let paint_lights_at = if paint_lights.iter().any(Option::is_some) {
+        let at = b.at();
+        for light in &paint_lights {
+            let (share, d) = light.unwrap_or((0.0, [0.0, 0.0, 1.0]));
+            let [x, y] = octahedral(d);
+            b.f32(share);
+            b.i16(x);
+            b.i16(y);
+        }
+        at
+    } else {
+        0
+    };
     b.align(32);
     let size = b.at();
     let mut flags = u32::from(ir.scale_mode);
@@ -1192,7 +1249,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         geometry_at,
         geometry_size,
         hits_at,
-        0,
+        paint_lights_at,
     ];
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);

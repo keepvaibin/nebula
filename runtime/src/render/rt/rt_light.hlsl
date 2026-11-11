@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The light pass: the shares the programs read, from the sun's V (filtered by rt_sun_time and rt_sun_blur) with the
-// sky's light near the surface, and what glass, metal and gloss mirror. Until the sky and bounce light pass
-// (rt_indirect) and the reflection pass (rt_reflect) replace them, the sky's part is two alternating occlusion rays
-// and the mirror a first cut. What the programs read (program.hlsli traced_colour, program_lit.hlsli), both layers:
+// The light pass: the shares the programs read, from the sun's V (filtered by rt_sun_time and rt_sun_blur), and what
+// glass, metal and gloss mirror where the reflection pass (rt_reflect) does not run (a first cut). The sky's share O
+// is the sky and bounce light pass's (rt_indirect; rt_light_space.hlsl's last step reads it); where that part is off,
+// 1 (the authored ambient; screen-space occlusion runs then). What the programs read (program.hlsli traced_colour,
+// program_lit.hlsli), both layers:
 //   Light   rgb V, the sun's share as a colour (what blended things on its ray let through tints it); a O, the sky's
 //           share (what stands near or over the surface hides of it). The programs put sun, sky, fill and the
 //           stage's colours together themselves (plan 3.4); every point light is an emitter (the added light);
-//   Facing  how the surface faces the sun as a painted surface takes it (from g_look.z of full facing up: all of
-//           it); a lit program takes n.l itself.
-// The opaque layer's sky rays are noisy: this pass writes, for the filter (rt_light_time, rt_light_space), r V (one
-// number), b the facing code (0 to 1 painted; -1 to -2 lit, -1 - n.l) and a the sky's share; the filter averages a
-// alone and its last step writes V (rgb, from the sun's filter) with it. The second layer's are written here.
+//   Facing  r how the surface faces the sun as a painted surface takes it (from g_look.z of full facing up: all of
+//           it); a lit program takes n.l itself. For the Physical style (FB 22.19, plan 14.6): g max(n.s, 0), b
+//           max(n.d, 0) with d the light the mesh's paint holds (item word 16), a its share (0: it stays painted).
+// For the opaque layer this pass writes, for the filter (rt_light_time, rt_light_space), r V (one number), b the facing
+// code (0 to 1 painted; -1 to -2 lit, -1 - n.l) and a 1; the filter's last step writes V (rgb, from the sun's filter)
+// with the sky's share. The second layer's are written here (O 1).
 #include "rt_common.hlsli"
 
 Texture2D<float4> g_guide : register(t9);
@@ -23,7 +25,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 // What the pixel mirrors: rgb what its mirror ray sees by how much the surface mirrors; a how much of the surface's own
 // colour stays under it, plus 2 in the second layer (program.hlsli traced_mirror).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u1);
-RT_FORMAT(r8) RWTexture2D<float> g_facing : register(u2);  // how a painted surface faces the sun (0: no surface: 1)
+RT_FORMAT(rgba8) RWTexture2D<float4> g_facing : register(u2);  // how a painted surface faces the sun, and its paint light
 RT_FORMAT(r8) RWTexture2D<unorm float> g_body : register(u3);  // the second layer's body (glass and water, FC's c16)
 Texture2D<float4> g_guide_opaque : register(t15);  // the opaque layer's guide: under water, how deep it is
 
@@ -184,7 +186,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     float4 share = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float4 mirror = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    float facing_out = 1.0f;
+    float4 facing_out = float4(1.0f, 0.0f, 0.0f, 0.0f);
     bool clear = false;  // glass or water on the second layer: the mirror is (F R, 4 + F)
     float body = 1.0f;
     const float4 guide = g_guide.Load(int3(pixel, 0));
@@ -202,27 +204,31 @@ void main(uint3 id : SV_DispatchThreadID) {
             const float lambert = saturate((flags & kSurfaceTwoSided) != 0u ? abs(turned) : turned);
             facing = lit ? lambert : saturate(lambert / g_look.z);
         }
-        facing_out = facing;
+        facing_out.r = facing;
+        // A painted mesh whose paint is one light, placed by one matrix (item word 10: 0): that light's direction
+        // turned to the eye by the item's normal rows (word 7), and the sun's (FB 22.19).
+        if (!lit && item != 0u) {
+            const uint at = g_at.x + (item - 1u) * kItemBytes;
+            const uint paint = g_items.Load(at + 64u);
+            if ((paint & 255u) != 0u && g_items.Load(at + 40u) == 0u) {
+                const float2 o = float2(int2(paint << 12u, paint) >> 20) / 2047.0f;
+                float3 d = float3(o, 1.0f - abs(o.x) - abs(o.y));
+                if (d.z < 0.0f) {
+                    d.xy = (1.0f - abs(d.yx)) * float2(d.x >= 0.0f ? 1.0f : -1.0f, d.y >= 0.0f ? 1.0f : -1.0f);
+                }
+                const uint row = mesh_at(8u) + g_items.Load(at + 28u) * 16u;
+                const float3 n0 = asfloat(g_rows.Load3(row + 48u)), n1 = asfloat(g_rows.Load3(row + 64u)), n2 = asfloat(g_rows.Load3(row + 80u));
+                const float3 eye_d = normalize(float3(dot(n0, d), dot(n1, d), dot(n2, d)));
+                const float sun = (g_more.z & 1u) != 0u ? max(dot(s.smooth_, g_sun.xyz), 0.0f) : 0.0f;
+                facing_out.gba = float3(sun, max(dot(s.smooth_, eye_d), 0.0f), float(paint & 255u) / 255.0f);
+            }
+        }
         // The lamp of the pixel's light set: every point light is an emitter (bit 6), lit through the added light.
         share.b = 0.0f;
         share.r = v;
 
-        // The sky's light. A frame takes one of two rays (the average over time holds both): over the half-space the
-        // surface faces, short: what stands close by hides that much of the sky (corners, the foot of a wall); or toward
-        // the sky itself, about straight up, long: what stands over the surface hides the sky's brightest part, the soft
-        // shadow everything has on an overcast day and in a sunny day's shade. So a thing the sun does not reach still
-        // stands on a shadow of its own. Not in the second layer.
-        float seen = 1.0f;
-        if (!second && (g_more.z & 8u) != 0u && g_look.w > 0.0f) {
-            const float2 chance = rt_sample(id.xy, g_more.y, kSampleSky);
-            if (rt_sample(id.xy, g_more.y, kSampleSky + kSampleSecond).x < 0.5f) {
-                const float open = clear_to(s.origin, around(s.smooth_, chance), g_look.w) / g_look.w;
-                seen = lerp(0.5f, 1.0f, open * (2.0f - open));
-            } else {
-                const float3 over = within(g_up.xyz, 0.6f, chance);
-                seen = clear_to(s.origin, over, 1200.0f) < 1200.0f ? 0.42f : 1.0f;  // what stands within 12 m over it
-            }
-        }
+        // The sky's share: the sky and bounce light pass's (22.10; rt_light_space.hlsl's last step), else 1.
+        const float seen = 1.0f;
         if (second) {
             share = float4(v3, seen);  // as the programs read it: no filter after this layer's
         } else {

@@ -303,10 +303,7 @@ bool RenderCore::rt_fb_reference() const noexcept {
 
 void RenderCore::rt_pass_reference() {
     rt_ref_ready_ = false;
-    if (!rt_fb_reference() || rt_light_frame_.layer != 0u) {
-        return;
-    }
-    const unsigned width = rt_light_frame_.width, height = rt_light_frame_.height;
+    // What was retired goes once no frame in flight reads it, whether the reference runs or not (FA).
     std::erase_if(rt_bounce_retired_, [&](const std::pair<std::uint64_t, std::uint32_t>& retired) {
         if (retired.first + rt::kFramesToRelease > frame_index_) {
             return false;
@@ -314,6 +311,22 @@ void RenderCore::rt_pass_reference() {
         rt_backend_.free_image(retired.second);
         return true;
     });
+    if (!rt_fb_reference()) {
+        // Off: its sums go (8 Rgba32f images at the light pass's size); the next time it is on they are made again and
+        // it starts again.
+        for (std::uint32_t& image : rt_ref_images_) {
+            if (image != rt::kNoImage) {
+                rt_bounce_retired_.emplace_back(frame_index_, image);
+                image = rt::kNoImage;
+            }
+        }
+        rt_bounce_width_ = rt_bounce_height_ = 0u;
+        return;
+    }
+    if (rt_light_frame_.layer != 0u) {
+        return;
+    }
+    const unsigned width = rt_light_frame_.width, height = rt_light_frame_.height;
     static constexpr const char* kNames[8] = {"Nebula RT Reference V A", "Nebula RT Reference D A", "Nebula RT Reference I A",
                                               "Nebula RT Reference R A", "Nebula RT Reference V B", "Nebula RT Reference D B",
                                               "Nebula RT Reference I B", "Nebula RT Reference R B"};
@@ -378,6 +391,22 @@ void RenderCore::rt_reference_publish() {
     means.writes[1] = rt_image(RtImage::Added);
     means.writes[2] = rt_image(RtImage::Mirror);
     rt_backend_.dispatch(RtShader::ReferenceOut, means, rt_light_frame_.across, rt_light_frame_.down);
+    // The reference's R through the reflections' own composite where they are on (rt_reflect_out.hlsl, g_pass.w bit 0:
+    // the mean, the local lights' highlights added there): the Mirror picture in a preset's encoding, so the two
+    // differ by the signal alone (section 18; FB).
+    if (rt_levels_[kFbReflect] >= 2u) {
+        rt::PassBinds into = rt_pass_binds();
+        into.constants = rt_light_frame_.binds.constants;
+        into.pass_constants = rt_pass_constants(0u, 0u, 0u, 1u);
+        into.reads[0] = rt_ref_images_[rt_ref_now_ + 3u];
+        into.reads[1] = rt_now(RtImage::GuideA);
+        into.reads[2] = rt_image(RtImage::Normal);
+        into.reads[3] = rt_image(RtImage::Material);
+        into.reads[4] = rt_image(RtImage::Base);
+        into.reads[5] = rt_image(RtImage::LightsSpec);
+        into.writes[0] = rt_image(RtImage::Mirror);
+        rt_backend_.dispatch(RtShader::ReflectOut, into, rt_light_frame_.across, rt_light_frame_.down);
+    }
 }
 
 // The signals as pictures (--diagnostics rt-signals), on the walks of a hold kSignalApart apart, the last ones: each

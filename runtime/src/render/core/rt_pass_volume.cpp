@@ -19,9 +19,9 @@ namespace {
 
 bool RenderCore::rt_pass_volume_on() const { return rt_levels_[kFbVolume] != 0u && !rt_fb_reference(); }
 
-// The stage's air: its row's (b34, after the stage table's air column lands); none without one.
+// The stage's air: its row's (rt_stage_air_, kept by the walk); none without one.
 float RenderCore::rt_air_density() const {
-    return 0.0f;
+    return rt_stage_air_;
 }
 
 void RenderCore::rt_pass_volume() {
