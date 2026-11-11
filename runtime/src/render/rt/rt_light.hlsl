@@ -221,7 +221,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         // What the surface mirrors: glass, metal and glossy things show the scene and the sky along the eye's ray turned
         // at the surface, more at a glancing look (Schlick's term), a metal in its own colour; and the sun's own glint
         // where that ray runs at the sun unhindered.
-        if ((g_more.z & 32u) != 0u) {
+        if ((g_more.z & 32u) != 0u && (second || (g_more.z & 1024u) == 0u)) {  // bit 10: the reflections pass has the opaque layer
             const uint look = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u);
             const uint tint_word = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 48u);
             const uint class_ = look & 255u;
@@ -265,7 +265,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
     }
-    if (guide.a != 0.0f) {
+    if (guide.a != 0.0f && (second || (g_more.z & 1024u) == 0u)) {  // under bit 10 R carries the highlights
         mirror.rgb += highlight_near(pixel, guide);
     }
     if ((g_more.z & 128u) != 0u && item != 0u && guide.a != 0.0f) {

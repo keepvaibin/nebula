@@ -15,3 +15,14 @@ sun_tiles	rt_sun_tiles.hlsl	cs_6_0	main
 sun_time	rt_sun_time.hlsl	cs_6_0	main
 sun_blur	rt_sun_blur.hlsl	cs_6_0	main
 reactive	rt_reactive.hlsl	cs_6_0	main
+reference	rt_reference.hlsl	cs_6_5	main
+reference_out	rt_reference_out.hlsl	cs_6_0	main
+signal	rt_signal.hlsl	cs_6_0	main
+indirect	rt_indirect.hlsl	cs_6_5	main
+indirect_up	rt_indirect_up.hlsl	cs_6_0	main
+reflect	rt_reflect.hlsl	cs_6_5	main
+reflect_time	rt_reflect_time.hlsl	cs_6_0	main
+reflect_space	rt_reflect_space.hlsl	cs_6_0	main
+reflect_out	rt_reflect_out.hlsl	cs_6_0	main
+volume	rt_volume.hlsl	cs_6_5	main
+scatter	rt_scatter.hlsl	cs_6_5	main

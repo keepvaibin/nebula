@@ -7,6 +7,7 @@
 #include "rt_frame.hlsli"
 
 Texture2D<float4> g_lights_moments : register(t9);  // this frame's moments of the added light: a, the change
+Texture2D<float> g_reflect_moved : register(t10);    // FB: 1 where the reflections changed (rt_reflect_time.hlsl); g_pass.w 1
 RT_FORMAT(r8) RWTexture2D<unorm float> g_reactive : register(u7);  // the renderer's reactive mask
 
 [numthreads(8, 8, 1)]
@@ -16,7 +17,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= width || id.y >= height) {
         return;
     }
-    if (g_lights_moments.Load(int3(id.xy, 0)).a > 0.5f) {
+    if (g_lights_moments.Load(int3(id.xy, 0)).a > 0.5f || (g_pass.w != 0u && g_reflect_moved.Load(int3(id.xy, 0)) > 0.5f)) {
         g_reactive[id.xy] = 0.9f;
     }
 }

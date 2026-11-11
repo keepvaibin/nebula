@@ -32,6 +32,8 @@ enum Diagnostic : unsigned {
     kDiagnoseTelemetry = 1u << 17u,      // telemetry: frame counts in shared memory each second (tools/telemetry)
     kDiagnoseRtLight = 1u << 18u,        // rt-light: the light pass's shares as the scene's colours (sun red, ground green, lamp blue)
     kDiagnoseRtAdded = 1u << 19u,        // rt-added: the scene under its emitters alone (no sun, no sky): where each light source lights
+    kDiagnoseRtReference = 1u << 20u,    // rt-reference: the reference path tracer's signals in place of the real-time passes'
+    kDiagnoseRtSignals = 1u << 21u,      // rt-signals: each kept picture's lighting signals as pictures of their own (signal_*.ppm)
     kDiagnoseRtMotion = 1u << 22u,       // rt-motion: where each pixel's point was the frame before, as colours (across red, down green, unknown blue)
     kDiagnoseRtToggle = 1u << 23u,       // rt-toggle: ray tracing switched off and on every 90 frames (the setting changed while the game runs)
 };
@@ -64,6 +66,8 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"telemetry", kDiagnoseTelemetry},
     {"rt-light", kDiagnoseRtLight},
     {"rt-added", kDiagnoseRtAdded},
+    {"rt-reference", kDiagnoseRtReference},
+    {"rt-signals", kDiagnoseRtSignals},
     {"rt-motion", kDiagnoseRtMotion},
     {"rt-toggle", kDiagnoseRtToggle},
     {"frames", kDiagnoseFrames},

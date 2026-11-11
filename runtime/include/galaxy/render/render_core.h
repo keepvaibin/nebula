@@ -458,8 +458,8 @@ private:
         BlendGuideA, BlendGuideB, BlendReservoirsA, BlendReservoirsB, BlendSunA, BlendSunB, BlendDistanceA, BlendDistanceB,
         BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
-        GiReservoirsB, GiWeightsA, GiWeightsB, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
-        VolumeB, Count
+        GiReservoirsB, GiWeightsA, GiWeightsB, IndirectGuideA, IndirectGuideB, IndirectMotion, IndirectStep, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
+        VolumeB, Scatter, ReflectMoved, Count
     };
     // The passes an image is made for.
     static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
@@ -548,6 +548,69 @@ private:
     std::uint32_t rt_view_image_ = rt::kNoImage;
     unsigned rt_view_width_ = 0u, rt_view_height_ = 0u;
     rt::ImageFormat rt_view_format_ = rt::ImageFormat::Rgb10a2;
+    // The light that travels (rt_bounce.cpp, rt_pass_indirect.cpp): hit shading's frame (rt_shade.hlsli
+    // RtShadeFrame, field for field), the world light grid, the reference path tracer (--diagnostics rt-reference)
+    // and the signals as pictures (rt-signals).
+    struct RtShadeFrame {
+        float ambient[4], key[4], fill[4], sky[4], gains[4], axis[3][4], look[4], authored[4];
+        std::uint32_t grid[4], spare[5][4];
+    };
+    void rt_shade_frame(RtShadeFrame& frame) const;
+    void rt_world_grid();
+    [[nodiscard]] bool rt_shade_binds(rt::PassBinds& binds, std::uint32_t& at);
+    [[nodiscard]] rt::BufferView rt_bounce_constants(std::uint32_t y, std::uint32_t z, std::uint32_t w, const float (&values)[3][4]);
+    [[nodiscard]] std::uint32_t rt_bounce_image(std::uint32_t& image, rt::ImageFormat format, unsigned width, unsigned height,
+                                                const char* name);
+    bool rt_dome_read();
+    void rt_pass_reference();
+    void rt_reference_publish();
+    void rt_signals();
+    [[nodiscard]] bool rt_holds() const noexcept;
+    void rt_hold(ListEntry& entry, const core::WalkTime& time, const std::string& picture);
+    void rt_bounce_stop() noexcept;
+    unsigned rt_quality_ = 1u;  // render.rt_quality: 0 medium, 1 high, 2 low (3 reference, 4 custom: FA's l32)
+    // Each part's level, in FA's RtPart order (sun, lights, indirect, reflect, transmit, volume): 0 off, 1 low,
+    // 2 medium, 3 high (begin_walk_frame).
+    std::uint8_t rt_levels_[6] = {2u, 2u, 2u, 2u, 2u, 2u};
+    static constexpr unsigned kFbIndirect = 2u, kFbReflect = 3u, kFbVolume = 5u;
+    // The reference draws the picture: --diagnostics rt-reference, or the preset (3).
+    [[nodiscard]] bool rt_fb_reference() const noexcept;
+    // The shading frame and grid as uploaded for the frame of turn rt_shade_turn_ - 1 (0: none yet).
+    std::uint32_t rt_shade_turn_ = 0u, rt_shade_at_ = 0u;
+    rt::BufferView rt_shade_view_{};
+    std::vector<std::uint32_t> rt_grid_words_;
+    struct RtGridRange {
+        int low[3], high[3];
+    };
+    std::vector<RtGridRange> rt_grid_ranges_;
+    std::uint32_t rt_grid_entries_ = 0u;
+    float rt_grid_axis_[3][4]{};
+    unsigned rt_bounce_width_ = 0u, rt_bounce_height_ = 0u;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_bounce_retired_;  // frame, image
+    float rt_dome_mean_ = 0.0f;  // the sky dome's mean luminance as the bounce rays see it (11.1); 0 not yet known
+    // The reference's sums, V D I R this walk's and the walk before's by turns (rt_ref_now_: this walk's first), and
+    // what starts them again.
+    std::uint32_t rt_ref_images_[8] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
+                                       rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage};
+    unsigned rt_ref_now_ = 0u;
+    bool rt_ref_ready_ = false;  // this walk's reference is traced: rt_reference_publish puts it out
+    std::uint32_t rt_ref_serial_ = 0u;
+    const NebulaFrameList* rt_ref_list_ = nullptr;
+    Affine34 rt_ref_camera_{};
+    float rt_ref_time_ = 0.0f;
+    // A kept picture held (rt_hold): the walks left (0: none), of how many, and its folder and number.
+    unsigned rt_hold_left_ = 0u, rt_hold_walks_ = 0u;
+    std::string rt_hold_folder_, rt_hold_number_;
+    bool rt_signal_waiting_ = false;
+    // The light volume (rt_pass_volume.cpp): drawn this frame; the turn after the last frame that drew it; its picture's
+    // place among the textures and its sampler's (program.hlsli traced_air). The light in the air (rt_scatter.hlsl):
+    // integrated this frame, its picture's place.
+    [[nodiscard]] bool rt_volume_reads(const NebulaFrameItem& item, std::uint32_t state) const;
+    [[nodiscard]] float rt_air_density() const;
+    bool rt_volume_drawn_ = false, rt_scatter_drawn_ = false;
+    // The reflections' change was written this frame (rt_pass_reflect.cpp): the reactive mask reads it (rt_reactive).
+    bool rt_reflect_moved_ = false;
+    std::uint32_t rt_volume_turn_ = 0u, rt_volume_slot_ = 0u, rt_volume_sampler_ = 0u, rt_scatter_slot_ = 0u;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_view_retired_;  // frame, image
     std::uint64_t rt_check_sum_[8]{};
     std::uint32_t rt_check_frames_ = 0u;

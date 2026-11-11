@@ -132,6 +132,7 @@ void RenderCore::rt_stop() noexcept {
     rt_light_frame_ = RtFrame{};
     rt_light_history_ = false;
     rt_light_retired_.clear();
+    rt_bounce_stop();
     rt_light_on_ = false;
     rt_prepass_walk_ = false;
     rt_skin_buffer_ = rt::kNoBuffer;
@@ -829,6 +830,7 @@ void RenderCore::rt_prepass(const NebulaFramePass& begin) {
     }
     rt_prepass_walk_ = false;
     rt_light();
+    rt_signals();
     if (!rt_light_on_) {
         rt_drop_volumes_.clear();
         rt_drops_.clear();
@@ -902,6 +904,10 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT GI Reservoirs B", rt::ImageFormat::Rgba32ui, kRtHalf, kForIndirect},
     {"Nebula RT GI Weights A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT GI Weights B", kHalf4, kRtHalf, kForIndirect},
+    {"Nebula RT Indirect Guide A", kHalf4, kRtHalf, kForIndirect},
+    {"Nebula RT Indirect Guide B", kHalf4, kRtHalf, kForIndirect},
+    {"Nebula RT Indirect Motion", kHalf4, kRtHalf, kForIndirect},
+    {"Nebula RT Indirect Step", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Reflect Raw", kHalf4, kRtFull, kForReflect},
     {"Nebula RT Reflect Average A", kHalf4, kRtFull, kForReflect},
     {"Nebula RT Reflect Average B", kHalf4, kRtFull, kForReflect},
@@ -909,6 +915,8 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Transmit", kHalf4, kRtFull, kForTransmit},
     {"Nebula RT Volume A", kHalf4, kRtVolume, kForVolume},
     {"Nebula RT Volume B", kHalf4, kRtVolume, kForVolume},
+    {"Nebula RT Scatter", kHalf4, kRtVolume, kForVolume},  // FB: the light in the air, integrated (rt_scatter.hlsl)
+    {"Nebula RT Reflect Moved", rt::ImageFormat::R8, kRtFull, kForReflect},  // FB: where R changed (rt_reflect_time.hlsl)
 };
 // The light volume's cells: across, down and deep over the scene camera's view.
 constexpr std::uint32_t kRtVolumeCells[3] = {96u, 54u, 48u};
@@ -1197,6 +1205,7 @@ void RenderCore::rt_filters() {
         over_space.reads[0] = step == 0u ? average : step == 1u ? light : light_step;
         over_space.reads[2] = guide;
         over_space.reads[3] = step == 2u ? motion : rt::kNoImage;  // the last step's, for --diagnostics rt-motion
+        over_space.reads[4] = step == 2u && rt_pass_indirect_on() ? rt_image(RtImage::Indirect) : rt::kNoImage;  // the sky's share
         over_space.reads[5] = step == 2u ? rt_image(RtImage::SunOut) : rt::kNoImage;  // the last step's V (rgb)
         over_space.writes[0] = step == 1u ? light_step : light;
         rt_backend_.dispatch(RtShader::LightSpace, over_space, frame.across, frame.down);
@@ -1384,6 +1393,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                         byte_of(mesh.hit_metal) << 24u;
             words[12] = byte_of(mesh.hit_base[0]) | byte_of(mesh.hit_base[1]) << 8u | byte_of(mesh.hit_base[2]) << 16u |
                         byte_of(mesh.hit_environment) << 24u;
+            // What it shows with no light, and whether it glows (rt_shade.hlsli rt_hit_read).
+            words[14] = byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u | byte_of(mesh.hit_emission[2]) << 16u |
+                        (mesh.glow[3] != 0.0f ? 1u << 24u : 0u);
         }
     }
     if (covering) {
@@ -1578,6 +1590,14 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) | 8u |
                         (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
+    if (rt_pass_indirect_on()) {
+        // The sky and bounce light pass gives the sky's share (bit 8): no sky rays here, no tint taken back.
+        constants.more[2] = (constants.more[2] & ~8u) | 256u;
+        rt_tint_[0] = rt_tint_[1] = rt_tint_[2] = 0.0f;
+    }
+    if (rt_pass_reflect_on()) {
+        constants.more[2] |= 1024u;  // the reflections pass writes the opaque layer's mirror (rt_pass_reflect.cpp)
+    }
     // For a pixel whose mesh the pass cannot read: the camera's own move since the frame before (none where there is
     // no frame before: the filter starts anew there anyway).
     Affine34 before_from_now = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
@@ -1615,6 +1635,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         constants.sky[c] = list.stage_light_known != 0u ? list.stage_ambient[c] : 0.25f;
     }
     static_assert(sizeof(RtFrameConstants) <= 512u && offsetof(RtFrameConstants, more) == 64u);
+    static_assert(offsetof(RtFrameConstants, kept) == 304u);  // rt_pass_indirect.cpp HalfFrameConstants
     const UploadRing::Allocation at = renderer_.constant_ring().allocate(512u, 256u);
     std::memcpy(at.cpu, &constants, sizeof(constants));
     binds.constants = {at.gpu, 512u};
@@ -1682,8 +1703,10 @@ void RenderCore::rt_light() {
             rt_pass_light();
             rt_pass_reflect();
             rt_pass_volume();
+            rt_pass_reference();
             rt_backend_.end_counters();
             rt_filters();
+            rt_reference_publish();
             rt_light_view_before_ = view_now;
             std::memcpy(rt_light_ray_before_, eye.ray, sizeof(rt_light_ray_before_));
             rt_light_walk_before_ = walk_.serial;
@@ -1701,6 +1724,26 @@ void RenderCore::rt_light() {
                 rt_added_slot_ = renderer_.rt_publish_light(added, texture_store_, 1u);
                 rt_mirror_slot_ = renderer_.rt_publish_light(mirror, texture_store_, 2u);
                 rt_facing_slot_ = renderer_.rt_publish_light(facing, texture_store_, 3u);
+                // The light volume (FB): picture 4, read through a linear sampler (program.hlsli traced_air).
+                if (rt_volume_drawn_) {
+                    if (void* const volume = rt_backend_.image_to_sample(rt_now(RtImage::VolumeA)); volume != nullptr) {
+                        rt_volume_slot_ = renderer_.rt_publish_light(volume, texture_store_, 4u);
+                        TextureSampler linear;
+                        linear.mag_linear = linear.min_linear = true;
+                        rt_volume_sampler_ = renderer_.sampler_slot(make_sampler_key(linear, false, 1u));
+                    } else {
+                        rt_volume_drawn_ = false;
+                    }
+                }
+                // The light in the air (FB): picture 5 (program.hlsli traced_scatter).
+                rt_scatter_drawn_ = rt_scatter_drawn_ && rt_volume_drawn_;
+                if (rt_scatter_drawn_) {
+                    if (void* const scatter = rt_backend_.image_to_sample(rt_image(RtImage::Scatter)); scatter != nullptr) {
+                        rt_scatter_slot_ = renderer_.rt_publish_light(scatter, texture_store_, 5u);
+                    } else {
+                        rt_scatter_drawn_ = false;
+                    }
+                }
                 rt_light_on_ = true;
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
                                (rt_lamps_own_ ? 32u : 0u);  // local lights off: the programs' own lamp (FC)
@@ -1837,6 +1880,13 @@ void RenderCore::rt_reactive() {
         binds.constants = rt_light_frame_.binds.constants;
         binds.pass_constants = rt_light_frame_.pass;
         binds.reads[0] = moments;
+        // FB: where the reflections changed too (plan 16.4's R), when the reflection pass wrote it this frame.
+        const std::uint32_t reflect_moved = rt_reflect_moved_ ? rt_image(RtImage::ReflectMoved) : rt::kNoImage;
+        if (reflect_moved != rt::kNoImage) {
+            binds.reads[1] = reflect_moved;
+            binds.pass_constants = rt_pass_constants(0u, 0u, 0u, 1u);
+        }
+        rt_reflect_moved_ = false;
         binds.write_texture = reactive;
         rt_backend_.dispatch(RtShader::Reactive, binds, rt_light_frame_.across, rt_light_frame_.down);
         renderer_.rt_reactive_end();
@@ -2110,6 +2160,19 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
 // Each particle is a light of its own, where it is and in its own colour, its intensity the luminance over what it
 // shows this frame: so a spin's ring lights the ground around the player, a fuse sputters and a fire flickers as the
 // effect itself does, and the thing in the middle of a cloud of sparks throws its shadow outward.
+// A particle draw the light volume lights (FB, rt_pass_volume.cpp): one that is not a light (rt_particle_emitter's rule).
+bool RenderCore::rt_volume_reads(const NebulaFrameItem& item, std::uint32_t state) const {
+    if ((item.flags & (NEBULA_ITEM_INSTANCES | NEBULA_ITEM_PARTICLE)) == 0u) {
+        return false;
+    }
+    const bool added = (state & 3u) == NEBULA_BLEND_ADD && ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE;
+    float luminance = effect_luminance(item.source_hash);
+    if (luminance < 0.0f) {
+        luminance = added ? 200.0f : 0.0f;
+    }
+    return !(luminance > 0.0f);
+}
+
 void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t state, std::uint32_t camera) {
     constexpr std::size_t kMost = 4096u;
     const bool added = (state & 3u) == NEBULA_BLEND_ADD && ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE;

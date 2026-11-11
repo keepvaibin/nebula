@@ -467,6 +467,16 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     rows.traced[0] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_light_slot_) : 0.0f;
     rows.traced[1] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_added_slot_) : 0.0f;
     rows.traced[2] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_mirror_slot_) : 0.0f;
+    if ((view_flags_ & 8u) != 0u && rt_volume_drawn_ && index == rt_scene_view_) {
+        // The light volume over the scene camera's view (program.hlsli traced_air): the depth's eye terms and the
+        // viewport the volume spans (rt_light_frame_'s), its picture and sampler, 1 it is there.
+        std::memcpy(rows.volume[0], rt_light_frame_.depth, sizeof(rows.volume[0]));
+        std::memcpy(rows.volume[1], rt_light_frame_.viewport, sizeof(rows.volume[1]));
+        rows.volume[2][0] = static_cast<float>(rt_volume_slot_);
+        rows.volume[2][1] = static_cast<float>(rt_volume_sampler_);
+        rows.volume[2][2] = 1.0f;
+        rows.volume[2][3] = rt_scatter_drawn_ ? static_cast<float>(rt_scatter_slot_) + 1.0f : 0.0f;
+    }
     rows.traced[3] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_facing_slot_) : 0.0f;
     if ((view_flags_ & 8u) != 0u) {
         std::memcpy(rows.tint, rt_tint_, sizeof(rows.tint));
@@ -1114,7 +1124,16 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         }
         root.first_instance = i;
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
-                     ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u);
+                     ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) |
+                     (rt_light_on_ && rt_volume_drawn_ && scene_layer && rt_volume_reads(item, state) ? 4u : 0u) |
+                     // The air in front (traced_scatter): a draw that covers what is behind it or blends over it by
+                     // its alpha (an added one would add the air twice).
+                     (rt_light_on_ && rt_scatter_drawn_ && scene_layer && state_color_write(state) &&
+                              ((state & 3u) == NEBULA_BLEND_REPLACE ||
+                               ((state & 3u) == NEBULA_BLEND_ADD && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA &&
+                                ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA))
+                          ? 8u
+                          : 0u);
         root.half_line = item.line_width * view.frame_height;
         root.half_point = item.point_size * view.frame_height;
         encoder.set_root(root);

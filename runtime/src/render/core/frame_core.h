@@ -155,11 +155,14 @@ struct ViewRows {
     float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's,
                       // the facing picture's
     float tint[4];    // with view_flags bit 3: what a shadow takes back from the sky, as a colour (rgb)
+    float volume[3][4];  // with view_flags bit 3, the scene's view (FB, the light volume: program.hlsli traced_air): the
+                         // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places and 1
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
               offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, tint) == 176 &&
-              sizeof(ViewRows) == 192);
+              offsetof(ViewRows, volume) == 192 &&
+              sizeof(ViewRows) == 240);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

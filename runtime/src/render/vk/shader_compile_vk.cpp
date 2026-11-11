@@ -34,6 +34,7 @@ constexpr RegisterBinding kDrawBindings[] = {
     // Set 1 the images and set 2 the samplers, as one array each over every texture and sampler (space1) or as a bound
     // table (program.hlsli).
     {"t0, space1", 1, 0},
+    {"t0, space2", 1, 0},  // the same images as Texture3D (program.hlsli gVolumes)
     {"s0, space1", 2, 0},
     {"t0", 1, 0},
     {"s0", 2, 0},

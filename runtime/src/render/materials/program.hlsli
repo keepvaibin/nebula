@@ -35,6 +35,7 @@ cbuffer View : register(b0) {
                                // z the mirror's
     float4 view_tint;          // with bit 3: rgb what a shadow takes back from the sky (the stage's ambient colour,
                                // by a share): a shadow is the sky's colour, not grey
+    float4 view_volume[3];     // with bit 3 in the scene's view: the light volume (traced_air), [2].z 1 where it is
 };
 
 cbuffer Draw : register(b3) {
@@ -275,8 +276,40 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
     return (view_flags & 16u) != 0u ? float4(float3(light.r, light.a, light.b) * 0.7 + added, c.a) : traced_mirror(c.rgb * (light.a + (1.0 - light.a) * view_tint.rgb + added), c.a, pixel);
 }
+// The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
+// 4: a particle that is no light): its colour times what of the stage's light and the local lights' reaches the air
+// at the pixel's place, one trilinear fetch of the volume (96 x 54 across the viewport view_volume[1], 48 slices
+// at z = 50 (20000 / 50)^(k / 48); view_volume[0] the depth's eye terms, as rt_eye_z). Every texture is also a
+// Texture3D in space 2 (the same table: renderer_d3d12.cpp, vk shader_compile_vk.cpp); the volume's slot is one.
+Texture3D<float4> gVolumes[] : register(t0, space2);
+float4 traced_air(float4 c, float4 pixel) {
+    if ((view_flags & 8u) == 0u || view_volume[2].z == 0.0 || (view_flags & 16u) != 0u) {
+        return traced_colour(c, pixel);
+    }
+    const float4 d = view_volume[0];
+    const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
+    const float3 cells = float3(96.0, 54.0, 48.0);
+    const float3 at = float3((pixel.xy - view_volume[1].xy) / view_volume[1].zw, log(max(away, 1.0) / 50.0) / log(400.0));
+    const float3 inner = clamp(at, 0.5 / cells, 1.0 - 0.5 / cells);
+    const float4 air = gVolumes[uint(view_volume[2].x)].SampleLevel(gSamplers[uint(view_volume[2].y)], inner, 0.0);
+    return float4(c.rgb * air.rgb, c.a);
+}
+// The light the air between the eye and the pixel scatters toward the eye (rt/rt_scatter.hlsl, 15.4; High, a stage
+// with air), added, for a draw that covers or alpha-blends (draw flag 8): its picture's place + 1 in view_volume[2].w.
+float4 traced_scatter(float4 c, float4 pixel) {
+    if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u) {
+        return c;
+    }
+    const float4 d = view_volume[0];
+    const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
+    const float3 cells = float3(96.0, 54.0, 48.0);
+    const float3 at = float3((pixel.xy - view_volume[1].xy) / view_volume[1].zw, log(max(away, 1.0) / 50.0) / log(400.0));
+    const float3 inner = clamp(at, 0.5 / cells, 1.0 - 0.5 / cells);
+    const float3 air = gVolumes[uint(view_volume[2].w) - 1u].SampleLevel(gSamplers[uint(view_volume[2].y)], inner, 0.0).rgb;
+    return float4(c.rgb + air, c.a);
+}
 // A program returns inside its entry, whose input `i` holds the pixel.
-#define PROGRAM_LIGHT(c) traced_colour(c, i.pos)
+#define PROGRAM_LIGHT(c) traced_scatter((draw_flags & 4u) != 0u ? traced_air(c, i.pos) : traced_colour(c, i.pos), i.pos)
 #else
 #define PROGRAM_LIGHT(c) (c)
 #endif
