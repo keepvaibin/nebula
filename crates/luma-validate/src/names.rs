@@ -115,6 +115,9 @@ pub struct Types {
     pub globals: HashMap<String, String>,
     /// What the generator left out, by kind and name (a field as "Record.field"), to its reason as written.
     pub left_out: HashMap<(LeftOutKind, String), String>,
+    /// Names left out a second time with another reason, which `left_out` does not keep (the first one, in the file's
+    /// order, is the kernel's too: A-TY7-3). Shown by the real-file test so a second reason is never unseen.
+    pub left_out_again: Vec<(LeftOutKind, String, String)>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -231,7 +234,14 @@ impl Types {
             };
             // An anonymous enum or record has no name to look up; the first reason of a name is kept.
             let name = row.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-            types.left_out.entry((kind, name)).or_insert(text(row, "reason", &at)?);
+            let reason = text(row, "reason", &at)?;
+            match types.left_out.get(&(kind, name.clone())) {
+                Some(first) if *first != reason => types.left_out_again.push((kind, name, reason)),
+                Some(_) => {}
+                None => {
+                    types.left_out.insert((kind, name), reason);
+                }
+            }
         }
         Ok(types)
     }

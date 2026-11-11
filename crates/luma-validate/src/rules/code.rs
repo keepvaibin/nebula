@@ -423,6 +423,10 @@ fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
     if let Some(base) = reason.strip_prefix("through the virtual base ") {
         return vec![("why", p("LeftOut.VirtualBase")), ("what", t(base))];
     }
+    // A file-local typedef two .cpp files give to different types (A-TY7-1): "<record> (<file>), ...".
+    if let Some(types) = reason.strip_prefix("a name .cpp files give to different types: ") {
+        return vec![("why", p("LeftOut.AliasTwice")), ("what", t(types))];
+    }
     vec![("why", t(reason))]
 }
 
@@ -488,6 +492,8 @@ mod types_tests {
         assert_eq!(types.globals.keys().collect::<Vec<_>>(), vec!["MR::sCount"]);
         assert_eq!(types.left_out(LeftOutKind::Field, "LiveActor.mWide"), Some("a bit-field wider than 32 bits"));
         assert_eq!(types.left_out(LeftOutKind::Enum, ""), Some("no name a mod can write"));
+        // The first reason of a name is kept, a second other one recorded (A-TY7-3).
+        assert_eq!(types.left_out_again, vec![(LeftOutKind::Field, "LiveActor.mWide".to_string(), "a second reason, not kept".to_string())]);
     }
 
     #[test]
@@ -560,7 +566,7 @@ mod types_tests {
     }
 
     /// Every reason the generator writes (gen_types.py's R_*) has its row, and L505 says it whole in all 14 languages.
-    const REASONS: [&str; 13] = [
+    const REASONS: [&str; 14] = [
         "the kernel's own",
         "internal linkage: no name a mod can bind",
         "thread-local: one per thread, no one address",
@@ -574,6 +580,7 @@ mod types_tests {
         "a template instance only a .cpp names",
         "ambiguous: A::mPos, B::mPos",
         "through the virtual base V",
+        "a name .cpp files give to different types: TailRoot (a.cpp), TailNode (b.cpp)",
     ];
 
     fn said(kind: &'static str, reason: &str, language: &str) -> String {
@@ -622,6 +629,10 @@ mod types_tests {
             assert_eq!(typed(&types, 7, name, Some(ty)), Typed::Bound, "{name}");
         }
         eprintln!("{path}: {} records, {} aliases, {} globals, {} left out", types.records.len(), types.aliases.len(), types.globals.len(), types.left_out.len());
+        // A name left out twice with two reasons keeps the first, as the kernel does (A-TY7-3); each is shown.
+        for (kind, name, reason) in &types.left_out_again {
+            eprintln!("left out again, not kept: {kind:?} {name}: {reason} (kept: {})", types.left_out(*kind, name).unwrap_or_default());
+        }
         let mut unknown: Vec<&str> = types.left_out.values().map(String::as_str).filter(|r| !matches!(left_out_reason(r)[0], ("why", Arg::Phrase(_)))).collect();
         unknown.sort();
         unknown.dedup();
