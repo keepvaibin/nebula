@@ -309,7 +309,33 @@ pub unsafe extern "C" fn luma_validate(input: *const LumaValidateInput) -> *mut 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(input))) {
         Ok(Ok(r)) => Box::into_raw(Box::new(r)),
         Ok(Err(why)) => invalid(&why),
-        Err(_) => invalid("the store's functions panicked"),
+        Err(payload) => invalid(&format!("the validator failed (a bug): {}", panic_text(payload.as_ref()))),
+    }
+}
+
+/// A panic's message, for the log: the store's functions are C and cannot unwind into Rust, so a panic caught at
+/// this boundary is the Rust side's own bug (3.1 V-2).
+pub(crate) fn panic_text(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(text) = payload.downcast_ref::<&str>() {
+        (*text).to_string()
+    } else if let Some(text) = payload.downcast_ref::<String>() {
+        text.clone()
+    } else {
+        "no message".to_string()
+    }
+}
+
+#[cfg(test)]
+mod panic_tests {
+    #[test]
+    fn a_panic_names_its_message() {
+        let a = std::panic::catch_unwind(|| panic!("index 7 past 3")).unwrap_err();
+        assert_eq!(super::panic_text(a.as_ref()), "index 7 past 3");
+        let n = 7;
+        let b = std::panic::catch_unwind(|| panic!("index {n} past 3")).unwrap_err();
+        assert_eq!(super::panic_text(b.as_ref()), "index 7 past 3");
+        let c = std::panic::catch_unwind(|| std::panic::panic_any(5u8)).unwrap_err();
+        assert_eq!(super::panic_text(c.as_ref()), "no message");
     }
 }
 
