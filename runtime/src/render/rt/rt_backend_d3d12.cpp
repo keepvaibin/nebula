@@ -85,6 +85,11 @@ struct Backend::State {
     ComPtr<ID3D12Resource> counters_read[kFramesInFlight];
     const std::uint32_t* counters_mapped[kFramesInFlight]{};
     bool counters_bound = false;
+    // The timed stretch (time_mark): two timestamps a frame slot, resolved into `times_read` (none: no measure).
+    ComPtr<ID3D12QueryHeap> times;
+    ComPtr<ID3D12Resource> times_read;
+    const std::uint64_t* times_mapped = nullptr;
+    bool timed[kFramesInFlight]{};
     // Buffers passes write and builds read.
     struct OwnBuffer {
         ComPtr<ID3D12Resource> buffer;
@@ -188,6 +193,20 @@ bool Backend::start(gpu::Device* device) {
     if (!ok) {
         delete state;
         return false;
+    }
+    D3D12_QUERY_HEAP_DESC times_desc{};
+    times_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    times_desc.Count = 2u * kFramesInFlight;
+    if (SUCCEEDED(state->device->CreateQueryHeap(&times_desc, IID_PPV_ARGS(&state->times)))) {
+        state->times_read = state->buffer(std::uint64_t{times_desc.Count} * 8u, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                                          D3D12_RESOURCE_FLAG_NONE, L"Nebula RT Times");
+        void* mapped = nullptr;
+        if (state->times_read == nullptr || FAILED(state->times_read->Map(0, nullptr, &mapped))) {
+            state->times.Reset();
+            state->times_read.Reset();
+        } else {
+            state->times_mapped = static_cast<const std::uint64_t*>(mapped);
+        }
     }
     state_ = state;
     return true;
@@ -669,6 +688,30 @@ void Backend::end_counters() {
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {
     std::memcpy(out, state_->counters_mapped[frame_slot % kFramesInFlight], std::size_t{kCounters} * 4u);
+}
+
+void Backend::time_mark(bool end) {
+    State& s = *state_;
+    if (s.times == nullptr) {
+        return;
+    }
+    const UINT at = s.frame_slot * 2u;
+    s.commands->EndQuery(s.times.Get(), D3D12_QUERY_TYPE_TIMESTAMP, at + (end ? 1u : 0u));
+    if (end) {
+        s.commands->ResolveQueryData(s.times.Get(), D3D12_QUERY_TYPE_TIMESTAMP, at, 2u, s.times_read.Get(), std::uint64_t{at} * 8u);
+        s.timed[s.frame_slot] = true;
+    }
+}
+
+std::uint64_t Backend::timed_ticks(unsigned frame_slot) const {
+    State& s = *state_;
+    const unsigned slot = frame_slot % kFramesInFlight;
+    if (s.times_mapped == nullptr || !s.timed[slot]) {
+        return 0u;
+    }
+    s.timed[slot] = false;
+    const std::uint64_t* const at = s.times_mapped + std::size_t{slot} * 2u;
+    return at[1] > at[0] ? at[1] - at[0] : 0u;
 }
 
 std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {

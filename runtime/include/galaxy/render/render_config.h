@@ -126,6 +126,11 @@ struct RenderConfig {
     // The parts, each its own setting, in RtPart's order (sun shadows, local lights, sky and bounce light, reflections,
     // glass and water, light in the air): 0 off, 1 low, 2 medium, 3 high.
     std::array<std::uint8_t, 6> rt_parts{2u, 2u, 2u, 2u, 2u, 2u};
+    // Plan 19.2: what one shadow ray a pixel cost this GPU at the output size (ms), measured once by the tracer in the
+    // first stage it traced with a sun (0: not yet). It sets the preset (high under 0.35 ms, medium under 1.2, else
+    // low) unless the player chose one: rt_chosen, set by the Settings rows.
+    float    rt_probe_ms         = 0.0f;
+    bool     rt_chosen           = false;
     // Light the lens scatters around every bright surface.
     bool     rt_lens_bloom       = true;
 

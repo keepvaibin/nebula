@@ -1653,7 +1653,14 @@ void RenderCore::rt_light() {
             frame.pass = rt_pass_constants(0u, 0u, 0u);
             rt_noise_fill();
             rt_pass_surface();
+            const bool timed = rt_measure(width);
+            if (timed) {
+                rt_backend_.time_mark(false);
+            }
             rt_pass_sun();
+            if (timed) {
+                rt_backend_.time_mark(true);
+            }
             rt_sun_filter();
             rt_pass_lights();
             rt_pass_indirect();
@@ -1690,6 +1697,48 @@ void RenderCore::rt_light() {
     }
     renderer_.rt_commands_end();
     rt_report();
+}
+
+// Plan 19.2: the default preset by measurement, not by device lists. Once a config (rt_probe_ms 0), in the first stage
+// traced with a sun: the sun pass, one shadow ray a pixel, timed by the GPU over kRtMeasureFrames frames after 60
+// settled ones (a sun, history unbroken); the median scaled to the output's pixels is the measure. High under 0.35 ms,
+// medium under 1.2, low above (over 3.5 the log says so; the player turned tracing on, so it stays on). It sets the
+// preset unless the player chose one (rt_chosen) and is saved with the settings. Whether this frame's sun pass is timed.
+bool RenderCore::rt_measure(unsigned width) {
+    if (rt_measure_done_) {
+        return false;
+    }
+    const double ms_per_tick = renderer_.gpu_ms_per_tick();
+    if (ms_per_tick <= 0.0 || get_render_config_chosen().rt_probe_ms > 0.0f) {
+        rt_measure_done_ = true;
+        return false;
+    }
+    const std::uint64_t ticks = rt_backend_.timed_ticks(renderer_.frame_slot());
+    const unsigned output = renderer_.temporal_output_width();
+    const float scale = width != 0u && output > width ? static_cast<float>(output) / static_cast<float>(width) : 1.0f;
+    if (ticks != 0u && rt_measure_count_ < kRtMeasureFrames) {
+        rt_measure_ms_[rt_measure_count_++] = static_cast<float>(static_cast<double>(ticks) * ms_per_tick) * scale * scale;
+    }
+    if (rt_measure_count_ == kRtMeasureFrames) {
+        rt_measure_done_ = true;
+        std::nth_element(rt_measure_ms_, rt_measure_ms_ + kRtMeasureFrames / 2u, rt_measure_ms_ + kRtMeasureFrames);
+        const float ms = std::max(rt_measure_ms_[kRtMeasureFrames / 2u], 0.001f);
+        RenderConfig chosen = get_render_config_chosen();
+        const unsigned preset = ms < 0.35f ? 1u : ms < 1.2f ? 0u : 2u;  // high, medium, low
+        static constexpr const char* kNames[] = {"medium", "high", "low"};
+        std::fprintf(stderr, "[rt] measured: %.3f ms a shadow ray a pixel at the output size: preset %s%s%s\n", ms, kNames[preset],
+                     chosen.rt_chosen ? " (the player's own stays)" : "", ms >= 3.5f ? "; over 3.5 ms: too slow to trace well" : "");
+        chosen.rt_probe_ms = ms;
+        if (!chosen.rt_chosen) {
+            chosen.rt_quality = preset;
+            rt_apply_preset(chosen);
+        }
+        set_render_config(chosen);
+        (void)save_render_config_to_file();
+        return false;
+    }
+    rt_measure_settled_ = rt_sun_now_ && rt_light_frame_.history ? rt_measure_settled_ + 1u : 0u;
+    return rt_measure_settled_ > 60u;
 }
 
 // --diagnostics rt-inputs: what the passes counted, every 300 frames.

@@ -993,6 +993,7 @@ void apply_native_settings_draft() {
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     applied.rt_quality = next.rt_quality;
     applied.rt_parts = next.rt_parts;
+    applied.rt_chosen = next.rt_chosen;
     applied.rt_lens_bloom = next.rt_lens_bloom;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;

@@ -232,21 +232,25 @@ int main() {
             original.rt_lens_bloom = false;
             original.rt_quality = galaxy::render::kRtPresetCustom;
             original.rt_parts = {3u, 0u, 1u, 2u, 3u, 0u};
+            original.rt_probe_ms = 0.75f;
+            original.rt_chosen = true;
             galaxy::render::set_render_config(original);
             passed &= expect(galaxy::render::save_render_config_to_file(), "bloom and parts fixture saves");
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
             galaxy::render::load_render_config_from_file();
             const auto loaded = galaxy::render::get_render_config();
             passed &= expect(loaded.bloom == 140u && !loaded.rt_lens_bloom && loaded.rt_quality == galaxy::render::kRtPresetCustom &&
-                                 loaded.rt_parts == original.rt_parts && galaxy::render::rt_part(loaded, RtPart::Lights) == 0u,
-                             "the bloom's strength and a custom set of parts survive a save");
+                                 loaded.rt_parts == original.rt_parts && galaxy::render::rt_part(loaded, RtPart::Lights) == 0u &&
+                                 loaded.rt_probe_ms == 0.75f && loaded.rt_chosen,
+                             "the bloom's strength, a custom set of parts and the tracer's measure survive a save");
             galaxy::render::RenderConfig low{};
             low.rt_quality = 2u;
             galaxy::render::set_render_config(low);
             const auto set_low = galaxy::render::get_render_config();
             const galaxy::render::RenderConfig defaults{};
             passed &= expect(set_low.rt_parts == std::array<std::uint8_t, 6>{1u, 1u, 1u, 0u, 1u, 1u} && defaults.rt_quality == 0u &&
-                                 defaults.rt_parts == std::array<std::uint8_t, 6>{2u, 2u, 2u, 2u, 2u, 2u} && defaults.rt_lens_bloom,
+                                 defaults.rt_parts == std::array<std::uint8_t, 6>{2u, 2u, 2u, 2u, 2u, 2u} && defaults.rt_lens_bloom &&
+                                 defaults.rt_probe_ms == 0.0f && !defaults.rt_chosen,
                              "a preset sets every part; medium by default");
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
         }

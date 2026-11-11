@@ -433,6 +433,10 @@ public:
     // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
+    // Milliseconds a GPU timestamp tick of the frame's queue (0: none).
+    [[nodiscard]] double gpu_ms_per_tick() const noexcept {
+        return timestamp_frequency_ != 0u ? 1000.0 / static_cast<double>(timestamp_frequency_) : 0.0;
+    }
     // After scene_temporal_begin, in a temporal scene or one the ray tracing
     // engine lights (its histories follow moving surfaces by the motion; no
     // jitter, no upscale): clears the motion target for the scene. False

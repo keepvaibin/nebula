@@ -432,6 +432,7 @@ private:
     void rt_pass_light();
     void rt_filters();
     void rt_report();
+    [[nodiscard]] bool rt_measure(unsigned width);
     // The passes of their own files (rt_pass_indirect.cpp, rt_pass_reflect.cpp, rt_pass_volume.cpp): whether each runs
     // this frame (its images are made while it does), and the pass.
     [[nodiscard]] bool rt_pass_indirect_on() const;
@@ -525,6 +526,12 @@ private:
     std::uint64_t rt_light_walk_before_ = 0u;
     std::int64_t rt_light_ticks_before_ = 0;  // when the light pass ran last (qpc)
     float rt_frame_rate_ = 60.0f;             // the rate it runs at, smoothed: the filters' histories follow it
+    // Plan 19.2 (rt_measure): settled frames in a row, the sun pass's times taken, done (measured, or not to be).
+    static constexpr unsigned kRtMeasureFrames = 31u;
+    unsigned rt_measure_settled_ = 0u;
+    unsigned rt_measure_count_ = 0u;
+    float rt_measure_ms_[kRtMeasureFrames]{};
+    bool rt_measure_done_ = false;
     bool rt_light_history_ = false;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
     std::vector<std::uint32_t> rt_item_words_;
