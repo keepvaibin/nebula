@@ -34,6 +34,26 @@ option(NEBULA_LUMA_HOOKS "Every game function carries its LumaCore row and hook 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(luma_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/instrument.py")
+# The row generator parses with libclang on the build machine. A compiler of the build machine has it beside itself
+# (LLVM's packages); a cross compiler may not (Android's NDK ships none), so a cross build finds the build machine's.
+set(NEBULA_LIBCLANG "" CACHE FILEPATH "The build machine's libclang for the row generator (default: beside the compiler)")
+set(luma_libclang)
+if(NEBULA_LUMA_HOOKS AND NOT NEBULA_LIBCLANG AND CMAKE_CROSSCOMPILING)
+    file(GLOB luma_libclang_hints LIST_DIRECTORIES true "/usr/lib/llvm-*/lib")
+    file(TO_CMAKE_PATH "$ENV{ProgramFiles}" luma_program_files)
+    find_file(luma_libclang_found NAMES libclang.dll libclang.so libclang.so.1 libclang.dylib
+              HINTS "${luma_program_files}/LLVM/bin" "$ENV{LLVM_ROOT}/bin" "$ENV{LLVM_ROOT}/lib" ${luma_libclang_hints}
+                    /opt/homebrew/opt/llvm/lib /usr/local/opt/llvm/lib /usr/lib /usr/lib64
+              NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH)
+    if(NOT luma_libclang_found)
+        message(FATAL_ERROR "The row generator needs the build machine's libclang (the cross compiler has none beside it): "
+                            "install LLVM or set NEBULA_LIBCLANG to libclang.dll, libclang.so or libclang.dylib")
+    endif()
+    set(NEBULA_LIBCLANG "${luma_libclang_found}" CACHE FILEPATH "The build machine's libclang for the row generator" FORCE)
+endif()
+if(NEBULA_LIBCLANG)
+    set(luma_libclang --libclang "${NEBULA_LIBCLANG}")
+endif()
 set(module_sources)
 foreach(source IN LISTS game_sources)
     if(NEBULA_LUMA_HOOKS AND source MATCHES "\\.cpp$" AND NOT source MATCHES "/System/(Luma(Hook|Loader)\\.cpp$|generated/)")
@@ -43,6 +63,7 @@ foreach(source IN LISTS game_sources)
         add_custom_command(OUTPUT "${copy}"
             COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" "${source}" "${copy}"
                     --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${petari}/src" --depfile "${copy}.d"
+                    ${luma_libclang}
             DEPENDS "${source}" "${luma_tool}" DEPFILE "${copy}.d" VERBATIM)
         set_source_files_properties("${copy}" PROPERTIES COMPILE_OPTIONS "-iquote${folder}")
         list(APPEND module_sources "${copy}")
