@@ -185,12 +185,7 @@ fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
     if matches!(reach, Some(None)) {
         pc.ctx.not_checked(402, "Missing.Scenarios");
     }
-    let together = |other: usize| match &reach {
-        None => true,
-        Some(_) if layer == 0 || other == 0 || other == layer => true,
-        Some(Some(sets)) => sets.iter().any(|s| s.layers >> layer & 1 == 1 && s.layers >> other & 1 == 1),
-        Some(None) => false,
-    };
+    let together = |other: usize| crate::layers_meet(reach.is_some(), layer, other, reach.as_ref().and_then(|s| s.as_deref()));
     let mut there: Option<String> = None;
     if let Some(store) = store {
         for other in crate::link_paths(&own) {

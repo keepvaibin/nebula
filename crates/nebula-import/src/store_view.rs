@@ -32,6 +32,8 @@ struct Entry {
     position: u64,
     size: u64,
     folder: bool,
+    /// An archive's folder (flags bit 1): a mods' store replaces it whole.
+    archive: bool,
 }
 
 /// An imported game, for the validator.
@@ -87,7 +89,7 @@ impl PakStore {
                 Some("") | None => name,
                 Some(parent) => format!("{parent}/{name}"),
             };
-            entries.insert(path.to_ascii_lowercase(), Entry { path: path.clone(), position, size, folder: flags & 1 != 0 });
+            entries.insert(path.to_ascii_lowercase(), Entry { path: path.clone(), position, size, folder: flags & 1 != 0, archive: flags & 2 != 0 });
             full.push(path);
         }
         let game_id = String::from_utf8_lossy(&header[48..54]).into_owned();
@@ -101,6 +103,14 @@ impl PakStore {
     /// Every file's store path, in the game's case (in no set order).
     pub fn files(&self) -> impl Iterator<Item = &str> {
         self.entries.values().filter(|e| !e.folder).map(|e| e.path.as_str())
+    }
+
+    /// The archive a path lies in, as its folder's store path in the game's case (`StageData/AstroGalaxy` for
+    /// `StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo`); None when no folder above it is an archive.
+    pub fn archive_of(&self, path: &str) -> Option<String> {
+        let lower = lower_store_path(path);
+        let parts: Vec<&str> = lower.split('/').collect();
+        (1..parts.len()).map(|n| parts[..n].join("/")).find_map(|p| self.entries.get(&p).filter(|e| e.archive).map(|e| e.path.clone()))
     }
 
     fn entry(&self, path: &str) -> Option<&Entry> {

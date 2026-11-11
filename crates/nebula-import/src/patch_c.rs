@@ -1,9 +1,9 @@
 //! The applier's C interface (`include/luma_patch.h`, contract table-keys 8): the game gives one cooked table and the
 //! patches of the mods that are on, and takes back the patched table and the facts for the Mods screen.
 
-use crate::cook::patch::{apply_linked, refuse, Fact, Link, ModPatch};
+use crate::cook::patch::{apply_linked, Fact, Link, ModPatch};
 use crate::cook::table::TableIr;
-use luma_validate::{Arg, Finding};
+use luma_validate::Finding;
 use std::cell::RefCell;
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
@@ -146,21 +146,8 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
         let json = bytes(p.json, p.json_size).ok_or_else(|| format!("{mod_id}: {file}: its bytes are null"))?;
         match serde_json::from_slice::<serde_json::Value>(json) {
             Ok(value) => owned.push((mod_id, file, value)),
-            Err(_) => {
-                // The validator's own reading names the fault as its L400 does (Json.Truncated, Json.Comment...).
-                let (what, detail) = match luma_validate::json::parse(json) {
-                    Err(e) => (e.what, e.detail),
-                    Ok(_) => ("Json.Unreadable", String::new()),
-                };
-                let mut refusal = match refuse(400, vec![("found", Arg::Phrase(what)), ("detail", Arg::Text(detail))]).downcast::<crate::cook::patch::Refusal>() {
-                    Ok(r) => r.0,
-                    Err(e) => return Err(format!("{e:#}")),
-                };
-                refusal.mod_id = Some(mod_id.clone());
-                refusal.file = file.clone();
-                let why = luma_validate::reason(&refusal, "UsEnglish");
-                unread.push(Fact::Failed { table: path.to_string(), mod_id, file, refusal, why });
-            }
+            // The validator's own reading names the fault as its L400 does (Json.Truncated, Json.Comment...).
+            Err(_) => unread.push(crate::cook::patch::unreadable(path, &mod_id, &file, json)),
         }
     }
     let patches: Vec<ModPatch> = owned.iter().map(|(mod_id, file, patch)| ModPatch { mod_id, file, patch }).collect();

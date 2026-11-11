@@ -334,6 +334,17 @@ pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) ->
     Some(out)
 }
 
+/// Whether the game meets a key of the link group table at `layer` among the group's table at `other` (table-keys 13.3,
+/// 13.6): always for `l_id` kinds (`by_scenario` false); for start and generalpos when either is common, both are one
+/// layer, or some scenario turns both on (`sets`; None: the scenario tables are not known, so common and the same
+/// layer only). The validator and the applier's cook both ask this.
+pub fn layers_meet(by_scenario: bool, layer: usize, other: usize, sets: Option<&[LayerSet]>) -> bool {
+    if !by_scenario || layer == 0 || other == 0 || other == layer {
+        return true;
+    }
+    sets.is_some_and(|sets| sets.iter().any(|s| s.layers >> layer & 1 == 1 && s.layers >> other & 1 == 1))
+}
+
 /// The other tables of a table's link group, as store paths in lowercase (empty for a table in no group).
 pub fn link_paths(path: &str) -> Vec<String> {
     let Some(group) = link_group(path) else { return Vec::new() };

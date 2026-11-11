@@ -54,6 +54,27 @@ pub(crate) fn refuse(code: u16, args: Vec<(&'static str, Arg)>) -> anyhow::Error
     anyhow::Error::new(Refusal(Finding { code, level: Level::Error, mod_id: None, file: String::new(), line: None, column: None, pointer: None, args }))
 }
 
+/// A patch file that is not JSON: left out whole, named as the validator's L400 names it (Json.Truncated,
+/// Json.Comment...).
+pub fn unreadable(table: &str, mod_id: &str, file: &str, json: &[u8]) -> Fact {
+    let (what, detail) = match luma_validate::json::parse(json) {
+        Err(e) => (e.what, e.detail),
+        Ok(_) => ("Json.Unreadable", String::new()),
+    };
+    let refusal = Finding {
+        code: 400,
+        level: Level::Error,
+        mod_id: Some(mod_id.to_string()),
+        file: file.to_string(),
+        line: None,
+        column: None,
+        pointer: None,
+        args: vec![("found", Arg::Phrase(what)), ("detail", Arg::Text(detail))],
+    };
+    let why = luma_validate::reason(&refusal, "UsEnglish");
+    Fact::Failed { table: table.to_string(), mod_id: mod_id.to_string(), file: file.to_string(), refusal, why }
+}
+
 /// L400 with a shape phrase, as the validator's `bad`.
 pub(crate) fn shape(why: &'static str, detail: impl Into<String>) -> anyhow::Error {
     refuse(400, vec![("found", Arg::Phrase(why)), ("detail", Arg::Text(detail.into()))])

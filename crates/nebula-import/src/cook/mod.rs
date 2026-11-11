@@ -33,6 +33,7 @@ pub mod model_write;
 pub mod pipeline_list;
 pub mod native_data;
 pub mod overlay;
+pub mod overlay_patches;
 pub mod particle_json;
 pub mod particles;
 pub mod ui_layout;
