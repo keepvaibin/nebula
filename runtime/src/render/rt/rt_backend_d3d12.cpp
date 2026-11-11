@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The tracer on Direct3D 12 (rt_backend.h): DXR 1.1, acceleration structures in pages and inline ray queries in compute
-// shaders.
+// shaders; DXR 1.2's opacity micromaps where the device has them (the Agility SDK's runtime, cmake/agility_sdk.cmake).
 #include "galaxy/render/rt/rt_backend.h"
 
 #include "galaxy/render/renderer_d3d12.h"
@@ -96,6 +96,9 @@ struct Backend::State {
         bool for_builds = false;
     };
     std::vector<OwnBuffer> buffers;
+    // Opacity micromaps (5.3 G-2): the device has DXR 1.2 and takes the ray queries' opt-in (pipeline_flags).
+    bool micromaps = false;
+    D3D12_PIPELINE_STATE_FLAGS pipeline_flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
     void transition(ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const {
         D3D12_RESOURCE_BARRIER barrier{};
@@ -111,6 +114,11 @@ struct Backend::State {
     [[nodiscard]] std::uint64_t own_address(const TriangleInput& input) const {
         return input.own_buffer < buffers.size() && buffers[input.own_buffer].buffer != nullptr
                    ? buffers[input.own_buffer].buffer->GetGPUVirtualAddress()
+                   : 0u;
+    }
+    [[nodiscard]] std::uint64_t micromap_indices(const TriangleInput& input) const {
+        return input.micromap_buffer < buffers.size() && buffers[input.micromap_buffer].buffer != nullptr
+                   ? buffers[input.micromap_buffer].buffer->GetGPUVirtualAddress() + input.micromap_indices
                    : 0u;
     }
 
@@ -138,29 +146,72 @@ struct Backend::State {
 
 namespace {
 
-// `own`: the address of the tracer's buffer the input names, or 0.
-D3D12_RAYTRACING_GEOMETRY_DESC geometry_of(const TriangleInput& input, std::uint64_t own) {
-    D3D12_RAYTRACING_GEOMETRY_DESC g{};
-    g.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    // Opaque here; an instance whose material tests alpha says so itself.
-    g.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-    g.Triangles.VertexBuffer.StartAddress = own + input.positions;
-    g.Triangles.VertexBuffer.StrideInBytes = input.position_stride;
-    g.Triangles.VertexCount = input.vertex_count;
-    g.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+// `own`: the address of the tracer's buffer the input names, or 0. With a micromap, `triangles` and `linkage` (the
+// caller's, alive while the geometry is) carry the triangles and the micromap, its indices at `omm_indices`.
+D3D12_RAYTRACING_GEOMETRY_DESC geometry_of(const TriangleInput& input, std::uint64_t own, D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC& triangles,
+                                           D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC& linkage, std::uint64_t omm_indices) {
+    triangles = {};
+    triangles.VertexBuffer.StartAddress = own + input.positions;
+    triangles.VertexBuffer.StrideInBytes = input.position_stride;
+    triangles.VertexCount = input.vertex_count;
+    triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
     if (input.indices != 0u) {
-        g.Triangles.IndexBuffer = input.indices;
-        g.Triangles.IndexCount = input.index_count;
-        g.Triangles.IndexFormat = input.index_bytes == 2u ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+        triangles.IndexBuffer = input.indices;
+        triangles.IndexCount = input.index_count;
+        triangles.IndexFormat = input.index_bytes == 2u ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
+    }
+    D3D12_RAYTRACING_GEOMETRY_DESC g{};
+    // Opaque here; an instance whose material tests alpha says so itself. Where a micromap is linked, it decides each
+    // triangle's parts instead (the flag stands where an instance turns micromaps off).
+    g.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    if (input.micromap != 0u && omm_indices != 0u) {
+        linkage = {};
+        linkage.OpacityMicromapIndexBuffer.StartAddress = omm_indices;
+        linkage.OpacityMicromapIndexBuffer.StrideInBytes = 4u;
+        linkage.OpacityMicromapIndexFormat = DXGI_FORMAT_R32_UINT;
+        linkage.OpacityMicromapArray = input.micromap;
+        g.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_OMM_TRIANGLES;
+        g.OmmTriangles.pTriangles = &triangles;
+        g.OmmTriangles.pOmmLinkage = &linkage;
+    } else {
+        g.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        g.Triangles = triangles;
     }
     return g;
 }
 
-D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags_of(BuildKind kind) {
-    return kind == BuildKind::Static ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
-                                           D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION
-                                     : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD |
-                                           D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+// A structure over a micromap lets its instances turn the micromap off (Scene's kInstanceNoMicromaps; undefined
+// otherwise).
+D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags_of(BuildKind kind, const TriangleInput& input) {
+    return (kind == BuildKind::Static ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+                                            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_COMPACTION
+                                      : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD |
+                                            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE) |
+           (input.micromap != 0u ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_DISABLE_OMMS
+                                 : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE);
+}
+
+// A micromap array of `input.triangles` micromaps of one level, four states (rt_backend.h MicromapInput); `at` the
+// address of its buffer, 0 for sizes alone.
+D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS micromap_inputs(const MicromapInput& input, std::uint64_t at,
+                                                                     D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY& histogram,
+                                                                     D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC& array) {
+    histogram = {input.triangles, input.level, D3D12_RAYTRACING_OPACITY_MICROMAP_FORMAT_OC1_4_STATE};
+    array = {};
+    array.NumOmmHistogramEntries = 1u;
+    array.pOmmHistogram = &histogram;
+    if (at != 0u) {
+        array.InputBuffer = at;
+        array.PerOmmDescs.StartAddress = at + input.triangles_at;
+        array.PerOmmDescs.StrideInBytes = 8u;
+    }
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
+    inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY;
+    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    inputs.NumDescs = 1u;
+    inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    inputs.pOpacityMicromapArrayDesc = &array;
+    return inputs;
 }
 
 }  // namespace
@@ -194,6 +245,22 @@ bool Backend::start(gpu::Device* device) {
         delete state;
         return false;
     }
+    // Opacity micromaps (5.3 G-2): DXR 1.2, and the opt-in for the tracer's ray queries (Shader Model 6.6) taken: the
+    // micromap pass's pipeline is made with it here (a runtime without the flag refuses it, and none are made).
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+    if (SUCCEEDED(state->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5))) &&
+        options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_2) {
+        const RtShaderBytes code = rt_shader(RtShader::Omm);
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+        desc.pRootSignature = state->pass_root.Get();
+        desc.CS = {code.data, code.size};
+        desc.Flags = D3D12_PIPELINE_STATE_FLAG_RAYQUERY_ALLOW_OPACITY_MICROMAPS_ON_PRE_SM69_SHADERS;
+        const auto omm = static_cast<unsigned>(RtShader::Omm);
+        state->micromaps = code.size != 0u && SUCCEEDED(state->device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&state->pipelines[omm])));
+        state->pipeline_flags = state->micromaps ? desc.Flags : D3D12_PIPELINE_STATE_FLAG_NONE;
+    }
+    std::fprintf(stderr, "[rt] d3d12: raytracing tier %u.%u; opacity micromaps %s\n", static_cast<unsigned>(options5.RaytracingTier) / 10u,
+                 static_cast<unsigned>(options5.RaytracingTier) % 10u, state->micromaps ? "on" : "off");
     D3D12_QUERY_HEAP_DESC times_desc{};
     times_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
     times_desc.Count = 2u * kTimedStretches * kFramesInFlight;
@@ -296,10 +363,13 @@ void Backend::stop() noexcept {
 }
 
 BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
-    const D3D12_RAYTRACING_GEOMETRY_DESC geometry = geometry_of(input, state_->own_address(input));
+    D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangles{};
+    D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage{};
+    const D3D12_RAYTRACING_GEOMETRY_DESC geometry =
+        geometry_of(input, state_->own_address(input), triangles, linkage, state_->micromap_indices(input));
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
     inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    inputs.Flags = flags_of(kind);
+    inputs.Flags = flags_of(kind, input);
     inputs.NumDescs = 1;
     inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     inputs.pGeometryDescs = &geometry;
@@ -356,10 +426,13 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
 }
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
-    const D3D12_RAYTRACING_GEOMETRY_DESC geometry = geometry_of(input, state_->own_address(input));
+    D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangles{};
+    D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage{};
+    const D3D12_RAYTRACING_GEOMETRY_DESC geometry =
+        geometry_of(input, state_->own_address(input), triangles, linkage, state_->micromap_indices(input));
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc{};
     desc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    desc.Inputs.Flags = flags_of(kind);
+    desc.Inputs.Flags = flags_of(kind, input);
     desc.Inputs.NumDescs = 1;
     desc.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     desc.Inputs.pGeometryDescs = &geometry;
@@ -531,6 +604,7 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
         desc.pRootSignature = s.pass_root.Get();
         desc.CS = {code.data, code.size};
+        desc.Flags = s.pipeline_flags;  // its ray queries meet micromaps where there are any
         const HRESULT made = code.size != 0u ? s.device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&s.pipelines[index])) : E_FAIL;
         if (FAILED(made)) {
             s.refused[index] = true;
@@ -757,11 +831,46 @@ BufferView Backend::view_of(gpu::Address at, std::uint64_t bytes, std::uint32_t&
     return {at, bytes};
 }
 
-// Opacity micromaps (5.3 G-2): none on this back end yet (Direct3D 12's come with DXR 1.2, the Agility SDK).
-bool Backend::micromaps() const noexcept { return false; }
-BuildSizes Backend::micromap_sizes(const MicromapInput&) const { return {}; }
-Structure Backend::make_micromap(const Range&) { return {}; }
+// Opacity micromaps (5.3 G-2): DXR 1.2's micromap arrays, one micromap a triangle, in the structures' pages (128-byte
+// aligned at least: ranges are 256). A micromap's name and handle are its address.
+bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->micromaps; }
+
+BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
+    D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY histogram{};
+    D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array{};
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = micromap_inputs(input, 0u, histogram, array);
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+    state_->device->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+    return {info.ResultDataMaxSizeInBytes, info.ScratchDataSizeInBytes, 0u};
+}
+
+Structure Backend::make_micromap(const Range& range) {
+    Structure out;
+    out.range = range;
+    out.name = state_->pages[range.page].address + range.offset;
+    out.handle = out.name;
+    return out;
+}
+
 void Backend::free_micromap(Structure& micromap) noexcept { micromap = Structure{}; }
-void Backend::build_micromap(const MicromapInput&, const Structure&, const Range&) {}
+
+void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
+    State& s = *state_;
+    if (input.buffer >= s.buffers.size() || s.buffers[input.buffer].buffer == nullptr) {
+        return;
+    }
+    // The pass's writes before the build reads them (the buffer becomes a build input, as the structure's build reads
+    // its indices too), and the scratch's last use by a build before this one.
+    buffer_for(input.buffer, true);
+    barrier();
+    D3D12_RAYTRACING_OPACITY_MICROMAP_HISTOGRAM_ENTRY histogram{};
+    D3D12_RAYTRACING_OPACITY_MICROMAP_ARRAY_DESC array{};
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc{};
+    desc.Inputs = micromap_inputs(input, s.buffers[input.buffer].buffer->GetGPUVirtualAddress(), histogram, array);
+    desc.DestAccelerationStructureData = to.name;
+    desc.ScratchAccelerationStructureData = s.pages[scratch.page].address + scratch.offset;
+    s.commands->BuildRaytracingAccelerationStructure(&desc, 0, nullptr);
+    barrier();  // whole for the structure built over it next
+}
 
 }  // namespace galaxy::render::rt

@@ -309,6 +309,7 @@ VkMicromapBuildInfoEXT micromap_info(const VkMicromapUsageEXT& usage) {
     return info;
 }
 
+// (A structure over a micromap also lets its instances turn the micromap off: Scene's kInstanceNoMicromaps.)
 VkBuildAccelerationStructureFlagsKHR flags_of(BuildKind kind) {
     return kind == BuildKind::Static
                ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR
@@ -420,7 +421,8 @@ BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
         geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = flags_of(kind);
+    info.flags = flags_of(kind) |
+                 (input.micromap != 0u ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_BIT_EXT : 0u);  // see flags_of
     info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     info.geometryCount = 1u;
     info.pGeometries = &geometry;
@@ -547,7 +549,8 @@ void Backend::build(const TriangleInput& input, BuildKind kind, const Structure&
         geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = flags_of(kind);
+    info.flags = flags_of(kind) |
+                 (input.micromap != 0u ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_BIT_EXT : 0u);  // see flags_of
     info.mode = refit ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     const auto handle = reinterpret_cast<VkAccelerationStructureKHR>(to.handle);
     info.srcAccelerationStructure = refit ? handle : VK_NULL_HANDLE;

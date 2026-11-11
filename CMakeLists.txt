@@ -23,6 +23,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # The mods importer's archive libraries (zlib, liblzma, libarchive), built once per build tree.
+# The DirectX 12 Agility SDK's headers before the Windows SDK's, for every target (cmake/agility_sdk.cmake).
+include(cmake/agility_sdk.cmake)
 include(cmake/archive_deps.cmake)
 
 # NVIDIA's runtime binaries (Streamline, DLSS) never enter the source tree: players install them themselves.
@@ -511,6 +513,7 @@ target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
 target_link_libraries(NebulaNative PRIVATE galaxy_render galaxy_save_files galaxy_asset_store dwmapi)
+nebula_agility_runtime(NebulaNative)
 if(MSVC)
     # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
     target_sources(NebulaNative PRIVATE native/host/nebula_host.manifest)
