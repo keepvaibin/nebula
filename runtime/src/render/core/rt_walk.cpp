@@ -1488,6 +1488,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     // the frame before; two words spare.
     constexpr std::size_t kItemWords = kRtItemWords;
     rt_item_words_.assign(std::size_t{list.item_count} * kItemWords, 0u);
+    rt_item_coords_.clear();
     for (std::uint32_t i = 0; i < list.item_count; ++i) {
         rt_item_words_[i * kItemWords] = list.items[i].slot;
         rt_item_words_[i * kItemWords + 2u] = NEBULA_NONE32;
@@ -1623,6 +1624,24 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                         byte_of(mesh.hit_roughness) << 16u | byte_of(mesh.hit_metal) << 24u;
             words[12] = byte_of(mesh.hit_base[0]) | byte_of(mesh.hit_base[1]) << 8u | byte_of(mesh.hit_base[2]) << 16u |
                         byte_of(mesh.hit_environment) << 24u;
+            // Water's first map's coordinate rows (plan 13.3, l54: its surface ripples as the map moves): the two rows
+            // the program's coordinate takes, the walk's own at t for a listed material, after the items; word 18
+            // their first byte from the items' first. Only a map read from uv set 0 (the tracer's vertices carry no
+            // other), and only rows of this form's layout (FC's c30, as live_glow checks).
+            if (mesh.hit_class == NEBULA_HIT_WATER && mesh.map0_row != 0xFFFFu && mesh.map0_uv == 0u && words[8] != NEBULA_NONE32 &&
+                list.constants != nullptr && item.constants < list.constants_count) {
+                const NebulaFrameConstants& constants = list.constants[item.constants];
+                const float* rows = constants.rows != nullptr          ? walk_material_rows(item.constants)
+                                    : constants.slot != NEBULA_NONE32 ? registries_.slot(constants.slot).cpu
+                                                                      : nullptr;
+                if (rows != nullptr && constants.vertex_rows + constants.pixel_rows == mesh.map0_form_rows &&
+                    std::uint32_t{mesh.map0_row} + 2u <= constants.vertex_rows) {
+                    words[18] = static_cast<std::uint32_t>((rt_item_words_.size() + rt_item_coords_.size()) * 4u);
+                    const std::size_t at = rt_item_coords_.size();
+                    rt_item_coords_.resize(at + 8u);
+                    std::memcpy(rt_item_coords_.data() + at, rows + std::size_t{mesh.map0_row} * 4u, 8u * sizeof(float));
+                }
+            }
             // What it shows with no light, and whether it glows (rt_shade.hlsli rt_hit_read).
             words[14] = byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u | byte_of(mesh.hit_emission[2]) << 16u |
                         (mesh.glow[3] != 0.0f ? 1u << 24u : 0u);
@@ -1716,7 +1735,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     }
     RtFrameConstants constants{};
     UploadRing& ring = renderer_.matrix_ring();
-    const std::size_t item_bytes = rt_item_words_.size() * sizeof(std::uint32_t);
+    const std::size_t item_bytes = (rt_item_words_.size() + rt_item_coords_.size()) * sizeof(std::uint32_t);  // l54: + water's rows
     const std::size_t set_bytes = rt_set_words_.size() * sizeof(float);
     static_assert(sizeof(RtDrop) == 48u && sizeof(RtEmitter) == 48u);
     // The stage's exposure: the light a fully lit surface of it stands in, from its own key and ambient: 40 lux
@@ -1762,7 +1781,11 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     const UploadRing::Allocation sets_at = ring.allocate(set_bytes, 256u);
     const UploadRing::Allocation drops_at = ring.allocate(drop_bytes, 256u);
     const UploadRing::Allocation tiles_at = ring.allocate(tile_words * sizeof(std::uint32_t), 256u);
-    std::memcpy(items_at.cpu, rt_item_words_.data(), item_bytes);
+    std::memcpy(items_at.cpu, rt_item_words_.data(), rt_item_words_.size() * sizeof(std::uint32_t));
+    if (!rt_item_coords_.empty()) {
+        std::memcpy(items_at.cpu + rt_item_words_.size() * sizeof(std::uint32_t), rt_item_coords_.data(),
+                    rt_item_coords_.size() * sizeof(std::uint32_t));
+    }
     if (clip_count != 0u) {
         std::memcpy(items_at.cpu + item_bytes, clip_words, clip_bytes);
     }

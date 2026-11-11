@@ -583,6 +583,7 @@ private:
     bool rt_light_history_ = false;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
     std::vector<std::uint32_t> rt_item_words_;
+    std::vector<std::uint32_t> rt_item_coords_;  // l54: water's first map's coordinate rows, uploaded after the items
     std::vector<float> rt_set_words_;
     std::uint64_t rt_light_sum_[10]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays,
                                         // [9] refracted pixels

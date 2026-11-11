@@ -199,6 +199,63 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
     return found;
 }
 
+// A water surface's normal bent by its own moving map (plan 13.3; l54): item word 18 names the two rows of its first
+// map's coordinate (0: none); the luminance's change a texel along u' and v', at the level the pixel covers, tilts the
+// smooth normal against the rise, kWave of it. `place`: the pixel's point on the triangle (eye space).
+static const float kWave = 0.15f;
+float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_) {
+    const uint rows_at = g_items.Load(item_at + 72u);
+    const uint arena = first.z;
+    if (rows_at == 0u || arena >= 8u) {
+        return smooth_;
+    }
+    const float4 ra = asfloat(g_items.Load4(g_at.x + rows_at)), rb = asfloat(g_items.Load4(g_at.x + rows_at + 16u));
+    const uint base = mesh_at(arena);
+    const uint3 corner = triangle_corners(first, second, triangle_);
+    float3 p[3];
+    float2 t[3];
+    for (uint c = 0u; c < 3u; ++c) {
+        const uint row = vertex_rows(arena, base, second.w, stream, corner[c]);
+        const float4 r0 = asfloat(g_rows.Load4(row)), r1 = asfloat(g_rows.Load4(row + 16u)), r2 = asfloat(g_rows.Load4(row + 32u));
+        const float4 q = float4(asfloat(arena_words(arena, base + second.z + corner[c] * 12u)), 1.0f);
+        p[c] = float3(dot(r0, q), dot(r1, q), dot(r2, q));
+        const float4 uv = float4(asfloat(arena_words(arena, base + first.w + corner[c] * 24u + 12u).yz), 1.0f, 1.0f);
+        t[c] = float2(dot(uv, ra), dot(uv, rb));
+    }
+    // The point among the corners, and the triangle's directions of u' and v' (the change of place a unit of each).
+    const float3 e1 = p[1] - p[0], e2 = p[2] - p[0], e = place - p[0];
+    const float d11 = dot(e1, e1), d12 = dot(e1, e2), d22 = dot(e2, e2), de1 = dot(e, e1), de2 = dot(e, e2);
+    const float area = d11 * d22 - d12 * d12;
+    const float2 m1 = t[1] - t[0], m2 = t[2] - t[0];
+    const float turn = m1.x * m2.y - m1.y * m2.x;
+    if (!(abs(area) > 1e-12f) || !(abs(turn) > 1e-12f)) {
+        return smooth_;
+    }
+    const float v = (d22 * de1 - d12 * de2) / area, w = (d11 * de2 - d12 * de1) / area;
+    const float2 here = t[0] + m1 * v + m2 * w;
+    const float3 along_u = (e1 * m2.y - e2 * m1.y) / turn, along_v = (e2 * m1.x - e1 * m2.x) / turn;
+    // The level the pixel covers: a pixel's width there (stretched along the surface as it turns from the eye) over
+    // the place a unit of u' spans, in texels.
+    uint map_w, map_h;
+    g_textures[NonUniformResourceIndex(map)].GetDimensions(map_w, map_h);
+    const float pixel = -place.z * abs(g_ray.x) / max(abs(dot(smooth_, normalize(place))), 0.05f);
+    const float texels = pixel * float(max(map_w, map_h)) / max(min(length(along_u), length(along_v)), 1e-6f);
+    const float level = max(log2(max(texels, 1.0f)), 0.0f);
+    const float2 step_ = exp2(level) / float2(max(map_w, 1u), max(map_h, 1u));
+    const float3 luma = float3(0.2126f, 0.7152f, 0.0722f);
+    const float l0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here, level).rgb, luma);
+    const float lu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(step_.x, 0.0f), level).rgb, luma);
+    const float lv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(0.0f, step_.y), level).rgb, luma);
+    // The directions in the surface's plane (unit), the normal tilted against the rise.
+    const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
+    const float su = dot(tu, tu), sv = dot(tv, tv);
+    if (!(su > 1e-12f) || !(sv > 1e-12f)) {
+        return smooth_;
+    }
+    const float3 bent = normalize(smooth_ - kWave * ((lu - l0) * tu * rsqrt(su) + (lv - l0) * tv * rsqrt(sv)));
+    return dot(bent, smooth_) > 0.5f ? bent : smooth_;
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     uint width, height;
@@ -271,7 +328,12 @@ void main(uint3 id : SV_DispatchThreadID) {
         g_motion[id.xy] = float4(move, away_before, dot(lifted - at, normal));  // xy, z: both layers
     }
     g_guide[id.xy] = float4(away, float(words4.x & 1023u), float(words4.x >> 10u), rt_pack_normal(smooth_));
-    g_normals[id.xy] = float4(rt_oct(smooth_), rt_oct(normal));
+    // Water shades by its rippled normal (l54); the guide keeps the smooth one for the filters. `shaded` and the
+    // resolved `triangle_`: with no triangle found its arena is 8 and the ripple stays out.
+    const float3 shading = (third.w & 255u) == kClassWater && third.x != 0xFFFFFFFFu
+                               ? water_ripple(at_item, shaded, mesh, third.z, third.x, triangle_, at, smooth_)
+                               : smooth_;
+    g_normals[id.xy] = float4(rt_oct(shading), rt_oct(normal));
     // The material: the hit record's numbers as the item table carries them.
     const uint look = third.w;
     const uint class_ = look & 255u, hit_flags = look >> 8u & 255u;
