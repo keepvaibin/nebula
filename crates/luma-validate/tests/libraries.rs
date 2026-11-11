@@ -243,6 +243,38 @@ fn a_mach_o_segment_with_more_sections_than_it_holds_is_not_read_in_part() {
 }
 
 #[test]
+fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() {
+    // Loader D3-2 and D3-3: kinds 5 and 6. What is left to the host (its services, the needed mod's exports) is said.
+    let left = |r: &Report| r.not_checked.iter().map(|n| (n.code, n.because)).collect::<Vec<_>>();
+    for (path, platform) in [("pe-x64/service.dll", "windows-x64"), ("elf-x64/service.so", "linux-x64")] {
+        let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
+        assert!(r.findings.is_empty(), "{path}: {:?}", r.findings);
+        assert_eq!(left(&r), vec![(505, "Missing.Services"), (506, "Missing.Services")], "{path}");
+    }
+    let w = "windows-x64";
+    let r = check(&code_mod(w, &lib("pe-x64/service_bad.dll"), &[], false), w, true);
+    assert_eq!(codes(&r), vec![512]);
+    let r = check(&code_mod(w, &lib("pe-x64/mod_function_bad.dll"), &[], false), w, true);
+    assert_eq!(codes(&r), vec![512]);
+
+    // Another mod's function: refused as the kernel refuses it unless the mod needs that mod; then its exports are
+    // the needed mod's.
+    for (path, platform) in [("pe-x64/mod_function.dll", "windows-x64"), ("elf-x64/mod_function.so", "linux-x64")] {
+        let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
+        assert_eq!(codes(&r), vec![505], "{path}: {:?}", r.findings);
+        let text = english(&r, 505);
+        assert!(text.contains("\"lumakit/hud.meter\"") && text.contains("of a mod that is on"), "{text}");
+
+        let code = format!(r#"{{"platforms": ["{platform}"]}}"#);
+        let needs = r#"[{"id": "lumakit", "version": "^1"}]"#;
+        let bytes = luma(&[("code", code.as_str()), ("needs", needs)], &[file(&format!("code/{platform}/{}", entry_name(platform)), &lib(path))]);
+        let r = check(&bytes, platform, true);
+        assert!(!codes(&r).contains(&505), "{path}: {:?}", r.findings);
+        assert!(left(&r).contains(&(505, "Missing.ModExports")), "{path}: {:?}", r.not_checked);
+    }
+}
+
+#[test]
 fn without_the_game_s_names_the_name_rules_say_they_were_not_checked() {
     let report = check(&code_mod("windows-x64", &lib("pe-x64/good.dll"), &[], false), "windows-x64", false);
     assert!(report.findings.is_empty(), "{:?}", report.findings);

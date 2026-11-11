@@ -93,6 +93,28 @@ LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API + 1, imp
 #elif defined(SHORT_INFO)
 /* A luma_mod that was not made by luma.h: shorter than LumaModInfo. */
 LUMA_EXPORT const uint32_t luma_mod[2] = {8, LUMA_API};
+#elif defined(SERVICE)
+/* Loader D3-2: a service by name and "major.minor". */
+static LumaImport imports[] = {
+    {5, 0, "net", "1.0", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(SERVICE_BAD)
+static LumaImport imports[] = {
+    {5, 0, "net", "one", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(MOD_FUNCTION)
+/* Loader D3-3: another mod's exported function, "<mod id>/<export name>". */
+static LumaImport imports[] = {
+    {6, 0, "lumakit/hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
+#elif defined(MOD_FUNCTION_BAD)
+static LumaImport imports[] = {
+    {6, 0, "hud.meter", "lumi1:0123456789abcdef", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
 #elif defined(NO_IMPORTS)
 LUMA_MOD_NO_IMPORTS(start, 0);
 #elif defined(NO_EXPORT)

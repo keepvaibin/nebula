@@ -17,7 +17,7 @@ mkdir -p pe-x64 pe-arm64 elf-x64 elf-arm64 elf-x64-relr macho-arm64 macho-arm64-
 
 common="-O2 -nostdlib -ffreestanding -fno-stack-protector -fvisibility=hidden -Wall -Wextra -Werror -I $inc"
 win="-fuse-ld=lld -Wl,/NOENTRY -Wl,/Brepro"
-variants="GOOD MISSING WRONG_SIGNATURE OPTIONAL_MISSING CONSTRUCTOR_WRAP CONSTRUCTOR_AFTER REPLACE BAD_ROW NEWER SHORT_INFO NO_IMPORTS NO_EXPORT"
+variants="GOOD MISSING WRONG_SIGNATURE OPTIONAL_MISSING CONSTRUCTOR_WRAP CONSTRUCTOR_AFTER REPLACE BAD_ROW NEWER SHORT_INFO NO_IMPORTS NO_EXPORT SERVICE SERVICE_BAD MOD_FUNCTION MOD_FUNCTION_BAD"
 lower() { echo "$1" | tr 'A-Z' 'a-z'; }
 
 # Windows x64: every variant, an extra library pair, and a program.
@@ -47,6 +47,8 @@ elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_LOAD -o elf-x64/runs_at_load.so lib.c
 # Code the system runs when it closes the library (A-1): DT_FINI_ARRAY, DT_FINI; Mach-O __mod_term_func below.
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_CLOSE -o elf-x64/runs_at_close.so lib.c
+"$cc" --target=x86_64-unknown-linux-gnu $common $elf -DSERVICE -o elf-x64/service.so lib.c
+"$cc" --target=x86_64-unknown-linux-gnu $common $elf -DMOD_FUNCTION -o elf-x64/mod_function.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-fini,fini_function -DGOOD -DFINI_FUNCTION -o elf-x64/fini.so lib.c
 
 # Mach-O: arm64 with the classic rebase opcodes, arm64 with chained fixups, x64.

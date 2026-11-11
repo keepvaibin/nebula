@@ -6,7 +6,7 @@ use crate::zip::EntryKind;
 use std::collections::BTreeMap;
 
 pub const MAX_LIBRARY: u64 = 1 << 30;
-const IMPORT_KINDS: u32 = 5; // LUMA_IMPORT_FUNCTION..LUMA_IMPORT_HOOK
+const IMPORT_KINDS: u32 = 7; // LUMA_IMPORT_FUNCTION..LUMA_IMPORT_HOOK, LUMA_IMPORT_SERVICE, LUMA_IMPORT_MOD_FUNCTION
 const HOOK_KINDS: u32 = 4; // LUMA_BEFORE..LUMA_REPLACE
 const LUMA_OPTIONAL: u32 = 1;
 
@@ -233,10 +233,38 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
     } else {
         ctx.not_checked(508, "Missing.SelfDescription");
     }
+    let (mut services, mut mod_functions) = (false, false);
     for (i, row) in info.imports.iter().enumerate() {
         if row.kind >= IMPORT_KINDS || (row.kind == 4 && row.hook_kind >= HOOK_KINDS) || row.name.is_empty() {
             ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]);
             continue;
+        }
+        match row.kind {
+            // A service (loader D3-2): `signature` is "major.minor". Which services there are, their versions and
+            // permissions are the host's (its service finder), not the self-description's: said below.
+            5 => {
+                if row.signature.as_deref().is_some_and(is_service_version) {
+                    services = true;
+                } else {
+                    ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]);
+                }
+                continue;
+            }
+            // Another mod's function (D3-3, lumakit R-1): "<mod id>/<export name>", that mod among `needs` (the kernel
+            // binds only from a needed mod that is loaded: L505 with the same phrase). Its export list is the needed
+            // mod's library's: said below.
+            6 => {
+                let needed = row.name.split_once('/').filter(|(m, e)| !m.is_empty() && !e.is_empty()).map(|(m, _)| m.to_string());
+                match needed {
+                    None => ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]),
+                    Some(m) if row.flags & LUMA_OPTIONAL == 0 && !ctx.facts.needs.iter().any(|(id, _)| *id == m) => {
+                        ctx.add(505, &name, None, None, vec![("kind", p("Name.ModFunction")), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default()))]);
+                    }
+                    Some(_) => mod_functions = true,
+                }
+                continue;
+            }
+            _ => {}
         }
         let Some(n) = names else {
             ctx.not_checked(505, "Missing.SelfDescription");
@@ -284,7 +312,20 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             ctx.add(505, &name, None, None, vec![("kind", p(kind)), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default()))]);
         }
     }
-    // Services are asked for by name at run time (`core->service`), not listed in the import rows, so which ones a
-    // library uses cannot be read from it yet: L506 waits for a service import kind in luma.h (asked of F).
-    ctx.not_checked(506, "Missing.ServiceImports");
+    if services {
+        ctx.not_checked(505, "Missing.Services");
+        ctx.not_checked(506, "Missing.Services");
+    } else {
+        // A library may still ask `core->service(mod, ...)` by name at run time, which no row shows; the kernel refuses
+        // one not granted (Hook.ServiceNotGranted).
+        ctx.not_checked(506, "Missing.ServiceImports");
+    }
+    if mod_functions {
+        ctx.not_checked(505, "Missing.ModExports");
+    }
+}
+
+/// A service import's version, "major.minor": two whole numbers (loader D3-2).
+fn is_service_version(s: &str) -> bool {
+    s.split_once('.').is_some_and(|(a, b)| [a, b].iter().all(|x| !x.is_empty() && x.len() <= 5 && x.bytes().all(|c| c.is_ascii_digit())))
 }
