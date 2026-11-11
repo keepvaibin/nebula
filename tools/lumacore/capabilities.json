@@ -1,0 +1,15 @@
+{
+  "about": "Every capability a harness test may prove (contract harness, 3.1 `proves`). The status page is generated from this list and the results that name each id (plan rule 8). An id is added with the task that builds it; it is never renamed or reused.",
+  "capabilities": {
+    "harness.self": "A check of the harness itself, or a fixture: proves nothing about LumaCore",
+    "kernel.bind": "A mod's library is bound by name before its first line runs: every import or none, a missing name refused with a message naming it (0.2, 1.1)",
+    "kernel.call": "A mod calls any function of the game by name and signature (0.2, 1.1)",
+    "kernel.field": "A mod reads and writes any field of the game's types by Class.field and type (0.2, 1.2)",
+    "kernel.hook.before": "A before hook on any function: runs first, may skip the function (0.2, 1.1)",
+    "kernel.hook.after": "An after hook on any function: runs last, may change the result (0.2, 1.1)",
+    "kernel.hook.wrap": "A wrap on any function: runs around it and calls proceed (0.2, 1.1)",
+    "kernel.hook.replace": "A replace on any function: one mod holds it, a second is refused naming the first (0.2, 1.1)",
+    "kernel.refusal": "Every refusal to load a mod names its cause in the log and on the Mods screen (0.2 Z-1, 1.1)",
+    "kernel.service": "A mod finds a service by name and version through LumaCore.service (0.3, 2.x)"
+  }
+}
