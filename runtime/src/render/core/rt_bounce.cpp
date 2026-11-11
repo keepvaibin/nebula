@@ -288,7 +288,7 @@ std::uint32_t RenderCore::rt_bounce_image(std::uint32_t& image, rt::ImageFormat 
 }
 
 // The dome's mean luminance as the bounce rays see it (11.1): what they added to the counters 44 and 45 (the frame
-// slot's last frame), a running mean (0.05 a frame), kept still once a hold has measured it over its first walks so
+// slot's last frame), a running mean (0.05 a frame at 60 a second, as many seconds at any rate: b50), kept still once a hold has measured it over its first walks so
 // the reference adds up under one light. False when it is kept. Beside it the mean ratio of the surfaces they meet
 // (counters 46 and 47, rt_count_hit; FB b46), kept the same way.
 bool RenderCore::rt_dome_read() {
@@ -297,17 +297,19 @@ bool RenderCore::rt_dome_read() {
     }
     std::uint32_t counted[rt::kCounters];
     rt_backend_.read_counters(renderer_.frame_slot(), counted);
+    // A walk's step, by the rate as the filters' histories take it (rt_history_scale; FB b50).
+    const float step = 0.05f / std::clamp(rt_frame_rate_ / 60.0f, 0.5f, 2.0f);
     if (counted[45] != 0u) {
         const float mean = static_cast<float>(counted[44]) / 256.0f / static_cast<float>(counted[45]);
-        rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * 0.05f : mean;
+        rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * step : mean;
         for (unsigned c = 0; c < 3u; ++c) {  // its colour (b48)
             const float channel = static_cast<float>(counted[48u + c]) / 256.0f / static_cast<float>(counted[45]);
-            rt_dome_colour_[c] = rt_dome_colour_[c] > 0.0f ? rt_dome_colour_[c] + (channel - rt_dome_colour_[c]) * 0.05f : channel;
+            rt_dome_colour_[c] = rt_dome_colour_[c] > 0.0f ? rt_dome_colour_[c] + (channel - rt_dome_colour_[c]) * step : channel;
         }
     }
     if (counted[47] != 0u) {
         const float hits = static_cast<float>(counted[46]) / 256.0f / static_cast<float>(counted[47]);
-        rt_hit_mean_ = rt_hit_mean_ > 0.0f ? rt_hit_mean_ + (hits - rt_hit_mean_) * 0.05f : hits;
+        rt_hit_mean_ = rt_hit_mean_ > 0.0f ? rt_hit_mean_ + (hits - rt_hit_mean_) * step : hits;
     }
     return true;
 }
