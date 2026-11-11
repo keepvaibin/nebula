@@ -273,8 +273,9 @@ void main(uint3 id : SV_DispatchThreadID) {
                 }
                 mirror.rgb = seen_ * tint * share_;
                 // The painted reflection it was drawn with gives way to the real one: that much less of the colour under
-                // the mirror (a blended surface: of its alpha, so glass clears).
-                mirror.a = 1.0f - 0.6f * float(tint_word >> 24u) / 255.0f;
+                // the mirror (a blended surface: of its alpha, so glass clears); and what it mirrors is taken from the
+                // colour under it, never added on top (C2; FB b52b).
+                mirror.a = (1.0f - 0.6f * float(tint_word >> 24u) / 255.0f) * (1.0f - saturate(dot(tint * share_, float3(0.2126f, 0.7152f, 0.0722f))));
                 if (second && (class_ == kClassGlass || class_ == kClassWater)) {
                     const float4 under = g_guide_opaque.Load(int3(pixel, 0));
                     const ClearSurface c = clear_surface(item, class_, -dot(n, look_along), under.a != 0.0f ? under.r - guide.r : 0.0f);
