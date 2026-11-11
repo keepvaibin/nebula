@@ -1704,7 +1704,8 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     break;
                 }
                 const fs::path library = mod.path / fs::path(from_utf8(binary->second));
-                plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library)});
+                plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library), {}});
+                for (const luma::Dependency& need : mod.luma->needs) plan.plugins.back().needs.push_back(need.id);
             }
             std::rotate(plan.plugins.begin(), plan.plugins.begin() + static_cast<std::ptrdiff_t>(lower_mods), plan.plugins.end());
         }

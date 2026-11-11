@@ -135,6 +135,9 @@ struct LumaMod {
     // The permissions the player granted it (D3-2), copied.
     char** granted;
     u32 grantedCount;
+    // The mods it imported functions from (kind 6, D3-3), each once, in bind order: told `dependent_gone` when it goes.
+    LumaMod** uses;
+    u32 useCount;
 };
 
 namespace luma {
@@ -776,12 +779,78 @@ namespace luma {
                 return rImport.signature != nullptr ? "Name.FieldSig" : "Name.Field";
             case LUMA_IMPORT_SERVICE:
                 return "Name.Service";
+            case LUMA_IMPORT_MOD_FUNCTION:
+                return "Name.ModFunction";
             default:
                 return "Name.Class";
             }
         }
 
         bool covers(const LumaModInfo* pInfo, size_t end) { return pInfo->size >= end; }
+
+        // pB is the first `length` bytes of pA, whole.
+        bool sameUpTo(const char* pA, u32 length, const char* pB) {
+            for (u32 i = 0; i < length; i++) {
+                if (pA[i] != pB[i] || pB[i] == 0) {
+                    return false;
+                }
+            }
+            return pB[length] == 0;
+        }
+
+        // A loaded mod by id; null when none is loaded.
+        LumaMod* loadedMod(const char* pId, u32 length) {
+            for (u32 i = 0; i < sModCount; i++) {
+                if (sameUpTo(pId, length, sMods[i]->name)) {
+                    return sMods[i];
+                }
+            }
+            return nullptr;
+        }
+
+        // A kind 6 import's mod and export (D3-3): "<mod id>/<export name>". The export by name; *pSameSig whether its
+        // signature is the import's. Null: no such mod loaded, or it exports no such name.
+        const LumaExport* modExport(const LumaImport& rImport, LumaMod** ppOwner, bool* pSameSig) {
+            *ppOwner = nullptr;
+            *pSameSig = false;
+            u32 slash = 0;
+            while (rImport.name[slash] != 0 && rImport.name[slash] != '/') {
+                slash++;
+            }
+            if (rImport.name[slash] != '/' || slash == 0) {
+                return nullptr;
+            }
+            LumaMod* const pOwner = loadedMod(rImport.name, slash);
+            if (pOwner == nullptr) {
+                return nullptr;
+            }
+            const LumaModInfo* const pInfo = pOwner->info;
+            if (!covers(pInfo, offsetof(LumaModInfo, export_count) + sizeof(pInfo->export_count)) || pInfo->exports == nullptr) {
+                return nullptr;
+            }
+            const char* const pName = rImport.name + slash + 1;
+            for (u32 i = 0; i < pInfo->export_count; i++) {
+                const LumaExport& rExport = pInfo->exports[i];
+                if (rExport.name != nullptr && sameText(pName, rExport.name)) {
+                    *ppOwner = pOwner;
+                    *pSameSig = rExport.signature != nullptr && rImport.signature != nullptr && sameText(rImport.signature, rExport.signature);
+                    return &rExport;
+                }
+            }
+            return nullptr;
+        }
+
+        // The mods `pMod` imported from are told it is going (D3-3, R-3): after its stop, before its grace, the last
+        // bound first, on the game thread.
+        void tellDependentGone(LumaMod* pMod) {
+            for (u32 i = pMod->useCount; i > 0; i--) {
+                LumaMod* const pOwner = pMod->uses[i - 1];
+                const LumaModInfo* const pInfo = pOwner->info;
+                if (covers(pInfo, offsetof(LumaModInfo, dependent_gone) + sizeof(pInfo->dependent_gone)) && pInfo->dependent_gone != nullptr) {
+                    pInfo->dependent_gone(pMod);
+                }
+            }
+        }
 
         // "major.minor" of a service import; false when it is not that.
         bool versionOf(const char* pText, u32* pMajor, u32* pMinor) {
@@ -822,6 +891,7 @@ namespace luma {
                 ::free(pMod->granted[i]);
             }
             ::free(pMod->granted);
+            ::free(pMod->uses);
             delete pMod;
         }
 
@@ -913,7 +983,7 @@ namespace luma {
         // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet (LR-2).
         for (u32 i = 0; !refused && i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
-            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_SERVICE ||
+            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_MOD_FUNCTION ||
                 (rImport.kind == LUMA_IMPORT_HOOK && (rImport.hook == nullptr || rImport.hook_kind >= Hook_KindCount))) {
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.ImportRowBad");
@@ -953,6 +1023,22 @@ namespace luma {
                     break;
                 }
                 continue;
+            }
+            // Another mod's function (D3-3): that mod loaded (its needs come first), the export by name, then by
+            // signature; L505 Name.ModFunction or Name.FunctionSig.
+            if (rImport.kind == LUMA_IMPORT_MOD_FUNCTION) {
+                LumaMod* pOwner = nullptr;
+                bool sameSig = false;
+                const LumaExport* const pExport = modExport(rImport, &pOwner, &sameSig);
+                if ((pExport != nullptr && sameSig) || (rImport.flags & LUMA_OPTIONAL) != 0) {
+                    continue;
+                }
+                refuse.start(505);
+                refuse.put("kind", 'P', pExport == nullptr ? "Name.ModFunction" : "Name.FunctionSig");
+                refuse.put("found", 'T', rImport.name);
+                refuse.put("sig", 'T', rImport.signature != nullptr ? rImport.signature : "");
+                refused = true;
+                break;
             }
             const Function* pFunction = nullptr;
             s32 number = -1;
@@ -1015,6 +1101,30 @@ namespace luma {
                 *static_cast<const void**>(rImport.slot) = pTable;
                 continue;
             }
+            if (rImport.kind == LUMA_IMPORT_MOD_FUNCTION) {
+                // Pass 1 checked it; an optional one the needed mod lacks stays null. Its mod is kept, once, to be told.
+                LumaMod* pOwner = nullptr;
+                bool sameSig = false;
+                const LumaExport* const pExport = modExport(rImport, &pOwner, &sameSig);
+                const bool bound = pExport != nullptr && sameSig;
+                *static_cast<const void**>(rImport.slot) = bound ? pExport->address : nullptr;
+                if (bound) {
+                    bool known = false;
+                    for (u32 k = 0; k < pMod->useCount && !known; k++) {
+                        known = pMod->uses[k] == pOwner;
+                    }
+                    if (!known) {
+                        if (pMod->uses == nullptr) {
+                            pMod->uses = static_cast<LumaMod**>(zeroed(pInfo->import_count, sizeof(LumaMod*)));
+                            if (pMod->uses == nullptr) {
+                                NEBULA_PANIC("LumaCore: no memory to keep which mods %s uses", pMod->name);
+                            }
+                        }
+                        pMod->uses[pMod->useCount++] = pOwner;
+                    }
+                }
+                continue;
+            }
             const Function* pFunction = nullptr;
             s32 number = -1;
             const bool found = resolve(rImport, &pFunction, &number);
@@ -1034,8 +1144,10 @@ namespace luma {
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.StartRefused");
                 refuse.number("found", answer);
-                // Hooks its start added itself go; it ends after the grace when any was published.
+                // Hooks its start added itself go; the mods it imported from are told; it ends after the grace when any
+                // was published.
                 removeHooks(pMod);
+                tellDependentGone(pMod);
                 endMod(pMod);
                 return false;
             }
@@ -1068,12 +1180,23 @@ namespace luma {
                 continue;
             }
             LumaMod* const pMod = sMods[i];
+            // A mod another loaded mod imports from goes after it (D3-3: the host stops the dependents first); taken
+            // out before, the other would call into a closed library.
+            for (u32 j = 0; j < sModCount; j++) {
+                for (u32 k = 0; k < sMods[j]->useCount; k++) {
+                    if (sMods[j]->uses[k] == pMod) {
+                        NEBULA_PANIC("LumaCore: %s was taken out while %s, which uses it, is on", pMod->name, sMods[j]->name);
+                    }
+                }
+            }
             sMods[i] = sMods[--sModCount];
-            // Unbind, its stop, then after the grace its destructors, memory and library (LR-5).
+            // Unbind, its stop, the mods it imported from told, then after the grace its destructors, memory and
+            // library (LR-5, D3-3).
             removeHooks(pMod);
             if (pInfo->stop != nullptr) {
                 pInfo->stop();
             }
+            tellDependentGone(pMod);
             endMod(pMod);
             frame();
             return;

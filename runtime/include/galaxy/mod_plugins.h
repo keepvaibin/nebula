@@ -20,6 +20,7 @@ struct PluginFile {
     std::string version;
     std::map<std::string, std::string> options;  // option id -> choice id
     std::string code;  // code_hash taken at start; a library that changed before it loads is not run
+    std::vector<std::string> needs;  // the ids of the mods its manifest needs (loader D3-3: those start before it)
 };
 
 // A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
@@ -199,6 +200,9 @@ struct ModRows {
     [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
+// The language refusals are said in (loader contract 3): the played language's folder name, as language_folder gives
+// it ("EuGerman"); empty or unknown to the validator: UsEnglish. Set before start_plugins.
+void set_message_language(std::string folder);
 // Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`
 // looks up a name in the game module (null when absent). A plugin that can't start is logged and skipped.
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,

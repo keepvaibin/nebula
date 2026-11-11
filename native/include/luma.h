@@ -58,7 +58,10 @@ enum {
     LUMA_IMPORT_SIZE = 2,     /* name "Class"; slot: int32_t* (its size in bytes) */
     LUMA_IMPORT_CLASS = 3,    /* name "Class"; slot: int32_t* (its number, for is_a) */
     LUMA_IMPORT_HOOK = 4,     /* a hook on the function `name` with `signature`: `hook`, `hook_kind`, `user` */
-    LUMA_IMPORT_SERVICE = 5   /* a service: `name`, `signature` its "major.minor"; slot: const void** (its table) */
+    LUMA_IMPORT_SERVICE = 5,  /* a service: `name`, `signature` its "major.minor"; slot: const void** (its table) */
+    LUMA_IMPORT_MOD_FUNCTION = 6 /* another mod's function (loader D3-3): `name` "<mod id>/<export name>", `signature`
+                                    the export's ("lumi1:" and 16 hex digits, lumascript-abi R-2); slot: const void**.
+                                    That mod is among this one's `needs`, so it is loaded first */
 };
 #define LUMA_OPTIONAL 1u
 
@@ -127,6 +130,14 @@ typedef struct LumaCore {
 /* report's own codes (D3-1). */
 #define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
 
+/* One function a library mod gives the mods that need it (loader D3-3). Names "<module>.<fn>" and the signature form
+   are lumascript-abi R-2's; the kernel compares both strings and nothing else. Sorted by name. */
+typedef struct LumaExport {
+    const char* name;
+    const char* signature;
+    const void* address;
+} LumaExport;
+
 typedef struct LumaModInfo {
     uint32_t size;
     uint32_t api;
@@ -143,6 +154,13 @@ typedef struct LumaModInfo {
     /* luma.h's: after the grace, the destructors `atexit` took, the last first; then the game frees the mod's memory
        and closes its library. */
     void (*finish)(void);
+    /* A library mod's functions for the mods that need it (kind 6 imports); none for most mods. */
+    const LumaExport* exports;
+    uint32_t export_count;
+    /* A library mod is told that `dependent`, which imported from it, is being taken out: after the dependent's stop,
+       before its grace, on the game thread. It drops what it keeps for that mod (callbacks into its code). May be
+       null. */
+    void (*dependent_gone)(const LumaMod* dependent);
 } LumaModInfo;
 
 #if defined(_WIN32)
@@ -157,6 +175,8 @@ typedef struct LumaModInfo {
 #define LUMA_CLASS(slot, class_name) {LUMA_IMPORT_CLASS, 0, class_name, 0, &slot, 0, 0, 0}
 #define LUMA_HOOK_ON(name, signature, kind, hook) {LUMA_IMPORT_HOOK, 0, name, signature, 0, hook, kind, 0}
 #define LUMA_SERVICE(slot, name, major_minor) {LUMA_IMPORT_SERVICE, 0, name, major_minor, &slot, 0, 0, 0}
+#define LUMA_MOD_FUNCTION(slot, mod_and_name, signature) {LUMA_IMPORT_MOD_FUNCTION, 0, mod_and_name, signature, &slot, 0, 0, 0}
+#define LUMA_EXPORT_FUNCTION(name, signature, function) {name, signature, (const void*)(function)}
 
 /* A library with no C library that uses floats needs this one symbol the Windows compiler expects. */
 #if defined(_WIN32)
@@ -378,11 +398,16 @@ typedef void (*LumaCtor)(void);
 
 #define LUMA_MOD(imports, start, stop) \
     LUMA_RUNTIME                       \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0}
 /* A mod that binds no name of the game (it finds what it needs through the core at start). */
 #define LUMA_MOD_NO_IMPORTS(start, stop) \
     LUMA_RUNTIME                         \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish, 0, 0, 0}
+/* A library mod (loader D3-3): its exports (LUMA_EXPORT_FUNCTION rows, sorted by name) and what it does when a mod that
+   needs it is taken out. */
+#define LUMA_LIBRARY_MOD(imports, start, stop, exports, dependent_gone) \
+    LUMA_RUNTIME                                                        \
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])

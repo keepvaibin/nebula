@@ -3312,6 +3312,11 @@ void svc_mods_start(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::mods::set_achievement_store(galaxy::achievements::unlock_mod);
 #endif
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::mods::set_message_language(galaxy::mods::language_folder(
+        std::string(gPak.store.game_id()),
+        static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language))));
+#endif  // a headless host has no language setting: refusals stay in English, the default
     galaxy::mods::start_plugins(gPlugins, gModRows, game_api(),
                                 [](const char* name) -> void* {
 #if defined(_WIN32)

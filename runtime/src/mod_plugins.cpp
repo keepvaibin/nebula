@@ -214,12 +214,18 @@ ValidateMessage validate_message() {
     return found;
 }
 
+std::string& message_language() {
+    static std::string language;
+    return language;
+}
+
 std::string refusal_text(const LumaRefusal& refusal) {
     const char* values[LUMA_REFUSAL_MOST] = {};
     const std::uint32_t count = refusal.count < LUMA_REFUSAL_MOST ? refusal.count : LUMA_REFUSAL_MOST;
     for (std::uint32_t i = 0; i < count; ++i) values[i] = refusal.values[i];
     if (const ValidateMessage message = validate_message(); message != nullptr) {
-        return message(refusal.code, refusal.names, values, count, "UsEnglish");
+        const std::string& language = message_language();
+        return message(refusal.code, refusal.names, values, count, language.empty() ? "UsEnglish" : language.c_str());
     }
     std::string text = "L" + std::to_string(refusal.code);
     for (std::uint32_t i = 0; i < count; ++i) {
@@ -683,9 +689,132 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
     }
     g_starting = true;
-    for (std::size_t index = 0; index < plugins.size(); ++index) {
+    // The needs order (loader D3-3): a mod's needed mods start before it; otherwise the list's order. `index` stays the
+    // mod's place in the list, its order for hooks and who wins. A cycle starts none of its mods, each named (L800).
+    std::vector<std::size_t> sequence;
+    std::vector<bool> placed(plugins.size(), false);
+    const auto listed = [&plugins](const std::string& id) {
+        return std::any_of(plugins.begin(), plugins.end(), [&id](const PluginFile& p) { return p.mod_id == id; });
+    };
+    const auto ready = [&](std::size_t i) {
+        for (const std::string& need : plugins[i].needs) {
+            if (!listed(need)) continue;  // the host's own check (mods.cpp) has said it is missing
+            for (std::size_t j = 0; j < plugins.size(); ++j) {
+                if (plugins[j].mod_id == need && j != i && !placed[j]) return false;  // a need on itself orders nothing
+            }
+        }
+        return true;
+    };
+    for (bool more = true; more;) {
+        more = false;
+        for (std::size_t i = 0; i < plugins.size(); ++i) {
+            if (placed[i] || !ready(i)) continue;
+            placed[i] = true;
+            sequence.push_back(i);
+            more = true;
+            break;  // again from the top, so the list's order holds wherever the needs allow
+        }
+    }
+    // The shortest cycle of needs from plugins[own] back to it among the listed mods, as the validator's L800 names it
+    // (luma-validate need_cycle: breadth first, each mod's needs in its own order): the ids with the mod first and
+    // last, or none.
+    const auto cycle_through = [&plugins](std::size_t own) {
+        const std::string& id = plugins[own].mod_id;
+        const auto other_mod = [&plugins, &id](const std::string& want) -> const PluginFile* {
+            if (want == id) return nullptr;
+            for (const PluginFile& p : plugins) {
+                if (p.mod_id == want) return &p;
+            }
+            return nullptr;
+        };
+        std::vector<std::pair<std::string, std::string>> from;  // each id reached, with the id it was reached from
+        const auto reached_from = [&from](const std::string& want) -> const std::string* {
+            for (const auto& f : from) {
+                if (f.first == want) return &f.second;
+            }
+            return nullptr;
+        };
+        std::vector<std::string> queue;
+        for (const std::string& n : plugins[own].needs) {
+            if (other_mod(n) != nullptr && reached_from(n) == nullptr) {
+                from.emplace_back(n, id);
+                queue.push_back(n);
+            }
+        }
+        for (std::size_t q = 0; q < queue.size(); ++q) {
+            const std::string at = queue[q];
+            for (const std::string& n : other_mod(at)->needs) {
+                if (n == id) {
+                    std::vector<std::string> chain{id, at};
+                    for (std::string walk = at; *reached_from(walk) != id; walk = chain[1]) {
+                        chain.insert(chain.begin() + 1, *reached_from(walk));
+                    }
+                    chain.push_back(id);
+                    return chain;
+                }
+                if (other_mod(n) != nullptr && reached_from(n) == nullptr) {
+                    from.emplace_back(n, at);
+                    queue.push_back(n);
+                }
+            }
+        }
+        return std::vector<std::string>{};
+    };
+    for (std::size_t i = 0; i < plugins.size(); ++i) {
+        if (placed[i]) continue;
+        const std::vector<std::string> chain = cycle_through(i);
+        if (chain.empty()) {
+            // Not in a cycle: it needs a mod that is in one, or that needs one (its own line names that mod).
+            std::string other;
+            for (const std::string& need : plugins[i].needs) {
+                for (std::size_t j = 0; j < plugins.size() && other.empty(); ++j) {
+                    if (plugins[j].mod_id == need && !placed[j]) other = need;
+                }
+            }
+            say(plugins[i].mod_id + " (" + plugins[i].path.filename().string() + ") not started: it needs " + other +
+                ", which did not start");
+            continue;
+        }
+        // Said as the validator says L800 for Validator.Need.Cycle, values "T:" a literal and "P:" a phrase as the
+        // loader's: other the next mod in the cycle, expected empty, chain "a -> b -> a".
+        std::string joined;
+        for (const std::string& id : chain) joined += (joined.empty() ? "" : " -> ") + id;
+        LumaRefusal cycle{};
+        const std::string mod = "T:" + plugins[i].mod_id;
+        const std::string them = "T:" + chain[1];
+        const std::string circle = "T:" + joined;
+        cycle.code = 800;
+        cycle.names[0] = "mod";
+        cycle.values[0] = mod.c_str();
+        cycle.names[1] = "file";
+        cycle.values[1] = "T:luma.json";
+        cycle.names[2] = "other";
+        cycle.values[2] = them.c_str();
+        cycle.names[3] = "expected";
+        cycle.values[3] = "T:";
+        cycle.names[4] = "found";
+        cycle.values[4] = "P:Need.Cycle";
+        cycle.names[5] = "chain";
+        cycle.values[5] = circle.c_str();
+        cycle.count = 6;
+        say(refusal_text(cycle));
+    }
+    std::vector<std::string> started;
+    for (const std::size_t index : sequence) {
         const PluginFile& file = plugins[index];
         const std::string name = file.mod_id + " (" + file.path.filename().string() + ")";
+        // A needed mod that did not start leaves this one off, named (its imports from it could not bind).
+        std::string missing;
+        for (const std::string& need : file.needs) {
+            if (listed(need) && std::find(started.begin(), started.end(), need) == started.end()) {
+                missing = need;
+                break;
+            }
+        }
+        if (!missing.empty()) {
+            say(name + " not started: it needs " + missing + ", which did not start");
+            continue;
+        }
         const std::filesystem::path running = running_copy(file.path, index);
         if (file.code.empty() || code_hash(running) != file.code) {
             say(name + (file.code.empty() ? " not started: its code can't be read" : " not started: its code changed after it was allowed"));
@@ -722,6 +851,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             loaded->options = file.options;
             loaded->module = module;
             g_loaded.push_back(std::move(loaded));
+            started.push_back(file.mod_id);
             say(name + " started");
             continue;
         }
@@ -764,6 +894,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         Loaded* const mine = loaded.get();
         g_loaded.push_back(std::move(loaded));
         start(&g_api, &mine->self);
+        started.push_back(file.mod_id);
         say(name + " started");
     }
     g_starting = false;
@@ -817,6 +948,10 @@ const char* plugin_at(const void* address) noexcept {
     }
 #endif
     return nullptr;
+}
+
+void set_message_language(std::string folder) {
+    message_language() = std::move(folder);
 }
 
 }  // namespace galaxy::mods
