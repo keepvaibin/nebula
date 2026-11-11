@@ -170,6 +170,9 @@ public:
     // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
     // textures (the view constants' view_traced). `which`: 0 the traced light, 1 the added light.
     [[nodiscard]] std::uint32_t rt_publish_light(void* image, TextureStore& textures, unsigned which = 0u);
+    // The tracer stops while the game runs: its pictures leave the draws (their views retire), after the GPU is idle.
+    void rt_unpublish_lights(TextureStore& textures);
+    void rt_wait_idle() { wait_for_gpu_idle(); }
     // The game's bloom (game_bloom_vk.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);

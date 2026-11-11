@@ -1724,6 +1724,25 @@ void RendererVk::rt_light_end() {
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 }
 
+void RendererVk::rt_unpublish_lights(TextureStore& textures) {
+    const VkDevice device = vk::Context::get().device();
+    for (unsigned which = 0u; which < 4u; ++which) {
+        const auto found = pictures_.find(kRtLightPicture + which);
+        if (found == pictures_.end()) {
+            continue;
+        }
+        Picture& picture = found->second;
+        if (picture.view != ~0u) {
+            textures.retire_view(picture.view, std::move(picture.viewed));
+        }
+        if (picture.sampled != VK_NULL_HANDLE) {
+            const VkImageView old = picture.sampled;
+            vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+        }
+        pictures_.erase(found);
+    }
+}
+
 std::uint32_t RendererVk::rt_publish_light(void* image, TextureStore& textures, unsigned which) {
     auto* const texture = static_cast<vk::Texture*>(image);
     if (texture == nullptr) {

@@ -182,6 +182,8 @@ public:
     [[nodiscard]] bool rt_light_begin(rt::TextureView&, rt::TextureView&, unsigned&, unsigned&) { return false; }
     void rt_light_end() {}
     [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
+    void rt_unpublish_lights(TextureStore&) {}
+    void rt_wait_idle() { wait_for_gpu_idle(); }
     [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
     void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
         index = scene_jitter_index_;
