@@ -8,6 +8,8 @@ mod manifest;
 mod mods;
 mod patches;
 
+pub use manifest::save_problem;
+
 use crate::json::{self, Pos};
 use crate::source::{Mod, OpenError};
 use crate::saved::{kept_at_start, Saved, NOT_CHECKED_AT_START};
