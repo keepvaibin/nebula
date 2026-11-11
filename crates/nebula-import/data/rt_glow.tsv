@@ -1,0 +1,73 @@
+# Models that glow: with ray tracing on, each is a light that lights what is near it (the owner's list of 11-09, and
+# what the material audit cannot see: a glow that is in the art's intent, not in the material's data).
+# model (file stem, lower case)	colour (r g b, 0 to 1; "own": the material's own bright colour)	intensity in candela
+# The intensity is the source's luminous intensity as a lighting artist would set it: 100 units of the game are a
+# metre, the light at a surface is intensity / (distance^2 + the source's own radius^2), and a stage's exposure
+# (40 lux in the dark of space to 150 on a bright day, from the stage's own light) says how much of the surface's
+# colour that adds. For a sense of scale: a candle is 1, a household bulb 65, a torch 100 to 200, a street lamp
+# 2000. The values below are stylised upward so a glow reads in daylight, and are ordered as the things are: a coin's
+# glint under a star bit, a star bit under a Luma, a Luma under a launch star, under a power star, under a grand
+# star, under the Observatory's core. A long thin model (an electric rail) takes its value a metre of its length.
+# A mod's pack may carry a file of the same form.
+starpiece	own	40
+starpiececluster	own	60
+starpiecemother	own	120
+kinopiogoodsstarpiece	own	40
+ticofatgoodsstarpiece	own	40
+coin	1.0 0.80 0.25	12
+coinflower	1.0 0.80 0.25	8
+purplecoin	0.72 0.35 1.0	15
+questioncoin	1.0 0.82 0.28	60
+koopaplatecoin	1.0 0.80 0.25	12
+bluechip	0.30 0.62 1.0	40
+yellowchip	1.0 0.85 0.30	40
+powerstar	1.0 0.90 0.40	900
+powerstarhalo	1.0 0.90 0.40	150
+grandstar	1.0 0.90 0.50	2500
+ticocometgoodsstar	1.0 0.90 0.40	300
+superspindriver	1.0 0.85 0.30	700
+spindriver	1.0 0.80 0.30	350
+itemappearstonespindriver	1.0 0.80 0.30	200
+tico	own	150
+ticobaby	own	100
+ticolow	own	150
+ticomiddle	own	150
+ticofat	own	300
+ticocomet	own	250
+ticojii	own	150
+ticoshop	own	150
+straytico	own	150
+kinokooneup	0.45 1.0 0.45	60
+ticoshopgoodsoneup	0.45 1.0 0.45	60
+kinokolifeup	1.0 0.45 0.45	60
+ticoshopgoodslifeup	1.0 0.45 0.45	60
+kinopiogoodslight	1.0 0.95 0.80	400
+astrocore	1.0 0.80 0.50	30000
+fireball	1.0 0.50 0.15	500
+firebubble	1.0 0.50 0.15	400
+firebarball	1.0 0.50 0.15	300
+firebarcore	1.0 0.50 0.15	150
+firebullet	1.0 0.50 0.15	400
+koopafire	1.0 0.50 0.15	3000
+dinopackunfireball	1.0 0.50 0.15	800
+bosskameckfireball	1.0 0.45 0.20	800
+meteorstrike	1.0 0.50 0.15	4000
+elementblockfire	1.0 0.50 0.15	300
+electricball	0.60 0.80 1.0	800
+electricbullet	0.60 0.80 1.0	800
+electricrail	0.60 0.80 1.0	250
+electricrailmoving	0.60 0.80 1.0	250
+electricrailpoint	0.60 0.80 1.0	300
+jellyfishelectric	0.60 0.80 1.0	400
+candlestandicevolcano	1.0 0.60 0.25	150
+phantomcandlestand	0.55 0.75 1.0	150
+teresamansioncandlestand	1.0 0.60 0.25	150
+gravitylighta	own	500
+spotmarklight	own	300
+torpedolight	1.0 0.90 0.70	600
+skeletalfishbosslight	0.70 0.90 1.0	1500
+tripodbosseyelight	1.0 0.60 0.40	1500
+tripodbossheadlight	1.0 0.90 0.70	3000
+teresaroomglaringlight	1.0 0.95 0.80	1200
+dashring	own	100
+prizering	own	120

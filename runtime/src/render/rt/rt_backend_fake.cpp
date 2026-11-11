@@ -179,6 +179,8 @@ void Backend::free_image(std::uint32_t) noexcept {}
 
 void* Backend::image_to_copy(std::uint32_t) { return nullptr; }
 
+void* Backend::image_to_sample(std::uint32_t) { return nullptr; }
+
 void Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) { ++g_log.passes; }
 
 void Backend::end_counters() {}

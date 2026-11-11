@@ -501,9 +501,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         // (a larger set is made while the frames that read the smaller finish: together at most twice the larger).
         const std::uint64_t others = std::uint64_t{kBindlessSamplerSlots} + 16u;
         const auto beyond = [others](std::uint64_t limit) { return limit > others ? limit - others : 0u; };
+        // The tracer's passes name the array beside their own sampled images (rt_backend_vk.cpp: set 0's textures and
+        // reads, 16 with room): both image limits count a pipeline layout's every set.
+        const auto beside = [](std::uint64_t limit) { return limit > 16u ? limit - 16u : 0u; };
         const std::uint64_t images =
-            std::min({std::uint64_t{limits.maxDescriptorSetUpdateAfterBindSampledImages},
-                      std::uint64_t{limits.maxPerStageDescriptorUpdateAfterBindSampledImages},
+            std::min({beside(limits.maxDescriptorSetUpdateAfterBindSampledImages),
+                      beside(limits.maxPerStageDescriptorUpdateAfterBindSampledImages),
                       beyond(limits.maxPerStageUpdateAfterBindResources), beyond(limits.maxUpdateAfterBindDescriptorsInAllPools) / 2u,
                       std::uint64_t{kBindlessTextureSlotsCap}});
         const bool room = images >= kBindlessTextureSlotsMin &&
@@ -839,8 +842,16 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         rt_caps_.acceleration_structures = rt_structures.accelerationStructure == VK_TRUE && have12.bufferDeviceAddress == VK_TRUE;
         rt_caps_.ray_queries = rt_queries.rayQuery == VK_TRUE;
         rt_caps_.micromaps = has_device_extension(physical_, "VK_EXT_opacity_micromap");
+        // A pass reads the texture a ray meets: an index that differs from pixel to pixel.
+        rt_caps_.bindless = bindless_ && have12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
     }
-    const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless;
+    // The prepass's pixel stage reads its triangle's number, which Vulkan gives a fragment shader only on a device
+    // with geometry shaders (LOOK-INVENTORY G8: a device without them needs the triangle another way).
+    const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless &&
+                           available.geometryShader == VK_TRUE;
+    if (rt_enable) {
+        enabled.geometryShader = VK_TRUE;
+    }
     // Only what the tracer uses is enabled, whatever else the device reports in these structures.
     rt_structures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
     rt_structures.accelerationStructure = VK_TRUE;
@@ -895,6 +906,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     if (core_12) {
         if (rt_enable) {
             features12.bufferDeviceAddress = VK_TRUE;
+            features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
         }
         if (temporal_upscaling_) {
             features11.storageBuffer16BitAccess = VK_TRUE;

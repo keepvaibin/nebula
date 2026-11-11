@@ -105,6 +105,10 @@ namespace Frame {
     void setLightPointOwner(const NebulaFrameWorldLight* pPoint);
     // The light of the stage's own surfaces this frame (key `id`, fill `id` + 1) and its ambient.
     void setStageLight(u64 id, const f32* pAmbient);
+    // A drop shadow the game draws this frame (NebulaFrameShadowDrop), into this frame's list.
+    void shadowDrop(const NebulaFrameShadowDrop& rDrop);
+    // A point light an actor asks for this frame (NebulaFramePointLight), into this frame's list.
+    void pointLight(const NebulaFramePointLight& rLight);
 
     // A state word with what the pass decides: its alpha and its stencil.
     u32 finishState(u32 state);
@@ -166,6 +170,8 @@ namespace Frame {
     void scene2D(bool begin);
     void mirror(bool begin);
     void phase(u8 phase);
+    // The draws from here on are of this category (NEBULA_CATEGORY_*; 0 none): what the game draws them as.
+    void category(u8 category);
     void bloom(u32 kind, u32 arg0, u32 arg1);
     void cameraCut(u32 cuts);
 }  // namespace Frame

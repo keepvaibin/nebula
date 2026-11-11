@@ -2418,7 +2418,7 @@ uint32_t svc_option(void*, uint32_t what) {
 #if defined(NEBULA_HOST_RENDERER)
     {
         const galaxy::render::RenderConfig render = galaxy::render::get_render_config();
-        return render.per_pixel_lighting || render.enhanced_lighting ? 1u : 0u;
+        return galaxy::render::lights_at_pixel(render) ? 1u : 0u;
     }
 #else
         return 0;

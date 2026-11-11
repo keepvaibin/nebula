@@ -70,8 +70,11 @@ inline constexpr std::uint64_t kFramesToRelease = kFramesInFlight + 1u;
 // A pass: one of the tracer's compute shaders (rt_shaders.h) and what it binds, by the registers of rt_bindings.hlsli.
 enum class ImageFormat : std::uint8_t { Rgba8, Rgba16f, Rg16f, R16f, R8, R32f, Rgb10a2 };
 inline constexpr std::uint32_t kNoImage = ~0u;
-inline constexpr unsigned kPassBuffers = 4u, kPassTextures = 4u, kPassReads = 4u, kPassWrites = 4u;
-// The counters a pass may add to (u4), read back a frame later: numbers for proofs and diagnostics.
+inline constexpr unsigned kPassBuffers = 4u, kPassTextures = 4u, kPassReads = 6u, kPassWrites = 6u;
+// Mesh memory a pass reads to know a surface where a ray or a pixel meets it (t15 up): the arenas the scene's meshes
+// lie in, then the frame's rows (their matrices).
+inline constexpr unsigned kPassMeshArenas = 8u, kPassMeshBuffers = kPassMeshArenas + 1u;
+// The counters a pass may add to (u6), read back a frame later: numbers for proofs and diagnostics.
 inline constexpr unsigned kCounters = 64u;
 
 // Bytes in a buffer of the renderer's (an upload ring's).
@@ -91,11 +94,12 @@ struct PassBinds {
     Structure scene{};                         // t0
     BufferView buffers[kPassBuffers]{};        // t1-t4
     TextureView textures[kPassTextures]{};     // t5-t8
-    std::uint32_t reads[kPassReads] = {kNoImage, kNoImage, kNoImage, kNoImage};    // t9-t12: images of the tracer's
-    std::uint32_t writes[kPassWrites] = {kNoImage, kNoImage, kNoImage, kNoImage};  // u0-u3
+    std::uint32_t reads[kPassReads] = {kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage};  // t9-t14: images of the tracer's
+    BufferView mesh[kPassMeshBuffers]{};       // t15-t23: mesh arenas, then the rows
+    std::uint32_t writes[kPassWrites] = {kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage};  // u0-u5
     BufferView constants{};                    // b0: 256-byte aligned, in an upload ring
-    bool counters = false;                     // u4
-    std::uint32_t write_buffer = kNoBuffer;    // u5: a buffer of the tracer's, whole (make_buffer)
+    bool counters = false;                     // u6
+    std::uint32_t write_buffer = kNoBuffer;    // u7: a buffer of the tracer's, whole (make_buffer)
 };
 
 class Backend {
@@ -124,6 +128,12 @@ public:
     // Once a frame, before its first begin: frame slot `frame_slot` (the renderer's) comes round, and the GPU has
     // finished that slot's last frame (what a pass bound there may go).
     void frame(unsigned frame_slot) noexcept;
+    // Vulkan: what `descriptors` of begin points at, the renderer's textures as the draws' programs see them (its
+    // image array's set and that set's layout). The passes read them as set 1.
+    struct TextureTable {
+        void* set = nullptr;
+        void* layout = nullptr;
+    };
     // Recording, into the frame's commands (ID3D12GraphicsCommandList* or VkCommandBuffer, no pass open), in frame slot
     // `frame_slot`: each slot's size answers are kept apart. `descriptors`: where a pass's views go this frame on
     // Direct3D 12 (the renderer's DescriptorRing*; null when only builds follow); Vulkan keeps pools of its own.
@@ -167,8 +177,11 @@ public:
     // The image as the renderer's own texture (ID3D12Resource*; vk::Texture*), put in copy-source use: the renderer
     // copies from it in these commands. The next pass that binds it changes its use again.
     [[nodiscard]] void* image_to_copy(std::uint32_t image);
-    // The counters: zeroed before the frame's first pass that binds them; `end_counters` after its last makes them
-    // readable. `read_counters`: the values of the frame slot's last finished frame (zero before one).
+    // The image as a texture of the renderer's that the draws' programs sample (the traced light), put in that use.
+    [[nodiscard]] void* image_to_sample(std::uint32_t image);
+    // The counters: zeroed before the frame's first pass that binds them; `end_counters` makes what was added so far
+    // readable (after each pass that counts: the frame's last call holds them all). `read_counters`: the values of
+    // the frame slot's last finished frame (zero before one).
     void end_counters();
     void read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const;
 

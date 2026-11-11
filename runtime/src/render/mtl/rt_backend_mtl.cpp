@@ -47,6 +47,7 @@ BufferView Backend::view_of(gpu::Address, std::uint64_t, std::uint32_t& offset) 
     return {};
 }
 void* Backend::image_to_copy(std::uint32_t) { return nullptr; }
+void* Backend::image_to_sample(std::uint32_t) { return nullptr; }
 void Backend::end_counters() {}
 void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
     for (unsigned i = 0; i < kCounters; ++i) {

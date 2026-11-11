@@ -77,6 +77,10 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             println!("{}", stats.summary());
             Ok(ExitCode::SUCCESS)
         }
+        [command, input, output] if command == "rt-materials" => {
+            cook::hit_record::audit(Path::new(input), Path::new(output))?;
+            Ok(ExitCode::SUCCESS)
+        }
         [command, input, output] if command == "programs" => {
             cook::programs::write_set(Path::new(input), Path::new(output))?;
             Ok(ExitCode::SUCCESS)

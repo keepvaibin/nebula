@@ -74,6 +74,14 @@ struct GpuMesh {
     std::uint32_t further_stride = 0u;
     std::uint32_t single_matrix = NEBULA_MODEL_NONE;
     std::uint8_t index_bytes = 4u;
+    // What a ray reads of the mesh's material (nebula_model.h NebulaModelHit): its class and flags, what it shows with
+    // no light, its colour under full light, and its numbers.
+    std::uint8_t hit_class = 0u, hit_flags = 0u;
+    float hit_emission[3]{}, hit_base[3]{0.5f, 0.5f, 0.5f};
+    float hit_roughness = 0.45f, hit_metal = 0.0f, hit_transmission = 0.0f;
+    float hit_environment = 0.0f;  // how much of its look a painted reflection carries
+    float glow[4]{};  // the light it gives: colour, and its strength (0: none)
+    float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
     float min[3]{}, max[3]{};
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
     std::uint32_t arena = 0u;
@@ -142,12 +150,15 @@ struct ViewRows {
     float motion[4];
     float raster[4];
     float sky_up[3];          // the player's up in eye space (unit), else the view's up
-    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target
+    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light (`traced`), bit 4 shown
     float scale[4];
+    float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's
+    float tint[4];    // with view_flags bit 3: what a shadow takes back from the sky, as a colour (rgb)
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
-              offsetof(ViewRows, scale) == 144 && sizeof(ViewRows) == 160);
+              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, tint) == 176 &&
+              sizeof(ViewRows) == 192);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {
@@ -289,6 +300,9 @@ public:
         std::uint32_t slots = 0u;         // material slots registered
     };
     [[nodiscard]] MemoryStats memory_stats() noexcept;
+    // Arena `index`'s memory, where the meshes placed in it lie (GpuMesh::arena): its first byte and its size. False
+    // when there is no such arena now.
+    [[nodiscard]] bool arena_memory(std::uint32_t index, gpu::Address& base, std::size_t& bytes) noexcept;
 
 private:
     // A page of upload memory models and meshes are placed in: free ranges (offset -> size), taken best fit and given back

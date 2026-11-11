@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The compiled programs' file, linked into the program. Written by tools/dev/compile_programs.py:
-//   "NBPROG02", vertex rows u32, pixel rows u32, the interface (40 hexadecimal digits), padding to 64 bytes;
+//   "NBPROG03", vertex rows u32, pixel rows u32, the interface (40 hexadecimal digits), padding to 64 bytes;
 //   rows sorted by id within each stage: id u64, flags u32, coords u32 (a written vertex program's texture coordinate
-//   inputs, 0 for others), then per stored variant (kProgramStored: the variants, then a pixel program's bound-table
-//   forms) offset u32 and size u32.
+//   inputs, 0 for others), then per stored variant (kProgramStored: the variants, a pixel program's bound-table
+//   forms, then its ray tracing forms) offset u32 and size u32.
 #include "galaxy/render/program_table.h"
 
 #include "galaxy/render/mod_shaders.h"
@@ -29,6 +29,7 @@ namespace {
 
 constexpr std::uint32_t kReadsWorld = 1u;
 constexpr std::uint32_t kLit = 2u;
+constexpr std::uint32_t kSumsKey = 4u;
 
 struct Row {
     std::uint64_t id;
@@ -38,7 +39,7 @@ struct Row {
         std::uint32_t offset, size;
     } variants[kProgramStored];
 };
-static_assert(sizeof(Row) == 96u);
+static_assert(sizeof(Row) == 16u + 8u * kProgramStored);
 
 struct Blob {
     const unsigned char* bytes = nullptr;
@@ -60,7 +61,7 @@ Blob open_blob() noexcept {
 #else
     blob.bytes = nebula_programs_begin;
 #endif
-    if (blob.bytes == nullptr || std::memcmp(blob.bytes, "NBPROG02", 8u) != 0) {
+    if (blob.bytes == nullptr || std::memcmp(blob.bytes, "NBPROG03", 8u) != 0) {
         blob.bytes = nullptr;
         return blob;
     }
@@ -102,7 +103,8 @@ bool program_bound_tables() noexcept {
 }
 
 ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexcept {
-    if (variant >= kProgramVariants) {
+    const bool traced = variant >= kProgramPrepass && variant < kProgramStored;
+    if (variant >= kProgramVariants && !traced) {
         return {};
     }
     if (!pixel) {
@@ -110,14 +112,22 @@ ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexc
         case kProgramReactive:
         case kProgramLayer:
         case kProgramSample:
+        case kProgramPrepass:
+        case kProgramTraced:
             variant = kProgramBase;
+            break;
+        case kProgramTracedMotion:
+            variant = kProgramMotion;
             break;
         default:
             break;
         }
     }
-    // A vertex stage reads no texture: one form serves both.
+    // A vertex stage reads no texture: one form serves both. The tracer's forms are bindless only.
     if (pixel && g_bound_tables.load(std::memory_order_relaxed)) {
+        if (traced) {
+            return {};
+        }
         variant += kProgramBoundOffset;
     }
     const Row* row = find(id, pixel);
@@ -131,6 +141,12 @@ ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexc
 }
 
 unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log2) noexcept {
+    if (aux == kAuxPrepass || aux == kAuxPrepassMotion) {
+        return kProgramPrepass;
+    }
+    if (aux >= kAuxTraced) {
+        return (aux & 7u) == 1u ? kProgramTracedMotion : kProgramTraced;
+    }
     if (aux != 0u && aux != 4u) {
         return aux == 1u ? kProgramMotion : aux == 2u ? kProgramReactive : kProgramLayer;
     }
@@ -150,6 +166,15 @@ std::uint32_t program_coords(std::uint64_t vertex) noexcept {
 bool program_lit(std::uint64_t pixel) noexcept {
     const Row* row = find(pixel, true);
     return row != nullptr && (row->flags & kLit) != 0u;
+}
+
+bool program_sums_key(std::uint64_t pixel) noexcept {
+    const Row* row = find(pixel, true);
+    return row != nullptr && (row->flags & kSumsKey) != 0u;
+}
+
+bool program_traced(std::uint64_t pixel) noexcept {
+    return exists(pixel, kProgramTraced, true);
 }
 
 const char* program_file_name() noexcept {

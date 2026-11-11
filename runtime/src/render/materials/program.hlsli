@@ -12,7 +12,10 @@
 //
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
 // effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
-// (inputs per sample: an alpha test decides each sample of a multisampled target).
+// (inputs per sample: an alpha test decides each sample of a multisampled target). Ray tracing's two: NATIVE_PREPASS
+// (SV_Target0 is the draw's item and nothing else: the scene's depth and items before the tracer's light pass) and
+// NATIVE_TRACED (the pixel's traced light, rt/rt_light.hlsl: every program's colour by the ground's share, a lit
+// program's key and point light by theirs, program_lit.hlsli; with NATIVE_MOTION too).
 
 #ifndef PROGRAM_HLSLI
 #define PROGRAM_HLSLI
@@ -25,8 +28,13 @@ cbuffer View : register(b0) {
     float4 motion_params;      // xy the jitter, z this frame's half viewport, w last frame's
     float4 line_point_raster;  // the viewport's width and height in pixels, the half line width and half point size
     float3 view_sky_up;        // the player's up in eye space, unit length
-    uint view_flags;           // bit 0 view_sky_up known, bit 1 enhanced, bit 2 wide target
+    uint view_flags;           // bit 0 view_sky_up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light,
+                               // bit 4 the traced light shown in place of the colour (--diagnostics rt-light)
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
+    float4 view_traced;        // with bit 3: x the traced light's place among the textures, y the added light's,
+                               // z the mirror's
+    float4 view_tint;          // with bit 3: rgb what a shadow takes back from the sky (the stage's ambient colour,
+                               // by a share): a shadow is the sky's colour, not grey
 };
 
 cbuffer Draw : register(b3) {
@@ -185,6 +193,11 @@ float fog_rev_exp2(float f) { const float g = 1.0 - f; return exp2(-8.0 * g * g)
 // The motion varyings follow the program's own coordinates: the text that uses them defines the two indices (numbers).
 #define VARYINGS_MOTION float4 mv_cur : NEBULA_TEXCOORD(NEBULA_MOTION_CURRENT_INDEX); float4 mv_prev : NEBULA_TEXCOORD(NEBULA_MOTION_PREVIOUS_INDEX);
 #define PLACE_OUT(o, p) o.pos = p.clip; o.mv_cur = p.mv_cur; o.mv_prev = p.mv_prev
+#elif NATIVE_PREPASS
+// The prepass's pixel stage takes the primitive's number where the motion form's varyings would stand: the last of its
+// inputs, which no vertex stage writes.
+#define VARYINGS_MOTION uint primitive_ : SV_PrimitiveID;
+#define PLACE_OUT(o, p) o.pos = p.clip
 #else
 #define VARYINGS_MOTION
 #define PLACE_OUT(o, p) o.pos = p.clip
@@ -196,7 +209,9 @@ float fog_rev_exp2(float f) { const float g = 1.0 - f; return exp2(-8.0 * g * g)
 #endif
 
 
-#if NATIVE_LAYER
+#if NATIVE_PREPASS
+struct NativeOut { uint2 item : SV_Target0; };
+#elif NATIVE_LAYER
 struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; float4 layer : SV_Target2;
                    float4 trans : SV_Target3; };
 #elif NATIVE_REACTIVE
@@ -210,7 +225,11 @@ struct NativeOut { float4 color : SV_Target0; };
 // The colour as it is; the target rounds it once.
 NativeOut native_out_of(float4 c) {
     NativeOut o;
+#if NATIVE_PREPASS
+    o.item = uint2(draw_first_instance + 1u, 0u);  // the draw's item, from 1 (0: a pixel no draw of the prepass holds); y: its triangle
+#else
     o.color = c;
+#endif
 #if NATIVE_REACTIVE
     o.reactive = min(saturate(c.a), 0.9);
 #endif
@@ -224,14 +243,55 @@ NativeOut native_out_of(float4 c) {
     return o;
 }
 
-#if NATIVE_MOTION
+#if NATIVE_TRACED
+// The pixel's traced light: r the sun's share, g the fill's (all of it), b the lamp's, a the ground's (drop shadows,
+// and the sun's shadow on what is not lit). All of every light when the view carries none (view_flags bit 3).
+float4 traced_at(float4 pixel) {
+    if ((view_flags & 8u) == 0u) {
+        return float4(1.0, 1.0, 1.0, 1.0);
+    }
+    return gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
+}
+// The colour under it: darkened by the ground's share, and lit again by what glows near the pixel (the added light:
+// each emitter's colour by how much of it reaches the surface, as a share of the surface's own colour). Then what the
+// surface mirrors, over it (rgb, already by how much the surface mirrors; a: how much of the colour under it stays,
+// plus 2 on a blended surface: there what stays is taken from its alpha, and the mirror is given back the share
+// the blend would take of it).
+float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
+    const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
+    if (mirror.a > 1.5) {
+        // Blended: its alpha by what stays (glass clears where a real mirror stands for its painted one), and the
+        // mirror by that alpha's inverse, so the blend gives all of it.
+        const float stays = alpha * (mirror.a - 2.0);
+        return float4(colour + mirror.rgb / max(stays, 0.04), stays);
+    }
+    return float4(colour * mirror.a + mirror.rgb, alpha);
+}
+float4 traced_colour(float4 c, float4 pixel) {
+    if ((view_flags & 8u) == 0u) {
+        return c;
+    }
+    const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
+    const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
+    return (view_flags & 16u) != 0u ? float4(float3(light.r, light.a, light.b) * 0.7 + added, c.a) : traced_mirror(c.rgb * (light.a + (1.0 - light.a) * view_tint.rgb + added), c.a, pixel);
+}
+// A program returns inside its entry, whose input `i` holds the pixel.
+#define PROGRAM_LIGHT(c) traced_colour(c, i.pos)
+#else
+#define PROGRAM_LIGHT(c) (c)
+#endif
+
+#if NATIVE_PREPASS
+// The prepass names the pixel's triangle too (the primitive's number, among a pixel stage's inputs: VARYINGS_MOTION).
+#define PROGRAM_RETURN(c) { NativeOut out_ = native_out_of(c); out_.item.y = i.primitive_; return out_; }
+#elif NATIVE_MOTION
 // The move since the previous frame in pixels (mv_cur.z and mv_prev.z: the half viewport).
-#define PROGRAM_RETURN(c) { NativeOut out_ = native_out_of(c); \
+#define PROGRAM_RETURN(c) { NativeOut out_ = native_out_of(PROGRAM_LIGHT(c)); \
     if (i.mv_cur.w > 0.0 && i.mv_prev.w > 0.0) { \
         out_.motion = (i.mv_prev.xy / i.mv_prev.w - i.mv_cur.xy / i.mv_cur.w) * float2(i.mv_cur.z, i.mv_prev.z); \
     } return out_; }
 #else
-#define PROGRAM_RETURN(c) return native_out_of(c)
+#define PROGRAM_RETURN(c) return native_out_of(PROGRAM_LIGHT(c))
 #endif
 
 // The inspector's picture of one selected stage; nothing otherwise.

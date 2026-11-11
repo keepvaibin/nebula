@@ -100,7 +100,10 @@ struct Backend::State {
     [[nodiscard]] VkDescriptorSet allocate_set();
     std::vector<std::shared_ptr<vk::Texture>> images;
     VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
-    VkPipelineLayout layout = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;  // made when the renderer's image set's layout is known (begin)
+    VkSampler sampler = VK_NULL_HANDLE;        // s0
+    VkDescriptorSet texture_set = VK_NULL_HANDLE;  // the renderer's textures, set 1
+    VkDescriptorSetLayout images_layout = VK_NULL_HANDLE;
     VkPipeline pipelines[static_cast<unsigned>(RtShader::Count)]{};
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
     // Counters: the GPU adds to `counters`; a frame slot's copy is read a frame later.
@@ -126,6 +129,8 @@ struct Backend::State {
 
 namespace {
 
+constexpr std::uint32_t kMeshBinding = 1u + kPassBuffers + kPassTextures + kPassReads;
+constexpr std::uint32_t kSamplerBinding = 100u;  // s0 (the shaders' samplers are shifted by 100)
 constexpr std::uint32_t kImageBinding = 200u, kCountersBinding = 200u + kPassWrites, kWriteBufferBinding = kCountersBinding + 1u,
                         kConstantsBinding = 300u;
 constexpr VkDeviceSize kCountersBytes = VkDeviceSize{kCounters} * 4u;
@@ -139,10 +144,11 @@ VkDescriptorSet Backend::State::allocate_set() {
         if (pool_at >= slot_pools.size()) {
             const VkDescriptorPoolSize sizes[] = {
                 {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, kSets},
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSets * (kPassBuffers + 2u)},
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSets * (kPassBuffers + 2u + kPassMeshBuffers)},
                 {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kSets * (kPassTextures + kPassReads)},
                 {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kSets * kPassWrites},
                 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets},
+                {VK_DESCRIPTOR_TYPE_SAMPLER, kSets},
             };
             VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             info.maxSets = kSets;
@@ -167,7 +173,7 @@ VkDescriptorSet Backend::State::allocate_set() {
 }
 
 bool Backend::State::make_passes() {
-    VkDescriptorSetLayoutBinding bindings[1u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + 3u]{};
+    VkDescriptorSetLayoutBinding bindings[1u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + 4u + kPassMeshBuffers]{};
     std::uint32_t count = 0u;
     bindings[count++] = {0u, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     for (std::uint32_t i = 0; i < kPassBuffers; ++i) {
@@ -182,18 +188,27 @@ bool Backend::State::make_passes() {
     bindings[count++] = {kCountersBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[count++] = {kWriteBufferBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[count++] = {kConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    // s0: one sampler for the renderer's textures (linear, repeating), fixed in the layout.
+    VkSamplerCreateInfo sampler_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+    sampler_info.magFilter = sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.addressModeU = sampler_info.addressModeV = sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.maxLod = VK_LOD_CLAMP_NONE;
+    if (vkCreateSampler(device, &sampler_info, nullptr, &sampler) != VK_SUCCESS) {
+        return false;
+    }
+    bindings[count++] = {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, &sampler};
+    for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {  // t15 up: the mesh memory
+        bindings[count++] = {kMeshBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    }
     VkDescriptorSetLayoutCreateInfo set_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     set_info.bindingCount = count;
     set_info.pBindings = bindings;
     if (vkCreateDescriptorSetLayout(device, &set_info, nullptr, &set_layout) != VK_SUCCESS) {
         return false;
     }
-    VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    layout_info.setLayoutCount = 1u;
-    layout_info.pSetLayouts = &set_layout;
-    if (vkCreatePipelineLayout(device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
-        return false;
-    }
+    // The pipeline layout waits for the renderer's image set's layout (begin's `descriptors`): the passes' set is
+    // set 0, the renderer's textures set 1.
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_info.size = kCountersBytes;
     buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -315,6 +330,9 @@ void Backend::stop() noexcept {
     if (state_->layout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(state_->device, state_->layout, nullptr);
     }
+    if (state_->sampler != VK_NULL_HANDLE) {
+        vkDestroySampler(state_->device, state_->sampler, nullptr);
+    }
     if (state_->set_layout != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(state_->device, state_->set_layout, nullptr);
     }
@@ -415,12 +433,43 @@ void Backend::frame(unsigned frame_slot) noexcept {
         vkResetDescriptorPool(state_->device, pool, 0u);
     }
     state_->pool_at = 0u;
+    state_->counters_bound = false;  // the frame's first pass that counts zeroes them
 }
 
-void Backend::begin(void* commands, unsigned frame_slot, void*) noexcept {
-    state_->commands = static_cast<VkCommandBuffer>(commands);
-    state_->frame_slot = frame_slot % kFramesInFlight;
-    state_->asked = false;
+void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
+    State& s = *state_;
+    s.commands = static_cast<VkCommandBuffer>(commands);
+    s.frame_slot = frame_slot % kFramesInFlight;
+    s.asked = false;
+    if (const auto* textures = static_cast<const TextureTable*>(descriptors); textures != nullptr && textures->layout != nullptr) {
+        s.texture_set = static_cast<VkDescriptorSet>(textures->set);
+        const auto images_layout = static_cast<VkDescriptorSetLayout>(textures->layout);
+        if (s.layout == VK_NULL_HANDLE || s.images_layout != images_layout) {
+            // The passes' pipeline layout over the two sets (anew should the renderer's layout ever change: the
+            // pipelines made with the old one go with it).
+            const VkDevice device = s.device;
+            for (VkPipeline& pipeline : s.pipelines) {
+                if (pipeline != VK_NULL_HANDLE) {
+                    const VkPipeline old = pipeline;
+                    vk::Context::get().defer([device, old] { vkDestroyPipeline(device, old, nullptr); });
+                    pipeline = VK_NULL_HANDLE;
+                }
+            }
+            if (s.layout != VK_NULL_HANDLE) {
+                const VkPipelineLayout old = s.layout;
+                vk::Context::get().defer([device, old] { vkDestroyPipelineLayout(device, old, nullptr); });
+                s.layout = VK_NULL_HANDLE;
+            }
+            const VkDescriptorSetLayout sets[2] = {s.set_layout, images_layout};
+            VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+            layout_info.setLayoutCount = 2u;
+            layout_info.pSetLayouts = sets;
+            if (vkCreatePipelineLayout(device, &layout_info, nullptr, &s.layout) != VK_SUCCESS) {
+                s.layout = VK_NULL_HANDLE;
+            }
+            s.images_layout = images_layout;
+        }
+    }
 }
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
@@ -583,10 +632,26 @@ void* Backend::image_to_copy(std::uint32_t image) {
     return state_->images[image].get();
 }
 
+// The draws' programs sample it in the read-only layout (the texture array's); the next pass that writes it takes it
+// back to the general one.
+void* Backend::image_to_sample(std::uint32_t image) {
+    if (image >= state_->images.size() || state_->images[image] == nullptr) {
+        return nullptr;
+    }
+    vk::Texture& texture = *state_->images[image];
+    if (texture.layout == VK_IMAGE_LAYOUT_GENERAL) {
+        vk::image_barrier(state_->commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeWrite, gpu::Use::ShaderRead,
+                          gpu::Contents::Keep, 1u);
+        texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    return &texture;
+}
+
 void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
     State& s = *state_;
     const auto index = static_cast<unsigned>(shader);
-    if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || groups_x == 0u || groups_y == 0u) {
+    if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || groups_x == 0u || groups_y == 0u ||
+        s.layout == VK_NULL_HANDLE) {
         return;
     }
     if (s.pipelines[index] == VK_NULL_HANDLE) {
@@ -626,6 +691,16 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             image->layout = VK_IMAGE_LAYOUT_GENERAL;
         }
     }
+    // So does an image read before any pass wrote it (the filter's history on its first frame): a descriptor names
+    // no image without a layout, whatever the pass makes of its contents.
+    for (const std::uint32_t read : binds.reads) {
+        vk::Texture* const image = image_of(read);
+        if (image != nullptr && image->layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+            vk::image_barrier(commands, image->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ShaderRead, gpu::Use::ComputeWrite,
+                              gpu::Contents::Discard, 1u);
+            image->layout = VK_IMAGE_LAYOUT_GENERAL;
+        }
+    }
     if (binds.counters && !s.counters_bound) {
         vkCmdFillBuffer(commands, s.counters, 0u, kCountersBytes, 0u);
         VkMemoryBarrier filled{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -640,9 +715,9 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     if (set == VK_NULL_HANDLE) {
         return;  // the device has no pool left for it: the pass is left out this frame
     }
-    constexpr unsigned kMost = 4u + kPassBuffers + kPassTextures + kPassReads + kPassWrites;
+    constexpr unsigned kMost = 4u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + kPassMeshBuffers;
     VkWriteDescriptorSet writes[kMost]{};
-    VkDescriptorBufferInfo buffers[kPassBuffers + 3u]{};
+    VkDescriptorBufferInfo buffers[kPassBuffers + 3u + kPassMeshBuffers]{};
     VkDescriptorImageInfo views[kPassTextures + kPassReads + kPassWrites]{};
     std::uint32_t write_count = 0u, buffer_count = 0u, view_count = 0u;
     const auto next = [&](std::uint32_t binding, VkDescriptorType type) -> VkWriteDescriptorSet& {
@@ -680,7 +755,8 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     }
     for (std::uint32_t i = 0; i < kPassReads; ++i) {
         if (const vk::Texture* image = image_of(binds.reads[i])) {
-            views[view_count] = {VK_NULL_HANDLE, image->view, VK_IMAGE_LAYOUT_GENERAL};
+            // As it lies: the general layout, or read-only once the draws sampled it (image_to_sample).
+            views[view_count] = {VK_NULL_HANDLE, image->view, image->layout};
             next(1u + kPassBuffers + kPassTextures + i, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE).pImageInfo = &views[view_count++];
         }
     }
@@ -701,9 +777,15 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     if (binds.constants.at != 0u) {
         next(kConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).pBufferInfo = buffer_at(binds.constants);
     }
+    for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {
+        if (binds.mesh[i].at != 0u) {
+            next(kMeshBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).pBufferInfo = buffer_at(binds.mesh[i]);
+        }
+    }
     vkUpdateDescriptorSets(s.device, write_count, writes, 0u, nullptr);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.pipelines[index]);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.layout, 0u, 1u, &set, 0u, nullptr);
+    const VkDescriptorSet sets[2] = {set, s.texture_set};
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.layout, 0u, s.texture_set != VK_NULL_HANDLE ? 2u : 1u, sets, 0u, nullptr);
     vkCmdDispatch(commands, groups_x, groups_y, 1u);
     written(commands);
 }
@@ -720,7 +802,6 @@ void Backend::end_counters() {
                          nullptr);
     const VkBufferCopy all{0u, 0u, kCountersBytes};
     vkCmdCopyBuffer(s.commands, s.counters, s.counters_read[s.frame_slot]->buffer, 1u, &all);
-    s.counters_bound = false;
 }
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {

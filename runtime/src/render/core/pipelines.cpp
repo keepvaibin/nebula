@@ -16,6 +16,8 @@
 #include <fstream>
 #include <stdexcept>
 
+#include "galaxy/render/program_table.h"
+
 namespace galaxy::render::core {
 
 
@@ -55,13 +57,16 @@ void Pipelines::shutdown() noexcept {
     for (auto& root : directories_) {
         if (Directory* directory = root.exchange(nullptr)) {
             for (auto& page : directory->pages) { delete page.load(); }
+            for (auto& page : directory->traced_pages) { delete page.load(); }
             delete directory;
         }
     }
 }
 
 std::atomic<gpu::Pipeline*>* Pipelines::cell(std::uint64_t id, unsigned variant, unsigned aux) {
-    Page* page = page_of(id);
+    const std::uint32_t key = key_of(variant, aux);
+    const bool traced = key >= kKeys;
+    Page* page = page_of(id, traced);
     if (page == nullptr) {
         const auto root = static_cast<std::size_t>(id >> (kPageBits + kDirectoryBits));
         if (root >= directories_.size()) { throw std::out_of_range("pipeline ID outside the native namespaces"); }
@@ -71,11 +76,11 @@ std::atomic<gpu::Pipeline*>* Pipelines::cell(std::uint64_t id, unsigned variant,
             directory = new Directory();
             directories_[root].store(directory, std::memory_order_release);
         }
-        auto& at = directory->pages[(id >> kPageBits) & (kDirectorySize - 1u)];
+        auto& at = (traced ? directory->traced_pages : directory->pages)[(id >> kPageBits) & (kDirectorySize - 1u)];
         page = at.load(std::memory_order_acquire);
         if (page == nullptr) { page = new Page(); at.store(page, std::memory_order_release); }
     }
-    return &page->rows[id & kPageMask][key_of(variant, aux)];
+    return &page->rows[id & kPageMask][key & (kKeys - 1u)];
 }
 
 gpu::Pipeline* Pipelines::publish(std::atomic<gpu::Pipeline*>& at, gpu::Pipeline* built) noexcept {
@@ -102,7 +107,7 @@ std::uint64_t pair_key(const PipelineEntry& entry) noexcept {
 void Pipelines::refuse(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
     failures_.fetch_add(1u, std::memory_order_relaxed);
     std::lock_guard guard(lock_);
-    refused_.insert(std::uint64_t{id} << 8u | key_of(variant, aux));
+    refused_.insert(std::uint64_t{id} << 9u | key_of(variant, aux));
     if (++refused_pairs_[pair_key(entry)] == kPairRefusals) {
         std::fprintf(stderr, "[pipelines] programs %llx %llx refused twice: not asked for again\n",
                      static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel));
@@ -125,7 +130,7 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
     }
     {
         std::lock_guard guard(lock_);
-        if (refused_.count(std::uint64_t{id} << 8u | key_of(variant, aux)) != 0u) {
+        if (refused_.count(std::uint64_t{id} << 9u | key_of(variant, aux)) != 0u) {
             return nullptr;
         }
     }
@@ -157,8 +162,22 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
     return published;
 }
 
+// Whether the tracer's prepass draws this entry: an opaque surface that writes depth through a test that passes an equal
+// depth (the pass after it finds its own depth there), and no stencil (its marks are the scene pass's).
+bool prepass_draws(std::uint32_t state) noexcept {
+    const std::uint32_t test = (state >> 11u) & 7u;  // the game's: 3 less or equal, 6 greater or equal, 7 always
+    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_REPLACE && (state & (1u << 10u)) != 0u &&
+           (state & (1u << 14u)) != 0u && test == 3u && ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
+}
+
+bool blended_prepass_draws(std::uint32_t state) noexcept {
+    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA &&
+           ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA && (state & (1u << 10u)) != 0u && ((state >> 20u) & 3u) == 0u &&
+           ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
+}
+
 void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
-                        bool one_pass) {
+                        bool one_pass, bool traced) {
     const auto add = [&](unsigned variant, unsigned aux) {
         pending_.fetch_add(1u, std::memory_order_relaxed);
         jobs_.push_back(Job{id, entry, variant, aux});
@@ -168,9 +187,20 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
         if (quit_) {
             return;
         }
+        // The tracer's forms of a scene draw (no target, one sample): its prepass, and a lit program's traced forms under
+        // the aux the scene pass gives an opaque draw.
+        const bool prepass = traced && (prepass_draws(entry.desc.state) || blended_prepass_draws(entry.desc.state));
+        const bool lit = prepass && program_traced(entry.desc.pixel);
         for (const unsigned variant : variants) {
             add(variant, 0u);
-            if (!motion || (variant & kSceneVariantTarget) != 0u || (variant & kSceneVariantSamplesMask) != 0u) {
+            const bool scene = (variant & kSceneVariantTarget) == 0u && (variant & kSceneVariantSamplesMask) == 0u;
+            if (scene && prepass) {
+                add(variant, motion ? kAuxPrepassMotion : kAuxPrepass);
+                if (lit) {
+                    add(variant, kAuxTraced | (motion ? 1u : 0u));
+                }
+            }
+            if (!motion || !scene) {
                 continue;
             }
             add(variant, 1u);

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The one path every presented frame takes through a frame list: a real frame at t = 1, a generated one at its t.
+#include "galaxy/render/program_table.h"
 #include "galaxy/render/render_core.h"
 
 #include "galaxy/cpu_count.h"
@@ -252,6 +253,7 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     }
 
     std::memcpy(rows_at.cpu, rows, std::size_t{instances_first} * 16u);
+    walk_rows_upload_ = rows_at.cpu;
     if (list.instance_row_count != 0u) {
         std::memcpy(rows_at.cpu + std::size_t{instances_first} * 16u, list.instance_rows, std::size_t{list.instance_row_count} * 16u);
     }
@@ -462,6 +464,12 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     rows.raster[1] = height;
     std::memcpy(rows.sky_up, sky_up_, sizeof(rows.sky_up));
     rows.view_flags = view_flags_;
+    rows.traced[0] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_light_slot_) : 0.0f;
+    rows.traced[1] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_added_slot_) : 0.0f;
+    rows.traced[2] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_mirror_slot_) : 0.0f;
+    if ((view_flags_ & 8u) != 0u) {
+        std::memcpy(rows.tint, rt_tint_, sizeof(rows.tint));
+    }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
     std::memcpy(out.cpu, &rows, sizeof(rows));
@@ -598,6 +606,10 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
             break;
         }
         if (!walk_same_material(next.constants, head.constants)) {
+            break;
+        }
+        // A drop shadow's volume the tracer draws is left out by itself: it does not ride in a run that is drawn.
+        if (!rt_drop_volumes_.empty() && rt_drop_volumes_.contains(next.slot) != rt_drop_volumes_.contains(head.slot)) {
             break;
         }
         index_count += next.count;
@@ -984,7 +996,8 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
     const bool layer_window = renderer_.layer_window();
     const bool one_pass = renderer_.motion_pass_only();
     const std::uint32_t end = pass.first_item + pass.item_count;
-    const bool collect_ao = collect_ao_objects_ && scene_layer;
+    const bool collect_ao = collect_ao_objects_ && scene_layer && !rt_prepass_walk_;
+    const bool tracing = rt_backend_.started();
     for (std::uint32_t i = pass.first_item; i < end;) {
         const NebulaFrameItem& item = list.items[i];
         const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u;
@@ -992,11 +1005,31 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         const core::GpuMesh* mesh = ring || instanced ? nullptr : &registries_.mesh(item.mesh);
         const core::PipelineEntry& entry = registries_.pipeline(item.pipeline);
         const std::uint32_t state = entry.desc.state;
+        // The tracer's prepass draws the scene's opaque surfaces only.
+        if (rt_prepass_walk_ && !rt_prepass_draws(item, state)) {
+            ++i;
+            continue;
+        }
 
         if (collect_ao && (item.flags & NEBULA_ITEM_REFLECT_AO) != 0u && mesh != nullptr) {
             const float (*block_rows)[4] = walk_rows_cpu_ + walk_block_rows_[item.block];
             ao_objects_.add(item.block, registries_.object_slots(*mesh),
                             [block_rows](std::uint32_t row, unsigned col) { return block_rows[row][col]; });
+        }
+        // With traced light no shadow is drawn by hand: not the game's own (drop shadow volumes and their fill, the
+        // player's alpha shadow, shadow surfaces: one category), not a shadow model or decal (its material says so).
+        // The prepass leaves them out too (they are no surfaces).
+        if ((rt_light_on_ || rt_prepass_walk_) && scene_layer &&
+            (((item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT) == NEBULA_CATEGORY_GAME_SHADOW ||
+             (mesh != nullptr && (mesh->hit_flags & NEBULA_HIT_DRAWN_SHADOW) != 0u))) {
+            ++i;
+            continue;
+        }
+        // A drop shadow's stencil volume whose shadow the tracer draws (rt_drops_collect) is left out.
+        if (!rt_drop_volumes_.empty() && scene_layer && !state_color_write(state) && state_stencil(state) &&
+            rt_drop_volumes_.contains(item.slot)) {
+            ++i;
+            continue;
         }
         const WalkView& view = walk_view(item.view, pass);
         if (view.empty || (mesh != nullptr && mesh->positions == 0u) || item_culled(item, pass, state, mesh)) {
@@ -1009,6 +1042,13 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         if (scene_layer && motion_scene_ && one_pass && aux != 1u) {
             aux = 4u;
         }
+        if (rt_prepass_walk_) {
+            // Through the vertex stage the scene pass will use for it: the two passes find one depth.
+            aux = static_cast<std::uint8_t>(aux == 1u ? kAuxPrepassMotion : kAuxPrepass);
+        } else if (rt_light_on_ && scene_layer && rt_prepassed_[i] != 0u && (aux == 0u || aux == 1u || aux == 4u) &&
+                   program_traced(entry.desc.pixel)) {
+            aux = static_cast<std::uint8_t>(aux | kAuxTraced);  // a surface the light pass saw: its colour and lights by their shares
+        }
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
@@ -1019,7 +1059,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
 
         // Consecutive draws of one mesh under one material are one instanced draw.
         std::uint32_t instances = 1u;
-        if (mesh != nullptr) {
+        if (mesh != nullptr && !rt_prepass_walk_) {  // the prepass: one item a draw, so a pixel names its own item
             while (i + instances < end) {
                 const NebulaFrameItem& next = list.items[i + instances];
                 if (next.mesh != item.mesh || next.pipeline != item.pipeline || !walk_same_material(next.constants, item.constants) ||
@@ -1035,16 +1075,24 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                 if (item_culled(next, pass, state, mesh)) {
                     break;
                 }
+                // The light pass reads a draw's light set from its first item: one set a draw.
+                if (tracing && next.light_set != item.light_set) {
+                    break;
+                }
+                if (!rt_drop_volumes_.empty() && !state_color_write(state) && state_stencil(state) && rt_drop_volumes_.contains(next.slot)) {
+                    break;  // a traced drop shadow's volume: left out when its turn comes
+                }
                 ++instances;
             }
         }
         // Consecutive ring draws of one material are one draw.
         std::uint32_t ring_index_count = item.count;
-        if (ring && !instanced && (item.flags & NEBULA_ITEM_INDEXED) != 0u && aux != 1u) {
+        const bool motion_form = aux_motion_form(aux);
+        if (ring && !instanced && (item.flags & NEBULA_ITEM_INDEXED) != 0u && !motion_form && !rt_prepass_walk_) {
             instances = merge_ring_run(i, end, entry.matrix_at, ring_index_count);
         }
 
-        encoder.set_draw_aux(aux);
+        encoder.set_draw_aux(aux_targets(aux));
         renderer_.note_scene_draw(state);
         encoder.set_pipeline(pipeline);
         encoder.set_view(view.address);
@@ -1076,7 +1124,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             // The vertex stage reads its instances from the rows: every stream the layout names reads zero.
             const gpu::StreamView zero{renderer_.zero_stream(16u), 16u, 0u};
             encoder.set_stream(gpu::kStreamPosition, zero);
-            if (aux == 1u) {
+            if (motion_form) {
                 encoder.set_stream(gpu::kStreamBefore, zero);
             }
             encoder.set_stream(gpu::kStreamZero, zero);
@@ -1086,7 +1134,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             const auto bytes = static_cast<std::uint32_t>(list.ring_vertex_bytes - item.ring_at);
             const gpu::Address at = walk_.ring_vertices + item.ring_at;
             encoder.set_stream(gpu::kStreamPosition, {at, bytes, stride});
-            if (aux == 1u) {
+            if (motion_form) {
                 encoder.set_stream(gpu::kStreamBefore, {ring_item_before(i, at), bytes, stride});
             }
             encoder.set_stream(gpu::kStreamZero, {renderer_.zero_stream(16u), 16u, 0u});
@@ -1099,7 +1147,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         } else if (mesh->site_stride != 0u) {
             const std::uint32_t bytes = mesh->vertex_count * mesh->site_stride;
             encoder.set_stream(gpu::kStreamPosition, {mesh->positions, bytes, mesh->site_stride});
-            if (aux == 1u) {
+            if (motion_form) {
                 encoder.set_stream(gpu::kStreamBefore, {mesh->positions, bytes, mesh->site_stride});
             }
             encoder.set_stream(gpu::kStreamZero, {renderer_.zero_stream(16u), 16u, 0u});
@@ -1125,8 +1173,18 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             encoder.set_indices(refined ? mesh->refined_indices : mesh->indices, index_count * mesh->index_bytes, mesh->index_bytes);
             encoder.draw_indexed(index_count, instances, 0u, 0);
         }
+        if (rt_prepass_walk_) {
+            std::fill_n(rt_prepassed_.begin() + i, std::min<std::size_t>(instances, rt_prepassed_.size() - i),
+                        rt_blended_walk_ ? std::uint8_t{2u} : std::uint8_t{1u});
+        }
         i += instances;
     }
+}
+
+// A draw pass through the encoder as it is walked (the tracer's prepass).
+void RenderCore::walk_draw_pass_direct(const NebulaFramePass& pass) {
+    DirectDraws draws(renderer_.encoder(), renderer_);
+    walk_draw_items(pass, draws);
 }
 
 gpu::Address RenderCore::ring_item_before(std::uint32_t index, gpu::Address own) const noexcept {
@@ -1210,10 +1268,14 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     ++walk_view_stamp_;
     if (rt_backend_.started()) {
         rt_scene(pass);
+        rt_prepass(pass);
     }
 }
 
 void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
+    if (rt_backend_.started() && scene_phase_) {
+        rt_blended(pass);
+    }
     if (rt_backend_.started() && scene_phase_ && pass.scene_view != NEBULA_NONE32 &&
         ::galaxy::diagnosing(::galaxy::kDiagnoseRtView | ::galaxy::kDiagnoseRtCheck)) {
         rt_view(pass);
@@ -1234,6 +1296,7 @@ void RenderCore::walk_opaque_end(const NebulaFramePass& pass) {
 }
 
 void RenderCore::walk_scene_end() {
+    rt_light_end();
     scene_phase_ = false;
     temporal_scene_ = false;
     motion_scene_ = false;
