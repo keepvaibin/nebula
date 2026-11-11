@@ -143,6 +143,9 @@ pub struct Record {
     pub trivial_copy: bool,
     /// Trivially destructible (TY-10): dropping one frees nothing.
     pub trivial_destroy: bool,
+    /// No copy or move constructor and no copy or move assignment can be called (TY-10b). clang calls such a record
+    /// trivially copyable, so a reader that takes a record by value needs `trivial_copy && !no_copy`.
+    pub no_copy: bool,
     /// In declaration order.
     pub bases: Vec<Base>,
     /// Its own fields in declaration order.
@@ -292,6 +295,7 @@ impl Types {
                         is_abstract: flag(row, "abstract", &at)?,
                         trivial_copy: flag(row, "trivial_copy", &at)?,
                         trivial_destroy: flag(row, "trivial_destroy", &at)?,
+                        no_copy: flag(row, "no_copy", &at)?,
                         ..Record::default()
                     };
                     for (k, b) in items(row, "bases", &at)?.iter().enumerate() {
