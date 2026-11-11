@@ -874,6 +874,7 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Blend Moments A", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Blend Moments B", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Facing", rt::ImageFormat::R8, kRtFull, kForLight},
+    {"Nebula RT Blend Body", rt::ImageFormat::R8, kRtFull, kForBlend},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average B", kHalf4, kRtHalf, kForIndirect},
@@ -1087,6 +1088,7 @@ void RenderCore::rt_blend_filters() {
     over_space.reads[0] = average;
     over_space.reads[1] = moments;
     over_space.reads[2] = guide;
+    over_space.reads[3] = rt_image(RtImage::BlendBody);  // glass's and water's body into the added light's a
     over_space.writes[0] = rt_image(RtImage::Added);
     rt_backend_.dispatch(RtShader::LightsSpace, over_space, frame.across, frame.down);
 }
@@ -1142,6 +1144,8 @@ void RenderCore::rt_pass_light() {
     binds.writes[0] = rt_image(RtImage::Light);
     binds.writes[1] = rt_image(RtImage::Mirror);
     binds.writes[2] = rt_image(RtImage::Facing);
+    binds.writes[3] = rt_image(RtImage::BlendBody);         // the second layer's glass and water (kNoImage before one)
+    binds.reads[6] = rt_now(RtImage::GuideA);               // the opaque layer's, for the water's depth
     rt_backend_.dispatch(RtShader::Light, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 

@@ -24,6 +24,35 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 // colour stays under it, plus 2 in the second layer (program.hlsli traced_mirror).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u1);
 RT_FORMAT(r8) RWTexture2D<float> g_facing : register(u2);  // how a painted surface faces the sun (0: no surface: 1)
+RT_FORMAT(r8) RWTexture2D<unorm float> g_body : register(u3);  // the second layer's body (glass and water, FC's c16)
+Texture2D<float4> g_guide_opaque : register(t15);  // the opaque layer's guide: under water, how deep it is
+
+// Glass and water on the second layer (plan 13.2, 13.3; FC's c16): the Schlick reflectance of the material's ior times
+// its shine, at most 1, and its body. Item word 15 (FC's c15): ior bits 12-19 as (ior - 1) * 100, shine bits 20-25 as
+// shine * 4 (63: the class's own), body bits 26-31 as body * 62 (63: the class's own); 0 when nothing wrote it.
+struct ClearSurface {
+    float f;     // how much of R it shows
+    float body;  // how much of its own colour covers what lies behind
+};
+
+ClearSurface clear_surface(uint item, uint class_, float facing_eye, float depth) {
+    const uint word = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u);
+    const bool water = class_ == kClassWater;
+    const uint ior_bits = word >> 12u & 255u, shine_bits = word >> 20u & 63u, body_bits = word >> 26u;
+    const bool written = ior_bits != 0u;
+    const float ior = written ? 1.0f + float(ior_bits) / 100.0f : (water ? 1.33f : 1.5f);
+    const float shine = written && shine_bits != 63u ? float(shine_bits) / 4.0f : (water ? 1.5f : 2.0f);
+    const float f0 = (ior - 1.0f) * (ior - 1.0f) / ((ior + 1.0f) * (ior + 1.0f));
+    const float away = 1.0f - saturate(facing_eye);
+    ClearSurface c;
+    c.f = min(shine * (f0 + (1.0f - f0) * away * away * away * away * away), 1.0f);
+    if (water) {
+        c.body = depth > 0.0f ? 1.0f - exp(-depth / 600.0f) : 1.0f;  // kWaterClear: 6 m (rt_stages.tsv may say)
+    } else {
+        c.body = written && body_bits != 63u ? float(body_bits) / 62.0f : 0.35f;  // kGlassBody
+    }
+    return c;
+}
 
 // What a ray sees: the colour of the nearest thing on it, as the scene's light leaves it. The scene's solid things
 // and its cutouts where their maps say they are, else the sky's dome, else g_sky. A thing shows its first map at the
@@ -144,6 +173,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     float4 share = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float4 mirror = float4(0.0f, 0.0f, 0.0f, 1.0f);
     float facing_out = 1.0f;
+    bool clear = false;  // glass or water on the second layer: the mirror is (F R, 4 + F)
+    float body = 1.0f;
     const float4 guide = g_guide.Load(int3(pixel, 0));
     if (guide.a != 0.0f) {
         const RtSurface s = rt_surface(pixel, guide, g_normals.Load(int3(pixel, 0)), g_motion.Load(int3(pixel, 0)).w);
@@ -199,6 +230,8 @@ void main(uint3 id : SV_DispatchThreadID) {
             float3 tint = float3(1.0f, 1.0f, 1.0f);
             if (class_ == kClassGlass) {
                 head_on = 0.1f;
+            } else if (class_ == kClassWater) {
+                head_on = second ? 0.02f : 0.0f;  // the opaque layer's water is the painted floor under it
             } else if (class_ == kClassMetal) {
                 head_on = 0.55f;
                 tint = lerp(float3(1.0f, 1.0f, 1.0f), float3(float(tint_word & 255u), float(tint_word >> 8u & 255u), float(tint_word >> 16u & 255u)) / 255.0f, 0.5f);
@@ -222,6 +255,13 @@ void main(uint3 id : SV_DispatchThreadID) {
                 // The painted reflection it was drawn with gives way to the real one: that much less of the colour under
                 // the mirror (a blended surface: of its alpha, so glass clears).
                 mirror.a = 1.0f - 0.6f * float(tint_word >> 24u) / 255.0f;
+                if (second && (class_ == kClassGlass || class_ == kClassWater)) {
+                    const float4 under = g_guide_opaque.Load(int3(pixel, 0));
+                    const ClearSurface c = clear_surface(item, class_, -dot(n, look_along), under.a != 0.0f ? under.r - guide.r : 0.0f);
+                    mirror = float4(seen_ * c.f, 4.0f + c.f);
+                    body = c.body;
+                    clear = true;
+                }
             }
         }
     }
@@ -233,5 +273,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     g_out[id.xy] = share;
     g_facing[id.xy] = facing_out;
-    g_mirror[id.xy] = float4(mirror.rgb, mirror.a + (second ? 2.0f : 0.0f));
+    g_mirror[id.xy] = float4(mirror.rgb, mirror.a + (second && !clear ? 2.0f : 0.0f));
+    if (second) {
+        g_body[id.xy] = body;
+    }
 }
