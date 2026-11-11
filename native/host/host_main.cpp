@@ -3428,16 +3428,38 @@ void cook_failed(const fs::path& overlay) {
                                   : ("the mods' files could not be cooked: the game runs without them: " + why).c_str());
 }
 
+// The cooker this build runs, by its file's size and time: another cooker (a new build, with its own applier and
+// cooks) cooks the mods again. "none" when it is not found; the cook then fails and says so.
+std::string cooker_identity() {
+#if defined(_WIN32)
+    const fs::path cooker = fs::path(::galaxy::windows::executable_path()).parent_path() / "nebula-import.exe";
+#else
+    fs::path cooker;
+    if (void* const library = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL)) {
+        Dl_info info{};
+        if (void* const cook = dlsym(library, "nebula_cook_overlay"); cook != nullptr && dladdr(cook, &info) != 0 && info.dli_fname != nullptr) {
+            cooker = fs::path(info.dli_fname);
+        }
+    }
+#endif
+    std::error_code error;
+    const auto size = fs::file_size(cooker, error);
+    if (error) return "cooker none\n";
+    const auto time = fs::last_write_time(cooker, error).time_since_epoch().count();
+    return "cooker " + std::to_string(size) + " " + std::to_string(static_cast<long long>(time)) + "\n";
+}
+
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
-    if (plan.files.empty() && plan.merges.empty()) {
+    if (plan.files.empty() && plan.merges.empty() && plan.patches.empty()) {
         return;
     }
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
-    // Another build's shader interface or shader compiler means their shaders are built again.
+    // Another build's shader interface or shader compiler means their shaders are built again; another cooker, that
+    // the mods are cooked again (table-keys 9: cached by the mod list, the game and the applier).
     const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + " " +
-                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n";
+                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n" + cooker_identity();
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;
@@ -3495,6 +3517,17 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
                 log_line("mods: left out:", line.c_str());
             }
         }
+        // What the patches by key did that a player must hear of (table-keys: conflicts, rows not there, selectors'
+        // counts, patches left out), one fact a line, for the log here and the Mods screen (plan 6.2).
+        {
+            fs::path facts = overlay;
+            facts.replace_extension("facts");
+            std::ifstream lines(facts);
+            std::string line;
+            while (std::getline(lines, line)) {
+                log_line("mods: patch:", line.c_str());
+            }
+        }
         {
             // What their materials need and they didn't bring.
             std::vector<fs::path> brought;
@@ -3549,7 +3582,8 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
     }
     if (gPak.store.attach_overlay(overlay)) {
         char text[96];
-        std::snprintf(text, sizeof(text), "%zu files and %zu table or file merges applied", plan.files.size(), plan.merges.size());
+        std::snprintf(text, sizeof(text), "%zu files, %zu table or file merges and %zu patches by key applied", plan.files.size(),
+                      plan.merges.size(), plan.patches.size());
         log_line("mods:", text);
     } else {
         log_line("mods:", "the mods' files could not be read: the game runs without them");

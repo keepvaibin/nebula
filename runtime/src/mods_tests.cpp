@@ -272,6 +272,61 @@ bool setting_overlaps() {
     return ok;
 }
 
+// Patches by key (luma-format 5.1) go to the cooker with their mod, file and game path, bottom of the list first, then
+// layer and file order, with the mod order; a file that is not <game path>.json is named, not used. A mod of patches
+// only changes the game.
+bool patches_by_key_in_the_plan() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_patches_by_key");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const auto manifest = [](const char* id, const char* layers) {
+        return std::string(R"({"format":1,"id":")") + id + R"(","name":"n","version":"1.0.0","game":"RMG","layers":[)" + layers + "]}";
+    };
+    write(root / "mods" / "top" / "luma.json", manifest("top", R"({"path":"layers/base"})"));
+    write(root / "mods" / "top" / "layers" / "base" / "patches" / "StageData" / "AstroGalaxy" / "jmp" / "Placement" / "Common" /
+              "ObjInfo.json",
+          R"({"patch":1,"key":["l_id"],"remove":[{"l_id":3}]})");
+    write(root / "mods" / "low" / "luma.json", manifest("low", R"({"path":"layers/one"},{"path":"layers/two"})"));
+    write(root / "mods" / "low" / "layers" / "one" / "patches" / "ObjectData" / "Things.bcsv.json", R"({"patch":1,"key":["name"]})");
+    write(root / "mods" / "low" / "layers" / "one" / "patches" / "ObjectData" / "Notes.txt", "not a patch");
+    write(root / "mods" / "low" / "layers" / "two" / "patches" / "ObjectData" / "Things.bcsv.json", R"({"patch":1,"key":["name"]})");
+    write(root / "mods" / "low" / "layers" / "two" / "patches" / "Effect" / "Particles.json", R"({"patch":1,"key":["name"]})");
+    write(root / "mods.ini", "[top]\nenabled=1\norder=1\n[low]\nenabled=1\norder=2\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto changes = [&](const char* id) {
+        const auto it = std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+        return it != mods.end() && it->enabled && it->problem.empty() && galaxy::mods::changes_game_files(*it);
+    };
+    ok &= expect(changes("top") && changes("low"), "a .luma of patches only changes the game");
+    const galaxy::assets::AssetStore store;
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
+    std::vector<std::string> got;
+    for (const galaxy::mods::ModPlan::Patch& p : plan.patches) got.push_back(p.mod_id + " " + p.entry + " " + p.disc);
+    ok &= expect(got == std::vector<std::string>{
+                            "low layers/one/patches/ObjectData/Things.bcsv.json ObjectData/Things.bcsv",
+                            "low layers/two/patches/Effect/Particles.json Effect/Particles",
+                            "low layers/two/patches/ObjectData/Things.bcsv.json ObjectData/Things.bcsv",
+                            "top layers/base/patches/StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo.json "
+                            "StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo"},
+                 "the patches, bottom of the list first, then layer and file order");
+    ok &= expect(plan.used == std::vector<std::string>{"low", "top"}, "the mod order, bottom of the list first");
+    ok &= expect(std::any_of(plan.notes.begin(), plan.notes.end(),
+                             [](const std::string& n) { return n.find("layers/one/patches/ObjectData/Notes.txt") != std::string::npos; }),
+                 "a file that is not a patch is named");
+    const std::string text = galaxy::mods::plan_text(plan, "RMGE01");
+    ok &= expect(text.find("\n%mods\tlow\ttop\n") != std::string::npos &&
+                     text.find("\n%patch\ttop\tlayers/base/patches/StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo.json\t"
+                               "StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo\t") != std::string::npos,
+                 "the cooker's plan has the mod order and each patch");
+    const std::string signature = galaxy::mods::plan_signature(plan, "RMGE01");
+    ok &= expect(signature.find("\n%mods\tlow\ttop\n") != std::string::npos && signature.find("%patch\tlow\t") != std::string::npos,
+                 "the signature has the order and the patches");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 // A .luma that only sets the player's numbers, or only adds an object, is in the plan and asks for a restart; one with an
 // empty layer folder sets nothing.
 bool layer_only_mods() {
@@ -669,7 +724,7 @@ bool texture_names() {
 int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
-    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), layer_only_mods(), galaxy_saves(),
+    const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), galaxy_saves(),
                             luma_rules(), luma_import()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
