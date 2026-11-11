@@ -48,14 +48,30 @@ target_compile_definitions(nebula_vulkan_deps INTERFACE NEBULA_GPU_VULKAN VK_NO_
 
 # Shaders are compiled at build time by the PC's tools (the Windows Vulkan build's galaxy_native_spirv and
 # galaxy_utility_spirv): a device compiles nothing.
+# A native build (desktop Linux) can build them itself instead, from glslang's sources in NEBULA_DEPS.
 set(NEBULA_HOST_TOOLS "" CACHE PATH "Folder of galaxy_native_spirv and galaxy_utility_spirv for the build machine")
-if(NOT IS_DIRECTORY "${NEBULA_HOST_TOOLS}")
+if(IS_DIRECTORY "${NEBULA_HOST_TOOLS}")
+    add_executable(galaxy_native_spirv IMPORTED)
+    set_target_properties(galaxy_native_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_native_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
+    add_executable(galaxy_utility_spirv IMPORTED)
+    set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
+elseif(NOT CMAKE_CROSSCOMPILING)
+    # (glslang and nebula_shader_compiler: above.)
+    include("${nebula_root}/cmake/post_shader_sources.cmake")
+    set(galaxy_tools_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/tools_post_shader_embed.cpp")
+    galaxy_embed_post_sources("${galaxy_tools_post_embed_cpp}" "${nebula_root}")
+    add_executable(galaxy_native_spirv "${nebula_root}/tools/dev/native_spirv.cpp"
+        "${nebula_root}/runtime/src/render/vk/shader_compile_vk.cpp")
+    add_executable(galaxy_utility_spirv "${nebula_root}/tools/dev/utility_spirv.cpp"
+        "${nebula_root}/runtime/src/render/vk/shader_compile_vk.cpp" "${nebula_root}/runtime/src/render/renderer_common.cpp"
+        "${galaxy_tools_post_embed_cpp}")
+    foreach(tool galaxy_native_spirv galaxy_utility_spirv)
+        target_include_directories(${tool} PRIVATE "${nebula_root}/runtime/include" "${nebula_root}/native/include")
+        target_link_libraries(${tool} PRIVATE nebula_vulkan_deps nebula_shader_compiler)
+    endforeach()
+else()
     message(FATAL_ERROR "Set NEBULA_HOST_TOOLS to the Windows Vulkan build folder")
 endif()
-add_executable(galaxy_native_spirv IMPORTED)
-set_target_properties(galaxy_native_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_native_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
-add_executable(galaxy_utility_spirv IMPORTED)
-set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 include("${nebula_root}/cmake/native_materials.cmake")
 galaxy_program_blob(galaxy_programs_spirv spirv)
 set(galaxy_utility_spirv_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/utility_spirv")
@@ -63,6 +79,9 @@ file(MAKE_DIRECTORY "${galaxy_utility_spirv_dir}")
 add_custom_command(OUTPUT "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     COMMAND galaxy_utility_spirv "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     DEPENDS galaxy_utility_spirv VERBATIM)
+# The header as a target of its own, for a target in another folder that includes it (platform/apple's utility_msl):
+# a custom command's output only gets built for targets in the folder that declares it.
+add_custom_target(galaxy_utility_spirv_data DEPENDS "${galaxy_utility_spirv_dir}/utility_spirv_data.h")
 
 set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_render_vk STATIC
