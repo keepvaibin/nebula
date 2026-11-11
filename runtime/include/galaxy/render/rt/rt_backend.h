@@ -31,7 +31,25 @@ struct TriangleInput {
     gpu::Address indices = 0u;  // 0: none, the vertices in threes
     std::uint32_t index_count = 0u;
     std::uint32_t index_bytes = 4u;  // 2 or 4
+    // An opacity micromap over its triangles (5.3 G-2): the micromap (Backend::make_micromap's handle), and the buffer
+    // of the tracer's whose byte `micromap_indices` begins one uint a triangle, its index in the micromap.
+    std::uint64_t micromap = 0u;
+    std::uint32_t micromap_buffer = kNoBuffer;
+    std::uint64_t micromap_indices = 0u;
+    std::uint32_t micromap_level = 4u;
     [[nodiscard]] std::uint32_t triangles() const noexcept { return (indices != 0u ? index_count : vertex_count) / 3u; }
+};
+
+// What an opacity micromap is built from (5.3 G-2): a buffer of the tracer's (make_buffer) a pass wrote
+// (RtShader::Omm): from byte 0 each triangle's states, 4^level of two bits (0 transparent, 1 opaque, 2 and 3 unknown),
+// packed from each byte's lowest bit (level 4: 64 bytes a triangle); at `triangles_at` each triangle's 8 bytes (its
+// states' first byte, its level as 16 bits, the format 2 = four states as 16 bits); at `indices_at` a uint a triangle
+// (its own number). Both offsets are multiples of 256.
+struct MicromapInput {
+    std::uint32_t buffer = kNoBuffer;
+    std::uint32_t triangles = 0u;
+    std::uint32_t level = 4u;
+    std::uint64_t triangles_at = 0u, indices_at = 0u;
 };
 
 // How a structure is built: once and traced often (compacted afterwards), or refitted as its vertices move.
@@ -166,6 +184,15 @@ public:
     [[nodiscard]] std::uint64_t compacted_size(std::uint32_t slot, unsigned frame_slot) const;
     // The compacted copy of `from` into `to` (a range of that size).
     void compact(const Structure& from, const Structure& to);
+    // Opacity micromaps (5.3 G-2): whether this device builds them; a micromap's sizes (`structure` its own, then its
+    // build's scratch); the micromap over a range of a structure page (`handle` and `name` the API's object); and its
+    // build, which first waits for the pass's writes and the scratch's last use, and leaves the micromap whole for a
+    // structure built over it next (TriangleInput::micromap).
+    [[nodiscard]] bool micromaps() const noexcept;
+    [[nodiscard]] BuildSizes micromap_sizes(const MicromapInput& input) const;
+    [[nodiscard]] Structure make_micromap(const Range& range);
+    void free_micromap(Structure& micromap) noexcept;
+    void build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch);
 
     // An image of the tracer's: written by one pass, read by the next; `depth` above 1 a volume of that many slices
     // (Texture3D). kNoImage when the device has no memory. Freed only when nothing recorded can still read it (the

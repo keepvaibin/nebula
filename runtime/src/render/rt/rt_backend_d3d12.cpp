@@ -757,4 +757,11 @@ BufferView Backend::view_of(gpu::Address at, std::uint64_t bytes, std::uint32_t&
     return {at, bytes};
 }
 
+// Opacity micromaps (5.3 G-2): none on this back end yet (Direct3D 12's come with DXR 1.2, the Agility SDK).
+bool Backend::micromaps() const noexcept { return false; }
+BuildSizes Backend::micromap_sizes(const MicromapInput&) const { return {}; }
+Structure Backend::make_micromap(const Range&) { return {}; }
+void Backend::free_micromap(Structure& micromap) noexcept { micromap = Structure{}; }
+void Backend::build_micromap(const MicromapInput&, const Structure&, const Range&) {}
+
 }  // namespace galaxy::render::rt

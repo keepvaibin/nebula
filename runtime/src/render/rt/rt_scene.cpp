@@ -93,7 +93,7 @@ void Scene::begin() noexcept {
 // agree when det A < 0 (the eye's space is right-handed), so an instance flips its facing when det A > 0; a draw that
 // shows its back faces flips once more.
 void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, std::uint64_t structure, Faces faces,
-                std::uint32_t kind) {
+                std::uint32_t kind, Micromapped micromapped) {
     Instance& instance = instances_.emplace_back();
     std::memcpy(instance.transform, rows, sizeof(instance.transform));
     instance.id_mask = (id & 0xFFFFFFu) | mask << 24u;
@@ -104,11 +104,19 @@ void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, st
                           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
         flags = (det > 0.0f) == (faces == Faces::Front) ? kInstanceFlip : 0u;
     }
-    if ((kind & kKindCutout) != 0u) {
+    if ((kind & kKindCutout) != 0u && micromapped != Micromapped::Own) {
         flags |= kInstanceNotOpaque;  // a ray that does not force hits opaque reads its alpha at each one
+    }
+    if (micromapped == Micromapped::Other) {
+        flags |= kInstanceNoMicromaps;
     }
     instance.flags = flags << 24u | (kind & 0xFFFFFFu);
     instance.structure = structure;
+}
+
+void Scene::no_micromap(std::uint32_t instance) noexcept {
+    Instance& at = instances_[instance];
+    at.flags |= (kInstanceNoMicromaps | ((at.flags & kKindCutout) != 0u ? kInstanceNotOpaque : 0u)) << 24u;
 }
 
 // The structure and its scratch in use go once no recorded frame can read them.

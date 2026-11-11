@@ -123,10 +123,15 @@ struct Backend::State {
         bool for_builds = false;
     };
     std::vector<OwnBuffer> buffers;
+    // Opacity micromaps (5.3 G-2): the device builds them (the extension's feature and synchronization2).
+    bool micromaps = false;
 
     [[nodiscard]] bool make_passes();
     [[nodiscard]] std::uint64_t own_address(const TriangleInput& input) const {
         return input.own_buffer < buffers.size() ? buffers[input.own_buffer].address : 0u;
+    }
+    [[nodiscard]] std::uint64_t micromap_indices(const TriangleInput& input) const {
+        return input.micromap_buffer < buffers.size() ? buffers[input.micromap_buffer].address + input.micromap_indices : 0u;
     }
 };
 
@@ -259,8 +264,11 @@ std::uint64_t device_address(VkDevice device, gpu::Address address) {
     return vkGetBufferDeviceAddress(device, &info) + at.offset;
 }
 
-// `own`: the address of the tracer's buffer the input names, or 0.
-VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleInput& input, std::uint64_t own) {
+// `own`: the address of the tracer's buffer the input names, or 0. With a micromap, `omm` and `usage` (the caller's,
+// alive while the geometry is) carry it, its indices at `omm_indices`.
+VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleInput& input, std::uint64_t own,
+                                               VkAccelerationStructureTrianglesOpacityMicromapEXT& omm, VkMicromapUsageEXT& usage,
+                                               std::uint64_t omm_indices) {
     VkAccelerationStructureGeometryKHR g{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
     g.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
     // Opaque here; an instance whose material tests alpha says so itself.
@@ -274,7 +282,31 @@ VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleIn
     if (input.indices != 0u) {
         g.geometry.triangles.indexData.deviceAddress = device_address(device, input.indices);
     }
+    if (input.micromap != 0u) {
+        // Its micromap decides where a triangle is opaque, transparent or asks (the geometry's opaque flag stands where an
+        // instance turns micromaps off).
+        usage = {input.triangles(), input.micromap_level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+        omm = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT};
+        omm.indexType = VK_INDEX_TYPE_UINT32;
+        omm.indexBuffer.deviceAddress = omm_indices;
+        omm.indexStride = 4u;
+        omm.usageCountsCount = 1u;
+        omm.pUsageCounts = &usage;
+        omm.micromap = reinterpret_cast<VkMicromapEXT>(input.micromap);
+        g.geometry.triangles.pNext = &omm;
+    }
     return g;
+}
+
+VkMicromapBuildInfoEXT micromap_info(const VkMicromapUsageEXT& usage) {
+    VkMicromapBuildInfoEXT info{VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT};
+    info.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    info.flags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    info.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    info.usageCountsCount = 1u;
+    info.pUsageCounts = &usage;
+    info.triangleArrayStride = 8u;
+    return info;
 }
 
 VkBuildAccelerationStructureFlagsKHR flags_of(BuildKind kind) {
@@ -324,6 +356,8 @@ bool Backend::start(gpu::Device* device) {
         stop();
         return false;
     }
+    state->micromaps = context.rt_caps().micromaps && context.pipeline_barrier2() != nullptr && vkCreateMicromapEXT != nullptr &&
+                       vkCmdBuildMicromapsEXT != nullptr && vkGetMicromapBuildSizesEXT != nullptr;
     if (context.properties().limits.timestampComputeAndGraphics == VK_TRUE) {
         VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         info.queryType = VK_QUERY_TYPE_TIMESTAMP;
@@ -380,7 +414,10 @@ void Backend::stop() noexcept {
 }
 
 BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
-    const VkAccelerationStructureGeometryKHR geometry = geometry_of(state_->device, input, state_->own_address(input));
+    VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
+    VkMicromapUsageEXT usage{};
+    const VkAccelerationStructureGeometryKHR geometry =
+        geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     info.flags = flags_of(kind);
@@ -398,6 +435,9 @@ std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
     buffer_info.size = bytes;
     buffer_info.usage = (scratch ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR) |
                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (!scratch && state_->micromaps) {
+        buffer_info.usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;  // micromaps lie in the structures' pages
+    }
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -501,7 +541,10 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
 }
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
-    const VkAccelerationStructureGeometryKHR geometry = geometry_of(state_->device, input, state_->own_address(input));
+    VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
+    VkMicromapUsageEXT usage{};
+    const VkAccelerationStructureGeometryKHR geometry =
+        geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
     info.flags = flags_of(kind);
@@ -927,11 +970,16 @@ std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
     buffer_info.size = bytes;
     buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    if (state_->micromaps) {
+        buffer_info.usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;  // a micromap's input
+    }
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     State::OwnBuffer made;
-    if (vmaCreateBuffer(vk::Context::get().allocator(), &buffer_info, &alloc_info, &made.buffer, &made.allocation, nullptr) != VK_SUCCESS) {
+    // At a multiple of 256 bytes: a micromap build reads its input from there.
+    if (vmaCreateBufferWithAlignment(vk::Context::get().allocator(), &buffer_info, &alloc_info, kRangeAlign, &made.buffer, &made.allocation,
+                                     nullptr) != VK_SUCCESS) {
         return kNoBuffer;
     }
     if (name != nullptr) {
@@ -957,6 +1005,81 @@ void Backend::free_buffer(std::uint32_t buffer) noexcept {
     }
     vmaDestroyBuffer(vk::Context::get().allocator(), state_->buffers[buffer].buffer, state_->buffers[buffer].allocation);
     state_->buffers[buffer] = State::OwnBuffer{};
+}
+
+bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->micromaps; }
+
+BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
+    const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+    const VkMicromapBuildInfoEXT info = micromap_info(usage);
+    VkMicromapBuildSizesInfoEXT sizes{VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT};
+    vkGetMicromapBuildSizesEXT(state_->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &info, &sizes);
+    return {sizes.micromapSize, sizes.buildScratchSize, 0u};
+}
+
+Structure Backend::make_micromap(const Range& range) {
+    VkMicromapCreateInfoEXT info{VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT};
+    info.buffer = state_->pages[range.page].buffer;
+    info.offset = range.offset;
+    info.size = range.size;
+    info.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    VkMicromapEXT handle = VK_NULL_HANDLE;
+    if (vkCreateMicromapEXT(state_->device, &info, nullptr, &handle) != VK_SUCCESS) {
+        return {};
+    }
+    Structure out;
+    out.range = range;
+    out.handle = reinterpret_cast<std::uint64_t>(handle);
+    out.name = out.handle;
+    return out;
+}
+
+void Backend::free_micromap(Structure& micromap) noexcept {
+    if (state_ != nullptr && micromap.handle != 0u) {
+        vkDestroyMicromapEXT(state_->device, reinterpret_cast<VkMicromapEXT>(micromap.handle), nullptr);
+    }
+    micromap = Structure{};
+}
+
+void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
+    State& s = *state_;
+    const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2();
+    if (barrier2 == nullptr || input.buffer >= s.buffers.size()) {
+        return;
+    }
+    const std::uint64_t at = s.buffers[input.buffer].address;
+    // The pass's writes before this build and the structure's build read them (the indices), and the scratch's last
+    // use by a build before this one writes it.
+    VkMemoryBarrier2 before[2] = {{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}, {VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}};
+    before[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    before[0].srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    before[0].dstStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+    before[0].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+    before[1].srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    before[1].srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    before[1].dstStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    before[1].dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dependency.memoryBarrierCount = 2u;
+    dependency.pMemoryBarriers = before;
+    barrier2(s.commands, &dependency);
+    const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+    VkMicromapBuildInfoEXT info = micromap_info(usage);
+    info.dstMicromap = reinterpret_cast<VkMicromapEXT>(to.handle);
+    info.data.deviceAddress = at;
+    info.scratchData.deviceAddress = s.pages[scratch.page].address + scratch.offset;
+    info.triangleArray.deviceAddress = at + input.triangles_at;
+    vkCmdBuildMicromapsEXT(s.commands, 1u, &info);
+    // The micromap whole for the structure built over it next, and the scratch free for that build.
+    VkMemoryBarrier2 after{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    after.srcStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    after.srcAccessMask = VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    after.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    after.dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT |
+                          VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+    dependency.memoryBarrierCount = 1u;
+    dependency.pMemoryBarriers = &after;
+    barrier2(s.commands, &dependency);
 }
 
 // What the passes wrote before a build reads it, and a build's reads before the passes write again.

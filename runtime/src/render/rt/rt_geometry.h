@@ -54,6 +54,9 @@ struct GeometryStats {
     std::uint64_t timed_triangles = 0u;       // the builds of the frame slot's last frame, timed: their triangles
     std::uint64_t timed_ticks = 0u;           // and their GPU time (0: none timed)
     std::uint32_t released = 0u;              // static structures released past the ceiling, since the start
+    std::uint32_t micromaps = 0u;             // opacity micromaps under built structures (5.3 G-2)
+    std::uint64_t micromap_bytes = 0u;        // in ranges
+    std::uint32_t micromaps_built = 0u;       // since the start
 };
 
 class Geometry {
@@ -76,6 +79,14 @@ public:
     void refit();
     // The mesh is gone: its structure is released once no frame can name it.
     void forget(std::uint64_t key);
+    // 5.3 G-2: an opacity micromap for a built static mesh, from `input` (its buffer is the geometry's from here: freed
+    // once no frame can read it), named by `tag` (what it was made from: the draw's map). In a coming frame, within
+    // the budget, the micromap is built and the mesh's structure again over it, and swapped in; until then the old one
+    // is named. False (the buffer stays the caller's) when the mesh is not a built static one or has or awaits one.
+    bool give_micromap(std::uint64_t key, const MicromapInput& input, std::uint32_t tag);
+    [[nodiscard]] bool takes_micromap(std::uint64_t key) const noexcept;
+    // What the micromap under the mesh's structure was made from; 0 when it has none.
+    [[nodiscard]] std::uint32_t micromap_tag(std::uint64_t key) const noexcept;
     // Everything goes now, before the back end stops (the device is lost, or ray tracing is turned off and the GPU has
     // finished what named the structures): nothing is recorded.
     void clear() noexcept;
@@ -112,10 +123,14 @@ private:
         bool moved = false;                    // Moving: named this frame, to refit
         bool queued = false;
         mutable std::uint64_t used_frame = 0u;  // Static: the last frame it was built or named in (the ceiling's order)
+        MicromapInput omm{};                    // Static: a micromap's input, waiting or under its structure
+        std::uint32_t omm_tag = 0u;             // what that input was made from
+        Structure micromap{};                   // the micromap under the structure
     };
     struct Retired {
         std::uint64_t frame = 0u;
         Structure structure{};
+        bool micromap = false;
     };
     // The compacted sizes asked in one frame: slot n is keys[n]'s, read in the next frame of the same frame slot.
     struct Asked {
@@ -129,6 +144,7 @@ private:
     void retire(Entry& entry);
     void release_retired();
     bool build(Entry& entry, bool refit);
+    bool build_with_micromap(Entry& entry);
 
     Backend& backend_;
     std::unordered_map<std::uint64_t, Entry> entries_;
@@ -141,6 +157,8 @@ private:
     std::uint32_t scratch_page_ = ~0u;
     std::uint64_t scratch_bytes_ = 0u, scratch_used_ = 0u;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> retired_scratch_;  // frame, page
+    std::deque<std::uint64_t> micromap_queue_;  // static meshes whose micromap input waits, oldest first
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> retired_buffers_;  // frame, a micromap input's buffer
     std::uint64_t frame_index_ = 0u;
     bool built_since_barrier_ = false;
     std::uint64_t ceiling_ = kStructureCeiling;

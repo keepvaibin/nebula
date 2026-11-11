@@ -843,7 +843,15 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         vkGetPhysicalDeviceFeatures2(physical_, &features);
         rt_caps_.acceleration_structures = rt_structures.accelerationStructure == VK_TRUE && have12.bufferDeviceAddress == VK_TRUE;
         rt_caps_.ray_queries = rt_queries.rayQuery == VK_TRUE;
-        rt_caps_.micromaps = has_device_extension(physical_, "VK_EXT_opacity_micromap");
+        // Opacity micromaps (5.3 G-2): the extension and its feature, with synchronization2's barriers (a micromap
+        // build's stage has no version-1 bit).
+        if (has_device_extension(physical_, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) && (sync2_core || sync2_extension)) {
+            VkPhysicalDeviceOpacityMicromapFeaturesEXT have_micromaps{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT};
+            VkPhysicalDeviceFeatures2 micromap_features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            micromap_features.pNext = &have_micromaps;
+            vkGetPhysicalDeviceFeatures2(physical_, &micromap_features);
+            rt_caps_.micromaps = have_micromaps.micromap == VK_TRUE;
+        }
         // A pass reads the texture a ray meets: an index that differs from pixel to pixel.
         rt_caps_.bindless = bindless_ && have12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
     }
@@ -860,10 +868,15 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     rt_structures.accelerationStructure = VK_TRUE;
     rt_queries = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
     rt_queries.rayQuery = VK_TRUE;
+    VkPhysicalDeviceOpacityMicromapFeaturesEXT micromaps_on{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT};
+    micromaps_on.micromap = VK_TRUE;
     if (rt_enable) {
         device_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
         device_extensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
         device_extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+        if (rt_caps_.micromaps) {
+            device_extensions.push_back(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME);
+        }
     }
     depth_clamp_ = available.depthClamp == VK_TRUE;
     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
@@ -876,6 +889,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         rt_queries.pNext = const_cast<void*>(device_info.pNext);
         rt_structures.pNext = &rt_queries;
         device_info.pNext = &rt_structures;
+    }
+    if (rt_enable && rt_caps_.micromaps) {
+        micromaps_on.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &micromaps_on;
     }
     if (sync2_extension) {
         sync2.pNext = const_cast<void*>(device_info.pNext);

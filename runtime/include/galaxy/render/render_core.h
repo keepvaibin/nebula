@@ -321,6 +321,17 @@ private:
         }
     };
     std::unordered_map<RtPlace, std::uint32_t, RtPlaceHash> rt_seen_;  // a place's instance in this frame's scene
+    // 5.3 G-2: the alpha-tested meshes that stand still and asked this frame for an opacity micromap (each mesh once),
+    // made after the frame's tables by a pass over the item that asked (rt_micromaps).
+    struct RtMicromapWant {
+        std::uint64_t key = 0u;
+        std::uint32_t item = 0u, tag = 0u, triangles = 0u;
+    };
+    std::vector<RtMicromapWant> rt_micromap_wants_;
+    std::unordered_set<std::uint64_t> rt_micromap_asked_;
+    [[nodiscard]] rt::Micromapped rt_micromap_for(std::uint64_t key, const NebulaFrameItem& item, std::uint32_t i, std::uint32_t kind,
+                                                  std::uint32_t mask, std::uint32_t triangles);
+    void rt_micromaps();
     void rt_scene(const NebulaFramePass& begin);
     // A draw whose vertices carry their own matrices: skinned by a pass into the tracer's vertex buffer each frame.
     struct RtSkin {

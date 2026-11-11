@@ -36,6 +36,10 @@ inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may disc
 inline constexpr std::uint32_t kInstanceNoCull = 1u;  // a ray that culls back faces meets both of this instance's
 inline constexpr std::uint32_t kInstanceFlip = 2u;    // its triangles face the other way
 inline constexpr std::uint32_t kInstanceNotOpaque = 8u;  // a hit on it is a candidate the ray's shader decides (a cutout)
+inline constexpr std::uint32_t kInstanceNoMicromaps = 32u;  // its structure's opacity micromap is not this draw's (5.3 G-2)
+// What an instance has of its structure's opacity micromap (5.3 G-2): none under it; this draw's own (the micromap
+// decides where its cutout is, asking only where it cannot tell); another's (turned off for this instance).
+enum class Micromapped : std::uint8_t { None, Own, Other };
 
 // Which faces a draw shows. A ray that culls back faces (the views; a ray that asks what the scene drew) meets the
 // same faces as the draw; a ray without that flag (a shadow's) meets every face.
@@ -82,7 +86,9 @@ public:
     // A frame's instances, in the order added.
     void begin() noexcept;
     void add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, std::uint64_t structure, Faces faces = Faces::Both,
-             std::uint32_t kind = 0u);
+             std::uint32_t kind = 0u, Micromapped micromapped = Micromapped::None);
+    // An instance drawn again by a draw the micromap is not for: micromaps off, its cutout asked at every hit.
+    void no_micromap(std::uint32_t instance) noexcept;
     // A draw of an instance already added (the same mesh under the same matrix): its mask joins.
     void also(std::uint32_t instance, std::uint32_t mask) noexcept { instances_[instance].id_mask |= mask << 24u; }
     [[nodiscard]] std::span<const Instance> instances() const noexcept { return instances_; }

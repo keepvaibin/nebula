@@ -149,6 +149,8 @@ void RenderCore::rt_stop() noexcept {
     rt_skin_buffer_ = rt::kNoBuffer;
     rt_skin_bytes_ = 0u;
     rt_skin_retired_.clear();
+    rt_micromap_wants_.clear();
+    rt_micromap_asked_.clear();
     rt_drop_volumes_.clear();
     rt_sun_known_ = false;
     rt_sun_ease_ = 0u;
@@ -226,11 +228,12 @@ void RenderCore::rt_frame(const NebulaFrameList& list) {
         rt_log_at_ = frame_index_ + 600u;
         std::fprintf(stderr,
                      "[rt] structures: %u built (%u compacted), %u waiting, %llu triangles, %.2f MB in %.2f MB of pages, most in a frame "
-                     "%llu triangles; budget %llu, %.0f built a ms, %u released past the ceiling\n",
+                     "%llu triangles; budget %llu, %.0f built a ms, %u released past the ceiling; micromaps %u (%.2f MB, %u built)\n",
                      stats.structures, stats.compacted, stats.waiting, static_cast<unsigned long long>(stats.triangles),
                      static_cast<double>(stats.structure_bytes) / 1048576.0, static_cast<double>(stats.page_bytes) / 1048576.0,
                      static_cast<unsigned long long>(stats.most_built_triangles), static_cast<unsigned long long>(rt_budget_),
-                     rt_build_rate_, stats.released);
+                     rt_build_rate_, stats.released, stats.micromaps, static_cast<double>(stats.micromap_bytes) / 1048576.0,
+                     stats.micromaps_built);
     }
 }
 
@@ -240,6 +243,10 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
     const core::ListData& now = *walk_.now;
     const NebulaFrameList& list = *now.list;
     rt_scene_.begin();
+    for (const RtMicromapWant& want : rt_micromap_wants_) {
+        rt_micromap_asked_.erase(want.key);
+    }
+    rt_micromap_wants_.clear();
     rt_casters_.clear();
     rt_emitters_.clear();
     rt_emitters_finished_ = false;
@@ -403,12 +410,17 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                 const std::uint32_t matrix = one_matrix ? item.matrix : 0u;
                 const auto [seen, fresh] =
                     rt_seen_.try_emplace(RtPlace{key, item.block, matrix}, static_cast<std::uint32_t>(rt_scene_.instances().size()));
+                const rt::Micromapped micromapped = rt_micromap_for(key, item, i, kind, mask, mesh.index_count / 3u);
                 if (!fresh) {
                     rt_scene_.also(seen->second, mask);
+                    if (micromapped != rt::Micromapped::Own && rt_geometry_.micromap_tag(key) != 0u) {
+                        rt_scene_.no_micromap(seen->second);
+                    }
                     ++count.repeats;
                     continue;
                 }
-                rt_scene_.add(walk_rows_cpu_ + walk_block_rows_[item.block] + matrix * kRowsPerMatrix, i, mask, structure, faces, kind);
+                rt_scene_.add(walk_rows_cpu_ + walk_block_rows_[item.block] + matrix * kRowsPerMatrix, i, mask, structure, faces, kind,
+                              micromapped);
                 count.triangles += (mesh.indices != 0u ? mesh.index_count : mesh.vertex_count) / 3u;
                 continue;
             }
@@ -492,13 +504,17 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             const std::uint32_t matrix = one_matrix || mesh.single_matrix != NEBULA_MODEL_NONE ? item.matrix : 0u;
             const auto [seen, fresh] =
                 rt_seen_.try_emplace(RtPlace{key, item.block, matrix}, static_cast<std::uint32_t>(rt_scene_.instances().size()));
+            const rt::Micromapped micromapped = rt_micromap_for(key, item, i, kind, mask, triangles);
             if (!fresh) {
                 rt_scene_.also(seen->second, mask);
+                if (micromapped != rt::Micromapped::Own && rt_geometry_.micromap_tag(key) != 0u) {
+                    rt_scene_.no_micromap(seen->second);
+                }
                 ++count.repeats;
                 continue;
             }
             const float (*place)[4] = walk_rows_cpu_ + walk_block_rows_[item.block] + matrix * kRowsPerMatrix;
-            rt_scene_.add(place, i, mask, structure, faces, kind);
+            rt_scene_.add(place, i, mask, structure, faces, kind, micromapped);
             count.triangles += triangles;
             // Off screen (the game keeps it drawn for the tracer while it traces, 5.3 G-1): the raster passes leave it out.
             count.outside += item_culled(item, pass, state, &mesh) ? 1u : 0u;
@@ -622,6 +638,70 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
 // The frame's skinned draws: each one's vertices through its matrices into the tracer's vertex buffer, in its root
 // matrix's space (rt_skin.hlsl), and its structure named to be refitted from them. Recorded through the back end's
 // open commands.
+// 5.3 G-2: what a draw has of its mesh's opacity micromap. One made from this draw's map serves an alpha-tested draw of
+// the opaque phases (its mask holds kMaskCutout; a blended one weighs every hit itself); any other draw of a mesh with
+// a micromap turns it off for its instance. An alpha-tested draw of a static mesh with none asks for one, once, from
+// this draw (rt_micromaps).
+rt::Micromapped RenderCore::rt_micromap_for(std::uint64_t key, const NebulaFrameItem& item, std::uint32_t i, std::uint32_t kind,
+                                            std::uint32_t mask, std::uint32_t triangles) {
+    const std::uint32_t has = rt_geometry_.micromap_tag(key);
+    std::uint32_t tag = 0u;
+    if ((kind & rt::kKindCutout) != 0u && (mask & rt::kMaskCutout) != 0u) {
+        if (const core::TextureTable& table = registries_.table(item.textures);
+            table.count != 0u && !table.list.empty() && table.list[0].texture != 0u && !TextureStore::is_target(table.list[0].texture)) {
+            tag = table.list[0].texture;
+        }
+    }
+    if (tag == 0u) {
+        return has != 0u ? rt::Micromapped::Other : rt::Micromapped::None;
+    }
+    if (has != 0u) {
+        return has == tag ? rt::Micromapped::Own : rt::Micromapped::Other;
+    }
+    if (rt_backend_.micromaps() && !::galaxy::diagnosing(::galaxy::kDiagnoseRtNoMicromaps) && rt_geometry_.takes_micromap(key) &&
+        rt_micromap_asked_.insert(key).second) {
+        rt_micromap_wants_.push_back({key, i, tag, triangles});
+    }
+    return rt::Micromapped::None;
+}
+
+// 5.3 G-2: each micromap asked for this frame, a pass over its mesh as the item that asked draws it (RtShader::Omm, one
+// group a triangle) into a buffer of the tracer's, which the geometry builds the micromap from in a coming frame. Up
+// to kTrianglesAFrame triangles a frame (one want at least); a want whose item has no mesh or map bound this frame,
+// or that waits, asks again when next drawn.
+void RenderCore::rt_micromaps() {
+    constexpr std::uint32_t kTrianglesAFrame = 65536u, kGroupsAcross = 65535u;
+    std::uint32_t done = 0u;
+    for (const RtMicromapWant& want : rt_micromap_wants_) {
+        const std::uint32_t* words = rt_item_words_.data() + std::size_t{want.item} * kRtItemWords;
+        if ((done != 0u && done + want.triangles > kTrianglesAFrame) || std::size_t{want.item} * kRtItemWords >= rt_item_words_.size() ||
+            words[2] >= rt::kPassMeshArenas || words[8] == NEBULA_NONE32 || !rt_geometry_.takes_micromap(want.key)) {
+            rt_micromap_asked_.erase(want.key);
+            continue;
+        }
+        const auto round = [](std::uint64_t bytes) { return (bytes + rt::kRangeAlign - 1u) & ~(rt::kRangeAlign - 1u); };
+        rt::MicromapInput input;
+        input.triangles = want.triangles;
+        input.triangles_at = round(std::uint64_t{want.triangles} * 64u);
+        input.indices_at = round(input.triangles_at + std::uint64_t{want.triangles} * 8u);
+        input.buffer = rt_backend_.make_buffer(input.indices_at + std::uint64_t{want.triangles} * 4u, "Nebula RT Micromap Input");
+        if (input.buffer == rt::kNoBuffer) {
+            rt_micromap_asked_.erase(want.key);
+            continue;
+        }
+        rt::PassBinds binds = rt_pass_binds();
+        binds.write_buffer = input.buffer;
+        binds.pass_constants = rt_pass_constants(want.item, want.triangles, static_cast<std::uint32_t>(input.triangles_at),
+                                                 static_cast<std::uint32_t>(input.indices_at));
+        rt_backend_.dispatch(RtShader::Omm, binds, std::min(want.triangles, kGroupsAcross), (want.triangles + kGroupsAcross - 1u) / kGroupsAcross);
+        if (!rt_geometry_.give_micromap(want.key, input, want.tag)) {
+            rt_skin_retired_.emplace_back(frame_index_, input.buffer);  // goes once no frame can run the pass
+        }
+        done += want.triangles;
+    }
+    rt_micromap_wants_.clear();
+}
+
 void RenderCore::rt_skin() {
     struct SkinConstants {
         std::uint32_t at[4];
@@ -1744,6 +1824,7 @@ void RenderCore::rt_light() {
                             affine_inverse(view_now, world_from_now);
             rt_tables(world_from_now);
             frame.pass = rt_pass_constants(0u, 0u, 0u);
+            rt_micromaps();
             rt_noise_fill();
             rt_pass_surface();
             const bool timed = rt_measure(width);
