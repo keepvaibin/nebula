@@ -1170,6 +1170,8 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             }
         }
         if (mod.package) {
+            // The answers as read, whatever the manifest does this start: one not read keeps them (consent 1.2).
+            if (s != nullptr) mod.permission_answers = s->permissions;
             std::optional<luma::Manifest> manifest = luma::read_manifest(dir);
             if (!manifest) {
                 mod.problem = "THIS FILE IS DAMAGED";
@@ -1193,7 +1195,6 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 mod.code_declined = !mod.code_token.empty() && !mod.code_allowed && s != nullptr && s->code_no == mod.code_token;
                 mod.code_changed = !mod.code_token.empty() && !mod.code_allowed && !mod.code_declined && s != nullptr &&
                                    (!s->code_ok.empty() || !s->code_no.empty());
-                if (s != nullptr) mod.permission_answers = s->permissions;
                 if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed)) {
                     mod.problem = "THIS MOD'S CODE IS OFF AFTER A CRASH. RESTART TO TRY IT AGAIN";
                 }
@@ -1514,13 +1515,20 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (mod.code_allowed) out << "code_ok=" << mod.code_token << '\n';
         if (mod.code_declined) out << "code_no=" << mod.code_token << '\n';
         // Answers for the permissions it declares now, with the digest each was given for (a stale one is asked again);
-        // an answer for a permission it no longer declares is dropped here (consent 1.2).
+        // an answer for a permission it no longer declares is dropped here. A mod whose manifest was not read this start
+        // keeps every answer as read (consent 1.2).
+        const auto write_answer = [&out](const std::string& name, const PermissionAnswer& answer) {
+            out << "permission." << escape_key(name) << '=' << (answer.granted ? "yes " : "no ") << answer.digest << '\n';
+        };
         if (mod.luma != nullptr) {
             for (const luma::Permission& permission : mod.luma->permissions) {
                 const auto answer = mod.permission_answers.find(permission.name);
                 if (answer == mod.permission_answers.end()) continue;
-                out << "permission." << escape_key(permission.name) << '=' << (answer->second.granted ? "yes " : "no ")
-                    << answer->second.digest << '\n';
+                write_answer(permission.name, answer->second);
+            }
+        } else {
+            for (const auto& [name, answer] : mod.permission_answers) {
+                write_answer(name, answer);
             }
         }
         for (const ModOption& o : mod.options) {

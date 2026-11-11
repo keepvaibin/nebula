@@ -55,11 +55,15 @@ void report(const LumaMod* mod, const char* where, std::uint32_t code, std::init
     g_kernel->report(mod, where, code, all.data(), static_cast<std::uint32_t>(all.size()));
 }
 
-// Each function's first checks (services-registry 4): the mod, known to the kernel (any thread), then the thread.
+// Each function's first checks (services-registry 4.1, 4.2): the mod, known to the kernel (any thread); a mod being
+// taken out (after its stop) gets LUMA_E_CANCELLED and nothing is done; then the thread.
 int32_t enter(const LumaMod* mod, const char* where) {
     if (mod == nullptr || g_kernel->mod_id(mod) == nullptr) {
         g_kernel->unknown_mod(where);
         return LUMA_E_ARGUMENT;
+    }
+    if (g_kernel->mod_live(mod) == 0) {
+        return LUMA_E_CANCELLED;
     }
     if (g_kernel->game_thread() == 0) {
         report(mod, where, 100u, {});
@@ -127,10 +131,12 @@ void deliver(LumaEventNode* raw) {
     }
     // Counted before the call: the mod's function may end in its taking out, after which `owner` is not touched.
     // LUMA_E_CANCELLED means the function was not called and the mod is still known.
+    const std::uint64_t seq_before = owner->stats.delivered_seq;
     owner->stats.delivered_seq = ++g_seq;
     ++owner->stats.delivered;
     if (g_kernel->call(raw->mod, "test.svc", node->fn, node->user, &event) == LUMA_E_CANCELLED) {
         --owner->stats.delivered;
+        owner->stats.delivered_seq = seq_before;
     }
 }
 
@@ -252,8 +258,15 @@ int32_t stats(const LumaMod* mod, const char* mod_id, LumaTestSvcStats* out) {
     if (const int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (mod_id == nullptr || out == nullptr || out->size < 8u) {
+    if (mod_id == nullptr || out == nullptr) {
         report(mod, where, 101u, {mod_id == nullptr ? "mod_id" : "out"});
+        return LUMA_E_ARGUMENT;
+    }
+    // stats came in 1.3 with every field: the whole struct is the least (services-registry 3).
+    if (out->size < sizeof(LumaTestSvcStats)) {
+        const std::string found = std::to_string(out->size);
+        const std::string expected = std::to_string(sizeof(LumaTestSvcStats));
+        report(mod, where, 103u, {"LumaTestSvcStats", found.c_str(), expected.c_str()});
         return LUMA_E_ARGUMENT;
     }
     LumaTestSvcStats found{};
@@ -267,9 +280,8 @@ int32_t stats(const LumaMod* mod, const char* mod_id, LumaTestSvcStats* out) {
             found = ended->second;
         }
     }
-    const std::uint32_t size = out->size < sizeof(found) ? out->size : static_cast<std::uint32_t>(sizeof(found));
     found.size = out->size;
-    std::memcpy(out, &found, size);
+    std::memcpy(out, &found, sizeof(found));
     return LUMA_OK;
 }
 

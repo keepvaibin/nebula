@@ -46,9 +46,11 @@ namespace luma {
             // One mod, from its begin to its end. Slots are reused only after an end; a mod taken out waits for its
             // grace in its slot, so there are twice as many slots as mods may be on.
             const u32 kMostRecords = LUMA_MAX_MODS * 2u;
+            // A mod's id and its 0: luma-format 2 allows 3 to 64 characters.
+            const u32 kIdBytes = 64u + 1u;
             struct Record {
                 const LumaMod* mod;  // null: a free slot. Stored with release on the game thread; loaded with acquire
-                char id[64];
+                char id[kIdBytes];
                 s32 order;
                 char** granted;
                 u32 grantedCount;
@@ -65,7 +67,7 @@ namespace luma {
             Record* sByOrder[kMostRecords];
             u32 sByOrderCount = 0;
 
-            u32 sPosted = 0;   // 1 when a node was posted since the frame's start took the stacks; atomic
+            u32 sPosted = 0;   // 1 when a node was posted since the frame's start took the stacks, or nodes are carried; atomic
             u32 sCarried = 0;  // nodes taken but kept for a later frame, all mods (game thread)
             void (*sFrameHandler)() = nullptr;
 
@@ -110,6 +112,34 @@ namespace luma {
                     }
                 }
                 return length != 0 && length <= 31 && !partStart;
+            }
+
+            // A service's block of report codes (services-registry 11), by the name's first part. False: none.
+            struct RowBlock {
+                const char* service;
+                u16 first;
+                u16 last;
+            };
+            const RowBlock cRowBlocks[] = {
+                {"time", 120, 139},    {"system", 140, 159},  {"mods", 160, 179},  {"save", 180, 199},
+                {"fs", 200, 249},      {"net", 250, 299},     {"input", 300, 349}, {"audio", 350, 399},
+                {"capture", 400, 419}, {"assets", 420, 469},  {"draw", 470, 569},  {"ui", 570, 619},
+            };
+            bool rowBlock(const char* pName, u32* pFirst, u32* pLast) {
+                for (u32 i = 0; i < sizeof(cRowBlocks) / sizeof(cRowBlocks[0]); i++) {
+                    const char* pService = cRowBlocks[i].service;
+                    const char* p = pName;
+                    while (*pService != 0 && *p == *pService) {
+                        pService++;
+                        p++;
+                    }
+                    if (*pService == 0 && (*p == 0 || *p == '.')) {
+                        *pFirst = cRowBlocks[i].first;
+                        *pLast = cRowBlocks[i].last;
+                        return true;
+                    }
+                }
+                return false;
             }
 
             // A copy from the module's malloc; the game stops when there is no memory (as the loader does).
@@ -433,6 +463,11 @@ namespace luma {
                 if (!onGameThread()) {
                     NEBULA_PANIC("LumaCore: a service was provided off the game thread");
                 }
+                // luma_services_open first: the module's own services are registered before the host's, so mod_gone
+                // reaches them last (section 8's reverse order).
+                if (!sOpened) {
+                    NEBULA_PANIC("LumaCore: a service was provided before luma_services_open");
+                }
                 const char* const pName = pProvider != nullptr && pProvider->name != nullptr ? pProvider->name : "(no name)";
                 if (pProvider == nullptr || pProvider->size < kProviderLeast || pProvider->name == nullptr || pProvider->table == nullptr) {
                     NEBULA_PANIC("LumaCore: the provider of service %s is incomplete", pName);
@@ -467,10 +502,19 @@ namespace luma {
                 if (pProvider->row_count != 0 && pProvider->rows == nullptr) {
                     NEBULA_PANIC("LumaCore: the service %s gives %u rows and no table of them", pName, pProvider->row_count);
                 }
+                if (test && pProvider->row_count != 0) {
+                    NEBULA_PANIC("LumaCore: the test service %s gives report rows; test services report through 100 to 104 only", pName);
+                }
+                u32 blockFirst = 0;
+                u32 blockLast = 0;
+                if (pProvider->row_count != 0 && !rowBlock(pName, &blockFirst, &blockLast)) {
+                    NEBULA_PANIC("LumaCore: the service %s gives report rows and has no code block (services-registry 11)", pName);
+                }
                 for (u32 r = 0; r < pProvider->row_count; r++) {
                     const LumaServiceRow& rRow = pProvider->rows[r];
-                    if (rRow.code < 120u || rRow.code > 899u || rRow.id == nullptr) {
-                        NEBULA_PANIC("LumaCore: the service %s's report row %u has code %u (120 to 899 are the services')", pName, r, rRow.code);
+                    if (rRow.code < blockFirst || rRow.code > blockLast || rRow.id == nullptr) {
+                        NEBULA_PANIC("LumaCore: the service %s's report row %u has code %u; its block is %u to %u", pName, r, rRow.code,
+                                     blockFirst, blockLast);
                     }
                     const char* const* ppNames = nullptr;
                     char id[64];
@@ -651,6 +695,11 @@ namespace luma {
                     pProvider->mod_end(pProvider->user, pMod);
                 }
             }
+            // Nothing can be posted after the providers' mod_gone and the drop above: a node here is a provider that broke
+            // that promise, and the slot's next begin would lose it.
+            if (__atomic_load_n(&pRecord->head, __ATOMIC_ACQUIRE) != nullptr) {
+                NEBULA_PANIC("LumaCore: a service posted an event for the mod %s after its services were told it is gone", pRecord->id);
+            }
             // The address first (release), so no lookup finds the record; then what it holds is freed (section 8).
             __atomic_store_n(&pRecord->mod, static_cast<const LumaMod*>(nullptr), __ATOMIC_RELEASE);
             freeGranted(pRecord);
@@ -682,7 +731,8 @@ namespace luma {
         }
 
         void frameStart() {
-            if (__atomic_load_n(&sPosted, __ATOMIC_ACQUIRE) != 0 || sCarried != 0) {
+            // sPosted alone: it stays 1 while nodes are carried to a later frame (set again below).
+            if (__atomic_load_n(&sPosted, __ATOMIC_ACQUIRE) != 0) {
                 (void)__atomic_exchange_n(&sPosted, 0u, __ATOMIC_ACQ_REL);
                 // A copy of the order: a mod taken out while its events run (the guard) leaves the list meanwhile.
                 Record* order[kMostRecords];
@@ -694,6 +744,9 @@ namespace luma {
                     if (!isGone(order[i])) {
                         deliverMod(order[i]);
                     }
+                }
+                if (sCarried != 0) {
+                    __atomic_store_n(&sPosted, 1u, __ATOMIC_RELEASE);
                 }
             }
             if (sFrameHandler != nullptr) {

@@ -39,7 +39,7 @@ typedef struct LumaServiceRow {
 typedef struct LumaServiceKernel {
     uint32_t size;
     /* The mod's id ("gold-flower"), its place in the Mods list (top 0), and 1 when the player granted it `permission`.
-       A mod the kernel does not know (or after its end): null, -1, 0. */
+       A mod the kernel does not know (or after its end): null, -1, 0. The id is valid until the mod's mod_end. */
     const char* (*mod_id)(const LumaMod* mod);
     int32_t (*mod_order)(const LumaMod* mod);
     int32_t (*granted)(const LumaMod* mod, const char* permission);
