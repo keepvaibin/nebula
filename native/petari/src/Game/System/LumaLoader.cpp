@@ -3,6 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
+#include <nebula_format.h>
 #include <nebula_game_api.h>
 #include <nebula_module.h>
 
@@ -68,6 +69,37 @@ namespace luma {
             }
             *ppField = pName + i + 1;
             return true;
+        }
+
+        // Text as it is, after what the message holds.
+        void addText(char* pMessage, u32 size, const char* pText) {
+            if (pMessage == nullptr || size == 0) {
+                return;
+            }
+            u32 at = 0;
+            while (at < size && pMessage[at] != 0) {
+                at++;
+            }
+            for (; *pText != 0 && at + 1 < size; pText++) {
+                pMessage[at++] = *pText;
+            }
+            pMessage[at < size ? at : size - 1] = 0;
+        }
+
+        // Why a hook import was refused; the mod that holds a replace by name.
+        void addHookRefusal(char* pMessage, u32 size, const LumaImport& rImport, const Function* pFunction, HookResult result) {
+            addName(pMessage, size, rImport.name != nullptr ? rImport.name : "(no name)", nullptr);
+            if (rImport.hook == nullptr) {
+                addText(pMessage, size, " was given no hook");
+            } else if (rImport.hook_kind >= Hook_KindCount) {
+                addText(pMessage, size, " was asked for a kind of hook this game does not have");
+            } else if (result == HookResult_Replaced) {
+                const LumaMod* pOther = static_cast<const LumaMod*>(replacedBy(pFunction));
+                addText(pMessage, size, " is replaced already by ");
+                addText(pMessage, size, pOther != nullptr ? pOther->name : "another mod");
+            } else {
+                addText(pMessage, size, " takes before and after hooks only (a constructor or destructor)");
+            }
         }
 
         void apiLog(const LumaMod* pMod, const char* pText) { nebula_log("[mod %s] %s\n", pMod != nullptr ? pMod->name : "?", pText); }
@@ -170,8 +202,25 @@ namespace luma {
         if (pMessage != nullptr && messageSize != 0) {
             pMessage[0] = 0;
         }
-        if (pInfo == nullptr || pInfo->size < sizeof(LumaModInfo) || pInfo->api > LUMA_API || sModCount == cMaxMods) {
-            addName(pMessage, messageSize, "made for a newer LumaCore", nullptr);
+        // Each refusal says which it is, as a whole sentence the host prints as it is.
+        if (pInfo == nullptr) {
+            addText(pMessage, messageSize, "its luma_mod is empty");
+            return false;
+        }
+        if (pInfo->api > LUMA_API) {
+            addText(pMessage, messageSize, "it was made for a newer LumaCore than this game has");
+            return false;
+        }
+        if (pInfo->size < sizeof(LumaModInfo)) {
+            addText(pMessage, messageSize, "its luma_mod is shorter than luma.h says (it was not built with luma.h)");
+            return false;
+        }
+        if (pInfo->import_count != 0 && pInfo->imports == nullptr) {
+            addText(pMessage, messageSize, "its luma_mod lists imports but gives none");
+            return false;
+        }
+        if (sModCount == cMaxMods) {
+            addText(pMessage, messageSize, "more than 256 LumaCore mods are on");
             return false;
         }
         // Every name first: a mod is bound whole or not at all.
@@ -182,6 +231,16 @@ namespace luma {
             s32 number = -1;
             const char* pWhy = nullptr;
             if (!resolve(rImport, &pFunction, &number, &pWhy) && (rImport.flags & LUMA_OPTIONAL) == 0) {
+                if (whole) {
+                    addText(pMessage, messageSize, "the game has no ");
+                    addText(pMessage, messageSize, rImport.name != nullptr ? rImport.name : "(no name)");
+                    if (pWhy != nullptr) {
+                        addText(pMessage, messageSize, " ");
+                        addText(pMessage, messageSize, pWhy);
+                    }
+                    whole = false;
+                    continue;
+                }
                 addName(pMessage, messageSize, rImport.name != nullptr ? rImport.name : "(no name)", pWhy);
                 whole = false;
             }
@@ -201,9 +260,11 @@ namespace luma {
             const char* pWhy = nullptr;
             const bool found = resolve(rImport, &pFunction, &number, &pWhy);
             if (rImport.kind == LUMA_IMPORT_HOOK) {
-                if (found && addHook(pFunction, static_cast<HookKind>(rImport.hook_kind), reinterpret_cast<HookCallback>(rImport.hook), rImport.user,
-                                     pMod, order) != HookResult_Added) {
-                    addName(pMessage, messageSize, rImport.name, "(another mod replaces it, or it takes no such hook)");
+                const HookResult result = found ? addHook(pFunction, static_cast<HookKind>(rImport.hook_kind), reinterpret_cast<HookCallback>(rImport.hook),
+                                                          rImport.user, pMod, order)
+                                                : HookResult_Added;
+                if (result != HookResult_Added) {
+                    addHookRefusal(pMessage, messageSize, rImport, pFunction, result);
                     whole = false;
                 }
             } else if (rImport.slot != nullptr) {
@@ -214,9 +275,16 @@ namespace luma {
                 }
             }
         }
-        if (whole && pInfo->start != nullptr && pInfo->start(&sCore, pMod) != 0) {
-            addName(pMessage, messageSize, "its start refused", nullptr);
-            whole = false;
+        if (whole && pInfo->start != nullptr) {
+            const int32_t refused = pInfo->start(&sCore, pMod);
+            if (refused != 0) {
+                char number[16];
+                nebula_snprintf(number, sizeof(number), "%d", static_cast<int>(refused));
+                addText(pMessage, messageSize, "its start refused to run (it returned ");
+                addText(pMessage, messageSize, number);
+                addText(pMessage, messageSize, ")");
+                whole = false;
+            }
         }
         if (!whole) {
             removeHooks(pMod);

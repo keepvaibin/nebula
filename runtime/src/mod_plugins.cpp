@@ -639,7 +639,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
                 g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
             char missing[1024] = {};
             if (load == nullptr || load(info, file.mod_id.c_str(), static_cast<std::int32_t>(index), missing, sizeof(missing)) == 0) {
-                say(name + " not started: " + (load == nullptr ? std::string("this game has no LumaCore") : "the game has no " + std::string(missing)));
+                say(name + " not started: " + (load == nullptr ? std::string("this game has no LumaCore") : std::string(missing[0] != 0 ? missing : "the game refused it and said nothing")));
                 close_library(module);
                 continue;
             }

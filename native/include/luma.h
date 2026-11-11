@@ -128,6 +128,10 @@ typedef struct LumaModInfo {
 #define LUMA_MOD(imports, start, stop) \
     LUMA_FLOATS                        \
     LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop}
+/* A mod that binds no name of the game (it finds what it needs through the core at start). */
+#define LUMA_MOD_NO_IMPORTS(start, stop) \
+    LUMA_FLOATS                          \
+    LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])
