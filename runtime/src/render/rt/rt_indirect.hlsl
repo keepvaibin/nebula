@@ -10,9 +10,12 @@
 //     occlusion in the sky's colour);
 //   1 Medium: one ray within kIndirectReach, the hit shaded (rt_hit_radiance: the sun traced from it), ReSTIR GI
 //     (Ouyang et al. 2021, "ReSTIR GI: Path Resampling for Real-Time Path Tracing"): the frame before's reservoir of
-//     the same surface (M up to 30) and one neighbour's within 16 half-res pixels;
-//   2 High: three neighbours, a visibility ray to the sample kept, the grid's lights shadowed at hits, the screen's own
-//     I at hits it shows (more than one bounce over time).
+//     the same surface (M up to 30) and one neighbour's within 16 half-res pixels, which joins only where a ray from
+//     here reaches its sample (RTXDI's ray traced bias correction: a hidden one would bring light this pixel does not
+//     see);
+//   2 High: three neighbours (a ray each, as Medium's), the pixel's own earlier sample checked once kept (something
+//     may have moved in front: then the new sample alone), the grid's lights shadowed at hits, the screen's own I at
+//     hits it shows (more than one bounce over time).
 // Writes the half-res guide and motion the filters (rt_lights_time.hlsl, rt_lights_space.hlsl at half res) read, the
 // raw I in their channels (r, b, a), and the reservoirs: the sample's place (float bits, eye space of this frame) with
 // its normal and M in Rgba32ui, its light (ratio) and W in Rgba16f.
@@ -93,6 +96,15 @@ void gi_take(inout GiReservoir r, GiReservoir other, float weight, inout uint se
         r.n = other.n;
         r.light = other.light;
     }
+}
+
+// Whether something solid stands between the ray's origin and a sample (short of the sample itself).
+bool gi_hidden(float3 origin, float3 sample_at) {
+    const float3 to = sample_at - origin;
+    const float far_ = length(to);
+    const float reach = min(far_, kIndirectReach) - max(0.002f * far_, 1.0f);
+    uint met;
+    return reach > 1.0f && blocked(origin, to / far_, reach, kMaskSolid | kMaskCutout, true, met);
 }
 
 void write_nothing(uint2 half_pixel, float4 guide) {
@@ -198,6 +210,8 @@ void main(uint3 id : SV_DispatchThreadID) {
         r.light = fresh.light;
     }
     bool reused = false;
+    const GiReservoir fresh_only = r;  // what a hidden earlier sample falls back to (High)
+    float3 own_at = r.at;              // the sample kept before the neighbours
 
     // The frame before's: its reservoir of the same surface, then neighbours' around it.
     if ((g_pass.z & 1u) != 0u) {
@@ -221,6 +235,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 before_half = float2(-1.0f, -1.0f);
             }
         }
+        own_at = r.at;
         const uint neighbours = mode == kModeHigh ? 3u : 1u;
         const float2 centre = before_half.x >= 0.0f ? before_half : float2(id.xy) + 0.5f;
         for (uint k = 0u; k < neighbours; ++k) {
@@ -254,23 +269,23 @@ void main(uint3 id : SV_DispatchThreadID) {
                 continue;
             }
             const float jacobian = clamp(cos_r / cos_q * far_q / far_r, 0.0f, kMostJacobian);
-            const float3 kept_at = r.at;
+            if (gi_hidden(s.origin, other.at)) {
+                continue;  // hidden from here: neither its light nor its count
+            }
             gi_take(r, other, gi_target(other.light, other.at, x, n) * other.w * other.m * jacobian, seed);
-            reused = reused || any(r.at != kept_at);
         }
     }
 
-    // Its contribution weight; High: a sample taken over from elsewhere may be hidden from here.
-    const float target = gi_target(r.light, r.at, x, n);
+    // Its contribution weight. The neighbours' samples were seen from here before they joined; on High the pixel's own
+    // earlier one is checked once it is the one kept, and where it is hidden now the new sample alone is kept (a
+    // hidden direction's light is the occluder's, not none: never a weight of 0).
+    float target = gi_target(r.light, r.at, x, n);
     r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
-    if (mode == kModeHigh && reused && r.w > 0.0f) {
-        const float3 to = r.at - s.origin;
-        const float far_ = length(to);
-        const float reach = min(far_, kIndirectReach) - max(0.002f * far_, 1.0f);
-        uint met;
-        if (reach > 1.0f && blocked(s.origin, to / far_, reach, kMaskSolid | kMaskCutout, true, met)) {
-            r.w = 0.0f;
-        }
+    const bool own_earlier = reused && all(r.at == own_at) && any(r.at != fresh_only.at);
+    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(s.origin, r.at)) {
+        r = fresh_only;
+        target = gi_target(r.light, r.at, x, n);
+        r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
     }
     const float facing = max(dot(n, normalize(r.at - x)), 0.0f);
     const float3 ratio = min(r.light * r.w * facing / kRtPi, g_shade.gains.w);

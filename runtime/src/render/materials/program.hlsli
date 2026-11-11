@@ -305,8 +305,8 @@ float4 traced_scatter(float4 c, float4 pixel) {
     const float3 cells = float3(96.0, 54.0, 48.0);
     const float3 at = float3((pixel.xy - view_volume[1].xy) / view_volume[1].zw, log(max(away, 1.0) / 50.0) / log(400.0));
     const float3 inner = clamp(at, 0.5 / cells, 1.0 - 0.5 / cells);
-    const float3 air = gVolumes[uint(view_volume[2].w) - 1u].SampleLevel(gSamplers[uint(view_volume[2].y)], inner, 0.0).rgb;
-    return float4(c.rgb + air, c.a);
+    const float4 air = gVolumes[uint(view_volume[2].w) - 1u].SampleLevel(gSamplers[uint(view_volume[2].y)], inner, 0.0);
+    return float4(c.rgb * air.a + air.rgb, c.a);  // what the air lets through of the colour, and its own light (FB)
 }
 // A program returns inside its entry, whose input `i` holds the pixel.
 #define PROGRAM_LIGHT(c) traced_scatter((draw_flags & 4u) != 0u ? traced_air(c, i.pos) : traced_colour(c, i.pos), i.pos)
