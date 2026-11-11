@@ -121,6 +121,7 @@ fn every_input_fault_is_refused_with_its_reason() {
     let one_c = one.c();
     let cases: Vec<(LumaPatchInput, &str)> = vec![
         (LumaPatchInput { size: 4, ..ok }, "size"),
+        (LumaPatchInput { size: std::mem::size_of::<LumaPatchInput>() as u32 + 8, ..ok }, "size"),
         (LumaPatchInput { path: null(), ..ok }, "path"),
         (LumaPatchInput { table: null(), table_size: 4, ..ok }, "table"),
         (LumaPatchInput { table: damaged.as_ptr(), table_size: damaged.len() as u64, ..ok }, "StageData"),

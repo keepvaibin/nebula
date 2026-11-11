@@ -88,8 +88,8 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
     if input.is_null() {
         return Err("the input is null".into());
     }
-    if ((*input).size as usize) < std::mem::size_of::<LumaPatchInput>() {
-        return Err(format!("the input's size is {}, not {}", (*input).size, std::mem::size_of::<LumaPatchInput>()));
+    if (*input).size as usize != std::mem::size_of::<LumaPatchInput>() {
+        return Err(format!("the input's size is {}, not sizeof(LumaPatchInput) = {}", (*input).size, std::mem::size_of::<LumaPatchInput>()));
     }
     let input = &*input;
     let path = text(input.path).ok_or("the path is null or not UTF-8")?;

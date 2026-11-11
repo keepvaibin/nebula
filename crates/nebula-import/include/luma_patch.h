@@ -27,7 +27,7 @@ typedef struct LumaTablePatch {
 } LumaTablePatch;
 
 typedef struct LumaPatchInput {
-    uint32_t size;         /* sizeof(LumaPatchInput) */
+    uint32_t size;         /* sizeof(LumaPatchInput) as the caller was built; any other size is refused */
     const char* path;      /* the table's path in the store, UTF-8 */
     const uint8_t* table;  /* the game's cooked table */
     uint64_t table_size;
