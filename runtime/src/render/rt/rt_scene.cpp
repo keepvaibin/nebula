@@ -94,6 +94,9 @@ void Scene::begin() noexcept {
 // shows its back faces flips once more.
 void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, std::uint64_t structure, Faces faces,
                 std::uint32_t kind, Micromapped micromapped) {
+    if ((kind & kKindClipped) != 0u && micromapped == Micromapped::Own) {
+        micromapped = Micromapped::Other;  // a clipped part's every hit is asked (clip_shows): no micromap answers first
+    }
     Instance& instance = instances_.emplace_back();
     std::memcpy(instance.transform, rows, sizeof(instance.transform));
     instance.id_mask = (id & 0xFFFFFFu) | mask << 24u;
