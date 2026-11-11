@@ -279,7 +279,8 @@ pub unsafe extern "C" fn luma_patched_fact_reason(result: *const LumaPatched, in
     let Some(Some(refusal)) = r.refusals.get(index as usize) else { return ptr::null() };
     let language = text(language).unwrap_or("UsEnglish");
     let mut said = r.said.borrow_mut();
-    said.push(cstring(&luma_validate::reason(refusal, language)));
+    let reason = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| luma_validate::reason(refusal, language))).unwrap_or_else(|_| format!("{{L{}}}", refusal.code));
+    said.push(cstring(&reason));
     said.last().expect("just pushed").as_ptr()
 }
 

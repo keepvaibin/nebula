@@ -117,7 +117,10 @@ unsafe fn say(code: u16, names: *const *const c_char, values: *const *const c_ch
               how: fn(u16, &[(&str, &str)], &str) -> String) -> *const c_char {
     let args = given(names, values, count);
     let args: Vec<(&str, &str)> = args.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect();
-    let said = c(&how(code, &args, &text(language).unwrap_or_default()));
+    let language = text(language).unwrap_or_default();
+    // As luma_validate: no panic crosses into C (audits/3.11.md, 09:12 note). None is known; the id stays visible.
+    let said = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| how(code, &args, &language))).unwrap_or_else(|_| format!("{{L{code}}}"));
+    let said = c(&said);
     SAID.with(|s| {
         *s.borrow_mut() = said;
         s.borrow().as_ptr()

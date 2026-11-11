@@ -478,8 +478,8 @@ mod tests {
         // The higher mod's cell stands, and the conflict is a fact; the older cook's facts are gone.
         assert_eq!(rows(&out, SHADOW), vec![vec!["Game".to_string(), "3".into()]]);
         assert!(!facts.iter().any(|f| f.contains("older")), "{facts:?}");
-        // (A column that is not the key is named by its hash, as the applier's facts name it.)
-        let conflict = format!("conflict\tObjectData/Things/Shadow.bcsv\ttop\t\tlow\tGame\t0x{:08x}\t", super::super::table::column_hash("count"));
+        // The column is named as the higher mod's patch wrote it (audits/3.11.md P-2).
+        let conflict = "conflict\tObjectData/Things/Shadow.bcsv\ttop\t\tlow\tGame\tcount\t";
         assert!(facts.iter().any(|f| f.starts_with(&conflict)), "{facts:?}");
         // MarioNo 0 is in LayerA, which scenario 1 turns on with LayerB: that patch is left out (L402), as the
         // validator says.

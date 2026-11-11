@@ -279,7 +279,7 @@ impl Applier<'_> {
             let values = object(s.get("values").ok_or_else(set_shape)?, set_shape)?;
             let cells = self.cells(values)?;
             if let Some(at) = self.find(p, w)? {
-                self.write(at, &cells, p.mod_id);
+                self.write(at, &cells, values, p.mod_id);
             }
         }
         for row in list(root, "add")? {
@@ -341,7 +341,7 @@ impl Applier<'_> {
             for r in 0..self.table.rows.len() {
                 if tests.iter().all(|(c, kind, value)| self.test(r, *c, kind, value)) {
                     count += 1;
-                    self.write(r, &cells, p.mod_id);
+                    self.write(r, &cells, values, p.mod_id);
                 }
             }
             self.facts.push(Fact::Selected { table: self.path.clone(), mod_id: p.mod_id.into(), file: p.file.into(), selector: i, rows: count });
@@ -414,13 +414,16 @@ impl Applier<'_> {
         })
     }
 
-    fn write(&mut self, at: usize, cells: &[(usize, Cell)], mod_id: &str) {
+    /// `values` are the patch's, which `cells` came from: a conflict names the column as the patch wrote it (P-2).
+    fn write(&mut self, at: usize, cells: &[(usize, Cell)], values: &Map<String, Value>, mod_id: &str) {
         let id = self.row_id(at);
         for (c, cell) in cells {
             let hash = self.table.columns[*c].hash;
             if let Some(lower) = self.owners.cells.insert((id.clone(), hash), mod_id.to_string()) {
                 if lower != mod_id {
-                    self.push_conflict(&id, Some(format!("0x{hash:08x}")), lower, mod_id);
+                    // `cells` holds only columns `values` names (`Applier::cells`).
+                    let name = values.keys().find(|n| self.column(n) == Some(*c)).cloned().unwrap_or_else(|| format!("0x{hash:08x}"));
+                    self.push_conflict(&id, Some(name), lower, mod_id);
                 }
             }
             self.table.rows[at][*c] = cell.clone();
@@ -535,7 +538,8 @@ impl Applier<'_> {
         if lower == higher {
             return;
         }
-        self.facts.push(Fact::Conflict { table: self.path.clone(), row: row.replace('\u{1f}', ", "), column, lower, higher: higher.to_string() });
+        // The row as every fact gives it, key values joined by U+001F (luma_patch.h); the screen shows them.
+        self.facts.push(Fact::Conflict { table: self.path.clone(), row: row.to_string(), column, lower, higher: higher.to_string() });
     }
 }
 
@@ -617,7 +621,7 @@ mod tests {
             ModPatch { mod_id: "c", file: "pc", patch: &c },
         ]).unwrap();
         assert_eq!(speed(&t, 0), 6.0);
-        assert!(facts.contains(&Fact::Conflict { table: OBJINFO.into(), row: "1".into(), column: Some(format!("0x{:08x}", column_hash("speed"))), lower: "a".into(), higher: "b".into() }));
+        assert!(facts.contains(&Fact::Conflict { table: OBJINFO.into(), row: "1".into(), column: Some("speed".into()), lower: "a".into(), higher: "b".into() }));
         assert!(facts.contains(&Fact::Missing { table: OBJINFO.into(), row: "2".into(), mod_id: "c".into(), file: "pc".into(), removed_by: Some("b".into()) }));
     }
 
@@ -649,6 +653,37 @@ mod tests {
         let facts = apply(path, &mut t, &[ModPatch { mod_id: "a", file: "pa", patch: &a }, ModPatch { mod_id: "w", file: "pw", patch: &whole }]).unwrap();
         assert_eq!(t.rows.len(), 1);
         assert!(facts.iter().any(|f| matches!(f, Fact::Conflict { lower, higher, .. } if lower == "a" && higher == "w")), "{facts:?}");
+    }
+
+    #[test]
+    fn a_conflict_names_the_row_by_its_key_values_and_the_column_by_name() {
+        // audits/3.11.md P-2 and P-3: key values joined by U+001F, a word that is not UTF-8 as {bytes:<hex>}, a
+        // whole number signed at its width; the column as the patch wrote it.
+        let floats = ["pos_x", "pos_y", "pos_z", "dir_x", "dir_y", "dir_z"];
+        let mut t = TableIr { columns: floats.iter().map(|n| Column { hash: column_hash(n), mask: u32::MAX, kind: Kind::Float, width: 32 }).collect(), rows: vec![] };
+        let path = "StageData/PoleUnizoZone/jmp/GeneralPos/Common/GeneralPosInfo";
+        let a = json!({"patch": 1, "key": ["PosName", "Obj_ID"], "add": [{"PosName": "Start", "Obj_ID": -5}]});
+        let b = json!({"patch": 1, "key": ["PosName", "Obj_ID"], "set": [{"where": {"PosName": "Start", "Obj_ID": -5}, "values": {"pos_x": 3.0}}]});
+        let c = json!({"patch": 1, "key": ["PosName", "Obj_ID"], "set": [{"where": {"PosName": "Start", "Obj_ID": -5}, "values": {"pos_x": 4.0}}]});
+        let facts = apply(path, &mut t, &[
+            ModPatch { mod_id: "a", file: "pa", patch: &a },
+            ModPatch { mod_id: "b", file: "pb", patch: &b },
+            ModPatch { mod_id: "c", file: "pc", patch: &c },
+        ]).unwrap();
+        let conflict = facts.iter().find_map(|f| match f {
+            Fact::Conflict { row, column, lower, higher, .. } if lower == "b" && higher == "c" => Some((row.clone(), column.clone())),
+            _ => None,
+        });
+        let (row, column) = conflict.unwrap_or_else(|| panic!("{facts:?}"));
+        assert_eq!(row.to_lowercase(), "start\u{1f}-5");
+        assert_eq!(column.as_deref(), Some("pos_x"));
+
+        let col = |name: &str, kind| Column { hash: column_hash(name), mask: u32::MAX, kind, width: 32 };
+        let mut t = TableIr { columns: vec![col("id", Kind::Text), col("dist", Kind::Float)], rows: vec![vec![Cell::Text(b"c:\x92".to_vec()), Cell::Bits(0)]] };
+        let set = |v: f64| json!({"patch": 1, "set": [{"where": {"id": {"bytes": "633a92"}}, "values": {"dist": v}}]});
+        let (low, high) = (set(1.0), set(2.0));
+        let facts = apply("StageData/AstroGalaxy/camera/CameraParam.bcam", &mut t, &[ModPatch { mod_id: "l", file: "pl", patch: &low }, ModPatch { mod_id: "h", file: "ph", patch: &high }]).unwrap();
+        assert_eq!(facts, vec![Fact::Conflict { table: "StageData/AstroGalaxy/camera/CameraParam.bcam".into(), row: "{bytes:633a92}".into(), column: Some("dist".into()), lower: "l".into(), higher: "h".into() }]);
     }
 
     #[test]

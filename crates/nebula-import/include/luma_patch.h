@@ -42,7 +42,11 @@ typedef struct LumaPatchInput {
     const char* path;      /* the table's path in the store, UTF-8 */
     const uint8_t* table;  /* the game's cooked table */
     uint64_t table_size;
-    const LumaTablePatch* patches; /* from the bottom of the mod list up: the last given wins */
+    /* From the bottom of the mod list up: the last given wins. One mod's patches of this table (one a layer that is
+       on, `layers/<layer>/patches/<path>.json`) in its layer order (luma-format 5: the layers as the mod lists them,
+       the ones the player turned on), then by file path. luma-format 5.1's "load order, layer order, then file
+       order" for one table; the caller builds this list, so this is its contract. */
+    const LumaTablePatch* patches;
     uint32_t patch_count;
     /* A table of a link group: the other tables of its group the game meets its key among, each once (none for a
        table of no group; read only when the table has a patch). For Placement, MapParts and ChildObj (l_id) every
@@ -60,7 +64,7 @@ typedef struct LumaPatchInput {
 enum {
     LUMA_PATCH_CONFLICT = 0, /* mod_id and other change one row (column null: the whole row); mod_id's is used: it is
                                 higher in the list */
-    LUMA_PATCH_MISSING = 1,  /* mod_id's file names `row`, which is not there: other removed it, or (null) an
+    LUMA_PATCH_MISSING = 1,  /* mod_id's file names `row`, which is not there: other removed it, or (null) a
                                 lower mod's whole table left it out */
     LUMA_PATCH_SELECTED = 2, /* mod_id's selector number `selector` matched `rows` rows (0: a note, L407) */
     LUMA_PATCH_FAILED = 3    /* mod_id's file could not apply and is left out: `code` is the validator's rule (L400,
@@ -73,8 +77,15 @@ typedef struct LumaPatchFact {
     const char* mod_id;
     const char* file;       /* mod_id's patch file; null for a conflict */
     const char* other;      /* the other mod, or null */
-    const char* row;        /* the row's key values joined by U+001F, "#<n>" by place, "*" the whole table; or null */
-    const char* column;     /* "0x" and the column's hash, or null */
+    /* The row: its key values in the key's column order, joined by U+001F; "#<n>" by place (a table with no key);
+       "*" the whole table; or null. Each value as the validator writes a key (table-keys 5): a whole number in
+       decimal, signed at its column's width (a field unsigned); a float in its shortest form; a word as itself, or
+       `{bytes:<hex>}` (lower-case hex) when it is not UTF-8, the form JSON gives it as {"bytes":"<hex>"}. Lower case
+       for a table whose keys the game compares without case. The screen may show U+001F as ", ". */
+    const char* row;
+    /* LUMA_PATCH_CONFLICT on one cell: the column's name as mod_id's patch wrote it (the higher's), never a hash;
+       null for the whole row (add, remove, rows) and for the other kinds. */
+    const char* column;
     const char* why;        /* LUMA_PATCH_FAILED only: the reason in English */
     uint32_t selector;
     uint32_t rows;
