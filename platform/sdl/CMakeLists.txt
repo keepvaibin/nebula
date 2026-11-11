@@ -265,3 +265,19 @@ if(ANDROID)
     target_link_options(nebula_mods PRIVATE "-Wl,--gc-sections")
 endif()
 
+
+# Release builds optimise the host's own code across source files, as the Windows host does (CMakeLists.txt
+# NEBULA_HOST_IPO): ThinLTO, so the render thread's small calls from file to file are inlined. Clang only: it fuses a
+# multiply and an add only within one expression as written (-ffp-contract=on), so inlining across files changes no
+# result; a compiler that fuses across statements could. CMake links a test library first and leaves the build plain
+# where the toolchain cannot.
+option(NEBULA_HOST_IPO "Optimize the host's code across source files in Release builds" ON)
+if(NEBULA_HOST_IPO AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT nebula_host_ipo_supported OUTPUT nebula_host_ipo_error LANGUAGES C CXX)
+    if(nebula_host_ipo_supported)
+        set_property(TARGET galaxy_render_vk main PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+    else()
+        message(STATUS "Host IPO unavailable: ${nebula_host_ipo_error}")
+    endif()
+endif()

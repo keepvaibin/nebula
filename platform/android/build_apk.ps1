@@ -10,6 +10,7 @@
 #                 [-SeedTool <vk_shader_seed.exe>] [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
 #                 [-FfxShaders <FidelityFX's Vulkan shader headers, made already>]
 #                 [-Debuggable: the APK can be debugged (run-as) on a test device]
+#                 [-Plain: no ThinLTO for the game module and host; links in a fraction of the time, for development]
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
     [Parameter(Mandatory = $true)][string]$Work,
@@ -18,7 +19,8 @@ param(
     [string]$Signing = "",
     [string]$Abis = "arm64-v8a,x86_64",
     [string]$FfxShaders = "",
-    [switch]$Debuggable
+    [switch]$Debuggable,
+    [switch]$Plain
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -37,6 +39,8 @@ $hostToolsSlash = $HostTools -replace '\\', '/'
 $ffxArgs = @()
 if (Test-Path "$Deps\ffx-src\FidelityFX-SDK-1.1.4\sdk") { $ffxArgs += "-DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$depsSlash/ffx-src/FidelityFX-SDK-1.1.4" }
 if ($FfxShaders) { $ffxArgs += "-DNEBULA_FFX_VK_SHADERS=$($FfxShaders -replace '\\', '/')" }
+# The players' build: ThinLTO for the game module (native/CMakeLists.txt NEBULA_LTO) and the host (NEBULA_HOST_IPO).
+$lto = if ($Plain) { "OFF" } else { "ON" }
 New-Item -ItemType Directory -Force $Work | Out-Null
 
 # A step's output to a UTF-8 log; its errors shown and the build stopped when it fails. Tools write progress to
@@ -62,13 +66,13 @@ foreach ($abi in $Abis -split ",") {
     $module = "$Work/module-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\module-$abi.log" {
         cmake -G Ninja -S "$root/native" -B $module "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari"
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari" "-DNEBULA_LTO=$lto"
         if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game }
     }
     $hostBuild = "$Work/host-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\host-$abi.log" {
         cmake -G Ninja -S "$root/platform/sdl" -B $hostBuild "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" @ffxArgs
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" "-DNEBULA_HOST_IPO=$lto" @ffxArgs
         if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main nebula_mods }
     }
     $upper = ($triple -replace '-', '_').ToUpper()

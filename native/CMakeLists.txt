@@ -149,12 +149,32 @@ endif()
 
 # A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, tools/verify/pgo_profile.sh): the game's CPU falls about
 # 17 % (docs/NATIVE_PERFORMANCE.md). A profile older than the code still applies to what has not changed.
+# The profile names functions as the Windows build mangles them (the Microsoft C++ ABI): on Android, Linux and Apple
+# (the Itanium ABI) no function would find its counts, so those builds take ThinLTO alone, NEBULA_LTO: about 7 % of the
+# game's CPU by itself on Windows (the same table). -ffp-contract=off holds the results bit for bit through either.
 option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)
+option(NEBULA_LTO "Build the game with ThinLTO (the players' build where the profile does not apply)" OFF)
+if(NEBULA_PGO AND NOT WIN32)
+    message(WARNING "NEBULA_PGO: the profile is the Windows build's; this build takes ThinLTO alone")
+    set(NEBULA_LTO ON)
+    set(NEBULA_PGO OFF)
+endif()
 if(NEBULA_PGO)
     set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")
     target_compile_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}"
                            -Wno-profile-instr-unprofiled -Wno-profile-instr-out-of-date -Wno-backend-plugin)
     target_link_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}")
+elseif(NEBULA_LTO)
+    # CMake links a small library and program with the toolchain's ThinLTO first: a linker that cannot read the
+    # compiler's bitcode (an Apple linker older than the LLVM in use) leaves the build plain, as before.
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT game_lto_supported OUTPUT game_lto_error LANGUAGES C CXX)
+    if(game_lto_supported)
+        target_compile_options(smg_game PRIVATE -flto=thin)
+        target_link_options(smg_game PRIVATE -flto=thin)
+    else()
+        message(WARNING "NEBULA_LTO: this toolchain cannot link ThinLTO, the game is built plain: ${game_lto_error}")
+    endif()
 endif()
 
 # CPU level. The Windows package needs AVX2 (Setup checks it; the host is built for it), and every AVX2 CPU also has
