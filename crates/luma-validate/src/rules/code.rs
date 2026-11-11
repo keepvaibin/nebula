@@ -609,6 +609,36 @@ mod types_tests {
         assert_eq!(as_given(&left_out_reason("a new reason")), vec![("why", "T:a new reason".to_string())]);
     }
 
+    /// The generator's own reason list (`LUMA_GEN_TYPES=<tools/lumacore/gen_types.py> cargo test -- --ignored`):
+    /// every `R_* = "..."` phrase has a row, a prefix (ending in a space) with names after it as `what`. A reason
+    /// added to the generator without a row here fails this test before any types file carries it.
+    #[test]
+    #[ignore]
+    fn every_reason_the_generator_has_has_a_row() {
+        let path = std::env::var("LUMA_GEN_TYPES").expect("LUMA_GEN_TYPES names tools/lumacore/gen_types.py");
+        let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let mut reasons = Vec::new();
+        for line in source.lines() {
+            let Some((name, value)) = line.split_once('=') else { continue };
+            let name = name.trim();
+            if !name.starts_with("R_") || !name.bytes().all(|c| c.is_ascii_uppercase() || c == b'_') {
+                continue;
+            }
+            let value = value.trim();
+            let text = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or_else(|| panic!("{path}: {name} is not one plain string: {value}"));
+            assert!(!text.contains('\\') && !text.contains('"'), "{path}: {name}: {text}");
+            reasons.push((name.to_string(), text.to_string()));
+        }
+        assert!(reasons.len() >= 14, "{path}: only {} R_ constants read: {reasons:?}", reasons.len());
+        for (name, text) in &reasons {
+            let (given, names) = if text.ends_with(' ') { (format!("{text}A::x (a.cpp), B::x (b.cpp)"), true) } else { (text.clone(), false) };
+            let args = as_given(&left_out_reason(&given));
+            assert!(args[0].0 == "why" && args[0].1.starts_with("P:LeftOut."), "{name} = {text:?} has no row: {args:?}");
+            assert_eq!(args.len() == 2 && args[1] == ("what", "T:A::x (a.cpp), B::x (b.cpp)".to_string()), names, "{name}: {args:?}");
+        }
+        eprintln!("{path}: {} reasons, each with a row", reasons.len());
+    }
+
     /// The real types file (`LUMA_TYPES=<path> cargo test -- --ignored`): it reads, and every reason in it has a row.
     #[test]
     #[ignore]
