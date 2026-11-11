@@ -1,0 +1,12 @@
+[package]
+name = "luma-validate"
+description = "The one validator of a .luma: LumaLink runs it before packing, the game at import and at each start"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+miniz_oxide = "0.8"
+crc32fast = "1"
+sha1.workspace = true

@@ -33,12 +33,16 @@ pub mod model_write;
 pub mod pipeline_list;
 pub mod native_data;
 pub mod overlay;
+pub mod overlay_patches;
 pub mod particle_json;
 pub mod particles;
 pub mod ui_layout;
 pub mod sound;
 pub mod store;
 pub mod table;
+pub mod table_keys;
+pub mod patch;
+pub mod table_columns;
 pub mod texture;
 pub mod thp;
 

@@ -1,0 +1,25 @@
+pattern	key	match	why
+stagedata/*/jmp/placement/*/*	l_id	exact	placement rows: the editor's own id, unique in each of the 4,542 files
+stagedata/*/jmp/mapparts/*/*	l_id	exact	placement rows
+stagedata/*/jmp/childobj/*/*	l_id	exact	placement rows
+stagedata/*/jmp/start/*/*	MarioNo	exact	the player's start by number (315 of 649 files have no l_id)
+stagedata/*/jmp/path/commonpathinfo	l_id	exact	one row per rail
+stagedata/*/jmp/path/commonpathpointinfo.*	#	exact	a rail's points, in order
+stagedata/*/jmp/generalpos/*/*	PosName,Obj_ID	exact	how the game finds a position: its name and owner (two files repeat a key)
+stagedata/*/jmp/list/*	#	exact	one row
+stagedata/*/camera/cameraparam.bcam	id	exact	the camera's id, as areas and events name it
+stagedata/*/zonelist.bcsv	ZoneName	exact	a galaxy's zones by name
+stagedata/*/scenariodata.bcsv	ScenarioNo	exact	a galaxy's stars by number
+stagedata/*/objnametable.tbl	en_name	exact	an object's name in the game's code
+**/messageid.tbl	MessageId	exact	a message by its id
+**/struct.tbl	#	exact	a message's settings, by the message's place in messageid.tbl
+objectdata/**/*.banmt	name	exact	an animation by name
+objectdata/**/*.pa	#	exact	keyframes, in order
+objectdata/**/demo*/*.bcsv	#	exact	a cutscene's steps, in order
+objectdata/*/actoranimctrl.bcsv	ActorAnimName	exact	an action by name
+objectdata/*/shadow.bcsv	Name	exact	a shadow by name
+objectdata/*/groupinfo	name	exact	a group by name
+objectdata/*/padrumbledata.bcsv	PadRumbleName,StartFrame	exact	a rumble by name and start
+objectdata/lightdata/lightdata.bcsv	AreaLightName	exact	the light sets areas name
+objectdata/*/light*.bcsv	AreaLightName,LightID	exact	a light set by the name areas use, one row per light in it
+**	#	exact	any other table: rows by place
