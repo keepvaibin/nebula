@@ -26,8 +26,33 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
 # LumaCore's field rows (tools/lumacore) name private fields too: offsetof reads them with no access check.
 set_source_files_properties("${petari}/src/Game/System/generated/lumacore_fields.cpp" PROPERTIES COMPILE_OPTIONS "-Xclang;-fno-access-control")
 
+# Every function the game defines carries its LumaCore row and hook test (include/luma_hook.h). Each source is compiled
+# from a copy tools/lumacore/instrument.py writes into the build folder; the source itself is never changed. The hook
+# runner and the generated tables are compiled as they are.
+# OFF builds the module with no rows (no function can be hooked or called by name): only to measure what they cost.
+option(NEBULA_LUMA_HOOKS "Every game function carries its LumaCore row and hook test" ON)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(luma_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/instrument.py")
+set(module_sources)
+foreach(source IN LISTS game_sources)
+    if(NEBULA_LUMA_HOOKS AND source MATCHES "\\.cpp$" AND NOT source MATCHES "/System/(Luma(Hook|Loader)\\.cpp$|generated/)")
+        file(RELATIVE_PATH relative "${petari}/src" "${source}")
+        get_filename_component(folder "${source}" DIRECTORY)
+        set(copy "${CMAKE_CURRENT_BINARY_DIR}/luma/${relative}")
+        add_custom_command(OUTPUT "${copy}"
+            COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" "${source}" "${copy}"
+                    --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${petari}/src" --depfile "${copy}.d"
+            DEPENDS "${source}" "${luma_tool}" DEPFILE "${copy}.d" VERBATIM)
+        set_source_files_properties("${copy}" PROPERTIES COMPILE_OPTIONS "-iquote${folder}")
+        list(APPEND module_sources "${copy}")
+    else()
+        list(APPEND module_sources "${source}")
+    endif()
+endforeach()
+
 add_library(smg_game SHARED
-    ${game_sources}
+    ${module_sources}
     math/src/nebula_math.c
     math/src/nebula_libm.c
     math/src/nebula_libc.c
