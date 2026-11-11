@@ -6,6 +6,7 @@
 #include <d3d12.h>
 
 #include "galaxy/render/post_process_settings.h"
+#include "galaxy/render/rt/rt_denoiser.h"
 
 #include <array>
 #include <cstdint>
@@ -59,6 +60,8 @@ public:
     // Its SDK records its own (legacy) barriers on the textures it is handed (FSR 3, Streamline); false: the caller's
     // barriers put them where it reads them (XeSS).
     [[nodiscard]] virtual bool own_barriers() const noexcept { return false; }
+    // The tracer's outside denoiser, when this upscaler is one (rt_denoiser.h): null for the others.
+    [[nodiscard]] virtual rt::Denoiser* denoiser() noexcept { return nullptr; }
 };
 
 // AMD FidelityFX FSR 3.1 (statically linked, MIT). Null when the runtime was

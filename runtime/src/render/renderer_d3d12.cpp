@@ -4561,9 +4561,11 @@ void RendererD3D12::prepare_temporal_upscaler() {
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 5u);
+    // DLSS as Ray Reconstruction while the tracer runs, where it is installed and supported (FB, 22.20).
+    const bool rr = kind == 3u && render_tracing() && streamline::dlss_rr_supported();
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
-        oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
+        oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -4583,6 +4585,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
     temporal_pending_ = {};
     temporal_kind_ = kind;
     temporal_quality_ = quality;
+    temporal_rr_ = rr;
     temporal_history_valid_ = false;
     temporal_render_w_ = rw;
     temporal_render_h_ = rh;
@@ -4602,7 +4605,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
         });
         return;
     }
-    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality);
+    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality, rr);
     if (temporal_) {
         std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
                   << " -> " << ow << "x" << oh << "\n";
@@ -4713,6 +4716,14 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
         handed.texture(in.motion, gpu::Use::ColorWrite, gpu::Use::Common);
         handed.texture(in.reactive, gpu::Use::ColorWrite, gpu::Use::Common);
         handed.texture(in.output, gpu::Use::ColorWrite, gpu::Use::Common);
+        // An outside denoiser's guides (DLSS Ray Reconstruction), from the shader-read layout the tracer left them in.
+        if (const rt::Denoiser* denoiser = temporal_->denoiser()) {
+            if (const rt::DenoiseGuides guides = denoiser->pending_guides(); guides.valid) {
+                for (void* guide : {guides.diffuse_albedo, guides.specular_albedo, guides.normal_roughness, guides.hit_distance}) {
+                    handed.texture(static_cast<ID3D12Resource*>(guide), gpu::Use::ShaderRead, gpu::Use::Common);
+                }
+            }
+        }
         handed.issue();
     }
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);

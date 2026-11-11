@@ -408,6 +408,8 @@ public:
     // the device cannot. Until rt_reactive_end.
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
     void rt_reactive_end();
+    // The tracer's outside denoiser this frame (rt_denoiser.h: DLSS Ray Reconstruction), null for the built-in filters.
+    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return temporal_ ? temporal_->denoiser() : nullptr; }
     // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
     // textures (the view constants' view_traced). `which`: 0 the traced light, 1 the added light.
     [[nodiscard]] std::uint32_t rt_publish_light(void* image, TextureStore& textures, unsigned which = 0u);
@@ -948,6 +950,7 @@ private:
     // integrated GPU), for the sizes and mode recorded below.
     std::future<std::unique_ptr<TemporalUpscaler>> temporal_pending_;
     unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
+    bool temporal_rr_ = false;         // DLSS made as Ray Reconstruction (the tracer running)
     unsigned temporal_quality_ = 0;
     std::int64_t temporal_last_upscale_us_ = 0;
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).

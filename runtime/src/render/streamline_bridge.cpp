@@ -18,6 +18,7 @@
 #include <sl_consts.h>
 #include <sl_dlss.h>
 #include <sl_dlss_g.h>
+#include <sl_dlss_d.h>
 #include <sl_pcl.h>
 #include <sl_reflex.h>
 #include <sl_security.h>
@@ -56,8 +57,11 @@ struct Api {
     PFun_slFreeResources* free_resources{};
     PFun_slDLSSGetOptimalSettings* dlss_get_optimal_settings{};
     PFun_slDLSSSetOptions* dlss_set_options{};
+    PFun_slDLSSDSetOptions* dlssd_set_options{};
     bool initialized = false;
     bool dlss = false;
+    bool dlssd = false;         // DLSS Ray Reconstruction runs on the adapter
+    bool dlssd_loaded = false;  // its plugins installed and loaded
     bool dlssg_loaded = false;      // requested at startup and its plugins installed
 };
 Api g_api;
@@ -165,10 +169,22 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
         if (frame_generation && !dlssg) {
             std::cerr << "[streamline] DLSS Frame Generation is not installed\n";
         }
-        static const sl::Feature features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex,
-                                               sl::kFeaturePCL};
+        // DLSS Ray Reconstruction (the tracer's outside denoiser, 22.20): loaded whenever it is installed; it runs
+        // only while the tracer does and the player has chosen DLSS.
+        const bool dlssd = installed(L"sl.dlss_d.dll") && installed(L"nvngx_dlssd.dll");
+        static sl::Feature features[5]{};
+        std::uint32_t feature_count = 0u;
+        features[feature_count++] = sl::kFeatureDLSS;
+        if (dlssg) {
+            features[feature_count++] = sl::kFeatureDLSS_G;
+            features[feature_count++] = sl::kFeatureReflex;
+            features[feature_count++] = sl::kFeaturePCL;
+        }
+        if (dlssd) {
+            features[feature_count++] = sl::kFeatureDLSS_RR;
+        }
         preferences.featuresToLoad = features;
-        preferences.numFeaturesToLoad = dlssg ? 4u : 1u;
+        preferences.numFeaturesToLoad = feature_count;
         preferences.engine = sl::EngineType::eCustom;
         preferences.engineVersion = "Nebula";
         preferences.projectId = "7c3e2b1a-5d4f-4e8a-9b6c-1f2e3d4c5b6a";
@@ -180,6 +196,7 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
         }
         api.initialized = true;
         api.dlssg_loaded = dlssg;
+        api.dlssd_loaded = dlssd;
         g_api = api;
         g_generation.is_feature_supported = api.is_feature_supported;
         g_generation.get_feature_function = api.get_feature_function;
@@ -224,6 +241,19 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
     g_api.dlss_set_options = reinterpret_cast<PFun_slDLSSSetOptions*>(options);
     g_api.dlss = true;
     std::cerr << "[streamline] DLSS ready\n";
+    if (g_api.dlssd_loaded) {
+        void* rr_options = nullptr;
+        result = g_api.is_feature_supported(sl::kFeatureDLSS_RR, info);
+        if (result == sl::Result::eOk &&
+            g_api.get_feature_function(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", rr_options) == sl::Result::eOk &&
+            rr_options != nullptr) {
+            g_api.dlssd_set_options = reinterpret_cast<PFun_slDLSSDSetOptions*>(rr_options);
+            g_api.dlssd = true;
+            std::cerr << "[streamline] DLSS Ray Reconstruction ready\n";
+        } else {
+            std::cerr << "[streamline] DLSS Ray Reconstruction unavailable: " << result_name(result) << '\n';
+        }
+    }
     boot_step("streamline: dlss");
     if (g_api.dlssg_loaded) {
         g_generation.attach(info);
@@ -233,6 +263,8 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
 }
 
 bool dlss_supported() noexcept { return g_api.initialized && g_api.dlss; }
+
+bool dlss_rr_supported() noexcept { return g_api.initialized && g_api.dlss && g_api.dlssd; }
 
 bool frame_generation_supported() noexcept { return g_api.initialized && g_generation.supported(); }
 
@@ -368,6 +400,7 @@ void shutdown() noexcept {
     g_device_proxy.Reset();
     g_api.initialized = false;
     g_api.dlss = false;
+    g_api.dlssd = false;
     g_generation.shutdown();
 }
 
@@ -377,16 +410,25 @@ namespace {
 
 using streamline_common::dlss_mode;
 
-class DlssUpscaler final : public TemporalUpscaler {
+class DlssUpscaler final : public TemporalUpscaler, public rt::Denoiser {
 public:
-    explicit DlssUpscaler(unsigned quality) : mode_(dlss_mode(quality)) {}
+    DlssUpscaler(unsigned quality, bool ray_reconstruction) : mode_(dlss_mode(quality)), rr_(ray_reconstruction) {}
 
     ~DlssUpscaler() override {
         // The renderer waits for the GPU before it replaces an upscaler.
         if (g_api.dlss && g_api.free_resources != nullptr) {
             (void)g_api.free_resources(sl::kFeatureDLSS, viewport_);
+            if (rr_) {
+                (void)g_api.free_resources(sl::kFeatureDLSS_RR, viewport_);  // and DLSS alone, for frames without guides
+            }
         }
     }
+
+    // rt::Denoiser: DLSS Ray Reconstruction takes every signal raw and the guides of each frame.
+    [[nodiscard]] std::uint32_t raw_signals() const noexcept override { return rr_ ? rt::kSignalAll : 0u; }
+    void guides(const rt::DenoiseGuides& guides) noexcept override { guides_ = guides; }
+    rt::DenoiseGuides pending_guides() const noexcept override { return guides_; }
+    [[nodiscard]] rt::Denoiser* denoiser() noexcept override { return rr_ ? this : nullptr; }
 
     bool evaluate(const TemporalUpscaleInputs& in) override {
         if (!streamline::dlss_supported() || in.list == nullptr || in.color == nullptr ||
@@ -407,6 +449,11 @@ public:
         }
         sl::Constants constants{};
         streamline_common::fill_constants(constants, in);
+        // Ray Reconstruction where the tracer left this frame's guides; a frame without them (the title, a menu: the
+        // tracer did not run) takes DLSS alone.
+        if (rr_ && guides_.valid) {
+            return evaluate_rr(in, *token, constants);
+        }
         if (g_api.set_constants(constants, *token, viewport_) != sl::Result::eOk) {
             return failed("constants");
         }
@@ -457,14 +504,91 @@ public:
         streamline_common::jitter(index, phase_count, x, y);
     }
 
-    const char* name() const noexcept override { return "DLSS"; }
+    const char* name() const noexcept override { return rr_ ? "DLSS Ray Reconstruction" : "DLSS"; }
     bool own_barriers() const noexcept override { return true; }
 
 private:
+    // DLSS Ray Reconstruction: the composited picture of this frame's raw signals with the tracer's guides
+    // (rt_rr_guides.hlsl), denoised and upscaled in one.
+    bool evaluate_rr(const TemporalUpscaleInputs& in, sl::FrameToken& token, sl::Constants& constants) {
+        const rt::DenoiseGuides guides = guides_;
+        guides_.valid = false;  // each frame's own
+        if (!streamline::dlss_rr_supported()) {
+            return failed("ray reconstruction not supported");
+        }
+        streamline_common::rr_projection(constants, in);
+        if (g_api.set_constants(constants, token, viewport_) != sl::Result::eOk) {
+            return failed("ray reconstruction constants");
+        }
+        if (rr_options_.outputWidth != in.output_width || rr_options_.outputHeight != in.output_height ||
+            std::memcmp(rr_view_, guides.world_to_view, sizeof(rr_view_)) != 0) {
+            rr_options_.mode = mode_;
+            rr_options_.outputWidth = in.output_width;
+            rr_options_.outputHeight = in.output_height;
+            rr_options_.colorBuffersHDR = sl::Boolean::eFalse;  // gamma-encoded RGBA8
+            rr_options_.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
+            streamline_common::camera_matrices(guides.world_to_view, rr_options_.worldToCameraView, rr_options_.cameraViewToWorld);
+            std::memcpy(rr_view_, guides.world_to_view, sizeof(rr_view_));
+            if (g_api.dlssd_set_options(viewport_, rr_options_) != sl::Result::eOk) {
+                rr_options_.outputWidth = 0u;
+                return failed("ray reconstruction options");
+            }
+            if (!rr_reported_) {
+                rr_reported_ = true;
+                std::cerr << "[dlss] ray reconstruction: " << in.render_width << 'x' << in.render_height << " -> " << in.output_width
+                          << 'x' << in.output_height << ", jitter " << in.jitter_x << ' ' << in.jitter_y << ", motion in render pixels"
+                          << " (current to previous, unjittered), depth reversed, reset " << (in.reset ? 1 : 0) << '\n';
+            }
+        }
+        // As evaluate: the common state on the enhanced path (the renderer handed the guides over too).
+        const D3D12_RESOURCE_STATES kRead = in.common ? D3D12_RESOURCE_STATE_COMMON
+                                                      : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        const D3D12_RESOURCE_STATES target = in.common ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_RENDER_TARGET;
+        sl::Resource color(sl::ResourceType::eTex2d, in.color, target);
+        sl::Resource depth(sl::ResourceType::eTex2d, in.depth, in.common ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        sl::Resource motion(sl::ResourceType::eTex2d, in.motion, target);
+        sl::Resource output(sl::ResourceType::eTex2d, in.output, target);
+        sl::Resource diffuse(sl::ResourceType::eTex2d, guides.diffuse_albedo, kRead);
+        sl::Resource specular(sl::ResourceType::eTex2d, guides.specular_albedo, kRead);
+        sl::Resource normal(sl::ResourceType::eTex2d, guides.normal_roughness, kRead);
+        sl::Resource hit(sl::ResourceType::eTex2d, guides.hit_distance, kRead);
+        sl::Extent render{};
+        render.width = in.render_width;
+        render.height = in.render_height;
+        sl::Extent upscaled{};
+        upscaled.width = in.output_width;
+        upscaled.height = in.output_height;
+        const sl::ResourceTag tags[] = {
+            sl::ResourceTag(&color, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eOnlyValidNow, &render),
+            sl::ResourceTag(&output, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eOnlyValidNow, &upscaled),
+            sl::ResourceTag(&depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eOnlyValidNow, &render),
+            sl::ResourceTag(&motion, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eOnlyValidNow, &render),
+            sl::ResourceTag(&diffuse, sl::kBufferTypeAlbedo, sl::ResourceLifecycle::eOnlyValidNow, &render),
+            sl::ResourceTag(&specular, sl::kBufferTypeSpecularAlbedo, sl::ResourceLifecycle::eOnlyValidNow, &render),
+            sl::ResourceTag(&normal, sl::kBufferTypeNormalRoughness, sl::ResourceLifecycle::eOnlyValidNow, &render),
+            sl::ResourceTag(&hit, sl::kBufferTypeSpecularHitDistance, sl::ResourceLifecycle::eOnlyValidNow, &render)};
+        if (g_api.set_tag_for_frame(token, viewport_, tags, 8u, in.list) != sl::Result::eOk) {
+            return failed("ray reconstruction tags");
+        }
+        const sl::BaseStructure* inputs[] = {&viewport_};
+        const sl::Result result = g_api.evaluate_feature(sl::kFeatureDLSS_RR, token, inputs, 1u, in.list);
+        if (result != sl::Result::eOk) {
+            return failed(result_name(result));
+        }
+        return true;
+    }
+
+    // Each different failure once (the reasons are literals).
     bool failed(const char* what) {
-        if (!reported_) {
-            reported_ = true;
-            std::cerr << "[dlss] evaluate failed: " << what << '\n';
+        for (const char*& seen : reported_) {
+            if (seen == what) {
+                break;
+            }
+            if (seen == nullptr) {
+                seen = what;
+                std::cerr << "[dlss] evaluate failed: " << what << '\n';
+                break;
+            }
         }
         return false;
     }
@@ -472,18 +596,24 @@ private:
     sl::ViewportHandle viewport_{0u};
     sl::DLSSMode mode_;
     sl::DLSSOptions options_{};
-    bool reported_ = false;
+    const char* reported_[16] = {};
+    bool rr_ = false;
+    rt::DenoiseGuides guides_{};
+    sl::DLSSDOptions rr_options_{};
+    float rr_view_[12] = {};
+    bool rr_reported_ = false;
 };
 
 }  // namespace
 
 std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, unsigned render_height,
                                                        unsigned output_width, unsigned output_height,
-                                                       unsigned quality) {
+                                                       unsigned quality, bool ray_reconstruction) {
     if (!streamline::dlss_supported() || render_width == 0u || render_height == 0u ||
         output_width == 0u || output_height == 0u) {
         return nullptr;
     }
+    ray_reconstruction = ray_reconstruction && streamline::dlss_rr_supported();
     // A mode evaluates only render widths inside its range (ultra performance accepts one size), and
     // the render scales are whole scene target scales: the requested mode, else the next higher-quality one
     // whose range holds the render width (NGX fails every evaluate outside it).
@@ -503,12 +633,12 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
                       << output_height << " mode " << candidate << " of requested " << quality << " (range "
                       << settings.renderWidthMin << 'x' << settings.renderHeightMin << " .. "
                       << settings.renderWidthMax << 'x' << settings.renderHeightMax << ")\n";
-            return std::make_unique<DlssUpscaler>(candidate);
+            return std::make_unique<DlssUpscaler>(candidate, ray_reconstruction);
         }
         std::cerr << "[dlss] " << render_width << 'x' << render_height << " -> " << output_width << 'x'
                   << output_height << ": outside every mode's range\n";
     }
-    return std::make_unique<DlssUpscaler>(mode);
+    return std::make_unique<DlssUpscaler>(mode, ray_reconstruction);
 }
 
 unsigned dlss_min_render_width(unsigned quality, unsigned output_width, unsigned output_height) noexcept {
@@ -548,13 +678,16 @@ bool attach_device(ID3D12Device*, const LUID&) noexcept { return false; }
 #if !defined(GALAXY_STREAMLINE_VK)
 bool dlss_supported() noexcept { return false; }
 #endif
+#if !defined(GALAXY_STREAMLINE_VK)
+bool dlss_rr_supported() noexcept { return false; }  // streamline_vk.cpp's with Vulkan
+#endif
 ID3D12CommandQueue* native_queue(ID3D12CommandQueue* queue) noexcept { return queue; }
 Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept { return device; }
 Microsoft::WRL::ComPtr<IDXGIFactory4> swap_chain_factory(IDXGIFactory4* factory) noexcept { return factory; }
 void shutdown() noexcept {}
 }  // namespace streamline
 
-std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned, unsigned, unsigned, unsigned, unsigned) {
+std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned, unsigned, unsigned, unsigned, unsigned, bool) {
     return nullptr;
 }
 

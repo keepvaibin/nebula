@@ -904,9 +904,15 @@ void RendererVk::prepare_temporal_upscaler() {
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 5u);
+#if defined(_WIN32)
+    // DLSS as Ray Reconstruction while the tracer runs, where it is installed and supported (FB, 22.20).
+    const bool rr = kind == 3u && render_tracing() && streamline::dlss_rr_supported();
+#else
+    const bool rr = false;
+#endif
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ && oh == temporal_output_h_ &&
-        kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {
+        kind == temporal_kind_ && (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -930,9 +936,10 @@ void RendererVk::prepare_temporal_upscaler() {
     temporal_output_h_ = oh;
     temporal_kind_ = kind;
     temporal_quality_ = quality;
+    temporal_rr_ = rr;
 #if defined(_WIN32)
     if (kind == 3u) {
-        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality);
+        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality, rr);
         if (temporal_) {
             std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
         }

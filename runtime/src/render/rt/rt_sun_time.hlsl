@@ -54,7 +54,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float4 guide = g_guide.Load(int3(pixel, 0));
     const float4 raw = g_raw.Load(int3(pixel, 0));
     const float own_distance = raw.a < kNoOccluder ? raw.a : 0.0f;
-    if (guide.a == 0.0f || !in_penumbra(id.xy)) {
+    if (guide.a == 0.0f || !in_penumbra(id.xy) || (g_more.z & 2048u) != 0u) {  // raw signals (FB, 22.20): copied through
         g_out[id.xy] = float4(raw.rgb, 1.0f);
         g_distance[id.xy] = own_distance;
         return;

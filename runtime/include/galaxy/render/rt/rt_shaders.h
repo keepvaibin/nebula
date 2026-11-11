@@ -13,7 +13,7 @@ enum class RtShader : unsigned {
     Probe, View, Skin, Light, LightTime, LightSpace, LightsTime, LightsSpace, Surface, Sun, Lights, NoiseFill, SunTiles, SunTime,
     SunBlur, Reactive,
     Reference, ReferenceOut, Signal, Indirect, IndirectUp, Reflect, ReflectTime,
-    ReflectSpace, ReflectOut, Volume, Scatter, Count
+    ReflectSpace, ReflectOut, Volume, Scatter, RrGuides, Count
 };
 
 struct RtShaderBytes {
