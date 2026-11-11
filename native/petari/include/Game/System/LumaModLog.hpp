@@ -1,0 +1,83 @@
+#pragma once
+
+// The on-screen mod log's store (contract mod-log): every entry said about a mod this session, kept once with a count
+// of its repeats, its words rendered once in the played language and in English. Read by the notice
+// (NebulaModLogNotice) and the LOG page. No mod: never allocated.
+
+#include <luma_modlog.h>
+#include <nebula_types.h>
+
+namespace luma {
+    namespace modlog {
+        const u32 cPerMod = 256;      // a mod's entries kept (as the kernel's record keeps)
+        const u32 cSession = 1024;    // all mods' together
+        const u32 cFirstKept = 16;    // a mod's first ones, kept past cSession
+
+        // One kept entry. Its fields never change once it is published, except `count` (read it with countOf).
+        struct Entry {
+            u32 source;
+            u32 level;
+            u32 code;
+            u32 line;
+            u32 column;
+            u32 count;               // repeats included; atomic
+            u32 reload;              // the mod's reload number when it was added (plan 1.11); 0 before any
+            const char* mod;
+            const char* file;        // "" when none
+            const char16_t* text;    // the played language, for the screen
+            const char* textUtf8;    // the same, for the facts
+            const char* english;     // for the game's log and the facts
+            Entry* next;             // in added order; atomic
+        };
+
+        // A mod the log has entries of, in the order its first entry came.
+        struct Mod {
+            const char* id;
+            u32 kept;
+            u32 past;    // entries not kept (cPerMod or cSession reached); atomic
+            u32 reload;
+            Mod* next;   // atomic
+        };
+
+        // From the kernel and the game's content (CODE, CONTENT, GUARD): the entry with `text` and `english` null, and
+        // `pRowId` the NebulaText row its words are; the row's {names} are filled from the entry's names and values,
+        // {mod} from its mod. A null row or one NebulaText lacks: the code and every value, so nothing is lost. The
+        // host's entries (luma_modlog_add) carry their own words.
+        void add(const LumaModLogEntry& rEntry, const char* pRowId);
+        // luma_modlog_session.
+        void session(u32 modsOn, LumaModLogFact fact);
+        // A mod taken out and loaded again (1.11): its later entries carry the new number; the earlier stay.
+        void reloaded(const char* pMod);
+
+        // Whether a scene makes the notice: mods are on this session, or something was said anyway.
+        bool wanted();
+        bool allocated();
+        // Grows by one with every entry kept, counted or noted; 0 while nothing is kept.
+        u32 revision();
+        // The first kept entry and the first mod (in order); null when none. Follow `next` (with nextOf).
+        const Entry* first();
+        const Mod* firstMod();
+        const Entry* nextOf(const Entry* pEntry);
+        const Mod* nextOf(const Mod* pMod);
+        u32 countOf(const Entry* pEntry);
+        u32 pastOf(const Mod* pMod);
+        u32 kept();
+        u32 errors();
+
+        // The notice's cursor: the next Error entry no notice has taken yet (in added order), taken. Null when none.
+        const Entry* takeNotice();
+        // Errors no notice has taken yet.
+        u32 noticesWaiting();
+        // Once a session, for the first notice made: how many Errors were kept before it (they are taken as one summary
+        // line, not one by one). 0 after the first call.
+        u32 takeSummary();
+
+        // A harness fact, when this is a harness run (the writer luma_modlog_session gave); nothing otherwise.
+        void fact(const char* pKey, const char* pJson);
+        bool facts();
+        // `pText` as a JSON string with its quotes, into pDst (cut at a character when it would not fit).
+        void jsonString(char* pDst, u32 size, const char* pText);
+        // UTF-16 to UTF-8 within `size`.
+        void toUtf8(char* pDst, u32 size, const char16_t* pText);
+    }  // namespace modlog
+}  // namespace luma
