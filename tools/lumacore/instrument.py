@@ -117,6 +117,20 @@ def find_libclang(named, compiler):
     sys.exit(f'instrument.py: libclang was not found beside {compiler}; name it with --libclang')
 
 
+def own_resource_dir(libclang, compiler):
+    """libclang takes its built-in headers (stdarg.h and the like) from beside the compiler the command names. A libclang
+    that is not that compiler's own (a cross build: Android's NDK has none) is given its own folder, or it looks for
+    its version's headers in the compiler's tree (seen: the NDK's lib/clang/22 for LLVM 22's libclang)."""
+    own = pathlib.Path(libclang).resolve().parent
+    if own == pathlib.Path(compiler).resolve().parent:
+        return None
+    candidates = sorted((d for base in (own.parent / 'lib' / 'clang', own / 'clang') if base.is_dir() for d in base.iterdir()
+                         if (d / 'include' / 'stdarg.h').exists()), key=lambda d: [int(x) for x in d.name.split('.') if x.isdigit()])
+    if not candidates:
+        sys.exit(f'instrument.py: no built-in headers (lib/clang/<version>/include) beside {libclang}')
+    return str(candidates[-1])
+
+
 class Unit:
     def __init__(self, api, tu, source, root):
         self.api, self.tu = api, tu
@@ -387,7 +401,11 @@ def main():
     root = os.path.abspath(options.get('--root', os.path.dirname(source)))
     args, directory = command_for(os.path.abspath(options['--commands']), options.get('--entry', output))
     args = parse_arguments(args, pathlib.Path(source).resolve())
-    api = load(find_libclang(options.get('--libclang'), args[0]))
+    libclang = find_libclang(options.get('--libclang'), args[0])
+    resource_dir = own_resource_dir(libclang, args[0])
+    if resource_dir is not None and '-resource-dir' not in args:
+        args = args[:1] + ['-resource-dir', resource_dir] + args[1:]
+    api = load(libclang)
     os.chdir(directory)
     index = api.createIndex(0, 0)
     tu = c_void_p()
