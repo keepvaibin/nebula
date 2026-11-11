@@ -86,7 +86,9 @@ struct EnhancedUse {
     case gpu::Use::Present:
         return {D3D12_BARRIER_SYNC_NONE, D3D12_BARRIER_ACCESS_NO_ACCESS, D3D12_BARRIER_LAYOUT_PRESENT};
     case gpu::Use::Common:
-        return {D3D12_BARRIER_SYNC_NONE, D3D12_BARRIER_ACCESS_NO_ACCESS, D3D12_BARRIER_LAYOUT_COMMON};
+        // The legacy COMMON state's equivalent: an SDK given a texture here records its own legacy barriers on it,
+        // which the enhanced model refuses after a SyncAfter of NONE (debug layer id 1417).
+        return {D3D12_BARRIER_SYNC_ALL, D3D12_BARRIER_ACCESS_COMMON, D3D12_BARRIER_LAYOUT_COMMON};
     }
     return {D3D12_BARRIER_SYNC_NONE, D3D12_BARRIER_ACCESS_NO_ACCESS, D3D12_BARRIER_LAYOUT_COMMON};
 }
