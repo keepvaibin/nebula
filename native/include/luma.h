@@ -223,7 +223,13 @@ typedef struct LumaModInfo {
    - Apple: the build runs macho_ctors.py over each object, which makes the init section `__DATA,luma_ctors` of type
      S_REGULAR, so dyld runs none; ld64 gives `___dso_handle`.
    Destructors registered with `atexit` (Windows) or `__cxa_atexit` (elsewhere) run in `finish`, the last first; the
-   list grows through the core's memory. */
+   list grows through the core's memory. Then `finish` runs the terminators the C runtime would have run at exit (a
+   destructor attribute's function the compiler did not register with atexit), which the system would otherwise run
+   never (Windows `.CRT$XT*`, ELF `.dtors`) or after the mod's memory is gone (Mach-O `__mod_term_func`):
+   - Windows: what lies between luma.h's `.CRT$XTA` and `.CRT$XTZ` markers, last to first.
+   - Linux and Android: luma_ctors.ld puts `.dtors` in `luma_dtors` (a null entry first), run first to last.
+   On every system the order is GCC's: constructors by priority, 101 first; terminators the other way round.
+   - Apple: macho_ctors.py makes the term section `__DATA,luma_dtors` of type S_REGULAR, run first to last. */
 typedef void (*LumaCtor)(void);
 #if defined(_WIN32)
 #define LUMA_CTORS                                                                                                    \
@@ -237,6 +243,18 @@ typedef void (*LumaCtor)(void);
             if (*at != 0) (*at)();                                                                                    \
         }                                                                                                             \
     }                                                                                                                 \
+    LUMA_C __attribute__((section(".CRT$XTA"), used)) const LumaCtor luma_dtors_a = 0;                                \
+    LUMA_C __attribute__((section(".CRT$XTZ"), used)) const LumaCtor luma_dtors_z = 0;                                \
+    static void luma_run_dtors(void) {                                                                                \
+        /* The last first: the compiler places priority 101's in .CRT$XTA00101, before the plain ones in .CRT$XTX, */ \
+        /* so this gives the order ELF's .dtors gives (101's terminator last). */                                     \
+        const LumaCtor* first = &luma_dtors_a;                                                                        \
+        const LumaCtor* at = &luma_dtors_z;                                                                           \
+        __asm__("" : "+r"(first), "+r"(at));                                                                          \
+        for (at--; at > first; at--) {                                                                                \
+            if (*at != 0) (*at)();                                                                                    \
+        }                                                                                                             \
+    }                                                                                                                 \
     LUMA_C int atexit(void (*fn)(void)) { return luma_add_exit(0, 0, fn); }
 #elif defined(__APPLE__)
 #define LUMA_CTORS                                                                                                    \
@@ -245,6 +263,14 @@ typedef void (*LumaCtor)(void);
     LUMA_C_EXTERN LumaCtor luma_ctors_end[] __asm("section$end$__DATA$luma_ctors");                                   \
     static void luma_run_ctors(void) {                                                                                \
         for (LumaCtor* at = luma_ctors_start; at != luma_ctors_end; at++) {                                           \
+            if (*at != 0) (*at)();                                                                                    \
+        }                                                                                                             \
+    }                                                                                                                 \
+    LUMA_C __attribute__((section("__DATA,luma_dtors"), used)) const LumaCtor luma_dtors_zero = 0;                    \
+    LUMA_C_EXTERN LumaCtor luma_dtors_start[] __asm("section$start$__DATA$luma_dtors");                               \
+    LUMA_C_EXTERN LumaCtor luma_dtors_end[] __asm("section$end$__DATA$luma_dtors");                                   \
+    static void luma_run_dtors(void) {                                                                                \
+        for (LumaCtor* at = luma_dtors_start; at != luma_dtors_end; at++) {                                           \
             if (*at != 0) (*at)();                                                                                    \
         }                                                                                                             \
     }                                                                                                                 \
@@ -260,6 +286,14 @@ typedef void (*LumaCtor)(void);
         /* .ctors order: the last first; the script's null entry is skipped. */                                       \
         for (LumaCtor* at = __stop_luma_ctors; at != __start_luma_ctors;) {                                           \
             --at;                                                                                                     \
+            if (*at != 0) (*at)();                                                                                    \
+        }                                                                                                             \
+    }                                                                                                                 \
+    LUMA_C_EXTERN __attribute__((visibility("hidden"))) LumaCtor __start_luma_dtors[];                                \
+    LUMA_C_EXTERN __attribute__((visibility("hidden"))) LumaCtor __stop_luma_dtors[];                                 \
+    static void luma_run_dtors(void) {                                                                                \
+        /* .dtors order: the first first; the script's null entry is skipped. */                                      \
+        for (LumaCtor* at = __start_luma_dtors; at != __stop_luma_dtors; at++) {                                      \
             if (*at != 0) (*at)();                                                                                    \
         }                                                                                                             \
     }                                                                                                                 \
@@ -317,6 +351,7 @@ typedef void (*LumaCtor)(void);
                 luma_exits[luma_exit_count].fn(luma_exits[luma_exit_count].arg);                                      \
             }                                                                                                         \
         }                                                                                                             \
+        luma_run_dtors();                                                                                             \
     }                                                                                                                 \
 
 #define LUMA_RUNTIME \
