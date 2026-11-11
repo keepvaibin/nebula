@@ -57,6 +57,13 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u3);
 // eye there, w 1 where known. The point itself is followed: its triangle's corners through the rows their matrices
 // had the frame before (a moving thing, a bending skin and the camera's own move alike).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_motion : register(u4);
+// The pixel's reservoir (Bitterli et al. 2020): the one light kept of all that were weighed for it. r, g: the light's
+// number in this frame's list, from 1, in two parts (each whole in a half float; 0: none); b: its weight (what its
+// unshadowed light is multiplied by: the sum of the weights it was chosen among over its own, 0 where the light was
+// found in shadow); a: how many candidates stand behind it (no more than 20).
+RT_FORMAT(rgba16f) RWTexture2D<float4> g_reservoirs : register(u5);
+Texture2D<float4> g_reservoirs_before : register(t9);  // the frame before's
+Texture2D<float4> g_guide_before : register(t10);      // and its guide: what surface each of those pixels was
 RWStructuredBuffer<uint> g_counters : register(u6);
 
 cbuffer LightConstants : register(b0) {
@@ -88,6 +95,9 @@ cbuffer LightConstants : register(b0) {
     float4 g_ray_before;   // rt_eye_ray of the frame before
     float4 g_before[3];    // the frame before's eye space from this frame's (rows of a 3x4 matrix): for a pixel whose
                            // mesh the pass cannot read, only the camera's move is known
+    uint4 g_kept;          // x: the first byte, in the drops' buffer, of where each emitter of the frame before is in
+                           // this frame's list (a uint each; past the list: gone); y: how many the frame before had;
+                           // z 1: there is a frame before to read
 };
 
 static const float kFarLight = 20000.0f;
@@ -477,6 +487,27 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
     return colour * lerp(g_look.x, 1.0f, sunlit);
 }
 
+// What an emitter adds at a surface unshadowed, as a share of the surface's own colour: its intensity over the
+// distance squared and its own size squared, by the surface's facing, ending at its reach without a step. Nothing on
+// the thing it belongs to (`self`) nor past its reach.
+float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out float4 place, out uint slot) {
+    place = asfloat(g_drops.Load4(emitter));
+    const float4 colour = asfloat(g_drops.Load4(emitter + 16u));
+    slot = g_drops.Load(emitter + 32u);
+    const float3 to = place.xyz - at;
+    const float far2 = dot(to, to);
+    if (slot == self || far2 > colour.w * colour.w) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float facing_it = max(dot(facing, to) * rsqrt(max(far2, 1e-4f)), 0.0f);
+    const float fade = saturate(1.0f - far2 / (colour.w * colour.w));
+    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * (0.25f + 0.75f * facing_it) * fade * fade);
+}
+
+float rt_unit(uint seed) {
+    return float(seed & 0xFFFFFFu) / 16777216.0f;
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     uint width, height;
@@ -494,6 +525,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint item = named.x;
     const float depth = g_depth_map.Load(int3(pixel, 0));
     const bool second = (g_more.z & 16u) != 0u;
+    if (!second) {
+        g_reservoirs[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // none, until the local lights say otherwise
+    }
     if (second && item == 0u) {
         return;  // no blended surface here: the picture keeps the first layer's light
     }
@@ -680,69 +714,155 @@ void main(uint3 id : SV_DispatchThreadID) {
 
         const uint2 tile = id.xy / max(g_grid.z, 1u);
         // The local lights (every emitter: the game's point lights, glowing meshes, each particle of a glowing
-        // effect). Resampled importance sampling (Talbot et al. 2005; the estimator ReSTIR's reservoirs carry on):
-        // up to eight of the tile's lights are tried, one from each equal run of the list, each weighed by what it
-        // would add here unshadowed; one is kept in proportion to its weight, and ONE ray asks whether it reaches the
-        // surface. What is written is that light's share times the sum of the weights over its own: on average
-        // exactly the sum of every light with its shadow, at a cost that does not grow with the lights. The filter
-        // after the pass (rt_lights_time, rt_lights_space) takes the noise of choosing. Not on itself. The second
-        // layer has no filter after it: there up to 32 of the lights are summed as they are, unshadowed.
+        // effect), by spatiotemporal reservoir resampling (ReSTIR DI: Bitterli et al. 2020; resampled importance
+        // sampling: Talbot et al. 2005). A pixel keeps ONE light, chosen in proportion to what each would add here
+        // unshadowed, out of:
+        //   this frame's candidates: up to eight of the tile's lights, one from each equal run of its list;
+        //   the reservoirs of the frame before at the pixel's own point (found by its motion) and at two points
+        //   near it, where the surface there is the pixel's own kind (in its plane, facing its way): each stands
+        //   for all the candidates it was itself chosen among, so a pixel sees what hundreds of tries would find.
+        // ONE ray then asks whether the kept light reaches the surface, and what is written is its light times its
+        // weight: the sum of the weights it was chosen among, over its own and over how many of the candidates could
+        // have chosen it (those whose surface it reaches: without that share a light's edge darkens). On average the
+        // sum of every light with its shadow, at a cost that does not grow with the lights. A light found in shadow
+        // is kept with no weight, so it is not handed on. The filter after the pass (rt_lights_time,
+        // rt_lights_space) takes what noise is left. Not on itself. The second layer has no filter after it: there
+        // up to 32 of the lights are summed as they are, unshadowed.
         if (g_glow.w != 0u && tile.x < g_grid.x && tile.y < g_grid.y) {
+            static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
             const uint2 run = g_tiles.Load2(g_glow.y + (tile.y * g_grid.x + tile.x) * 8u);
             const uint lights = run.y;
-            if (lights != 0u) {
+            float4 place;
+            uint slot;
+            if (second) {
+                const uint tries = min(lights, 32u);
+                const float each = float(lights) / float(max(tries, 1u));
+                for (uint k = 0u; k < tries; ++k) {
+                    const uint index = g_tiles.Load(g_glow.z + (run.x + min(uint(float(k) * each), lights - 1u)) * 4u);
+                    added += emitter_light(g_glow.x + index * 48u, at, smooth_, words.x, place, slot) * each;
+                }
+            } else {
                 uint seed = rt_hash(id.x + id.y * 8192u + g_more.y * 9781u + 4099u);
-                const uint tries = min(lights, second ? 32u : 8u);
-                const float each = float(lights) / float(tries);  // the lights one try stands for
-                float sum = 0.0f, kept_weight = 0.0f;
-                float3 kept = float3(0.0f, 0.0f, 0.0f);
+                float sum = 0.0f;      // of the weights: what each would add here, over its chance of being tried
+                float counted = 0.0f;  // the candidates behind what is combined
+                uint kept = 0xFFFFFFFFu, kept_slot = 0u;
+                float3 kept_light = float3(0.0f, 0.0f, 0.0f);
+                float kept_target = 0.0f;
                 float4 kept_at = float4(0.0f, 0.0f, 0.0f, 0.0f);
-                uint kept_slot = 0u;
+                // This frame's candidates.
+                const uint tries = min(lights, 8u);
+                const float each = float(lights) / float(max(tries, 1u));
                 for (uint k = 0u; k < tries; ++k) {
                     seed = rt_hash(seed + k * 7919u + 1u);
-                    const float within = second || lights <= tries ? 0.0f : float(seed & 0xFFFFFFu) / 16777216.0f;
-                    const uint pick = min(uint((float(k) + within) * each), lights - 1u);
-                    const uint emitter = g_glow.x + g_tiles.Load(g_glow.z + (run.x + pick) * 4u) * 48u;
-                    const float4 place = asfloat(g_drops.Load4(emitter));
-                    const float4 colour = asfloat(g_drops.Load4(emitter + 16u));
-                    const uint slot = g_drops.Load(emitter + 32u);
-                    const float3 to = place.xyz - at;
-                    const float far2 = dot(to, to);
-                    if (slot == words.x || far2 > colour.w * colour.w) {
-                        continue;
-                    }
-                    const float facing_it = max(dot(smooth_, to) * rsqrt(max(far2, 1e-4f)), 0.0f);
-                    const float fade = saturate(1.0f - far2 / (colour.w * colour.w));  // its light ends at its reach without a step
-                    const float3 light = colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * (0.25f + 0.75f * facing_it) * fade * fade);
-                    if (second) {
-                        added += light * each;
-                        continue;
-                    }
-                    const float mine = dot(light, float3(0.2126f, 0.7152f, 0.0722f));
+                    const float within = lights <= tries ? 0.0f : rt_unit(seed);
+                    const uint index = g_tiles.Load(g_glow.z + (run.x + min(uint((float(k) + within) * each), lights - 1u)) * 4u);
+                    const float3 light = emitter_light(g_glow.x + index * 48u, at, smooth_, words.x, place, slot);
+                    const float mine = dot(light, kLuminance);
                     if (!(mine > 0.0f)) {
                         continue;
                     }
-                    sum += mine * each;
+                    const float w = mine * float(lights);  // a light is tried with the chance of one in `lights`
+                    sum += w;
                     seed = rt_hash(seed);
-                    if (float(seed & 0xFFFFFFu) / 16777216.0f * sum < mine * each) {
-                        kept = light;
-                        kept_weight = mine;
+                    if (rt_unit(seed) * sum < w) {
+                        kept = index;
+                        kept_light = light;
+                        kept_target = mine;
                         kept_at = place;
                         kept_slot = slot;
                     }
                 }
-                if (kept_weight > 0.0f) {
-                    added = kept * (sum / kept_weight);
+                counted = float(tries);
+                // The frame before's reservoirs.
+                float3 others[3] = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f)};
+                float others_count[3] = {0.0f, 0.0f, 0.0f};
+                if (g_kept.z != 0u && before.z < -1.0f) {
+                    uint wide, high;
+                    g_reservoirs_before.GetDimensions(wide, high);
+                    const float away_before = -before.z;
+                    const float2 was = float2((before.x / away_before - g_ray_before.y) / g_ray_before.x,
+                                              (before.y / away_before - g_ray_before.w) / g_ray_before.z);
+                    const float3 facing_before = float3(dot(g_before[0].xyz, smooth_), dot(g_before[1].xyz, smooth_), dot(g_before[2].xyz, smooth_));
+                    for (uint j = 0u; j < 3u; ++j) {
+                        float2 from_at = was;
+                        if (j != 0u) {
+                            seed = rt_hash(seed + 977u);
+                            const float turn = float(seed & 0xFFFFu) / 65536.0f * 6.2831853f;
+                            from_at += float2(cos(turn), sin(turn)) * (sqrt(float(seed >> 16u) / 65536.0f) * 12.0f);
+                        }
+                        const int2 from = int2(floor(from_at));
+                        if (from.x < 0 || from.y < 0 || from.x >= int(wide) || from.y >= int(high)) {
+                            continue;
+                        }
+                        const float4 there = g_guide_before.Load(int3(from, 0));
+                        if (there.a == 0.0f) {
+                            continue;
+                        }
+                        const float3 place_before = rt_eye_ray(g_ray_before, float2(from) + 0.5f) * there.r;
+                        if (abs(dot(facing_before, place_before - before)) > 0.02f * away_before + 2.0f ||
+                            dot(facing_before, rt_unpack_normal(there.a)) < 0.85f) {
+                            continue;
+                        }
+                        const float4 theirs = g_reservoirs_before.Load(int3(from, 0));
+                        const float behind = min(theirs.a, 20.0f);
+                        if (!(behind > 0.0f)) {
+                            continue;
+                        }
+                        // Where that surface point is in this frame's eye space (the camera's move undone).
+                        const float3 moved = place_before - float3(g_before[0].w, g_before[1].w, g_before[2].w);
+                        others[j] = g_before[0].xyz * moved.x + g_before[1].xyz * moved.y + g_before[2].xyz * moved.z;
+                        others_count[j] = behind;
+                        counted += behind;
+                        const uint was_index = uint(theirs.r) + uint(theirs.g) * 1024u;
+                        if (was_index == 0u || was_index > g_kept.y || !(theirs.b > 0.0f)) {
+                            continue;  // it kept none, or one found in shadow: its candidates count, its light is not handed on
+                        }
+                        const uint index = g_drops.Load(g_kept.x + (was_index - 1u) * 4u);
+                        if (index >= g_glow.w) {
+                            continue;  // that light is gone
+                        }
+                        const float3 light = emitter_light(g_glow.x + index * 48u, at, smooth_, words.x, place, slot);
+                        const float mine = dot(light, kLuminance);
+                        const float w = mine * theirs.b * behind;
+                        if (!(w > 0.0f)) {
+                            continue;
+                        }
+                        sum += w;
+                        seed = rt_hash(seed);
+                        if (rt_unit(seed) * sum < w) {
+                            kept = index;
+                            kept_light = light;
+                            kept_target = mine;
+                            kept_at = place;
+                            kept_slot = slot;
+                        }
+                    }
+                }
+                float weight = 0.0f;
+                if (kept != 0xFFFFFFFFu) {
+                    // How many of the candidates could have chosen this light: this frame's, and each reservoir's
+                    // whose surface the light reaches.
+                    const float reach = asfloat(g_drops.Load(g_glow.x + kept * 48u + 28u));
+                    float could = float(tries);
+                    for (uint j = 0u; j < 3u; ++j) {
+                        const float3 to_it = kept_at.xyz - others[j];
+                        if (others_count[j] > 0.0f && dot(to_it, to_it) < reach * reach) {
+                            could += others_count[j];
+                        }
+                    }
+                    weight = min(sum / (max(could, 1.0f) * kept_target), 60000.0f);
                     // Its shadow: one ray, stopping short of the source's own body.
                     const float3 to = kept_at.xyz - at;
                     const float far = length(to);
                     const float short_of = far - min(max(kept_at.w, 10.0f), 60.0f);
                     if (short_of > 1.0f && blocked(origin, to / max(far, 1e-3f), short_of, kMaskSolid, false, met) &&
                         g_items.Load(g_at.x + met * kItemBytes) != kept_slot) {
-                        added = float3(0.0f, 0.0f, 0.0f);
+                        weight = 0.0f;
                     }
+                    // Far over what a picture shows is cut: the filter's moments stay finite.
+                    added = min(kept_light * weight, float3(32.0f, 32.0f, 32.0f));
                 }
-                added = min(added, float3(32.0f, 32.0f, 32.0f));  // far over what a picture shows; the filter's moments stay finite
+                g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, 20.0f));
             }
         }
 

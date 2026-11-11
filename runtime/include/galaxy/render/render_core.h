@@ -409,10 +409,10 @@ private:
     // [6] the added light (what glows near each pixel). [7] what each pixel mirrors (rt_light.hlsl g_mirror).
     // [8] where each pixel's point was the frame before (g_motion). [9] the local lights' share as the pass's rays
     // gave it, then between the filter's steps; [10], [11] its averages over time, by turns; [12], [13] the moments
-    // of its noise, by turns.
-    static constexpr unsigned kRtLightImages = 14u;
-    std::uint32_t rt_light_images_[kRtLightImages] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
-                                                      rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
+    // of its noise, by turns; [14], [15] the pixels' reservoirs (the one local light each keeps), by turns.
+    static constexpr unsigned kRtLightImages = 16u;
+    std::uint32_t rt_light_images_[kRtLightImages] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
+                                                      rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
                                                       rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage};
     std::uint32_t rt_mirror_slot_ = 0u;  // the mirror picture's place among the textures
     std::uint32_t rt_added_slot_ = 0u;  // the added light's place among the textures
@@ -425,12 +425,17 @@ private:
     struct RtEmitter {
         float centre[3], radius;  // in the scene camera's eye space; the source's own radius
         float colour[3], reach;   // collected: colour x candela; finished: the share of a surface's colour at the source. Where its light ends
-        std::uint32_t slot, kind, reserved[2];  // kind: 0 a point light the game asked, 1 a glowing mesh, 2 a particle effect
+        std::uint32_t slot, kind, reserved[2];  // kind: 0 a point light the game asked, 1 a glowing mesh, 2 a particle;
+                                                // reserved[1]: what it is from one frame to the next (rt_emitter_id)
     };
     bool rt_emitters_finished_ = false;
     float rt_exposure_ = 150.0f;  // the stage's exposure the emitters were finished by (lux)
     void rt_emitters_finish(float exposure_lux);
     std::vector<RtEmitter> rt_emitters_;
+    // For the reservoirs: the frame before's emitters by what they are, where each is in this frame's list, and this
+    // frame's list by what they are.
+    std::vector<std::uint32_t> rt_emitter_ids_before_, rt_emitter_remap_;
+    std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_now_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_blocks_;
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
     void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
