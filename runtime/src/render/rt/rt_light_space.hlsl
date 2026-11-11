@@ -15,6 +15,7 @@
 // each step as the noise itself is: the weight of Schied et al. 2017), and the last step writes red, green, blue as
 // the programs read them.
 #include "rt_bindings.hlsli"
+#include "rt_frame.hlsli"
 
 Texture2D<float4> g_in : register(t9);
 Texture2D<float4> g_guide : register(t11);  // eye distance, the object's slot in two parts, the normal packed (0: no surface)
@@ -24,10 +25,7 @@ Texture2D<float4> g_moments : register(t10);  // b: the variance of the average'
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
 
-cbuffer SpaceConstants : register(b0) {
-    uint4 g_step;  // x: pixels between taps; y 1: the last step
-    float4 g_ray;  // rt_eye_ray
-};
+// The step (b1, rt_frame.hlsli): g_pass.y pixels between taps; g_pass.z 1 the last step.
 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -39,7 +37,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const int2 pixel = int2(id.xy);
     const float4 centre = g_in.Load(int3(pixel, 0));
     const float4 guide = g_guide.Load(int3(pixel, 0));
-    const float frames = g_step.y != 0u ? 1.0f : centre.g;
+    const float frames = g_pass.z != 0u ? 1.0f : centre.g;
     if (guide.a == 0.0f) {
 #ifdef RT_LIGHTS
         g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -49,7 +47,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     static const float kTap[3] = {6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f};
-    const int step_ = int(g_step.x);
+    const int step_ = int(g_pass.y);
     const float3 normal = rt_unpack_normal(guide.a);
     const float3 place = rt_eye_ray(g_ray, float2(pixel) + 0.5f) * guide.r;
     // How far a neighbour may stand off the pixel's plane: a pixel's width there, and the depth's own steps.
@@ -69,7 +67,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
     }
-    const float unsure = sqrt(max(variance / max(counted, 1e-4f), 0.0f)) / float(g_step.x);
+    const float unsure = sqrt(max(variance / max(counted, 1e-4f), 0.0f)) / float(g_pass.y);
     const float like = 1.0f / (4.0f * unsure + 0.004f);
     const float bright = dot(centre.rba, kLuminance);
 #else
@@ -111,7 +109,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const float3 now = sum / weight;
 #ifdef RT_LIGHTS
-    g_out[id.xy] = g_step.y != 0u ? float4(now.x, now.y, now.z, 1.0f) : float4(now.x, frames, now.y, now.z);
+    g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, 1.0f) : float4(now.x, frames, now.y, now.z);
 #else
     g_out[id.xy] = float4(now.x, frames, now.y, now.z);
 #endif

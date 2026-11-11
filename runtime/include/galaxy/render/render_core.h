@@ -380,9 +380,9 @@ private:
     bool rt_sun_known_ = false;
     [[nodiscard]] std::uint32_t rt_scene_image(rt::ImageFormat format, unsigned width, unsigned height);
     // The traced light. Before the scene's draws, its opaque surfaces go into depth and the item target (the prepass:
-    // every scene item that core::prepass_draws takes, under the scene's camera); a pass gives each pixel the share of
-    // its light set's key, fill and point light that reaches it (rt_light.hlsl); the scene pass then draws those items
-    // over their own depth, the lit programs in their traced form.
+    // every scene item that core::prepass_draws takes, under the scene's camera); the frame's passes give each pixel
+    // what light reaches it (rt_light: the surfaces, the sun, the local lights, the shares the programs read, the
+    // filters); the scene pass then draws those items over their own depth, the lit programs in their traced form.
     void rt_prepass(const NebulaFramePass& begin);
     void rt_light();
     void rt_light_end() noexcept;
@@ -394,26 +394,77 @@ private:
     std::vector<std::uint8_t> rt_prepassed_;  // an item of the list: 1 drawn in this walk's prepass, 2 in its second
     bool rt_prepass_walk_ = false;            // walk_draw_items draws the prepass
     bool rt_blended_walk_ = false;            // and it is the second layer's
-    // The light pass as it ran this walk, kept for the second layer: its bindings, its constants, its size, and an
-    // image it is done with (the guide of the frame before).
-    rt::PassBinds rt_light_binds_{};
-    std::uint32_t rt_light_block_[128]{};
-    std::uint32_t rt_light_across_ = 0u, rt_light_down_ = 0u;
-    std::uint32_t rt_light_spare_ = rt::kNoImage;
+    // The frame's traced light as rt_tables set it up, for every pass and both layers: the bindings every pass shares
+    // (the scene, the frame's buffers and mesh memory, the depth and the item map, the frame's constants at b0), the
+    // picture's size and groups (across 0: no light this walk), the eye's terms, the frame's turn (the noise's, and
+    // which of a pair of images is this frame's), the layer, the layer's b1, and whether a frame before is read.
+    struct RtFrame {
+        rt::PassBinds binds{};
+        unsigned width = 0u, height = 0u;
+        std::uint32_t across = 0u, down = 0u;
+        float ray[4]{}, depth[4]{}, viewport[4]{};
+        std::uint32_t turn = 0u;
+        std::uint32_t layer = 0u;  // 0 the opaque surfaces; 1 the nearest blended surface a pixel (rt_blended)
+        rt::BufferView pass{};
+        bool history = false;
+    };
+    RtFrame rt_light_frame_{};
+    // The passes of the frame, in their order (rt_walk.cpp): its tables and constants; the surfaces; the sun; the local
+    // lights; the sky and bounce light; the shares the programs read with what the surfaces mirror; the reflections;
+    // the light volume; then the filters, and the report (--diagnostics rt-inputs).
+    void rt_tables(const Affine34& world_from_now);
+    [[nodiscard]] rt::BufferView rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last);
+    [[nodiscard]] rt::PassBinds rt_pass_binds() const;
+    [[nodiscard]] std::uint32_t rt_layer_guide() const noexcept;
+    void rt_pass_surface();
+    void rt_pass_sun();
+    void rt_pass_lights();
+    void rt_pass_light();
+    void rt_filters();
+    void rt_report();
+    // The passes of their own files (rt_pass_indirect.cpp, rt_pass_reflect.cpp, rt_pass_volume.cpp): whether each runs
+    // this frame (its images are made while it does), and the pass.
+    [[nodiscard]] bool rt_pass_indirect_on() const;
+    void rt_pass_indirect();
+    [[nodiscard]] bool rt_pass_reflect_on() const;
+    void rt_pass_reflect();
+    [[nodiscard]] bool rt_pass_volume_on() const;
+    void rt_pass_volume();
     bool rt_light_on_ = false;                // this walk's scene has its traced light: its views carry it
     std::uint32_t rt_light_slot_ = 0u;        // the light image's place among the textures
     std::uint32_t rt_scene_camera_ = NEBULA_NONE32;
-    // The light pass's images: [0] this frame's rays, then the filter's last picture (the one the programs read);
-    // [1] between the filter's two steps over space; [2], [3] the averages over time, this frame's and the one
-    // before's by turns; [4], [5] the guides the same way.
-    // [6] the added light (what glows near each pixel). [7] what each pixel mirrors (rt_light.hlsl g_mirror).
-    // [8] where each pixel's point was the frame before (g_motion). [9] the local lights' share as the pass's rays
-    // gave it, then between the filter's steps; [10], [11] its averages over time, by turns; [12], [13] the moments
-    // of its noise, by turns; [14], [15] the pixels' reservoirs (the one local light each keeps), by turns.
-    static constexpr unsigned kRtLightImages = 16u;
-    std::uint32_t rt_light_images_[kRtLightImages] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
-                                                      rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
-                                                      rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage};
+    // The traced light's images (rt_walk.cpp kRtImageKinds: name, format, size, the passes that need one). A pair A, B
+    // is this frame's and the frame before's by turns (rt_now, rt_before). The surface images (rt_common.hlsli):
+    // Guide, Normal, Motion, Material, Base. Light: the sun's and the sky's shares, then the filter's last picture,
+    // the one the programs read; Added: the local lights' (what glows near each pixel), the same way; Mirror: what
+    // each pixel mirrors.
+    enum class RtImage : std::uint8_t {
+        GuideA, GuideB, Normal, Motion, Material, Base, SunRaw, Light, LightStep, LightAverageA, LightAverageB, Lights,
+        LightsAverageA, LightsAverageB, LightsMomentsA, LightsMomentsB, Added, ReservoirsA, ReservoirsB, Mirror,
+        IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
+        GiReservoirsB, GiWeightsA, GiWeightsB, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
+        VolumeB, Count
+    };
+    // The passes an image is made for.
+    static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
+                                   kRtPassTransmit = 16u;
+    static constexpr std::size_t kRtImages = static_cast<std::size_t>(RtImage::Count);
+    [[nodiscard]] static constexpr std::array<std::uint32_t, kRtImages> rt_no_images() noexcept {
+        std::array<std::uint32_t, kRtImages> none{};
+        for (std::uint32_t& image : none) {
+            image = rt::kNoImage;
+        }
+        return none;
+    }
+    std::array<std::uint32_t, kRtImages> rt_images_ = rt_no_images();
+    [[nodiscard]] bool rt_images(unsigned width, unsigned height, std::uint32_t wanted);
+    [[nodiscard]] std::uint32_t rt_image(RtImage image) const noexcept { return rt_images_[static_cast<std::size_t>(image)]; }
+    [[nodiscard]] std::uint32_t rt_now(RtImage a) const noexcept {
+        return rt_images_[static_cast<std::size_t>(a) + (rt_light_frame_.turn & 1u)];
+    }
+    [[nodiscard]] std::uint32_t rt_before(RtImage a) const noexcept {
+        return rt_images_[static_cast<std::size_t>(a) + 1u - (rt_light_frame_.turn & 1u)];
+    }
     std::uint32_t rt_mirror_slot_ = 0u;  // the mirror picture's place among the textures
     std::uint32_t rt_added_slot_ = 0u;  // the added light's place among the textures
     float rt_tint_[4]{};                // what a shadow takes back from the sky (ViewRows::tint)

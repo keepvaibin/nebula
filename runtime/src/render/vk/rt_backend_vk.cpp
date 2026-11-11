@@ -132,7 +132,7 @@ namespace {
 constexpr std::uint32_t kMeshBinding = 1u + kPassBuffers + kPassTextures + kPassReads;
 constexpr std::uint32_t kSamplerBinding = 100u;  // s0 (the shaders' samplers are shifted by 100)
 constexpr std::uint32_t kImageBinding = 200u, kCountersBinding = 200u + kPassWrites, kWriteBufferBinding = kCountersBinding + 1u,
-                        kConstantsBinding = 300u;
+                        kConstantsBinding = 300u, kPassConstantsBinding = 301u;
 constexpr VkDeviceSize kCountersBytes = VkDeviceSize{kCounters} * 4u;
 
 }  // namespace
@@ -147,7 +147,7 @@ VkDescriptorSet Backend::State::allocate_set() {
                 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSets * (kPassBuffers + 2u + kPassMeshBuffers)},
                 {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kSets * (kPassTextures + kPassReads)},
                 {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kSets * kPassWrites},
-                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets},
+                {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets * 2u},
                 {VK_DESCRIPTOR_TYPE_SAMPLER, kSets},
             };
             VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
@@ -173,7 +173,7 @@ VkDescriptorSet Backend::State::allocate_set() {
 }
 
 bool Backend::State::make_passes() {
-    VkDescriptorSetLayoutBinding bindings[1u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + 4u + kPassMeshBuffers]{};
+    VkDescriptorSetLayoutBinding bindings[1u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + 5u + kPassMeshBuffers]{};
     std::uint32_t count = 0u;
     bindings[count++] = {0u, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     for (std::uint32_t i = 0; i < kPassBuffers; ++i) {
@@ -188,6 +188,7 @@ bool Backend::State::make_passes() {
     bindings[count++] = {kCountersBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[count++] = {kWriteBufferBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     bindings[count++] = {kConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    bindings[count++] = {kPassConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     // s0: one sampler for the renderer's textures (linear, repeating), fixed in the layout.
     VkSamplerCreateInfo sampler_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     sampler_info.magFilter = sampler_info.minFilter = VK_FILTER_LINEAR;
@@ -198,7 +199,7 @@ bool Backend::State::make_passes() {
         return false;
     }
     bindings[count++] = {kSamplerBinding, VK_DESCRIPTOR_TYPE_SAMPLER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, &sampler};
-    for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {  // t15 up: the mesh memory
+    for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {  // t21 up: the mesh memory
         bindings[count++] = {kMeshBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1u, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
     }
     VkDescriptorSetLayoutCreateInfo set_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -580,8 +581,52 @@ constexpr VkFormat format_of(ImageFormat format) noexcept {
     case ImageFormat::R8: return VK_FORMAT_R8_UNORM;
     case ImageFormat::R32f: return VK_FORMAT_R32_SFLOAT;
     case ImageFormat::Rgb10a2: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    case ImageFormat::Rgba32ui: return VK_FORMAT_R32G32B32A32_UINT;
+    case ImageFormat::Rgba32f: return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case ImageFormat::Rg16ui: return VK_FORMAT_R16G16_UINT;
     }
     return VK_FORMAT_UNDEFINED;
+}
+
+// A volume of `depth` slices, read and written by passes (Texture3D): its own image and a 3D view.
+std::shared_ptr<vk::Texture> make_volume(std::uint32_t width, std::uint32_t height, std::uint32_t depth, VkFormat format) {
+    vk::Context& context = vk::Context::get();
+    auto texture = std::make_shared<vk::Texture>();
+    VkImageCreateInfo image_info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image_info.imageType = VK_IMAGE_TYPE_3D;
+    image_info.format = format;
+    image_info.extent = {width, height, depth};
+    image_info.mipLevels = 1u;
+    image_info.arrayLayers = 1u;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    VmaAllocationInfo allocated{};
+    if (vmaCreateImage(context.allocator(), &image_info, &alloc_info, &texture->image, &texture->allocation, &allocated) != VK_SUCCESS) {
+        texture->image = VK_NULL_HANDLE;
+        texture->allocation = nullptr;
+        return {};
+    }
+    texture->format = format;
+    texture->usage = image_info.usage;
+    texture->width = width;
+    texture->height = height;
+    texture->levels = 1u;
+    texture->allocation_bytes = allocated.size;
+    VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view_info.image = texture->image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
+    view_info.format = format;
+    view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    if (vkCreateImageView(context.device(), &view_info, nullptr, &texture->view) != VK_SUCCESS) {
+        texture->view = VK_NULL_HANDLE;
+        return {};  // the texture's end lets the image go
+    }
+    return texture;
 }
 
 // What a pass wrote, before the next pass or a draw reads it.
@@ -591,15 +636,17 @@ void written(VkCommandBuffer commands) {
 
 }  // namespace
 
-std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name) {
+std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name, std::uint32_t depth) {
     VkFormatProperties properties{};
     vkGetPhysicalDeviceFormatProperties(vk::Context::get().physical_device(), format_of(format), &properties);
     if (width == 0u || height == 0u || (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0u) {
         return kNoImage;
     }
-    std::shared_ptr<vk::Texture> image = vk::Context::get().create_texture(
-        width, height, 1u, format_of(format), VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        false, name);
+    std::shared_ptr<vk::Texture> image =
+        depth > 1u ? make_volume(width, height, depth, format_of(format))
+                   : vk::Context::get().create_texture(width, height, 1u, format_of(format),
+                                                       VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                       false, name);
     if (image == nullptr) {
         return kNoImage;
     }
@@ -715,9 +762,9 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     if (set == VK_NULL_HANDLE) {
         return;  // the device has no pool left for it: the pass is left out this frame
     }
-    constexpr unsigned kMost = 4u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + kPassMeshBuffers;
+    constexpr unsigned kMost = 5u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + kPassMeshBuffers;
     VkWriteDescriptorSet writes[kMost]{};
-    VkDescriptorBufferInfo buffers[kPassBuffers + 3u + kPassMeshBuffers]{};
+    VkDescriptorBufferInfo buffers[kPassBuffers + 4u + kPassMeshBuffers]{};
     VkDescriptorImageInfo views[kPassTextures + kPassReads + kPassWrites]{};
     std::uint32_t write_count = 0u, buffer_count = 0u, view_count = 0u;
     const auto next = [&](std::uint32_t binding, VkDescriptorType type) -> VkWriteDescriptorSet& {
@@ -776,6 +823,9 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     }
     if (binds.constants.at != 0u) {
         next(kConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).pBufferInfo = buffer_at(binds.constants);
+    }
+    if (binds.pass_constants.at != 0u) {
+        next(kPassConstantsBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).pBufferInfo = buffer_at(binds.pass_constants);
     }
     for (std::uint32_t i = 0; i < kPassMeshBuffers; ++i) {
         if (binds.mesh[i].at != 0u) {

@@ -36,7 +36,7 @@ void Backend::ask_compacted_size(const Structure&, std::uint32_t) {}
 void Backend::end_size_asks() {}
 std::uint64_t Backend::compacted_size(std::uint32_t, unsigned) const { return 0u; }
 void Backend::compact(const Structure&, const Structure&) {}
-std::uint32_t Backend::make_image(ImageFormat, std::uint32_t, std::uint32_t, const char*) { return kNoImage; }
+std::uint32_t Backend::make_image(ImageFormat, std::uint32_t, std::uint32_t, const char*, std::uint32_t) { return kNoImage; }
 void Backend::free_image(std::uint32_t) noexcept {}
 void Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) {}
 std::uint32_t Backend::make_buffer(std::uint64_t, const char*) { return kNoBuffer; }

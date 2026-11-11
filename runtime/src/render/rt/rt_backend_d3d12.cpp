@@ -73,6 +73,7 @@ struct Backend::State {
         ComPtr<ID3D12Resource> texture;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         gpu::Use use = gpu::Use::ComputeRead;
+        std::uint32_t depth = 1u;  // above 1: a volume
     };
     std::vector<Image> images;
     DescriptorRing* descriptors = nullptr;
@@ -192,8 +193,9 @@ bool Backend::start(gpu::Device* device) {
     return true;
 }
 
-// The passes' root signature: b0 constants, t0 the scene, t1-t4 buffers (root descriptors); t5-t14 textures and
-// u0-u5 images (tables); u6 the counters, u7 a buffer written, t15 up the mesh memory (root descriptors).
+// The passes' root signature: b0 constants, t0 the scene, t1-t4 buffers (root descriptors); t5-t20 textures and
+// u0-u7 images (tables); u8 the counters, u9 a buffer written, t21 up the mesh memory (root descriptors); the renderer's
+// textures (a table); b1 the pass's constants (root descriptor).
 bool Backend::State::make_passes() {
     D3D12_DESCRIPTOR_RANGE ranges[3]{};
     // Every texture of the renderer's (t0 up in space1, as the draws' programs see them) and one sampler (s0).
@@ -205,7 +207,7 @@ bool Backend::State::make_passes() {
     ranges[0].BaseShaderRegister = 1u + kPassBuffers;
     ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     ranges[1].NumDescriptors = kPassWrites;
-    D3D12_ROOT_PARAMETER params[11u + kPassMeshBuffers]{};
+    D3D12_ROOT_PARAMETER params[12u + kPassMeshBuffers]{};
     params[10u + kPassMeshBuffers].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[10u + kPassMeshBuffers].DescriptorTable.NumDescriptorRanges = 1;
     params[10u + kPassMeshBuffers].DescriptorTable.pDescriptorRanges = &ranges[2];
@@ -229,13 +231,15 @@ bool Backend::State::make_passes() {
     params[8].Descriptor.ShaderRegister = kPassWrites;
     params[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[9].Descriptor.ShaderRegister = kPassWrites + 1u;
-    // t15 up: the mesh memory (root descriptors: buffers of the renderer's, by address).
+    // t21 up: the mesh memory (root descriptors: buffers of the renderer's, by address).
     for (unsigned i = 0; i < kPassMeshBuffers; ++i) {
         params[10u + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[10u + i].Descriptor.ShaderRegister = 1u + kPassBuffers + kPassTextures + kPassReads + i;
     }
+    params[11u + kPassMeshBuffers].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[11u + kPassMeshBuffers].Descriptor.ShaderRegister = 1u;
     D3D12_ROOT_SIGNATURE_DESC desc{};
-    desc.NumParameters = 11u + kPassMeshBuffers;
+    desc.NumParameters = 12u + kPassMeshBuffers;
     desc.NumStaticSamplers = 1;
     desc.pStaticSamplers = &sampler;
     desc.pParameters = params;
@@ -425,27 +429,31 @@ constexpr DXGI_FORMAT format_of(ImageFormat format) noexcept {
     case ImageFormat::R8: return DXGI_FORMAT_R8_UNORM;
     case ImageFormat::R32f: return DXGI_FORMAT_R32_FLOAT;
     case ImageFormat::Rgb10a2: return DXGI_FORMAT_R10G10B10A2_UNORM;
+    case ImageFormat::Rgba32ui: return DXGI_FORMAT_R32G32B32A32_UINT;
+    case ImageFormat::Rgba32f: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    case ImageFormat::Rg16ui: return DXGI_FORMAT_R16G16_UINT;
     }
     return DXGI_FORMAT_UNKNOWN;
 }
 
 }  // namespace
 
-std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name) {
+std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name, std::uint32_t depth) {
     D3D12_HEAP_PROPERTIES heap{};
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
-    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Dimension = depth > 1u ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     rd.Width = width;
     rd.Height = height;
-    rd.DepthOrArraySize = 1;
+    rd.DepthOrArraySize = static_cast<UINT16>(depth > 1u ? depth : 1u);
     rd.MipLevels = 1;
     rd.Format = format_of(format);
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     State::Image image;
     image.format = rd.Format;
-    if (width == 0u || height == 0u ||
+    image.depth = depth > 1u ? depth : 1u;
+    if (width == 0u || height == 0u || depth > 2048u ||
         FAILED(create_texture(state_->device.Get(), &heap, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ComputeRead, nullptr,
                               IID_PPV_ARGS(&image.texture)))) {
         return kNoImage;
@@ -582,15 +590,25 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     }
     for (unsigned i = 0; views && i < kPassReads; ++i) {
         if (const State::Image* image = image_of(binds.reads[i])) {
-            read.Format = image->format;
-            s.device->CreateShaderResourceView(image->texture.Get(), &read, cpu(kPassTextures + i));
+            D3D12_SHADER_RESOURCE_VIEW_DESC own = read;
+            own.Format = image->format;
+            if (image->depth > 1u) {
+                own.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                own.Texture3D = {};
+                own.Texture3D.MipLevels = 1;
+            }
+            s.device->CreateShaderResourceView(image->texture.Get(), &own, cpu(kPassTextures + i));
         }
     }
-    D3D12_UNORDERED_ACCESS_VIEW_DESC write{};
-    write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     for (unsigned i = 0; views && i < kPassWrites; ++i) {
         if (const State::Image* image = image_of(binds.writes[i])) {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC write{};
             write.Format = image->format;
+            write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            if (image->depth > 1u) {
+                write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+                write.Texture3D.WSize = image->depth;
+            }
             s.device->CreateUnorderedAccessView(image->texture.Get(), nullptr, &write, cpu(kPassTextures + kPassReads + i));
         }
     }
@@ -600,6 +618,9 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     s.descriptors->bind(list);
     if (binds.constants.at != 0u) {
         list->SetComputeRootConstantBufferView(0, binds.constants.at);
+    }
+    if (binds.pass_constants.at != 0u) {
+        list->SetComputeRootConstantBufferView(11u + kPassMeshBuffers, binds.pass_constants.at);
     }
     if (binds.scene.name != 0u) {
         list->SetComputeRootShaderResourceView(1, binds.scene.name);

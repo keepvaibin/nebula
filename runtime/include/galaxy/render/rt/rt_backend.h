@@ -68,13 +68,13 @@ inline constexpr std::uint32_t kSizeSlots = 1024u;
 inline constexpr std::uint64_t kFramesToRelease = kFramesInFlight + 1u;
 
 // A pass: one of the tracer's compute shaders (rt_shaders.h) and what it binds, by the registers of rt_bindings.hlsli.
-enum class ImageFormat : std::uint8_t { Rgba8, Rgba16f, Rg16f, R16f, R8, R32f, Rgb10a2 };
+enum class ImageFormat : std::uint8_t { Rgba8, Rgba16f, Rg16f, R16f, R8, R32f, Rgb10a2, Rgba32f, Rgba32ui, Rg16ui };
 inline constexpr std::uint32_t kNoImage = ~0u;
-inline constexpr unsigned kPassBuffers = 4u, kPassTextures = 4u, kPassReads = 6u, kPassWrites = 6u;
-// Mesh memory a pass reads to know a surface where a ray or a pixel meets it (t15 up): the arenas the scene's meshes
+inline constexpr unsigned kPassBuffers = 4u, kPassTextures = 4u, kPassReads = 12u, kPassWrites = 8u;
+// Mesh memory a pass reads to know a surface where a ray or a pixel meets it (t21 up): the arenas the scene's meshes
 // lie in, then the frame's rows (their matrices).
 inline constexpr unsigned kPassMeshArenas = 8u, kPassMeshBuffers = kPassMeshArenas + 1u;
-// The counters a pass may add to (u6), read back a frame later: numbers for proofs and diagnostics.
+// The counters a pass may add to (u8), read back a frame later: numbers for proofs and diagnostics.
 inline constexpr unsigned kCounters = 64u;
 
 // Bytes in a buffer of the renderer's (an upload ring's).
@@ -94,12 +94,14 @@ struct PassBinds {
     Structure scene{};                         // t0
     BufferView buffers[kPassBuffers]{};        // t1-t4
     TextureView textures[kPassTextures]{};     // t5-t8
-    std::uint32_t reads[kPassReads] = {kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage};  // t9-t14: images of the tracer's
-    BufferView mesh[kPassMeshBuffers]{};       // t15-t23: mesh arenas, then the rows
-    std::uint32_t writes[kPassWrites] = {kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage};  // u0-u5
+    std::uint32_t reads[kPassReads] = {kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage,
+                                       kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage};  // t9-t20: images of the tracer's
+    BufferView mesh[kPassMeshBuffers]{};       // t21-t29: mesh arenas, then the rows
+    std::uint32_t writes[kPassWrites] = {kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage, kNoImage};  // u0-u7
     BufferView constants{};                    // b0: 256-byte aligned, in an upload ring
-    bool counters = false;                     // u6
-    std::uint32_t write_buffer = kNoBuffer;    // u7: a buffer of the tracer's, whole (make_buffer)
+    BufferView pass_constants{};               // b1: the same
+    bool counters = false;                     // u8
+    std::uint32_t write_buffer = kNoBuffer;    // u9: a buffer of the tracer's, whole (make_buffer)
 };
 
 class Backend {
@@ -159,9 +161,11 @@ public:
     // The compacted copy of `from` into `to` (a range of that size).
     void compact(const Structure& from, const Structure& to);
 
-    // An image of the tracer's: written by one pass, read by the next. kNoImage when the device has no memory. Freed
-    // only when nothing recorded can still read it (the caller waits kFramesToRelease frames).
-    [[nodiscard]] std::uint32_t make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name);
+    // An image of the tracer's: written by one pass, read by the next; `depth` above 1 a volume of that many slices
+    // (Texture3D). kNoImage when the device has no memory. Freed only when nothing recorded can still read it (the
+    // caller waits kFramesToRelease frames).
+    [[nodiscard]] std::uint32_t make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name,
+                                           std::uint32_t depth = 1u);
     void free_image(std::uint32_t image) noexcept;
     // The pass, `groups_x` by `groups_y` groups. Nothing when the shader is not in this build or the driver refused it
     // (told once).
