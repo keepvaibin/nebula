@@ -29,12 +29,14 @@ set_source_files_properties("${petari}/src/Game/System/generated/lumacore_fields
 # Every function the game defines carries its LumaCore row and hook test (include/luma_hook.h). Each source is compiled
 # from a copy tools/lumacore/instrument.py writes into the build folder; the source itself is never changed. The hook
 # runner and the generated tables are compiled as they are.
+# OFF builds the module with no rows (no function can be hooked or called by name): only to measure what they cost.
+option(NEBULA_LUMA_HOOKS "Every game function carries its LumaCore row and hook test" ON)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(luma_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/instrument.py")
 set(module_sources)
 foreach(source IN LISTS game_sources)
-    if(source MATCHES "\\.cpp$" AND NOT source MATCHES "/System/(Luma(Hook|Loader)\\.cpp$|generated/)")
+    if(NEBULA_LUMA_HOOKS AND source MATCHES "\\.cpp$" AND NOT source MATCHES "/System/(Luma(Hook|Loader)\\.cpp$|generated/)")
         file(RELATIVE_PATH relative "${petari}/src" "${source}")
         get_filename_component(folder "${source}" DIRECTORY)
         set(copy "${CMAKE_CURRENT_BINARY_DIR}/luma/${relative}")
