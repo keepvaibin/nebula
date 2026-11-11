@@ -2263,12 +2263,26 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         if (fresh || !rt_sun_up_known_ || dot(rt_sun_up_, up) >= 0.99985f) {
             std::memcpy(rt_sun_up_, up, sizeof(up));
         } else if (!walk_.between) {
-            for (unsigned c = 0; c < 3u; ++c) {
-                rt_sun_up_[c] += (up[c] - rt_sun_up_[c]) * 0.125f;
+            // A tenth of the angle a frame, about the axis of the turn (any axis across the old up for a flip): a blend
+            // of the two would hold a flip still (half of v and of -v points along v).
+            float axis[3] = {rt_sun_up_[1] * up[2] - rt_sun_up_[2] * up[1], rt_sun_up_[2] * up[0] - rt_sun_up_[0] * up[2],
+                             rt_sun_up_[0] * up[1] - rt_sun_up_[1] * up[0]};
+            if (!unit(axis)) {
+                const float side[3] = {std::fabs(rt_sun_up_[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(rt_sun_up_[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
+                axis[0] = rt_sun_up_[1] * side[2] - rt_sun_up_[2] * side[1];
+                axis[1] = rt_sun_up_[2] * side[0] - rt_sun_up_[0] * side[2];
+                axis[2] = rt_sun_up_[0] * side[1] - rt_sun_up_[1] * side[0];
+                static_cast<void>(unit(axis));
             }
-            if (!unit(rt_sun_up_)) {
-                std::memcpy(rt_sun_up_, up, sizeof(up));
+            const float step = 0.1f * std::acos(std::clamp(dot(rt_sun_up_, up), -1.0f, 1.0f));
+            const float c = std::cos(step), s = std::sin(step);
+            const float across[3] = {axis[1] * rt_sun_up_[2] - axis[2] * rt_sun_up_[1], axis[2] * rt_sun_up_[0] - axis[0] * rt_sun_up_[2],
+                                     axis[0] * rt_sun_up_[1] - axis[1] * rt_sun_up_[0]};
+            float eased[3];
+            for (unsigned k = 0; k < 3u; ++k) {
+                eased[k] = rt_sun_up_[k] * c + across[k] * s;  // the axis is across the old up: Rodrigues' formula
             }
+            std::memcpy(rt_sun_up_, unit(eased) ? eased : up, sizeof(up));
         }
         rt_sun_up_known_ = true;
     } else {
