@@ -232,8 +232,9 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
 // What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
-// 1 - F at normal incidence (index 1.5); water 0.9; a translucent thing (a cloud, a ghost, jelly) 1 - 0.5 alpha at
-// the hit; what glows, what is painted and the rest nothing.
+// 1 - F at normal incidence (index 1.5); water 0.9 once a ray (a body of water is drawn as several sheets at one
+// place: the surface, its back face, a cup; the others weigh nothing and do not count to the four); a translucent
+// thing (a cloud, a ghost, jelly) 1 - 0.5 alpha at the hit; what glows, what is painted and the rest nothing.
 float3 let_through(float3 origin, float3 direction, float reach, out float first) {
     RayDesc ray;
     ray.Origin = origin;
@@ -244,18 +245,22 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
     query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, kMaskBlended, ray);
     float3 tint = float3(1.0f, 1.0f, 1.0f);
     uint weighed = 0u;
+    bool watered = false;
     first = -1.0f;
     while (query.Proceed()) {
         const uint item = query.CandidateInstanceID();
         const uint at = g_at.x + item * kItemBytes;
         const uint class_ = g_items.Load(at + 44u) & 255u;
         float3 passes = float3(1.0f, 1.0f, 1.0f);
+        bool counts = true;
         if (class_ == kClassGlass) {
             const uint colour = g_items.Load(at + 48u);
             const float3 base = float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f;
             passes = sqrt(max(base, 0.02f)) * 0.96f;
         } else if (class_ == kClassWater) {
-            passes = float3(0.9f, 0.9f, 0.9f);
+            counts = !watered;
+            passes = counts ? float3(0.9f, 0.9f, 0.9f) : float3(1.0f, 1.0f, 1.0f);
+            watered = true;
         } else if (class_ == kClassTranslucent) {
             passes = (1.0f - 0.5f * alpha_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())).xxx;
         } else {
@@ -264,7 +269,7 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
         tint *= passes;
         const float t = query.CandidateTriangleRayT();
         first = first < 0.0f ? t : min(first, t);
-        if (++weighed == 4u) {
+        if (counts && ++weighed == 4u) {
             query.Abort();
         }
     }
