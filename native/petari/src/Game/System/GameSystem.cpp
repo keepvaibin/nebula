@@ -1,4 +1,5 @@
 #include "Game/System/LumaScript.hpp"
+#include "Game/System/LumaHook.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -63,6 +64,8 @@ namespace {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
+    // Mods start here and hooks change only here (LumaCore.game_thread, loader contract 4).
+    luma::markGameThread();
     NebulaArena::create(nullptr);
     Ui::LytInit();
     Arenas::create();

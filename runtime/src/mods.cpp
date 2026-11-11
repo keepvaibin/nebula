@@ -1692,6 +1692,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                                                   achievement.event_value});
             }
             const luma::Situation situation = situation_of(mod, game_id, language);
+            // The mods' code binds from the top of the list down (loader contract 1): this loop goes bottom up, so
+            // each mod's libraries go in front of the lower mods' already listed, in the mod's own order.
+            const std::size_t lower_mods = plan.plugins.size();
             for (const luma::Plugin& plugin : mod.luma->plugins) {
                 if (!luma::when_holds(plugin.when, situation)) continue;
                 const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
@@ -1703,6 +1706,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 const fs::path library = mod.path / fs::path(from_utf8(binary->second));
                 plan.plugins.push_back({library, mod.id, mod.luma->version, situation.options, code_hash(library)});
             }
+            std::rotate(plan.plugins.begin(), plan.plugins.begin() + static_cast<std::ptrdiff_t>(lower_mods), plan.plugins.end());
         }
         if (!changes_game_files(mod)) continue;
 #if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE

@@ -6,11 +6,27 @@
 #include <nebula_format.h>
 #include <nebula_game_api.h>
 #include <nebula_module.h>
+#include <stdlib.h>
+
+namespace luma {
+    // One block a mod took with core->alloc: before the bytes it gives, so `free` and the mod's end find it.
+    struct Block {
+        Block* prev;
+        Block* next;
+        void* start;  // what malloc gave
+        u64 size;     // what the mod asked for
+    };
+}
 
 struct LumaMod {
     const LumaModInfo* info;
     char name[64];
     s32 order;
+    // Its memory (core->alloc), counted for the Mods screen and freed when it is taken out. `lock` guards the list.
+    luma::Block* blocks;
+    u64 bytes;
+    u32 blockCount;
+    u32 lock;
 };
 
 namespace luma {
@@ -19,7 +35,7 @@ namespace luma {
                   "luma.h and LumaHook.hpp number the hook kinds alike");
 
     namespace {
-        const u32 cMaxMods = 256;
+        const u32 cMaxMods = LUMA_MAX_MODS;
         LumaMod* sMods[cMaxMods];
         u32 sModCount = 0;
 
@@ -152,8 +168,117 @@ namespace luma {
 
         const void* apiService(const char* /*pName*/, u32 /*major*/, u32 /*minor*/) { return nullptr; }
 
+        s32 apiGameThread() { return onGameThread() ? 1 : 0; }
+
+        s32 apiUnhook(const LumaMod* pMod, const LumaFunction* pFunction, u32 kind, LumaHook pHook, void* pUser) {
+            if (pMod == nullptr || pFunction == nullptr || kind >= Hook_KindCount) {
+                return -1;
+            }
+            return removeHook(asRow(pFunction), static_cast<HookKind>(kind), reinterpret_cast<HookCallback>(pHook), pUser, pMod);
+        }
+
+        void lockMod(LumaMod* pMod) {
+            while (__atomic_exchange_n(&pMod->lock, 1u, __ATOMIC_ACQUIRE) != 0u) {
+#if defined(__x86_64__) || defined(__i386__)
+                __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+                __asm__ volatile("yield");
+#endif
+            }
+        }
+
+        void unlockMod(LumaMod* pMod) { __atomic_store_n(&pMod->lock, 0u, __ATOMIC_RELEASE); }
+
+        void* apiAlloc(const LumaMod* pConstMod, u64 size, u64 align) {
+            LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
+            if (pMod == nullptr || align == 0 || (align & (align - 1)) != 0 || align > 4096u) {
+                return nullptr;
+            }
+            const u64 total = sizeof(Block) + size + align;
+            if (size > (static_cast<u64>(1) << 40) || total < size) {
+                return nullptr;
+            }
+            void* const pStart = ::malloc(static_cast<size_t>(total));
+            if (pStart == nullptr) {
+                return nullptr;
+            }
+            // The bytes start at the first `align` boundary with room for the block before them.
+            const uintptr_t at = (reinterpret_cast<uintptr_t>(pStart) + sizeof(Block) + align - 1) & ~static_cast<uintptr_t>(align - 1);
+            Block* const pBlock = reinterpret_cast<Block*>(at) - 1;
+            pBlock->start = pStart;
+            pBlock->size = size;
+            lockMod(pMod);
+            pBlock->prev = nullptr;
+            pBlock->next = pMod->blocks;
+            if (pMod->blocks != nullptr) {
+                pMod->blocks->prev = pBlock;
+            }
+            pMod->blocks = pBlock;
+            pMod->bytes += size;
+            pMod->blockCount++;
+            unlockMod(pMod);
+            return reinterpret_cast<void*>(at);
+        }
+
+        void apiFree(const LumaMod* pConstMod, void* p) {
+            LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
+            if (pMod == nullptr || p == nullptr) {
+                return;
+            }
+            Block* const pBlock = static_cast<Block*>(p) - 1;
+            lockMod(pMod);
+            if (pBlock->prev != nullptr) {
+                pBlock->prev->next = pBlock->next;
+            } else {
+                pMod->blocks = pBlock->next;
+            }
+            if (pBlock->next != nullptr) {
+                pBlock->next->prev = pBlock->prev;
+            }
+            pMod->bytes -= pBlock->size;
+            pMod->blockCount--;
+            unlockMod(pMod);
+            ::free(pBlock->start);
+        }
+
+        // Everything a mod still holds, when it is taken out.
+        void freeAll(LumaMod* pMod) {
+            for (Block* pBlock = pMod->blocks; pBlock != nullptr;) {
+                Block* const pNext = pBlock->next;
+                ::free(pBlock->start);
+                pBlock = pNext;
+            }
+            pMod->blocks = nullptr;
+            pMod->bytes = 0;
+            pMod->blockCount = 0;
+        }
+
+        // A before that skipped a function whose result has no default: said once per function and mod (the first 64
+        // pairs; later ones each time, so none is lost).
+        struct Said {
+            const Function* function;
+            const void* owner;
+        };
+        Said sSaid[64];
+        u32 sSaidCount = 0;
+
+        void skipRefused(const Function* pFunction, const void* pOwner) {
+            for (u32 i = 0; i < sSaidCount; i++) {
+                if (sSaid[i].function == pFunction && sSaid[i].owner == pOwner) {
+                    return;
+                }
+            }
+            if (sSaidCount < 64u) {
+                sSaid[sSaidCount++] = {pFunction, pOwner};
+            }
+            const LumaMod* const pMod = static_cast<const LumaMod*>(pOwner);
+            nebula_log("[mod %s] a before hook skipped %s %s, whose result has no default; the function ran\n",
+                       pMod != nullptr ? pMod->name : "?", pFunction->name, pFunction->signature);
+        }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
+            apiGameThread, apiUnhook, apiAlloc, apiFree,
         };
 
         // Resolves one import into `pSlotValue` (a pointer or a number). False: the game has no such name.
@@ -207,6 +332,10 @@ namespace luma {
             addText(pMessage, messageSize, "its luma_mod is empty");
             return false;
         }
+        if (pInfo->api == 0) {
+            addText(pMessage, messageSize, "its luma_mod says api 0 (it was not built with luma.h)");
+            return false;
+        }
         if (pInfo->api > LUMA_API) {
             addText(pMessage, messageSize, "it was made for a newer LumaCore than this game has");
             return false;
@@ -220,7 +349,11 @@ namespace luma {
             return false;
         }
         if (sModCount == cMaxMods) {
-            addText(pMessage, messageSize, "more than 256 LumaCore mods are on");
+            char most[16];
+            nebula_snprintf(most, sizeof(most), "%u", static_cast<unsigned>(LUMA_MAX_MODS));
+            addText(pMessage, messageSize, "more LumaCore mods are on than the ");
+            addText(pMessage, messageSize, most);
+            addText(pMessage, messageSize, " this game takes");
             return false;
         }
         // Every name first: a mod is bound whole or not at all.
@@ -249,6 +382,7 @@ namespace luma {
             return false;
         }
 
+        gSkipRefused = skipRefused;
         LumaMod* pMod = new LumaMod();
         pMod->info = pInfo;
         pMod->order = order;
@@ -288,6 +422,7 @@ namespace luma {
         }
         if (!whole) {
             removeHooks(pMod);
+            freeAll(pMod);
             delete pMod;
             return false;
         }
@@ -302,8 +437,11 @@ namespace luma {
                     pInfo->stop();
                 }
                 removeHooks(sMods[i]);
+                freeAll(sMods[i]);
                 delete sMods[i];
                 sMods[i] = sMods[--sModCount];
+                // The mod list changed: the hook lists replaced so far go (loader contract 4).
+                freeRetired();
                 return;
             }
         }

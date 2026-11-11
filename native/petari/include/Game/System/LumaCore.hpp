@@ -51,6 +51,10 @@ namespace lumacore {
         HandleType_CameraInfo,
         HandleType_Other,       // one of the game's other types: its tag (kOpaqueNames) in the upper 16 bits
     };
+    // An arena's memory, [pStart, pEnd), is about to go with every object in it, whose destructors mostly do not run:
+    // told at the start of each NebulaArena::destroy, a parent before its children (loader contract 7). It does
+    // nothing itself; a mod that keeps objects hooks it (before) and forgets those in the range.
+    void released(const void* pStart, const void* pEnd);
     u32 generation();
     void nextGeneration();
     NebulaValue handle(NameObj* pObj);

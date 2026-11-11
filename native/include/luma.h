@@ -17,6 +17,8 @@ extern "C" {
 #endif
 
 #define LUMA_API 1u
+/* The most mods with code that may be on at once (loader contract 2). */
+#define LUMA_MAX_MODS 256u
 
 /* A function of the game. `invoke` calls it: args[0] is `this` (null for a function without one), args[1..] point at
    the arguments, and `result` is where what it returns is put. Hooks on the function run. */
@@ -31,8 +33,10 @@ typedef struct LumaFunction {
 typedef struct LumaCall {
     const LumaFunction* function;
     void** args;  /* as LumaFunction.invoke takes them; a hook may change what they point at */
-    void* result; /* where the result is, or goes; null for a constructor or destructor */
-    uint32_t next;
+    void* result; /* where the result is, or goes; null for a constructor or destructor. Zero (a class: as its
+                     default constructor makes it) until a hook or the function writes it (loader contract 4) */
+    uint32_t next;      /* the kernel's */
+    const void* chain;  /* the kernel's: the hooks this call runs, fixed when it starts */
 } LumaCall;
 
 typedef int32_t (*LumaHook)(LumaCall* call, void* user);
@@ -76,8 +80,9 @@ typedef struct LumaCore {
     const LumaFunction* (*function)(const char* name, const char* signature);
     /* Every function: `index` from 0 until it returns null, by name. */
     const LumaFunction* (*function_at)(uint32_t index);
-    /* Adds a hook after loading. 0: added; -1: refused (a constructor or destructor takes before and after only);
-       -2: another mod replaces the function already. */
+    /* Adds a hook after loading. 0: added; -1: refused (a constructor or destructor takes before and after only, and a
+       function whose result has no default takes no skipping hook); -2: another mod replaces the function already;
+       -3: not on the game thread (nothing changes). A call already running keeps the hooks it started with. */
     int32_t (*hook)(const LumaMod* mod, const LumaFunction* function, uint32_t kind, LumaHook hook, void* user);
     /* From a wrap or a replace: runs the wraps after it, then the function. */
     void (*proceed)(LumaCall* call);
@@ -93,6 +98,18 @@ typedef struct LumaCore {
     /* A service by name ("fs", "net", "draw"...): its table of functions, or null when this game has no such service
        or an older one than `minor`. A `major` is a table of its own; within it a later `minor` only adds at the end. */
     const void* (*service)(const char* name, uint32_t major, uint32_t minor);
+
+    /* 1 on the game thread (the thread that runs the game's frames and starts the mods), else 0. A hooked function
+       runs its hooks on whatever thread calls it. */
+    int32_t (*game_thread)(void);
+    /* Takes out a hook this mod added (in its imports or with `hook`): the same function, kind, hook and user. 0: taken
+       out; -1: this mod has no such hook; -3: not on the game thread (nothing changes). */
+    int32_t (*unhook)(const LumaMod* mod, const LumaFunction* function, uint32_t kind, LumaHook hook, void* user);
+    /* Memory for the mod, `size` bytes aligned to `align` (a power of two up to 4096), counted on the Mods screen and
+       freed when the mod is taken out. Null: none left (the mod says so). From any thread. */
+    void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align);
+    /* Gives back what `alloc` gave this mod; null does nothing. */
+    void (*free)(const LumaMod* mod, void* p);
 } LumaCore;
 
 typedef struct LumaModInfo {
@@ -125,13 +142,79 @@ typedef struct LumaModInfo {
 #define LUMA_FLOATS
 #endif
 
+/* What the compiler calls in a library with no C library: copies, zeroing and comparing (a struct copy, `= {0}`), and
+   on Windows the stack probe of a frame over 4 KiB (loader contract 8). The library defines them itself, once, with
+   luma_mod; they are not exported. */
+#if defined(__cplusplus)
+#define LUMA_C extern "C"
+#else
+#define LUMA_C
+#endif
+#if defined(_WIN32)
+#define LUMA_OWN
+#else
+#define LUMA_OWN __attribute__((visibility("hidden")))
+#endif
+#define LUMA_MEMORY                                                                                                   \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memcpy(void* to, const void* from, __SIZE_TYPE__ n) {     \
+        unsigned char* t = (unsigned char*)to;                                                                       \
+        const unsigned char* f = (const unsigned char*)from;                                                         \
+        while (n-- != 0) *t++ = *f++;                                                                                \
+        return to;                                                                                                   \
+    }                                                                                                                \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memmove(void* to, const void* from, __SIZE_TYPE__ n) {    \
+        unsigned char* t = (unsigned char*)to;                                                                       \
+        const unsigned char* f = (const unsigned char*)from;                                                         \
+        if (t < f) {                                                                                                 \
+            while (n-- != 0) *t++ = *f++;                                                                            \
+        } else {                                                                                                     \
+            while (n-- != 0) t[n] = f[n];                                                                            \
+        }                                                                                                            \
+        return to;                                                                                                   \
+    }                                                                                                                \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memset(void* to, int value, __SIZE_TYPE__ n) {           \
+        unsigned char* t = (unsigned char*)to;                                                                       \
+        while (n-- != 0) *t++ = (unsigned char)value;                                                                \
+        return to;                                                                                                   \
+    }                                                                                                                \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) int memcmp(const void* a, const void* b, __SIZE_TYPE__ n) {    \
+        const unsigned char* x = (const unsigned char*)a;                                                            \
+        const unsigned char* y = (const unsigned char*)b;                                                            \
+        for (; n != 0; n--, x++, y++) {                                                                              \
+            if (*x != *y) return *x < *y ? -1 : 1;                                                                   \
+        }                                                                                                            \
+        return 0;                                                                                                    \
+    }
+
+/* __chkstk as the Windows ABI has it: x64 takes the frame's size in rax and keeps every register; arm64 takes it in x15
+   in 16-byte units. Each touches the frame's pages from the top down, so the guard page grows the stack in order. */
+#if defined(_WIN32) && defined(__x86_64__)
+#define LUMA_STACK_PROBE                                                                                              \
+    __asm__(".text\n.globl __chkstk\n.p2align 4\n__chkstk:\n"                                                       \
+            "pushq %rcx\npushq %rax\ncmpq $0x1000, %rax\nleaq 24(%rsp), %rcx\njb 1f\n"                               \
+            "2:\nsubq $0x1000, %rcx\ntestq %rcx, (%rcx)\nsubq $0x1000, %rax\ncmpq $0x1000, %rax\nja 2b\n"              \
+            "1:\nsubq %rax, %rcx\ntestq %rcx, (%rcx)\npopq %rax\npopq %rcx\nretq\n");
+#elif defined(_WIN32) && defined(__aarch64__)
+#define LUMA_STACK_PROBE                                                                                              \
+    __asm__(".text\n.globl __chkstk\n.p2align 2\n__chkstk:\n"                                                       \
+            "lsl x16, x15, #4\nmov x17, sp\n"                                                                           \
+            "1:\nsub x17, x17, #4096\nsubs x16, x16, #4096\nldr xzr, [x17]\nb.gt 1b\nret\n");
+#else
+#define LUMA_STACK_PROBE
+#endif
+
+#define LUMA_RUNTIME \
+    LUMA_FLOATS      \
+    LUMA_MEMORY      \
+    LUMA_STACK_PROBE
+
 #define LUMA_MOD(imports, start, stop) \
-    LUMA_FLOATS                        \
-    LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop}
+    LUMA_RUNTIME                       \
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop}
 /* A mod that binds no name of the game (it finds what it needs through the core at start). */
 #define LUMA_MOD_NO_IMPORTS(start, stop) \
-    LUMA_FLOATS                          \
-    LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop}
+    LUMA_RUNTIME                         \
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])

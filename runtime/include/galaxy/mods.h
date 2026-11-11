@@ -180,7 +180,7 @@ struct ModPlan {
     std::vector<File> materials;
     // The .luma mods in use, bottom of the list first, for their shaders.
     std::vector<std::filesystem::path> luma_folders;
-    std::vector<PluginFile> plugins;  // code of the .luma mods, bottom of the list first
+    std::vector<PluginFile> plugins;  // code of the .luma mods, top of the list first (the order they bind in)
     ModRows rows;
     std::vector<std::string> notes;  // what could not be applied, for the log
     unsigned code_patches = 0;

@@ -154,6 +154,11 @@ namespace lumacore {
         return classOf(static_cast< const NameObj* >(rValue.u.h.p));
     }
 
+    void released(const void* pStart, const void* pEnd) {
+        (void)pStart;
+        (void)pEnd;
+    }
+
     u32 generation() {
         return sGeneration;
     }

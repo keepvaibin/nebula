@@ -26,6 +26,9 @@ namespace luma {
     void run(const Function* fn, void** args, void* result);
     // A constructor or destructor: its hooks are told, and it goes on.
     void tell(const Function* fn, void** args);
+    // Given as `args` to a function's invoke, it asks instead of calling: the answer (bool, at `result`) is whether the
+    // function's result has no default the kernel can give (Result<R>::kNoSkip).
+    extern void* kAskNoSkip[1];
 
     template <class T> using Type = T;
     template <class T> struct Bare { typedef T type; };
@@ -48,8 +51,21 @@ namespace luma {
 inline void* operator new(decltype(sizeof(0)), luma::Place, void* p) noexcept { return p; }
 
 namespace luma {
+    // Where a hooked call's result goes. Before any hook runs it holds R's default (zero for a scalar or a plain
+    // struct), so a before that skips without writing it, or a wrap that does not proceed, gives the caller that,
+    // never uninitialised bytes (loader contract 4, Z-2). A result with no such default (a reference; a class with no
+    // default constructor, or one with a destructor, which the function's own value would be built over) is noSkip:
+    // the kernel binds no wrap or replace on it and does not take a before's skip.
     template <class R> struct Result {
+        static constexpr bool kNoSkip = !(__is_constructible(R) && __is_trivially_destructible(R));
         alignas(R) unsigned char bytes[sizeof(R)];
+        Result() {
+            if constexpr (!kNoSkip) {
+                // Zero first: a class whose default constructor sets nothing (TVec3f's) still reads 0, 0, 0.
+                __builtin_memset(bytes, 0, sizeof(bytes));
+                ::new (Place(), bytes) R();
+            }
+        }
         template <class F> static void put(void* r, F&& f) { ::new (Place(), r) R(f()); }
         R take() {
             R* p = reinterpret_cast<R*>(bytes);
@@ -58,11 +74,13 @@ namespace luma {
         }
     };
     template <class R> struct Result<R&> {
-        R* p;
+        static constexpr bool kNoSkip = true;
+        R* p = nullptr;
         template <class F> static void put(void* r, F&& f) { *static_cast<R**>(r) = &f(); }
         R& take() { return *p; }
     };
     template <> struct Result<void> {
+        static constexpr bool kNoSkip = false;
         template <class F> static void put(void*, F&& f) { f(); }
         void take() {}
     };
@@ -95,6 +113,10 @@ namespace luma {
 // copy of the parameters (it is another function, so the path with no hook keeps nothing for it). POINTERS: args.
 #define LUMA_HOOK(NAME, SIGNATURE, RESULT, CALL, PARAMS, ARGS, POINTERS)                                             \
     LUMA_ROW(NAME, SIGNATURE, ([](void** luma_a, void* luma_r) {                                                     \
+        if (__builtin_expect(luma_a == ::luma::kAskNoSkip, 0)) {                                                     \
+            *static_cast<bool*>(luma_r) = ::luma::Result<::luma::Type<RESULT>>::kNoSkip;                             \
+            return;                                                                                                  \
+        }                                                                                                            \
         ::luma::Result<::luma::Type<RESULT>>::put(luma_r, [&]() -> ::luma::Type<RESULT> { return CALL; });           \
     }));                                                                                                             \
     if (__builtin_expect(luma_hooked, 0)) {                                                                          \

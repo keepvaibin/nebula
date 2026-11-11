@@ -10,6 +10,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/LumaCore.hpp"
 
 #ifdef NEBULA_ASAN_HEAPS
 // AddressSanitizer test builds: what no block holds is poisoned, so overflows and uses after free inside an arena are reported.
@@ -155,6 +156,9 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 }
 
 void NebulaArena::destroy(NebulaArena* pArena) {
+    // Mods that keep objects forget those in it, before any of them or its memory goes.
+    lumacore::released(pArena->mStart, pArena->mEnd);
+
     // Its objects first: one that owns a child arena destroys it itself.
     pArena->destroyOwned();
 

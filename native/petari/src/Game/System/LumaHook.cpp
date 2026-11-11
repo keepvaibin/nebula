@@ -1,6 +1,7 @@
 #include "Game/System/LumaHook.hpp"
 
 #include <nebula_module.h>
+#include <stdlib.h>
 
 namespace luma {
     LUMA_THREAD const Function* tBody = nullptr;
@@ -48,18 +49,24 @@ namespace luma {
             u32 sequence;
             HookKind kind;
         };
-        // A function's hooks, by order then sequence.
+        // A function's hooks, by order then sequence. Never changed once published: a change builds a new one.
         struct Chain {
-            Hook* hooks;
             u32 count;
-            u32 capacity;
+            Hook hooks[1];  // `count` of them
+        };
+        // A replaced chain, kept until no call can be inside it.
+        struct Retired {
+            Chain* chain;
+            Retired* next;
         };
 
         const Function** sSorted = nullptr;
         u32 sCount = 0;
-        Chain* sChains = nullptr;  // one per flag
+        Chain** sChains = nullptr;  // one per flag; null: no hooks
+        Retired* sRetired = nullptr;
         u32 sSequence = 0;
         bool sPrepared = false;
+        LUMA_THREAD bool tGameThread = false;
 
         s32 compare(const char* pA, const char* pB) {
             while (*pA != 0 && *pA == *pB) {
@@ -122,13 +129,76 @@ namespace luma {
                 sSorted[end] = pHeld;
                 sift(sSorted, 0, end);
             }
-            sChains = new Chain[flags + 1]();
+            sChains = new Chain*[flags + 1]();
         }
 
-        Chain& chainOf(const Function* pFunction) { return sChains[pFunction->hooked - flagsBegin()]; }
+        Chain** slotOf(const Function* pFunction) { return &sChains[pFunction->hooked - flagsBegin()]; }
+
+        // The chain a call runs: read once, when it starts.
+        const Chain* chainOf(const Function* pFunction) { return __atomic_load_n(slotOf(pFunction), __ATOMIC_ACQUIRE); }
 
         bool wraps(HookKind kind) { return kind == Hook_Wrap || kind == Hook_Replace; }
+
+        Chain* newChain(u32 count) {
+            void* const p = ::malloc(sizeof(Chain) + (count != 0 ? count - 1 : 0) * sizeof(Hook));
+            if (p == nullptr) {
+                NEBULA_PANIC("out of memory for a function's hooks");
+            }
+            Chain* const pChain = static_cast<Chain*>(p);
+            pChain->count = count;
+            return pChain;
+        }
+
+        // Publishes a function's new chain (null when it has no hooks) and keeps the old one until no call can be
+        // inside it. The flag is set before a chain exists and cleared after it is gone, so a call that sees the flag
+        // and then no chain runs the function alone.
+        void publish(const Function* pFunction, Chain* pChain) {
+            Chain** const ppSlot = slotOf(pFunction);
+            Chain* const pOld = *ppSlot;
+            if (pChain != nullptr) {
+                __atomic_store_n(pFunction->hooked, static_cast<unsigned char>(1), __ATOMIC_RELEASE);
+            }
+            __atomic_store_n(ppSlot, pChain, __ATOMIC_RELEASE);
+            if (pChain == nullptr) {
+                __atomic_store_n(pFunction->hooked, static_cast<unsigned char>(0), __ATOMIC_RELEASE);
+            }
+            if (pOld != nullptr) {
+                Retired* const pRetired = new Retired;
+                pRetired->chain = pOld;
+                pRetired->next = sRetired;
+                sRetired = pRetired;
+            }
+        }
+
+        // A chain without the hooks `keep` refuses; null when none is left.
+        template <class Keep> Chain* without(const Chain* pChain, Keep keep, u32* pRemoved) {
+            u32 kept = 0;
+            for (u32 i = 0; i < pChain->count; i++) {
+                kept += keep(pChain->hooks[i]) ? 1u : 0u;
+            }
+            *pRemoved = pChain->count - kept;
+            if (kept == 0) {
+                return nullptr;
+            }
+            Chain* const pNew = newChain(kept);
+            u32 at = 0;
+            for (u32 i = 0; i < pChain->count; i++) {
+                if (keep(pChain->hooks[i])) {
+                    pNew->hooks[at++] = pChain->hooks[i];
+                }
+            }
+            return pNew;
+        }
     }
+
+    // The address a function's invoke takes as "is your result one the kernel cannot give a default?" (luma_hook.h).
+    void* kAskNoSkip[1] = {nullptr};
+
+    void (*gSkipRefused)(const Function* pFunction, const void* pOwner) = nullptr;
+
+    void markGameThread() { tGameThread = true; }
+
+    bool onGameThread() { return tGameThread; }
 
     u32 functionCount() {
         prepare();
@@ -179,12 +249,21 @@ namespace luma {
         return pFound;
     }
 
+    bool noSkip(const Function* pFunction) {
+        if (pFunction->invoke == nullptr) {
+            return false;  // a constructor or destructor: told, never skipped
+        }
+        bool no = false;
+        pFunction->invoke(kAskNoSkip, &no);
+        return no;
+    }
+
     const void* replacedBy(const Function* pFunction) {
         prepare();
-        const Chain& rChain = chainOf(pFunction);
-        for (u32 i = 0; i < rChain.count; i++) {
-            if (rChain.hooks[i].kind == Hook_Replace) {
-                return rChain.hooks[i].owner;
+        const Chain* const pChain = chainOf(pFunction);
+        for (u32 i = 0; pChain != nullptr && i < pChain->count; i++) {
+            if (pChain->hooks[i].kind == Hook_Replace) {
+                return pChain->hooks[i].owner;
             }
         }
         return nullptr;
@@ -192,7 +271,10 @@ namespace luma {
 
     HookResult addHook(const Function* pFunction, HookKind kind, HookCallback pCallback, void* pUser, const void* pOwner, s32 order) {
         prepare();
-        if (pFunction == nullptr || pCallback == nullptr || kind >= Hook_KindCount || (pFunction->invoke == nullptr && wraps(kind))) {
+        if (!tGameThread) {
+            return HookResult_NotGameThread;
+        }
+        if (pFunction == nullptr || pCallback == nullptr || kind >= Hook_KindCount || (wraps(kind) && (pFunction->invoke == nullptr || noSkip(pFunction)))) {
             return HookResult_Refused;
         }
         if (kind == Hook_Replace) {
@@ -201,51 +283,85 @@ namespace luma {
                 return HookResult_Replaced;
             }
         }
-        Chain& rChain = chainOf(pFunction);
-        if (rChain.count == rChain.capacity) {
-            const u32 capacity = rChain.capacity == 0 ? 2 : rChain.capacity * 2;
-            Hook* pHooks = new Hook[capacity];
-            for (u32 i = 0; i < rChain.count; i++) {
-                pHooks[i] = rChain.hooks[i];
-            }
-            delete[] rChain.hooks;
-            rChain.hooks = pHooks;
-            rChain.capacity = capacity;
+        const Chain* const pOld = chainOf(pFunction);
+        const u32 count = pOld != nullptr ? pOld->count : 0;
+        Chain* const pNew = newChain(count + 1);
+        // After every hook of a lower or the same order: a mod's hooks keep the order of its rows.
+        u32 at = 0;
+        while (at < count && pOld->hooks[at].order <= order) {
+            pNew->hooks[at] = pOld->hooks[at];
+            at++;
         }
-        u32 at = rChain.count;
-        while (at > 0 && rChain.hooks[at - 1].order > order) {
-            rChain.hooks[at] = rChain.hooks[at - 1];
-            at--;
+        pNew->hooks[at] = {pCallback, pUser, pOwner, order, sSequence++, kind};
+        for (u32 i = at; i < count; i++) {
+            pNew->hooks[i + 1] = pOld->hooks[i];
         }
-        rChain.hooks[at] = {pCallback, pUser, pOwner, order, sSequence++, kind};
-        rChain.count++;
-        *pFunction->hooked = 1;
+        publish(pFunction, pNew);
         return HookResult_Added;
+    }
+
+    s32 removeHook(const Function* pFunction, HookKind kind, HookCallback pCallback, void* pUser, const void* pOwner) {
+        prepare();
+        if (!tGameThread) {
+            return HookResult_NotGameThread;
+        }
+        const Chain* const pChain = pFunction != nullptr ? chainOf(pFunction) : nullptr;
+        if (pChain == nullptr) {
+            return -1;
+        }
+        // One hook: the first that matches.
+        bool taken = false;
+        u32 removed = 0;
+        Chain* const pNew = without(
+            pChain,
+            [&](const Hook& rHook) {
+                if (!taken && rHook.owner == pOwner && rHook.kind == kind && rHook.callback == pCallback && rHook.user == pUser) {
+                    taken = true;
+                    return false;
+                }
+                return true;
+            },
+            &removed);
+        if (removed == 0) {
+            ::free(pNew);
+            return -1;
+        }
+        publish(pFunction, pNew);
+        return 0;
     }
 
     void removeHooks(const void* pOwner) {
         prepare();
         for (u32 f = 0; f < sCount; f++) {
-            Chain& rChain = chainOf(sSorted[f]);
-            u32 kept = 0;
-            for (u32 i = 0; i < rChain.count; i++) {
-                if (rChain.hooks[i].owner != pOwner) {
-                    rChain.hooks[kept++] = rChain.hooks[i];
-                }
+            const Chain* const pChain = chainOf(sSorted[f]);
+            if (pChain == nullptr) {
+                continue;
             }
-            rChain.count = kept;
-            if (kept == 0) {
-                *sSorted[f]->hooked = 0;
+            u32 removed = 0;
+            Chain* const pNew = without(pChain, [&](const Hook& rHook) { return rHook.owner != pOwner; }, &removed);
+            if (removed == 0) {
+                ::free(pNew);
+                continue;
             }
+            publish(sSorted[f], pNew);
+        }
+    }
+
+    void freeRetired() {
+        while (sRetired != nullptr) {
+            Retired* const pNext = sRetired->next;
+            ::free(sRetired->chain);
+            delete sRetired;
+            sRetired = pNext;
         }
     }
 
     void proceed(Call* pCall) {
-        const Chain& rChain = chainOf(pCall->function);
-        for (u32 i = pCall->next; i < rChain.count; i++) {
-            if (wraps(rChain.hooks[i].kind)) {
+        const Chain* const pChain = static_cast<const Chain*>(pCall->chain);
+        for (u32 i = pCall->next; pChain != nullptr && i < pChain->count; i++) {
+            if (wraps(pChain->hooks[i].kind)) {
                 pCall->next = i + 1;
-                rChain.hooks[i].callback(pCall, rChain.hooks[i].user);
+                pChain->hooks[i].callback(pCall, pChain->hooks[i].user);
                 pCall->next = i;
                 return;
             }
@@ -255,29 +371,37 @@ namespace luma {
     }
 
     void run(const Function* pFunction, void** pArgs, void* pResult) {
-        const Chain& rChain = chainOf(pFunction);
-        Call call = {pFunction, pArgs, pResult, 0};
+        const Chain* const pChain = chainOf(pFunction);
+        Call call = {pFunction, pArgs, pResult, 0, pChain};
+        const u32 count = pChain != nullptr ? pChain->count : 0;
         bool skip = false;
-        for (u32 i = 0; i < rChain.count && !skip; i++) {
-            if (rChain.hooks[i].kind == Hook_Before) {
-                skip = rChain.hooks[i].callback(&call, rChain.hooks[i].user) != 0;
+        for (u32 i = 0; i < count && !skip; i++) {
+            if (pChain->hooks[i].kind == Hook_Before) {
+                skip = pChain->hooks[i].callback(&call, pChain->hooks[i].user) != 0;
+                // A result with no default is never left unwritten: the function runs (loader contract 4).
+                if (skip && noSkip(pFunction)) {
+                    if (gSkipRefused != nullptr) {
+                        gSkipRefused(pFunction, pChain->hooks[i].owner);
+                    }
+                    skip = false;
+                }
             }
         }
         if (!skip) {
             proceed(&call);
         }
-        for (u32 i = rChain.count; i-- > 0;) {
-            if (rChain.hooks[i].kind == Hook_After) {
-                rChain.hooks[i].callback(&call, rChain.hooks[i].user);
+        for (u32 i = count; i-- > 0;) {
+            if (pChain->hooks[i].kind == Hook_After) {
+                pChain->hooks[i].callback(&call, pChain->hooks[i].user);
             }
         }
     }
 
     void tell(const Function* pFunction, void** pArgs) {
-        const Chain& rChain = chainOf(pFunction);
-        Call call = {pFunction, pArgs, nullptr, 0};
-        for (u32 i = 0; i < rChain.count; i++) {
-            rChain.hooks[i].callback(&call, rChain.hooks[i].user);
+        const Chain* const pChain = chainOf(pFunction);
+        Call call = {pFunction, pArgs, nullptr, 0, pChain};
+        for (u32 i = 0; pChain != nullptr && i < pChain->count; i++) {
+            pChain->hooks[i].callback(&call, pChain->hooks[i].user);
         }
     }
 }

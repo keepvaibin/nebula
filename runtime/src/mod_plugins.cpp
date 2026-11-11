@@ -633,7 +633,9 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(name + " not started: " + load_error());
             continue;
         }
-        // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all.
+        // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all. `plugins` is top of the
+        // list first, so `index` is the mod's order: 0 binds first, holds a replace, runs its befores first and its
+        // afters last, and its wrap is outermost (loader contract 1).
         if (const void* const info = symbol_in(module, "luma_mod"); info != nullptr) {
             const auto load = reinterpret_cast<std::int32_t (*)(const void*, const char*, std::int32_t, char*, std::uint32_t)>(
                 g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
