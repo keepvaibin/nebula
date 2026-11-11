@@ -214,6 +214,20 @@ impl Store for PakStore {
         self.entry(lower).map(|e| e.path.clone())
     }
 
+    fn folder(&self, lower: &str) -> Option<Vec<String>> {
+        let prefix = format!("{}/", lower_store_path(lower).trim_end_matches('/'));
+        let mut names: Vec<String> = self
+            .entries
+            .keys()
+            .filter_map(|k| k.strip_prefix(&prefix))
+            .filter_map(|rest| rest.split('/').next().filter(|n| !n.is_empty()))
+            .map(str::to_string)
+            .collect();
+        names.sort();
+        names.dedup();
+        Some(names)
+    }
+
     fn table(&self, path: &str) -> Option<Table> {
         // A store this program cooked; a table of it that cannot be read is no table (the patch rules then name the
         // file as one without rows).

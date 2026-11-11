@@ -137,6 +137,110 @@ fn a_link_key_is_new_to_the_whole_zone() {
     assert!(clashes.iter().any(|m| m.contains("stagedata/zone/jmp/placement/*/objinfo")), "{clashes:?}");
 }
 
+/// A zone whose start has MarioNo 0 in LayerB and LayerC, which no scenario turns on together: scenario 1 turns on
+/// LayerA and LayerB (mask 3), scenario 2 LayerA and LayerC (mask 5); LayerD is never on (F's dandelionhillzone case).
+struct ScenarioStore {
+    listed: bool,
+}
+
+const START: &str = "StageData/DandelionHillZone/jmp/Start/{}/StartInfo";
+const SCENARIOS: &str = "StageData/DandelionHillGalaxyScenario/ScenarioData.bcsv";
+
+impl Store for ScenarioStore {
+    fn path(&self, lower: &str) -> Option<String> {
+        ["Common", "LayerA", "LayerB", "LayerC", "LayerD"]
+            .iter()
+            .map(|l| START.replace("{}", l))
+            .chain([SCENARIOS.to_string()])
+            .find(|p| p.to_lowercase() == lower)
+    }
+    fn table(&self, path: &str) -> Option<Table> {
+        let int = ColumnType::Int { min: 0, max: 65535 };
+        if path == SCENARIOS {
+            return Some(Table {
+                key: vec!["ScenarioNo".into()],
+                columns: vec![("ScenarioNo".into(), int), ("DandelionHillZone".into(), int)],
+                rows: Some(HashSet::from(["1".to_string(), "2".to_string()])),
+                cells: Some(vec![vec!["1".into(), "3".into()], vec!["2".into(), "5".into()]]),
+                ..Default::default()
+            });
+        }
+        let layer = ["LayerB", "LayerC"].iter().any(|l| path == START.replace("{}", l));
+        path.starts_with("StageData/DandelionHillZone/").then(|| Table {
+            key: vec!["MarioNo".into()],
+            columns: vec![("MarioNo".into(), int)],
+            rows: Some(if layer { HashSet::from(["0".to_string()]) } else { HashSet::new() }),
+            ..Default::default()
+        })
+    }
+    fn may_be_new(&self, _path: &str) -> bool {
+        false
+    }
+    fn folder(&self, lower: &str) -> Option<Vec<String>> {
+        (self.listed && lower == "stagedata").then(|| vec!["dandelionhillgalaxyscenario".to_string(), "dandelionhillzone".to_string()])
+    }
+}
+
+/// Table-keys T-4: a start or generalpos key is new among Common and the layers a scenario turns on together, by the
+/// galaxies' scenario tables with the mod's own scenario patches; two mods adding one key overlap only there.
+#[test]
+fn a_start_key_is_new_among_the_layers_on_together() {
+    let store = ScenarioStore { listed: true };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let layer = [("layers", r#"[{"name": "base"}]"#)];
+    let at = |l: &str| format!("layers/base/patches/{}.json", START.replace("{}", l));
+    let add = |n: u32| format!(r#"{{"patch": 1, "key": ["MarioNo"], "add": [{{"MarioNo": {n}}}]}}"#).into_bytes();
+    let scenario = |mask: u32| format!(r#"{{"patch": 1, "key": ["ScenarioNo"], "add": [{{"ScenarioNo": 3, "DandelionHillZone": {mask}}}]}}"#).into_bytes();
+    let scenario_file = format!("layers/base/patches/{SCENARIOS}.json");
+    let in_group = |r: &Report| r.findings.iter().filter(|f| f.code == 402 && f.args.iter().any(|(n, a)| *n == "why" && *a == Arg::Phrase("Patch.KeyInGroup"))).count();
+    let run = |files: &[E]| check(&luma(&layer, files), &Setup { game: Some(&game), ..NO_GAME });
+
+    // LayerA is on with LayerB (scenario 1): MarioNo 0 is there.
+    let r = run(&[file(&at("LayerA"), &add(0))]);
+    assert_eq!(in_group(&r), 1, "{:?}", r.findings);
+    let f = r.findings.iter().find(|f| f.code == 402).unwrap();
+    assert!(f.args.iter().any(|(n, a)| *n == "where" && *a == Arg::Text(START.replace("{}", "LayerB"))), "{:?}", f.args);
+    // Common is on with every layer.
+    assert_eq!(in_group(&run(&[file(&at("Common"), &add(0))])), 1);
+    // LayerD is never on; with a new scenario 3 of LayerA and LayerD (mask 9) it meets no MarioNo 0 either.
+    let r = run(&[file(&at("LayerD"), &add(0))]);
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    assert!(r.not_checked.is_empty(), "{:?}", r.not_checked);
+    let r = run(&[file(&scenario_file, &scenario(9)), file(&at("LayerD"), &add(0))]);
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    let d = "stagedata/dandelionhillzone/jmp/start/{}/startinfo\u{1f}0";
+    assert!(r.touches.links.contains(&d.replace("{}", "layerd")), "{:?}", r.touches.links);
+    assert!(r.touches.links.contains(&d.replace("{}", "@dandelionhillgalaxy#3")), "{:?}", r.touches.links);
+    // A new scenario 3 of LayerB and LayerD (mask 10): the mod's own scenario patch puts LayerD with LayerB, whichever
+    // file comes first.
+    assert_eq!(in_group(&run(&[file(&at("LayerD"), &add(0)), file(&scenario_file, &scenario(10))])), 1);
+
+    // The same mod's own adds: LayerB and LayerC never meet; LayerA and LayerB do.
+    assert_eq!(in_group(&run(&[file(&at("LayerB"), &add(7)), file(&at("LayerC"), &add(7))])), 0);
+    assert_eq!(in_group(&run(&[file(&at("LayerA"), &add(7)), file(&at("LayerB"), &add(7))])), 1);
+
+    // Two installed mods: one adding 7 to LayerC overlaps an add to LayerA (scenario 2) and to Common, not to LayerB.
+    let mut adding = other("other.mod");
+    adding.touches = run(&[file(&at("LayerC"), &add(7))]).touches;
+    let overlaps = |l: &str| {
+        check(&luma(&layer, &[file(&at(l), &add(7))]), &Setup { game: Some(&game), installed: std::slice::from_ref(&adding), ..NO_GAME })
+            .findings
+            .iter()
+            .filter(|f| f.code == 404)
+            .count()
+    };
+    assert!(overlaps("LayerA") >= 1);
+    assert_eq!(overlaps("LayerB"), 0);
+    assert!(overlaps("Common") >= 1);
+
+    // A store that cannot list its galaxies: only Common and the same layer are checked, and the report says so.
+    let unlisted = ScenarioStore { listed: false };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&unlisted) };
+    let r = check(&luma(&layer, &[file(&at("LayerA"), &add(0))]), &Setup { game: Some(&game), ..NO_GAME });
+    assert_eq!(in_group(&r), 0, "{:?}", r.findings);
+    assert!(r.not_checked.iter().any(|n| n.code == 402 && n.because == "Missing.Scenarios"), "{:?}", r.not_checked);
+}
+
 #[test]
 fn every_rule_has_a_broken_mod() {
     let store = FakeStore { case_insensitive: false };

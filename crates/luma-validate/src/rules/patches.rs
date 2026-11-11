@@ -90,6 +90,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         .map(|i| i.name.clone())
         .filter(|n| n.split('/').nth(2) == Some("patches") && n.starts_with("layers/"))
         .collect();
+    let mut parsed: Vec<(String, String, Value)> = Vec::new();
     for name in names {
         let target = name.splitn(4, '/').nth(3).unwrap_or("").to_string();
         let Some(target) = target.strip_suffix(".json").map(str::to_string) else {
@@ -117,21 +118,85 @@ pub(crate) fn check(ctx: &mut Ctx) {
                 continue;
             }
         };
-        let mut pc = P { ctx, file: name.clone() };
+        parsed.push((name, target, root));
+    }
+    // The scenario tables' cells first: they say which layers are on together (table-keys T-4).
+    if let Some(store) = ctx.game().and_then(|g| g.store) {
+        for (_, target, root) in &parsed {
+            let Some(galaxy) = store.path(&target.to_lowercase()).and_then(|p| crate::scenario_table_galaxy(&p)) else { continue };
+            scenario_cells(ctx, &galaxy, root);
+        }
+    }
+    for (name, target, root) in parsed {
+        let mut pc = P { ctx, file: name };
         one(&mut pc, &root, &target);
     }
 }
 
-/// A key added to a table of a link group (table-keys 13) must be new to the whole group: in the game's other layers
-/// of the zone (the game finds a linked object, a demo group, a start by it across them) and in this mod's own files
-/// for them. Recorded as a touch of the group, for two mods adding one key (L404).
+/// The cells a patch of a galaxy's scenario table gives (`set` and `add`, by `ScenarioNo`), each a whole number.
+fn scenario_cells(ctx: &mut Ctx, galaxy: &str, root: &Value) {
+    let mut push = |scenario: Option<String>, values: &Value| {
+        let Some(scenario) = scenario else { return };
+        for m in values.members() {
+            if same_column(&m.key, "ScenarioNo") {
+                continue;
+            }
+            if let Some(value) = m.value.as_i64() {
+                ctx.facts.scenario_cells.push(crate::ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.clone(), column: m.key.clone(), value });
+            }
+        }
+    };
+    let number = |v: &Value| v.members().iter().find(|m| same_column(&m.key, "ScenarioNo")).and_then(|m| cell_text(&m.value));
+    for entry in root.get("set").map(|s| s.items()).unwrap_or_default() {
+        if let (Some(w), Some(values)) = (entry.get("where"), entry.get("values")) {
+            push(number(w), values);
+        }
+    }
+    for row in root.get("add").map(|a| a.items()).unwrap_or_default() {
+        push(number(row), row);
+    }
+}
+
+/// A zone's layer sets, read once (the store path `own` names the zone in the game's case).
+fn layer_sets(pc: &mut P, own: &str) -> Option<Vec<crate::LayerSet>> {
+    let zone = own.split('/').nth(1)?.to_string();
+    let key = zone.to_lowercase();
+    if let Some(known) = pc.ctx.facts.layer_sets.get(&key) {
+        return known.clone();
+    }
+    let sets = pc.ctx.game().and_then(|g| g.store).and_then(|s| crate::zone_layer_sets(s, &zone, &pc.ctx.facts.scenario_cells));
+    pc.ctx.facts.layer_sets.insert(key, sets.clone());
+    sets
+}
+
+/// A key added to a table of a link group (table-keys 13) must be new to the tables the game finds it among: for
+/// `l_id` (placement, mapparts, childobj) every layer of the zone; for start and generalpos (T-4) common and the layers
+/// some scenario turns on together with this one. Both in the game and in this mod's own files. Recorded as touches,
+/// for two mods adding one key (L404): the group with `*` for `l_id`; for start and generalpos the table's layer (all
+/// 17 for common) and each scenario that turns it on (`@<galaxy>#<ScenarioNo>`), so two adds overlap exactly when
+/// the game would meet both.
 fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
     let store = pc.ctx.game().and_then(|g| g.store);
     let own = store.and_then(|s| s.path(&target.to_lowercase())).unwrap_or_else(|| target.to_string());
     let Some(group) = crate::link_group(&own) else { return };
+    let layer = crate::link_layer(&own).unwrap_or(0);
+    // None: the whole group (l_id). Some(None): by scenario, but the store gave no scenario tables.
+    let reach: Option<Option<Vec<crate::LayerSet>>> = crate::link_by_scenario(&own).then(|| layer_sets(pc, &own));
+    if matches!(reach, Some(None)) {
+        pc.ctx.not_checked(402, "Missing.Scenarios");
+    }
+    let together = |other: usize| match &reach {
+        None => true,
+        Some(_) if layer == 0 || other == 0 || other == layer => true,
+        Some(Some(sets)) => sets.iter().any(|s| s.layers >> layer & 1 == 1 && s.layers >> other & 1 == 1),
+        Some(None) => false,
+    };
     let mut there: Option<String> = None;
     if let Some(store) = store {
         for other in crate::link_paths(&own) {
+            if !together(crate::link_layer(&other).unwrap_or(0)) {
+                continue;
+            }
             let Some(game_path) = store.path(&other) else { continue };
             if store.table(&game_path).is_some_and(|tb| tb.rows.as_ref().is_some_and(|r| r.contains(id))) {
                 there = Some(game_path);
@@ -140,15 +205,34 @@ fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
         }
     }
     let key = format!("{group}{SEP}{id}");
-    let own_lower = own.to_lowercase();
     if there.is_none() {
-        there = pc.ctx.facts.link_targets.get(&key).filter(|t| **t != own_lower).cloned();
+        there = pc.ctx.facts.link_targets.get(&key).and_then(|ts| ts.iter().find(|t| !t.eq_ignore_ascii_case(&own) && together(crate::link_layer(t).unwrap_or(0))).cloned());
     }
-    pc.ctx.facts.link_targets.entry(key.clone()).or_insert(own_lower);
+    let targets = pc.ctx.facts.link_targets.entry(key.clone()).or_default();
+    if !targets.iter().any(|t| t.eq_ignore_ascii_case(&own)) {
+        targets.push(own.clone());
+    }
     if let Some(there) = there {
         pc.at(402, row, rp, vec![("why", p("Patch.KeyInGroup")), ("row", t(id.replace(SEP, ", "))), ("where", t(there))]);
     }
-    pc.ctx.facts.touches.links.push(key);
+    let in_layer = |l: &str| format!("{}{SEP}{id}", group.replacen("/*/", &format!("/{l}/"), 1));
+    let links = &mut pc.ctx.facts.touches.links;
+    match &reach {
+        None => links.push(key),
+        Some(sets) => {
+            if layer == 0 {
+                links.extend(crate::LINK_LAYERS.iter().map(|l| in_layer(l)));
+            } else {
+                links.push(in_layer(crate::LINK_LAYERS[layer]));
+                for s in sets.iter().flatten().filter(|s| s.layers >> layer & 1 == 1) {
+                    links.push(in_layer(&format!("@{}#{}", s.galaxy, s.scenario)));
+                }
+            }
+            if sets.is_none() {
+                links.push(key);
+            }
+        }
+    }
 }
 
 fn one(pc: &mut P, root: &Value, target: &str) {

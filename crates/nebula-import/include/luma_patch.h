@@ -44,10 +44,13 @@ typedef struct LumaPatchInput {
     uint64_t table_size;
     const LumaTablePatch* patches; /* from the bottom of the mod list up: the last given wins */
     uint32_t patch_count;
-    /* A table of a link group: every other table of its group that the game has, each once (none for a table of no
-       group; read only when the table has a patch). The game links by the group's key across its layers, so a key a
-       patch adds must be new to the group: one the game has there leaves the patch out (LUMA_PATCH_FAILED, L402), one
-       a higher mod adds there leaves this row out (LUMA_PATCH_CONFLICT, the higher's row stays). */
+    /* A table of a link group: the other tables of its group the game meets its key among, each once (none for a
+       table of no group; read only when the table has a patch). For Placement, MapParts and ChildObj (l_id) every
+       other layer of the zone; for Start and GeneralPos (MarioNo; PosName and Obj_ID) Common and the layers some
+       scenario turns on together with this table's, by the galaxies' scenario tables after their own patches
+       (contract table-keys T-4). A key a patch adds must be new to those: one the game has there leaves the patch out
+       (LUMA_PATCH_FAILED, L402), one a higher mod adds there leaves this row out (LUMA_PATCH_CONFLICT, the higher's
+       row stays). */
     const LumaLinkTable* links;
     uint32_t link_count;
     const char* const* mods; /* every mod that is on, by id, from the bottom of the list up (for which is higher) */

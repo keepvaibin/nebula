@@ -172,6 +172,11 @@ pub trait Store {
     fn table(&self, path: &str) -> Option<Table>;
     /// Whether a file at a path the game does not have may be new (a kind the game finds by name).
     fn may_be_new(&self, path: &str) -> bool;
+    /// The names in a folder of the store (`lower`, a store path in lowercase), in lowercase: what the game lists to
+    /// find its galaxies (`/StageData`, ScenarioDataParser). None when the store cannot list it.
+    fn folder(&self, _lower: &str) -> Option<Vec<String>> {
+        None
+    }
 }
 
 /// What the validator knows of the game it checks against.
@@ -226,18 +231,104 @@ pub const LINK_LAYERS: [&str; 17] = [
     "layern", "layero", "layerp",
 ];
 const LINK_FOLDERS: [&str; 5] = ["placement", "mapparts", "childobj", "start", "generalpos"];
+/// The kinds whose key the game finds only among the layers one scenario turns on (`start`: MarioNo; `generalpos`:
+/// PosName and Obj_ID), not across the whole group as `l_id` (contract table-keys, T-4).
+const SCENARIO_FOLDERS: [&str; 2] = ["start", "generalpos"];
 
-/// A table's link group, in lowercase with the layer as `*` (`stagedata/astrogalaxy/jmp/placement/*/objinfo`): one
-/// zone's tables of one kind, whose key (`l_id`, `MarioNo`, `PosName`+`Obj_ID`) the game finds across every layer.
-/// None for a table in no group. `path` is a store path, or a disc path with the zone's archive (`<zone>/<zone>.arc/`).
-pub fn link_group(path: &str) -> Option<String> {
+/// A link group table's zone, folder, layer (0 common, 1 to 16 LayerA to LayerP) and file, in lowercase.
+fn link_parts(path: &str) -> Option<(String, String, usize, String)> {
     let lower = path.to_lowercase();
     let mut parts: Vec<&str> = lower.split('/').collect();
     if parts.len() == 7 && parts[2].strip_suffix(".arc") == Some(parts[1]) {
         parts.remove(2);
     }
-    let linked = parts.len() == 6 && parts[0] == "stagedata" && parts[2] == "jmp" && LINK_FOLDERS.contains(&parts[3]) && LINK_LAYERS.contains(&parts[4]);
-    linked.then(|| format!("{}/{}/jmp/{}/*/{}", parts[0], parts[1], parts[3], parts[5]))
+    if parts.len() != 6 || parts[0] != "stagedata" || parts[2] != "jmp" || !LINK_FOLDERS.contains(&parts[3]) {
+        return None;
+    }
+    let layer = LINK_LAYERS.iter().position(|l| *l == parts[4])?;
+    Some((parts[1].to_string(), parts[3].to_string(), layer, parts[5].to_string()))
+}
+
+/// A table's link group, in lowercase with the layer as `*` (`stagedata/astrogalaxy/jmp/placement/*/objinfo`): one
+/// zone's tables of one kind, whose key (`l_id`, `MarioNo`, `PosName`+`Obj_ID`) the game finds across its layers.
+/// None for a table in no group. `path` is a store path, or a disc path with the zone's archive (`<zone>/<zone>.arc/`).
+pub fn link_group(path: &str) -> Option<String> {
+    link_parts(path).map(|(zone, folder, _, file)| format!("stagedata/{zone}/jmp/{folder}/*/{file}"))
+}
+
+/// A link group table's layer: 0 for common, 1 to 16 for LayerA to LayerP.
+pub fn link_layer(path: &str) -> Option<usize> {
+    link_parts(path).map(|(_, _, layer, _)| layer)
+}
+
+/// Whether a link group's key is unique only among the layers a scenario turns on together (start, generalpos),
+/// rather than across the whole group (placement, mapparts, childobj).
+pub fn link_by_scenario(path: &str) -> bool {
+    link_parts(path).is_some_and(|(_, folder, _, _)| SCENARIO_FOLDERS.contains(&folder.as_str()))
+}
+
+/// The layers one scenario of a galaxy turns on in a zone: bit 0 common (always on), bit n LayerA + n - 1, as
+/// `ScenarioDataFunction::getCurrentScenarioLayers` makes them (the zone's column of the galaxy's scenario table, times
+/// 2, with common).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LayerSet {
+    /// The galaxy, in lowercase (`astrogalaxy`).
+    pub galaxy: String,
+    /// The row's `ScenarioNo`, as text.
+    pub scenario: String,
+    pub layers: u32,
+}
+
+/// A cell of a galaxy's scenario table that a mod's patch gives (`set` or `add`), read before the stage tables' patches
+/// (the game patches the scenario tables first).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScenarioCell {
+    /// The galaxy, in lowercase.
+    pub galaxy: String,
+    pub scenario: String,
+    /// The column as the patch names it (a zone's name, or its hash as `0x` and 8 hex digits).
+    pub column: String,
+    pub value: i64,
+}
+
+/// The galaxy whose scenario table a store path is (`stagedata/<galaxy>scenario/scenariodata.bcsv`), in lowercase.
+pub fn scenario_table_galaxy(store_path: &str) -> Option<String> {
+    let lower = store_path.to_lowercase();
+    let parts: Vec<&str> = lower.split('/').collect();
+    if parts.len() != 3 || parts[0] != "stagedata" || parts[2] != "scenariodata.bcsv" {
+        return None;
+    }
+    parts[1].strip_suffix("scenario").filter(|g| !g.is_empty()).map(str::to_string)
+}
+
+/// Every layer set the game can turn on in a zone (`zone` in the game's case: its column in a scenario table is named
+/// by it): one per scenario row of each galaxy the store lists whose table has the zone's column, with a mod's own
+/// `cells` over the game's. None when the store cannot list its galaxies or give a scenario table's cells.
+pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) -> Option<Vec<LayerSet>> {
+    let bits = |mask: i64| ((mask as u32 & 0xffff) << 1) | 1;
+    let mut out = Vec::new();
+    for name in store.folder("stagedata")? {
+        let Some(galaxy) = name.strip_suffix("scenario").filter(|g| !g.is_empty()) else { continue };
+        let Some(path) = store.path(&format!("stagedata/{name}/scenariodata.bcsv")) else { continue };
+        let table = store.table(&path)?;
+        let rows = table.cells.as_ref()?;
+        let number = table.columns.iter().position(|(c, _)| same_column(c, "ScenarioNo"))?;
+        let mut sets: Vec<(String, u32)> = Vec::new();
+        if let Some(column) = table.columns.iter().position(|(c, _)| same_column(c, zone)) {
+            for row in rows {
+                let (Some(no), Some(mask)) = (row.get(number), row.get(column)) else { continue };
+                sets.push((no.clone(), bits(mask.parse::<i64>().unwrap_or(0))));
+            }
+        }
+        for c in cells.iter().filter(|c| c.galaxy == galaxy && same_column(zone, &c.column)) {
+            match sets.iter_mut().find(|(no, _)| *no == c.scenario) {
+                Some(set) => set.1 = bits(c.value),
+                None => sets.push((c.scenario.clone(), bits(c.value))),
+            }
+        }
+        out.extend(sets.into_iter().map(|(scenario, layers)| LayerSet { galaxy: galaxy.to_string(), scenario, layers }));
+    }
+    Some(out)
 }
 
 /// The other tables of a table's link group, as store paths in lowercase (empty for a table in no group).
