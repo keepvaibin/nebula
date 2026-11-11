@@ -31,6 +31,8 @@ Texture2D<uint4> g_reservoirs_before : register(t13);
 Texture2D<float4> g_weights_before : register(t14);
 Texture2D<float4> g_half_guide_before : register(t15);
 Texture2D<float4> g_out_before : register(t16);  // the frame before's I out (full res): the screen's own
+Texture2D<float4> g_added_before : register(t17);    // the walk before's D out (the local lights' share): the screen's own
+Texture2D<float4> g_blended_before : register(t18);  // the walk before's blended guide (rt_screen_lights; FB b49)
 RT_FORMAT(rgba32ui) RWTexture2D<uint4> g_reservoirs : register(u0);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_weights : register(u1);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_half_guide : register(u2);
@@ -200,7 +202,11 @@ void main(uint3 id : SV_DispatchThreadID) {
                         o = seen;
                     }
                 }
-                const float3 bounce = g_shade.gains.z * rt_hit_radiance(h, options, o, seed) / max(g_shade.authored.rgb, 0.02f);
+                // The lamps on a hit the screen shows, as the screen has them (10.2 item 5, b49), else the grid's.
+                float3 d_seen;
+                const bool d_known = (g_pass.z & 1u) != 0u && rt_screen_lights(g_guide, g_added_before, g_blended_before, h.at, d_seen);
+                const float3 bounce = g_shade.gains.z * rt_hit_radiance_with(h, options, o, d_known, d_seen, seed) /
+                                      max(g_shade.authored.rgb, 0.02f);
                 if (h.glows && !h.listed) {
                     fresh.light = bounce;  // it shines of itself: its light as it is
                 } else {

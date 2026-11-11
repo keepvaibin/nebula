@@ -487,10 +487,10 @@ static const uint kRtShadeLightRay = 2u;    // the grid's light shadowed (High)
 static const uint kRtShadeSkyOnly = 8u;     // Low: a hit is kHitDark, nothing read
 static const uint kRtShadeLighting = 16u;   // a ray that lights something: a listed glow lights through the list, not by its hit
 
-// Last frame's indirect ratio where the hit is on the screen and the screen shows that very surface (more than one
-// bounce over time, 10.2 item 5): `guide` this frame's surface guide, `sky` last frame's I out.
-bool rt_screen_cache(Texture2D<float4> guide, Texture2D<float4> sky, float3 at, out float3 o) {
-    o = float3(1.0f, 1.0f, 1.0f);
+// Where the hit is on the screen and the screen shows that very surface (10.2 item 5): its place projects inside the
+// picture at the depth `guide` (this frame's surface guide) holds there, within 2 % + 2 units. `p` its pixel.
+bool rt_screen_pixel(Texture2D<float4> guide, float3 at, out int3 p) {
+    p = int3(0, 0, 0);
     const float away = -at.z;
     if (!(away > 1.0f)) {
         return false;
@@ -499,18 +499,45 @@ bool rt_screen_cache(Texture2D<float4> guide, Texture2D<float4> sky, float3 at, 
     if (!in_viewport(pixel)) {
         return false;
     }
-    const int3 p = int3(int2(pixel), 0);
+    p = int3(int2(pixel), 0);
     const float4 seen = guide.Load(p);
-    if (seen.a == 0.0f || abs(seen.r - away) > 0.02f * away + 2.0f) {
+    return seen.a != 0.0f && abs(seen.r - away) <= 0.02f * away + 2.0f;
+}
+
+// Last frame's indirect ratio where the hit is on the screen and the screen shows that very surface (more than one
+// bounce over time, 10.2 item 5): `guide` this frame's surface guide, `sky` last frame's I out.
+bool rt_screen_cache(Texture2D<float4> guide, Texture2D<float4> sky, float3 at, out float3 o) {
+    o = float3(1.0f, 1.0f, 1.0f);
+    int3 p;
+    if (!rt_screen_pixel(guide, at, p)) {
         return false;
     }
     o = sky.Load(p).rgb;
     return true;
 }
 
+// The local lights' share at a hit the screen shows (10.2 item 5, FB b49): the walk before's D out there (`added`,
+// RtImage::Added: every light, shadowed, through the lights' filters), unless the walk before's blended layer put its
+// own light at that pixel (`blended`, its guide: a surface there). False: the world light grid stands in.
+bool rt_screen_lights(Texture2D<float4> guide, Texture2D<float4> added, Texture2D<float4> blended, float3 at, out float3 d) {
+    d = float3(0.0f, 0.0f, 0.0f);
+    int3 p;
+    if (!rt_screen_pixel(guide, at, p) || blended.Load(p).a != 0.0f) {
+        return false;
+    }
+    d = added.Load(p).rgb;
+    return true;
+}
+
 // What a hit sends back toward the ray (10.2), in the picture's units (a share of white). `o`: the hit's own indirect
 // ratio (kHitSky, or what the screen knows of it).
+float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float3 d_seen, inout uint seed);
 float3 rt_hit_radiance(RtHit h, uint options, float3 o, inout uint seed) {
+    return rt_hit_radiance_with(h, options, o, false, float3(0.0f, 0.0f, 0.0f), seed);
+}
+// The same with the hit's local lights known from the screen (`d_known`: `d_seen`, rt_screen_lights), else from the
+// world light grid (10.3).
+float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float3 d_seen, inout uint seed) {
     if ((h.item_flags & kItemSky) != 0u) {
         return rt_dome(h);
     }
@@ -526,7 +553,7 @@ float3 rt_hit_radiance(RtHit h, uint options, float3 o, inout uint seed) {
     if (nl > 0.0f && (options & kRtShadeSunRay) != 0u) {
         v = rt_hit_sun(h, false, float2(0.0f, 0.0f));
     }
-    const float3 d = rt_grid_light(h.at, h.ns, h.slot, (options & kRtShadeLightRay) != 0u, seed);
+    const float3 d = d_known ? d_seen : rt_grid_light(h.at, h.ns, h.slot, (options & kRtShadeLightRay) != 0u, seed);
     float3 out_ = h.base * (rt_share(lit, nl, v, o) + d);
     // Mirror-like hits do not trace again: the stage's ambient stands for their reflection (10.2 item 6).
     if (h.klass == kRtMetal || h.klass == kRtGlass) {

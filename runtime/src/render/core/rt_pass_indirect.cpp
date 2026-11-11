@@ -72,6 +72,10 @@ void RenderCore::rt_pass_indirect() {
     binds.reads[5] = rt_before(RtImage::GiWeightsA);
     binds.reads[6] = rt_before(RtImage::IndirectGuideA);
     binds.reads[7] = rt_image(RtImage::Indirect);  // the frame before's, until rt_indirect_up writes this frame's
+    // The walk before's local lights at its pixels, and where its blended layer had them instead (rt_screen_lights;
+    // b49): this walk's filters write Added after this pass.
+    binds.reads[8] = rt_image(RtImage::Added);
+    binds.reads[9] = rt_before(RtImage::BlendGuideA);
     const std::uint32_t raw = rt_image(RtImage::IndirectRaw), step_image = rt_image(RtImage::IndirectStep);
     const std::uint32_t half_guide = rt_now(RtImage::IndirectGuideA), half_motion = rt_image(RtImage::IndirectMotion);
     binds.writes[0] = rt_now(RtImage::GiReservoirsA);

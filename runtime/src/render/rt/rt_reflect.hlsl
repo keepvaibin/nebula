@@ -23,6 +23,8 @@ Texture2D<float4> g_material : register(t12);
 Texture2D<float4> g_indirect : register(t13);  // this frame's I (rt_indirect_up.hlsl): the screen's own at hits
 Texture2D<float4> g_lights_spec : register(t14);  // the local lights' highlights (rt_lights.hlsl), already weighed
 Texture2D<float4> g_base : register(t15);
+Texture2D<float4> g_added_before : register(t16);    // the walk before's D out: the screen's own lamps at hits (FB b49)
+Texture2D<float4> g_blended_before : register(t17);  // the walk before's blended guide (rt_screen_lights)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_raw : register(u0);
 
 static const uint kRtWater = 9u;
@@ -96,7 +98,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             if ((g_pass.z & 1u) != 0u && rt_screen_cache(g_guide, g_indirect, h.at, known)) {
                 o = known;
             }
-            seen = rt_hit_radiance(h, kRtShadeSunRay | (high ? kRtShadeLightRay : 0u), o, seed);
+            // The lamps on a hit the screen shows, as the screen has them (10.2 item 5, b49; g_pass.z bit 1: the walk
+            // before's), else the grid's.
+            float3 d_seen;
+            const bool d_known = (g_pass.z & 2u) != 0u && rt_screen_lights(g_guide, g_added_before, g_blended_before, h.at, d_seen);
+            seen = rt_hit_radiance_with(h, kRtShadeSunRay | (high ? kRtShadeLightRay : 0u), o, d_known, d_seen, seed);
         }
     }
     // The sun itself on the reflected ray, where nothing hides it (12.2 item 4): far brighter than white, it blooms.
