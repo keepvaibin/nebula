@@ -118,8 +118,9 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
         }
         frame.dome[3] = 1.0f;
     }
-    // A surface met counts against the mean of such hits, only ever down: dark surroundings keep their darkening (b46).
-    frame.authored[3] = rt_hit_mean_ > 1.0f ? 1.0f / rt_hit_mean_ : 1.0f;
+    // A surface met counts as it is (b51: b46's gain against the running mean of such hits is held at 1; the mean
+    // is still measured, for the sheet).
+    frame.authored[3] = 1.0f;
     frame.look[3] = kSunGlint;
     frame.grid[3] = rt_light_frame_.turn;
 }

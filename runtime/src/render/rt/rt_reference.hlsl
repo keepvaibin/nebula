@@ -42,6 +42,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= width || id.y >= height) {
         return;
     }
+    if (all(id.xy < uint2(64u, 64u))) {
+        rt_shade_begin(g_pass.w);
+        rt_count_dome_directions(id.xy);  // the dome's mean, as the indirect pass counts it (FB b51)
+    }
     const int2 pixel = int2(id.xy);
     const int3 here = int3(pixel, 0);
     const float4 guide = g_guide.Load(here);
@@ -73,7 +77,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     uint seed = rt_seed(id.xy, g_more.y, 17u);
-    s_count_dome = ((id.x | id.y) & 7u) == 0u;
+    s_count_dome = false;  // the dome's mean: the same fixed directions as the indirect pass (b51)
     // What the pixel mirrors (R): the radiance its mirror ray sees, as the reflections pass's R raw (rt_reflect.hlsl
     // reflects: on High glass and water, metal and gloss); rt_reflect_out.hlsl composites the mean.
     const uint class_ = look & 255u;

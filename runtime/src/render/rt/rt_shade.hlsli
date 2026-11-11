@@ -352,6 +352,29 @@ void rt_count_dome(float3 dome) {
     InterlockedAdd(g_counters[50], c.b);
 }
 
+// The dome's mean as a property of the stage's sky (FB b51, C4): kDomeDirections fixed directions, cosine-weighted
+// about the player's up, traced from the eye against the sky alone; the indirect pass and the reference each count
+// the same set (threads 0 to 63 by 0 to 63), so both divide by the same number and open ground at the player reads 1.
+// A direction that meets no dome is not counted.
+static const uint kDomeDirections = 4096u;
+void rt_count_dome_directions(uint2 id) {
+    if (any(id >= uint2(64u, 64u)) || !(dot(g_up.xyz, g_up.xyz) > 0.25f)) {
+        return;
+    }
+    const uint k = id.y * 64u + id.x;
+    const float2 u = float2((float(k) + 0.5f) / float(kDomeDirections), frac(float(k) * 0.6180339887f));
+    const float3 dir = rt_cosine(normalize(g_up.xyz), u);
+    uint item, triangle_;
+    float2 where_;
+    float far_;
+    if (!rt_closest(float3(0.0f, 0.0f, 0.0f), dir, kDomeReach, kMaskSky, item, triangle_, where_, far_)) {
+        return;
+    }
+    RtHit h;
+    rt_hit_read(item, triangle_, where_, far_, float3(0.0f, 0.0f, 0.0f), dir, 0.05f, h);
+    rt_count_dome(rt_dome(h));
+}
+
 // A surface met (not shining of itself) as a ratio before the gain, kBounce * L / A, into the counters 46 and 47 for the
 // host's running mean of such hits (FB b46): a surface met counts against it, as the sky against the dome's mean. Held
 // to 16 so a 4K frame's sum stays inside 32 bits with the reference counting too.

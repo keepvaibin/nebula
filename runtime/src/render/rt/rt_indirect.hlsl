@@ -125,6 +125,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= half_width || id.y >= half_height || g_pass.x != 0u) {
         return;
     }
+    if (all(id.xy < uint2(64u, 64u))) {
+        rt_shade_begin(g_pass.w);
+        rt_count_dome_directions(id.xy);  // the dome's mean, the stage's, not the view's (FB b51)
+    }
     const uint turn = g_more.y & 3u;
     static const uint2 kVisit[4] = {uint2(0u, 0u), uint2(1u, 1u), uint2(1u, 0u), uint2(0u, 1u)};
     const int2 pixel = int2(min(id.xy * 2u + kVisit[turn], uint2(width, height) - 1u));
@@ -187,11 +191,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             rt_hit_read(item, triangle_, where_, far_, s.origin, dir, 0.05f, h);
             fresh.at = h.at;
             if (met == 1u || (h.item_flags & kItemSky) != 0u) {
-                const float3 dome = rt_dome(h);
-                if (((id.x | id.y) & 3u) == 0u) {
-                    rt_count_dome(dome);
-                }
-                fresh.light = rt_sky_ratio(dome);
+                fresh.light = rt_sky_ratio(rt_dome(h));  // the dome's mean: rt_count_dome_directions (b51)
             } else {
                 fresh.n = h.ng;
                 const uint options = kRtShadeSunRay | kRtShadeLighting | (mode == kModeHigh ? kRtShadeLightRay : 0u);
