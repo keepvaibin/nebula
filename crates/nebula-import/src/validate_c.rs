@@ -68,6 +68,9 @@ pub struct LumaValidateInput {
     pub option_count: u32,
     pub kept: *const u8,
     pub kept_size: u64,
+    /// The game's luma_types.json; null: kinds 1, 2 and 7 are not checked.
+    pub types: *const c_char,
+    pub types_size: u64,
 }
 
 #[repr(C)]
@@ -276,10 +279,15 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         let bytes = std::slice::from_raw_parts(input.names.cast::<u8>(), input.names_size as usize);
         String::from_utf8_lossy(bytes).into_owned()
     });
+    let types_bytes = (!input.types.is_null()).then(|| std::slice::from_raw_parts(input.types.cast::<u8>(), input.types_size as usize));
+    if types_bytes.is_some() && names_text.is_none() {
+        return Err("types given without names".to_string());
+    }
     let names = match &names_text {
         Some(t) => {
             let mut n = Names { api: input.luma_api, ..Names::default() };
             n.add_rows(t).map_err(|line| format!("names line {line}: not name, signature, kind, line"))?;
+            n.types = types_bytes.map(luma_validate::names::Types::from_json).transpose().map_err(|e| format!("types: {e}"))?;
             n.permissions = (!input.permissions.is_null()).then(|| list(input.permissions, input.permission_count).iter().filter_map(|&p| text(p)).collect());
             Some(n)
         }
@@ -299,11 +307,12 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     let mut perms: Vec<String> = names.as_ref().and_then(|n| n.permissions.clone()).unwrap_or_default();
     perms.sort();
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; permissions {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; permissions {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
         names_text.as_deref().map_or_else(|| "-".to_string(), |t| hex_sha1(t.as_bytes())),
+        types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         perms.join(","),
         if store.is_some() { store_key.as_str() } else { "-" },
     );

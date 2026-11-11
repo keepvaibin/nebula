@@ -118,6 +118,8 @@ struct Call {
     store: LumaGameStore,
     installed: Vec<LumaInstalledMod>,
     files: Vec<CString>,
+    /// The types file given; empty: none.
+    types: Vec<u8>,
 }
 
 impl Call {
@@ -132,6 +134,7 @@ impl Call {
             store: c_store(std::ptr::null_mut()),
             installed: Vec::new(),
             files: Vec::new(),
+            types: Vec::new(),
         });
         c.store.context = (&*c.table as *const CTable).cast_mut().cast();
         c
@@ -159,6 +162,8 @@ impl Call {
             option_count: 0,
             kept: kept.map_or(null(), |k| k.as_ptr()),
             kept_size: kept.map_or(0, |k| k.len() as u64),
+            types: if self.types.is_empty() { null() } else { self.types.as_ptr().cast() },
+            types_size: self.types.len() as u64,
         }
     }
 }
@@ -336,6 +341,24 @@ fn a_faulty_input_is_refused_with_its_reason() {
     i.installed = installed.as_ptr();
     i.installed_count = 1;
     refused(Some(&i), "installed[0] x.luma");
+    // A types file that does not read names where; one given without names is the caller's fault.
+    let mut typed = Call::new(&path, "windows-x64");
+    typed.types = br#"{"types": [{"kind": "struct", "name": "A", "size": 4, "fields": [], "reachable": []}], "globals": [], "left_out": [{"kind": "nerve", "name": "x", "reason": "r"}]}"#.to_vec();
+    refused(Some(&typed.input(None)), "types: left_out[0].kind");
+    typed.types = b"{".to_vec();
+    refused(Some(&typed.input(None)), "types: line 1");
+    let mut i = typed.input(None);
+    i.names = null();
+    refused(Some(&i), "types given without names");
+
+    // A types file is part of what identifies the game: a kept report made without it checks every rule again.
+    let mut typed = Call::new(&path, "windows-x64");
+    typed.types = br#"{"types": [], "globals": [], "left_out": []}"#.to_vec();
+    let with_types = c_call(Some(&typed.input(None)));
+    assert_eq!(with_types.state, 0, "{:?}", with_types.invalid);
+    let without = c_call(Some(&call.input(None)));
+    assert_eq!(c_call(Some(&typed.input(Some(&with_types.kept)))).state, 1);
+    assert_eq!(c_call(Some(&typed.input(Some(&without.kept)))).state, 0);
 
     // A kept report that does not read is not a fault: every rule runs.
     let got = c_call(Some(&call.input(Some(junk))));
@@ -356,11 +379,12 @@ fn the_layout_is_the_header_s() {
     assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (40, 8, 32));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
-    assert_eq!(size_of::<LumaValidateInput>(), 160);
+    assert_eq!(size_of::<LumaValidateInput>(), 176);
     assert_eq!(
         (offset_of!(LumaValidateInput, names_size), offset_of!(LumaValidateInput, store), offset_of!(LumaValidateInput, position), offset_of!(LumaValidateInput, kept_size)),
         (64, 96, 124, 152)
     );
+    assert_eq!(offset_of!(LumaValidateInput, types_size), 168);
     assert_eq!((size_of::<LumaFinding>(), offset_of!(LumaFinding, text)), (48, 40));
 }
 

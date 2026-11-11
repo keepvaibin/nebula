@@ -6,7 +6,7 @@ use crate::zip::EntryKind;
 use std::collections::BTreeMap;
 
 pub const MAX_LIBRARY: u64 = 1 << 30;
-const IMPORT_KINDS: u32 = 7; // LUMA_IMPORT_FUNCTION..LUMA_IMPORT_HOOK, LUMA_IMPORT_SERVICE, LUMA_IMPORT_MOD_FUNCTION
+const IMPORT_KINDS: u32 = 8; // LUMA_IMPORT_FUNCTION..LUMA_IMPORT_HOOK, LUMA_IMPORT_SERVICE, LUMA_IMPORT_MOD_FUNCTION, LUMA_IMPORT_GLOBAL
 const HOOK_KINDS: u32 = 4; // LUMA_BEFORE..LUMA_REPLACE
 const LUMA_OPTIONAL: u32 = 1;
 
@@ -290,16 +290,27 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
                 }
                 (if row.signature.is_some() { "Name.FunctionSig" } else { "Name.Function" }, matched.is_some())
             }
-            1 => match &n.fields {
-                Some(fields) => (
-                    if row.signature.is_some() { "Name.FieldSig" } else { "Name.Field" },
-                    fields.get(&row.name).is_some_and(|ty| row.signature.as_ref().map_or(true, |s| s == ty)),
-                ),
-                None => {
-                    ctx.not_checked(505, "Missing.Fields");
+            // A record's size (kind 2), its field (kind 1), a global (kind 7): against the types file, as the kernel
+            // binds them (LumaTypes.cpp). A name the generator left out is refused with its reason (TY2-1).
+            1 | 2 | 7 => {
+                let Some(types) = &n.types else {
+                    ctx.not_checked(505, "Missing.Types");
                     continue;
+                };
+                match typed(types, row.kind, &row.name, row.signature.as_deref()) {
+                    Typed::Bound => continue,
+                    Typed::Missing(kind) => (kind, false),
+                    Typed::LeftOut(kind, reason) => {
+                        if !optional {
+                            let mut args = vec![("kind", p(kind)), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default()))];
+                            args.extend(left_out_reason(reason));
+                            ctx.add(505, &name, None, None, args);
+                        }
+                        continue;
+                    }
                 }
-            },
+            }
+            // A NameObj class's number (kind 3, for is_a; types 4 and plan 1.3).
             _ => match &n.classes {
                 Some(classes) => ("Name.Class", classes.contains(&row.name)),
                 None => {
@@ -325,7 +336,336 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
     }
 }
 
+/// What the types file says of a kind 1, 2 or 7 import.
+#[derive(Debug, PartialEq)]
+enum Typed<'a> {
+    Bound,
+    /// No such name, or (with a signature) not of that type: the L505 kind phrase.
+    Missing(&'static str),
+    /// A name the generator left out: the kind phrase and its reason as written.
+    LeftOut(&'static str, &'a str),
+}
+
+/// Kind 1 "Type.field" (the record by its name or another spelling, then its own and reachable fields), kind 2 a
+/// record, kind 7 a global; a signature is the type text whole (Z-4: a bit-field's reads "u32 : 3", so one named with
+/// its plain type is refused). As LumaTypes.cpp's findType, findField and findGlobal answer.
+fn typed<'a>(types: &'a crate::names::Types, kind: u32, name: &str, signature: Option<&str>) -> Typed<'a> {
+    use crate::names::LeftOutKind;
+    let same = |ty: &str| signature.map_or(true, |s| s == ty);
+    let with_sig = |plain, sig| if signature.is_some() { sig } else { plain };
+    // A type that is no record: why, if the generator left it out as one of these or as a template (by its name
+    // before the arguments, `TVec3<s8>` as `TVec3`).
+    let type_left_out = |ty: &str| {
+        [LeftOutKind::Record, LeftOutKind::Alias, LeftOutKind::Enum]
+            .iter()
+            .find_map(|k| types.left_out(*k, ty))
+            .or_else(|| types.left_out(LeftOutKind::Template, ty.split_once('<').map_or(ty, |(t, _)| t)))
+    };
+    match kind {
+        1 => {
+            let Some((record, field)) = crate::names::split_field(name) else {
+                return Typed::Missing(with_sig("Name.Field", "Name.FieldSig"));
+            };
+            match types.record(record) {
+                Some((row, r)) => match r.fields.get(field) {
+                    Some(ty) if same(ty) => Typed::Bound,
+                    Some(_) => Typed::Missing("Name.FieldSig"),
+                    None => match types.left_out(LeftOutKind::Field, &format!("{row}.{field}")) {
+                        Some(reason) => Typed::LeftOut("Name.FieldUnbound", reason),
+                        None => Typed::Missing(with_sig("Name.Field", "Name.FieldSig")),
+                    },
+                },
+                None => match type_left_out(record) {
+                    Some(reason) => Typed::LeftOut("Name.FieldUnbound", reason),
+                    None => Typed::Missing(with_sig("Name.Field", "Name.FieldSig")),
+                },
+            }
+        }
+        2 => match types.record(name) {
+            Some(_) => Typed::Bound,
+            None => match type_left_out(name) {
+                Some(reason) => Typed::LeftOut("Name.TypeUnbound", reason),
+                None => Typed::Missing("Name.Type"),
+            },
+        },
+        _ => match (types.globals.get(name), types.left_out(LeftOutKind::Global, name)) {
+            (Some(ty), _) if same(ty) => Typed::Bound,
+            (None, Some(reason)) => Typed::LeftOut("Name.GlobalUnbound", reason),
+            _ => Typed::Missing(with_sig("Name.Global", "Name.GlobalSig")),
+        },
+    }
+}
+
+/// A left_out reason (the generator's fixed phrases, tools/lumacore/gen_types.py R_*) as the finding's `why` phrase,
+/// and `what` for the names in it. A phrase this list does not know is shown as the generator wrote it, never dropped
+/// (a test reads every reason of a real types file through this and fails on one).
+fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
+    let fixed = match reason {
+        "the kernel's own" => Some("LeftOut.KernelOwn"),
+        "internal linkage: no name a mod can bind" => Some("LeftOut.InternalLinkage"),
+        "thread-local: one per thread, no one address" => Some("LeftOut.ThreadLocal"),
+        "no name a mod can write" => Some("LeftOut.NoName"),
+        "no size (incomplete or dependent)" => Some("LeftOut.NoSize"),
+        "a type with no name a mod can write" => Some("LeftOut.TypeNoName"),
+        "a template not used with these arguments" => Some("LeftOut.TemplateUnused"),
+        "a bit-field wider than 32 bits" => Some("LeftOut.WideBitField"),
+        "declared, defined nowhere in the game" => Some("LeftOut.NotDefined"),
+        "a static member of a class template" => Some("LeftOut.TemplateMember"),
+        "a template instance only a .cpp names" => Some("LeftOut.InstanceInCpp"),
+        _ => None,
+    };
+    if let Some(id) = fixed {
+        return vec![("why", p(id))];
+    }
+    if let Some(names) = reason.strip_prefix("ambiguous: ") {
+        return vec![("why", p("LeftOut.Ambiguous")), ("what", t(names))];
+    }
+    if let Some(base) = reason.strip_prefix("through the virtual base ") {
+        return vec![("why", p("LeftOut.VirtualBase")), ("what", t(base))];
+    }
+    // A file-local typedef two .cpp files give to different types (A-TY7-1): "<record> (<file>), ...".
+    if let Some(types) = reason.strip_prefix("a name .cpp files give to different types: ") {
+        return vec![("why", p("LeftOut.AliasTwice")), ("what", t(types))];
+    }
+    vec![("why", t(reason))]
+}
+
 /// A service import's version, "major.minor": two whole numbers (loader D3-2).
 fn is_service_version(s: &str) -> bool {
     s.split_once('.').is_some_and(|(a, b)| [a, b].iter().all(|x| !x.is_empty() && x.len() <= 5 && x.bytes().all(|c| c.is_ascii_digit())))
+}
+
+#[cfg(test)]
+mod types_tests {
+    use super::{left_out_reason, typed, Typed};
+    use crate::names::{LeftOutKind, Types, TypesError};
+    use crate::Arg;
+
+    /// Rows in the form the generator writes (tools/lumacore/gen_types.py), one of each case the readers take.
+    const SAMPLE: &str = r#"{
+      "types": [
+        {"kind": "struct", "name": "TVec3<f32>", "size": 12, "fields": [{"name": "x", "type": "f32"}], "reachable": []},
+        {"kind": "class", "name": "NameObj", "size": 12, "fields": [{"name": "mName", "type": "const char *"}], "reachable": []},
+        {"kind": "class", "name": "LiveActor", "size": 140, "fields": [{"name": "mFlags", "type": "u32 : 3"}],
+         "reachable": [{"name": "mName", "type": "const char *"}]},
+        {"kind": "union", "name": "Both", "size": 4, "fields": [], "reachable": []},
+        {"kind": "alias", "name": "TVec3f", "of": "TVec3<f32>", "record": "TVec3<f32>"},
+        {"kind": "spelling", "name": "JGeometry::TVec3<float>", "of": "TVec3<f32>", "record": "TVec3<f32>"},
+        {"kind": "alias", "name": "s8", "of": "signed char"},
+        {"kind": "alias", "name": "Both", "of": "Both", "record": "Both"},
+        {"kind": "enum", "name": "Mode", "underlying": "u32"}
+      ],
+      "globals": [
+        {"name": "MR::sCount", "type": "s32", "defined": true},
+        {"name": "MR::sDeclared", "type": "s32", "defined": false}
+      ],
+      "left_out": [
+        {"kind": "record", "name": "LumaMod", "file": "native/include/luma.h", "line": 1, "reason": "the kernel's own"},
+        {"kind": "alias", "name": "LumaHook", "file": "native/include/luma_hook.h", "line": 1, "reason": "the kernel's own"},
+        {"kind": "template", "name": "TBox", "file": "a.hpp", "line": 2, "reason": "a template not used with these arguments"},
+        {"kind": "record", "name": "Forward", "file": "a.hpp", "line": 3, "reason": "no size (incomplete or dependent)"},
+        {"kind": "field", "name": "LiveActor.mPos", "file": "a.hpp", "line": 4, "reason": "ambiguous: A::mPos, B::mPos"},
+        {"kind": "field", "name": "LiveActor.mBase", "file": "a.hpp", "line": 5, "reason": "through the virtual base V"},
+        {"kind": "field", "name": "LiveActor.mWide", "file": "a.hpp", "line": 6, "reason": "a bit-field wider than 32 bits"},
+        {"kind": "field", "name": "LiveActor.mWide", "file": "a.hpp", "line": 6, "reason": "a second reason, not kept"},
+        {"kind": "global", "name": "MR::sDeclared", "file": "a.hpp", "line": 7, "reason": "declared, defined nowhere in the game"},
+        {"kind": "global", "name": "sLocal", "file": "a.cpp", "line": 8, "reason": "internal linkage: no name a mod can bind"},
+        {"kind": "enum", "name": "", "file": "a.hpp", "line": 9, "reason": "no name a mod can write"}
+      ]
+    }"#;
+
+    fn sample() -> Types {
+        Types::from_json(SAMPLE.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn a_types_file_reads_as_draft_2_gives_it() {
+        let types = sample();
+        assert_eq!(types.records.len(), 4);
+        assert_eq!(types.record("TVec3f").map(|(n, r)| (n, r.size)), Some(("TVec3<f32>", 12)));
+        assert_eq!(types.record("JGeometry::TVec3<float>").map(|(n, _)| n), Some("TVec3<f32>"));
+        // An alias of no record is no record; one spelled as its record is the record.
+        assert!(types.record("s8").is_none());
+        assert_eq!(types.aliases.get("Both"), None);
+        // Reachable and own fields together; a declared global with no definition is not bound.
+        assert_eq!(types.records["LiveActor"].fields.len(), 2);
+        assert_eq!(types.globals.keys().collect::<Vec<_>>(), vec!["MR::sCount"]);
+        assert_eq!(types.left_out(LeftOutKind::Field, "LiveActor.mWide"), Some("a bit-field wider than 32 bits"));
+        assert_eq!(types.left_out(LeftOutKind::Enum, ""), Some("no name a mod can write"));
+        // The first reason of a name is kept, a second other one recorded (A-TY7-3).
+        assert_eq!(types.left_out_again, vec![(LeftOutKind::Field, "LiveActor.mWide".to_string(), "a second reason, not kept".to_string())]);
+    }
+
+    #[test]
+    fn a_types_file_not_in_the_form_is_refused_naming_the_row() {
+        let refused = |json: &str| Types::from_json(json.as_bytes()).unwrap_err().to_string();
+        assert!(refused("{").starts_with("line 1 column ") && refused("{").contains(": not JSON ("), "{}", refused("{"));
+        assert_eq!(refused(r#"{"globals": [], "left_out": []}"#), "types: missing, or not a list");
+        assert_eq!(
+            refused(r#"{"types": [{"kind": "struct", "name": "A", "size": -1, "fields": [], "reachable": []}], "globals": [], "left_out": []}"#),
+            "types[0].size: missing, or not a size"
+        );
+        let two = r#"{"types": [{"kind": "struct", "name": "A", "size": 1, "fields": [], "reachable": []},
+                                {"kind": "class", "name": "A", "size": 1, "fields": [], "reachable": []}], "globals": [], "left_out": []}"#;
+        assert_eq!(refused(two), "types[1]: a second record named \"A\"");
+        let alias = r#"{"types": [{"kind": "struct", "name": "A", "size": 1, "fields": [], "reachable": []},
+                                  {"kind": "struct", "name": "B", "size": 1, "fields": [], "reachable": []},
+                                  {"kind": "alias", "name": "C", "record": "A"}, {"kind": "alias", "name": "C", "record": "B"}],
+                        "globals": [], "left_out": []}"#;
+        assert_eq!(refused(alias), "types[3]: \"C\" names both \"A\" and \"B\"");
+        assert_eq!(
+            refused(r#"{"types": [{"kind": "nerve", "name": "A"}], "globals": [], "left_out": []}"#),
+            "types[0].kind: \"nerve\" is no kind of draft 2"
+        );
+        assert_eq!(
+            refused(r#"{"types": [], "globals": [{"name": "g", "type": "s32"}], "left_out": []}"#),
+            "globals[0].defined: missing, or not true or false"
+        );
+        assert!(matches!(Types::from_json(b"[]"), Err(TypesError::Row { .. })));
+    }
+
+    #[test]
+    fn kinds_1_2_and_7_bind_as_the_kernel_binds() {
+        let types = sample();
+        let typed = |kind, name, sig| typed(&types, kind, name, sig);
+        // Kind 2: a record by any spelling; a type left out by its reason, a template by its name before `<`.
+        assert_eq!(typed(2, "TVec3f", None), Typed::Bound);
+        assert_eq!(typed(2, "JGeometry::TVec3<float>", None), Typed::Bound);
+        assert_eq!(typed(2, "Mode", None), Typed::Missing("Name.Type"));
+        assert_eq!(typed(2, "LumaMod", None), Typed::LeftOut("Name.TypeUnbound", "the kernel's own"));
+        assert_eq!(typed(2, "LumaHook", None), Typed::LeftOut("Name.TypeUnbound", "the kernel's own"));
+        assert_eq!(typed(2, "TBox<s8>", None), Typed::LeftOut("Name.TypeUnbound", "a template not used with these arguments"));
+        assert_eq!(typed(2, "Forward", None), Typed::LeftOut("Name.TypeUnbound", "no size (incomplete or dependent)"));
+        // Kind 1: own and reachable fields, through an alias; a bit-field's type is its whole text.
+        assert_eq!(typed(1, "TVec3f.x", Some("f32")), Typed::Bound);
+        assert_eq!(typed(1, "LiveActor.mName", None), Typed::Bound);
+        assert_eq!(typed(1, "LiveActor.mFlags", Some("u32 : 3")), Typed::Bound);
+        assert_eq!(typed(1, "LiveActor.mFlags", Some("u32")), Typed::Missing("Name.FieldSig"));
+        assert_eq!(typed(1, "LiveActor.mPos", None), Typed::LeftOut("Name.FieldUnbound", "ambiguous: A::mPos, B::mPos"));
+        assert_eq!(typed(1, "LiveActor.mWide", None), Typed::LeftOut("Name.FieldUnbound", "a bit-field wider than 32 bits"));
+        assert_eq!(typed(1, "LumaMod.version", None), Typed::LeftOut("Name.FieldUnbound", "the kernel's own"));
+        assert_eq!(typed(1, "LiveActor.mNone", None), Typed::Missing("Name.Field"));
+        assert_eq!(typed(1, "LiveActor.mNone", Some("u32")), Typed::Missing("Name.FieldSig"));
+        assert_eq!(typed(1, "LiveActor", None), Typed::Missing("Name.Field"));
+        assert_eq!(typed(1, "TVec3<f32.x>", None), Typed::Missing("Name.Field"));
+        // Kind 7: defined globals only, the type whole.
+        assert_eq!(typed(7, "MR::sCount", Some("s32")), Typed::Bound);
+        assert_eq!(typed(7, "MR::sCount", Some("u32")), Typed::Missing("Name.GlobalSig"));
+        assert_eq!(typed(7, "MR::sDeclared", None), Typed::LeftOut("Name.GlobalUnbound", "declared, defined nowhere in the game"));
+        assert_eq!(typed(7, "sLocal", None), Typed::LeftOut("Name.GlobalUnbound", "internal linkage: no name a mod can bind"));
+        assert_eq!(typed(7, "MR::sNone", None), Typed::Missing("Name.Global"));
+    }
+
+    fn as_given(args: &[(&'static str, Arg)]) -> Vec<(&'static str, String)> {
+        args.iter()
+            .map(|(n, a)| (*n, match a {
+                Arg::Text(t) => format!("T:{t}"),
+                Arg::Phrase(p) => format!("P:{p}"),
+            }))
+            .collect()
+    }
+
+    /// Every reason the generator writes (gen_types.py's R_*) has its row, and L505 says it whole in all 14 languages.
+    const REASONS: [&str; 14] = [
+        "the kernel's own",
+        "internal linkage: no name a mod can bind",
+        "thread-local: one per thread, no one address",
+        "no name a mod can write",
+        "no size (incomplete or dependent)",
+        "a type with no name a mod can write",
+        "a template not used with these arguments",
+        "a bit-field wider than 32 bits",
+        "declared, defined nowhere in the game",
+        "a static member of a class template",
+        "a template instance only a .cpp names",
+        "ambiguous: A::mPos, B::mPos",
+        "through the virtual base V",
+        "a name .cpp files give to different types: TailRoot (a.cpp), TailNode (b.cpp)",
+    ];
+
+    fn said(kind: &'static str, reason: &str, language: &str) -> String {
+        let mut args = vec![("kind", Arg::Phrase(kind)), ("found", Arg::Text("LiveActor.mPos".into())), ("sig", Arg::Text(String::new()))];
+        args.extend(left_out_reason(reason));
+        let given = as_given(&args);
+        let given: Vec<(&str, &str)> = given.iter().map(|(n, v)| (*n, v.as_str())).collect();
+        crate::message_of(505, &[&[("mod", "m"), ("file", "code/windows-x64/mod.dll")][..], &given].concat(), language)
+    }
+
+    #[test]
+    fn every_left_out_reason_is_said_in_every_language() {
+        for reason in REASONS {
+            let args = left_out_reason(reason);
+            assert!(matches!(args[0], ("why", Arg::Phrase(_))), "{reason}: no row");
+            for kind in ["Name.TypeUnbound", "Name.FieldUnbound", "Name.GlobalUnbound"] {
+                for language in crate::LANGUAGES {
+                    let text = said(kind, reason, language);
+                    assert!(!text.contains('{') && !text.contains('}'), "{reason} {kind} {language}: {text}");
+                }
+            }
+        }
+        let en = said("Name.FieldUnbound", "ambiguous: A::mPos, B::mPos", "UsEnglish");
+        assert!(en.contains("\"LiveActor.mPos\"") && en.contains("(A::mPos, B::mPos each have it)"), "{en}");
+        // A phrase no row knows is shown as written, never dropped.
+        assert_eq!(as_given(&left_out_reason("a new reason")), vec![("why", "T:a new reason".to_string())]);
+    }
+
+    /// The generator's own reason list (`LUMA_GEN_TYPES=<tools/lumacore/gen_types.py> cargo test -- --ignored`):
+    /// every `R_* = "..."` phrase has a row, a prefix (ending in a space) with names after it as `what`. A reason
+    /// added to the generator without a row here fails this test before any types file carries it.
+    #[test]
+    #[ignore]
+    fn every_reason_the_generator_has_has_a_row() {
+        let path = std::env::var("LUMA_GEN_TYPES").expect("LUMA_GEN_TYPES names tools/lumacore/gen_types.py");
+        let source = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+        let mut reasons = Vec::new();
+        for line in source.lines() {
+            let Some((name, value)) = line.split_once('=') else { continue };
+            let name = name.trim();
+            if !name.starts_with("R_") || !name.bytes().all(|c| c.is_ascii_uppercase() || c == b'_') {
+                continue;
+            }
+            let value = value.trim();
+            let text = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or_else(|| panic!("{path}: {name} is not one plain string: {value}"));
+            assert!(!text.contains('\\') && !text.contains('"'), "{path}: {name}: {text}");
+            reasons.push((name.to_string(), text.to_string()));
+        }
+        assert!(reasons.len() >= 14, "{path}: only {} R_ constants read: {reasons:?}", reasons.len());
+        for (name, text) in &reasons {
+            let (given, names) = if text.ends_with(' ') { (format!("{text}A::x (a.cpp), B::x (b.cpp)"), true) } else { (text.clone(), false) };
+            let args = as_given(&left_out_reason(&given));
+            assert!(args[0].0 == "why" && args[0].1.starts_with("P:LeftOut."), "{name} = {text:?} has no row: {args:?}");
+            assert_eq!(args.len() == 2 && args[1] == ("what", "T:A::x (a.cpp), B::x (b.cpp)".to_string()), names, "{name}: {args:?}");
+        }
+        eprintln!("{path}: {} reasons, each with a row", reasons.len());
+    }
+
+    /// The real types file (`LUMA_TYPES=<path> cargo test -- --ignored`): it reads, and every reason in it has a row.
+    #[test]
+    #[ignore]
+    fn the_real_types_file_reads_and_every_reason_has_a_row() {
+        let path = std::env::var("LUMA_TYPES").expect("LUMA_TYPES names a luma_types.json");
+        let types = Types::from_json(&std::fs::read(&path).unwrap()).unwrap_or_else(|e| panic!("{path}: {e}"));
+        // Each record's own and reachable fields bind as kind 1 by the record's name.
+        for (name, record) in &types.records {
+            for (field, ty) in &record.fields {
+                let full = format!("{name}.{field}");
+                if crate::names::split_field(&full) == Some((name.as_str(), field.as_str())) {
+                    assert_eq!(typed(&types, 1, &full, Some(ty)), Typed::Bound, "{full}");
+                }
+            }
+            assert_eq!(typed(&types, 2, name, None), Typed::Bound, "{name}");
+        }
+        for (name, ty) in &types.globals {
+            assert_eq!(typed(&types, 7, name, Some(ty)), Typed::Bound, "{name}");
+        }
+        eprintln!("{path}: {} records, {} aliases, {} globals, {} left out", types.records.len(), types.aliases.len(), types.globals.len(), types.left_out.len());
+        // A name left out twice with two reasons keeps the first, as the kernel does (A-TY7-3); each is shown.
+        for (kind, name, reason) in &types.left_out_again {
+            eprintln!("left out again, not kept: {kind:?} {name}: {reason} (kept: {})", types.left_out(*kind, name).unwrap_or_default());
+        }
+        let mut unknown: Vec<&str> = types.left_out.values().map(String::as_str).filter(|r| !matches!(left_out_reason(r)[0], ("why", Arg::Phrase(_)))).collect();
+        unknown.sort();
+        unknown.dedup();
+        assert!(unknown.is_empty(), "reasons with no row: {unknown:?}");
+    }
 }

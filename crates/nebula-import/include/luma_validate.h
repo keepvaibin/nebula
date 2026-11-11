@@ -76,6 +76,8 @@ typedef struct LumaValidateInput {
     uint32_t option_count;
     const uint8_t* kept;    /* this mod's kept report; null at import */
     uint64_t kept_size;
+    const char* types;      /* the game's luma_types.json (types contract); null: kinds 1, 2 and 7 are not checked */
+    uint64_t types_size;
 } LumaValidateInput;
 
 typedef struct LumaFinding {
