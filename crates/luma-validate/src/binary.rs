@@ -42,6 +42,10 @@ pub struct Library<'d> {
     /// PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or DT_PREINIT_ARRAY, a Mach-O init section or
     /// LC_ROUTINES_64. Each named as the format names it.
     pub runs_at_load: Vec<String>,
+    /// What the system would run when it closes the library, after LumaCore has freed the mod's memory (F's audit of
+    /// R3-A, A-1): ELF DT_FINI or DT_FINI_ARRAY, a Mach-O term section. A PE's entry point and TLS callbacks run at
+    /// both and are in `runs_at_load`.
+    pub runs_at_close: Vec<String>,
     data: &'d [u8],
     /// Address ranges to file offsets: (address, size in file, file offset).
     maps: Vec<(u64, u64, u64)>,
@@ -155,7 +159,7 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     };
     let table = opt + opt_size;
     let mut maps = Vec::new();
-    for s in 0..sections.min(96) {
+    for s in 0..sections {
         let h = table + s * 40;
         let vsize = u32_at(d, h + 8)? as u64;
         let va = u32_at(d, h + 12)? as u64;
@@ -171,6 +175,7 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
         imports: Vec::new(),
         needed: Vec::new(),
         runs_at_load: Vec::new(),
+        runs_at_close: Vec::new(),
         data: d,
         maps,
         fixups: HashMap::new(),
@@ -181,8 +186,19 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     if u32_at(d, opt + 16)? != 0 {
         lib.runs_at_load.push("AddressOfEntryPoint".to_string());
     }
-    if dir(9)?.0 != 0 {
-        lib.runs_at_load.push("TLS callbacks (IMAGE_DIRECTORY_ENTRY_TLS)".to_string());
+    // TLS (A-3): the data alone runs nothing; the callbacks run at load and close. IMAGE_TLS_DIRECTORY holds
+    // AddressOfCallBacks, an address (ImageBase added) at +24 (PE32+) or +12 (PE32), of an array that ends with a null.
+    let (tls, _) = dir(9)?;
+    if tls != 0 {
+        let width = if is_64 { 8 } else { 4 };
+        let word = |at: usize| if is_64 { u64_at(d, at) } else { u32_at(d, at).map(u64::from) };
+        let callbacks = word(lib.offset_of(tls as u64, 3 * width + width)? + 3 * width as usize)?;
+        if callbacks != 0 {
+            let first = word(lib.offset_of(callbacks.checked_sub(base)?, width)?)?;
+            if first != 0 {
+                lib.runs_at_load.push("TLS callbacks (IMAGE_TLS_DIRECTORY.AddressOfCallBacks)".to_string());
+            }
+        }
     }
     let off = |lib: &Library, rva: u32, len: u64| lib.offset_of(rva as u64, len);
     // Exports.
@@ -190,7 +206,7 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     if export_rva != 0 && export_size != 0 {
         let e = off(&lib, export_rva, 40)?;
         let functions = u32_at(d, e + 28)?;
-        let name_count = (u32_at(d, e + 24)? as usize).min(1 << 20);
+        let name_count = u32_at(d, e + 24)? as usize;
         let names = u32_at(d, e + 32)?;
         let ordinals = u32_at(d, e + 36)?;
         for i in 0..name_count {
@@ -256,7 +272,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
     let sh_count = u16_at(d, 60)? as usize;
     let mut maps = Vec::new();
     let mut dynamic = None;
-    for i in 0..ph_count.min(256) {
+    for i in 0..ph_count {
         let h = ph_at.checked_add(i.checked_mul(ph_size)?)?;
         let kind = u32_at(d, h)?;
         let offset = u64_at(d, h + 8)?;
@@ -276,6 +292,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
         imports: Vec::new(),
         needed: Vec::new(),
         runs_at_load: Vec::new(),
+        runs_at_close: Vec::new(),
         data: d,
         maps,
         fixups: HashMap::new(),
@@ -286,7 +303,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
     let Some((dyn_at, dyn_size)) = dynamic else { return Some(lib) };
     let mut tags: HashMap<u64, u64> = HashMap::new();
     let mut needed_offsets = Vec::new();
-    for i in 0..(dyn_size / 16).min(4096) {
+    for i in 0..dyn_size / 16 {
         let tag = u64_at(d, dyn_at + i * 16)?;
         let value = u64_at(d, dyn_at + i * 16 + 8)?;
         if tag == 0 {
@@ -306,6 +323,12 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
             lib.runs_at_load.push(name.to_string());
         }
     }
+    if tags.contains_key(&13) {
+        lib.runs_at_close.push("DT_FINI".to_string());
+    }
+    if tags.contains_key(&26) && tags.get(&28).copied().unwrap_or(1) != 0 {
+        lib.runs_at_close.push("DT_FINI_ARRAY".to_string());
+    }
     let strtab = lib.offset_of(*tags.get(&5)?, 1)?;
     let strsz = *tags.get(&10).unwrap_or(&0) as usize;
     let string = |o: u64| -> Option<String> {
@@ -321,7 +344,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
     // The dynamic symbols: the count from the section headers (.dynsym), else from DT_HASH.
     let symtab = tags.get(&6).copied();
     let mut count = 0usize;
-    for i in 0..sh_count.min(4096) {
+    for i in 0..sh_count {
         let h = sh_at.checked_add(i.checked_mul(sh_size)?)?;
         if u32_at(d, h + 4)? == 11 {
             let size = u64_at(d, h + 32)? as usize;
@@ -337,7 +360,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
     let mut symbols: Vec<(String, u64, bool)> = Vec::new();
     if let Some(symtab) = symtab {
         let base = lib.offset_of(symtab, 24)?;
-        for i in 0..count.min(1 << 20) {
+        for i in 0..count {
             let s = base.checked_add(i * 24)?;
             let name = string(u32_at(d, s)? as u64)?;
             let info = *d.get(s + 4)?;
@@ -362,7 +385,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
     for (at_tag, size_tag) in [(7u64, 8u64), (23, 2)] {
         let (Some(&at), Some(&size)) = (tags.get(&at_tag), tags.get(&size_tag)) else { continue };
         let Some(start) = lib.offset_of(at, size) else { continue };
-        for i in 0..(size as usize / 24).min(1 << 22) {
+        for i in 0..size as usize / 24 {
             let r = start + i * 24;
             let offset = u64_at(d, r)?;
             let info = u64_at(d, r + 8)?;
@@ -380,7 +403,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
     if let (Some(&at), Some(&size)) = (tags.get(&36), tags.get(&35)) {
         if let Some(start) = lib.offset_of(at, size) {
             let mut next = 0u64;
-            for i in 0..(size as usize / 8).min(1 << 22) {
+            for i in 0..size as usize / 8 {
                 let entry = u64_at(d, start + i * 8)?;
                 if entry & 1 == 0 {
                     // An address: the word there is relocated by the base (0 here), so its value stays.
@@ -425,6 +448,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
         imports: Vec::new(),
         needed: Vec::new(),
         runs_at_load: Vec::new(),
+        runs_at_close: Vec::new(),
         data: d,
         maps: Vec::new(),
         fixups: HashMap::new(),
@@ -435,7 +459,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
     let mut at = 32usize;
     let mut symtab = None;
     let mut chained_at = None;
-    for _ in 0..ncmds.min(4096) {
+    for _ in 0..ncmds {
         let cmd = u32_at(d, at)?;
         let size = u32_at(d, at + 4)? as usize;
         if size < 8 {
@@ -452,14 +476,23 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
                     lib.base = vmaddr;
                 }
                 lib.maps.push((vmaddr, filesize, fileoff));
+                // The sections are inside the command (A-2): more than its size holds is not a readable library.
                 let nsects = u32_at(d, at + 64)? as usize;
-                for s in 0..nsects.min(255) {
-                    let h = at.checked_add(72 + s * 80)?;
+                if nsects.checked_mul(80)?.checked_add(72)? > size {
+                    return None;
+                }
+                for s in 0..nsects {
+                    let h = at + 72 + s * 80;
                     let size = u64_at(d, h + 40)?;
                     let kind = u32_at(d, h + 64)? & 0xff;
-                    if size != 0 && (kind == 0x9 || kind == 0x16) {
+                    let list = match kind {
+                        0x9 | 0x16 => &mut lib.runs_at_load,
+                        0xa => &mut lib.runs_at_close,
+                        _ => continue,
+                    };
+                    if size != 0 {
                         let sect = String::from_utf8_lossy(d.get(h..h + 16)?).trim_end_matches('\0').to_string();
-                        lib.runs_at_load.push(format!("{name},{sect}"));
+                        list.push(format!("{name},{sect}"));
                     }
                 }
             }
@@ -484,7 +517,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
         // an arm64 or x86-64 library.
         let starts = off + u32_at(d, off + 4)? as usize;
         let segs = u32_at(d, starts)? as usize;
-        for s in 0..segs.min(64) {
+        for s in 0..segs {
             let seg_off = u32_at(d, starts + 4 + s * 4)? as usize;
             if seg_off != 0 {
                 lib.chained = Some(u16_at(d, starts + seg_off + 6)?);
@@ -493,7 +526,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
         }
     }
     if let Some((symoff, nsyms, stroff)) = symtab {
-        for i in 0..nsyms.min(1 << 20) {
+        for i in 0..nsyms {
             let s = symoff.checked_add(i * 16)?;
             let strx = u32_at(d, s)? as usize;
             let n_type = *d.get(s + 4)?;

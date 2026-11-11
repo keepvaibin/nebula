@@ -193,6 +193,56 @@ fn a_library_the_system_runs_code_from_at_load_is_refused() {
 }
 
 #[test]
+fn a_library_the_system_runs_code_from_when_it_closes_it_is_refused() {
+    // F's audit of R3-A, A-1: the kernel closes the library after `finish`, when the mod's memory is freed.
+    for (path, platform, what) in [
+        ("elf-x64/runs_at_close.so", "linux-x64", "DT_FINI_ARRAY"),
+        ("elf-x64/fini.so", "linux-x64", "DT_FINI"),
+        ("macho-arm64/runs_at_close.dylib", "macos-arm64", "__mod_term_func"),
+    ] {
+        let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
+        assert_eq!(codes(&r), vec![509], "{path}: {:?}", r.findings);
+        let text = english(&r, 509);
+        assert!(text.contains(what) && text.contains("when it closes it") && text.contains("luma.h"), "{path}: {text}");
+    }
+}
+
+#[test]
+fn tls_data_alone_loads_and_a_tls_callback_is_refused() {
+    // A-3: the directory alone runs nothing; its callbacks run at load and close.
+    let w = "windows-x64";
+    let r = check(&code_mod(w, &lib("pe-x64/tls_data.dll"), &[], false), w, true);
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    let r = check(&code_mod(w, &lib("pe-x64/tls_callback.dll"), &[], false), w, true);
+    assert_eq!(codes(&r), vec![509], "{:?}", r.findings);
+    let text = english(&r, 509);
+    assert!(text.contains("TLS callbacks") && text.contains("when it loads it"), "{text}");
+}
+
+#[test]
+fn a_mach_o_segment_with_more_sections_than_it_holds_is_not_read_in_part() {
+    // A-2: a segment command whose sections run past its size is not a readable library (no partial read).
+    let mut d = lib("macho-arm64/good.dylib");
+    let u32_at = |d: &[u8], at: usize| u32::from_le_bytes(d[at..at + 4].try_into().unwrap());
+    let mut at = 32;
+    let mut done = false;
+    for _ in 0..u32_at(&d, 16) {
+        let (cmd, size) = (u32_at(&d, at), u32_at(&d, at + 4) as usize);
+        if cmd == 0x19 && u32_at(&d, at + 64) > 0 {
+            let more = ((size - 72) / 80 + 1) as u32;
+            d[at + 64..at + 68].copy_from_slice(&more.to_le_bytes());
+            done = true;
+            break;
+        }
+        at += size;
+    }
+    assert!(done);
+    let m = "macos-arm64";
+    let r = check(&code_mod(m, &d, &[], false), m, true);
+    assert_eq!(codes(&r), vec![502], "{:?}", r.findings);
+}
+
+#[test]
 fn without_the_game_s_names_the_name_rules_say_they_were_not_checked() {
     let report = check(&code_mod("windows-x64", &lib("pe-x64/good.dll"), &[], false), "windows-x64", false);
     assert!(report.findings.is_empty(), "{:?}", report.findings);

@@ -31,6 +31,9 @@ done
 "$cc" --target=aarch64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -DGOOD -o pe-arm64/good.dll lib.c
 # Code the system runs at load (an entry point), refused (L509 Lib.RunsAtLoad); likewise for ELF and Mach-O below.
 "$cc" --target=x86_64-pc-windows-msvc -shared $common -fuse-ld=lld -Wl,/ENTRY:dll_entry -Wl,/Brepro -Wl,/NOIMPLIB -DGOOD -DRUNS_AT_LOAD -o pe-x64/runs_at_load.dll lib.c
+# A TLS directory: data alone loads; a callback runs at load and close and is refused (A-3).
+"$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_DATA -o pe-x64/tls_data.dll lib.c
+"$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_CALLBACK -o pe-x64/tls_callback.dll lib.c
 
 # ELF: x64 with RELA relocations, x64 with RELR (packed relative), arm64; an extra library pair on x64.
 elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
@@ -42,6 +45,9 @@ elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-z,pack-relative-relocs -DGOOD -o elf-x64-relr/good.so lib.c
 "$cc" --target=aarch64-unknown-linux-gnu $common $elf -DGOOD -o elf-arm64/good.so lib.c
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_LOAD -o elf-x64/runs_at_load.so lib.c
+# Code the system runs when it closes the library (A-1): DT_FINI_ARRAY, DT_FINI; Mach-O __mod_term_func below.
+"$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_CLOSE -o elf-x64/runs_at_close.so lib.c
+"$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-fini,fini_function -DGOOD -DFINI_FUNCTION -o elf-x64/fini.so lib.c
 
 # Mach-O: arm64 with the classic rebase opcodes, arm64 with chained fixups, x64.
 macho="-shared -fuse-ld=lld -Wl,-undefined,error"
@@ -51,6 +57,7 @@ macho="-shared -fuse-ld=lld -Wl,-undefined,error"
 "$cc" --target=x86_64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -o macho-x64/good.dylib lib.c
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64/runs_at_load.dylib lib.c
 "$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64-chained/runs_at_load.dylib lib.c
+"$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_CLOSE -o macho-arm64/runs_at_close.dylib lib.c
 
 rm -rf tmp
 find . -type f ! -name '*.c' ! -name '*.sh' | sort | while read -r f; do

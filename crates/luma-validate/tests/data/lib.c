@@ -120,3 +120,55 @@ int __stdcall dll_entry(void* module, unsigned long reason, void* reserved) {
 }
 #endif
 #endif
+
+#if defined(RUNS_AT_CLOSE) || defined(FINI_FUNCTION)
+/* Code the system runs when it closes the library, after LumaCore has freed the mod's memory (F's audit of R3-A,
+   A-1): a destructor the compiler does not register with atexit (ELF .fini_array, Mach-O __mod_term_func), or the
+   function the linker's -fini names (ELF DT_FINI). */
+static volatile int closed;
+#if defined(RUNS_AT_CLOSE) && defined(__APPLE__)
+/* Apple's clang always registers a destructor attribute's function with __cxa_atexit (luma.h's exit list), so the
+   term section is written as an assembler or another compiler would. */
+static void at_close(void) {
+    closed = 1;
+}
+__attribute__((used, section("__DATA,__mod_term_func,mod_term_funcs"))) static void (*const at_close_entry)(void) = at_close;
+#elif defined(RUNS_AT_CLOSE)
+__attribute__((destructor)) static void at_close(void) {
+    closed = 1;
+}
+#else
+void fini_function(void);
+void fini_function(void) {
+    closed = 2;
+}
+#endif
+#endif
+
+#if defined(TLS_DATA) || defined(TLS_CALLBACK)
+/* A TLS directory as the C library's tlssup gives one (these are built without it). Thread-local data alone runs
+   nothing and loads; a callback runs at load and close and is refused (A-3). */
+typedef void (*TlsCallback)(void* module, unsigned long reason, void* reserved);
+static unsigned long tls_index;
+static char tls_block[8];
+#if defined(TLS_CALLBACK)
+static void at_tls(void* module, unsigned long reason, void* reserved) {
+    (void)module;
+    (void)reason;
+    (void)reserved;
+    tls_block[0] = 1;
+}
+static TlsCallback tls_callbacks[] = {at_tls, 0};
+#else
+static TlsCallback tls_callbacks[] = {0};
+#endif
+typedef struct {
+    void* start;
+    void* end;
+    void* index;
+    TlsCallback* callbacks;
+    unsigned zero_fill;
+    unsigned characteristics;
+} TlsDirectory;
+__attribute__((used)) const TlsDirectory _tls_used = {tls_block, tls_block + 8, &tls_index, tls_callbacks, 0, 0};
+#endif

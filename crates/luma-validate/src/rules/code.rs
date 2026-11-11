@@ -187,6 +187,10 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
     for what in &lib.runs_at_load {
         ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtLoad")), ("found", t(what.clone()))]);
     }
+    // And code it would run when it closes the library, after the mod's memory is freed (F's audit of R3-A, A-1).
+    for what in &lib.runs_at_close {
+        ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtClose")), ("found", t(what.clone()))]);
+    }
     let from_extra = |library: &str| extras.iter().any(|e| e.eq_ignore_ascii_case(library) || library.ends_with(&format!("/{e}")));
     if is_apple {
         // What the linker forces into a -nostdlib dylib is the kernel loader contract's list (1.1), from evidence.
