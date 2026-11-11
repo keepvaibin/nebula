@@ -404,6 +404,8 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                     input.index_count = mesh.index_count;
                     input.index_bytes = 4u;
                     rt_geometry_.want(key, input);
+                    const float (*waiting_at)[4] = walk_rows_cpu_ + walk_block_rows_[item.block] + (one_matrix ? item.matrix : 0u) * kRowsPerMatrix;
+                    rt_geometry_.drawn_at(key, waiting_at[0][3] * waiting_at[0][3] + waiting_at[1][3] * waiting_at[1][3] + waiting_at[2][3] * waiting_at[2][3]);
                     ++count.waiting;
                     continue;
                 }
@@ -498,6 +500,9 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             const std::uint64_t structure = rt_geometry_.name(key);
             if (structure == 0u) {
                 rt_want_form(item.mesh, mesh, refined);
+                const std::uint32_t at_matrix = one_matrix || mesh.single_matrix != NEBULA_MODEL_NONE ? item.matrix : 0u;
+                const float (*waiting_at)[4] = walk_rows_cpu_ + walk_block_rows_[item.block] + at_matrix * kRowsPerMatrix;
+                rt_geometry_.drawn_at(key, waiting_at[0][3] * waiting_at[0][3] + waiting_at[1][3] * waiting_at[1][3] + waiting_at[2][3] * waiting_at[2][3]);
                 ++count.waiting;
                 continue;
             }

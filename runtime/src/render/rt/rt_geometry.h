@@ -69,6 +69,9 @@ public:
     // A mesh that does not move wants a structure of its vertices as they are: queued once. `key`: the caller's name
     // for it, kept until forget.
     void want(std::uint64_t key, const TriangleInput& input);
+    // A waiting mesh the scene draws this frame, `distance_sq` from the eye (squared): the next frame builds such meshes
+    // before the rest, the nearest first (plan 26: what comes into view casts first).
+    void drawn_at(std::uint64_t key, float distance_sq);
     // A mesh whose vertices move: built by the first refit() after it is named, refitted from then on, rebuilt every
     // `kRefitsToRebuild` refits or when its triangles change. Named each frame it is to be traced; one not named for
     // kFramesToForget frames is forgotten.
@@ -144,11 +147,13 @@ private:
     void retire(Entry& entry);
     void release_retired();
     bool build(Entry& entry, bool refit);
+    void order_queue();
     bool build_with_micromap(Entry& entry);
 
     Backend& backend_;
     std::unordered_map<std::uint64_t, Entry> entries_;
     std::deque<std::uint64_t> queue_;        // Static meshes waiting, oldest first
+    std::vector<std::pair<float, std::uint64_t>> drawn_waiting_;  // drawn_at(): this frame's, by distance squared
     std::vector<std::uint64_t> moving_;      // keys of Moving entries
     std::vector<Retired> retired_;
     std::deque<std::uint64_t> to_ask_;       // built, their compacted size not asked yet

@@ -257,6 +257,40 @@ void Geometry::want(std::uint64_t key, const TriangleInput& input) {
     ++stats_.waiting;
 }
 
+void Geometry::drawn_at(std::uint64_t key, float distance_sq) {
+    if (drawn_waiting_.size() < 65536u && distance_sq >= 0.0f) {
+        drawn_waiting_.emplace_back(distance_sq, key);
+    }
+}
+
+// The queue with the meshes the last frame drew first, the nearest first; the others after them in their order.
+void Geometry::order_queue() {
+    if (drawn_waiting_.empty() || queue_.size() < 2u) {
+        drawn_waiting_.clear();
+        return;
+    }
+    std::sort(drawn_waiting_.begin(), drawn_waiting_.end());
+    std::deque<std::uint64_t> ordered;
+    std::unordered_map<std::uint64_t, bool> first;
+    first.reserve(drawn_waiting_.size());
+    for (const auto& [distance_sq, key] : drawn_waiting_) {
+        const auto found = entries_.find(key);
+        if (found != entries_.end() && found->second.queued && first.emplace(key, true).second) {
+            ordered.push_back(key);
+        }
+    }
+    drawn_waiting_.clear();
+    if (ordered.empty()) {
+        return;
+    }
+    for (const std::uint64_t key : queue_) {
+        if (first.find(key) == first.end()) {
+            ordered.push_back(key);  // a key queued twice (forgotten, wanted again) keeps both places, as before
+        }
+    }
+    queue_.swap(ordered);
+}
+
 void Geometry::move(std::uint64_t key, const TriangleInput& input, bool rebuild) {
     if (nothing(input)) {
         return;
@@ -312,6 +346,7 @@ void Geometry::clear() noexcept {
     micromap_queue_.clear();
     entries_.clear();
     queue_.clear();
+    drawn_waiting_.clear();
     moving_.clear();
     retired_.clear();
     retired_scratch_.clear();
@@ -406,7 +441,9 @@ void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_in
         }
     }
 
-    // What stands still: oldest first, within the budget (one build at least).
+    // What stands still: what the last frame drew first, the nearest first; then the oldest; within the budget (one
+    // build at least).
+    order_queue();
     std::uint64_t used = 0u;
     bool any = false;
     while (!queue_.empty()) {

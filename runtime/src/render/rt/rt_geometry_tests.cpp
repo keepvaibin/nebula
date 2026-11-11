@@ -132,6 +132,27 @@ bool a_budget_spreads_builds() {
     return ok;
 }
 
+bool what_is_drawn_is_built_first_the_nearest_first() {
+    Run run;
+    for (std::uint64_t key = 1u; key <= 6u; ++key) {
+        run.geometry.want(key, mesh(1000u, key * 0x10000u));
+    }
+    run.geometry.drawn_at(5u, 100.0f);
+    run.geometry.drawn_at(3u, 900.0f);
+    run.geometry.drawn_at(5u, 400.0f);  // drawn twice: its nearer place counts
+    run.geometry.drawn_at(42u, 1.0f);   // not waiting: no effect
+    run.step(1500u);  // one a frame
+    bool ok = expect(run.geometry.name(5u) != 0u && run.geometry.name(1u) == 0u, "the nearest drawn mesh is built first");
+    run.step(1500u);
+    ok &= expect(run.geometry.name(3u) != 0u && run.geometry.name(1u) == 0u, "then the next drawn one");
+    run.step(1500u);
+    run.step(1500u);
+    ok &= expect(run.geometry.name(1u) != 0u && run.geometry.name(2u) != 0u && run.geometry.name(4u) == 0u,
+                 "then the rest, oldest first");
+    ok &= expect(fake::log().faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
 bool scratch_is_used_again_only_after_a_barrier() {
     Run run;
     // Builds whose scratch together is several pages of it.
@@ -293,6 +314,7 @@ int main() {
     ok &= a_ceiling_releases_the_least_recently_named();
     ok &= a_mesh_is_built_compacted_and_released();
     ok &= a_budget_spreads_builds();
+    ok &= what_is_drawn_is_built_first_the_nearest_first();
     ok &= scratch_is_used_again_only_after_a_barrier();
     ok &= a_moving_mesh_is_refitted_and_forgotten();
     ok &= an_answer_waits_for_its_frame_slot();
