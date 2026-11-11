@@ -16,11 +16,18 @@
 // traced_mirror), a 1 where traced, 0 elsewhere (the programs blend as on Medium there).
 // Pass constants: g_pass.x 1 (the second layer), g_pass.w the shading frame's first byte in t4.
 #include "rt_shade.hlsli"
+#if RT_TRANSMIT_REFERENCE
+#include "rt_reference_paths.hlsli"
+#endif
 
 Texture2D<float4> g_guide : register(t9);     // the second layer's guide (r its eye distance, a 0 where none)
 Texture2D<float4> g_normals : register(t10);  // the second layer's normals
 Texture2D<float4> g_motion : register(t11);   // the second layer's motion (w: the smooth surface's lift)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
+#if RT_TRANSMIT_REFERENCE
+Texture2D<float4> g_t_before : register(t12);               // the reference's T sums, the walk before's (FB)
+RT_FORMAT(rgba32f) RWTexture2D<float4> g_t_mean : register(u1);  // this walk's: rgb the mean, a the samples
+#endif
 
 static const float kThinGlass = 4.0f;      // units: thinner is a shell (a soap film, a dome's pane)
 static const float kGlassTint = 0.5f;      // 13.2: 1 the art's whole tint at the thickness, 0 colourless
@@ -30,6 +37,21 @@ static const uint kInsideSegments = 2u;
 
 // What a ray from `from` along `dir` meets and what that sends back (as the reflections pass's rays).
 float3 seen_along(float3 from, float3 dir, float cone, inout uint seed, out float far_) {
+#if RT_TRANSMIT_REFERENCE
+    // The reference (section 18; FB): what the ray meets by path tracing (its light traced on, mirrors traced on), the
+    // mean of the walk's paths; the distance as the pass takes it.
+    uint met_item, met_triangle;
+    float2 met_where;
+    if (!rt_closest(from, dir, kSeenReach, kMaskSolid | kMaskCutout | kMaskSky, met_item, met_triangle, met_where, far_)) {
+        far_ = kSeenReach;
+    }
+    const uint paths = max(uint(g_pass_value[0].x), 1u);
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    for (uint p = 0u; p < paths; ++p) {
+        sum += ref_mirror(from, dir, 0.0f, seed);
+    }
+    return sum / float(paths);
+#else
     uint item, triangle_;
     float2 where_;
     if (!rt_closest(from, dir, kSeenReach, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
@@ -43,6 +65,7 @@ float3 seen_along(float3 from, float3 dir, float cone, inout uint seed, out floa
     }
     const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
     return rt_hit_radiance(h, kRtShadeSunRay | kRtShadeLightRay, o, seed);
+#endif
 }
 
 // The nearest face of instance `self` on the ray (blended, both sides), its distance; false where none (an open mesh).
@@ -111,6 +134,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const int3 here = int3(id.xy, 0);
+#if RT_TRANSMIT_REFERENCE
+    g_t_mean[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // no T here: no sums (a traced pixel writes its own below)
+#endif
     const float4 guide = g_guide.Load(here);
     const uint item = g_item_map.Load(here).x;
     if (g_pass.x == 0u || guide.a == 0.0f || item == 0u) {
@@ -156,5 +182,20 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
     InterlockedAdd(g_counters[24], 1u);  // refracted pixels (rt-inputs)
+#if RT_TRANSMIT_REFERENCE
+    {
+        // Summed while nothing moves (the reference's own restarts start it again), held at the most samples.
+        const float4 before = g_t_before.Load(here);
+        const float count = (g_pass.z & 1u) != 0u ? 0.0f : before.a;
+        const float paths = float(max(uint(g_pass_value[0].x), 1u));
+        if (count >= g_pass_value[0].y) {
+            t = before.rgb;
+            g_t_mean[id.xy] = before;
+        } else {
+            t = (before.rgb * count + t * paths) / (count + paths);
+            g_t_mean[id.xy] = float4(t, count + paths);
+        }
+    }
+#endif
     g_out[id.xy] = float4(min(t, 64.0f), 1.0f);
 }

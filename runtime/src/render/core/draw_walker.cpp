@@ -484,6 +484,13 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
         rows.transmit[0] = static_cast<float>(rt_transmit_slot_);  // program.hlsli traced_mirror: glass and water, High
         rows.transmit[1] = 1.0f;
     }
+    if ((view_flags_ & 8u) != 0u && rt_blend_guide_mode_ != 0u && index == rt_scene_view_) {
+        // The guide blended draws compare with (program.hlsli traced_by_air, traced_mirror_own; FB 15.2): the second
+        // layer's, else the opaque layer's; and the depth's eye terms for the compare (with the volume or without).
+        rows.blend_guide[0] = static_cast<float>(rt_blend_guide_mode_ == 1u ? rt_blend_guide_slot_ : rt_opaque_guide_slot_);
+        rows.blend_guide[1] = static_cast<float>(rt_blend_guide_mode_);
+        std::memcpy(rows.volume[0], rt_light_frame_.depth, sizeof(rows.volume[0]));
+    }
     if ((view_flags_ & 8u) != 0u) {
         std::memcpy(rows.stage_a, rt_stage_a_, sizeof(rows.stage_a));
         std::memcpy(rows.stage_k, rt_stage_k_, sizeof(rows.stage_k));
@@ -1133,6 +1140,17 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) |
                      (rt_light_on_ && rt_volume_drawn_ && scene_layer && rt_volume_reads(item, state) ? 4u : 0u) |
+                     // A blended surface off the one the light pass saw (program.hlsli traced_by_air; FB 15.2).
+                     (rt_light_on_ && rt_volume_drawn_ && rt_blend_guide_mode_ != 0u && scene_layer && state_color_write(state) &&
+                              (item.flags & (NEBULA_ITEM_INSTANCES | NEBULA_ITEM_PARTICLE)) == 0u &&
+                              (state & 3u) == NEBULA_BLEND_ADD && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA &&
+                              ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA
+                          ? 16u
+                          : 0u) |
+                     // A glow (its blend adds): no reflection of its own (program.hlsli traced_mirror_own; FB).
+                     (rt_light_on_ && scene_layer && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE
+                          ? 32u
+                          : 0u) |
                      // The air in front (traced_scatter): a draw that covers what is behind it or blends over it by
                      // its alpha (an added one would add the air twice).
                      (rt_light_on_ && rt_scatter_drawn_ && scene_layer && state_color_write(state) &&

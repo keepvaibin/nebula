@@ -924,6 +924,16 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
             rt_blend_filters();
             frame.layer = 0u;
             rt_blend_walk_before_ = walk_.serial;
+            // The second layer's guide (FB, 15.2): picture 9, what blended draws compare with (traced_by_air).
+            // With none, none at all: layer 1's passes read the opaque layer's guide as compute work since its publishing.
+            if (rt_blend_guide_mode_ != 0u) {
+                void* const guide = rt_backend_.image_to_sample(rt_now(RtImage::BlendGuideA));
+                rt_blend_guide_mode_ = guide != nullptr ? 1u : 0u;
+                if (guide != nullptr) {
+                    rt_blend_guide_slot_ = renderer_.rt_publish_light(guide, texture_store_, 9u);
+                }
+                ++walk_view_stamp_;  // the blended draws' views carry it
+            }
         }
         renderer_.rt_light_end();
         // The draws read the pictures again.
@@ -994,6 +1004,7 @@ void RenderCore::rt_prepass(const NebulaFramePass& begin) {
     const NebulaFrameList& list = *walk_.now->list;
     rt_light_on_ = false;
     rt_transmit_drawn_ = false;
+    rt_blend_guide_mode_ = 0u;
     rt_prepassed_.assign(list.item_count, 0u);
     rt_light_frame_.across = 0u;  // no light pass yet this walk: no second layer either
     if (rt_scene_view_ == NEBULA_NONE32 || rt_scene_.name() == 0u || !renderer_.rt_items_begin()) {
@@ -1949,7 +1960,7 @@ void RenderCore::rt_light() {
         rt_raw_ = denoiser != nullptr && denoiser->raw_signals() == rt::kSignalAll;
         const std::uint32_t wanted = (rt_raw_ ? kRtPassGuides : 0u) | kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
                                      (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u) |
-                                     (rt_blend_seen_ ? kRtPassBlend : 0u) | (rt_blend_seen_ && rt_pass_transmit_on() ? kRtPassTransmit : 0u);
+                                     (rt_blend_seen_ ? kRtPassBlend : 0u) | (rt_blend_seen_ && rt_transmit_wanted() ? kRtPassTransmit : 0u);
         rt_light_wanted_ = wanted & ~kRtPassBlend;
         ao::Constants eye{};
         bool lit = false;
@@ -2034,6 +2045,12 @@ void RenderCore::rt_light() {
                     } else {
                         rt_scatter_drawn_ = false;
                     }
+                }
+                // The opaque layer's guide (FB, 15.2): picture 8, what blended draws compare with where no second layer
+                // runs (program.hlsli traced_by_air); with the volume or without (traced_mirror_own reads picture 9).
+                if (void* const guide = rt_backend_.image_to_sample(rt_now(RtImage::GuideA)); guide != nullptr) {
+                    rt_opaque_guide_slot_ = renderer_.rt_publish_light(guide, texture_store_, 8u);
+                    rt_blend_guide_mode_ = 2u;
                 }
                 // The sky and bounce light's ratio a channel at a time (FB 22.10): picture 7 (program.hlsli traced_o).
                 rt_indirect_shown_ = false;

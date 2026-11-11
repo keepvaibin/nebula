@@ -9,15 +9,23 @@
 
 namespace galaxy::render {
 
+bool RenderCore::rt_transmit_wanted() const {
+    return rt_part(get_render_config(), RtPart::Transmit) >= 3u && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
+           !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
+}
+
 bool RenderCore::rt_pass_transmit_on() const {
-    return rt_part(get_render_config(), RtPart::Transmit) >= 3u && !rt_fb_reference() &&
-           !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) && !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
+    return rt_transmit_wanted() && !rt_fb_reference();
 }
 
 void RenderCore::rt_pass_transmit() {
     const RtFrame& frame = rt_light_frame_;
     rt_transmit_drawn_ = false;
-    if (frame.layer != 1u || !rt_pass_transmit_on()) {
+    if (frame.layer != 1u || !rt_transmit_wanted()) {
+        return;
+    }
+    if (rt_fb_reference()) {
+        rt_pass_transmit_reference();  // the reference's own T (rt_bounce.cpp; FB, section 18)
         return;
     }
     const std::uint32_t out = rt_image(RtImage::Transmit);

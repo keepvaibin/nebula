@@ -40,6 +40,8 @@ cbuffer View : register(b0) {
                                // place + 1 (traced_o), .w the scattered light's place + 1 (traced_scatter)
     float4 view_transmit;      // with bit 3 in the scene's view: x T's place (glass and water seen through, bent;
                                // rt_transmit.hlsl), y 1 where drawn
+    float4 view_blend_guide;   // with bit 3 in the scene's view: x the guide blended draws compare with
+                               // (traced_by_air, traced_mirror_own), y 1 the second layer's, 2 the opaque layer's, 0 none
 };
 
 cbuffer Draw : register(b3) {
@@ -260,9 +262,50 @@ float3 traced_level(float3 level) {
     return level;
 }
 #define TRACED_LEVEL(x) traced_level(x)
+// The light volume stands for the pixel's light (traced_air; the master plan's 15.2): a particle that is no light (draw
+// flag 4), or a blended draw (flag 16) off the surface its guide names: with the second layer's guide
+// (view_blend_guide.y 1), behind that layer's surface there, the nearest blended one (none there: not behind); with
+// the opaque layer's (2: no second layer this walk), in front of the opaque surface (a decal on it keeps its light)
+// or over the sky. The guide's r is the eye depth (rt_surface.hlsl `away`), the pixel's by the volume's terms.
+bool traced_by_air(float4 pixel) {
+    if ((view_flags & 8u) == 0u || view_volume[2].x == 0.0 || (view_flags & 16u) != 0u) {
+        return false;
+    }
+    if ((draw_flags & 4u) != 0u) {
+        return true;
+    }
+    if ((draw_flags & 16u) == 0u || view_blend_guide.y == 0.0) {
+        return false;
+    }
+    const float4 d = view_volume[0];
+    const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
+    const float4 guide = gTextures[uint(view_blend_guide.x)].Load(int3(pixel.xy, 0));
+    if (view_blend_guide.y < 1.5) {
+        return guide.a != 0.0 && away > guide.r * 1.002 + 1.0;
+    }
+    return guide.a == 0.0 || away < guide.r * 0.998 - 1.0;
+}
+// Whether the mirror picture at the pixel is this draw's own (FB with FA and FC): never for a draw whose blend adds
+// (draw flag 32: a glow shows no reflection of its own); where the second layer's guide names a surface here, only for
+// the draw at that surface's depth; else it is the opaque layer's (opaque draws, decals on them): yes.
+bool traced_mirror_own(float4 pixel) {
+    if ((draw_flags & 32u) != 0u) {
+        return false;
+    }
+    if (view_blend_guide.y < 0.5 || view_blend_guide.y > 1.5) {
+        return true;
+    }
+    const float4 guide = gTextures[uint(view_blend_guide.x)].Load(int3(pixel.xy, 0));
+    if (guide.a == 0.0) {
+        return true;
+    }
+    const float4 d = view_volume[0];
+    const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
+    return abs(away - guide.r) <= guide.r * 0.002 + 1.0;
+}
 float4 traced_at(float4 pixel) {
-    if ((view_flags & 8u) == 0u) {
-        return float4(1.0, 1.0, 1.0, 1.0);
+    if ((view_flags & 8u) == 0u || traced_by_air(pixel)) {
+        return float4(1.0, 1.0, 1.0, 1.0);  // the volume's share is all of its light (PROGRAM_LIGHT)
     }
     return gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
 }
@@ -272,6 +315,9 @@ float4 traced_at(float4 pixel) {
 // plus 2 on a blended surface: there what stays is taken from its alpha, and the mirror is given back the share
 // the blend would take of it).
 float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
+    if (!traced_mirror_own(pixel)) {
+        return float4(colour, alpha);  // another surface's mirror, or a glow (traced_mirror_own)
+    }
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
     if (mirror.a < -0.5) {
         return float4(colour, alpha);  // a substitute: the environment fetch took the mirror in (env_fetch)
@@ -303,7 +349,7 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
 // SUBSTITUTE): the mirror picture holds rgb R tinted by the map's own colour and the class's gain, a -(1 + keep), keep
 // how much of the painted shine comes back where R is dark. Elsewhere the texel as it is.
 float4 env_fetch(float4 painted, float4 pixel) {
-    if ((view_flags & 8u) == 0u) {
+    if ((view_flags & 8u) == 0u || !traced_mirror_own(pixel)) {
         return painted;
     }
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
@@ -320,7 +366,7 @@ float4 env_fetch(float4 painted, float4 pixel) {
 // that pass ran; else O as it is. `coloured` says which.
 float3 traced_o(float4 light, float4 pixel, out bool coloured) {
     coloured = false;
-    if (view_volume[2].z == 0.0 || (draw_flags & 8u) != 0u) {
+    if (view_volume[2].z == 0.0 || (draw_flags & 8u) != 0u || traced_by_air(pixel)) {
         return light.aaa;
     }
     const float3 ratio = gTextures[uint(view_volume[2].z) - 1u].Load(int3(pixel.xy, 0)).rgb;
@@ -416,7 +462,7 @@ float4 program_fogged(float4 c) { return g_fog_amount > 0.0 ? float4(lerp(c.rgb,
 #endif
 // A program returns inside its entry, whose input `i` holds the pixel. The light on the surface, the game's fog, the
 // light in the air between the eye and the surface.
-#define PROGRAM_LIGHT(c) traced_scatter(program_fogged((draw_flags & 4u) != 0u ? traced_air(c, i.pos) : traced_colour(c, i.pos)), i.pos)
+#define PROGRAM_LIGHT(c) traced_scatter(program_fogged(traced_by_air(i.pos) ? traced_air(c, i.pos) : traced_colour(c, i.pos)), i.pos)
 #else
 // Fog at once (the same math as the fog step had in place).
 float3 program_fog(float3 c, float3 colour, float amount) { return lerp(c, colour, amount); }

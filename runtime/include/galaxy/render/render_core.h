@@ -475,6 +475,9 @@ private:
     // What is seen through glass and water, bent (rt_pass_transmit.cpp; plan 13.2/13.3 High): picture 6.
     [[nodiscard]] bool rt_pass_transmit_on() const;
     void rt_pass_transmit();
+    // T is wanted (its image kept): High, not under rt-added or rt-motion; under the reference its own (FB, 18).
+    [[nodiscard]] bool rt_transmit_wanted() const;
+    void rt_pass_transmit_reference();
     [[nodiscard]] bool rt_pass_volume_on() const;
     void rt_pass_volume();
     bool rt_light_on_ = false;                // this walk's scene has its traced light: its views carry it
@@ -642,6 +645,10 @@ private:
     const NebulaFrameList* rt_ref_list_ = nullptr;
     Affine34 rt_ref_camera_{};
     float rt_ref_time_ = 0.0f;
+    bool rt_ref_restart_ = false;  // this walk's reference started its sums again (its T follows: FB, 18)
+    // The reference's T sums by turns (rt_pass_transmit_reference), and the size they were made at.
+    std::uint32_t rt_ref_t_images_[2] = {rt::kNoImage, rt::kNoImage};
+    unsigned rt_ref_t_width_ = 0u, rt_ref_t_height_ = 0u;
     // A kept picture held (rt_hold): the walks left (0: none), of how many, and its folder and number.
     unsigned rt_hold_left_ = 0u, rt_hold_walks_ = 0u;
     std::string rt_hold_folder_, rt_hold_number_;
@@ -658,6 +665,9 @@ private:
     bool rt_reflect_moved_ = false;
     bool rt_transmit_drawn_ = false;        // the transmit pass wrote T this walk (ViewRows::transmit)
     std::uint32_t rt_transmit_slot_ = 0u;   // T's place among the textures (picture 6)
+    // The guide blended draws compare with (FB, 15.2; ViewRows::blend_guide): 0 none this walk, 1 the second layer's
+    // (picture 9), 2 the opaque layer's (picture 8).
+    std::uint32_t rt_blend_guide_mode_ = 0u, rt_blend_guide_slot_ = 0u, rt_opaque_guide_slot_ = 0u;
     // An outside denoiser (rt_denoiser.h; rt_pass_reflect.cpp): the signals go to it raw this frame (g_more.z bit
     // 2048); its guides were written this frame.
     bool rt_raw_ = false, rt_guides_drawn_ = false;

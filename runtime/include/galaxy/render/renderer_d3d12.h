@@ -842,7 +842,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> item_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE item_rtv_{};
     static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
-    static constexpr unsigned kRtLightPictures = 8u;  // its pictures, kRtLightPicture + 0 to 7 (rt_publish_light's which)
+    static constexpr unsigned kRtLightPictures = 10u;  // its pictures, kRtLightPicture + 0 to 9 (rt_publish_light's which)
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics

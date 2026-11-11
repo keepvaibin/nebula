@@ -321,6 +321,13 @@ void RenderCore::rt_pass_reference() {
             }
         }
         rt_bounce_width_ = rt_bounce_height_ = 0u;
+        for (std::uint32_t& image : rt_ref_t_images_) {  // and what it sees through glass and water (b41)
+            if (image != rt::kNoImage) {
+                rt_bounce_retired_.emplace_back(frame_index_, image);
+                image = rt::kNoImage;
+            }
+        }
+        rt_ref_t_width_ = rt_ref_t_height_ = 0u;
         return;
     }
     if (rt_light_frame_.layer != 0u) {
@@ -354,6 +361,7 @@ void RenderCore::rt_pass_reference() {
     rt_ref_list_ = now.list;
     rt_ref_camera_ = camera;
     rt_ref_time_ = walk_.time.t;
+    rt_ref_restart_ = restart;
     rt::PassBinds binds;
     std::uint32_t shade_at = 0u;
     if (!rt_shade_binds(binds, shade_at)) {
@@ -373,6 +381,53 @@ void RenderCore::rt_pass_reference() {
     rt_backend_.dispatch(RtShader::Reference, binds, rt_light_frame_.across, rt_light_frame_.down);
     rt_ref_now_ = now_set;
     rt_ref_ready_ = true;
+}
+
+// The reference's T (section 18; FB): the transmit pass's paths with the light where they land by path tracing
+// (rt_transmit_ref.hlsl), summed while the reference's own sums are (rt_ref_restart_ starts both again), written to T
+// as the pass writes it; the second layer's walk, after the opaque layer's reference.
+void RenderCore::rt_pass_transmit_reference() {
+    const RtFrame& frame = rt_light_frame_;
+    const std::uint32_t out = rt_image(RtImage::Transmit);
+    if (!rt_ref_ready_ || out == rt::kNoImage) {
+        return;
+    }
+    bool restart = rt_ref_restart_;
+    if (rt_ref_t_width_ != frame.width || rt_ref_t_height_ != frame.height) {
+        for (std::uint32_t& image : rt_ref_t_images_) {
+            if (image != rt::kNoImage) {
+                rt_bounce_retired_.emplace_back(frame_index_, image);
+                image = rt::kNoImage;
+            }
+        }
+        rt_ref_t_width_ = frame.width;
+        rt_ref_t_height_ = frame.height;
+    }
+    static constexpr const char* kNames[2] = {"Nebula RT Reference T A", "Nebula RT Reference T B"};
+    bool images = true;
+    for (unsigned i = 0; i < 2u; ++i) {
+        restart = restart || rt_ref_t_images_[i] == rt::kNoImage;  // new sums hold nothing yet
+        images = rt_bounce_image(rt_ref_t_images_[i], rt::ImageFormat::Rgba32f, frame.width, frame.height, kNames[i]) != rt::kNoImage && images;
+    }
+    if (!images) {
+        return;
+    }
+    rt::PassBinds binds;
+    std::uint32_t shade_at = 0u;
+    if (!rt_shade_binds(binds, shade_at)) {
+        return;
+    }
+    const unsigned now = rt_ref_now_ != 0u ? 1u : 0u;  // by the reference's own turns
+    const float values[3][4] = {{rt_hold_left_ != 0u ? static_cast<float>(kRefPaths) : 1.0f, static_cast<float>(kRefMostSamples), 0.0f, 0.0f}};
+    binds.pass_constants = rt_bounce_constants(0u, restart ? 1u : 0u, shade_at, values);
+    binds.reads[0] = rt_layer_guide();  // the second layer's, as the pass reads it
+    binds.reads[1] = rt_image(RtImage::Normal);
+    binds.reads[2] = rt_image(RtImage::Motion);
+    binds.reads[3] = rt_ref_t_images_[1u - now];
+    binds.writes[0] = out;
+    binds.writes[1] = rt_ref_t_images_[now];
+    rt_backend_.dispatch(RtShader::TransmitReference, binds, frame.across, frame.down);
+    rt_transmit_drawn_ = true;
 }
 
 // The reference's means as the programs read them, over the pictures the filters made (rt_reference_out.hlsl).
@@ -515,6 +570,11 @@ void RenderCore::rt_bounce_stop() noexcept {
     for (std::uint32_t& image : rt_ref_images_) {
         image = rt::kNoImage;
     }
+    for (std::uint32_t& image : rt_ref_t_images_) {
+        image = rt::kNoImage;
+    }
+    rt_ref_t_width_ = rt_ref_t_height_ = 0u;
+    rt_ref_restart_ = false;
     rt_bounce_retired_.clear();
     rt_bounce_width_ = rt_bounce_height_ = 0u;
     rt_dome_mean_ = 0.0f;

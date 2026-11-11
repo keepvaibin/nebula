@@ -5661,7 +5661,7 @@ void RendererD3D12::rt_reactive_end() {
 }
 
 void RendererD3D12::rt_unpublish_lights(TextureStore& textures) {
-    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // the light, added, mirror, facing, volume, scatter, transmit, indirect
+    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides
         const auto found = pictures_.find(kRtLightPicture + which);
         if (found == pictures_.end()) {
             continue;
