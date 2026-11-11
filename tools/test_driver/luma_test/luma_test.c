@@ -109,6 +109,12 @@ static void put(Out* out, const char* text) {
         static const char said[] = " (cut)";
         out->cut = 1u;
         out->at = (uint32_t)(sizeof(out->text) - sizeof(said));
+        /* Never half a character (audit 0.3 H-14): a UTF-8 character the cut falls in is dropped whole, so the
+           runner's UTF-8 read of the message holds. text[at] is the first byte dropped; while it continues a
+           character (10xxxxxx), that character began earlier. */
+        while (out->at > 0u && ((unsigned char)out->text[out->at] & 0xC0u) == 0x80u) {
+            out->at--;
+        }
         for (uint32_t i = 0; i < sizeof(said); i++) {
             out->text[out->at + i] = said[i];
         }
