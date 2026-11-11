@@ -411,6 +411,7 @@ fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
         "a bit-field wider than 32 bits" => Some("LeftOut.WideBitField"),
         "declared, defined nowhere in the game" => Some("LeftOut.NotDefined"),
         "a static member of a class template" => Some("LeftOut.TemplateMember"),
+        "a template instance only a .cpp names" => Some("LeftOut.InstanceInCpp"),
         _ => None,
     };
     if let Some(id) = fixed {
@@ -559,7 +560,7 @@ mod types_tests {
     }
 
     /// Every reason the generator writes (gen_types.py's R_*) has its row, and L505 says it whole in all 14 languages.
-    const REASONS: [&str; 12] = [
+    const REASONS: [&str; 13] = [
         "the kernel's own",
         "internal linkage: no name a mod can bind",
         "thread-local: one per thread, no one address",
@@ -570,6 +571,7 @@ mod types_tests {
         "a bit-field wider than 32 bits",
         "declared, defined nowhere in the game",
         "a static member of a class template",
+        "a template instance only a .cpp names",
         "ambiguous: A::mPos, B::mPos",
         "through the virtual base V",
     ];
