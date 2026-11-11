@@ -284,12 +284,16 @@ def parse(api, index, args):
 class Reader:
     """unit_pass: only what this unit's own file defines (instrument.py); else what the game's headers declare."""
 
-    def __init__(self, api, tu, headers, unit_pass=False):
+    def __init__(self, api, tu, headers, unit_pass=False, unit=None):
         self.api, self.tu, self.headers, self.unit_pass = api, tu, headers, unit_pass
         self.main = None  # the unit's own file, lower case with '/' (unit pass)
-        self.unit = I.Unit.__new__(I.Unit)
-        self.unit.api = api
-        self.unit.tu = tu
+        # The unit pass reads with instrument.py's own Unit, whose file label names a .cpp's own classes' functions
+        # (identity(): "file#Class::f"); the header pass has no such class, and a bare one for its texts.
+        if unit is None:
+            unit = I.Unit.__new__(I.Unit)
+            unit.api = api
+            unit.tu = tu
+        self.unit = unit
         self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor (TY-9)
         self.named_instances = set()  # unit pass: the instances (and their members) its types name (TY-9)
         self.trivial_memo = {}  # TY-10: canonical spelling -> trivial
@@ -490,7 +494,7 @@ class Reader:
                                      "virtual": bool(self.api.virtualBase(m))})
                 self.want(self.api.type(m))
             elif m.kind in I.FUNCTIONS:
-                row["polymorphic"] = row["polymorphic"] or (m.kind == K_METHOD and bool(self.api.virtualMethod(m)))
+                self.virtual(row, m, False)
                 self.want_signature(m)
             elif m.kind in RECORDS or m.kind == K_ENUM:
                 if self.api.isDefinition(m):
@@ -508,13 +512,40 @@ class Reader:
                                      "virtual": bool(self.api.virtualBase(m))})
                 self.want(self.api.type(m))
             methods = self.api.members(self.api.visitMethods, t)
-            row["polymorphic"] = row["polymorphic"] or any(self.api.virtualMethod(m) for m in methods)
+            for m in methods:
+                self.virtual(row, m, True)
             for m in methods:
                 self.want_signature(m)
         self.fields(c, t, row, "", 0)
         row["polymorphic"] = row["polymorphic"] or any(self.records.get(b["name"], {}).get("polymorphic") for b in row["bases"])
         row["trivial_copy"], row["trivial_destroy"], can_construct, can_assign, _ = self.trivial(t)
         row["no_copy"] = not can_construct and not can_assign
+
+    def virtual(self, row, m, instance):
+        """Contract objects: a virtual function (a destructor or conversion too) makes the record polymorphic; each one
+        but a destructor is a method row, its thunk called with the compiler's dispatch (method). The name and signature
+        are instrument.py's identity(), the function rows' own rule (an instance's: the record's row name and
+        identity_signature). A virtual whose name or types no mod can write is in the JSON with "row": false."""
+        if m.kind not in (K_METHOD, I.K_DESTRUCTOR, I.K_CONVERSION) or not self.api.virtualMethod(m):
+            return
+        row["polymorphic"] = True
+        if m.kind == I.K_DESTRUCTOR or self.api.deleted(m):
+            return
+        ua = self.unit.api
+        spelling = self.unit.string(ua.spelling(m))
+        ident = self.unit.identity(m)
+        if ident is None and instance:
+            signature = self.unit.identity_signature(m)
+            ident = None if signature is None else ("%s::%s" % (row["name"], spelling), signature)
+        fntype = ua.type(m)
+        params = [self.unit.type_text(ua.argType(fntype, i)) for i in range(ua.numArgs(m))]
+        result = self.unit.type_text(ua.resultType(fntype))
+        v = {"name": ident[0] if ident else "%s::%s" % (row["name"], spelling), "signature": ident[1] if ident else None,
+             "pure": bool(ua.isPure(m)), "row": ident is not None and result is not None and None not in params}
+        if v["row"]:
+            v["call"] = {"spelling": spelling, "params": params, "result": result, "const": bool(ua.isConst(m))}
+            v["params"] = "(%s)%s" % (", ".join(params), " const" if v["call"]["const"] else "")
+        row.setdefault("virtuals", []).append(v)
 
     def trivial(self, t):
         """TY-10: (trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
@@ -813,7 +844,7 @@ class Reader:
                  "// virtual base (those fields have no row: luma_types.left).",
                  "#pragma clang diagnostic ignored \"-Winvalid-offsetof\"", ""]
         lines += ['#include "%s"' % h.as_posix() for h in self.headers]
-        lines += ["#include <cstddef>", '#include "luma_types.h"', ""]
+        lines += ["#include <cstddef>", '#include "luma_types.h"', "#include <luma_hook.h>", ""]
         unit_records, unit_globals = self.merge_units(DEFINED)
         self.unit_records = unit_records
         lines += self.cpp_rows(defined)
@@ -884,6 +915,8 @@ class Reader:
                      '"TY-10: the generator says %s is %strivially copyable and %strivially destructible");') % (
                 "true" if r.get("trivial_copy") else "false", "true" if r.get("trivial_destroy") else "false", cstr(name),
                 "" if r.get("trivial_copy") else "not ", "" if r.get("trivial_destroy") else "not ")
+            claim += ' static_assert(__is_polymorphic(%%s) == %s, "contract objects: the generator says %s is %spolymorphic");' % (
+                "true" if r["polymorphic"] else "false", cstr(name), "" if r["polymorphic"] else "not ")
             # no_copy: whether any copy or move can be called. The table is built without access control, so its traits
             # see every member and check both ways; a unit's rows and an in-class claim see public members only, so
             # they check that a no_copy record has none.
@@ -895,8 +928,18 @@ class Reader:
             elif not unit and not mine:
                 claim += ' static_assert(%s, "TY-10: the generator says %s has a copy or move to call");' % (
                     callable_, cstr(name))
+            calls = [(k, v) for k, v in enumerate(r.get("virtuals", ())) if v["row"]]
             if mine:
                 decls = []
+                for k, v in calls:
+                    decls.append("static void lumaV%d_(void** luma_a, void* luma_r);" % k)
+                    decls.append("static const luma::Function lumaF%d_;" % k)
+                    decls.append("static const luma::MethodRow lumaM%d_;" % k)
+                    after.append("void %s::lumaV%d_(void** luma_a, void* luma_r) { %s }" % (name, k, thunk(v, "::" + name)))
+                    after.append('const luma::Function %s::lumaF%d_ = {"%s", "%s", %s::lumaV%d_, nullptr};' % (
+                        name, k, cstr(v["name"]), cstr(v["signature"]), name, k))
+                    after.append('LUMA_METHOD_SECTION const luma::MethodRow %s::lumaM%d_ = {&%s::lumaF%d_, %s};' % (
+                        name, k, name, k, method_names(name, v)))
                 if field_rows:
                     decls.append("static const luma::TypeField lumaFields_[];")
                     after.append("const luma::TypeField %s::lumaFields_[] = {%s};" % (name, ", ".join(field_rows)))
@@ -905,9 +948,10 @@ class Reader:
                     after.append("const luma::TypeBase %s::lumaBases_[] = {%s};" % (name, ", ".join(base_rows)))
                 decls.append("static const luma::TypeRow lumaRow_;")
                 decls.append("static void lumaTrivial_() { %s }" % (claim % (("::" + name,) * claim.count("%s"))))
-                after.append('LUMA_TYPE_SECTION const luma::TypeRow %s::lumaRow_ = {"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du};' % (
+                after.append('LUMA_TYPE_SECTION const luma::TypeRow %s::lumaRow_ = {"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du, %s};' % (
                     name, cstr(name), name, name, "lumaFields_" if field_rows else "nullptr", len(field_rows),
-                    "lumaBases_" if base_rows else "nullptr", len(base_rows)))
+                    "lumaBases_" if base_rows else "nullptr", len(base_rows),
+                    "&typeid(::%s)" % name if r["polymorphic"] else "nullptr"))
                 self.inside_decls[name] = " " + " ".join(decls) + " "
                 n += 1
                 continue
@@ -915,10 +959,24 @@ class Reader:
                 member("", "TypeField", "kF%d" % n, "{%s}" % ", ".join(field_rows), "[]")
             if base_rows:
                 member("", "TypeBase", "kB%d" % n, "{%s}" % ", ".join(base_rows), "[]")
-            member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du}' % (
+            # Contract objects: a polymorphic record's type_info (the RTTI data, -frtti), which the kernel finds from an
+            # object's vtable. typeid of a type is a constant address, never a call into the C++ runtime.
+            member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du, %s}' % (
                 cstr(name), name, name, "kF%d" % n if field_rows else "nullptr", len(field_rows),
-                "kB%d" % n if base_rows else "nullptr", len(base_rows)))
+                "kB%d" % n if base_rows else "nullptr", len(base_rows),
+                "&typeid(R%d)" % n if r["polymorphic"] else "nullptr"))
             (held if unit else lines).append(claim % (("R%d" % n,) * claim.count("%s")))
+            for k, v in calls:
+                if unit:
+                    held.append("static void kV%d_%d(void** luma_a, void* luma_r);" % (n, k))
+                    lines.append("void LumaUnitRows::kV%d_%d(void** luma_a, void* luma_r) { %s }" % (n, k, thunk(v, "R%d" % n)))
+                else:
+                    lines.append("void kV%d_%d(void** luma_a, void* luma_r) { %s }" % (n, k, thunk(v, "R%d" % n)))
+                scope = "LumaUnitRows::" if unit else ""
+                member("", "Function", "kF%d_%d" % (n, k), '{"%s", "%s", %skV%d_%d, nullptr}' % (
+                    cstr(v["name"]), cstr(v["signature"]), scope, n, k))
+                member("LUMA_METHOD_SECTION ", "MethodRow", "kM%d_%d" % (n, k), "{&%skF%d_%d, %s}" % (
+                    scope, n, k, method_names(name, v)))
             n += 1
         # Aliases and other spellings of a record (TY-2): kind 1 and kind 2 find the record through them. The header
         # pass's alone, the units' merged (merge_units): a row names its record by name, wherever its row is.
@@ -1073,17 +1131,19 @@ class Reader:
 
     def foreign_aliases(self):
         """TY-9: a typedef from outside the game's trees (<stdint.h>'s uint32_t) that a text names is an alias row, as
-        the game's own s32 is: the name a modder reads, with no record."""
-        named = set()
-        for _, text in self.texts():
-            named.update(re.findall(r"(?<![\w:])[A-Za-z_]\w*", text or ""))
-        for name in sorted(named & set(self.foreign)):
-            if name in self.aliases or name in self.records:
-                continue
-            c = self.foreign[name]
-            under = self.api.underlying(c)
-            self.aliases[name] = {"name": name, "kind": "alias", "of": self.type_text(under), "record": None,
-                                  "file": None, "line": None}
+        the game's own s32 is: the name a modder reads, with no record. One may name another (bionic's uintptr_t is
+        __uintptr_t, Darwin's size_t __darwin_size_t): each alias row's text is named too, until none is new."""
+        while True:
+            named = set()
+            for _, text in self.texts():
+                named.update(re.findall(r"(?<![\w:])[A-Za-z_]\w*", text or ""))
+            new = sorted(n for n in named & set(self.foreign) if n not in self.aliases and n not in self.records)
+            if not new:
+                return
+            for name in new:
+                under = self.api.underlying(self.foreign[name])
+                self.aliases[name] = {"name": name, "kind": "alias", "of": self.type_text(under), "record": None,
+                                      "file": None, "line": None}
 
     def unnamed(self):
         """TY-9's check: every name a text holds outside template arguments (past pointers, references, arrays, cv
@@ -1190,6 +1250,25 @@ def type_names(text):
         if name and name not in TYPE_WORDS:
             out.append(name)
     return out
+
+
+def thunk(v, self_type):
+    """A virtual call's body with LumaFunction.invoke's form: args[0] is the object as the declaring class, the call is
+    unqualified (the compiler dispatches by the object's own class), the result goes where Result<R> puts it, and
+    kAskKind asks its kind as a function row's invoke answers (luma_hook.h)."""
+    c = v["call"]
+    passed = ", ".join("::luma::arg<%s>(luma_a[%d])" % (p, i + 1) for i, p in enumerate(c["params"]))
+    self_type = ("const " if c["const"] else "") + self_type
+    return ("using luma_result = ::luma::Type<%s>; "
+            "if (__builtin_expect(luma_a == ::luma::kAskKind, 0)) { "
+            "*static_cast<unsigned*>(luma_r) = ::luma::Result<luma_result>::kKind; return; } "
+            "::luma::Result<luma_result>::put(luma_r, [&]() -> luma_result { "
+            "return static_cast<%s*>(luma_a[0])->%s(%s); });" % (c["result"], self_type, c["spelling"], passed))
+
+
+def method_names(record, v):
+    """A MethodRow's record, own name and parameter list, as C strings."""
+    return '"%s", "%s", "%s"' % (cstr(record), cstr(v["call"]["spelling"]), cstr(v["params"]))
 
 
 def cstr(s):

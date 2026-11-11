@@ -194,8 +194,10 @@ target_compile_options(smg_game PRIVATE
     "SHELL:-include nebula_prelude.h"
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
-    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation
->
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation>
+    # The module with rows carries RTTI data, so the kernel finds an object's own class from its vtable (contract objects,
+    # plan 1.3); the game never uses typeid on an object or dynamic_cast. The module without rows has none.
+    $<$<COMPILE_LANGUAGE:CXX>:$<IF:$<BOOL:${NEBULA_LUMA_HOOKS}>,-frtti,-fno-rtti>>
     # Every new-expression tests the allocation before constructing: the arenas' operator new returns null when the
     # system has no memory left, and the game checks. Standard C++ lets the compiler drop those checks for an operator new that
     # is not noexcept, which would run a constructor on null.

@@ -658,7 +658,7 @@ def main():
         sys.exit(f'instrument.py: {source} does not compile:\n' + '\n'.join(errors[:20]))
     unit = Unit(api, tu, source, root)
     unit.walk(api.cursor(tu))
-    types = gen_types.Reader(api, tu, [], unit_pass=True)
+    types = gen_types.Reader(api, tu, [], unit_pass=True, unit=unit)
     types.walk(api.cursor(tu))
     unit.type_rows(types)
     unit.function_facts(types)

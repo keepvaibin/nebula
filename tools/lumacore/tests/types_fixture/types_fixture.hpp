@@ -154,6 +154,36 @@ struct FxPoly {  // a vtable: destructible only
     virtual void f() {}
 };
 
+// Contract objects (plan 1.3): an object's own class from its vtable, through primary and secondary bases.
+struct FoA {
+    virtual ~FoA() {}
+    virtual s32 fa() { return 1; }
+    virtual s32 add(s32 x, const s32& y) const { return x + y + a; }
+    s32 a = 0;
+};
+struct FoB {
+    virtual s32 fb() { return 2; }
+    s32 b = 0;
+};
+struct FoC : FoA, FoB {  // FoB is a secondary base, at a non-zero offset
+    s32 fa() override { return 3; }
+    s32 fb() override { return 4; }
+    s32 add(s32 x, const s32& y) const override { return x * y; }
+    s32 c = 0;
+};
+struct FoD : FoC {
+    s32 fb() override { return 5; }
+
+private:
+    virtual s32 secret(s32 x) const { return x * 7; }  // a private virtual: a method row all the same
+};
+struct FoV {  // polymorphic by its destructor alone: a type_info, no method row
+    virtual ~FoV() {}
+    s32 v = 0;
+};
+struct FoX : FoA {};
+struct FoAmb : FoC, FoX {};  // two FoA subobjects: as FoA, ambiguous
+
 // Globals: one defined in the header (a row), one only declared (left out), one constant (a value, no row needed).
 inline s32 gFxDefined = 7;
 extern s32 gFxDeclaredOnly;

@@ -37,7 +37,7 @@ def main():
     for name in sorted(set(records) & set(rows)):
         r, k = records[name], rows[name]
         compared["records"] += 1
-        for key in ("size", "align"):
+        for key in ("size", "align", "polymorphic"):
             if r[key] != k[key]:
                 differ(f"record {name}: {key} {r[key]} by libclang, {k[key]} in the module")
         if [f["name"] for f in r["fields"]] != [f["name"] for f in k["fields"]]:
@@ -108,6 +108,17 @@ def main():
     for n in sorted(set(want_globals) | set(got_globals)):
         if want_globals.get(n) != got_globals.get(n):
             differ(f"global {n}: {want_globals.get(n)} in the generator's JSON, {got_globals.get(n)} in the module")
+    # Contract objects: one method row (a virtual call) per virtual the generator gave a row, and no other.
+    want_methods = {(v["name"], v["signature"], r["name"], v["call"]["spelling"], v["params"])
+                    for r in generated["types"] for v in r.get("virtuals", ()) if v["row"]}
+    got_methods = [(m["name"], m["signature"], m["record"], m["own"], m["params"]) for m in described["methods"]]
+    compared["methods"] = len(want_methods)
+    if len(set(got_methods)) != len(got_methods):
+        differ("methods: %d rows in the module, %d names and signatures" % (len(got_methods), len(set(got_methods))))
+    for m in sorted(want_methods ^ set(got_methods)):
+        differ(f"method {m[0]} {m[1]} (record {m[2]}, {m[3]}{m[4]}): " + (
+            "in the generator's JSON, no row in the module" if m in want_methods
+            else "a row in the module, not in the generator's JSON"))
     if wrong:
         print(f"compare_types.py: {len(wrong)} differences between the module's type rows and the generator's", file=sys.stderr)
         for line in wrong[:SHOWN]:

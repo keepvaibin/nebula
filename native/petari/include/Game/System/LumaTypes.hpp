@@ -1,6 +1,7 @@
 #pragma once
 // The kernel's lookups over the type and global rows (luma_types.h; contract types, plan 1.2).
 #include "luma_types.h"
+#include <luma_hook.h>
 #include <nebula_game_api.h>
 #include <nebula_types.h>
 
@@ -32,4 +33,23 @@ namespace luma {
     const LeftRow* leftOut(u32 kind, const char* pName);
     // The rows as JSON, with the kernel's answer for every name a record's bases give it (nebula_game_luma_describe).
     void describeTypes(NebulaDescribeWrite write, void* user);
+
+    // Contract objects (plan 1.3): an object's own class, read from its vtable's RTTI data. pObject is a game object of
+    // a polymorphic class or any polymorphic subobject of one.
+    struct OwnClass {
+        const TypeRow* type;   // the own class's row; null when it has none (`typeInfo` still says which class it is)
+        const void* complete;  // the whole object: pObject less its subobject's offset
+        const void* typeInfo;  // the own class's type_info (MSVC: its type descriptor)
+    };
+    OwnClass ownClass(const void* pObject);
+    // The object's pTarget subobject when its own class is pTarget or derives from it; null otherwise, and null with
+    // *pAmbiguous set when pTarget is reached by two paths (C++'s ambiguous base).
+    const void* asClass(const void* pObject, const TypeRow* pTarget, bool* pAmbiguous);
+    // The virtual call of a virtual function a record row declares ("LiveActor::control", "void()"): its invoke takes
+    // args[0] as the object seen as the declaring class and runs what the object's own class runs. Null: no such row.
+    const Function* findMethod(const char* pName, const char* pSignature);
+    // The method row of the declaration the object's own class runs for that virtual ("FoA::fa", "s32()" on a FoD
+    // gives FoC's fa): from the own class, depth first through the bases that are or derive from the declaring class,
+    // the first that declares one of that name and parameters. Null: no row for the virtual, or the own class has none.
+    const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature);
 }
