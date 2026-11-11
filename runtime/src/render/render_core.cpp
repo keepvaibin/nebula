@@ -2046,24 +2046,34 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     // New textures upload through this frame's command list.
     renderer_.attach_texture_uploads(texture_store_);
     {
+        bool mods_moved = false;
         if (const std::uint64_t generation = texture_pack_mod_folders_generation();
             generation != texture_pack_mods_generation_) {
             texture_pack_mods_generation_ = generation;
             texture_pack_mod_folders_ = texture_pack_mod_folders();
             texture_pack_mod_categories_off_ = texture_pack_mod_categories_off();
+            mods_moved = true;
         }
+        const std::uint64_t budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+        // The settings are built and compared only when something they are made of may have changed.
+        const bool moved = !texture_pack_settings_applied_ || mods_moved ||
+                           texture_pack_settings_.enabled != render.texture_packs ||
+                           texture_pack_settings_.preload != render.texture_pack_preload ||
+                           texture_pack_settings_.dump != render.texture_dump ||
+                           texture_pack_settings_.budget_bytes != budget_bytes;
         static const std::filesystem::path dumps = texture_dump_directory();
         TexturePackSettings settings{};
         settings.enabled = render.texture_packs;
         settings.preload = render.texture_pack_preload;
         settings.dump = render.texture_dump;
-        // Each mod's pack, the lowest in the mods list first (the last wins a texture).
-        settings.packs.insert(settings.packs.end(), texture_pack_mod_folders_.begin(), texture_pack_mod_folders_.end());
-        settings.pack_categories_off.insert(settings.pack_categories_off.end(), texture_pack_mod_categories_off_.begin(),
-                                            texture_pack_mod_categories_off_.end());
-        settings.dumps = dumps;
-        settings.budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
-        if (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_)) {
+        settings.budget_bytes = budget_bytes;
+        if (moved) {
+            // Each mod's pack, the lowest in the mods list first (the last wins a texture).
+            settings.packs = texture_pack_mod_folders_;
+            settings.pack_categories_off = texture_pack_mod_categories_off_;
+            settings.dumps = dumps;
+        }
+        if (moved && (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_))) {
             texture_store_.configure_texture_packs(settings);
             texture_pack_settings_ = std::move(settings);
             texture_pack_settings_applied_ = true;
