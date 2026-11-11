@@ -10,3 +10,7 @@ lights_space	rt_lights_space.hlsl	cs_6_0	main
 surface	rt_surface.hlsl	cs_6_5	main
 sun	rt_sun.hlsl	cs_6_5	main
 lights	rt_lights.hlsl	cs_6_5	main
+noise_fill	rt_noise_fill.hlsl	cs_6_0	main
+sun_tiles	rt_sun_tiles.hlsl	cs_6_0	main
+sun_time	rt_sun_time.hlsl	cs_6_0	main
+sun_blur	rt_sun_blur.hlsl	cs_6_0	main

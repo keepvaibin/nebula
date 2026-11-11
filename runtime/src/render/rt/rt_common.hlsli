@@ -8,6 +8,7 @@
 
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
+#include "rt_sample.hlsli"
 
 RaytracingAccelerationStructure g_scene : register(t0);
 // Sixteen uints an item (rt_walk.cpp rt_tables): its slot; its flags and light set; its mesh for a pixel that wants its
@@ -183,9 +184,10 @@ bool cutout_there(uint item, uint triangle_, float2 where_) {
     return g_textures[NonUniformResourceIndex(map.x)].SampleLevel(g_wrap, coordinate, 0.0f).a >= asfloat(map.y);
 }
 
-// Whether anything of `mask` stands on the ray; `met`: the item of what does (the nearest, unless `any` asks only
-// whether). With kMaskCutout in the mask, alpha-tested surfaces stand there where their map says they are.
-bool blocked(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
+// How far along the ray something of `mask` stands, or -1 where nothing does; `met`: the item of what does (the
+// nearest, unless `any` takes the first the walk meets). With kMaskCutout in the mask, alpha-tested surfaces stand
+// there where their map says they are.
+float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -204,10 +206,15 @@ bool blocked(float3 origin, float3 direction, float reach, uint mask, bool any, 
     InterlockedAdd(g_counters[17], 1u);
     met = 0u;
     if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-        return false;
+        return -1.0f;
     }
     met = query.CommittedInstanceID();
-    return true;
+    return query.CommittedRayT();
+}
+
+// Whether anything of `mask` stands on the ray (occluder_at).
+bool blocked(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
+    return occluder_at(origin, direction, reach, mask, any, met) >= 0.0f;
 }
 
 // What an emitter adds at a surface unshadowed, as a share of the surface's own colour: its intensity over the

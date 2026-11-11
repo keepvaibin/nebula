@@ -7,8 +7,9 @@
 //   coin toss, so a pixel with n frames behind it is uncertain by about 0.5 / sqrt(n): with few frames (a surface
 //   just come into view, a moving thing) everything near is taken; with many, only the like, and a sharp edge
 //   between light and shadow stays where it is.
-// Channels: r the sun's share, b the lamp's, a the ground's, g the frames averaged (over 32); the last step writes g
-// as 1, the fill light's share the programs read there.
+// Channels (rt_light.hlsl): r V, b how the surface faces the sun, a the sky's share (spread here; r and b go
+// through), g the frames averaged (over 32). The last step puts together the shares the programs read: r V, g 1 (the
+// fill's), b 0, a the ground's (with --diagnostics rt-motion: the point's motion instead, from S.motion at t12).
 // Compiled a second time as rt_lights_space.hlsl (RT_LIGHTS) for the local lights' share (red, green, blue in r, b,
 // a): there a neighbour's light counts by how far its luminance is from the pixel's against the noise the pixel is
 // known to have (the variance rt_lights_time.hlsl keeps, smoothed over three by three pixels, halved in reach by
@@ -20,6 +21,9 @@
 Texture2D<float4> g_in : register(t9);
 Texture2D<float4> g_guide : register(t11);  // eye distance, the object's slot in two parts, the normal packed (0: no surface)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
+#ifndef RT_LIGHTS
+Texture2D<float4> g_motion_map : register(t12);  // the last step's, for --diagnostics rt-motion
+#endif
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
@@ -111,6 +115,25 @@ void main(uint3 id : SV_DispatchThreadID) {
 #ifdef RT_LIGHTS
     g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, 1.0f) : float4(now.x, frames, now.y, now.z);
 #else
-    g_out[id.xy] = float4(now.x, frames, now.y, now.z);
+    if (g_pass.z == 0u) {
+        g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);
+        return;
+    }
+    // The shares the programs read. In the sun the sky's part of the light is small.
+    const bool lit = centre.b < -0.5f;
+    const float facing = lit ? -1.0f - centre.b : centre.b;
+    const float in_sun = centre.r * facing;
+    const float painted = lit ? 1.0f : lerp(g_look.x, 1.0f, in_sun);
+    float4 shares = float4(centre.r, 1.0f, 0.0f, painted * lerp(now.z, 1.0f, 0.65f * in_sun));
+    if ((g_more.z & 128u) != 0u) {
+        shares = float4(0.0f, 1.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
+    }
+    if ((g_more.z & 512u) != 0u) {
+        // --diagnostics rt-motion (shown as rt-light shows r, a, b): the move across in red, down in green, eight
+        // pixels a frame full; blue where where the point was is not known.
+        const float4 m = g_motion_map.Load(int3(pixel, 0));
+        shares = float4(saturate(abs(m.x) / 8.0f), 1.0f, m.z > 0.0f ? 0.0f : 1.0f, saturate(abs(m.y) / 8.0f));
+    }
+    g_out[id.xy] = shares;
 #endif
 }

@@ -72,9 +72,10 @@ void main(uint3 id : SV_DispatchThreadID) {
             // This frame's candidates.
             const uint tries = min(lights, 8u);
             const float each = float(lights) / float(max(tries, 1u));
+            const float tried = rt_sample(id.xy, g_more.y, kSampleLightTry).x;  // where in its run each candidate is
             for (uint k = 0u; k < tries; ++k) {
                 seed = rt_hash(seed + k * 7919u + 1u);
-                const float inside = lights <= tries ? 0.0f : rt_unit(seed);
+                const float inside = lights <= tries ? 0.0f : frac(tried + float(k) * 0.618034f);
                 const uint index = g_tiles.Load(g_glow.z + (run.x + min(uint((float(k) + inside) * each), lights - 1u)) * 4u);
                 const float3 light = emitter_light(g_glow.x + index * 48u, s.at, s.smooth_, s.slot, place, slot);
                 const float mine = dot(light, kLuminance);
@@ -107,8 +108,9 @@ void main(uint3 id : SV_DispatchThreadID) {
                     float2 from_at = was;
                     if (j != 0u) {
                         seed = rt_hash(seed + 977u);
-                        const float turn = float(seed & 0xFFFFu) / 65536.0f * 6.2831853f;
-                        from_at += float2(cos(turn), sin(turn)) * (sqrt(float(seed >> 16u) / 65536.0f) * 12.0f);
+                        const float2 near_ = rt_sample(id.xy, g_more.y, kSampleLightNear + (j == 2u ? kSampleSecond : 0u));
+                        const float turn = near_.x * 6.2831853f;
+                        from_at += float2(cos(turn), sin(turn)) * (sqrt(near_.y) * 12.0f);
                     }
                     const int2 from = int2(floor(from_at));
                     if (from.x < 0 || from.y < 0 || from.x >= int(wide) || from.y >= int(high)) {
