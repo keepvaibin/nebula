@@ -21,7 +21,32 @@ struct MaterialConstants {
 };
 
 #define NATIVE_COORDS 1
+#define NATIVE_LIT 1
 #include "native_material.hlsli"
+
+// The lit channel's colour at a place: the lights the colour mask names over the ambient.
+float3 mii_light(float3 eye, float3 nrm) {
+    const uint mask = uint(material.lights.x);
+    const uint diffuse = uint(material.lights.y);
+    const uint atten = uint(material.lights.z);
+    float3 sum = float3(0.0, 0.0, 0.0);
+    for (uint n = 0u; n < min(native_light_count(), 24u); ++n) {
+        if ((mask & (1u << n)) != 0u) {
+            sum += channel_light(n, atten, diffuse, eye, nrm).rgb;
+        }
+    }
+    return material.mat_color.rgb * saturate((AMBIENT_TERM(material.amb_color.rgb) * 255.0 + sum) / 255.0);
+}
+
+#if NATIVE_TRACED
+bool material_relight(inout NativeVaryings i, float3 nrm) {
+    if (uint(material.params.y) == 0u) {
+        return false;  // no lit chain: the part's constant colour, painted
+    }
+    i.color.rgb = mii_light(i.lit_eye, nrm);
+    return true;
+}
+#endif
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.uv[0] = float4(v.uv[0], 1.0, 0.0);
@@ -30,20 +55,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     if (chain == 0u) {
         return;
     }
-    const uint nq = v.pn_row;
-    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
-                             dot(native_normal_row(nq + 2u).xyz, v.nrm));
-    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
-    const uint mask = uint(material.lights.x);
-    const uint diffuse = uint(material.lights.y);
-    const uint atten = uint(material.lights.z);
-    float3 sum = float3(0.0, 0.0, 0.0);
-    for (uint n = 0u; n < min(native_light_count(), 24u); ++n) {
-        if ((mask & (1u << n)) != 0u) {
-            sum += channel_light(n, atten, diffuse, v.eye, nrm).rgb;
-        }
-    }
-    o.color.rgb = material.mat_color.rgb * saturate((material.amb_color.rgb * 255.0 + sum) / 255.0);
+    const float3 nrm = native_lit_normal(v);
+    o.color.rgb = mii_light(v.eye, nrm);
     if (chain == 2u) {
         o.color.a = material.mat_color.a * saturate((material.amb_color.a * 255.0 + channel_light(2u, 2u, 1u, v.eye, nrm).a) / 255.0);
     }

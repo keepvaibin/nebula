@@ -40,15 +40,22 @@ TRACED_VARIANTS = {
     "prepass": (10, ["NATIVE_PREPASS"]),
     "traced": (11, ["NATIVE_TRACED"]),
     "traced_motion": (12, ["NATIVE_TRACED", "NATIVE_MOTION"]),
+    "traced_reactive": (13, ["NATIVE_TRACED", "NATIVE_REACTIVE"]),
+    "traced_layer": (14, ["NATIVE_TRACED", "NATIVE_REACTIVE", "NATIVE_LAYER"]),
+    # Vulkan without geometry shaders: the prepass names the item only (D11). SPIR-V only.
+    "prepass_item": (15, ["NATIVE_PREPASS", "NATIVE_PREPASS_ITEM"]),
 }
 VERTEX_FORMS = ("base", "motion")
 # A Vulkan device without descriptor indexing reads each pixel program's bound-table form (program.hlsli
 # NEBULA_BOUND_TABLES): stored at the variant + BOUND_OFFSET, STORED variants to a row (core/program_table.h).
 BOUND_OFFSET = 5
-STORED = 13
+STORED = 16
 READS_WORLD = 1
 LIT = 2
 SUMS_KEY = 4  # a pixel program that sums its light set's first light: light_term or enh_add_light of light 0
+# A written material that sums the game's lights (native_material.hlsli NATIVE_LIT): its traced form has a vertex
+# form of its own (the light varyings), and its pixel program sums its key at the pixel there (SUMS_KEY).
+WRITTEN_LIT = re.compile(r"^\s*#\s*define\s+NATIVE_LIT\s+1", re.M)
 
 
 def native_coords(path):
@@ -111,9 +118,11 @@ def main():
                 continue
             add(stage, row, source, text, entry, defines, index)
         for name, (index, defines) in TRACED_VARIANTS.items():
+            if name == "prepass_item" and backend != "spirv":
+                continue
             add(stage, row, source, text, entry, defines, index, False)
         flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
-            SUMS_KEY if re.search(r"(light_term|enh_add_light)\(i\.lit_light, 0u", text) else 0)
+            SUMS_KEY if re.search(r"(light_term|enh_add_light)\(i\.lit_light, 0u", text) or WRITTEN_LIT.search(text) else 0)
 
     for number, name in enumerate(WRITTEN, 1):
         source = os.path.join(MATERIALS, name + ".hlsl")
@@ -124,6 +133,10 @@ def main():
             return 1
         coords[("vs", row)] = coords[("vs", row | 1)] = count
         add_program("vs", row, source, "native_vs")
+        if WRITTEN_LIT.search(read(source)):
+            for name in ("traced", "traced_motion"):
+                index, defines = TRACED_VARIANTS[name]
+                add("vs", row, source, read(source), "native_vs", defines, index)
         if name in VERTEX_ONLY:
             continue
         add_program("ps", row, source, "native_ps")

@@ -347,7 +347,8 @@ private:
         std::uint32_t item = 0u;
         bool regenerated = false;      // a draw whose vertices are not last frame's moved
     };
-    RtRing rt_rings_[3];
+    RtRing rt_rings_[4];  // early, opaque, blended; and the game's code-drawn water (c10)
+    std::uint32_t rt_water_ring_item_ = ~0u;  // the water ring's first item this frame: its words are water's
     // The game's drop shadows, traced in place of their stencil volumes (the light pass, rt_light.hlsl). A drop is
     // traced when the scene holds its caster's draws; its volume's draws are then left out of the walk.
     struct RtCaster {
@@ -500,7 +501,9 @@ private:
     std::uint32_t rt_mirror_slot_ = 0u;  // the mirror picture's place among the textures
     std::uint32_t rt_added_slot_ = 0u;  // the added light's place among the textures
     std::uint32_t rt_facing_slot_ = 0u;  // the facing picture's (how a painted surface faces the sun)
-    float rt_tint_[4]{};                // what a shadow takes back from the sky (ViewRows::tint)
+    // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k,
+    // RT-MASTER-PLAN 3.4); rt_stage_a_[3] is kShadowTint.
+    float rt_stage_a_[4]{}, rt_stage_k_[4]{};
     // What glows in the scene: a draw of a mesh whose material glows (nebula_model.h NebulaModelHit.glow, from the
     // cooker's table of glowing models and from surfaces added to what is behind them). One a block; the light pass
     // adds each one's light to the surfaces within its reach, less what stands between.
@@ -522,6 +525,12 @@ private:
     std::vector<float> rt_emitter_places_before_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_now_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_blocks_;
+    // A byte an item of this walk's list: 1 for a glowing mesh too large to be one light (over 6 m in two axes, L-3):
+    // the item table flags it (word 1, kItemEmissiveArea) and the indirect pass lights by its emission.
+    std::vector<std::uint8_t> rt_emissive_areas_;
+    // --diagnostics rt-inputs: the lights' sources over a report's frames (kind << 32 | name hash: 1 a glowing mesh's
+    // material, 2 a particle light's effect), and how many lights each gave (c11, the emitter census a stop).
+    std::unordered_map<std::uint64_t, std::uint32_t> rt_emitter_sources_;
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
     void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
                     const float (*place)[4] = nullptr);

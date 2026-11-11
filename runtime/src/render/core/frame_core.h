@@ -81,6 +81,16 @@ struct GpuMesh {
     float hit_roughness = 0.45f, hit_metal = 0.0f, hit_transmission = 0.0f;
     float hit_environment = 0.0f;  // how much of its look a painted reflection carries
     float glow[4]{};  // the light it gives: colour, and its strength (0: none)
+    std::uint8_t glow_source = 0u;  // NebulaModelHit.glow_source: where the glow's colour comes from as it animates
+    std::uint8_t hit_env_map = 0xFFu;
+    float hit_ior = 1.5f, hit_thickness = 0.0f;
+    float hit_env_tint[3]{};
+    float hit_body = -1.0f, hit_shine = -1.0f, hit_tint_keep = -1.0f;  // the review's; below 0: the class's own
+    // The live colour of glow_source (L-1): its row among the material's form 0 rows (vertex rows first; 0xFFFF
+    // none), how many rows that form has, and the row's cooked colour, which the live one is measured against.
+    std::uint16_t glow_row = 0xFFFFu;
+    std::uint16_t glow_row_count = 0u;
+    float glow_cooked[3]{};
     float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
     float min[3]{}, max[3]{};
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
@@ -154,15 +164,16 @@ struct ViewRows {
     float scale[4];
     float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's,
                       // the facing picture's
-    float tint[4];    // with view_flags bit 3: what a shadow takes back from the sky, as a colour (rgb)
+    float stage_a[4]; // with view_flags bit 3: the stage's ambient colour A (rgb), w kShadowTint (program.hlsli)
+    float stage_k[4]; // with view_flags bit 3: the stage's key colour K (rgb)
     float volume[3][4];  // with view_flags bit 3, the scene's view (FB, the light volume: program.hlsli traced_air): the
                          // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places and 1
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
-              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, tint) == 176 &&
-              offsetof(ViewRows, volume) == 192 &&
-              sizeof(ViewRows) == 240);
+              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
+              offsetof(ViewRows, volume) == 208 &&
+              sizeof(ViewRows) == 256);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

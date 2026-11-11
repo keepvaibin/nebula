@@ -24,10 +24,18 @@ static const float kEnhEnvGraze = 0.80;      // gain added at grazing angles, Sc
 bool enh_on() { return (view_flags & 2u) != 0u; }
 
 #if NATIVE_TRACED
-// The pixel's traced light (program.hlsli traced_at): how much of the light set's key (light 0: the sun's share),
-// fill (light 1) and point light (light 4) reaches it; all of every other light.
-static float3 g_traced = float3(1.0, 1.0, 1.0);
-float traced_light(uint n) { return n == 0u ? g_traced.x : n == 1u ? g_traced.y : n == 4u ? g_traced.z : 1.0; }
+// The pixel's traced light (program.hlsli traced_at, RT-MASTER-PLAN 3.4): how much of the light set's key (light 0:
+// V, a channel) and fill (light 1: O, the sky's share: the fill is the artists' bounce light) reaches it, and none
+// of its point light (light 4: an emitter, in the added light; all of it when view_flags bit 32 says the local lights
+// are off); all of lights 2 and 3 (alpha tricks). Its ambient by O.
+static float4 g_traced = float4(1.0, 1.0, 1.0, 1.0);
+float3 traced_light(uint n) {
+    const float lamp = (view_flags & 32u) != 0u ? 1.0 : 0.0;
+    return n == 0u ? g_traced.rgb : n == 1u ? g_traced.aaa : n == 4u ? float3(lamp, lamp, lamp) : float3(1.0, 1.0, 1.0);
+}
+#define AMBIENT_TERM(x) ((x) * g_traced.a)
+#else
+#define AMBIENT_TERM(x) (x)
 #endif
 
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
@@ -161,7 +169,7 @@ void enh_add_light(uint base, uint n, bool spot, uint diffuse, bool first, bool 
     enh_light(base, n, spot, eye, ldir, attn, lcol);
     const float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
 #if NATIVE_TRACED
-    attn *= traced_light(n);
+    lcol *= traced_light(n);
 #endif
     const float x = attn * facing;
     acc += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
@@ -206,11 +214,12 @@ float4 enh_env(float4 t) {
 // A lit program begins with enh_begin(i.lit_eye, i.lit_nrm) in its entry, whose input `i` holds the pixel (i.pos): the
 // traced form reads the pixel's light there, and every light_term after it is taken by its share.
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
-    g_traced = traced_at(pixel).rgb;
+    g_traced = traced_at(pixel);
+    g_traced_lit = true;
     return enh_begin(P, n);
 }
 #define enh_begin(P, n) enh_begin_traced(P, n, i.pos)
-#define light_term(base, n, atten, diffuse, pos, nrm) (light_term(base, n, atten, diffuse, pos, nrm) * traced_light(n))
+#define light_term(base, n, atten, diffuse, pos, nrm) (light_term(base, n, atten, diffuse, pos, nrm) * float4(traced_light(n), 1.0))
 #endif
 
 #endif  // PROGRAM_LIT_HLSLI

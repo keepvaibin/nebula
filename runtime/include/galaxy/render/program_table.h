@@ -29,7 +29,10 @@ enum ProgramVariant : unsigned {
     kProgramPrepass = 10u,
     kProgramTraced = 11u,
     kProgramTracedMotion = 12u,
-    kProgramStored = 13u,
+    kProgramTracedReactive = 13u,  // a blended draw's: + the reactive mask
+    kProgramTracedLayer = 14u,     // + the reactive mask and the effects layer's targets
+    kProgramPrepassItem = 15u,     // the prepass naming its item only (Vulkan without geometry shaders: D11)
+    kProgramStored = 16u,
 };
 
 // A scene draw's "aux": the targets it writes beside the colour (0 none, 1 the motion, 2 the reactive mask, 3 that and
@@ -37,7 +40,7 @@ enum ProgramVariant : unsigned {
 inline constexpr unsigned kAuxPrepass = 5u;        // the prepass: depth and the item target, no colour
 inline constexpr unsigned kAuxPrepassMotion = 6u;  // the same through the vertex stage's motion form (a draw whose own
                                                    // aux is 1: one vertex stage, so one depth, in both passes)
-inline constexpr unsigned kAuxTraced = 8u;         // + 0, 1 or 4: that aux's targets, the pixel program's traced form
+inline constexpr unsigned kAuxTraced = 8u;         // + 0 to 4: that aux's targets, the pixel program's traced form
 // The vertex stage's motion form (and its stream of last frame's positions).
 [[nodiscard]] constexpr bool aux_motion_form(unsigned aux) noexcept {
     return aux == 1u || aux == kAuxPrepassMotion || aux == (kAuxTraced | 1u);
@@ -51,6 +54,9 @@ inline constexpr unsigned kAuxTraced = 8u;         // + 0, 1 or 4: that aux's ta
 // indexing, set once the device is chosen); false, the bindless form (Direct3D 12, and Vulkan with descriptor indexing).
 void program_use_bound_tables(bool bound) noexcept;
 [[nodiscard]] bool program_bound_tables() noexcept;
+// The prepass reads its triangle's number (true: Direct3D 12, and Vulkan with geometry shaders); false, the prepass
+// takes the form that names its item only and the surface pass finds the triangle by a ray (D11).
+void program_use_triangle_ids(bool ids) noexcept;
 
 // The pixel program's form for a draw of `aux`.
 [[nodiscard]] unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log2) noexcept;

@@ -1,0 +1,6 @@
+# The material review's decisions (RT-MASTER-PLAN 14.2 change 8, 14.4), applied last by the cooker
+# (hit_record::finish). A row a material: the model's file stem, the material's name (a trailing * matches names that
+# begin so), then any of: class (dielectric gloss metal glass ramp emissive painted translucent water), roughness,
+# metal, ior, thickness (units), tint keep, body, shine (0 to 16), emission (r g b). Empty fields keep the cooker's
+# numbers; a note says what the picture showed. A mod's pack may carry a file of the same form.
+model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note

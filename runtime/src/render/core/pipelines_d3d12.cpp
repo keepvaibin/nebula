@@ -291,7 +291,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     const unsigned program = program_variant(desc.pixel, aux,
         (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
     // The tracer's prepass of a motion draw goes through the vertex stage's motion form, as the draw itself will.
-    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramMotion} : program, false);
+    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramTracedMotion} : program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
         std::fprintf(stderr, "[pipelines] no program %llx %llx variant %u\n", static_cast<unsigned long long>(desc.vertex),

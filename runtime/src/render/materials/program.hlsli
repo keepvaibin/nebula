@@ -32,9 +32,9 @@ cbuffer View : register(b0) {
                                // bit 4 the traced light shown in place of the colour (--diagnostics rt-light)
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
     float4 view_traced;        // with bit 3: x the traced light's place among the textures, y the added light's,
-                               // z the mirror's
-    float4 view_tint;          // with bit 3: rgb what a shadow takes back from the sky (the stage's ambient colour,
-                               // by a share): a shadow is the sky's colour, not grey
+                               // z the mirror's, w the facing's
+    float4 view_stage_a;       // with bit 3: rgb the stage's ambient colour A, w kShadowTint (RT-MASTER-PLAN 3.4)
+    float4 view_stage_k;       // with bit 3: rgb the stage's key colour K
     float4 view_volume[3];     // with bit 3 in the scene's view: the light volume (traced_air), [2].z 1 where it is
 };
 
@@ -194,9 +194,9 @@ float fog_rev_exp2(float f) { const float g = 1.0 - f; return exp2(-8.0 * g * g)
 // The motion varyings follow the program's own coordinates: the text that uses them defines the two indices (numbers).
 #define VARYINGS_MOTION float4 mv_cur : NEBULA_TEXCOORD(NEBULA_MOTION_CURRENT_INDEX); float4 mv_prev : NEBULA_TEXCOORD(NEBULA_MOTION_PREVIOUS_INDEX);
 #define PLACE_OUT(o, p) o.pos = p.clip; o.mv_cur = p.mv_cur; o.mv_prev = p.mv_prev
-#elif NATIVE_PREPASS
+#elif NATIVE_PREPASS && !NATIVE_PREPASS_ITEM
 // The prepass's pixel stage takes the primitive's number where the motion form's varyings would stand: the last of its
-// inputs, which no vertex stage writes.
+// inputs, which no vertex stage writes. (NATIVE_PREPASS_ITEM: a device that cannot give it, below.)
 #define VARYINGS_MOTION uint primitive_ : SV_PrimitiveID;
 #define PLACE_OUT(o, p) o.pos = p.clip
 #else
@@ -245,8 +245,17 @@ NativeOut native_out_of(float4 c) {
 }
 
 #if NATIVE_TRACED
-// The pixel's traced light: r the sun's share, g the fill's (all of it), b the lamp's, a the ground's (drop shadows,
-// and the sun's shadow on what is not lit). All of every light when the view carries none (view_flags bit 3).
+// The pixel's traced light (the light pass's): rgb V, the sun's share a channel; a O, the sky's share. All of every
+// light when the view carries none (view_flags bit 3). A lit program sets g_traced_lit (program_lit.hlsli).
+static bool g_traced_lit = false;
+// A lit program's channel 0 light level (the generator's TRACED_LEVEL), so the added light takes its colour before
+// lighting: c / level.
+static float3 g_traced_level = float3(1.0, 1.0, 1.0);
+float3 traced_level(float3 level) {
+    g_traced_level = level;
+    return level;
+}
+#define TRACED_LEVEL(x) traced_level(x)
 float4 traced_at(float4 pixel) {
     if ((view_flags & 8u) == 0u) {
         return float4(1.0, 1.0, 1.0, 1.0);
@@ -260,6 +269,17 @@ float4 traced_at(float4 pixel) {
 // the blend would take of it).
 float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
+    if (mirror.a < -0.5) {
+        return float4(colour, alpha);  // a substitute: the environment fetch took the mirror in (env_fetch)
+    }
+    if (mirror.a > 3.5) {
+        // Glass and water (RT-MASTER-PLAN 13.2, 13.3): F = a - 4, the body's share of the alpha in the added
+        // picture's a, rgb F R.
+        const float f = saturate(mirror.a - 4.0);
+        const float body = (1.0 - f) * saturate(gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).a) * alpha;
+        const float covered = f + body;
+        return float4((body * colour + mirror.rgb) / max(covered, 1e-4), covered);
+    }
     if (mirror.a > 1.5) {
         // Blended: its alpha by what stays (glass clears where a real mirror stands for its painted one), and the
         // mirror by that alpha's inverse, so the blend gives all of it.
@@ -268,13 +288,50 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
     }
     return float4(colour * mirror.a + mirror.rgb, alpha);
 }
+// A painted environment map's texel where the light pass traced what the surface mirrors (RT-MASTER-PLAN 12.4
+// SUBSTITUTE): the mirror picture holds rgb R tinted by the map's own colour and the class's gain, a -(1 + keep), keep
+// how much of the painted shine comes back where R is dark. Elsewhere the texel as it is.
+float4 env_fetch(float4 painted, float4 pixel) {
+    if ((view_flags & 8u) == 0u) {
+        return painted;
+    }
+    const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
+    return mirror.a < -0.5 ? float4(mirror.rgb + painted.rgb * (-mirror.a - 1.0), painted.a) : painted;
+}
+// The program's fetch of a painted environment map (the generator wraps it); `i` holds the pixel.
+#define ENV_FETCH(t) env_fetch(t, i.pos)
+// The light under a painted surface (RT-MASTER-PLAN 3.4): its art holds the stage's light, ambient A and key K by how
+// it faces the key (nl); the traced light keeps the key's part by V and the ambient's by O, a channel at a time
+// (a shadow takes the sky's colour, and a coloured thing's shadow its colour) and in luminance, mixed by
+// kShadowTint. In open sun with nothing near: 1.
+float3 traced_painted(float4 light, float nl) {
+    const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
+    const float o = light.a;
+    const float3 whole = a + k * nl;
+    const float3 channel = float3(whole.r > 1e-4 ? (a.r * o + k.r * nl * v.r) / whole.r : 1.0,
+                                  whole.g > 1e-4 ? (a.g * o + k.g * nl * v.g) / whole.g : 1.0,
+                                  whole.b > 1e-4 ? (a.b * o + k.b * nl * v.b) / whole.b : 1.0);
+    const float3 luminance = float3(0.2126, 0.7152, 0.0722);
+    const float al = dot(a, luminance), kl = dot(k, luminance) * nl;
+    const float mean = al + kl > 1e-4 ? (al * o + kl * dot(v, luminance)) / (al + kl) : 1.0;
+    return lerp(float3(mean, mean, mean), channel, view_stage_a.w);
+}
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
         return c;
     }
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
     const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
-    return (view_flags & 16u) != 0u ? float4(float3(light.r, light.a, light.b) * 0.7 + added, c.a) : traced_mirror(c.rgb * (light.a + (1.0 - light.a) * view_tint.rgb + added), c.a, pixel);
+    if ((view_flags & 16u) != 0u) {
+        return float4(float3(light.r, light.a, light.b) * 0.7 + added, c.a);
+    }
+    // A lit program took its key by V and its fill and ambient by O inside its light sums: nothing more here.
+    const float nl = g_traced_lit ? 1.0 : saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
+    const float3 share = g_traced_lit ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl);
+    // The added light by the surface's colour before lighting (a painted program's colour is that already).
+    const float kBaseFloor = 0.2;
+    const float3 base = g_traced_lit ? c.rgb / max(g_traced_level, kBaseFloor) : c.rgb;
+    return traced_mirror(c.rgb * share + base * added, c.a, pixel);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
 // 4: a particle that is no light): its colour times what of the stage's light and the local lights' reaches the air
@@ -314,7 +371,18 @@ float4 traced_scatter(float4 c, float4 pixel) {
 #define PROGRAM_LIGHT(c) (c)
 #endif
 
-#if NATIVE_PREPASS
+#ifndef ENV_FETCH
+#define ENV_FETCH(t) (t)
+#endif
+#ifndef TRACED_LEVEL
+#define TRACED_LEVEL(x) (x)
+#endif
+
+#if NATIVE_PREPASS && NATIVE_PREPASS_ITEM
+// A Vulkan device without geometry shaders gives a pixel stage no primitive number (D11): the item only, and the
+// surface pass finds the triangle by a ray (rt_surface.hlsl kItemNoTriangle).
+#define PROGRAM_RETURN(c) { NativeOut out_ = native_out_of(c); out_.item.y = 0xFFFFFFFFu; return out_; }
+#elif NATIVE_PREPASS
 // The prepass names the pixel's triangle too (the primitive's number, among a pixel stage's inputs: VARYINGS_MOTION).
 #define PROGRAM_RETURN(c) { NativeOut out_ = native_out_of(c); out_.item.y = i.primitive_; return out_; }
 #elif NATIVE_MOTION

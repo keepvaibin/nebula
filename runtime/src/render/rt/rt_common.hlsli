@@ -316,6 +316,8 @@ float3 rt_unoct(float2 o) {
 }
 
 static const uint kSurfaceLit = 16u, kSurfaceEmissive = 32u, kSurfaceEnvironment = 64u, kSurfaceTwoSided = 128u;
+// The hit record's flags (nebula_model.h NEBULA_HIT_*) a pass reads from item word 11.
+static const uint kHitPaintedShadow = 64u;
 
 // A pixel's surface as the surface pass left it.
 struct RtSurface {

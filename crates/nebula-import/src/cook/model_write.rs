@@ -9,9 +9,9 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 5;
+pub const VERSION: u32 = 7;
 pub const HEADER_WORDS: usize = 30;
-pub const HIT_BYTES: usize = 88;
+pub const HIT_BYTES: usize = 120;
 pub const STAGE_BYTES: usize = 36;
 pub const JOINT_BYTES: usize = 96;
 pub const MESH_BYTES: usize = 100;
@@ -382,6 +382,221 @@ impl Blob {
     }
 }
 
+/// How much light crosses inside each material (RT-MASTER-PLAN 13.2): over the meshes it draws, their bounds, area and
+/// enclosed volume, and whether together they close (every edge, corners welded by place, shared by two triangles).
+#[derive(Clone, Copy)]
+struct Measure {
+    low: [f32; 3],
+    high: [f32; 3],
+    area: f64,
+    volume: f64,
+    closed: bool,
+    seen: bool,
+}
+
+impl Measure {
+    fn new() -> Measure {
+        Measure { low: [f32::MAX; 3], high: [f32::MIN; 3], area: 0.0, volume: 0.0, closed: true, seen: false }
+    }
+
+    fn add(&mut self, positions: &[[f32; 3]], indices: &[u32]) {
+        let (low, high) = mesh_bounds(positions);
+        for k in 0..3 {
+            self.low[k] = self.low[k].min(low[k]);
+            self.high[k] = self.high[k].max(high[k]);
+        }
+        self.seen = self.seen || !positions.is_empty();
+        let mut welded: HashMap<[u32; 3], u32> = HashMap::new();
+        let mut id = |p: [f32; 3]| {
+            let next = welded.len() as u32;
+            *welded.entry(p.map(f32::to_bits)).or_insert(next)
+        };
+        let mut edges: HashMap<(u32, u32), u32> = HashMap::new();
+        for t in indices.chunks_exact(3) {
+            let (Some(&a), Some(&b), Some(&c)) = (positions.get(t[0] as usize), positions.get(t[1] as usize), positions.get(t[2] as usize)) else {
+                self.closed = false;
+                continue;
+            };
+            let (u, v) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]);
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            self.area += 0.5 * f64::from((n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt());
+            self.volume += f64::from(a[0] * (b[1] * c[2] - b[2] * c[1]) + a[1] * (b[2] * c[0] - b[0] * c[2]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0;
+            let k = [id(a), id(b), id(c)];
+            for (p, q) in [(k[0], k[1]), (k[1], k[2]), (k[2], k[0])] {
+                *edges.entry((p.min(q), p.max(q))).or_default() += 1;
+            }
+        }
+        if edges.values().any(|&n| n != 2) {
+            self.closed = false;
+        }
+    }
+
+    fn thickness(&self) -> f32 {
+        if !self.seen {
+            return 0.0;
+        }
+        if self.closed && self.area > 0.0 && self.volume.abs() > 0.0 {
+            return (3.0 * self.volume.abs() / self.area) as f32;
+        }
+        let smallest = (0..3).map(|k| self.high[k] - self.low[k]).fold(f32::MAX, f32::min);
+        (0.5 * smallest).max(1.0)
+    }
+}
+
+/// Below this share of smooth residual a model's paint holds detail shadows of its own (RT-MASTER-PLAN 14.6).
+const PAINTED_SHADOW_SMOOTH: f64 = 0.5;
+
+/// The painted light of a model's vertex-coloured meshes (RT-MASTER-PLAN 14.6; agents/rt/tools/debake_study.py does the
+/// same over a pak): each mesh's vertex luminance fitted by an ambient and one directional light (least squares over
+/// its vertices, unclamped), and the share of what the fit leaves that is smooth over the surface (the variance of
+/// the residual's triangle means against the residual's own), weighted by vertices over the model.
+#[derive(Default)]
+struct PaintedLight {
+    weight: f64,
+    smooth: f64,
+}
+
+impl PaintedLight {
+    fn add(&mut self, s: &MeshStreams) {
+        let count = s.positions.len();
+        if count < 16 || s.normals.len() != count || s.colors.len() != count {
+            return;
+        }
+        // Luminance (Rec. 601, as the study) of colour 0, stored 0xRRGGBBAA.
+        let luminance = |c: u32| (0.299 * f64::from(c >> 24) + 0.587 * f64::from(c >> 16 & 255) + 0.114 * f64::from(c >> 8 & 255)) / 255.0;
+        let mut rows: Vec<Option<([f64; 4], f64)>> = Vec::with_capacity(count);
+        let mut normal_sums = [[0.0f64; 4]; 4];
+        let mut target_sums = [0.0f64; 4];
+        let mut good = 0usize;
+        for (n, &c) in s.normals.iter().zip(&s.colors) {
+            let n = n.map(f64::from);
+            let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            if length <= 1e-6 {
+                rows.push(None);
+                continue;
+            }
+            let x = [1.0, n[0] / length, n[1] / length, n[2] / length];
+            let y = luminance(c);
+            for i in 0..4 {
+                for j in 0..4 {
+                    normal_sums[i][j] += x[i] * x[j];
+                }
+                target_sums[i] += x[i] * y;
+            }
+            rows.push(Some((x, y)));
+            good += 1;
+        }
+        if good < 16 {
+            return;
+        }
+        let Some(fit) = solve4(normal_sums, target_sums) else { return };
+        let mut residual = vec![0.0f64; count];
+        let (mut sum, mut sum2) = (0.0f64, 0.0f64);
+        for (r, row) in residual.iter_mut().zip(&rows) {
+            if let Some((x, y)) = row {
+                *r = y - (0..4).map(|k| fit[k] * x[k]).sum::<f64>();
+                sum += *r;
+                sum2 += *r * *r;
+            }
+        }
+        let good_variance = sum2 / good as f64 - (sum / good as f64).powi(2);
+        let mut smooth = 0.0f64;
+        if s.indices.len() >= 3 && good_variance > 1e-9 {
+            let all_mean = residual.iter().sum::<f64>() / count as f64;
+            let all_variance = residual.iter().map(|r| (r - all_mean).powi(2)).sum::<f64>() / count as f64;
+            let means: Vec<f64> = s.indices.chunks_exact(3)
+                .map(|t| t.iter().map(|&i| residual.get(i as usize).copied().unwrap_or(0.0)).sum::<f64>() / 3.0)
+                .collect();
+            let means_mean = means.iter().sum::<f64>() / means.len() as f64;
+            let means_variance = means.iter().map(|m| (m - means_mean).powi(2)).sum::<f64>() / means.len() as f64;
+            if all_variance > 0.0 {
+                smooth = (means_variance / all_variance).min(1.0);
+            }
+        }
+        self.weight += good as f64;
+        self.smooth += smooth * good as f64;
+    }
+
+    /// Whether the model's paint holds detail shadows of its own: a tracer shadows its painted materials by lit
+    /// things only (NEBULA_HIT_PAINTED_SHADOW).
+    fn holds_shadows(&self) -> bool {
+        self.weight > 0.0 && self.smooth / self.weight < PAINTED_SHADOW_SMOOTH
+    }
+}
+
+/// The least squares solution of four normal equations (Gaussian elimination, partial pivoting); a whisker added to the
+/// diagonal keeps a flat mesh (every normal alike: the columns dependent) solvable. None when it still is not.
+fn solve4(mut a: [[f64; 4]; 4], mut b: [f64; 4]) -> Option<[f64; 4]> {
+    let trace = (0..4).map(|i| a[i][i]).sum::<f64>();
+    for (i, row) in a.iter_mut().enumerate() {
+        row[i] += 1e-9 * trace.max(1e-12);
+    }
+    for col in 0..4 {
+        let pivot = (col..4).max_by(|&p, &q| a[p][col].abs().total_cmp(&a[q][col].abs()))?;
+        if a[pivot][col].abs() < 1e-15 {
+            return None;
+        }
+        a.swap(col, pivot);
+        b.swap(col, pivot);
+        for row in col + 1..4 {
+            let f = a[row][col] / a[col][col];
+            for k in col..4 {
+                a[row][k] -= f * a[col][k];
+            }
+            b[row] -= f * b[col];
+        }
+    }
+    let mut x = [0.0f64; 4];
+    for row in (0..4).rev() {
+        let rest = (row + 1..4).map(|k| a[row][k] * x[k]).sum::<f64>();
+        x[row] = (b[row] - rest) / a[row][row];
+    }
+    Some(x)
+}
+
+/// Each material's thickness (nebula_model.h NebulaModelHit.thickness), by its meshes (the audit's; the cook measures
+/// as it writes).
+pub fn material_measures(ir: &ModelIr, stem: &str) -> Vec<f32> {
+    let mut measures = vec![Measure::new(); ir.materials.len()];
+    for shape in &ir.shapes {
+        if let (Ok(streams), Some(m)) = (flatten(&ir.arrays, shape, None), measures.get_mut(shape.material as usize)) {
+            m.add(&streams.positions, &streams.indices);
+        }
+    }
+    let _ = stem;
+    measures.iter().map(Measure::thickness).collect()
+}
+
+/// A reading as the cook finishes it (hit_record::finish, then the art's numbers): the painted reflection's map gives
+/// its colour and, for metal and gloss, the roughness.
+pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32, r: &mut super::hit_record::Reading) {
+    use super::hit_record::{mean_colour, roughness_of_map, Class};
+    let Some(m) = ir.materials.get(material) else { return };
+    if r.env_map != 0xFF {
+        let record = m
+            .textures
+            .get(r.env_map as usize)
+            .and_then(|&t| ir.textures.get(t as usize))
+            .and_then(|t| ir.records.get(t.record))
+            .and_then(|bytes| super::texture::record_level0(bytes));
+        if let Some((w, h, texels)) = record {
+            if let Some(mean) = mean_colour(&texels) {
+                let tint = [r.env_tint[0] * mean[0], r.env_tint[1] * mean[1], r.env_tint[2] * mean[2]];
+                let top = tint[0].max(tint[1]).max(tint[2]);
+                if top > 1e-4 {
+                    r.env_tint = tint.map(|v| v / top);
+                }
+            }
+            if matches!(r.class, Class::Metal | Class::Gloss) {
+                if let Some(roughness) = roughness_of_map(w, h, &texels) {
+                    r.roughness = roughness;
+                }
+            }
+        }
+    }
+    super::hit_record::finish(stem, &m.name, thickness, r);
+}
+
 /// Which mesh corners the program reads comes with the generator; here a mesh holds what its source held.
 fn mesh_bounds(positions: &[[f32; 3]]) -> ([f32; 3], [f32; 3]) {
     if positions.is_empty() {
@@ -512,6 +727,10 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     b.align(4);
     // Meshes: records now, streams after the materials, offsets patched.
     let meshes_at = b.at();
+    let mut measures = vec![Measure::new(); ir.materials.len()];
+    // The painted light of the model's vertex-coloured meshes (14.6): whether its paint holds shadows of its own.
+    let vertex_coloured: Vec<bool> = ir.materials.iter().map(|m| super::hit_record::read(m).signals.vertex_colour).collect();
+    let mut painted = PaintedLight::default();
     let mut mesh_slots = Vec::with_capacity(ir.shapes.len());
     let mut meshes = Vec::with_capacity(ir.shapes.len());
     for shape in &ir.shapes {
@@ -524,6 +743,12 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             mesh_order::cache_order(&mut streams.refined_indices, vertices);
         }
         mesh_slots.push(b.0.len());
+        if let Some(m) = measures.get_mut(shape.material as usize) {
+            m.add(&streams.positions, &streams.indices);
+        }
+        if vertex_coloured.get(shape.material as usize).copied().unwrap_or(false) {
+            painted.add(&streams);
+        }
         let (min, max) = mesh_bounds(&streams.positions);
         b.fs(&min);
         b.fs(&max);
@@ -848,8 +1073,10 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
     b.align(4);
     let hits_at = b.at();
     let mut stage_slots = Vec::new();
-    for m in &ir.materials {
-        let r = super::hit_record::read(m);
+    let paint_holds_shadows = painted.holds_shadows();
+    for (i, m) in ir.materials.iter().enumerate() {
+        let mut r = super::hit_record::read(m);
+        finish_reading(ir, stem, i, measures[i].thickness(), &mut r);
         let s = &r.signals;
         let stages = (m.pixel_stage_count as usize).min(m.stages.len());
         b.u8(r.class as u8);
@@ -859,8 +1086,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             | u8::from(s.alpha_test) << 2
             | u8::from(s.vertex_colour) << 3
             | u8::from(s.environment) << 4
-            | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5);
-        b.u8(0);
+            | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5
+            | u8::from(paint_holds_shadows && s.vertex_colour && !s.lit) << 6);
+        b.u8(r.glow_source);
         b.f32(r.roughness);
         b.f32(r.metal);
         b.f32(r.ior);
@@ -875,8 +1103,17 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
                 b.u8(c);
             }
         }
-        b.u32(0);
-        b.fs(&super::hit_record::glow_of(stem, &r));
+        b.f32(r.thickness);
+        b.fs(&super::hit_record::glow_of(stem, &m.name, &r));
+        b.fs(&r.env_tint);
+        b.u8(r.env_map);
+        b.u8(0);
+        b.u8(0);
+        b.u8(0);
+        b.f32(r.body);
+        b.f32(r.shine);
+        b.f32(r.tint_keep);
+        b.f32(0.0);
     }
     for (m, &slot) in ir.materials.iter().zip(&stage_slots) {
         let stages = (m.pixel_stage_count as usize).min(m.stages.len());

@@ -169,6 +169,36 @@ void no_surface(uint2 id, bool second) {
     g_base[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+// The item map's triangle where the prepass could not name it (a Vulkan device without geometry shaders, D11).
+static const uint kItemNoTriangle = 0xFFFFFFFFu;
+
+// The pixel's triangle of `item` (from 1) by one ray from the eye along its view ray: of that item's triangles the
+// ray meets, the one nearest `away` (the depth; an alpha-cut part of the item may stand nearer and let the pixel
+// through), or the nearest where `away` < 0 (no depth of the layer's). kItemNoTriangle where it meets none.
+uint triangle_by_ray(uint item, float2 centre, float away) {
+    RayDesc ray;
+    ray.Origin = float3(0.0f, 0.0f, 0.0f);
+    ray.Direction = rt_eye_ray(g_ray, centre);  // z -1: the ray's t is the distance along -z, as `away`
+    ray.TMin = 0.0f;
+    ray.TMax = away > 0.0f ? away * 1.01f + 1.0f : 1.0e30f;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, 0xFFu, ray);
+    uint found = kItemNoTriangle;
+    float best = 1.0e30f;
+    while (query.Proceed()) {
+        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE && query.CandidateInstanceID() == item - 1u) {
+            const float t = query.CandidateTriangleRayT();
+            const float off = away > 0.0f ? abs(t - away) : t;
+            if (off < best) {
+                best = off;
+                found = query.CandidatePrimitiveIndex();
+            }
+        }
+    }
+    InterlockedAdd(g_counters[17], 1u);
+    return found;
+}
+
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     uint width, height;
@@ -202,8 +232,15 @@ void main(uint3 id : SV_DispatchThreadID) {
     float away = -rt_eye_z(g_depth, depth);
     float3 at = rt_eye_ray(g_ray, centre) * away;
     float3 normal;
+    // The pixel's triangle: the prepass's, or where it could not name one the ray's (D11). The first layer with none
+    // found keeps the depth's own normal (no mesh: arena 8).
+    uint triangle_ = named.y;
+    if (triangle_ == kItemNoTriangle) {
+        triangle_ = triangle_by_ray(item, centre, second ? -1.0f : away);
+    }
+    const uint4 shaded = triangle_ == kItemNoTriangle ? uint4(words4.xy, 8u, words4.w) : words4;
     if (second) {
-        if (!triangle_place(words4, mesh, third.z, named.y, rt_eye_ray(g_ray, centre), at, normal)) {
+        if (!triangle_place(shaded, mesh, third.z, triangle_, rt_eye_ray(g_ray, centre), at, normal)) {
             no_surface(id.xy, second);
             return;
         }
@@ -216,7 +253,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float2 coordinate;
     float4 vertex_colour;
     float map_per_pixel;
-    const float3 smooth_ = shading_normal(words4, mesh, third.z, fourth.y, named.y, at, normal, lifted, before, before_known,
+    const float3 smooth_ = shading_normal(shaded, mesh, third.z, fourth.y, triangle_, at, normal, lifted, before, before_known,
                                           coordinate, vertex_colour, map_per_pixel);
     {
         // Where the point was the frame before (both layers: each follows its own surfaces).

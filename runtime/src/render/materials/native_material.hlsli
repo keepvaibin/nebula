@@ -13,6 +13,16 @@
 // draw's prepass (its vertex stage's motion form) links.
 
 #include "program.hlsli"
+// NATIVE_LIT (set by a written material that sums the game's lights in its vertex stage: fur, the Mii face, the
+// trample star): its traced form (NATIVE_TRACED, a vertex form of its own) carries where the vertex is, its normal,
+// its light set and its colour 0 to the pixel stage, which sums the same lights again, each by its share
+// (program_lit.hlsli: light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight
+// (RT-MASTER-PLAN 14.3 item 4). Its other forms are as they were.
+#if NATIVE_LIT
+#include "program_lit.hlsli"
+#else
+#define AMBIENT_TERM(x) (x)
+#endif
 
 #ifndef NATIVE_COORDS
 #error a written material defines NATIVE_COORDS before including native_material.hlsli
@@ -83,9 +93,19 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     return lerp(c, fog_color.rgb, f);
 }
 
+#if NATIVE_LIT && NATIVE_TRACED
+#if NATIVE_COORDS > 2
+#error the light varyings of a lit written material follow the motion pair and at most two coordinates (TEXCOORD4-7)
+#endif
+#define NATIVE_LIT_MEMBERS PER_SAMPLE float3 lit_eye : TEXCOORD4; PER_SAMPLE float3 lit_nrm : TEXCOORD5; \
+    nointerpolation uint lit_light : TEXCOORD6; PER_SAMPLE float4 lit_color0 : TEXCOORD7;
+#else
+#define NATIVE_LIT_MEMBERS
+#endif
+
 #define NATIVE_VARYING_MEMBERS \
     float4 pos : SV_Position; PER_SAMPLE float4 color : COLOR0; PER_SAMPLE float4 color1 : COLOR1; PER_SAMPLE float4 uv[NATIVE_COORDS] : NATIVE_UV_SEMANTIC; \
-    VARYINGS_MOTION
+    VARYINGS_MOTION NATIVE_LIT_MEMBERS
 
 // What the vertex stage writes and the pixel stage reads.
 struct NativeVaryings {
@@ -131,6 +151,14 @@ struct NativeVertex {
 };
 
 void material_vertex(NativeVertex v, inout NativeVaryings o);
+
+// The vertex's normal in eye space through its draw's normal rows (unit length, or zero): what a lit material lights.
+float3 native_lit_normal(NativeVertex v) {
+    const uint nq = v.pn_row;
+    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
+                             dot(native_normal_row(nq + 2u).xyz, v.nrm));
+    return dot(nt, nt) > 0.0 ? normalize(nt) : nt;
+}
 
 #if NATIVE_WIDE
 // A spreading line's or point's texture coordinates move a whole texel-space unit on its far edges.
@@ -182,6 +210,12 @@ NativeVaryings native_vs(NativeVertexIn input) {
     NativeVaryings o = (NativeVaryings)0;
     PLACE_OUT(o, place);
     material_vertex(v, o);
+#if NATIVE_LIT && NATIVE_TRACED
+    o.lit_eye = v.eye;
+    o.lit_nrm = native_lit_normal(v);
+    o.lit_light = place.light;
+    o.lit_color0 = v.color0;
+#endif
 #if NATIVE_WIDE
     // A corner of a widened point or line: moved out by the draw's size in pixels. A line widens across its major axis
     // (a steep one across x, a flat one across y); the second edge's coordinates move.
@@ -209,7 +243,21 @@ NativeVaryings native_vs(NativeVertexIn input) {
 }
 #endif
 
+#if NATIVE_LIT && NATIVE_TRACED
+// A lit written material's lights at the pixel (`nrm` unit length or zero): its varyings' lit colours set again; true
+// when it lit them (false: none of its channels is lit here, its colour is painted).
+bool material_relight(inout NativeVaryings i, float3 nrm);
+#endif
+
 NativeOut native_ps(NativeVaryings i) {
+#if NATIVE_LIT && NATIVE_TRACED
+    // The material's lights summed again here, each by how much of it reaches the pixel (the light pass's shares).
+    if ((view_flags & 8u) != 0u) {
+        g_light_base = i.lit_light;
+        g_traced = traced_at(i.pos);
+        g_traced_lit = material_relight(i, dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : i.lit_nrm);
+    }
+#endif
     // The material's colour as it is; the target rounds it once.
     const float4 c = saturate(material_color(i));
     PROGRAM_RETURN(c);

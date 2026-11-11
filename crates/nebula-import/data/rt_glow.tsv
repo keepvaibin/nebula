@@ -71,3 +71,15 @@ tripodbossheadlight	1.0 0.90 0.70	3000
 teresaroomglaringlight	1.0 0.95 0.80	1200
 dashring	own	100
 prizering	own	120
+# Decided by agents/rt/tools/glow_audit.py's review (census/glow_decisions.tsv, 11-11). `model/material`: that material alone.
+meramera	1.0 0.55 0.20	150
+mariofireball	1.0 0.50 0.15	500
+ballbeamer/ray_v	1.0 0.90 0.77	300
+ringbeamer/ray_v	1.0 0.90 0.77	300
+jumpbeamerbody/ray_v	1.0 0.90 0.77	300
+icelavaislandlavamovablestepa/lava_v	1.0 0.45 0.12	400
+lavageyser	1.0 0.45 0.12	400
+lavaminisunplanet	own	3000
+lavaprominence	own	600
+shootingstar	own	60
+gcapturetarget	0.55 0.70 1.0	250

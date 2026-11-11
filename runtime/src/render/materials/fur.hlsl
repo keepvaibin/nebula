@@ -20,6 +20,7 @@ struct MaterialConstants {
 
 #define NATIVE_SHELL 1
 #define NATIVE_COORDS 1
+#define NATIVE_LIT 1
 #include "native_material.hlsli"
 
 float2 fur_coord(NativeVertex v, uint i) {
@@ -27,11 +28,8 @@ float2 fur_coord(NativeVertex v, uint i) {
     return float2(dot(c, material.coord[3u * i]), dot(c, material.coord[3u * i + 1u]));
 }
 
-void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    const uint nq = v.pn_row;
-    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
-                             dot(native_normal_row(nq + 2u).xyz, v.nrm));
-    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
+// Channels 0 and 1 (the specular) at a place: the lights each mask names over the channel's ambient.
+void fur_light(float3 eye, float3 nrm, float4 color0, out float3 c0, out float3 c1) {
     const uint mask0 = uint(material.params.x);
     const uint mask1 = uint(material.params.y);
     const uint src = uint(material.params.z);
@@ -40,20 +38,37 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     // The masks travel in float constants (24 bits); the set holds as many lights as the game lit.
     for (uint n = 0u; n < min(native_light_count(), 24u); ++n) {
         if (((mask0 >> n) & 1u) != 0u) {
-            lit0 += channel_light(n, 2u, 2u, v.eye, nrm).rgb;
+            lit0 += channel_light(n, 2u, 2u, eye, nrm).rgb;
         }
         if (((mask1 >> n) & 1u) != 0u) {
-            lit1 += channel_light(n, 1u, 0u, v.eye, nrm).rgb;
+            lit1 += channel_light(n, 1u, 0u, eye, nrm).rgb;
         }
     }
-    const float3 amb0 = (src & 1u) != 0u ? v.color0.rgb : material.amb0.rgb;
-    const float3 mat0 = (src & 2u) != 0u ? v.color0.rgb : material.mat0.rgb;
-    const float3 amb1 = (src & 4u) != 0u ? v.color0.rgb : material.amb1.rgb;
-    const float3 mat1 = (src & 8u) != 0u ? v.color0.rgb : material.mat1.rgb;
-    o.color = float4(mat0 * saturate((amb0 * 255.0 + lit0) / 255.0), material.mat0.a);
-    o.color1 = float4(mat1 * saturate((amb1 * 255.0 + lit1) / 255.0), material.mat1.a);
+    const float3 amb0 = (src & 1u) != 0u ? color0.rgb : material.amb0.rgb;
+    const float3 mat0 = (src & 2u) != 0u ? color0.rgb : material.mat0.rgb;
+    const float3 amb1 = (src & 4u) != 0u ? color0.rgb : material.amb1.rgb;
+    const float3 mat1 = (src & 8u) != 0u ? color0.rgb : material.mat1.rgb;
+    c0 = mat0 * saturate((AMBIENT_TERM(amb0) * 255.0 + lit0) / 255.0);
+    c1 = mat1 * saturate((AMBIENT_TERM(amb1) * 255.0 + lit1) / 255.0);
+}
+
+void material_vertex(NativeVertex v, inout NativeVaryings o) {
+    float3 c0, c1;
+    fur_light(v.eye, native_lit_normal(v), v.color0, c0, c1);
+    o.color = float4(c0, material.mat0.a);
+    o.color1 = float4(c1, material.mat1.a);
     o.uv[0] = float4(fur_coord(v, 0u), fur_coord(v, 1u));
 }
+
+#if NATIVE_TRACED
+bool material_relight(inout NativeVaryings i, float3 nrm) {
+    float3 c0, c1;
+    fur_light(i.lit_eye, nrm, i.lit_color0, c0, c1);
+    i.color.rgb = c0;
+    i.color1.rgb = c1;
+    return true;
+}
+#endif
 
 float4 material_color(NativeVaryings i) {
     const float4 t0 = TEX(0).Sample(SAMP(0), i.uv[0].xy);

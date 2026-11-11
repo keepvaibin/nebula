@@ -35,6 +35,7 @@ enum Diagnostic : unsigned {
     kDiagnoseRtReference = 1u << 20u,    // rt-reference: the reference path tracer's signals in place of the real-time passes'
     kDiagnoseRtSignals = 1u << 21u,      // rt-signals: each kept picture's lighting signals as pictures of their own (signal_*.ppm)
     kDiagnoseRtMotion = 1u << 22u,       // rt-motion: where each pixel's point was the frame before, as colours (across red, down green, unknown blue)
+    kDiagnoseRtNoGeometry = 1u << 24u,   // rt-no-geometry: a test: the Vulkan device is made as one without geometry shaders
     kDiagnoseRtToggle = 1u << 23u,       // rt-toggle: ray tracing switched off and on every 90 frames (the setting changed while the game runs)
 };
 
@@ -69,6 +70,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-reference", kDiagnoseRtReference},
     {"rt-signals", kDiagnoseRtSignals},
     {"rt-motion", kDiagnoseRtMotion},
+    {"rt-no-geometry", kDiagnoseRtNoGeometry},
     {"rt-toggle", kDiagnoseRtToggle},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},

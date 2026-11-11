@@ -191,13 +191,27 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
         // the aux the scene pass gives an opaque draw.
         const bool prepass = traced && (prepass_draws(entry.desc.state) || blended_prepass_draws(entry.desc.state));
         const bool lit = prepass && program_traced(entry.desc.pixel);
+        const bool blended = blended_prepass_draws(entry.desc.state);
         for (const unsigned variant : variants) {
             add(variant, 0u);
             const bool scene = (variant & kSceneVariantTarget) == 0u && (variant & kSceneVariantSamplesMask) == 0u;
             if (scene && prepass) {
-                add(variant, motion ? kAuxPrepassMotion : kAuxPrepass);
+                // The aux the scene pass gives it (draw_walker scene_aux): with motion written, an opaque draw the
+                // motion (1), a blended one the reactive mask (2; 3 in a layer window too), or with one pass for the
+                // scene the motion target left alone (4); without motion, none. The prepass runs the same vertex form.
+                const bool writes_motion = motion && !blended;
+                add(variant, writes_motion ? kAuxPrepassMotion : kAuxPrepass);
                 if (lit) {
-                    add(variant, kAuxTraced | (motion ? 1u : 0u));
+                    if (!motion || !blended) {
+                        add(variant, kAuxTraced | (writes_motion ? 1u : 0u));
+                    } else if (one_pass) {
+                        add(variant, kAuxTraced | 4u);
+                    } else {
+                        add(variant, kAuxTraced | 2u);
+                        if (layer) {
+                            add(variant, kAuxTraced | 3u);
+                        }
+                    }
                 }
             }
             if (!motion || !scene) {

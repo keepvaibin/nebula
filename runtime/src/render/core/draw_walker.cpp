@@ -479,7 +479,8 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     }
     rows.traced[3] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_facing_slot_) : 0.0f;
     if ((view_flags_ & 8u) != 0u) {
-        std::memcpy(rows.tint, rt_tint_, sizeof(rows.tint));
+        std::memcpy(rows.stage_a, rt_stage_a_, sizeof(rows.stage_a));
+        std::memcpy(rows.stage_k, rt_stage_k_, sizeof(rows.stage_k));
     }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
@@ -1056,7 +1057,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         if (rt_prepass_walk_) {
             // Through the vertex stage the scene pass will use for it: the two passes find one depth.
             aux = static_cast<std::uint8_t>(aux == 1u ? kAuxPrepassMotion : kAuxPrepass);
-        } else if (rt_light_on_ && scene_layer && rt_prepassed_[i] != 0u && (aux == 0u || aux == 1u || aux == 4u) &&
+        } else if (rt_light_on_ && scene_layer && rt_prepassed_[i] != 0u && aux <= 4u &&
                    program_traced(entry.desc.pixel)) {
             aux = static_cast<std::uint8_t>(aux | kAuxTraced);  // a surface the light pass saw: its colour and lights by their shares
         }
