@@ -369,6 +369,6 @@ fn the_mod_higher_in_the_list_wins() {
     let above = winners(Some(0));
     assert_eq!(below.len(), 2, "{below:?}");
     assert_eq!(above.len(), 2, "{above:?}");
-    assert!(below.iter().all(|(_, m)| m.ends_with("other.mod's is used.") || m.ends_with("other.mod's change is used.")), "{below:?}");
-    assert!(above.iter().all(|(_, m)| m.ends_with("test.mod's is used.") || m.ends_with("test.mod's change is used.")), "{above:?}");
+    assert!(below.iter().all(|(_, m)| m.contains("; other.mod's") && m.ends_with("(it is higher in the list).")), "{below:?}");
+    assert!(above.iter().all(|(_, m)| m.contains("; test.mod's") && m.ends_with("(it is higher in the list).")), "{above:?}");
 }

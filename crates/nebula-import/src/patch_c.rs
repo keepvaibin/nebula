@@ -180,7 +180,7 @@ pub unsafe extern "C" fn luma_patch_table(input: *const LumaPatchInput) -> *mut 
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(input))) {
         Ok(Ok(result)) => Box::into_raw(Box::new(result)),
         Ok(Err(why)) => failed(&why),
-        Err(_) => failed("the applier panicked"),
+        Err(payload) => failed(&format!("the applier failed (a bug): {}", crate::validate_c::panic_text(payload.as_ref()))),
     }
 }
 
