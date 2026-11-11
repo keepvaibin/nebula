@@ -300,19 +300,44 @@ pub struct ScenarioCell {
     /// The column as the patch names it (a zone's name, or its hash as `0x` and 8 hex digits).
     pub column: String,
     pub value: i64,
+    /// A row of a table the mod brings whole (the base: the highest mod's whole table wins), not a patch's cell
+    /// (which edits whatever base there is). `scenario_order` (V4-1).
+    pub whole: bool,
 }
 
 impl ScenarioCell {
-    /// As `Touches::scenarios` keeps it.
+    /// As `Touches::scenarios` keeps it: galaxy, ScenarioNo, column, value and `whole` or `patch`, joined by U+001F.
     pub fn kept(&self) -> String {
-        format!("{}\u{1f}{}\u{1f}{}\u{1f}{}", self.galaxy, self.scenario, self.column, self.value)
+        let from = if self.whole { "whole" } else { "patch" };
+        format!("{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{from}", self.galaxy, self.scenario, self.column, self.value)
     }
     /// From `Touches::scenarios`; None for a value that is not one.
     pub fn from_kept(text: &str) -> Option<ScenarioCell> {
         let mut parts = text.split('\u{1f}');
         let (galaxy, scenario, column, value) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?.parse().ok()?);
-        parts.next().is_none().then(|| ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.to_string(), column: column.to_string(), value })
+        let whole = match parts.next()? {
+            "whole" => true,
+            "patch" => false,
+            _ => return None,
+        };
+        parts.next().is_none().then(|| ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.to_string(), column: column.to_string(), value, whole })
     }
+}
+
+/// The scenario cells of the mods that are on, as the cook applies tables (V4-1, DECISIONS): `lists` holds each mod's
+/// cells, the lowest in the list first. A galaxy's whole table is the base, the highest mod's that brings one; then
+/// every mod's patch cells edit it, lowest first, whoever brought the table. Whole cells come first, each galaxy's
+/// from one mod only, so `zone_layer_sets` (a later cell wins) gives the game's sets.
+pub fn scenario_order(lists: Vec<Vec<ScenarioCell>>) -> Vec<ScenarioCell> {
+    let mut out: Vec<ScenarioCell> = Vec::new();
+    let mut taken: Vec<String> = Vec::new();
+    for list in lists.iter().rev() {
+        let mine: Vec<String> = list.iter().filter(|c| c.whole && !taken.contains(&c.galaxy)).map(|c| c.galaxy.clone()).collect();
+        out.extend(list.iter().filter(|c| c.whole && mine.contains(&c.galaxy)).cloned());
+        taken.extend(mine);
+    }
+    out.extend(lists.into_iter().flatten().filter(|c| !c.whole));
+    out
 }
 
 /// The galaxy whose scenario table a store path is (`stagedata/<galaxy>scenario/scenariodata.bcsv`), in lowercase.

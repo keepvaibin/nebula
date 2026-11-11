@@ -8,6 +8,17 @@ use std::collections::BTreeSet;
 pub const SOURCE_ENDINGS: [&str; 16] =
     [".gltf", ".glb", ".bin", ".png", ".jpg", ".jpeg", ".ktx2", ".dds", ".wav", ".ogg", ".mid", ".json", ".ttf", ".otf", ".webm", ".mp4"];
 
+/// The game path a file at `layers/<l>/files/<path>` stands at, as kept for L305: lowercase, and a source form with
+/// `.json` added to a file name that has its own ending (`scenariodata.bcsv.json`) is that file, so two mods bringing
+/// one file in either form are named (V4-2).
+fn replaced(path: &str) -> String {
+    let lower = path.to_lowercase();
+    match lower.strip_suffix(".json") {
+        Some(stem) if stem.rsplit('/').next().is_some_and(|name| name.contains('.')) => stem.to_string(),
+        _ => lower,
+    }
+}
+
 pub(crate) fn check(ctx: &mut Ctx) {
     let listed: Vec<(String, crate::json::Pos, String)> = ctx.facts.layers.clone();
     let mut folders: BTreeSet<String> = BTreeSet::new();
@@ -76,7 +87,7 @@ pub(crate) fn check(ctx: &mut Ctx) {
         match parts[2] {
             "files" => {
                 let path = parts[3];
-                ctx.facts.touches.replaces.push(path.to_lowercase());
+                ctx.facts.touches.replaces.push(replaced(path));
                 let Some(store) = store else {
                     ctx.not_checked(302, "Missing.Store");
                     ctx.not_checked(303, "Missing.Store");

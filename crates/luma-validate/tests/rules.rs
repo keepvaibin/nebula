@@ -216,7 +216,7 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
     let r = run(&[file(new_galaxy, &table(10)), file(&at("LayerD"), &add(0))], &[], None);
     assert_eq!(in_group(&r), 1, "{:?}", r.findings);
     assert!(r.not_checked.is_empty(), "{:?}", r.not_checked);
-    assert_eq!(r.touches.scenarios, vec!["moongalaxy\u{1f}1\u{1f}DandelionHillZone\u{1f}10".to_string()]);
+    assert_eq!(r.touches.scenarios, vec!["moongalaxy\u{1f}1\u{1f}DandelionHillZone\u{1f}10\u{1f}whole".to_string()]);
     // The source form at the same path, `.json` added, reads alike.
     assert_eq!(in_group(&run(&[file(&format!("{new_galaxy}.json"), &table(10)), file(&at("LayerD"), &add(0))], &[], None)), 1);
     // A table that keeps LayerD apart (LayerA and LayerD, mask 9): nothing met.
@@ -243,10 +243,39 @@ fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() 
     assert_eq!(in_group(&run(&mine, std::slice::from_ref(&galaxy_mod), Some(1))), 0);
     assert_eq!(in_group(&run(&mine, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
 
+
+    // V4-1, the cook's rule: the highest whole table is the base, and every mod's patch cells edit it, lowest first,
+    // whoever brought the table. A patch on another mod's galaxy is `patches/@<id>/<its path>.json`.
+    let patch = |mask: u32| format!(r#"{{"patch": 1, "key": ["ScenarioNo"], "set": [{{"where": {{"ScenarioNo": 1}}, "values": {{"DandelionHillZone": {mask}}}}}]}}"#).into_bytes();
+    let on_moon = "layers/base/patches/@moon.mod/StageData/MoonGalaxyScenario/ScenarioData.bcsv.json";
+    let on_mine = "layers/base/patches/@this.mod/StageData/MoonGalaxyScenario/ScenarioData.bcsv.json";
+    // This mod brings the galaxy (10); a mod below it patches scenario 1 to 9: the patch edits the whole table above.
+    let mut patcher = other("patcher.mod");
+    patcher.touches = run(&[file(on_mine, &patch(9))], &[], None).touches;
+    assert_eq!(patcher.touches.scenarios, vec!["moongalaxy\u{1f}1\u{1f}DandelionHillZone\u{1f}9\u{1f}patch".to_string()]);
+    assert_eq!(in_group(&run(&mine, std::slice::from_ref(&patcher), Some(0))), 0);
+    assert_eq!(in_group(&run(&mine, std::slice::from_ref(&patcher), Some(1))), 0);
+    // A mod above brings it (9); this mod, below, patches it to 10: the patch still edits it.
+    let r = run(&[file(on_moon, &patch(10)), file(&at("LayerD"), &add(0))], std::slice::from_ref(&galaxy_mod), Some(1));
+    assert_eq!(in_group(&r), 1, "{:?}", r.findings);
+    // Two whole tables: the higher's is the base, whatever patch cells there are, and the lower's rows are gone.
+    let two = "table:ScenarioNo,DandelionHillZone;2,10".to_string().into_bytes();
+    let mine_two = [file(new_galaxy, &two), file(&at("LayerD"), &add(0))];
+    assert_eq!(in_group(&run(&mine_two, std::slice::from_ref(&galaxy_mod), Some(1))), 0, "the higher's table has no scenario 2");
+    assert_eq!(in_group(&run(&mine_two, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
+
+    // V4-2: two mods bringing one new galaxy whole are named (L305), in either form.
+    let r = run(&[file(&format!("{new_galaxy}.json"), &table(10))], std::slice::from_ref(&galaxy_mod), Some(1));
+    let named: Vec<String> = r.findings.iter().filter(|f| f.code == 305).map(|f| message(f, "UsEnglish")).collect();
+    assert_eq!(named.len(), 1, "{:?}", r.findings);
+    assert!(named[0].contains("stagedata/moongalaxyscenario/scenariodata.bcsv\"") && named[0].contains("moon.mod"), "{named:?}");
+
     // The kept report carries the cells.
     let kept = luma_validate::Saved::from_report(&r, "RMGE01").to_bytes();
     let back = luma_validate::Saved::parse(&kept).expect("kept report reads back");
     assert_eq!(back.touches, r.touches);
+    let kept = luma_validate::Saved::from_report(&run(&[file(on_mine, &patch(9))], &[], None), "RMGE01").to_bytes();
+    assert_eq!(luma_validate::Saved::parse(&kept).unwrap().touches.scenarios, patcher.touches.scenarios);
 }
 
 /// Table-keys T-4: a start or generalpos key is new among Common and the layers a scenario turns on together, by the

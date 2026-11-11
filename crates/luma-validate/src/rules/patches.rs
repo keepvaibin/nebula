@@ -125,21 +125,30 @@ pub(crate) fn check(ctx: &mut Ctx) {
     if let Some(store) = ctx.game().and_then(|g| g.store) {
         own = new_scenario_tables(ctx, store);
         for (_, target, root) in &parsed {
-            let Some(galaxy) = store.path(&target.to_lowercase()).and_then(|p| crate::scenario_table_galaxy(&p)) else { continue };
+            // A game galaxy's table, or another mod's new galaxy's (F-3: `@<id>/StageData/<g>Scenario/ScenarioData.bcsv`,
+            // its source form too), which V4-1 lets any mod patch from anywhere in the list.
+            let galaxy = match target.strip_prefix('@') {
+                Some(rest) => rest.split_once('/').and_then(|(_, path)| {
+                    let lower = path.to_lowercase();
+                    crate::scenario_table_galaxy(lower.strip_suffix(".json").unwrap_or(&lower))
+                }),
+                None => store.path(&target.to_lowercase()).and_then(|p| crate::scenario_table_galaxy(&p)),
+            };
+            let Some(galaxy) = galaxy else { continue };
             own.extend(scenario_cells(&galaxy, root));
         }
     }
     ctx.facts.touches.scenarios = own.iter().map(crate::ScenarioCell::kept).collect();
-    // With the installed mods' that are on, around this one's, lowest first: those below it, then this one, then those
-    // above it (the higher wins, F INBOX-G 13). `position` says how many are above.
+    // With the installed mods' that are on, lowest first: those below it, then this one, then those above it.
+    // `position` says how many are above. The cook's rule orders them (V4-1).
     let mod_id = ctx.mod_id.clone().unwrap_or_default();
     let installed: Vec<&crate::Installed> = ctx.input.installed.iter().filter(|m| m.on && m.id != mod_id).collect();
     let position = ctx.input.position.unwrap_or(installed.len()).min(installed.len());
     let theirs = |m: &&crate::Installed| m.touches.scenarios.iter().filter_map(|c| crate::ScenarioCell::from_kept(c)).collect::<Vec<_>>();
-    let mut cells: Vec<crate::ScenarioCell> = installed[position..].iter().rev().flat_map(theirs).collect();
-    cells.extend(own);
-    cells.extend(installed[..position].iter().rev().flat_map(theirs));
-    ctx.facts.scenario_cells = cells;
+    let mut lists: Vec<Vec<crate::ScenarioCell>> = installed[position..].iter().rev().map(theirs).collect();
+    lists.push(own);
+    lists.extend(installed[..position].iter().rev().map(theirs));
+    ctx.facts.scenario_cells = crate::scenario_order(lists);
     for (name, target, root) in parsed {
         let mut pc = P { ctx, file: name };
         one(&mut pc, &root, &target);
@@ -185,7 +194,7 @@ fn new_scenario_tables(ctx: &mut Ctx, store: &dyn crate::Store) -> Vec<crate::Sc
             let Some(scenario) = row.get(number) else { continue };
             for (i, (column, _)) in table.columns.iter().enumerate().filter(|(i, _)| *i != number) {
                 if let Some(value) = row.get(i).and_then(|v| v.parse::<i64>().ok()) {
-                    out.push(crate::ScenarioCell { galaxy: galaxy.clone(), scenario: scenario.clone(), column: column.clone(), value });
+                    out.push(crate::ScenarioCell { galaxy: galaxy.clone(), scenario: scenario.clone(), column: column.clone(), value, whole: true });
                 }
             }
         }
@@ -203,7 +212,7 @@ fn scenario_cells(galaxy: &str, root: &Value) -> Vec<crate::ScenarioCell> {
                 continue;
             }
             if let Some(value) = m.value.as_i64() {
-                out.push(crate::ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.clone(), column: m.key.clone(), value });
+                out.push(crate::ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.clone(), column: m.key.clone(), value, whole: false });
             }
         }
     };
