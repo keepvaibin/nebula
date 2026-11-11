@@ -4699,7 +4699,32 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     in.reset = !temporal_history_valid_;
     in.view = scene_view_;
     in.view_known = scene_view_known_;
+    // An SDK that records its own legacy barriers takes its textures in the common layout on the enhanced path (the
+    // only place the two models meet), and gives them back there; then they go back to their uses.
+    const bool common = BarrierPath::enhanced();
+    in.common = common && temporal_->own_barriers();
+    BarriersD3D12 handed{command_list_.Get()};
+    if (in.common) {
+        handed.texture(in.color, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.texture(in.depth, gpu::Use::DepthWrite, gpu::Use::Common);
+        handed.texture(in.motion, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.texture(in.reactive, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.texture(in.output, gpu::Use::ColorWrite, gpu::Use::Common);
+        handed.issue();
+    }
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
+    if (in.common) {
+        handed.undo();
+    }
+    // Frame generation's SDKs too (FSR 3's, Streamline's): the depth and the motion.
+    BarriersD3D12 generation{command_list_.Get()};
+    const auto hand_generation = [&] {
+        if (common) {
+            generation.texture(in.depth, gpu::Use::DepthWrite, gpu::Use::Common);
+            generation.texture(in.motion, gpu::Use::ColorWrite, gpu::Use::Common);
+            generation.issue();
+        }
+    };
     if (recorded && fsr_swap_chain_) {
         const unsigned display_width = host_window::backbuffer_width;
         const unsigned display_height = host_window::backbuffer_height;
@@ -4722,7 +4747,12 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
             prepare.camera_near = in.camera_near;
             prepare.camera_far = in.camera_far;
             prepare.fov_y = in.fov_y;
+            prepare.common = common;
+            hand_generation();
             (void)fsr_generation_.prepare(prepare);
+            if (common) {
+                generation.undo();
+            }
         }
     } else if (recorded && frame_generation_running()) {
         streamline::FrameGenerationInputs fg{};
@@ -4731,7 +4761,12 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
         fg.motion = in.motion;
         fg.render_width = in.render_width;
         fg.render_height = in.render_height;
+        fg.common = common;
+        hand_generation();
         (void)streamline::tag_frame_generation(fg);
+        if (common) {
+            generation.undo();
+        }
     }
     // The upscaler binds its own heaps, root signature and pipelines.
     srv_ring_.forget_bound();

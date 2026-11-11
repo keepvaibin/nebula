@@ -78,6 +78,7 @@ struct FrameGenerationInputs {
     ID3D12Resource* motion = nullptr;
     unsigned render_width = 0;
     unsigned render_height = 0;
+    bool common = false;  // depth and motion in the common state (TemporalUpscaleInputs::common)
 };
 bool tag_frame_generation(const FrameGenerationInputs& in) noexcept;
 void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsigned top, unsigned width,

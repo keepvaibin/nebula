@@ -254,8 +254,8 @@ bool tag_frame_generation(const FrameGenerationInputs& in) noexcept {
     if (token == nullptr) {
         return false;
     }
-    sl::Resource depth(sl::ResourceType::eTex2d, in.depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-    sl::Resource motion(sl::ResourceType::eTex2d, in.motion, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    sl::Resource depth(sl::ResourceType::eTex2d, in.depth, in.common ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    sl::Resource motion(sl::ResourceType::eTex2d, in.motion, in.common ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_RENDER_TARGET);
     sl::Extent render{};
     render.width = in.render_width;
     render.height = in.render_height;
@@ -422,10 +422,11 @@ public:
                 return failed("options");
             }
         }
-        sl::Resource color(sl::ResourceType::eTex2d, in.color, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        sl::Resource depth(sl::ResourceType::eTex2d, in.depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-        sl::Resource motion(sl::ResourceType::eTex2d, in.motion, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        sl::Resource output(sl::ResourceType::eTex2d, in.output, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        const D3D12_RESOURCE_STATES target = in.common ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_RENDER_TARGET;
+        sl::Resource color(sl::ResourceType::eTex2d, in.color, target);
+        sl::Resource depth(sl::ResourceType::eTex2d, in.depth, in.common ? D3D12_RESOURCE_STATE_COMMON : D3D12_RESOURCE_STATE_DEPTH_WRITE);
+        sl::Resource motion(sl::ResourceType::eTex2d, in.motion, target);
+        sl::Resource output(sl::ResourceType::eTex2d, in.output, target);
         sl::Extent render{};
         render.width = in.render_width;
         render.height = in.render_height;
@@ -457,6 +458,7 @@ public:
     }
 
     const char* name() const noexcept override { return "DLSS"; }
+    bool own_barriers() const noexcept override { return true; }
 
 private:
     bool failed(const char* what) {

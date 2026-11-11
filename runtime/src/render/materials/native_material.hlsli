@@ -8,7 +8,9 @@
 // NATIVE_COORDS (set by the includer before this header): how many texture coordinates the material reads and its
 // varyings carry. Any number: the device's own interpolator count is the limit.
 //
-// The motion varyings come first (TEXCOORD0 and 1), the coordinates after them, so no place depends on the count.
+// The coordinates come first (TEXCOORD0 up), the motion varyings after them (TEXCOORD NATIVE_COORDS and the next), as a
+// generated program's: the prepass's pixel stage (no motion varyings) reads the motion form's first outputs, so a motion
+// draw's prepass (its vertex stage's motion form) links.
 
 #include "program.hlsli"
 
@@ -19,13 +21,28 @@
 #error NATIVE_COORDS is at least 1
 #endif
 
-#define NEBULA_MOTION_CURRENT_INDEX 0
-#define NEBULA_MOTION_PREVIOUS_INDEX 1
-#if NATIVE_MOTION
-#define NATIVE_UV_SEMANTIC TEXCOORD2
+#if NATIVE_COORDS == 1
+#define NEBULA_MOTION_CURRENT_INDEX 1
+#define NEBULA_MOTION_PREVIOUS_INDEX 2
+#elif NATIVE_COORDS == 2
+#define NEBULA_MOTION_CURRENT_INDEX 2
+#define NEBULA_MOTION_PREVIOUS_INDEX 3
+#elif NATIVE_COORDS == 3
+#define NEBULA_MOTION_CURRENT_INDEX 3
+#define NEBULA_MOTION_PREVIOUS_INDEX 4
+#elif NATIVE_COORDS == 4
+#define NEBULA_MOTION_CURRENT_INDEX 4
+#define NEBULA_MOTION_PREVIOUS_INDEX 5
+#elif NATIVE_COORDS == 5
+#define NEBULA_MOTION_CURRENT_INDEX 5
+#define NEBULA_MOTION_PREVIOUS_INDEX 6
+#elif NATIVE_COORDS == 6
+#define NEBULA_MOTION_CURRENT_INDEX 6
+#define NEBULA_MOTION_PREVIOUS_INDEX 7
 #else
-#define NATIVE_UV_SEMANTIC TEXCOORD0
+#error a written material reads at most 6 texture coordinates (the motion varyings take the next two of 8)
 #endif
+#define NATIVE_UV_SEMANTIC TEXCOORD0
 
 cbuffer MaterialBlock : register(b2) {
     MaterialConstants material;

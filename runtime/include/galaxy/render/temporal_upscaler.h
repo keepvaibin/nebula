@@ -35,6 +35,9 @@ struct TemporalUpscaleInputs {
     float fov_y = 1.0f;     // radians
     float frame_ms = 16.667f;
     bool reset = false;
+    // The textures are in the common state (Direct3D 12 with enhanced barriers, for an upscaler whose SDK records its own
+    // legacy barriers: the two models meet only there); else as each field says.
+    bool common = false;
     // The scene camera (world to eye, rows 3x4; the eye looks down -z), when known.
     std::array<float, 12> view{};
     bool view_known = false;
@@ -53,6 +56,9 @@ public:
     virtual void jitter_offset(unsigned index, unsigned phase_count,
                                float& x, float& y) const = 0;
     [[nodiscard]] virtual const char* name() const noexcept = 0;
+    // Its SDK records its own (legacy) barriers on the textures it is handed (FSR 3, Streamline); false: the caller's
+    // barriers put them where it reads them (XeSS).
+    [[nodiscard]] virtual bool own_barriers() const noexcept { return false; }
 };
 
 // AMD FidelityFX FSR 3.1 (statically linked, MIT). Null when the runtime was
