@@ -208,7 +208,7 @@ ValidateMessage validate_message() {
             found = reinterpret_cast<ValidateMessage>(symbol_in(importer, "luma_validate_message"));
         }
         if (found == nullptr) {
-            say("mods: refusals are given as codes: " + (why.empty() ? std::string("the importer has no luma_validate_message") : why));
+            say("refusals are given as codes: " + (why.empty() ? std::string("the importer has no luma_validate_message") : why));
         }
     }
     return found;

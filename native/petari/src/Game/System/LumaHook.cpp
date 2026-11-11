@@ -216,7 +216,6 @@ namespace luma {
             Hold& operator=(const Hold&) = delete;
         };
 
-        // A chain without the hooks `keep` refuses; null when none is left.
         // The chain without the hooks `keep` refuses (null when none is left). `keep` is asked once per hook, in order:
         // removeHook's takes only the first match, so asking twice would keep what the first pass took out.
         template <class Keep> Chain* without(const Chain* pChain, Keep keep, u32* pRemoved) {

@@ -12,7 +12,8 @@ test and renderer; exit 0 only when every verdict is `pass`.
 `refs` writes a run's pictures as the references a test names, after the person running it has looked at them.
 
 The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll, nebula_test_extension.dll,
-luma-test.dll (the game half), pak.path, and dxc/. Nothing outside the work folder is written but the run's own files.
+luma-test.dll (the game half), nebula_import.dll (a refusal's words; without it the game gives codes) and
+nebula-import.exe, pak.path, and dxc/. Nothing outside the work folder is written but the run's own files.
 """
 import argparse
 import datetime
@@ -838,6 +839,11 @@ def run_one(test, renderer, args, run_folder, previous):
         shutil.copytree(bin_folder / "dxc", run_folder / "bin" / "dxc")
     if (bin_folder / "nebula-import.exe").is_file():
         shutil.copyfile(bin_folder / "nebula-import.exe", run_folder / "bin" / "nebula-import.exe")
+    # The game loads the importer's library from its own folder (mod_plugins.cpp validate_message): a run without it
+    # gets refusals as codes, so it is frozen with the rest.
+    if (bin_folder / "nebula_import.dll").is_file():
+        shutil.copyfile(bin_folder / "nebula_import.dll", run_folder / "bin" / "nebula_import.dll")
+        frozen["nebula_import.dll"] = sha256(run_folder / "bin" / "nebula_import.dll")
     mod_ids = []
     if not test["bare"]:
         frozen["luma-test.dll"] = sha256(bin_folder / "luma-test.dll")
