@@ -221,6 +221,7 @@ private:
         gpu::TextureRef texture;
         std::uint32_t width = 0;
         std::uint32_t height = 0;
+        std::uint64_t idle_since_ms = 0;  // steady_ms() when it became idle
     };
     void retire_texture(DisplayTexture& texture);
     void recycle_retired_textures(unsigned frame_slot);

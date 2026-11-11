@@ -2,6 +2,7 @@
 // helpers.
 
 #include "galaxy/render/frame_pass.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
 #if !defined(NEBULA_GPU_VULKAN) && !defined(NEBULA_GPU_METAL)
@@ -21,6 +22,9 @@ namespace galaxy::render {
 namespace {
 
 constexpr std::size_t kMaxIdleDisplayTextures = 8u;
+// A picture idle this long is freed: in a steady frame every pooled picture is taken again within a few frames, so
+// only sizes the frame no longer has (a resize, a scale change) and one-off uses wait this long.
+constexpr std::uint64_t kIdleTextureMs = 5000u;
 // Three pictures: the one being drawn, the one shown and the one before it, which a present may still read.
 constexpr std::uint32_t kPictures = 3u;
 
@@ -78,12 +82,19 @@ void DisplayPictures::retire_texture(DisplayTexture& texture) {
 
 void DisplayPictures::recycle_retired_textures(unsigned frame_slot) {
     auto& retired = retired_textures_[frame_slot];
+    const std::uint64_t now = galaxy::steady_ms();
+    // Idle textures are past their fence and kept oldest first: those idle too long go.
+    const auto stale = std::find_if(idle_textures_.begin(), idle_textures_.end(), [now](const PooledTexture& pooled) {
+        return now - pooled.idle_since_ms < kIdleTextureMs;
+    });
+    idle_textures_.erase(idle_textures_.begin(), stale);
     for (auto& texture : retired) {
         if (texture.texture) {
             if (idle_textures_.size() >= kMaxIdleDisplayTextures) {
-                // Idle textures are past their fence; the oldest goes so unused sizes do not accumulate.
+                // The oldest goes so unused sizes do not accumulate.
                 idle_textures_.erase(idle_textures_.begin());
             }
+            texture.idle_since_ms = now;
             idle_textures_.push_back(std::move(texture));
         }
     }
