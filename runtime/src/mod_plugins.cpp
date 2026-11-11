@@ -183,20 +183,29 @@ extern "C" void close_luma_library(void* module) {
 }
 
 // A LumaCore refusal in the validator's own words (loader contract 3): luma_validate_message from the importer's
-// library (nebula_import.dll beside the game on Windows, libnebula_import.so in the app on Android and Linux). Without
+// library (nebula_import.dll beside the game on Windows, libnebula_import.so in the app on Android and Linux; on Apple
+// the importer is linked into the program, platform/apple/metal.cmake, and called directly). Without
 // it the line gives the code and every parameter as the loader gave them, never nothing, and the log says once why.
 // On Windows the library's own dependencies (its C runtime) come from System32: with the application folder alone the
 // loader does not find them.
 std::string load_error();
 using ValidateMessage = const char* (*)(std::uint16_t code, const char* const* names, const char* const* values,
                                         std::uint32_t count, const char* language);
+#if defined(__APPLE__)
+extern "C" const char* luma_validate_message(std::uint16_t code, const char* const* names, const char* const* values,
+                                             std::uint32_t count, const char* language);
+#endif
 
 ValidateMessage validate_message() {
     static ValidateMessage found = nullptr;
     static bool looked = false;
     if (!looked) {
         looked = true;
-#if defined(_WIN32)
+#if defined(__APPLE__)
+        found = &luma_validate_message;
+        void* const importer = nullptr;
+        const std::string why;
+#elif defined(_WIN32)
         void* const importer =
             LoadLibraryExW(L"nebula_import.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         const std::string why = importer == nullptr ? "nebula_import.dll did not load (" + load_error() + ")" : "";

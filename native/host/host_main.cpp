@@ -3339,6 +3339,11 @@ void svc_app_restart(void*) {
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/mod_import.h"
 
+#if defined(__APPLE__)
+// The importer, linked into the program on Apple (platform/apple/metal.cmake; crates/nebula-import/src/jni.rs).
+extern "C" int nebula_cook_overlay(const char* plan, const char* output);
+#endif
+
 namespace {
 
 std::string json_text(std::string_view text) {
@@ -3478,6 +3483,12 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             log_line("mods:", "the cooker (nebula-import) could not start");
         }
         if (exit_code != 0u) {
+            cook_failed(overlay);
+            return false;
+        }
+#elif defined(__APPLE__)
+        // The importer is linked into the program (platform/apple/metal.cmake).
+        if (nebula_cook_overlay(utf8_of(plan_file).c_str(), utf8_of(overlay).c_str()) != 0) {
             cook_failed(overlay);
             return false;
         }
