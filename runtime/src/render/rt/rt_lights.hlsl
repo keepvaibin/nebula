@@ -37,6 +37,9 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_reservoirs : register(u1);
 // The kept light's highlight, rgb.
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights_spec : register(u2);
 
+// The candidates a reservoir carries at most, at 60 frames a second (l59: times rt_history_scale, plan 16.5).
+static const float kMostLightM = 20.0f;
+
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     uint width, height;
@@ -162,7 +165,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                         continue;
                     }
                     const float4 theirs = g_reservoirs_before.Load(int3(from, 0));
-                    const float behind = min(theirs.a, 20.0f);
+                    const float behind = min(theirs.a, kMostLightM * rt_history_scale());
                     if (!(behind > 0.0f)) {
                         continue;
                     }
@@ -254,7 +257,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                     }
                 }
             }
-            g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, 20.0f));
+            g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, kMostLightM * rt_history_scale()));
         }
     }
     g_lights[id.xy] = float4(added.r, 0.0f, added.g, added.b);
