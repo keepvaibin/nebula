@@ -1984,7 +1984,12 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
     rt_follow_setting(render);
-    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready();
+    // Ray tracing's sky and bounce light shades what screen-space occlusion would darken a second time.
+    ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready() && !(render.ray_tracing_enabled && rt_backend_.started());
+    rt_quality_ = render.rt_quality;
+    for (unsigned part = 0; part < 6u; ++part) {
+        rt_levels_[part] = static_cast<std::uint8_t>(rt_part(render, static_cast<RtPart>(part)));
+    }
     // The complete native list is available before begin_frame can resize a
     // ring. Include all eye/world rows, even rows a particular program omits.
     const NebulaFrameList& list = *entry.data.list;
@@ -2256,8 +2261,12 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     begin_walk_frame(entry);
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, time);
     const bool real = time.t >= 1.0f;
-    const DisplayTexture* const selected = present ? display_pictures_.latest() : nullptr;
+    const DisplayTexture* selected = present ? display_pictures_.latest() : nullptr;
     const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
+    if (!snapshot_path.empty() && real && rt_holds()) {
+        rt_hold(entry, time, snapshot_path);
+        selected = display_pictures_.latest();
+    }
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
@@ -2357,7 +2366,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                               !interp_on_ && !black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
                               !frame_generation_running();
     const bool presents = chunk.present_swap_chain || frame_end_present;
-    const DisplayTexture* const selected_display = chunk.black ? nullptr : display_pictures_.latest();
+    const DisplayTexture* selected_display = chunk.black ? nullptr : display_pictures_.latest();
     const bool duplicate_display_present =
         selected_display != nullptr && selected_display->picture_number == last_presented_picture_.load(std::memory_order_relaxed);
     const bool skip_duplicate_present = presents && duplicate_display_present && !native_settings_overlay_visible();
@@ -2373,6 +2382,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     }
     if (present_swap_chain) {
         const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? NEBULA_EXT_PICTURE_REPEAT : NEBULA_EXT_PICTURE_GAME);
+        if (!snapshot_path.empty() && !duplicate_display_present && rt_holds()) {
+            rt_hold(entry, core::WalkTime{}, snapshot_path);
+            selected_display = display_pictures_.latest();
+        }
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }

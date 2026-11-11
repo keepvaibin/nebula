@@ -24,6 +24,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 #ifndef RT_LIGHTS
 Texture2D<float4> g_motion_map : register(t12);  // the last step's, for --diagnostics rt-motion
 Texture2D<float4> g_sun_out : register(t14);     // the last step's: the sun's V, filtered (rgb)
+Texture2D<float4> g_indirect : register(t13);    // the last step's: I (rt_indirect_up.hlsl), when bit 8 of g_more.z says
 #endif
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
@@ -126,7 +127,13 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     // What the programs read: V as a colour and the sky's share.
-    float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, now.z);
+    // O: the sky and bounce light's mean ratio where that pass runs (bit 8), else the sky rays' share.
+    float sky = now.z;
+    if ((g_more.z & 256u) != 0u) {
+        const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;
+        sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
+    }
+    float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
     if ((g_more.z & 128u) != 0u) {
         shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
     }

@@ -90,6 +90,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/core/compose.cpp
     ${rt}/render/core/draw_walker.cpp
     ${rt}/render/core/rt_walk.cpp
+    ${rt}/render/core/rt_bounce.cpp
     ${rt}/render/core/rt_pass_indirect.cpp
     ${rt}/render/core/rt_pass_reflect.cpp
     ${rt}/render/core/rt_pass_volume.cpp

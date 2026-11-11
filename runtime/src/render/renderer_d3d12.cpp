@@ -1069,6 +1069,9 @@ HRESULT create_draw_root_signature(
     tex_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     tex_range.NumDescriptors = UINT_MAX;
     tex_range.RegisterSpace = 1u;
+    // The same table as Texture3D (t0 space2, from the heap's start too): the light volume (program.hlsli traced_air).
+    D3D12_DESCRIPTOR_RANGE tex_ranges[2] = {tex_range, tex_range};
+    tex_ranges[1].RegisterSpace = 2u;
     D3D12_DESCRIPTOR_RANGE samp_range{};
     samp_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
     samp_range.NumDescriptors = UINT_MAX;
@@ -1085,8 +1088,8 @@ HRESULT create_draw_root_signature(
     params[3].Constants.Num32BitValues = gpu::kDrawRootWords;
     params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    params[4].DescriptorTable.NumDescriptorRanges = 1;
-    params[4].DescriptorTable.pDescriptorRanges = &tex_range;
+    params[4].DescriptorTable.NumDescriptorRanges = 2;
+    params[4].DescriptorTable.pDescriptorRanges = tex_ranges;
     params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[5].DescriptorTable.NumDescriptorRanges = 1;
@@ -5139,6 +5142,10 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std:
         swizzle[0] == 4u ? 5u : swizzle[0], swizzle[1] == 4u ? 5u : swizzle[1], swizzle[2] == 4u ? 5u : swizzle[2],
         swizzle[3] == 4u ? 5u : swizzle[3]);
     desc.Texture2D.MipLevels = 1u;
+    if (picture.viewed->GetDesc().Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+        desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;  // the light volume (rt_publish_light)
+        desc.Texture3D = D3D12_TEX3D_SRV{0u, 1u, 0.0f};
+    }
     const auto cpu = textures.backend().srv_cpu(picture.view);
     device_->CreateShaderResourceView(picture.viewed.Get(), &desc, cpu);
     textures.backend().publish_view(picture.view);
