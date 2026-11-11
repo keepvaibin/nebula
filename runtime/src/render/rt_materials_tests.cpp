@@ -209,52 +209,52 @@ bool glow_apart_from_light() {
     return ok;
 }
 
-bool stage_suns() {
-    std::istringstream file(
-        "stage\tsource\tx\ty\tz\tr\tg\tb\tstrength\tsize\tshafts\tnotes\n"
-        "EggStarGalaxy\tgame\t\t\t\t1\t0.95\t0.85\t1.2\t3\t0.8\tBrightSun\n"
-        "HoneyBeeKingdomGalaxy\ttable\t0\t3\t4\t\t\t\t\t\t\tsky sun\n"
-        "BadGalaxy\ttable\t0\t0\t0\t\t\t\t9\t\t\tno direction\n"
-        "HellProminenceGalaxy\tnone\t\t\t\t\t\t\t\t\t\tlava\n"
-        "PeachCastleGardenGalaxy\tmoon\t3\t4\t0\t0.78\t0.85\t1\t0.4\t1.5\t\tnight\n"
-        "MoonlessGalaxy\tmoon\t\t\t\t\t\t\t\t\t\tno direction\n");
-    galaxy::render::RtStageSunTable table;
-    bool ok = expect(table.read(file) == 6u, "six suns");
-    using Source = galaxy::render::RtStageSun::Source;
-    const auto* egg = table.find("EggStarGalaxy");
-    ok &= expect(egg != nullptr && egg->source == Source::Game && egg->has_color && near(egg->color[2], 0.85f) &&
-                     near(egg->strength, 1.2f) && near(egg->size, 3.0f) && near(egg->shafts, 0.8f),
-                 "a game sun with its look");
-    const auto* honey = table.find("HoneyBeeKingdomGalaxy");
-    ok &= expect(honey != nullptr && honey->source == Source::Table && near(honey->direction[1], 0.6f) &&
-                     near(honey->direction[2], 0.8f) && !honey->has_color && honey->size < 0.0f,
-                 "a table sun, its direction normalised");
-    const auto* bad = table.find("BadGalaxy");
-    ok &= expect(bad != nullptr && bad->source == Source::Game && near(bad->strength, 4.0f),
-                 "no direction: the game's sun; strength clamped");
-    const auto* lava = table.find("HellProminenceGalaxy");
-    ok &= expect(lava != nullptr && lava->source == Source::None, "no sun");
-    const auto* moon = table.find("PeachCastleGardenGalaxy");
-    ok &= expect(moon != nullptr && moon->source == Source::Moon && near(moon->direction[0], 0.6f) &&
-                     near(moon->direction[1], 0.8f) && near(moon->strength, 0.4f) && near(moon->size, 1.5f),
-                 "a moon, its direction normalised");
-    const auto* moonless = table.find("MoonlessGalaxy");
-    ok &= expect(moonless != nullptr && moonless->source == Source::Game, "a moon without a direction: the game's");
-    ok &= expect(table.find("Missing") == nullptr, "no row");
-    ok &= expect(egg->day < 0.0f, "no day column: by the sky");
-    std::istringstream with_day(
-        "stage\tsource\tday\tnotes\n"
-        "BattleShipGalaxy\tgame\t0\tspace\n"
-        "EggStarGalaxy\tgame\t1.5\tday\n"
-        "PhantomGalaxy\tgame\t\tby sky\n");
-    galaxy::render::RtStageSunTable days;
-    days.read(with_day);
-    const auto* space = days.find("BattleShipGalaxy");
-    const auto* day = days.find("EggStarGalaxy");
-    const auto* by_sky = days.find("PhantomGalaxy");
-    ok &= expect(space != nullptr && space->day == 0.0f, "day 0: the night model");
-    ok &= expect(day != nullptr && near(day->day, 1.0f), "day clamps to 1");
-    ok &= expect(by_sky != nullptr && by_sky->day < 0.0f, "empty day: by the sky");
+bool stage_table() {
+    using galaxy::render::RtStage;
+    galaxy::render::RtStageTable table;
+    const char* text =
+        "# rt_stages.tsv\n"
+        "stage\tsun\tsun_gain\tsun size\tambient gain\texposure low\texposure high\tshadow sets\tnote\r\n"
+        "EggStarGalaxy\t0 3 4\t1.2\t0.02\t\t\t\t\tfixed\n"
+        "PhantomGalaxy\tnone\t\t\t0.9\t60\t30\tkeep\tnight\n"
+        "HeavenlyBeachGalaxy\tkey\t9\t\t\t\t\t\tclamped\n"
+        "BadGalaxy\t0 0 0\n"
+        "\tobject\n";
+    bool ok = expect(table.read(text) == 4u, "four rows, the nameless one skipped");
+    const RtStage* egg = table.find(galaxy::render::rt_stage_hash("EggStarGalaxy"));
+    ok &= expect(egg != nullptr && egg->sun == RtStage::Sun::Fixed && near(egg->direction[1], 0.6f) && near(egg->direction[2], 0.8f) &&
+                     near(egg->sun_gain, 1.2f) && near(egg->sun_size, 0.02f) && near(egg->ambient_gain, 1.1f) && !egg->shadow_sets_kept,
+                 "a fixed sun, normalised; empty fields keep the defaults");
+    const RtStage* night = table.find(galaxy::render::rt_stage_hash("PhantomGalaxy"));
+    ok &= expect(night != nullptr && night->sun == RtStage::Sun::None && near(night->ambient_gain, 0.9f) &&
+                     near(night->exposure_low, 60.0f) && near(night->exposure_high, 60.0f) && night->shadow_sets_kept,
+                 "no sun; exposure's high never under its low; shadow sets kept");
+    const RtStage* beach = table.find(galaxy::render::rt_stage_hash("HeavenlyBeachGalaxy"));
+    ok &= expect(beach != nullptr && beach->sun == RtStage::Sun::Key && near(beach->sun_gain, 4.0f), "the key; gain clamped");
+    const RtStage* bad = table.find(galaxy::render::rt_stage_hash("BadGalaxy"));
+    ok &= expect(bad != nullptr && bad->sun == RtStage::Sun::Auto, "no direction in three zeros: auto");
+    ok &= expect(table.find(galaxy::render::rt_stage_hash("Missing")) == nullptr, "no row");
+    ok &= expect(galaxy::render::rt_stage_hash("EggStarGalaxy") == 0x099E9A42u, "FNV-1a of the stage's name, as the game's");
+    ok &= expect(galaxy::render::rt_stage_hash("") == 0u, "no stage");
+    return ok;
+}
+
+bool effect_table() {
+    galaxy::render::RtEffectTable table;
+    const char* text =
+        "effect\tclass\tluminance\tbehaviour\n"
+        "2PGlowActiveLoop00\tglow or lamp\t300\tsteady\n"
+        "Smoke\tsmoke\t0\tsteady\n"
+        "Fuse\tfuse\t1500\tflash\n"
+        "Nameless\tx\t\tsteady\n";
+    bool ok = expect(table.read(text) == 3u, "three effects, the one without a luminance skipped");
+    ok &= expect(galaxy::render::rt_effect_hash("2PGlowActiveLoop00") == 0x29FEECAEu, "the hash the game's draws carry");
+    const auto* glow = table.find(0x29FEECAEu);
+    ok &= expect(glow != nullptr && near(glow->luminance, 300.0f) && glow->behaviour == 0u, "a lamp's glow");
+    const auto* fuse = table.find(galaxy::render::rt_effect_hash("FUSE"));
+    ok &= expect(fuse != nullptr && fuse->behaviour == 3u, "a flash; names in any case");
+    const auto* smoke = table.find(galaxy::render::rt_effect_hash("Smoke"));
+    ok &= expect(smoke != nullptr && smoke->luminance == 0.0f, "smoke is no light");
     return ok;
 }
 
@@ -270,7 +270,8 @@ int main() {
     ok &= luminous_effects();
     ok &= clear_tints();
     ok &= identities_by_stage();
-    ok &= stage_suns();
+    ok &= stage_table();
+    ok &= effect_table();
     if (!ok) {
         return 1;
     }

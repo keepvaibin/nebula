@@ -12,6 +12,7 @@
 #include <nebula_frame_list.h>
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/Util/SceneUtil.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_channel_f1, "channel.f1", 255.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_pointLight_f1, "pointLight.f1", 0.5f);
@@ -90,6 +91,8 @@ namespace GameLightSignal {
 
     void frame() {
         sFrame++;
+        // The stage being played: the renderer's table of each stage's light reads it (rt_stages.tsv).
+        Frame::setStage(MR::getCurrentStageName());
         // The light of the stage's own surfaces where the player is: the planet light of the player's area, else of the
         // stage's default area. Its two lights are in the list whether or not a draw loads them.
         if (MR::isExistSceneObj(SceneObj_LightDirector)) {

@@ -105,6 +105,9 @@ namespace Frame {
     void setLightPointOwner(const NebulaFrameWorldLight* pPoint);
     // The light of the stage's own surfaces this frame (key `id`, fill `id` + 1) and its ambient.
     void setStageLight(u64 id, const f32* pAmbient);
+    // The stage being played (its name, or null for none): the list's stage_hash from this frame on; the host hears
+    // of each change (game_stage).
+    void setStage(const char* pName);
     // A drop shadow the game draws this frame (NebulaFrameShadowDrop), into this frame's list.
     void shadowDrop(const NebulaFrameShadowDrop& rDrop);
     // A point light an actor asks for this frame (NebulaFramePointLight), into this frame's list.

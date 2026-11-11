@@ -570,11 +570,23 @@ pub fn write_cooked_pak(
     let mut rows = texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(texture::names_table(&mut rows)) };
     placed.extend(place(&mut pak, &mut at, texture::NAMES_PATH, vec![item], stats)?);
+    // Ray tracing's tables: each stage's numbers and the particle effects' light (rt_materials.h set_rt_tables).
+    for (path, text) in [(RT_STAGES_PATH, RT_STAGES), (RT_EFFECTS_PATH, RT_EFFECTS)] {
+        let item = StoreItem { path: String::new(), order: 0, bytes: Some(text.as_bytes().to_vec()) };
+        placed.extend(place(&mut pak, &mut at, path, vec![item], stats)?);
+    }
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
     Ok(at)
 }
+
+/// Ray tracing's tables, as the renderer finds them in the pak (runtime/include/galaxy/render/rt_materials.h
+/// kRtStagesPath, kRtEffectsPath).
+const RT_STAGES_PATH: &str = "NebulaData/RtStages.tsv";
+const RT_EFFECTS_PATH: &str = "NebulaData/RtEffects.tsv";
+const RT_STAGES: &str = include_str!("../../data/rt_stages.tsv");
+const RT_EFFECTS: &str = include_str!("../../data/rt_effects.tsv");
 
 /// main.dol in a system area (its header's sections give its length).
 fn system_dol(system: &SystemArea) -> Result<&[u8]> {

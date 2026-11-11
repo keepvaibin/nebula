@@ -5,6 +5,8 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_requestPointLight_f1, "requestPointLight.f1", 0.95f);
 NEBULA_TUNABLE_NAMED(f32, cNum_requestPointLight_f2, "requestPointLight.f2", 0.999999f);
@@ -61,6 +63,8 @@ void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color
         light.color[0] = static_cast< f32 >(color.r) / 255.0f;
         light.color[1] = static_cast< f32 >(color.g) / 255.0f;
         light.color[2] = static_cast< f32 >(color.b) / 255.0f;
+        // The glowing body's size: the actor's own (its binder's sphere) where it has one.
+        light.radius = pActor != nullptr && pActor->getBinder() != nullptr ? MR::getBinderRadius(pActor) : 0.0f;
         Frame::pointLight(light);
     }
     if (mStep == -1 && isUpdateCandidateActor(pActor)) {
