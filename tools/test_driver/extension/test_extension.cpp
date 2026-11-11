@@ -4,6 +4,8 @@
 // controls, the pictures and sound to keep, menu keys, window sizes, device losses and the fixed-step clock.
 #include <nebula_host_extension.h>
 
+#include "harness.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -341,6 +343,10 @@ void read_script() {
 }
 
 void controls(void*, const NebulaExtensionFrame* frame, NebulaExtensionControls* out) {
+    if (harness::on()) {
+        harness::controls(frame->game_frames, out);
+        return;
+    }
     std::uint64_t now = frame->game_frames;
     if (g_script.clock == ScriptClock::Scene) {
         now = g_scene_frames.load(std::memory_order_relaxed);
@@ -443,6 +449,10 @@ void read_menus() {
 void frame(void*, const NebulaExtensionFrame* frame) {
     const std::uint64_t now = frame->game_frames;
     g_game_frames.store(now, std::memory_order_relaxed);
+    if (harness::on()) {
+        harness::frame(now);
+        return;
+    }
     if (g_menus.open.has_value() && now >= g_menus.open->second && HOST_HAS(open_settings)) {
         g_host->open_settings(g_host->host, g_menus.open->first);
         g_menus.open.reset();
@@ -525,6 +535,9 @@ void read_pictures() {
 }
 
 const char* picture_path(void*, std::uint64_t game_frame, std::uint32_t kind) {
+    if (harness::on()) {
+        return harness::picture_path(game_frame, kind);
+    }
     Pictures& p = g_pictures;
     if (p.game_only && kind == NEBULA_EXT_PICTURE_GENERATED) {
         if (++p.left_out % 300u == 0u) {
@@ -671,6 +684,14 @@ std::uint32_t mods_changed(void*) {
 
 NebulaHostExtension g_extension{};
 
+// The harness's end: the sound file closed, then the run ends as closing the window ends it.
+void harness_quit() {
+    g_wav.finish();
+    if (HOST_HAS(quit)) {
+        g_host->quit(g_host->host);
+    }
+}
+
 }  // namespace
 
 // The test plugin in the game (test_plugin.cpp, this library loaded again by the mods): each scene frame and stop, and
@@ -707,9 +728,17 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         return nullptr;
     }
 #endif
-    read_script();
-    read_menus();
-    read_pictures();
+    // A harness run (LUMA_HARNESS_PLAN): the plan drives the controls, menu keys and pictures; the GALAXY_* scripts
+    // below are not read.
+    const std::optional<std::string> plan = env("LUMA_HARNESS_PLAN");
+    const bool in_harness = plan.has_value();
+    if (in_harness) {
+        harness::start(host, *plan, log, harness_quit);
+    } else {
+        read_script();
+        read_menus();
+        read_pictures();
+    }
     if (const std::optional<std::string> wav = env("GALAXY_AUDIO_WAV_DUMP")) {
         g_wav.start(*wav, static_cast<std::uint32_t>(std::clamp<std::uint64_t>(env_u64("GALAXY_AUDIO_WAV_DUMP_SECONDS", 15u), 1u, 3600u)));
     }
@@ -717,7 +746,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     NebulaHostExtension& e = g_extension;
     e.version = NEBULA_HOST_EXTENSION_VERSION;
     e.size = sizeof(e);
-    e.flags = (env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
+    e.flags = (in_harness || env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
               (env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY") ? NEBULA_EXT_NO_SOUND_DEVICE : 0u) |
               (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u);
     e.controls = controls;
@@ -727,6 +756,10 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.mods_changed = mods_changed;
     e.vram_budget_mb = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_VRAM_BUDGET_MB", 0u));
     e.disc_read_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_DISC_DELAY_US", 0u));
+    if (in_harness) {
+        e.log_line = [](void*, const char* line) { harness::log_line(line); };
+        e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
+    }
     log("test extension attached");
     return &e;
 }

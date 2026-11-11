@@ -132,6 +132,12 @@ typedef struct NebulaHostExtension {
     uint32_t vram_budget_mb;
     /* Nonzero: each read of the game's files waits this long first, a slow drive (the longest of the extensions'). */
     uint32_t disc_read_delay_us;
+    /* Any thread: each line the host writes to its log, as "<tag> <text>" without the time or a line end. The extension
+       must not log from here. */
+    void (*log_line)(void* user, const char* line);
+    /* Game thread: a service the extension offers to mods (LumaCore.service), or null. The first extension that gives
+       one is used. */
+    const void* (*service)(void* user, const char* name, uint32_t major, uint32_t minor);
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);
