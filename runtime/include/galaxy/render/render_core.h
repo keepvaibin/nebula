@@ -484,8 +484,9 @@ private:
     void rt_emitters_finish(float exposure_lux);
     std::vector<RtEmitter> rt_emitters_;
     // For the reservoirs: the frame before's emitters by what they are, where each is in this frame's list, and this
-    // frame's list by what they are.
+    // frame's list by what they are; the frame before's emitters' centres and reaches (4 floats each, as ids_before).
     std::vector<std::uint32_t> rt_emitter_ids_before_, rt_emitter_remap_;
+    std::vector<float> rt_emitter_places_before_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_now_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_blocks_;
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
