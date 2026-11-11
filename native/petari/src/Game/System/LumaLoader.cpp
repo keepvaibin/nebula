@@ -150,7 +150,12 @@ namespace luma {
             return lumacore::isA(lumacore::classOf(static_cast<const NameObj*>(pObject)), static_cast<u16>(classNumber)) ? 1 : 0;
         }
 
-        const void* apiService(const char* /*pName*/, u32 /*major*/, u32 /*minor*/) { return nullptr; }
+        // Services come from the host (luma_set_service_finder), which asks its own services and its extensions.
+        LumaServiceFinder sServiceFinder = nullptr;
+
+        const void* apiService(const char* pName, u32 major, u32 minor) {
+            return pName != nullptr && sServiceFinder != nullptr ? sServiceFinder(pName, major, minor) : nullptr;
+        }
 
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
@@ -321,5 +326,9 @@ NEBULA_GAME_API void luma_unload_mod(const LumaModInfo* info) {
 
 NEBULA_GAME_API const LumaCore* luma_core(void) {
     return luma::core();
+}
+
+NEBULA_GAME_API void luma_set_service_finder(LumaServiceFinder finder) {
+    luma::sServiceFinder = finder;
 }
 }

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 
 #if defined(_WIN32)
@@ -111,6 +112,36 @@ std::uint64_t vram_budget_bytes() noexcept {
 
 std::uint32_t disc_read_delay_us() noexcept {
     return g_disc_read_delay_us;
+}
+
+void log_line(const char* tag, const char* text) noexcept {
+    bool any = false;
+    for (std::size_t i = 0; i < g_count; ++i) {
+        any = any || g_extensions[i].log_line != nullptr;
+    }
+    if (!any) {
+        return;
+    }
+    // Given as it is: a line of any length reaches the extension whole.
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].log_line != nullptr) {
+            g_extensions[i].log_line(g_extensions[i].user, tag != nullptr ? tag : "", text != nullptr ? text : "");
+        }
+    }
+}
+
+const void* service(const char* name, std::uint32_t major, std::uint32_t minor) noexcept {
+    if (name == nullptr) {
+        return nullptr;
+    }
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].service != nullptr) {
+            if (const void* const table = g_extensions[i].service(g_extensions[i].user, name, major, minor)) {
+                return table;
+            }
+        }
+    }
+    return nullptr;
 }
 
 std::uint32_t flags() noexcept {
