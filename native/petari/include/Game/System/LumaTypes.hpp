@@ -49,7 +49,9 @@ namespace luma {
     // args[0] as the object seen as the declaring class and runs what the object's own class runs. Null: no such row.
     const Function* findMethod(const char* pName, const char* pSignature);
     // The method row of the declaration the object's own class runs for that virtual ("FoA::fa", "s32()" on a FoD
-    // gives FoC's fa): from the own class, depth first through the bases that are or derive from the declaring class,
-    // the first that declares one of that name and parameters. Null: no row for the virtual, or the own class has none.
-    const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature);
+    // gives FoC's fa): for the declaring class's subobject pObject points at, the most derived record on that
+    // subobject's path that declares one of that name and parameters (contract objects M-1: D : B1, B2 from A gives
+    // B1's or B2's by the A pObject is). Null: no row for the virtual, the own class has none, or pObject is no
+    // subobject of the declaring class and it has more than one, with *pAmbiguous set (as asClass).
+    const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous);
 }

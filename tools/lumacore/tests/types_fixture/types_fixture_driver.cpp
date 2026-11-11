@@ -302,6 +302,14 @@ int main(int argc, char** argv) {
         p = luma::asClass(static_cast<FoB*>(&only), pD, &ambiguous);
         check(p == nullptr && !ambiguous, "asClass of a class with no row is null");
         check(luma::ownClass(nullptr).type == nullptr && luma::ownClass(nullptr).typeInfo == nullptr, "ownClass of null");
+        // Contract objects S-1: a pointer not aligned as an object's, and an object whose first word is no vtable
+        // (a plain struct's data, a misaligned word), are no class: none, nothing read past them.
+        {
+            alignas(8) static unsigned char bytes[32] = {};
+            check(luma::ownClass(bytes + 1).type == nullptr, "ownClass of a misaligned pointer");
+            alignas(8) static __UINTPTR_TYPE__ notVtable[2] = {3, 0};
+            check(luma::ownClass(notVtable).type == nullptr, "ownClass of an object whose first word is misaligned");
+        }
         check(luma::findType("FoV") && luma::findType("FoV")->typeInfo == &typeid(FoV),
               "a record whose only virtual is its destructor is polymorphic: its type_info");
 
@@ -346,6 +354,32 @@ int main(int argc, char** argv) {
             const char* want;  // the overrider's function name; null: none
         };
         static FoX x;
+        // Contract objects M-1: FoTA reached twice; each subobject's overrider is its own path's, as the compiler
+        // calls it; from a pointer that is no FoTA (FoTE's FoV at offset 0), none, said as ambiguous.
+        static FoTD td;
+        static FoTE te;
+        FoTA* const pTd1 = static_cast<FoTB1*>(&td);
+        FoTA* const pTd2 = static_cast<FoTB2*>(&td);
+        FoTA* const pTe2 = static_cast<FoTB2*>(&te);
+        check(pTd1->f() == 11 && pTd2->f() == 12 && pTe2->f() == 12, "the compiler's calls on FoTA's two subobjects");
+        {
+            bool ambiguous = true;
+            const luma::MethodRow* pRow = luma::overrider(pTd2, "FoTA::f", "s32()", &ambiguous);
+            check(pRow != nullptr && std::strcmp(pRow->function->name, "FoTB2::f") == 0 && !ambiguous, "overrider FoTD's second FoTA: FoTB2::f");
+            pRow = luma::overrider(pTd1, "FoTA::f", "s32()", &ambiguous);
+            check(pRow != nullptr && std::strcmp(pRow->function->name, "FoTB1::f") == 0 && !ambiguous, "overrider FoTD's first FoTA: FoTB1::f");
+            pRow = luma::overrider(pTe2, "FoTA::f", "s32()", &ambiguous);
+            check(pRow != nullptr && std::strcmp(pRow->function->name, "FoTB2::f") == 0 && !ambiguous, "overrider FoTE's second FoTA: FoTB2::f");
+            pRow = luma::overrider(static_cast<FoV*>(&te), "FoTA::f", "s32()", &ambiguous);
+            check(pRow == nullptr && ambiguous, "overrider from FoTE's FoV: none, ambiguous");
+            const luma::Function* const pM = luma::findMethod("FoTA::f", "s32()");
+            s32 got = -1;
+            void* args[] = {pTd2};
+            if (pM != nullptr) {
+                pM->invoke(args, &got);
+            }
+            check(got == 12, "method FoTA::f on FoTD's second FoTA runs FoTB2::f");
+        }
         const Over overs[] = {
             {static_cast<FoA*>(&d), "FoA::fa", "s32()", "FoC::fa"},
             {static_cast<FoB*>(&d), "FoB::fb", "s32()", "FoD::fb"},
@@ -357,7 +391,9 @@ int main(int argc, char** argv) {
             {static_cast<FoA*>(&d), "FoA::fa", "s32(s32)", nullptr},  // no such virtual
         };
         for (const Over& k : overs) {
-            const luma::MethodRow* const pRow = luma::overrider(k.object, k.name, k.signature);
+            bool ambiguous = true;
+            const luma::MethodRow* const pRow = luma::overrider(k.object, k.name, k.signature, &ambiguous);
+            check(!ambiguous, "overrider says nothing ambiguous with one subobject");
             const char* const got = pRow != nullptr ? pRow->function->name : nullptr;
             char what[256];
             std::snprintf(what, sizeof(what), "overrider %s %s: %s (want %s)", k.name, k.signature, got ? got : "none",

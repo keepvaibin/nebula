@@ -528,15 +528,34 @@ namespace luma {
 
         // The own class's type_info and the whole object, from the vtable of the subobject at pObject. Null when the
         // vtable carries no RTTI the kernel can read.
+        // A pointer that cannot be an object's or a vtable's: null or not aligned as a pointer. What a mod passes C
+        // cannot check further without reading it; a read that faults is the guard's (1.6), under which mod code runs.
+        // A vtable is not required to be the game module's: a mod's own derived class (1.4) has its vtable in the mod.
+        bool misaligned(const void* p) {
+            return p == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(p) & (sizeof(void*) - 1)) != 0;
+        }
+
         const void* readOwnClass(const void* pObject, const void** pComplete) {
-            const void* const* pVtable;
-            __builtin_memcpy(&pVtable, pObject, sizeof(pVtable));
-#if defined(_WIN32)
-            const ObjectLocator* const pLocator = static_cast<const ObjectLocator*>(pVtable[-1]);
-            if (pLocator == nullptr || pLocator->signature != 1) {
+            if (misaligned(pObject)) {
                 return nullptr;
             }
+            const void* const* pVtable;
+            __builtin_memcpy(&pVtable, pObject, sizeof(pVtable));
+            if (misaligned(pVtable)) {
+                return nullptr;
+            }
+#if defined(_WIN32)
+            const ObjectLocator* const pLocator = static_cast<const ObjectLocator*>(pVtable[-1]);
+            // The locator is 32-bit words: aligned as one.
+            if (pLocator == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(pLocator) & 3) != 0 || pLocator->signature != 1) {
+                return nullptr;
+            }
+            // The locator's own offset leads to its image: a module begins "MZ" (S-1: a vtable with no locator is
+            // refused, not followed).
             const char* const pImage = reinterpret_cast<const char*>(pLocator) - pLocator->self;
+            if (pImage[0] != 'M' || pImage[1] != 'Z') {
+                return nullptr;
+            }
             *pComplete = static_cast<const char*>(pObject) - pLocator->offset;
             return pImage + pLocator->typeDescriptor;
 #else
@@ -638,17 +657,32 @@ namespace luma {
             return nullptr;
         }
 
-        // Depth first from pType through the bases that are or derive from pDeclaring: the first record that declares
-        // pLike's name and params (C++'s final overrider, on the path to that subobject).
-        const MethodRow* overriderIn(const TypeRow* pType, const TypeRow* pDeclaring, const MethodRow* pLike, u32 depth) {
-            u32 count = 0;
-            u32 first = 0;
-            findBase(pType, pDeclaring, 0, &count, &first, 0);
-            if (count == 0) {
-                return nullptr;
-            }
-            if (const MethodRow* const pHere = declaredIn(pType, pLike)) {
-                return pHere;
+        // The pDeclaring subobjects of an object and their final overriders: those at offset `want` (the object pointer's
+        // own subobject) and all of them.
+        struct Overriders {
+            u32 want;
+            u32 atCount;
+            const MethodRow* pAt;
+            u32 anyCount;
+            const MethodRow* pAny;
+        };
+
+        // Depth first from pType (at `at` in the complete object) through its bases that are not virtual: each
+        // pDeclaring subobject's final overrider is the most derived record on its own path that declares pLike's name
+        // and params (pAbove: the one found above pType on this path, if any). Two subobjects of one class can have
+        // different overriders (D : B1, B2, each from A and each overriding A::f).
+        void overridersIn(const TypeRow* pType, const TypeRow* pDeclaring, const MethodRow* pLike, u32 at, const MethodRow* pAbove,
+                          Overriders* pOut, u32 depth) {
+            const MethodRow* const pHere = pAbove != nullptr ? pAbove : declaredIn(pType, pLike);
+            if (pType == pDeclaring) {
+                // A class is never its own base: nothing below this one is another pDeclaring.
+                pOut->anyCount++;
+                pOut->pAny = pHere;
+                if (at == pOut->want) {
+                    pOut->atCount++;
+                    pOut->pAt = pHere;
+                }
+                return;
             }
             if (depth >= 64) {
                 NEBULA_PANIC("LumaCore: the bases of %s nest deeper than 64", pType->name);
@@ -662,11 +696,8 @@ namespace luma {
                 if (pBase == nullptr) {
                     NEBULA_PANIC("LumaCore: %s's base %s has no row", pType->name, rBase.name);
                 }
-                if (const MethodRow* const pFound = overriderIn(pBase, pDeclaring, pLike, depth + 1)) {
-                    return pFound;
-                }
+                overridersIn(pBase, pDeclaring, pLike, at + rBase.offset, pHere, pOut, depth + 1);
             }
-            return nullptr;
         }
     }  // namespace
 
@@ -676,7 +707,8 @@ namespace luma {
         return pRow != nullptr ? pRow->function : nullptr;
     }
 
-    const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature) {
+    const MethodRow* overrider(const void* pObject, const char* pName, const char* pSignature, bool* pAmbiguous) {
+        *pAmbiguous = false;
         prepareTypes();
         const MethodRow* const pTarget = methodRow(pName, pSignature);
         if (pTarget == nullptr) {
@@ -687,7 +719,20 @@ namespace luma {
         if (own.type == nullptr || pDeclaring == nullptr) {
             return nullptr;
         }
-        return overriderIn(own.type, pDeclaring, pTarget, 0);
+        // The subobject pObject is: by its offset in the complete object. When pObject is no pDeclaring subobject (it
+        // points at the complete object, or another base) and there is more than one, which runs is not decided: the
+        // answer is none, said as ambiguous, as asClass says it (contract objects M-1).
+        Overriders found = {};
+        found.want = static_cast<u32>(static_cast<const char*>(pObject) - static_cast<const char*>(own.complete));
+        overridersIn(own.type, pDeclaring, pTarget, 0, nullptr, &found, 0);
+        if (found.atCount == 1) {
+            return found.pAt;
+        }
+        if (found.anyCount == 1) {
+            return found.pAny;
+        }
+        *pAmbiguous = found.anyCount > 1;
+        return nullptr;
     }
 
     OwnClass ownClass(const void* pObject) {

@@ -183,6 +183,19 @@ struct FoV {  // polymorphic by its destructor alone: a type_info, no method row
 };
 struct FoX : FoA {};
 struct FoAmb : FoC, FoX {};  // two FoA subobjects: as FoA, ambiguous
+// One class reached twice, with no virtual base: each subobject has its own final overrider (contract objects M-1).
+struct FoTA {
+    virtual s32 f() { return 10; }
+    s32 ta = 0;
+};
+struct FoTB1 : FoTA {
+    s32 f() override { return 11; }
+};
+struct FoTB2 : FoTA {
+    s32 f() override { return 12; }
+};
+struct FoTD : FoTB1, FoTB2 {};
+struct FoTE : FoV, FoTB1, FoTB2 {};  // at offset 0 a FoV: no FoTA there
 // Polymorphic only through an instance named nowhere but as a base, which declares nothing virtual itself
 // (the game's DeriveActorGroup<T> holders: a base walked after the record, or with no row of its own).
 template <class T>

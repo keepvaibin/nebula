@@ -226,6 +226,12 @@ elseif(APPLE)
         -Wl,-unexported_symbol,__ZT?St* -Wl,-unexported_symbol,__ZT?NSt* -Wl,-unexported_symbol,___cxa* -Wl,-unexported_symbol,___gxx*)
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
+    # A symbol the module names and nothing defines (a class's type_info whose key function has no body: contract
+    # objects M-2) fails the link here, as the NDK's own flags make it fail on Android, never the game's start. A
+    # sanitizer's runtime is the executable's, so its build leaves them to the loader.
+    if(NOT ANDROID AND NOT NEBULA_SANITIZE)
+        target_link_options(smg_game PRIVATE -Wl,--no-undefined)
+    endif()
     if(NOT ANDROID)  # Android's C library holds the threads
         target_link_libraries(smg_game PRIVATE pthread)
     endif()
