@@ -120,6 +120,8 @@ struct Call {
     files: Vec<CString>,
     /// The types file given; empty: none.
     types: Vec<u8>,
+    /// The services catalog given; empty: none.
+    services: Vec<u8>,
 }
 
 impl Call {
@@ -135,6 +137,7 @@ impl Call {
             installed: Vec::new(),
             files: Vec::new(),
             types: Vec::new(),
+            services: Vec::new(),
         });
         c.store.context = (&*c.table as *const CTable).cast_mut().cast();
         c
@@ -151,8 +154,8 @@ impl Call {
             names: ROWS.as_ptr().cast(),
             names_size: ROWS.len() as u64,
             luma_api: 1,
-            permissions: null(),
-            permission_count: 0,
+            services: if self.services.is_empty() { null() } else { self.services.as_ptr().cast() },
+            services_size: self.services.len() as u64,
             store: &self.store,
             store_key: self.store_key.as_ptr(),
             installed: self.installed.as_ptr(),
@@ -343,7 +346,7 @@ fn a_faulty_input_is_refused_with_its_reason() {
     refused(Some(&i), "installed[0] x.luma");
     // A types file that does not read names where; one given without names is the caller's fault.
     let mut typed = Call::new(&path, "windows-x64");
-    typed.types = br#"{"types": [{"kind": "struct", "name": "A", "size": 4, "fields": [], "reachable": []}], "globals": [], "left_out": [{"kind": "nerve", "name": "x", "reason": "r"}]}"#.to_vec();
+    typed.types = br#"{"types": [], "globals": [], "left_out": [{"kind": "nerve", "name": "x", "file": "a.hpp", "line": 1, "reason": "r"}]}"#.to_vec();
     refused(Some(&typed.input(None)), "types: left_out[0].kind");
     typed.types = b"{".to_vec();
     refused(Some(&typed.input(None)), "types: line 1");
@@ -438,4 +441,50 @@ fn a_refusal_is_said_from_its_code_and_parameters_in_every_language() {
     let none = unsafe { CStr::from_ptr(luma_validate_message(402, nulls.as_ptr(), nulls.as_ptr(), 2, null())) };
     assert!(!none.to_bytes().is_empty());
     assert!(!unsafe { luma_validate_reason(402, null(), null(), 3, null()) }.is_null());
+}
+
+#[test]
+fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
+    // pe-x64/service.dll imports net 1.0 without LUMA_OPTIONAL (luma-validate's tests/data/lib.c, SERVICE).
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/windows-x64/mod.dll", &fixture("pe-x64/service.dll"))]);
+    let path = write(dir.path(), "s.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.services = br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let required = |input: &LumaValidateInput, platform: &str| unsafe {
+        let r = luma_validate(input);
+        assert_eq!(luma_report_errors(r), 0);
+        let p = CString::new(platform).unwrap();
+        let mut out = Vec::new();
+        for i in 0.. {
+            let name = luma_report_required_service(r, p.as_ptr(), i);
+            if name.is_null() {
+                break;
+            }
+            out.push(CStr::from_ptr(name).to_str().unwrap().to_string());
+        }
+        assert!(luma_report_required_service(r, null(), 0).is_null());
+        assert!(luma_report_required_service(null(), p.as_ptr(), 0).is_null());
+        luma_report_free(r);
+        out
+    };
+    assert_eq!(required(&call.input(None), "windows-x64"), vec!["net".to_string()]);
+    assert_eq!(required(&call.input(None), "linux-x64"), Vec::<String>::new());
+    // The start's check takes the kept report and gives the same.
+    let full = c_call(Some(&call.input(None)));
+    assert_eq!(c_call(Some(&call.input(Some(&full.kept)))).state, 1);
+    assert_eq!(required(&call.input(Some(&full.kept)), "windows-x64"), vec!["net".to_string()]);
+    // The catalog identifies the game: a kept report made against another one checks every rule again.
+    let mut other = Call::new(&path, "windows-x64");
+    other.services = br#"{"services": [{"name": "net", "major": 1, "minor": 1, "permission": null}]}"#.to_vec();
+    assert_eq!(c_call(Some(&other.input(Some(&full.kept)))).state, 0);
+    // A catalog not in registry 9's form is the caller's fault, said; one without names likewise.
+    other.services = br#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let got = c_call(Some(&other.input(None)));
+    assert_eq!(got.state, -1);
+    assert!(got.invalid.unwrap().contains("services: services[0].name"));
+    let mut i = call.input(None);
+    i.names = null();
+    let got = c_call(Some(&i));
+    assert!(got.invalid.unwrap().contains("services given without names"));
 }

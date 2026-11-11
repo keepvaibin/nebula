@@ -43,6 +43,83 @@ pub const TYPES_FILE: &str = "luma_types.json";
 /// The function rows' facts file's name in a folder of names (types TY-11).
 pub const FUNCTIONS_FILE: &str = "luma_functions.json";
 
+/// The services catalog's file name in a folder of names: an object whose `services` key is the self-description's
+/// (services-registry 9), so the same reader takes either.
+pub const SERVICES_FILE: &str = "luma_services.json";
+
+/// A service name (services-registry 2): parts `[a-z][a-z0-9]*` joined by `.`, at most 31 bytes.
+pub fn service_name_ok(name: &str) -> bool {
+    name.len() <= 31 && name.split('.').all(|part| part.as_bytes().first().is_some_and(u8::is_ascii_lowercase) && part.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
+}
+
+/// A kind 5 row's version text (services-registry 2, G R-4): `<major>.<minor>`, each a decimal number from 0 to
+/// 65535 with no leading zero, nothing else.
+pub fn service_version(text: &str) -> Option<(u16, u16)> {
+    let number = |s: &str| -> Option<u16> {
+        if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) || (s.len() > 1 && s.starts_with('0')) {
+            return None;
+        }
+        s.parse().ok()
+    };
+    let (a, b) = text.split_once('.')?;
+    Some((number(a)?, number(b)?))
+}
+
+/// One catalogued service (services-registry 9).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Service {
+    pub name: String,
+    pub major: u16,
+    pub minor: u16,
+    /// The permission it needs (its own name), or None.
+    pub permission: Option<String>,
+}
+
+/// The game's services catalog, in its order: by name in byte order, then major.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Services {
+    pub rows: Vec<Service>,
+}
+
+impl Services {
+    /// Reads an object with a `services` key (the self-description, or luma_services.json). A row not in registry 9's
+    /// form is an error naming it: a name outside section 2's grammar, a major or minor that is no whole number from 0
+    /// to 65535, a permission that is not null or the service's own name, a row out of order or given twice.
+    pub fn from_json(bytes: &[u8]) -> Result<Services, TypesError> {
+        use crate::json::{Kind, Value};
+        let root = crate::json::parse(bytes)
+            .map_err(|e| TypesError::Json { line: e.pos.line, column: e.pos.column, what: e.what, detail: e.detail })?;
+        let bad = |at: String, why: &str| TypesError::Row { at, why: why.to_string() };
+        let list = root.get("services").filter(|v| v.is_array()).map(Value::items).ok_or_else(|| bad("services".into(), "missing, or not a list"))?;
+        let mut rows: Vec<Service> = Vec::new();
+        for (i, row) in list.iter().enumerate() {
+            let at = format!("services[{i}]");
+            let name = row.get("name").and_then(Value::as_str).filter(|n| service_name_ok(n)).ok_or_else(|| bad(format!("{at}.name"), "missing, or not a service name"))?;
+            let version = |key: &str| {
+                row.get(key).and_then(Value::as_i64).filter(|n| (0..=i64::from(u16::MAX)).contains(n)).map(|n| n as u16).ok_or_else(|| bad(format!("{at}.{key}"), "missing, or not a whole number from 0 to 65535"))
+            };
+            let (major, minor) = (version("major")?, version("minor")?);
+            let permission = match row.get("permission").map(|v| &v.kind) {
+                Some(Kind::Null) => None,
+                Some(Kind::String(p)) if p == name => Some(p.clone()),
+                _ => return Err(bad(format!("{at}.permission"), "missing, or not null or the service's own name")),
+            };
+            if let Some(last) = rows.last() {
+                if (last.name.as_bytes(), last.major) >= (name.as_bytes(), major) {
+                    return Err(bad(at, "not after the row before it (by name in byte order, then major), or given twice"));
+                }
+            }
+            rows.push(Service { name: name.to_string(), major, minor, permission });
+        }
+        Ok(Services { rows })
+    }
+
+    /// The row a kind 5 import of `name` at `major.minor` binds: that name and major, and a minor at least the one asked.
+    pub fn find(&self, name: &str, major: u16, minor: u16) -> Option<&Service> {
+        self.rows.iter().find(|s| s.name == name && s.major == major && s.minor >= minor)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Names {
     /// Each function's signatures, with whether the row is a constructor or destructor (`tell`).
@@ -54,8 +131,9 @@ pub struct Names {
     pub function_facts: Option<FunctionFacts>,
     /// The NameObj class names (kind 3); None until the self-description lists classes (1.3, 1.8).
     pub classes: Option<HashSet<String>>,
-    /// The services' permission names; None until the service registry (2.1) lists them.
-    pub permissions: Option<Vec<String>>,
+    /// The game's services catalog (services-registry 9, the self-description's `services`); None when not given:
+    /// kind 5 imports are not checked.
+    pub services: Option<Services>,
     /// The LumaCore version mods are checked against (`LUMA_API`).
     pub api: u32,
 }
@@ -89,6 +167,13 @@ impl Names {
                     }
                     let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
                     names.function_facts = Some(FunctionFacts::from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
+                } else if path.file_name().is_some_and(|n| n == SERVICES_FILE) {
+                    if names.services.is_some() {
+                        let why = format!("a second {SERVICES_FILE} under {}", folder.display());
+                        return Err(RowsError::Types { path, error: TypesError::Row { at: String::new(), why } });
+                    }
+                    let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
+                    names.services = Some(Services::from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
                 }
             }
         }

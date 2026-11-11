@@ -216,6 +216,12 @@ pub(crate) struct Facts {
     pub layers: Vec<(String, json::Pos, String)>,
     pub options: Vec<OptionFacts>,
     pub permissions: BTreeSet<String>,
+    /// Each permission of the closed list asked for, once, with where (for L218, said after the code is read).
+    pub permission_at: Vec<(String, json::Pos, String)>,
+    /// The services any entry library imports (kind 5, optional or not), and how many entry libraries' imports were
+    /// read (L218, said by the code block).
+    pub services_imported: BTreeSet<String>,
+    pub entries_read: usize,
     pub needs: Vec<(String, Option<Range>)>,
     pub code_platforms: Vec<String>,
     pub has_code_key: bool,
@@ -697,10 +703,60 @@ fn text(m: &mut M, root: &Value, facts: &Facts) {
     }
 }
 
+/// The permissions a mod may ask for (luma-format revision 3, services-registry 5.1): a closed list. A permissioned
+/// service's permission is its own name (registry 9), so these are also the names of the services that need one,
+/// `native` aside (not a service: extra libraries, F-1).
+pub const PERMISSIONS: [&str; 11] = [
+    "native",
+    "fs.exchange",
+    "net.local",
+    "net.internet",
+    "input.inject",
+    "input.devices",
+    "audio.microphone",
+    "capture.camera",
+    "system.clipboard",
+    "system.links",
+    "save.game",
+];
+
+/// The most hosts `net.internet` may list (services-registry 5.1).
+pub const MAX_HOSTS: usize = 32;
+
+/// A host `net.internet` may reach (services-registry 5.1, G R-2): `*` alone, a name (`api.example.org`), a name
+/// under a domain (`*.example.org`), or an IPv4 address in dotted digits. No port, no IPv6 literal. Letters of either
+/// case: the host lowercases them (consent 1.2).
+pub fn permission_host_ok(host: &str) -> bool {
+    if host == "*" {
+        return true;
+    }
+    if ipv4_ok(host) {
+        return true;
+    }
+    let (wild, name) = match host.strip_prefix("*.") {
+        Some(rest) => (true, rest),
+        None => (false, host),
+    };
+    let labels: Vec<&str> = name.split('.').collect();
+    let label_ok = |l: &str| l.len() <= 63 && !l.is_empty() && !l.starts_with('-') && !l.ends_with('-') && l.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-');
+    // A last label of digits only is an address, not a name: `1.2.3` is neither, and `*.` takes a domain, not an address.
+    !name.is_empty()
+        && name.len() <= 253
+        && labels.iter().all(|l| label_ok(l))
+        && !labels.last().is_some_and(|l| l.bytes().all(|b| b.is_ascii_digit()))
+        && (!wild || !ipv4_ok(name))
+}
+
+/// Four decimal numbers from 0 to 255 joined by `.`, without leading zeros (`010` reads as octal in some resolvers).
+fn ipv4_ok(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('.').collect();
+    parts.len() == 4
+        && parts.iter().all(|x| !x.is_empty() && x.len() <= 3 && x.bytes().all(|b| b.is_ascii_digit()) && (x.len() == 1 || !x.starts_with('0')) && x.parse::<u16>().is_ok_and(|n| n <= 255))
+}
+
 fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
     let Some(v) = root.get("permissions") else { return };
-    let Some(items) = m.array(v, "/permissions", "permissions", 0, 32) else { return };
-    let known: Option<Vec<String>> = m.ctx.game().and_then(|g| g.names).and_then(|n| n.permissions.clone());
+    let Some(items) = m.array(v, "/permissions", "permissions", 0, PERMISSIONS.len()) else { return };
     for (i, x) in items.iter().enumerate() {
         let ptr = format!("/permissions/{i}");
         let Some(obj) = m.object(x, &ptr, "permissions") else { continue };
@@ -712,14 +768,16 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
         if facts.permissions.contains(&name) {
             m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Twice"))]);
         }
-        // `native` and `net` are luma-format's own; every other name is a service's (validator contract: from the
-        // self-description), not checked without it.
-        if name != "native" && name != "net" {
-            match &known {
-                Some(list) if !list.contains(&name) => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Unknown"))]),
-                Some(_) => {}
-                None => m.ctx.not_checked(211, "Missing.SelfDescription"),
-            }
+        // The closed list; the `net` of revision 1 became two permissions (revision 3). A `test.` name is a test
+        // service's (services-registry 14), which only a test run provides: a Note, L219.
+        let test = name.starts_with("test.") && crate::names::service_name_ok(&name);
+        let known = test || PERMISSIONS.contains(&name.as_str());
+        if name == "net" {
+            m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NetSplit"))]);
+        } else if test {
+            m.at(219, obj, &ptr, vec![("key", t(name.clone()))]);
+        } else if !known {
+            m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.Unknown"))]);
         }
         match obj.get("why") {
             None => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NoWhy"))]),
@@ -728,21 +786,35 @@ fn permissions(m: &mut M, root: &Value, facts: &mut Facts) {
             }
         }
         match (name.as_str(), obj.get("hosts")) {
-            ("net", None) => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NetHosts"))]),
-            ("net", Some(h)) => {
-                if let Some(hosts) = m.array(h, &format!("{ptr}/hosts"), "permissions/hosts", 1, 64) {
-                    for (j, host) in hosts.iter().enumerate() {
-                        let hp = format!("{ptr}/hosts/{j}");
-                        if let Some(s) = m.string(host, &hp, "permissions/hosts") {
-                            if !host_ok(s) {
-                                m.wrong(host, &hp, "permissions/hosts", "Expect.Host");
-                            }
-                        }
+            ("net.internet", None) => m.at(211, obj, &ptr, vec![("key", t(name.clone())), ("why", p("Perm.NetHosts"))]),
+            ("net.internet", Some(h)) => {
+                let hp = format!("{ptr}/hosts");
+                if !h.is_array() {
+                    m.wrong(h, &hp, "permissions/hosts", "Expect.Array");
+                } else if h.items().is_empty() || h.items().len() > MAX_HOSTS {
+                    m.at(211, h, &hp, vec![("key", t(name.clone())), ("why", p("Perm.HostCount"))]);
+                }
+                let mut seen: Vec<String> = Vec::new();
+                for (j, host) in h.items().iter().enumerate() {
+                    let at = format!("{hp}/{j}");
+                    let Some(s) = m.string(host, &at, "permissions/hosts") else { continue };
+                    if !permission_host_ok(s) {
+                        m.wrong(host, &at, "permissions/hosts", "Expect.Host");
+                        continue;
+                    }
+                    let lower = s.to_ascii_lowercase();
+                    if seen.contains(&lower) {
+                        m.at(211, host, &at, vec![("key", t(name.clone())), ("why", p("Perm.HostTwice"))]);
+                    } else {
+                        seen.push(lower);
                     }
                 }
             }
             (_, Some(h)) => m.at(211, h, &format!("{ptr}/hosts"), vec![("key", t(name.clone())), ("why", p("Perm.HostsOnlyNet"))]),
             _ => {}
+        }
+        if known && !facts.permissions.contains(&name) {
+            facts.permission_at.push((name.clone(), obj.pos, ptr.clone()));
         }
         facts.permissions.insert(name);
     }
@@ -1106,6 +1178,10 @@ mod tests {
     fn small_checks() {
         assert!(id_ok("gold-flower") && id_ok("a.b-c") && !id_ok("ab") && !id_ok("Gold") && !id_ok("1abc") && !id_ok("a..b") && !id_ok("abc."));
         assert!(host_ok("api.example.org") && host_ok("*.example.org") && host_ok("127.0.0.1:8080") && !host_ok("a b") && !host_ok("x:0") && !host_ok("-a.org"));
+        assert!(["*", "api.example.org", "API.Example.org", "*.example.org", "localhost", "10.0.0.1", "255.255.255.255", "0.0.0.0"].iter().all(|h| permission_host_ok(h)));
+        assert!(!["", "*.", "**", "*.*.org", "a.org:80", "10.0.0.1:80", "::1", "[::1]", "1.2.3", "256.0.0.1", "01.2.3.4", "*.10.0.0.1", "-a.org", "a b", "a..org", "a.org."]
+            .iter()
+            .any(|h| permission_host_ok(h)));
         assert!(url_ok("https://example.org/x?y") && !url_ok("http://example.org") && !url_ok("https://localhost"));
         assert!(spdx_ok("GPL-3.0-only") && spdx_ok("MIT OR (Apache-2.0 AND BSD-3-Clause)") && spdx_ok("GPL-2.0-or-later WITH Classpath-exception-2.0"));
         assert!(spdx_ok("LicenseRef-Mine") && !spdx_ok("MIT OR") && !spdx_ok("(MIT") && !spdx_ok("") && !spdx_ok("MIT AND AND BSD"));

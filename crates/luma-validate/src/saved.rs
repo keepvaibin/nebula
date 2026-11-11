@@ -15,7 +15,7 @@
 //! about	<id>	<version>
 //! conflict	<id>
 //! need	<id>
-//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios	<value>
+//! touch	replaces|cells|adds|removes|assets|functions|links|scenarios|services	<value>
 //! finding	<code>	<file>	<line>|-	<column>|-	<pointer>|-	<mod id>|-	(<name>=T:<text> | <name>=P:<phrase id>)...
 //! not-checked	<code>	<phrase id>	<places>
 //! end	<SHA-1 of every byte before this line, hex>
@@ -99,7 +99,7 @@ fn opt(v: Option<&str>) -> String {
     v.map_or_else(|| "-".to_string(), esc)
 }
 
-fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 8] {
+fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 9] {
     [
         ("replaces", &t.replaces),
         ("cells", &t.cells),
@@ -109,6 +109,7 @@ fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 8] {
         ("functions", &t.functions),
         ("links", &t.links),
         ("scenarios", &t.scenarios),
+        ("services", &t.services),
     ]
 }
 
@@ -217,6 +218,7 @@ impl Saved {
                         "functions" => t.functions.push(v),
                         "links" => t.links.push(v),
                         "scenarios" => t.scenarios.push(v),
+                        "services" => t.services.push(v),
                         _ => return None,
                     }
                 }

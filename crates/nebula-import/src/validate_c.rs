@@ -57,8 +57,9 @@ pub struct LumaValidateInput {
     pub names: *const c_char,
     pub names_size: u64,
     pub luma_api: u32,
-    pub permissions: *const *const c_char,
-    pub permission_count: u32,
+    /// The game's services catalog (JSON with a `services` key, services-registry 9); null: kind 5 is not checked.
+    pub services: *const c_char,
+    pub services_size: u64,
     pub store: *const LumaGameStore,
     pub store_key: *const c_char,
     pub installed: *const LumaInstalledMod,
@@ -95,6 +96,8 @@ pub struct LumaReport {
     strings: Vec<[Option<CString>; 3]>,
     id: Option<CString>,
     version: Option<CString>,
+    /// Touches.services: each platform and the name of a service its entry library requires, in import order.
+    required: Vec<(String, CString)>,
     shown: RefCell<Option<(CString, LumaFinding)>>,
     shown_not_checked: RefCell<Option<CString>>,
     /// Why the input was not valid (for the developer's log, in English).
@@ -259,6 +262,7 @@ fn invalid(why: &str) -> *mut LumaReport {
         strings: Vec::new(),
         id: None,
         version: None,
+        required: Vec::new(),
         shown: RefCell::new(None),
         shown_not_checked: RefCell::new(None),
         invalid: Some(c(why)),
@@ -283,12 +287,16 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     if types_bytes.is_some() && names_text.is_none() {
         return Err("types given without names".to_string());
     }
+    let services_bytes = (!input.services.is_null()).then(|| std::slice::from_raw_parts(input.services.cast::<u8>(), input.services_size as usize));
+    if services_bytes.is_some() && names_text.is_none() {
+        return Err("services given without names".to_string());
+    }
     let names = match &names_text {
         Some(t) => {
             let mut n = Names { api: input.luma_api, ..Names::default() };
             n.add_rows(t).map_err(|line| format!("names line {line}: not name, signature, kind, line"))?;
             n.types = types_bytes.map(luma_validate::names::Types::from_json).transpose().map_err(|e| format!("types: {e}"))?;
-            n.permissions = (!input.permissions.is_null()).then(|| list(input.permissions, input.permission_count).iter().filter_map(|&p| text(p)).collect());
+            n.services = services_bytes.map(luma_validate::names::Services::from_json).transpose().map_err(|e| format!("services: {e}"))?;
             Some(n)
         }
         None => None,
@@ -304,16 +312,14 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     let store = (!input.store.is_null()).then(|| CStore(input.store));
     let store_key = text(input.store_key).unwrap_or_default();
     // What identifies the game for a kept report: a change in any of it checks every rule again.
-    let mut perms: Vec<String> = names.as_ref().and_then(|n| n.permissions.clone()).unwrap_or_default();
-    perms.sort();
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; permissions {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
         names_text.as_deref().map_or_else(|| "-".to_string(), |t| hex_sha1(t.as_bytes())),
         types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
-        perms.join(","),
+        services_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         if store.is_some() { store_key.as_str() } else { "-" },
     );
     // Every other mod is given by its kept report; one that does not read is the caller's fault, never skipped.
@@ -357,7 +363,16 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         .collect();
     let id = report.about.as_ref().map(|a| c(&a.id));
     let version = report.about.as_ref().map(|a| c(&a.version.to_string()));
-    Ok(LumaReport { report: Some(report), kept, strings, id, version, shown: RefCell::new(None), shown_not_checked: RefCell::new(None), invalid: None })
+    let required = report
+        .touches
+        .services
+        .iter()
+        .filter_map(|v| {
+            let mut parts = v.split('\u{1f}');
+            Some((parts.next()?.to_string(), c(parts.next()?)))
+        })
+        .collect();
+    Ok(LumaReport { report: Some(report), kept, strings, id, version, required, shown: RefCell::new(None), shown_not_checked: RefCell::new(None), invalid: None })
 }
 
 /// Validates the mod at `input->path` against the running game. Never null; give it back to luma_report_free.
@@ -522,6 +537,18 @@ pub unsafe extern "C" fn luma_report_kept(report: *const LumaReport, size: *mut 
 #[no_mangle]
 pub unsafe extern "C" fn luma_report_id(report: *const LumaReport) -> *const c_char {
     report.as_ref().and_then(|r| r.id.as_ref()).map_or(std::ptr::null(), |c| c.as_ptr())
+}
+
+/// The name of the service number `index` that the entry library for `platform` imports without LUMA_OPTIONAL
+/// (kind 5), in import order, each once; null past the last, or for a platform the mod has no code for. The same from
+/// a start's check that took the kept report (consent 1.3: the host maps each to its permission by name).
+///
+/// # Safety
+/// As luma_report_state; `platform` is null or a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn luma_report_required_service(report: *const LumaReport, platform: *const c_char, index: u32) -> *const c_char {
+    let (Some(r), Some(platform)) = (report.as_ref(), text(platform)) else { return std::ptr::null() };
+    r.required.iter().filter(|(p, _)| *p == platform).nth(index as usize).map_or(std::ptr::null(), |(_, name)| name.as_ptr())
 }
 
 /// # Safety

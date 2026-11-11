@@ -3,6 +3,8 @@
 use super::{p, t, Ctx};
 use crate::binary::{self, Format, Machine};
 use crate::zip::EntryKind;
+use crate::names::{service_name_ok, service_version};
+use super::patches::SEP;
 use std::collections::BTreeMap;
 
 pub const MAX_LIBRARY: u64 = 1 << 30;
@@ -128,6 +130,23 @@ pub(crate) fn check(ctx: &mut Ctx) {
             library(ctx, plat, f, f == entry_name, format, machine, &extras);
         }
     }
+    // L218: a permission asked for that nothing of the mod needs (services-registry 5.2, a Note): `native` with no extra
+    // library; any other when no entry library imports its service (a permissioned service's name is its permission's).
+    // Said only when every entry library's imports were read (one that was not is an error already).
+    let native_used = libraries.values().any(|l| !l.is_empty());
+    let all_read = ctx.facts.entries_read == listed.len();
+    for (permission, at, pointer) in ctx.facts.permission_at.clone() {
+        let used = if permission == "native" {
+            native_used
+        } else if all_read {
+            ctx.facts.services_imported.contains(&permission)
+        } else {
+            true
+        };
+        if !used {
+            ctx.add(218, "luma.json", Some(at), Some(&pointer), vec![("permission", t(permission))]);
+        }
+    }
     // L507: the platforms checked for, where the mod's code does not run (the mod is off there).
     if has_key {
         for plat in ctx.input.platforms {
@@ -233,7 +252,8 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
     } else {
         ctx.not_checked(508, "Missing.SelfDescription");
     }
-    let (mut services, mut mod_functions) = (false, false);
+    ctx.facts.entries_read += 1;
+    let (mut any_service, mut services_unchecked, mut mod_functions) = (false, false, false);
     for (i, row) in info.imports.iter().enumerate() {
         if row.kind >= IMPORT_KINDS || (row.kind == 4 && row.hook_kind >= HOOK_KINDS) || row.name.is_empty() {
             ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]);
@@ -243,10 +263,37 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             // A service (loader D3-2): `signature` is "major.minor". Which services there are, their versions and
             // permissions are the host's (its service finder), not the self-description's: said below.
             5 => {
-                if row.signature.as_deref().is_some_and(is_service_version) {
-                    services = true;
-                } else {
-                    ctx.add(512, &name, None, None, vec![("why", p("Lib.ImportRowBad")), ("row", t(i.to_string()))]);
+                any_service = true;
+                let optional = row.flags & LUMA_OPTIONAL != 0;
+                let sig = row.signature.clone().unwrap_or_default();
+                // Registry 2: a name outside its grammar or a version text other than "<major>.<minor>" is L505 with
+                // `sig` as found, whatever the flags (the loader reads the same grammar).
+                let Some((major, minor)) = row.signature.as_deref().and_then(service_version).filter(|_| service_name_ok(&row.name)) else {
+                    ctx.add(505, &name, None, None, vec![("kind", p("Name.Service")), ("found", t(row.name.clone())), ("sig", t(sig))]);
+                    continue;
+                };
+                ctx.facts.services_imported.insert(row.name.clone());
+                if !optional {
+                    let required = format!("{plat}{SEP}{}{SEP}{major}.{minor}", row.name);
+                    if !ctx.facts.touches.services.contains(&required) {
+                        ctx.facts.touches.services.push(required);
+                    }
+                }
+                match names.and_then(|n| n.services.as_ref()) {
+                    None => services_unchecked = true,
+                    Some(catalog) => match catalog.find(&row.name, major, minor) {
+                        // An optional import of a service the game lacks is `none` (registry 2).
+                        None if optional => {}
+                        None => ctx.add(505, &name, None, None, vec![("kind", p("Name.Service")), ("found", t(row.name.clone())), ("sig", t(sig))]),
+                        // Optional or not: without the permission declared it is never granted.
+                        Some(service) => {
+                            if let Some(permission) = service.permission.clone() {
+                                if !ctx.facts.permissions.contains(&permission) {
+                                    ctx.add(506, &name, None, None, vec![("service", t(row.name.clone())), ("permission", t(permission))]);
+                                }
+                            }
+                        }
+                    },
                 }
                 continue;
             }
@@ -323,13 +370,11 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             ctx.add(505, &name, None, None, vec![("kind", p(kind)), ("found", t(row.name.clone())), ("sig", t(row.signature.clone().unwrap_or_default()))]);
         }
     }
-    if services {
+    // A library may also ask `core->service(mod, ...)` by name at run time, which no row shows: the kernel refuses one
+    // not granted (Hook.ServiceNotGranted), and L218 stays a Note for it.
+    if any_service && services_unchecked {
         ctx.not_checked(505, "Missing.Services");
         ctx.not_checked(506, "Missing.Services");
-    } else {
-        // A library may still ask `core->service(mod, ...)` by name at run time, which no row shows; the kernel refuses
-        // one not granted (Hook.ServiceNotGranted).
-        ctx.not_checked(506, "Missing.ServiceImports");
     }
     if mod_functions {
         ctx.not_checked(505, "Missing.ModExports");
@@ -431,10 +476,6 @@ fn left_out_reason(reason: &str) -> Vec<(&'static str, crate::Arg)> {
 }
 
 /// A service import's version, "major.minor": two whole numbers (loader D3-2).
-fn is_service_version(s: &str) -> bool {
-    s.split_once('.').is_some_and(|(a, b)| [a, b].iter().all(|x| !x.is_empty() && x.len() <= 5 && x.bytes().all(|c| c.is_ascii_digit())))
-}
-
 #[cfg(test)]
 mod types_tests {
     use super::{left_out_reason, typed, Typed};

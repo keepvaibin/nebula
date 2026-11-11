@@ -4,7 +4,7 @@
 
    At import: luma_validate with `kept` null runs every rule; keep luma_report_kept's bytes beside the mod.
    At each start, and each change of the mod list or options: luma_validate with the mod's kept bytes. When they are for
-   the same .luma and the same game (release, region, platform, languages, LumaCore version, names, permissions,
+   the same .luma and the same game (release, region, platform, languages, LumaCore version, names, services,
    store_key), the rules that read the whole .luma are taken from them and every other rule runs; otherwise every rule
    runs. Keep the new kept bytes either way.
 
@@ -65,8 +65,9 @@ typedef struct LumaValidateInput {
     const char* names;      /* the game's names as `.rows` lines (name, signature, hook|tell, line); null: not checked */
     uint64_t names_size;
     uint32_t luma_api;      /* LUMA_API */
-    const char* const* permissions; /* the services' permission names; null: not known */
-    uint32_t permission_count;
+    const char* services;   /* the game's services catalog: JSON with the self-description's "services" key (services-registry 9);
+                               null: kind 5 imports are not checked */
+    uint64_t services_size;
     const LumaGameStore* store;     /* null: the rules on game paths and rows are not checked */
     const char* store_key;          /* what identifies the store's content (its version and the game it came from) */
     const LumaInstalledMod* installed; /* every other installed mod, in load order (an update leaves out the mod it replaces) */
@@ -112,6 +113,10 @@ const uint8_t* luma_report_kept(const LumaReport* report, uint64_t* size);
 /* The mod's id and version from its luma.json; null when not given well formed. */
 const char* luma_report_id(const LumaReport* report);
 const char* luma_report_version(const LumaReport* report);
+/* The service number `index` (0 first) that the mod's entry library for `platform` imports without LUMA_OPTIONAL, in
+   import order, each once: its name; null past the last. The same after a start's check that took the kept report. A
+   permissioned service's permission is its name (services-registry 9). */
+const char* luma_report_required_service(const LumaReport* report, const char* platform, uint32_t index);
 void luma_report_free(LumaReport* report);
 
 /* A refusal said as the validator says its findings (loader contract 3; the cook's `failed` facts): rule `code`'s

@@ -54,13 +54,11 @@ fn code_mod(platform: &str, entry: &[u8], extras: &[(&str, Vec<u8>)], native: bo
 
 fn check(bytes: &[u8], platform: &str, with_names: bool) -> Report {
     let names = names();
-    let game = Game {
-        nebula: Version::parse("2.0.0").unwrap(),
-        region: Some("RMGE01"),
-        extra_languages: &[],
-        names: with_names.then_some(&names),
-        store: None,
-    };
+    check_with(bytes, platform, with_names.then_some(&names))
+}
+
+fn check_with(bytes: &[u8], platform: &str, names: Option<&Names>) -> Report {
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names, store: None };
     let platforms = [platform];
     let input = Input { source: Source::Bytes(bytes, "test.luma"), game: Some(&game), installed: &[], platforms: &platforms, options: None, position: None };
     let report = validate(&input);
@@ -100,9 +98,8 @@ fn a_correct_library_passes_in_every_format() {
     for (path, platform) in GOOD {
         let report = check(&code_mod(platform, &lib(path), &[], false), platform, true);
         assert!(report.findings.is_empty(), "{path} as {platform}: {:?}", report.findings);
-        // Services are asked for at run time; nothing else is left unchecked.
-        let left: Vec<u16> = report.not_checked.iter().map(|n| n.code).collect();
-        assert_eq!(left, vec![506], "{path} as {platform}");
+        // It imports no service: nothing is left unchecked.
+        assert!(report.not_checked.is_empty(), "{path} as {platform}: {:?}", report.not_checked);
     }
 }
 
@@ -252,8 +249,10 @@ fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() 
         assert_eq!(left(&r), vec![(505, "Missing.Services"), (506, "Missing.Services")], "{path}");
     }
     let w = "windows-x64";
+    // A version text other than "<major>.<minor>" is L505 with `sig` as found (services-registry 2).
     let r = check(&code_mod(w, &lib("pe-x64/service_bad.dll"), &[], false), w, true);
-    assert_eq!(codes(&r), vec![512]);
+    assert_eq!(codes(&r), vec![505]);
+    assert!(english(&r, 505).contains("service \"net\" at version one"), "{}", english(&r, 505));
     let r = check(&code_mod(w, &lib("pe-x64/mod_function_bad.dll"), &[], false), w, true);
     assert_eq!(codes(&r), vec![512]);
 
@@ -275,11 +274,69 @@ fn service_and_other_mod_imports_are_read_and_checked_as_far_as_the_mod_shows() 
 }
 
 #[test]
+fn a_service_import_is_checked_against_the_game_s_catalog() {
+    use luma_validate::names::Services;
+    let w = "windows-x64";
+    let with = |rows: &str| {
+        let mut n = names();
+        n.services = Some(Services::from_json(format!(r#"{{"services": {rows}}}"#).as_bytes()).unwrap());
+        n
+    };
+    // service.dll asks for net 1.0 (not optional): the same major and a minor at least that binds (registry 2).
+    let bytes = code_mod(w, &lib("pe-x64/service.dll"), &[], false);
+    for (rows, want) in [
+        (r#"[{"name": "net", "major": 1, "minor": 0, "permission": null}]"#, vec![]),
+        (r#"[{"name": "fs", "major": 1, "minor": 0, "permission": null}, {"name": "net", "major": 1, "minor": 3, "permission": null}]"#, vec![]),
+        (r#"[{"name": "net", "major": 2, "minor": 0, "permission": null}]"#, vec![505]),
+        (r#"[{"name": "fs", "major": 1, "minor": 0, "permission": null}]"#, vec![505]),
+        ("[]", vec![505]),
+        (r#"[{"name": "net", "major": 1, "minor": 0, "permission": "net"}]"#, vec![506]),
+    ] {
+        let n = with(rows);
+        let r = check_with(&bytes, w, Some(&n));
+        assert_eq!(codes(&r), want, "{rows}: {:?}", r.findings);
+        assert!(r.not_checked.is_empty(), "{rows}: {:?}", r.not_checked);
+        // What the host's consent question reads (consent 1.3), and the C accessor's source.
+        assert_eq!(r.touches.services, vec!["windows-x64\u{1f}net\u{1f}1.0".to_string()], "{rows}");
+    }
+    let r = check_with(&bytes, w, Some(&with(r#"[{"name": "net", "major": 1, "minor": 0, "permission": "net"}]"#)));
+    assert_eq!(english(&r, 506), "test.mod uses net without asking for the \"net\" permission.");
+    let r = check_with(&bytes, w, Some(&with("[]")));
+    assert!(english(&r, 505).contains("service \"net\" at version 1.0"), "{}", english(&r, 505));
+
+    // L218: a permission nothing imports. service.dll imports net, not net.local; a mod with no code needs none.
+    let code = format!(r#"{{"platforms": ["{w}"]}}"#);
+    let asks = r#"[{"name": "net.local", "why": "Finds a partner on your network."}]"#;
+    let mod_ = luma(&[("code", code.as_str()), ("permissions", asks)], &[file(&format!("code/{w}/mod.dll"), &lib("pe-x64/service.dll"))]);
+    let r = check_with(&mod_, w, Some(&with(r#"[{"name": "net", "major": 1, "minor": 0, "permission": null}]"#)));
+    assert_eq!(codes(&r), vec![218], "{:?}", r.findings);
+    assert_eq!(english(&r, 218), "test.mod asks for the \"net.local\" permission, but no code of it imports a service that needs it.");
+    // `native` with no extra library is the same Note.
+    let r = check(&luma(&[("code", code.as_str()), ("permissions", r#"[{"name": "native", "why": "Its own helper."}]"#)], &[file(&format!("code/{w}/mod.dll"), &lib("pe-x64/good.dll"))]), w, true);
+    assert_eq!(codes(&r), vec![218], "{:?}", r.findings);
+
+    // The catalog's own form (registry 9): anything else does not read, so a wrong file is never a game with fewer services.
+    for bad in [
+        r#"{}"#,
+        r#"{"services": [{"name": "Net", "major": 1, "minor": 0, "permission": null}]}"#,
+        r#"{"services": [{"name": "net", "major": 1, "minor": 70000, "permission": null}]}"#,
+        r#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": "fs"}]}"#,
+        r#"{"services": [{"name": "net", "major": 1, "minor": 0}]}"#,
+        r#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}, {"name": "fs", "major": 1, "minor": 0, "permission": null}]}"#,
+        r#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}, {"name": "net", "major": 1, "minor": 2, "permission": null}]}"#,
+    ] {
+        assert!(Services::from_json(bad.as_bytes()).is_err(), "{bad}");
+    }
+    let two = Services::from_json(br#"{"services": [{"name": "net", "major": 1, "minor": 2, "permission": null}, {"name": "net", "major": 2, "minor": 0, "permission": null}]}"#).unwrap();
+    assert_eq!((two.find("net", 1, 1).map(|s| s.minor), two.find("net", 2, 0).map(|s| s.major), two.find("net", 1, 3)), (Some(2), Some(2), None));
+}
+
+#[test]
 fn without_the_game_s_names_the_name_rules_say_they_were_not_checked() {
     let report = check(&code_mod("windows-x64", &lib("pe-x64/good.dll"), &[], false), "windows-x64", false);
     assert!(report.findings.is_empty(), "{:?}", report.findings);
     let left: Vec<u16> = report.not_checked.iter().map(|n| n.code).collect();
-    assert_eq!(left, vec![505, 506, 508]);
+    assert_eq!(left, vec![505, 508]);
 }
 
 #[test]
