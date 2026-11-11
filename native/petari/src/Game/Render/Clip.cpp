@@ -1,6 +1,7 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
+#include <nebula_module.h>
 #include "Game/Util/Tunable.hpp"
 
 NEBULA_TUNABLE_NAMED(f32, cNum_value_f1, "value.f1", 0.5f);
@@ -39,7 +40,13 @@ void Clip::bind(const ModelData* pModelData) {
     const u32 count = targetCount();
     const NebulaClipTarget* pTargets = targets();
     for (u32 i = 0; i < count; i++) {
-        const s32 index = pModelData->findMaterial(reinterpret_cast< const char* >(mFile) + pTargets[i].name_at);
+        const char* pName = reinterpret_cast< const char* >(mFile) + pTargets[i].name_at;
+        const s32 index = pModelData->findMaterial(pName);
+        if (index < 0) {
+            // A target the model does not have is skipped (the original engine binds by name and skips the same),
+            // but never silently: a model posed or placed wrong names its broken binding here.
+            nebula_log("Clip: target \"%s\" is not in the model; its tracks stay still\n", pName);
+        }
         mBound[i] = index >= 0 ? static_cast< u32 >(index) : NEBULA_NONE32;
     }
 }
