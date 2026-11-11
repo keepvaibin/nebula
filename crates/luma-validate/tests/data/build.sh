@@ -29,6 +29,8 @@ done
 "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -DHELPER -o pe-x64/helper.dll lib.c tmp/extra.lib
 "$cc" --target=x86_64-pc-windows-msvc $common -fuse-ld=lld -Wl,/ENTRY:entry -Wl,/SUBSYSTEM:CONSOLE -Wl,/Brepro -DPROGRAM -o pe-x64/program.exe lib.c
 "$cc" --target=aarch64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -DGOOD -o pe-arm64/good.dll lib.c
+# Code the system runs at load (an entry point), refused (L509 Lib.RunsAtLoad); likewise for ELF and Mach-O below.
+"$cc" --target=x86_64-pc-windows-msvc -shared $common -fuse-ld=lld -Wl,/ENTRY:dll_entry -Wl,/Brepro -Wl,/NOIMPLIB -DGOOD -DRUNS_AT_LOAD -o pe-x64/runs_at_load.dll lib.c
 
 # ELF: x64 with RELA relocations, x64 with RELR (packed relative), arm64; an extra library pair on x64.
 elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
@@ -39,6 +41,7 @@ elf="-shared -fPIC -fuse-ld=lld -Wl,--build-id=none"
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -DUSES_EXTRA -o elf-x64/uses_extra.so lib.c elf-x64/extra.so
 "$cc" --target=x86_64-unknown-linux-gnu $common $elf -Wl,-z,pack-relative-relocs -DGOOD -o elf-x64-relr/good.so lib.c
 "$cc" --target=aarch64-unknown-linux-gnu $common $elf -DGOOD -o elf-arm64/good.so lib.c
+"$cc" --target=x86_64-unknown-linux-gnu $common $elf -DGOOD -DRUNS_AT_LOAD -o elf-x64/runs_at_load.so lib.c
 
 # Mach-O: arm64 with the classic rebase opcodes, arm64 with chained fixups, x64.
 macho="-shared -fuse-ld=lld -Wl,-undefined,error"
@@ -46,6 +49,8 @@ macho="-shared -fuse-ld=lld -Wl,-undefined,error"
 "$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DMISSING -o macho-arm64/missing.dylib lib.c
 "$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DGOOD -o macho-arm64-chained/good.dylib lib.c
 "$cc" --target=x86_64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -o macho-x64/good.dylib lib.c
+"$cc" --target=arm64-apple-macos11 $common $macho -Wl,-no_fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64/runs_at_load.dylib lib.c
+"$cc" --target=arm64-apple-macos13 $common $macho -Wl,-fixup_chains -DGOOD -DRUNS_AT_LOAD -o macho-arm64-chained/runs_at_load.dylib lib.c
 
 rm -rf tmp
 find . -type f ! -name '*.c' ! -name '*.sh' | sort | while read -r f; do

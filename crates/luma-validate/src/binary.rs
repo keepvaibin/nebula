@@ -38,6 +38,10 @@ pub struct Library<'d> {
     pub imports: Vec<Import>,
     /// Every library it names (with or without symbols).
     pub needed: Vec<String>,
+    /// What the system's loader would run in it when it loads, before LumaCore's `begin` (loader contract D2-6): a
+    /// PE entry point or TLS callbacks, ELF DT_INIT, DT_INIT_ARRAY or DT_PREINIT_ARRAY, a Mach-O init section or
+    /// LC_ROUTINES_64. Each named as the format names it.
+    pub runs_at_load: Vec<String>,
     data: &'d [u8],
     /// Address ranges to file offsets: (address, size in file, file offset).
     maps: Vec<(u64, u64, u64)>,
@@ -166,6 +170,7 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
         exports: HashMap::new(),
         imports: Vec::new(),
         needed: Vec::new(),
+        runs_at_load: Vec::new(),
         data: d,
         maps,
         fixups: HashMap::new(),
@@ -173,6 +178,12 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
         base,
         is_64,
     };
+    if u32_at(d, opt + 16)? != 0 {
+        lib.runs_at_load.push("AddressOfEntryPoint".to_string());
+    }
+    if dir(9)?.0 != 0 {
+        lib.runs_at_load.push("TLS callbacks (IMAGE_DIRECTORY_ENTRY_TLS)".to_string());
+    }
     let off = |lib: &Library, rva: u32, len: u64| lib.offset_of(rva as u64, len);
     // Exports.
     let (export_rva, export_size) = dir(0)?;
@@ -264,6 +275,7 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
         exports: HashMap::new(),
         imports: Vec::new(),
         needed: Vec::new(),
+        runs_at_load: Vec::new(),
         data: d,
         maps,
         fixups: HashMap::new(),
@@ -284,6 +296,14 @@ fn read_elf(d: &[u8]) -> Option<Library<'_>> {
             needed_offsets.push(value);
         } else {
             tags.insert(tag, value);
+        }
+    }
+    if tags.contains_key(&12) {
+        lib.runs_at_load.push("DT_INIT".to_string());
+    }
+    for (array, size, name) in [(25u64, 27u64, "DT_INIT_ARRAY"), (32, 33, "DT_PREINIT_ARRAY")] {
+        if tags.contains_key(&array) && tags.get(&size).copied().unwrap_or(1) != 0 {
+            lib.runs_at_load.push(name.to_string());
         }
     }
     let strtab = lib.offset_of(*tags.get(&5)?, 1)?;
@@ -404,6 +424,7 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
         exports: HashMap::new(),
         imports: Vec::new(),
         needed: Vec::new(),
+        runs_at_load: Vec::new(),
         data: d,
         maps: Vec::new(),
         fixups: HashMap::new(),
@@ -431,7 +452,18 @@ fn read_macho(d: &[u8]) -> Option<Library<'_>> {
                     lib.base = vmaddr;
                 }
                 lib.maps.push((vmaddr, filesize, fileoff));
+                let nsects = u32_at(d, at + 64)? as usize;
+                for s in 0..nsects.min(255) {
+                    let h = at.checked_add(72 + s * 80)?;
+                    let size = u64_at(d, h + 40)?;
+                    let kind = u32_at(d, h + 64)? & 0xff;
+                    if size != 0 && (kind == 0x9 || kind == 0x16) {
+                        let sect = String::from_utf8_lossy(d.get(h..h + 16)?).trim_end_matches('\0').to_string();
+                        lib.runs_at_load.push(format!("{name},{sect}"));
+                    }
+                }
             }
+            0x1a => lib.runs_at_load.push("LC_ROUTINES_64".to_string()),
             0x2 => symtab = Some((u32_at(d, at + 8)? as usize, u32_at(d, at + 12)? as usize, u32_at(d, at + 16)? as usize)),
             0xc | 0x8000_0018 | 0x8000_001f | 0x20 => {
                 let name_off = u32_at(d, at + 8)? as usize;

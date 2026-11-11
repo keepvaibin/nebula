@@ -102,3 +102,21 @@ LUMA_EXPORT int not_luma_mod = 1;
 #endif
 
 #endif
+
+#if defined(RUNS_AT_LOAD)
+/* Code the system's loader runs when it loads the library, before LumaCore's `begin` (loader contract D2-6): a
+   constructor (ELF .init_array, Mach-O __mod_init_func) and, on Windows, an entry point. */
+static volatile int loaded;
+__attribute__((constructor)) static void at_load(void) {
+    loaded = 1;
+}
+#if defined(_WIN32)
+int __stdcall dll_entry(void* module, unsigned long reason, void* reserved) {
+    (void)module;
+    (void)reason;
+    (void)reserved;
+    loaded = 2;
+    return 1;
+}
+#endif
+#endif

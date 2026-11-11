@@ -174,6 +174,25 @@ fn each_broken_library_gives_its_finding() {
 }
 
 #[test]
+fn a_library_the_system_runs_code_from_at_load_is_refused() {
+    // Loader contract D2-6: the system's loader would run it before LumaCore's `begin`, so a C++ constructor there
+    // finds no core. Each form names what the format calls it.
+    for (path, platform, what) in [
+        ("pe-x64/runs_at_load.dll", "windows-x64", "AddressOfEntryPoint"),
+        ("elf-x64/runs_at_load.so", "linux-x64", "DT_INIT_ARRAY"),
+        ("macho-arm64/runs_at_load.dylib", "macos-arm64", "__DATA_CONST,__mod_init_func"),
+        // macOS 13 and later: the linker turns the constructor pointers into 32-bit offsets.
+        ("macho-arm64-chained/runs_at_load.dylib", "macos-arm64", "__TEXT,__init_offsets"),
+    ] {
+        let r = check(&code_mod(platform, &lib(path), &[], false), platform, true);
+        assert_eq!(codes(&r), vec![509], "{path}: {:?}", r.findings);
+        let text = english(&r, 509);
+        assert!(text.contains(what) && text.contains("luma.h"), "{path}: {text}");
+        assert!(text.starts_with(&format!("test.mod: code/{platform}/{}: the system would run its ", entry_name(platform))), "{text}");
+    }
+}
+
+#[test]
 fn without_the_game_s_names_the_name_rules_say_they_were_not_checked() {
     let report = check(&code_mod("windows-x64", &lib("pe-x64/good.dll"), &[], false), "windows-x64", false);
     assert!(report.findings.is_empty(), "{:?}", report.findings);

@@ -182,6 +182,11 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
         ctx.add(503, &name, None, None, vec![]);
         return;
     };
+    // Code the system's loader would run before LumaCore's `begin` gives the core (loader contract D2-6): a C++
+    // constructor there would find no core, and nothing would say why.
+    for what in &lib.runs_at_load {
+        ctx.add(509, &name, None, None, vec![("why", p("Lib.RunsAtLoad")), ("found", t(what.clone()))]);
+    }
     let from_extra = |library: &str| extras.iter().any(|e| e.eq_ignore_ascii_case(library) || library.ends_with(&format!("/{e}")));
     if is_apple {
         // What the linker forces into a -nostdlib dylib is the kernel loader contract's list (1.1), from evidence.
