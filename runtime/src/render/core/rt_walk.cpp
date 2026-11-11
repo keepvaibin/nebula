@@ -95,6 +95,8 @@ void RenderCore::rt_stop() noexcept {
     rt_view_retired_.clear();
     rt_images_ = rt_no_images();
     rt_noise_filled_ = false;
+    rt_blend_seen_ = false;
+    rt_blend_walk_before_ = 0u;
     rt_light_frame_ = RtFrame{};
     rt_light_history_ = false;
     rt_light_retired_.clear();
@@ -714,13 +716,25 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
         RtFrame& frame = rt_light_frame_;
         frame.binds.textures[0] = depth;
         frame.binds.textures[1] = items;
-        frame.layer = 1u;
-        frame.pass = rt_pass_constants(1u, 0u, 0u);
-        rt_pass_surface();
-        rt_pass_sun();
-        rt_pass_lights();
-        rt_pass_light();
-        frame.layer = 0u;
+        // The layer's history images, once blended things are seen; with none, the layer has no traced light (the
+        // programs read the opaque layer's there).
+        if (!rt_blend_seen_) {
+            rt_blend_seen_ = true;
+            rt_blend_walk_before_ = 0u;
+        }
+        if (rt_images(width, height, rt_light_wanted_ | kRtPassBlend)) {
+            const bool history = frame.history && rt_blend_walk_before_ + 1u == walk_.serial;
+            frame.layer = 1u;
+            frame.pass = rt_pass_constants(1u, 0u, 0u, history ? 1u : 0u);
+            rt_pass_surface();
+            rt_pass_sun();
+            rt_sun_filter();
+            rt_pass_lights();
+            rt_pass_light();
+            rt_blend_filters();
+            frame.layer = 0u;
+            rt_blend_walk_before_ = walk_.serial;
+        }
         renderer_.rt_light_end();
         // The draws read the pictures again.
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Light));
@@ -782,7 +796,7 @@ struct RtImageKind {
     std::uint8_t size;
     std::uint8_t passes;
 };
-constexpr std::uint8_t kForLight = 1u, kForIndirect = 2u, kForReflect = 4u, kForVolume = 8u, kForTransmit = 16u;
+constexpr std::uint8_t kForLight = 1u, kForIndirect = 2u, kForReflect = 4u, kForVolume = 8u, kForTransmit = 16u, kForBlend = 32u;
 constexpr rt::ImageFormat kHalf4 = rt::ImageFormat::Rgba16f;  // shares as fractions: an average over time in bytes stalls
 constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Guide A", kHalf4, kRtFull, kForLight},
@@ -814,6 +828,18 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Sun Blur", kHalf4, kRtFull, kForLight},
     {"Nebula RT Sun", kHalf4, kRtFull, kForLight},
     {"Nebula RT Lights Spec", kHalf4, kRtFull, kForLight},
+    {"Nebula RT Blend Guide A", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Guide B", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Reservoirs A", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Reservoirs B", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Sun A", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Sun B", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Distance A", rt::ImageFormat::R16f, kRtFull, kForBlend},
+    {"Nebula RT Blend Distance B", rt::ImageFormat::R16f, kRtFull, kForBlend},
+    {"Nebula RT Blend Lights A", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Lights B", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Moments A", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Blend Moments B", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average B", kHalf4, kRtHalf, kForIndirect},
@@ -861,7 +887,7 @@ struct RtPassConstants {
 bool RenderCore::rt_images(unsigned width, unsigned height, std::uint32_t wanted) {
     static_assert(std::size(kRtImageKinds) == kRtImages);
     static_assert(kRtPassLight == kForLight && kRtPassIndirect == kForIndirect && kRtPassReflect == kForReflect && kRtPassVolume == kForVolume &&
-                  kRtPassTransmit == kForTransmit);
+                  kRtPassTransmit == kForTransmit && kRtPassBlend == kForBlend);
     std::erase_if(rt_light_retired_, [&](const std::pair<std::uint64_t, std::uint32_t>& retired) {
         if (retired.first + rt::kFramesToRelease > frame_index_) {
             return false;
@@ -944,13 +970,16 @@ void RenderCore::rt_noise_fill() {
     rt_noise_filled_ = true;
 }
 
-// The sun's V filtered (plan 7.3), the opaque layer only: the tiles that hold a penumbra (rt_sun_tiles), the average
-// over time with the occluder's distance (rt_sun_time), then two blurs as wide as the penumbra is (rt_sun_blur). The
-// light pass reads the last.
+// The sun's V filtered (plan 7.3): the tiles that hold a penumbra (rt_sun_tiles), the average over time with the
+// occluder's distance (rt_sun_time), then two blurs as wide as the penumbra is (rt_sun_blur; one on the second layer,
+// plan 13.1). Each layer keeps its own averages. The light pass reads the last.
 void RenderCore::rt_sun_filter() {
     const RtFrame& frame = rt_light_frame_;
-    const std::uint32_t guide = rt_now(RtImage::GuideA), tiles = rt_image(RtImage::SunTiles), raw = rt_image(RtImage::SunRaw);
-    const std::uint32_t average = rt_now(RtImage::SunAverageA), distance = rt_now(RtImage::SunDistanceA);
+    const bool second = frame.layer != 0u;
+    const RtImage average_pair = second ? RtImage::BlendSunA : RtImage::SunAverageA;
+    const RtImage distance_pair = second ? RtImage::BlendDistanceA : RtImage::SunDistanceA;
+    const std::uint32_t guide = rt_layer_guide(), tiles = rt_image(RtImage::SunTiles), raw = rt_image(RtImage::SunRaw);
+    const std::uint32_t average = rt_now(average_pair), distance = rt_now(distance_pair);
     rt::PassBinds tile;
     tile.constants = frame.binds.constants;
     tile.pass_constants = frame.pass;
@@ -962,34 +991,70 @@ void RenderCore::rt_sun_filter() {
     over_time.constants = frame.binds.constants;
     over_time.pass_constants = frame.pass;
     over_time.reads[0] = raw;
-    over_time.reads[1] = rt_before(RtImage::SunAverageA);
+    over_time.reads[1] = rt_before(average_pair);
     over_time.reads[2] = guide;
-    over_time.reads[3] = rt_before(RtImage::GuideA);
+    over_time.reads[3] = rt_before(second ? RtImage::BlendGuideA : RtImage::GuideA);
     over_time.reads[4] = rt_image(RtImage::Motion);
     over_time.reads[5] = tiles;
-    over_time.reads[6] = rt_before(RtImage::SunDistanceA);
+    over_time.reads[6] = rt_before(distance_pair);
     over_time.writes[0] = average;
     over_time.writes[1] = distance;
     rt_backend_.dispatch(RtShader::SunTime, over_time, frame.across, frame.down);
-    for (std::uint32_t pass = 0u; pass < 2u; ++pass) {
+    const std::uint32_t blurs = second ? 1u : 2u;
+    for (std::uint32_t pass = 0u; pass < blurs; ++pass) {
+        const bool last = pass + 1u == blurs;
         rt::PassBinds blur;
         blur.constants = frame.binds.constants;
-        blur.pass_constants = rt_pass_constants(0u, pass, pass == 1u ? 1u : 0u);
+        blur.pass_constants = rt_layer_constants(pass, last ? 1u : 0u);
         blur.reads[0] = pass == 0u ? average : rt_image(RtImage::SunBlur);
         blur.reads[1] = distance;
         blur.reads[2] = guide;
         blur.reads[3] = rt_image(RtImage::Normal);
         blur.reads[5] = tiles;
         blur.reads[rt::kPassReads - 1u] = rt_image(RtImage::BlueNoise);
-        blur.writes[0] = rt_image(pass == 0u ? RtImage::SunBlur : RtImage::SunOut);
+        blur.writes[0] = rt_image(last ? RtImage::SunOut : RtImage::SunBlur);
         rt_backend_.dispatch(RtShader::SunBlur, blur, frame.across, frame.down);
     }
 }
 
-// The guide the layer's passes write and read: this frame's; the second layer's goes to the frame before's, done
-// with by then (the filter over time has read it).
+// The guide the layer's passes write and read: this frame's of its own pair.
 std::uint32_t RenderCore::rt_layer_guide() const noexcept {
-    return rt_light_frame_.layer == 0u ? rt_now(RtImage::GuideA) : rt_before(RtImage::GuideA);
+    return rt_now(rt_light_frame_.layer == 0u ? RtImage::GuideA : RtImage::BlendGuideA);
+}
+
+// A filter step's constants for the layer being traced (the second layer's say whether it has a frame before).
+rt::BufferView RenderCore::rt_layer_constants(std::uint32_t step, std::uint32_t last) {
+    const RtFrame& frame = rt_light_frame_;
+    return rt_pass_constants(frame.layer, step, last, frame.layer != 0u && frame.history && rt_blend_walk_before_ + 1u == walk_.serial ? 1u : 0u);
+}
+
+// The second layer's local lights filtered: over time with its own averages and moments, then one step over space
+// into the added light at its pixels (the rest keep the opaque layer's).
+void RenderCore::rt_blend_filters() {
+    const RtFrame& frame = rt_light_frame_;
+    const std::uint32_t guide = rt_now(RtImage::BlendGuideA), average = rt_now(RtImage::BlendLightsA);
+    const std::uint32_t moments = rt_now(RtImage::BlendMomentsA);
+    rt::PassBinds over_time;
+    over_time.constants = frame.binds.constants;
+    over_time.pass_constants = frame.pass;
+    over_time.reads[0] = rt_image(RtImage::Lights);
+    over_time.reads[1] = rt_before(RtImage::BlendLightsA);
+    over_time.reads[2] = guide;
+    over_time.reads[3] = rt_before(RtImage::BlendGuideA);
+    over_time.reads[4] = rt_image(RtImage::Motion);
+    over_time.reads[5] = rt_before(RtImage::BlendMomentsA);
+    over_time.reads[6] = rt_now(RtImage::BlendReservoirsA);
+    over_time.writes[0] = average;
+    over_time.writes[1] = moments;
+    rt_backend_.dispatch(RtShader::LightsTime, over_time, frame.across, frame.down);
+    rt::PassBinds over_space;
+    over_space.constants = frame.binds.constants;
+    over_space.pass_constants = rt_layer_constants(1u, 1u);
+    over_space.reads[0] = average;
+    over_space.reads[1] = moments;
+    over_space.reads[2] = guide;
+    over_space.writes[0] = rt_image(RtImage::Added);
+    rt_backend_.dispatch(RtShader::LightsSpace, over_space, frame.across, frame.down);
 }
 
 // The surfaces: what every later pass needs of a pixel's surface, once (rt_surface.hlsl).
@@ -1022,12 +1087,12 @@ void RenderCore::rt_pass_lights() {
     binds.reads[0] = rt_layer_guide();
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
-    binds.reads[3] = rt_before(RtImage::ReservoirsA);
-    binds.reads[4] = second ? rt_now(RtImage::GuideA) : rt_before(RtImage::GuideA);  // (not the one this layer reads)
+    binds.reads[3] = rt_before(second ? RtImage::BlendReservoirsA : RtImage::ReservoirsA);
+    binds.reads[4] = rt_before(second ? RtImage::BlendGuideA : RtImage::GuideA);
     binds.reads[5] = rt_image(RtImage::Material);
-    binds.writes[0] = rt_image(second ? RtImage::Added : RtImage::Lights);
-    binds.writes[1] = rt_now(RtImage::ReservoirsA);
-    binds.writes[2] = second ? rt::kNoImage : rt_image(RtImage::LightsSpec);  // the opaque layer's highlights
+    binds.writes[0] = rt_image(RtImage::Lights);
+    binds.writes[1] = rt_now(second ? RtImage::BlendReservoirsA : RtImage::ReservoirsA);
+    binds.writes[2] = rt_image(RtImage::LightsSpec);
     rt_backend_.dispatch(RtShader::Lights, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 
@@ -1037,9 +1102,9 @@ void RenderCore::rt_pass_light() {
     binds.reads[0] = rt_layer_guide();
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
-    binds.reads[3] = rt_image(rt_light_frame_.layer == 0u ? RtImage::SunOut : RtImage::SunRaw);  // the second layer has no sun filter
+    binds.reads[3] = rt_image(RtImage::SunOut);
     binds.reads[4] = rt_image(RtImage::Material);
-    binds.reads[5] = rt_light_frame_.layer == 0u ? rt_image(RtImage::LightsSpec) : rt::kNoImage;
+    binds.reads[5] = rt_image(RtImage::LightsSpec);
     binds.writes[0] = rt_image(RtImage::Light);
     binds.writes[1] = rt_image(RtImage::Mirror);
     rt_backend_.dispatch(RtShader::Light, binds, rt_light_frame_.across, rt_light_frame_.down);
@@ -1498,7 +1563,9 @@ void RenderCore::rt_light() {
     if (renderer_.rt_light_begin(depth, items, width, height)) {
         rt_backend_.begin(commands.commands, renderer_.frame_slot(), commands.descriptors);
         const std::uint32_t wanted = kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
-                                     (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u);
+                                     (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u) |
+                                     (rt_blend_seen_ ? kRtPassBlend : 0u);
+        rt_light_wanted_ = wanted & ~kRtPassBlend;
         ao::Constants eye{};
         bool lit = false;
         if (rt_images(width, height, wanted) && ao::make_constants(camera, width, height, 1u, false, eye)) {

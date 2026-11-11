@@ -446,13 +446,21 @@ private:
         GuideA, GuideB, Normal, Motion, Material, Base, SunRaw, Light, LightStep, LightAverageA, LightAverageB, Lights,
         LightsAverageA, LightsAverageB, LightsMomentsA, LightsMomentsB, Added, ReservoirsA, ReservoirsB, Mirror,
         BlueNoise, SunTiles, SunAverageA, SunAverageB, SunDistanceA, SunDistanceB, SunBlur, SunOut, LightsSpec,
+        BlendGuideA, BlendGuideB, BlendReservoirsA, BlendReservoirsB, BlendSunA, BlendSunB, BlendDistanceA, BlendDistanceB,
+        BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
         VolumeB, Count
     };
     // The passes an image is made for.
     static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
-                                   kRtPassTransmit = 16u;
+                                   kRtPassTransmit = 16u, kRtPassBlend = 32u;
+    // The second layer's history images are made once a frame has had blended things to trace (rt_blended).
+    std::uint32_t rt_light_wanted_ = 0u;
+    bool rt_blend_seen_ = false;
+    std::uint64_t rt_blend_walk_before_ = 0u;
+    [[nodiscard]] rt::BufferView rt_layer_constants(std::uint32_t step, std::uint32_t last);
+    void rt_blend_filters();
     static constexpr std::size_t kRtImages = static_cast<std::size_t>(RtImage::Count);
     [[nodiscard]] static constexpr std::array<std::uint32_t, kRtImages> rt_no_images() noexcept {
         std::array<std::uint32_t, kRtImages> none{};

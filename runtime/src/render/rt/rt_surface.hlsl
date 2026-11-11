@@ -164,9 +164,7 @@ float3 shading_normal(uint4 first, uint4 second, uint stream, uint row_before, u
 void no_surface(uint2 id, bool second) {
     g_guide[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     g_normals[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    if (!second) {
-        g_motion[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    }
+    g_motion[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     g_material[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     g_base[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -184,7 +182,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint item = named.x;
     const bool second = rt_second_layer();
     if (second && item == 0u) {
-        return;  // no blended surface here: the picture keeps the opaque layer's light
+        g_guide[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // no blended surface here: its filters leave the pixel
+        return;  // and the picture keeps the opaque layer's light
     }
     const float depth = g_depth_map.Load(int3(pixel, 0));
     if (item == 0u || (!second && rt_far(g_depth, depth)) || !in_viewport(centre)) {
@@ -219,7 +218,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     float map_per_pixel;
     const float3 smooth_ = shading_normal(words4, mesh, third.z, fourth.y, named.y, at, normal, lifted, before, before_known,
                                           coordinate, vertex_colour, map_per_pixel);
-    if (!second) {
+    {
+        // Where the point was the frame before (both layers: each follows its own surfaces).
         if (!before_known) {
             const float4 here = float4(at, 1.0f);
             before = float3(dot(g_before[0], here), dot(g_before[1], here), dot(g_before[2], here));
@@ -231,9 +231,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             const float2 was = float2((before.x / away_before - g_ray_before.y) / g_ray_before.x, (before.y / away_before - g_ray_before.w) / g_ray_before.z);
             move = was - centre;
         }
-        g_motion[id.xy] = float4(move, away_before, dot(lifted - at, normal));
-    } else {
-        g_motion[id.xy] = float4(0.0f, 0.0f, 0.0f, dot(lifted - at, normal));  // the lift only: the filters are done with the motion
+        g_motion[id.xy] = float4(move, away_before, dot(lifted - at, normal));  // xy, z: both layers
     }
     g_guide[id.xy] = float4(away, float(words4.x & 1023u), float(words4.x >> 10u), rt_pack_normal(smooth_));
     g_normals[id.xy] = float4(rt_oct(smooth_), rt_oct(normal));

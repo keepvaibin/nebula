@@ -44,6 +44,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float frames = g_pass.z != 0u ? 1.0f : centre.g;
     if (guide.a == 0.0f) {
 #ifdef RT_LIGHTS
+        if (rt_second_layer()) {
+            return;  // the added light there is the opaque layer's
+        }
         g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 #else
         g_out[id.xy] = float4(1.0f, frames, 1.0f, 1.0f);

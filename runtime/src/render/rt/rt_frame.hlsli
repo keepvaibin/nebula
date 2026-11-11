@@ -40,7 +40,8 @@ cbuffer FrameConstants : register(b0) {
 
 cbuffer PassConstants : register(b1) {
     uint4 g_pass;          // x: the layer (0 the opaque surfaces, 1 the nearest blended surface a pixel); y: a filter's
-                           // step in pixels; z 1: a filter's last step; w: free for the pass
+                           // step in pixels; z 1: a filter's last step; w: free for the pass (the second layer's
+                           // passes: bit 0, the layer has a frame before: rt_history)
     float4 g_pass_value[3];  // free for the pass
 };
 
@@ -50,13 +51,19 @@ cbuffer PassConstants : register(b1) {
 static const uint kItemBytes = 64u;
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
-static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u;
+static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassWater = 9u;
 
 // What V raw's distance says where nothing stood on the sun's ray: the largest half float.
 static const float kNoOccluder = 65504.0f;
 
 bool rt_second_layer() {
     return g_pass.x != 0u;
+}
+
+// Whether the layer's images of the frame before hold its surfaces (the camera did not cut; the second layer was
+// traced the frame before too).
+bool rt_history() {
+    return g_kept.z != 0u && (g_pass.x == 0u || (g_pass.w & 1u) != 0u);
 }
 
 #endif

@@ -29,12 +29,8 @@ static const uint2 kSampleOffsets[16] = {
     uint2(7u, 83u), uint2(97u, 109u), uint2(31u, 19u), uint2(67u, 3u), uint2(11u, 47u), uint2(79u, 91u),
     uint2(53u, 29u), uint2(103u, 67u), uint2(17u, 117u), uint2(41u, 53u)};
 
-// Two numbers in [0, 1) for pixel `pixel`, frame `frame`, use `use`. The second layer has no filter after it yet:
-// there every number is 0 (the centre of the sun, a fixed ray), as straight light as the old noise gave it.
+// Two numbers in [0, 1) for pixel `pixel`, frame `frame`, use `use` (both layers: each has its filter after it).
 float2 rt_sample(uint2 pixel, uint frame, uint use) {
-    if (g_pass.x != 0u) {
-        return float2(0.0f, 0.0f);
-    }
     const float4 texel = g_blue_noise.Load(int3((pixel + kSampleOffsets[use & 15u]) & 127u, 0));
     const float2 base = ((use & kSampleSecond) != 0u ? texel.zw : texel.xy) * (255.0f / 256.0f) + 0.5f / 256.0f;
     // R2: frame * (0.7548776662, 0.5698402910) in 32-bit fixed point, exact for any frame number.
