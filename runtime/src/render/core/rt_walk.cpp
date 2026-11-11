@@ -1793,6 +1793,8 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     rt_lamps_own_ = rt_part(render, RtPart::Lights) == 0u;
     constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) | 8u |
                         (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
+    // Bit 12: the camera under water, as the game reports it: water is seen from inside (rt_light.hlsl clear_surface).
+    constants.more[2] |= camera_water_depth() >= 0.0f ? 4096u : 0u;
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
     if (rt_pass_indirect_on()) {
         // The sky and bounce light pass gives the sky's share (bit 8): no sky rays here. A painted surface keeps

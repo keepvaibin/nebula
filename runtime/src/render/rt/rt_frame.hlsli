@@ -13,7 +13,8 @@ cbuffer FrameConstants : register(b0) {
                         // turn); z: bit 0 the sun is traced, bit 3 the sky's light near the surface, bit 5 mirrors (what
                         // glass, metal and gloss show of the scene), bit 6 the actors' point lights are emitters (the
                         // light set's own lamp is put out), bit 7 the emitters alone (--diagnostics rt-added: no sun, no
-                        // sky), bit 9 the point's motion shown (--diagnostics rt-motion). Bits 1, 2 and 4 are retired
+                        // sky), bit 9 the point's motion shown (--diagnostics rt-motion), bit 12 the camera under water
+                        // (the game's report: water is seen from inside). Bits 1, 2 and 4 are retired
                         // (the set's lamp, the drops, the second layer: g_pass.x). w: ray tracing's parts as the
                         // player set them (rt_part), bit 12 the reference preset.
     uint4 g_grid;       // tiles across, tiles down, pixels a tile

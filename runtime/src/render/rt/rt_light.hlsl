@@ -30,6 +30,9 @@ Texture2D<float4> g_guide_opaque : register(t15);  // the opaque layer's guide: 
 // Glass and water on the second layer (plan 13.2, 13.3; FC's c16): the Schlick reflectance of the material's ior times
 // its shine, at most 1, and its body. Item word 15 (FC's c15): ior bits 12-19 as (ior - 1) * 100, shine bits 20-25 as
 // shine * 4 (63: the class's own), body bits 26-31 as body * 62 (63: the class's own); 0 when nothing wrote it.
+// Water seen from inside (the camera under water, g_more.z bit 12): the index inverted, all mirrored past the critical
+// angle, Schlick by the angle out in the air; no body (the water before the surface is the game's camera filter; past
+// it lies air).
 struct ClearSurface {
     float f;     // how much of R it shows
     float body;  // how much of its own colour covers what lies behind
@@ -43,8 +46,16 @@ ClearSurface clear_surface(uint item, uint class_, float facing_eye, float depth
     const float ior = written ? 1.0f + float(ior_bits) / 100.0f : (water ? 1.33f : 1.5f);
     const float shine = written && shine_bits != 63u ? float(shine_bits) / 4.0f : (water ? 1.5f : 2.0f);
     const float f0 = (ior - 1.0f) * (ior - 1.0f) / ((ior + 1.0f) * (ior + 1.0f));
-    const float away = 1.0f - saturate(facing_eye);
+    const float cos_in = saturate(facing_eye);
     ClearSurface c;
+    if (water && (g_more.z & 4096u) != 0u) {
+        const float sin_out2 = ior * ior * (1.0f - cos_in * cos_in);
+        const float away_out = sin_out2 >= 1.0f ? 1.0f : 1.0f - sqrt(1.0f - sin_out2);
+        c.f = sin_out2 >= 1.0f ? 1.0f : min(shine * (f0 + (1.0f - f0) * away_out * away_out * away_out * away_out * away_out), 1.0f);
+        c.body = 0.0f;
+        return c;
+    }
+    const float away = 1.0f - cos_in;
     c.f = min(shine * (f0 + (1.0f - f0) * away * away * away * away * away), 1.0f);
     if (water) {
         c.body = depth > 0.0f ? 1.0f - exp(-depth / 600.0f) : 1.0f;  // kWaterClear: 6 m (rt_stages.tsv may say)
