@@ -10,6 +10,10 @@ are the build's. Writes:
   DIR/luma_types.json       the self-description's `types` (each record with `reachable`), `globals` and
                             `left_out` (libclang's numbers: the build compares them with the module's --luma-describe)
   DIR/luma_types.left       what has no row, and why
+  DIR/luma_functions.json   with --defined: every function row's facts (kind, owner, virtual, pure, const, what it
+                            overrides), the units' .functions merged (merge_functions); a row without facts, facts
+                            without a row, an owner that is no record of the types file or an override with no name
+                            stops the build, naming it
 Each is rewritten only when it changes.
 --defined: the folder of instrument.py's copies. Each copy's .globals lists the variables its unit defines (mangled
 names); a header's global gets a row only when one of them, or the header itself (an inline variable), defines it.
@@ -817,6 +821,14 @@ class Reader:
         self.records.update(unit_records)
         self.globals.update(unit_globals)
         self.foreign_aliases()
+        if DEFINED is not None:
+            left_records = {x[1] for x in self.left if x[0] == "record"}
+            functions, wrong = merge_functions(DEFINED, set(self.records), left_records)
+            if wrong:
+                sys.exit("gen_types.py: the function rows' facts (luma_functions.json) do not hold:\n  " +
+                         "\n  ".join(wrong[:200]) + ("\n  ... %d in all" % len(wrong) if len(wrong) > 200 else ""))
+            I.write_if_changed(OUT / "luma_functions.json", (json.dumps(
+                {"functions": functions}, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
         self.outputs(lines)
 
     def cpp_rows(self, defined):
@@ -1182,6 +1194,38 @@ def type_names(text):
 
 def cstr(s):
     return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def merge_functions(folder, records, left_records):
+    """C-1: every unit's .functions (instrument.py), in the order of the units' paths and their rows. Returns (functions,
+    what is wrong). Each unit's facts are its .rows, row for row; an owner is a record row or a record left out; each
+    override has a name, and says whether it is a function row (`row`)."""
+    functions, wrong = [], []
+    for rows_file in sorted(pathlib.Path(folder).rglob("*.rows")):
+        source = rows_file.relative_to(folder).as_posix()[:-len(".rows")]
+        rows = [tuple(line.split("\t")[:2]) for line in rows_file.read_text(encoding="utf-8").splitlines() if line]
+        facts_file = rows_file.with_suffix(".functions")
+        if not facts_file.is_file():
+            wrong.append("%s: %d rows and no .functions" % (source, len(rows)))
+            continue
+        facts = json.loads(facts_file.read_text(encoding="utf-8"))
+        have = [(f["name"], f["signature"]) for f in facts]
+        if have != rows:
+            at = next((i for i, (a, b) in enumerate(zip(rows, have)) if a != b), min(len(rows), len(have)))
+            wrong.append("%s: row %d is %s, its facts are for %s" % (
+                source, at + 1, " ".join(rows[at]) if at < len(rows) else "(none)",
+                " ".join(have[at]) if at < len(have) else "(none)"))
+            continue
+        functions += facts
+    every = {(f["name"], f["signature"]) for f in functions}
+    for f in functions:
+        if f["owner"] is not None and f["owner"] not in records and f["owner"] not in left_records:
+            wrong.append("%s %s: its owner %s is no record of the types file" % (f["name"], f["signature"], f["owner"]))
+        for o in f["overrides"]:
+            if o["name"] is None or o["signature"] is None:
+                wrong.append("%s %s: it overrides a function with no name a row can have" % (f["name"], f["signature"]))
+            o["row"] = (o["name"], o["signature"]) in every
+    return functions, wrong
 
 
 def defined_symbols(folder):

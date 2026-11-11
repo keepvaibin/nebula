@@ -7,7 +7,15 @@ OUTPUT keeps SOURCE's line numbers.
 
 Beside OUTPUT: OUTPUT.rows (name, signature, kind, line of every row), OUTPUT.left (what got no row, and why) and
 OUTPUT.globals (the mangled name of every variable with external linkage SOURCE defines: gen_types.py gives a header's
-global a row only when some unit defines it) and OUTPUT.types (this unit's part of the self-description).
+global a row only when some unit defines it), OUTPUT.types (this unit's part of the self-description) and
+OUTPUT.functions (each row's facts, in the rows' order: gen_types.py merges them into luma_functions.json):
+  {"name", "signature"}  the row, as OUTPUT.rows has it
+  "kind"                 "free", "method", "static", "constructor" or "destructor"
+  "owner"                the record's name in the types file; null for a free function, or a record with no name a
+                         mod can write (an unnamed namespace's)
+  "virtual", "pure", "const"
+  "overrides"            for a virtual, each function it overrides directly (clang_getOverriddenCursors), by the
+                         name and signature its own row has or would have
 
 The records, aliases and globals only SOURCE can name (a nerve class, a file's own struct) get their type rows at the end
 of OUTPUT (gen_types.py's unit pass), as members of the unit's LumaUnitRows. Each record SOURCE writes declares it a
@@ -123,6 +131,10 @@ def load(path):
     api.namedType = fn('clang_Type_getNamedType', CXType, CXType)
     api.modifiedType = fn('clang_Type_getModifiedType', CXType, CXType)
     api.unqualified = fn('clang_getUnqualifiedType', CXType, CXType)
+    api.isVirtual = fn('clang_CXXMethod_isVirtual', c_uint, CXCursor)
+    api.isPure = fn('clang_CXXMethod_isPureVirtual', c_uint, CXCursor)
+    api.overridden = fn('clang_getOverriddenCursors', None, CXCursor, POINTER(POINTER(CXCursor)), POINTER(c_uint))
+    api.disposeOverridden = fn('clang_disposeOverriddenCursors', None, POINTER(CXCursor))
     return api
 
 
@@ -164,6 +176,8 @@ class Unit:
             self.label = self.source.name
         self.edits = []
         self.rows = []
+        self.facts = []  # per row, in order: (cursor, name, signature, kind)
+        self.functions = []
         self.left = []
         self.defines = set()
         self.main_file = None
@@ -383,8 +397,75 @@ class Unit:
                      f'({", ".join(given)}), ({first}{", " + pointers if pointers else ""}))')
             kind = 'hook'
         edits.append((at + 1, f' {macro}'.encode()))
+        if self.identity(cursor) != (name, signature):
+            # The name and signature an override is given (identity) are the row's own, by one rule: checked on every row.
+            sys.exit(f'instrument.py: {self.label}:{line}: the row {name} {signature} is named {self.identity(cursor)} '
+                     'by identity()')
         self.edits += edits
         self.rows.append(f'{name}\t{signature}\t{kind}\t{line}')
+        role = {K_CONSTRUCTOR: 'constructor', K_DESTRUCTOR: 'destructor'}.get(cursor.kind)
+        if role is None:
+            role = 'free' if owner is None else 'static' if api.isStatic(cursor) else 'method'
+        self.facts.append((cursor, name, signature, role))
+
+    def identity(self, cursor):
+        """The row name and signature function() gives a function, whether this unit defines it or not (an overridden
+        one); None when its scope or a type has no name."""
+        api = self.api
+        scope = self.scope(cursor)
+        if scope is None:
+            return None
+        qualified = '::'.join([name for name, _, _ in scope if name] + [self.string(api.spelling(cursor))])
+        member_of = bool(scope) and scope[-1][1] == K_CLASS and cursor.kind != K_FUNCTION
+        local = api.linkage(cursor) == LINKAGE_INTERNAL or any(kind == K_CLASS and self.defined_here(c) for _, kind, c in scope)
+        name = f'{self.label}#{qualified}' if local else qualified
+        fntype = api.type(cursor)
+        texts = [self.type_text(api.argType(fntype, i)) for i in range(api.numArgs(cursor))]
+        if None in texts:
+            return None
+        if cursor.kind in (K_CONSTRUCTOR, K_DESTRUCTOR):
+            return name, f'({", ".join(texts)})'
+        result = self.type_text(api.resultType(fntype))
+        if result is None:
+            return None
+        const = member_of and not api.isStatic(cursor) and bool(api.isConst(cursor))
+        return name, f'{result}({", ".join(texts)})' + (' const' if const else '')
+
+    def function_facts(self, types):
+        """Each row's facts (OUTPUT.functions); types: gen_types.Reader, which names records as the types file does."""
+        api = self.api
+        for cursor, name, signature, role in self.facts:
+            owner = None if role == 'free' else types.name(api.semanticParent(cursor))
+            overrides = []
+            found, count = POINTER(CXCursor)(), c_uint()
+            api.overridden(cursor, byref(found), byref(count))
+            for i in range(count.value):
+                base = CXCursor.from_buffer_copy(found[i])
+                known = self.identity(base)
+                if known is None:
+                    # A template instance's function: the instance's name in the types file, the same signature rule.
+                    record = types.name(api.semanticParent(base))
+                    rest = self.identity_signature(base)
+                    known = (f'{record}::{self.string(api.spelling(base))}', rest) if record and rest else (None, None)
+                overrides.append({'name': known[0], 'signature': known[1]})
+            if count.value:
+                api.disposeOverridden(found)
+            member = role in ('method', 'constructor', 'destructor')
+            self.functions.append({
+                'name': name, 'signature': signature, 'kind': role, 'owner': owner,
+                'virtual': member and bool(api.isVirtual(cursor)), 'pure': member and bool(api.isPure(cursor)),
+                'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides})
+
+    def identity_signature(self, cursor):
+        """identity()'s signature of a member function whose class has no scope a row can name (a template's instance)."""
+        api = self.api
+        fntype = api.type(cursor)
+        texts = [self.type_text(api.argType(fntype, i)) for i in range(api.numArgs(cursor))]
+        result = self.type_text(api.resultType(fntype))
+        if None in texts or result is None:
+            return None
+        const = not api.isStatic(cursor) and bool(api.isConst(cursor))
+        return f'{result}({", ".join(texts)})' + (' const' if const else '')
 
     def type_rows(self, types):
         """The unit pass's rows (types: gen_types.Reader after its unit-pass walk). A record written by a macro gets no
@@ -463,6 +544,7 @@ class Unit:
         write_if_changed(output, self.types_head + marker + text + self.types_tail)
         write_if_changed(output + '.types', (json.dumps(self.types_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
+        write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
         write_if_changed(output + '.globals', ''.join(name + '\n' for name in sorted(self.defines) if name).encode())
 
@@ -579,6 +661,7 @@ def main():
     types = gen_types.Reader(api, tu, [], unit_pass=True)
     types.walk(api.cursor(tu))
     unit.type_rows(types)
+    unit.function_facts(types)
     unit.write(output)
     if '--depfile' in options:
         included = []

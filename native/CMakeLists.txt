@@ -64,14 +64,14 @@ foreach(source IN LISTS game_sources)
         get_filename_component(folder "${source}" DIRECTORY)
         set(copy "${CMAKE_CURRENT_BINARY_DIR}/luma/${relative}")
         add_custom_command(OUTPUT "${copy}"
-            BYPRODUCTS "${copy}.globals" "${copy}.types"
+            BYPRODUCTS "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions"
             COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" "${source}" "${copy}"
                     --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${petari}/src" --depfile "${copy}.d"
                     ${luma_libclang}
             DEPENDS "${source}" "${luma_tool}" "${luma_types_tool}" DEPFILE "${copy}.d" VERBATIM)
         set_source_files_properties("${copy}" PROPERTIES COMPILE_OPTIONS "-iquote${folder}")
         list(APPEND module_sources "${copy}")
-        list(APPEND luma_defined_lists "${copy}.globals" "${copy}.types")
+        list(APPEND luma_defined_lists "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions")
     else()
         list(APPEND module_sources "${source}")
     endif()
@@ -84,7 +84,7 @@ endforeach()
 if(NEBULA_LUMA_HOOKS)
     set(luma_types "${CMAKE_CURRENT_BINARY_DIR}/luma_types")
     add_custom_command(OUTPUT "${luma_types}/luma_types_table.cpp"
-        BYPRODUCTS "${luma_types}/luma_types.json" "${luma_types}/luma_types.left"
+        BYPRODUCTS "${luma_types}/luma_types.json" "${luma_types}/luma_types.left" "${luma_types}/luma_functions.json"
         COMMAND "${Python3_EXECUTABLE}" "${luma_types_tool}" --commands "${CMAKE_BINARY_DIR}/compile_commands.json"
                 --out "${luma_types}" --defined "${CMAKE_CURRENT_BINARY_DIR}/luma" --depfile "${luma_types}/luma_types_table.d"
                 ${luma_libclang}
