@@ -7,13 +7,27 @@ mod common;
 use common::*;
 
 use luma_validate::semver::Version;
-use luma_validate::{message, validate, ColumnType, Game, Input, Names, Source, Store, Table};
+use luma_validate::{message, validate, Game, Input, Names, Source, Store, Table};
+use nebula_import::cook::table::{column_hash, Cell, Column, Kind, TableIr};
+use nebula_import::store_view::table_view;
 use nebula_import::validate_c::*;
-use std::collections::HashSet;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::ptr::null;
 
 const TABLE: &str = "Stage/Table.bcsv";
+/// The galaxies' folder as the game lists it: two names, one a file named like a galaxy's folder.
+const LISTED: [(&str, u32); 3] = [("AstroGalaxyScenario", 1), ("AstroGalaxy", 1), ("OddScenario", 0)];
+
+/// The store's table: `name` (text) and `count` (an 8-bit int), one row "Alpha".
+fn table_ir() -> TableIr {
+    TableIr {
+        columns: vec![
+            Column { hash: column_hash("name"), mask: u32::MAX, kind: Kind::Text, width: 32 },
+            Column { hash: column_hash("count"), mask: 0xff, kind: Kind::Int, width: 8 },
+        ],
+        rows: vec![vec![Cell::Text(b"Alpha".to_vec()), Cell::Bits(1)]],
+    }
+}
 
 // ---------------------------------------------------------------- one store, as Rust and as C functions
 
@@ -23,41 +37,28 @@ impl Store for RustStore {
         [TABLE, "ObjectData/Kuribo.arc"].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
     }
     fn table(&self, path: &str) -> Option<Table> {
-        (path == TABLE).then(|| Table {
-            key: vec!["name".into()],
-            columns: vec![("name".into(), ColumnType::Text), ("count".into(), ColumnType::Int { min: 0, max: 10 })],
-            rows: Some(HashSet::from(["Alpha".to_string()])),
-            case_insensitive: false,
-            ..Default::default()
-        })
+        (path == TABLE).then(|| table_view(TABLE, &table_ir()))
     }
     fn may_be_new(&self, path: &str) -> bool {
         path.ends_with(".wav")
     }
+    fn folder(&self, lower: &str) -> Option<Vec<(String, bool)>> {
+        (lower == "stagedata").then(|| {
+            let mut names: Vec<(String, bool)> = LISTED.iter().map(|(n, f)| (n.to_string(), *f != 0)).collect();
+            names.sort();
+            names
+        })
+    }
 }
 
+/// What the C store hands out: the table's cooked bytes, kept for the call.
 struct CTable {
-    _names: Vec<CString>,
-    key: Vec<*const c_char>,
-    columns: Vec<LumaTableColumn>,
-    rows: Vec<*const c_char>,
-    table: LumaTable,
+    ntbl: Vec<u8>,
+    store_path: CString,
 }
 
 fn c_table() -> Box<CTable> {
-    let names: Vec<CString> = ["name", "count", "Alpha"].iter().map(|s| CString::new(*s).unwrap()).collect();
-    let mut t = Box::new(CTable {
-        key: vec![names[0].as_ptr()],
-        columns: vec![
-            LumaTableColumn { name: names[0].as_ptr(), kind: 2, min: 0, max: 0 },
-            LumaTableColumn { name: names[1].as_ptr(), kind: 0, min: 0, max: 10 },
-        ],
-        rows: vec![names[2].as_ptr()],
-        _names: names,
-        table: LumaTable { key: null(), key_count: 0, columns: null(), column_count: 0, rows: null(), row_count: 0, case_insensitive: 0 },
-    });
-    t.table = LumaTable { key: t.key.as_ptr(), key_count: 1, columns: t.columns.as_ptr(), column_count: 2, rows: t.rows.as_ptr(), row_count: 1, case_insensitive: 0 };
-    t
+    Box::new(CTable { ntbl: table_ir().to_ntbl(), store_path: CString::new(TABLE).unwrap() })
 }
 
 unsafe extern "C" fn c_path(_: *mut c_void, lower: *const c_char, out: *mut c_char, size: u32) -> u32 {
@@ -70,16 +71,41 @@ unsafe extern "C" fn c_path(_: *mut c_void, lower: *const c_char, out: *mut c_ch
     }
     n
 }
-unsafe extern "C" fn c_table_of(context: *mut c_void, path: *const c_char) -> *const LumaTable {
+unsafe extern "C" fn c_table_of(context: *mut c_void, path: *const c_char, bytes: *mut *const u8, size: *mut u64, store_path: *mut *const c_char) -> u32 {
     let path = CStr::from_ptr(path).to_str().unwrap();
-    if path == TABLE {
-        &(*(context as *const CTable)).table
-    } else {
-        null()
+    if path != TABLE {
+        return 0;
     }
+    let t = &*(context as *const CTable);
+    *bytes = t.ntbl.as_ptr();
+    *size = t.ntbl.len() as u64;
+    *store_path = t.store_path.as_ptr();
+    1
 }
 unsafe extern "C" fn c_may_be_new(_: *mut c_void, path: *const c_char) -> u32 {
     RustStore.may_be_new(CStr::from_ptr(path).to_str().unwrap()) as u32
+}
+/// Lists the galaxies' folder in the store's own order, the first name twice (a store may repeat; one is kept).
+unsafe extern "C" fn c_folder(_: *mut c_void, lower: *const c_char, sink: LumaFolderSink, sink_context: *mut c_void) -> i32 {
+    if CStr::from_ptr(lower).to_str().unwrap() != "stagedata" {
+        return -1;
+    }
+    let names: Vec<CString> = LISTED.iter().map(|(n, _)| CString::new(*n).unwrap()).collect();
+    for (name, (_, is_folder)) in names.iter().zip(LISTED).chain(std::iter::once((&names[0], LISTED[0]))) {
+        sink(sink_context, name.as_ptr(), is_folder);
+    }
+    LISTED.len() as i32
+}
+
+fn c_store(context: *mut c_void) -> LumaGameStore {
+    LumaGameStore {
+        size: std::mem::size_of::<LumaGameStore>() as u32,
+        context,
+        path: Some(c_path),
+        table: Some(c_table_of),
+        may_be_new: Some(c_may_be_new),
+        folder: Some(c_folder),
+    }
 }
 
 // ---------------------------------------------------------------- the two calls
@@ -107,7 +133,7 @@ impl Call {
             region: CString::new("RMGE01").unwrap(),
             store_key: CString::new("store 1").unwrap(),
             table: c_table(),
-            store: LumaGameStore { context: std::ptr::null_mut(), path: Some(c_path), table: Some(c_table_of), may_be_new: Some(c_may_be_new) },
+            store: c_store(std::ptr::null_mut()),
             installed: Vec::new(),
             files: Vec::new(),
         });
@@ -294,11 +320,19 @@ fn a_faulty_input_is_refused_with_its_reason() {
     i.names = bad_names.as_ptr().cast();
     i.names_size = bad_names.len() as u64;
     refused(Some(&i), "names line 1");
-    let mut store = LumaGameStore { path: None, ..call.store };
-    store.context = call.store.context;
+    let mut store = c_store(call.store.context);
+    store.path = None;
     let mut i = call.input(None);
     i.store = &store;
     refused(Some(&i), "store");
+    let mut store = c_store(call.store.context);
+    store.folder = None;
+    i.store = &store;
+    refused(Some(&i), "folder");
+    let mut store = c_store(call.store.context);
+    store.size -= 8;
+    i.store = &store;
+    refused(Some(&i), "sizeof(LumaGameStore)");
     let junk = b"not a kept report";
     let file = CString::new("x.luma").unwrap();
     let installed = [LumaInstalledMod { file: file.as_ptr(), on: 1, kept: junk.as_ptr(), kept_size: junk.len() as u64 }];
@@ -323,9 +357,7 @@ fn the_layout_is_the_header_s() {
     // with x86_64-pc-windows-msvc, aarch64-pc-windows-msvc, x86_64-linux-gnu, aarch64-linux-android24,
     // arm64-apple-macos11, x86_64-apple-macos11, arm64-apple-ios14.
     use std::mem::{offset_of, size_of};
-    assert_eq!(size_of::<LumaTableColumn>(), 32);
-    assert_eq!((size_of::<LumaTable>(), offset_of!(LumaTable, case_insensitive)), (48, 44));
-    assert_eq!(size_of::<LumaGameStore>(), 32);
+    assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (48, 8, 40));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
     assert_eq!(size_of::<LumaValidateInput>(), 160);
@@ -334,4 +366,22 @@ fn the_layout_is_the_header_s() {
         (64, 96, 124, 152)
     );
     assert_eq!((size_of::<LumaFinding>(), offset_of!(LumaFinding, text)), (48, 40));
+}
+
+/// Validator revision 3: the C store's folder and table give the views the Rust store gives (one code builds them):
+/// a folder's names in the game's case with whether each is a folder, repeats merged; -1 is no folder; a table from
+/// its cooked bytes; bytes that are no table are no table.
+#[test]
+fn the_c_store_lists_folders_and_reads_tables_as_the_rust_one() {
+    let call = Call::new(std::path::Path::new("m.luma"), "windows-x64");
+    let store = nebula_import::validate_c::store_for_tests(&call.store);
+    assert_eq!(store.folder("stagedata"), RustStore.folder("stagedata"));
+    assert_eq!(store.folder("objectdata"), None);
+    let (c, rust) = (store.table(TABLE).unwrap(), RustStore.table(TABLE).unwrap());
+    assert_eq!((c.key, c.columns, c.rows, c.cells, c.repeated), (rust.key, rust.columns, rust.rows, rust.cells, rust.repeated));
+    assert!(store.table("Stage/Other.bcsv").is_none());
+
+    let junk = Box::new(CTable { ntbl: b"NTBL but not a table".to_vec(), store_path: CString::new(TABLE).unwrap() });
+    let bad = c_store((&*junk as *const CTable).cast_mut().cast());
+    assert!(nebula_import::validate_c::store_for_tests(&bad).table(TABLE).is_none());
 }

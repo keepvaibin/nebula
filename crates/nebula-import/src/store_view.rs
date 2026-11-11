@@ -10,7 +10,7 @@ use crate::cook::table_columns::{columns_of, widen_empty};
 use crate::cook::table_keys::{self, Key};
 use anyhow::{bail, Context, Result};
 use luma_validate::{ColumnType, Store, Table};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -214,18 +214,33 @@ impl Store for PakStore {
         self.entry(lower).map(|e| e.path.clone())
     }
 
-    fn folder(&self, lower: &str) -> Option<Vec<String>> {
-        let prefix = format!("{}/", lower_store_path(lower).trim_end_matches('/'));
-        let mut names: Vec<String> = self
-            .entries
-            .keys()
-            .filter_map(|k| k.strip_prefix(&prefix))
-            .filter_map(|rest| rest.split('/').next().filter(|n| !n.is_empty()))
-            .map(str::to_string)
-            .collect();
-        names.sort();
-        names.dedup();
-        Some(names)
+    fn folder(&self, lower: &str) -> Option<Vec<(String, bool)>> {
+        let folder = lower_store_path(lower).trim_end_matches('/').to_string();
+        if !folder.is_empty() && self.entries.get(&folder).is_some_and(|e| !e.folder) {
+            return None;
+        }
+        let (prefix, depth) = if folder.is_empty() { (String::new(), 0) } else { (format!("{folder}/"), folder.split('/').count()) };
+        // Each name in the game's case (its segment of a path under it); a folder when a path goes on past it or
+        // the index marks it one.
+        let mut names: BTreeMap<String, (String, bool)> = BTreeMap::new();
+        for (key, entry) in &self.entries {
+            let Some(rest) = key.strip_prefix(&prefix) else { continue };
+            let (first, deeper) = match rest.split_once('/') {
+                Some((first, _)) => (first, true),
+                None => (rest, false),
+            };
+            if first.is_empty() {
+                continue;
+            }
+            let name = entry.path.split('/').nth(depth).filter(|n| n.eq_ignore_ascii_case(first)).unwrap_or(first).to_string();
+            let is_folder = deeper || entry.folder;
+            let slot = names.entry(first.to_string()).or_insert((name, false));
+            slot.1 |= is_folder;
+            if !deeper {
+                slot.0 = entry.path.rsplit('/').next().unwrap_or(first).to_string();
+            }
+        }
+        (!names.is_empty() || self.entries.contains_key(&folder) || folder.is_empty()).then(|| names.into_values().collect())
     }
 
     fn table(&self, path: &str) -> Option<Table> {
@@ -298,6 +313,11 @@ mod tests {
         // A disc path with its archive ending finds the store's folder.
         assert_eq!(store.path("objectdata/kuribo.arc/kuribo.bdl").as_deref(), Some("ObjectData/Kuribo/Kuribo.bdl"));
         assert_eq!(store.path("objectdata/kuribo.arc").as_deref(), Some("ObjectData/Kuribo"));
+        // A folder's names in the game's case, each a folder or not; a file or a missing path is no folder.
+        assert_eq!(store.folder("stagedata"), Some(vec![("AstroGalaxy".to_string(), true)]));
+        assert_eq!(store.folder("stagedata/astrogalaxy"), Some(vec![("ZoneList.bcsv".to_string(), false)]));
+        assert_eq!(store.folder("stagedata/astrogalaxy/zonelist.bcsv"), None);
+        assert_eq!(store.folder("nothing"), None);
         assert!(store.path("objectdata/nokotaro.arc").is_none());
 
         let t = store.table("StageData/AstroGalaxy/ZoneList.bcsv").unwrap();

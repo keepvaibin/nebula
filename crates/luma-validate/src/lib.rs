@@ -172,9 +172,10 @@ pub trait Store {
     fn table(&self, path: &str) -> Option<Table>;
     /// Whether a file at a path the game does not have may be new (a kind the game finds by name).
     fn may_be_new(&self, path: &str) -> bool;
-    /// The names in a folder of the store (`lower`, a store path in lowercase), in lowercase: what the game lists to
-    /// find its galaxies (`/StageData`, ScenarioDataParser). None when the store cannot list it.
-    fn folder(&self, _lower: &str) -> Option<Vec<String>> {
+    /// The names directly in a folder of the store (`lower`, a store path in lowercase), each in the game's case and
+    /// whether it is a folder: what the game lists to find its galaxies (`/StageData`, ScenarioDataParser). None when
+    /// the store cannot list it or the path is no folder.
+    fn folder(&self, _lower: &str) -> Option<Vec<(String, bool)>> {
         None
     }
 }
@@ -307,9 +308,11 @@ pub fn scenario_table_galaxy(store_path: &str) -> Option<String> {
 pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) -> Option<Vec<LayerSet>> {
     let bits = |mask: i64| ((mask as u32 & 0xffff) << 1) | 1;
     let mut out = Vec::new();
-    for name in store.folder("stagedata")? {
-        let Some(galaxy) = name.strip_suffix("scenario").filter(|g| !g.is_empty()) else { continue };
-        let Some(path) = store.path(&format!("stagedata/{name}/scenariodata.bcsv")) else { continue };
+    // As ScenarioDataParser: a folder whose name ends in "Scenario" (in that case) is a galaxy's.
+    for (name, is_folder) in store.folder("stagedata")? {
+        let Some(galaxy) = name.strip_suffix("Scenario").filter(|g| is_folder && !g.is_empty()) else { continue };
+        let galaxy = galaxy.to_lowercase();
+        let Some(path) = store.path(&format!("stagedata/{}/scenariodata.bcsv", name.to_lowercase())) else { continue };
         let table = store.table(&path)?;
         let rows = table.cells.as_ref()?;
         let number = table.columns.iter().position(|(c, _)| same_column(c, "ScenarioNo"))?;

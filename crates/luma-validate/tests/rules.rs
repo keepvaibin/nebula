@@ -176,8 +176,11 @@ impl Store for ScenarioStore {
     fn may_be_new(&self, _path: &str) -> bool {
         false
     }
-    fn folder(&self, lower: &str) -> Option<Vec<String>> {
-        (self.listed && lower == "stagedata").then(|| vec!["dandelionhillgalaxyscenario".to_string(), "dandelionhillzone".to_string()])
+    fn folder(&self, lower: &str) -> Option<Vec<(String, bool)>> {
+        // A file named like a scenario folder is no galaxy (the game lists folders only).
+        (self.listed && lower == "stagedata").then(|| {
+            vec![("DandelionHillGalaxyScenario".to_string(), true), ("DandelionHillZone".to_string(), true), ("FakeScenario".to_string(), false)]
+        })
     }
 }
 

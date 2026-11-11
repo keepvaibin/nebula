@@ -18,36 +18,28 @@
 extern "C" {
 #endif
 
-enum { LUMA_COLUMN_INT = 0, LUMA_COLUMN_FLOAT = 1, LUMA_COLUMN_TEXT = 2 };
+/* Given to a store's `folder`: called once for each name directly in the folder, the name in the game's case,
+   `is_folder` non-zero when it is a folder. The name is read only during the call. */
+typedef void (*LumaFolderSink)(void* sink_context, const char* name, uint32_t is_folder);
 
-typedef struct LumaTableColumn {
-    const char* name;
-    uint32_t kind; /* LUMA_COLUMN_*; an int holds min..max */
-    int64_t min;
-    int64_t max;
-} LumaTableColumn;
-
-/* A file with rows, as the content system defines it (luma-format 5.1). */
-typedef struct LumaTable {
-    const char* const* key; /* the columns that make a row's key, in order */
-    uint32_t key_count;
-    const LumaTableColumn* columns;
-    uint32_t column_count;
-    const char* const* rows; /* each row's key values joined by U+001F; null when not known */
-    uint32_t row_count;
-    uint32_t case_insensitive; /* non-zero: a key matches whatever its case */
-} LumaTable;
-
-/* The player's game files: all three functions are given. */
+/* The player's game files (validator contract, revision 3): all four functions are given. Rust reads each table from
+   its cooked bytes, so the game's check and LumaLink's build one view with one code (table-keys 11). */
 typedef struct LumaGameStore {
+    uint32_t size; /* sizeof(LumaGameStore) */
     void* context;
     /* The game's own case of a lowercase path, NUL-terminated in `out` when it fits; returns its length in bytes,
        0 when the game has no such path. Called again with a larger `out` when the length did not fit. */
     uint32_t (*path)(void* context, const char* lower, char* out, uint32_t out_size);
-    /* A path's rows; null when the file has none. Valid until the next call on this store. */
-    const LumaTable* (*table)(void* context, const char* path);
+    /* The file at `path` (a path `path` gave) when it is a table: its cooked bytes as the store holds them (NTBL) in
+       *bytes and *bytes_size, and its path in the store, in the game's case, in *store_path (null: `path` is it).
+       Returns 0 when the file is no table. The bytes and the path are valid until the next call on this store. */
+    uint32_t (*table)(void* context, const char* path, const uint8_t** bytes, uint64_t* bytes_size, const char** store_path);
     /* Non-zero when a file at a path the game does not have may be new (a kind the game finds by name). */
     uint32_t (*may_be_new)(void* context, const char* path);
+    /* The names directly in the folder at `lower` (a lowercase path; "stagedata" lists the galaxies' folders, as the
+       game's ScenarioDataParser does), each through `sink`, in any order; returns how many, or -1 when the path is no
+       folder. */
+    int32_t (*folder)(void* context, const char* lower, LumaFolderSink sink, void* sink_context);
 } LumaGameStore;
 
 /* Another installed mod: its file name and its kept report. */

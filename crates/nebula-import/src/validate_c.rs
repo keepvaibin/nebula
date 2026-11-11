@@ -3,43 +3,32 @@
 //! (the rules that read the whole `.luma` are taken from it when it is for the same `.luma` and the same game). The
 //! findings and their text are those of `luma_validate::validate`, field for field.
 
-use luma_validate::{message, phrase, recheck, ColumnType, Game, Input, Installed, Level, Names, Report, Saved, Source, Store, Table};
+use luma_validate::{message, phrase, recheck, Game, Input, Installed, Level, Names, Report, Saved, Source, Store, Table};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::PathBuf;
 
-#[repr(C)]
-pub struct LumaTableColumn {
-    pub name: *const c_char,
-    /// 0 an integer from `min` to `max`, 1 a float, 2 text.
-    pub kind: u32,
-    pub min: i64,
-    pub max: i64,
-}
-
-#[repr(C)]
-pub struct LumaTable {
-    pub key: *const *const c_char,
-    pub key_count: u32,
-    pub columns: *const LumaTableColumn,
-    pub column_count: u32,
-    /// Each row's key values joined by U+001F; null when the rows are not known.
-    pub rows: *const *const c_char,
-    pub row_count: u32,
-    pub case_insensitive: u32,
-}
+/// Called by a store's `folder` once for each name directly in the folder (the game's case; non-zero: a folder).
+pub type LumaFolderSink = unsafe extern "C" fn(sink_context: *mut c_void, name: *const c_char, is_folder: u32);
 
 #[repr(C)]
 pub struct LumaGameStore {
+    /// `size_of::<LumaGameStore>()`.
+    pub size: u32,
     pub context: *mut c_void,
     /// The game's own case of a lowercase path, NUL-terminated in `out` when it fits; returns its length in bytes (0:
     /// the game has no such path).
     pub path: Option<unsafe extern "C" fn(context: *mut c_void, lower: *const c_char, out: *mut c_char, out_size: u32) -> u32>,
-    /// A path's rows; null when the file has none. Valid until the next call on this store.
-    pub table: Option<unsafe extern "C" fn(context: *mut c_void, path: *const c_char) -> *const LumaTable>,
+    /// The file at `path` when it is a table: its cooked bytes (NTBL) and its path in the store (null: `path`);
+    /// 0 when it is no table. Valid until the next call on this store.
+    pub table: Option<
+        unsafe extern "C" fn(context: *mut c_void, path: *const c_char, bytes: *mut *const u8, bytes_size: *mut u64, store_path: *mut *const c_char) -> u32,
+    >,
     /// Non-zero when a file at a path the game does not have may be new (a kind the game finds by name).
     pub may_be_new: Option<unsafe extern "C" fn(context: *mut c_void, path: *const c_char) -> u32>,
+    /// The names directly in the folder at `lower`, each through `sink`; how many, or -1 when the path is no folder.
+    pub folder: Option<unsafe extern "C" fn(context: *mut c_void, lower: *const c_char, sink: LumaFolderSink, sink_context: *mut c_void) -> i32>,
 }
 
 #[repr(C)]
@@ -153,32 +142,20 @@ impl Store for CStore {
         }
     }
     fn table(&self, path: &str) -> Option<Table> {
+        // As the pak store does (store_view): the cooked table read by the cooker's own reader, its view built by the
+        // same code; bytes that do not read as a table are no table (the patch rules then name the file as one
+        // without rows).
         let store = unsafe { &*self.0 };
         let f = store.table?;
-        let path = c(path);
-        let t = unsafe { f(store.context, path.as_ptr()) };
-        if t.is_null() {
+        let asked = c(path);
+        let (mut bytes, mut size, mut store_path) = (std::ptr::null::<u8>(), 0u64, std::ptr::null::<c_char>());
+        if unsafe { f(store.context, asked.as_ptr(), &mut bytes, &mut size, &mut store_path) } == 0 || bytes.is_null() {
             return None;
         }
-        unsafe {
-            let t = &*t;
-            let key = list(t.key, t.key_count).iter().filter_map(|&k| text(k)).collect();
-            let columns = list(t.columns, t.column_count)
-                .iter()
-                .filter_map(|col| {
-                    let kind = match col.kind {
-                        0 => ColumnType::Int { min: col.min, max: col.max },
-                        1 => ColumnType::Float,
-                        _ => ColumnType::Text,
-                    };
-                    Some((text(col.name)?, kind))
-                })
-                .collect();
-            let rows = (!t.rows.is_null()).then(|| list(t.rows, t.row_count).iter().filter_map(|&r| text(r)).collect::<HashSet<_>>());
-            let mut table = Table { key, columns, rows, case_insensitive: t.case_insensitive != 0, ..Default::default() };
-            crate::store_view::widen_view(&path.to_string_lossy(), &mut table);
-            Some(table)
-        }
+        let bytes = unsafe { std::slice::from_raw_parts(bytes, usize::try_from(size).ok()?) };
+        let ir = crate::cook::table::TableIr::from_ntbl(bytes).ok()?;
+        let at = unsafe { text(store_path) }.unwrap_or_else(|| path.to_string());
+        Some(crate::store_view::table_view(&crate::cook::store::store_path(at.trim_start_matches('/')), &ir))
     }
     fn may_be_new(&self, path: &str) -> bool {
         let store = unsafe { &*self.0 };
@@ -186,6 +163,35 @@ impl Store for CStore {
         let path = c(path);
         unsafe { f(store.context, path.as_ptr()) != 0 }
     }
+    fn folder(&self, lower: &str) -> Option<Vec<(String, bool)>> {
+        unsafe extern "C" fn sink(context: *mut c_void, name: *const c_char, is_folder: u32) {
+            let names = &mut *context.cast::<Vec<(String, bool)>>();
+            if let Some(name) = text(name).filter(|n| !n.is_empty()) {
+                names.push((name, is_folder != 0));
+            }
+        }
+        let store = unsafe { &*self.0 };
+        let f = store.folder?;
+        let lower = c(lower);
+        let mut names: Vec<(String, bool)> = Vec::new();
+        let n = unsafe { f(store.context, lower.as_ptr(), sink, (&mut names as *mut Vec<(String, bool)>).cast()) };
+        if n < 0 {
+            return None;
+        }
+        // One entry per name, whatever order or repeats the store gave.
+        names.sort();
+        names.dedup_by(|a, b| a.0 == b.0 && {
+            b.1 |= a.1;
+            true
+        });
+        Some(names)
+    }
+}
+
+/// The validator's view of a C store, for tests of the C interface.
+#[doc(hidden)]
+pub fn store_for_tests(store: &LumaGameStore) -> impl Store + '_ {
+    CStore(store)
 }
 
 fn hex_sha1(bytes: &[u8]) -> String {
@@ -230,8 +236,11 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         None => None,
     };
     if let Some(s) = input.store.as_ref() {
-        if s.path.is_none() || s.table.is_none() || s.may_be_new.is_none() {
-            return Err("store: path, table and may_be_new are each needed".to_string());
+        if s.size as usize != std::mem::size_of::<LumaGameStore>() {
+            return Err(format!("store: size is {}, sizeof(LumaGameStore) is {} (luma_validate.h of another revision)", s.size, std::mem::size_of::<LumaGameStore>()));
+        }
+        if s.path.is_none() || s.table.is_none() || s.may_be_new.is_none() || s.folder.is_none() {
+            return Err("store: path, table, may_be_new and folder are each needed".to_string());
         }
     }
     let store = (!input.store.is_null()).then(|| CStore(input.store));

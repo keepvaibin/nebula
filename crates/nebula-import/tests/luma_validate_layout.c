@@ -3,10 +3,9 @@
 #include <stddef.h>
 #include "../include/luma_validate.h"
 
-_Static_assert(sizeof(LumaTableColumn) == 32, "LumaTableColumn");
-_Static_assert(sizeof(LumaTable) == 48, "LumaTable");
-_Static_assert(offsetof(LumaTable, case_insensitive) == 44, "LumaTable.case_insensitive");
-_Static_assert(sizeof(LumaGameStore) == 32, "LumaGameStore");
+_Static_assert(sizeof(LumaGameStore) == 48, "LumaGameStore");
+_Static_assert(offsetof(LumaGameStore, context) == 8, "LumaGameStore.context");
+_Static_assert(offsetof(LumaGameStore, folder) == 40, "LumaGameStore.folder");
 _Static_assert(sizeof(LumaInstalledMod) == 32, "LumaInstalledMod");
 _Static_assert(sizeof(LumaOption) == 16, "LumaOption");
 _Static_assert(sizeof(LumaValidateInput) == 160, "LumaValidateInput");
