@@ -82,9 +82,6 @@ unsafe extern "C" fn c_table_of(context: *mut c_void, path: *const c_char, bytes
     *store_path = t.store_path.as_ptr();
     1
 }
-unsafe extern "C" fn c_may_be_new(_: *mut c_void, path: *const c_char) -> u32 {
-    RustStore.may_be_new(CStr::from_ptr(path).to_str().unwrap()) as u32
-}
 /// Lists the galaxies' folder in the store's own order, the first name twice (a store may repeat; one is kept).
 unsafe extern "C" fn c_folder(_: *mut c_void, lower: *const c_char, sink: LumaFolderSink, sink_context: *mut c_void) -> i32 {
     if CStr::from_ptr(lower).to_str().unwrap() != "stagedata" {
@@ -103,7 +100,6 @@ fn c_store(context: *mut c_void) -> LumaGameStore {
         context,
         path: Some(c_path),
         table: Some(c_table_of),
-        may_be_new: Some(c_may_be_new),
         folder: Some(c_folder),
     }
 }
@@ -357,7 +353,7 @@ fn the_layout_is_the_header_s() {
     // with x86_64-pc-windows-msvc, aarch64-pc-windows-msvc, x86_64-linux-gnu, aarch64-linux-android24,
     // arm64-apple-macos11, x86_64-apple-macos11, arm64-apple-ios14.
     use std::mem::{offset_of, size_of};
-    assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (48, 8, 40));
+    assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (40, 8, 32));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
     assert_eq!(size_of::<LumaValidateInput>(), 160);
@@ -384,6 +380,12 @@ fn the_c_store_lists_folders_and_reads_tables_as_the_rust_one() {
     let junk = Box::new(CTable { ntbl: b"NTBL but not a table".to_vec(), store_path: CString::new(TABLE).unwrap() });
     let bad = c_store((&*junk as *const CTable).cast_mut().cast());
     assert!(nebula_import::validate_c::store_for_tests(&bad).table(TABLE).is_none());
+
+    // Which files may be new is the library's own list, the one LumaLink's PakStore reads (F INBOX-G 46).
+    for path in ["ObjectData/Nokotaro.arc", "/objectdata/kuribo.arc/kuribo_new.btk", "StageData/MyGalaxy/MyGalaxyMap.arc", "AudioRes/Stream/new.ast", "ObjectData/new.bcsv"] {
+        assert_eq!(store.may_be_new(path), nebula_import::store_view::may_be_new(path), "{path}");
+    }
+    assert!(store.may_be_new("ObjectData/Nokotaro.arc") && !store.may_be_new("AudioRes/Stream/new.ast"));
 }
 
 /// luma_validate_message and luma_validate_reason say a refusal from (code, parameters) as the validator says its own

@@ -18,7 +18,8 @@ use std::path::{Path, PathBuf};
 const NODE: usize = 40;
 
 /// Disc paths (lower case) that may be new, the kinds the game finds by name (luma-format 5): each with why. A kind's
-/// contract adds its own here.
+/// contract adds its own here. The game's check reads the same list (`may_be_new`, through the C validator), so the
+/// game and LumaLink cannot differ on it.
 const NEW: [(&str, &str); 4] = [
     ("objectdata/*.arc", "an object's archive: the game loads ObjectData/<name>.arc by the object's name"),
     ("**/*.arc/**", "a file in an archive: the game's resource holders find an archive's files by name"),
@@ -42,7 +43,14 @@ pub struct PakStore {
     game_id: String,
     /// Lower-case store paths without a leading '/'.
     entries: HashMap<String, Entry>,
-    new: Vec<Vec<&'static str>>,
+}
+
+/// Whether a disc path the game does not have may be new: a kind the game finds by name (`NEW`). Any case, with or
+/// without a leading '/'.
+pub fn may_be_new(path: &str) -> bool {
+    let lower = path.trim_start_matches('/').to_ascii_lowercase();
+    let parts: Vec<&str> = lower.split('/').collect();
+    NEW.iter().any(|(p, _)| table_keys::matches(&p.split('/').collect::<Vec<_>>(), &parts))
 }
 
 fn lower_store_path(path: &str) -> String {
@@ -93,7 +101,7 @@ impl PakStore {
             full.push(path);
         }
         let game_id = String::from_utf8_lossy(&header[48..54]).into_owned();
-        Ok(Self { pak: pak.to_path_buf(), game_id, entries, new: NEW.iter().map(|(p, _)| p.split('/').collect()).collect() })
+        Ok(Self { pak: pak.to_path_buf(), game_id, entries })
     }
 
     pub fn game_id(&self) -> &str {
@@ -275,9 +283,7 @@ impl Store for PakStore {
     }
 
     fn may_be_new(&self, path: &str) -> bool {
-        let lower = path.trim_start_matches('/').to_ascii_lowercase();
-        let parts: Vec<&str> = lower.split('/').collect();
-        self.new.iter().any(|p| table_keys::matches(p, &parts))
+        may_be_new(path)
     }
 
     fn read_table(&self, path: &str, bytes: &[u8]) -> Option<Table> {

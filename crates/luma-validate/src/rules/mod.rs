@@ -138,7 +138,7 @@ pub(crate) fn run(input: &Input, start: Option<(&Saved, &str)>) -> Report {
     report
 }
 
-/// The mod's id, version and conflicts, when luma.json gives them well formed.
+/// The mod's id, version, conflicts and needs, when luma.json gives them well formed.
 fn about(ctx: &Ctx) -> Option<About> {
     let root = ctx.manifest.as_ref()?;
     let id = ctx.mod_id.clone()?;
@@ -147,7 +147,11 @@ fn about(ctx: &Ctx) -> Option<About> {
         .get("conflicts")
         .map(|c| c.items().iter().filter_map(|x| Some(x.get("id")?.as_str()?.to_string())).collect())
         .unwrap_or_default();
-    Some(About { id, version, conflicts })
+    let needs = root
+        .get("needs")
+        .map(|c| c.items().iter().filter_map(|x| Some(x.get("id")?.as_str()?.to_string())).collect())
+        .unwrap_or_default();
+    Some(About { id, version, conflicts, needs })
 }
 
 /// A JSON pointer segment, escaped (RFC 6901).

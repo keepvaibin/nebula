@@ -47,6 +47,11 @@ pub(crate) fn check(ctx: &mut Ctx) {
             ctx.add(800, "luma.json", None, None, vec![("other", t(id.clone())), ("expected", t(wanted)), ("found", found)]);
         }
     }
+    // L800: a cycle of needs through this mod, among the mods that are on. The game starts a needed mod before the mods
+    // that need it, so in a cycle none can start first; the host refuses each mod in one with this finding (loader D3-3).
+    if let Some(chain) = need_cycle(&own, &ctx.facts.needs.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(), installed) {
+        ctx.add(800, "luma.json", None, None, vec![("other", t(chain[1].clone())), ("expected", t("")), ("found", p("Need.Cycle")), ("chain", t(chain.join(" -> ")))]);
+    }
     // L801: a conflict, declared by this mod or by the other.
     let conflicts: Vec<(String, String)> = root
         .and_then(|r| r.get("conflicts"))
@@ -108,4 +113,40 @@ pub(crate) fn check(ctx: &mut Ctx) {
             ]);
         }
     }
+}
+
+/// The shortest cycle of needs from `own` back to itself through the installed mods that are on, as the ids in order with
+/// `own` first and last (`a -> b -> a`); None when there is none. Breadth first, each mod's needs in its own order, so
+/// the same list always gives the same cycle.
+fn need_cycle(own: &str, own_needs: &[String], installed: &[crate::Installed]) -> Option<Vec<String>> {
+    use std::collections::{BTreeMap, VecDeque};
+    let needs_of = |id: &str| installed.iter().find(|o| o.on && o.id == id && o.id != own).map(|o| o.needs.as_slice());
+    // Each id reached, with the id it was reached from (`own` for its own needs).
+    let mut from: BTreeMap<String, String> = BTreeMap::new();
+    let mut queue: VecDeque<String> = VecDeque::new();
+    for n in own_needs {
+        if n != own && needs_of(n).is_some() && !from.contains_key(n) {
+            from.insert(n.clone(), own.to_string());
+            queue.push_back(n.clone());
+        }
+    }
+    while let Some(id) = queue.pop_front() {
+        for n in needs_of(&id).unwrap_or(&[]) {
+            if n == own {
+                let mut chain = vec![own.to_string(), id.clone()];
+                let mut at = id.clone();
+                while let Some(prev) = from.get(&at).filter(|p| p.as_str() != own) {
+                    chain.insert(1, prev.clone());
+                    at = prev.clone();
+                }
+                chain.push(own.to_string());
+                return Some(chain);
+            }
+            if needs_of(n).is_some() && !from.contains_key(n) {
+                from.insert(n.clone(), id.clone());
+                queue.push_back(n.clone());
+            }
+        }
+    }
+    None
 }
