@@ -296,6 +296,8 @@ private:
     rt::Geometry rt_geometry_{rt_backend_};
     std::uint64_t rt_log_at_ = 0u;
     bool rt_building_ = false;  // meshes wait for their structures
+    double rt_build_rate_ = 0.0;      // triangles a GPU millisecond of the timed builds (5.3 G-3; 0: none timed yet)
+    std::uint64_t rt_budget_ = 0u;    // this frame's build budget, in triangles
     void rt_start();
     void rt_stop() noexcept;
     // The setting changed while the game runs (plan 5.3 G-6): the tracer starts or stops at the start of a walk.

@@ -229,10 +229,34 @@ bool a_scene_is_built_over_its_instances() {
     return ok;
 }
 
+// 5.3 G-4: past the ceiling the static structures no frame named for longest go; one named each frame stays, and a
+// released mesh is built again when wanted again.
+bool a_ceiling_releases_the_least_recently_named() {
+    Run run;
+    const fake::Log& log = fake::log();
+    run.geometry.set_ceiling(fake::structure_bytes(1000u));
+    for (std::uint64_t key = 1u; key <= 5u; ++key) {
+        run.geometry.want(key, mesh(1000u, key * 0x10000u));
+    }
+    for (unsigned i = 0; i < 12u; ++i) {
+        run.step();
+        (void)run.geometry.name(5u);
+    }
+    bool ok = expect(run.geometry.stats().released >= 3u && run.geometry.name(1u) == 0u && run.geometry.name(5u) != 0u,
+                     "past the ceiling the least recently named go, the one named each frame stays");
+    const std::uint32_t builds = log.builds;
+    run.geometry.want(1u, mesh(1000u, 0x10000u));
+    run.step();
+    ok &= expect(log.builds == builds + 1u && run.geometry.name(1u) != 0u, "a released mesh is built again when wanted");
+    ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     bool ok = ranges_fit_and_merge();
+    ok &= a_ceiling_releases_the_least_recently_named();
     ok &= a_mesh_is_built_compacted_and_released();
     ok &= a_budget_spreads_builds();
     ok &= scratch_is_used_again_only_after_a_barrier();

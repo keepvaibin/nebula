@@ -310,7 +310,36 @@ bool Geometry::build(Entry& entry, bool refit) {
     backend_.build(entry.input, entry.kind, entry.structure, scratch, refit);
     built_since_barrier_ = true;
     entry.state = State::Built;
+    entry.used_frame = frame_index_;
     return true;
+}
+
+// 5.3 G-4: past the ceiling, the least recently named static structures go, down to seven eighths of it (what retired
+// structures still hold is counted gone). A mesh seen again asks for its structure again (RenderCore::rt_want_form).
+void Geometry::keep_under_ceiling() {
+    std::uint64_t live = pages_.used_bytes();
+    for (const Retired& retired : retired_) {
+        live -= std::min(live, retired.structure.range.size);
+    }
+    if (live <= ceiling_) {
+        return;
+    }
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> oldest;  // used frame, key
+    for (const auto& [key, entry] : entries_) {
+        if (entry.kind == BuildKind::Static && entry.structure && !entry.queued && entry.used_frame + kFramesToForget < frame_index_) {
+            oldest.emplace_back(entry.used_frame, key);
+        }
+    }
+    std::sort(oldest.begin(), oldest.end());
+    const std::uint64_t goal = ceiling_ / 8u * 7u;
+    for (const auto& [used, key] : oldest) {
+        if (live <= goal) {
+            break;
+        }
+        live -= std::min(live, entries_[key].structure.range.size);
+        forget(key);
+        ++stats_.released;
+    }
 }
 
 void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_index, std::uint64_t budget_triangles) {
@@ -318,9 +347,18 @@ void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_in
     stats_.built_triangles = 0u;
     stats_.builds = stats_.compactions = 0u;
     release_retired();
+    keep_under_ceiling();
+    // The builds this frame slot's last frame timed (5.3 G-3: the caller learns the rate from them).
+    const unsigned timed_slot = frame_slot % kFramesInFlight;
+    stats_.timed_ticks = backend_.timed_ticks(kTimedBuilds, frame_slot);
+    stats_.timed_triangles = stats_.timed_ticks != 0u ? timed_triangles_[timed_slot] : 0u;
     backend_.begin(commands, frame_slot);
     scratch_used_ = 0u;
     built_since_barrier_ = false;
+    const bool timing = !queue_.empty();
+    if (timing) {
+        backend_.time_mark(kTimedBuilds, false);
+    }
 
     // What moves and no frame has named for a while is forgotten.
     for (std::size_t i = 0; i < moving_.size();) {
@@ -364,6 +402,10 @@ void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_in
     if (built_since_barrier_) {
         backend_.barrier();
         built_since_barrier_ = false;
+    }
+    if (timing) {
+        backend_.time_mark(kTimedBuilds, true);
+        timed_triangles_[timed_slot] = used;
     }
 
     // The sizes asked in this frame slot's last frame are readable now: the renderer waited for that frame before it
@@ -459,7 +501,11 @@ void Geometry::refit() {
 
 std::uint64_t Geometry::name(std::uint64_t key) const noexcept {
     const auto found = entries_.find(key);
-    return found != entries_.end() ? found->second.structure.name : 0u;
+    if (found == entries_.end()) {
+        return 0u;
+    }
+    found->second.used_frame = frame_index_;
+    return found->second.structure.name;
 }
 
 }  // namespace galaxy::render::rt

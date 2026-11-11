@@ -113,7 +113,7 @@ struct Backend::State {
     bool counters_bound = false;
     // The timed stretch (time_mark): two timestamps a frame slot (none: no measure).
     VkQueryPool times = VK_NULL_HANDLE;
-    bool timed[kFramesInFlight]{};
+    bool timed[kFramesInFlight][kTimedStretches]{};
     // Buffers passes write and builds read.
     struct OwnBuffer {
         VkBuffer buffer = VK_NULL_HANDLE;
@@ -314,7 +314,7 @@ bool Backend::start(gpu::Device* device) {
     if (context.properties().limits.timestampComputeAndGraphics == VK_TRUE) {
         VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        info.queryCount = 2u * kFramesInFlight;
+        info.queryCount = 2u * kTimedStretches * kFramesInFlight;
         if (vkCreateQueryPool(state->device, &info, nullptr, &state->times) != VK_SUCCESS) {
             state->times = VK_NULL_HANDLE;
         }
@@ -878,32 +878,32 @@ void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) c
     std::memcpy(out, read.mapped, kCountersBytes);
 }
 
-void Backend::time_mark(bool end) {
+void Backend::time_mark(unsigned stretch, bool end) {
     State& s = *state_;
-    if (s.times == VK_NULL_HANDLE) {
+    if (s.times == VK_NULL_HANDLE || stretch >= kTimedStretches) {
         return;
     }
-    const std::uint32_t at = s.frame_slot * 2u;
+    const std::uint32_t at = (s.frame_slot * kTimedStretches + stretch) * 2u;
     if (!end) {
         vkCmdResetQueryPool(s.commands, s.times, at, 2u);
     }
     // Each mark when every command before it has finished.
     vkCmdWriteTimestamp(s.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, s.times, at + (end ? 1u : 0u));
     if (end) {
-        s.timed[s.frame_slot] = true;
+        s.timed[s.frame_slot][stretch] = true;
     }
 }
 
-std::uint64_t Backend::timed_ticks(unsigned frame_slot) const {
+std::uint64_t Backend::timed_ticks(unsigned stretch, unsigned frame_slot) const {
     State& s = *state_;
     const unsigned slot = frame_slot % kFramesInFlight;
-    if (s.times == VK_NULL_HANDLE || !s.timed[slot]) {
+    if (s.times == VK_NULL_HANDLE || stretch >= kTimedStretches || !s.timed[slot][stretch]) {
         return 0u;
     }
-    s.timed[slot] = false;
+    s.timed[slot][stretch] = false;
     std::uint64_t ticks[2]{};
-    if (vkGetQueryPoolResults(s.device, s.times, slot * 2u, 2u, sizeof(ticks), ticks, sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) !=
-        VK_SUCCESS) {
+    if (vkGetQueryPoolResults(s.device, s.times, (slot * kTimedStretches + stretch) * 2u, 2u, sizeof(ticks), ticks, sizeof(std::uint64_t),
+                              VK_QUERY_RESULT_64_BIT) != VK_SUCCESS) {
         return 0u;
     }
     return ticks[1] > ticks[0] ? ticks[1] - ticks[0] : 0u;
