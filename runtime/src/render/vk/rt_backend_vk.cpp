@@ -208,6 +208,19 @@ bool Backend::State::make_passes() {
     VkDescriptorSetLayoutCreateInfo set_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     set_info.bindingCount = count;
     set_info.pBindings = bindings;
+    // A pass binds only the images it has (an image not made yet: the second layer's body before glass is seen, a
+    // filter step's pictures it does not read): every binding partially bound, as Direct3D 12's null descriptors; the
+    // shaders read those only under the constants that bind them. The device has it with bindless (the tracer needs it).
+    VkDescriptorBindingFlags flags[std::size(bindings)]{};
+    VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+    if (vk::Context::get().bindless()) {
+        for (std::uint32_t i = 0; i < count; ++i) {
+            flags[i] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+        }
+        binding_flags.bindingCount = count;
+        binding_flags.pBindingFlags = flags;
+        set_info.pNext = &binding_flags;
+    }
     if (vkCreateDescriptorSetLayout(device, &set_info, nullptr, &set_layout) != VK_SUCCESS) {
         return false;
     }

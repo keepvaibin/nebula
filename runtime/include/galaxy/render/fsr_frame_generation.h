@@ -41,6 +41,7 @@ public:
         float camera_near = 0.0f;
         float camera_far = 0.0f;
         float fov_y = 0.0f;
+        bool common = false;  // depth and motion in the common state (TemporalUpscaleInputs::common)
     };
     // This frame's scene, after its upscale.
     bool prepare(const Prepare& in) noexcept;

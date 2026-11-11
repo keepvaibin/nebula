@@ -96,8 +96,10 @@ bool FsrFrameGeneration::prepare(const Prepare& in) noexcept {
         return false;
     }
     return impl_->core.prepare(ffxGetCommandListDX12(in.list),
-                               ffxGetResourceDX12(in.depth, ffxGetResourceDescriptionDX12(in.depth), L"Nebula scene depth", FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT),
-                               ffxGetResourceDX12(in.motion, ffxGetResourceDescriptionDX12(in.motion), L"Nebula motion vectors", FFX_RESOURCE_STATE_RENDER_TARGET),
+                               ffxGetResourceDX12(in.depth, ffxGetResourceDescriptionDX12(in.depth), L"Nebula scene depth",
+                                                  in.common ? FFX_RESOURCE_STATE_COMMON : FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT),
+                               ffxGetResourceDX12(in.motion, ffxGetResourceDescriptionDX12(in.motion), L"Nebula motion vectors",
+                                                  in.common ? FFX_RESOURCE_STATE_COMMON : FFX_RESOURCE_STATE_RENDER_TARGET),
                                in.jitter_x, in.jitter_y, in.render_width, in.render_height, in.frame_ms, in.camera_near, in.camera_far, in.fov_y);
 }
 
