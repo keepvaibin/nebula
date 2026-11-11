@@ -1519,15 +1519,28 @@ void RenderCore::plan_early_probes(ListData& now) {
         if (list.passes[p].kind != NEBULA_PASS_PROBE) {
             continue;
         }
+        // Back to the scene's end if nothing between changes its depth (frame copies do not): asked there, the scene's
+        // own depth is still the bound one (before an upscaler or the resolve trades the targets). Else after the
+        // nearest frame copy, where the scene pass is closed anyway.
+        std::uint32_t copy = NEBULA_NONE32;
         for (std::uint32_t q = p; q-- > 0u;) {
             const NebulaFramePass& pass = list.passes[q];
-            if (pass.kind == NEBULA_PASS_COPY_FRAME || pass.kind == NEBULA_PASS_TAKE_FRAME) {
-                now.early_probes.push_back(core::ListData::EarlyProbe{q, p});
+            if (pass.kind == NEBULA_PASS_SCENE_END) {
+                copy = q;
                 break;
+            }
+            if (pass.kind == NEBULA_PASS_COPY_FRAME || pass.kind == NEBULA_PASS_TAKE_FRAME) {
+                if (copy == NEBULA_NONE32) {
+                    copy = q;
+                }
+                continue;
             }
             if (!keeps_depth(pass)) {
                 break;
             }
+        }
+        if (copy != NEBULA_NONE32) {
+            now.early_probes.push_back(core::ListData::EarlyProbe{copy, p});
         }
     }
 }
@@ -1607,7 +1620,7 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
         }
         walk_pass(now, p, target_channels);
         for (const core::ListData::EarlyProbe& early : now.early_probes) {
-            if (early.after == p && now.probes_due(walk_.between)) {
+            if (early.after == p && list.passes[p].kind != NEBULA_PASS_SCENE_END && now.probes_due(walk_.between)) {
                 const NebulaFramePass& probe = list.passes[early.probe];
                 record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count,
                                      probe.arg0 == NEBULA_PROBE_COMPARED);
@@ -1708,6 +1721,16 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             walk_opaque_end(pass);
             break;
         case NEBULA_PASS_SCENE_END:
+            // The probes asked after the scene with its depth unchanged (plan_early_probes): while it is still bound.
+            if (now.probes_due(walk_.between)) {
+                for (const core::ListData::EarlyProbe& early : now.early_probes) {
+                    if (early.after == p) {
+                        const NebulaFramePass& probe = list.passes[early.probe];
+                        record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count,
+                                             probe.arg0 == NEBULA_PROBE_COMPARED);
+                    }
+                }
+            }
             walk_scene_end();
             break;
         case NEBULA_PASS_BLOOM_HOLD:

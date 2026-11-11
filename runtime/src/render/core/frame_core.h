@@ -208,7 +208,8 @@ struct ListData {
     };
     bool targets_planned = false;
     std::vector<EarlyTargets> early_targets;
-    // Probes asked right after an earlier pass (plan_early_probes), in list order.
+    // Probes asked right after an earlier pass (plan_early_probes), in list order; `after` a SCENE_END: asked as the
+    // scene ends, before walk_scene_end trades the targets.
     struct EarlyProbe {
         std::uint32_t after = 0u, probe = 0u;
     };
