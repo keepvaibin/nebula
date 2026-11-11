@@ -218,6 +218,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
         Some(if case_insensitive { id.to_lowercase() } else { id })
     };
 
+    // Touches compare paths in lower case; messages show the path as the mod writes it.
     let target_shown = target.to_lowercase();
     // Values against the column types (L403), every column named existing.
     let check_value = |pc: &mut P, m: &json::Member, vp: &str| {
@@ -227,7 +228,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
         {
             let vp = vp.to_string();
             match column(&m.key) {
-                None => pc.at(403, &m.value, &vp, vec![("why", p("Patch.NoSuchColumn")), ("column", t(m.key.clone())), ("target", t(target_shown.clone()))]),
+                None => pc.at(403, &m.value, &vp, vec![("why", p("Patch.NoSuchColumn")), ("column", t(m.key.clone())), ("target", t(target.to_string()))]),
                 Some(_) if is_byte_form(&m.value) && word_bytes(&m.value).is_none() => {
                     pc.at(403, &m.value, &vp, vec![("why", p("Patch.BytesShape")), ("column", t(m.key.clone()))]);
                 }
@@ -462,7 +463,7 @@ fn one(pc: &mut P, root: &Value, target: &str) {
                 .map(|row| tb.columns.iter().map(|(name, _)| row.members().iter().find(|mm| same_column(name, &mm.key)).and_then(|mm| cell_text(&mm.value)).unwrap_or_default()).collect())
                 .collect();
             if !game_rows.iter().chain(added_rows.iter()).any(|r| hit(r)) {
-                pc.at(407, m, &format!("/select/{i}/match"), vec![("target", t(target_shown.clone()))]);
+                pc.at(407, m, &format!("/select/{i}/match"), vec![("target", t(target.to_string()))]);
             }
         }
     }
