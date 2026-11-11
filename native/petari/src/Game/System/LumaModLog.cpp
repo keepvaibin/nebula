@@ -552,7 +552,7 @@ namespace luma {
                 ::free(pJson);
             }
 
-            void keep(const LumaModLogEntry& rEntry, const char* pRowId, bool own);
+            Entry* keep(const LumaModLogEntry& rEntry, const char* pRowId, bool own);
 
             // The log's own Notes and Errors about an entry (ModLog.ArgsCut, ModLog.NoText): once per key.
             void addOwn(const char* pMod, u32 source, u32 level, const char* pRow) {
@@ -570,13 +570,28 @@ namespace luma {
             }
         }  // namespace
 
-        void add(const LumaModLogEntry& rEntry, const char* pRowId) {
-            keep(rEntry, pRowId, false);
+        const Entry* add(const LumaModLogEntry& rEntry, const char* pRowId) {
+            return keep(rEntry, pRowId, false);
+        }
+
+        void counted(const Entry* pEntry, u32 count) {
+            if (pEntry == nullptr) {
+                return;
+            }
+            Entry* const pKept = const_cast< Entry* >(pEntry);
+            u32 now = __atomic_load_n(&pKept->count, __ATOMIC_RELAXED);
+            while (now < count) {
+                if (__atomic_compare_exchange_n(&pKept->count, &now, count, true, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
+                    bump(store());
+                    entryFact(pKept, count);
+                    return;
+                }
+            }
         }
 
         namespace {
         // `own`: one of the log's own lines (addOwn), which may be a Note of any source and writes its own log line.
-        void keep(const LumaModLogEntry& rEntry, const char* pRowId, bool own) {
+        Entry* keep(const LumaModLogEntry& rEntry, const char* pRowId, bool own) {
             // Section 6: the caller's mistakes are Nebula's bugs; nothing is kept, the game's log names them.
             if (rEntry.size < LUMA_MODLOG_ENTRY_SIZE || rEntry.mod == nullptr || rEntry.source >= LUMA_MODLOG_SOURCE_COUNT ||
                 rEntry.level > LUMA_MODLOG_NOTE) {
@@ -584,7 +599,7 @@ namespace luma {
                            "its caller)\n",
                            rEntry.size, rEntry.size >= LUMA_MODLOG_ENTRY_SIZE && rEntry.mod != nullptr ? rEntry.mod : "(none)",
                            rEntry.source, rEntry.level, rEntry.code);
-                return;
+                return nullptr;
             }
             // Section 3.1: the module's own sources are Errors (the log's own lines are as they say).
             if (rEntry.source >= LUMA_MODLOG_CODE && !own && rEntry.level != LUMA_MODLOG_ERROR) {
@@ -592,8 +607,7 @@ namespace luma {
                            sourceName(rEntry.source), rEntry.code);
                 LumaModLogEntry asError = rEntry;
                 asError.level = LUMA_MODLOG_ERROR;
-                keep(asError, pRowId, own);
-                return;
+                return keep(asError, pRowId, own);
             }
             const char* const pFile = rEntry.file != nullptr ? rEntry.file : "";
             Store* const pStore = store();
@@ -605,7 +619,7 @@ namespace luma {
                 bump(pStore);
                 unlockStore(pStore);
                 entryFact(pFound, count);
-                return;
+                return pFound;
             }
             Mod* pMod = findMod(pStore, rEntry.mod);
             if (pMod != nullptr && !canKeep(pStore, pMod)) {
@@ -613,7 +627,7 @@ namespace luma {
                 bump(pStore);
                 unlockStore(pStore);
                 pastFact(pMod, past);
-                return;
+                return nullptr;
             }
             unlockStore(pStore);
 
@@ -633,7 +647,7 @@ namespace luma {
                 ::free(pMade);
                 ::free(pNewMod);
                 entryFact(pFound, count);
-                return;
+                return pFound;
             }
             pMod = findMod(pStore, rEntry.mod);
             if (pMod == nullptr) {
@@ -648,7 +662,7 @@ namespace luma {
                 ::free(pMade);
                 ::free(pNewMod);
                 pastFact(pMod, past);
-                return;
+                return nullptr;
             }
             pMade->reload = pMod->reload;
             if (pStore->tail == nullptr) {
@@ -685,6 +699,7 @@ namespace luma {
             if (words.bare && rEntry.text == nullptr && rEntry.source <= LUMA_MODLOG_COOK && !own) {
                 addOwn(cNebula, rEntry.source, LUMA_MODLOG_ERROR, cNoText);
             }
+            return pMade;
         }
         }  // namespace
 

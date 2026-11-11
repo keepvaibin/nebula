@@ -42,8 +42,12 @@ namespace luma {
         // From the kernel and the game's content (CODE, CONTENT, GUARD): the entry with `text` and `english` null, and
         // `pRowId` the NebulaText row its words are; the row's {names} are filled from the entry's names and values,
         // {mod} from its mod. A null row or one NebulaText lacks: the code and every value, so nothing is lost. The
-        // host's entries (luma_modlog_add) carry their own words.
-        void add(const LumaModLogEntry& rEntry, const char* pRowId);
+        // host's entries (luma_modlog_add) carry their own words. Returns the entry kept for this key (the new one, or the
+        // one it repeats), null when the limits kept none: the caller may hold it to count repeats with `counted`.
+        const Entry* add(const LumaModLogEntry& rEntry, const char* pRowId);
+        // A repeat its caller counts itself (the kernel's record, contract 2): the entry's count becomes `count` when that
+        // is more. One atomic: no lock, no lookup, nothing copied; any thread. Null does nothing.
+        void counted(const Entry* pEntry, u32 count);
         // luma_modlog_session.
         void session(u32 modsOn, LumaModLogFact fact);
         // A mod taken out and loaded again (1.11): its later entries carry the new number; the earlier stay.
