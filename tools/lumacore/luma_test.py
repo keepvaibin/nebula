@@ -1191,6 +1191,9 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
               "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
     test_json = extra.pop("test_json", None)
     result.update(extra)
+    # Every result has contract 5's fields; a test refused before it ran has them empty (audit 0.3 H-15).
+    for key, empty in (("setup", {}), ("frames", None), ("seconds", None), ("pictures", [])):
+        result.setdefault(key, empty)
     (run_folder / "result.json").write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if test_json is not None:
         (run_folder / "test.json").write_text(json.dumps({"runner": RUNNER_VERSION, "test": test_json}, indent=2, ensure_ascii=False) + "\n",
