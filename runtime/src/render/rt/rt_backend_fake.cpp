@@ -191,6 +191,9 @@ void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
     }
 }
 
+void Backend::time_mark(bool) {}
+std::uint64_t Backend::timed_ticks(unsigned) const { return 0u; }
+
 std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char*) { return bytes != 0u ? g_log.buffers++ : kNoBuffer; }
 
 void Backend::free_buffer(std::uint32_t) noexcept {}

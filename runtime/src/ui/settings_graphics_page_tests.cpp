@@ -107,7 +107,8 @@ int main() {
                   "ray tracing's preset and parts rows");
             galaxy::ui::RenderConfig draft = config;
             row(rows, "LOCAL LIGHTS").change(draft, -1);
-            check(draft.rt_quality == galaxy::render::kRtPresetCustom && draft.rt_parts[1] == 1u, "a part alone makes it custom");
+            check(draft.rt_quality == galaxy::render::kRtPresetCustom && draft.rt_parts[1] == 1u && draft.rt_chosen,
+                  "a part alone makes it custom, and the player's");
             quality.change(draft, 1);
             check(draft.rt_quality != galaxy::render::kRtPresetCustom && draft.rt_parts[1] == draft.rt_parts[0], "a preset sets every part");
         }

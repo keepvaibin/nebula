@@ -191,6 +191,11 @@ public:
     // the frame slot's last finished frame (zero before one).
     void end_counters();
     void read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const;
+    // The GPU's time over a stretch of this frame's commands: time_mark(false) before it, time_mark(true) after, once a
+    // frame at most. timed_ticks: the frame slot's last finished stretch in the GPU's ticks (the renderer's
+    // gpu_ms_per_tick converts), 0 when that frame timed none or the device has no timestamps; reading clears it.
+    void time_mark(bool end);
+    [[nodiscard]] std::uint64_t timed_ticks(unsigned frame_slot) const;
 
 private:
     struct State;

@@ -149,6 +149,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             const unsigned quality = std::min(draft.rt_quality, kRtPresetCustom);
                             const unsigned at = quality == 2u ? 0u : quality == 1u ? 2u : quality == kRtPresetReference ? 3u : 1u;
                             draft.rt_quality = kOrder[settings_step(at, 4u, delta)];
+                            draft.rt_chosen = true;
                             rt_apply_preset(draft);
                         },
                         "SETS EVERY PART BELOW. REFERENCE: PATH TRACED, FOR COMPARISON"});
@@ -159,6 +160,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                                 const auto at = static_cast<std::size_t>(part);
                                 draft.rt_parts[at] = static_cast<std::uint8_t>(settings_step(rt_part(draft, part), 4u, delta));
                                 draft.rt_quality = kRtPresetCustom;
+                                draft.rt_chosen = true;
                             },
                             help});
         };
