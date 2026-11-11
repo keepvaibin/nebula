@@ -55,8 +55,10 @@ enum {
 enum {
     LUMA_IMPORT_FUNCTION = 0, /* slot: const LumaFunction** */
     LUMA_IMPORT_FIELD = 1,    /* name "Type.field" of any record the game defines ("MarioModule::Data.mSpeed",
-                                 "Vec3<f32>.x", a member of an anonymous type "LiveActor.mFlag.mIsDead"; a base's field
-                                 through the type), signature its type text as the self-description writes it ("f32");
+                                 "Vec3<f32>.x", a member of an anonymous type "StarPiece.mFlags.isGettable"; a base's
+                                 field through the type). One name is one row: a field of a named type's field takes two
+                                 ("LiveActor.mFlag" and "LiveActorFlag.mIsDead", offsets added). Signature: its type
+                                 text as the self-description writes it ("f32");
                                  slot: int32_t* (the offset in the object). A bit-field's signature is "<type> : <width>"
                                  and its slot gets its position in bits (LUMA_BITS_GET, LUMA_BITS_SET) */
     LUMA_IMPORT_SIZE = 2,     /* name any record ("Class", "Vec3<f32>"); slot: int32_t* (its size in bytes) */
