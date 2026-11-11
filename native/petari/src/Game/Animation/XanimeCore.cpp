@@ -4,6 +4,7 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
+#include <nebula_module.h>
 
 namespace {
     // Divides each rotation row of pMtx by the matching component of rScale where it is not 1.
@@ -179,6 +180,15 @@ void XanimeCore::doFreeze() {
 }
 
 void XanimeCore::setBck(u32 index, Clip* pAnm) {
+    // A clip made for another skeleton: joint j reads tracks j*9 on, with nothing marking the clip's end, so a short
+    // clip walked what lies past it as keys (a model shaking, or standing off the ground, by junk translations).
+    // Such a clip does not play: the model keeps its pose and the log names the mismatch.
+    if (pAnm != nullptr && pAnm->jointCapacity() != mJointCount) {
+        nebula_log("Xanime: a clip of %u joints set on a model of %u; it does not play\n",
+                   static_cast< unsigned >(pAnm->jointCapacity()), static_cast< unsigned >(mJointCount));
+        mTrackList[index].mClip = nullptr;
+        return;
+    }
     mTrackList[index].mClip = pAnm;
 }
 

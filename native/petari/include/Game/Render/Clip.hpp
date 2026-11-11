@@ -100,6 +100,11 @@ public:
         return mBound[entry] != NEBULA_NONE32;
     }
 
+    // The joints a transform clip holds tracks for (nine a joint).
+    u32 jointCapacity() const {
+        return (mFile->targets_at - mFile->tracks_at) / (sizeof(NebulaClipTrack) * 9u);
+    }
+
     // Where a player has it.
     f32 mFrame;
     s32 mFrameMax;
