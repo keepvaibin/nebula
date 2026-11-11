@@ -63,14 +63,18 @@ public:
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkImageView input = VK_NULL_HANDLE;
         PostConstants constants{};
+        unsigned width = 0;  // the target size prepare_present was given
+        unsigned height = 0;
     };
     PresentStep prepare_present(VkCommandBuffer commands, const Texture& source, unsigned source_width,
                                 unsigned source_height, unsigned target_width, unsigned target_height,
                                 bool present, const SetAllocator& allocate);
     // `output.hdr`: the target is an HDR10 swap chain image (the present pass made for its format); the default is the 8-bit
-    // window's write.
+    // window's write. `quarter_turns`: the target is turned by 1-3 quarter turns clockwise (a pre-rotated swap chain image;
+    // `viewport` is then the turned rectangle), and the pass writes each of its pixels from the picture's turned-back one.
     void finish_present(VkCommandBuffer commands, const PresentStep& step, const VkRect2D& viewport,
-                        const SetAllocator& allocate, const PostOutput& output = PostOutput{});
+                        const SetAllocator& allocate, const PostOutput& output = PostOutput{},
+                        unsigned quarter_turns = 0u);
     // The chain's pipelines into the present pass exist (an HDR10 swap chain needs them: nothing else writes its encoding).
     [[nodiscard]] bool present_ready() const noexcept {
         return to_present_.rcas != VK_NULL_HANDLE && to_present_.rcas_scaled != VK_NULL_HANDLE && to_present_.resample != VK_NULL_HANDLE;

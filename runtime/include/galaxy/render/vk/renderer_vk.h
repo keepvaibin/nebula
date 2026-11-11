@@ -551,8 +551,6 @@ private:
     RtView scene_ao_view_{};
     std::vector<ao::ObjectOccluder> scene_ao_objects_;
     void sync_post_process();
-    // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
-    gpu::TextureRef oriented_;
     // DLSS Frame Generation (RendererD3D12's fg_hudless_*): the frame without its 2D layer, and whether a frame's Streamline
     // markers are open.
     gpu::TextureRef fg_hudless_scene_color_;

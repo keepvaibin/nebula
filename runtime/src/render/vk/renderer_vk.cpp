@@ -70,6 +70,20 @@ VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int hei
     }
 }
 
+// Clockwise quarter turns of `transform` (turned_rect's three; any other is drawn upright, as there).
+unsigned quarter_turns(VkSurfaceTransformFlagBitsKHR transform) {
+    switch (transform) {
+    case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+        return 1u;
+    case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+        return 2u;
+    case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+        return 3u;
+    default:
+        return 0u;
+    }
+}
+
 }  // namespace
 
 VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, const PoolSizes& counts) {
@@ -816,8 +830,8 @@ bool RendererVk::create_swapchain() {
             }
         }
     }
-    // HDR10 where it is asked for and the surface lists it; a surface turned from its natural orientation ends in a blit that
-    // knows only the 8-bit write.
+    // HDR10 where it is asked for and the surface lists it; a surface turned from its natural orientation stays on the 8-bit
+    // write (its blit, drawn while the post chain is not ready, knows only that one).
     const bool hdr_asked = wants_hdr();
     const bool surface_turned = (caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
                                  caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR ||
@@ -1564,7 +1578,6 @@ void RendererVk::shutdown() {
         texture_lists_used_ = 0u;
         post_.shutdown();
         bloom_.shutdown();
-        oriented_.reset();
         hdr_capture_.reset();
         fg_hudless_scene_color_.reset();
         fg_hudless_display_.reset();
@@ -2766,48 +2779,15 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         present_fg_hudless(*source, content);
     }
 
-    // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. A
-    // turned swap chain takes it through `oriented_` and the blit, which turns it.
+    // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. The last
+    // one writes the swap chain image, turned or not: on a turned image each pixel takes the picture's turned-back one, the
+    // pixel the blit of an upright copy would show there.
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     vk::PostProcessorVk::PresentStep step{};
-    const vk::Texture* picture = shown;
     if (post_.ready() && !present_black_) {
-        const bool turned = swapchain_.transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-        const auto width = static_cast<std::uint32_t>(content.width);
-        const auto height = static_cast<std::uint32_t>(content.height);
-        step = post_.prepare_present(commands, *shown, shown->width, shown->height, width, height, !turned,
-                                     allocate);
-        if (turned && step.pipeline != VK_NULL_HANDLE) {
-            if (!oriented_ || oriented_->width != width || oriented_->height != height) {
-                oriented_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
-                                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                   true, "post-process picture");
-                VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-                info.renderPass = rgba8_pass_;
-                info.attachmentCount = 1;
-                info.width = width;
-                info.height = height;
-                info.layers = 1;
-                if (oriented_) {
-                    info.pAttachments = &oriented_->target_view;
-                    if (vkCreateFramebuffer(context.device(), &info, nullptr, &oriented_->framebuffer) != VK_SUCCESS) {
-                        oriented_.reset();
-                    }
-                }
-            }
-            if (oriented_) {
-                VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-                begin.renderPass = rgba8_pass_;
-                begin.framebuffer = oriented_->framebuffer;
-                begin.renderArea = {{0, 0}, {width, height}};
-                vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
-                post_.finish_present(commands, step, {{0, 0}, {width, height}}, allocate);
-                vkCmdEndRenderPass(commands);
-                oriented_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                picture = oriented_.get();
-            }
-            step = {};
-        }
+        step = post_.prepare_present(commands, *shown, shown->width, shown->height,
+                                     static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height),
+                                     true, allocate);
     }
 
     VkClearValue clear{};
@@ -2826,16 +2806,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     }
 
     // The picture, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image:
-    // the post chain's last pass, or the blit of the display picture (or of the chain's turned picture).
-    const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
-    const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, picture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    write.dstSet = set;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    write.pImageInfo = &image_info;
-    vkUpdateDescriptorSets(context.device(), 1, &write, 0, nullptr);
+    // the post chain's last pass, or the blit of the display picture.
     const VkRect2D scissor =
         turned_rect(swapchain_.transform, bb_w, bb_h, content.left, content.top, content.width, content.height);
     const VkViewport viewport{static_cast<float>(scissor.offset.x),
@@ -2845,8 +2816,18 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     if (step.pipeline != VK_NULL_HANDLE) {
-        post_.finish_present(commands, step, scissor, allocate, swapchain_.hdr ? hdr_output_ : PostOutput{});
+        post_.finish_present(commands, step, scissor, allocate, swapchain_.hdr ? hdr_output_ : PostOutput{},
+                             quarter_turns(swapchain_.transform));
     } else {
+        const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
+        const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, shown->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        write.dstSet = set;
+        write.dstBinding = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write.pImageInfo = &image_info;
+        vkUpdateDescriptorSets(context.device(), 1, &write, 0, nullptr);
         vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, blit_pipeline_);
         vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set, 0, nullptr);
         const std::uint32_t transform = static_cast<std::uint32_t>(swapchain_.transform);

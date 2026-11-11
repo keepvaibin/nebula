@@ -672,6 +672,8 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
     PostProcessPlan plan = plan_post_process(source_width, source_height, target_width, target_height, scaling,
                                              status_.smaa_ok, status_.fxaa_ok);
     PresentStep step{};
+    step.width = target_width;
+    step.height = target_height;
     set_post_input_size(step.constants, source_width, source_height);
     const VkImageView input = source.view;
     step.input = input;
@@ -731,11 +733,16 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
 }
 
 void PostProcessorVk::finish_present(VkCommandBuffer commands, const PresentStep& step, const VkRect2D& viewport,
-                                     const SetAllocator& allocate, const PostOutput& output) {
+                                     const SetAllocator& allocate, const PostOutput& output, unsigned quarter_turns) {
     PostConstants constants = step.constants;
     constants.origin[0] = viewport.offset.x;
     constants.origin[1] = viewport.offset.y;
     set_post_output(constants, output);
+    if (quarter_turns != 0u) {
+        constants.turn[0] = static_cast<std::int32_t>(quarter_turns & 3u);
+        constants.turn[1] = static_cast<std::int32_t>(step.width);
+        constants.turn[2] = static_cast<std::int32_t>(step.height);
+    }
     draw(commands, step.pipeline, {step.input}, viewport, constants, allocate);
 }
 

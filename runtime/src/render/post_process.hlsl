@@ -26,6 +26,8 @@ cbuffer PostConstants : register(b0) {
     // (dithered), 2 the last write as HDR10 (FinalWriteHdr). w: with z = 2, the paper white (bits 0-9) and the display's
     // peak (bits 10-23), both in nits (post_process_settings.h post_output_word).
     int4 g_origin;
+    // x: the target turned by 0-3 quarter turns clockwise; yz: the picture's width and height (PostConstants.turn).
+    int4 g_turn;
 };
 
 SamplerState LinearSampler : register(s0);
@@ -43,9 +45,19 @@ FullscreenOut FullscreenTriangle(uint id) {
     return o;
 }
 
-// Integer pixel inside the pass viewport.
+// The picture's integer pixel: the one inside the pass viewport, turned back where the target is turned.
 int2 ViewportPixel(float4 pos) {
-    return int2(pos.xy) - g_origin.xy;
+    const int2 p = int2(pos.xy) - g_origin.xy;
+    if (g_turn.x == 1) {
+        return int2(p.y, g_turn.z - 1 - p.x);
+    }
+    if (g_turn.x == 2) {
+        return int2(g_turn.y - 1 - p.x, g_turn.z - 1 - p.y);
+    }
+    if (g_turn.x == 3) {
+        return int2(g_turn.y - 1 - p.y, p.x);
+    }
+    return p;
 }
 
 // The last write to the window, 8 bits a channel from the scene's 10: a pixel between two levels takes one of them by a

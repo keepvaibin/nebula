@@ -62,8 +62,12 @@ struct PostConstants {
     // 8-bit window (dithered), 2 the last write as HDR10 (set_post_output). origin[3]: with 2, the paper white and the
     // display's peak (post_output_word).
     std::int32_t origin[4];
+    // turn[0]: the target turned by 0-3 quarter turns clockwise (a pre-rotated Vulkan swap chain image), so the passes
+    // turn its pixels back to the picture's; turn[1..2]: the picture's width and height.
+    std::int32_t turn[4];
 };
-static_assert(sizeof(PostConstants) == 28u * 4u);
+// 128 bytes: Vulkan's least push constant size.
+static_assert(sizeof(PostConstants) == 32u * 4u);
 
 // rt_metrics for a pass reading a `width` x `height` input.
 void set_post_input_size(PostConstants& constants, unsigned width, unsigned height) noexcept;

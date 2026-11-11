@@ -303,8 +303,7 @@ void RendererVk::log_video_memory(const VideoMemoryOutside& outside) {
     // effects-layer targets, the frame-generation and HDR captures.
     std::uint64_t scene = set_bytes(scene_) + set_bytes(wide_scene_) + set_bytes(alt_scene_) + set_bytes(target_scene_);
     for (const gpu::TextureRef* texture : {&motion_.motion, &motion_.reactive, &motion_.layer_color, &motion_.layer_trans,
-                                           &fg_hudless_scene_color_, &fg_hudless_display_, &fg_hudless_target_, &hdr_capture_,
-                                           &oriented_}) {
+                                           &fg_hudless_scene_color_, &fg_hudless_display_, &fg_hudless_target_, &hdr_capture_}) {
         scene += allocation_bytes(texture->get());
     }
     std::uint64_t slots = 0u;
