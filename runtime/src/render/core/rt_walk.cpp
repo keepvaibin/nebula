@@ -1460,6 +1460,10 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     if (!(ambient > 0.02f) || !(key > 0.02f)) {
         ambient = key = 0.5f;  // a stage that names no light of its own: an even split
     }
+    // The stage's own numbers where its row gives them (rt_stages.tsv, RT-MASTER-PLAN 23.2).
+    const RtStage& stage_row = rt_stage(list.stage_hash) != nullptr ? *rt_stage(list.stage_hash) : kRtStageDefaults;
+    key *= stage_row.sun_gain;
+    ambient *= stage_row.ambient_gain / kRtStageDefaults.ambient_gain;
     if (!rt_drops_.empty()) {
         rt_drop_bins(width, height, frame.ray);
     } else {
@@ -1474,7 +1478,8 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     static_assert(sizeof(RtDrop) == 48u && sizeof(RtEmitter) == 48u);
     // The stage's exposure: the light a fully lit surface of it stands in, from its own key and ambient: 40 lux
     // in the dark of space (a glow carries far), 150 on a bright day (a glow is a touch of colour near it).
-    rt_emitters_finish(40.0f + 110.0f * std::clamp((ambient + key) / 1.2f, 0.0f, 1.0f));
+    rt_emitters_finish(stage_row.exposure_low +
+                       (stage_row.exposure_high - stage_row.exposure_low) * std::clamp((ambient + key) / 1.2f, 0.0f, 1.0f));
     const bool glowing = !rt_emitters_.empty();
     if (glowing) {
         rt_emitter_bins(width, height, frame.ray);
@@ -1559,7 +1564,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.sun[0] = sun[0];
     constants.sun[1] = sun[1];
     constants.sun[2] = sun[2];
-    constants.sun[3] = kSunTan;
+    constants.sun[3] = stage_row.sun_size > 0.0f ? stage_row.sun_size : kSunTan;
     constants.stage[0] = ambient;
     constants.stage[1] = key;
     constants.stage[2] = 128.0f / 255.0f;  // the game's fill: black at alpha 0x80 (MR::fillSilhouetteColor)
