@@ -1,7 +1,10 @@
 //! Mods' files as the game reads them: each file a mod changes or adds is cooked as the disc's were at import and
 //! written to a store of its own, which the game reads over game.pak (runtime/src/asset_store.cpp). The plan names them,
-//! one a line: the game id, then `path<TAB>source file`.
+//! one a line: the game id, then `path<TAB>source file`; `%mods` and `%patch` lines give the patches by key
+//! (overlay_patches), whose facts go in `<store>.facts`.
 
+use super::overlay_patches::{apply_patches, facts_text, read_patches, PlanPatches};
+use super::patch::Fact;
 use super::{archive, audio_data, cook_entry, cooks, place, store, Stats, StoreItem, ALIGN};
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -32,7 +35,7 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
         bail!("the plan's game id is {game_id:?}");
     }
     let mut changes = Vec::new();
-    for line in lines.filter(|line| !line.is_empty() && !line.starts_with("base\t") && !line.starts_with("=material\t")) {
+    for line in lines.filter(|line| !line.is_empty() && !line.starts_with("base\t") && !line.starts_with("=material\t") && !line.starts_with('%')) {
         let (path, source) = line.split_once('\t').with_context(|| format!("the plan's line {line:?}"))?;
         let (merge, path) = path.strip_prefix('+').map_or((false, path), |rest| (true, rest));
         changes.push(Change { path: path.trim_start_matches('/').to_string(), source: PathBuf::from(source), merge });
@@ -125,8 +128,9 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
 }
 
 /// Writes the store. A file that cannot be cooked is left out and named, so that the rest of a mod still loads; its
-/// paths and reasons are returned.
-pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, output: &Path, stats: &mut Stats) -> Result<Vec<(String, String)>> {
+/// paths and reasons are returned. The patches by key apply after the files and merges, and their facts go in `facts`.
+pub fn write_overlay(game_id: &str, changes: &[Change], patches: &PlanPatches, base: Option<&Path>, output: &Path, facts: &mut Vec<Fact>,
+                     stats: &mut Stats) -> Result<Vec<(String, String)>> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("{} cannot be created", parent.display()))?;
     }
@@ -191,6 +195,7 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
         }
     }
     apply_merges(changes, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, stats)?;
+    apply_patches(patches, base, &mut pak, &temporary, &mut at, &mut placed, &mut failed, facts, stats)?;
     complete_archives(changes, base, &mut pak, &mut at, &mut placed, &mut failed, stats)?;
     if placed.is_empty() {
         let _ = fs::remove_file(&temporary);
@@ -425,10 +430,15 @@ static PROGRESS: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex
 /// A plan file into a store: the C entry of Android and the command of the desktop program.
 /// As `cook_plan_inner`, and what couldn't be cooked goes in a file beside the store: the game logs each. When nothing
 /// could be, why goes in `<store>.why`: the desktop's cooker has no console and Android's stderr goes nowhere.
+/// The patches' facts go in `<store>.facts` on every cook, empty when there are none (so no older cook's survive);
+/// the host logs each line.
 pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, String)>)> {
     let why = output.with_extension("why");
     fs::remove_file(&why).ok();
-    let cooked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cook_plan_inner(plan, output)))
+    let facts_file = output.with_extension("facts");
+    fs::remove_file(&facts_file).ok();
+    let mut facts = Vec::new();
+    let cooked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| cook_plan_inner(plan, output, &mut facts)))
         .unwrap_or_else(|panic| {
             let text = panic
                 .downcast_ref::<&str>()
@@ -437,6 +447,7 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
                 .unwrap_or_default();
             Err(anyhow::anyhow!("the converter stopped: {text}"))
         });
+    fs::write(&facts_file, facts_text(&facts)).ok();
     let (stats, failed) = match cooked {
         Ok(done) => done,
         Err(error) => {
@@ -452,9 +463,10 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     Ok((stats, failed))
 }
 
-fn cook_plan_inner(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, String)>)> {
+fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<(Stats, Vec<(String, String)>)> {
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
+    let patches = read_patches(&text)?;
     let mut stats = Stats::default();
     let mut written = BTreeMap::new();
     for line in text.lines().filter_map(|line| line.strip_prefix("=material\t")) {
@@ -465,7 +477,7 @@ fn cook_plan_inner(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, St
     *super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(written);
     *super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()) = Some(BTreeMap::new());
     *PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(output.with_extension("progress"));
-    let result = write_overlay(&game_id, &changes, plan_base(&text).as_deref(), output, &mut stats);
+    let result = write_overlay(&game_id, &changes, &patches, plan_base(&text).as_deref(), output, facts, &mut stats);
     let texts = super::programs::MOD_TEXTS.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
     let _ = fs::remove_file(output.with_extension("progress"));
     *super::programs::MOD_WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -531,7 +543,7 @@ mod tests {
             Change { path: "StageData/galaxy/zonea.bin".into(), source: b, merge: false },
         ];
         let out = dir.path().join("mods.pak");
-        let failed = write_overlay("RMGE01", &changes, None, &out, &mut Stats::default()).unwrap();
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), None, &out, &mut Vec::new(), &mut Stats::default()).unwrap();
         assert_eq!(failed.len(), 1, "{failed:?}");
         assert!(failed[0].0 == "StageData/Galaxy/ZoneA.bin" && failed[0].1.contains("used instead"));
         assert_eq!(store::read_file(&out, "StageData/galaxy/zonea.bin").unwrap(), b"second");
@@ -563,7 +575,7 @@ mod tests {
         ];
         let output = dir.join("mods.pak");
         let mut stats = Stats::default();
-        let failed = write_overlay("RMGE01", &changes, None, &output, &mut stats).unwrap();
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), None, &output, &mut Vec::new(), &mut stats).unwrap();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].0, "StageData/missing.txt");
         assert_eq!(store::read_file(&output, "StageData/note.txt").unwrap(), b"hello");
@@ -600,7 +612,7 @@ mod tests {
             Change { path: "MessageData/messages.json".into(), source: broken, merge: true },
         ];
         let output = dir.path().join("mods.pak");
-        let failed = write_overlay("RMGE01", &changes, Some(&base), &output, &mut Stats::default()).unwrap();
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), Some(&base), &output, &mut Vec::new(), &mut Stats::default()).unwrap();
         // The broken merge has words in French only: English has none, so no language takes it.
         assert_eq!(failed.len(), 1, "{failed:?}");
         assert!(failed[0].1.contains("UsEnglish"), "{failed:?}");
@@ -649,7 +661,7 @@ mod tests {
             },
         ];
         let output = dir.path().join("mods.pak");
-        let failed = write_overlay("RMGE01", &changes, Some(&base), &output, &mut Stats::default()).unwrap();
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), Some(&base), &output, &mut Vec::new(), &mut Stats::default()).unwrap();
         assert_eq!(failed.len(), 1, "{failed:?}");
         assert!(failed[0].1.contains("nope"), "{failed:?}");
         let merged = store::read_file(&output, "ObjectData/Things.arc/Things.bcsv").unwrap();
@@ -686,7 +698,7 @@ mod tests {
         ];
         let output = dir.join("mods.pak");
         let mut stats = Stats::default();
-        let failed = write_overlay("RMGE01", &changes, None, &output, &mut stats).unwrap();
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), None, &output, &mut Vec::new(), &mut stats).unwrap();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].0, "opening.bnr");
         assert!(failed[0].1.contains("console"));
@@ -709,7 +721,7 @@ mod tests {
         ];
         let output = dir.join("mods.pak");
         let mut stats = Stats::default();
-        let failed = write_overlay("RMGE01", &changes, None, &output, &mut stats).unwrap();
+        let failed = write_overlay("RMGE01", &changes, &PlanPatches::default(), None, &output, &mut Vec::new(), &mut stats).unwrap();
         assert!(failed.is_empty(), "{failed:?}");
         for path in ["StageData/NewGalaxy.arc/jmp/placement/common/objinfo", "StageData/NewGalaxy.arc/camera/cameraparam.bcam"] {
             let cooked = store::read_file(&output, path).unwrap();

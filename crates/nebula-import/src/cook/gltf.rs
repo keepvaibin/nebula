@@ -1,6 +1,6 @@
 //! A modern model in place of the game's own format: glTF 2.0 (`.gltf` with its files, or `.glb`) read straight into
 //! `ModelIr` and `ClipIr`, with a clip for each animation. Triangles, a colour and up to sixteen texture layers per
-//! material (the base colour texture, then `extras.nebula.textures`), skins and node animation. Lengths are metres in glTF: one metre is 100 of the game's units. A glTF triangle winds counter-clockwise;
+//! material (the base colour texture, then `extras.nebula.textures`), skins and node animation. Lengths are metres in glTF: one metre is 100 of the game's units (`UNITS_PER_METRE`, models and collision alike). A glTF triangle winds counter-clockwise;
 //! the game's wind clockwise (measured on Kuribo, Coin and Mario: 650 to 2, 268 to 0, 4514 to 363).
 
 use super::clip::{ClipIr, Target, Track, KIND_COLORS, KIND_JOINTS, KIND_PATTERN, KIND_TEXTURE_MATRICES, STEP};
@@ -265,7 +265,7 @@ pub fn to_collision(bytes: &[u8], folder: Option<&Path>) -> Result<(Vec<u8>, Vec
             let corner = |index: u32| -> [f32; 3] {
                 let at = index as usize * 3;
                 let p = transform(&matrix, [positions[at], positions[at + 1], positions[at + 2]], 1.0);
-                [p[0] * 100.0, p[1] * 100.0, p[2] * 100.0]
+                p.map(|v| v * UNITS_PER_METRE)
             };
             for triple in indices.chunks_exact(3) {
                 triangles.push(super::kcl::Triangle { corners: [corner(triple[0]), corner(triple[1]), corner(triple[2])], attribute });

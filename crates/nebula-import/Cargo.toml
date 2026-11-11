@@ -15,6 +15,7 @@ folders-only = []
 proof-tools = []
 
 [dependencies]
+luma-validate = { path = "../luma-validate" }
 anyhow.workspace = true
 jni-sys = "0.4"
 nod = "=1.4.4"
@@ -30,3 +31,6 @@ windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# The validator's test zip writer (tests/validate_c.rs shares luma-validate's tests/common).
+miniz_oxide = "0.8"
+crc32fast = "1"
