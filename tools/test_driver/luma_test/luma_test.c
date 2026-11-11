@@ -359,7 +359,8 @@ static int player_takes_input(void) {
     return disabled == 0;
 }
 
-static int stage_ready(void) {
+/* Ready, or the first condition still unmet and its value in `why` (harness revision 3, R3-1). */
+static int stage_ready(Out* why) {
     const char* name = 0;
     int32_t scenario = 0;
     unsigned char opening = 1, starting = 1, demo = 1;
@@ -370,8 +371,33 @@ static int stage_ready(void) {
     /* The stage-start demo (the scenario starter's "Welcome" layout, run 6) holds the player's input: ready once no
        demo runs. */
     call0(demo_active, &demo);
-    return name != 0 && same(name, pending_stage) && scenario == pending_scenario && opening == 0 && starting == 0 &&
-           demo == 0 && player() != 0 && player_takes_input();
+    why->at = 0;
+    why->text[0] = 0;
+    if (name == 0 || !same(name, pending_stage)) {
+        put(why, "ready: stage ");
+        put(why, pending_stage);
+        put(why, " expected, found ");
+        put(why, name != 0 ? name : "none");
+    } else if (scenario != pending_scenario) {
+        put(why, "ready: scenario ");
+        put_int(why, pending_scenario);
+        put(why, " expected, found ");
+        put_int(why, scenario);
+    } else if (opening != 0) {
+        put(why, "ready: MR::isStageStateScenarioOpeningCamera still true");
+    } else if (starting != 0) {
+        put(why, "ready: MR::isExecScenarioStarter still true");
+    } else if (demo != 0) {
+        put(why, "ready: MR::isDemoActive still true");
+    } else if (player() == 0) {
+        put(why, "ready: no player");
+    } else if (!player_takes_input()) {
+        put(why, player_mario == 0 ? "ready: Mario::checkKeyLock has not run on this stage"
+                                   : "ready: MarioModule::isInputDisable still true");
+    } else {
+        return 1;
+    }
+    return 0;
 }
 
 /* User file <n> made current as the file select does: loaded when the saves hold it, else made through the game's
@@ -953,11 +979,13 @@ static int32_t on_frame(LumaCall* call, void* user) {
         }
     }
     if (pending == Pending_Stage) {
-        if (stage_ready()) {
+        static Out why;
+        if (stage_ready(&why)) {
             finish_stage();
         } else if (++pending_frames > 60u * 120u) {
             pending = Pending_None;
-            harness->done(0, "the stage was not ready within 7,200 frames");
+            put(&why, " (after 7,200 frames)");
+            harness->done(0, why.text);
         } else {
             return 0;
         }
