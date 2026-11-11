@@ -768,6 +768,7 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Light));
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Added));
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Mirror));
+        (void)rt_backend_.image_to_sample(rt_image(RtImage::Facing));
     }
     renderer_.rt_commands_end();
 }
@@ -868,6 +869,7 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Blend Lights B", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Blend Moments A", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Blend Moments B", kHalf4, kRtFull, kForBlend},
+    {"Nebula RT Facing", rt::ImageFormat::R8, kRtFull, kForLight},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average B", kHalf4, kRtHalf, kForIndirect},
@@ -1135,6 +1137,7 @@ void RenderCore::rt_pass_light() {
     binds.reads[5] = rt_image(RtImage::LightsSpec);
     binds.writes[0] = rt_image(RtImage::Light);
     binds.writes[1] = rt_image(RtImage::Mirror);
+    binds.writes[2] = rt_image(RtImage::Facing);
     rt_backend_.dispatch(RtShader::Light, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 
@@ -1169,6 +1172,7 @@ void RenderCore::rt_filters() {
         over_space.reads[0] = step == 0u ? average : step == 1u ? light : light_step;
         over_space.reads[2] = guide;
         over_space.reads[3] = step == 2u ? motion : rt::kNoImage;  // the last step's, for --diagnostics rt-motion
+        over_space.reads[5] = step == 2u ? rt_image(RtImage::SunOut) : rt::kNoImage;  // the last step's V (rgb)
         over_space.writes[0] = step == 1u ? light_step : light;
         rt_backend_.dispatch(RtShader::LightSpace, over_space, frame.across, frame.down);
     }
@@ -1638,11 +1642,13 @@ void RenderCore::rt_light() {
         if (lit) {
             void* const added = rt_backend_.image_to_sample(rt_image(RtImage::Added));
             void* const mirror = rt_backend_.image_to_sample(rt_image(RtImage::Mirror));
+            void* const facing = rt_backend_.image_to_sample(rt_image(RtImage::Facing));
             if (void* const texture = rt_backend_.image_to_sample(rt_image(RtImage::Light));
                 texture != nullptr && added != nullptr && mirror != nullptr) {
                 rt_light_slot_ = renderer_.rt_publish_light(texture, texture_store_);
                 rt_added_slot_ = renderer_.rt_publish_light(added, texture_store_, 1u);
                 rt_mirror_slot_ = renderer_.rt_publish_light(mirror, texture_store_, 2u);
+                rt_facing_slot_ = renderer_.rt_publish_light(facing, texture_store_, 3u);
                 rt_light_on_ = true;
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u);
                 ++walk_view_stamp_;  // the scene's views are written again, with the light

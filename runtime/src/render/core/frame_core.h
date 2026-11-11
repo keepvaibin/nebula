@@ -152,7 +152,8 @@ struct ViewRows {
     float sky_up[3];          // the player's up in eye space (unit), else the view's up
     std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light (`traced`), bit 4 shown
     float scale[4];
-    float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's
+    float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's,
+                      // the facing picture's
     float tint[4];    // with view_flags bit 3: what a shadow takes back from the sky, as a colour (rgb)
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.

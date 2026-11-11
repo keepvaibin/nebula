@@ -2,17 +2,15 @@
 // The light pass: the shares the programs read, from the sun's V (filtered by rt_sun_time and rt_sun_blur) with the
 // sky's light near the surface, and what glass, metal and gloss mirror. Until the sky and bounce light pass
 // (rt_indirect) and the reflection pass (rt_reflect) replace them, the sky's part is two alternating occlusion rays
-// and the mirror a first cut. The shares the programs read (program.hlsli traced_colour, program_lit.hlsli):
-//   r  the sun's share on a lit surface (its program sums the key by it): V;
-//   g  the fill's: all of it;
-//   b  0: every point light is an emitter, lit through the added light (rt_lights.hlsl);
-//   a  the ground's share on every surface that takes shadows: a painted surface's own shadow ratio where the sun's
-//      shadow falls (its painting holds the sun's facing: from g_look.z of full facing it keeps all of its colour,
-//      g_look.x where the sun leaves it), times what the sky's light keeps where something stands near or over it.
-// The opaque layer's sky rays are noisy and V is not: this pass writes, for the filter (rt_light_time,
-// rt_light_space), r V, b how the surface faces the sun (0 to 1 a painted surface's sunlit share at full V; -1 to
-// -2 a lit surface's, -1 - n.l) and a the sky's share; the filter averages a alone and its last step puts the
-// shares together. The second layer has no filter: there they are put together here.
+// and the mirror a first cut. What the programs read (program.hlsli traced_colour, program_lit.hlsli), both layers:
+//   Light   rgb V, the sun's share as a colour (what blended things on its ray let through tints it); a O, the sky's
+//           share (what stands near or over the surface hides of it). The programs put sun, sky, fill and the
+//           stage's colours together themselves (plan 3.4); every point light is an emitter (the added light);
+//   Facing  how the surface faces the sun as a painted surface takes it (from g_look.z of full facing up: all of
+//           it); a lit program takes n.l itself.
+// The opaque layer's sky rays are noisy: this pass writes, for the filter (rt_light_time, rt_light_space), r V (one
+// number), b the facing code (0 to 1 painted; -1 to -2 lit, -1 - n.l) and a the sky's share; the filter averages a
+// alone and its last step writes V (rgb, from the sun's filter) with it. The second layer's are written here.
 #include "rt_common.hlsli"
 
 Texture2D<float4> g_guide : register(t9);
@@ -25,6 +23,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 // What the pixel mirrors: rgb what its mirror ray sees by how much the surface mirrors; a how much of the surface's own
 // colour stays under it, plus 2 in the second layer (program.hlsli traced_mirror).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u1);
+RT_FORMAT(r8) RWTexture2D<float> g_facing : register(u2);  // how a painted surface faces the sun (0: no surface: 1)
 
 // What a ray sees: the colour of the nearest thing on it, as the scene's light leaves it. The scene's solid things
 // and its cutouts where their maps say they are, else the sky's dome, else g_sky. A thing shows its first map at the
@@ -144,6 +143,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     float4 share = float4(1.0f, 1.0f, 1.0f, 1.0f);
     float4 mirror = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    float facing_out = 1.0f;
     const float4 guide = g_guide.Load(int3(pixel, 0));
     if (guide.a != 0.0f) {
         const RtSurface s = rt_surface(pixel, guide, g_normals.Load(int3(pixel, 0)), g_motion.Load(int3(pixel, 0)).w);
@@ -159,7 +159,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             const float lambert = saturate((flags & kSurfaceTwoSided) != 0u ? abs(turned) : turned);
             facing = lit ? lambert : saturate(lambert / g_look.z);
         }
-        const float in_sun = v * facing;  // how much of the sun's light the surface takes
+        facing_out = facing;
         // The lamp of the pixel's light set: every point light is an emitter (bit 6), lit through the added light.
         share.b = 0.0f;
         share.r = v;
@@ -181,9 +181,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
         if (second) {
-            // In the sun the sky's part of the light is small.
-            const float painted = lit ? 1.0f : lerp(g_look.x, 1.0f, in_sun);
-            share.a = painted * lerp(seen, 1.0f, 0.65f * in_sun);
+            share = float4(v3, seen);  // as the programs read it: no filter after this layer's
         } else {
             share.b = lit ? -1.0f - facing : facing;  // for the filter's last step (rt_light_space.hlsl)
             share.a = seen;
@@ -234,5 +232,6 @@ void main(uint3 id : SV_DispatchThreadID) {
         share = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (the filter's last step says so too)
     }
     g_out[id.xy] = share;
+    g_facing[id.xy] = facing_out;
     g_mirror[id.xy] = float4(mirror.rgb, mirror.a + (second ? 2.0f : 0.0f));
 }
