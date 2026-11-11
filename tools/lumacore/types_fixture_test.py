@@ -109,7 +109,9 @@ def main():
                     ("FxCopies", (False, True, False)), ("FxDefaulted", (True, True, False)),
                     ("FxNoCopy", (True, True, True)), ("FxHoldsNoCopy", (True, True, True)),
                     ("FxMoveOnly", (True, True, False)), ("FxHoldsOwner", (False, False, False)),
-                    ("FxPoly", (False, True, False)), ("FxConstField", (True, True, False))):
+                    ("FxPoly", (False, True, False)), ("FxConstField", (True, True, False)),
+                    ("FxNoDestroy", (True, False, False)), ("FxNoDestroyConst", (True, False, True)),
+                    ("FxHoldsNoDestroy", (True, False, True))):
         r = rows.get(n)
         have = None if r is None else tuple(r.get(k) for k in keys)
         if have != want:

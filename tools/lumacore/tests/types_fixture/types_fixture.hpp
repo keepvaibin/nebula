@@ -126,6 +126,27 @@ struct FxConstField {  // a const field: no assignment, a copy (clang lists its 
 };
 static_assert(!__is_assignable(FxConstField&, FxConstField&&) && __is_constructible(FxConstField, const FxConstField&),
               "FxConstField: copied, never assigned");
+struct FxNoDestroy {  // a deleted destructor: trivially copyable (clang), not destructible; assigned, never constructed
+    s32 v;
+    ~FxNoDestroy() = delete;
+};
+struct FxNoDestroyConst {  // and a const field: no_copy
+    s32 v;
+    const s32 c;
+    ~FxNoDestroyConst() = delete;
+};
+struct FxHoldsNoDestroy {  // a part's deleted destructor deletes the implicit copy (B02-1), the const field the assignment
+    FxNoDestroy held;
+    const s32 c;
+};
+static_assert(!__is_constructible(FxNoDestroy, const FxNoDestroy&) && __is_assignable(FxNoDestroy&, const FxNoDestroy&),
+              "FxNoDestroy: assigned, never constructed");
+static_assert(!__is_constructible(FxNoDestroyConst, const FxNoDestroyConst&) &&
+                  !__is_assignable(FxNoDestroyConst&, const FxNoDestroyConst&),
+              "FxNoDestroyConst: never copied");
+static_assert(!__is_constructible(FxHoldsNoDestroy, const FxHoldsNoDestroy&) &&
+                  !__is_assignable(FxHoldsNoDestroy&, const FxHoldsNoDestroy&),
+              "FxHoldsNoDestroy: never copied");
 struct FxHoldsOwner {  // a field that frees: neither
     FxOwns owned;
 };

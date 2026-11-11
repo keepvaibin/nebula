@@ -509,44 +509,54 @@ class Reader:
                 self.want_signature(m)
         self.fields(c, t, row, "", 0)
         row["polymorphic"] = row["polymorphic"] or any(self.records.get(b["name"], {}).get("polymorphic") for b in row["bases"])
-        row["trivial_copy"], row["trivial_destroy"], can_construct, can_assign = self.trivial(t)
+        row["trivial_copy"], row["trivial_destroy"], can_construct, can_assign, _ = self.trivial(t)
         row["no_copy"] = not can_construct and not can_assign
 
     def trivial(self, t):
         """TY-10: (trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
-        assignment can be called), as the compiler says; the compiled rows check them.
+        assignment can be called, the destructor is not deleted), as the compiler says; the compiled rows check the
+        first four.
         - Numbers, enums, pointers and references are all four (a reference or const field is the owner's business).
         - Destructible: the destructor is not the record's own (implicit or defaulted), not virtual, not deleted, and
           every base and field is destructible.
-        - Copyable (clang's rule): destructible, no vtable, no virtual base, no copy or move of its own (defaulted
+        - Copyable (clang's rule): a destructor that is not its own and not virtual (a deleted one is not its own, so
+          clang still calls it trivially copyable), no vtable, no virtual base, no copy or move of its own (defaulted
           and deleted ones are not its own), every base and field copyable. Deleted ones do not stop it.
         - Callable copies: a declared one that is not deleted; else the implicit one, which a user-declared copy or
           move deletes ([class.copy.ctor] 6, [class.copy.assign] 2), and which needs every base and field to have its
           own (an assignment also no reference and no const field). libclang also lists a special member clang
           declared implicitly (a unit used it), written where the class's name is: its deleted flag is clang's own
-          answer for that member, and an implicit move deletes nothing."""
+          answer for that member, and an implicit move deletes nothing.
+        - B02-1, destructors ([class.copy.ctor] 10, [class.dtor] 7): a part's deleted destructor deletes the implicit
+          copy constructor and the implicit destructor, and a record whose destructor is deleted cannot be copy
+          constructed (clang's __is_constructible, which the table checks, asks for the destructor too). An
+          inaccessible destructor deletes nothing in the table, built without access control, so access is not read."""
         api = self.api
         t = api.canonical(t)
         while t.kind in (T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY):
             t = api.canonical(api.element(t))
         decl = api.declaration(t)
         if decl.kind not in RECORDS:
-            return True, True, True, True
+            return True, True, True, True, True
         key = self.text(api.typeSpelling(t))
         if key in self.trivial_memo:
             return self.trivial_memo[key]
-        self.trivial_memo[key] = (False, False, False, False)  # while worked out (a record cannot hold itself by value)
+        self.trivial_memo[key] = (False, False, False, False, False)  # while worked out (a record cannot hold itself)
         if api.sizeOf(t) < 0:
-            return False, False, False, False
+            return False, False, False, False, False
         copy, destroy = True, True
         ctors, assigns, moves = [], [], 0  # declared copy and move constructors and assignments: deleted or not
         copy_ctor, copy_assign = False, False
         record_at = self.at(decl)
+        destructor = None  # declared: not deleted; None: the implicit one, deleted when a part's is
         for m in api.members(api.visitMethods, t):
             if m.kind == K_METHOD and api.virtualMethod(m):
                 copy = False
-            if m.kind == I.K_DESTRUCTOR and (api.deleted(m) or api.virtualMethod(m) or not api.defaulted(m)):
-                destroy = False
+            if m.kind == I.K_DESTRUCTOR:
+                destructor = not api.deleted(m)
+                if api.virtualMethod(m) or not (api.defaulted(m) or api.deleted(m)):
+                    copy, destroy = False, False  # not trivial
+                destroy = destroy and destructor
             is_ctor = m.kind == I.K_CONSTRUCTOR and (api.copyConstructor(m) or api.moveConstructor(m))
             is_assign = m.kind == K_METHOD and (api.copyAssignment(m) or api.moveAssignment(m))
             if is_ctor or is_assign:
@@ -558,27 +568,28 @@ class Reader:
                     moves += 1
                 copy_ctor = copy_ctor or (is_ctor and bool(api.copyConstructor(m)))
                 copy_assign = copy_assign or (is_assign and bool(api.copyAssignment(m)))
-        parts_construct, parts_assign = True, True
+        parts_construct, parts_assign, parts_destroy = True, True, True
         for b in api.members(api.visitBases, t):
-            c, d, pc, pa = self.trivial(api.type(b))
+            c, d, pc, pa, pd = self.trivial(api.type(b))
             copy = copy and c and not api.virtualBase(b)
             destroy = destroy and d
-            parts_construct, parts_assign = parts_construct and pc, parts_assign and pa
+            parts_construct, parts_assign, parts_destroy = parts_construct and pc and pd, parts_assign and pa, parts_destroy and pd
         for f in api.members(api.visitFields, t):
             ft = api.type(f)
-            c, d, pc, pa = self.trivial(ft)
+            c, d, pc, pa, pd = self.trivial(ft)
             copy, destroy = copy and c, destroy and d
-            parts_construct, parts_assign = parts_construct and pc, parts_assign and pa
+            parts_construct, parts_assign, parts_destroy = parts_construct and pc and pd, parts_assign and pa, parts_destroy and pd
             ft = api.canonical(ft)
             while ft.kind in (T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY):
                 ft = api.canonical(api.element(ft))
             if ft.kind in (T_LVALUE, T_RVALUE) or api.constType(ft):
                 parts_assign = False
-        copy = copy and destroy
-        can_construct = any(ctors) or (not copy_ctor and not moves and parts_construct)
+        if destructor is None:
+            destructor = parts_destroy
+        can_construct = destructor and (any(ctors) or (not copy_ctor and not moves and parts_construct))
         can_assign = any(assigns) or (not copy_assign and not moves and parts_assign)
-        self.trivial_memo[key] = (copy, destroy, can_construct, can_assign)
-        return copy, destroy, can_construct, can_assign
+        self.trivial_memo[key] = (copy, destroy, can_construct, can_assign, destructor)
+        return copy, destroy, can_construct, can_assign, destructor
 
     def fields(self, owner, owner_type, row, prefix, base_bits):
         """Fields of `owner`, named prefix + name; base_bits: where owner starts in the row's record. Read through the
