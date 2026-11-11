@@ -230,6 +230,13 @@ struct Plugin {
     When when;
 };
 
+// A permission the mod asks the player for (luma.json "permissions"; services-registry 5, consent 1.1).
+struct Permission {
+    std::string name;                // one of services-registry 5.1's names
+    std::string why;                 // the manifest's line, shown as it is (the mod's own words)
+    std::vector<std::string> hosts;  // net.internet only: as written, in order
+};
+
 enum class SaveMode {
     Shared,  // the player's normal saves
     Own,     // saves of its own, from nothing or from its starting files
@@ -265,6 +272,7 @@ struct Manifest : Rows {
     std::string save_path;  // folder in the mod with the starting save files
     bool save_player_can_change = false;
     std::vector<Plugin> plugins;
+    std::vector<Permission> permissions;  // in the manifest's order
     // Set when the manifest uses a retired key (a layer's "switches"): what to write instead. The mod is refused.
     std::string retired;
 };

@@ -78,6 +78,13 @@ struct PackTexture {
     std::uint8_t folder_category = galaxy::textures::kCategoryCount;
 };
 
+// The player's stored answer about one permission (contracts/consent.md 1.2): yes or no, for the declaration whose
+// digest it was given for.
+struct PermissionAnswer {
+    bool granted = false;
+    std::string digest;
+};
+
 struct ModInfo {
     std::string id;  // the folder name
     std::filesystem::path path;
@@ -103,6 +110,13 @@ struct ModInfo {
     std::vector<ModOption> options;
     std::string code_token;     // identifies this device's libraries of a .luma; empty when it has no code
     bool code_allowed = false;  // the player allowed exactly these libraries
+    bool code_declined = false; // the player said Not now to exactly these libraries (code_no)
+    bool code_changed = false;  // an answer is stored for other libraries than these (asked again)
+    // The player's answers by permission name, as stored (mod_consent.h reads them against the manifest's declarations).
+    std::map<std::string, PermissionAnswer> permission_answers;
+    // The permissions whose services the mod's entry library imports without LUMA_OPTIONAL, from the validator's kept
+    // report (consent 1.3 `required`); empty until a check has read them. `native` is required without being listed.
+    std::vector<std::string> required_permissions;
     // Texture pack details: its textures, counts per category and of this game's textures, and the categories turned
     // off (category_bit). A pack's manifest.json gives its title, author and description.
     std::shared_ptr<const std::vector<PackTexture>> pack_textures;

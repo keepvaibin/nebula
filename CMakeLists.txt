@@ -120,13 +120,13 @@ add_library(galaxy_save_files STATIC runtime/src/save_files.cpp)
 target_link_libraries(galaxy_save_files PUBLIC galaxy_runtime_abi galaxy_atomic_file)
 
 # The host's extensions (host_extension.h, --extension).
-add_library(galaxy_host_extension STATIC runtime/src/host_extension.cpp)
+add_library(galaxy_host_extension STATIC runtime/src/host_extension.cpp runtime/src/luma_services_host.cpp)
 target_link_libraries(galaxy_host_extension PUBLIC galaxy_runtime_abi)
 galaxy_host_options(galaxy_host_extension)
 # The test runs' extension (run.sh: --extension): scripted controls, pictures, sound, menus and device losses from the
 # run's GALAXY_* environment. Never in an install.
 add_library(nebula_test_extension MODULE tools/test_driver/extension/test_extension.cpp
-    tools/test_driver/extension/harness.cpp tools/test_driver/extension/test_plugin.cpp tools/test_driver/extension/data_guard.cpp runtime/src/hidden_start.cpp)
+    tools/test_driver/extension/harness.cpp tools/test_driver/extension/test_services.cpp tools/test_driver/extension/test_plugin.cpp tools/test_driver/extension/data_guard.cpp runtime/src/hidden_start.cpp)
 target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi)
 if(WIN32)
     target_link_libraries(nebula_test_extension PRIVATE shell32)
@@ -193,6 +193,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/luma.cpp
     runtime/src/mod_plugins.cpp
     runtime/src/mods.cpp
+    runtime/src/mod_consent.cpp
     runtime/src/texture_categories.cpp
     runtime/src/dolphin_pack.cpp
     runtime/src/mod_import.cpp
@@ -600,8 +601,12 @@ galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
     LIBS galaxy_atomic_file)
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
-galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/luma.cpp
+galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
     ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
+# The consent store (contracts/consent.md 1.5): answers, digests and their round trip through the mod settings.
+galaxy_test(galaxy_mod_consent_tests SOURCES ${rt}/mod_consent_tests.cpp ${rt}/mod_consent.cpp ${rt}/mods.cpp ${rt}/mod_xml.cpp
+    ${rt}/luma.cpp ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp
+    LIBS galaxy_atomic_file nebula_archive)
 # Console mods the tests read as files (runtime/tests).
 target_compile_definitions(galaxy_mods_tests PRIVATE MODS_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/runtime/tests")
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)

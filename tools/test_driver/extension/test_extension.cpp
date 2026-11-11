@@ -5,6 +5,7 @@
 #include <nebula_host_extension.h>
 
 #include "harness.h"
+#include "test_services.h"
 
 #include <algorithm>
 #include <atomic>
@@ -759,6 +760,8 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     if (in_harness) {
         e.log_line = [](void*, const char* tag, const char* text) { harness::log_line(tag, text); };
         e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
+        // The registry's test services (services-registry 14): only in a harness run.
+        e.luma_providers = test_services::providers(&e.luma_provider_count);
     }
     log("test extension attached");
     return &e;
