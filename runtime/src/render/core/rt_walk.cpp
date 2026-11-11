@@ -709,7 +709,9 @@ bool RenderCore::rt_prepass_draws(const NebulaFrameItem& item, std::uint32_t sta
 // over time follows) and the pictures the opaque draws read, done with, take the result. The blended draws then read
 // them in their traced form.
 void RenderCore::rt_blended(const NebulaFramePass& end) {
-    if (!rt_light_on_ || rt_light_frame_.across == 0u || rt_scene_view_ == NEBULA_NONE32) {
+    // Glass and water below medium: no second layer (plan 19.1; blended things read the opaque layer's light).
+    if (!rt_light_on_ || rt_light_frame_.across == 0u || rt_scene_view_ == NEBULA_NONE32 ||
+        rt_part(get_render_config(), RtPart::Transmit) < 2u) {
         return;
     }
     const NebulaFrameList& list = *walk_.now->list;
@@ -1550,7 +1552,16 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     // No bit 2: the landing blob under an actor is a shadow drawn by hand, traced outline or not (the
     // owner, 11-09: no fake shadows with ray tracing on). What stands on the ground darkens it by the sun's
     // shadow and by the sky it hides (bit 3), as it would.
-    constants.more[2] = (sunned ? 1u : 0u) | 8u | 32u | 64u;
+    // The player's parts (plan 19.1): two bits each in more[3] (rt_part), bit 12 the reference preset. Sun off: no
+    // traced sun; reflections off or low: no mirror rays (the painted maps stay, plan 19.1).
+    const RenderConfig render = get_render_config();
+    for (unsigned part = 0u; part < static_cast<unsigned>(RtPart::Count); ++part) {
+        constants.more[3] |= rt_part(render, static_cast<RtPart>(part)) << (part * 2u);
+    }
+    constants.more[3] |= render.rt_quality == kRtPresetReference ? 4096u : 0u;
+    rt_lamps_own_ = rt_part(render, RtPart::Lights) == 0u;
+    constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) | 8u |
+                        (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
     // For a pixel whose mesh the pass cannot read: the camera's own move since the frame before (none where there is
     // no frame before: the filter starts anew there anyway).
@@ -1669,7 +1680,8 @@ void RenderCore::rt_light() {
                 rt_mirror_slot_ = renderer_.rt_publish_light(mirror, texture_store_, 2u);
                 rt_facing_slot_ = renderer_.rt_publish_light(facing, texture_store_, 3u);
                 rt_light_on_ = true;
-                view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u);
+                view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
+                               (rt_lamps_own_ ? 32u : 0u);  // local lights off: the programs' own lamp (FC)
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {
@@ -1772,7 +1784,7 @@ void RenderCore::rt_reactive() {
 void RenderCore::rt_light_end() noexcept {
     if (rt_light_on_) {
         rt_light_on_ = false;
-        view_flags_ &= ~24u;
+        view_flags_ &= ~56u;
     }
 }
 

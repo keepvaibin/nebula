@@ -569,9 +569,7 @@ unsigned pending_settings_changes() {
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += d.rt_quality != live.rt_quality;
-    changes += d.rt_reflections != live.rt_reflections;
-    changes += d.rt_water != live.rt_water;
-    changes += d.rt_sun_rays != live.rt_sun_rays;
+    changes += d.rt_parts != live.rt_parts;
     changes += d.rt_lens_bloom != live.rt_lens_bloom;
     changes += d.texture_packs != live.texture_packs ||
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
@@ -994,9 +992,7 @@ void apply_native_settings_draft() {
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     applied.rt_quality = next.rt_quality;
-    applied.rt_reflections = next.rt_reflections;
-    applied.rt_water = next.rt_water;
-    applied.rt_sun_rays = next.rt_sun_rays;
+    applied.rt_parts = next.rt_parts;
     applied.rt_lens_bloom = next.rt_lens_bloom;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;

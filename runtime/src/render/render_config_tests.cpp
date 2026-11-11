@@ -225,27 +225,30 @@ int main() {
                 "frame-rate caps survive exact float round trips");
         }
         {
-            // The bloom's strength and the ray-traced effects, each away from its default.
+            // The bloom's strength and ray tracing's parts, each away from its default (plan 19.1).
+            using galaxy::render::RtPart;
             galaxy::render::RenderConfig original{};
             original.bloom = 140u;
-            original.rt_reflections = false;
             original.rt_lens_bloom = false;
-            original.rt_sun_rays = false;
-            original.rt_water = false;
+            original.rt_quality = galaxy::render::kRtPresetCustom;
+            original.rt_parts = {3u, 0u, 1u, 2u, 3u, 0u};
             galaxy::render::set_render_config(original);
-            passed &= expect(galaxy::render::save_render_config_to_file(), "bloom and effects fixture saves");
+            passed &= expect(galaxy::render::save_render_config_to_file(), "bloom and parts fixture saves");
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
             galaxy::render::load_render_config_from_file();
             const auto loaded = galaxy::render::get_render_config();
-            passed &= expect(loaded.bloom == 140u &&
-                                 !loaded.rt_reflections && !loaded.rt_lens_bloom && !loaded.rt_sun_rays &&
-                                 !loaded.rt_water,
-                             "the bloom's strength and the ray-traced effects survive a save");
+            passed &= expect(loaded.bloom == 140u && !loaded.rt_lens_bloom && loaded.rt_quality == galaxy::render::kRtPresetCustom &&
+                                 loaded.rt_parts == original.rt_parts && galaxy::render::rt_part(loaded, RtPart::Lights) == 0u,
+                             "the bloom's strength and a custom set of parts survive a save");
+            galaxy::render::RenderConfig low{};
+            low.rt_quality = 2u;
+            galaxy::render::set_render_config(low);
+            const auto set_low = galaxy::render::get_render_config();
             const galaxy::render::RenderConfig defaults{};
-            passed &= expect(defaults.rt_reflections &&
-                                 defaults.rt_lens_bloom &&
-                                 defaults.rt_sun_rays && defaults.rt_water,
-                             "every ray-traced effect by default");
+            passed &= expect(set_low.rt_parts == std::array<std::uint8_t, 6>{1u, 1u, 1u, 0u, 1u, 1u} && defaults.rt_quality == 0u &&
+                                 defaults.rt_parts == std::array<std::uint8_t, 6>{2u, 2u, 2u, 2u, 2u, 2u} && defaults.rt_lens_bloom,
+                             "a preset sets every part; medium by default");
+            galaxy::render::set_render_config(galaxy::render::RenderConfig{});
         }
         {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);
@@ -334,9 +337,8 @@ int main() {
     config.msaa_samples = 8;
     config.taa_enabled = true;
     config.ray_tracing_enabled = true;
-    config.rt_shadow_quality = 3;
-    config.rt_ao_enabled = true;
-    config.rt_reflections = false;
+    config.rt_quality = galaxy::render::kRtPresetCustom;
+    config.rt_parts[static_cast<std::size_t>(galaxy::render::RtPart::Reflect)] = 0u;
     galaxy::render::set_render_config(config);
 
     const galaxy::render::RenderConfig sanitized =
@@ -349,10 +351,9 @@ int main() {
         "set_render_config clamps unimplemented TAA off");
     passed &= expect(
         sanitized.ray_tracing_enabled &&
-            sanitized.rt_shadow_quality == 0 &&
-            !sanitized.rt_ao_enabled &&
-            !sanitized.rt_reflections,
-        "set_render_config keeps ray tracing and its reflections choice, and clamps the reserved DXR keys off");
+            galaxy::render::rt_part(sanitized, galaxy::render::RtPart::Reflect) == 0u &&
+            sanitized.rt_quality == galaxy::render::kRtPresetCustom,
+        "set_render_config keeps ray tracing and its reflections choice");
 
     {
         const std::filesystem::path root = galaxy::test_temp_path("galaxy_render_config_tests");
@@ -523,15 +524,14 @@ int main() {
             return galaxy::render::get_render_config();
         };
         const galaxy::render::RenderConfig loaded = load(
-            "msaa_samples=8\ntaa_enabled=1\nray_tracing_enabled=1\nrt_shadow_quality=3\nrt_ao_enabled=1\nrt_reflections=0\n");
+            "msaa_samples=8\ntaa_enabled=1\nray_tracing_enabled=1\nrt_quality=custom\nrt_reflect=off\nrt_sun=high\n");
         passed &= expect(
             loaded.msaa_samples == 8 &&
                 !loaded.taa_enabled &&
                 loaded.ray_tracing_enabled &&
-                loaded.rt_shadow_quality == 0 &&
-                !loaded.rt_ao_enabled &&
-                !loaded.rt_reflections,
-            "the file's render config enables ray tracing, takes its reflections choice, and no unimplemented feature");
+                galaxy::render::rt_part(loaded, galaxy::render::RtPart::Reflect) == 0u &&
+                galaxy::render::rt_part(loaded, galaxy::render::RtPart::Sun) == 3u,
+            "the file's render config enables ray tracing, takes its parts by name, and no unimplemented feature");
 
         const galaxy::render::RenderConfig quality =
             load("texture_lod_bias=99\nanisotropic_filtering=99\nenhanced_mipmaps=0\n");

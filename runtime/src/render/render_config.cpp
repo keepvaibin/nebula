@@ -110,6 +110,20 @@ static bool parse_bool(const char* v, bool def) {
 }
 
 // A choice given by index or by name (case-insensitive): names[i] selects i.
+// config.ini's names of the presets and of a part's levels.
+constexpr const char* kRtPresetNames[] = {"medium", "high", "low", "reference", "custom"};
+constexpr const char* kRtLevelNames[] = {"off", "low", "medium", "high"};
+
+// config.ini's names of ray tracing's parts, in RtPart's order.
+constexpr const char* kRtPartKeys[] = {"rt_sun", "rt_lights", "rt_indirect", "rt_reflect", "rt_transmit", "rt_volume"};
+static_assert(std::size(kRtPartKeys) == static_cast<std::size_t>(RtPart::Count));
+static int rt_part_key(const char* key) {
+    for (std::size_t i = 0; i < std::size(kRtPartKeys); ++i) {
+        if (std::strcmp(key, kRtPartKeys[i]) == 0) return static_cast<int>(i);
+    }
+    return -1;
+}
+
 template <std::size_t N>
 static unsigned parse_choice(const char* v, const char* const (&names)[N], unsigned def) {
     if (v == nullptr || *v == '\0') return def;
@@ -178,15 +192,15 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     }
     else if (std::strcmp(key, "ray_tracing_enabled") == 0) cfg.ray_tracing_enabled = parse_bool(val, false);
     else if (std::strcmp(key, "rt_quality") == 0) {
-        static constexpr const char* kNames[] = {"medium", "high", "low"};
+        static constexpr const char* kNames[] = {"medium", "high", "low", "reference", "custom"};
         cfg.rt_quality = parse_choice(val, kNames, cfg.rt_quality);
     }
+    else if (const int part = rt_part_key(key); part >= 0) {
+        static constexpr const char* kLevels[] = {"off", "low", "medium", "high"};
+        cfg.rt_parts[static_cast<std::size_t>(part)] =
+            static_cast<std::uint8_t>(parse_choice(val, kLevels, cfg.rt_parts[static_cast<std::size_t>(part)]));
+    }
     else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
-    else if (std::strcmp(key, "rt_sun_rays") == 0) cfg.rt_sun_rays = parse_bool(val, cfg.rt_sun_rays);
-    else if (std::strcmp(key, "rt_water") == 0) cfg.rt_water = parse_bool(val, cfg.rt_water);
-    else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
-    else if (std::strcmp(key, "rt_ao_enabled")  == 0) cfg.rt_ao_enabled       = parse_bool(val, false);
-    else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, cfg.rt_reflections);
     else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
     else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
     else if (std::strcmp(key, "texture_dump") == 0) cfg.texture_dump = parse_bool(val, cfg.texture_dump);
@@ -273,9 +287,11 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.gpu.back() = '\0';
     cfg.msaa_samples = std::bit_floor(std::clamp(cfg.msaa_samples, 1u, 8u));
     cfg.taa_enabled = false;
-    cfg.rt_shadow_quality = 0;
-    cfg.rt_quality = std::min(cfg.rt_quality, 2u);
-    cfg.rt_ao_enabled = false;
+    cfg.rt_quality = std::min(cfg.rt_quality, kRtPresetCustom);
+    for (std::uint8_t& part : cfg.rt_parts) {
+        part = static_cast<std::uint8_t>(std::min<unsigned>(part, 3u));
+    }
+    rt_apply_preset(cfg);
     // Ray tracing follows its setting in every build; Nebula Settings offers its row once it is finished
     // (rt_caps.h kRayTracingRowOffered).
 }
@@ -439,12 +455,22 @@ RenderFeatureStatus make_render_feature_status(
     return status;
 }
 
-bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
-    const bool configured = effect == RtEffect::Reflections ? cfg.rt_reflections
-                            : effect == RtEffect::Water     ? cfg.rt_water
-                            : effect == RtEffect::SunRays   ? cfg.rt_sun_rays
-                                                            : cfg.rt_lens_bloom;
-    return configured;
+unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept {
+    return part < RtPart::Count ? std::min<unsigned>(cfg.rt_parts[static_cast<std::size_t>(part)], 3u) : 0u;
+}
+
+// The presets' parts (plan 19.1): low leaves the painted reflections; reference takes high's parts and the reference
+// path tracer draws the picture (FB's 22.9).
+void rt_apply_preset(RenderConfig& cfg) noexcept {
+    static constexpr std::uint8_t kParts[4][6] = {
+        {2u, 2u, 2u, 2u, 2u, 2u},  // medium
+        {3u, 3u, 3u, 3u, 3u, 3u},  // high
+        {1u, 1u, 1u, 0u, 1u, 1u},  // low
+        {3u, 3u, 3u, 3u, 3u, 3u},  // reference
+    };
+    if (cfg.rt_quality < kRtPresetCustom) {
+        std::copy(std::begin(kParts[cfg.rt_quality]), std::end(kParts[cfg.rt_quality]), cfg.rt_parts.begin());
+    }
 }
 
 namespace {
@@ -605,11 +631,14 @@ bool save_render_config_to_file() {
              << "texture_pack_preload=" << (cfg.texture_pack_preload ? 1u : 0u) << '\n'
              << "texture_dump=" << (cfg.texture_dump ? 1u : 0u) << '\n'
              << "texture_pack_budget_mb=" << cfg.texture_pack_budget_mb << '\n'
-             << "rt_quality=" << (cfg.rt_quality == 1u ? "high" : cfg.rt_quality == 2u ? "low" : "medium") << '\n'
-             << "rt_reflections=" << (cfg.rt_reflections ? 1u : 0u) << '\n'
+             << "rt_quality=" << kRtPresetNames[std::min(cfg.rt_quality, kRtPresetCustom)] << '\n'
+             << "rt_sun=" << kRtLevelNames[cfg.rt_parts[0]] << '\n'
+             << "rt_lights=" << kRtLevelNames[cfg.rt_parts[1]] << '\n'
+             << "rt_indirect=" << kRtLevelNames[cfg.rt_parts[2]] << '\n'
+             << "rt_reflect=" << kRtLevelNames[cfg.rt_parts[3]] << '\n'
+             << "rt_transmit=" << kRtLevelNames[cfg.rt_parts[4]] << '\n'
+             << "rt_volume=" << kRtLevelNames[cfg.rt_parts[5]] << '\n'
              << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
-             << "rt_sun_rays=" << (cfg.rt_sun_rays ? 1u : 0u) << '\n'
-             << "rt_water=" << (cfg.rt_water ? 1u : 0u) << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'

@@ -98,6 +98,19 @@ int main() {
         rows = galaxy::ui::graphics_page(config, host);
         check(row(rows, "RAY TRACING").value == "ON", "ray tracing capability row");
         check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "MSAA" || r.label == "AMBIENT OCCLUSION"; }), "exclusive graphics row visibility");
+        // The preset and every part (plan 19.1): a part changed alone makes the preset custom; a preset sets them all.
+        {
+            auto quality = row(rows, "RAY TRACING QUALITY");
+            check(quality.value == "MEDIUM" && row(rows, "SUN SHADOWS").value == "MEDIUM" && has(rows, "LIGHT IN THE AIR") &&
+                      has(rows, "GLASS AND WATER") && has(rows, "SKY AND BOUNCE LIGHT") && has(rows, "LOCAL LIGHTS") &&
+                      has(rows, "REFLECTIONS") && has(rows, "LENS BLOOM"),
+                  "ray tracing's preset and parts rows");
+            galaxy::ui::RenderConfig draft = config;
+            row(rows, "LOCAL LIGHTS").change(draft, -1);
+            check(draft.rt_quality == galaxy::render::kRtPresetCustom && draft.rt_parts[1] == 1u, "a part alone makes it custom");
+            quality.change(draft, 1);
+            check(draft.rt_quality != galaxy::render::kRtPresetCustom && draft.rt_parts[1] == draft.rt_parts[0], "a preset sets every part");
+        }
         host.traced = true;
         config.aa_mode = 1u;
         rows = galaxy::ui::graphics_page(config, host);
