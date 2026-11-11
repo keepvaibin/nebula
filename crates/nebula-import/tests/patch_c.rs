@@ -83,9 +83,9 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
         for (i, fact) in rust.iter().enumerate() {
             let c = &*luma_patched_fact_at(r, i as u32 + 1);
             match fact {
-                Fact::Conflict { row, column, earlier, later, .. } => {
+                Fact::Conflict { row, column, lower, higher, .. } => {
                     assert_eq!(c.kind, LUMA_PATCH_CONFLICT);
-                    assert_eq!((s(c.mod_id), s(c.other), s(c.row), s(c.column)), (Some(later.clone()), Some(earlier.clone()), Some(row.clone()), column.clone()));
+                    assert_eq!((s(c.mod_id), s(c.other), s(c.row), s(c.column)), (Some(higher.clone()), Some(lower.clone()), Some(row.clone()), column.clone()));
                 }
                 Fact::Missing { row, mod_id, file, removed_by, .. } => {
                     assert_eq!(c.kind, LUMA_PATCH_MISSING);
@@ -106,7 +106,7 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
         assert!(luma_patched_fact_at(r, n).is_null());
         luma_patched_free(r);
     }
-    assert!(rust.iter().any(|f| matches!(f, Fact::Conflict { earlier, later, .. } if earlier == "a" && later == "b")));
+    assert!(rust.iter().any(|f| matches!(f, Fact::Conflict { lower, higher, .. } if lower == "a" && higher == "b")));
 }
 
 #[test]

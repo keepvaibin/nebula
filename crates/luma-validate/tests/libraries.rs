@@ -256,12 +256,12 @@ fn two_mods_replacing_one_function_refuse_the_later() {
         let r = validate(&Input { source: Source::Bytes(&bytes, "test.luma"), game: Some(&game), installed: &list, platforms: &platforms, options: None, position });
         r.findings.iter().map(|f| (f.code, message(f, "UsEnglish"))).collect::<Vec<_>>()
     };
-    // Loading after the other: refused, naming the function and the other mod.
+    // Below the other in the list: refused, naming the function and the other mod.
     assert_eq!(
         run(None, true),
         vec![(805, "test.mod: code/windows-x64/mod.dll replaces \"GameSystem::update\" (void()), which other.mod replaces already; only one mod may replace a function.".to_string())]
     );
-    // Loading first, or the other off: nothing (the other mod's own check names the clash).
+    // At the top, or the other off: nothing (the other mod's own check names the clash).
     assert!(run(Some(0), true).is_empty());
     assert!(run(None, false).is_empty());
 }

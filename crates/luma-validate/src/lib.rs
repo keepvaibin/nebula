@@ -227,7 +227,8 @@ pub struct Input<'a> {
     pub platforms: &'a [&'a str],
     /// The player's option values; None means the defaults.
     pub options: Option<&'a BTreeMap<String, String>>,
-    /// How many of `installed` (in load order) load before this mod; None: after all of them.
+    /// How many of `installed` (in list order, the top first) are above this mod; None: below all of them. The mod
+    /// higher in the list wins a file, a cell and a replace (L305, L404, L805).
     pub position: Option<usize>,
 }
 

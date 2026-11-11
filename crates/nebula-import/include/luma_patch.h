@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* Patches by key, as the game applies them (contract table-keys): one game table and the patches of every mod that is
-   on, in load order, make the table the game reads. The same applier LumaLink's checks are made against.
+   on, from the bottom of the mod list up, make the table the game reads: the last given (the mod higher in the list)
+   wins, as for whole files. The same applier LumaLink's checks are made against.
 
    The table is the store's cooked table (NTBL) and its path the store path ("StageData/AstroGalaxy/jmp/Placement/
    Common/ObjInfo"; a disc path with its archives is taken too). A mod's patch that cannot apply is left out whole and
@@ -30,14 +31,15 @@ typedef struct LumaPatchInput {
     const char* path;      /* the table's path in the store, UTF-8 */
     const uint8_t* table;  /* the game's cooked table */
     uint64_t table_size;
-    const LumaTablePatch* patches; /* in load order */
+    const LumaTablePatch* patches; /* from the bottom of the mod list up: the last given wins */
     uint32_t patch_count;
 } LumaPatchInput;
 
 enum {
-    LUMA_PATCH_CONFLICT = 0, /* mod_id and other change one row (column null: the whole row); mod_id's is used */
+    LUMA_PATCH_CONFLICT = 0, /* mod_id and other change one row (column null: the whole row); mod_id's is used: it is
+                                higher in the list */
     LUMA_PATCH_MISSING = 1,  /* mod_id's file names `row`, which is not there: other removed it, or (null) an
-                                earlier mod's whole table left it out */
+                                lower mod's whole table left it out */
     LUMA_PATCH_SELECTED = 2, /* mod_id's selector number `selector` matched `rows` rows (0: a note, L407) */
     LUMA_PATCH_FAILED = 3    /* mod_id's file could not apply and is left out; `why` in English, for the log */
 };

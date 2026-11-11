@@ -1,8 +1,8 @@
 //! Patches by key (luma-format 5.1, contract table-keys; plan 3.11): a game table and the patches of every mod that is
-//! on, in load order, make the table the game reads. Each mod's patch applies in this order: `rows` (a whole `#`
+//! on, from the bottom of the mod list up, make the table the game reads. Each mod's patch applies in this order: `rows` (a whole `#`
 //! table), `remove`, `set`, `add`, `select`. Patches reach here checked by the validator; what only the mod list
 //! decides (two mods changing one cell, a row another mod removed) is a [`Fact`] for the Mods screen, never silent.
-//! The later mod in load order wins. A table of a kind (cook::table_columns) that has no rows takes its kind's columns
+//! The last given wins: the mod higher in the list, as for whole files (F, INBOX-G 13). A table of a kind (cook::table_columns) that has no rows takes its kind's columns
 //! first, and a row a mod adds starts from the value most of the game's rows have in each column (table-keys 10).
 
 use super::table::{Cell, Column, Kind, TableIr};
@@ -23,9 +23,9 @@ pub struct ModPatch<'a> {
 /// What the Mods screen says about a patched table.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fact {
-    /// Two mods change one row (`column` None: the whole row, by add, remove or rows); `later` is used.
-    Conflict { table: String, row: String, column: Option<String>, earlier: String, later: String },
-    /// A row a patch names is not there: `removed_by` removed it, or (None) an earlier mod's `rows` left it out.
+    /// Two mods change one row (`column` None: the whole row, by add, remove or rows); `higher` is used.
+    Conflict { table: String, row: String, column: Option<String>, lower: String, higher: String },
+    /// A row a patch names is not there: `removed_by` removed it, or (None) the `rows` of a mod given before it (lower in the list) left it out.
     Missing { table: String, row: String, mod_id: String, file: String, removed_by: Option<String> },
     /// How many rows a mod's selector matched (0 is a Note: L407).
     Selected { table: String, mod_id: String, file: String, selector: usize, rows: usize },
@@ -132,8 +132,8 @@ impl Applier<'_> {
             self.conflict_row(&id, p.mod_id);
             let mine = self.owners.cells.keys().filter(|(r, _)| *r == id).cloned().collect::<Vec<_>>();
             for k in mine {
-                let earlier = self.owners.cells.remove(&k).unwrap_or_default();
-                self.push_conflict(&id, None, earlier, p.mod_id);
+                let lower = self.owners.cells.remove(&k).unwrap_or_default();
+                self.push_conflict(&id, None, lower, p.mod_id);
             }
             self.table.rows.remove(at);
             self.owners.removed.insert(id, p.mod_id.to_string());
@@ -164,8 +164,8 @@ impl Applier<'_> {
             match (0..self.table.rows.len()).find(|&r| self.row_id(r) == id) {
                 // A row of that key is there: another mod added it (the validator refuses one the game has).
                 Some(at) => {
-                    let earlier = self.owners.rows.get(&id).cloned().unwrap_or_else(|| "the game".to_string());
-                    self.push_conflict(&id, None, earlier, p.mod_id);
+                    let lower = self.owners.rows.get(&id).cloned().unwrap_or_else(|| "the game".to_string());
+                    self.push_conflict(&id, None, lower, p.mod_id);
                     self.table.rows[at] = cells;
                 }
                 None => self.table.rows.push(cells),
@@ -202,9 +202,9 @@ impl Applier<'_> {
         if !self.positional {
             bail!("rows gives a whole table, which only a table named by place takes (table-keys 3)");
         }
-        let earlier = self.owners.whole.clone().or_else(|| self.owners.rows.values().chain(self.owners.cells.values()).next().cloned());
-        if let Some(earlier) = earlier {
-            self.push_conflict("*", None, earlier, p.mod_id);
+        let lower = self.owners.whole.clone().or_else(|| self.owners.rows.values().chain(self.owners.cells.values()).next().cloned());
+        if let Some(lower) = lower {
+            self.push_conflict("*", None, lower, p.mod_id);
         }
         let mut whole = Vec::with_capacity(rows.len());
         for (i, row) in rows.iter().enumerate() {
@@ -239,9 +239,9 @@ impl Applier<'_> {
         let id = self.row_id(at);
         for (c, cell) in cells {
             let hash = self.table.columns[*c].hash;
-            if let Some(earlier) = self.owners.cells.insert((id.clone(), hash), mod_id.to_string()) {
-                if earlier != mod_id {
-                    self.push_conflict(&id, Some(format!("0x{hash:08x}")), earlier, mod_id);
+            if let Some(lower) = self.owners.cells.insert((id.clone(), hash), mod_id.to_string()) {
+                if lower != mod_id {
+                    self.push_conflict(&id, Some(format!("0x{hash:08x}")), lower, mod_id);
                 }
             }
             self.table.rows[at][*c] = cell.clone();
@@ -342,19 +342,19 @@ impl Applier<'_> {
         }
     }
 
-    fn conflict_row(&mut self, id: &str, later: &str) {
-        if let Some(earlier) = self.owners.rows.get(id).cloned() {
-            if earlier != later {
-                self.push_conflict(id, None, earlier, later);
+    fn conflict_row(&mut self, id: &str, higher: &str) {
+        if let Some(lower) = self.owners.rows.get(id).cloned() {
+            if lower != higher {
+                self.push_conflict(id, None, lower, higher);
             }
         }
     }
 
-    fn push_conflict(&mut self, row: &str, column: Option<String>, earlier: String, later: &str) {
-        if earlier == later {
+    fn push_conflict(&mut self, row: &str, column: Option<String>, lower: String, higher: &str) {
+        if lower == higher {
             return;
         }
-        self.facts.push(Fact::Conflict { table: self.path.clone(), row: row.replace('\u{1f}', ", "), column, earlier, later: later.to_string() });
+        self.facts.push(Fact::Conflict { table: self.path.clone(), row: row.replace('\u{1f}', ", "), column, lower, higher: higher.to_string() });
     }
 }
 
@@ -425,7 +425,7 @@ mod tests {
     }
 
     #[test]
-    fn two_mods_on_one_cell_name_both_and_the_later_wins() {
+    fn two_mods_on_one_cell_name_both_and_the_higher_wins() {
         let mut t = objinfo();
         let a = json!({"patch": 1, "set": [{"where": {"l_id": 1}, "values": {"speed": 5.0}}]});
         let b = json!({"patch": 1, "set": [{"where": {"l_id": 1}, "values": {"speed": 6.0}}], "remove": [{"l_id": 2}]});
@@ -436,7 +436,7 @@ mod tests {
             ModPatch { mod_id: "c", file: "pc", patch: &c },
         ]).unwrap();
         assert_eq!(speed(&t, 0), 6.0);
-        assert!(facts.contains(&Fact::Conflict { table: OBJINFO.into(), row: "1".into(), column: Some(format!("0x{:08x}", column_hash("speed"))), earlier: "a".into(), later: "b".into() }));
+        assert!(facts.contains(&Fact::Conflict { table: OBJINFO.into(), row: "1".into(), column: Some(format!("0x{:08x}", column_hash("speed"))), lower: "a".into(), higher: "b".into() }));
         assert!(facts.contains(&Fact::Missing { table: OBJINFO.into(), row: "2".into(), mod_id: "c".into(), file: "pc".into(), removed_by: Some("b".into()) }));
     }
 
@@ -448,7 +448,7 @@ mod tests {
         let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "a", file: "pa", patch: &a }, ModPatch { mod_id: "b", file: "pb", patch: &b }]).unwrap();
         assert_eq!(t.rows.len(), 4);
         assert_eq!(t.rows[3][1], Cell::Text(b"B".to_vec()));
-        assert!(facts.contains(&Fact::Conflict { table: OBJINFO.into(), row: "9".into(), column: None, earlier: "a".into(), later: "b".into() }));
+        assert!(facts.contains(&Fact::Conflict { table: OBJINFO.into(), row: "9".into(), column: None, lower: "a".into(), higher: "b".into() }));
     }
 
     #[test]
@@ -467,7 +467,7 @@ mod tests {
         let whole = json!({"patch": 1, "rows": [{"frame": 0, "value": 9.0}]});
         let facts = apply(path, &mut t, &[ModPatch { mod_id: "a", file: "pa", patch: &a }, ModPatch { mod_id: "w", file: "pw", patch: &whole }]).unwrap();
         assert_eq!(t.rows.len(), 1);
-        assert!(facts.iter().any(|f| matches!(f, Fact::Conflict { earlier, later, .. } if earlier == "a" && later == "w")), "{facts:?}");
+        assert!(facts.iter().any(|f| matches!(f, Fact::Conflict { lower, higher, .. } if lower == "a" && higher == "w")), "{facts:?}");
     }
 
     #[test]

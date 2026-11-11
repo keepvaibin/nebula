@@ -123,11 +123,11 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
     for fact in &facts {
         let t = &mut out.texts;
         let c = match fact {
-            Fact::Conflict { row, column, earlier, later, .. } => LumaPatchFact {
+            Fact::Conflict { row, column, lower, higher, .. } => LumaPatchFact {
                 kind: LUMA_PATCH_CONFLICT,
-                mod_id: put(t, Some(later)),
+                mod_id: put(t, Some(higher)),
                 file: ptr::null(),
-                other: put(t, Some(earlier)),
+                other: put(t, Some(lower)),
                 row: put(t, Some(row)),
                 column: put(t, column.as_deref()),
                 why: ptr::null(),

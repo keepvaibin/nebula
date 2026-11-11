@@ -59,12 +59,13 @@ pub(crate) fn check(ctx: &mut Ctx) {
             ctx.add(801, "luma.json", None, None, vec![("other", t(other.id.clone())), ("why", p("Conflict.Theirs"))]);
         }
     }
-    // L305 and L404 (Notes): the same file replaced, or the same cell changed, by another mod that is on. The later
-    // in the load order wins: installed mods are given in load order, and `position` says where this one loads.
+    // L305 and L404 (Notes): the same file replaced, or the same cell changed, by another mod that is on. The mod higher
+    // in the list wins, for everything (F, INBOX-G 13): installed mods are given in list order, the top first, and
+    // `position` says how many are above this one.
     let position = ctx.input.position.unwrap_or(installed.len());
     let touches = ctx.facts.touches.clone();
     for (i, other) in installed.iter().enumerate().filter(|(_, o)| o.on && o.id != own) {
-        let winner = if i < position { own.clone() } else { other.id.clone() };
+        let winner = if i < position { other.id.clone() } else { own.clone() };
         for path in touches.replaces.iter().filter(|p| other.touches.replaces.contains(p)) {
             ctx.add(305, "luma.json", None, None, vec![("other", t(other.id.clone())), ("found", t(path.clone())), ("winner", t(winner.clone()))]);
         }
@@ -78,8 +79,8 @@ pub(crate) fn check(ctx: &mut Ctx) {
                 ]);
             }
         }
-        // L805: a function this mod replaces that a mod loading before it replaces already; the game refuses the later
-        // replacement, so the mod loading later is off.
+        // L805: a function this mod replaces that a mod above it in the list replaces already; the game binds from the
+        // top down, holds the higher mod's replacement and refuses this one, so this mod is off.
         if i < position {
             for f in touches.functions.iter().filter(|f| other.touches.functions.contains(f)) {
                 let (name, sig) = f.split_once(SEP).unwrap_or((f.as_str(), ""));

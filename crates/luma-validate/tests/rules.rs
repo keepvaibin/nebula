@@ -346,3 +346,29 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
         assert!(Saved::parse(&changed).is_none(), "byte {n} changed");
     }
 }
+
+/// The mod higher in the list wins a file and a cell (F, INBOX-G 13): installed mods come top first, and `position`
+/// is how many are above the mod checked.
+#[test]
+fn the_mod_higher_in_the_list_wins() {
+    let store = FakeStore { case_insensitive: false };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let layer = [("layers", r#"[{"name": "base"}]"#)];
+    let mut replacing = other("other.mod");
+    replacing.touches.replaces = vec!["objectdata/kuribo.arc".into()];
+    replacing.touches.cells = vec!["stage/table.bcsv\u{1f}Alpha\u{1f}count".into()];
+    let bytes = luma(&layer, &[
+        file("layers/base/files/ObjectData/Kuribo.arc", b"x"),
+        file("layers/base/patches/stage/table.bcsv.json", br#"{"patch": 1, "key": ["name"], "set": [{"where": {"name": "Alpha"}, "values": {"count": 1}}]}"#),
+    ]);
+    let winners = |position: Option<usize>| -> Vec<(u16, String)> {
+        let report = check(&bytes, &Setup { game: Some(&game), installed: std::slice::from_ref(&replacing), position, ..NO_GAME });
+        report.findings.iter().filter(|f| f.code == 305 || f.code == 404).map(|f| (f.code, message(f, "UsEnglish"))).collect()
+    };
+    let below = winners(None);
+    let above = winners(Some(0));
+    assert_eq!(below.len(), 2, "{below:?}");
+    assert_eq!(above.len(), 2, "{above:?}");
+    assert!(below.iter().all(|(_, m)| m.ends_with("other.mod's is used.") || m.ends_with("other.mod's change is used.")), "{below:?}");
+    assert!(above.iter().all(|(_, m)| m.ends_with("test.mod's is used.") || m.ends_with("test.mod's change is used.")), "{above:?}");
+}
