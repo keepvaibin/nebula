@@ -16,13 +16,11 @@ constexpr char kTableMagic[4] = {'N', 'T', 'B', 'L'};
 
 }  // namespace
 
-LumaGameStoreView::LumaGameStoreView(const assets::AssetStore& store, std::uint32_t (*may_be_new)(const char* path))
-    : assets_(store), may_be_new_(may_be_new) {
+LumaGameStoreView::LumaGameStoreView(const assets::AssetStore& store) : assets_(store) {
     store_.size = sizeof(LumaGameStore);
     store_.context = this;
     store_.path = &LumaGameStoreView::path;
     store_.table = &LumaGameStoreView::table;
-    store_.may_be_new = &LumaGameStoreView::may_be_new;
     store_.folder = &LumaGameStoreView::folder;
 }
 
@@ -84,11 +82,6 @@ std::uint32_t LumaGameStoreView::table(void* context, const char* path, const st
     *bytes_size = entry->length;
     if (store_path != nullptr) *store_path = self->table_path_.c_str();
     return 1;
-}
-
-std::uint32_t LumaGameStoreView::may_be_new(void* context, const char* path) {
-    const auto* const self = static_cast<const LumaGameStoreView*>(context);
-    return self->may_be_new_ != nullptr && path != nullptr ? self->may_be_new_(path) : 0u;
 }
 
 std::int32_t LumaGameStoreView::folder(void* context, const char* lower, LumaFolderSink sink, void* sink_context) {

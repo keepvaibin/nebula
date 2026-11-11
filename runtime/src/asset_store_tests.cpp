@@ -245,15 +245,11 @@ int main() {
         image.insert(image.end(), other_bytes, other_bytes + 8);
         AssetStore assets;
         passed &= expect(assets.load(image.data(), image.size()), "the game for the validator's view loads");
-        static std::string asked;
-        galaxy::LumaGameStoreView view(assets, [](const char* path) -> std::uint32_t {
-            asked = path;
-            return 7u;
-        });
+        galaxy::LumaGameStoreView view(assets);
         const LumaGameStore* store = view.get();
         passed &= expect(store->size == sizeof(LumaGameStore) && store->context != nullptr && store->path && store->table &&
-                             store->may_be_new && store->folder,
-                         "the view gives its size and all four functions");
+                             store->folder,
+                         "the view gives its size and all three functions");
         const auto path_of = [store](const char* lower) {
             char out[64] = {};
             const std::uint32_t n = store->path(store->context, lower, out, sizeof(out));
@@ -286,8 +282,6 @@ int main() {
         passed &= expect(store->table(store->context, "stagedata/eggstargalaxyscenario", &got, &size, &at) == 0 &&
                              store->table(store->context, "stagedata/none.bcsv", &got, &size, &at) == 0,
                          "a folder and a missing file are no table");
-        passed &= expect(store->may_be_new(store->context, "objectdata/new.arc") == 7u && asked == "objectdata/new.arc",
-                         "may_be_new is the library's");
         std::string listed;
         const LumaFolderSink sink = [](void* context, const char* name, std::uint32_t is_folder) {
             *static_cast<std::string*>(context) += std::string(name) + (is_folder != 0 ? "/ " : " ");
