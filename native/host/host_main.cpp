@@ -194,6 +194,7 @@ void log_line(const char* tag, const char* text) {
     const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
     std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
     std::fflush(stdout);
+    galaxy::extensions::log_line(tag, text);
 }
 
 // The start, step by step ("boot:" lines, milliseconds from the process's creation): the black screen before the

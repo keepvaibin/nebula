@@ -5,6 +5,9 @@
 #include <luma.h>
 #include <nebula_types.h>
 
+// The host's lookup of a service by name (LumaCore.service), given to the module once before any mod loads.
+typedef const void* (*LumaServiceFinder)(const char* name, uint32_t major, uint32_t minor);
+
 namespace luma {
     const LumaCore* core();
 

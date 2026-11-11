@@ -3,6 +3,7 @@
 #include "galaxy/mods.h"
 
 #include "galaxy/luma.h"
+#include "galaxy/host_extension.h"
 
 #include <algorithm>
 #include <cmath>
@@ -395,6 +396,13 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
                           void (*log)(const char*)) {
     g_log = log;
     g_find_symbol = find_symbol;
+    // LumaCore.service: the module asks the host, which asks its extensions (the harness's own service while a test runs).
+    using ServiceFinder = const void* (*)(const char*, std::uint32_t, std::uint32_t);
+    if (const auto give = reinterpret_cast<void (*)(ServiceFinder)>(find_symbol != nullptr ? find_symbol("luma_set_service_finder") : nullptr)) {
+        give([](const char* name, std::uint32_t major, std::uint32_t minor) -> const void* {
+            return galaxy::extensions::service(name, major, minor);
+        });
+    }
     if (plugins.empty() && rows.empty()) return 0;
     if (game_api == nullptr || game_api->size < sizeof(NebulaModApi)) {
         say("the game module has no plugin interface");
