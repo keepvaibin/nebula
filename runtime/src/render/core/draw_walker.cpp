@@ -478,6 +478,10 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
         rows.volume[2][3] = rt_scatter_drawn_ ? static_cast<float>(rt_scatter_slot_) + 1.0f : 0.0f;
     }
     rows.traced[3] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_facing_slot_) : 0.0f;
+    if ((view_flags_ & 8u) != 0u && rt_transmit_drawn_ && index == rt_scene_view_) {
+        rows.transmit[0] = static_cast<float>(rt_transmit_slot_);  // program.hlsli traced_mirror: glass and water, High
+        rows.transmit[1] = 1.0f;
+    }
     if ((view_flags_ & 8u) != 0u) {
         std::memcpy(rows.stage_a, rt_stage_a_, sizeof(rows.stage_a));
         std::memcpy(rows.stage_k, rt_stage_k_, sizeof(rows.stage_k));

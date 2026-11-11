@@ -229,6 +229,32 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
     return query.CommittedRayT();
 }
 
+// The light a water surface gathers under it (plan 13.3 High: caustics): at the place item `item`'s triangle
+// `triangle_` meets the sun's ray, its first map's brightness, two samples drifting apart over time (0.03 of the map
+// a second), their product over the square of the map's mean (its smallest level): 1 on the mean, more on the bright
+// lines the map's waves make, less between. 1 where the item has no mesh or map.
+static const float kCaustic = 0.6f;
+float caustic_there(uint item, uint triangle_, float2 where_) {
+    const uint at = g_at.x + item * kItemBytes;
+    const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
+    const uint map = g_items.Load(at + 32u);
+    if (first.z >= 8u || map == 0xFFFFFFFFu) {
+        return 1.0f;
+    }
+    const uint base = mesh_at(first.z);
+    const uint3 corner = triangle_corners(first, second, triangle_);
+    const float2 c0 = asfloat(arena_words(first.z, base + first.w + corner.x * 24u + 12u).yz);
+    const float2 c1 = asfloat(arena_words(first.z, base + first.w + corner.y * 24u + 12u).yz);
+    const float2 c2 = asfloat(arena_words(first.z, base + first.w + corner.z * 24u + 12u).yz);
+    const float2 coordinate = c0 * (1.0f - where_.x - where_.y) + c1 * where_.x + c2 * where_.y;
+    const float seconds = float(g_more.y % 216000u) / 60.0f;
+    const float3 luma = float3(0.2126f, 0.7152f, 0.0722f);
+    const float a = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate + seconds * float2(0.03f, 0.017f), 0.0f).rgb, luma);
+    const float b = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate * 1.37f - seconds * float2(0.019f, 0.03f), 0.0f).rgb, luma);
+    const float mean = max(dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate, 16.0f).rgb, luma), 0.05f);
+    return clamp(1.0f + kCaustic * (a * b / (mean * mean) - 1.0f), 0.5f, 1.8f);
+}
+
 // What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
@@ -259,7 +285,10 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
             passes = sqrt(max(base, 0.02f)) * 0.96f;
         } else if (class_ == kClassWater) {
             counts = !watered;
-            passes = counts ? float3(0.9f, 0.9f, 0.9f) : float3(1.0f, 1.0f, 1.0f);
+            passes = !counts ? float3(1.0f, 1.0f, 1.0f)
+                             : 0.9f * (rt_part(kPartTransmit) >= 3u
+                                           ? caustic_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())
+                                           : 1.0f).xxx;
             watered = true;
         } else if (class_ == kClassTranslucent) {
             passes = (1.0f - 0.5f * alpha_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())).xxx;

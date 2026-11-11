@@ -27,4 +27,5 @@ reflect_out	rt_reflect_out.hlsl	cs_6_0	main
 volume	rt_volume.hlsl	cs_6_5	main
 scatter	rt_scatter.hlsl	cs_6_5	main
 rr_guides	rt_rr_guides.hlsl	cs_6_5	main
+transmit	rt_transmit.hlsl	cs_6_5	main
 omm	rt_omm.hlsl	cs_6_5	main

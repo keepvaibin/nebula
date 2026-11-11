@@ -168,12 +168,14 @@ struct ViewRows {
     float stage_k[4]; // with view_flags bit 3: the stage's key colour K (rgb)
     float volume[3][4];  // with view_flags bit 3, the scene's view (FB, the light volume: program.hlsli traced_air): the
                          // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places and 1
+    float transmit[4];  // with view_flags bit 3, the scene's view: x picture 6's place (T, rt_pass_transmit), y 1
+                        // where the pass drew this walk
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
               offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
               offsetof(ViewRows, volume) == 208 &&
-              sizeof(ViewRows) == 256);
+              offsetof(ViewRows, transmit) == 256 && sizeof(ViewRows) == 272);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

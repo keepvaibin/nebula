@@ -93,6 +93,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/core/rt_bounce.cpp
     ${rt}/render/core/rt_pass_indirect.cpp
     ${rt}/render/core/rt_pass_reflect.cpp
+    ${rt}/render/core/rt_pass_transmit.cpp
     ${rt}/render/core/rt_pass_volume.cpp
     ${rt}/render/core/pairing.cpp
     ${rt}/render/core/pipelines.cpp

@@ -470,6 +470,9 @@ private:
     void rt_pass_indirect();
     [[nodiscard]] bool rt_pass_reflect_on() const;
     void rt_pass_reflect();
+    // What is seen through glass and water, bent (rt_pass_transmit.cpp; plan 13.2/13.3 High): picture 6.
+    [[nodiscard]] bool rt_pass_transmit_on() const;
+    void rt_pass_transmit();
     [[nodiscard]] bool rt_pass_volume_on() const;
     void rt_pass_volume();
     bool rt_light_on_ = false;                // this walk's scene has its traced light: its views carry it
@@ -575,7 +578,8 @@ private:
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
     std::vector<std::uint32_t> rt_item_words_;
     std::vector<float> rt_set_words_;
-    std::uint64_t rt_light_sum_[9]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays
+    std::uint64_t rt_light_sum_[10]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays,
+                                        // [9] refracted pixels
     std::uint32_t rt_light_arenas_ = 0u, rt_light_unplaced_ = 0u;  // this walk: mesh arenas bound, items left without
     std::uint32_t rt_light_skinned_ = 0u;  // this walk: mesh items whose vertices name their own matrices (no mesh words)
     std::uint32_t rt_light_frames_ = 0u;
@@ -647,6 +651,8 @@ private:
     bool rt_volume_drawn_ = false, rt_scatter_drawn_ = false;
     // The reflections' change was written this frame (rt_pass_reflect.cpp): the reactive mask reads it (rt_reactive).
     bool rt_reflect_moved_ = false;
+    bool rt_transmit_drawn_ = false;        // the transmit pass wrote T this walk (ViewRows::transmit)
+    std::uint32_t rt_transmit_slot_ = 0u;   // T's place among the textures (picture 6)
     // An outside denoiser (rt_denoiser.h; rt_pass_reflect.cpp): the signals go to it raw this frame (g_more.z bit
     // 2048); its guides were written this frame.
     bool rt_raw_ = false, rt_guides_drawn_ = false;

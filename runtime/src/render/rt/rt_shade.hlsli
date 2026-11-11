@@ -241,8 +241,10 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     h.share = float(w3.x >> 24u) / 255.0f;
     h.alpha = 1.0f;
     h.emission = float3(0.0f, 0.0f, 0.0f);
-    h.ior = h.klass == kRtGlass ? 1.5f : 1.33f;
-    h.thickness = 0.0f;
+    // Its index (item word 15 bits 12-19, (ior - 1) x 100; 0: the class's own) and thickness (word 17, units).
+    const uint ior_bits = w3.w >> 12u & 255u;
+    h.ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (h.klass == kRtGlass ? 1.5f : 1.33f);
+    h.thickness = asfloat(g_items.Load(at + 68u));
     h.far = far_;
     float3 map = float3(1.0f, 1.0f, 1.0f);
     const uint arena = w0.z;

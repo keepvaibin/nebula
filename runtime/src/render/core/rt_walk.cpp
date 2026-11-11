@@ -58,7 +58,7 @@ constexpr std::uint32_t rt_emitter_id(std::uint32_t kind, std::uint32_t whose, s
 }
 
 // The words of an item in the light pass's table (rt_light).
-constexpr std::size_t kRtItemWords = 16u;
+constexpr std::size_t kRtItemWords = 20u;  // rt_frame.hlsli kItemBytes
 
 // The sky's dome among the sky's draws: what a mirror shows where nothing of the scene stands.
 constexpr bool item_is_sky_dome(const NebulaFrameItem& item) noexcept {
@@ -909,6 +909,7 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
             rt_sun_filter();
             rt_pass_lights();
             rt_pass_light();
+            rt_pass_transmit();
             rt_blend_filters();
             frame.layer = 0u;
             rt_blend_walk_before_ = walk_.serial;
@@ -919,6 +920,15 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Added));
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Mirror));
         (void)rt_backend_.image_to_sample(rt_image(RtImage::Facing));
+        // What is seen through glass and water, bent (rt_pass_transmit.cpp): picture 6, for the blended draws.
+        if (rt_transmit_drawn_) {
+            if (void* const seen = rt_backend_.image_to_sample(rt_image(RtImage::Transmit)); seen != nullptr) {
+                rt_transmit_slot_ = renderer_.rt_publish_light(seen, texture_store_, 6u);
+                ++walk_view_stamp_;  // the blended draws' views carry it
+            } else {
+                rt_transmit_drawn_ = false;
+            }
+        }
     }
     renderer_.rt_commands_end();
 }
@@ -972,6 +982,7 @@ void RenderCore::rt_untraced() {
 void RenderCore::rt_prepass(const NebulaFramePass& begin) {
     const NebulaFrameList& list = *walk_.now->list;
     rt_light_on_ = false;
+    rt_transmit_drawn_ = false;
     rt_prepassed_.assign(list.item_count, 0u);
     rt_light_frame_.across = 0u;  // no light pass yet this walk: no second layer either
     if (rt_scene_view_ == NEBULA_NONE32 || rt_scene_.name() == 0u || !renderer_.rt_items_begin()) {
@@ -1589,6 +1600,8 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                         bits_of(mesh.hit_env_tint[2], 15.0f, 15u) << 8u | bits_of(mesh.hit_ior - 1.0f, 100.0f, 255u) << 12u |
                         (mesh.hit_shine < 0.0f ? 63u : bits_of(mesh.hit_shine, 4.0f, 62u)) << 20u |
                         (mesh.hit_body < 0.0f ? 63u : bits_of(mesh.hit_body, 62.0f, 62u)) << 26u;
+            // Its thickness in units (13.2: a body bends what is seen through it, a shell does not; rt_transmit.hlsl).
+            std::memcpy(&words[17], &mesh.hit_thickness, sizeof(float));
         }
     }
     if (covering) {
@@ -1870,7 +1883,7 @@ void RenderCore::rt_light() {
         rt_raw_ = denoiser != nullptr && denoiser->raw_signals() == rt::kSignalAll;
         const std::uint32_t wanted = (rt_raw_ ? kRtPassGuides : 0u) | kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
                                      (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u) |
-                                     (rt_blend_seen_ ? kRtPassBlend : 0u);
+                                     (rt_blend_seen_ ? kRtPassBlend : 0u) | (rt_blend_seen_ && rt_pass_transmit_on() ? kRtPassTransmit : 0u);
         rt_light_wanted_ = wanted & ~kRtPassBlend;
         ao::Constants eye{};
         bool lit = false;
@@ -2025,6 +2038,7 @@ void RenderCore::rt_report() {
     rt_light_sum_[6] += counted[21];
     rt_light_sum_[7] += counted[22];
     rt_light_sum_[8] += counted[23];
+    rt_light_sum_[9] += counted[24];
     std::uint32_t prepassed = 0u;
     for (const std::uint8_t drawn : rt_prepassed_) {
         prepassed += drawn;
@@ -2050,6 +2064,8 @@ void RenderCore::rt_report() {
     }
     std::fprintf(stderr, "[rt-inputs]   emitters now: %u point lights of the game, %u glowing meshes, %u particles\n", kinds[0],
                  kinds[1], kinds[2]);
+    std::fprintf(stderr, "[rt-inputs]   refracted pixels %.0f a frame (glass and water bodies, High)\n",
+                 static_cast<double>(rt_light_sum_[9]) / n);
     // What they are, over the report's frames (emitter_census.py names them): most lights first.
     if (!rt_emitter_sources_.empty()) {
         std::vector<std::pair<std::uint64_t, std::uint32_t>> sources(rt_emitter_sources_.begin(), rt_emitter_sources_.end());

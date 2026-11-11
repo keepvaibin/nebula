@@ -36,6 +36,8 @@ cbuffer View : register(b0) {
     float4 view_stage_a;       // with bit 3: rgb the stage's ambient colour A, w kShadowTint (RT-MASTER-PLAN 3.4)
     float4 view_stage_k;       // with bit 3: rgb the stage's key colour K
     float4 view_volume[3];     // with bit 3 in the scene's view: the light volume (traced_air), [2].z 1 where it is
+    float4 view_transmit;      // with bit 3 in the scene's view: x T's place (glass and water seen through, bent;
+                               // rt_transmit.hlsl), y 1 where drawn
 };
 
 cbuffer Draw : register(b3) {
@@ -278,6 +280,13 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
         const float f = saturate(mirror.a - 4.0);
         const float body = (1.0 - f) * saturate(gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).a) * alpha;
         const float covered = f + body;
+        if (view_transmit.y > 0.5) {
+            // High (rt_transmit.hlsl): what lies behind traced bent; the rest of the pixel is it, covered whole.
+            const float4 seen = gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0));
+            if (seen.a > 0.5) {
+                return float4(body * colour + mirror.rgb + (1.0 - covered) * seen.rgb, 1.0);
+            }
+        }
         return float4((body * colour + mirror.rgb) / max(covered, 1e-4), covered);
     }
     if (mirror.a > 1.5) {

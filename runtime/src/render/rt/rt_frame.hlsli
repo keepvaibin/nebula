@@ -52,7 +52,7 @@ cbuffer PassConstants : register(b1) {
 // The item table (rt_walk.cpp rt_tables: sixteen uints an item). Flags (word 1): bit 0 lit (its program sums the key
 // at the pixel), 1 takes the game's drop shadows, 2 a surface of the scene, 3 a sheet drawn from both sides, 4 the sky
 // (shown as it is); bits 8 up its light set from 1.
-static const uint kItemBytes = 64u;
+static const uint kItemBytes = 80u;  // rt_walk.cpp kRtItemWords
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
 static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassTranslucent = 8u,
