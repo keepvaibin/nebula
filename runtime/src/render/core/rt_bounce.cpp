@@ -111,6 +111,13 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
     frame.look[0] = kSkyMin;
     frame.look[1] = kHitDark;
     frame.look[2] = rt_dome_mean_ > 1e-3f ? 1.0f / rt_dome_mean_ : 0.0f;
+    // The sky against its own mean colour (b48): a channel's mean at least a tenth of the mean luminance.
+    if (rt_dome_mean_ > 1e-3f && rt_dome_colour_[0] + rt_dome_colour_[1] + rt_dome_colour_[2] > 0.0f) {
+        for (unsigned c = 0; c < 3u; ++c) {
+            frame.dome[c] = 1.0f / std::max(rt_dome_colour_[c], 0.1f * rt_dome_mean_);
+        }
+        frame.dome[3] = 1.0f;
+    }
     // A surface met counts against the mean of such hits, only ever down: dark surroundings keep their darkening (b46).
     frame.authored[3] = rt_hit_mean_ > 1.0f ? 1.0f / rt_hit_mean_ : 1.0f;
     frame.look[3] = kSunGlint;
@@ -293,6 +300,10 @@ bool RenderCore::rt_dome_read() {
     if (counted[45] != 0u) {
         const float mean = static_cast<float>(counted[44]) / 256.0f / static_cast<float>(counted[45]);
         rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * 0.05f : mean;
+        for (unsigned c = 0; c < 3u; ++c) {  // its colour (b48)
+            const float channel = static_cast<float>(counted[48u + c]) / 256.0f / static_cast<float>(counted[45]);
+            rt_dome_colour_[c] = rt_dome_colour_[c] > 0.0f ? rt_dome_colour_[c] + (channel - rt_dome_colour_[c]) * 0.05f : channel;
+        }
     }
     if (counted[47] != 0u) {
         const float hits = static_cast<float>(counted[46]) / 256.0f / static_cast<float>(counted[47]);
@@ -586,6 +597,7 @@ void RenderCore::rt_bounce_stop() noexcept {
     rt_bounce_width_ = rt_bounce_height_ = 0u;
     rt_dome_mean_ = 0.0f;
     rt_hit_mean_ = 0.0f;
+    std::fill_n(rt_dome_colour_, 3u, 0.0f);
     rt_ref_list_ = nullptr;
     rt_ref_ready_ = false;
     rt_ref_now_ = 0u;

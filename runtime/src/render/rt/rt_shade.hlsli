@@ -23,7 +23,8 @@ struct RtShadeFrame {
     float4 authored;  // rgb the stage's ambient as authored (A without kAmbientGain): what the indirect ratio is a ratio to;
                       // w the gain of a surface met (1 / the running mean of such hits, at most 1: rt_count_hit; FB b46)
     uint4 grid;       // x the grid's cells' first byte in t4, y its entries', z 1 when it holds any, w the frame's number
-    uint4 spare[5];
+    float4 dome;      // rgb 1 / the dome's mean colour as the bounce rays see it, w 1 when known (rt_sky_ratio; FB b48)
+    uint4 spare[4];
 };
 static RtShadeFrame g_shade;
 
@@ -41,7 +42,8 @@ void rt_shade_begin(uint at) {
     g_shade.authored = asfloat(g_tiles.Load4(at + 144u));
     g_shade.grid = g_tiles.Load4(at + 160u);
     g_shade.grid.xy += uint2(at, at);
-    for (uint k = 0u; k < 5u; ++k) {
+    g_shade.dome = asfloat(g_tiles.Load4(at + 176u));
+    for (uint k = 0u; k < 4u; ++k) {
         g_shade.spare[k] = uint4(0u, 0u, 0u, 0u);
     }
 }
@@ -328,7 +330,12 @@ float3 rt_dome(RtHit h) {
 }
 
 // What the dome shows along a direction, as a ratio to the stage's authored ambient (11.1: S).
+// Against the dome's mean colour, a channel at a time, once it is known (FB b48): open sky averages 1, its colour
+// included (the art's ambient already is the sky's colour); before that against the mean luminance as at first.
 float3 rt_sky_ratio(float3 dome) {
+    if (g_shade.dome.w > 0.0f) {
+        return clamp(dome * g_shade.dome.rgb, 0.25f, 3.0f);
+    }
     const float scale = g_shade.look.z > 0.0f ? g_shade.look.z : 1.0f / max(rt_lum(dome), 1e-3f);
     return clamp(dome * scale, 0.25f, 3.0f);
 }
@@ -338,6 +345,11 @@ float3 rt_sky_ratio(float3 dome) {
 void rt_count_dome(float3 dome) {
     InterlockedAdd(g_counters[44], uint(clamp(rt_lum(dome), 0.0f, 64.0f) * 256.0f));
     InterlockedAdd(g_counters[45], 1u);
+    // Its colour, a channel at a time (rt_sky_ratio; FB b48).
+    const uint3 c = uint3(clamp(dome, 0.0f, 64.0f) * 256.0f);
+    InterlockedAdd(g_counters[48], c.r);
+    InterlockedAdd(g_counters[49], c.g);
+    InterlockedAdd(g_counters[50], c.b);
 }
 
 // A surface met (not shining of itself) as a ratio before the gain, kBounce * L / A, into the counters 46 and 47 for the

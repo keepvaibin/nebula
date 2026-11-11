@@ -600,7 +600,9 @@ private:
     // and the signals as pictures (rt-signals).
     struct RtShadeFrame {
         float ambient[4], key[4], fill[4], sky[4], gains[4], axis[3][4], look[4], authored[4];
-        std::uint32_t grid[4], spare[5][4];
+        std::uint32_t grid[4];
+        float dome[4];  // rgb 1 / the dome's mean colour, w 1 when known (rt_shade.hlsli rt_sky_ratio; FB b48)
+        std::uint32_t spare[4][4];
     };
     void rt_shade_frame(RtShadeFrame& frame) const;
     void rt_world_grid();
@@ -636,6 +638,7 @@ private:
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_bounce_retired_;  // frame, image
     float rt_dome_mean_ = 0.0f;  // the sky dome's mean luminance as the bounce rays see it (11.1); 0 not yet known
     float rt_hit_mean_ = 0.0f;   // the mean ratio of the surfaces they meet (rt_count_hit; FB b46); 0 not yet known
+    float rt_dome_colour_[3] = {0.0f, 0.0f, 0.0f};  // the dome's mean colour as they see it (FB b48); 0 not yet known
     // The reference's sums, V D I R this walk's and the walk before's by turns (rt_ref_now_: this walk's first), and
     // what starts them again.
     std::uint32_t rt_ref_images_[8] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
