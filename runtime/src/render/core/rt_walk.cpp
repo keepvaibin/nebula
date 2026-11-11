@@ -9,6 +9,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt_caps.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/render/post_process_settings.h"
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
 
@@ -88,6 +89,7 @@ void RenderCore::rt_start() {
     registries_.tell_retired_meshes(true);
     rt_log_at_ = 0u;
     rt_building_ = false;
+    set_render_tracing(true, fsr3_available());  // single-sampled, anti-aliased temporally (plan 16.3)
 }
 
 // The setting changed while the game runs (plan 5.3 G-6): the tracer starts or stops here, between frames, on the same
@@ -119,6 +121,7 @@ void RenderCore::rt_follow_setting(const RenderConfig& render) {
 
 // Before the device's memory goes (it is lost: nothing recorded runs any more), or when the setting turns it off.
 void RenderCore::rt_stop() noexcept {
+    set_render_tracing(false, false);  // the player's anti-aliasing again
     registries_.tell_retired_meshes(false);
     rt_view_image_ = rt::kNoImage;  // the back end's stop frees its images and buffers
     rt_view_retired_.clear();

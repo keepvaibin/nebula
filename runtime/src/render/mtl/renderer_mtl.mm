@@ -239,7 +239,7 @@ void RendererMtl::choose_first_start_scale() {
         layer_.layer == nullptr) {
         return;
     }
-    RenderConfig cfg = get_render_config();
+    RenderConfig cfg = get_render_config_chosen();
     if (cfg.upscaler != 0u || cfg.internal_height != 0u || cfg.spatial_quality != 0u ||
         ((__bridge CAMetalLayer*)layer_.layer).contentsScale < 1.5) {
         return;  // a choice made another way (a test's), or a display whose pixels are its points

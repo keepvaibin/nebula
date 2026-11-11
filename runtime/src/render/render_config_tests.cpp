@@ -192,6 +192,28 @@ int main() {
             passed &= expect(value.max_fps == 60.0f && value.texture_lod_bias == 8u &&
                 value.anisotropic_filtering == 1u, "direct config applies the same numeric boundary checks");
         }
+#if !defined(NEBULA_GPU_METAL)
+        {
+            // The tracer running: the scene single-sampled, anti-aliased by FSR 3; the player's choices kept (plan 16.3).
+            galaxy::render::RenderConfig chosen{};
+            chosen.msaa_samples = 4u;
+            chosen.upscaler = 1u;
+            chosen.spatial_quality = 3u;
+            galaxy::render::set_render_config(chosen);
+            galaxy::render::set_render_tracing(true, true);
+            const auto traced = galaxy::render::get_render_config();
+            const auto kept = galaxy::render::get_render_config_chosen();
+            galaxy::render::set_render_tracing(true, false);
+            const auto no_fsr3 = galaxy::render::get_render_config();
+            galaxy::render::set_render_tracing(false, false);
+            const auto after = galaxy::render::get_render_config();
+            passed &= expect(traced.msaa_samples == 1u && traced.upscaler == 2u && traced.temporal_quality == 3u &&
+                    kept.msaa_samples == 4u && kept.upscaler == 1u && no_fsr3.msaa_samples == 1u && no_fsr3.upscaler == 1u &&
+                    after == galaxy::render::get_render_config_chosen() && after.msaa_samples == 4u,
+                "with the tracer running the scene is single-sampled and FSR 3 anti-aliases it; off, the choices return");
+            galaxy::render::set_render_config(galaxy::render::RenderConfig{});
+        }
+#endif
         for (float rate : {1.0f, 30.0f, 59.940002f, 60.0f}) {
             galaxy::render::RenderConfig original{};
             original.max_fps = rate;
