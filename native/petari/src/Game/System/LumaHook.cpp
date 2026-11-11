@@ -52,18 +52,26 @@ namespace luma {
         // A function's hooks, by order then sequence. Never changed once published: a change builds a new one.
         struct Chain {
             u32 count;
+            u32 gameUsers;  // the game thread's calls inside it now (only that thread touches it)
             Hook hooks[1];  // `count` of them
         };
-        // A replaced chain, kept until no call can be inside it.
+        // A replaced chain, kept until no call can be inside it: freed once the game thread has left it and two flips
+        // of sEpoch, each made when the other threads' counter it leaves had drained, came after it was replaced.
         struct Retired {
             Chain* chain;
             Retired* next;
+            u32 epoch;  // sEpoch when it was replaced
         };
 
         const Function** sSorted = nullptr;
         u32 sCount = 0;
         Chain** sChains = nullptr;  // one per flag; null: no hooks
         Retired* sRetired = nullptr;
+        u32 sRetiredCount = 0;
+        // Calls on threads other than the game thread, counted as SRCU counts them: a call adds 1 to
+        // sReaders[epoch & 1] and then reads the function's chain; the game thread flips sEpoch.
+        u32 sEpoch = 0;
+        u32 sReaders[2] = {0, 0};
         u32 sSequence = 0;
         bool sPrepared = false;
         LUMA_THREAD bool tGameThread = false;
@@ -146,6 +154,7 @@ namespace luma {
             }
             Chain* const pChain = static_cast<Chain*>(p);
             pChain->count = count;
+            pChain->gameUsers = 0;
             return pChain;
         }
 
@@ -158,7 +167,8 @@ namespace luma {
             if (pChain != nullptr) {
                 __atomic_store_n(pFunction->hooked, static_cast<unsigned char>(1), __ATOMIC_RELEASE);
             }
-            __atomic_store_n(ppSlot, pChain, __ATOMIC_RELEASE);
+            // Ordered with every other thread's count and read (Hold): a call counted after the next flip reads this.
+            __atomic_store_n(ppSlot, pChain, __ATOMIC_SEQ_CST);
             if (pChain == nullptr) {
                 __atomic_store_n(pFunction->hooked, static_cast<unsigned char>(0), __ATOMIC_RELEASE);
             }
@@ -166,9 +176,45 @@ namespace luma {
                 Retired* const pRetired = new Retired;
                 pRetired->chain = pOld;
                 pRetired->next = sRetired;
+                pRetired->epoch = __atomic_load_n(&sEpoch, __ATOMIC_RELAXED);
                 sRetired = pRetired;
+                sRetiredCount++;
             }
         }
+
+        // The chain one call runs, held until the call ends. On the game thread the chain counts it (a plain add: no
+        // other thread frees chains); elsewhere sReaders does, counted before the chain is read.
+        struct Hold {
+            Chain* chain;
+            s32 counter;  // -1: the game thread
+
+            explicit Hold(const Function* pFunction) {
+                if (tGameThread) {
+                    counter = -1;
+                    chain = *slotOf(pFunction);
+                    if (chain != nullptr) {
+                        chain->gameUsers++;
+                    }
+                } else {
+                    counter = static_cast<s32>(__atomic_load_n(&sEpoch, __ATOMIC_SEQ_CST) & 1u);
+                    __atomic_fetch_add(&sReaders[counter], 1u, __ATOMIC_SEQ_CST);
+                    chain = __atomic_load_n(slotOf(pFunction), __ATOMIC_SEQ_CST);
+                }
+            }
+
+            ~Hold() {
+                if (counter < 0) {
+                    if (chain != nullptr) {
+                        chain->gameUsers--;
+                    }
+                } else {
+                    __atomic_fetch_sub(&sReaders[counter], 1u, __ATOMIC_RELEASE);
+                }
+            }
+
+            Hold(const Hold&) = delete;
+            Hold& operator=(const Hold&) = delete;
+        };
 
         // A chain without the hooks `keep` refuses; null when none is left.
         template <class Keep> Chain* without(const Chain* pChain, Keep keep, u32* pRemoved) {
@@ -191,10 +237,11 @@ namespace luma {
         }
     }
 
-    // The address a function's invoke takes as "is your result one the kernel cannot give a default?" (luma_hook.h).
-    void* kAskNoSkip[1] = {nullptr};
+    // The address a function's invoke takes as "what kind is your result?" (luma_hook.h).
+    void* kAskKind[1] = {nullptr};
 
     void (*gSkipRefused)(const Function* pFunction, const void* pOwner) = nullptr;
+    void (*gNoResult)(const Function* pFunction, const void* pOwner) = nullptr;
 
     void markGameThread() { tGameThread = true; }
 
@@ -249,13 +296,13 @@ namespace luma {
         return pFound;
     }
 
-    bool noSkip(const Function* pFunction) {
-        if (pFunction->invoke == nullptr) {
-            return false;  // a constructor or destructor: told, never skipped
+    unsigned resultKind(const Function* pFunction) {
+        if (isTell(pFunction)) {
+            return kPlain;  // a constructor or destructor: told, never skipped
         }
-        bool no = false;
-        pFunction->invoke(kAskNoSkip, &no);
-        return no;
+        unsigned kind = kPlain;
+        pFunction->invoke(kAskKind, &kind);
+        return kind;
     }
 
     const void* replacedBy(const Function* pFunction) {
@@ -274,7 +321,7 @@ namespace luma {
         if (!tGameThread) {
             return HookResult_NotGameThread;
         }
-        if (pFunction == nullptr || pCallback == nullptr || kind >= Hook_KindCount || (wraps(kind) && (pFunction->invoke == nullptr || noSkip(pFunction)))) {
+        if (pFunction == nullptr || pCallback == nullptr || kind >= Hook_KindCount || (wraps(kind) && (isTell(pFunction) || resultKind(pFunction) == kFixed))) {
             return HookResult_Refused;
         }
         if (kind == Hook_Replace) {
@@ -347,13 +394,48 @@ namespace luma {
         }
     }
 
-    void freeRetired() {
-        while (sRetired != nullptr) {
-            Retired* const pNext = sRetired->next;
-            ::free(sRetired->chain);
-            delete sRetired;
-            sRetired = pNext;
+    void reclaim(bool waiting) {
+        if ((sRetired == nullptr && !waiting) || !tGameThread) {
+            return;
         }
+        // Up to two flips, each when the counter the calls leave for it has drained: a call counted there may hold
+        // a chain replaced before the flip; one counted after it reads the chain published before it.
+        for (u32 flip = 0; flip < 2; flip++) {
+            const u32 epoch = __atomic_load_n(&sEpoch, __ATOMIC_RELAXED);
+            if (__atomic_load_n(&sReaders[(epoch + 1u) & 1u], __ATOMIC_SEQ_CST) != 0) {
+                break;
+            }
+            __atomic_store_n(&sEpoch, epoch + 1u, __ATOMIC_SEQ_CST);
+        }
+        const u32 epoch = __atomic_load_n(&sEpoch, __ATOMIC_RELAXED);
+        for (Retired** ppAt = &sRetired; *ppAt != nullptr;) {
+            Retired* const pRetired = *ppAt;
+            if (epoch - pRetired->epoch >= 2u && pRetired->chain->gameUsers == 0) {
+                *ppAt = pRetired->next;
+                ::free(pRetired->chain);
+                delete pRetired;
+                sRetiredCount--;
+            } else {
+                ppAt = &pRetired->next;
+            }
+        }
+    }
+
+    u32 retiredCount() { return sRetiredCount; }
+
+    u32 graceMark() { return __atomic_load_n(&sEpoch, __ATOMIC_RELAXED); }
+
+    bool graceOver(u32 mark) {
+        if (__atomic_load_n(&sEpoch, __ATOMIC_RELAXED) - mark < 2u) {
+            return false;
+        }
+        // A list replaced at or before the mark and not freed: the game thread is still inside it.
+        for (const Retired* pRetired = sRetired; pRetired != nullptr; pRetired = pRetired->next) {
+            if (static_cast<s32>(pRetired->epoch - mark) <= 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     void proceed(Call* pCall) {
@@ -366,29 +448,51 @@ namespace luma {
                 return;
             }
         }
+        pCall->ran = 1;
         tBody = pCall->function;
         pCall->function->invoke(pCall->args, pCall->result);
     }
 
     void run(const Function* pFunction, void** pArgs, void* pResult) {
-        const Chain* const pChain = chainOf(pFunction);
-        Call call = {pFunction, pArgs, pResult, 0, pChain};
+        const Hold hold(pFunction);
+        const Chain* const pChain = hold.chain;
+        Call call = {pFunction, pArgs, pResult, 0, 0, pChain};
         const u32 count = pChain != nullptr ? pChain->count : 0;
         bool skip = false;
+        const void* pSkipper = nullptr;
         for (u32 i = 0; i < count && !skip; i++) {
             if (pChain->hooks[i].kind == Hook_Before) {
                 skip = pChain->hooks[i].callback(&call, pChain->hooks[i].user) != 0;
-                // A result with no default is never left unwritten: the function runs (loader contract 4).
-                if (skip && noSkip(pFunction)) {
+                // A fixed result is never left unbuilt: the function runs (loader contract 4).
+                if (skip && resultKind(pFunction) == kFixed) {
                     if (gSkipRefused != nullptr) {
                         gSkipRefused(pFunction, pChain->hooks[i].owner);
                     }
                     skip = false;
                 }
+                if (skip) {
+                    pSkipper = pChain->hooks[i].owner;
+                }
             }
         }
         if (!skip) {
             proceed(&call);
+        }
+        // The function's own code did not run (a skip, or a wrap that did not proceed): a reference nothing wrote is
+        // filled by the function itself (LR-1). A plain result already holds its default.
+        if (call.ran == 0 && resultKind(pFunction) == kReference && *static_cast<void**>(pResult) == nullptr) {
+            const void* pOwner = pSkipper;
+            for (u32 i = 0; pOwner == nullptr && i < count; i++) {
+                if (wraps(pChain->hooks[i].kind)) {
+                    pOwner = pChain->hooks[i].owner;
+                }
+            }
+            if (gNoResult != nullptr) {
+                gNoResult(pFunction, pOwner);
+            }
+            call.ran = 1;
+            tBody = pFunction;
+            pFunction->invoke(pArgs, pResult);
         }
         for (u32 i = count; i-- > 0;) {
             if (pChain->hooks[i].kind == Hook_After) {
@@ -398,8 +502,9 @@ namespace luma {
     }
 
     void tell(const Function* pFunction, void** pArgs) {
-        const Chain* const pChain = chainOf(pFunction);
-        Call call = {pFunction, pArgs, nullptr, 0, pChain};
+        const Hold hold(pFunction);
+        const Chain* const pChain = hold.chain;
+        Call call = {pFunction, pArgs, nullptr, 0, 0, pChain};
         for (u32 i = 0; pChain != nullptr && i < pChain->count; i++) {
             pChain->hooks[i].callback(&call, pChain->hooks[i].user);
         }

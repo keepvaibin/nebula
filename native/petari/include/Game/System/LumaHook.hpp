@@ -14,6 +14,7 @@ namespace luma {
         void** args;        // args[0]: `this`, or null for a function without one; args[1..]: pointers to the arguments
         void* result;       // where the result is, or goes; null for a constructor or destructor
         u32 next;           // the runner's own
+        u32 ran;            // the runner's own: the function's own code ran
         const void* chain;  // the runner's own: the hooks this call runs, fixed when it starts
     };
 
@@ -42,7 +43,7 @@ namespace luma {
     enum HookResult : s32 {
         HookResult_Added = 0,
         HookResult_Refused = -1,     // a constructor or destructor takes Before and After only; a function whose result
-                                     // has no default takes no wrap or replace (noSkip)
+                                     // is fixed takes no wrap or replace
         HookResult_Replaced = -2,    // another owner replaces the function already (replacedBy says who)
         HookResult_NotGameThread = -3  // hooks change on the game thread only
     };
@@ -53,13 +54,24 @@ namespace luma {
     s32 removeHook(const Function* pFunction, HookKind kind, HookCallback pCallback, void* pUser, const void* pOwner);
     void removeHooks(const void* pOwner);
     const void* replacedBy(const Function* pFunction);
-    // Whether a function's result has no default the kernel can give it (a reference, or a class with no default
-    // constructor or with a destructor): a before's skip is then not taken (the function runs; a script error is
-    // reported), and no wrap or replace binds (loader contract 4, Z-2).
-    bool noSkip(const Function* pFunction);
-    // The hook lists replaced since the last call, freed: only where no call can be inside one (a mod taken out while
-    // the stage is stopped, the game's end).
-    void freeRetired();
+    // A function's result kind (luma_hook.h kPlain, kReference, kFixed; a constructor or destructor: kPlain). On a
+    // fixed result a before's skip is not taken (the function runs; reported) and no wrap or replace binds; a
+    // reference no hook wrote is filled by the function itself (reported) (loader contract 4, LR-1).
+    unsigned resultKind(const Function* pFunction);
+    // A constructor or destructor: its hooks are told (before and after only).
+    inline bool isTell(const Function* pFunction) { return pFunction->invoke == nullptr; }
+    // The hook lists replaced so far that no call can be inside any more, freed; the rest wait for a later call. On the
+    // game thread, once a frame (GameSystem::update) and when a mod is taken out. A list is freed when the game
+    // thread has no call in it and two flips of the other threads' counters (SRCU), each made once the calls counted
+    // on the side it leaves have ended, came after it was replaced (loader contract 4, INBOX-F 37).
+    // `waiting`: something else waits on the grace (a mod taken out), so the counters flip even with no list retired.
+    void reclaim(bool waiting = false);
+    // The lists replaced and not yet freed (a fact for 1.1's tests: bounded, 0 once no call holds one).
+    u32 retiredCount();
+    // A grace: marked after the hooks are taken out; over when no call on any thread can still be in a list replaced
+    // before the mark (two flips since, and no such list still held by the game thread) (loader contract LR-5).
+    u32 graceMark();
+    bool graceOver(u32 mark);
     // From a wrap: runs the wraps after it and then the function.
     void proceed(Call* pCall);
 
@@ -67,6 +79,9 @@ namespace luma {
     void markGameThread();
     bool onGameThread();
 
-    // A before skipped a function whose result has no default: the skip was not taken. Set by the loader to report it.
+    // A before skipped a function whose result is fixed: the skip was not taken. A reference result no hook wrote and
+    // no wrap proceeded to: the function ran. `pOwner` the hook's (the before's, else the outermost wrap's). Set by the
+    // loader to report each once.
     extern void (*gSkipRefused)(const Function* pFunction, const void* pOwner);
+    extern void (*gNoResult)(const Function* pFunction, const void* pOwner);
 }

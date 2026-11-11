@@ -1,5 +1,6 @@
 #include "Game/System/LumaScript.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaLoader.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -232,6 +233,7 @@ void GameSystem::update() {
     NebulaMenuFocus::update();
     NebulaPrepare::update();
     lumascript::beginFrame();  // the scripts' step budgets; nothing when no mod has a script
+    luma::frame();             // replaced hook lists and taken-out mods no call holds; nothing when there are none
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();

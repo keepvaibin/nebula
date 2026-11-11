@@ -3,6 +3,7 @@
 #include "galaxy/mods.h"
 
 #include "galaxy/luma.h"
+#include <luma_host.h>
 
 #include <algorithm>
 #include <cmath>
@@ -172,6 +173,49 @@ void* symbol_in(void* module, const char* name) {
 #else
     return dlsym(module, name);
 #endif
+}
+
+// The game's loader closes a LumaCore mod's library itself, when none of its code can run any more (loader contract
+// LR-5).
+extern "C" void close_luma_library(void* module) {
+    close_library(module);
+}
+
+// A LumaCore refusal in the validator's own words (loader contract 3): luma_validate_message from the importer's
+// library (nebula_import.dll beside the game on Windows, libnebula_import.so in the app on Android and Linux). Without
+// it the line gives the code and every parameter as the loader gave them, never nothing.
+using ValidateMessage = const char* (*)(std::uint16_t code, const char* const* names, const char* const* values,
+                                        std::uint32_t count, const char* language);
+
+ValidateMessage validate_message() {
+    static ValidateMessage found = nullptr;
+    static bool looked = false;
+    if (!looked) {
+        looked = true;
+#if defined(_WIN32)
+        void* const importer = LoadLibraryExW(L"nebula_import.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+#else
+        void* const importer = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL);
+#endif
+        if (importer != nullptr) {
+            found = reinterpret_cast<ValidateMessage>(symbol_in(importer, "luma_validate_message"));
+        }
+    }
+    return found;
+}
+
+std::string refusal_text(const LumaRefusal& refusal) {
+    const char* values[LUMA_REFUSAL_MOST] = {};
+    const std::uint32_t count = refusal.count < LUMA_REFUSAL_MOST ? refusal.count : LUMA_REFUSAL_MOST;
+    for (std::uint32_t i = 0; i < count; ++i) values[i] = refusal.values[i];
+    if (const ValidateMessage message = validate_message(); message != nullptr) {
+        return message(refusal.code, refusal.names, values, count, "UsEnglish");
+    }
+    std::string text = "L" + std::to_string(refusal.code);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        text += std::string(" ") + (refusal.names[i] != nullptr ? refusal.names[i] : "?") + "=" + values[i];
+    }
+    return text;
 }
 
 std::string load_error() {
@@ -635,14 +679,20 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
         // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all. `plugins` is top of the
         // list first, so `index` is the mod's order: 0 binds first, holds a replace, runs its befores first and its
-        // afters last, and its wrap is outermost (loader contract 1).
+        // afters last, and its wrap is outermost (loader contract 1). From the call on, the game closes the library.
         if (const void* const info = symbol_in(module, "luma_mod"); info != nullptr) {
-            const auto load = reinterpret_cast<std::int32_t (*)(const void*, const char*, std::int32_t, char*, std::uint32_t)>(
-                g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
-            char missing[1024] = {};
-            if (load == nullptr || load(info, file.mod_id.c_str(), static_cast<std::int32_t>(index), missing, sizeof(missing)) == 0) {
-                say(name + " not started: " + (load == nullptr ? std::string("this game has no LumaCore") : std::string(missing[0] != 0 ? missing : "the game refused it and said nothing")));
+            const auto load = reinterpret_cast<LumaLoadMod>(g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
+            if (load == nullptr) {
+                // The game module is this build's: it always has the loader. Said, never silent.
+                say(name + " not started: luma_load_mod is missing from the game module");
                 close_library(module);
+                continue;
+            }
+            LumaRefusal refusal{};
+            const std::string library = file.path.filename().string();
+            if (load(static_cast<const LumaModInfo*>(info), file.mod_id.c_str(), library.c_str(), static_cast<std::int32_t>(index), module,
+                     close_luma_library, &refusal) == 0) {
+                say(refusal.code != 0 ? refusal_text(refusal) : name + " not started: the loader gave no reason");
                 continue;
             }
             auto loaded = std::make_unique<Loaded>();

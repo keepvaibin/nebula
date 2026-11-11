@@ -1,0 +1,2 @@
+/* A mod library exports luma_mod alone (loader contract 8): Linux and Android, -Wl,--version-script=luma_mod.map. */
+{ global: luma_mod; local: *; };

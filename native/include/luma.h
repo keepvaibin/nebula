@@ -34,8 +34,10 @@ typedef struct LumaCall {
     const LumaFunction* function;
     void** args;  /* as LumaFunction.invoke takes them; a hook may change what they point at */
     void* result; /* where the result is, or goes; null for a constructor or destructor. Zero (a class: as its
-                     default constructor makes it) until a hook or the function writes it (loader contract 4) */
+                     default constructor makes it; a reference: a null pointer) until a hook or the function writes it
+                     (loader contract 4) */
     uint32_t next;      /* the kernel's */
+    uint32_t ran;       /* the kernel's: the function's own code ran in this call */
     const void* chain;  /* the kernel's: the hooks this call runs, fixed when it starts */
 } LumaCall;
 
@@ -119,8 +121,15 @@ typedef struct LumaModInfo {
     uint32_t import_count;
     /* After every slot is filled. Non-zero: the mod could not start and is left off. May be null. */
     int32_t (*start)(const LumaCore* core, const LumaMod* mod);
-    /* Before the library is taken out (a reload while making the mod). May be null. */
+    /* When the mod is taken out, after its hooks are: other threads may still be inside one until the game's grace
+       ends, so it frees nothing they read (memory from `alloc` and its globals go after the grace). May be null. */
     void (*stop)(void);
+    /* luma.h's, filled by LUMA_MOD: before `start`, it keeps the core for `new` and runs the C++ globals' constructors
+       (the system's loader runs none: loader contract 8, LR-6). */
+    void (*begin)(const LumaCore* core, const LumaMod* mod);
+    /* luma.h's: after the grace, the destructors `atexit` took, the last first; then the game frees the mod's memory
+       and closes its library. */
+    void (*finish)(void);
 } LumaModInfo;
 
 #if defined(_WIN32)
@@ -147,8 +156,10 @@ typedef struct LumaModInfo {
    luma_mod; they are not exported. */
 #if defined(__cplusplus)
 #define LUMA_C extern "C"
+#define LUMA_C_EXTERN extern "C"
 #else
 #define LUMA_C
+#define LUMA_C_EXTERN extern
 #endif
 #if defined(_WIN32)
 #define LUMA_OWN
@@ -157,64 +168,145 @@ typedef struct LumaModInfo {
 #endif
 #define LUMA_MEMORY                                                                                                   \
     LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memcpy(void* to, const void* from, __SIZE_TYPE__ n) {     \
-        unsigned char* t = (unsigned char*)to;                                                                       \
-        const unsigned char* f = (const unsigned char*)from;                                                         \
-        while (n-- != 0) *t++ = *f++;                                                                                \
-        return to;                                                                                                   \
-    }                                                                                                                \
+        unsigned char* t = (unsigned char*)to;                                                                        \
+        const unsigned char* f = (const unsigned char*)from;                                                          \
+        while (n-- != 0) *t++ = *f++;                                                                                 \
+        return to;                                                                                                    \
+    }                                                                                                                 \
     LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memmove(void* to, const void* from, __SIZE_TYPE__ n) {    \
-        unsigned char* t = (unsigned char*)to;                                                                       \
-        const unsigned char* f = (const unsigned char*)from;                                                         \
-        if (t < f) {                                                                                                 \
-            while (n-- != 0) *t++ = *f++;                                                                            \
-        } else {                                                                                                     \
-            while (n-- != 0) t[n] = f[n];                                                                            \
-        }                                                                                                            \
-        return to;                                                                                                   \
-    }                                                                                                                \
-    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memset(void* to, int value, __SIZE_TYPE__ n) {           \
-        unsigned char* t = (unsigned char*)to;                                                                       \
-        while (n-- != 0) *t++ = (unsigned char)value;                                                                \
-        return to;                                                                                                   \
-    }                                                                                                                \
-    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) int memcmp(const void* a, const void* b, __SIZE_TYPE__ n) {    \
-        const unsigned char* x = (const unsigned char*)a;                                                            \
-        const unsigned char* y = (const unsigned char*)b;                                                            \
-        for (; n != 0; n--, x++, y++) {                                                                              \
-            if (*x != *y) return *x < *y ? -1 : 1;                                                                   \
-        }                                                                                                            \
-        return 0;                                                                                                    \
+        unsigned char* t = (unsigned char*)to;                                                                        \
+        const unsigned char* f = (const unsigned char*)from;                                                          \
+        if (t < f) {                                                                                                  \
+            while (n-- != 0) *t++ = *f++;                                                                             \
+        } else {                                                                                                      \
+            while (n-- != 0) t[n] = f[n];                                                                             \
+        }                                                                                                             \
+        return to;                                                                                                    \
+    }                                                                                                                 \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) void* memset(void* to, int value, __SIZE_TYPE__ n) {            \
+        unsigned char* t = (unsigned char*)to;                                                                        \
+        while (n-- != 0) *t++ = (unsigned char)value;                                                                 \
+        return to;                                                                                                    \
+    }                                                                                                                 \
+    LUMA_C LUMA_OWN __attribute__((no_builtin, used)) int memcmp(const void* a, const void* b, __SIZE_TYPE__ n) {     \
+        const unsigned char* x = (const unsigned char*)a;                                                             \
+        const unsigned char* y = (const unsigned char*)b;                                                             \
+        for (; n != 0; n--, x++, y++) {                                                                               \
+            if (*x != *y) return *x < *y ? -1 : 1;                                                                    \
+        }                                                                                                             \
+        return 0;                                                                                                     \
     }
 
 /* __chkstk as the Windows ABI has it: x64 takes the frame's size in rax and keeps every register; arm64 takes it in x15
    in 16-byte units. Each touches the frame's pages from the top down, so the guard page grows the stack in order. */
 #if defined(_WIN32) && defined(__x86_64__)
 #define LUMA_STACK_PROBE                                                                                              \
-    __asm__(".text\n.globl __chkstk\n.p2align 4\n__chkstk:\n"                                                       \
-            "pushq %rcx\npushq %rax\ncmpq $0x1000, %rax\nleaq 24(%rsp), %rcx\njb 1f\n"                               \
-            "2:\nsubq $0x1000, %rcx\ntestq %rcx, (%rcx)\nsubq $0x1000, %rax\ncmpq $0x1000, %rax\nja 2b\n"              \
+    __asm__(".text\n.globl __chkstk\n.p2align 4\n__chkstk:\n"                                                         \
+            "pushq %rcx\npushq %rax\ncmpq $0x1000, %rax\nleaq 24(%rsp), %rcx\njb 1f\n"                                \
+            "2:\nsubq $0x1000, %rcx\ntestq %rcx, (%rcx)\nsubq $0x1000, %rax\ncmpq $0x1000, %rax\nja 2b\n"             \
             "1:\nsubq %rax, %rcx\ntestq %rcx, (%rcx)\npopq %rax\npopq %rcx\nretq\n");
 #elif defined(_WIN32) && defined(__aarch64__)
 #define LUMA_STACK_PROBE                                                                                              \
-    __asm__(".text\n.globl __chkstk\n.p2align 2\n__chkstk:\n"                                                       \
-            "lsl x16, x15, #4\nmov x17, sp\n"                                                                           \
+    __asm__(".text\n.globl __chkstk\n.p2align 2\n__chkstk:\n"                                                         \
+            "lsl x16, x15, #4\nmov x17, sp\n"                                                                         \
             "1:\nsub x17, x17, #4096\nsubs x16, x16, #4096\nldr xzr, [x17]\nb.gt 1b\nret\n");
 #else
 #define LUMA_STACK_PROBE
 #endif
 
+/* A mod's life (loader contract 8, LR-6). Its global constructors run in `begin`, after the core is known: on Windows
+   the library has no C runtime, so nothing else runs `.CRT$XCU`, and luma.h runs what lies between its own
+   `.CRT$XCA` and `.CRT$XCZ` markers; on Linux and Android the build's `-fno-use-init-array` and luma_ctors.ld put
+   them in `luma_ctors`, which the system's loader does not run. On Apple dyld runs them at load (not checked here).
+   Destructors registered with `atexit` (Windows) or `__cxa_atexit` (elsewhere) run in `finish`, the last first. */
+#define LUMA_MAX_EXITS 256
+typedef void (*LumaCtor)(void);
+#if defined(_WIN32)
+#define LUMA_CTORS                                                                                                    \
+    LUMA_C __attribute__((section(".CRT$XCA"), used)) const LumaCtor luma_ctors_a = 0;                                \
+    LUMA_C __attribute__((section(".CRT$XCZ"), used)) const LumaCtor luma_ctors_z = 0;                                \
+    static void luma_run_ctors(void) {                                                                                \
+        const LumaCtor* at = &luma_ctors_a;                                                                           \
+        const LumaCtor* end = &luma_ctors_z;                                                                          \
+        __asm__("" : "+r"(at), "+r"(end)); /* two objects' addresses: the compiler may not reason across them */      \
+        for (at++; at < end; at++) {                                                                                  \
+            if (*at != 0) (*at)();                                                                                    \
+        }                                                                                                             \
+    }                                                                                                                 \
+    LUMA_C int atexit(void (*fn)(void)) { return luma_add_exit(0, 0, fn); }
+#elif defined(__APPLE__)
+#define LUMA_CTORS                                                                                                    \
+    static void luma_run_ctors(void) {} /* dyld runs them; the linker gives __dso_handle */                           \
+    LUMA_C LUMA_OWN int __cxa_atexit(void (*fn)(void*), void* arg, void* dso) {                                       \
+        (void)dso;                                                                                                    \
+        return luma_add_exit(fn, arg, 0);                                                                             \
+    }
+#else
+#define LUMA_CTORS                                                                                                    \
+    LUMA_C_EXTERN __attribute__((weak, visibility("hidden"))) LumaCtor __start_luma_ctors[];                          \
+    LUMA_C_EXTERN __attribute__((weak, visibility("hidden"))) LumaCtor __stop_luma_ctors[];                           \
+    static void luma_run_ctors(void) {                                                                                \
+        /* .ctors order: the last first. */                                                                           \
+        for (LumaCtor* at = __stop_luma_ctors; at != __start_luma_ctors;) (*--at)();                                  \
+    }                                                                                                                 \
+    LUMA_C LUMA_OWN void* __dso_handle = &__dso_handle;                                                               \
+    LUMA_C LUMA_OWN int __cxa_atexit(void (*fn)(void*), void* arg, void* dso) {                                       \
+        (void)dso;                                                                                                    \
+        return luma_add_exit(fn, arg, 0);                                                                             \
+    }
+#endif
+
+#define LUMA_LIFE                                                                                                     \
+    LUMA_C LUMA_OWN const LumaCore* luma_rt_core = 0;                                                                 \
+    LUMA_C LUMA_OWN const LumaMod* luma_rt_self = 0;                                                                  \
+    static struct {                                                                                                   \
+        void (*fn)(void*);                                                                                            \
+        void* arg;                                                                                                    \
+        void (*plain)(void);                                                                                          \
+    } luma_exits[LUMA_MAX_EXITS];                                                                                     \
+    static unsigned luma_exit_count = 0;                                                                              \
+    static int luma_add_exit(void (*fn)(void*), void* arg, void (*plain)(void)) {                                     \
+        if (luma_exit_count == LUMA_MAX_EXITS) {                                                                      \
+            if (luma_rt_core != 0) luma_rt_core->log(luma_rt_self, "more than 256 destructors were registered; this one will not run"); \
+            return -1;                                                                                                \
+        }                                                                                                             \
+        luma_exits[luma_exit_count].fn = fn;                                                                          \
+        luma_exits[luma_exit_count].arg = arg;                                                                        \
+        luma_exits[luma_exit_count].plain = plain;                                                                    \
+        luma_exit_count++;                                                                                            \
+        return 0;                                                                                                     \
+    }                                                                                                                 \
+    LUMA_CTORS                                                                                                        \
+    static void luma_begin(const LumaCore* core, const LumaMod* mod) {                                                \
+        luma_rt_core = core;                                                                                          \
+        luma_rt_self = mod;                                                                                           \
+        luma_run_ctors();                                                                                             \
+    }                                                                                                                 \
+    static void luma_finish(void) {                                                                                   \
+        while (luma_exit_count != 0) {                                                                                \
+            luma_exit_count--;                                                                                        \
+            if (luma_exits[luma_exit_count].plain != 0) {                                                             \
+                luma_exits[luma_exit_count].plain();                                                                  \
+            } else {                                                                                                  \
+                luma_exits[luma_exit_count].fn(luma_exits[luma_exit_count].arg);                                      \
+            }                                                                                                         \
+        }                                                                                                             \
+    }
+
 #define LUMA_RUNTIME \
     LUMA_FLOATS      \
     LUMA_MEMORY      \
-    LUMA_STACK_PROBE
+    LUMA_STACK_PROBE \
+    LUMA_LIFE        \
+    LUMA_NEW
 
 #define LUMA_MOD(imports, start, stop) \
     LUMA_RUNTIME                       \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish}
 /* A mod that binds no name of the game (it finds what it needs through the core at start). */
 #define LUMA_MOD_NO_IMPORTS(start, stop) \
     LUMA_RUNTIME                         \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])
@@ -223,6 +315,80 @@ typedef struct LumaModInfo {
 
 #ifdef __cplusplus
 }
+
+/* C++'s `new` and `delete` over the core's memory (LR-6), in a mod's library (built freestanding, loader contract 8;
+   the game's own code, built hosted, includes luma.h for its types only). Include <new> before luma.h or not at all:
+   without it, luma.h declares what `new` needs. A throwing `new` with no memory logs and stops the game (no
+   exceptions); the nothrow forms give null. Placement `new` is the usual one. */
+#if !__STDC_HOSTED__
+#if !defined(_NEW_) && !defined(_LIBCPP_NEW) && !defined(_NEW) && !defined(__NEW__) && !defined(__NOTHROW_T_DEFINED)
+namespace std {
+    enum class align_val_t : __SIZE_TYPE__ {};
+    struct nothrow_t {
+        explicit nothrow_t() = default;
+    };
+    extern const nothrow_t nothrow;
+}
+inline void* operator new(__SIZE_TYPE__, void* p) noexcept { return p; }
+inline void* operator new[](__SIZE_TYPE__, void* p) noexcept { return p; }
+inline void operator delete(void*, void*) noexcept {}
+inline void operator delete[](void*, void*) noexcept {}
+void* operator new(__SIZE_TYPE__, const std::nothrow_t&) noexcept;
+void* operator new[](__SIZE_TYPE__, const std::nothrow_t&) noexcept;
+void* operator new(__SIZE_TYPE__, std::align_val_t, const std::nothrow_t&) noexcept;
+void* operator new[](__SIZE_TYPE__, std::align_val_t, const std::nothrow_t&) noexcept;
+void operator delete(void*, const std::nothrow_t&) noexcept;
+void operator delete[](void*, const std::nothrow_t&) noexcept;
+void operator delete(void*, std::align_val_t, const std::nothrow_t&) noexcept;
+void operator delete[](void*, std::align_val_t, const std::nothrow_t&) noexcept;
+#endif
+extern "C" const LumaCore* luma_rt_core;
+extern "C" const LumaMod* luma_rt_self;
+/* Off Windows these are visible by the language's rule; the build's luma_mod.map exports luma_mod alone and
+   -Bsymbolic binds the mod's own calls to them (loader contract 8). */
+#define LUMA_NEW                                                                                                      \
+    namespace std {                                                                                                   \
+        const nothrow_t nothrow{};                                                                                    \
+    }                                                                                                                 \
+    static void* luma_new(__SIZE_TYPE__ size, __SIZE_TYPE__ align, bool must) {                                       \
+        void* const p = luma_rt_core != 0 ? luma_rt_core->alloc(luma_rt_self, size != 0 ? size : 1, align < 16 ? 16 : align) : 0; \
+        if (p == 0 && must) {                                                                                         \
+            if (luma_rt_core != 0) luma_rt_core->log(luma_rt_self, "new found no memory; the game stops here");       \
+            __builtin_trap();                                                                                         \
+        }                                                                                                             \
+        return p;                                                                                                     \
+    }                                                                                                                 \
+    static void luma_delete(void* p) {                                                                                \
+        if (p != 0 && luma_rt_core != 0) luma_rt_core->free(luma_rt_self, p);                                         \
+    }                                                                                                                 \
+    void* operator new(__SIZE_TYPE__ n) { return luma_new(n, 16, true); }                                             \
+    void* operator new[](__SIZE_TYPE__ n) { return luma_new(n, 16, true); }                                           \
+    void* operator new(__SIZE_TYPE__ n, std::align_val_t a) { return luma_new(n, (__SIZE_TYPE__)a, true); }           \
+    void* operator new[](__SIZE_TYPE__ n, std::align_val_t a) { return luma_new(n, (__SIZE_TYPE__)a, true); }         \
+    void* operator new(__SIZE_TYPE__ n, const std::nothrow_t&) noexcept { return luma_new(n, 16, false); }            \
+    void* operator new[](__SIZE_TYPE__ n, const std::nothrow_t&) noexcept { return luma_new(n, 16, false); }          \
+    void* operator new(__SIZE_TYPE__ n, std::align_val_t a, const std::nothrow_t&) noexcept {                         \
+        return luma_new(n, (__SIZE_TYPE__)a, false);                                                                  \
+    }                                                                                                                 \
+    void* operator new[](__SIZE_TYPE__ n, std::align_val_t a, const std::nothrow_t&) noexcept {                       \
+        return luma_new(n, (__SIZE_TYPE__)a, false);                                                                  \
+    }                                                                                                                 \
+    void operator delete(void* p) noexcept { luma_delete(p); }                                                        \
+    void operator delete[](void* p) noexcept { luma_delete(p); }                                                      \
+    void operator delete(void* p, __SIZE_TYPE__) noexcept { luma_delete(p); }                                         \
+    void operator delete[](void* p, __SIZE_TYPE__) noexcept { luma_delete(p); }                                       \
+    void operator delete(void* p, std::align_val_t) noexcept { luma_delete(p); }                                      \
+    void operator delete[](void* p, std::align_val_t) noexcept { luma_delete(p); }                                    \
+    void operator delete(void* p, __SIZE_TYPE__, std::align_val_t) noexcept { luma_delete(p); }                       \
+    void operator delete[](void* p, __SIZE_TYPE__, std::align_val_t) noexcept { luma_delete(p); }                     \
+    void operator delete(void* p, const std::nothrow_t&) noexcept { luma_delete(p); }                                 \
+    void operator delete[](void* p, const std::nothrow_t&) noexcept { luma_delete(p); }                               \
+    void operator delete(void* p, std::align_val_t, const std::nothrow_t&) noexcept { luma_delete(p); }               \
+    void operator delete[](void* p, std::align_val_t, const std::nothrow_t&) noexcept { luma_delete(p); }
+#endif /* !__STDC_HOSTED__ */
+#endif /* __cplusplus */
+#ifndef LUMA_NEW
+#define LUMA_NEW
 #endif
 
 #endif
