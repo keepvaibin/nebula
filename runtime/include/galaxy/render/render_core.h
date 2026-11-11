@@ -452,7 +452,7 @@ private:
         LightsAverageA, LightsAverageB, LightsMomentsA, LightsMomentsB, Added, ReservoirsA, ReservoirsB, Mirror,
         BlueNoise, SunTiles, SunAverageA, SunAverageB, SunDistanceA, SunDistanceB, SunBlur, SunOut, LightsSpec,
         BlendGuideA, BlendGuideB, BlendReservoirsA, BlendReservoirsB, BlendSunA, BlendSunB, BlendDistanceA, BlendDistanceB,
-        BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing,
+        BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
         VolumeB, Count

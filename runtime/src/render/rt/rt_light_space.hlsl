@@ -27,6 +27,7 @@ Texture2D<float4> g_sun_out : register(t14);     // the last step's: the sun's V
 #endif
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
+Texture2D<float4> g_body : register(t12);     // the second layer's last step: glass's and water's body, in a (FC's c16)
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
 
@@ -117,7 +118,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const float3 now = sum / weight;
 #ifdef RT_LIGHTS
-    g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, 1.0f) : float4(now.x, frames, now.y, now.z);
+    const float body = g_pass.z != 0u && rt_second_layer() ? g_body.Load(int3(pixel, 0)).r : 1.0f;
+    g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, body) : float4(now.x, frames, now.y, now.z);
 #else
     if (g_pass.z == 0u) {
         g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);
