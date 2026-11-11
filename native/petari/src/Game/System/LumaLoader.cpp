@@ -3,6 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
 #include <nebula_format.h>
 #include <nebula_game_api.h>
@@ -20,6 +21,19 @@ namespace luma {
         uintptr_t check;  // the block's address mixed with kBlockCheck; 0 once freed
     };
     const uintptr_t kBlockCheck = static_cast<uintptr_t>(0x4C554D41424C4B21ull);
+
+    // One thing a mod's code reported (loader contract 6, D3-1): its place and code, its args the first time, how often.
+    const u32 kReportArgs = 8;
+    const u32 kReportsKept = 256;
+    struct Report {
+        char* file;  // copied
+        u32 line;
+        u32 code;
+        char* args[kReportArgs];  // copied; past kReportArgs, `cut`
+        u32 argCount;
+        bool cut;
+        u64 count;
+    };
 
     // The addresses alloc gave one mod: open addressing, kept at most half full. 0 is an empty slot, 1 a taken-out one.
     struct BlockSet {
@@ -94,10 +108,17 @@ struct LumaMod {
     // Its library, closed by the kernel (LR-5).
     void* library;
     LumaCloseLibrary close;
-    bool begun;      // its begin ran (so finish runs)
+    bool begun;      // its begin ran (so finish runs; T-2: a mod refused before begin runs no terminator)
     bool published;  // a hook of it was in a chain at some time (so its end waits for the grace)
     u32 grace;       // the grace mark of its end
     LumaMod* nextGone;
+    // What its code reported (D3-1), for the Mods page and the mod log; under `lock`. Past kReportsKept, counted.
+    luma::Report* reports;
+    u32 reportCount;
+    u64 reportsPast;
+    // The permissions the player granted it (D3-2), copied.
+    char** granted;
+    u32 grantedCount;
 };
 
 namespace luma {
@@ -259,9 +280,13 @@ namespace luma {
         // Services come from the host (luma_set_service_finder), which asks its own services and its extensions.
         LumaServiceFinder sServiceFinder = nullptr;
 
-        const void* apiService(const char* pName, u32 major, u32 minor) {
-            return pName != nullptr && sServiceFinder != nullptr ? sServiceFinder(pName, major, minor) : nullptr;
+        // The host's service and the permission it needs (null: none), or null.
+        const void* findService(const char* pName, u32 major, u32 minor, const char** ppPermission) {
+            *ppPermission = nullptr;
+            return pName != nullptr && sServiceFinder != nullptr ? sServiceFinder(pName, major, minor, ppPermission) : nullptr;
         }
+
+        const void* apiService(const LumaMod* pConstMod, const char* pName, u32 major, u32 minor);
 
         s32 apiGameThread() { return onGameThread() ? 1 : 0; }
 
@@ -283,6 +308,296 @@ namespace luma {
         }
 
         void unlockMod(LumaMod* pMod) { __atomic_store_n(&pMod->lock, 0u, __ATOMIC_RELEASE); }
+
+        bool sameText(const char* pA, const char* pB) {
+            if (pA == nullptr || pB == nullptr) {
+                return pA == pB;
+            }
+            while (*pA != 0 && *pA == *pB) {
+                pA++;
+                pB++;
+            }
+            return *pA == *pB;
+        }
+
+        char* keepText(const char* pText) {
+            const char* const pFrom = pText != nullptr ? pText : "";
+            size_t length = 0;
+            while (pFrom[length] != 0) {
+                length++;
+            }
+            char* const pKept = static_cast<char*>(::malloc(length + 1));
+            if (pKept == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory to keep a mod's report");
+            }
+            for (size_t i = 0; i <= length; i++) {
+                pKept[i] = pFrom[i];
+            }
+            return pKept;
+        }
+
+        void dropReport(Report* pReport) {
+            ::free(pReport->file);
+            for (u32 i = 0; i < pReport->argCount; i++) {
+                ::free(pReport->args[i]);
+            }
+        }
+
+        // The kernel's and luma.h's own codes (D3-1): the row and the names of its args in order. {mod} the kernel fills.
+        struct OwnRow {
+            u32 code;
+            const char* id;
+            const char* names[2];
+        };
+        const OwnRow cOwnRows[] = {
+            {LUMA_REPORT_OUT_OF_MEMORY, "Hook.OutOfMemory", {"size", nullptr}},
+            {2, "Hook.NoResult", {"found", nullptr}},
+            {3, "Hook.SkipRefused", {"found", nullptr}},
+            {4, "Hook.ServiceNotGranted", {"service", "permission"}},
+        };
+        const u32 kCodeNoResult = 2;
+        const u32 kCodeSkipRefused = 3;
+        const u32 kCodeNotGranted = 4;
+
+        // The row a code says, into pId; false when the code is no row (a bug in the reporting runtime).
+        bool rowOf(u32 code, char* pId, u32 size, const OwnRow** ppOwn) {
+            *ppOwn = nullptr;
+            for (u32 i = 0; i < sizeof(cOwnRows) / sizeof(cOwnRows[0]); i++) {
+                if (cOwnRows[i].code == code) {
+                    *ppOwn = &cOwnRows[i];
+                    copyText(pId, size, cOwnRows[i].id);
+                    return true;
+                }
+            }
+            if (code >= 900u && code <= 9999u) {
+                nebula_snprintf(pId, size, "Script.S%04u", code);
+                return true;
+            }
+            return false;
+        }
+
+        // UTF-8 of one UTF-16 unit or pair, appended within `size`.
+        u32 putUnit(char* pDst, u32 at, u32 size, u32 c) {
+            char bytes[4];
+            u32 n = 0;
+            if (c < 0x80u) {
+                bytes[n++] = static_cast<char>(c);
+            } else if (c < 0x800u) {
+                bytes[n++] = static_cast<char>(0xC0u | (c >> 6));
+                bytes[n++] = static_cast<char>(0x80u | (c & 0x3Fu));
+            } else if (c < 0x10000u) {
+                bytes[n++] = static_cast<char>(0xE0u | (c >> 12));
+                bytes[n++] = static_cast<char>(0x80u | ((c >> 6) & 0x3Fu));
+                bytes[n++] = static_cast<char>(0x80u | (c & 0x3Fu));
+            } else {
+                bytes[n++] = static_cast<char>(0xF0u | (c >> 18));
+                bytes[n++] = static_cast<char>(0x80u | ((c >> 12) & 0x3Fu));
+                bytes[n++] = static_cast<char>(0x80u | ((c >> 6) & 0x3Fu));
+                bytes[n++] = static_cast<char>(0x80u | (c & 0x3Fu));
+            }
+            if (at + n >= size) {
+                return at;
+            }
+            for (u32 i = 0; i < n; i++) {
+                pDst[at++] = bytes[i];
+            }
+            pDst[at] = 0;
+            return at;
+        }
+
+        u32 putText(char* pDst, u32 at, u32 size, const char* pText) {
+            for (; pText != nullptr && *pText != 0 && at + 1 < size; pText++) {
+                pDst[at++] = *pText;
+            }
+            pDst[at] = 0;
+            return at;
+        }
+
+        // The report's English words for the game's log: the row's {names} filled, a missing one left as {name}; with no
+        // such row (its table not built yet, or a bad code), the row's id or the code and every arg, so nothing is lost.
+        void englishOf(char* pDst, u32 size, const LumaMod* pMod, const Report& rReport) {
+            pDst[0] = 0;
+            char id[32];
+            const OwnRow* pOwn = nullptr;
+            const bool known = rowOf(rReport.code, id, sizeof(id), &pOwn);
+            const char16_t* const pTemplate = known ? NebulaText::english(id) : nullptr;
+            u32 at = 0;
+            if (pTemplate == nullptr) {
+                if (known) {
+                    at = putText(pDst, at, size, id);
+                } else {
+                    char code[48];
+                    nebula_snprintf(code, sizeof(code), "report code %u is no row (a bug in the mod's runtime)", rReport.code);
+                    at = putText(pDst, at, size, code);
+                }
+                for (u32 i = 0; i < rReport.argCount; i++) {
+                    at = putText(pDst, at, size, i == 0 ? ": " : ", ");
+                    at = putText(pDst, at, size, rReport.args[i]);
+                }
+                if (rReport.cut) {
+                    at = putText(pDst, at, size, ", ...");
+                }
+                return;
+            }
+            for (const char16_t* pAt = pTemplate; *pAt != 0;) {
+                if (*pAt == u'{') {
+                    char name[24];
+                    u32 n = 0;
+                    const char16_t* pEnd = pAt + 1;
+                    while (*pEnd != 0 && *pEnd != u'}' && n + 1 < sizeof(name) && *pEnd < 0x80) {
+                        name[n++] = static_cast<char>(*pEnd++);
+                    }
+                    name[n] = 0;
+                    if (*pEnd == u'}') {
+                        const char* pValue = nullptr;
+                        if (sameText(name, "mod")) {
+                            pValue = pMod->name;
+                        } else {
+                            for (u32 i = 0; i < rReport.argCount && pValue == nullptr; i++) {
+                                char positional[12];
+                                nebula_snprintf(positional, sizeof(positional), "%u", i);
+                                const char* const pName = pOwn != nullptr ? (i < 2 ? pOwn->names[i] : nullptr) : positional;
+                                if (pName != nullptr && sameText(name, pName)) {
+                                    pValue = rReport.args[i];
+                                }
+                            }
+                        }
+                        if (pValue != nullptr) {
+                            at = putText(pDst, at, size, pValue);
+                            pAt = pEnd + 1;
+                            continue;
+                        }
+                    }
+                }
+                u32 c = *pAt++;
+                if (c >= 0xD800u && c < 0xDC00u && *pAt >= 0xDC00u && *pAt < 0xE000u) {
+                    c = 0x10000u + ((c - 0xD800u) << 10) + (static_cast<u32>(*pAt++) - 0xDC00u);
+                }
+                at = putUnit(pDst, at, size, c);
+            }
+            if (rReport.cut) {
+                putText(pDst, at, size, " (...)");
+            }
+        }
+
+        void logReport(const LumaMod* pMod, const Report& rReport, u64 seen) {
+            char text[768];
+            englishOf(text, sizeof(text), pMod, rReport);
+            char times[40] = "";
+            if (seen > 1) {
+                nebula_snprintf(times, sizeof(times), " (seen %llu times)", static_cast<unsigned long long>(seen));
+            }
+            if (rReport.line != 0) {
+                nebula_log("[mod %s] %s:%u: %s%s\n", pMod->name, rReport.file, rReport.line, text, times);
+            } else {
+                nebula_log("[mod %s] %s%s\n", pMod->name, text, times);
+            }
+        }
+
+        bool powerOfTen(u64 n) {
+            while (n >= 10u && n % 10u == 0) {
+                n /= 10u;
+            }
+            return n == 1u;
+        }
+
+        // One report of a mod (D3-1): a new (file, line, code) is kept and said; a repeat is counted and said again at
+        // 10, 100, 1000... Past kReportsKept kept ones, counted as one more, said the same way.
+        void record(LumaMod* pMod, const char* pFile, u32 line, u32 code, const char* const* ppArgs, u32 argCount) {
+            const char* const pPlace = pFile != nullptr ? pFile : "";
+            for (int pass = 0; pass < 2; pass++) {
+                lockMod(pMod);
+                for (u32 i = 0; i < pMod->reportCount; i++) {
+                    Report& rReport = pMod->reports[i];
+                    if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace)) {
+                        const u64 seen = ++rReport.count;
+                        unlockMod(pMod);
+                        if (powerOfTen(seen)) {
+                            logReport(pMod, rReport, seen);
+                        }
+                        return;
+                    }
+                }
+                if (pMod->reportCount == kReportsKept) {
+                    const u64 past = ++pMod->reportsPast;
+                    unlockMod(pMod);
+                    if (powerOfTen(past)) {
+                        nebula_log("[mod %s] %llu reports more than the Mods page keeps (%u); counted, not kept\n", pMod->name,
+                                   static_cast<unsigned long long>(past), kReportsKept);
+                    }
+                    return;
+                }
+                unlockMod(pMod);
+                if (pass == 1) {
+                    break;
+                }
+                // Copied outside the lock; another thread may have kept the same one meanwhile (the second pass).
+                Report made = {};
+                made.file = keepText(pPlace);
+                made.line = line;
+                made.code = code;
+                made.argCount = argCount < kReportArgs ? argCount : kReportArgs;
+                made.cut = argCount > kReportArgs;
+                for (u32 i = 0; i < made.argCount; i++) {
+                    made.args[i] = keepText(ppArgs != nullptr ? ppArgs[i] : nullptr);
+                }
+                made.count = 1;
+                lockMod(pMod);
+                bool kept = false;
+                for (u32 i = 0; i < pMod->reportCount && !kept; i++) {
+                    Report& rReport = pMod->reports[i];
+                    if (rReport.code == code && rReport.line == line && sameText(rReport.file, pPlace)) {
+                        rReport.count++;
+                        kept = true;
+                    }
+                }
+                if (!kept && pMod->reportCount < kReportsKept) {
+                    if (pMod->reports == nullptr) {
+                        pMod->reports = static_cast<Report*>(::calloc(kReportsKept, sizeof(Report)));
+                        if (pMod->reports == nullptr) {
+                            unlockMod(pMod);
+                            NEBULA_PANIC("LumaCore: no memory for %s's reports", pMod->name);
+                        }
+                    }
+                    pMod->reports[pMod->reportCount++] = made;
+                    unlockMod(pMod);
+                    logReport(pMod, made, 1);
+                    return;
+                }
+                unlockMod(pMod);
+                dropReport(&made);
+                if (!kept) {
+                    continue;  // the list filled meanwhile: counted past it
+                }
+                return;
+            }
+            // The list filled between the passes.
+            lockMod(pMod);
+            const u64 past = ++pMod->reportsPast;
+            unlockMod(pMod);
+            if (powerOfTen(past)) {
+                nebula_log("[mod %s] %llu reports more than the Mods page keeps (%u); counted, not kept\n", pMod->name,
+                           static_cast<unsigned long long>(past), kReportsKept);
+            }
+        }
+
+        void apiReport(const LumaMod* pConstMod, const char* pFile, u32 line, u32 code, const char* const* ppArgs, u32 argCount) {
+            LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
+            if (pMod == nullptr) {
+                nebula_log("LumaCore: report(%u) without its mod; it cannot be kept\n", code);
+                return;
+            }
+            record(pMod, pFile, line, code, ppArgs, argCount);
+        }
+
+        bool grants(const LumaMod* pMod, const char* pPermission) {
+            for (u32 i = 0; i < pMod->grantedCount; i++) {
+                if (sameText(pMod->granted[i], pPermission)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         void* apiAlloc(const LumaMod* pConstMod, u64 size, u64 align) {
             LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
@@ -366,47 +681,44 @@ namespace luma {
             pMod->blockCount = 0;
         }
 
-        // A hook's result that the kernel had to mend, said once per (what, function, mod): the first 256 triples;
-        // later ones each time, so none is lost.
-        struct Said {
-            const Function* function;
-            const void* owner;
-            u32 what;
-        };
-        Said sSaid[256];
-        u32 sSaidCount = 0;
-
-        bool sayOnce(const Function* pFunction, const void* pOwner, u32 what) {
-            for (u32 i = 0; i < sSaidCount; i++) {
-                if (sSaid[i].function == pFunction && sSaid[i].owner == pOwner && sSaid[i].what == what) {
-                    return false;
-                }
+        const void* apiService(const LumaMod* pConstMod, const char* pName, u32 major, u32 minor) {
+            const char* pPermission = nullptr;
+            const void* const pTable = findService(pName, major, minor, &pPermission);
+            if (pTable == nullptr || pPermission == nullptr) {
+                return pTable;
             }
-            if (sSaidCount < 256u) {
-                sSaid[sSaidCount++] = {pFunction, pOwner, what};
+            LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
+            if (pMod == nullptr) {
+                nebula_log("LumaCore: service(%s) without its mod: refused, as the permission %s cannot be checked\n", pName, pPermission);
+                return nullptr;
             }
-            return true;
+            if (!grants(pMod, pPermission)) {
+                const char* const args[2] = {pName, pPermission};
+                record(pMod, pName, 0, kCodeNotGranted, args, 2);
+                return nullptr;
+            }
+            return pTable;
         }
 
-        const char* modName(const void* pOwner) { return pOwner != nullptr ? static_cast<const LumaMod*>(pOwner)->name : "?"; }
-
-        void skipRefused(const Function* pFunction, const void* pOwner) {
-            if (sayOnce(pFunction, pOwner, 0)) {
-                nebula_log("[mod %s] a before hook skipped %s %s, whose result is built by the function itself; the function ran\n",
-                           modName(pOwner), pFunction->name, pFunction->signature);
+        // A hook's result that the kernel had to mend, said through report (D3-1): once per (function, mod), then counted.
+        void mended(const Function* pFunction, const void* pOwner, u32 code) {
+            if (pOwner == nullptr) {
+                nebula_log("LumaCore: a hook with no mod on %s %s (code %u)\n", pFunction->name, pFunction->signature, code);
+                return;
             }
+            char found[256];
+            nebula_snprintf(found, sizeof(found), "%s %s", pFunction->name, pFunction->signature);
+            const char* const args[1] = {found};
+            record(const_cast<LumaMod*>(static_cast<const LumaMod*>(pOwner)), found, 0, code, args, 1);
         }
 
-        void noResult(const Function* pFunction, const void* pOwner) {
-            if (sayOnce(pFunction, pOwner, 1)) {
-                nebula_log("[mod %s] a hook on %s %s gave no result, so the function ran\n", modName(pOwner), pFunction->name,
-                           pFunction->signature);
-            }
-        }
+        void skipRefused(const Function* pFunction, const void* pOwner) { mended(pFunction, pOwner, kCodeSkipRefused); }
+
+        void noResult(const Function* pFunction, const void* pOwner) { mended(pFunction, pOwner, kCodeNoResult); }
 
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
-            apiGameThread, apiUnhook, apiAlloc, apiFree,
+            apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none.
@@ -430,6 +742,8 @@ namespace luma {
             case LUMA_IMPORT_SIZE:
                 *pNumber = apiSizeOf(rImport.name);
                 return *pNumber >= 0;
+            case LUMA_IMPORT_SERVICE:
+                return false;  // bindService
             default:
                 *pNumber = apiClassOf(rImport.name);
                 return *pNumber >= 0;
@@ -444,12 +758,35 @@ namespace luma {
                 return rImport.signature != nullptr ? "Name.FunctionSig" : "Name.Function";
             case LUMA_IMPORT_FIELD:
                 return rImport.signature != nullptr ? "Name.FieldSig" : "Name.Field";
+            case LUMA_IMPORT_SERVICE:
+                return "Name.Service";
             default:
                 return "Name.Class";
             }
         }
 
         bool covers(const LumaModInfo* pInfo, size_t end) { return pInfo->size >= end; }
+
+        // "major.minor" of a service import; false when it is not that.
+        bool versionOf(const char* pText, u32* pMajor, u32* pMinor) {
+            u32 parts[2] = {0, 0};
+            u32 part = 0;
+            bool digit = false;
+            for (const char* p = pText; p != nullptr && *p != 0; p++) {
+                if (*p >= '0' && *p <= '9' && parts[part] < 100000000u) {
+                    parts[part] = parts[part] * 10u + static_cast<u32>(*p - '0');
+                    digit = true;
+                } else if (*p == '.' && part == 0 && digit) {
+                    part = 1;
+                    digit = false;
+                } else {
+                    return false;
+                }
+            }
+            *pMajor = parts[0];
+            *pMinor = parts[1];
+            return part == 1 && digit;
+        }
 
         // After the grace: the mod's destructors, its memory, its library.
         void finishMod(LumaMod* pMod) {
@@ -461,6 +798,14 @@ namespace luma {
             if (pMod->library != nullptr && pMod->close != nullptr) {
                 pMod->close(pMod->library);
             }
+            for (u32 i = 0; i < pMod->reportCount; i++) {
+                dropReport(&pMod->reports[i]);
+            }
+            ::free(pMod->reports);
+            for (u32 i = 0; i < pMod->grantedCount; i++) {
+                ::free(pMod->granted[i]);
+            }
+            ::free(pMod->granted);
             delete pMod;
         }
 
@@ -494,7 +839,7 @@ namespace luma {
     }
 
     bool loadMod(const LumaModInfo* pInfo, const char* pId, const char* pFile, s32 order, void* pLibrary, LumaCloseLibrary close,
-                 LumaRefusal* pRefusal) {
+                 const char* const* pGranted, u32 grantedCount, LumaRefusal* pRefusal) {
         if (pRefusal != nullptr) {
             pRefusal->code = 0;
             pRefusal->count = 0;
@@ -511,6 +856,16 @@ namespace luma {
         pMod->order = order;
         pMod->library = pLibrary;
         pMod->close = close;
+        if (pGranted != nullptr && grantedCount != 0) {
+            pMod->granted = static_cast<char**>(::calloc(grantedCount, sizeof(char*)));
+            if (pMod->granted == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory to keep %s's permissions", pMod->name);
+            }
+            for (u32 i = 0; i < grantedCount; i++) {
+                pMod->granted[i] = keepText(pGranted[i]);
+            }
+            pMod->grantedCount = grantedCount;
+        }
         Refuse refuse = {pRefusal, pId, pFile};
 
         // Each refusal is the first one found, with the validator's code and parameters (loader contract 2, 3).
@@ -542,13 +897,46 @@ namespace luma {
         // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet (LR-2).
         for (u32 i = 0; !refused && i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
-            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_HOOK ||
+            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_SERVICE ||
                 (rImport.kind == LUMA_IMPORT_HOOK && (rImport.hook == nullptr || rImport.hook_kind >= Hook_KindCount))) {
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.ImportRowBad");
                 refuse.number("row", i);
                 refused = true;
                 break;
+            }
+            // A service (D3-2): absent or older is L505 (Name.Service); not granted is L506.
+            if (rImport.kind == LUMA_IMPORT_SERVICE) {
+                u32 major = 0;
+                u32 minor = 0;
+                if (!versionOf(rImport.signature, &major, &minor)) {
+                    refuse.start(512);
+                    refuse.put("why", 'P', "Lib.ImportRowBad");
+                    refuse.number("row", i);
+                    refused = true;
+                    break;
+                }
+                const char* pPermission = nullptr;
+                const void* const pTable = findService(rImport.name, major, minor, &pPermission);
+                if ((rImport.flags & LUMA_OPTIONAL) != 0) {
+                    continue;
+                }
+                if (pTable == nullptr) {
+                    refuse.start(505);
+                    refuse.put("kind", 'P', "Name.Service");
+                    refuse.put("found", 'T', rImport.name);
+                    refuse.put("sig", 'T', rImport.signature);
+                    refused = true;
+                    break;
+                }
+                if (pPermission != nullptr && !grants(pMod, pPermission)) {
+                    refuse.start(506);
+                    refuse.put("service", 'T', rImport.name);
+                    refuse.put("permission", 'T', pPermission);
+                    refused = true;
+                    break;
+                }
+                continue;
             }
             const Function* pFunction = nullptr;
             s32 number = -1;
@@ -597,6 +985,18 @@ namespace luma {
         for (u32 i = 0; i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
             if (rImport.kind == LUMA_IMPORT_HOOK || rImport.slot == nullptr) {
+                continue;
+            }
+            if (rImport.kind == LUMA_IMPORT_SERVICE) {
+                // Pass 1 checked it; an optional one the player may not use, or the game lacks, stays null.
+                u32 major = 0;
+                u32 minor = 0;
+                const char* pPermission = nullptr;
+                const void* pTable = versionOf(rImport.signature, &major, &minor) ? findService(rImport.name, major, minor, &pPermission) : nullptr;
+                if (pTable != nullptr && pPermission != nullptr && !grants(pMod, pPermission)) {
+                    pTable = nullptr;
+                }
+                *static_cast<const void**>(rImport.slot) = pTable;
                 continue;
             }
             const Function* pFunction = nullptr;
@@ -667,8 +1067,8 @@ namespace luma {
 
 extern "C" {
 NEBULA_GAME_API int32_t luma_load_mod(const LumaModInfo* info, const char* mod_id, const char* file, int32_t order, void* library,
-                                      LumaCloseLibrary close, LumaRefusal* refusal) {
-    return luma::loadMod(info, mod_id, file, order, library, close, refusal) ? 1 : 0;
+                                      LumaCloseLibrary close, const char* const* granted, uint32_t granted_count, LumaRefusal* refusal) {
+    return luma::loadMod(info, mod_id, file, order, library, close, granted, granted_count, refusal) ? 1 : 0;
 }
 
 NEBULA_GAME_API void luma_unload_mod(const LumaModInfo* info) {

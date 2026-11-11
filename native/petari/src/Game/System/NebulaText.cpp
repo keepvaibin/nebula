@@ -393,6 +393,16 @@ namespace NebulaText {
         return measure(pId);
     }
 
+    const char16_t* english(const char* pId) {
+        const s32 idLength = lengthOf(pId);
+        for (u32 i = 0; i < sizeof(cNebulaTextRows) / sizeof(cNebulaTextRows[0]); i++) {
+            if (sameTerminated(cNebulaTextRows[i].mId, pId, idLength)) {
+                return cNebulaTextRows[i].mText[0];
+            }
+        }
+        return nullptr;
+    }
+
     const char16_t* get(MR::GrowBuffer< char16_t >* pText, const char* pId) {
         const s32 units = measure(pId) + 1;
         get(pText->room(units), units, pId);

@@ -441,9 +441,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_log = log;
     g_find_symbol = find_symbol;
     // LumaCore.service: the module asks the host, which asks its extensions (the harness's own service while a test runs).
-    using ServiceFinder = const void* (*)(const char*, std::uint32_t, std::uint32_t);
+    // An extension's service (the harness's) needs no permission; phase 2's services name theirs here (loader D3-2).
+    using ServiceFinder = const void* (*)(const char*, std::uint32_t, std::uint32_t, const char**);
     if (const auto give = reinterpret_cast<void (*)(ServiceFinder)>(find_symbol != nullptr ? find_symbol("luma_set_service_finder") : nullptr)) {
-        give([](const char* name, std::uint32_t major, std::uint32_t minor) -> const void* {
+        give([](const char* name, std::uint32_t major, std::uint32_t minor, const char** permission) -> const void* {
+            if (permission != nullptr) *permission = nullptr;
             return galaxy::extensions::service(name, major, minor);
         });
     }
@@ -698,8 +700,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
             LumaRefusal refusal{};
             const std::string library = file.path.filename().string();
+            // The permissions the player granted: none until the consent screen (phase 6), so a permissioned service is
+            // refused by name, never allowed by omission (loader D3-2).
             if (load(static_cast<const LumaModInfo*>(info), file.mod_id.c_str(), library.c_str(), static_cast<std::int32_t>(index), module,
-                     close_luma_library, &refusal) == 0) {
+                     close_luma_library, nullptr, 0u, &refusal) == 0) {
                 say(refusal.code != 0 ? refusal_text(refusal) : name + " not started: the loader gave no reason");
                 continue;
             }

@@ -31,12 +31,13 @@ typedef void (*LumaCloseLibrary)(void* library);
    luma_load_mod binds a mod's library whole or not at all, at `order` (its place in the Mods list, top 0), and runs
    its start. 1: on. 0: refused, `refusal` says why. On the game thread. From this call on the game closes `library`
    with `close`: at once when none of the mod's code can still run, else after the grace (another thread may be
-   inside one of its hooks). The host never closes it.
+   inside one of its hooks). The host never closes it. `granted` names the permissions the player granted this mod
+   (`granted_count` of them, copied): a service that needs another is refused (loader contract D3-2).
 
    luma_unload_mod takes a mod out: its hooks, its stop, then after the grace its destructors, its memory and its
    library. */
 typedef int32_t (*LumaLoadMod)(const LumaModInfo* info, const char* mod_id, const char* file, int32_t order, void* library,
-                               LumaCloseLibrary close, LumaRefusal* refusal);
+                               LumaCloseLibrary close, const char* const* granted, uint32_t granted_count, LumaRefusal* refusal);
 typedef void (*LumaUnloadMod)(const LumaModInfo* info);
 
 #ifdef __cplusplus

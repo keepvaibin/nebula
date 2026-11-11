@@ -24,6 +24,9 @@ namespace NebulaText {
     const char16_t* get(MR::GrowBuffer< char16_t >* pText, const char* pId);
     // Whether any of those has a text for `pId`.
     bool has(const char* pId);
+    // A row's American English words as the table holds them, its {names} unfilled (the game's log, which is English);
+    // null when there is no such row.
+    const char16_t* english(const char* pId);
     // A talk in the game's balloon for MessageData (Nebula_<id>), its pages in the played language: AchievementLuma
     // (LumaGreeting, then LumaBoard); null for another id.
     const char16_t* getTalk(const char* pId);

@@ -55,7 +55,8 @@ enum {
     LUMA_IMPORT_FIELD = 1,    /* name "Class.field", signature its type; slot: int32_t* (the offset in the object) */
     LUMA_IMPORT_SIZE = 2,     /* name "Class"; slot: int32_t* (its size in bytes) */
     LUMA_IMPORT_CLASS = 3,    /* name "Class"; slot: int32_t* (its number, for is_a) */
-    LUMA_IMPORT_HOOK = 4      /* a hook on the function `name` with `signature`: `hook`, `hook_kind`, `user` */
+    LUMA_IMPORT_HOOK = 4,     /* a hook on the function `name` with `signature`: `hook`, `hook_kind`, `user` */
+    LUMA_IMPORT_SERVICE = 5   /* a service: `name`, `signature` its "major.minor"; slot: const void** (its table) */
 };
 #define LUMA_OPTIONAL 1u
 
@@ -97,9 +98,10 @@ typedef struct LumaCore {
     int32_t (*class_of)(const char* class_name);
     int32_t (*is_a)(const void* object, int32_t class_number);
 
-    /* A service by name ("fs", "net", "draw"...): its table of functions, or null when this game has no such service
-       or an older one than `minor`. A `major` is a table of its own; within it a later `minor` only adds at the end. */
-    const void* (*service)(const char* name, uint32_t major, uint32_t minor);
+    /* A service by name ("fs", "net", "draw"...): its table of functions, or null when this game has no such service,
+       an older one than `minor`, or one whose permission the player has not granted this mod (logged, named). A
+       `major` is a table of its own; within it a later `minor` only adds at the end. */
+    const void* (*service)(const LumaMod* mod, const char* name, uint32_t major, uint32_t minor);
 
     /* 1 on the game thread (the thread that runs the game's frames and starts the mods), else 0. A hooked function
        runs its hooks on whatever thread calls it. */
@@ -107,12 +109,21 @@ typedef struct LumaCore {
     /* Takes out a hook this mod added (in its imports or with `hook`): the same function, kind, hook and user. 0: taken
        out; -1: this mod has no such hook; -3: not on the game thread (nothing changes). */
     int32_t (*unhook)(const LumaMod* mod, const LumaFunction* function, uint32_t kind, LumaHook hook, void* user);
-    /* Memory for the mod, `size` bytes aligned to `align` (a power of two up to 4096), counted on the Mods screen and
+    /* Memory for the mod, `size` bytes aligned to `align` (a power of two up to 65536), counted on the Mods screen and
        freed when the mod is taken out. Null: none left (the mod says so). From any thread. */
     void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align);
     /* Gives back what `alloc` gave this mod; null does nothing. */
     void (*free)(const LumaMod* mod, void* p);
+    /* Something went wrong in the mod's code at `file`:`line` (loader contract 6, D3-1). `code` picks the words: 900 to
+       9999 lumart's (Script.S0901...), args {0}, {1}... in order; 1 to 99 the kernel's and luma.h's own (LUMA_REPORT_*).
+       Said once in the game's log and kept for the Mods page in the player's language; repeats are counted. Args are
+       UTF-8 and copied; at most 8 are kept. From any thread. */
+    void (*report)(const LumaMod* mod, const char* file, uint32_t line, uint32_t code, const char* const* args,
+                   uint32_t arg_count);
 } LumaCore;
+
+/* report's own codes (D3-1). */
+#define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
 
 typedef struct LumaModInfo {
     uint32_t size;
@@ -143,6 +154,7 @@ typedef struct LumaModInfo {
 #define LUMA_SIZE(slot, class_name) {LUMA_IMPORT_SIZE, 0, class_name, 0, &slot, 0, 0, 0}
 #define LUMA_CLASS(slot, class_name) {LUMA_IMPORT_CLASS, 0, class_name, 0, &slot, 0, 0, 0}
 #define LUMA_HOOK_ON(name, signature, kind, hook) {LUMA_IMPORT_HOOK, 0, name, signature, 0, hook, kind, 0}
+#define LUMA_SERVICE(slot, name, major_minor) {LUMA_IMPORT_SERVICE, 0, name, major_minor, &slot, 0, 0, 0}
 
 /* A library with no C library that uses floats needs this one symbol the Windows compiler expects. */
 #if defined(_WIN32)
@@ -229,7 +241,8 @@ typedef struct LumaModInfo {
    - Windows: what lies between luma.h's `.CRT$XTA` and `.CRT$XTZ` markers, last to first.
    - Linux and Android: luma_ctors.ld puts `.dtors` in `luma_dtors` (a null entry first), run first to last.
    On every system the order is GCC's: constructors by priority, 101 first; terminators the other way round.
-   - Apple: macho_ctors.py makes the term section `__DATA,luma_dtors` of type S_REGULAR, run first to last. */
+   - Apple: macho_ctors.py makes a term section `__DATA,luma_dtors` of type S_REGULAR, run first to last. Apple's clang
+     sends a destructor attribute through `__cxa_atexit`, so only assembly or another compiler makes one. */
 typedef void (*LumaCtor)(void);
 #if defined(_WIN32)
 #define LUMA_CTORS                                                                                                    \
@@ -415,7 +428,19 @@ extern "C" const LumaMod* luma_rt_self;
     static void* luma_new(__SIZE_TYPE__ size, __SIZE_TYPE__ align, bool must) {                                       \
         void* const p = luma_rt_core != 0 ? luma_rt_core->alloc(luma_rt_self, size != 0 ? size : 1, align < 16 ? 16 : align) : 0; \
         if (p == 0 && must) {                                                                                         \
-            if (luma_rt_core != 0) luma_rt_core->log(luma_rt_self, "new found no memory; the game stops here");       \
+            /* Hook.OutOfMemory through report (D3-1), then the game stops with its crash report (D2-7). */           \
+            if (luma_rt_core != 0) {                                                                                  \
+                char digits[24];                                                                                      \
+                char* at = digits + sizeof(digits) - 1;                                                               \
+                *at = 0;                                                                                              \
+                unsigned long long n = size;                                                                          \
+                do {                                                                                                  \
+                    *--at = (char)('0' + n % 10u);                                                                    \
+                    n /= 10u;                                                                                         \
+                } while (n != 0);                                                                                     \
+                const char* args[1] = {at};                                                                           \
+                luma_rt_core->report(luma_rt_self, "luma.h", 0, LUMA_REPORT_OUT_OF_MEMORY, args, 1);                  \
+            }                                                                                                         \
             __builtin_trap();                                                                                         \
         }                                                                                                             \
         return p;                                                                                                     \

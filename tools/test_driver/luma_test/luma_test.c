@@ -1219,7 +1219,7 @@ static int32_t on_frame(LumaCall* call, void* user) {
 static int32_t start(const LumaCore* given, const LumaMod* mod) {
     core = given;
     self = mod;
-    harness = (const LumaHarness*)core->service(LUMA_HARNESS_NAME, LUMA_HARNESS_MAJOR, 0);
+    harness = (const LumaHarness*)core->service(mod, LUMA_HARNESS_NAME, LUMA_HARNESS_MAJOR, 0);
     if (harness == 0 || harness->size < sizeof(LumaHarness)) {
         core->log(mod, "not in a harness run: the harness service is absent");
         return 1;
