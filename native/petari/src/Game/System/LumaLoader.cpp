@@ -592,7 +592,8 @@ namespace luma {
             return false;
         }
 
-        void* apiAlloc(const LumaMod* pConstMod, u64 size, u64 align) {
+        // luma.h's types: uint64_t is unsigned long on LP64 Android and Linux, which u64 (unsigned long long) is not.
+        void* apiAlloc(const LumaMod* pConstMod, uint64_t size, uint64_t align) {
             LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
             if (pMod == nullptr) {
                 return nullptr;
