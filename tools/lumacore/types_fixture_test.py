@@ -123,6 +123,9 @@ def main():
         have = None if r is None else tuple(r.get(k) for k in keys)
         if have != want:
             failed.append("TY-10: %s should be %s %s; it is %s" % (n, keys, want, have))
+    # Contract objects: polymorphic through a base that is an instance named only as a base.
+    if not rows.get("FoHolder", {}).get("polymorphic"):
+        failed.append("objects: FoHolder (a base FoGroup<FoB> : FoV) is not said polymorphic")
     missing = [r["name"] for r in data["types"] if r.get("kind") in ("struct", "class", "union")
                and any(k not in r for k in keys)]
     if missing:

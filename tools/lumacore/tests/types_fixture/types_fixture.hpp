@@ -183,6 +183,15 @@ struct FoV {  // polymorphic by its destructor alone: a type_info, no method row
 };
 struct FoX : FoA {};
 struct FoAmb : FoC, FoX {};  // two FoA subobjects: as FoA, ambiguous
+// Polymorphic only through an instance named nowhere but as a base, which declares nothing virtual itself
+// (the game's DeriveActorGroup<T> holders: a base walked after the record, or with no row of its own).
+template <class T>
+struct FoGroup : FoV {
+    T* first = nullptr;
+};
+struct FoHolder : FoGroup<FoB> {
+    s32 h = 0;
+};
 
 // Globals: one defined in the header (a row), one only declared (left out), one constant (a value, no row needed).
 inline s32 gFxDefined = 7;

@@ -297,6 +297,7 @@ class Reader:
         self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor (TY-9)
         self.named_instances = set()  # unit pass: the instances (and their members) its types name (TY-9)
         self.trivial_memo = {}  # TY-10: canonical spelling -> trivial
+        self.polymorphic_types = {}  # contract objects: canonical spelling -> declares or inherits a virtual
         self.seen = set()
         self.records = {}   # name -> row
         self.enums = {}
@@ -517,9 +518,25 @@ class Reader:
             for m in methods:
                 self.want_signature(m)
         self.fields(c, t, row, "", 0)
-        row["polymorphic"] = row["polymorphic"] or any(self.records.get(b["name"], {}).get("polymorphic") for b in row["bases"])
+        # Inherited: from the compiler's own bases, not from the rows (a base may be an instance with no row yet, or
+        # none at all: DeriveActorGroup<ArrowSwitchMulti>).
+        row["polymorphic"] = row["polymorphic"] or any(self.inherits_virtual(self.api.type(m))
+                                                       for m in self.api.members(self.api.visitBases, t))
         row["trivial_copy"], row["trivial_destroy"], can_construct, can_assign, _ = self.trivial(t)
         row["no_copy"] = not can_construct and not can_assign
+
+    def inherits_virtual(self, t):
+        """True when the record type t declares a virtual function or has a base that does, by the compiler's own
+        members and bases (an instance's too); remembered by its canonical spelling."""
+        t = self.api.canonical(t)
+        key = self.text(self.api.typeSpelling(t))
+        if key not in self.polymorphic_types:
+            self.polymorphic_types[key] = False  # ends a malformed walk; a base is never its own base
+            self.polymorphic_types[key] = (
+                any(m.kind in (K_METHOD, I.K_DESTRUCTOR, I.K_CONVERSION) and self.api.virtualMethod(m)
+                    for m in self.api.members(self.api.visitMethods, t))
+                or any(self.inherits_virtual(self.api.type(b)) for b in self.api.members(self.api.visitBases, t)))
+        return self.polymorphic_types[key]
 
     def virtual(self, row, m, instance):
         """Contract objects: a virtual function (a destructor or conversion too) makes the record polymorphic; each one
