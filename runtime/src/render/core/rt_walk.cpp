@@ -813,6 +813,7 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Sun Distance B", rt::ImageFormat::R16f, kRtFull, kForLight},
     {"Nebula RT Sun Blur", kHalf4, kRtFull, kForLight},
     {"Nebula RT Sun", kHalf4, kRtFull, kForLight},
+    {"Nebula RT Lights Spec", kHalf4, kRtFull, kForLight},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average B", kHalf4, kRtHalf, kForIndirect},
@@ -1023,8 +1024,10 @@ void RenderCore::rt_pass_lights() {
     binds.reads[2] = rt_image(RtImage::Motion);
     binds.reads[3] = rt_before(RtImage::ReservoirsA);
     binds.reads[4] = second ? rt_now(RtImage::GuideA) : rt_before(RtImage::GuideA);  // (not the one this layer reads)
+    binds.reads[5] = rt_image(RtImage::Material);
     binds.writes[0] = rt_image(second ? RtImage::Added : RtImage::Lights);
     binds.writes[1] = rt_now(RtImage::ReservoirsA);
+    binds.writes[2] = second ? rt::kNoImage : rt_image(RtImage::LightsSpec);  // the opaque layer's highlights
     rt_backend_.dispatch(RtShader::Lights, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 
@@ -1036,6 +1039,7 @@ void RenderCore::rt_pass_light() {
     binds.reads[2] = rt_image(RtImage::Motion);
     binds.reads[3] = rt_image(rt_light_frame_.layer == 0u ? RtImage::SunOut : RtImage::SunRaw);  // the second layer has no sun filter
     binds.reads[4] = rt_image(RtImage::Material);
+    binds.reads[5] = rt_light_frame_.layer == 0u ? rt_image(RtImage::LightsSpec) : rt::kNoImage;
     binds.writes[0] = rt_image(RtImage::Light);
     binds.writes[1] = rt_image(RtImage::Mirror);
     rt_backend_.dispatch(RtShader::Light, binds, rt_light_frame_.across, rt_light_frame_.down);
@@ -1088,6 +1092,7 @@ void RenderCore::rt_filters() {
     lights_time.reads[3] = guide_before;
     lights_time.reads[4] = motion;
     lights_time.reads[5] = rt_before(RtImage::LightsMomentsA);
+    lights_time.reads[6] = rt_now(RtImage::ReservoirsA);  // the boiling filter's weights
     lights_time.writes[0] = lights_average;
     lights_time.writes[1] = moments;
     rt_backend_.dispatch(RtShader::LightsTime, lights_time, frame.across, frame.down);
@@ -2083,6 +2088,51 @@ void RenderCore::rt_emitter_bins(unsigned width, unsigned height, const float ra
             for (std::uint32_t x = reach.x0; x <= reach.x1; ++x) {
                 const std::size_t t = std::size_t{y} * across + x;
                 rt_glow_entries_[rt_glow_tiles_[t * 2u] + rt_glow_tiles_[t * 2u + 1u]++] = static_cast<std::uint32_t>(e);
+            }
+        }
+    }
+    // Past eight lights a tile's list starts with its four strongest (rt_lights.hlsl tries them for certain): each
+    // light's luminance by its falloff at the tile's middle ray, as far from the eye as the light is (no depth here).
+    std::vector<float> luminance(rt_emitters_.size());
+    for (std::size_t e = 0; e < rt_emitters_.size(); ++e) {
+        const RtEmitter& emitter = rt_emitters_[e];
+        luminance[e] = 0.2126f * emitter.colour[0] + 0.7152f * emitter.colour[1] + 0.0722f * emitter.colour[2];
+    }
+    for (std::size_t t = 0; t < rt_glow_counts_.size(); ++t) {
+        const std::uint32_t first = rt_glow_tiles_[t * 2u], count = rt_glow_tiles_[t * 2u + 1u];
+        if (count <= 8u) {
+            continue;
+        }
+        const float slope_x = (static_cast<float>(t % across) * kTile + 0.5f * kTile) * ray[0] + ray[1];
+        const float slope_y = (static_cast<float>(t / across) * kTile + 0.5f * kTile) * ray[2] + ray[3];
+        std::uint32_t best[4] = {0u, 0u, 0u, 0u};  // places in the list
+        float strength[4] = {-1.0f, -1.0f, -1.0f, -1.0f};
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const RtEmitter& emitter = rt_emitters_[rt_glow_entries_[first + i]];
+            const float depth = std::max(-emitter.centre[2], 1.0f);
+            const float dx = emitter.centre[0] - slope_x * depth, dy = emitter.centre[1] - slope_y * depth;
+            const float far2 = dx * dx + dy * dy, r2 = emitter.radius * emitter.radius;
+            const float s = far2 > emitter.reach * emitter.reach ? 0.0f : luminance[rt_glow_entries_[first + i]] * r2 / (far2 + r2);
+            for (unsigned k = 0; k < 4u; ++k) {
+                if (s > strength[k]) {
+                    for (unsigned m = 3u; m > k; --m) {
+                        strength[m] = strength[m - 1u];
+                        best[m] = best[m - 1u];
+                    }
+                    strength[k] = s;
+                    best[k] = i;
+                    break;
+                }
+            }
+        }
+        // To the front, in order: a swap each; a later best whose place was swapped away follows it.
+        for (unsigned k = 0; k < 4u; ++k) {
+            const std::uint32_t from = best[k];
+            std::swap(rt_glow_entries_[first + k], rt_glow_entries_[first + from]);
+            for (unsigned m = k + 1u; m < 4u; ++m) {
+                if (best[m] == k) {
+                    best[m] = from;
+                }
             }
         }
     }

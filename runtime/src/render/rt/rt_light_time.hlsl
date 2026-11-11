@@ -14,7 +14,9 @@
 // kind also keeps what its noise is (Schied et al. 2017, "Spatiotemporal Variance-Guided Filtering"): the first and
 // second moment of the luminance over time, and from them the variance of the average, which the steps over space
 // (rt_lights_space.hlsl) weigh their taps by. A pixel with fewer than four frames behind it takes the variance of
-// this frame's rays around it instead.
+// this frame's rays around it instead. Two guards of ReSTIR's: the boiling filter (RTXDI's): a pixel whose kept light's
+// weight is over 20 times the mean of its lit neighbours' is a firefly, brought down to that; and a flash stays a
+// flash: where this frame is over four times the history, the history holds at most 8 frames.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
 
@@ -28,6 +30,7 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 Texture2D<float4> g_moments_before : register(t14);            // the frame before's moments
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_moments : register(u1);  // r, g: the luminance's first and second moment over time;
                                                                   // b: the variance of the average
+Texture2D<float4> g_reservoirs_now : register(t15);           // this frame's reservoirs: b the kept light's weight
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
 
@@ -46,7 +49,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const int2 pixel = int2(id.xy);
     const float4 guide = g_guide.Load(int3(pixel, 0));
-    const float3 raw = g_raw.Load(int3(pixel, 0)).rba;
+    float3 raw = g_raw.Load(int3(pixel, 0)).rba;
     if (guide.a == 0.0f) {
 #ifdef RT_LIGHTS
         g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -56,6 +59,26 @@ void main(uint3 id : SV_DispatchThreadID) {
 #endif
         return;
     }
+#ifdef RT_LIGHTS
+    const float own = g_reservoirs_now.Load(int3(pixel, 0)).b;
+    if (own > 0.0f) {
+        float total = 0.0f, lit = 0.0f;
+        for (int y = -1; y <= 1; ++y) {
+            for (int x = -1; x <= 1; ++x) {
+                const int2 at = clamp(pixel + int2(x, y), int2(0, 0), int2(width, height) - 1);
+                const float w = g_reservoirs_now.Load(int3(at, 0)).b;
+                if ((x != 0 || y != 0) && w > 0.0f) {
+                    total += w;
+                    lit += 1.0f;
+                }
+            }
+        }
+        const float most = 20.0f * total / max(lit, 1.0f);
+        if (lit >= 2.0f && own > most) {
+            raw *= most / own;
+        }
+    }
+#endif
     // What this frame's rays saw around the pixel on the same object: the history may not leave their mean by more
     // than their spread.
     float3 first = float3(0.0f, 0.0f, 0.0f), square = float3(0.0f, 0.0f, 0.0f);
@@ -118,7 +141,12 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const float3 history = clamp(sum / weight, low, high);
-    const float count = min(frames / weight * kMostFrames + 1.0f, kMostFrames);
+    float count = min(frames / weight * kMostFrames + 1.0f, kMostFrames);
+#ifdef RT_LIGHTS
+    if (bright > 4.0f * dot(history, kLuminance) + 0.02f) {
+        count = min(count, 8.0f);  // a flash
+    }
+#endif
     const float3 now = lerp(history, raw, max(1.0f / count, 0.06f));
 #ifdef RT_LIGHTS
     g_out[id.xy] = float4(now.x, count / kMostFrames, now.y, now.z);

@@ -3,15 +3,20 @@
 // each pixel's surface, by spatiotemporal reservoir resampling (ReSTIR DI: Bitterli et al. 2020; resampled importance
 // sampling: Talbot et al. 2005). A pixel keeps ONE light, chosen in proportion to what each would add here unshadowed,
 // out of:
-//   this frame's candidates: up to eight of the tile's lights, one from each equal run of its list;
+//   this frame's candidates: up to eight of the tile's lights; past eight, the tile's four strongest (the host puts
+//   them first in its list) each for certain, and four of the rest, one from each equal run;
 //   the reservoirs of the frame before at the pixel's own point (found by its motion) and at two points near it, where
 //   the surface there is the pixel's own kind (in its plane, facing its way): each stands for all the candidates it
 //   was itself chosen among, so a pixel sees what hundreds of tries would find.
-// ONE ray then asks whether the kept light reaches the surface, and what is written is its light times its weight: the
+// ONE ray then asks whether the kept light reaches the surface (aimed at a point of its disc where the source is large,
+// so a lamp's shadow is as soft as the lamp is wide), and what is written is its light times its weight: the
 // sum of the weights it was chosen among, over its own and over how many of the candidates could have chosen it (those
 // whose surface it reaches: without that share a light's edge darkens). On average the sum of every light with its
 // shadow, at a cost that does not grow with the lights. A light found in shadow is kept with no weight, so it is not
 // handed on. The filter after the pass (rt_lights_time, rt_lights_space) takes what noise is left. Not on itself.
+// On gloss, metal and glass the kept light also gives its highlight (GGX, Schlick; the lobe widened by the source's
+// size as it is seen, Karis 2013), by the same weight: LightsSpec, which the reflection's raw image takes before its
+// filter.
 // The second layer (g_pass.x 1) has no filter after it: there up to 32 of the lights are summed as they are, unshadowed,
 // straight into the picture the programs read.
 #include "rt_common.hlsli"
@@ -21,6 +26,7 @@ Texture2D<float4> g_normals : register(t10);
 Texture2D<float4> g_motion : register(t11);
 Texture2D<float4> g_reservoirs_before : register(t12);  // the frame before's
 Texture2D<float4> g_guide_before : register(t13);       // and its guide: what surface each of those pixels was
+Texture2D<float4> g_material : register(t14);           // S.material: r roughness, b class and flags
 // The opaque layer: red, green, blue in r, b, a (the channels the filter averages); the second layer: rgb as the
 // programs read them.
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights : register(u0);
@@ -28,6 +34,8 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights : register(u0);
 // float; 0: none); b its weight (what its unshadowed light is multiplied by; 0 where it was found in shadow); a how
 // many candidates stand behind it (no more than 20).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_reservoirs : register(u1);
+// The kept light's highlight, rgb (the opaque layer).
+RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights_spec : register(u2);
 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -43,6 +51,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     if (!second) {
         g_reservoirs[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // none, until the lights say otherwise
+        g_lights_spec[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
     const float4 guide = g_guide.Load(int3(pixel, 0));
     const uint2 tile = id.xy / max(g_grid.z, 1u);
@@ -71,18 +80,26 @@ void main(uint3 id : SV_DispatchThreadID) {
             float4 kept_at = float4(0.0f, 0.0f, 0.0f, 0.0f);
             // This frame's candidates.
             const uint tries = min(lights, 8u);
-            const float each = float(lights) / float(max(tries, 1u));
+            const uint strong = lights > tries ? 4u : 0u;  // the list's first four, the tile's strongest: each for certain
+            const float each = float(lights - strong) / float(max(tries - strong, 1u));  // what one of the others stands for
             const float tried = rt_sample(id.xy, g_more.y, kSampleLightTry).x;  // where in its run each candidate is
             for (uint k = 0u; k < tries; ++k) {
                 seed = rt_hash(seed + k * 7919u + 1u);
-                const float inside = lights <= tries ? 0.0f : frac(tried + float(k) * 0.618034f);
-                const uint index = g_tiles.Load(g_glow.z + (run.x + min(uint((float(k) + inside) * each), lights - 1u)) * 4u);
+                uint in_list = k;
+                float stands = 1.0f;
+                if (k >= strong) {
+                    const float inside = lights <= tries ? 0.0f : frac(tried + float(k) * 0.618034f);
+                    in_list = strong + min(uint((float(k - strong) + inside) * each), lights - strong - 1u);
+                    stands = each;
+                }
+                const uint index = g_tiles.Load(g_glow.z + (run.x + in_list) * 4u);
                 const float3 light = emitter_light(g_glow.x + index * 48u, s.at, s.smooth_, s.slot, place, slot);
                 const float mine = dot(light, kLuminance);
                 if (!(mine > 0.0f)) {
                     continue;
                 }
-                const float w = mine * float(lights);  // a light is tried with the chance of one in `lights`
+                // Its weight: what it adds here by how many of the list it stands for, as a share of the candidates.
+                const float w = mine * stands * float(tries);
                 sum += w;
                 seed = rt_hash(seed);
                 if (rt_unit(seed) * sum < w) {
@@ -172,8 +189,18 @@ void main(uint3 id : SV_DispatchThreadID) {
                     }
                 }
                 weight = min(sum / (max(could, 1.0f) * kept_target), 60000.0f);
-                // Its shadow: one ray, stopping short of the source's own body.
-                const float3 to = kept_at.xyz - s.at;
+                // Its shadow: one ray, stopping short of the source's own body. A source over 50 units across is aimed
+                // at a point of its disc as the surface sees it, so its shadow is as soft as it is wide.
+                float3 aim = kept_at.xyz;
+                if (kept_at.w > 50.0f) {
+                    const float3 axis = normalize(s.at - kept_at.xyz);
+                    const float3 side = normalize(abs(axis.y) < 0.9f ? cross(axis, float3(0.0f, 1.0f, 0.0f)) : cross(axis, float3(1.0f, 0.0f, 0.0f)));
+                    const float3 up_ = cross(axis, side);
+                    const float2 u = rt_sample(id.xy, g_more.y, kSampleLightDisc);
+                    const float turn = u.y * 6.2831853f;
+                    aim += (side * cos(turn) + up_ * sin(turn)) * (sqrt(u.x) * kept_at.w);
+                }
+                const float3 to = aim - s.at;
                 const float far_ = length(to);
                 const float short_of = far_ - min(max(kept_at.w, 10.0f), 60.0f);
                 uint met;
@@ -183,6 +210,29 @@ void main(uint3 id : SV_DispatchThreadID) {
                 }
                 // Far over what a picture shows is cut: the filter's moments stay finite.
                 added = min(kept_light * weight, float3(32.0f, 32.0f, 32.0f));
+                // Its highlight on gloss, metal and glass: D_ggx(n.h) F(v.h) / (4 n.v) of the light arriving (the kept
+                // light without its wrap of facing), by the same weight.
+                const float4 material = g_material.Load(int3(pixel, 0));
+                const uint class_ = uint(material.b * 255.0f + 0.5f) & 15u;
+                if (weight > 0.0f && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass)) {
+                    const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
+                    const float3 v = -normalize(s.at);
+                    const float nl = dot(s.smooth_, l), nv = dot(s.smooth_, v);
+                    if (nl > 0.0f && nv > 0.0f) {
+                        const float3 h = normalize(l + v);
+                        const float nh = saturate(dot(s.smooth_, h)), vh = saturate(dot(v, h));
+                        const float a = saturate(max(material.r * material.r, 0.002f) + kept_at.w / (2.0f * far_));
+                        const float a2 = a * a;
+                        const float lobe = nh * nh * (a2 - 1.0f) + 1.0f;
+                        const float d = a2 / (3.14159265f * lobe * lobe);
+                        const float f0 = class_ == kClassMetal ? 0.55f : 0.04f;
+                        const float glance = 1.0f - vh;
+                        const float f = f0 + (1.0f - f0) * glance * glance * glance * glance * glance;
+                        const float3 arriving = kept_light / (0.25f + 0.75f * saturate(nl));
+                        const float3 spec = arriving * (d * f * 0.25f / max(nv, 0.05f)) * weight;
+                        g_lights_spec[id.xy] = float4(min(spec, float3(32.0f, 32.0f, 32.0f)), 0.0f);
+                    }
+                }
             }
             g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, 20.0f));
         }

@@ -20,6 +20,7 @@ Texture2D<float4> g_normals : register(t10);
 Texture2D<float4> g_motion : register(t11);
 Texture2D<float4> g_sun_v : register(t12);     // rgb V: filtered on the opaque layer, raw on the second
 Texture2D<float4> g_material : register(t13);
+Texture2D<float4> g_lights_spec : register(t14);  // the local lights' highlights (rt_lights.hlsl), the opaque layer
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 // What the pixel mirrors: rgb what its mirror ray sees by how much the surface mirrors; a how much of the surface's own
 // colour stays under it, plus 2 in the second layer (program.hlsli traced_mirror).
@@ -104,6 +105,28 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
         }
     }
     return colour * lerp(g_look.x, 1.0f, sunlit);
+}
+
+// The local lights' highlight at the pixel, over it and its four neighbours on the same object (one light a pixel is
+// noisy). Until the reflection pass's R raw takes LightsSpec before its filter, it goes on the mirror.
+float3 highlight_near(int2 pixel, float4 guide) {
+    uint width, height;
+    g_lights_spec.GetDimensions(width, height);
+    float3 sum = g_lights_spec.Load(int3(pixel, 0)).rgb;
+    float taps = 1.0f;
+    const int2 steps[4] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1)};
+    for (uint k = 0u; k < 4u; ++k) {
+        const int2 at = pixel + steps[k];
+        if (at.x < 0 || at.y < 0 || at.x >= int(width) || at.y >= int(height)) {
+            continue;
+        }
+        const float4 near = g_guide.Load(int3(at, 0));
+        if (near.a != 0.0f && near.g == guide.g && near.b == guide.b) {
+            sum += g_lights_spec.Load(int3(at, 0)).rgb;
+            taps += 1.0f;
+        }
+    }
+    return sum / taps;
 }
 
 [numthreads(8, 8, 1)]
@@ -203,6 +226,9 @@ void main(uint3 id : SV_DispatchThreadID) {
                 mirror.a = 1.0f - 0.6f * float(tint_word >> 24u) / 255.0f;
             }
         }
+    }
+    if (!second && guide.a != 0.0f) {
+        mirror.rgb += highlight_near(pixel, guide);
     }
     if ((g_more.z & 128u) != 0u && item != 0u && guide.a != 0.0f) {
         share = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (the filter's last step says so too)
