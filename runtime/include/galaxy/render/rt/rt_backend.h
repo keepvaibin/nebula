@@ -207,6 +207,13 @@ public:
     // memory. `buffer_for` puts it in the use its next commands have for it: written by passes, or read by builds.
     [[nodiscard]] std::uint32_t make_buffer(std::uint64_t bytes, const char* name);
     void free_buffer(std::uint32_t buffer) noexcept;
+    // The images and buffers of the tracer's alive, and the memory they take (plan 26: a long run's report shows no
+    // growth).
+    struct Live {
+        std::uint32_t images = 0u, buffers = 0u;
+        std::uint64_t image_bytes = 0u, buffer_bytes = 0u;
+    };
+    [[nodiscard]] Live live() const noexcept;
     void buffer_for(std::uint32_t buffer, bool builds);
     // What a pass binds to read `bytes` at `at` in a buffer of the renderer's: a view starting where the API lets one
     // start, and where `at` is in it (`offset`, bytes).

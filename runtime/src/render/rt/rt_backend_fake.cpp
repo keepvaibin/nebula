@@ -179,6 +179,7 @@ std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_
 }
 
 void Backend::free_image(std::uint32_t) noexcept {}
+Backend::Live Backend::live() const noexcept { return {}; }
 
 void* Backend::image_to_copy(std::uint32_t) { return nullptr; }
 

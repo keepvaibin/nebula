@@ -602,6 +602,27 @@ void Backend::free_image(std::uint32_t image) noexcept {
     }
 }
 
+Backend::Live Backend::live() const noexcept {
+    Live live;
+    if (state_ == nullptr) {
+        return live;
+    }
+    for (const State::Image& image : state_->images) {
+        if (image.texture != nullptr) {
+            const D3D12_RESOURCE_DESC desc = image.texture->GetDesc();
+            ++live.images;
+            live.image_bytes += state_->device->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
+        }
+    }
+    for (const State::OwnBuffer& buffer : state_->buffers) {
+        if (buffer.buffer != nullptr) {
+            ++live.buffers;
+            live.buffer_bytes += buffer.buffer->GetDesc().Width;
+        }
+    }
+    return live;
+}
+
 void* Backend::image_to_copy(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image].texture == nullptr) {
         return nullptr;

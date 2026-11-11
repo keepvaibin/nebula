@@ -243,14 +243,17 @@ void RenderCore::rt_frame(const NebulaFrameList& list) {
     rt_building_ = stats.waiting != 0u;
     if (caught_up || (diagnosing && frame_index_ >= rt_log_at_)) {
         rt_log_at_ = frame_index_ + 600u;
+        const rt::Backend::Live live = rt_backend_.live();
         std::fprintf(stderr,
                      "[rt] structures: %u built (%u compacted), %u waiting, %llu triangles, %.2f MB in %.2f MB of pages, most in a frame "
-                     "%llu triangles; budget %llu, %.0f built a ms, %u released past the ceiling; micromaps %u (%.2f MB, %u built)\n",
+                     "%llu triangles; budget %llu, %.0f built a ms, %u released past the ceiling; micromaps %u (%.2f MB, %u built); "
+                     "images %u (%.2f MB), buffers %u (%.2f MB)\n",
                      stats.structures, stats.compacted, stats.waiting, static_cast<unsigned long long>(stats.triangles),
                      static_cast<double>(stats.structure_bytes) / 1048576.0, static_cast<double>(stats.page_bytes) / 1048576.0,
                      static_cast<unsigned long long>(stats.most_built_triangles), static_cast<unsigned long long>(rt_budget_),
                      rt_build_rate_, stats.released, stats.micromaps, static_cast<double>(stats.micromap_bytes) / 1048576.0,
-                     stats.micromaps_built);
+                     stats.micromaps_built, live.images, static_cast<double>(live.image_bytes) / 1048576.0, live.buffers,
+                     static_cast<double>(live.buffer_bytes) / 1048576.0);
     }
 }
 

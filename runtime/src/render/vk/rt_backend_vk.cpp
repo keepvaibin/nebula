@@ -781,6 +781,26 @@ void Backend::free_image(std::uint32_t image) noexcept {
     }
 }
 
+Backend::Live Backend::live() const noexcept {
+    Live live;
+    if (state_ == nullptr) {
+        return live;
+    }
+    for (const std::shared_ptr<vk::Texture>& image : state_->images) {
+        if (image != nullptr) {
+            ++live.images;
+            live.image_bytes += image->allocation_bytes;
+        }
+    }
+    for (const State::OwnBuffer& buffer : state_->buffers) {
+        if (buffer.buffer != VK_NULL_HANDLE) {
+            ++live.buffers;
+            live.buffer_bytes += buffer.bytes;
+        }
+    }
+    return live;
+}
+
 // An image of the tracer's stays in the general layout, which a copy reads too, once the pass's writes are done.
 void* Backend::image_to_copy(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image] == nullptr) {

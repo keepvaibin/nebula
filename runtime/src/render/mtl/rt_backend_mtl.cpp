@@ -38,6 +38,7 @@ std::uint64_t Backend::compacted_size(std::uint32_t, unsigned) const { return 0u
 void Backend::compact(const Structure&, const Structure&) {}
 std::uint32_t Backend::make_image(ImageFormat, std::uint32_t, std::uint32_t, const char*, std::uint32_t) { return kNoImage; }
 void Backend::free_image(std::uint32_t) noexcept {}
+Backend::Live Backend::live() const noexcept { return {}; }
 void Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) {}
 std::uint32_t Backend::make_buffer(std::uint64_t, const char*) { return kNoBuffer; }
 void Backend::free_buffer(std::uint32_t) noexcept {}
