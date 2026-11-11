@@ -74,6 +74,7 @@ fn other(id: &str) -> Installed {
         on: true,
         file: format!("{id}.luma"),
         conflicts: Vec::new(),
+        needs: Vec::new(),
         touches: Touches::default(),
     }
 }
@@ -609,6 +610,9 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
     assert!(r.full);
     assert_eq!(codes(&r), vec![302, 402, 800]);
     assert!(Saved::parse(b"luma-saved\t1\nvalidator\t1.0\n").is_none());
+    // A form 1 report (before `need` lines), whole and signed, does not read: its needs would be read as none.
+    let form1 = String::from_utf8(kept_form1(&full)).unwrap();
+    assert!(Saved::parse(form1.as_bytes()).is_none());
     assert!(Saved::parse(b"not a kept report").is_none());
     // Cut at any byte, or any byte changed: it does not read.
     let kept = Saved::from_report(&full, "game").to_bytes();
@@ -618,6 +622,60 @@ fn a_start_takes_the_whole_file_findings_from_the_kept_report_and_runs_the_rest(
         changed[n] ^= 0x01;
         assert!(Saved::parse(&changed).is_none(), "byte {n} changed");
     }
+}
+
+/// `full`'s kept report written in form 1, signed as that form was.
+fn kept_form1(full: &Report) -> Vec<u8> {
+    let text = String::from_utf8(Saved::from_report(full, "game").to_bytes()).unwrap();
+    let body: String = text.lines().filter(|l| !l.starts_with("end\t") && !l.starts_with("need\t")).map(|l| format!("{l}\n")).collect();
+    let body = body.replacen("luma-saved\t2\n", "luma-saved\t1\n", 1);
+    use sha1::{Digest, Sha1};
+    let sum: String = Sha1::digest(body.as_bytes()).iter().map(|b| format!("{b:02x}")).collect();
+    format!("{body}end\t{sum}\n").into_bytes()
+}
+
+/// L800's cycle (loader D3-3): the game starts a needed mod first, so mods that need each other round a circle cannot
+/// start. The check sees this mod's needs and the kept needs of the mods that are on.
+#[test]
+fn a_cycle_of_needs_through_the_mod_is_refused_and_named() {
+    let needing = |id: &str, needs: &[&str]| {
+        let mut o = other(id);
+        o.needs = needs.iter().map(|n| n.to_string()).collect();
+        o
+    };
+    let bytes = luma(&[("needs", r#"[{"id": "b.mod"}]"#)], &[]);
+    let cycles = |installed: &[Installed]| -> Vec<String> {
+        let r = check(&bytes, &Setup { installed, ..NO_GAME });
+        r.findings.iter().filter(|f| f.code == 800).map(|f| message(f, "UsEnglish")).collect()
+    };
+    // Two: test.mod -> b.mod -> test.mod. No stray space where the need has no version range.
+    let two = [needing("b.mod", &["test.mod"])];
+    assert_eq!(
+        cycles(&two),
+        vec!["test.mod needs b.mod: each needs the next, in a circle (test.mod -> b.mod -> test.mod), so none of them can start first.".to_string()]
+    );
+    // Three, and the shortest is named when there are two.
+    let three = [needing("b.mod", &["c.mod"]), needing("c.mod", &["test.mod"])];
+    assert!(cycles(&three)[0].contains("(test.mod -> b.mod -> c.mod -> test.mod)"), "{:?}", cycles(&three));
+    let both = [needing("b.mod", &["c.mod", "test.mod"]), needing("c.mod", &["test.mod"])];
+    assert!(cycles(&both)[0].contains("(test.mod -> b.mod -> test.mod)"), "{:?}", cycles(&both));
+    // None: a chain that does not come back, a cycle not through this mod, and a mod that is off.
+    assert!(cycles(&[needing("b.mod", &["c.mod"]), needing("c.mod", &[])]).is_empty());
+    assert!(cycles(&[needing("b.mod", &["c.mod"]), needing("c.mod", &["b.mod"])]).is_empty());
+    let mut off = needing("b.mod", &["test.mod"]);
+    off.on = false;
+    let r = check(&bytes, &Setup { installed: std::slice::from_ref(&off), ..NO_GAME });
+    assert_eq!(r.findings.iter().filter(|f| f.code == 800).map(|f| message(f, "UsEnglish")).collect::<Vec<_>>(), vec!["test.mod needs b.mod: it is off.".to_string()]);
+    // Every language fills it.
+    let r = check(&bytes, &Setup { installed: &two, ..NO_GAME });
+    let f = r.findings.iter().find(|f| f.code == 800).unwrap();
+    for lang in luma_validate::LANGUAGES {
+        let text = message(f, lang);
+        assert!(!text.contains('{') && text.contains("test.mod -> b.mod -> test.mod"), "{lang}: {text}");
+    }
+    // The needs go through the kept report, so another mod's check sees them.
+    let kept = Saved::parse(&Saved::from_report(&r, "game").to_bytes()).unwrap();
+    assert_eq!(kept.installed("test.luma", true).unwrap().needs, vec!["b.mod".to_string()]);
 }
 
 /// The mod higher in the list wins a file and a cell (F, INBOX-G 13): installed mods come top first, and `position`

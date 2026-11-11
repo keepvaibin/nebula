@@ -347,6 +347,7 @@ fn two_mods_replacing_one_function_refuse_the_later() {
         on: true,
         file: "other.luma".into(),
         conflicts: Vec::new(),
+        needs: Vec::new(),
         touches: alone.touches.clone(),
     };
     let installed = [other];
