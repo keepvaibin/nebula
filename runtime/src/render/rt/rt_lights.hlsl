@@ -56,6 +56,29 @@ void main(uint3 id : SV_DispatchThreadID) {
         g_lights[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return;
     }
+    // Low (R-2): a checkerboard of rays on the opaque layer, the other half each frame. A pixel left out carries the frame
+    // before's reservoir at its point, its light renumbered into this frame's list, and marks its share (g -1): the
+    // lights' time pass takes its left or right neighbour's, whichever lies nearer its depth.
+    if (level == 1u && !second && ((id.x + id.y + g_more.y) & 1u) != 0u) {
+        if (rt_history()) {
+            const float4 motion = g_motion.Load(int3(pixel, 0));
+            uint wide, high;
+            g_reservoirs_before.GetDimensions(wide, high);
+            const int2 from = int2(floor(float2(id.xy) + 0.5f + motion.xy));
+            if (motion.z > 1.0f && from.x >= 0 && from.y >= 0 && from.x < int(wide) && from.y < int(high)) {
+                const float4 theirs = g_reservoirs_before.Load(int3(from, 0));
+                const uint was_index = uint(theirs.r) + uint(theirs.g) * 1024u;
+                if (was_index != 0u && was_index <= g_kept.y) {
+                    const uint index = g_drops.Load(g_kept.x + (was_index - 1u) * 4u);
+                    if (index < g_glow.w) {
+                        g_reservoirs[id.xy] = float4(float((index + 1u) & 1023u), float((index + 1u) >> 10u), theirs.b, theirs.a);
+                    }
+                }
+            }
+        }
+        g_lights[id.xy] = float4(0.0f, -1.0f, 0.0f, 0.0f);
+        return;
+    }
     const float4 guide = g_guide.Load(int3(pixel, 0));
     const uint2 tile = id.xy / max(g_grid.z, 1u);
     float3 added = float3(0.0f, 0.0f, 0.0f);
