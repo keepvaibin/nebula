@@ -47,9 +47,17 @@ LANGUAGES = {
 }
 FORMS = {"normal", "rainbow", "fire", "ice", "bee", "spring", "boo", "flying", "tornado"}
 # The parameter types the game half passes (tools/test_driver/luma_test/luma_test.c do_call).
-CALL_TYPES = {"f32", "float", "s32", "int", "u32", "u16", "bool", "const char *", "const Vec3f &", "const TVec3f &",
-              "Vec3f *", "const Vec3f *", "Vec3f", "TVec3f", "LiveActor *", "const LiveActor *", "NameObj *",
-              "const NameObj *", "MarioActor *"}
+CALL_TYPES = {"f32", "float", "f64", "double", "s32", "int", "u32", "u16", "s16", "u8", "s8", "bool", "const char *",
+              "const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec3f", "TVec3f", "LiveActor *",
+              "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
+# The result types it takes (luma_test.c kResults); any other pointer is taken as "is there one". Any other type (an
+# enum, s64, a struct by value) is refused: it could be wider than the game half's result or read as the wrong bytes.
+RESULT_TYPES = {"void", "f32", "float", "f64", "double", "s32", "int", "u32", "u16", "s16", "u8", "s8", "bool",
+                "const char *", "Vec3f *", "const Vec3f *", "TVec3f *", "const TVec3f *", "Vec3f", "TVec3f"}
+# H-5: the longest line the game half takes, in bytes (its end not counted), and the most words of a line; a call's
+# arguments are its tab-separated words (luma_test.c LINE_BYTES, LINE_WORDS).
+LINE_BYTES = 1023
+LINE_WORDS = 16
 VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec3f", "TVec3f"}
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
@@ -429,7 +437,10 @@ def read_steps(t, bare):
                 raise HarnessError("%s: args must list %d argument(s) for %s" % (path, len(params), sig))
             words = [call_arg(a, p, "%s.args[%d]" % (path, j)) for j, (a, p) in enumerate(zip(args, params))]
             fact = plain(text(s, "fact", path), path + ".fact") if "fact" in s else "-"
-            step["line"] = "game call %s %s" % (fact, "\t".join([name, sig] + words))
+            rest = "\t".join([name, sig] + words)
+            if len(rest.encode("utf-8")) > LINE_BYTES or len(params) + 2 > LINE_WORDS:
+                raise HarnessError("%s: the call is longer than the game half takes (%d bytes, %d arguments)" % (path, LINE_BYTES, LINE_WORDS - 2))
+            step["line"] = "game call %s %s" % (fact, rest)
         elif action == "read":
             field = text(s, "read", path)
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*", field):
@@ -457,8 +468,13 @@ def signature_params(sig, path):
     m = re.fullmatch(r"\s*(.+?)\s*\((.*)\)\s*(const)?\s*", sig)
     if not m:
         raise HarnessError("%s.signature is not a signature as the game writes it" % path)
+    result = m.group(1).strip()
+    if result not in RESULT_TYPES and not result.endswith("*"):
+        raise HarnessError("%s.signature: the harness cannot take a result of type %s" % (path, result))
     inner = m.group(2).strip()
     params = [p.strip() for p in inner.split(",")] if inner else []
+    if len(params) > LINE_WORDS:
+        raise HarnessError("%s.signature: more than %d parameters" % (path, LINE_WORDS))
     for p in params:
         if p not in CALL_TYPES:
             raise HarnessError("%s.signature: the harness cannot pass a parameter of type %s" % (path, p))
@@ -470,9 +486,15 @@ def call_arg(value, param, path):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise HarnessError("%s must be a number for %s" % (path, param))
         return repr(float(value))
-    if param in ("s32", "int", "u32", "u16"):
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise HarnessError("%s must be a whole number for %s" % (path, param))
+    if param in ("f64", "double"):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise HarnessError("%s must be a number for %s" % (path, param))
+        return repr(float(value))
+    if param in ("s32", "int", "u32", "u16", "s16", "u8", "s8"):
+        lo, hi = {"s32": (-2**31, 2**31 - 1), "int": (-2**31, 2**31 - 1), "u32": (0, 2**32 - 1), "u16": (0, 65535),
+                  "s16": (-32768, 32767), "u8": (0, 255), "s8": (-128, 127)}[param]
+        if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
+            raise HarnessError("%s must be a whole number from %d to %d for %s" % (path, lo, hi, param))
         return str(value)
     if param == "bool":
         if not isinstance(value, bool):
@@ -757,8 +779,18 @@ def plan_text(test, out):
             else:
                 _, key, op, value, within = a
                 lines.append("cond fact %s %s %s %s" % (key, op, "-" if within is None else repr(float(within)),
-                                                        json.dumps(value if op not in ("exists", "absent") else True)))
+                                                        json.dumps(value if op not in ("exists", "absent") else True,
+                                                                   ensure_ascii=False, separators=(",", ":"))))
             lines.append("timeout %d" % s["timeout"])
+    for line in lines:
+        game = line[len("setup "):] if line.startswith("setup ") else None
+        if game is None and line.startswith("step ") and " game " in line:
+            game = line.split(" game ", 1)[1]
+        if game is None:
+            continue
+        given = line if line.startswith("setup ") else game
+        if len(given.encode("utf-8")) > LINE_BYTES or (not game.startswith("call ") and len(given.split(" ")) > LINE_WORDS):
+            raise HarnessError("the plan line %r is longer than the game half takes (%d bytes, %d words)" % (given[:60], LINE_BYTES, LINE_WORDS))
     return "\n".join(lines) + "\n"
 
 
@@ -900,6 +932,11 @@ def check_value(actual, op, value, within):
     return {"less": actual < value, "at_most": actual <= value, "more": actual > value, "at_least": actual >= value}[op]
 
 
+# The host's own crash line (native/host/host_main.cpp log_line("crash:", ...)): its time, then the tag. A mod or a
+# fact that writes the word elsewhere is not a crash.
+CRASH_LINE = re.compile(r"^\[\s*\d+\.\d{3}\] crash: ")
+
+
 def evaluate(test, renderer, run_folder, ran):
     """The verdict and every check, from the run's files."""
     facts = read_facts(run_folder)
@@ -923,7 +960,7 @@ def evaluate(test, renderer, run_folder, ran):
         # The extension refused the run's folders: the runner's fault, not the game's.
         verdict = "harness-error"
         reason = "the test extension declined the run: %s" % " | ".join(declined)
-    elif dumps or any("crash:" in line for line in log_lines):
+    elif dumps or any(CRASH_LINE.match(line) for line in log_lines):
         verdict = "crashed"
         reason = "dump %s; last lines: %s" % (", ".join(dumps) or "none", " | ".join(log_lines[-5:]))
     elif stop:
@@ -938,6 +975,7 @@ def evaluate(test, renderer, run_folder, ran):
         frame = end[-1]["value"].get("frame")
         add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
     add("no crash dump", not dumps, dumps)
+    add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
     for bad in by_key.get("harness.bad_fact", []):
         add("every fact is JSON", False, bad["value"])
     if not test["bare"]:
@@ -1028,8 +1066,22 @@ def sound_check(run_folder, facts, c):
     if not clock or not wav.is_file():
         return False, "no harness.clock fact or no audio.wav"
     data = wav.read_bytes()
-    rate = struct.unpack("<I", data[24:28])[0]
-    samples = data[44:]
+    if data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return False, "audio.wav is not a RIFF WAVE file"
+    fmt, samples, at = None, None, 12
+    while at + 8 <= len(data):
+        cid, size = data[at:at + 4], struct.unpack("<I", data[at + 4:at + 8])[0]
+        body = data[at + 8:at + 8 + size]
+        if cid == b"fmt " and len(body) >= 16:
+            fmt = struct.unpack("<HHIIHH", body[:16])
+        elif cid == b"data":
+            samples = body
+        at += 8 + size + (size & 1)
+    if fmt is None or samples is None:
+        return False, "audio.wav has no fmt or no data chunk"
+    tag, channels, rate, _, _, bits = fmt
+    if tag != 1 or channels != 2 or bits != 16:
+        return False, "audio.wav is format %d, %d channels, %d bits; the check reads 16-bit PCM stereo" % (tag, channels, bits)
     base = clock[-1]["value"]["game_frame"]
     first = int((base + c["frames"][0]) * rate / 60) * 4
     last = int((base + c["frames"][1] + 1) * rate / 60) * 4

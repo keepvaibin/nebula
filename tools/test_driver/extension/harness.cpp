@@ -25,6 +25,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -48,8 +49,9 @@ struct Json {
     enum Kind { Null, Bool, Number, String, Array, Object } kind = Null;
     bool boolean = false;
     double number = 0.0;
-    std::string text;           // a string's value; an object's source text
-    std::vector<Json> items;    // an array's
+    std::string text;                                  // a string's value, UTF-8 (escapes decoded)
+    std::vector<Json> items;                           // an array's
+    std::vector<std::pair<std::string, Json>> members; // an object's, as written
 };
 
 class JsonReader {
@@ -78,6 +80,21 @@ private:
         }
         return false;
     }
+    std::optional<std::uint32_t> hex4() {
+        if (at_ + 4u > text_.size()) {
+            return std::nullopt;
+        }
+        std::uint32_t value = 0u;
+        for (int i = 0; i < 4; ++i) {
+            const char h = text_[at_ + i];
+            if (std::isxdigit(static_cast<unsigned char>(h)) == 0) {
+                return std::nullopt;
+            }
+            value = value * 16u + static_cast<std::uint32_t>(h <= '9' ? h - '0' : (h | 0x20) - 'a' + 10);
+        }
+        at_ += 4u;
+        return value;
+    }
     std::optional<std::string> string() {
         if (at_ >= text_.size() || text_[at_] != '"') {
             return std::nullopt;
@@ -102,16 +119,40 @@ private:
                 case 'r': out += '\r'; break;
                 case 't': out += '\t'; break;
                 case 'u': {
-                    if (at_ + 4u > text_.size()) {
+                    // Decoded to UTF-8, a surrogate pair to its one character, so "\u30de" and the mod's own UTF-8
+                    // are one string (audit 0.3 H-3). A lone surrogate is not text.
+                    std::optional<std::uint32_t> unit = hex4();
+                    if (!unit) {
                         return std::nullopt;
                     }
-                    for (int i = 0; i < 4; ++i) {
-                        if (std::isxdigit(static_cast<unsigned char>(text_[at_ + i])) == 0) {
+                    std::uint32_t code = *unit;
+                    if (code >= 0xd800u && code <= 0xdbffu) {
+                        if (!word("\\u")) {
                             return std::nullopt;
                         }
+                        const std::optional<std::uint32_t> low = hex4();
+                        if (!low || *low < 0xdc00u || *low > 0xdfffu) {
+                            return std::nullopt;
+                        }
+                        code = 0x10000u + ((code - 0xd800u) << 10u) + (*low - 0xdc00u);
+                    } else if (code >= 0xdc00u && code <= 0xdfffu) {
+                        return std::nullopt;
                     }
-                    out += "\\u" + std::string(text_.substr(at_, 4));  // kept as written: compared, never shown
-                    at_ += 4u;
+                    if (code < 0x80u) {
+                        out += static_cast<char>(code);
+                    } else if (code < 0x800u) {
+                        out += static_cast<char>(0xc0u | (code >> 6u));
+                        out += static_cast<char>(0x80u | (code & 0x3fu));
+                    } else if (code < 0x10000u) {
+                        out += static_cast<char>(0xe0u | (code >> 12u));
+                        out += static_cast<char>(0x80u | ((code >> 6u) & 0x3fu));
+                        out += static_cast<char>(0x80u | (code & 0x3fu));
+                    } else {
+                        out += static_cast<char>(0xf0u | (code >> 18u));
+                        out += static_cast<char>(0x80u | ((code >> 12u) & 0x3fu));
+                        out += static_cast<char>(0x80u | ((code >> 6u) & 0x3fu));
+                        out += static_cast<char>(0x80u | (code & 0x3fu));
+                    }
                     break;
                 }
                 default: return std::nullopt;
@@ -176,7 +217,7 @@ private:
                 }
             }
         } else if (c == '{') {
-            const std::size_t from = at_++;
+            ++at_;
             v.kind = Json::Object;
             space();
             if (at_ < text_.size() && text_[at_] == '}') {
@@ -184,13 +225,19 @@ private:
             } else {
                 for (;;) {
                     space();
-                    if (!string()) {
+                    std::optional<std::string> name = string();
+                    if (!name) {
                         return std::nullopt;
                     }
                     space();
-                    if (at_ >= text_.size() || text_[at_++] != ':' || !any()) {
+                    if (at_ >= text_.size() || text_[at_++] != ':') {
                         return std::nullopt;
                     }
+                    std::optional<Json> member = any();
+                    if (!member) {
+                        return std::nullopt;
+                    }
+                    v.members.emplace_back(std::move(*name), std::move(*member));
                     space();
                     if (at_ < text_.size() && text_[at_] == ',') {
                         ++at_;
@@ -203,7 +250,6 @@ private:
                     return std::nullopt;
                 }
             }
-            v.text = std::string(text_.substr(from, at_ - from));
         } else {
             const std::size_t from = at_;
             if (at_ < text_.size() && text_[at_] == '-') {
@@ -246,7 +292,27 @@ bool equal(const Json& a, const Json& b) {
     case Json::Null: return true;
     case Json::Bool: return a.boolean == b.boolean;
     case Json::Number: return a.number == b.number;
-    case Json::String: case Json::Object: return a.text == b.text;
+    case Json::String: return a.text == b.text;
+    case Json::Object:
+        // Member by member, in any order: {"a":1,"b":2} is {"b": 2, "a": 1}. A name given twice holds its last value,
+        // as JSON readers take it.
+        {
+            const auto last = [](const Json& o, const std::string& name) -> const Json* {
+                const Json* found = nullptr;
+                for (const auto& [n, value] : o.members) {
+                    if (n == name) found = &value;
+                }
+                return found;
+            };
+            const auto covered = [&](const Json& x, const Json& y) {
+                for (const auto& [n, value] : x.members) {
+                    const Json* const other = last(y, n);
+                    if (other == nullptr || !equal(*last(x, n), *other)) return false;
+                }
+                return true;
+            };
+            return covered(a, b) && covered(b, a);
+        }
     case Json::Array:
         if (a.items.size() != b.items.size()) {
             return false;
@@ -950,15 +1016,15 @@ const char* picture_path(std::uint64_t game_frame, std::uint32_t kind) {
     return g.picture_file.c_str();
 }
 
-void log_line(const char* line) {
-    if (line == nullptr) {
+void log_line(const char* tag, const char* line) {
+    if (tag == nullptr || line == nullptr) {
         return;
     }
     std::lock_guard<std::recursive_mutex> hold(g_lock);
     if (!g.on || g.finished) {
         return;
     }
-    const std::string text = line;
+    const std::string text = std::string(tag) + " " + line;
     if (text.compare(0, 18u, "boot: title screen") == 0) {
         g.title_seen = true;
     }

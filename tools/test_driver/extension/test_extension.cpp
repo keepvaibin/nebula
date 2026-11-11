@@ -757,7 +757,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.vram_budget_mb = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_VRAM_BUDGET_MB", 0u));
     e.disc_read_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_DISC_DELAY_US", 0u));
     if (in_harness) {
-        e.log_line = [](void*, const char* line) { harness::log_line(line); };
+        e.log_line = [](void*, const char* tag, const char* text) { harness::log_line(tag, text); };
         e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
     }
     log("test extension attached");

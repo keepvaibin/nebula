@@ -122,11 +122,10 @@ void log_line(const char* tag, const char* text) noexcept {
     if (!any) {
         return;
     }
-    char line[2048];
-    std::snprintf(line, sizeof(line), "%s %s", tag != nullptr ? tag : "", text != nullptr ? text : "");
+    // Given as it is: a line of any length reaches the extension whole.
     for (std::size_t i = 0; i < g_count; ++i) {
         if (g_extensions[i].log_line != nullptr) {
-            g_extensions[i].log_line(g_extensions[i].user, line);
+            g_extensions[i].log_line(g_extensions[i].user, tag != nullptr ? tag : "", text != nullptr ? text : "");
         }
     }
 }

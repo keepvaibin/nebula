@@ -24,7 +24,7 @@ void controls(std::uint64_t game_frames, NebulaExtensionControls* out);
 // Render thread: the file for a picture the plan asks for at this present, or null.
 const char* picture_path(std::uint64_t game_frame, std::uint32_t kind);
 // Any thread: a line of the host's log ("<tag> <text>").
-void log_line(const char* line);
+void log_line(const char* tag, const char* text);
 // Game thread: the harness's service for mods, or null.
 const void* service(const char* name, std::uint32_t major, std::uint32_t minor);
 

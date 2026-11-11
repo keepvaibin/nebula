@@ -50,6 +50,13 @@ static const LumaFunction* file_created;    /* bool UserFile::isCreated() const 
 static const LumaFunction* load_file;       /* void GameSequenceFunction::startGameDataLoadSequence(int, bool) */
 static const LumaFunction* create_file;     /* void GameSequenceFunction::startCreateUserFileSequence(int) */
 static const LumaFunction* save_busy;       /* bool GameSequenceFunction::isActiveSaveDataHandleSequence() */
+static const LumaFunction* arena_of;        /* NebulaArena *NebulaArena::findFromRoot(void *) */
+
+/* The longest plan line, argument list or fact the game half takes, in bytes with its end, and the most words of a
+   line: the runner refuses a plan over them (luma_test.py LINE_BYTES, LINE_WORDS), and anything over them here is a
+   failed line naming it, never a cut one. */
+#define LINE_BYTES 1024u
+#define LINE_WORDS 16u
 
 static int32_t field_name = -1;      /* NameObj.mName */
 static int32_t field_position = -1; /* LiveActor.mPosition */
@@ -77,13 +84,23 @@ static uint32_t length(const char* text) {
 }
 
 typedef struct Out {
-    char text[1024];
+    char text[LINE_BYTES];
     uint32_t at;
+    uint32_t cut; /* nonzero: more was put than fits; the fact is not written (fact) */
 } Out;
+
+static void out_empty(Out* out) {
+    out->at = 0;
+    out->cut = 0;
+    out->text[0] = 0;
+}
 
 static void put(Out* out, const char* text) {
     while (*text != 0 && out->at + 1 < sizeof(out->text)) {
         out->text[out->at++] = *text++;
+    }
+    if (*text != 0) {
+        out->cut = 1u;
     }
     out->text[out->at] = 0;
 }
@@ -108,11 +125,12 @@ static void put_int(Out* out, int64_t value) {
 
 /* A float as JSON, to 1/1000 (enough for positions in game units and for factors). */
 static void put_float(Out* out, float value) {
-    if (value != value) {
+    double v = value;
+    /* NaN, the infinities and anything past 2^63 (whose whole part does not fit the conversion below) are null. */
+    if (v != v || v >= 9223372036854775808.0 || v <= -9223372036854775808.0) {
         put(out, "null");
         return;
     }
-    double v = value;
     if (v < 0) {
         put(out, "-");
         v = -v;
@@ -160,21 +178,30 @@ static void put_vec(Out* out, const Vec3* v) {
 /* Words of a plan line (kept in static storage where used: only the game thread runs the harness, and a frame
    over 4 KiB would need the stack probe a library with no C library lacks), split at spaces; the last word may hold spaces when `rest` is asked for. */
 typedef struct Words {
-    char buffer[1024];
-    const char* word[16];
+    char buffer[LINE_BYTES];
+    const char* word[LINE_WORDS];
     uint32_t count;
+    uint32_t over; /* nonzero: the text was longer than LINE_BYTES - 1 or had more than LINE_WORDS words */
 } Words;
 
 static void split(Words* w, const char* line, char separator) {
     uint32_t n = 0;
     w->count = 0;
+    w->over = 0;
     while (line[n] != 0 && n + 1 < sizeof(w->buffer)) {
         w->buffer[n] = line[n];
         n++;
     }
+    if (line[n] != 0) {
+        w->over = 1u;
+    }
     w->buffer[n] = 0;
     char* at = w->buffer;
-    while (*at != 0 && w->count < 16u) {
+    while (*at != 0) {
+        if (w->count == LINE_WORDS) {
+            w->over = 1u;
+            break;
+        }
         w->word[w->count++] = at;
         while (*at != 0 && *at != separator) {
             at++;
@@ -250,8 +277,36 @@ static void* player(void) {
     return actor;
 }
 
+/* The first fact of the current line that did not fit, by key: the line then fails naming it (finish). */
+static char cut_fact[128];
+
 static void fact(const char* key, Out* json) {
+    if (json->cut != 0u) {
+        if (cut_fact[0] == 0) {
+            uint32_t i = 0;
+            for (; key[i] != 0 && i + 1 < sizeof(cut_fact); i++) {
+                cut_fact[i] = key[i];
+            }
+            cut_fact[i] = 0;
+        }
+        return;
+    }
     harness->fact(key, json->text);
+}
+
+/* Every line ends here: a line one of whose facts did not fit fails, naming the fact. */
+static void finish(int ok, const char* why) {
+    if (cut_fact[0] != 0) {
+        static Out text;
+        out_empty(&text);
+        put(&text, "the fact ");
+        put(&text, cut_fact);
+        put(&text, " is longer than the harness's 1,023 bytes: not written");
+        cut_fact[0] = 0;
+        harness->done(0, text.text);
+        return;
+    }
+    harness->done(ok, why);
 }
 
 static void fact_bool(const char* key, int value) {
@@ -260,16 +315,14 @@ static void fact_bool(const char* key, int value) {
 
 static void fact_int(const char* key, int64_t value) {
     Out o;
-    o.at = 0;
-    o.text[0] = 0;
+    out_empty(&o);
     put_int(&o, value);
     fact(key, &o);
 }
 
 static void fact_text(const char* key, const char* value) {
     Out o;
-    o.at = 0;
-    o.text[0] = 0;
+    out_empty(&o);
     put_string(&o, value);
     fact(key, &o);
 }
@@ -288,6 +341,52 @@ static int32_t on_object(LumaCall* call, void* user) {
         objects[object_count++] = LUMA_THIS(call, void);
     } else {
         objects_lost++;
+    }
+    return 0;
+}
+
+static void drop_object(uint32_t i) {
+    for (; i + 1 < object_count; i++) {
+        objects[i] = objects[i + 1];
+    }
+    object_count--;
+}
+
+/* A NameObj's destructor: it leaves the list (creation order kept), so its memory, used again, is never taken for it. */
+static int32_t on_object_gone(LumaCall* call, void* user) {
+    (void)user;
+    void* const gone = LUMA_THIS(call, void);
+    for (uint32_t i = 0; i < object_count; i++) {
+        if (objects[i] == gone) {
+            drop_object(i);
+            break;
+        }
+    }
+    return 0;
+}
+
+static void* player_mario;
+
+/* An arena about to go (a stage's scene, whatever changed the stage): what lies in it leaves the lists, the objects
+   whose destructors never run with it and the player's Mario. Its child arenas come here each on its own. */
+static int32_t on_arena_gone(LumaCall* call, void* user) {
+    (void)user;
+    void* const arena = LUMA_ARG(call, 1, void*);
+    for (uint32_t i = 0; i < object_count;) {
+        void* in = 0;
+        call1(arena_of, &objects[i], &in);
+        if (in == arena) {
+            drop_object(i);
+        } else {
+            i++;
+        }
+    }
+    if (player_mario != 0) {
+        void* in = 0;
+        call1(arena_of, &player_mario, &in);
+        if (in == arena) {
+            player_mario = 0;
+        }
     }
     return 0;
 }
@@ -322,7 +421,7 @@ static void* object_of(const char* ref) {
     static Words w;
     split(&w, ref + 7, '#');
     int good = 0;
-    const int64_t n = w.count == 2u ? to_int(w.word[1], &good) : 0;
+    const int64_t n = w.count == 2u && w.over == 0u ? to_int(w.word[1], &good) : 0;
     return w.count == 2u && good ? object_named(w.word[0], n) : 0;
 }
 
@@ -332,14 +431,15 @@ typedef enum Pending { Pending_None, Pending_Stage, Pending_File } Pending;
 static Pending pending;
 static char pending_stage[64];
 static int32_t pending_scenario;
+static int32_t pending_file; /* the user file `setup file` made current; 0 before one */
 static uint32_t pending_frames;
 static int pending_is_step;
 static int32_t frame_now = -1;
 
 static const char* const kForms[] = {"normal", "rainbow", "fire", "ice", "bee", "spring", "boo", "flying", 0, "tornado"};
 
-/* The player's Mario, as its own Mario::checkKeyLock last saw it this stage (0 until it runs on the new stage). */
-static void* player_mario;
+/* player_mario (above): the player's Mario, as its own Mario::checkKeyLock last saw it this stage (0 until it runs on
+   the new stage, and once its arena goes). */
 
 static int32_t on_key_lock(LumaCall* call, void* user) {
     (void)user;
@@ -371,8 +471,7 @@ static int stage_ready(Out* why) {
     /* The stage-start demo (the scenario starter's "Welcome" layout, run 6) holds the player's input: ready once no
        demo runs. */
     call0(demo_active, &demo);
-    why->at = 0;
-    why->text[0] = 0;
+    out_empty(why);
     if (name == 0 || !same(name, pending_stage)) {
         put(why, "ready: stage ");
         put(why, pending_stage);
@@ -401,8 +500,7 @@ static int stage_ready(Out* why) {
 }
 
 /* User file <n> made current as the file select does: loaded when the saves hold it, else made through the game's
-   new-file path (which also writes it, so the next test continuing from this one finds it). */
-static int32_t pending_file;
+   new-file path (which also writes it, so the next test continuing from this one finds it). pending_file: above. */
 static void* the_current_file(void) {
     void* sequence = 0;
     call0(save_sequence, &sequence);
@@ -426,13 +524,13 @@ static void setup_file(const char* text) {
     int good = 0;
     const int64_t n = to_int(text, &good);
     if (!good || n < 1 || n > 3) {
-        harness->done(0, "file: a user file is 1, 2 or 3");
+        finish(0, "file: a user file is 1, 2 or 3");
         return;
     }
     pending_file = (int32_t)n;
     void* const file = the_current_file();
     if (file == 0) {
-        harness->done(0, "file: the game has no current user file yet");
+        finish(0, "file: the game has no current user file yet");
         return;
     }
     int32_t index = pending_file;
@@ -441,7 +539,7 @@ static void setup_file(const char* text) {
     load_file->invoke(load_args, 0);
     if (file_is_created(file)) {
         fact_text("setup.file", "loaded");
-        harness->done(1, 0);
+        finish(1, 0);
         return;
     }
     void* create_args[] = {0, &index};
@@ -456,7 +554,7 @@ static void file_tick(void) {
     if (busy != 0) {
         if (++pending_frames > 60u * 60u) {
             pending = Pending_None;
-            harness->done(0, "file: the new file was not written within 3,600 frames");
+            finish(0, "file: the new file was not written within 3,600 frames");
         }
         return;
     }
@@ -464,7 +562,7 @@ static void file_tick(void) {
     void* const file = the_current_file();
     const int created = file != 0 && file_is_created(file);
     fact_text("setup.file", created ? "created" : "not created");
-    harness->done(created, "file: the game's new-file path left the file not created");
+    finish(created, "file: the game's new-file path left the file not created");
 }
 
 static void start_stage(const char* name, const char* scenario_text, int is_step) {
@@ -478,7 +576,7 @@ static void start_stage(const char* name, const char* scenario_text, int is_step
         scenario_data->invoke(args, &data);
     }
     if (!good || data == 0 || length(name) + 1u > sizeof(pending_stage)) {
-        harness->done(0, "the game has no stage of that name");
+        finish(0, "the game has no stage of that name");
         return;
     }
     for (uint32_t i = 0; i <= length(name); i++) {
@@ -498,8 +596,7 @@ static void start_stage(const char* name, const char* scenario_text, int is_step
 
 static void finish_stage(void) {
     Out o;
-    o.at = 0;
-    o.text[0] = 0;
+    out_empty(&o);
     put(&o, "{\"name\":");
     put_string(&o, pending_stage);
     put(&o, ",\"scenario\":");
@@ -512,7 +609,7 @@ static void finish_stage(void) {
         fact("stage.ready", &o);
     }
     pending = Pending_None;
-    harness->done(1, 0);
+    finish(1, 0);
 }
 
 static void setup_save(const Words* w) {
@@ -522,14 +619,17 @@ static void setup_save(const Words* w) {
         void* holder = 0;
         call0(game_data, &holder);
         if (holder == 0 || field_is_mario < 0 || field_user < 0) {
-            harness->done(0, field_is_mario < 0 ? "not built yet: GameDataHolder has no fields by name (task 1.2)" : "save.character: no game data to set");
+            finish(0, field_is_mario < 0 ? "not built yet: GameDataHolder has no fields by name (task 1.2)" : "save.character: no game data to set");
             return;
         }
         *(unsigned char*)((char*)holder + field_is_mario) = same(w->word[2], "luigi") ? 0u : 1u;
-        *(int32_t*)((char*)holder + field_user) = 1;
+        /* The holder's user file: the one `setup file` made current; else as the load set it. */
+        if (pending_file != 0) {
+            *(int32_t*)((char*)holder + field_user) = pending_file;
+        }
         const int mario = *(const unsigned char*)((const char*)holder + field_is_mario) != 0;
         fact_text("setup.save.character", mario ? "mario" : "luigi");
-        harness->done(same(w->word[2], mario ? "mario" : "luigi"), "save.character did not take");
+        finish(same(w->word[2], mario ? "mario" : "luigi"), "save.character did not take");
         return;
     }
     if (same(item, "save.spin") && w->count == 3u) {
@@ -542,29 +642,28 @@ static void setup_save(const Words* w) {
         }
         const int passed = ask_text(passed_story, "\xe3\x82\xb9\xe3\x83\x94\xe3\x83\xb3\xe6\xa8\xa9\xe5\x88\xa9"); /* スピン権利 */
         fact_bool("setup.save.spin", passed);
-        harness->done(passed == want, "save.spin did not take");
+        finish(passed == want, "save.spin did not take");
         return;
     }
     if (same(item, "save.flag") && w->count == 3u) {
         if (!ask_text(flag_exists, w->word[2])) {
-            harness->done(0, "save.flags: the game has no event flag of that name");
+            finish(0, "save.flags: the game has no event flag of that name");
             return;
         }
         call1(flag_on, (void*)&w->word[2], 0);
         const int on = ask_text(is_flag_on, w->word[2]);
         Out key;
-    key.at = 0;
-    key.text[0] = 0;
+    out_empty(&key);
         put(&key, "setup.save.flags.");
         put(&key, w->word[2]);
         fact_bool(key.text, on);
-        harness->done(on, "save.flags did not take");
+        finish(on, "save.flags did not take");
         return;
     }
     if (same(item, "save.value") && w->count == 4u) {
         const int64_t value = to_int(w->word[3], &good);
         if (!good || value < 0 || value > 65535) {
-            harness->done(0, "save.values: a value is 0 to 65535");
+            finish(0, "save.values: a value is 0 to 65535");
             return;
         }
         uint16_t v16 = (uint16_t)value;
@@ -573,12 +672,11 @@ static void setup_save(const Words* w) {
         uint32_t back = 0;
         call1(get_value, (void*)&w->word[2], &back);
         Out key;
-    key.at = 0;
-    key.text[0] = 0;
+    out_empty(&key);
         put(&key, "setup.save.values.");
         put(&key, w->word[2]);
         fact_int(key.text, back);
-        harness->done(back == (uint32_t)value, "save.values did not take");
+        finish(back == (uint32_t)value, "save.values did not take");
         return;
     }
     if ((same(item, "save.stars") || same(item, "save.grand_stars")) && w->count == 3u) {
@@ -593,13 +691,13 @@ static void setup_save(const Words* w) {
         }
         fact_int(same(item, "save.stars") ? "setup.save.stars" : "setup.save.grand_stars", have);
         if (good && want != have) {
-            harness->done(0, "not built yet: setting a number of stars other than the file's own");
+            finish(0, "not built yet: setting a number of stars other than the file's own");
             return;
         }
-        harness->done(good, "a number of stars is a whole number");
+        finish(good, "a number of stars is a whole number");
         return;
     }
-    harness->done(0, "not a save item the harness knows");
+    finish(0, "not a save item the harness knows");
 }
 
 static void setup_player(const Words* w) {
@@ -607,7 +705,7 @@ static void setup_player(const Words* w) {
     void* const actor = player();
     int good = 1;
     if (actor == 0) {
-        harness->done(0, "player: there is no player (no stage)");
+        finish(0, "player: there is no player (no stage)");
         return;
     }
     if ((same(item, "player.position") && w->count == 5u) || (same(item, "player.at") && w->count == 4u)) {
@@ -622,7 +720,7 @@ static void setup_player(const Words* w) {
             const int64_t n = to_int(w->word[3], &good);
             void* const object = good ? object_named(w->word[2], n) : 0;
             if (object == 0) {
-                harness->done(0, objects_lost != 0 ? "player.at: more objects than the harness keeps" : "player.at: no live object of that name and number");
+                finish(0, objects_lost != 0 ? "player.at: more objects than the harness keeps" : "player.at: no live object of that name and number");
                 return;
             }
             const Vec3* const at = (const Vec3*)((const char*)object + field_position);
@@ -634,7 +732,7 @@ static void setup_player(const Words* w) {
             place.z = at->z - g.z * 150.0f;
         }
         if (!good) {
-            harness->done(0, "player.position is three numbers");
+            finish(0, "player.position is three numbers");
             return;
         }
         Vec3* p = &place;
@@ -642,8 +740,7 @@ static void setup_player(const Words* w) {
         Vec3* back = 0;
         call0(player_pos, &back);
         Out o;
-    o.at = 0;
-    o.text[0] = 0;
+    out_empty(&o);
         if (back != 0) {
             put_vec(&o, back);
         } else {
@@ -651,7 +748,7 @@ static void setup_player(const Words* w) {
         }
         fact(same(item, "player.position") ? "setup.player.position" : "setup.player.at", &o);
         const float dx = back != 0 ? back->x - place.x : 1e9f, dy = back != 0 ? back->y - place.y : 0.0f, dz = back != 0 ? back->z - place.z : 0.0f;
-        harness->done(dx * dx + dy * dy + dz * dz < 1.0f, "the player is not where he was put");
+        finish(dx * dx + dy * dy + dz * dz < 1.0f, "the player is not where he was put");
         return;
     }
     if (same(item, "player.form") && w->count == 3u) {
@@ -662,7 +759,7 @@ static void setup_player(const Words* w) {
             }
         }
         if (mode < 0 || field_mode < 0) {
-            harness->done(0, "player.form: the game has no form of that name");
+            finish(0, "player.form: the game has no form of that name");
             return;
         }
         uint16_t m = (uint16_t)mode;
@@ -671,22 +768,22 @@ static void setup_player(const Words* w) {
         set_mode->invoke(args, 0);
         const uint16_t back = *(const uint16_t*)((const char*)actor + field_mode);
         fact_text("setup.player.form", back < sizeof(kForms) / sizeof(kForms[0]) && kForms[back] != 0 ? kForms[back] : "?");
-        harness->done(back == m, "player.form did not take");
+        finish(back == m, "player.form did not take");
         return;
     }
     if (same(item, "player.life") && w->count == 3u) {
         const int64_t life = to_int(w->word[2], &good);
         if (!good || life < 1 || field_health < 0) {
-            harness->done(0, "player.life is 1 or more");
+            finish(0, "player.life is 1 or more");
             return;
         }
         *(uint32_t*)((char*)actor + field_health) = (uint32_t)life;
         const uint32_t back = *(const uint32_t*)((const char*)actor + field_health);
         fact_int("setup.player.life", back);
-        harness->done(back == (uint32_t)life, "player.life did not take");
+        finish(back == (uint32_t)life, "player.life did not take");
         return;
     }
-    harness->done(0, "not a player item the harness knows");
+    finish(0, "not a player item the harness knows");
 }
 
 /* `call <fact or -> <name>\t<signature>\t<argument>\t...`: arguments as the plan writes them (numbers, true, false,
@@ -695,13 +792,17 @@ static void setup_player(const Words* w) {
 static void do_call(const char* key, const char* rest) {
     static Words parts;
     split(&parts, rest, '\t');
+    if (parts.over != 0u) {
+        finish(0, "call: more than 14 arguments, or longer than 1,023 bytes: not taken");
+        return;
+    }
     if (parts.count < 2u) {
-        harness->done(0, "a call needs a name and a signature");
+        finish(0, "a call needs a name and a signature");
         return;
     }
     const LumaFunction* const f = core->function(parts.word[0], parts.word[1]);
     if (f == 0) {
-        harness->done(0, "the game has no function of that name and signature");
+        finish(0, "the game has no function of that name and signature");
         return;
     }
     /* The parameter types, between the signature's outer parentheses. */
@@ -710,7 +811,7 @@ static void do_call(const char* key, const char* rest) {
     while (*open != 0 && *open != '(') {
         open++;
     }
-    char params[256];
+    static char params[LINE_BYTES];
     uint32_t n = 0;
     if (*open == '(') {
         open++;
@@ -722,19 +823,26 @@ static void do_call(const char* key, const char* rest) {
     params[n] = 0;
     static Words types;
     split(&types, params, ',');
+    if (types.over != 0u) {
+        finish(0, "call: a signature of more than 16 parameters: not taken");
+        return;
+    }
     if (n == 0u) {
         types.count = 0;
     }
     if (types.count != parts.count - 2u || types.count > MOST_ARGS) {
-        harness->done(0, "the call's arguments do not match its signature");
+        finish(0, "the call's arguments do not match its signature");
         return;
     }
     union Value {
         float f;
+        double d;
         int32_t i;
         uint32_t u;
         uint16_t h;
+        int16_t sh;
         unsigned char b;
+        signed char sb;
         const char* s;
         void* p;
         Vec3 v;
@@ -761,6 +869,18 @@ static void do_call(const char* key, const char* rest) {
         } else if (same(type, "u16")) {
             values[i].h = (uint16_t)to_int(text, &good);
             args[i + 1] = &values[i].h;
+        } else if (same(type, "s16")) {
+            values[i].sh = (int16_t)to_int(text, &good);
+            args[i + 1] = &values[i].sh;
+        } else if (same(type, "u8")) {
+            values[i].b = (unsigned char)to_int(text, &good);
+            args[i + 1] = &values[i].b;
+        } else if (same(type, "s8")) {
+            values[i].sb = (signed char)to_int(text, &good);
+            args[i + 1] = &values[i].sb;
+        } else if (same(type, "f64") || same(type, "double")) {
+            values[i].d = to_float(text, &good);
+            args[i + 1] = &values[i].d;
         } else if (same(type, "bool")) {
             good = same(text, "true") || same(text, "false");
             values[i].b = same(text, "true") ? 1u : 0u;
@@ -773,7 +893,7 @@ static void do_call(const char* key, const char* rest) {
             static Words xyz;
             split(&xyz, text, ' ');
             int g1 = 0, g2 = 0, g3 = 0;
-            good = xyz.count == 3u;
+            good = xyz.count == 3u && xyz.over == 0u;
             values[i].v.x = good ? to_float(xyz.word[0], &g1) : 0.0f;
             values[i].v.y = good ? to_float(xyz.word[1], &g2) : 0.0f;
             values[i].v.z = good ? to_float(xyz.word[2], &g3) : 0.0f;
@@ -783,19 +903,23 @@ static void do_call(const char* key, const char* rest) {
         } else if (same(type, "LiveActor *") || same(type, "const LiveActor *") || same(type, "NameObj *") || same(type, "const NameObj *") ||
                    same(type, "MarioActor *")) {
             values[i].p = object_of(text);
-            good = values[i].p != 0;
             args[i + 1] = &values[i].p;
+            if (values[i].p == 0) {
+                finish(0, objects_lost != 0 && !same(text, "player") ? "call: more objects than the harness keeps (4,096): the object may be one of those"
+                                                                     : "call: an argument names no live object");
+                return;
+            }
         } else {
-            harness->done(0, "a parameter type the harness cannot pass");
+            finish(0, "a parameter type the harness cannot pass");
             return;
         }
         if (!good) {
-            harness->done(0, "an argument does not fit its parameter, or names no live object");
+            finish(0, "an argument does not fit its parameter, or names no live object");
             return;
         }
     }
     /* The result, by the signature's return type (the text before the parentheses). */
-    char ret[64];
+    static char ret[LINE_BYTES];
     uint32_t r = 0;
     while (sig[r] != 0 && sig[r] != '(' && r + 1 < sizeof(ret)) {
         ret[r] = sig[r];
@@ -805,16 +929,32 @@ static void do_call(const char* key, const char* rest) {
         r--;
     }
     ret[r] = 0;
+    /* Only a result the harness knows is taken: any other (an enum, s64, a struct by value) could be wider than
+       `result` or read as the wrong bytes, so the call is not made. A pointer is "is there one". */
+    static const char* const kResults[] = {"void", "f32", "float", "f64", "double", "s32", "int", "u32", "u16", "s16", "u8", "s8", "bool",
+                                           "const char *", "Vec3f *", "const Vec3f *", "TVec3f *", "const TVec3f *", "Vec3f", "TVec3f", 0};
+    int known = r > 0 && ret[r - 1] == '*';
+    for (uint32_t k = 0; kResults[k] != 0 && !known; k++) {
+        known = same(ret, kResults[k]);
+    }
+    if (!known) {
+        static Out text;
+        out_empty(&text);
+        put(&text, "call: a result type the harness cannot take: ");
+        put(&text, ret);
+        finish(0, text.text);
+        return;
+    }
     union Value result;
+    result.d = 0.0;
     result.v.x = result.v.y = result.v.z = 0.0f;
     f->invoke(args, same(ret, "void") ? (void*)0 : (void*)&result);
     if (same(key, "-")) {
-        harness->done(1, 0);
+        finish(1, 0);
         return;
     }
     Out o;
-    o.at = 0;
-    o.text[0] = 0;
+    out_empty(&o);
     if (same(ret, "void")) {
         put(&o, "null");
     } else if (same(ret, "f32") || same(ret, "float")) {
@@ -825,6 +965,14 @@ static void do_call(const char* key, const char* rest) {
         put_int(&o, result.u);
     } else if (same(ret, "u16")) {
         put_int(&o, result.h);
+    } else if (same(ret, "s16")) {
+        put_int(&o, result.sh);
+    } else if (same(ret, "u8")) {
+        put_int(&o, result.b);
+    } else if (same(ret, "s8")) {
+        put_int(&o, result.sb);
+    } else if (same(ret, "f64") || same(ret, "double")) {
+        put_float(&o, (float)result.d);
     } else if (same(ret, "bool")) {
         put(&o, result.b != 0 ? "true" : "false");
     } else if (same(ret, "const char *")) {
@@ -846,19 +994,19 @@ static void do_call(const char* key, const char* rest) {
         put(&o, result.p != 0 ? "true" : "false");
     }
     fact(key, &o);
-    harness->done(1, 0);
+    finish(1, 0);
 }
 
 /* `read <fact> <of> <Class.field> <type>`. */
 static void do_read(const Words* w) {
     if (w->count < 5u) {
-        harness->done(0, "a read needs a fact, an object, a field and a type");
+        finish(0, "a read needs a fact, an object, a field and a type");
         return;
     }
     static Words cf;
     split(&cf, w->word[3], '.');
     /* The type may hold spaces: the rest of the line. */
-    char type[64];
+    static char type[LINE_BYTES];
     uint32_t t = 0;
     for (uint32_t i = 4; i < w->count; i++) {
         const char* part = w->word[i];
@@ -870,16 +1018,21 @@ static void do_read(const Words* w) {
         }
     }
     type[t] = 0;
+    if (cf.over != 0u) {
+        finish(0, "read: a field name longer than 1,023 bytes");
+        return;
+    }
     void* const object = object_of(w->word[2]);
     const int32_t offset = cf.count == 2u ? core->field(cf.word[0], cf.word[1], type) : -1;
     if (object == 0 || offset < 0) {
-        harness->done(0, object == 0 ? "no live object of that name and number" : "the game has no field of that name and type");
+        finish(0, object == 0 ? (objects_lost != 0 ? "read: more objects than the harness keeps (4,096): the object may be one of those"
+                                                   : "no live object of that name and number")
+                              : "the game has no field of that name and type");
         return;
     }
     const char* const at = (const char*)object + offset;
     Out o;
-    o.at = 0;
-    o.text[0] = 0;
+    out_empty(&o);
     if (same(type, "f32")) {
         put_float(&o, *(const float*)at);
     } else if (same(type, "s32")) {
@@ -904,24 +1057,29 @@ static void do_read(const Words* w) {
             put(&o, "null");
         }
     } else {
-        harness->done(0, "a field type the harness cannot read");
+        finish(0, "a field type the harness cannot read");
         return;
     }
     fact(w->word[1], &o);
-    harness->done(1, 0);
+    finish(1, 0);
 }
 
 static void do_line(const char* line) {
     static Words w;
     split(&w, line, ' ');
+    /* A call's words are its tab-separated arguments, read from the line itself (do_call checks them). */
+    if (w.over != 0u && !(w.count >= 2u && same(w.word[0], "call") && length(line) < LINE_BYTES)) {
+        finish(0, "a plan line longer than 1,023 bytes or of more than 16 words: not taken");
+        return;
+    }
     if (w.count == 0u) {
-        harness->done(0, "an empty line");
+        finish(0, "an empty line");
         return;
     }
     if (same(w.word[0], "frame") && w.count == 2u) {
         int good = 0;
         frame_now = (int32_t)to_int(w.word[1], &good);
-        harness->done(good, "a frame number");
+        finish(good, "a frame number");
         return;
     }
     if (same(w.word[0], "setup") && w.count >= 2u) {
@@ -937,18 +1095,18 @@ static void do_line(const char* line) {
         } else if (same(item, "seed") && w.count == 3u) {
             /* The game seeds its generator from the stage's name as each stage starts: seed 0 is that. */
             fact_int("setup.seed", 0);
-            harness->done(same(w.word[2], "0"), "not built yet: a seed other than 0 needs the game's globals by name (task 1.2)");
+            finish(same(w.word[2], "0"), "not built yet: a seed other than 0 needs the game's globals by name (task 1.2)");
         } else if (same(item, "language") && w.count == 3u) {
             /* The runner set the language as the setting is set; the game's own name for the language it took. */
             const char* name = 0;
             call0(language_name, &name);
             fact_text("setup.language", name != 0 ? name : "");
-            harness->done(name != 0 && same(name, w.word[2]), "language did not take: the game took the one setup.language holds (a disc offers only its own languages)");
+            finish(name != 0 && same(name, w.word[2]), "language did not take: the game took the one setup.language holds (a disc offers only its own languages)");
         } else if (same(item, "done")) {
             fact_bool("setup.done", 1);
-            harness->done(1, 0);
+            finish(1, 0);
         } else {
-            harness->done(0, "not a setup item the harness knows");
+            finish(0, "not a setup item the harness knows");
         }
         return;
     }
@@ -966,7 +1124,7 @@ static void do_line(const char* line) {
         do_read(&w);
         return;
     }
-    harness->done(0, "not a line the game half knows");
+    finish(0, "not a line the game half knows");
 }
 
 static int32_t on_frame(LumaCall* call, void* user) {
@@ -985,7 +1143,7 @@ static int32_t on_frame(LumaCall* call, void* user) {
         } else if (++pending_frames > 60u * 120u) {
             pending = Pending_None;
             put(&why, " (after 7,200 frames)");
-            harness->done(0, why.text);
+            finish(0, why.text);
         } else {
             return 0;
         }
@@ -1054,6 +1212,9 @@ static const LumaImport imports[] = {
     LUMA_FIELD(field_mode, "MarioActor.mPlayerMode", "u16"),
     LUMA_FIELD(field_health, "MarioActor.mHealth", "u32"),
     LUMA_HOOK_ON("LiveActor::LiveActor", "(const char *)", LUMA_AFTER, on_object),
+    LUMA_HOOK_ON("NameObj::~NameObj", "()", LUMA_AFTER, on_object_gone),
+    LUMA_FUNCTION(arena_of, "NebulaArena::findFromRoot", "NebulaArena *(void *)"),
+    LUMA_HOOK_ON("NebulaArena::destroy", "void(NebulaArena *)", LUMA_BEFORE, on_arena_gone),
     LUMA_FUNCTION(input_disabled, "MarioModule::isInputDisable", "bool() const"),
     LUMA_HOOK_ON("Mario::checkKeyLock", "void()", LUMA_AFTER, on_key_lock),
     LUMA_HOOK_ON("GameSystem::update", "void()", LUMA_AFTER, on_frame),
