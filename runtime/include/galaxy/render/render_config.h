@@ -133,7 +133,7 @@ struct RenderConfig {
     bool     rt_chosen           = false;
     // The lighting style (plan 14.6): 0 painted (the art's own light, relit by the tracer's ratios), 1 physical (where
     // a painted mesh's paint is one light, the real sun takes its place).
-    unsigned rt_style            = 0;
+    unsigned rt_style            = 1;
     // Light the lens scatters around every bright surface.
     bool     rt_lens_bloom       = true;
 

@@ -42,6 +42,8 @@ cbuffer View : register(b0) {
                                // rt_transmit.hlsl), y 1 where drawn
     float4 view_blend_guide;   // with bit 3 in the scene's view: x the guide blended draws compare with
                                // (traced_by_air, traced_mirror_own), y 1 the second layer's, 2 the opaque layer's, 0 none
+    float4 view_look;          // with bit 3: the painted composite's look (traced_painted): x kForm, y the stage's m
+                               // (what the art is taken to hold of the sun's facing), z kDebake, w kAmbientLook
 };
 
 cbuffer Draw : register(b3) {
@@ -361,6 +363,9 @@ float4 env_fetch(float4 painted, float4 pixel) {
 // it faces the key (nl); the traced light keeps the key's part by V and the ambient's by O, a channel at a time
 // (a shadow takes the sky's colour, and a coloured thing's shadow its colour) and in luminance, mixed by
 // kShadowTint. In open sun with nothing near: 1.
+// The relight (DIRECTOR.md C3): the art is taken to hold A + K m, m = lerp(nl, the stage's m, kForm): kForm 0 is the
+// above (m = nl, the art's own facing divided out); 1 every painted mesh by the traced sun's facing (a side away from
+// the sun keeps A O of A + K m, a top facing it gains K (1 - m)). The ambient by kAmbientLook (D4: a look dial).
 // O a channel at a time (FB 22.10, plan 11): the sky and bounce light's ratio (picture view_volume[2].z - 1, rt_indirect_up)
 // scaled to the light's O (the ratio itself where O is its mean; 0 with O), for an opaque draw of the scene view where
 // that pass ran; else O as it is. `coloured` says which.
@@ -377,14 +382,17 @@ float3 traced_o(float4 light, float4 pixel, out bool coloured) {
 float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
     const float o = light.a;
-    const float3 whole = a + k * nl;
-    const float3 channel = float3(whole.r > 1e-4 ? (a.r * o3.r + k.r * nl * v.r) / whole.r : 1.0,
-                                  whole.g > 1e-4 ? (a.g * o3.g + k.g * nl * v.g) / whole.g : 1.0,
-                                  whole.b > 1e-4 ? (a.b * o3.b + k.b * nl * v.b) / whole.b : 1.0);
+    const float m = lerp(nl, view_look.y, view_look.x);
+    const float ga = view_look.w;
+    const float3 held = a + k * m;
+    const float3 channel = float3(held.r > 1e-4 ? (ga * a.r * o3.r + k.r * nl * v.r) / held.r : 1.0,
+                                  held.g > 1e-4 ? (ga * a.g * o3.g + k.g * nl * v.g) / held.g : 1.0,
+                                  held.b > 1e-4 ? (ga * a.b * o3.b + k.b * nl * v.b) / held.b : 1.0);
     const float3 luminance = float3(0.2126, 0.7152, 0.0722);
-    const float al = dot(a, luminance), kl = dot(k, luminance) * nl;
+    const float al = dot(a, luminance), kl = dot(k, luminance);
     const float ao = coloured ? dot(a * o3, luminance) : al * o;
-    const float mean = al + kl > 1e-4 ? (ao + kl * dot(v, luminance)) / (al + kl) : 1.0;
+    const float held_l = al + kl * m;
+    const float mean = held_l > 1e-4 ? (ga * ao + kl * nl * dot(v, luminance)) / held_l : 1.0;
     return lerp(float3(mean, mean, mean), channel, view_stage_a.w);
 }
 float4 traced_colour(float4 c, float4 pixel) {
@@ -400,13 +408,9 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float nl = g_traced_lit ? 1.0 : saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
     bool coloured = false;
     const float3 o3 = g_traced_lit ? light.aaa : traced_o(light, pixel, coloured);
-    float3 share = g_traced_lit ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl, o3, !g_traced_lit && coloured);
-    if ((view_flags & 64u) != 0u && !g_traced_lit) {
-        // The Physical style (plan 14.6; FB 22.19): the paint's one light gives way to the sun and the sky.
-        const float4 f = gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0));
-        if (f.a > 0.0) {
-            share = clamp(((1.0 - f.a) * o3 + f.a * f.g * light.rgb) / max((1.0 - f.a) + f.a * f.b, 1e-3), 0.3, 2.5);
-        }
+    const float3 share = g_traced_lit ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl, o3, !g_traced_lit && coloured);
+    if ((view_flags & 64u) != 0u) {
+        return float4(share, c.a);  // the share alone (--diagnostics rt-signals, S: FA's sheet); a lit program's is 1
     }
     // The added light by the surface's colour before lighting (a painted program's colour is that already).
     const float kBaseFloor = 0.2;

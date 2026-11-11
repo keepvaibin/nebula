@@ -1904,6 +1904,20 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.more[3] |= render.rt_quality == kRtPresetReference ? 4096u : 0u;
     rt_lamps_own_ = rt_part(render, RtPart::Lights) == 0u;
     rt_physical_ = render.rt_style == 1u;
+    {
+        // The painted composite's look (program.hlsli traced_painted; DIRECTOR.md C3, D1, D4). kForm: 1 the relight
+        // (every painted mesh by the traced sun's facing), 0 Painted (the art's own facing). kArtFacing: the m the art
+        // is taken to hold (a stage's sunlit mean holds near it; a stage column if one needs its own). kDebake: D2's
+        // per-vertex gain (0 until the cooker writes it). kAmbientLook: the share of the stage's ambient the relight
+        // keeps. Painted keeps the art's light exactly (0, -, 0, 1).
+        constexpr float kForm = 1.0f, kArtFacing = 0.7f, kDebake = 0.0f, kAmbientLook = 1.0f;
+        // No traced sun (a stage without one, the sun part off): the facing is 1 everywhere and the art keeps its own.
+        const bool relit = rt_physical_ && sunned && rt_part(render, RtPart::Sun) != 0u;
+        rt_look_[0] = relit ? kForm : 0.0f;
+        rt_look_[1] = kArtFacing;
+        rt_look_[2] = rt_physical_ ? kDebake : 0.0f;
+        rt_look_[3] = rt_physical_ ? kAmbientLook : 1.0f;
+    }
     constants.more[2] = (sunned && rt_part(render, RtPart::Sun) != 0u ? 1u : 0u) |
                         (rt_part(render, RtPart::Reflect) >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
     // Bit 12: the camera under water, as the game reports it: water is seen from inside (rt_light.hlsl clear_surface).
@@ -2086,8 +2100,7 @@ void RenderCore::rt_light() {
                 rt_light_on_ = true;
                 rt_guides_publish();
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
-                               (rt_lamps_own_ ? 32u : 0u) |  // local lights off: the programs' own lamp (FC)
-                               (rt_physical_ ? 64u : 0u);  // the Physical style (FB 22.19): program.hlsli traced_colour
+                               (rt_lamps_own_ ? 32u : 0u);  // local lights off: the programs' own lamp (FC)
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {

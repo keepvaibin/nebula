@@ -423,7 +423,7 @@ private:
     void rt_light();
     void rt_light_end() noexcept;
     void rt_reactive();  // the reactive mask where the added light changed (plan 16.4)
-    bool rt_physical_ = false;   // the Physical style (plan 14.6, view_flags bit 64)
+    bool rt_physical_ = false;   // the relight (DIRECTOR.md D1; the setting's "physical"): rt_look_'s kForm and gains
     bool rt_lamps_own_ = false;  // local lights off (plan 19.1): the programs light by their own lamp (view_flags bit 32)
     // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
     // item target and the light pass run over them, into the picture the opaque draws are done reading.
@@ -530,6 +530,9 @@ private:
     // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k,
     // RT-MASTER-PLAN 3.4); rt_stage_a_[3] is kShadowTint.
     float rt_stage_a_[4]{}, rt_stage_k_[4]{};
+    // The painted composite's look (program.hlsli traced_painted, view row `look`): kForm, the stage's m, kDebake,
+    // kAmbientLook. Set every walk from the style (rt_walk.cpp); FA's dev block sets them by name.
+    float rt_look_[4]{0.0f, 0.7f, 0.0f, 1.0f};
     float rt_stage_air_ = 0.0f;  // the stage row's air (rt_stages.tsv), per unit; 0: none (rt_air_density)
     // What glows in the scene: a draw of a mesh whose material glows (nebula_model.h NebulaModelHit.glow, from the
     // cooker's table of glowing models and from surfaces added to what is behind them). One a block; the light pass

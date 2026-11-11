@@ -186,12 +186,15 @@ struct ViewRows {
     float blend_guide[4];  // with view_flags bit 3, the scene's view (FB, 15.2: program.hlsli traced_by_air,
                            // traced_mirror_own): x the guide blended draws compare with, y 1 the second layer's
                            // (picture 9), 2 the opaque layer's (picture 8), 0 none
+    float look[4];  // with view_flags bit 3: the painted composite's look (program.hlsli traced_painted; RenderCore
+                    // rt_look_): kForm, the stage's m, kDebake, kAmbientLook
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
               offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
               offsetof(ViewRows, volume) == 208 &&
-              offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && sizeof(ViewRows) == 288);
+              offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && offsetof(ViewRows, look) == 288 &&
+              sizeof(ViewRows) == 304);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

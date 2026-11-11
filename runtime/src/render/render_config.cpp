@@ -213,7 +213,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
     else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_milliseconds(val, cfg.rt_probe_ms);
     else if (std::strcmp(key, "rt_chosen") == 0) cfg.rt_chosen = parse_bool(val, cfg.rt_chosen);
-    else if (std::strcmp(key, "rt_style") == 0) {
+    else if (std::strcmp(key, "rt_light_style") == 0) {  // rt_style before the relight was the default: left behind
         static constexpr const char* kNames[] = {"painted", "physical"};
         cfg.rt_style = parse_choice(val, kNames, cfg.rt_style);
     }
@@ -643,7 +643,7 @@ bool save_render_config_to_file() {
              << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
              << "rt_probe_ms=" << cfg.rt_probe_ms << '\n'
              << "rt_chosen=" << (cfg.rt_chosen ? 1u : 0u) << '\n'
-             << "rt_style=" << (cfg.rt_style == 1u ? "physical" : "painted") << '\n'
+             << "rt_light_style=" << (cfg.rt_style == 1u ? "physical" : "painted") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'

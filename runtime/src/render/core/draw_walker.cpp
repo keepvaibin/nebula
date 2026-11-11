@@ -494,6 +494,7 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     if ((view_flags_ & 8u) != 0u) {
         std::memcpy(rows.stage_a, rt_stage_a_, sizeof(rows.stage_a));
         std::memcpy(rows.stage_k, rt_stage_k_, sizeof(rows.stage_k));
+        std::memcpy(rows.look, rt_look_, sizeof(rows.look));
     }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
