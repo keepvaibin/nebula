@@ -91,7 +91,12 @@ pub(crate) fn check(ctx: &mut Ctx) {
                         }
                     }
                     None => {
-                        if source.is_some() {
+                        // A source form of a game table at the table's own path (`objinfo.json` beside `objinfo`,
+                        // as `lumalink extract --game` writes it) still replaces rows: L303, in any form.
+                        let table = source.and_then(|e| store.path(&lower[..lower.len() - e.len()])).filter(|g| store.table(g).is_some());
+                        if let Some(game_path) = table {
+                            ctx.add(303, &item.name, None, None, vec![("found", t(game_path))]);
+                        } else if source.is_some() {
                             // A source standing in for a game file of another ending: what it may stand in for is
                             // each content kind's contract (3.2 to 3.10), checked by that kind's rules.
                             ctx.not_checked(304, "Missing.KindContract");
