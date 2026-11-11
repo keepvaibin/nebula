@@ -444,20 +444,29 @@ mod types_tests {
     /// Rows in the form the generator writes (tools/lumacore/gen_types.py), one of each case the readers take.
     const SAMPLE: &str = r#"{
       "types": [
-        {"kind": "struct", "name": "TVec3<f32>", "size": 12, "fields": [{"name": "x", "type": "f32"}], "reachable": []},
-        {"kind": "class", "name": "NameObj", "size": 12, "fields": [{"name": "mName", "type": "const char *"}], "reachable": []},
-        {"kind": "class", "name": "LiveActor", "size": 140, "fields": [{"name": "mFlags", "type": "u32 : 3"}],
-         "reachable": [{"name": "mName", "type": "const char *"}]},
-        {"kind": "union", "name": "Both", "size": 4, "fields": [], "reachable": []},
+        {"kind": "struct", "name": "TVec3<f32>", "size": 12, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "bases": [],
+         "fields": [{"name": "x", "type": "f32", "offset": 0, "count": 1, "extents": null, "access": "public", "bits": null}], "reachable": []},
+        {"kind": "class", "name": "NameObj", "size": 12, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false, "bases": [],
+         "fields": [{"name": "mName", "type": "const char *", "offset": 4, "count": 1, "extents": null, "access": "public", "bits": null}], "reachable": []},
+        {"kind": "class", "name": "LiveActor", "size": 140, "align": 4, "polymorphic": true, "abstract": false, "trivial_copy": false, "trivial_destroy": false,
+         "bases": [{"name": "NameObj", "offset": 0, "virtual": false}],
+         "fields": [{"name": "mFlags", "type": "u32 : 3", "offset": 12, "count": 1, "extents": null, "access": "protected",
+                     "bits": {"width": 3, "offset": 0}},
+                    {"name": "mGrid", "type": "f32", "offset": 16, "count": 12, "extents": [3, 4], "access": "public", "bits": null},
+                    {"name": "mRow", "type": "f32", "offset": 64, "count": 4, "extents": null, "access": "private", "bits": null}],
+         "reachable": [{"name": "mName", "from": "NameObj", "offset": 4, "type": "const char *"}]},
+        {"kind": "union", "name": "Both", "size": 4, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "bases": [], "fields": [], "reachable": []},
         {"kind": "alias", "name": "TVec3f", "of": "TVec3<f32>", "record": "TVec3<f32>"},
         {"kind": "spelling", "name": "JGeometry::TVec3<float>", "of": "TVec3<f32>", "record": "TVec3<f32>"},
-        {"kind": "alias", "name": "s8", "of": "signed char"},
+        {"kind": "alias", "name": "s8", "of": "signed char", "record": null},
         {"kind": "alias", "name": "Both", "of": "Both", "record": "Both"},
-        {"kind": "enum", "name": "Mode", "underlying": "u32"}
+        {"kind": "enum", "name": "Mode", "underlying": "u32", "scoped": true, "values": [{"name": "Off", "value": 0}, {"name": "On", "value": 4294967295}]},
+        {"kind": "enum", "name": null, "underlying": "int", "scoped": false, "values": [{"name": "LOW", "value": -2147483648}]}
       ],
       "globals": [
-        {"name": "MR::sCount", "type": "s32", "defined": true},
-        {"name": "MR::sDeclared", "type": "s32", "defined": false}
+        {"name": "MR::sCount", "type": "s32", "const": false, "defined": true, "value": null},
+        {"name": "MR::sDeclared", "type": "s32", "const": false, "defined": false, "value": null},
+        {"name": "MR::cLimit", "type": "const f32", "const": true, "defined": false, "value": -0.5}
       ],
       "left_out": [
         {"kind": "record", "name": "LumaMod", "file": "native/include/luma.h", "line": 1, "reason": "the kernel's own"},
@@ -488,7 +497,7 @@ mod types_tests {
         assert!(types.record("s8").is_none());
         assert_eq!(types.aliases.get("Both"), None);
         // Reachable and own fields together; a declared global with no definition is not bound.
-        assert_eq!(types.records["LiveActor"].fields.len(), 2);
+        assert_eq!(types.records["LiveActor"].fields.len(), 4);
         assert_eq!(types.globals.keys().collect::<Vec<_>>(), vec!["MR::sCount"]);
         assert_eq!(types.left_out(LeftOutKind::Field, "LiveActor.mWide"), Some("a bit-field wider than 32 bits"));
         assert_eq!(types.left_out(LeftOutKind::Enum, ""), Some("no name a mod can write"));
@@ -497,30 +506,95 @@ mod types_tests {
     }
 
     #[test]
+    fn a_types_file_gives_the_facts_the_compiler_reads() {
+        use crate::names::{Access, Base, Bits, Enum, Global, Reached, RecordKind};
+        let types = sample();
+        let actor = &types.records["LiveActor"];
+        assert_eq!((actor.kind, actor.align, actor.polymorphic, actor.is_abstract), (RecordKind::Class, 4, true, false));
+        assert_eq!((actor.trivial_copy, actor.trivial_destroy), (false, false));
+        assert!(types.records["TVec3<f32>"].trivial_copy && types.records["TVec3<f32>"].trivial_destroy);
+        assert_eq!(actor.bases, vec![Base { name: "NameObj".into(), offset: 0, is_virtual: false }]);
+        assert_eq!(actor.reached, vec![Reached { name: "mName".into(), from: "NameObj".into(), offset: 4, ty: "const char *".into() }]);
+        let own: Vec<_> = actor.own.iter().map(|f| (f.name.as_str(), f.ty.as_str(), f.offset, f.extents.clone(), f.bits, f.access)).collect();
+        assert_eq!(
+            own,
+            vec![
+                ("mFlags", "u32 : 3", 12, vec![], Some(Bits { width: 3, offset: 0 }), Access::Protected),
+                ("mGrid", "f32", 16, vec![3, 4], None, Access::Public),
+                // A one-extent array: the file gives only the count.
+                ("mRow", "f32", 64, vec![4], None, Access::Private),
+            ]
+        );
+        assert_eq!(types.records["Both"].kind, RecordKind::Union);
+        assert_eq!(types.enums["Mode"], Enum { underlying: "u32".into(), scoped: true, values: vec![("Off".into(), 0), ("On".into(), 4294967295)] });
+        assert_eq!(types.anonymous_enums, vec![Enum { underlying: "int".into(), scoped: false, values: vec![("LOW".into(), -2147483648)] }]);
+        // Every alias and spelling row, a record's or not.
+        assert_eq!(types.typedefs.get("s8").map(String::as_str), Some("signed char"));
+        assert_eq!(types.typedefs.get("TVec3f").map(String::as_str), Some("TVec3<f32>"));
+        assert_eq!(types.typedefs.len(), 4);
+        // Every global, defined or not; a constant's value as the file writes it.
+        assert_eq!(types.global_facts["MR::cLimit"], Global { ty: "const f32".into(), konst: true, defined: false, value: Some("-0.5".into()) });
+        assert_eq!(types.global_facts.len(), 3);
+        assert!(!types.globals.contains_key("MR::cLimit"));
+    }
+
+    #[test]
     fn a_types_file_not_in_the_form_is_refused_naming_the_row() {
         let refused = |json: &str| Types::from_json(json.as_bytes()).unwrap_err().to_string();
         assert!(refused("{").starts_with("line 1 column ") && refused("{").contains(": not JSON ("), "{}", refused("{"));
         assert_eq!(refused(r#"{"globals": [], "left_out": []}"#), "types: missing, or not a list");
+        // A record row with every key draft 2 gives, and the fields given.
+        let record = |name: &str, kind: &str, fields: &str| {
+            format!(r#"{{"kind": "{kind}", "name": "{name}", "size": 1, "align": 1, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "bases": [], "fields": [{fields}], "reachable": []}}"#)
+        };
+        let file = |types: &str, globals: &str| format!(r#"{{"types": [{types}], "globals": [{globals}], "left_out": []}}"#);
+        assert_eq!(refused(&file(&record("A", "struct", "").replace("\"size\": 1", "\"size\": -1"), "")), "types[0].size: missing, or not a whole number from 0");
+        assert_eq!(refused(&file(&record("A", "struct", "").replace("\"align\": 1, ", ""), "")), "types[0].align: missing, or not a whole number from 0");
+        for key in ["trivial_copy", "trivial_destroy"] {
+            let without = record("A", "struct", "").replace(&format!("\"{key}\": true, "), "");
+            assert_eq!(refused(&file(&without, "")), format!("types[0].{key}: missing, or not true or false"));
+        }
         assert_eq!(
-            refused(r#"{"types": [{"kind": "struct", "name": "A", "size": -1, "fields": [], "reachable": []}], "globals": [], "left_out": []}"#),
-            "types[0].size: missing, or not a size"
+            refused(&file(&record("A", "struct", "").replace("\"bases\": []", r#""bases": [{"name": "B", "offset": 0}]"#), "")),
+            "types[0].bases[0].virtual: missing, or not true or false"
         );
-        let two = r#"{"types": [{"kind": "struct", "name": "A", "size": 1, "fields": [], "reachable": []},
-                                {"kind": "class", "name": "A", "size": 1, "fields": [], "reachable": []}], "globals": [], "left_out": []}"#;
-        assert_eq!(refused(two), "types[1]: a second record named \"A\"");
-        let alias = r#"{"types": [{"kind": "struct", "name": "A", "size": 1, "fields": [], "reachable": []},
-                                  {"kind": "struct", "name": "B", "size": 1, "fields": [], "reachable": []},
-                                  {"kind": "alias", "name": "C", "record": "A"}, {"kind": "alias", "name": "C", "record": "B"}],
-                        "globals": [], "left_out": []}"#;
-        assert_eq!(refused(alias), "types[3]: \"C\" names both \"A\" and \"B\"");
+        let two = format!("{}, {}", record("A", "struct", ""), record("A", "class", ""));
+        assert_eq!(refused(&file(&two, "")), "types[1]: a second record named \"A\"");
+        let field = |rest: &str| file(&record("A", "struct", &format!(r#"{{"name": "f", "type": "f32", "offset": 0, {rest}}}"#)), "");
         assert_eq!(
-            refused(r#"{"types": [{"kind": "nerve", "name": "A"}], "globals": [], "left_out": []}"#),
-            "types[0].kind: \"nerve\" is no kind of draft 2"
+            refused(&field(r#""count": 12, "extents": [3, 5], "access": "public", "bits": null"#)),
+            "types[0].fields[0].extents: [3, 5] is not two or more extents whose product is the count 12"
         );
         assert_eq!(
-            refused(r#"{"types": [], "globals": [{"name": "g", "type": "s32"}], "left_out": []}"#),
-            "globals[0].defined: missing, or not true or false"
+            refused(&field(r#""count": 4, "extents": [4], "access": "public", "bits": null"#)),
+            "types[0].fields[0].extents: [4] is not two or more extents whose product is the count 4"
         );
+        assert_eq!(
+            refused(&field(r#""count": 1, "extents": null, "access": "public", "bits": {"width": 0, "offset": 0}"#)),
+            "types[0].fields[0].bits: width 0 at bit 0 is no bit-field"
+        );
+        assert_eq!(refused(&field(r#""count": 1, "extents": null, "access": "friend", "bits": null"#)), "types[0].fields[0].access: \"friend\" is no access");
+        assert_eq!(refused(&field(r#""count": 1, "extents": null, "access": "public""#)), "types[0].fields[0].bits: missing, or not null or an object");
+        let reach = record("A", "struct", "").replace("\"reachable\": []", r#""reachable": [{"name": "m", "offset": 0, "type": "f32"}]"#);
+        assert_eq!(refused(&file(&reach, "")), "types[0].reachable[0].from: missing, or not text");
+        let (a, b) = (record("A", "struct", ""), record("B", "struct", ""));
+        let alias = format!(r#"{a}, {b}, {{"kind": "alias", "name": "C", "of": "A", "record": "A"}}, {{"kind": "alias", "name": "C", "of": "B", "record": "B"}}"#);
+        assert_eq!(refused(&file(&alias, "")), "types[3]: \"C\" is both \"A\" and \"B\"");
+        let alias = format!(r#"{a}, {b}, {{"kind": "alias", "name": "C", "of": "X", "record": "A"}}, {{"kind": "alias", "name": "C", "of": "X", "record": "B"}}"#);
+        assert_eq!(refused(&file(&alias, "")), "types[3]: \"C\" names both \"A\" and \"B\"");
+        assert_eq!(refused(&file(r#"{"kind": "alias", "name": "s8", "of": "signed char"}"#, "")), "types[0].record: missing, or not text or null");
+        assert_eq!(refused(&file(r#"{"kind": "nerve", "name": "A"}"#, "")), "types[0].kind: \"nerve\" is no kind of draft 2");
+        let e = |values: &str| format!(r#"{{"kind": "enum", "name": "E", "underlying": "int", "scoped": false, "values": [{values}]}}"#);
+        assert_eq!(refused(&file(&e(r#"{"name": "A", "value": 1.5}"#), "")), "types[0].values[0].value: missing, or not a whole number");
+        assert_eq!(refused(&file(&format!("{}, {}", e(""), e("")), "")), "types[1]: a second enum named \"E\"");
+        assert_eq!(refused(&file("", r#"{"name": "g", "type": "s32", "const": false, "value": null}"#)), "globals[0].defined: missing, or not true or false");
+        assert_eq!(
+            refused(&file("", r#"{"name": "g", "type": "s32", "const": false, "defined": true, "value": "1"}"#)),
+            "globals[0].value: missing, or not null or a number"
+        );
+        assert_eq!(refused(&file("", r#"{"name": "g", "type": "s32", "defined": true, "value": null}"#)), "globals[0].const: missing, or not true or false");
+        let twice = r#"{"name": "g", "type": "s32", "const": false, "defined": false, "value": null}, {"name": "g", "type": "s32", "const": false, "defined": true, "value": null}"#;
+        assert_eq!(refused(&file("", twice)), "globals[1]: a second global named \"g\"");
         assert!(matches!(Types::from_json(b"[]"), Err(TypesError::Row { .. })));
     }
 
