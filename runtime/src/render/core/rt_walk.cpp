@@ -903,6 +903,50 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
     renderer_.rt_commands_end();
 }
 
+// Of the walk's 3D scenes into the frame, the one to trace: a perspective view over at least half the frame, the most
+// scene draws, the later on a tie (plan 26: one scene a walk, never half of two).
+std::uint32_t RenderCore::rt_pick_scene() const {
+    const NebulaFrameList& list = *walk_.now->list;
+    const FrameMap map = renderer_.frame_map();
+    std::uint32_t picked = NEBULA_NONE32;
+    std::uint64_t most = 0u;
+    for (std::uint32_t p = 0; p < list.pass_count; ++p) {
+        const NebulaFramePass& begin = list.passes[p];
+        if (begin.kind != NEBULA_PASS_SCENE_BEGIN || begin.target != 0u) {
+            continue;
+        }
+        bool seen = false;
+        std::uint64_t draws = 0u;
+        for (std::uint32_t q = p + 1u; q < list.pass_count && list.passes[q].kind != NEBULA_PASS_SCENE_END; ++q) {
+            const NebulaFramePass& pass = list.passes[q];
+            if (pass.kind == NEBULA_PASS_DRAW && pass.layer == NEBULA_LAYER_SCENE && pass.target == 0u) {
+                draws += pass.item_count;
+            }
+            if (pass.kind == NEBULA_PASS_OPAQUE_END && pass.scene_view != NEBULA_NONE32 && pass.scene_view < list.view_count) {
+                const NebulaFrameView& view = list.views[pass.scene_view];
+                const ScaledViewport viewport = viewport_pixels(view.viewport, map);
+                const double area = static_cast<double>(viewport.width) * viewport.height;
+                seen = view.orthographic == 0u && viewport.valid() &&
+                       area * 2.0 >= static_cast<double>(map.width) * static_cast<double>(map.height);
+            }
+        }
+        if (seen && draws != 0u && draws >= most) {
+            most = draws;
+            picked = p;
+        }
+    }
+    return picked;
+}
+
+// A scene pass this walk does not trace: drawn as with ray tracing off (its own drop shadows, no traced light).
+void RenderCore::rt_untraced() {
+    rt_light_on_ = false;
+    rt_light_frame_.across = 0u;
+    rt_prepassed_.assign(walk_.now->list->item_count, 0u);
+    rt_drop_volumes_.clear();
+    rt_drops_.clear();
+}
+
 // The prepass and the light pass, before the scene's first draw. Without them (no scene this walk, a multisampled
 // target, no memory) the scene draws as ever and no light is traced.
 void RenderCore::rt_prepass(const NebulaFramePass& begin) {

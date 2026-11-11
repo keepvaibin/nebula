@@ -333,6 +333,11 @@ private:
                                                   std::uint32_t mask, std::uint32_t triangles);
     void rt_micromaps();
     void rt_scene(const NebulaFramePass& begin);
+    // The walk's one traced scene: its begin pass (rt_pick_scene), NEBULA_NONE32 when none; a scene pass not picked
+    // draws untraced (rt_untraced).
+    [[nodiscard]] std::uint32_t rt_pick_scene() const;
+    void rt_untraced();
+    std::uint32_t rt_traced_begin_ = NEBULA_NONE32;
     // A draw whose vertices carry their own matrices: skinned by a pass into the tracer's vertex buffer each frame.
     struct RtSkin {
         std::uint64_t key = 0u;

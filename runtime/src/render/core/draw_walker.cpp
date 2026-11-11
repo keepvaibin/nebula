@@ -1288,8 +1288,12 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     }
     ++walk_view_stamp_;
     if (rt_backend_.started()) {
-        rt_scene(pass);
-        rt_prepass(pass);
+        if (static_cast<std::uint32_t>(&pass - list.passes) == rt_traced_begin_) {
+            rt_scene(pass);
+            rt_prepass(pass);
+        } else {
+            rt_untraced();  // another scene this walk is the traced one
+        }
     }
 }
 
@@ -1573,6 +1577,7 @@ void RenderCore::plan_late_depth_clears(ListData& now) {
 void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time) {
     prepare_walk(now, before, time);
     const NebulaFrameList& list = *now.list;
+    rt_traced_begin_ = rt_backend_.started() ? rt_pick_scene() : NEBULA_NONE32;
     target_open_ = false;
     std::uint32_t target_channels = 0u;
     if (!now.targets_planned) {
