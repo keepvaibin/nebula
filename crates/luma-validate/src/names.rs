@@ -40,12 +40,18 @@ impl std::error::Error for RowsError {
 /// The types file's name in a folder of names.
 pub const TYPES_FILE: &str = "luma_types.json";
 
+/// The function rows' facts file's name in a folder of names (types TY-11).
+pub const FUNCTIONS_FILE: &str = "luma_functions.json";
+
 #[derive(Clone, Debug, Default)]
 pub struct Names {
     /// Each function's signatures, with whether the row is a constructor or destructor (`tell`).
     pub functions: HashMap<String, Vec<(String, bool)>>,
     /// The game's records, fields and globals (kinds 1, 2 and 7); None when the types file was not given.
     pub types: Option<Types>,
+    /// Each function row's facts (types TY-11): what it is, its record, virtual and const; None when the folder has
+    /// no facts file.
+    pub function_facts: Option<FunctionFacts>,
     /// The NameObj class names (kind 3); None until the self-description lists classes (1.3, 1.8).
     pub classes: Option<HashSet<String>>,
     /// The services' permission names; None until the service registry (2.1) lists them.
@@ -76,6 +82,13 @@ impl Names {
                     }
                     let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
                     names.types = Some(Types::from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
+                } else if path.file_name().is_some_and(|n| n == FUNCTIONS_FILE) {
+                    if names.function_facts.is_some() {
+                        let why = format!("a second {FUNCTIONS_FILE} under {}", folder.display());
+                        return Err(RowsError::Types { path, error: TypesError::Row { at: String::new(), why } });
+                    }
+                    let bytes = std::fs::read(&path).map_err(|error| RowsError::Read { path: path.clone(), error })?;
+                    names.function_facts = Some(FunctionFacts::from_json(&bytes).map_err(|error| RowsError::Types { path: path.clone(), error })?);
                 }
             }
         }
@@ -187,8 +200,105 @@ pub struct Field {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bits {
     pub width: u32,
-    /// From the field's byte offset.
+    /// In bits from the start of the record (StarPiece's `mFlags.isGettable`: byte offset 372, bit 2977).
     pub offset: u32,
+}
+
+/// What a function row is (types TY-11).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FunctionKind {
+    Free,
+    Method,
+    Static,
+    Constructor,
+    Destructor,
+}
+
+/// A function a virtual overrides directly, by the name and signature its row has or would have.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Overridden {
+    pub name: String,
+    pub signature: String,
+    /// It is a function row.
+    pub row: bool,
+}
+
+/// One row's facts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Facts {
+    pub kind: FunctionKind,
+    /// The record as the types file names it; None for a free function or a record no mod can name.
+    pub owner: Option<String>,
+    pub is_virtual: bool,
+    pub pure: bool,
+    /// A const method: called on a const view.
+    pub konst: bool,
+    pub overrides: Vec<Overridden>,
+}
+
+/// luma_functions.json (types TY-11): each row's facts by its name and signature.
+#[derive(Clone, Debug, Default)]
+pub struct FunctionFacts {
+    pub rows: HashMap<(String, String), Facts>,
+}
+
+impl FunctionFacts {
+    /// Reads a facts file. Anything not in TY-11's form, a row given twice, or facts that cannot be (a free function
+    /// with a record, a const or virtual function that is no member, a pure one that is not virtual, overrides of one
+    /// that is not virtual) is an error naming the row.
+    pub fn from_json(bytes: &[u8]) -> Result<FunctionFacts, TypesError> {
+        use crate::json::{Kind, Value};
+        let root = crate::json::parse(bytes)
+            .map_err(|e| TypesError::Json { line: e.pos.line, column: e.pos.column, what: e.what, detail: e.detail })?;
+        let bad = |at: String, why: &str| TypesError::Row { at, why: why.to_string() };
+        let text = |v: &Value, key: &str, at: &str| v.get(key).and_then(Value::as_str).map(str::to_string).ok_or_else(|| bad(format!("{at}.{key}"), "missing, or not text"));
+        let flag = |v: &Value, key: &str, at: &str| v.get(key).and_then(Value::as_bool).ok_or_else(|| bad(format!("{at}.{key}"), "missing, or not true or false"));
+        let list = root.get("functions").filter(|v| v.is_array()).map(Value::items).ok_or_else(|| bad("functions".into(), "missing, or not a list"))?;
+        let mut facts = FunctionFacts::default();
+        for (i, row) in list.iter().enumerate() {
+            let at = format!("functions[{i}]");
+            let name = text(row, "name", &at)?;
+            let signature = text(row, "signature", &at)?;
+            let kind = match text(row, "kind", &at)?.as_str() {
+                "free" => FunctionKind::Free,
+                "method" => FunctionKind::Method,
+                "static" => FunctionKind::Static,
+                "constructor" => FunctionKind::Constructor,
+                "destructor" => FunctionKind::Destructor,
+                _ => return Err(bad(format!("{at}.kind"), "not free, method, static, constructor or destructor")),
+            };
+            let owner = match row.get("owner").map(|v| &v.kind) {
+                Some(Kind::Null) => None,
+                _ => Some(text(row, "owner", &at)?),
+            };
+            let (is_virtual, pure, konst) = (flag(row, "virtual", &at)?, flag(row, "pure", &at)?, flag(row, "const", &at)?);
+            let members = matches!(kind, FunctionKind::Method | FunctionKind::Constructor | FunctionKind::Destructor);
+            if kind == FunctionKind::Free && owner.is_some() {
+                return Err(bad(format!("{at}.owner"), "a free function has no record"));
+            }
+            if konst && kind != FunctionKind::Method || is_virtual && !members || pure && !is_virtual {
+                return Err(bad(at, "const only on a method, virtual only on a member, pure only on a virtual"));
+            }
+            let mut overrides = Vec::new();
+            let over = row.get("overrides").filter(|v| v.is_array()).map(Value::items).ok_or_else(|| bad(format!("{at}.overrides"), "missing, or not a list"))?;
+            for (k, o) in over.iter().enumerate() {
+                let oat = format!("{at}.overrides[{k}]");
+                overrides.push(Overridden { name: text(o, "name", &oat)?, signature: text(o, "signature", &oat)?, row: flag(o, "row", &oat)? });
+            }
+            if !overrides.is_empty() && !is_virtual {
+                return Err(bad(format!("{at}.overrides"), "only a virtual overrides"));
+            }
+            if facts.rows.insert((name, signature), Facts { kind, owner, is_virtual, pure, konst, overrides }).is_some() {
+                return Err(bad(at, "a row given twice"));
+            }
+        }
+        Ok(facts)
+    }
+
+    /// A row's facts.
+    pub fn get(&self, name: &str, signature: &str) -> Option<&Facts> {
+        self.rows.get(&(name.to_string(), signature.to_string()))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
