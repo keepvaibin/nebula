@@ -76,7 +76,8 @@ void run_fir(const std::vector<float>& weights, std::vector<float>& history, flo
     if (history.size() != reach) {
         history.assign(reach, 0.0f);
     }
-    std::array<float, 1024> x{};
+    // Only [0, reach + count) is read, all of it written first: no fill.
+    std::array<float, 1024> x;
     std::copy(history.begin(), history.end(), x.begin());
     std::copy_n(samples, count, x.begin() + static_cast<std::ptrdiff_t>(reach));
     for (std::size_t n = 0; n < count; ++n) {
@@ -99,12 +100,17 @@ void SampleDelay::reset(std::size_t delay) {
 }
 
 void SampleDelay::process(const float* in, float* out, std::size_t count) {
+    // The two places step and wrap (each wraps at most once a call: delay_ + count stays under the ring's size).
     const std::size_t size = ring_.size();
+    std::size_t read = read_;
+    std::size_t write = (read_ + delay_) % size;
     for (std::size_t i = 0; i < count; ++i) {
-        out[i] = ring_[(read_ + i) % size];
-        ring_[(read_ + delay_ + i) % size] = in[i];
+        out[i] = ring_[read];
+        ring_[write] = in[i];
+        read = read + 1u == size ? 0u : read + 1u;
+        write = write + 1u == size ? 0u : write + 1u;
     }
-    read_ = (read_ + count) % size;
+    read_ = read;
 }
 
 InterpolationKernel::InterpolationKernel(std::uint32_t taps, double cutoff, double beta, std::uint32_t phases)
@@ -218,6 +224,7 @@ void AudioMixer::mix(float gain, std::uint32_t used) {
     samples_ = static_cast<std::uint32_t>((subframe_counter_ + 1u) * rate_ / kSubframesPerSecond -
                                           subframe_counter_ * rate_ / kSubframesPerSecond);
     ++subframe_counter_;
+    make_ramp();
     const std::size_t n = samples_;
     for (auto& b : buses_) {
         std::fill_n(b.begin(), n, 0.0f);
@@ -233,8 +240,9 @@ void AudioMixer::mix(float gain, std::uint32_t used) {
     }
 
     // The surround buses one subframe late, matrix-encoded into left and right unless they have their own speakers.
-    std::array<float, kMaxSubframe> late_left{};
-    std::array<float, kMaxSubframe> late_right{};
+    // Written for [0, n) by the delays before any read: no fill.
+    std::array<float, kMaxSubframe> late_left;
+    std::array<float, kMaxSubframe> late_right;
     fold_left_.process(buses_[kSurroundLeft].data(), late_left.data(), n);
     fold_right_.process(buses_[kSurroundRight].data(), late_right.data(), n);
     float* left = buses_[kLeft].data();
@@ -361,12 +369,18 @@ void AudioMixer::apply_category(VoiceState& state, const NebulaVoice& voice, flo
         state.category_ramp = std::max<std::uint32_t>(rate_ / 100u, 1u);
     }
     state.category_target = target;
-    for (std::uint32_t i = 0; i < samples_; ++i) {
-        if (state.category_ramp != 0u) {
-            state.category_gain += (state.category_target - state.category_gain) / static_cast<float>(state.category_ramp);
-            --state.category_ramp;
-        }
+    std::uint32_t i = 0;
+    for (; i < samples_ && state.category_ramp != 0u; ++i) {
+        state.category_gain += (state.category_target - state.category_gain) / static_cast<float>(state.category_ramp);
+        --state.category_ramp;
         samples[i] *= state.category_gain;
+    }
+    // The ramp's end: one gain for the rest, and a unit gain changes no sample.
+    const float gain = state.category_gain;
+    if (gain != 1.0f) {
+        for (; i < samples_; ++i) {
+            samples[i] *= gain;
+        }
     }
 }
 
@@ -629,12 +643,22 @@ void AudioMixer::ramp_mix(float* destination, const float* source, float start, 
     if (destination == nullptr || (start == 0.0f && delta == 0.0f)) {
         return;
     }
+    for (std::uint32_t i = 0; i < samples_; ++i) {
+        const float volume = start + delta * ramp_[i];
+        destination[i] += source[i] * volume;
+    }
+}
+
+void AudioMixer::make_ramp() {
+    if (ramp_samples_ == samples_) {
+        return;
+    }
+    ramp_samples_ = samples_;
     // The volume reaches its target 65 samples of 32 kHz into the subframe.
     const double authored_per_output = static_cast<double>(kAuthoredTickSamples) / samples_;
     for (std::uint32_t i = 0; i < samples_; ++i) {
         const double t = std::clamp((i * authored_per_output - 1.0) / 64.0, 0.0, 1.0);
-        const float volume = start + delta * static_cast<float>(t);
-        destination[i] += source[i] * volume;
+        ramp_[i] = static_cast<float>(t);
     }
 }
 
@@ -690,7 +714,8 @@ void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
 // An effect line: the delayed signal (FIR'd before or after the sends) back into the delay with the line's input.
 void AudioMixer::effects_begin() {
     const std::size_t n = samples_;
-    std::array<std::array<float, kMaxSubframe>, 4> sends{};
+    // A line's row is written for [0, n) before its sends read it: no fill.
+    std::array<std::array<float, kMaxSubframe>, 4> sends;
     for (std::size_t line = 0; line < effect_states_.size(); ++line) {
         EffectState& e = effect_states_[line];
         std::fill_n(e.input.begin(), n, 0.0f);
@@ -727,8 +752,10 @@ void AudioMixer::effects_begin() {
             e.fir_key = key;
         }
         float* delayed = sends[line].data();
-        for (std::size_t i = 0; i < n; ++i) {
-            delayed[i] = e.delay[(e.position + i) % e.delay.size()];
+        const std::size_t size = e.delay.size();
+        for (std::size_t i = 0, at = e.position; i < n; ++i) {
+            delayed[i] = e.delay[at];
+            at = at + 1u == size ? 0u : at + 1u;
         }
         if ((config.filter & 1u) != 0u) {
             run_fir(e.fir, e.history_a, delayed, n);
@@ -761,8 +788,9 @@ void AudioMixer::effects_end() {
     const std::size_t n = samples_;
     // The panner's rear effect sends: the left one subframe late, the right half a subframe late, matrixed into
     // effect lines 2 and 3.
-    std::array<float, kMaxSubframe> late_left{};
-    std::array<float, kMaxSubframe> late_right{};
+    // Written for [0, n) by the delays before any read: no fill.
+    std::array<float, kMaxSubframe> late_left;
+    std::array<float, kMaxSubframe> late_right;
     panner_send_left_.process(buses_[kPannerSendLeft].data(), late_left.data(), n);
     panner_send_right_.process(buses_[kPannerSendRight].data(), late_right.data(), n);
     float* line2 = effect_states_[2].input.data();
@@ -777,8 +805,10 @@ void AudioMixer::effects_end() {
         if (config.filter == 0u || config.subframes == 0u || e.delay.empty()) {
             continue;
         }
-        for (std::size_t i = 0; i < n; ++i) {
-            e.delay[(e.position + i) % e.delay.size()] = e.input[i];
+        const std::size_t size = e.delay.size();
+        for (std::size_t i = 0, at = e.position; i < n; ++i) {
+            e.delay[at] = e.input[i];
+            at = at + 1u == size ? 0u : at + 1u;
         }
         e.position = (e.position + n) % e.delay.size();
     }

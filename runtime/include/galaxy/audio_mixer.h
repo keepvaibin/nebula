@@ -179,6 +179,8 @@ private:
     void mix_panner(NebulaVoice& voice, const float* samples);
     // destination += source * (start + ramp over the first 4/5 of the subframe) / 65536
     void ramp_mix(float* destination, const float* source, float start, float delta) const;
+    // ramp_'s positions for this subframe's sample count.
+    void make_ramp();
     void effects_begin();
     void effects_end();
     [[nodiscard]] const std::byte* wave_bytes(const NebulaVoice& voice, std::uint32_t offset,
@@ -196,6 +198,9 @@ private:
 
     std::uint64_t subframe_counter_{};
     std::uint32_t samples_{};  // this subframe's output samples
+    // The volume ramp's position (0..1) at each output sample, the same for every send of a subframe of ramp_samples_.
+    std::array<float, kMaxSubframe> ramp_{};
+    std::uint32_t ramp_samples_{};
     std::array<std::array<float, kMaxSubframe>, kBusCount> buses_{};
     std::array<float, kMaxSubframe> voice_out_{};
     std::vector<float> source_;
