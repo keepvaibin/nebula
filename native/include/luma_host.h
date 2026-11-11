@@ -12,16 +12,16 @@ extern "C" {
 #endif
 
 #define LUMA_REFUSAL_MOST 8
-#define LUMA_REFUSAL_VALUE 256
 
 /* Why a mod was refused, as the validator says its findings: rule `code` (505 is L505) with its parameters,
    names[i] = values[i]. A value "T:<text>" is a literal, "P:<phrase id>" a phrase (luma_validate_message renders
-   both). The place is given as "mod" and "file". */
+   both). The place is given as "mod" and "file". The values are whole (never cut) and kept by the game for the rest
+   of the session, so the Mods page may show them at any time. */
 typedef struct LumaRefusal {
     uint16_t code; /* 0: none */
     uint32_t count;
     const char* names[LUMA_REFUSAL_MOST];
-    char values[LUMA_REFUSAL_MOST][LUMA_REFUSAL_VALUE];
+    const char* values[LUMA_REFUSAL_MOST];
 } LumaRefusal;
 
 typedef void (*LumaCloseLibrary)(void* library);

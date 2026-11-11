@@ -443,12 +443,14 @@ namespace luma {
         for (u32 i = pCall->next; pChain != nullptr && i < pChain->count; i++) {
             if (wraps(pChain->hooks[i].kind)) {
                 pCall->next = i + 1;
+                // Wraps are entered outermost first, so the last one recorded is the deepest entered (D2-1).
+                pCall->ran = (pCall->ran & 1u) | ((i + 1u) << 1);
                 pChain->hooks[i].callback(pCall, pChain->hooks[i].user);
                 pCall->next = i;
                 return;
             }
         }
-        pCall->ran = 1;
+        pCall->ran |= 1u;
         tBody = pCall->function;
         pCall->function->invoke(pCall->args, pCall->result);
     }
@@ -480,17 +482,16 @@ namespace luma {
         }
         // The function's own code did not run (a skip, or a wrap that did not proceed): a reference nothing wrote is
         // filled by the function itself (LR-1). A plain result already holds its default.
-        if (call.ran == 0 && resultKind(pFunction) == kReference && *static_cast<void**>(pResult) == nullptr) {
+        if ((call.ran & 1u) == 0 && resultKind(pFunction) == kReference && *static_cast<void**>(pResult) == nullptr) {
+            // The skipping before's mod, else the deepest wrap entered: every wrap outside it proceeded (D2-1).
             const void* pOwner = pSkipper;
-            for (u32 i = 0; pOwner == nullptr && i < count; i++) {
-                if (wraps(pChain->hooks[i].kind)) {
-                    pOwner = pChain->hooks[i].owner;
-                }
+            if (pOwner == nullptr && (call.ran >> 1) != 0) {
+                pOwner = pChain->hooks[(call.ran >> 1) - 1].owner;
             }
             if (gNoResult != nullptr) {
                 gNoResult(pFunction, pOwner);
             }
-            call.ran = 1;
+            call.ran |= 1u;
             tBody = pFunction;
             pFunction->invoke(pArgs, pResult);
         }

@@ -14,7 +14,7 @@ namespace luma {
         void** args;        // args[0]: `this`, or null for a function without one; args[1..]: pointers to the arguments
         void* result;       // where the result is, or goes; null for a constructor or destructor
         u32 next;           // the runner's own
-        u32 ran;            // the runner's own: the function's own code ran
+        u32 ran;            // the runner's own: bit 0, the function's own code ran; above it, the deepest wrap entered + 1
         const void* chain;  // the runner's own: the hooks this call runs, fixed when it starts
     };
 

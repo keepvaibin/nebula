@@ -37,7 +37,7 @@ typedef struct LumaCall {
                      default constructor makes it; a reference: a null pointer) until a hook or the function writes it
                      (loader contract 4) */
     uint32_t next;      /* the kernel's */
-    uint32_t ran;       /* the kernel's: the function's own code ran in this call */
+    uint32_t ran;       /* the kernel's: whether the function's own code ran, and the deepest wrap entered */
     const void* chain;  /* the kernel's: the hooks this call runs, fixed when it starts */
 } LumaCall;
 
@@ -214,12 +214,16 @@ typedef struct LumaModInfo {
 #define LUMA_STACK_PROBE
 #endif
 
-/* A mod's life (loader contract 8, LR-6). Its global constructors run in `begin`, after the core is known: on Windows
-   the library has no C runtime, so nothing else runs `.CRT$XCU`, and luma.h runs what lies between its own
-   `.CRT$XCA` and `.CRT$XCZ` markers; on Linux and Android the build's `-fno-use-init-array` and luma_ctors.ld put
-   them in `luma_ctors`, which the system's loader does not run. On Apple dyld runs them at load (not checked here).
-   Destructors registered with `atexit` (Windows) or `__cxa_atexit` (elsewhere) run in `finish`, the last first. */
-#define LUMA_MAX_EXITS 256
+/* A mod's life (loader contract 8, LR-6, Draft 2 review). Its global constructors run in `begin`, after the core is
+   known; the system's loader runs none:
+   - Windows: the library has no C runtime, so nothing else runs `.CRT$XCU`; luma.h runs what lies between its own
+     `.CRT$XCA` and `.CRT$XCZ` markers.
+   - Linux and Android: the build's `-fno-use-init-array` and luma_ctors.ld put them in `luma_ctors` (always made, a
+     null entry first), not `.init_array`; the bounds are strong, so a link without the script fails.
+   - Apple: the build runs macho_ctors.py over each object, which makes the init section `__DATA,luma_ctors` of type
+     S_REGULAR, so dyld runs none; ld64 gives `___dso_handle`.
+   Destructors registered with `atexit` (Windows) or `__cxa_atexit` (elsewhere) run in `finish`, the last first; the
+   list grows through the core's memory. */
 typedef void (*LumaCtor)(void);
 #if defined(_WIN32)
 #define LUMA_CTORS                                                                                                    \
@@ -236,18 +240,28 @@ typedef void (*LumaCtor)(void);
     LUMA_C int atexit(void (*fn)(void)) { return luma_add_exit(0, 0, fn); }
 #elif defined(__APPLE__)
 #define LUMA_CTORS                                                                                                    \
-    static void luma_run_ctors(void) {} /* dyld runs them; the linker gives __dso_handle */                           \
+    LUMA_C __attribute__((section("__DATA,luma_ctors"), used)) const LumaCtor luma_ctors_zero = 0;                    \
+    LUMA_C_EXTERN LumaCtor luma_ctors_start[] __asm("section$start$__DATA$luma_ctors");                               \
+    LUMA_C_EXTERN LumaCtor luma_ctors_end[] __asm("section$end$__DATA$luma_ctors");                                   \
+    static void luma_run_ctors(void) {                                                                                \
+        for (LumaCtor* at = luma_ctors_start; at != luma_ctors_end; at++) {                                           \
+            if (*at != 0) (*at)();                                                                                    \
+        }                                                                                                             \
+    }                                                                                                                 \
     LUMA_C LUMA_OWN int __cxa_atexit(void (*fn)(void*), void* arg, void* dso) {                                       \
         (void)dso;                                                                                                    \
         return luma_add_exit(fn, arg, 0);                                                                             \
     }
 #else
 #define LUMA_CTORS                                                                                                    \
-    LUMA_C_EXTERN __attribute__((weak, visibility("hidden"))) LumaCtor __start_luma_ctors[];                          \
-    LUMA_C_EXTERN __attribute__((weak, visibility("hidden"))) LumaCtor __stop_luma_ctors[];                           \
+    LUMA_C_EXTERN __attribute__((visibility("hidden"))) LumaCtor __start_luma_ctors[];                                \
+    LUMA_C_EXTERN __attribute__((visibility("hidden"))) LumaCtor __stop_luma_ctors[];                                 \
     static void luma_run_ctors(void) {                                                                                \
-        /* .ctors order: the last first. */                                                                           \
-        for (LumaCtor* at = __stop_luma_ctors; at != __start_luma_ctors;) (*--at)();                                  \
+        /* .ctors order: the last first; the script's null entry is skipped. */                                       \
+        for (LumaCtor* at = __stop_luma_ctors; at != __start_luma_ctors;) {                                           \
+            --at;                                                                                                     \
+            if (*at != 0) (*at)();                                                                                    \
+        }                                                                                                             \
     }                                                                                                                 \
     LUMA_C LUMA_OWN void* __dso_handle = &__dso_handle;                                                               \
     LUMA_C LUMA_OWN int __cxa_atexit(void (*fn)(void*), void* arg, void* dso) {                                       \
@@ -259,16 +273,28 @@ typedef void (*LumaCtor)(void);
 #define LUMA_LIFE                                                                                                     \
     LUMA_C LUMA_OWN const LumaCore* luma_rt_core = 0;                                                                 \
     LUMA_C LUMA_OWN const LumaMod* luma_rt_self = 0;                                                                  \
-    static struct {                                                                                                   \
+    typedef struct {                                                                                                  \
         void (*fn)(void*);                                                                                            \
         void* arg;                                                                                                    \
         void (*plain)(void);                                                                                          \
-    } luma_exits[LUMA_MAX_EXITS];                                                                                     \
+    } LumaExit;                                                                                                       \
+    static LumaExit luma_exits_first[16];                                                                             \
+    static LumaExit* luma_exits = luma_exits_first;                                                                   \
     static unsigned luma_exit_count = 0;                                                                              \
+    static unsigned luma_exit_room = 16;                                                                              \
     static int luma_add_exit(void (*fn)(void*), void* arg, void (*plain)(void)) {                                     \
-        if (luma_exit_count == LUMA_MAX_EXITS) {                                                                      \
-            if (luma_rt_core != 0) luma_rt_core->log(luma_rt_self, "more than 256 destructors were registered; this one will not run"); \
-            return -1;                                                                                                \
+        if (luma_exit_count == luma_exit_room) {                                                                      \
+            /* 64 more at a time from the core (D2-4); none: this one is refused and said. */                         \
+            LumaExit* more = luma_rt_core != 0 ? (LumaExit*)luma_rt_core->alloc(luma_rt_self,                         \
+                                 (luma_exit_room + 64u) * sizeof(LumaExit), 16) : 0;                                  \
+            if (more == 0) {                                                                                          \
+                if (luma_rt_core != 0) luma_rt_core->log(luma_rt_self, "no memory for one more destructor; it will not run"); \
+                return -1;                                                                                            \
+            }                                                                                                         \
+            for (unsigned i = 0; i < luma_exit_count; i++) more[i] = luma_exits[i];                                   \
+            if (luma_exits != luma_exits_first) luma_rt_core->free(luma_rt_self, luma_exits);                         \
+            luma_exits = more;                                                                                        \
+            luma_exit_room += 64u;                                                                                    \
         }                                                                                                             \
         luma_exits[luma_exit_count].fn = fn;                                                                          \
         luma_exits[luma_exit_count].arg = arg;                                                                        \
@@ -291,7 +317,7 @@ typedef void (*LumaCtor)(void);
                 luma_exits[luma_exit_count].fn(luma_exits[luma_exit_count].arg);                                      \
             }                                                                                                         \
         }                                                                                                             \
-    }
+    }                                                                                                                 \
 
 #define LUMA_RUNTIME \
     LUMA_FLOATS      \
@@ -318,8 +344,9 @@ typedef void (*LumaCtor)(void);
 
 /* C++'s `new` and `delete` over the core's memory (LR-6), in a mod's library (built freestanding, loader contract 8;
    the game's own code, built hosted, includes luma.h for its types only). Include <new> before luma.h or not at all:
-   without it, luma.h declares what `new` needs. A throwing `new` with no memory logs and stops the game (no
-   exceptions); the nothrow forms give null. Placement `new` is the usual one. */
+   without it, luma.h declares what `new` needs. `new` of 0 bytes takes 1; alignments go up to 65536. A throwing `new`
+   the system has no memory for logs and stops the game (no exceptions); the nothrow forms give null. Placement `new`
+   is the usual one. */
 #if !__STDC_HOSTED__
 #if !defined(_NEW_) && !defined(_LIBCPP_NEW) && !defined(_NEW) && !defined(__NEW__) && !defined(__NOTHROW_T_DEFINED)
 namespace std {

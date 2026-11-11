@@ -11,17 +11,74 @@
 #include <stdlib.h>
 
 namespace luma {
-    // One block a mod took with core->alloc, just before the bytes it gives: its mod and a check word let `free` tell
-    // a block of this mod's from anything else (LR-5).
+    // One block a mod took with core->alloc, just before the bytes it gives. `free` reads it only after finding the
+    // pointer in the mod's own set (D2-3); the check word is a second check.
     struct Block {
-        Block* prev;
-        Block* next;
         void* start;  // what malloc gave
         u64 size;     // what the mod asked for
         const LumaMod* owner;
         uintptr_t check;  // the block's address mixed with kBlockCheck; 0 once freed
     };
     const uintptr_t kBlockCheck = static_cast<uintptr_t>(0x4C554D41424C4B21ull);
+
+    // The addresses alloc gave one mod: open addressing, kept at most half full. 0 is an empty slot, 1 a taken-out one.
+    struct BlockSet {
+        uintptr_t* slots;
+        u32 capacity;  // a power of two, or 0
+        u32 used;      // live and taken-out slots
+
+        static u32 hash(uintptr_t p, u32 capacity) {
+            return static_cast<u32>(((p >> 4) * static_cast<uintptr_t>(0x9E3779B97F4A7C15ull)) >> 32) & (capacity - 1);
+        }
+
+        bool add(uintptr_t p) {
+            if ((used + 1) * 2 > capacity) {
+                const u32 grown = capacity == 0 ? 64u : capacity * 2u;
+                uintptr_t* const pSlots = static_cast<uintptr_t*>(::calloc(grown, sizeof(uintptr_t)));
+                if (pSlots == nullptr) {
+                    return false;
+                }
+                u32 live = 0;
+                for (u32 i = 0; i < capacity; i++) {
+                    if (slots[i] > 1) {
+                        u32 at = hash(slots[i], grown);
+                        while (pSlots[at] != 0) {
+                            at = (at + 1) & (grown - 1);
+                        }
+                        pSlots[at] = slots[i];
+                        live++;
+                    }
+                }
+                ::free(slots);
+                slots = pSlots;
+                capacity = grown;
+                used = live;
+            }
+            u32 at = hash(p, capacity);
+            while (slots[at] > 1) {
+                at = (at + 1) & (capacity - 1);
+            }
+            if (slots[at] == 0) {
+                used++;
+            }
+            slots[at] = p;
+            return true;
+        }
+
+        // Taken out when there; false when this set never held it.
+        bool remove(uintptr_t p) {
+            if (capacity == 0) {
+                return false;
+            }
+            for (u32 at = hash(p, capacity), n = 0; n < capacity && slots[at] != 0; at = (at + 1) & (capacity - 1), n++) {
+                if (slots[at] == p) {
+                    slots[at] = 1;
+                    return true;
+                }
+            }
+            return false;
+        }
+    };
 }
 
 struct LumaMod {
@@ -29,8 +86,8 @@ struct LumaMod {
     char name[64];   // the mod's id
     char file[128];  // its library's file name
     s32 order;
-    // Its memory (core->alloc), counted for the Mods screen and freed after its grace. `lock` guards the list.
-    luma::Block* blocks;
+    // Its memory (core->alloc), counted for the Mods screen and freed after its grace. `lock` guards the set.
+    luma::BlockSet blocks;
     u64 bytes;
     u32 blockCount;
     u32 lock;
@@ -98,7 +155,8 @@ namespace luma {
         // A refusal as the validator says it (loader contract 3): the code, the place, then the rule's parameters.
         struct Refuse {
             LumaRefusal* refusal;
-            const LumaMod* mod;
+            const char* id;    // as the host gave them, whole
+            const char* file;
 
             void start(u16 code) {
                 if (refusal == nullptr) {
@@ -106,19 +164,34 @@ namespace luma {
                 }
                 refusal->code = code;
                 refusal->count = 0;
-                put("mod", 'T', mod->name);
-                put("file", 'T', mod->file);
+                put("mod", 'T', id);
+                put("file", 'T', file);
             }
 
-            // `kind` 'T' a literal, 'P' a phrase id.
+            // `kind` 'T' a literal, 'P' a phrase id. The value is copied whole and kept for the session (D2-2): the
+            // mod's library, where a name it asked for lives, is closed before the Mods page shows it.
             void put(const char* pName, char kind, const char* pValue) {
-                if (refusal == nullptr || refusal->count == LUMA_REFUSAL_MOST) {
+                if (refusal == nullptr) {
                     return;
                 }
-                char* const pAt = refusal->values[refusal->count];
-                pAt[0] = kind;
-                pAt[1] = ':';
-                copyText(pAt + 2, LUMA_REFUSAL_VALUE - 2, pValue != nullptr ? pValue : "");
+                if (refusal->count == LUMA_REFUSAL_MOST) {
+                    NEBULA_PANIC("LumaCore: a refusal with more than %d parameters", LUMA_REFUSAL_MOST);
+                }
+                const char* const pText = pValue != nullptr ? pValue : "";
+                size_t length = 0;
+                while (pText[length] != 0) {
+                    length++;
+                }
+                char* const pKept = static_cast<char*>(::malloc(length + 3));
+                if (pKept == nullptr) {
+                    NEBULA_PANIC("LumaCore: no memory to keep a refusal's words");
+                }
+                pKept[0] = kind;
+                pKept[1] = ':';
+                for (size_t i = 0; i <= length; i++) {
+                    pKept[2 + i] = pText[i];
+                }
+                refusal->values[refusal->count] = pKept;
                 refusal->names[refusal->count++] = pName;
             }
 
@@ -211,9 +284,9 @@ namespace luma {
             if (pMod == nullptr) {
                 return nullptr;
             }
-            // Arguments no mod means to give: said, never silent (LR-5).
-            if (size == 0 || align == 0 || (align & (align - 1)) != 0 || align > 4096u || size > (static_cast<u64>(1) << 40)) {
-                nebula_log("[mod %s] alloc(%llu, %llu): the size must be 1 to 2^40 and the alignment a power of two up to 4096; "
+            // Arguments no mod means to give: said, never silent (LR-5). Alignments up to 65536 (C++'s alignas, D2-7).
+            if (size == 0 || align == 0 || (align & (align - 1)) != 0 || align > 65536u || size > (static_cast<u64>(1) << 40)) {
+                nebula_log("[mod %s] alloc(%llu, %llu): the size must be 1 to 2^40 and the alignment a power of two up to 65536; "
                            "it gave nothing\n",
                            pMod->name, static_cast<unsigned long long>(size), static_cast<unsigned long long>(align));
                 return nullptr;
@@ -231,15 +304,16 @@ namespace luma {
             pBlock->owner = pMod;
             pBlock->check = reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck;
             lockMod(pMod);
-            pBlock->prev = nullptr;
-            pBlock->next = pMod->blocks;
-            if (pMod->blocks != nullptr) {
-                pMod->blocks->prev = pBlock;
+            const bool kept = pMod->blocks.add(at);
+            if (kept) {
+                pMod->bytes += size;
+                pMod->blockCount++;
             }
-            pMod->blocks = pBlock;
-            pMod->bytes += size;
-            pMod->blockCount++;
             unlockMod(pMod);
+            if (!kept) {
+                ::free(pStart);
+                return nullptr;
+            }
             return reinterpret_cast<void*>(at);
         }
 
@@ -248,38 +322,41 @@ namespace luma {
             if (pMod == nullptr || p == nullptr) {
                 return;
             }
+            // Nothing is read through `p` until the mod's own set has it (D2-3).
+            lockMod(pMod);
+            const bool held = pMod->blocks.remove(reinterpret_cast<uintptr_t>(p));
             Block* const pBlock = static_cast<Block*>(p) - 1;
-            if (pBlock->check != (reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck) || pBlock->owner != pMod) {
+            if (held && (pBlock->check != (reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck) || pBlock->owner != pMod)) {
+                unlockMod(pMod);
+                NEBULA_PANIC("LumaCore: %s's block at %p was written over in front of its bytes", pMod->name, p);
+            }
+            if (held) {
+                pMod->bytes -= pBlock->size;
+                pMod->blockCount--;
+                pBlock->check = 0;
+            }
+            unlockMod(pMod);
+            if (!held) {
                 nebula_log("[mod %s] free(%p): not a block alloc gave this mod (another mod's, freed already, or never "
                            "from alloc); nothing was freed\n",
                            pMod->name, p);
                 return;
             }
-            lockMod(pMod);
-            if (pBlock->prev != nullptr) {
-                pBlock->prev->next = pBlock->next;
-            } else {
-                pMod->blocks = pBlock->next;
-            }
-            if (pBlock->next != nullptr) {
-                pBlock->next->prev = pBlock->prev;
-            }
-            pMod->bytes -= pBlock->size;
-            pMod->blockCount--;
-            pBlock->check = 0;
-            unlockMod(pMod);
             ::free(pBlock->start);
         }
 
         // Everything a mod still holds, after its grace.
         void freeAll(LumaMod* pMod) {
-            for (Block* pBlock = pMod->blocks; pBlock != nullptr;) {
-                Block* const pNext = pBlock->next;
-                pBlock->check = 0;
-                ::free(pBlock->start);
-                pBlock = pNext;
+            BlockSet& rSet = pMod->blocks;
+            for (u32 i = 0; i < rSet.capacity; i++) {
+                if (rSet.slots[i] > 1) {
+                    Block* const pBlock = reinterpret_cast<Block*>(rSet.slots[i]) - 1;
+                    pBlock->check = 0;
+                    ::free(pBlock->start);
+                }
             }
-            pMod->blocks = nullptr;
+            ::free(rSet.slots);
+            rSet = BlockSet{};
             pMod->bytes = 0;
             pMod->blockCount = 0;
         }
@@ -429,7 +506,7 @@ namespace luma {
         pMod->order = order;
         pMod->library = pLibrary;
         pMod->close = close;
-        Refuse refuse = {pRefusal, pMod};
+        Refuse refuse = {pRefusal, pId, pFile};
 
         // Each refusal is the first one found, with the validator's code and parameters (loader contract 2, 3).
         bool refused = true;
