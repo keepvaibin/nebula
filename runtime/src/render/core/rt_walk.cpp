@@ -38,6 +38,17 @@ float effect_luminance(std::uint32_t name) noexcept {
 // 100 units of the game are a metre (the player is 1.6 m tall).
 constexpr float kUnitsPerMetre = 100.0f;
 
+// What an emitter is from one frame to the next (its kind, whose it is, which of them): a pixel's reservoir finds its
+// light again by it. Two emitters with one number are taken for each other, which costs a little noise and nothing
+// else.
+constexpr std::uint32_t rt_emitter_id(std::uint32_t kind, std::uint32_t whose, std::uint32_t which) {
+    std::uint32_t h = (whose * 0x9E3779B1u) ^ (which * 0x85EBCA6Bu) ^ (kind * 0xC2B2AE35u);
+    h ^= h >> 15u;
+    h *= 0x2C1B3C6Du;
+    h ^= h >> 12u;
+    return h;
+}
+
 // The words of an item in the light pass's table (rt_light).
 constexpr std::size_t kRtItemWords = 16u;
 
@@ -191,6 +202,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             emitter.reach = 0.0f;
             emitter.slot = NEBULA_NONE32;
             emitter.kind = 0u;
+            emitter.reserved[1] = rt_emitter_id(0u, 0u, n);
         }
     }
     rt_emitter_blocks_.clear();
@@ -700,6 +712,7 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
         rt::PassBinds binds = rt_light_binds_;
         binds.textures[0] = depth;
         binds.textures[1] = items;
+        binds.reads[1] = binds.writes[1];  // (not the spare: an image is not read and written in one pass)
         binds.writes[1] = rt_light_spare_;
         // The same constants but for the pass's switches (LightConstants::more[2]): no sky ray, the second layer.
         std::uint32_t block[128];
@@ -788,7 +801,8 @@ void RenderCore::rt_light() {
                                                                    "Nebula RT Mirror", "Nebula RT Motion",
                                                                    "Nebula RT Lights", "Nebula RT Lights Average A",
                                                                    "Nebula RT Lights Average B", "Nebula RT Lights Moments A",
-                                                                   "Nebula RT Lights Moments B"};
+                                                                   "Nebula RT Lights Moments B", "Nebula RT Reservoirs A",
+                                                                   "Nebula RT Reservoirs B"};
             for (unsigned i = 0; i < kRtLightImages; ++i) {
                 if (rt_light_images_[i] != rt::kNoImage) {
                     rt_light_retired_.emplace_back(frame_index_, rt_light_images_[i]);
@@ -1018,6 +1032,7 @@ void RenderCore::rt_light() {
                 float up[4];                // the player's up in the eye's space: where the sky is
                 float ray_before[4];        // the frame before's eye ray terms
                 float before[3][4];         // the frame before's eye space from this frame's
+                std::uint32_t kept[4];      // the reservoirs' way from the frame before's emitters to this frame's
             } constants{};
             UploadRing& ring = renderer_.matrix_ring();
             const std::size_t item_bytes = rt_item_words_.size() * sizeof(std::uint32_t);
@@ -1034,7 +1049,8 @@ void RenderCore::rt_light() {
                 rt_glow_entries_.clear();
             }
             const std::size_t drops_only = std::max<std::size_t>(rt_drops_.size() * sizeof(RtDrop), sizeof(RtDrop));
-            const std::size_t drop_bytes = drops_only + rt_emitters_.size() * sizeof(RtEmitter);
+            const std::size_t remap_at = drops_only + rt_emitters_.size() * sizeof(RtEmitter);
+            const std::size_t drop_bytes = remap_at + std::max<std::size_t>(rt_emitter_ids_before_.size(), 1u) * sizeof(std::uint32_t);
             const std::size_t drop_tile_words = rt_tiles_.size() + rt_tile_entries_.size();
             const std::size_t tile_words = drop_tile_words + rt_glow_tiles_.size() + rt_glow_entries_.size();
             const UploadRing::Allocation items_at = ring.allocate(item_bytes, 256u);
@@ -1056,6 +1072,29 @@ void RenderCore::rt_light() {
                             rt_glow_tiles_.size() * sizeof(std::uint32_t));
                 std::memcpy(tiles_at.cpu + (drop_tile_words + rt_glow_tiles_.size()) * sizeof(std::uint32_t), rt_glow_entries_.data(),
                             rt_glow_entries_.size() * sizeof(std::uint32_t));
+            }
+            {
+                // Where each emitter of the frame before is in this frame's list (by what it is), or nowhere: a pixel's
+                // reservoir names its light by the list of the frame it was written in.
+                rt_emitter_now_.clear();
+                for (std::size_t e = 0; e < rt_emitters_.size(); ++e) {
+                    rt_emitter_now_.try_emplace(rt_emitters_[e].reserved[1], static_cast<std::uint32_t>(e));
+                }
+                rt_emitter_remap_.assign(rt_emitter_ids_before_.size(), ~0u);
+                for (std::size_t e = 0; e < rt_emitter_ids_before_.size(); ++e) {
+                    if (const auto found = rt_emitter_now_.find(rt_emitter_ids_before_[e]); found != rt_emitter_now_.end()) {
+                        rt_emitter_remap_[e] = found->second;
+                    }
+                }
+                if (!rt_emitter_remap_.empty()) {
+                    std::memcpy(drops_at.cpu + remap_at, rt_emitter_remap_.data(), rt_emitter_remap_.size() * sizeof(std::uint32_t));
+                }
+                constants.kept[0] = static_cast<std::uint32_t>(remap_at);
+                constants.kept[1] = static_cast<std::uint32_t>(rt_emitter_ids_before_.size());
+                rt_emitter_ids_before_.resize(rt_emitters_.size());
+                for (std::size_t e = 0; e < rt_emitters_.size(); ++e) {
+                    rt_emitter_ids_before_[e] = rt_emitters_[e].reserved[1];
+                }
             }
             std::memcpy(constants.ray, eye.ray, sizeof(constants.ray));
             std::memcpy(constants.depth, eye.depth, sizeof(constants.depth));
@@ -1123,6 +1162,7 @@ void RenderCore::rt_light() {
                     affine_inverse(view_here, world_from_here)) {
                     before_from_here = affine_multiply(rt_light_view_before_, world_from_here);
                     std::memcpy(constants.ray_before, rt_light_ray_before_, sizeof(constants.ray_before));
+                    constants.kept[2] = 1u;  // and the frame before's reservoirs count
                 }
                 std::memcpy(constants.before, before_from_here.data(), sizeof(constants.before));
             }
@@ -1144,6 +1184,9 @@ void RenderCore::rt_light() {
             binds.writes[2] = rt_light_images_[9];
             binds.writes[3] = rt_light_images_[7];
             binds.writes[4] = rt_light_images_[8];
+            binds.writes[5] = rt_light_images_[14u + (turn & 1u)];
+            binds.reads[0] = rt_light_images_[15u - (turn & 1u)];
+            binds.reads[1] = guide_before;
             binds.constants = {at.gpu, 512u};
             binds.counters = true;
             const std::uint32_t across = (width + 7u) / 8u, down = (height + 7u) / 8u;
@@ -1535,6 +1578,7 @@ void RenderCore::rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& me
         emitter.slot = item.slot;
         emitter.kind = 1u;
         emitter.reserved[0] = count == 1u ? 0u : 1u;  // a row's piece keeps its place
+        emitter.reserved[1] = rt_emitter_id(1u, item.slot, n);
     }
 }
 
@@ -1628,6 +1672,7 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
         emitter.reach = 0.0f;
         emitter.slot = item.slot;
         emitter.kind = 2u;
+        emitter.reserved[1] = rt_emitter_id(2u, item.slot ^ static_cast<std::uint32_t>(item.source_hash), (ordinal - 1u) / every);
     };
     if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
         // Instanced particles: each a matrix in the world, its quad as wide and tall as the matrix's first two columns.
