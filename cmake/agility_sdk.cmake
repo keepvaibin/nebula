@@ -2,8 +2,8 @@
 # the opt-in that lets the tracer's ray queries (Shader Model 6.6) use them. Downloaded at configure time (pinned,
 # checked by SHA-256). Its headers come before the Windows SDK's for every target here; its runtime (D3D12Core.dll,
 # d3d12SDKLayers.dll for the debug layer, and its license) goes into D3D12\ beside a program that asks for it
-# (nebula_agility_runtime: native/host/d3d12_agility.cpp names the version and the folder). Without the folder Windows'
-# own runtime runs, and what that one lacks stays off.
+# (nebula_agility_runtime). The renderer opens it through a device factory (renderer_d3d12.cpp agility_device_factory,
+# l62); without the folder Windows' own runtime runs, and what that one lacks stays off.
 
 if(NOT WIN32)
     function(nebula_agility_runtime target)

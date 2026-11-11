@@ -298,6 +298,32 @@ static void dump_device_removal(ID3D12Device* dev) {
     }
 }
 
+// The Agility SDK's configuration and debug classes (d3d12.h's values; the Windows SDK's libraries may not define them).
+constexpr GUID kClsidSdkConfiguration = {0x7cda6aca, 0xa03e, 0x49c8, {0x94, 0x58, 0x03, 0x34, 0xd2, 0x0e, 0x07, 0xce}};
+constexpr GUID kClsidDebug = {0xf2352aeb, 0xdd84, 0x49fe, {0xb9, 0x7b, 0xa9, 0xdc, 0xfd, 0xcc, 0x1b, 0x4f}};
+constexpr GUID kClsidRemovedData = {0x4a75bbc4, 0x9ff4, 0x4ad8, {0x9f, 0x18, 0xab, 0xae, 0x84, 0xdc, 0x5f, 0xf2}};
+
+// The Agility SDK's runtime from D3D12\ beside the program (cmake/agility_sdk.cmake: the version of the headers it was
+// built with), through a device factory (l62). Null where Windows has no SDK configuration interface or the folder is
+// missing or refused: Windows' own runtime then makes the device.
+ComPtr<ID3D12DeviceFactory> agility_device_factory() {
+    using GetInterface = HRESULT(WINAPI*)(REFCLSID, REFIID, void**);
+    HMODULE d3d12 = GetModuleHandleW(L"d3d12.dll");
+    if (d3d12 == nullptr) {
+        d3d12 = LoadLibraryExW(L"d3d12.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    }
+    // Looked up, not linked: a Windows without the configuration interface has no D3D12GetInterface.
+    const auto get = d3d12 != nullptr ? reinterpret_cast<GetInterface>(reinterpret_cast<void*>(GetProcAddress(d3d12, "D3D12GetInterface")))
+                                      : nullptr;
+    ComPtr<ID3D12SDKConfiguration1> configuration;
+    ComPtr<ID3D12DeviceFactory> factory;
+    if (get == nullptr || FAILED(get(kClsidSdkConfiguration, IID_PPV_ARGS(&configuration))) ||
+        FAILED(configuration->CreateDeviceFactory(D3D12_SDK_VERSION, ".\\D3D12\\", IID_PPV_ARGS(&factory)))) {
+        return nullptr;
+    }
+    return factory;
+}
+
 }  // namespace
 
 void DescriptorRing::reset() noexcept {
@@ -1728,10 +1754,18 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
 
     // --gpu-validation: 1 enables the D3D12 debug layer, 2 also GPU-based validation.
     const unsigned d3d_debug_level = ::galaxy::launch_args().gpu_validation;
+    // The runtime the device comes from (l62): the Agility SDK's by its factory, else Windows' own. The debug layer and
+    // the removal data are asked of the same one.
+    const ComPtr<ID3D12DeviceFactory> agility = agility_device_factory();
+    std::fprintf(stderr, "[d3d12] runtime: %s\n",
+                 agility ? "the Agility SDK's from D3D12\\ (device factory)" : "Windows' own (D3D12\\ missing or not accepted)");
+    const auto configuration = [&](REFCLSID which, REFIID riid, void** out) {
+        return agility ? agility->GetConfigurationInterface(which, riid, out) : D3D12GetDebugInterface(riid, out);
+    };
     try {
         if (d3d_debug_level >= 1) {
             ComPtr<ID3D12Debug> d;
-            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&d)))) {
+            if (SUCCEEDED(configuration(kClsidDebug, IID_PPV_ARGS(&d)))) {
                 d->EnableDebugLayer();
                 if (d3d_debug_level >= 2) {
                     ComPtr<ID3D12Debug1> d1;
@@ -1745,13 +1779,13 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // allocations, breadcrumb contexts), asked for before the device exists. Otherwise the system's choice.
         if (::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults)) {
             ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dred;
-            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
+            if (SUCCEEDED(configuration(kClsidRemovedData, IID_PPV_ARGS(&dred)))) {
                 dred->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 dred->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 dred->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
             } else {
                 ComPtr<ID3D12DeviceRemovedExtendedDataSettings> basic;
-                if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&basic)))) {
+                if (SUCCEEDED(configuration(kClsidRemovedData, IID_PPV_ARGS(&basic)))) {
                     basic->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                     basic->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                 }
@@ -1781,9 +1815,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 return false;
             }
             ComPtr<ID3D12Device> candidate_device;
-            if (FAILED(D3D12CreateDevice(
-                    candidate, D3D_FEATURE_LEVEL_11_0,
-                    IID_PPV_ARGS(&candidate_device)))) {
+            const HRESULT made = agility ? agility->CreateDevice(candidate, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&candidate_device))
+                                         : D3D12CreateDevice(candidate, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&candidate_device));
+            if (FAILED(made)) {
                 return false;
             }
             adapter = candidate;
