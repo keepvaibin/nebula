@@ -7,6 +7,12 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 2700.0f);
 
 namespace {
     // One per joint beam1..beam16.
@@ -14,6 +20,7 @@ namespace {
 };  // namespace
 
 BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("ビームゴーラウンドビーム") {
+    lumacore::setClass(this, lumacore::kClassId< BeamGoRoundBeam >);
     mModelDrawer = nullptr;
     mBloomModel = nullptr;
     mBeamJointMtx = pMtx;
@@ -24,11 +31,11 @@ void BeamGoRoundBeam::init(const TableIter& /*rIter*/) {
     mPosition.set< f32 >(mBeamJointMtx[0][3], mBeamJointMtx[1][3], mBeamJointMtx[2][3]);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_IndirectMapObj, MR::DrawType_VolumeModel);
     initHitSensor(1);
-    MR::addHitSensorCallbackEnemyAttack(this, "beam", 4, 100.0f);
+    MR::addHitSensorCallbackEnemyAttack(this, "beam", 4, cNum_init_f1);
     initEffectKeeper(0, nullptr);
     mModelDrawer = new VolumeModelDrawer("ビームボリューム", "BeamGoRoundBeamVolume", getBaseMtx());
     mBloomModel = MR::createModelObjBloomModel("ビームブルーム", "BeamGoRoundBeamBloom", getBaseMtx());
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f2);
     MR::startAllAnim(this, "BeamGoRoundBeam");
     makeActorAppeared();
 }
@@ -49,7 +56,7 @@ void BeamGoRoundBeam::updateHitSensor(HitSensor* pSensor) {
     Vec3f lineStart;
     lineStart.scaleAdd(radius, up, mPosition);
     Vec3f lineEnd;
-    lineEnd.scaleAdd(2700.0f - radius, up, lineStart);
+    lineEnd.scaleAdd(cNum_updateHitSensor_f1 - radius, up, lineStart);
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), lineStart, lineEnd);
 }
 
@@ -66,6 +73,7 @@ namespace NrvBeamGoRoundPlanet {
 };  // namespace NrvBeamGoRoundPlanet
 
 BeamGoRoundPlanet::BeamGoRoundPlanet(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BeamGoRoundPlanet >);
     mBeams = nullptr;
     mMove1Collision = nullptr;
     mMove2Collision = nullptr;

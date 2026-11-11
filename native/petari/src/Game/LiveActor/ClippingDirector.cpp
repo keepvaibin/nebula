@@ -6,8 +6,10 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ClippingDirector::ClippingDirector() : NameObj("クリッピング指揮"), mJudge(nullptr), mActorHolder(nullptr), mGroupHolder(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< ClippingDirector >);
     mJudge = new ClippingJudge("クリッピング判定者");
     mJudge->initWithoutIter();
 

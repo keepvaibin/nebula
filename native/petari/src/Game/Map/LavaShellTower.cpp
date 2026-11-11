@@ -7,6 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDemo_1, "exeDemo.1", 1);
@@ -23,6 +24,7 @@ namespace NrvLavaShellTower {
 };  // namespace NrvLavaShellTower
 
 LavaShellTower::LavaShellTower(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< LavaShellTower >);
 }
 
 void LavaShellTower::init(const TableIter& rIter) {

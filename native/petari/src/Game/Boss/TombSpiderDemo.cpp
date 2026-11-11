@@ -25,6 +25,12 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGateOpen_f1, "updateGateOpen.f1", 270.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGateOpen_f2, "updateGateOpen.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGateOpen_f3, "updateGateOpen.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBattle2ndStart_f1, "updateBattle2ndStart.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBattle2ndStart_f2, "updateBattle2ndStart.f2", 40.0f);
+
 namespace {
     const s32 sStepDemoGateOpen = NebulaFrameClock::stepsOfSeconds(3);
     NEBULA_TUNABLE(f32, sGateOpenPlayerDistance, 6000.0f);
@@ -61,10 +67,10 @@ bool TombSpiderDemo::updateGateOpen() {
 
         Vec3f pos(mParent->mPosition);
         pos.z += ::sPlanetRadius;
-        MR::makeMtxTR(mMtx, pos, Vec3f(270.0f, 180.0f, 0.0f));
+        MR::makeMtxTR(mMtx, pos, Vec3f(cNum_updateGateOpen_f1, cNum_updateGateOpen_f2, 0.0f));
 
         MR::startBckWithInterpole(MR::getPlayerDemoActor(), "CocoonFly", 0);
-        MR::setBckFrameAndStop(MR::getPlayerDemoActor(), 50.0f);
+        MR::setBckFrameAndStop(MR::getPlayerDemoActor(), cNum_updateGateOpen_f3);
         MR::emitEffect(MR::getPlayerDemoActor(), "SpaceCocoonBlur");
         MR::appearSpiderThread();
     }
@@ -187,8 +193,8 @@ bool TombSpiderDemo::updateBattle2ndStart() {
     if (MR::isBckStopped(mParent)) {
         for (s32 idx = 0; idx < ::sBattle2ndStartStarPieceNum; idx++) {
             Vec3f dir(1.0f, 0.0f, 0.0f);
-            MR::rotateVecDegree(&dir, Vec3f(0.0f, 0.0f, 1.0f), MR::getRandom() * 360.0f);
-            MR::appearStarPieceToDirection(mParent, mParent->mPosition, dir, 1, 0.0f, 40.0f, false);
+            MR::rotateVecDegree(&dir, Vec3f(0.0f, 0.0f, 1.0f), MR::getRandom() * cNum_updateBattle2ndStart_f1);
+            MR::appearStarPieceToDirection(mParent, mParent->mPosition, dir, 1, 0.0f, cNum_updateBattle2ndStart_f2, false);
             MR::startSound(mParent, "SE_OJ_STAR_PIECE_BURST");
         }
         TombSpiderFunction::endTombSpiderAnimCameraDemo(mParent, "１回戦終了", "Battle2ndStart");

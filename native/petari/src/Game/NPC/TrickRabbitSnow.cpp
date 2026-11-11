@@ -9,6 +9,13 @@
 #include "Game/NPC/TrickRabbitUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideSnow_f1, "exeHideSnow.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromSnow_f1, "exeAppearFromSnow.f1", 20.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitSnow_turnDirectionToPlayerDegree_1, "exeWaitSnow.turnDirectionToPlayerDegree.1", 15.0f);
@@ -57,6 +64,7 @@ TrickRabbitSnow::TrickRabbitSnow(const char* pName)
     : LiveActor(pName), mFinishQuat(0.0f, 0.0f, 0.0f, 1.0f), mFinishPos(0.0f, 0.0f, 0.0f), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f),
       mFrontVec(0.0f, 0.0f, 1.0f), mStateWaitStart(), mStateRunaway(), mStateBlowDamage(), mStateCaught(), mMsgCtrl(), mFootPrint(), mSpotMarkLight(),
       mListener(), mNotCaughtableTimer(), mIsValidAppearStarPiece(true) {
+    lumacore::setClass(this, lumacore::kClassId< TrickRabbitSnow >);
 }
 
 void TrickRabbitSnow::setListener(TrickRabbitSnowListener* pListener) {
@@ -72,7 +80,7 @@ void TrickRabbitSnow::init(const TableIter& rIter) {
     mFinishQuat.set(mRotateQuat);
     mFinishPos.set(mPosition);
 
-    mSpotMarkLight = new SpotMarkLight(this, 100.0f, 1500.0f, nullptr);
+    mSpotMarkLight = new SpotMarkLight(this, cNum_init_f1, cNum_init_f2, nullptr);
     mSpotMarkLight->initWithoutIter();
 
     MR::initShadowFromCSV(this, "Shadow");
@@ -85,7 +93,7 @@ void TrickRabbitSnow::init(const TableIter& rIter) {
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbit", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "SnowRabbit", Vec3f(0.0f, cNum_init_f3, 0.0f), nullptr);
 
     initState();
     initSound(4, false);
@@ -350,7 +358,7 @@ void TrickRabbitSnow::exeHideSnow() {
     }
 
     MR::zeroVelocity(this);
-    MR::turnDirectionFromPlayerDegree(this, &mFrontVec, 15.0f);
+    MR::turnDirectionFromPlayerDegree(this, &mFrontVec, cNum_exeHideSnow_f1);
 
     if (MR::isValidSwitchA(this) && MR::isOnSwitchA(this)) {
         MR::showModel(this);
@@ -363,7 +371,7 @@ void TrickRabbitSnow::exeAppearFromSnow() {
         MR::emitEffect(this, "AppearSmoke");
         MR::startAction(this, "Jump");
         MR::setVelocityJump(this, cNum_exeAppearFromSnow_setVelocityJump_1);
-        MR::addVelocityMoveToDirection(this, mFrontVec, 20.0f);
+        MR::addVelocityMoveToDirection(this, mFrontVec, cNum_exeAppearFromSnow_f1);
         MR::startSound(this, "SE_SM_RABBIT_APPEAR");
         MR::startSystemSE("SE_SM_RUNAWAY_RABBIT_APP_ME");
     }

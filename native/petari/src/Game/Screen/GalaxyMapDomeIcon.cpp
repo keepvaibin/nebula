@@ -8,6 +8,7 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     class AstroDomeCheckerBase {
@@ -56,6 +57,7 @@ namespace {
 
 GalaxyMapDomeIcon::GalaxyMapDomeIcon(int param1, LayoutActor* pHost, const char* pPaneName, const char* pParam4)
     : LayoutActor(pPaneName, true), mDomeNo(param1), mHost(pHost), mPaneName(pPaneName), mNamePaneName(pParam4), mNamePlate(), mMode() {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapDomeIcon >);
 }
 
 void GalaxyMapDomeIcon::appear() {

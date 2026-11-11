@@ -25,6 +25,26 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 48.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 29.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalkOnRail_f1, "exeWalkOnRail.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalkOnRail_f2, "exeWalkOnRail.f2", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f1, "exeTurn.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f1, "exePursue.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f2, "exePursue.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f3, "exePursue.f3", 1100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f4, "exePursue.f4", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f5, "exePursue.f5", 5.729578f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreFireAttack_f1, "exePreFireAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 400.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isFaceToPlayerDegree_1, "exeWait.isFaceToPlayerDegree.1", 120.0f);
@@ -54,25 +74,26 @@ namespace NrvMechanicKoopaMini {
 };  // namespace NrvMechanicKoopaMini
 
 namespace {
-    static const MR::ActorMoveParam hNoMoveNoTurnParam = {0.0f, 2.0f, 0.8f, 0.0f};
-    static const MR::ActorMoveParam hOnAirParam = {0.0f, 2.0f, 0.98f, 0.0f};
-    static const MR::ActorMoveParam hOnAirTurnParam = {0.0f, 2.0f, 0.98f, 2.0f};
-    static const MR::ActorMoveParam hOnAirMoveParam = {0.2f, 2.0f, 0.98f, 2.0f};
-    static const MR::ActorMoveParam hWalkParam = {0.4f, 2.0f, 0.8f, 2.0f};
-    static const MR::ActorMoveParam hPursueParam = {1.3f, 2.0f, 0.8f, 2.0f};
-    static const MR::ActorMoveParam hPreFireAttackParam = {0.0f, 2.0f, 0.8f, 0.0f};
-    static const MR::ActorMoveParam hFireAttackParam = {0.0f, 2.0f, 0.8f, 1.0f};
-    static const MR::ActorMoveParam hHitReactionOnGroundParam = {0.0f, 1.2f, 0.8f, 5.0f};
-    static const MR::ActorMoveParam hHitReactionAirParam = {0.0f, 2.0f, 0.95f, 5.0f};
-    static const MR::ActorMoveParam hJumpOnGroundParam = {0.0f, 1.2f, 0.8f, 0.0f};
-    static const MR::ActorMoveParam hJumpAirParam = {0.5f, 2.0f, 0.95f, 0.0f};
-    static const MR::ActorMoveParam hTurnParam = {0.0f, 2.0f, 0.8f, 2.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hNoMoveNoTurnParam, {0.0f, 2.0f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnAirParam, {0.0f, 2.0f, 0.98f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnAirTurnParam, {0.0f, 2.0f, 0.98f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnAirMoveParam, {0.2f, 2.0f, 0.98f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hWalkParam, {0.4f, 2.0f, 0.8f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hPursueParam, {1.3f, 2.0f, 0.8f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hPreFireAttackParam, {0.0f, 2.0f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hFireAttackParam, {0.0f, 2.0f, 0.8f, 1.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hHitReactionOnGroundParam, {0.0f, 1.2f, 0.8f, 5.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hHitReactionAirParam, {0.0f, 2.0f, 0.95f, 5.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hJumpOnGroundParam, {0.0f, 1.2f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hJumpAirParam, {0.5f, 2.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTurnParam, {0.0f, 2.0f, 0.8f, 2.0f});
     static const Vec3f hBinderOffset(0.0f, 110.0f, 20.0f);
     NEBULA_TUNABLE(f32, hTrampleUpRangeSub, 80);
     NEBULA_TUNABLE(f32, hPushUpRangeSub, 130);
 };  // namespace
 
 MechanicKoopaMini::MechanicKoopaMini(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< MechanicKoopaMini >);
     mIsAppearJumping = false;
     mIsForbidPause = false;
     mScaleController = nullptr;
@@ -119,7 +140,7 @@ void MechanicKoopaMini::init(const TableIter& rIter) {
     initRailRider(rIter);
     initModelManagerWithAnm("MechanicKoopaMini", nullptr, false);
     MR::connectToSceneEnemy(this);
-    initBinder(120.0f, 0.0f, 0);
+    initBinder(cNum_init_f1, 0.0f, 0);
     MR::setBinderOffsetVec(this, &::hBinderOffset, true);
     MR::onCalcGravity(this);
     initSound(3, false);
@@ -128,11 +149,11 @@ void MechanicKoopaMini::init(const TableIter& rIter) {
     initNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
     initHitSensor(3);
     f32 yScale = mScale.y;
-    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 16, 130.0f * yScale, Vec3f(48.0f, 13.0f, 0.0f));
-    MR::addHitSensorCallbackEnemyAttack(this, "fire", 16, 29.0f * yScale);
+    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 16, cNum_init_f2 * yScale, Vec3f(cNum_init_f3, cNum_init_f4, 0.0f));
+    MR::addHitSensorCallbackEnemyAttack(this, "fire", 16, cNum_init_f5 * yScale);
     MR::initShadowFromCSV(this, "Shadow");
     MR::declareCoin(this, 1);
-    MR::initStarPointerTarget(this, 70.0f, Vec3f(0.0f, 35.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
     MR::validateClipping(this);
     MR::tryRegisterDemoCast(this, rIter);
     mScaleController = new AnimScaleController(nullptr);
@@ -172,7 +193,7 @@ void MechanicKoopaMini::exeWait() {
 
     MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
 
-    if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, cNum_exeWait_isFaceToPlayerDegree_1)) {
+    if (MR::calcDistanceToPlayer(this) < cNum_exeWait_f1 && MR::isFaceToPlayerDegree(this, cNum_exeWait_isFaceToPlayerDegree_1)) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFind));
     } else if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
@@ -191,13 +212,13 @@ void MechanicKoopaMini::exeWalkOnRail() {
         MR::calcFrontVec(&frontVec, this);
         if (MR::isBindedWallOfMap(this)) {
             Vec3f vecc(*MR::getWallNormal(this));
-            if (frontVec.dot(vecc) < -0.99f) {
+            if (frontVec.dot(vecc) < -cNum_exeWalkOnRail_f1) {
                 setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvJumpStart));
                 return;
             }
         }
 
-        if (MR::calcDistanceToPlayer(this) < 900.0f && MR::isFaceToPlayerDegree(this, cNum_exeWalkOnRail_isFaceToPlayerDegree_1)) {
+        if (MR::calcDistanceToPlayer(this) < cNum_exeWalkOnRail_f2 && MR::isFaceToPlayerDegree(this, cNum_exeWalkOnRail_isFaceToPlayerDegree_1)) {
             setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvFind));
             return;
         }
@@ -226,7 +247,7 @@ void MechanicKoopaMini::exeTurn() {
 
     Vec3f vec(mPosition);
     vec.add(railDir);
-    if (MR::isFaceToTargetDegree(this, vec, 5.0f)) {
+    if (MR::isFaceToTargetDegree(this, vec, cNum_exeTurn_f1)) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
     }
 }
@@ -291,7 +312,7 @@ void MechanicKoopaMini::exePursue() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Pursue");
         MR::invalidateClipping(this);
-        mVelocity.set(mGravity * -10.0f);
+        mVelocity.set(mGravity * -cNum_exePursue_f1);
     }
 
     if (MR::isOnGround(this)) {
@@ -299,7 +320,7 @@ void MechanicKoopaMini::exePursue() {
         MR::calcFrontVec(&frontVec, this);
         if (MR::isBindedWall(this)) {
             Vec3f vecc(*MR::getWallNormal(this));
-            if (frontVec.dot(vecc) < -0.99f) {
+            if (frontVec.dot(vecc) < -cNum_exePursue_f2) {
                 setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvJumpStart));
             }
         }
@@ -309,9 +330,9 @@ void MechanicKoopaMini::exePursue() {
     }
 
     f32 distance = MR::calcDistanceToPlayer(this);
-    if (1100.0f < distance) {
+    if (cNum_exePursue_f3 < distance) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvWalkOnRail));
-    } else if (distance < 300.0f && MR::isFaceToPlayerHorizontalDegree(this, frontVec, 5.729578f) && MR::isOnGround(this)) {
+    } else if (distance < cNum_exePursue_f4 && MR::isFaceToPlayerHorizontalDegree(this, frontVec, cNum_exePursue_f5) && MR::isOnGround(this)) {
         setNerve(GET_NERVE(MechanicKoopaMini, HostTypeNrvPreFireAttack));
     }
 }
@@ -320,7 +341,7 @@ void MechanicKoopaMini::exePreFireAttack() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "PreFire");
         MR::invalidateClipping(this);
-        mVelocity.set(mGravity * -10.0f);
+        mVelocity.set(mGravity * -cNum_exePreFireAttack_f1);
     }
 
     if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
@@ -573,7 +594,7 @@ void MechanicKoopaMini::updateHitSensor(HitSensor* pSensor) {
     MR::calcUpVec(&up, this);
     MR::calcFrontVec(&front, this);
     f32 dot = front.dot(*MR::getPlayerCenterPos() - mPosition);
-    f32 nerveRate = 400.0f * MR::calcNerveRate(this, 10, 30);
+    f32 nerveRate = cNum_updateHitSensor_f1 * MR::calcNerveRate(this, 10, 30);
     f32 frontDist = MR::clamp(dot, 0.0f, nerveRate);
 
     pSensor->mPosition.set(mPosition);

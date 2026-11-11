@@ -9,9 +9,11 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
+#include "Game/System/LumaCore.hpp"
 
 AudBgmConductor::AudBgmConductor()
     : NameObj("AudBgmConductor"), mStateBits(0), mState(0), mStartDelay(-1), mFadeInDelay(-1), mStopImmediately(false) {
+    lumacore::setClass(this, lumacore::kClassId< AudBgmConductor >);
 }
 
 void AudBgmConductor::init(const TableIter& /*rIter*/) {

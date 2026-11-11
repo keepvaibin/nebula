@@ -1,4 +1,8 @@
 #include "Game/Camera/CameraCalc.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_diffRadian_f1, "diffRadian.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_diffRadian_f2, "diffRadian.f2", 2.0f);
 
 namespace MR {
     void crossToPolar(const Vec3f& rA, const Vec3f& rB, f32* pLength, f32* pAngleX, f32* pAngleY) {
@@ -26,11 +30,11 @@ namespace MR {
         f32 diff = MR::repeat(angleB, 0.0f, TWO_PI) - MR::repeat(angleA, 0.0f, TWO_PI);
         if (diff > 0.0f) {
             if (diff > MR::pi()) {
-                diff = -(MR::pi() * 2.0f - diff);
+                diff = -(MR::pi() * cNum_diffRadian_f1 - diff);
             }
         } else {
             if (diff < -MR::pi()) {
-                diff = diff + MR::pi() * 2.0f;
+                diff = diff + MR::pi() * cNum_diffRadian_f2;
             }
         }
         return diff;

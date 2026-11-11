@@ -7,6 +7,26 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_doObjWarp_f1, "doObjWarp.f1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doObjWarp_f2, "doObjWarp.f2", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f1, "calcAxis.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f2, "calcAxis.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f3, "calcAxis.f3", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f4, "calcAxis.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f5, "calcAxis.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f6, "calcAxis.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAxis_f7, "calcAxis.f7", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJump_f1, "updateJump.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJump_f2, "updateJump.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJump_f3, "updateJump.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateJump_f4, "updateJump.f4", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f1, "close.f1", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f2, "close.f2", 5.0f);
 
 
 bool Mario::doObjWarp(LiveActor* pActor) {
@@ -35,8 +55,8 @@ bool Mario::doObjWarp(LiveActor* pActor) {
         MR::calcActorAxisY(&axisY, pActor);
         MR::calcActorAxisY(&pairAxisY, pPod);
 
-        mWarp->mTargetPos = pPod->mPosition + pairAxisY * 160.0f;
-        mWarp->mStartPos = pActor->mPosition + axisY * 160.0f;
+        mWarp->mTargetPos = pPod->mPosition + pairAxisY * cNum_doObjWarp_f1;
+        mWarp->mStartPos = pActor->mPosition + axisY * cNum_doObjWarp_f2;
 
         MR::getRotatedAxisZ(&mWarp->mEndFront, pPod->mRotation);
         MR::getRotatedAxisY(&mWarp->mEndUp, pPod->mRotation);
@@ -126,22 +146,22 @@ void MarioWarp::calcAxis() {
     f32 distance = displacement.length();
     axis.cross(displacement, getGravityVec());
     MR::normalizeOrZero(&axis);
-    Vec3f midpoint = getTrans() + displacement * 0.5f;
+    Vec3f midpoint = getTrans() + displacement * cNum_calcAxis_f1;
     normal.cross(axis, displacement);
     MR::normalizeOrZero(&normal);
-    f32 angle = PI / 4.0f;
+    f32 angle = PI / cNum_calcAxis_f2;
     if (mKind == 3) {
-        angle = PI * 0.4f;
+        angle = PI * cNum_calcAxis_f3;
     }
 
-    f32 radius = (0.5f * distance) / MR::sin(angle);
-    f32 height = MR::sqrt(radius * radius - 0.5f * (0.5f * distance * distance));
+    f32 radius = (cNum_calcAxis_f4 * distance) / MR::sin(angle);
+    f32 height = MR::sqrt(radius * radius - cNum_calcAxis_f5 * (cNum_calcAxis_f6 * distance * distance));
     mArcAxis = axis;
     mArcCenter = midpoint + normal * height;
     mArcStart = -normal * radius;
     mArcEndAngle = angle;
     mArcStartAngle = -angle;
-    mTimer = radius / 25.0f;
+    mTimer = radius / cNum_calcAxis_f7;
     if (mTimer == 0) {
         mTimer = 1;
     }
@@ -246,9 +266,9 @@ void MarioWarp::updateJump() {
         return;
     }
 
-    f32 angle = (mLength - mTimer - 0.5f * mLength) / mLength;
+    f32 angle = (mLength - mTimer - cNum_updateJump_f1 * mLength) / mLength;
     angle *= PI;
-    f32 progress = (1.0f + MR::sin(angle)) / 2.0f;
+    f32 progress = (1.0f + MR::sin(angle)) / cNum_updateJump_f2;
     if (mKind == 2) {
         progress = 1.0f - static_cast< f32 >(mTimer - 1) / mLength;
     }
@@ -258,7 +278,7 @@ void MarioWarp::updateJump() {
     NebulaMtxRotAxisRad(rotation, &mArcAxis, mArcStartAngle * (1.0f - progress) + mArcEndAngle * progress);
     NebulaMtxMultVecSR(rotation, &mArcStart, &offset);
     Vec3f position = mArcCenter + offset;
-    f32 followRate = 0.5f;
+    f32 followRate = cNum_updateJump_f3;
     if (mKind == 2) {
         followRate = 1.0f;
     }
@@ -271,7 +291,7 @@ void MarioWarp::updateJump() {
 
     addTrans((position - getTrans()) * followRate);
     if (mKind == 2) {
-        getPlayer()->setFrontVecKeepUp(mEndFront, 0.2f);
+        getPlayer()->setFrontVecKeepUp(mEndFront, cNum_updateJump_f4);
     }
 }
 
@@ -392,12 +412,12 @@ bool MarioWarp::update() {
         if (mTimer == 0) {
             volume = 0;
         } else {
-            f32 halfway = mLength / 2.0f;
+            f32 halfway = mLength / cNum_update_f1;
             f32 elapsed = mLength - mTimer;
             if (elapsed < halfway) {
-                volume = 100.0f * (elapsed / halfway);
+                volume = cNum_update_f2 * (elapsed / halfway);
             } else {
-                volume = 100.0f * (1.0f - (elapsed - halfway) / halfway);
+                volume = cNum_update_f3 * (1.0f - (elapsed - halfway) / halfway);
             }
         }
 
@@ -528,7 +548,7 @@ bool MarioWarp::close() {
 
         if (getPlayerMode() != 6) {
             playSound("声中ジャンプ");
-            getPlayer()->tryForcePowerJump(mEndUp * 12.0f + mEndFront * 5.0f, false);
+            getPlayer()->tryForcePowerJump(mEndUp * cNum_close_f1 + mEndFront * cNum_close_f2, false);
         }
 
         break;

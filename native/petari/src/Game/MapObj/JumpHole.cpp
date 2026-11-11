@@ -4,6 +4,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSetCenter_f1, "exeSetCenter.f1", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f1, "bindHole.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f2, "bindHole.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initParabola_f1, "initParabola.f1", 2.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sGravityAcc, 1.2f);
@@ -29,6 +35,7 @@ namespace NrvJumpHole {
 
 JumpHole::JumpHole(const char* pName)
     : LiveActor(pName), mBoundSensor(), mLaunchStart(0, 0, 0), mBindVelocity(0, 0, 0), mHoleGravity(0, 0, 0), mSettledFrames() {
+    lumacore::setClass(this, lumacore::kClassId< JumpHole >);
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
@@ -94,7 +101,7 @@ void JumpHole::exeSetCenter() {
 
     bindHole();
 
-    if (mBindVelocity.squared() < 0.0001f) {
+    if (mBindVelocity.squared() < cNum_exeSetCenter_f1) {
         mSettledFrames++;
     } else {
         mSettledFrames = 0;
@@ -180,7 +187,7 @@ void JumpHole::bindHole() {
     mBindVelocity *= MR::calcNerveValue(this, ::sForceSetStartTime, ::sForceSetEndTime, ::sBallToCenterFreq, ::sBallToCenterEndFreq);
     mBoundSensor->mHost->mVelocity.set(position - previous);
 
-    if (position.squared(previous) < 0.1f * 0.1f) {
+    if (position.squared(previous) < cNum_bindHole_f1 * cNum_bindHole_f2) {
         mBindVelocity.zero();
     }
 }
@@ -202,5 +209,5 @@ void JumpHole::initParabola(const Vec3f& rPosition) {
     MR::separateScalarAndDirection(&mLaunchDistance, &mLaunchDirection, mLaunchDirection);
     MR::calcParabolicFunctionParam(&mLaunchQuadratic, &mLaunchLinear, startHeight, endHeight);
     mLaunchStart = rPosition;
-    mLaunchDuration = NebulaSqrt(MR::abs(2.0f * mLaunchQuadratic / ::sGravityAcc));
+    mLaunchDuration = NebulaSqrt(MR::abs(cNum_initParabola_f1 * mLaunchQuadratic / ::sGravityAcc));
 }

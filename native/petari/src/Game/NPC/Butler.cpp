@@ -27,6 +27,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startDemoStarPiece1_f1, "startDemoStarPiece1.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startDemoStarPiece2_f1, "startDemoStarPiece2.f1", 50.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoStarPiece2_1, "exeDemoStarPiece2.1", 1);
@@ -55,6 +60,7 @@ namespace NrvButler {
 };  // namespace NrvButler
 
 Butler::Butler(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< Butler >);
     mTalkMessage = nullptr;
     mIsStarPieceLecture = false;
     mStarPieceHitCount = 0;
@@ -70,7 +76,7 @@ void Butler::init(const TableIter& rIter) {
     NPCActorCaps caps = "Butler";
     caps.setDefault();
     caps.mSensorJoint = "Body";
-    caps.mSensorSize = 50.0f;
+    caps.mSensorSize = cNum_init_f1;
     caps.mSensorOffset.x = 0.0f;
     caps.mSensorOffset.y = 0.0f;
     caps.mSensorOffset.z = 0.0f;
@@ -165,7 +171,7 @@ void Butler::startDemoStarPiece1() {
     mIsStarPieceLecture = true;
     mStarPieceHitCount = false;
     mReplaceStep = false;
-    MR::setSensorRadius(this, "Body", 100.0f);
+    MR::setSensorRadius(this, "Body", cNum_startDemoStarPiece1_f1);
     MR::onSwitchB(this);
     MR::invalidateClipping(this);
     LiveActor::appear();
@@ -174,7 +180,7 @@ void Butler::startDemoStarPiece1() {
 }
 
 void Butler::startDemoStarPiece2() {
-    MR::setSensorRadius(this, "Body", 50.0f);
+    MR::setSensorRadius(this, "Body", cNum_startDemoStarPiece2_f1);
     MR::offSwitchB(this);
     static_cast< StarPieceGroup* >(MR::getPairedGroupMember(this))->forceKillStarPieceAll(false);
     MR::getPairedGroupMember(this)->kill();

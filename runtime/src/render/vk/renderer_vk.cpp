@@ -3,7 +3,6 @@
 // copies and screen probes are renderer_vk_frame.cpp.
 
 #include "renderer_vk_internal.h"
-#include "galaxy/run_options.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
@@ -44,7 +43,7 @@
 
 namespace galaxy::render {
 
-void RendererVk::test_lose_device() {
+void RendererVk::lose_device() {
     vk::Context::get().simulate_device_loss();
 }
 

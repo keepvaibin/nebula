@@ -14,6 +14,15 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f1, "exeExplode.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f2, "exeExplode.f2", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f3, "exeExplode.f3", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f4, "exeExplode.f4", 8.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, hPreRecoverTime, 188);
@@ -32,6 +41,7 @@ namespace NrvJiraira {
 };  // namespace NrvJiraira
 
 Jiraira::Jiraira(const char* pName) : LiveActor(pName), mBodyCollision(), mExplodeRadius(500.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Jiraira >);
 }
 
 void Jiraira::init(const TableIter& rIter) {
@@ -48,12 +58,12 @@ void Jiraira::init(const TableIter& rIter) {
     f32 scaleY = mScale.y;
     Vec3f offset;
     offset.x = 0.0f;
-    offset.y = 30.0f;
+    offset.y = cNum_init_f1;
     offset.z = 0.0f;
-    MR::addHitSensorMapObjMoveCollision(this, "body", 16, scaleY * 100.0f, offset);
+    MR::addHitSensorMapObjMoveCollision(this, "body", 16, scaleY * cNum_init_f2, offset);
     Vec3f offset2;
     offset2.x = 0.0f;
-    offset2.y = 30.0f * scaleY;
+    offset2.y = cNum_init_f3 * scaleY;
     offset2.z = 0.0f;
     MR::addHitSensorEnemyAttack(this, "explode", 16, (mExplodeRadius * scaleY), offset2);
     MR::initCollisionPartsAutoEqualScaleOne(this, "Jiraira", getSensor("body"), MR::getJointMtx(this, "Jiraira"));
@@ -117,13 +127,13 @@ void Jiraira::exeExplode() {
         MR::startBck(this, "Down");
         MR::startBrk(this, "Down");
         getSensor("explode")->validate();
-        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceStrong(this, cNum_exeExplode_f1, cNum_exeExplode_f2, cNum_exeExplode_f3);
     }
 
     if (MR::isStep(this, ::hExplodeTime)) {
         getSensor("explode")->invalidate();
     } else if (MR::isLessStep(this, ::hExplodeTime)) {
-        getSensor("explode")->mRadius = mExplodeRadius * getNerveStep() / 8.0f;
+        getSensor("explode")->mRadius = mExplodeRadius * getNerveStep() / cNum_exeExplode_f4;
     }
 
     if (MR::isGreaterStep(this, ::hPreRecoverTime)) {

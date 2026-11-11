@@ -19,6 +19,17 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addToTargetPower_f1, "addToTargetPower.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f1, "addIKLimitPower.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f2, "addIKLimitPower.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f3, "addIKLimitPower.f3", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addIKLimitPower_f4, "addIKLimitPower.f4", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_separateMatrixRotateYZX_f1, "separateMatrixRotateYZX.f1", 0.000001f);
 
 namespace {
     NEBULA_TUNABLE(f32, sLiftHeight, 1000.0f);  // above the step point: lift ends, ankle fully turned, landing target
@@ -79,6 +90,7 @@ namespace NrvTripodBossLeg {
 TripodBossLeg::TripodBossLeg(const char* pName)
     : LiveActor(pName), mBoss(), mMoveArea(), mPrevStepPoint(), mStepPoint(), mJoint(new IKJoint()), mAnkleStartQuat(0, 0, 0, 1), mAnkleLandingQuat(0, 0, 0, 1), mRootLocalPos(0, 0, 0),
       mForceEndPoint(0, 0, 0), mEndVelocity(0, 0, 0), mEndTarget(0, 0, 0), mPoseMode(1), mLandingHeight(), mIsAttackHit(), mIsPressPlayer(), mDemoEffectTiming() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossLeg >);
     mRootLocalMtx.identity();
     mEndJointMtx.identity();
     mAnkleShadowMtx.identity();
@@ -92,7 +104,7 @@ void TripodBossLeg::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold));
     MR::invalidateClipping(this);
     initHitSensor(1);
-    MR::addHitSensorMtxMapObj(this, "body", 16, 1000.0f, mEndJointMtx, Vec3f(500.0f, 200.0f, 0.0f));
+    MR::addHitSensorMtxMapObj(this, "body", 16, cNum_init_f1, mEndJointMtx, Vec3f(cNum_init_f2, cNum_init_f3, 0.0f));
     initSound(6, false);
     mSoundObj = new AudAnmSoundObject(&mForceEndPoint, 6, NebulaArena::current());
     initEffectKeeper(0, "TripodBoss");
@@ -475,7 +487,7 @@ void TripodBossLeg::addToTargetPower(const Vec3f& rTarget, f32 power) {
     mEndVelocity += dir * (power * MR::clamp(dist / sTargetBrakeDistance, -1.0f, 1.0f));
     f32 brakeRate = (1.0f - (dist / sTargetBrakeDistance));
     if (brakeRate > 0.0f) {
-        mEndVelocity -= mEndVelocity * brakeRate * 0.1f;
+        mEndVelocity -= mEndVelocity * brakeRate * cNum_addToTargetPower_f1;
     }
 }
 
@@ -491,14 +503,14 @@ void TripodBossLeg::addIKLimitPower() {
     f32 rate = MR::normalize(dist, minDist, maxDist);
     f32 startRate, power;
 
-    if (rate < 0.5f) {
+    if (rate < cNum_addIKLimitPower_f1) {
         rate = 1.0f - rate;
         toRoot = -toRoot;
-        startRate = 0.5f;
+        startRate = cNum_addIKLimitPower_f2;
         power = 0.0f;
     } else {
-        startRate = 0.9f;
-        power = 5.0f;
+        startRate = cNum_addIKLimitPower_f3;
+        power = cNum_addIKLimitPower_f4;
     }
 
     if (startRate < rate) {
@@ -660,7 +672,7 @@ namespace MR {
         local.getXDir(xDir);
         f32 lengthXZ = MR::sqrt((xDir.x * xDir.x) + (xDir.z * xDir.z));
 
-        if (MR::isNearZero(lengthXZ, 0.000001f)) {
+        if (MR::isNearZero(lengthXZ, cNum_separateMatrixRotateYZX_f1)) {
             if (xDir.y >= 0.0f) {
                 pYMtx->setXDir(0.0f, 1.0f, 0.0f);
                 pYMtx->setYDir(-1.0f, 0.0f, 0.0f);

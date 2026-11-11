@@ -16,9 +16,11 @@
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/EmitterManager.hpp"
+#include "Game/System/LumaCore.hpp"
 
 EffectSystem::EffectSystem(const char* pName, bool createAdaptors)
     : NameObj(pName), mEmitterManager(), mDrawExec(), mCalcExec(), mGroupHolder(new AutoEffectGroupHolder()) {
+    lumacore::setClass(this, lumacore::kClassId< EffectSystem >);
     mDrawExec = new ParticleDrawExecutor(this, createAdaptors);
     mCalcExec = new ParticleCalcExecutor(this, createAdaptors);
 }

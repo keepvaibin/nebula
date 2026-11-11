@@ -11,6 +11,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_f1, "exeShot.f1", 150.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeShot_addVelocityToGravity_1, "exeShot.addVelocityToGravity.1", 2.0f);
@@ -38,6 +45,7 @@ DinoPackunFireHolder::DinoPackunFireHolder(s32 numMax) : DeriveActorGroup< DinoP
 }
 
 DinoPackunFire::DinoPackunFire(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunFire >);
     mRollQuat.x = 0.0f;
     mRollQuat.y = 0.0f;
     mRollQuat.z = 0.0f;
@@ -51,14 +59,14 @@ void DinoPackunFire::init(const TableIter& rIter) {
     initHitSensor(1);
     Vec3f attackOffs;
     attackOffs.set(0.0f, 0.0f, 0.0f);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 150.0f, attackOffs);
+    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f1, attackOffs);
     Vec3f starOffs;
     starOffs.set(0.0f);
-    MR::initStarPointerTarget(this, 150.0f, starOffs);
-    initBinder(150.0f, 0.0f, 0);
+    MR::initStarPointerTarget(this, cNum_init_f2, starOffs);
+    initBinder(cNum_init_f3, 0.0f, 0);
     initNerve(GET_NERVE(DinoPackunFire, DinoPackunFireNrvShot));
     MR::startBtk(this, "DinoPackunFireBall");
-    MR::initShadowVolumeSphere(this, 150.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f4);
     MR::onCalcShadow(this, nullptr);
     MR::onCalcGravity(this);
     MR::invalidateClipping(this);
@@ -99,7 +107,7 @@ void DinoPackunFire::exeShot() {
         MR::startAction(this, "Move");
     }
 
-    MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, (150.0f * mScale.x));
+    MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, (cNum_exeShot_f1 * mScale.x));
     MR::addVelocityToGravity(this, cNum_exeShot_addVelocityToGravity_1);
     MR::attenuateVelocity(this, cNum_exeShot_attenuateVelocity_1);
     MR::reboundVelocityFromCollision(this, cNum_exeShot_reboundVelocityFromCollision_1, cNum_exeShot_reboundVelocityFromCollision_2, cNum_exeShot_reboundVelocityFromCollision_3);

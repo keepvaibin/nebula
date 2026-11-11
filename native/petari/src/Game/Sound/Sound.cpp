@@ -3,6 +3,9 @@
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/SoundHandles.hpp"
 #include "Game/Sound/PlayerLink.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_mixOutAll_f1, "mixOutAll.f1", 0.5f);
 
 void SoundHandle::releaseSound() {
     if (mSound != nullptr) {
@@ -53,7 +56,7 @@ void SoundControls::mixOutAll(const SoundParams& inParams, SoundParams* outParam
     outParams->mVolume = mMove.mParams.mVolume * (inParams.mVolume * mProperty.mVolume) * fade;
     outParams->mFxMix = mMove.mParams.mFxMix + (inParams.mFxMix + mProperty.mFxMix);
     outParams->mPitch = mMove.mParams.mPitch * (inParams.mPitch * mProperty.mPitch);
-    outParams->mPan = (inParams.mPan + mMove.mParams.mPan) - 0.5f;
+    outParams->mPan = (inParams.mPan + mMove.mParams.mPan) - cNum_mixOutAll_f1;
     outParams->mDolby = inParams.mDolby + mMove.mParams.mDolby;
 }
 

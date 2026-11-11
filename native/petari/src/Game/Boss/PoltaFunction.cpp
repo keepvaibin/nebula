@@ -16,6 +16,8 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setBodyHP_f1, "setBodyHP.f1", 3.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, cRockCircleBaseAngle, 15.0f);
     NEBULA_TUNABLE(f32, cRockCircleAngleStep, 7.0f);
@@ -249,7 +251,7 @@ namespace PoltaFunction {
 
     void setBodyHP(Polta* pPolta, s32 hp) {
         MR::startBva(pPolta, "BreakLevel");
-        MR::setBvaFrameAndStop(pPolta, 3.0f - hp);
+        MR::setBvaFrameAndStop(pPolta, cNum_setBodyHP_f1 - hp);
 
         switch (hp) {
         case 3:

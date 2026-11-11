@@ -6,9 +6,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include <nebula_math.h>
+#include "Game/System/LumaCore.hpp"
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, bool inCrystalBox, MtxPtr pFixedMtx, MtxPtr pMtx)
     : PartsModel(pActor, pName, pModelName, pMtx, inCrystalBox ? MR::DrawBufferType_CrystalBox : MR::DrawBufferType_PlayerDecoration, true), mEffectName() {
+    lumacore::setClass(this, lumacore::kClassId< MarioParts >);
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
     if (MR::getLightNumMax(this) > 0) {
@@ -23,6 +25,7 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr mtx)
     : PartsModel(pActor, pName, pModelName, nullptr, MR::DrawBufferType_PlayerParts, true), mEffectName() {
+    lumacore::setClass(this, lumacore::kClassId< MarioParts >);
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
     if (MR::getLightNumMax(this) > 0) {

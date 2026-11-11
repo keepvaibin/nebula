@@ -9,6 +9,7 @@
 #   build_apk.ps1 -Deps <folder of SDL3-3.4.18, glslang-src, Vulkan-Headers, volk, VMA> -Work <build folder>
 #                 [-SeedTool <vk_shader_seed.exe>] [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
 #                 [-FfxShaders <FidelityFX's Vulkan shader headers, made already>]
+#                 [-Debuggable: the APK can be debugged (run-as) on a test device]
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
     [Parameter(Mandatory = $true)][string]$Work,
@@ -17,7 +18,7 @@ param(
     [string]$Signing = "",
     [string]$Abis = "arm64-v8a,x86_64",
     [string]$FfxShaders = "",
-    [switch]$TestHooks
+    [switch]$Debuggable
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -54,7 +55,6 @@ function Invoke-Logged([string]$Log, [scriptblock]$Command) {
 }
 
 $jni = Join-Path $android "jniLibs"
-$releaseFlag = if ($TestHooks) { "-DNEBULA_RELEASE=OFF" } else { "-DNEBULA_RELEASE=ON" }
 foreach ($abi in $Abis -split ",") {
     $triple = @{ "arm64-v8a" = "aarch64-linux-android"; "x86_64" = "x86_64-linux-android" }[$abi]
     if (-not $triple) { throw "unknown ABI $abi" }
@@ -62,13 +62,13 @@ foreach ($abi in $Abis -split ",") {
     $module = "$Work/module-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\module-$abi.log" {
         cmake -G Ninja -S "$root/native" -B $module "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari" $releaseFlag
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_PETARI_DIR=$root/native/petari"
         if ($LASTEXITCODE -eq 0) { cmake --build $module --target smg_game }
     }
     $hostBuild = "$Work/host-$abi" -replace '\\', '/'
     Invoke-Logged "$Work\host-$abi.log" {
         cmake -G Ninja -S "$root/platform/sdl" -B $hostBuild "-DCMAKE_TOOLCHAIN_FILE=$toolchain" "-DANDROID_ABI=$abi" `
-            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" $releaseFlag @ffxArgs
+            "-DANDROID_PLATFORM=android-31" -DCMAKE_BUILD_TYPE=Release "-DNEBULA_DEPS=$depsSlash" "-DNEBULA_HOST_TOOLS=$hostToolsSlash" @ffxArgs
         if ($LASTEXITCODE -eq 0) { cmake --build $hostBuild --target main nebula_mods }
     }
     $upper = ($triple -replace '-', '_').ToUpper()
@@ -130,7 +130,7 @@ if (-not $env:JAVA_HOME) { $env:JAVA_HOME = "${env:ProgramFiles}\Android\Android
 $env:ANDROID_HOME = $sdk
 $properties = @("-Pnebula.sdlDir=$Deps\SDL3-3.4.18", "-Pnebula.jniDir=$jni", "-Pnebula.assetsDir=$Work\assets")
 if ($Signing -ne "") { $properties += "-Pnebula.signing=$Signing" }
-if ($TestHooks) { $properties += "-Pnebula.testHooks=true" }
+if ($Debuggable) { $properties += "-Pnebula.debuggable=true" }
 Push-Location $android
 try {
     Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon assembleRelease "-PnebulaAbis=$Abis" @properties }

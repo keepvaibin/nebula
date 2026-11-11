@@ -4,12 +4,16 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 5000.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sShadowRadius, 20.0f);
 };  //  namespace
 
 MapPartsRailGuidePoint::MapPartsRailGuidePoint(const LiveActor* pActor, const char* pName, f32 coord, bool isPointModel) : LiveActor("レイル点") {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailGuidePoint >);
     mCoord = coord;
     mIsPointModel = isPointModel;
     initModelManagerWithAnm(pName, 0, false);
@@ -17,6 +21,7 @@ MapPartsRailGuidePoint::MapPartsRailGuidePoint(const LiveActor* pActor, const ch
 }
 
 MapPartsRailGuidePoint::MapPartsRailGuidePoint(const LiveActor* pActor, const char* pName, int pointIndex, bool isPointModel) : LiveActor("レイル点") {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailGuidePoint >);
     mIsPointModel = isPointModel;
     mCoord = 0.0f;
     initModelManagerWithAnm(pName, 0, false);
@@ -29,7 +34,7 @@ void MapPartsRailGuidePoint::init(const TableIter& /*rIter*/) {
 
     if (mIsPointModel) {
         MR::initShadowVolumeSphere(this, ::sShadowRadius);
-        MR::setShadowDropLength(this, 0, 5000.0f);
+        MR::setShadowDropLength(this, 0, cNum_init_f1);
         MR::onCalcShadowOneTime(this, 0);
     }
 

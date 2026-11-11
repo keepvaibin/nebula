@@ -6,6 +6,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getFarClipDistance_f1, "getFarClipDistance.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getClippingRadius_f1, "getClippingRadius.f1", 1500.0f);
 
 namespace {
     static const s32 sLifeTime = NebulaFrameClock::stepsOfSeconds(10);
@@ -13,6 +17,7 @@ namespace {
 };  // namespace
 
 RandomEffectObj::RandomEffectObj(const char* pName) : SimpleEffectObj(pName), mStep(), mSeStep(-1), mLifeTime(::sLifeTime), mRandWidth(::sRandWidth), mIsFireworks(false) {
+    lumacore::setClass(this, lumacore::kClassId< RandomEffectObj >);
 }
 
 void RandomEffectObj::init(const TableIter& rIter) {
@@ -71,9 +76,9 @@ void RandomEffectObj::control() {
 }
 
 f32 RandomEffectObj::getFarClipDistance() const {
-    return 400.0f;
+    return cNum_getFarClipDistance_f1;
 }
 
 f32 RandomEffectObj::getClippingRadius() const {
-    return 1500.0f;
+    return cNum_getClippingRadius_f1;
 }

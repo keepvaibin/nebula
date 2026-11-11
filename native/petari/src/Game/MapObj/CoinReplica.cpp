@@ -3,8 +3,10 @@
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/MapObj/Coin.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CoinReplica::CoinReplica(const char* pName) : NameObj(pName), mCoin() {
+    lumacore::setClass(this, lumacore::kClassId< CoinReplica >);
 }
 
 void CoinReplica::activeCoin() {

@@ -3,9 +3,18 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f5, "calc.f5", 10.0f);
 
 CameraSpiral::CameraSpiral(const char* pName)
     : Camera(pName), mEndTime(60), mTimer(), mStartTime(), mDistStart(1000.0f), mDistEnd(1000.0f), mAngleStart(), mAngleEnd() {
+    lumacore::setClass(this, lumacore::kClassId< CameraSpiral >);
 }
 
 void CameraSpiral::reset() {
@@ -14,7 +23,7 @@ void CameraSpiral::reset() {
 
 CameraTargetObj* CameraSpiral::calc() {
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_calc_f1 / cNum_calc_f2);
 
     f32 easeTime = mTimer < mStartTime ? 0.0f : mTimer - mStartTime;
 
@@ -31,7 +40,7 @@ CameraTargetObj* CameraSpiral::calc() {
         f32 t3 = t * t * t;
         f32 t4 = t3 * t;
         f32 t5 = t4 * t;
-        rate = t5 * 6.0f - t4 * 15.0f + t3 * 10.0f;
+        rate = t5 * cNum_calc_f3 - t4 * cNum_calc_f4 + t3 * cNum_calc_f5;
         break;
     }
     }

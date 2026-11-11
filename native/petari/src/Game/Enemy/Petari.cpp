@@ -21,21 +21,71 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initHitSensors_f1, "initHitSensors.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initHitSensors_f2, "initHitSensors.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApproach_f1, "exeApproach.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApproach_f2, "exeApproach.f2", 0.92f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApproach_f3, "exeApproach.f3", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f1, "exeEscape.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f2, "exeEscape.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f3, "exeEscape.f3", 0.45f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f4, "exeEscape.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f5, "exeEscape.f5", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscape_f6, "exeEscape.f6", 0.97f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwoonStart_f1, "exeSwoonStart.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLand_f1, "exeLand.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLand_f2, "exeLand.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLand_f3, "exeLand.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinOut_f1, "exeSpinOut.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinOut_f2, "exeSpinOut.f2", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFreeze_f1, "exeFreeze.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f1, "receiveMsgEnemyAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f1, "initFootPrint.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f2, "initFootPrint.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f3, "initFootPrint.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initFootPrint_f4, "initFootPrint.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receivePlayerAttackAtBody_f1, "receivePlayerAttackAtBody.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receivePlayerAttackAtBody_f2, "receivePlayerAttackAtBody.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveTowardTargetDirection_f1, "moveTowardTargetDirection.f1", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_avoidPlayer_f1, "avoidPlayer.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_avoidPlayer_f2, "avoidPlayer.f2", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_avoidPlayer_f3, "avoidPlayer.f3", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_avoidPlayer_f4, "avoidPlayer.f4", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_avoidWall_f1, "avoidWall.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_avoidWall_f2, "avoidWall.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCenter_f1, "calcCenter.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_meander_f1, "meander.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_meander_f2, "meander.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_meander_f3, "meander.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBoost_f1, "calcBoost.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceGradually_f1, "appearStarPieceGradually.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceGradually_f2, "appearStarPieceGradually.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceAll_f1, "appearStarPieceAll.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPieceAll_f2, "appearStarPieceAll.f2", 40.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeSwoonEnd_checkPassBckFrame_1, "exeSwoonEnd.checkPassBckFrame.1", 60.0f);
 NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 3.0f);
 
 namespace {
-    static const Vec sBodySensorOffset = {0.0f, 60.0f, 0.0f};
-    static const Vec sSpinSensorOffset = {0.0f, 0.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sBodySensorOffset, {0.0f, 60.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sSpinSensorOffset, {0.0f, 0.0f, 0.0f});
     const char* sBodySensorName = "body";
     const char* sSpinSensorName = "spin";
 
     // Standing turns in place (no move speed) toward mTargetDir.
-    const MR::ActorMoveParam sStandParam = {0.0f, 1.3f, 0.92f, 3.0f};
-    const MR::ActorMoveParam sSwoonStartParam = {0.0f, 1.3f, 0.985f, 3.0f};
-    const MR::ActorMoveParam sSwoonParam = {0.0f, 1.3f, 0.0f, 3.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sStandParam, {0.0f, 1.3f, 0.92f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sSwoonStartParam, {0.0f, 1.3f, 0.985f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sSwoonParam, {0.0f, 1.3f, 0.0f, 3.0f});
 
     // To the player: hiding closer than sJumpOutDistance on screen, chasing past sApproachStartDistance until
     // sApproachEndDistance, running from closer than sEscapeStartDistance until sEscapeEndDistance.
@@ -66,13 +116,14 @@ namespace {
 Petari::Petari(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(nullptr), mFootPrint(nullptr), mFootprintYOffs(0.0f), mRequestSmoke(true), mFront(0.0f, 0.0f, 1.0f),
       mTargetDir(0.0f, 0.0f, 1.0f), mMeanderStep(0), mMeanderAngle(0.0f), mStarPieceTotal(20), mStarPieceRemaining(20) {
+    lumacore::setClass(this, lumacore::kClassId< Petari >);
     mHeadMtx.identity();
 }
 
 inline void Petari::initHitSensors() {
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, ::sBodySensorName, 32, 60.0f, Vec3f(::sBodySensorOffset));
-    MR::addHitSensorEnemy(this, ::sSpinSensorName, 32, 100.0f, Vec3f(::sSpinSensorOffset));
+    MR::addHitSensorEnemy(this, ::sBodySensorName, 32, cNum_initHitSensors_f1, Vec3f(::sBodySensorOffset));
+    MR::addHitSensorEnemy(this, ::sSpinSensorName, 32, cNum_initHitSensors_f2, Vec3f(::sSpinSensorOffset));
 }
 
 void Petari::init(const TableIter& rIter) {
@@ -81,7 +132,7 @@ void Petari::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensors();
-    initBinder(60.0f, 60.0f, 0);
+    initBinder(cNum_init_f1, cNum_init_f2, 0);
     initEffectKeeper(1, nullptr);
     MR::addEffect(this, "PointerTouchManual");
     MR::setEffectHostMtx(this, "PointerTouchManual", mHeadMtx);
@@ -97,7 +148,7 @@ void Petari::init(const TableIter& rIter) {
     }
     MR::useStageSwitchWriteDead(this, rIter);
     initStarPiece(rIter);
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 70.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0.0f, cNum_init_f4, 0.0f));
     makeActorAppeared();
 }
 
@@ -174,7 +225,7 @@ void Petari::exeApproach() {
     }
     calcCenter();
     calcApproachDirection();
-    moveTowardTargetDirection(0.5f, 0.92f, 3.0f);
+    moveTowardTargetDirection(cNum_exeApproach_f1, cNum_exeApproach_f2, cNum_exeApproach_f3);
     updateFootPrint();
 
     if (MR::isFirstStep(this)) {
@@ -206,9 +257,9 @@ void Petari::exeEscape() {
     avoidWall();
 
     // The first step turns all the way round.
-    f32 turnDegree = MR::isFirstStep(this) ? 180.0f : 10.0f;
-    f32 boost = calcBoost(0.45f, 0.5f, 4.0f);
-    moveTowardTargetDirection(boost, 0.97f, turnDegree);
+    f32 turnDegree = MR::isFirstStep(this) ? cNum_exeEscape_f1 : cNum_exeEscape_f2;
+    f32 boost = calcBoost(cNum_exeEscape_f3, cNum_exeEscape_f4, cNum_exeEscape_f5);
+    moveTowardTargetDirection(boost, cNum_exeEscape_f6, turnDegree);
     updateFootPrint();
     MR::startLevelSound(this, "SE_EM_LV_PETARI_RUN");
 
@@ -219,7 +270,7 @@ void Petari::exeEscape() {
 
 void Petari::exeSwoonStart() {
     if (MR::isFirstStep(this)) {
-        calcSpinOutVelocity(5.0f);
+        calcSpinOutVelocity(cNum_exeSwoonStart_f1);
         MR::showModel(this);
         MR::startBck(this, "Appearance");
         MR::startBlowHitSound(this);
@@ -269,7 +320,7 @@ void Petari::exeLand() {
     meander();
     avoidPlayer();
     avoidWall();
-    moveTowardTargetDirection(1.0f, 0.99f, MR::isFirstStep(this) ? 180.0f : 10.0f);
+    moveTowardTargetDirection(1.0f, cNum_exeLand_f1, MR::isFirstStep(this) ? cNum_exeLand_f2 : cNum_exeLand_f3);
 
     MR::setNerveAtStep(this, GET_NERVE_ANON(PetariNrvEscape), 45);
 }
@@ -299,7 +350,7 @@ void Petari::exeSpinOut() {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 
-    MR::turnDirectionDegree(this, &mFront, -mVelocity, 180.0f);
+    MR::turnDirectionDegree(this, &mFront, -mVelocity, cNum_exeSpinOut_f1);
 
     // Slides along the ground (or falls), pressed down at 1.3.
     Vec3f down;
@@ -311,7 +362,7 @@ void Petari::exeSpinOut() {
 
     const Vec3f& vel = mVelocity;
     mVelocity.scaleAdd(-down.dot(vel), down, vel);
-    mVelocity.add(down * 1.3f);
+    mVelocity.add(down * cNum_exeSpinOut_f2);
 
     calcCenter();
     appearStarPieceGradually();
@@ -328,7 +379,7 @@ void Petari::exeKickOut() {
 void Petari::exeFreeze() {
     if (MR::isFirstStep(this)) {
         MR::startPointerHitSound();
-        MR::emitEffectWithScale(this, "PointerTouchManual", 0.8f, -1);
+        MR::emitEffectWithScale(this, "PointerTouchManual", cNum_exeFreeze_f1, -1);
         mVelocity.zero();
         mAnimScaleCtrl->startPointerHitVibration();
     }
@@ -362,11 +413,11 @@ void Petari::control() {
 
     if (MR::isOnGround(this)) {
         Quat4f groundQuat;
-        groundQuat.setRotate(upVec, *MR::getGroundNormal(this), 0.1f);
+        groundQuat.setRotate(upVec, *MR::getGroundNormal(this), cNum_control_f1);
         groundQuat.transform(upVec);
     } else {
         Quat4f gravityQuat;
-        gravityQuat.setRotate(upVec, -mGravity, 0.1f);
+        gravityQuat.setRotate(upVec, -mGravity, cNum_control_f2);
         gravityQuat.transform(upVec);
     }
     Pos3f baseMtx;
@@ -406,7 +457,7 @@ bool Petari::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
     }
 
     if (isSolidBody() && MR::isMsgToEnemyAttackBlow(msg)) {
-        MR::setVelocityBlowAttack(this, pSender, pReceiver, 10.0f, 0.0f, 4);
+        MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_receiveMsgEnemyAttack_f1, 0.0f, 4);
         setNerve(GET_NERVE_ANON(PetariNrvSpinOut));
         return true;
     }
@@ -425,7 +476,7 @@ bool Petari::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool Petari::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensor(pReceiver, ::sBodySensorName) && isNerve(GET_NERVE_ANON(PetariNrvSwoon)) && MR::isMsgPlayerKick(msg)) {
-        MR::setVelocityBlowAttack(this, pSender, pReceiver, 10.0f, 0.0f, 4);
+        MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_receiveOtherMsg_f1, 0.0f, 4);
         setNerve(GET_NERVE_ANON(PetariNrvKickOut));
         return true;
     }
@@ -438,10 +489,10 @@ void Petari::initFootPrint(const TableIter& rIter) {
 
     ResTIMG* texture = MR::getTexFromArc("Footprint.bti", this);
     mFootPrint->setTexture(texture);
-    mFootPrint->mSideOffset = 25.0f;
-    mFootPrint->mHeight = 30.0f;
-    mFootPrint->mWidth = 40.0f;
-    mFootPrint->mMinPrintDistance = 100.0f;
+    mFootPrint->mSideOffset = cNum_initFootPrint_f1;
+    mFootPrint->mHeight = cNum_initFootPrint_f2;
+    mFootPrint->mWidth = cNum_initFootPrint_f3;
+    mFootPrint->mMinPrintDistance = cNum_initFootPrint_f4;
 
     MR::getPlacementArg0NoInit(rIter, &mFootprintYOffs);
 }
@@ -523,7 +574,7 @@ bool Petari::receivePlayerAttackAtBody(u32 msg, HitSensor* pSender, HitSensor* p
     }
 
     if (isSolidBody() && (MR::isMsgJetTurtleAttack(msg) || MR::isMsgFireBallAttack(msg) || MR::isMsgInvincibleAttack(msg))) {
-        MR::setVelocityBlowAttack(this, pSender, pReceiver, 10.0f, 0.0f, 4);
+        MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_receivePlayerAttackAtBody_f1, 0.0f, 4);
         setNerve(GET_NERVE_ANON(PetariNrvKickOut));
         return true;
     }
@@ -538,7 +589,7 @@ bool Petari::receivePlayerAttackAtBody(u32 msg, HitSensor* pSender, HitSensor* p
     }
 
     if (MR::isMsgPlayerSpinAttack(msg) || MR::isMsgFreezeAttack(msg)) {
-        MR::setVelocityBlowAttack(this, pSender, pReceiver, 10.0f, 0.0f, 4);
+        MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_receivePlayerAttackAtBody_f2, 0.0f, 4);
         setNerve(GET_NERVE_ANON(PetariNrvSpinOut));
         return true;
     }
@@ -577,7 +628,7 @@ void Petari::moveTowardTargetDirection(f32 speed, f32 damp, f32 turnDegree) {
     if (!MR::isBindedGround(this)) {
         speed = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {speed, 1.3f, damp, turnDegree});
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {speed, cNum_moveTowardTargetDirection_f1, damp, turnDegree});
 }
 
 void Petari::updateFootPrint() {
@@ -630,7 +681,7 @@ void Petari::avoidPlayer() {
 
     Vec3f dirToPlayer = *MR::getPlayerCenterPos() - mBodyCenter;
     if (!MR::isNearZero(dirToPlayer)) {
-        f32 avoidWeight = 3.0f / (dirToPlayer * 0.01f).squared();
+        f32 avoidWeight = cNum_avoidPlayer_f1 / (dirToPlayer * cNum_avoidPlayer_f2).squared();
         MR::clamp01(&avoidWeight);
         MR::normalize(&dirToPlayer);
         dirToPlayer.negate();
@@ -642,7 +693,7 @@ void Petari::avoidPlayer() {
         }
         avoidWeight *= approaching;
         Quat4f quat;
-        quat.setRotate(mGravity, ((avoidWeight * ((90.0f * turnSign) * MR::pi())) / 180.0f));
+        quat.setRotate(mGravity, ((avoidWeight * ((cNum_avoidPlayer_f3 * turnSign) * MR::pi())) / cNum_avoidPlayer_f4));
         quat.transform(mTargetDir);
     }
 }
@@ -664,31 +715,31 @@ void Petari::avoidWall() {
                 MR::clamp01(&proximity);
                 f32 falloff = proximity * proximity;
 
-                mTargetDir -= wallNormal * (wallNormal.dot(mTargetDir)) * 2.0f * falloff * 2.0f;
+                mTargetDir -= wallNormal * (wallNormal.dot(mTargetDir)) * cNum_avoidWall_f1 * falloff * cNum_avoidWall_f2;
             }
         }
     }
 }
 
 void Petari::calcCenter() {
-    mBodyCenter = mPosition + mGravity * -60.0f;
+    mBodyCenter = mPosition + mGravity * -cNum_calcCenter_f1;
 }
 
 void Petari::meander() {
     if (MR::isStep(this, mMeanderStep)) {
-        mMeanderAngle = MR::getRandom(-90.0f, 90.0f);
+        mMeanderAngle = MR::getRandom(-cNum_meander_f1, cNum_meander_f2);
         mMeanderStep = getNerveStep() + MR::getRandom((s32)60, 120);
     }
 
     Quat4f turn;
-    turn.setRotate(-mGravity, MR::pi() * mMeanderAngle / 180.0f);
+    turn.setRotate(-mGravity, MR::pi() * mMeanderAngle / cNum_meander_f3);
     turn.transform(mTargetDir);
 }
 
 f32 Petari::calcBoost(f32 baseSpeed, f32 boostMultiplier, f32 effectiveRange) const {
     f32 distToPlayer = MR::calcDistanceToPlayer(mBodyCenter);
 
-    f32 scaledDist = distToPlayer * 0.01f;
+    f32 scaledDist = distToPlayer * cNum_calcBoost_f1;
 
     f32 distSquared = scaledDist * scaledDist;
     f32 intensity = effectiveRange / distSquared;
@@ -709,14 +760,14 @@ void Petari::appearStarPieceGradually() {
 
     Vec3f mouthPos;
     calcMouthPos(&mouthPos);
-    MR::appearStarPiece(this, mouthPos, numPieces, 20.0f, 40.0f, false);
+    MR::appearStarPiece(this, mouthPos, numPieces, cNum_appearStarPieceGradually_f1, cNum_appearStarPieceGradually_f2, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     mStarPieceRemaining -= numPieces;
 }
 
 void Petari::appearStarPieceAll() {
     if (mStarPieceRemaining > 0) {
-        MR::appearStarPiece(this, mPosition, mStarPieceRemaining, 20.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, mStarPieceRemaining, cNum_appearStarPieceAll_f1, cNum_appearStarPieceAll_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 }

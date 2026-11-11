@@ -4,7 +4,7 @@
 #include "Game/Scene/SceneNameObjMovementController.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 
-NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mExecutorIdx(-1) {
+NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mLumaClass(0), mExecutorIdx(-1) {
     mMotionEpoch = 0;
     mDrawSlot = 0;
     mListPlace[0] = -1;

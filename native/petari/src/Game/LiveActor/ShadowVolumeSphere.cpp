@@ -4,6 +4,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include <NebulaGpu.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sModelScale, 100.0f);
@@ -13,6 +14,7 @@ ShadowVolumeSphere::~ShadowVolumeSphere() {
 }
 
 ShadowVolumeSphere::ShadowVolumeSphere() : ShadowVolumeModel("影描画[ボリューム球]"), mRadius(100.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeSphere >);
     initVolumeModel("ShadowVolumeSphere");
 }
 

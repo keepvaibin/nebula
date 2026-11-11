@@ -35,6 +35,38 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initBind_f1, "initBind.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initBind_f2, "initBind.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryRunaway_f1, "tryRunaway.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryBrakeTurn_f1, "tryBrakeTurn.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoRunaway_f1, "exeDemoRunaway.f1", 125.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 125.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_f1, "exeWaitPowerStarDemo.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitPowerStarDemo_f2, "exeWaitPowerStarDemo.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doWait_f1, "doWait.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_f1, "doRunaway.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_f2, "doRunaway.f2", 2.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_f3, "doRunaway.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doRunaway_f4, "doRunaway.f4", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJumpStart_f1, "doJumpStart.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJump_f1, "doJump.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJump_f2, "doJump.f2", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doJump_f3, "doJump.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addMovingAccel_f1, "addMovingAccel.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setUpJumpParam_f1, "setUpJumpParam.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcDefaultJumpTime_f1, "calcDefaultJumpTime.f1", 22.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcJumpHeight_f1, "calcJumpHeight.f1", 100.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_tryRunaway_isNearPlayer_1, "tryRunaway.isNearPlayer.1", 1200.0f);
@@ -121,6 +153,7 @@ namespace NrvTrickRabbit {
 TrickRabbit::TrickRabbit(const char* pName)
     : LiveActor(pName), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mRabbitStateWaitStart(), mRabbitStateCaught(), mMultiEventCamera(),
       mTalkMessageCtrl(), mFootPrint(), mRailGraphIter(), mSpotMarkLight(), mPhaseSteps(), mNextNodeDistance(), mRouteLevelStep(), mRouteLevel(), mRouteLevelTarget(), mIsRouteLevelControl(), mIsGhost() {
+    lumacore::setClass(this, lumacore::kClassId< TrickRabbit >);
     mParabolicPath = new ParabolicPath();
 }
 
@@ -140,18 +173,18 @@ void TrickRabbit::init(const TableIter& rIter) {
     initEffectKeeper(0, 0);
     MR::onEmitEffectSyncClipping(this, "Light");
     MR::onForceDeleteEffectSyncClipping(this, "Light");
-    MR::initShadowVolumeSphere(this, mScale.x * 45.0f);
+    MR::initShadowVolumeSphere(this, mScale.x * cNum_init_f1);
 
     mFootPrint = TrickRabbitUtil::createRabbitFootPrint(this);
 
     initRoute(rIter);
 
-    mTalkMessageCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, 120.0f, 0.0f), 0);
+    mTalkMessageCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, cNum_init_f2, 0.0f), 0);
 
     initDemoCamera(rIter);
     initState();
 
-    mSpotMarkLight = new SpotMarkLight(this, 100.0f, 1500.0f, 0);
+    mSpotMarkLight = new SpotMarkLight(this, cNum_init_f3, cNum_init_f4, 0);
     mSpotMarkLight->initWithoutIter();
 
     MR::declarePowerStar(this);
@@ -177,13 +210,13 @@ void TrickRabbit::initModel() {
 
 void TrickRabbit::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, 70.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTargetAtJoint(this, "Spine", 70.0f, Vec3f(0, 0, 0));
+    MR::addHitSensorAtJointEnemy(this, "Body", "Spine", 8, cNum_initSensor_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "Catch", "Spine", 8, cNum_initSensor_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Spine", cNum_initSensor_f3, Vec3f(0, 0, 0));
 }
 
 void TrickRabbit::initBind() {
-    initBinder(mScale.x * 60.0f, mScale.x * 60.0f, 0);
+    initBinder(mScale.x * cNum_initBind_f1, mScale.x * cNum_initBind_f2, 0);
     MR::onCalcGravity(this);
 }
 
@@ -217,7 +250,7 @@ void TrickRabbit::initState() {
 
 void TrickRabbit::control() {
     Vec3f up(-mGravity);
-    MR::blendQuatUpFront(&mPoseQuat, up, mFront, 0.1f, 0.2f);
+    MR::blendQuatUpFront(&mPoseQuat, up, mFront, cNum_control_f1, cNum_control_f2);
     controlRouteLevel();
 }
 
@@ -356,7 +389,7 @@ bool TrickRabbit::tryRunaway() {
         MR::moveNodeNearPosition(mRailGraphIter, mPosition, -1.0f, &selecter);
 
         Vec3f fromPlayer(mPosition - *MR::getPlayerPos());
-        selectEdgeRunnaway(mRailGraphIter, fromPlayer, -0.3f);
+        selectEdgeRunnaway(mRailGraphIter, fromPlayer, -cNum_tryRunaway_f1);
         setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvRunaway));
         return true;
     }
@@ -371,7 +404,7 @@ bool TrickRabbit::tryBrakeTurn() {
         Vec3f toNextNode(*MR::getNextNodePosition(mRailGraphIter) - mPosition);
         MR::normalizeOrZero(&toPlayer);
         MR::normalizeOrZero(&toNextNode);
-        if (toNextNode.dot(toPlayer) > 0.1f) {
+        if (toNextNode.dot(toPlayer) > cNum_tryBrakeTurn_f1) {
             MR::selectReverseEdge(mRailGraphIter);
             setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvBrakeTurn));
             return true;
@@ -550,7 +583,7 @@ void TrickRabbit::exeTryStartDemoRunnaway() {
 
 void TrickRabbit::exeDemoRunaway() {
     doRunaway();
-    if (mNextNodeDistance < 125.0f) {
+    if (mNextNodeDistance < cNum_exeDemoRunaway_f1) {
         MR::moveNextNode(mRailGraphIter);
         if (!selectEdgeStartEvent(mRailGraphIter)) {
             setNerve(GET_NERVE(TrickRabbit, TrickRabbitNrvDemoEnd));
@@ -617,7 +650,7 @@ void TrickRabbit::endWait() {
 
 void TrickRabbit::exeRunaway() {
     doRunaway();
-    if (mNextNodeDistance < 125.0f) {
+    if (mNextNodeDistance < cNum_exeRunaway_f1) {
         MR::moveNextNode(mRailGraphIter);
         Vec3f fromPlayer(mPosition - *MR::getPlayerPos());
         selectEdgeRunnaway(mRailGraphIter, fromPlayer, 0.0f);
@@ -760,7 +793,7 @@ void TrickRabbit::exeWaitPowerStarDemo() {
     if (MR::isFirstStep(this)) {
         MR::endDemo(this, "捕まり");
         MR::startAfterBossBGM();
-        Vec3f starPos(mPosition - (mGravity * 200.0f));
+        Vec3f starPos(mPosition - (mGravity * cNum_exeWaitPowerStarDemo_f1));
         MR::requestAppearPowerStar(this, starPos);
         MR::startAction(this, "Wait");
         mFootPrint->clear();
@@ -780,7 +813,7 @@ void TrickRabbit::exeWaitPowerStarDemo() {
     }
 
     MR::reboundVelocityFromCollision(this, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_1, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_2, cNum_exeWaitPowerStarDemo_reboundVelocityFromCollision_3);
-    MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, 30.0f);
+    MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, cNum_exeWaitPowerStarDemo_f2);
 
     if (tryEndPowerStarDemo()) {
         MR::forwardNode(mTalkMessageCtrl);
@@ -803,7 +836,7 @@ void TrickRabbit::doWait() {
 
     MR::attenuateVelocity(this, cNum_doWait_attenuateVelocity_1);
     MR::reboundVelocityFromCollision(this, cNum_doWait_reboundVelocityFromCollision_1, cNum_doWait_reboundVelocityFromCollision_2, cNum_doWait_reboundVelocityFromCollision_3);
-    MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, 10.0f);
+    MR::turnDirectionToPlayerDegreeHorizon(this, &mFront, cNum_doWait_f1);
 }
 
 void TrickRabbit::doRunaway() {
@@ -822,7 +855,7 @@ void TrickRabbit::doRunaway() {
     Vec3f nextNodePos(*MR::getNextNodePosition(mRailGraphIter));
 
     // Edge arg 1: speed in percent; unset is full speed.
-    f32 speedRate = MR::getSelectEdgeArg1(mRailGraphIter) / 100.0f;
+    f32 speedRate = MR::getSelectEdgeArg1(mRailGraphIter) / cNum_doRunaway_f1;
 
     if (speedRate < 0.0f) {
         speedRate = 1.0f;
@@ -832,8 +865,8 @@ void TrickRabbit::doRunaway() {
         MR::addVelocityToGravity(this, cNum_doRunaway_addVelocityToGravity_1);
     }
 
-    addMovingAccel(nextNodePos - mPosition, 2.4f * speedRate);
-    addKeepRouteRange(1.0f, 100.0f, 400.0f);
+    addMovingAccel(nextNodePos - mPosition, cNum_doRunaway_f2 * speedRate);
+    addKeepRouteRange(1.0f, cNum_doRunaway_f3, cNum_doRunaway_f4);
     MR::attenuateVelocity(this, cNum_doRunaway_attenuateVelocity_1);
     MR::reboundVelocityFromCollision(this, cNum_doRunaway_reboundVelocityFromCollision_1, cNum_doRunaway_reboundVelocityFromCollision_2, cNum_doRunaway_reboundVelocityFromCollision_3);
 }
@@ -849,7 +882,7 @@ void TrickRabbit::doJumpStart() {
         MR::startAction(this, "JumpStartLoop");
     }
 
-    MR::turnVecToVecCosOnPlane(&mFront, *MR::getNextNodePosition(mRailGraphIter) - mPosition, mGravity, 0.99f);
+    MR::turnVecToVecCosOnPlane(&mFront, *MR::getNextNodePosition(mRailGraphIter) - mPosition, mGravity, cNum_doJumpStart_f1);
 
     if (!MR::isBindedGround(this)) {
         MR::addVelocityToGravity(this, cNum_doJumpStart_addVelocityToGravity_1);
@@ -866,13 +899,13 @@ void TrickRabbit::doJump() {
         MR::offBind(this);
     }
 
-    MR::turnVecToVecCosOnPlane(&mFront, (*MR::getNextNodePosition(mRailGraphIter) - mPosition), mGravity, 0.9f);
+    MR::turnVecToVecCosOnPlane(&mFront, (*MR::getNextNodePosition(mRailGraphIter) - mPosition), mGravity, cNum_doJump_f1);
     Vec3f nextPos;
     mParabolicPath->calcPosition(&nextPos, MR::calcNerveRate(this, mPhaseSteps));
 
     // A thicket crossed this step, going in or coming out.
-    if (!checkDivingThicket((mPosition - (mGravity * 70.0f)), nextPos - mPosition)) {
-        checkDivingThicket((nextPos - (mGravity * 70.0f)), (mPosition - nextPos));
+    if (!checkDivingThicket((mPosition - (mGravity * cNum_doJump_f2)), nextPos - mPosition)) {
+        checkDivingThicket((nextPos - (mGravity * cNum_doJump_f3)), (mPosition - nextPos));
     }
 
     mPosition.set(nextPos);
@@ -993,7 +1026,7 @@ void TrickRabbit::addMovingAccel(const Vec3f& rToNode, f32 accel) {
     MR::separateScalarAndDirection(&mNextNodeDistance, &dir, dir);
 
     if (!MR::isNearZero(dir)) {
-        MR::turnVecToVecCos(&mFront, mFront, dir, 0.98f, gravity);
+        MR::turnVecToVecCos(&mFront, mFront, dir, cNum_addMovingAccel_f1, gravity);
     }
 
     mVelocity += mFront * accel;
@@ -1057,7 +1090,7 @@ bool TrickRabbit::isNextEdgeJump() const {
 
 void TrickRabbit::setUpJumpParam() {
     Vec3f up(-mGravity);
-    mParabolicPath->initFromUpVectorAddHeight(mPosition, *MR::getNextNodePosition(mRailGraphIter), up, 100.0f);
+    mParabolicPath->initFromUpVectorAddHeight(mPosition, *MR::getNextNodePosition(mRailGraphIter), up, cNum_setUpJumpParam_f1);
     mPhaseSteps = calcDefaultJumpTime();
 }
 
@@ -1070,7 +1103,7 @@ void TrickRabbit::setUpJumpParamFromPlacement() {
 
 // Steps to cover the arc at 22 units a step.
 s32 TrickRabbit::calcDefaultJumpTime() const {
-    f32 ratePerStep = mParabolicPath->calcPathSpeedFromAverageSpeed(22.0f);
+    f32 ratePerStep = mParabolicPath->calcPathSpeedFromAverageSpeed(cNum_calcDefaultJumpTime_f1);
 
     if (ratePerStep <= 0.0f) {
         return 0;
@@ -1092,7 +1125,7 @@ s32 TrickRabbit::calcJumpTime() const {
 
 f32 TrickRabbit::calcJumpHeight() const {
     f32 height = MR::getSelectEdgeArg3(mRailGraphIter);
-    return height < 0.0f ? 100.0f : height;
+    return height < 0.0f ? cNum_calcJumpHeight_f1 : height;
 }
 
 namespace {

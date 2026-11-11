@@ -22,6 +22,21 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f1, "initShadow.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceGoal_f1, "exeRaceGoal.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceGoal_f2, "exeRaceGoal.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceTurn_f1, "exeRaceTurn.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateMove_f1, "updateMove.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_prepRacer_f1, "prepRacer.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_prepRacer_f2, "prepRacer.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRacer_f1, "updateRacer.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRacer_f2, "updateRacer.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_resetRacer_f1, "resetRacer.f1", 80.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRaceWait_attenuateVelocity_1, "exeRaceWait.attenuateVelocity.1", 0.9f);
@@ -54,6 +69,7 @@ namespace NrvPenguinRacer {
 };  // namespace NrvPenguinRacer
 
 PenguinRacer::PenguinRacer(const char* pName) : NPCActor(pName), mRaceDisabled(), mMoveSpeed(0.0f), mSpeed(1.0f), mRailPointNo() {
+    lumacore::setClass(this, lumacore::kClassId< PenguinRacer >);
 }
 
 void PenguinRacer::init(const TableIter& rIter) {
@@ -75,10 +91,10 @@ void PenguinRacer::init(const TableIter& rIter) {
 
     Vec3f target;
     target.set(0.0f);
-    MR::initStarPointerTarget(this, 100.0f, target);
+    MR::initStarPointerTarget(this, cNum_init_f1, target);
     initEtc(rIter);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacer", Vec3f(0.0f, 130.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "PenguinRacer", Vec3f(0.0f, cNum_init_f2, 0.0f), nullptr);
     MR::onRootNodeAutomatic(mMsgCtrl);
 
     initNerve(GET_NERVE(PenguinRacer, PenguinRacerNrvWait));
@@ -107,7 +123,7 @@ void PenguinRacer::initSensor() {
 }
 
 void PenguinRacer::initShadow() {
-    MR::initShadowVolumeSphere(this, 50.0f);
+    MR::initShadowVolumeSphere(this, cNum_initShadow_f1);
 }
 
 void PenguinRacer::initBind() {
@@ -311,7 +327,7 @@ void PenguinRacer::exeRaceGoal() {
 
     MR::attenuateVelocity(this, cNum_exeRaceGoal_attenuateVelocity_1);
 
-    if (mVelocity.length() > 5.0f) {
+    if (mVelocity.length() > cNum_exeRaceGoal_f1) {
         updateVelocity();
 
         if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim) && !MR::isBindedGround(this)) {
@@ -322,7 +338,7 @@ void PenguinRacer::exeRaceGoal() {
             MR::onBind(this);
         }
 
-        MR::decidePose(this, -mGravity, MR::getRailDirection(this), mPosition, 1.0f, 0.1f, 1.0f);
+        MR::decidePose(this, -mGravity, MR::getRailDirection(this), mPosition, 1.0f, cNum_exeRaceGoal_f2, 1.0f);
     } else {
         mVelocity.zero();
         setNerve(GET_NERVE(PenguinRacer, PenguinRacerNrvRaceTurn));
@@ -339,7 +355,7 @@ void PenguinRacer::exeRaceTurn() {
     }
 
     if (getNerveStep() < ::sTurnFrame) {
-        mRotation.y = MR::repeatDegree(mRotation.y + 3.0f);
+        mRotation.y = MR::repeatDegree(mRotation.y + cNum_exeRaceTurn_f1);
     }
 }
 
@@ -356,7 +372,7 @@ void PenguinRacer::updateMove() {
 
     updateRail();
 
-    MR::decidePose(this, -mGravity, MR::getRailDirection(this), mPosition, 1.0f, 0.1f, 1.0f);
+    MR::decidePose(this, -mGravity, MR::getRailDirection(this), mPosition, 1.0f, cNum_updateMove_f1, 1.0f);
 }
 
 void PenguinRacer::updateVelocity() {
@@ -390,7 +406,7 @@ void PenguinRacer::updateVelocity() {
 
     if (getMoveNerve() != GET_NERVE(PenguinRacer, PenguinRacerNrvRaceSwim)) {
         speedMaxH = mMoveSpeed;
-        speedMaxV = mMoveSpeed * 5.0f;
+        speedMaxV = mMoveSpeed * cNum_updateVelocity_f1;
     }
 
     if (velV.squared() > speedMaxV * speedMaxV) {
@@ -461,7 +477,7 @@ void PenguinRacer::initRacer() {
 
 void PenguinRacer::prepRacer(const RaceManager* /*pRaceManager*/) {
     MR::invalidateClipping(this);
-    mBinder->mOffsetY = 60.0f;
+    mBinder->mOffsetY = cNum_prepRacer_f1;
 
     MR::moveCoordToStartPos(this);
     MR::moveTransToCurrentRailPos(this);
@@ -476,7 +492,7 @@ void PenguinRacer::prepRacer(const RaceManager* /*pRaceManager*/) {
     } else {
         Vec3f pos;
         Triangle triangle;
-        if (MR::getFirstPolyOnLineToMap(&pos, &triangle, mPosition, mGravity * 1000.0f)) {
+        if (MR::getFirstPolyOnLineToMap(&pos, &triangle, mPosition, mGravity * cNum_prepRacer_f2)) {
             mPosition.set(pos);
         }
         MR::startAction(this, "RacerWalkSoon");
@@ -504,11 +520,11 @@ bool PenguinRacer::updateRacer(const RaceManager* pRaceManager) {
     f32 length = MR::getRailTotalLength(pRaceManager->mPlayerRacer);
     mPrevPosition.set(mCurrPosition);
     mCurrPosition.set(mPosition);
-    if (MR::fabs(mRailCoord - coord) < 2000.0f) {
+    if (MR::fabs(mRailCoord - coord) < cNum_updateRacer_f1) {
         mRailCoord = coord;
     }
 
-    if (MR::fabs(mRailCoord - length) < 100.0f) {
+    if (MR::fabs(mRailCoord - length) < cNum_updateRacer_f2) {
         return pRaceManager->isGoal(this);
     }
 
@@ -526,7 +542,7 @@ void PenguinRacer::loseRacer() {
 
 void PenguinRacer::resetRacer(const RaceManager* /*pRaceManager*/) {
     MR::onBind(this);
-    mBinder->mOffsetY = 80.0f;
+    mBinder->mOffsetY = cNum_resetRacer_f1;
     MR::setDefaultPose(this);
     mVelocity.zero();
     MR::calcGravity(this);

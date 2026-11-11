@@ -43,11 +43,23 @@
 #include <Game/Ui/ResFont.hpp>
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
-#include "Game/Screen/NebulaQuitButton.hpp"
+#include "Game/Screen/NebulaFileSelectButton.hpp"
+#include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initStep_f1, "initStep.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_offerFilesToMenuFocus_f1, "offerFilesToMenuFocus.f1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createSelectEffect_f1, "createSelectEffect.f1", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_goToNearPoint_f1, "goToNearPoint.f1", 16000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBasePos_f1, "calcBasePos.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBasePos_f2, "calcBasePos.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBasePos_f3, "calcBasePos.f3", 180.0f);
 
 namespace {
     // The save's user files (SaveDataHandler's cUserFiles).
@@ -138,8 +150,9 @@ FileSelector::FileSelector(const char* pName)
       mSelectedItem(), mDecidedItem(), mPointedItem(), mPointCandidate(), mUserFile(), mIsCompleteFile(), mTitle(), mMiiSelect(), mMiiId(new Mii::Id()), mManual(), mIsMiiSelectStartFirst(),
       mBgmState(), mSelectEffect()
       ,
-      mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mIsQuitFocusWanted(false)
+      mQuitButton(), mSettingsButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mSettingsFrames(-1), mFocusWanted()
 {
+    lumacore::setClass(this, lumacore::kClassId< FileSelector >);
 }
 
 void FileSelector::init(const TableIter& rIter) {
@@ -152,7 +165,7 @@ bool FileSelector::initStep(const TableIter& rIter, uint64_t deadline) {
         case 0:
             MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
             initHitSensor(1);
-            MR::addHitSensorPriorBinder(this, "body", 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
+            MR::addHitSensorPriorBinder(this, "body", 8, cNum_initStep_f1, Vec3f(0.0f, 0.0f, 0.0f));
             initUserFileArray();
             MR::invalidateClipping(this);
             break;
@@ -169,7 +182,7 @@ bool FileSelector::initStep(const TableIter& rIter, uint64_t deadline) {
         case 6: createBrosButton(); break;
         case 7: createInfoMessage(); break;
         case 8: createSysInfoWindow(); break;
-        case 9: createQuitButton(); break;
+        case 9: createCornerButtons(); break;
         case 10: createFileInfo(); break;
         case 11: createTitle(); break;
         case 12: createMiiSelect(); break;
@@ -248,7 +261,7 @@ void FileSelector::control() {
     for (int i = 0; i < mItems->getObjNum(); i++) {
         LiveActor* pActor = mItems->getActor(i);
         Vec3f& rPosition = pActor->mPosition;
-        rPosition = mItemPositions[i] * 0.05f + rPosition * 0.95f;
+        rPosition = mItemPositions[i] * cNum_control_f1 + rPosition * cNum_control_f2;
     }
 
     Vec3f* pEffectPosition;
@@ -260,7 +273,7 @@ void FileSelector::control() {
     }
 
     updateBgm();
-    updateQuitButton();
+    updateCornerButtons();
 }
 
 bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
@@ -361,20 +374,25 @@ void FileSelector::createSysInfoWindow() {
     MR::connectToSceneLayout(mSysInfoWindowMini);
 }
 
-void FileSelector::createQuitButton() {
-    mQuitButton = new NebulaQuitButton("NebulaQuitButton");
+void FileSelector::createCornerButtons() {
+    mQuitButton = new NebulaFileSelectButton("NebulaQuitButton", NebulaFileSelectButton::Role_Quit);
     mQuitButton->initWithoutIter();
+    mSettingsButton = new NebulaFileSelectButton("NebulaSettingsButton", NebulaFileSelectButton::Role_Settings);
+    mSettingsButton->initWithoutIter();
 
     mQuitWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayout(mQuitWindow);
     mQuitWindow->setBackAnswersNo(true);
 }
 
-// Quit to desktop shows while a file is being chosen and nothing else holds the top of the screen: a file's
-// information (while the pointer is on a file) or the frame asking to point at the screen.
-void FileSelector::updateQuitButton() {
+// Quit and Settings show while a file is being chosen and nothing else holds the top of the screen: a
+// file's information (while the pointer is on a file) or the frame asking to point at the screen.
+void FileSelector::updateCornerButtons() {
     const bool isChoosing = isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect));
-    mQuitButton->setShown(isChoosing && (mIsAskingQuit || (MR::isDead(mFileInfo) && !MR::isExistStarPointerGuidanceFrame1P())));
+    const bool isTopFree = MR::isDead(mFileInfo) && !MR::isExistStarPointerGuidanceFrame1P();
+    const bool isHeld = mIsAskingQuit || mSettingsFrames >= 0;
+    mQuitButton->setShown(isChoosing && (isHeld || isTopFree));
+    mSettingsButton->setShown(isChoosing && (isHeld || isTopFree));
 }
 
 // Nebula's menu focus: the files that can be chosen, where they are on screen (the pointer's target on each, its centre
@@ -384,12 +402,12 @@ void FileSelector::offerFilesToMenuFocus() {
     for (int i = 0; i < mItems->getObjNum(); i++) {
         FileSelectItem* pItem = static_cast< FileSelectItem* >(mItems->getActor(i));
         Vec2f screen;
-        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + Vec3f(0.0f, 900.0f, 0.0f))) {
+        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + Vec3f(0.0f, cNum_offerFilesToMenuFocus_f1, 0.0f))) {
             NebulaMenuFocus::offerTarget(pItem, screen);
         }
     }
     if (!NebulaMenuFocus::isActive() || !isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect))) {
-        mIsQuitFocusWanted = false;
+        mFocusWanted = nullptr;
     }
     if (!NebulaMenuFocus::isActive()) {
         return;
@@ -402,18 +420,34 @@ void FileSelector::offerFilesToMenuFocus() {
         }
     }
 
-    // Up from a file at the top: Quit to desktop, in the corner a file's information holds. The information goes (no
-    // file is pointed at), the button shows, the highlight moves to it. Another press first keeps the files.
+    // Up from a file at the top: the nearer of Quit (top left) and Settings (top right), in the top a file's
+    // information holds. The information goes (no file is pointed at), the buttons show, the highlight moves to it.
+    // Another press first keeps the files.
     if (isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect)) && mPointCandidate != nullptr &&
         NebulaMenuFocus::getUnmovedPress() == NebulaMenuFocus::Direction_Up) {
-        mIsQuitFocusWanted = true;
+        // Left or right of the files' middle, as they are on screen.
+        f32 sumX = 0.0f;
+        s32 count = 0;
+        f32 candidateX = 0.0f;
+        for (int i = 0; i < mItems->getObjNum(); i++) {
+            FileSelectItem* pItem = static_cast< FileSelectItem* >(mItems->getActor(i));
+            Vec2f screen;
+            if (MR::calcScreenPosition(&screen, pItem->mPosition)) {
+                sumX += screen.x;
+                count++;
+                if (pItem == mPointCandidate) {
+                    candidateX = screen.x;
+                }
+            }
+        }
+        mFocusWanted = count > 0 && candidateX > sumX / static_cast< f32 >(count) ? mSettingsButton : mQuitButton;
     } else if (NebulaMenuFocus::getPress() != NebulaMenuFocus::Direction_None) {
-        mIsQuitFocusWanted = false;
+        mFocusWanted = nullptr;
     }
-    if (mIsQuitFocusWanted) {
+    if (mFocusWanted != nullptr) {
         mPointCandidate = nullptr;
-        if (mQuitButton->takeMenuFocus()) {
-            mIsQuitFocusWanted = false;
+        if (mFocusWanted->takeMenuFocus()) {
+            mFocusWanted = nullptr;
         }
     }
 }
@@ -440,7 +474,7 @@ bool FileSelector::updateQuitQuestion() {
         // "Please choose a file." is drawn over every layout: it goes while the question is up, as before the game's
         // own questions.
         MR::deactiveStarPointerGuidance();
-        mQuitWindow->appearYesNoWithText(NebulaQuitButton::getQuestion());
+        mQuitWindow->appearYesNoWithText(NebulaFileSelectButton::getQuitQuestion());
         return true;
     }
 
@@ -461,9 +495,34 @@ bool FileSelector::updateQuitQuestion() {
     mIsAskingQuit = false;
     mQuitButton->resume();
     // A pad that chose Quit finds its highlight back on it.
-    mIsQuitFocusWanted = NebulaMenuFocus::isActive();
+    mFocusWanted = NebulaMenuFocus::isActive() ? mQuitButton : nullptr;
     validateSelectAll();
     MR::activeStarPointerGuidance();
+    return false;
+}
+
+// Settings: the settings menu opens over the file select, which waits under it (no frame of it runs while the menu is
+// open). True from the choice until the menu has closed.
+bool FileSelector::updateSettings() {
+    if (mSettingsFrames < 0) {
+        if (!mSettingsButton->isDecided()) {
+            return false;
+        }
+        mSettingsFrames = 0;
+        invalidateSelectAll();
+        clearPointing();
+        NebulaSettingsMenu::requestOpen();
+        return true;
+    }
+    // The menu opens on the next frame; the file select runs again once it has closed (or was never opened).
+    if (++mSettingsFrames < 2 || NebulaSettingsMenu::isFreezingScene()) {
+        return true;
+    }
+    mSettingsFrames = -1;
+    mSettingsButton->resume();
+    // A pad that chose Settings finds its highlight back on it.
+    mFocusWanted = NebulaMenuFocus::isActive() ? mSettingsButton : nullptr;
+    validateSelectAll();
     return false;
 }
 
@@ -500,7 +559,7 @@ void FileSelector::createSelectEffect() {
     for (int i = 0; i < ::cUserFileNum; i++) {
         mSelectEffect[i].initWithoutIter();
         mSelectEffect[i].mPosition.set(mItemPositions[i]);
-        mSelectEffect[i].mScale.set(0.4f);
+        mSelectEffect[i].mScale.set(cNum_createSelectEffect_f1);
     }
 }
 
@@ -629,7 +688,7 @@ void FileSelector::onPoint(FileSelectItem* pItem) {
         return;
     }
 
-    if (mQuitButton->isPointing()) {
+    if (mQuitButton->isPointing() || mSettingsButton->isPointing()) {
         return;
     }
 
@@ -747,7 +806,7 @@ bool FileSelector::checkSelectedBackButton() {
 }
 
 void FileSelector::goToNearPoint() {
-    calcBasePos(-16000.0f);
+    calcBasePos(-cNum_goToNearPoint_f1);
     mCameraController->goToNearPoint(mItemPositions[::getItemArrayIndex(mSelectedItem->mFileNo)]);
 }
 
@@ -807,13 +866,13 @@ namespace {
 };  // namespace
 
 void FileSelector::calcBasePos(f32 offset) {
-    f32 thetaStep = 2.0f * PI / ::cUserFileNum;
+    f32 thetaStep = cNum_calcBasePos_f1 * PI / ::cUserFileNum;
     Pos3f translationMtx;
     Pos3f& translation = translationMtx;
     translation.makeTrans(0.0f, offset, 0.0f);
 
     RotateMtx rotation;
-    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::cSlopeDegree * PI / 180.0f);
+    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::cSlopeDegree * PI / cNum_calcBasePos_f2);
 
     Pos3f transform;
     transform.concat(translation, rotation);
@@ -823,7 +882,7 @@ void FileSelector::calcBasePos(f32 offset) {
             continue;
         }
 
-        f32 theta = static_cast< f32 >(-(i + 4)) * thetaStep - ::cItemThetaOffset[i] * MR::pi() / 180.0f;
+        f32 theta = static_cast< f32 >(-(i + 4)) * thetaStep - ::cItemThetaOffset[i] * MR::pi() / cNum_calcBasePos_f3;
         f32 cosTheta = MR::cos(theta);
         f32 sinTheta = MR::sin(theta);
         mItemPositions[i].set(::cItemPosRadius * cosTheta, 0.0f, ::cItemPosRadius * sinTheta);
@@ -1128,7 +1187,7 @@ void FileSelector::exeFileSelect() {
         appearAllIndex();
         MR::activeStarPointerGuidance();
     } else {
-        if (updateQuitQuestion()) {
+        if (updateQuitQuestion() || updateSettings()) {
             return;
         }
         offerFilesToMenuFocus();

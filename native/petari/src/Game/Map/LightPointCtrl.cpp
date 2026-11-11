@@ -5,6 +5,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_requestPointLight_f1, "requestPointLight.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestPointLight_f2, "requestPointLight.f2", 0.999999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_clearPointLight_f1, "clearPointLight.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendPointLight_f1, "blendPointLight.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendPointLight_f2, "blendPointLight.f2", 0.95f);
+
 namespace {
     const s32 sDefaultBlendTime = NebulaFrameClock::stepsOfMilliseconds(500);
     NEBULA_TUNABLE(f32, sDefaultDistRef, 15.0f);
@@ -46,7 +52,7 @@ void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color
         mCandidateActor = pActor;
         mTargetInfo->mPos = pos;
         mTargetInfo->mColor = color.mRGBA;
-        mTargetInfo->mRefBrightness = MR::clamp(intensity, 0.95f, 0.999999f);
+        mTargetInfo->mRefBrightness = MR::clamp(intensity, cNum_requestPointLight_f1, cNum_requestPointLight_f2);
         mTargetInfo->mRefDistance = ::sDefaultDistRef;
         mTargetInfo->mDistAttnFn = LIGHT_FALLOFF_STEEP;
         mBlendTime = duration >= 0 ? duration : ::sDefaultBlendTime;
@@ -93,7 +99,7 @@ void LightPointCtrl::clearPointLight(PointLightInfo* pInfo) {
     color.a = 255;
     pInfo->mColor = color;
 
-    pInfo->mRefBrightness = 0.001f;
+    pInfo->mRefBrightness = cNum_clearPointLight_f1;
     pInfo->mRefDistance = ::sDefaultDistRef;
     pInfo->mDistAttnFn = LIGHT_FALLOFF_STEEP;
     mBlendTime = ::sDefaultBlendTime;
@@ -108,8 +114,8 @@ void LightPointCtrl::blendPointLight(PointLightInfo* pDst, const PointLightInfo&
         MR::blendVec(&pDst->mPos, rStart.mPos, rEnd.mPos, t);
     }
 
-    f32 start = mPreviousActor == nullptr ? 0.95f : rStart.mRefBrightness;
-    f32 end = mCurrentActor == nullptr ? 0.95f : rEnd.mRefBrightness;
+    f32 start = mPreviousActor == nullptr ? cNum_blendPointLight_f1 : rStart.mRefBrightness;
+    f32 end = mCurrentActor == nullptr ? cNum_blendPointLight_f2 : rEnd.mRefBrightness;
     pDst->mRefBrightness = MR::getLinerValue(t, start, end, 1.0f);
     MR::blendColor(&pDst->mColor, rStart.mColor, rEnd.mColor, t);
     pDst->mRefDistance = MR::getLinerValue(t, rStart.mRefDistance, rEnd.mRefDistance, 1.0f);

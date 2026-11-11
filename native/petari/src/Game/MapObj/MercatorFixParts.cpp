@@ -7,8 +7,10 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MercatorFixParts::MercatorFixParts(const char* pName) : LiveActor(pName), mAppearController() {
+    lumacore::setClass(this, lumacore::kClassId< MercatorFixParts >);
 }
 
 bool MercatorFixParts::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {

@@ -5,6 +5,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, cBckRate, 1.0f);
@@ -15,6 +16,7 @@ namespace NrvAstroDomeAsteroid {
 };  // namespace NrvAstroDomeAsteroid
 
 AstroDomeAsteroid::AstroDomeAsteroid(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeAsteroid >);
     mBaseMtx.identity();
 }
 

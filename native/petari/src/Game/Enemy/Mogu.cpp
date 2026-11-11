@@ -23,6 +23,18 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 55.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 67.38f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_f1, "exeHitBlow.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_f2, "exeHitBlow.f2", 40.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBlow_applyVelocityDampAndGravity_1, "exeHitBlow.applyVelocityDampAndGravity.1", 2.0f);
@@ -38,8 +50,8 @@ namespace {
         f32 mAngleV;
     };
 
-    const SightParam sThrowableSightParam = {900.0f, 10.0f, 90.0f};
-    const SightParam sCannonFleetSightParam = {1500.0f, 10.0f, 90.0f};
+    NEBULA_TUNABLE_RECORD(SightParam, sThrowableSightParam, {900.0f, 10.0f, 90.0f});
+    NEBULA_TUNABLE_RECORD(SightParam, sCannonFleetSightParam, {1500.0f, 10.0f, 90.0f});
 
     NEBULA_TUNABLE(f32, sHideNearDistance, 400.0f);
     NEBULA_TUNABLE(f32, sHideFarDistance, 2000.0f);
@@ -81,6 +93,7 @@ namespace NrvMogu {
 Mogu::Mogu(const char* pName)
     : LiveActor(pName), mAnimScaleController(nullptr), mStoneHoldPos(nullptr), mStone(nullptr), mHole(nullptr), mSight(0, 0, 1), mUp(0, 1, 0), mThrowOnGravity(true),
       mIsCannonFleet(false) {
+    lumacore::setClass(this, lumacore::kClassId< Mogu >);
 }
 
 // Arg 0 other than -1 throws the stone straight instead of along gravity.
@@ -107,26 +120,26 @@ void Mogu::init(const TableIter& rIter) {
     MR::declareCoin(this, 1);
 
     f32 scaleY = mScale.y;
-    f32 binderRadius = scaleY * 160.0f;
+    f32 binderRadius = scaleY * cNum_init_f1;
     initBinder(binderRadius, binderRadius, 0);
     initHitSensor(2);
 
-    Vec3f sensorOffset(-55.0f, 0.0f, 13.0f);
+    Vec3f sensorOffset(-cNum_init_f2, 0.0f, cNum_init_f3);
     sensorOffset *= scaleY;
 
-    MR::addHitSensorAtJointEnemy(this, "body", "Head", 32, 150.0f * scaleY, sensorOffset);
+    MR::addHitSensorAtJointEnemy(this, "body", "Head", 32, cNum_init_f4 * scaleY, sensorOffset);
     initEffectKeeper(0, nullptr);
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
     initSound(4, false);
     initNerve(GET_NERVE(Mogu, HostTypeNrvSearch));
     mGravity.set(-mUp);
-    MR::initShadowVolumeSphere(this, 60.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f7 * mScale.y);
     MR::invalidateShadow(this, nullptr);
     MR::initLightCtrl(this);
     mAnimScaleController = new AnimScaleController(nullptr);
     makeActorAppeared();
 
-    mStoneHoldPos = new FixedPosition(this, "ArmR2", Vec3f(67.38f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mStoneHoldPos = new FixedPosition(this, "ArmR2", Vec3f(cNum_init_f8, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     mStone = new MoguStone("投石用の石", "MoguStone");
     mStone->initWithoutIter();
@@ -454,7 +467,7 @@ void Mogu::exeHitBlow() {
         MR::startSound(this, "SE_EM_EXPLODE_S");
         kill();
         MR::startAction(mHole, "Down");
-        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, 3, cNum_exeHitBlow_f1, cNum_exeHitBlow_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 }

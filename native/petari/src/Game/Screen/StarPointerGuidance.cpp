@@ -9,6 +9,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaUi.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const s32 hOutScreenTime = NebulaFrameClock::stepsOfSeconds(1);
@@ -34,6 +35,7 @@ StarPointerGuidance::StarPointerGuidance(const char* pName)
     : LayoutActor(pName, true), mSpineFrame1P(nullptr), mSpineGuidance(nullptr), mSpineFrame2P(nullptr), mOutScreenTime(0), mRequestTime1P(0),
       mRequestTime2P(0), mGuidanceMessage(nullptr), mPrevGuidanceMessage(nullptr), mIsActiveRequest1P(false), mIsActiveRequest2P(false),
       mIsActive(true), mIsGuidanceDisabled(false), mTextLineNumGuidance(1), mTextLineNum1P(1), mTextLineNum2P(1) {
+    lumacore::setClass(this, lumacore::kClassId< StarPointerGuidance >);
 }
 
 void StarPointerGuidance::init(const TableIter& /*rIter*/) {

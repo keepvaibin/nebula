@@ -3,8 +3,10 @@
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Map/LightZoneDataHolder.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 LightAreaHolder::LightAreaHolder(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName) {
+    lumacore::setClass(this, lumacore::kClassId< LightAreaHolder >);
     LightFunction::registerLightAreaHolder(this);
 }
 

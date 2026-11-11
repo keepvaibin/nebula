@@ -4,8 +4,10 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 FlashingCtrl::FlashingCtrl(LiveActor* pActor, bool toggleDraw) : NameObj("点滅") {
+    lumacore::setClass(this, lumacore::kClassId< FlashingCtrl >);
     mActor = pActor;
     mToggleDraw = toggleDraw;
     mIsEnded = true;

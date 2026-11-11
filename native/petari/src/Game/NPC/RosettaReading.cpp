@@ -13,6 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cOverlayStartStep, 122);
@@ -34,6 +35,7 @@ namespace NrvRosettaReading {
 };  // namespace NrvRosettaReading
 
 RosettaReading::RosettaReading(const char* pName) : LiveActor(pName), mPictureBookLayout() {
+    lumacore::setClass(this, lumacore::kClassId< RosettaReading >);
 }
 
 void RosettaReading::init(const TableIter& rIter) {

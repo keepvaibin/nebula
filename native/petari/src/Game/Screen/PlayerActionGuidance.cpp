@@ -10,6 +10,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sSuspendFrame, 60);
@@ -33,6 +34,7 @@ namespace MR {
 PlayerActionGuidance::PlayerActionGuidance()
     : LayoutActor("プレイヤーアクションガイダンス", true), mSpinLayout(), mTamakoroLayout(), mCurrentLayout(), mGuidanceState(3),
       mGuidancePrevState(3), mShow(), mTamakoroForced() {
+    lumacore::setClass(this, lumacore::kClassId< PlayerActionGuidance >);
 }
 
 void PlayerActionGuidance::control() {

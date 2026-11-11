@@ -14,6 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
@@ -37,6 +38,7 @@ namespace NrvBossKameckBeamFire {
 };  // namespace NrvBossKameckBeamFire
 
 KameckFireBall::KameckFireBall(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mEventListener() {
+    lumacore::setClass(this, lumacore::kClassId< KameckFireBall >);
 }
 
 void KameckFireBall::init(const TableIter& rIter) {

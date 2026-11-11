@@ -4,6 +4,10 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeOn_1, "exeOn.1", 25);
@@ -15,6 +19,7 @@ namespace NrvPTimerSwitch {
 };  // namespace NrvPTimerSwitch
 
 PTimerSwitch::PTimerSwitch(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PTimerSwitch >);
     mSwitchCollision = nullptr;
     mConnector = nullptr;
     mPressStep = 0;
@@ -36,7 +41,7 @@ void PTimerSwitch::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "hit", ATYPE_SWITCH, 16, 120.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensor(this, "hit", ATYPE_SWITCH, 16, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     MR::initCollisionParts(this, "PTimerSwitch", getSensor("body"), 0);
     mSwitchCollision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Default);
     initSound(4, false);

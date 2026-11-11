@@ -10,10 +10,15 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/Model.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f1, "calcAnim.f1", 1000.0f);
 
 MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool deferMaterials)
     : NameObj(pName), mTranslation(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), mIsDead(true), mModelManager(nullptr),
       mEffectSystem(nullptr), mEffectKeeper(nullptr), mSpine(nullptr), mIsScenarioSelectSky(MR::isEqualString(pName, "シナリオ選択の空")) {
+    lumacore::setClass(this, lumacore::kClassId< MultiSceneActor >);
     mModelManager = new ModelManager();
     mModelManager->init(pModelName, nullptr, deferMaterials);
 }
@@ -53,7 +58,7 @@ void MultiSceneActor::calcAnim() {
         mIsScenarioSelectSky) {
         const f32 k = MR::getDisplay().layout_width / NebulaFrameClock::cLayoutWidth;
         if (k > 1.0f) {
-            const f32 offsetZ = pModel->mBaseScale.z * (1.0f - k) * -1000.0f;
+            const f32 offsetZ = pModel->mBaseScale.z * (1.0f - k) * -cNum_calcAnim_f1;
             pModel->mBaseScale.x *= k;
             pModel->mBaseScale.y *= k;
             pModel->mBaseScale.z *= k;

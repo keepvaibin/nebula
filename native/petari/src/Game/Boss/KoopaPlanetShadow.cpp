@@ -6,11 +6,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 KoopaPlanetShadow::~KoopaPlanetShadow() {
 }
 
 KoopaPlanetShadow::KoopaPlanetShadow(const Koopa* pKoopa) : LiveActor("惑星用の影"), mKoopa(pKoopa), mHipMtx() {
+    lumacore::setClass(this, lumacore::kClassId< KoopaPlanetShadow >);
 }
 
 void KoopaPlanetShadow::init(const TableIter& /*rIter*/) {

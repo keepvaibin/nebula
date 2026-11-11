@@ -6,11 +6,14 @@
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setKameckBeamCollisionFilter_f1, "setKameckBeamCollisionFilter.f1", 10.0f);
 
 namespace {
-    const f32 sFireAngleLebel1[] = {0.0f};
-    const f32 sFireAngleLebel2[] = {30.0f, -30.0f};
-    const f32 sFireAngleLebel3[] = {0.0f, 120.0f, -120.0f};
+    NEBULA_TUNABLE_LIST(f32, sFireAngleLebel1, , {0.0f});
+    NEBULA_TUNABLE_LIST(f32, sFireAngleLebel2, , {30.0f, -30.0f});
+    NEBULA_TUNABLE_LIST(f32, sFireAngleLebel3, , {0.0f, 120.0f, -120.0f});
     const f32* sFireAngleList[] = {nullptr, sFireAngleLebel1, sFireAngleLebel2, sFireAngleLebel3, nullptr};
     NEBULA_TUNABLE(s32, sMaxBeamLife, 360);
     NEBULA_TUNABLE(f32, sBeamRadius, 80.0f);
@@ -53,6 +56,7 @@ namespace NrvKameckBeam {
 
 KameckBeam::KameckBeam(const char* pName)
     : LiveActor(pName), mEventListener(), mKameckTurtle(), mFollowMtx(), mShootDir(0, 0, 1), mWandLocalPosition(0, 0, 0), mBeamKind(BeamType_FireBall1) {
+    lumacore::setClass(this, lumacore::kClassId< KameckBeam >);
     for (u32 i = 0; i < ARRAY_SIZE(mKameckFireBalls); i++) {
         mKameckFireBalls[i] = nullptr;
     }
@@ -472,6 +476,6 @@ void KameckBeam::emitBeamEffect() {
 
 namespace MR {
     void setKameckBeamCollisionFilter(LiveActor* pActor) {
-        MR::setBinderCollisionPartsFilter(pActor, new KameckBeamCollisionFilter(&pActor->mPosition, 10.0f));
+        MR::setBinderCollisionPartsFilter(pActor, new KameckBeamCollisionFilter(&pActor->mPosition, cNum_setKameckBeamCollisionFilter_f1));
     }
 };  // namespace MR

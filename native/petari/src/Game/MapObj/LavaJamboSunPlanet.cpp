@@ -9,6 +9,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.1f);
 
 namespace NrvLavaJamboSunPlanet {
     NEW_NERVE(HostTypeWait, LavaJamboSunPlanet, Wait);
@@ -17,6 +24,7 @@ namespace NrvLavaJamboSunPlanet {
 };  // namespace NrvLavaJamboSunPlanet
 
 LavaJamboSunPlanet::LavaJamboSunPlanet(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< LavaJamboSunPlanet >);
     mBloomModel = nullptr;
     mLodCtrl = nullptr;
     mMoveSpeed = 0.0f;
@@ -31,13 +39,13 @@ void LavaJamboSunPlanet::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "LavaJamboSunPlanet", bodySensor, nullptr);
     initNerve(GET_NERVE(LavaJamboSunPlanet, HostTypeWait));
     initRailRider(rIter);
-    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f1, cNum_init_f2);
     MR::needStageSwitchReadA(this, rIter);
     MR::needStageSwitchReadB(this, rIter);
     MR::connectToScenePlanet(this);
     mBloomModel = MR::createBloomModel(this, getBaseMtx());
     initSound(4, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f3);
     MR::setClippingFarMax(this);
     MR::startBtk(this, "LavaJamboSunPlanet");
     mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
@@ -65,7 +73,7 @@ void LavaJamboSunPlanet::exeWait() {
 
 void LavaJamboSunPlanet::exeMove() {
     MR::getMapPartsArgMoveSpeed(&mMoveSpeed, this);
-    mMoveSpeed *= 0.1f;
+    mMoveSpeed *= cNum_exeMove_f1;
     MR::moveCoordAndFollowTrans(this, mMoveSpeed);
     MR::startLevelSound(this, "SE_AT_LV_JUMBO_SUN_MOVE");
     s32 pointAction = -1;

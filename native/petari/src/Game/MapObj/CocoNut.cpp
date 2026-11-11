@@ -8,6 +8,43 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSoundLevel_f1, "calcSoundLevel.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 65.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f1, "updateRotate.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGravity_f1, "updateGravity.f1", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f1, "processMove.f1", 2.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f2, "processMove.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f3, "processMove.f3", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f4, "processMove.f4", 0.925f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f5, "processMove.f5", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f6, "processMove.f6", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f7, "processMove.f7", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f8, "processMove.f8", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f9, "processMove.f9", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_processMove_f10, "processMove.f10", 0.925f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reviseFrontVec_f1, "reviseFrontVec.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reviseFrontVec_f2, "reviseFrontVec.f2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryDisappear_f1, "tryDisappear.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isValidPushedFromPlayer_f1, "isValidPushedFromPlayer.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isOnGround_f1, "isOnGround.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f3, "receiveMsgPlayerAttack.f3", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f4, "receiveMsgPlayerAttack.f4", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f5, "receiveMsgPlayerAttack.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f6, "receiveMsgPlayerAttack.f6", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f7, "receiveMsgPlayerAttack.f7", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f8, "receiveMsgPlayerAttack.f8", 65.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 1.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f3, "receiveOtherMsg.f3", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f4, "receiveOtherMsg.f4", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initMapToolInfo_f1, "initMapToolInfo.f1", 55.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_emitEffectSpinHit_f1, "emitEffectSpinHit.f1", 0.7f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_isValidPushedFromPlayer_1, "isValidPushedFromPlayer.1", 15);
@@ -29,7 +66,7 @@ namespace {
 
     // The sound level of a speed: 100 at cMaxSpeed.
     s32 calcSoundLevel(f32 speed) {
-        s32 level = 100.0f * (speed / cMaxSpeed);
+        s32 level = cNum_calcSoundLevel_f1 * (speed / cMaxSpeed);
         return level > 100 ? 100 : level;
     }
 };  // namespace
@@ -38,6 +75,7 @@ CocoNut::CocoNut(const char* pName)
     : LiveActor(pName), mMoveSpeed(), mFallSpeed(), mFront(0.0f, 0.0f, 1.0f), mRadius(55.0f), mIsBindOff(), mOffGroundStep(), mIsKicked(),
       mSpawnPosition(gZeroVec), mIsOnMoveArea(), mAreaVelocity(gZeroVec), mSphericalShadow(), mRespawnWhenOutOfView(), mIsGroupClipping(),
       mContinueRolling() {
+    lumacore::setClass(this, lumacore::kClassId< CocoNut >);
     mRollMtx.identity();
     mSmokeMtx.identity();
     mSpinHitMtx.identity();
@@ -60,7 +98,7 @@ void CocoNut::init(const TableIter& rIter) {
         MR::initShadowVolumeSphere(this, mRadius);
     }
 
-    MR::setShadowDropLength(this, nullptr, 1500.0f);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f1);
 
     s32 groupId;
     if (MR::getPlacementClippingGroupID(rIter, &groupId)) {
@@ -180,8 +218,8 @@ f32 CocoNut::calcMoveSpeed() const {
 
 void CocoNut::initSensor() {
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_COCO_NUT, 16, 65.0f * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensor(this, "eye", ATYPE_EYE, 16, 2000.0f * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_COCO_NUT, 16, cNum_initSensor_f1 * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "eye", ATYPE_EYE, 16, cNum_initSensor_f2 * mScale.x, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void CocoNut::initModel() {
@@ -209,7 +247,7 @@ void CocoNut::updateRotate(f32 rate) {
     if (mRadius > 0.0f && !MR::normalizeOrZero(mVelocity, &dir) && !MR::isSameDirection(dir, up)) {
         Vec3f axis = dir.cross(up);
 
-        f32 angle = (mVelocity.length() * -180.0f * rate) / (mRadius * MR::pi());
+        f32 angle = (mVelocity.length() * -cNum_updateRotate_f1 * rate) / (mRadius * MR::pi());
         roll.makeRotate(axis, MR::toRadian(angle));
 
         mRollMtx.concat(roll, mRollMtx);
@@ -219,7 +257,7 @@ void CocoNut::updateRotate(f32 rate) {
 void CocoNut::updateGravity() {
     Vec3f fall;
 
-    f32 accel = mIsKicked ? 0.4f : 1.0f;
+    f32 accel = mIsKicked ? cNum_updateGravity_f1 : 1.0f;
     fall.set(mGravity);
     f32 fallSpeed = mFallSpeed + accel;
 
@@ -239,9 +277,9 @@ void CocoNut::processMove() {
         bool inWater = MR::isBindedGroundWater(this);
         const Vec3f* pGroundNormal = MR::getGroundNormal(this);
 
-        if (2.5f < mFallSpeed) {
+        if (cNum_processMove_f1 < mFallSpeed) {
             if (mGravity.dot(*pGroundNormal) < 0.0f) {
-                mFallSpeed *= -0.5f;
+                mFallSpeed *= -cNum_processMove_f2;
                 s32 level = calcSoundLevel(speed);
 
                 if (level > 0) {
@@ -253,7 +291,7 @@ void CocoNut::processMove() {
                 }
             }
 
-            if (mOffGroundStep >= 10 && 3.0f < mFallSpeed) {
+            if (mOffGroundStep >= 10 && cNum_processMove_f3 < mFallSpeed) {
                 MR::emitEffect(this, "Land");
             }
         } else {
@@ -271,12 +309,12 @@ void CocoNut::processMove() {
             }
         }
 
-        mMoveSpeed *= 0.925f;
+        mMoveSpeed *= cNum_processMove_f4;
         mIsOnMoveArea = MR::calcVelocityAreaMoveOnGround(&areaVelocity, this);
 
         if (mIsOnMoveArea) {
             mAreaVelocity.set(areaVelocity);
-            mAreaVelocity.mult(0.75f);
+            mAreaVelocity.mult(cNum_processMove_f5);
         }
 
         mOffGroundStep = 0;
@@ -289,7 +327,7 @@ void CocoNut::processMove() {
             MR::deleteEffect(this, "RollingSmoke");
         }
 
-        updateRotate(0.75f);
+        updateRotate(cNum_processMove_f6);
     }
 
     // Off a wall: the front reflects and a fifth of the speed is lost.
@@ -297,14 +335,14 @@ void CocoNut::processMove() {
         front.normalize(mFront);
         normal.normalize(wallNormal);
 
-        mFront.scaleAdd(-2.0f * front.dot(normal), normal, mFront);
+        mFront.scaleAdd(-cNum_processMove_f7 * front.dot(normal), normal, mFront);
 
         mFront.normalize();
         MR::normalize(&mFront);
 
-        mMoveSpeed *= 0.8f;
+        mMoveSpeed *= cNum_processMove_f8;
 
-        MR::startSound(this, "SE_OJ_COCONUT_BOUND", static_cast< s32 >(100.0f * (calcMoveSpeed() / cMaxSpeed)));
+        MR::startSound(this, "SE_OJ_COCONUT_BOUND", static_cast< s32 >(cNum_processMove_f9 * (calcMoveSpeed() / cMaxSpeed)));
     }
 
     setFrontVec(mFront);
@@ -312,7 +350,7 @@ void CocoNut::processMove() {
     mVelocity.scale(mMoveSpeed);
 
     if (!mIsOnMoveArea || mOffGroundStep >= 10) {
-        mAreaVelocity.mult(0.925f);
+        mAreaVelocity.mult(cNum_processMove_f10);
     }
 
     mVelocity.add(mAreaVelocity);
@@ -431,8 +469,8 @@ void CocoNut::reviseFrontVec() {
         MR::vecKillElement(toTarget, gravity, &toTargetH);
         MR::normalize(&toTargetH);
 
-        if (MR::cosDegree(15.0f) < toTargetH.dot(mFront)) {
-            mFront.lerp(mFront, toTargetH, 0.8f);
+        if (MR::cosDegree(cNum_reviseFrontVec_f1) < toTargetH.dot(mFront)) {
+            mFront.lerp(mFront, toTargetH, cNum_reviseFrontVec_f2);
         }
     }
 }
@@ -479,7 +517,7 @@ void CocoNut::tryMoveEnd() {
 
 bool CocoNut::tryDisappear() {
     Vec3f below;
-    below.scale(-100.0f, mGravity);
+    below.scale(-cNum_tryDisappear_f1, mGravity);
 
     if (MR::isInWater(this, below)) {
         setNerve(GET_NERVE(CocoNut, CocoNutNrvInWater));
@@ -523,7 +561,7 @@ bool CocoNut::isValidPushedFromPlayer(const HitSensor* pMySensor, const HitSenso
         return false;
     }
 
-    return !(fromPlayer.dot(playerDir) < MR::cosDegree(45.0f));
+    return !(fromPlayer.dot(playerDir) < MR::cosDegree(cNum_isValidPushedFromPlayer_f1));
 }
 
 // Two nuts meeting: the other leaves along the line between them, this one across it; the speed splits by the angle.
@@ -561,7 +599,7 @@ void CocoNut::calcHitSpeedAndFrontVec(f32* pMySpeed, f32* pOtherSpeed, Vec3f* pM
 // On a floor (less than 120 degrees from gravity's opposite) while falling.
 bool CocoNut::isOnGround() const {
     if (0.0f < mFallSpeed && MR::isOnGround(this)) {
-        if (MR::getGroundNormal(this)->dot(mGravity) < MR::cosDegree(120.0f)) {
+        if (MR::getGroundNormal(this)->dot(mGravity) < MR::cosDegree(cNum_isOnGround_f1)) {
             return true;
         }
     }
@@ -701,23 +739,23 @@ bool CocoNut::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     f32 fallSpeed;
 
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        moveSpeed = 35.0f;
-        fallSpeed = -20.0f;
+        moveSpeed = cNum_receiveMsgPlayerAttack_f1;
+        fallSpeed = -cNum_receiveMsgPlayerAttack_f2;
         MR::startSound(this, "SE_PM_SPIN_HIT");
         MR::startSound(this, "SE_OJ_COCONUT_LAUNCH");
         emitEffectSpinHit(pSender, pReceiver);
         mIsKicked = true;
     } else if (MR::isMsgPlayerHipDrop(msg) || MR::isMsgInvincibleAttack(msg)) {
-        moveSpeed = 25.0f;
-        fallSpeed = -15.0f;
+        moveSpeed = cNum_receiveMsgPlayerAttack_f3;
+        fallSpeed = -cNum_receiveMsgPlayerAttack_f4;
         MR::startSound(this, "SE_OJ_COCONUT_FLIP_M");
 
         if (MR::isMsgPlayerHipDrop(msg)) {
             MR::sendMsgAwayJump(pSender, pReceiver);
         }
     } else {
-        moveSpeed = 10.0f;
-        fallSpeed = -5.0f;
+        moveSpeed = cNum_receiveMsgPlayerAttack_f5;
+        fallSpeed = -cNum_receiveMsgPlayerAttack_f6;
         MR::startSound(this, "SE_OJ_COCONUT_FLIP_S");
     }
 
@@ -730,9 +768,9 @@ bool CocoNut::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
     // A star piece more than 60 degrees off the line also pushes the nut along its own path.
     if (MR::isMsgStarPieceReflect(msg) && !MR::normalizeOrZero(away, &awayDir) && !MR::normalizeOrZero(pSender->mHost->mVelocity, &shotDir)) {
-        if (awayDir.dot(shotDir) < MR::cosDegree(60.0f)) {
+        if (awayDir.dot(shotDir) < MR::cosDegree(cNum_receiveMsgPlayerAttack_f7)) {
             Vec3f shot(shotDir);
-            shot.scale(65.0f);
+            shot.scale(cNum_receiveMsgPlayerAttack_f8);
             away.add(shot);
         }
     }
@@ -757,10 +795,10 @@ bool CocoNut::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
             Vec3f* pPlayerVelocity = MR::getPlayerVelocity();
             setFrontVec(*pPlayerVelocity);
             f32 along = mFront.dot(*pPlayerVelocity);
-            f32 kickSpeed = 1.1f * along;
+            f32 kickSpeed = cNum_receiveOtherMsg_f1 * along;
 
-            mMoveSpeed = 18.0f >= kickSpeed ? 18.0f : kickSpeed;
-            mFallSpeed = -(0.7f * along);
+            mMoveSpeed = cNum_receiveOtherMsg_f2 >= kickSpeed ? cNum_receiveOtherMsg_f3 : kickSpeed;
+            mFallSpeed = -(cNum_receiveOtherMsg_f4 * along);
             MR::startSound(this, "SE_OJ_COCONUT_FLIP_S");
             setNerve(GET_NERVE(CocoNut, CocoNutNrvMove));
             return true;
@@ -777,7 +815,7 @@ void CocoNut::initMapToolInfo(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mSphericalShadow);
     MR::getPlacementArg1NoInit(rIter, &mRespawnWhenOutOfView);
     MR::getPlacementArg2NoInit(rIter, &mContinueRolling);
-    mRadius = 55.0f * mScale.x;
+    mRadius = cNum_initMapToolInfo_f1 * mScale.x;
     mSpawnPosition.set(mPosition);
 }
 
@@ -794,7 +832,7 @@ void CocoNut::statusToHide() {
 // The mark sits 70% of the way from the other sensor to this one.
 void CocoNut::emitEffectSpinHit(const HitSensor* pOtherSensor, const HitSensor* pMySensor) {
     Vec3f point;
-    point.lerp(pOtherSensor->mPosition, pMySensor->mPosition, 0.7f);
+    point.lerp(pOtherSensor->mPosition, pMySensor->mPosition, cNum_emitEffectSpinHit_f1);
     mSpinHitMtx.identity();
     mSpinHitMtx.mMtx[0][3] = point.x;
     mSpinHitMtx.mMtx[1][3] = point.y;

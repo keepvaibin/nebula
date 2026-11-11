@@ -1,8 +1,10 @@
 #include "Game/Boss/KoopaSwitchKeeper.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 KoopaSwitchKeeper::KoopaSwitchKeeper(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaSwitchKeeper >);
 }
 
 void KoopaSwitchKeeper::init(const TableIter& rIter) {

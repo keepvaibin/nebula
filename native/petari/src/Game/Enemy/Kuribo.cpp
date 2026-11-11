@@ -28,6 +28,41 @@
 #include "Game/Util/VectorUtil.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f1, "KuriboParam.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f2, "KuriboParam.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f3, "KuriboParam.f3", 0.93f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f4, "KuriboParam.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f5, "KuriboParam.f5", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f6, "KuriboParam.f6", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f7, "KuriboParam.f7", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f8, "KuriboParam.f8", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f9, "KuriboParam.f9", 0.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f10, "KuriboParam.f10", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f11, "KuriboParam.f11", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestBlowDown_f1, "requestBlowDown.f1", 36.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestBlowDown_f2, "requestBlowDown.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromBox_f1, "exeAppearFromBox.f1", 7.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromBox_f2, "exeAppearFromBox.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackSuccess_f1, "exeAttackSuccess.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBlowDown_f1, "exeBlowDown.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f1, "calcPassiveMovement.f1", 0.93f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f2, "calcPassiveMovement.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f3, "calcPassiveMovement.f3", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f4, "calcPassiveMovement.f4", 0.7f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 1.5f);
@@ -55,19 +90,19 @@ namespace {
     };
 
     KuriboParam::KuriboParam() {
-        mStateParam.mGravityAccel = 1.5f;
-        mStateParam.mAirFriction = 0.99f;
-        mStateParam.mGroundFriction = 0.93f;
-        mStateParam.mPlayerNearDistance = 1000.0f;
-        mStateParam.mPlayerSightFanDegreeH = 70.0f;
-        mStateParam.mPlayerSightFanDegreeV = 30.0f;
-        mWanderParam.mSpeed = 0.2f;
+        mStateParam.mGravityAccel = cNum_KuriboParam_f1;
+        mStateParam.mAirFriction = cNum_KuriboParam_f2;
+        mStateParam.mGroundFriction = cNum_KuriboParam_f3;
+        mStateParam.mPlayerNearDistance = cNum_KuriboParam_f4;
+        mStateParam.mPlayerSightFanDegreeH = cNum_KuriboParam_f5;
+        mStateParam.mPlayerSightFanDegreeV = cNum_KuriboParam_f6;
+        mWanderParam.mSpeed = cNum_KuriboParam_f7;
         mWanderParam.mWaitTime = NebulaFrameClock::stepsOfSeconds(2);
         mWanderParam.mWalkTime = NebulaFrameClock::stepsOfSeconds(2);
-        mWanderParam.mTurnMaxRateDegree = 3.0f;
-        mChaseParam.mChaseSpeed = 0.4f;
-        mFindPlayerParam.mTurnMaxRateDegree = 5.0f;
-        mFindPlayerParam.mJumpVelocity = 20.0f;
+        mWanderParam.mTurnMaxRateDegree = cNum_KuriboParam_f8;
+        mChaseParam.mChaseSpeed = cNum_KuriboParam_f9;
+        mFindPlayerParam.mTurnMaxRateDegree = cNum_KuriboParam_f10;
+        mFindPlayerParam.mJumpVelocity = cNum_KuriboParam_f11;
     }
 
     static KuriboParam sParam;
@@ -93,6 +128,7 @@ namespace NrvKuribo {
 Kuribo::Kuribo(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mItemGenerator(nullptr), mStateWander(nullptr), mStateFindPlayer(nullptr),
       mBindStarPointer(nullptr), mStateStagger(nullptr), mStateChase(nullptr), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mIsNoGravitySupport(false), mHasItem(true) {
+    lumacore::setClass(this, lumacore::kClassId< Kuribo >);
 }
 
 void Kuribo::init(const TableIter& rIter) {
@@ -117,7 +153,7 @@ void Kuribo::init(const TableIter& rIter) {
 
     mScaleController = new AnimScaleController(nullptr);
     mItemGenerator = new ItemGenerator();
-    MR::initStarPointerTarget(this, 70.0f * mScale.y, Vec3f(0.0f, 75.0f * mScale.y, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f1 * mScale.y, Vec3f(0.0f, cNum_init_f2 * mScale.y, 0.0f));
     initSound(4, false);
     if (MR::isEqualStageName("KoopaBattleVs2Galaxy")) {
         MR::setSeVersion(this, SeVersion_2D);
@@ -125,10 +161,10 @@ void Kuribo::init(const TableIter& rIter) {
         MR::setSeVersion(this, SeVersion_NORMAL);
     }
 
-    initBinder((70.0f * mScale.y), (70.0f * mScale.y), 0);
+    initBinder((cNum_init_f3 * mScale.y), (cNum_init_f4 * mScale.y), 0);
     initEffectKeeper(1, nullptr);
     initSensor();
-    MR::initShadowVolumeSphere(this, 60.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f5);
     initState();
     initNerve(GET_NERVE(Kuribo, KuriboNrvWander));
     initAppearState(rIter);
@@ -155,6 +191,7 @@ void Kuribo::initAfterPlacement() {
 }
 
 void Kuribo::initState() {
+    ::sParam = KuriboParam();  // again, with a mod's numbers
     mStateFindPlayer = new WalkerStateFindPlayer(this, &mFront, &::sParam.mStateParam, &::sParam.mFindPlayerParam);
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
     mStateStagger = new WalkerStateStagger(this, &mFront, &::sParam.mStateParam, &::sParam.mStaggerParam);
@@ -165,8 +202,8 @@ void Kuribo::initState() {
 void Kuribo::initSensor() {
     f32 y_scale = mScale.y;
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_KURIBO, 8, 75.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
-    MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, 45.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KURIBO, 8, cNum_initSensor_f1 * y_scale, Vec3f(0.0f, cNum_initSensor_f2 * y_scale, 0.0f));
+    MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, cNum_initSensor_f3 * y_scale, Vec3f(0.0f, cNum_initSensor_f4 * y_scale, 0.0f));
 }
 
 void Kuribo::initAppearState(const TableIter& rIter) {
@@ -215,11 +252,11 @@ void Kuribo::control() {
         MR::calcGravityOrZero(this);
     }
 
-    MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, 0.05f, 0.5f);
+    MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, cNum_control_f1, cNum_control_f2);
     if (!isNerve(GET_NERVE(Kuribo, KuriboNrvBindStarPointer))) {
         Vec3f groundMove(0, 0, 0);
         if (MR::calcVelocityAreaOrRailMoveOnGround(&groundMove, this)) {
-            MR::addVelocity(this, groundMove * 0.05f);
+            MR::addVelocity(this, groundMove * cNum_control_f3);
         }
     }
 
@@ -425,7 +462,7 @@ bool Kuribo::requestBlowDown(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     MR::deleteEffectAll(this);
-    MR::setVelocityBlowAttack(this, pSender, pReceiver, 36.0f, 30.0f, 4);
+    MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_requestBlowDown_f1, cNum_requestBlowDown_f2, 4);
     setNerve(GET_NERVE(Kuribo, KuriboNrvBlowDown));
     mItemGenerator->setTypeStarPeace(3);
     return true;
@@ -620,7 +657,7 @@ void Kuribo::exeAppearFromBox() {
         MR::startAction(this, "AppearFromBox");
         Vec3f zDir;
         mPoseQuat.getZDir(zDir);
-        MR::setVelocitySeparateHV(this, zDir, 7.0f, 30.0f);
+        MR::setVelocitySeparateHV(this, zDir, cNum_exeAppearFromBox_f1, cNum_exeAppearFromBox_f2);
         MR::offBind(this);
     }
     exeBlow();
@@ -642,7 +679,7 @@ void Kuribo::exeAttackSuccess() {
         MR::startAction(this, "Hit");
     }
 
-    MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *MR::getPlayerPos(), 5.0f);
+    MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *MR::getPlayerPos(), cNum_exeAttackSuccess_f1);
     calcPassiveMovement();
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(Kuribo, KuriboNrvWander));
@@ -698,7 +735,7 @@ void Kuribo::exeBlowDown() {
     }
 
     calcPassiveMovement();
-    MR::turnDirectionDegree(this, &mFront, -mVelocity, 30.0f);
+    MR::turnDirectionDegree(this, &mFront, -mVelocity, cNum_exeBlowDown_f1);
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         kill();
     }
@@ -712,14 +749,14 @@ void Kuribo::calcPassiveMovement() {
     f32 vel;
 
     if (MR::isOnGround(this)) {
-        vel = 0.93f;
+        vel = cNum_calcPassiveMovement_f1;
     } else {
-        vel = 0.99f;
+        vel = cNum_calcPassiveMovement_f2;
     }
 
     MR::attenuateVelocity(this, vel);
     if (MR::isBindedWall(this)) {
-        MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), 0.2f, 0.7f);
+        MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), cNum_calcPassiveMovement_f3, cNum_calcPassiveMovement_f4);
     }
 }
 

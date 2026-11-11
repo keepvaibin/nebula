@@ -17,6 +17,9 @@
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 39.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, cBackSequenceFadeFrame, 90);
@@ -42,6 +45,7 @@ namespace NrvPauseMenu {
 PauseMenu::PauseMenu()
     : LayoutActor("ポーズメニュー", true), mUpperButton(), mLowerButton(), mConfirmWindow(), mLuigiLetter(), mLetterButton(), mStageTitleOffset(0.0f, 39.0f),
       mCoinNumPos(0.0f, 0.0f), mStarPieceNumPos(0.0f, 0.0f), mWasDefaultLayoutActive(true) {
+    lumacore::setClass(this, lumacore::kClassId< PauseMenu >);
     mSettingsButton = nullptr;
 }
 
@@ -201,7 +205,7 @@ void PauseMenu::control() {
         mLetterButton->update();
     }
 
-    mStageTitleOffset.y = 39.0f;
+    mStageTitleOffset.y = cNum_control_f1;
 }
 
 void PauseMenu::updateStarPane() {

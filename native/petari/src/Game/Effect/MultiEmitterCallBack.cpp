@@ -5,6 +5,17 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Particle/EmitterCore.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f1, "getLightTint.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f2, "getLightTint.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f3, "getLightTint.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f4, "getLightTint.f4", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f5, "getLightTint.f5", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f6, "getLightTint.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f7, "getLightTint.f7", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f8, "getLightTint.f8", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getLightTint_f9, "getLightTint.f9", 0.5f);
 
 namespace {
     Color8 getSyntheticColor(const Color8& rColor1, const Color8& rColor2) {
@@ -24,9 +35,9 @@ namespace {
     // Per channel from white (affect 0) to the light colour (affect 1); LightAffectValue in the effect table.
     Color8 getLightTint(const Color8& rLight, f32 affect) {
         const f32 t = MR::clamp(affect, 0.0f, 1.0f);
-        const u8 r = static_cast< u8 >(255.0f + (static_cast< f32 >(rLight.r) - 255.0f) * t + 0.5f);
-        const u8 g = static_cast< u8 >(255.0f + (static_cast< f32 >(rLight.g) - 255.0f) * t + 0.5f);
-        const u8 b = static_cast< u8 >(255.0f + (static_cast< f32 >(rLight.b) - 255.0f) * t + 0.5f);
+        const u8 r = static_cast< u8 >(cNum_getLightTint_f1 + (static_cast< f32 >(rLight.r) - cNum_getLightTint_f2) * t + cNum_getLightTint_f3);
+        const u8 g = static_cast< u8 >(cNum_getLightTint_f4 + (static_cast< f32 >(rLight.g) - cNum_getLightTint_f5) * t + cNum_getLightTint_f6);
+        const u8 b = static_cast< u8 >(cNum_getLightTint_f7 + (static_cast< f32 >(rLight.b) - cNum_getLightTint_f8) * t + cNum_getLightTint_f9);
         return Color8(r, g, b, 255);
     }
 

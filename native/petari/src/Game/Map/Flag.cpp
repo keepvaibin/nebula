@@ -17,6 +17,33 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 275.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 112.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 145.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f15, "init.f15", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f16, "init.f16", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f17, "init.f17", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f18, "init.f18", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f19, "init.f19", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f20, "init.f20", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f21, "init.f21", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f22, "init.f22", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFlag_f1, "updateFlag.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFlag_f2, "updateFlag.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f1, "loadMaterial.f1", 255.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sDefaultPointIntervalU, 40.0f);
@@ -59,6 +86,7 @@ Flag::Flag(const char* pName)
       mWindAccelRate(::sDefaultWindAccelRate), mWindAccelMin(::sDefaultWindAccelMin), mRandomWindAccelMin(::sDefaultRandomWindAccelMin),
       mRandomWindAccelMax(::sDefaultRandomWindAccelMax), mLightColorMin(::sLightColorMinFar), mColors(), mTexST(), mTexture(), mUseAlpha(),
       mAlpha(0xFF), mAlphaDistanceNear(::sDefaultAlphaDistanceNear), mAlphaDistanceFar(::sDefaultAlphaDistanceFar), mSeStep(), mDisableSound() {
+    lumacore::setClass(this, lumacore::kClassId< Flag >);
 }
 
 void Flag::init(const TableIter& rIter) {
@@ -69,40 +97,40 @@ void Flag::init(const TableIter& rIter) {
         MR::getPlacementArg1NoInit(rIter, &mStickLength);
         MR::getObjectName(&mObjName, rIter);
         if (MR::isEqualString(mObjName, "FlagKoopaCastle")) {
-            mPointIntervalU = 1000.0f / mNumPointsU;
-            mPointIntervalV = 500.0f / (mNumPointsV - 1);
+            mPointIntervalU = cNum_init_f1 / mNumPointsU;
+            mPointIntervalV = cNum_init_f2 / (mNumPointsV - 1);
         } else if (MR::isEqualString(mObjName, "FlagKoopaA")) {
-            mPointIntervalU = 450.0f / mNumPointsU;
-            mPointIntervalV = 275.0f / (mNumPointsV - 1);
+            mPointIntervalU = cNum_init_f3 / mNumPointsU;
+            mPointIntervalV = cNum_init_f4 / (mNumPointsV - 1);
         } else if (MR::isEqualString(mObjName, "FlagKoopaB")) {
-            mPointIntervalU = 450.0f / mNumPointsU;
-            mPointIntervalV = 112.5f / (mNumPointsV - 1);
+            mPointIntervalU = cNum_init_f5 / mNumPointsU;
+            mPointIntervalV = cNum_init_f6 / (mNumPointsV - 1);
         } else if (MR::isEqualString(mObjName, "FlagPeachCastleA")) {
             mNumPointsV = 5;
             mNumPointsU = 6;
-            mPointIntervalU = 170.0f / mNumPointsU;
-            mPointIntervalV = 145.0f / (mNumPointsV - 1);
-            mAlphaDistanceNear = 200.0f;
-            mAlphaDistanceFar = 500.0f;
+            mPointIntervalU = cNum_init_f7 / mNumPointsU;
+            mPointIntervalV = cNum_init_f8 / (mNumPointsV - 1);
+            mAlphaDistanceNear = cNum_init_f9;
+            mAlphaDistanceFar = cNum_init_f10;
             mIsVerticalFlag = true;
-            mGravityScale = 0.5f;
-            mFrictionRateMin = 0.85f;
+            mGravityScale = cNum_init_f11;
+            mFrictionRateMin = cNum_init_f12;
             mFrictionRateMax = 1.0f;
             mWindAccelRate = 0.0f;
-            mWindAccelMin = 0.01f;
-            mRandomWindAccelMin = 0.5f;
-            mRandomWindAccelMax = 1.5f;
+            mWindAccelMin = cNum_init_f13;
+            mRandomWindAccelMin = cNum_init_f14;
+            mRandomWindAccelMax = cNum_init_f15;
             mDisableSound = true;
         } else if (MR::isEqualString(mObjName, "FlagPeachCastleB")) {
             mNumPointsV = 5;
             mNumPointsU = 5;
-            mPointIntervalU = 500.0f / mNumPointsU;
-            mPointIntervalV = 400.0f / (mNumPointsV - 1);
+            mPointIntervalU = cNum_init_f16 / mNumPointsU;
+            mPointIntervalV = cNum_init_f17 / (mNumPointsV - 1);
         } else if (MR::isEqualString(mObjName, "FlagPeachCastleC")) {
             mNumPointsV = 5;
             mNumPointsU = 5;
-            mPointIntervalU = 500.0f / mNumPointsU;
-            mPointIntervalV = 400.0f / (mNumPointsV - 1);
+            mPointIntervalU = cNum_init_f18 / mNumPointsU;
+            mPointIntervalV = cNum_init_f19 / (mNumPointsV - 1);
         } else if (MR::isEqualString(mObjName, "FlagRaceA")) {
             mDisableSound = true;
         }
@@ -164,11 +192,11 @@ void Flag::init(const TableIter& rIter) {
     initSound(4, false);
 
     if (MR::isEqualString(mObjName, "FlagKoopaCastle")) {
-        mClipCenter = mUp * 500.0f + mPosition;
-        MR::setClippingTypeSphere(this, 500.0f + ::sClippingRadiusOffset, &mClipCenter);
+        mClipCenter = mUp * cNum_init_f20 + mPosition;
+        MR::setClippingTypeSphere(this, cNum_init_f21 + ::sClippingRadiusOffset, &mClipCenter);
     } else if (mStickLength > 0.0f) {
         if (mBasePos == nullptr && mBaseMtx == nullptr) {
-            mClipCenter = mUp * (mStickLength * 0.5f) + mPosition;
+            mClipCenter = mUp * (mStickLength * cNum_init_f22) + mPosition;
             MR::setClippingTypeSphere(this, mStickLength / 2 + ::sClippingRadiusOffset, &mClipCenter);
         } else {
             MR::setClippingTypeSphere(this, mStickLength + ::sClippingRadiusOffset);
@@ -362,8 +390,8 @@ void Flag::updateFlag() {
             point->updatePos(friction);
 
             if (!mDisableLighting) {
-                f32 lightColor = 255.0f * ((point->mUp.dot(mFront) - ::sLightBorderMin) / (::sLightBorderMax - ::sLightBorderMin));
-                u8 color = (s32)(MR::clamp(lightColor, mLightColorMin, 255.0f));
+                f32 lightColor = cNum_updateFlag_f1 * ((point->mUp.dot(mFront) - ::sLightBorderMin) / (::sLightBorderMax - ::sLightBorderMin));
+                u8 color = (s32)(MR::clamp(lightColor, mLightColorMin, cNum_updateFlag_f2));
                 mColors[idxV * (mNumPointsU + 1) + idxU + 1].set(color, color, color, 0xFF);
             }
         }
@@ -439,7 +467,7 @@ SiteMaterial Flag::loadMaterial() const {
     SiteMaterial material;
     material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        mAlpha == 0xFF, NEBULA_CULL_NONE);
-    material.constants[0] = mAlpha / 255.0f;
+    material.constants[0] = mAlpha / cNum_loadMaterial_f1;
     material.setTexture(0, mTexture);
     return material;
 }

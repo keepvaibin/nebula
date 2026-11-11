@@ -13,6 +13,9 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_startLeaveAnim_setBckRate_1, "startLeaveAnim.setBckRate.1", -1.0f);
@@ -26,7 +29,7 @@ namespace {
         const char* mLeaveAnimName;
     };
 
-    static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sKoopaJrPos, {135.0f, 188.0f, 0.0f});
     static const char* sPartName = "クッパＪｒ．デモ";
     static const char* sJointNameKoopaJrPos = "obj";
     NEBULA_TUNABLE(s32, sBgmStartStep, 309);
@@ -47,6 +50,7 @@ namespace {
 };  // namespace
 
 DemoKoopaJrShip::DemoKoopaJrShip(const char* pName) : LiveActor(pName), mKoopaJrObj(), mAnimCameraIndex(-1) {
+    lumacore::setClass(this, lumacore::kClassId< DemoKoopaJrShip >);
 }
 
 void DemoKoopaJrShip::init(const TableIter& rIter) {
@@ -134,7 +138,7 @@ void DemoKoopaJrShip::control() {
     Mtx34f jointMtx;
     jointMtx.setInline(MR::getJointMtx(this, ::sJointNameKoopaJrPos));
 
-    MR::faceToPoint(jointMtx, *MR::getPlayerPos(), 5.0f);
+    MR::faceToPoint(jointMtx, *MR::getPlayerPos(), cNum_control_f1);
 
     jointMtx.mult(::sKoopaJrPos, mKoopaJrObj->mPosition);
 }

@@ -19,6 +19,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 180.0f);
 
 namespace NrvTamakoroTutorial {
     NEW_NERVE(HostTypeNrvFirst, TamakoroTutorial, First);
@@ -46,6 +53,7 @@ namespace {
 
 TamakoroTutorial::TamakoroTutorial(const char* pName)
     : LiveActor(pName), mHost(), mTalkCtrl(), mTalkCtrlAutomatic(), mPadAccel(0.0f, 0.0f, 0.0f), mIsTrampled(), mCanTalk() {
+    lumacore::setClass(this, lumacore::kClassId< TamakoroTutorial >);
 }
 
 void TamakoroTutorial::init(const TableIter& rIter) {
@@ -53,8 +61,8 @@ void TamakoroTutorial::init(const TableIter& rIter) {
     initModelManagerWithAnm("SignBoard", nullptr, false);
     MR::connectToSceneNpc(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 16, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
-    MR::addHitSensorCallbackMapObjSimple(this, "push", 16, 200.0f);
+    MR::addHitSensorEnemy(this, "body", 16, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::addHitSensorCallbackMapObjSimple(this, "push", 16, cNum_init_f3);
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
@@ -85,9 +93,9 @@ void TamakoroTutorial::init(const TableIter& rIter) {
 
     mTalkCtrlAutomatic = MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, "Common_TamakoroTutorial007", Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
-    MR::setMessageBalloonFollowOffset(mTalkCtrl, Vec3f(0.0f, 180.0f, 0.0f));
+    MR::setMessageBalloonFollowOffset(mTalkCtrl, Vec3f(0.0f, cNum_init_f4, 0.0f));
     MR::setDistanceToTalk(mTalkCtrl, ::hDistToStartTutorial);
-    MR::setMessageBalloonFollowOffset(mTalkCtrlAutomatic, Vec3f(0.0f, 180.0f, 0.0f));
+    MR::setMessageBalloonFollowOffset(mTalkCtrlAutomatic, Vec3f(0.0f, cNum_init_f5, 0.0f));
     MR::setDistanceToTalk(mTalkCtrlAutomatic, ::hDistToStartTutorial);
     MR::calcGravity(this);
 }

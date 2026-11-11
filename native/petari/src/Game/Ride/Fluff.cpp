@@ -7,6 +7,22 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFreeBloom_f1, "exeFreeBloom.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRideFlyOnWind_f1, "exeRideFlyOnWind.f1", 100.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, sFreeBloomFlyUpStep, 15);
@@ -55,6 +71,7 @@ namespace NrvFluff {
 Fluff::Fluff(const char* pName)
     : LiveActor(pName), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mTargetUpVec(0.0f, 1.0f, 0.0f),
       mWindDir(0.0f, 0.0f, 0.0f), mWindDistance(), mWindSpinTimer(-1), mSpinsRemaining(-1), mModel(), mRider(), mCameraTargetMtx(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< Fluff >);
     mBaseMtx.identity();
 }
 
@@ -69,23 +86,23 @@ void Fluff::init(const TableIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(6);
-    MR::addHitSensorBinder(this, "bind", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "body", "MarioHang", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorRide(this, "WindReceiver", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageMario", "MarioHang", 8, 60.0f, Vec3f(0.0f, -50.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageMiddle", "joint3", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, 100.0f, Vec3f(80.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "body", "MarioHang", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "WindReceiver", 8, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageMario", "MarioHang", 8, cNum_init_f4, Vec3f(0.0f, -cNum_init_f5, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageMiddle", "joint3", 8, cNum_init_f6, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, cNum_init_f7, Vec3f(cNum_init_f8, 0.0f, 0.0f));
 
-    initBinder(50.0f, -80.0f, 0);
+    initBinder(cNum_init_f9, -cNum_init_f10, 0);
     initEffectKeeper(0, nullptr);
     initSound(6, false);
     MR::calcGravity(this);
-    MR::initShadowVolumeSphere(this, 60.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f11);
 
     MR::useStageSwitchWriteA(this, rIter);
 
     mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
-    MR::setClippingTypeSphere(this, 800.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f12);
     mModel = MR::createModelObjMapObj("わたげの葉", "FluffLeaf", nullptr);
     MR::copyTransRotateScale(this, mModel);
     mModel->initWithoutIter();
@@ -110,7 +127,7 @@ void Fluff::exeFreeBloom() {
         MR::offCalcGravity(this);
         MR::offBind(this);
         MR::startBck(mModel, "Bloom");
-        MR::setShadowVolumeSphereRadius(this, nullptr, 30.0f);
+        MR::setShadowVolumeSphereRadius(this, nullptr, cNum_exeFreeBloom_f1);
         MR::invalidateHitSensors(this);
         MR::validateHitSensor(this, "WindReceiver");
         MR::hideModel(this);
@@ -227,7 +244,7 @@ void Fluff::exeRideFlyOnWind() {
         mWindSpinTimer = ::sWindRemainTime;
         if (!trySpinUp(0)) {
             MR::tryRumblePadWeak(this, PLAYER_1);
-            if (mWindDistance > ::sWindDistanceMax + 100.0f) {
+            if (mWindDistance > ::sWindDistanceMax + cNum_exeRideFlyOnWind_f1) {
                 setNerve(GET_NERVE(Fluff, FluffNrvRideFly));
             }
         }

@@ -3,6 +3,7 @@
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvGalaxySelectBackButton {
     NEW_NERVE(GalaxySelectBackButtonNrvAppear, GalaxySelectBackButton, Appear);
@@ -11,6 +12,7 @@ namespace NrvGalaxySelectBackButton {
 };  // namespace NrvGalaxySelectBackButton
 
 GalaxySelectBackButton::GalaxySelectBackButton() : LayoutActor("ギャラクシー選択戻るボタン", true) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxySelectBackButton >);
 }
 
 void GalaxySelectBackButton::init(const TableIter&) {

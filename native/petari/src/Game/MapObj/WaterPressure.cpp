@@ -4,12 +4,14 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sGunPointOffset, 200.0f);
 };  // namespace
 
 WaterPressure::WaterPressure(const char* pName) : PressureBase(pName), mCameraInfo(), mIsInvalidSpinKill() {
+    lumacore::setClass(this, lumacore::kClassId< WaterPressure >);
 }
 
 void WaterPressure::init(const TableIter& rIter) {

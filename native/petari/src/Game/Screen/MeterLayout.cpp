@@ -14,6 +14,19 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestActive_f1, "requestActive.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestActive_f2, "requestActive.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestPowerUp_f1, "requestPowerUp.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestPlayerMoving_f1, "requestPlayerMoving.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_requestPlayerStopped_f1, "requestPlayerStopped.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcMarioHeadPosition_f1, "calcMarioHeadPosition.f1", 120.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_setAnimBase_setAnimRate_1, "setAnimBase.setAnimRate.1", 4.0f);
@@ -88,6 +101,7 @@ namespace NrvMeterLayout {
 MeterLayout::MeterLayout(const char* pName, const char* pArcName)
     : LayoutActor(pName, true), mCountUpPaneRumbler(), mFollowPos(0.0f, 0.0f), mFollowPosW(0.0f, 0.0f), mMeterMoveStartPos(0.0f, 0.0f), mCount(3), mAlpha(),
       mVisibleRate(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< MeterLayout >);
     MR::connectToSceneLayout(this);
     initLayoutManager(pArcName, 3);
 }
@@ -104,7 +118,7 @@ void MeterLayout::init(const TableIter& /*rIter*/) {
     MR::setFollowTypeAdd(this, "HitPointW");
     MR::startAnim(this, "FontPosition2to1", 1);
     MR::startAnim(this, "ShowHide", 2);
-    MR::setAnimFrameAndStop(this, mAlpha * mVisibleRate * 20.0f, 2);
+    MR::setAnimFrameAndStop(this, mAlpha * mVisibleRate * cNum_init_f1, 2);
     setCountAnimFrame();
     mCountUpPaneRumbler = new CountUpPaneRumbler(this, "HitPointNumber");
     initNerve(GET_NERVE(MeterLayout, MeterLayoutNrvWait));
@@ -116,14 +130,14 @@ void MeterLayout::control() {
     if (isNerve(GET_NERVE(MeterLayout, MeterLayoutNrvAppear))) {
         mAlpha = 1.0f;
     } else if (MR::isStarPointerPointingPaneForMeterLayout(this, "PicBase", 0, false, nullptr)) {
-        mAlpha -= 0.05f;
+        mAlpha -= cNum_control_f1;
     } else {
-        mAlpha += 0.05f;
+        mAlpha += cNum_control_f2;
     }
 
     mAlpha = MR::clamp(mAlpha, ::sMinAlpha, ::sMaxAlpha);
 
-    MR::setAnimFrameAndStop(this, mVisibleRate * MR::normalize(mAlpha, 0.0f, 1.0f) * 20.0f, 2);
+    MR::setAnimFrameAndStop(this, mVisibleRate * MR::normalize(mAlpha, 0.0f, 1.0f) * cNum_control_f3, 2);
     mCountUpPaneRumbler->update();
 }
 
@@ -136,7 +150,7 @@ void MeterLayout::requestActive() {
 
     if (::isStartingHealth(mCount)) {
         mVisibleRate = 0.0f;
-        mFollowPos.x = MR::getEaseInOutValue(0.0f, 1.0f, 0.0f, 1.0f) * 50.0f;
+        mFollowPos.x = MR::getEaseInOutValue(0.0f, 1.0f, 0.0f, 1.0f) * cNum_requestActive_f1;
     } else {
         mVisibleRate = 1.0f;
         mFollowPos.y = 0.0f;
@@ -144,7 +158,7 @@ void MeterLayout::requestActive() {
     }
 
     f32 tmp = mVisibleRate;
-    MR::setAnimFrameAndStop(this, tmp * 20.0f, 2);
+    MR::setAnimFrameAndStop(this, tmp * cNum_requestActive_f2, 2);
     mFollowPosW.y = 0.0f;
     mFollowPosW.x = 0.0f;
     appear();
@@ -157,7 +171,7 @@ void MeterLayout::requestDeactivate() {
 
 void MeterLayout::requestPowerUp() {
     mVisibleRate = 1.0f;
-    MR::setAnimFrameAndStop(this, mVisibleRate * 20.0f, 2);
+    MR::setAnimFrameAndStop(this, mVisibleRate * cNum_requestPowerUp_f1, 2);
     mFollowPos.y = 0.0f;
     mFollowPos.x = 0.0f;
     mFollowPosW.y = 0.0f;
@@ -181,7 +195,7 @@ void MeterLayout::requestPlayerMoving() {
     }
 
     if (::isStartingHealth(mCount)) {
-        mVisibleRate -= 0.05f;
+        mVisibleRate -= cNum_requestPlayerMoving_f1;
 
         if (mVisibleRate < 0.0f) {
             mVisibleRate = 0.0f;
@@ -197,7 +211,7 @@ void MeterLayout::requestPlayerStopped() {
     }
 
     if (::isStartingHealth(mCount)) {
-        mVisibleRate += 0.05f;
+        mVisibleRate += cNum_requestPlayerStopped_f1;
 
         if (mVisibleRate > 1.0f) {
             mVisibleRate = 1.0f;
@@ -271,7 +285,7 @@ void MeterLayout::exeWait() {
         mFollowPos.x = 0.0f;
     }
 
-    mFollowPos.x = MR::getEaseInOutValue(mVisibleRate, 1.0f, 0.0f, 1.0f) * 50.0f;
+    mFollowPos.x = MR::getEaseInOutValue(mVisibleRate, 1.0f, 0.0f, 1.0f) * cNum_exeWait_f1;
     mFollowPosW.y = 0.0f;
     mFollowPosW.x = 0.0f;
 }
@@ -433,7 +447,7 @@ void MeterLayout::exeZeroMeterBreak() {
 void MeterLayout::calcMarioHeadPosition(Vec2f* pHeadPosition) const {
     Vec2f screenPos;
     MR::calcScreenPosition(&screenPos, *MR::getPlayerCenterPos());
-    f32 radius = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), 120.0f);
+    f32 radius = MR::calcPointRadius2D(*MR::getPlayerCenterPos(), cNum_calcMarioHeadPosition_f1);
 
     screenPos.y = screenPos.y - radius;
     screenPos.x += ::sMarioScreenOffsetX;

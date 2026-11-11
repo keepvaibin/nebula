@@ -13,6 +13,9 @@
 #include "Game/Screen/ImageEffectState.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setBloomSimpleParams_f1, "setBloomSimpleParams.f1", 255.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, sIntensityCountMax, 60);
@@ -24,6 +27,7 @@ ImageEffectDirector::ImageEffectDirector(const char* pName)
       mStateNull(new ImageEffectStateImpl::StateNull(this)), mStateBloomNormal(new ImageEffectStateImpl::StateBloomNormal(this)),
       mStateBloomSimple(new ImageEffectStateImpl::StateBloomSimple(this)), mStateScreenBlur(new ImageEffectStateImpl::StateScreenBlur(this)),
       mStateDepthOfField(new ImageEffectStateImpl::StateDepthOfField(this)), mState(mStateNull), mCurrentEffect() {
+    lumacore::setClass(this, lumacore::kClassId< ImageEffectDirector >);
     MR::connectToSceneImageEffectMovement(this);
 }
 
@@ -177,7 +181,7 @@ void ImageEffectDirector::setBloomSimpleParams(ImageEffectArea* pArea) {
     }
 
     mStateBloomSimple->setThreshold(pSimpleBloomArea->mThreshold);
-    mStateBloomSimple->setIntensity(pSimpleBloomArea->mIntensity / 255.0f);
+    mStateBloomSimple->setIntensity(pSimpleBloomArea->mIntensity / cNum_setBloomSimpleParams_f1);
 }
 
 void ImageEffectDirector::setScreenBlurParams(ImageEffectArea* pArea) {

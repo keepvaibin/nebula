@@ -28,6 +28,9 @@
 #include <NebulaGpuTypes.h>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_goToPlayer_f1, "goToPlayer.f1", 2.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_reboundVelocityFromCollision_1, "exeFall.reboundVelocityFromCollision.1", 0.0f);
@@ -130,6 +133,7 @@ StarPiece::StarPiece(const char* pName)
     : LiveActor(pName), mFront(0, 0, 1), mTurnRate(cTurnRateStart), mChaseRate(), mThrowStart(0, 0, 0), mThrowEnd(0, 0, 0), mDelegator(nullptr), mTargetSensor(),
       mGettableEffectStep(-1), mGettableDelayCounter(-1), mFallKillTimer(), mColor(NebulaColor8{0, 0, 0, 255}), mGroupType(groupType_noGroup), mHostInfo(nullptr),
       mReceiverInfo(nullptr), mNumGift(1) {
+    lumacore::setClass(this, lumacore::kClassId< StarPiece >);
     mFlags.isGoToPlayer = false;
     mFlags.isGettable = true;
     mFlags.isCheckGround = false;
@@ -821,7 +825,7 @@ void StarPiece::goToPlayer(Vec3f velocity) {
         f32 dot = mFront.dot(mGravity);
 
         if (0.0f < dot) {
-            mFront -= mGravity * dot * 2.0f;
+            mFront -= mGravity * dot * cNum_goToPlayer_f1;
         }
     }
 

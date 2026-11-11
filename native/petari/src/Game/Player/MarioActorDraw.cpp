@@ -7,6 +7,8 @@
 #include "Game/MapObj/IceStep.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
 #include "Game/Player/PlayerModel.hpp"
+#include "Game/Render/Model.hpp"
+#include "Game/Render/ModelData.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Player/MarioParts.hpp"
@@ -36,6 +38,16 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f1, "initDrawAndModel.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f2, "initDrawAndModel.f2", 0.14f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f3, "initDrawAndModel.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f4, "initDrawAndModel.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initTeresaMario_f1, "initTeresaMario.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFace_f1, "updateFace.f1", 0.49f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFace_f2, "updateFace.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawReflectModel_f1, "drawReflectModel.f1", 0.00001f);
 
 namespace MR {
     void showMaterial(Model*, const char*);
@@ -112,7 +124,7 @@ void MarioActor::initDrawAndModel() {
 
     {
         NebulaArena::CurrentScope restorer(Arenas::scene());
-        mBlurTexture = GameTexture::createTarget(0.2f, 0.14f);
+        mBlurTexture = GameTexture::createTarget(cNum_initDrawAndModel_f1, cNum_initDrawAndModel_f2);
 
         for (u32 i = 0; i < 2; i++) {
             mMaskTextures[i] = new GameTexture(8, 8, NEBULA_TEXTURE_LINEAR_LA8);
@@ -120,8 +132,8 @@ void MarioActor::initDrawAndModel() {
         }
 
         mMaskIndex = 0;
-        updateRandomTexture(1000.0f);
-        updateRandomTexture(1000.0f);
+        updateRandomTexture(cNum_initDrawAndModel_f3);
+        updateRandomTexture(cNum_initDrawAndModel_f4);
     }
 
     initScreenBox();
@@ -279,7 +291,7 @@ void MarioActor::initTeresaMario() {
     mTeresaTilt = 0.0f;
     mTeresaBlinkTimer = 0;
 
-    MR::initShadowVolumeSphere(mTeresaModel, 90.0f);
+    MR::initShadowVolumeSphere(mTeresaModel, cNum_initTeresaMario_f1);
     initTeresaMarioAnimation();
 }
 
@@ -305,6 +317,48 @@ void MarioActor::initBoneMario() {
     mModels[1] = model;
     mBoneModel->kill();
     MR::hideModel(mBoneModel);
+}
+
+namespace {
+    void showWholeModel(ModelHolder* pHolder, bool show) {
+        if (pHolder != nullptr) {
+            Model* pModel = MR::getModel(pHolder);
+            MR::showJointAndChildrenOn(pModel, pModel->mModelData->getJointAt(0), show);
+        }
+    }
+}  // namespace
+
+// show_joint on the player: each of his body models with the joint, and the face and hand models with the joint
+// they hang from.
+void MarioActor::showJointByPlugin(const char* pName, bool show) {
+    for (s32 i = 0; i < 6 + mNumModPowerUps; i++) {
+        PlayerModel* model = mModels[i];
+        if (model == nullptr) {
+            continue;
+        }
+        const s32 idx = model->mModelData->findJoint(pName);
+        if (idx < 0) {
+            continue;
+        }
+        Joint* pTop = model->mModelData->getJointAt(static_cast< u32 >(idx));
+        MR::showJointAndChildrenOn(model, pTop, show);
+        if (i != 0) {
+            continue;
+        }
+        if (MR::isJointUnder(pTop, MR::getJoint(model, "Face0"))) {
+            showWholeModel(mFaceModel, show);
+        }
+        if (MR::isJointUnder(pTop, MR::getJoint(model, "HandL0"))) {
+            showWholeModel(mHandL, show);
+            showWholeModel(mInvincibleHandL, show);
+            showWholeModel(mIceHandL, show);
+        }
+        if (MR::isJointUnder(pTop, MR::getJoint(model, "HandR0"))) {
+            showWholeModel(mHandR, show);
+            showWholeModel(mInvincibleHandR, show);
+            showWholeModel(mIceHandR, show);
+        }
+    }
 }
 
 void MarioActor::initModPowerUpModels() {
@@ -517,7 +571,7 @@ void MarioActor::drawMarioModel() const {
 
 bool MarioActor::isAllHidden() const {
     bool hidden = false;
-    if (mHidden || mMorphHidden || mHiddenByDemo) {
+    if (mHidden || mMorphHidden || mHiddenByDemo || mModHidden) {
         hidden = true;
     }
 
@@ -642,7 +696,7 @@ void MarioActor::updateFace() {
         player->getMainAnimationTrans(static_cast< u32 >(partsControlJoint), &partsControl);
     }
 
-    mFacePose = MR::clamp(static_cast< s32 >(0.49f + partsControl.x / 10.0f), 0, mFacePoseCount - 1);
+    mFacePose = MR::clamp(static_cast< s32 >(cNum_updateFace_f1 + partsControl.x / cNum_updateFace_f2), 0, mFacePoseCount - 1);
 
     for (u32 i = 0; i < mFacePoseCount; i++) {
         Joint* eyeJoint = MR::getJoint(mFaceModel, i + 1);
@@ -824,7 +878,7 @@ void MarioActor::drawReflectModel() const {
     model->mDrawPasses = 0;
 
     if (mShadowMode == 2) {
-        Frame::setZScaleOffset(1.0f, 0.00001f);
+        Frame::setZScaleOffset(1.0f, cNum_drawReflectModel_f1);
         model->mDrawPasses |= PlayerModel::Pass_DepthOnly;
         model->setDrawView(3);
         model->directDraw();
@@ -861,7 +915,7 @@ void MarioActor::drawReflectModel() const {
 }
 
 void MarioActor::drawModelBlur() const {
-    if (isAllHidden() || mModHidden) {
+    if (isAllHidden()) {
         return;
     }
 

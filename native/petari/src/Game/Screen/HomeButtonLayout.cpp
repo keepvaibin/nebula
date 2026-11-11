@@ -14,6 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvHomeButtonLayout {
     NEW_NERVE(HomeButtonLayoutDeactive, HomeButtonLayout, Deactive);
@@ -21,6 +22,7 @@ namespace NrvHomeButtonLayout {
 };  // namespace NrvHomeButtonLayout
 
 HomeButtonLayout::HomeButtonLayout() : LayoutActor("HOMEボタン", false), mIsInitialized(false), mForcedClosed(false) {
+    lumacore::setClass(this, lumacore::kClassId< HomeButtonLayout >);
 }
 
 void HomeButtonLayout::init(const TableIter& /*rIter*/) {

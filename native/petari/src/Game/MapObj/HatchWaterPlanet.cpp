@@ -3,6 +3,10 @@
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace NrvHatchWaterPlanet {
     NEW_NERVE(HatchWaterPlanetNrvWait, HatchWaterPlanet, Wait);
@@ -11,6 +15,7 @@ namespace NrvHatchWaterPlanet {
 };  // namespace NrvHatchWaterPlanet
 
 HatchWaterPlanet::HatchWaterPlanet(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< HatchWaterPlanet >);
     mPlanetLODCtrl = nullptr;
     mCollisionParts = nullptr;
 }
@@ -30,7 +35,7 @@ void HatchWaterPlanet::init(const TableIter& rIter) {
         MR::registerDemoActionNerve(this, GET_NERVE(HatchWaterPlanet, HatchWaterPlanetNrvOpen), nullptr);
     }
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     MR::setClippingFarMax(this);
     mPlanetLODCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLODCtrl->validate();

@@ -25,6 +25,9 @@ public:
     virtual void init(const TableIter& rIter) override;
 
     AreaObjMgr* getManager(const char*) const;
+    // The kinds of area the game makes (its manager table), for the area registry (LumaRegistry).
+    static u32 getKindNum();
+    static const char* getKindName(u32 index);
     AreaObj* getAreaObj(const char*, const Vec3f&) const;
 
 private:

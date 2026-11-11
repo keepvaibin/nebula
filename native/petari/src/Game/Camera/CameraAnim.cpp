@@ -5,6 +5,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 180.0f);
 
 namespace {
     // The cooked camera tracks store a key's slopes per authored frame of 30 a second (the cooker reads them the same way);
@@ -70,6 +74,7 @@ void CameraAnim::getWatchPos(Vec3f* pWatchPos, f32 key) const {
 
 CameraAnim::CameraAnim(const char* pName)
     : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mIsPaused(), mShownFrame(-1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraAnim >);
 }
 
 void CameraAnim::reset() {
@@ -124,7 +129,7 @@ CameraTargetObj* CameraAnim::calc() {
         CameraLocalUtil::setUpVec(this, up);
         CameraLocalUtil::setWatchUpVec(this, up);
 
-        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, mCurrentFrame) * MR::pi() / 180.0f);
+        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, mCurrentFrame) * MR::pi() / cNum_calc_f1);
         CameraLocalUtil::setFovy(this, getTrack(CamAnmTrack_Fovy, mCurrentFrame));
 
         if (isCutTo(mCurrentFrame)) {
@@ -137,7 +142,7 @@ CameraTargetObj* CameraAnim::calc() {
         }
     } else {
         const f32 frame = mNrFrames - 1;
-        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, frame) * MR::pi() / 180.0f);
+        CameraLocalUtil::setRoll(this, getTrack(CamAnmTrack_Twist, frame) * MR::pi() / cNum_calc_f2);
         CameraLocalUtil::setFovy(this, getTrack(CamAnmTrack_Fovy, mNrFrames - 1));
     }
 

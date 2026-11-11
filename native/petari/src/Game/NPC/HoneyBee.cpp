@@ -15,6 +15,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 450.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 9.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 120.0f);
 
 namespace {
     static const s32 sFlyLectureWaitStep = NebulaFrameClock::stepsOfSeconds(2);
@@ -33,6 +43,7 @@ namespace NrvHoneyBee {
 };  // namespace NrvHoneyBee
 
 HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), mRailPointNo(-1), mInitAction(), mFloatOffset() {
+    lumacore::setClass(this, lumacore::kClassId< HoneyBee >);
     mTalkMtx.identity();
     mClippingCenter.zero();
 }
@@ -44,9 +55,9 @@ void HoneyBee::init(const TableIter& rIter) {
     caps.mBinder = false;
     caps.mPointerJoint = "Center";
     caps.mSensorJoint = "Center";
-    caps.mSensorSize = 70.0f;
+    caps.mSensorSize = cNum_init_f1;
     caps.mSensorOffset.x = 0.0f;
-    caps.mSensorOffset.y = -20.0f;
+    caps.mSensorOffset.y = -cNum_init_f2;
     caps.mSensorOffset.z = 0.0f;
     caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvWait);
     caps.mScaleJoint = "Center";
@@ -57,7 +68,7 @@ void HoneyBee::init(const TableIter& rIter) {
 
     setDefaultsParam();
     mUseReactionActions = 0;
-    mSwingReactDist = 450.0f;
+    mSwingReactDist = cNum_init_f3;
 
     switch (mInitAction) {
     case InitAction_Wait:
@@ -146,13 +157,13 @@ void HoneyBee::control() {
     }
 
     NPCActor::control();
-    f32 a = mTalkMtx[1][3] - 80.0f;
+    f32 a = mTalkMtx[1][3] - cNum_control_f1;
     mTalkMtx.set(MR::getJointMtx(this, "Center"));
     MR::extractMtxTrans(mTalkMtx, &mClippingCenter);
-    mTalkMtx[1][3] = 80.0f + (((9.0f * a) + mTalkMtx[1][3]) / 10.0f);
+    mTalkMtx[1][3] = cNum_control_f2 + (((cNum_control_f3 * a) + mTalkMtx[1][3]) / cNum_control_f4);
 
     if (mInitAction != InitAction_Sleep && mInitAction != InitAction_Stick) {
-        mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, 120.0f);
+        mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, cNum_control_f5);
     }
 }
 

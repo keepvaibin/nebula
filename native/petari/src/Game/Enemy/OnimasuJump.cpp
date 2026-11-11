@@ -1,7 +1,12 @@
 #include "Game/Enemy/OnimasuJump.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcJumpVelocity_f1, "calcJumpVelocity.f1", 0.5f);
 
 OnimasuJump::OnimasuJump(const char* pName) : Onimasu(pName), mCurNormal(), mNormals() {
+    lumacore::setClass(this, lumacore::kClassId< OnimasuJump >);
 }
 
 void OnimasuJump::calcJumpVelocity() {
@@ -9,7 +14,7 @@ void OnimasuJump::calcJumpVelocity() {
     MR::calcRailPointPos(&railPointPos, this, mCurNormal);
     MR::onCalcGravity(this);
     f32 distToMoveThisFrame = mPosition.distance(railPointPos) / getTimeToNextPoint();
-    f32 jumpStrength = 0.5f * (getGravityScalar() * getTimeToNextPoint());
+    f32 jumpStrength = cNum_calcJumpVelocity_f1 * (getGravityScalar() * getTimeToNextPoint());
 
     Vec3f dirToRailPointPos(railPointPos - mPosition);
 

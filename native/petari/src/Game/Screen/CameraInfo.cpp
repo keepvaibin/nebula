@@ -5,6 +5,7 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const s32 sLifeTime = NebulaFrameClock::stepsOfSeconds(2);
@@ -19,6 +20,7 @@ namespace NrvCameraInfo {
 };  // namespace NrvCameraInfo
 
 CameraInfo::CameraInfo(const char* pName) : LayoutActor(pName, true), mStep(-1), mIsActive(true) {
+    lumacore::setClass(this, lumacore::kClassId< CameraInfo >);
 }
 
 void CameraInfo::init(const TableIter& /*rIter*/) {

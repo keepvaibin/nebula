@@ -6,6 +6,12 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 0.005f);
 
 namespace {
     NEBULA_TUNABLE(s32, sRoundingFrame, 60);
@@ -14,6 +20,7 @@ namespace {
 CameraWaterFollow::CameraWaterFollow(const char* pName)
     : Camera(pName), mDistMin(300.0f), mDistMax(1200.0f), mSideBlendRateMin(0.01f), mSideBlendRate(0.01f), mCollideCount(),
       mLastMoveDir(0.0f, 0.0f, 0.0f), mIsRounding(), mRoundingFrame(), mSide(1.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraWaterFollow >);
 }
 
 void CameraWaterFollow::reset() {
@@ -29,7 +36,7 @@ void CameraWaterFollow::reset() {
 
 CameraTargetObj* CameraWaterFollow::calc() {
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), cNum_calc_f1 / cNum_calc_f2);
 
     Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
     Vec3f front, up, side;
@@ -49,7 +56,7 @@ CameraTargetObj* CameraWaterFollow::calc() {
         }
         rate *= rate;
 
-        f32 angle = gravSide.angle(side) * 10000.0f;
+        f32 angle = gravSide.angle(side) * cNum_calc_f3;
         f32 angle2 = angle - angle * rate;
         if (MR::isNearZero(angle)) {
             mSideBlendRate = 1.0f;
@@ -68,7 +75,7 @@ CameraTargetObj* CameraWaterFollow::calc() {
         }
 
         f32 rate = mSideBlendRateMin * MR::abs(gravUp.dot(front));
-        mSideBlendRate *= 0.005f;
+        mSideBlendRate *= cNum_calc_f4;
         if (mSideBlendRate < rate) {
             mSideBlendRate = rate;
         }

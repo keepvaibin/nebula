@@ -12,6 +12,11 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPlantAfterPlacement_f1, "initPlantAfterPlacement.f1", 2.0f);
 
 namespace {
     // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,
@@ -77,6 +82,7 @@ namespace {
 WaterPlant::WaterPlant(const char* pName)
     : LiveActor(pName), mPlantNum(::cDefaultPlantNum), mPlantDataArray(), mAreaRadius(::cDefaultAreaRadius), mIsSpin(),
       mHalfWidth(::cDefaultHalfWidth), mHeight(), mType() {
+    lumacore::setClass(this, lumacore::kClassId< WaterPlant >);
 }
 
 void WaterPlant::init(const TableIter& rIter) {
@@ -98,7 +104,7 @@ void WaterPlant::init(const TableIter& rIter) {
     mHeight = ::cHeightTable[mType];
     initPlant();
 
-    MR::setClippingTypeSphere(this, Vec2f(mAreaRadius, 2.0f * mHeight).length());
+    MR::setClippingTypeSphere(this, Vec2f(mAreaRadius, cNum_init_f1 * mHeight).length());
 
     makeActorAppeared();
 }
@@ -132,7 +138,7 @@ void WaterPlant::movement() {
                 rPlant.mSpinWaveSwingVec2.set(rPlant.mSpinSwingDir);
                 rPlant.mSpinWaveSwingVec3.set(rPlant.mSpinSwingDir);
 
-                f32 spinSwingRate = rPlant.mSpinSwingStrength * (::cSpinWaveSwingRate * (rate * MR::sinDegree(180.0f * (1.0f - rate))));
+                f32 spinSwingRate = rPlant.mSpinSwingStrength * (::cSpinWaveSwingRate * (rate * MR::sinDegree(cNum_movement_f1 * (1.0f - rate))));
                 rPlant.mSpinWaveSwingVec1.scale(::cSpinSwingRate0 * spinSwingRate);
                 rPlant.mSpinWaveSwingVec2.scale(::cSpinSwingRate1 * spinSwingRate);
                 rPlant.mSpinWaveSwingVec3.scale(spinSwingRate);
@@ -233,7 +239,7 @@ void WaterPlant::initPlantAfterPlacement() {
         rPlant.mSpinWaveSwingTimer = 0;
         rPlant.mSpinSwingStrength = 0.0f;
 
-        f32 height = MR::getRandom(mHeight, 2.0f * mHeight);
+        f32 height = MR::getRandom(mHeight, cNum_initPlantAfterPlacement_f1 * mHeight);
         rPlant.mHeight1 = height * ::cHeightRate0;
         rPlant.mHeight2 = height * ::cHeightRate1;
         rPlant.mHeight3 = height;
@@ -293,6 +299,7 @@ void WaterPlant::drawDirect(TypedDraw& rDraw, const Vec3f& rSide) const {
 WaterPlantDrawInit::WaterPlantDrawInit()
     : NameObj("水草の描画初期化"), mAngleOffset(), mSwingPosTable(), mCameraSide(::cInitialCameraSide), mPlantATex(), mPlantBTex(),
       mPlantCTex(), mPlantDTex() {
+    lumacore::setClass(this, lumacore::kClassId< WaterPlantDrawInit >);
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, -1);
 
     mPlantATex = new GameTexture(MR::loadTexFromArc("WaterPlant", "WaterPlantA.bti"));

@@ -1,6 +1,7 @@
 #include "Game/Boss/BossAccessor.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     BossAccessor* getBossAccessor() {
@@ -9,6 +10,7 @@ namespace {
 };  // namespace
 
 BossAccessor::BossAccessor() : NameObj("ボスへのアクセス"), mBoss() {
+    lumacore::setClass(this, lumacore::kClassId< BossAccessor >);
 }
 
 namespace BossAccess {

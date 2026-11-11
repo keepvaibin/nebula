@@ -1,6 +1,8 @@
 #include "Game/Player/MatrixControl.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MatrixControl::MatrixControl(const char* pName, MatrixMap* pMap, bool values) : NameObj(pName), mMap(pMap) {
+    lumacore::setClass(this, lumacore::kClassId< MatrixControl >);
     u32 size;
     for (size = 0; mMap[size].mName[0] != '\0'; size++) {
         if (values) {
@@ -54,6 +56,7 @@ bool MatrixControl::getBitOrNone(const char* pName, u8 bit) const {
 }
 
 MatrixValueGetter::MatrixValueGetter(const char* pName, MatrixValueTable* pTable) : NameObj(pName), mTable(pTable) {
+    lumacore::setClass(this, lumacore::kClassId< MatrixValueGetter >);
     u32 size;
     for (size = 0; mTable[size].mName[0] != '\0'; size++) {
     }

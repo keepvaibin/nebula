@@ -2,6 +2,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvPicketSwitch {
     NEW_NERVE(PicketSwitchNrvWait, PicketSwitch, Wait);
@@ -10,6 +11,7 @@ namespace NrvPicketSwitch {
 };  // namespace NrvPicketSwitch
 
 PicketSwitch::PicketSwitch(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PicketSwitch >);
 }
 
 void PicketSwitch::init(const TableIter& rIter) {

@@ -40,6 +40,35 @@ static_assert(sizeof(GhostFrame) == 32, "GhostFrame is cook/ghost.rs's 32-byte f
 #include <cstdio>
 #include <nebula_format.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 15.59f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 42.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 42.93f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 17.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 113.55f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreStartDemo2_f1, "exePreStartDemo2.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f1, "receiveGhostFrame.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f2, "receiveGhostFrame.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f3, "receiveGhostFrame.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f4, "receiveGhostFrame.f4", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f5, "receiveGhostFrame.f5", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f6, "receiveGhostFrame.f6", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f7, "receiveGhostFrame.f7", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f8, "receiveGhostFrame.f8", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveGhostFrame_f9, "receiveGhostFrame.f9", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getShiftRatio_f1, "getShiftRatio.f1", 256.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getShiftRatio_f2, "getShiftRatio.f2", 256.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeWinDemo_1, "exeWinDemo.1", 180);
@@ -122,6 +151,7 @@ namespace NrvGhostPlayer {
 };  // namespace NrvGhostPlayer
 
 GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), mCameraInfo(), mXanimePlayer() {
+    lumacore::setClass(this, lumacore::kClassId< GhostPlayer >);
     mTargetRotation.zero();
     mKilledByStar = false;
     mPowerStarTarget = nullptr;
@@ -179,8 +209,8 @@ void GhostPlayer::init(const TableIter& rIter) {
     mVelocity.zero();
     initAnimation();
     initHitSensor(1);
-    MR::addHitSensorRide(this, "body", 4, 40.0f, Vec3f(0.0f, 80.0f, 0.0f));
-    MR::initShadowVolumeSphere(this, 50.0f);
+    MR::addHitSensorRide(this, "body", 4, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
     MR::validateShadow(this, nullptr);
     MR::calcGravity(this);
     MR::onCalcShadow(this, nullptr);
@@ -205,7 +235,7 @@ void GhostPlayer::init(const TableIter& rIter) {
     NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
     mJetTurtleShadow = new JetTurtleShadow("カメシャドウモデル");
     mJetTurtleShadow->initWithoutIter();
-    mHandRPos = new FixedPosition(this, "HandR", Vec3f(15.59f, 42.5f, 42.93f), Vec3f(-17.05f, -0.7f, 113.55f));
+    mHandRPos = new FixedPosition(this, "HandR", Vec3f(cNum_init_f4, cNum_init_f5, cNum_init_f6), Vec3f(-cNum_init_f7, -cNum_init_f8, cNum_init_f9));
     MR::declareStarPiece(this, 50);
     MR::declareCoin(this, 50);
     mAppearStarPieceCooldown = 0;
@@ -252,7 +282,7 @@ void GhostPlayer::control() {
         while (true) {
             mFrame += receiveGhostFrame();
             if (mSkippingLeadIn) {
-                if (mXanimePlayer->mWeights[3] > 0.9f) {
+                if (mXanimePlayer->mWeights[3] > cNum_control_f1) {
                     continue;
                 }
                 mSkippingLeadIn = false;
@@ -402,7 +432,7 @@ void GhostPlayer::exePreStartDemo2() {
     MR::extractMtxYDir(getBaseMtx(), &upVec);
     if (!isNormalized) {
         MR::calcFrontVec(&frontVec, this);
-        if (MR::vecBlendSphere(frontVec, normalizedFrontVec, &frontVec, 0.1f) == false) {
+        if (MR::vecBlendSphere(frontVec, normalizedFrontVec, &frontVec, cNum_exePreStartDemo2_f1) == false) {
             frontVec = normalizedFrontVec;
         }
         MR::makeMtxUpFront(getBaseMtx(), upVec, frontVec);
@@ -491,7 +521,7 @@ void GhostPlayer::calcAndSetBaseMtx() {
     }
 
     MtxPtr baseMtx = MR::getModel(this)->getBaseTRMtx();
-    MR::blendMtxRotate(getBaseMtx(), mTargetRotationMtx, 0.2f, baseMtx);
+    MR::blendMtxRotate(getBaseMtx(), mTargetRotationMtx, cNum_calcAndSetBaseMtx_f1, baseMtx);
     MR::setMtxTrans(baseMtx, mPosition.x, mPosition.y, mPosition.z);
     MR::getModel(this)->setBaseScale(mScale);
 
@@ -544,7 +574,7 @@ void GhostPlayer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
     } else {
         if (isNerve(GET_NERVE(GhostPlayer, HostTypeNrvRun)) && MR::sendMsgPush(pReceiver, pSender) && mAppearStarPieceCooldown == 0) {
-            if (MR::appearStarPiece(this, mPosition, 1, 10.0f, 40.0f, false)) {
+            if (MR::appearStarPiece(this, mPosition, 1, cNum_attackSensor_f1, cNum_attackSensor_f2, false)) {
                 if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
                     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
                 } else {
@@ -569,7 +599,7 @@ bool GhostPlayer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
         MR::calcUpVec(&upVec, this);
         MR::calcFrontVec(&frontVec, this);
 
-        if (MR::appearStarPiece(this, mPosition, 5, 10.0f, 40.0f, false)) {
+        if (MR::appearStarPiece(this, mPosition, 5, cNum_receiveMsgPlayerAttack_f1, cNum_receiveMsgPlayerAttack_f2, false)) {
             if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
                 MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
             } else {
@@ -645,8 +675,8 @@ u32 GhostPlayer::receiveGhostFrame() {
         s8 rawRotX = rFrame.mRotation[0];
         f32 rotX;
         MR::convToFloat(rawRotX, 7, &rotX);
-        rotX *= 180.0f;
-        rotX = MR::clamp(rotX, -180.0f, 180.0f);
+        rotX *= cNum_receiveGhostFrame_f1;
+        rotX = MR::clamp(rotX, -cNum_receiveGhostFrame_f2, cNum_receiveGhostFrame_f3);
         mTargetRotation.x = rotX;
     }
 
@@ -654,8 +684,8 @@ u32 GhostPlayer::receiveGhostFrame() {
         s8 rawRotY = rFrame.mRotation[1];
         f32 rotY;
         MR::convToFloat(rawRotY, 7, &rotY);
-        rotY *= 180.0f;
-        rotY = MR::clamp(rotY, -180.0f, 180.0f);
+        rotY *= cNum_receiveGhostFrame_f4;
+        rotY = MR::clamp(rotY, -cNum_receiveGhostFrame_f5, cNum_receiveGhostFrame_f6);
         mTargetRotation.y = rotY;
     }
 
@@ -663,8 +693,8 @@ u32 GhostPlayer::receiveGhostFrame() {
         s8 rawRotZ = rFrame.mRotation[2];
         f32 rotZ;
         MR::convToFloat(rawRotZ, 7, &rotZ);
-        rotZ *= 180.0f;
-        rotZ = MR::clamp(rotZ, -180.0f, 180.0f);
+        rotZ *= cNum_receiveGhostFrame_f7;
+        rotZ = MR::clamp(rotZ, -cNum_receiveGhostFrame_f8, cNum_receiveGhostFrame_f9);
         mTargetRotation.z = rotZ;
     }
 
@@ -752,9 +782,9 @@ u32 GhostPlayer::receiveGhostFrame() {
 
 f32 getShiftRatio(s8 shiftValue) {
     if (shiftValue > 0) {
-        return static_cast< f32 >(256 << shiftValue) / 256.0f;
+        return static_cast< f32 >(256 << shiftValue) / cNum_getShiftRatio_f1;
     }
-    return static_cast< f32 >(256 >> -shiftValue) / 256.0f;
+    return static_cast< f32 >(256 >> -shiftValue) / cNum_getShiftRatio_f2;
 }
 
 namespace MR {

@@ -4,6 +4,7 @@
 #include "Game/MapObj/Coin.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const s32 sAppearCameraTime = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -19,6 +20,7 @@ namespace NrvCoinGroup {
 };  // namespace NrvCoinGroup
 
 CoinGroup::CoinGroup(const char* pName) : LiveActor(pName), mCoinArray(), mCameraInfo(), mCoinCount(), mTimeLimit(-1), mIsPurpleCoinGroup() {
+    lumacore::setClass(this, lumacore::kClassId< CoinGroup >);
 }
 
 void CoinGroup::init(const TableIter& rIter) {

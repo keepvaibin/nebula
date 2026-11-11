@@ -6,6 +6,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_emitItem_f1, "emitItem.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_emitItem_f2, "emitItem.f2", 40.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_execute_1, "execute.1", 1);
 
@@ -103,7 +106,7 @@ void SpinHitController::emitItem(LiveActor* pActor) {
     if (mIsCoin) {
         MR::appearCoinPop(pActor, pActor->mPosition, mItemNum);
     } else {
-        MR::appearStarPiece(pActor, pActor->mPosition, mItemNum, 10.0f, 40.0f, false);
+        MR::appearStarPiece(pActor, pActor->mPosition, mItemNum, cNum_emitItem_f1, cNum_emitItem_f2, false);
         if (pActor->mSoundObject != nullptr) {
             MR::startSound(pActor, "SE_OJ_STAR_PIECE_BURST");
         }

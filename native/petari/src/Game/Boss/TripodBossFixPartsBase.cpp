@@ -9,9 +9,14 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initClippingSphere_f1, "initClippingSphere.f1", 0.5f);
 
 TripodBossFixPartsBase::TripodBossFixPartsBase(const char* pName)
     : LiveActor(pName), mLocalPos(0.0f, 0.0f, 0.0f), mBreakMovement(), mJointID(-1), mClipCenter(0.0f, 0.0f, 0.0f), mClippingRadius(), mIsActive() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossFixPartsBase >);
     mMtx.identity();
 }
 
@@ -33,7 +38,7 @@ void TripodBossFixPartsBase::initClippingSphere() {
     Box3f boundingBox;
     MR::calcModelBoundingBox(&boundingBox, this);
 
-    mClipCenter = (boundingBox.i + boundingBox.f) * 0.5f;
+    mClipCenter = (boundingBox.i + boundingBox.f) * cNum_initClippingSphere_f1;
     mClippingRadius = mClipCenter.distance(boundingBox.i);
 }
 

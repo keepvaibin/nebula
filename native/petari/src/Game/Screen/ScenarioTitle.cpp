@@ -3,6 +3,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(ScenarioTitleAppear, ScenarioTitle, Appear);
@@ -11,6 +12,7 @@ namespace {
 };  // namespace
 
 ScenarioTitle::ScenarioTitle() : LayoutActor("シナリオ名表示", true) {
+    lumacore::setClass(this, lumacore::kClassId< ScenarioTitle >);
 }
 
 void ScenarioTitle::init(const TableIter& /*rInfo*/) {

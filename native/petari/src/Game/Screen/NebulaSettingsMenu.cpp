@@ -243,12 +243,7 @@ namespace {
 
     // The HOME Menu (the host's NEBULA_HOME_MENU_VIEW): its rows top to bottom, then "are you sure?" about the choice it asks
     // about (1 leave, 2 reset), answered no or yes as the game's own questions are.
-#if defined(__ANDROID__)
-    const char* const cQuitRow = "Quit";  // no desktop to quit to
-#else
-    const char* const cQuitRow = "QuitToDesktop";
-#endif
-    const char* const cHomeRows[] = {"HomeMenuReturn", "HomeMenuReset", cQuitRow};
+    const char* const cHomeRows[] = {"HomeMenuReturn", "HomeMenuReset", "Quit"};
     const char* const cHomeAnswers[] = {"HomeMenuNo", "HomeMenuYes"};
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
@@ -3456,10 +3451,10 @@ namespace NebulaSettingsMenu {
             return;
         }
         NebulaHost::settingsView(&sView);
-        // Not before a file is chosen (the boot, the title, the file select): asked for there, it closes at once, unless
-        // the input mode has nothing to play with: the menu is how another is chosen.
+        // Not during the boot (the logos): asked for there, it closes at once. The title and the file select open it
+        // (F1, the file select's Settings button), over everything they draw.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            (MR::isCurrentScene(SceneKind_Boot) || MR::isStageFileSelect())) {
+            MR::isCurrentScene(SceneKind_Boot)) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }

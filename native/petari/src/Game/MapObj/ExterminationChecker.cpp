@@ -8,6 +8,7 @@
 #include "Game/MapObj/KeySwitch.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeTryStartDemoAppear_1, "exeTryStartDemoAppear.1", 5);
@@ -41,6 +42,7 @@ namespace {
 };  // namespace
 
 ExterminationChecker::ExterminationChecker(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ExterminationChecker >);
     mGroup = nullptr;
     mKeySwitch = nullptr;
     mKeySwitchPos.x = 0.0f;

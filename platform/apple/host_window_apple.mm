@@ -31,6 +31,7 @@
 #include "galaxy/steam_controller.h"
 #include "galaxy/switch_controller.h"
 #include "galaxy/virtual_keys.h"
+#include "apple_host.h"
 #include "sdl_host.h"
 
 #include <algorithm>
@@ -71,6 +72,7 @@ InputState g_input;  // guarded by g_input_mutex
 NSWindow* g_window = nil;       // the main thread's
 NebulaView* g_view = nil;
 id g_delegate = nil;
+std::vector<std::filesystem::path> g_opened_early;  // files opened before the window (the main thread's)
 std::atomic<void*> g_layer{nullptr};  // the view's CAMetalLayer, for the renderer's thread
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_menu_context{false};
@@ -608,6 +610,24 @@ void on_main(dispatch_block_t block) {
 }
 
 }  // namespace
+// Files dropped on the window or opened with Nebula (the main thread): to the importer once the window is up.
+void files_opened(NSArray<NSURL*>* urls) {
+    std::vector<std::filesystem::path> files;
+    for (NSURL* url in urls) {
+        if (url.isFileURL && url.fileSystemRepresentation != nullptr) {
+            files.emplace_back(url.fileSystemRepresentation);
+        }
+    }
+    if (files.empty()) {
+        return;
+    }
+    if (g_window == nil) {
+        g_opened_early.insert(g_opened_early.end(), files.begin(), files.end());
+        return;
+    }
+    galaxy::render::native_settings_files_dropped(std::move(files));
+}
+
 }  // namespace galaxy::sdl
 
 // The window's view: a Metal layer the size of the window in pixels.
@@ -618,6 +638,7 @@ void on_main(dispatch_block_t block) {
 - (instancetype)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
     if (self != nil) {
+        [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
         self.wantsLayer = YES;
         self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
         [self addTrackingArea:[[NSTrackingArea alloc]
@@ -662,6 +683,16 @@ void on_main(dispatch_block_t block) {
     [super viewDidChangeBackingProperties];
     self.layer.contentsScale = self.window != nil ? self.window.backingScaleFactor : 1.0;
 }
+// Files dropped on the window: mods to the importer, Mii files to the Mii import (native_settings_files_dropped).
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    return NSDragOperationCopy;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    NSArray<NSURL*>* const urls = [sender.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                                           options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+    galaxy::sdl::files_opened(urls);
+    return urls.count != 0u;
+}
 // Keys are the game's: none is passed on to beep.
 - (void)keyDown:(NSEvent*)event {
 }
@@ -685,6 +716,10 @@ void on_main(dispatch_block_t block) {
 - (BOOL)windowShouldClose:(NSWindow*)sender {
     galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
     return NO;  // the host closes it as the game ends
+}
+// "Open With" Nebula, or a .luma opened in Finder (Info.plist's document type).
+- (void)application:(NSApplication*)application openURLs:(NSArray<NSURL*>*)urls {
+    galaxy::sdl::files_opened(urls);
 }
 - (void)windowDidResize:(NSNotification*)notification {
     [self sizeChanged];
@@ -745,7 +780,12 @@ void on_main(dispatch_block_t block) {
     galaxy::sdl::update_cursor();
 }
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
-    // Quit from the menu, the Dock or the system: the host ends the game and leaves by itself.
+    // Quit from the menu, the Dock or the system. While the first start's setup window is up it is that window's
+    // Quit (it stops an import under way first); else the host ends the game and leaves by itself.
+    if (NSWindow* const modal = NSApp.modalWindow; modal != nil) {
+        [modal performClose:nil];
+        return NSTerminateCancel;
+    }
     galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
     return NSTerminateCancel;
 }
@@ -852,13 +892,8 @@ bool key_event(NSEvent* event, std::vector<std::tuple<int, bool, bool, int>>& me
 
 bool start() noexcept {
     g_main_thread = std::this_thread::get_id();
+    galaxy::apple::start_app();
     @autoreleasepool {
-        [NSApplication sharedApplication];
-        g_delegate = [NebulaDelegate new];
-        NSApp.delegate = g_delegate;
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-        make_menus();
-        [NSApp finishLaunching];
         NSNotificationCenter* const center = NSNotificationCenter.defaultCenter;
         [center addObserver:g_delegate selector:@selector(controllerConnected:) name:GCControllerDidConnectNotification object:nil];
         [center addObserver:g_delegate
@@ -872,52 +907,40 @@ bool start() noexcept {
     return true;
 }
 
-#if defined(NEBULA_DEV)
-// A test of the keyboard's whole path with nobody at the keys (NEBULA_TEST_KEY=<Mac key code>,<from ms>,<to ms>, counted
-// from the first event pump): the key goes down and comes up as events in the app's own queue, which the pump takes
-// like a keyboard's.
-void post_test_key() {
-    static const char* const spec = std::getenv("NEBULA_TEST_KEY");
-    if (spec == nullptr) {
+}  // namespace galaxy::sdl
+
+namespace galaxy::apple {
+
+void start_app() noexcept {
+    static bool started = false;
+    if (started) {
         return;
     }
-    static const std::uint64_t began = galaxy::steady_ms();
-    static int state = 0;  // 0 before, 1 held, 2 done
-    unsigned code = 0, from = 0, to = 0;
-    if (std::sscanf(spec, "%u,%u,%u", &code, &from, &to) != 3) {
-        return;
-    }
-    const std::uint64_t now = galaxy::steady_ms() - began;
-    const bool down = state == 0 && now >= from;
-    const bool up = state == 1 && now >= to;
-    if (!down && !up) {
-        return;
-    }
-    state += 1;
-    NSEvent* const event = [NSEvent keyEventWithType:down ? NSEventTypeKeyDown : NSEventTypeKeyUp
-                                            location:NSZeroPoint
-                                       modifierFlags:0
-                                           timestamp:NSProcessInfo.processInfo.systemUptime
-                                        windowNumber:g_window != nil ? g_window.windowNumber : 0
-                                             context:nil
-                                          characters:@""
-                         charactersIgnoringModifiers:@""
-                                           isARepeat:NO
-                                             keyCode:static_cast<unsigned short>(code)];
-    if (event != nil) {
-        [NSApp postEvent:event atStart:NO];
-        std::fprintf(stderr, "[input] test key %u %s at %llu ms\n", code, down ? "down" : "up", static_cast<unsigned long long>(now));
+    started = true;
+    @autoreleasepool {
+        // The delegate is the app's before anything of AppKit runs: it is asked at the app's first moments whether
+        // the windows' saved state is kept by secure coding, and AppKit stops a process whose answer changes after it
+        // has started without one (as when the first start's setup window came up before the game's delegate).
+        // Nothing of a window is restored at the next start either: the game opens its own as its settings say.
+        [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSQuitAlwaysKeepsWindows" : @NO}];
+        [NSApplication sharedApplication];
+        galaxy::sdl::g_delegate = [NebulaDelegate new];
+        NSApp.delegate = galaxy::sdl::g_delegate;
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        galaxy::sdl::make_menus();
+        [NSApp finishLaunching];
     }
 }
-#endif
+
+}  // namespace galaxy::apple
+
+namespace galaxy::sdl {
+
 
 void pump_events(int timeout_ms) noexcept {
     std::vector<std::tuple<int, bool, bool, int>> menu_keys;  // key, down, repeat, the letter at its place
     int menu_wheel = 0;
     @autoreleasepool {
-#if defined(NEBULA_DEV)
-        post_test_key();
-#endif
         NSDate* const until = [NSDate dateWithTimeIntervalSinceNow:static_cast<double>(std::max(timeout_ms, 0)) / 1000.0];
         NSEvent* event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:until inMode:NSDefaultRunLoopMode dequeue:YES];
         while (event != nil) {
@@ -1108,6 +1131,7 @@ void make_window(int width, int height) {
     NSWindow* const window = [[NSWindow alloc] initWithContentRect:content styleMask:style backing:NSBackingStoreBuffered defer:NO
                                                             screen:screen];
     window.releasedWhenClosed = NO;
+    window.restorable = NO;  // the settings say how the game's window opens, not the last run's
     window.title = @"Nebula";
     window.contentMinSize = NSMakeSize(320, 240);
     window.collectionBehavior = NSWindowCollectionBehaviorFullScreenPrimary;
@@ -1126,6 +1150,11 @@ void make_window(int width, int height) {
     g_view = view;
     g_layer.store((__bridge void*)((NSView*)view).layer, std::memory_order_release);
     update_window_size();
+    // Files opened before the window was up (Nebula started by opening a .luma): imported now.
+    if (!g_opened_early.empty()) {
+        galaxy::render::native_settings_files_dropped(std::move(g_opened_early));
+        g_opened_early.clear();
+    }
 }
 
 }  // namespace

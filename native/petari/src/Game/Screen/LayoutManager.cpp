@@ -28,6 +28,13 @@
 #include <Game/Ui/Rect.hpp>
 #include <nebula_math.h>
 #include <nebula_format.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f1, "calcAnim.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f1, "isPointing.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f2, "isPointing.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f3, "isPointing.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f4, "isPointing.f4", 2.0f);
 
 namespace {
     namespace Local {
@@ -199,7 +206,7 @@ void LayoutManager::movement() {
 void LayoutManager::calcAnim() {
     if (MR::isScreen16Per9()) {
         Vec2f scale;
-        scale.x = 0.75f;
+        scale.x = cNum_calcAnim_f1;
         scale.y = 1.0f;
         mDrawInfo.SetLocationAdjustScale(scale);
     } else {
@@ -334,7 +341,7 @@ bool LayoutManager::isPointing(const Ui::Pane* pPane, const Vec2f& rPos) const {
 
         break;
     case 1:
-        if (pos.x < -pPane->GetDrawSize().width / 2.0f || pPane->GetDrawSize().width / 2.0f < pos.x) {
+        if (pos.x < -pPane->GetDrawSize().width / cNum_isPointing_f1 || pPane->GetDrawSize().width / cNum_isPointing_f2 < pos.x) {
             return false;
         }
 
@@ -355,7 +362,7 @@ bool LayoutManager::isPointing(const Ui::Pane* pPane, const Vec2f& rPos) const {
 
         break;
     case 1:
-        if (pos.y < -pPane->GetDrawSize().height / 2.0f || pPane->GetDrawSize().height / 2.0f < pos.y) {
+        if (pos.y < -pPane->GetDrawSize().height / cNum_isPointing_f3 || pPane->GetDrawSize().height / cNum_isPointing_f4 < pos.y) {
             return false;
         }
 

@@ -21,6 +21,10 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_createLetterIcon_f1, "createLetterIcon.f1", 122.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startDemo_f1, "startDemo.f1", 180.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, sMessangerOneUpNum, 5);
@@ -33,6 +37,7 @@ namespace {
 
 KinopioAstro::KinopioAstro(const char* pName)
     : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), mHasPeachLetter(), mHasLuigiLetter(), mIsPlayerLuigi() {
+    lumacore::setClass(this, lumacore::kClassId< KinopioAstro >);
 }
 
 bool KinopioAstro::dispLetter(LayoutActor* pLayout) const {
@@ -53,7 +58,7 @@ bool KinopioAstro::isDispLetterIcon() const {
 }
 
 void KinopioAstro::createLetterIcon(const TableIter& rIter) {
-    mLetterIconTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Kinopio000", Vec3f(0.0f, 122.0f, 0.0f), nullptr);
+    mLetterIconTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Kinopio000", Vec3f(0.0f, cNum_createLetterIcon_f1, 0.0f), nullptr);
     MR::setDistanceToTalk(mLetterIconTalkCtrl, ::sMessangerTalkDistance);
 }
 
@@ -104,7 +109,7 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
 void KinopioAstro::startDemo() {
     MR::moveCoordAndTransToRailStartPoint(this);
     tryPushNullNerve();
-    turnToPlayer(180.0f);
+    turnToPlayer(cNum_startDemo_f1);
 }
 
 void KinopioAstro::endDemo() {

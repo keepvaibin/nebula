@@ -11,9 +11,19 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcGalaxyPos_f1, "calcGalaxyPos.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFlat_f1, "drawFlat.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFlat_f2, "drawFlat.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFlat_f3, "drawFlat.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFlat_f4, "drawFlat.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSide_f1, "drawSide.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSide_f2, "drawSide.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSide_f3, "drawSide.f3", 0.5f);
 
 namespace {
-    const Vec cRotateOutermost = {20.0f, 45.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cRotateOutermost, {20.0f, 45.0f, 0.0f});
     // Orbit radius by galaxy index: five galaxies in a dome, four in the last one.
     NEBULA_TUNABLE_LIST(f32, cRadius, , {4000.0f, 6200.0f, 8100.0f, 10300.0f, 12000.0f});
     NEBULA_TUNABLE_LIST(f32, cRadiusLastDome, , {4000.0f, 6700.0f, 9100.0f, 11800.0f});
@@ -45,6 +55,7 @@ namespace {
 }  // namespace
 
 AstroDomeOrbit::AstroDomeOrbit() : LiveActor("天文ドームの軌道"), mOrbitRadius(5000.0f), mAngle(), mRingCos(), mRingSin() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeOrbit >);
 }
 
 void AstroDomeOrbit::init(const TableIter& /*rIter*/) {
@@ -90,7 +101,7 @@ void AstroDomeOrbit::moveCoord() {
 }
 
 void AstroDomeOrbit::calcGalaxyPos(Vec3f* pPos) const {
-    f32 angle = MR::repeatDegree(mAngle) * TWO_PI / 360.0f;
+    f32 angle = MR::repeatDegree(mAngle) * TWO_PI / cNum_calcGalaxyPos_f1;
     pPos->set< f32 >(MR::cos(angle), 0.0f, MR::sin(angle));
     pPos->mult(mOrbitRadius);
     pPos->add(*pPos, SphereSelectorFunction::getHandleTrans());
@@ -124,9 +135,9 @@ void AstroDomeOrbit::drawFlat(TypedDraw& rDraw, f32 width, bool isTop, f32 heigh
     center.set(SphereSelectorFunction::getHandleTrans());
 
     if (isTop) {
-        center.y += (0.5f * height);
+        center.y += (cNum_drawFlat_f1 * height);
     } else {
-        center.y -= (0.5f * height);
+        center.y -= (cNum_drawFlat_f2 * height);
     }
 
     VertexP* pVtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, cRingPointNum * 2);
@@ -136,11 +147,11 @@ void AstroDomeOrbit::drawFlat(TypedDraw& rDraw, f32 width, bool isTop, f32 heigh
         dir.set< f32 >(mRingCos[i], 0.0f, mRingSin[i]);
 
         Vec3f inner;
-        inner.scale(mOrbitRadius - (0.5f * width), dir);
+        inner.scale(mOrbitRadius - (cNum_drawFlat_f3 * width), dir);
         inner.add(center);
 
         Vec3f outer;
-        outer.scale(mOrbitRadius + (0.5f * width), dir);
+        outer.scale(mOrbitRadius + (cNum_drawFlat_f4 * width), dir);
         outer.add(center);
 
         if (isTop) {
@@ -156,9 +167,9 @@ void AstroDomeOrbit::drawFlat(TypedDraw& rDraw, f32 width, bool isTop, f32 heigh
 void AstroDomeOrbit::drawSide(TypedDraw& rDraw, f32 width, bool isOuter, f32 height) const {
     Vec3f center;
     center.set(SphereSelectorFunction::getHandleTrans());
-    center.y += 0.5f * height;
+    center.y += cNum_drawSide_f1 * height;
 
-    f32 radius = isOuter ? mOrbitRadius + (0.5f * width) : mOrbitRadius - (0.5f * width);
+    f32 radius = isOuter ? mOrbitRadius + (cNum_drawSide_f2 * width) : mOrbitRadius - (cNum_drawSide_f3 * width);
 
     VertexP* pVtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, cRingPointNum * 2);
 

@@ -5,12 +5,18 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeLine_f1, "ShadowVolumeLine.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ShadowVolumeLine_f2, "ShadowVolumeLine.f2", 100.0f);
 
 ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("影描画[ボリュームライン]") {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeLine >);
     mFromShadowController = 0;
     mToShadowController = 0;
-    mFromWidth = 100.0f;
-    mToWidth = 100.0f;
+    mFromWidth = cNum_ShadowVolumeLine_f1;
+    mToWidth = cNum_ShadowVolumeLine_f2;
     mLastFromSide.zero();
     mLastToSide.zero();
     mSideFlips = 0;

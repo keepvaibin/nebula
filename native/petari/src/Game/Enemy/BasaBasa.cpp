@@ -24,6 +24,34 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChaseStart_f1, "exeChaseStart.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackStart_f1, "exeAttackStart.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackStart_f2, "exeAttackStart.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEnd_f1, "exeAttackEnd.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEndRecover_f1, "exeAttackEndRecover.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEndRecover_f2, "exeAttackEndRecover.f2", 116.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackEndRecover_f3, "exeAttackEndRecover.f3", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f1, "controlVelocity.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f2, "controlVelocity.f2", 0.96f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f3, "controlVelocity.f3", 0.45f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f4, "controlVelocity.f4", 8.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f5, "controlVelocity.f5", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_controlVelocity_f6, "controlVelocity.f6", 23.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeHitBack_turnDirectionToPlayerDegree_1, "exeHitBack.turnDirectionToPlayerDegree.1", 180.0f);
@@ -92,6 +120,7 @@ namespace NrvBasaBasa {
 BasaBasa::BasaBasa(const char* pName)
     : LiveActor(pName), mHangModel(nullptr), mScaleController(nullptr), mStampController(nullptr), mSpinHitController(nullptr), mFront(0.0f, 0.0f, 1.0f),
       mChaseDistance(2000.0f), mAttackDistance(0.0f), mTarget(nullptr), mChaseTurnAngle(0.0f), mAttackTarget(0.0f, 0.0f, 0.0f), mIsIceModel(false), mHomePos(0.0f, 0.0f, 0.0f), mHomeDistance(-1.0f), mClipStep(0), mIsOnCeiling(false) {
+    lumacore::setClass(this, lumacore::kClassId< BasaBasa >);
 }
 
 void BasaBasa::init(const TableIter& rIter) {
@@ -102,14 +131,14 @@ void BasaBasa::init(const TableIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 8, 90.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "attack", "JointRoot", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(110.0f, 0.0f, 0);
+    MR::addHitSensorAtJointEnemy(this, "body", "JointRoot", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "attack", "JointRoot", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(cNum_init_f3, 0.0f, 0);
     MR::initLightCtrl(this);
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initShadowVolumeSphere(this, 100.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f4);
     MR::validateClipping(this);
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
@@ -121,10 +150,10 @@ void BasaBasa::init(const TableIter& rIter) {
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     MR::onCalcGravity(this);
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mStampController = new AnimStampController();
-    mSpinHitController = new SpinHitController(this, 20, 20, 5, 0.0f, 20.0f, 10.0f, 3, false);
+    mSpinHitController = new SpinHitController(this, 20, 20, 5, 0.0f, cNum_init_f6, cNum_init_f7, 3, false);
     initHangModel();
     MR::getPlacementArg0NoInit(rIter, &mChaseDistance);
     MR::getPlacementArg1NoInit(rIter, &mHomeDistance);
@@ -133,8 +162,8 @@ void BasaBasa::init(const TableIter& rIter) {
     }
 
     MR::calcFrontVec(&mFront, this);
-    mAttackDistance = MR::getRandom(600.0f, 800.0f);
-    mChaseTurnAngle = MR::getRandom(-25.0f, 25.0f);
+    mAttackDistance = MR::getRandom(cNum_init_f8, cNum_init_f9);
+    mChaseTurnAngle = MR::getRandom(-cNum_init_f10, cNum_init_f11);
     MR::useStageSwitchSleep(this, rIter);
     makeActorAppeared();
 }
@@ -184,7 +213,7 @@ void BasaBasa::exeChaseStart() {
     }
 
     if (MR::isLessStep(this, cStep_exeChaseStart_1)) {
-        mVelocity.scaleAdd(15.0f, mGravity, mVelocity);
+        mVelocity.scaleAdd(cNum_exeChaseStart_f1, mGravity, mVelocity);
     }
 
     if (MR::isStep(this, cStep_exeChaseStart_2)) {
@@ -286,14 +315,14 @@ void BasaBasa::exeAttackStart() {
 
     MR::turnDirectionToTargetDegree(this, &mFront, *mTarget, cTurnDegree);
     Vec3f backUp;
-    backUp.scaleAdd(2.0f, mFront, mGravity);
+    backUp.scaleAdd(cNum_exeAttackStart_f1, mFront, mGravity);
     backUp.negate();
     MR::normalizeOrZero(&backUp);
     if (MR::isNearZero(backUp)) {
         backUp.set(-mGravity);
     }
 
-    mVelocity.scaleAdd(0.2f, backUp, mVelocity);
+    mVelocity.scaleAdd(cNum_exeAttackStart_f2, backUp, mVelocity);
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttack));
     } else {
@@ -340,7 +369,7 @@ void BasaBasa::exeAttackEnd() {
         }
     }
 
-    mVelocity.scaleAdd(0.1f, mFront, mVelocity);
+    mVelocity.scaleAdd(cNum_exeAttackEnd_f1, mFront, mVelocity);
     if (MR::isStep(this, cStep_exeAttackEnd_1)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttackEndRecover));
     } else {
@@ -354,11 +383,11 @@ void BasaBasa::exeAttackEndRecover() {
     }
 
     Vec3f riseDir;
-    riseDir.scaleAdd(-0.5f, mFront, mGravity);
+    riseDir.scaleAdd(-cNum_exeAttackEndRecover_f1, mFront, mGravity);
     riseDir.negate();
     MR::normalize(&riseDir);
-    if (MR::getBckFrame(this) >= 116.0f) {
-        mVelocity.scaleAdd(0.3f, riseDir, mVelocity);
+    if (MR::getBckFrame(this) >= cNum_exeAttackEndRecover_f2) {
+        mVelocity.scaleAdd(cNum_exeAttackEndRecover_f3, riseDir, mVelocity);
     }
 
     if (MR::isBckStopped(this)) {
@@ -492,9 +521,9 @@ void BasaBasa::exeStun() {
 void BasaBasa::initAfterPlacement() {
     MR::trySetMoveLimitCollision(this);
     Vec3f lineStart;
-    lineStart.scaleAdd(20.0f, mGravity, mPosition);
+    lineStart.scaleAdd(cNum_initAfterPlacement_f1, mGravity, mPosition);
     Vec3f lineDir;
-    lineDir.scale(-30.0f, mGravity);
+    lineDir.scale(-cNum_initAfterPlacement_f2, mGravity);
     mIsOnCeiling = MR::getFirstPolyOnLineToMap(&mPosition, nullptr, lineStart, lineDir);
     if (mIsOnCeiling) {
         initNerve(GET_NERVE(BasaBasa, BasaBasaNrvWait));
@@ -737,20 +766,20 @@ void BasaBasa::controlVelocity() {
     mVelocity.scaleAdd(-side.dot(mVelocity), side, mVelocity);
     mVelocity.add(sideVel);
 
-    f32 damping = 0.95f;
+    f32 damping = cNum_controlVelocity_f1;
     if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttackEnd))) {
-        damping = 0.96f;
+        damping = cNum_controlVelocity_f2;
     } else if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvChaseStart))) {
-        damping = 0.45f;
+        damping = cNum_controlVelocity_f3;
     }
 
     mVelocity.scale(damping);
 
-    f32 maxSpeed = 8.0f;
+    f32 maxSpeed = cNum_controlVelocity_f4;
     if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvChaseStart)) || isNerve(GET_NERVE(BasaBasa, BasaBasaNrvHitBack))) {
-        maxSpeed = 15.0f;
+        maxSpeed = cNum_controlVelocity_f5;
     } else if (isNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttack))) {
-        maxSpeed = 23.0f;
+        maxSpeed = cNum_controlVelocity_f6;
     }
 
     if (mVelocity.length() > maxSpeed) {

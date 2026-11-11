@@ -9,12 +9,16 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 1000.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sEffectPosOffsetY, 5000.0f);
 };  // namespace
 
 LavaBreakColumn::LavaBreakColumn(const char* pName) : AnmModelSwitchMoveEndKill(pName), mEffectPos(gZeroVec), mIsPillarFallen() {
+    lumacore::setClass(this, lumacore::kClassId< LavaBreakColumn >);
 }
 
 void LavaBreakColumn::makeActorAppeared() {
@@ -41,7 +45,7 @@ void LavaBreakColumn::control() {
     Vec3f up;
     mtx.getYDir(up);
     MR::normalize(&up);
-    Vec3f offset = pos + up * -1000.0f;
+    Vec3f offset = pos + up * -cNum_control_f1;
     Vec3f diff = mEffectPos - offset;
     MR::normalize(&diff);
 

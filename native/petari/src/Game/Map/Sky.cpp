@@ -10,6 +10,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* cChangeAnimName = "Change";
@@ -21,6 +22,7 @@ namespace NrvSky {
 };  // namespace NrvSky
 
 Sky::Sky(const char* pName) : LiveActor(pName), mSpaceInner(), mReflectionModel() {
+    lumacore::setClass(this, lumacore::kClassId< Sky >);
 }
 
 void Sky::init(const TableIter& rIter) {
@@ -117,6 +119,7 @@ void Sky::exeChange() {
 }
 
 ProjectionMapSky::ProjectionMapSky(const char* pSkyName) : Sky(pSkyName), mProjmapEffectMtxSetter() {
+    lumacore::setClass(this, lumacore::kClassId< ProjectionMapSky >);
 }
 
 void ProjectionMapSky::calcAndSetBaseMtx() {

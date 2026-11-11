@@ -3,6 +3,17 @@
 #include "Game/MapObj/FloaterFloatingForceTypeSpring.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_floaterIsMoving_f1, "floaterIsMoving.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 580.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 575.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 380.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 375.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 175.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
 
 namespace {
     const char* const cEffectName = "Ripple";
@@ -16,10 +27,11 @@ namespace NrvPhantomShipBoxFloater {
 
 PhantomShipBoxFloater::PhantomShipBoxFloater(const char* pName)
     : LiveActor(pName), mObjectName(), mFloaterOffset(gZeroVec), mRippleSeCounter(), mSinkDepthUnder(0.0f), mSinkDepthOver(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< PhantomShipBoxFloater >);
 }
 
 inline bool floaterIsMoving(FloaterFloatingForceTypeSpring* force) {
-    return 0.1f < force->getCurrentVelocity().length();
+    return cNum_floaterIsMoving_f1 < force->getCurrentVelocity().length();
 }
 
 void PhantomShipBoxFloater::init(const TableIter& rIter) {
@@ -27,14 +39,14 @@ void PhantomShipBoxFloater::init(const TableIter& rIter) {
     mFloaterOffset.set(mPosition);
     MR::getObjectName(&mObjectName, rIter);
     if (MR::isEqualString("PhantomShipBoxFloaterA", mObjectName)) {
-        mSinkDepthUnder = 580.0f;
-        mSinkDepthOver = 575.0f;
+        mSinkDepthUnder = cNum_init_f1;
+        mSinkDepthOver = cNum_init_f2;
     } else if (MR::isEqualString("PhantomShipBoxFloaterB", mObjectName)) {
-        mSinkDepthUnder = 380.0f;
-        mSinkDepthOver = 375.0f;
+        mSinkDepthUnder = cNum_init_f3;
+        mSinkDepthOver = cNum_init_f4;
     } else if (MR::isEqualString("PhantomShipBoxFloaterC", mObjectName)) {
-        mSinkDepthUnder = 180.0f;
-        mSinkDepthOver = 175.0f;
+        mSinkDepthUnder = cNum_init_f5;
+        mSinkDepthOver = cNum_init_f6;
     }
 
     initModelManagerWithAnm(mObjectName, nullptr, false);
@@ -45,7 +57,7 @@ void PhantomShipBoxFloater::init(const TableIter& rIter) {
     mRippleSeCounter = MR::getRandom(20, 90);
     initHitSensor(1);
     MR::initCollisionParts(this, mObjectName, MR::addBodyMessageSensorMapObj(this), nullptr);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f7);
     initNerve(GET_NERVE(PhantomShipBoxFloater, HostTypeWait));
 
     mFloatingForce = new FloaterFloatingForceTypeSpring(this, mObjectName);

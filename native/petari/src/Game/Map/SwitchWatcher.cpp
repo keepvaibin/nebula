@@ -1,9 +1,11 @@
 #include "Game/Map/SwitchWatcher.hpp"
 #include "Game/Map/ActorAppearSwitchListener.hpp"
 #include "Game/Map/StageSwitch.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SwitchWatcher::SwitchWatcher(const StageSwitchCtrl* pSwitchCtrl)
     : NameObj("スイッチ監視"), mFlags(), mSwitchCtrl(pSwitchCtrl), mSwitchListenerA(), mSwitchListenerB(), mSwitchListenerAppear() {
+    lumacore::setClass(this, lumacore::kClassId< SwitchWatcher >);
 }
 
 void SwitchWatcher::movement() {

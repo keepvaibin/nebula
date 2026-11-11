@@ -5,6 +5,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 180.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
@@ -24,13 +27,14 @@ namespace NrvSpringJetWater {
 };  // namespace NrvSpringJetWater
 
 SpringJetWater::SpringJetWater(const char* pName) : LiveActor(pName), mObjName(), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SpringJetWater >);
 }
 
 void SpringJetWater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     Pos3f mtx;
     mtx.identity();
-    mtx.setEuler(mRotation * (PI / 180.0f));
+    mtx.setEuler(mRotation * (PI / cNum_init_f1));
     mtx.getYDir(mUp);
     MR::normalize(&mUp);
     MR::getObjectName(&mObjName, rIter);

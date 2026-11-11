@@ -7,6 +7,9 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, hCountDownTime, 15);
@@ -21,13 +24,14 @@ namespace NrvPlayerMissLeft {
 };  // namespace NrvPlayerMissLeft
 
 PlayerMissLeft::PlayerMissLeft(const char* pName) : LayoutActor(pName, true), mLayoutAppearer(), mPaneRumbler() {
+    lumacore::setClass(this, lumacore::kClassId< PlayerMissLeft >);
 }
 
 void PlayerMissLeft::init(const TableIter& /*rIter*/) {
     initLayoutManager("PlayerLeft", 3);
     MR::createAndAddPaneCtrl(this, "CenterPlayerLeft", 1);
 
-    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-50.0f, 0.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-cNum_init_f1, 0.0f));
     mPaneRumbler = new CountUpPaneRumbler(this, "CenterPlayerLeft");
 
     initNerve(GET_NERVE(PlayerMissLeft, HostTypeNrvAppearWait));

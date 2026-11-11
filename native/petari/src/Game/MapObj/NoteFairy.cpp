@@ -6,6 +6,21 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_NoteFairy_f1, "NoteFairy.f1", 13.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_NoteFairy_f2, "NoteFairy.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAppear_f1, "exeDemoAppear.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAppear_f2, "exeDemoAppear.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAppear_f3, "exeDemoAppear.f3", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearNoteBloom_f1, "exeAppearNoteBloom.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearNote_f1, "exeAppearNote.f1", 5.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoAppear_1, "exeDemoAppear.1", 70);
@@ -24,19 +39,20 @@ namespace NrvNoteFairy {
 };  // namespace NrvNoteFairy
 
 NoteFairy::NoteFairy(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< NoteFairy >);
     mInitPos.x = 0.0f;
     mInitPos.y = 0.0f;
     mInitPos.z = 0.0f;
     mDemoJumpPos.x = 0.0f;
     mDemoJumpPos.y = 0.0f;
     mDemoJumpPos.z = 0.0f;
-    mAppearanceSpeed = 13.0f;
+    mAppearanceSpeed = cNum_NoteFairy_f1;
     mTimeLimit = 20;
     mMelodyNoteNum = 0;
     mAppearedNoteNum = 0;
     mSong = -1;
     mCompletionJingle = -1;
-    mNoteCoord = 150.0f;
+    mNoteCoord = cNum_NoteFairy_f2;
     mNoteArray = nullptr;
     mLastGotNote = nullptr;
     mAppearanceType = -1;
@@ -111,7 +127,7 @@ void NoteFairy::init(const TableIter& rIter) {
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     initEffectKeeper(0, "NoteFairy");
     initSound(6, false);
-    MR::initShadowVolumeSphere(this, 50.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f1);
     s32 railArg = -1;
     MR::getRailArg0WithInit(this, &railArg);
 
@@ -133,7 +149,7 @@ void NoteFairy::init(const TableIter& rIter) {
             }
 
             if (railArg < 0) {
-                mNoteCoord = 200.0f;
+                mNoteCoord = cNum_init_f2;
             } else {
                 mNoteCoord = railArg;
             }
@@ -182,10 +198,10 @@ void NoteFairy::init(const TableIter& rIter) {
     Vec3f jumpOffset(MR::getRailDirection(this));
     jumpOffset.y = 0.0f;
     MR::normalizeOrZero(&jumpOffset);
-    jumpOffset.x *= -800.0f;
-    jumpOffset.z *= -800.0f;
+    jumpOffset.x *= -cNum_init_f3;
+    jumpOffset.z *= -cNum_init_f4;
     mDemoJumpPos.x = jumpOffset.x + mPosition.x;
-    mDemoJumpPos.y = (0.5f * mPosition.y) + (0.5f * MR::getRailPos(this).y);
+    mDemoJumpPos.y = (cNum_init_f5 * mPosition.y) + (cNum_init_f6 * MR::getRailPos(this).y);
     mDemoJumpPos.z = jumpOffset.z + mPosition.z;
     MR::needStageSwitchReadAppear(this, rIter);
     MR::useStageSwitchWriteA(this, rIter);
@@ -289,14 +305,14 @@ void NoteFairy::exeDemoAppear() {
     if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         f32 ease = MR::getEaseOutValue(NebulaFrameClock::secondsOfSteps(getNerveStep()), 0.0f, 1.0f, 1.0f);
         mPosition.x = (mInitPos.x * (1.0f - ease)) + (mDemoJumpPos.x * ease);
-        mPosition.y = (((mInitPos.y * (1.0f - ease)) + (mDemoJumpPos.y * ease)) - (300.0f * MR::sinDegree(180.0f * ease)));
+        mPosition.y = (((mInitPos.y * (1.0f - ease)) + (mDemoJumpPos.y * ease)) - (cNum_exeDemoAppear_f1 * MR::sinDegree(cNum_exeDemoAppear_f2 * ease)));
         mPosition.z = (mInitPos.z * (1.0f - ease)) + (mDemoJumpPos.z * ease);
     }
 
     if (MR::isGreaterStep(this, cStep_exeDemoAppear_1)) {
         f32 ease = MR::getEaseInValue(NebulaFrameClock::secondsOfSteps(getNerveStep() - 70), 0.0f, 1.0f, 1.0f);
         mPosition.x = (mDemoJumpPos.x * (1.0f - ease)) + (ease * MR::getRailPos(this).x);
-        mPosition.y = mDemoJumpPos.y - (MR::sinDegree(90.0f * ease) * (mDemoJumpPos.y - MR::getRailPos(this).y));
+        mPosition.y = mDemoJumpPos.y - (MR::sinDegree(cNum_exeDemoAppear_f3 * ease) * (mDemoJumpPos.y - MR::getRailPos(this).y));
         mPosition.z = (mDemoJumpPos.z * (1.0f - ease)) + (ease * MR::getRailPos(this).z);
     }
 
@@ -325,7 +341,7 @@ void NoteFairy::exeAppearNoteBloom() {
 
     while (mAppearedNoteNum < mMelodyNoteNum && MR::getRailCoord(this) >= getNoteCoord(mAppearedNoteNum)) {
         mNoteArray[mAppearedNoteNum]->appear();
-        mNoteArray[mAppearedNoteNum]->mBrkFrame = 5.0f * mAppearedNoteNum;
+        mNoteArray[mAppearedNoteNum]->mBrkFrame = cNum_exeAppearNoteBloom_f1 * mAppearedNoteNum;
 
         if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)) && mAppearanceType != -1) {
             MR::requestMovementOn(mNoteArray[mAppearedNoteNum]);
@@ -353,7 +369,7 @@ void NoteFairy::exeAppearNote() {
 
         for (s32 i = 0; i < mMelodyNoteNum; i++) {
             mNoteArray[i]->appear();
-            mNoteArray[i]->mBrkFrame = 5.0f * i;
+            mNoteArray[i]->mBrkFrame = cNum_exeAppearNote_f1 * i;
         }
 
         setNerve(GET_NERVE(NoteFairy, NoteFairyNrvEndWait));

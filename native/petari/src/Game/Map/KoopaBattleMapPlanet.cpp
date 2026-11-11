@@ -15,6 +15,33 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f1, "createPlate.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f2, "createPlate.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f3, "createPlate.f3", 270.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f4, "createPlate.f4", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f5, "createPlate.f5", 270.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f6, "createPlate.f6", 1180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f7, "createPlate.f7", 55.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f8, "createPlate.f8", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f9, "createPlate.f9", 125.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f10, "createPlate.f10", 135.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f11, "createPlate.f11", 55.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f12, "createPlate.f12", 225.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f13, "createPlate.f13", 125.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f14, "createPlate.f14", 315.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f15, "createPlate.f15", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f16, "createPlate.f16", 125.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f17, "createPlate.f17", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f18, "createPlate.f18", 55.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f19, "createPlate.f19", 135.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f20, "createPlate.f20", 125.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f21, "createPlate.f21", 225.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f22, "createPlate.f22", 55.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f23, "createPlate.f23", 315.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createPlate_f24, "createPlate.f24", 1230.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoGrandStarAppear_1, "exeDemoGrandStarAppear.1", 151);
@@ -31,6 +58,7 @@ namespace NrvKoopaBattleMapPlanet {
 KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool isFinalPlanet, bool isNoPlate)
     : LiveActor(pName), mModelName(pModelName), mRotateMoment(0.0f, 0.0f, 0.0f), mDamagePlateGroup(), mCoinPlateGroup(), mPlateGroup(), mDamagePlate(),
       mIsFinalPlanet(isFinalPlanet), mIsNoPlate(isNoPlate) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaBattleMapPlanet >);
     mBaseMtx.identity();
 }
 
@@ -50,7 +78,7 @@ void KoopaBattleMapPlanet::init(const TableIter& rIter) {
 
     f32 boundingRadius = 0.0f;
     MR::calcModelBoundingRadius(&boundingRadius, this);
-    MR::setClippingTypeSphere(this, 100.0f + boundingRadius);
+    MR::setClippingTypeSphere(this, cNum_init_f1 + boundingRadius);
     MR::setClippingFarMax(this);
 
     initNerve(GET_NERVE(KoopaBattleMapPlanet, KoopaBattleMapPlanetNrvWait));
@@ -92,8 +120,8 @@ void KoopaBattleMapPlanet::createPlate() {
     mDamagePlateGroup->initWithoutIter();
 
     for (s32 idx = 0; idx < 6; idx++) {
-        f32 angles[6][2] = {{0.0f, 0.0f}, {180.0f, 0.0f}, {90.0f, 0.0f}, {270.0f, 0.0f}, {0.0f, 90.0f}, {0.0f, 270.0f}};
-        Vec3f vec(0.0f, 1180.0f, 0.0f);
+        f32 angles[6][2] = {{0.0f, 0.0f}, {cNum_createPlate_f1, 0.0f}, {cNum_createPlate_f2, 0.0f}, {cNum_createPlate_f3, 0.0f}, {0.0f, cNum_createPlate_f4}, {0.0f, cNum_createPlate_f5}};
+        Vec3f vec(0.0f, cNum_createPlate_f6, 0.0f);
         MR::rotateVecDegree(&vec, Vec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
         MR::rotateVecDegree(&vec, Vec3f(1.0f, 0.0f, 0.0f), angles[idx][1]);
 
@@ -120,8 +148,8 @@ void KoopaBattleMapPlanet::createPlate() {
     mCoinPlateGroup->initWithoutIter();
 
     for (s32 idx = 0; idx < 4; idx++) {
-        f32 angles[4][2] = {{55.0f, 45.0f}, {125.0f, 135.0f}, {55.0f, 225.0f}, {125.0f, 315.0f}};
-        Vec3f vec(0.0f, 1200.0f, 0.0f);
+        f32 angles[4][2] = {{cNum_createPlate_f7, cNum_createPlate_f8}, {cNum_createPlate_f9, cNum_createPlate_f10}, {cNum_createPlate_f11, cNum_createPlate_f12}, {cNum_createPlate_f13, cNum_createPlate_f14}};
+        Vec3f vec(0.0f, cNum_createPlate_f15, 0.0f);
         MR::rotateVecDegree(&vec, Vec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
         MR::rotateVecDegree(&vec, Vec3f(0.0f, 1.0f, 0.0f), angles[idx][1]);
 
@@ -138,8 +166,8 @@ void KoopaBattleMapPlanet::createPlate() {
     mPlateGroup->initWithoutIter();
 
     for (s32 idx = 0; idx < 4; idx++) {
-        f32 angles[4][2] = {{125.0f, 45.0f}, {55.0f, 135.0f}, {125.0f, 225.0f}, {55.0f, 315.0f}};
-        Vec3f vec(0.0f, 1230.0f, 0.0f);
+        f32 angles[4][2] = {{cNum_createPlate_f16, cNum_createPlate_f17}, {cNum_createPlate_f18, cNum_createPlate_f19}, {cNum_createPlate_f20, cNum_createPlate_f21}, {cNum_createPlate_f22, cNum_createPlate_f23}};
+        Vec3f vec(0.0f, cNum_createPlate_f24, 0.0f);
         MR::rotateVecDegree(&vec, Vec3f(0.0f, 0.0f, 1.0f), angles[idx][0]);
         MR::rotateVecDegree(&vec, Vec3f(0.0f, 1.0f, 0.0f), angles[idx][1]);
 

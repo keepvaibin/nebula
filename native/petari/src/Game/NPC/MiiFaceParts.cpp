@@ -4,9 +4,11 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MiiFaceParts::MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe)
     : LiveActor(pName), mRecipe(rRecipe), mFollowMtx(nullptr), mFixedPosition(nullptr), mWaiting(true) {
+    lumacore::setClass(this, lumacore::kClassId< MiiFaceParts >);
     MR::createSceneObj(SceneObj_MiiFacePartsHolder);
 }
 

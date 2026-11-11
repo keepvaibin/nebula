@@ -22,19 +22,28 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDead_f1, "exeDead.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDead_f2, "exeDead.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 20.0f);
 
 namespace {
     // A broken baby skeletal fish leaves an air bubble.
     NEBULA_TUNABLE(bool, cBreakAirBubble, true);
     const char* const sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
-    static const Vec sStarPointerTargetOffset[] = {{
+    NEBULA_TUNABLE_RECORDS(Vec, sStarPointerTargetOffset, , {{
                                                        0.0f,
                                                        0.0f,
                                                        150.0f,
                                                    },
                                                    {0.0f, 0.0f, 0.0f},
                                                    {0.0f, 0.0f, 0.0f},
-                                                   {0.0f, 0.0f, 0.0f}};
+                                                   {0.0f, 0.0f, 0.0f}});
     NEBULA_TUNABLE_LIST(f32, sStarPointerTargetSize, , {220.0f, 150.0f, 120.0f, 120.0f});
     NEBULA_TUNABLE(f32, sSensorRadius, 190.0f);
     NEBULA_TUNABLE(f32, sBustSensorRadius, 120.0f);
@@ -55,6 +64,7 @@ namespace {
 SkeletalFishBaby::SkeletalFishBaby(const char* pName)
     : LiveActor(pName), mJointIndicies(), mSpeedMax(::sSpeed), mSpeed(::sSpeed), mRailControl(new SkeletalFishRailControl()),
       mScaleController(new AnimScaleController(nullptr)) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBaby >);
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
         mControllers[i] = nullptr;
     }
@@ -76,7 +86,7 @@ void SkeletalFishBaby::init(const TableIter& rIter) {
     initJoint();
     initNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim));
     initSensor();
-    MR::setClippingTypeSphere(this, 500.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f1);
     MR::addToAttributeGroupSearchTurtle(this);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
@@ -238,7 +248,7 @@ void SkeletalFishBaby::exeDead() {
     if (MR::isFirstStep(this)) {
         Vec3f jointPos;
         MR::copyJointPos(this, "Center", &jointPos);
-        MR::appearStarPiece(this, jointPos, ::sStarPieceNum, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, jointPos, ::sStarPieceNum, cNum_exeDead_f1, cNum_exeDead_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W_F");
         kill();
     }
@@ -314,9 +324,9 @@ void SkeletalFishBaby::initJoint() {
 
 void SkeletalFishBaby::initSensor() {
     initHitSensor(4);
-    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, ::sSensorRadius, Vec3f(0.0f, 20.0f, 100.0f));
-    MR::addHitSensorAtJointEnemy(this, "bust", "Joint01", 16, ::sBustSensorRadius, Vec3f(0.0f, 00.0f, 30.0f));
-    MR::addHitSensorAtJointEnemy(this, "waist", "Joint02", 16, ::sWaistSensorRadius, Vec3f(0.0f, 00.0f, 20.0f));
+    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, ::sSensorRadius, Vec3f(0.0f, cNum_initSensor_f1, cNum_initSensor_f2));
+    MR::addHitSensorAtJointEnemy(this, "bust", "Joint01", 16, ::sBustSensorRadius, Vec3f(0.0f, 00.0f, cNum_initSensor_f3));
+    MR::addHitSensorAtJointEnemy(this, "waist", "Joint02", 16, ::sWaistSensorRadius, Vec3f(0.0f, 00.0f, cNum_initSensor_f4));
     MR::addHitSensorAtJointEnemy(this, "tail", "Joint03", 16, ::sTailSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 

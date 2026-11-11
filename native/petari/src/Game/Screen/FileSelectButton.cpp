@@ -6,6 +6,7 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(FileSelectButtonNrvSelect, FileSelectButton, Select);
@@ -14,6 +15,7 @@ namespace {
 };  // namespace
 
 FileSelectButton::FileSelectButton(const char* pName) : LayoutActor(pName, true) {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectButton >);
     for (int i = 0; i < ARRAY_SIZE(mButtonCtrl); i++) {
         mButtonCtrl[i] = nullptr;
         mCallbackFunctor[i] = nullptr;

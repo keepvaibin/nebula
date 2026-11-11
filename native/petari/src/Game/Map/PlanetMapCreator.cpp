@@ -8,6 +8,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Table.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const char* const sArcName = "PlanetMapDataTable";
@@ -213,6 +214,7 @@ namespace {
 };  // namespace
 
 PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetMapData(), mIndex() {
+    lumacore::setClass(this, lumacore::kClassId< PlanetMapCreator >);
     Table* pIter = MR::createCsvParser(::sArcName, ::sFileName);
 
     mTableCount = MR::getCsvDataElementNum(pIter);

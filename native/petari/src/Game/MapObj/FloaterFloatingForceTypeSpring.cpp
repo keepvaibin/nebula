@@ -3,6 +3,13 @@
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveReturn_f1, "exeMoveReturn.f1", 0.1f);
 
 namespace {
     NEBULA_TUNABLE(f32, sSpeedMin, 0.1f);
@@ -33,6 +40,7 @@ void FloaterSpringForce::setSpringBaseValue(f32 baseValue) {
 
 FloaterFloatingForceTypeSpring::FloaterFloatingForceTypeSpring(LiveActor* pHost, const char* pName)
     : FloaterFloatingForce(pHost, pName), mSpringForce(), mVelocity(gZeroVec), mRideSinkSpeed() {
+    lumacore::setClass(this, lumacore::kClassId< FloaterFloatingForceTypeSpring >);
 }
 
 void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
@@ -41,15 +49,15 @@ void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
     // The rotate arguments carry the spring constants and the ride kick.
     f32 spring = 0.0f;
     MR::getMapPartsArgRotateSpeed(&spring, rIter);
-    spring *= 0.001f;
+    spring *= cNum_init_f1;
 
     f32 damp = 0.0f;
     MR::getMapPartsArgRotateAngle(&damp, rIter);
-    damp *= 0.001f;
+    damp *= cNum_init_f2;
 
     s32 rideSinkSpeed = 0;
     MR::getMapPartsArgRotateAxis(&rideSinkSpeed, rIter);
-    mRideSinkSpeed = rideSinkSpeed * 0.1f;
+    mRideSinkSpeed = rideSinkSpeed * cNum_init_f3;
 
     mSpringForce = new FloaterSpringForce(-mMaxSinkDepth, spring, damp);
 
@@ -67,7 +75,7 @@ void FloaterFloatingForceTypeSpring::updateVelocity() {
     bool isValidAndOnSwitchA = MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost);
 
     if (isValidAndOnSwitchA) {
-        sinkSpeed *= 3.0f;
+        sinkSpeed *= cNum_updateVelocity_f1;
     }
 
     mVelocity.set(mUp * sinkSpeed);
@@ -166,7 +174,7 @@ void FloaterFloatingForceTypeSpring::exeMoveReturn() {
     }
 
     if (MR::isNearZero(mBasePos - mHost->mPosition)) {
-        if (MR::isNearZero(getCurrentSinkSpeed(), 0.1f)) {
+        if (MR::isNearZero(getCurrentSinkSpeed(), cNum_exeMoveReturn_f1)) {
             mHost->mPosition.set(mBasePos);
             setNerve(GET_NERVE(FloaterFloatingForceTypeSpring, HostTypeWait));
             return;

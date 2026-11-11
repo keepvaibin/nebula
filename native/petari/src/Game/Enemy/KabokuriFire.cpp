@@ -7,6 +7,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 350.0f);
 
 namespace NrvKabokuriFire {
     NEW_NERVE(KabokuriFireNrvWait, KabokuriFire, Wait);
@@ -19,6 +22,7 @@ namespace {
 };  // namespace
 
 KabokuriFire::KabokuriFire(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< KabokuriFire >);
     mBaseMtx.identity();
 }
 
@@ -57,7 +61,7 @@ void KabokuriFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool KabokuriFire::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isInSpinStormRange(msg, pSender, pReceiver, 350.0f)) {
+    if (MR::isInSpinStormRange(msg, pSender, pReceiver, cNum_receiveOtherMsg_f1)) {
         MR::startSound(this, "SE_OJ_PHANTOM_TOACH_OFF");
         kill();
         return true;

@@ -3,12 +3,14 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvButlerExplain {
     NEW_NERVE(ButlerExplainNrvDemo, ButlerExplain, Demo);
 };  // namespace NrvButlerExplain
 
 ButlerExplain::ButlerExplain(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ButlerExplain >);
 }
 
 void ButlerExplain::init(const TableIter& rIter) {

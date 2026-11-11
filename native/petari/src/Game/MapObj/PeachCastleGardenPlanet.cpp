@@ -4,6 +4,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvPeachCastleGardenPlanet {
     NEW_NERVE(PeachCastleGardenPlanetNrvWait, PeachCastleGardenPlanet, Wait);
@@ -11,6 +12,7 @@ namespace NrvPeachCastleGardenPlanet {
 };  // namespace NrvPeachCastleGardenPlanet
 
 PeachCastleGardenPlanet::PeachCastleGardenPlanet(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PeachCastleGardenPlanet >);
 }
 
 void PeachCastleGardenPlanet::init(const TableIter& rIter) {

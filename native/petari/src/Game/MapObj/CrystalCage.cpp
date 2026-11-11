@@ -7,6 +7,16 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f1, "exeBreak.f1", 2.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, cSensorRadius, 130.0f);
@@ -41,6 +51,7 @@ CrystalCage::CrystalCage(const char* pName)
     : LiveActor(pName), mCrystalCageType(CrystalCageType_Small), mBreakObj(nullptr), mHitPoint(1), mHitInvalidTime(0), mRumbleCalc(nullptr),
       mRumbleDir(0.0f, 0.0f, 1.0f), mBasePos(gZeroVec), mSensorPos(gZeroVec), mDisplayModel(nullptr), mGroundPos(gZeroVec), mBreakOnlyIfShown(false),
       mPowerStarId(-1), mVanishOnBreak(false), mPlayRiddleSFX(false), mHasBinding(false), mBinderOffset(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< CrystalCage >);
     mBreakMtx.identity();
 }
 
@@ -94,9 +105,9 @@ void CrystalCage::init(const TableIter& rIter) {
         Vec3f itemOffset;
 
         if (mCrystalCageType == CrystalCageType_Small) {
-            itemOffset.set< f32 >(-30.0f, 100.0f, -30.0f);
+            itemOffset.set< f32 >(-cNum_init_f1, cNum_init_f2, -cNum_init_f3);
         } else {
-            itemOffset.set< f32 >(0.0f, 200.0f, 0.0f);
+            itemOffset.set< f32 >(0.0f, cNum_init_f4, 0.0f);
         }
 
         mDisplayModel = MR::createDummyDisplayModelCrystalItem(this, rIter, itemOffset, Vec3f(0.0f, 0.0f, 0.0f));
@@ -117,7 +128,7 @@ void CrystalCage::init(const TableIter& rIter) {
     MR::setBvaFrameAndStop(this, 0.0f);
 
     if (mHitPoint > 1) {
-        mRumbleCalc = new RumbleCalculatorCosMultLinear(4.0f, HALF_PI, 50.0f, 20);
+        mRumbleCalc = new RumbleCalculatorCosMultLinear(cNum_init_f5, HALF_PI, cNum_init_f6, 20);
     }
 
     MR::joinToGroupArray(this, rIter, nullptr, 32);
@@ -158,7 +169,7 @@ void CrystalCage::initAfterPlacement() {
     Vec3f lineStart;
     MR::calcUpVec(&up, this);
     lineStart.add(mPosition, up * (searchHeight * mScale.x));
-    lineDir.scale((-(2.0f * searchHeight) * mScale.x), up);
+    lineDir.scale((-(cNum_initAfterPlacement_f1 * searchHeight) * mScale.x), up);
 
     if (!MR::getFirstPolyOnLineToMapExceptActor(&mGroundPos, 0, lineStart, lineDir, this)) {
         mGroundPos.set(mPosition);
@@ -345,7 +356,7 @@ void CrystalCage::exeBreak() {
         if (mVanishOnBreak) {
             MR::hideModel(this);
         } else {
-            MR::setBvaFrameAndStop(this, mCrystalCageType == CrystalCageType_Large ? 2.0f : 1.0f);
+            MR::setBvaFrameAndStop(this, mCrystalCageType == CrystalCageType_Large ? cNum_exeBreak_f1 : 1.0f);
             mPosition.set(mGroundPos);
         }
 

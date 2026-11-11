@@ -1,13 +1,11 @@
 // The game's sound on every host (native_audio.h): the native mixer's frames at the master volume with the remote speaker
-// added, pulled by the output device (audio_device.h), and the WAV dump the tests record.
+// added, pulled by the output device (audio_device.h), and given to the host's extensions (host_extension.h).
 #include "galaxy/native_audio.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/launch_args.h"
-#include "galaxy/run_options.h"
 
 #include "galaxy/audio_device.h"
 #include "galaxy/audio_mixer.h"
-#include "galaxy/path_text.h"
-#include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/wiimote_speaker.h"
 
@@ -15,10 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
+#include <cstdio>
 #include <memory>
 #include <span>
 #include <sstream>
@@ -29,264 +24,20 @@
 namespace galaxy::host {
 namespace {
 
-// GALAXY_AUDIO_WAV_DUMP=<path>: the output as a 16-bit stereo WAV file, at most 15 seconds. A sample rate change
-// starts a new file beside it (<name>.rate-<hz>.part-<n>.wav).
-class AudioWavDump {
-public:
-    ~AudioWavDump() {
-        finish();
-    }
-
-    AudioWavDump(const AudioWavDump&) = delete;
-    AudioWavDump& operator=(const AudioWavDump&) = delete;
-
-    AudioWavDump() = default;
-
-    bool append(std::span<const std::byte> pcm_le, std::uint32_t sample_rate) {
-        return append_locked(pcm_le, sample_rate);
-    }
-
-    bool finish() {
-        return finish_locked();
-    }
-
-private:
-    // 15 s, or GALAXY_AUDIO_WAV_DUMP_SECONDS (up to an hour) for a longer recording.
-    static std::uint32_t max_seconds() {
-        static const std::uint32_t seconds = [] {
-            unsigned long value = 15ul;
-            if (const char* const text = ::galaxy::run_options().audio_wav_dump_seconds) {
-                const unsigned long parsed = std::strtoul(text, nullptr, 10);
-                if (parsed > 0ul && parsed <= 3600ul) value = parsed;
-            }
-            return static_cast<std::uint32_t>(value);
-        }();
-        return seconds;
-    }
-
-    std::uint32_t max_bytes() const {
-        return sample_rate_ * 4u * max_seconds();
-    }
-
-    bool append_locked(std::span<const std::byte> pcm_le, std::uint32_t sample_rate) {
-        if (out_.is_open() && sample_rate_ != sample_rate) {
-            if (!finish_locked()) {
-                return false;
-            }
-            data_bytes_ = 0;
-            open_attempted_ = false;
-            ++segment_index_;
-        }
-        if (!ensure_open(sample_rate)) {
-            return false;
-        }
-        if (pcm_le.empty()) {
-            return true;
-        }
-        if (data_bytes_ >= max_bytes()) {
-            return true;
-        }
-        std::size_t write_size = std::min<std::size_t>(
-            pcm_le.size(),
-            static_cast<std::size_t>(max_bytes() - data_bytes_));
-        write_size &= ~std::size_t{3};
-        if (write_size == 0) {
-            return true;
-        }
-        out_.write(
-            reinterpret_cast<const char*>(pcm_le.data()),
-            static_cast<std::streamsize>(write_size));
-        if (!out_) {
-            std::cerr << "[audio] WAV dump write failed: " << galaxy::path_text(path_) << '\n';
-            finish_locked();
-            disabled_ = true;
-            return false;
-        }
-        data_bytes_ += static_cast<std::uint32_t>(write_size);
-        return true;
-    }
-
-    bool finish_locked() {
-        if (!out_.is_open()) {
-            return !disabled_;
-        }
-        out_.seekp(4, std::ios::beg);
-        write_u32_le(out_, 36u + data_bytes_);
-        out_.seekp(40, std::ios::beg);
-        write_u32_le(out_, data_bytes_);
-        out_.flush();
-        const bool contents_written = static_cast<bool>(out_);
-        out_.close();
-        if (!contents_written || !out_) {
-            disabled_ = true;
-            std::cerr << "[audio] WAV dump finalization failed: " << galaxy::path_text(path_) << '\n';
-            return false;
-        }
-        std::cout << "[audio] WAV dump wrote " << data_bytes_
-                  << " bytes at " << sample_rate_ << " Hz: " << galaxy::path_text(path_)
-                  << '\n';
-        return true;
-    }
-
-    static void write_u16_le(std::ostream& out, std::uint16_t value) {
-        const char bytes[2] = {
-            static_cast<char>(value & 0xFFu),
-            static_cast<char>((value >> 8) & 0xFFu),
-        };
-        out.write(bytes, sizeof(bytes));
-    }
-
-    static void write_u32_le(std::ostream& out, std::uint32_t value) {
-        const char bytes[4] = {
-            static_cast<char>(value & 0xFFu),
-            static_cast<char>((value >> 8) & 0xFFu),
-            static_cast<char>((value >> 16) & 0xFFu),
-            static_cast<char>((value >> 24) & 0xFFu),
-        };
-        out.write(bytes, sizeof(bytes));
-    }
-
-    bool ensure_open(std::uint32_t sample_rate) {
-        if (disabled_) {
-            return false;
-        }
-        if (out_.is_open()) {
-            return true;
-        }
-        if (open_attempted_) {
-            return false;
-        }
-        open_attempted_ = true;
-
-#if defined(_WIN32)
-        const wchar_t* const path = ::galaxy::run_options().audio_wav_dump_w;
-        if (path == nullptr || path[0] == L'\0') {
-#else
-        const char* const path = ::galaxy::run_options().audio_wav_dump;
-        if (path == nullptr || path[0] == '\0') {
-#endif
-            disabled_ = true;
-            return false;
-        }
-
-        if (base_path_.empty()) {
-            base_path_ = std::filesystem::path(path);
-        }
-        path_ = base_path_;
-        if (segment_index_ != 0u) {
-            const std::wstring extension = base_path_.extension().wstring();
-            const std::wstring filename =
-                base_path_.stem().wstring() + L".rate-" +
-                std::to_wstring(sample_rate) + L".part-" +
-                std::to_wstring(segment_index_) + extension;
-            path_ = base_path_.parent_path() / filename;
-        }
-        std::error_code ec;
-        const std::filesystem::path parent = path_.parent_path();
-        if (!parent.empty()) {
-            std::filesystem::create_directories(parent, ec);
-            if (ec) {
-                std::cerr << "[audio] WAV dump directory failed: "
-                          << galaxy::path_text(parent) << " error=" << ec.message() << '\n';
-                disabled_ = true;
-                return false;
-            }
-        }
-
-        sample_rate_ = sample_rate;
-        out_.open(path_, std::ios::binary | std::ios::trunc);
-        if (!out_) {
-            std::cerr << "[audio] WAV dump open failed: " << galaxy::path_text(path_) << '\n';
-            disabled_ = true;
-            return false;
-        }
-
-        out_.write("RIFF", 4);
-        write_u32_le(out_, 36u);
-        out_.write("WAVEfmt ", 8);
-        write_u32_le(out_, 16u);
-        write_u16_le(out_, 1u);
-        write_u16_le(out_, 2u);
-        write_u32_le(out_, sample_rate);
-        write_u32_le(out_, sample_rate * 4u);
-        write_u16_le(out_, 4u);
-        write_u16_le(out_, 16u);
-        out_.write("data", 4);
-        write_u32_le(out_, 0u);
-        if (!out_) {
-            std::cerr << "[audio] WAV dump header failed: " << galaxy::path_text(path_) << '\n';
-            finish_locked();
-            disabled_ = true;
-            return false;
-        }
-
-        // The first sample's time, to line a recording's audio up with its snapshots ("[snapshot] ... qpc=").
-        std::cout << "[audio] WAV dump enabled: " << galaxy::path_text(path_)
-                  << " max-bytes=" << max_bytes() << " qpc=" << galaxy::qpc_now() << '\n';
-        return true;
-    }
-
-    std::ofstream out_;
-    std::filesystem::path base_path_;
-    std::filesystem::path path_;
-    std::uint32_t data_bytes_{};
-    std::uint32_t sample_rate_{};
-    std::uint32_t segment_index_{};
-    bool disabled_{};
-    bool open_attempted_{};
-};
-
-// A test's devices, one after another (GALAXY_AUDIO_TEST_DEVICE_CYCLE=<seconds each>): other rates, more speakers.
-struct TestDevice {
-    std::uint32_t rate;
-    std::span<const Speaker> speakers;
-};
-constexpr Speaker kTestStereo[] = {Speaker::Left, Speaker::Right};
-constexpr Speaker kTestQuad[] = {Speaker::Left, Speaker::Right, Speaker::BackLeft, Speaker::BackRight};
-constexpr Speaker kTest51[] = {Speaker::Left, Speaker::Right, Speaker::Center, Speaker::Other, Speaker::BackLeft, Speaker::BackRight};
-constexpr Speaker kTest71[] = {Speaker::Left, Speaker::Right, Speaker::Center, Speaker::Other, Speaker::BackLeft, Speaker::BackRight,
-                               Speaker::SideLeft, Speaker::SideRight};
-constexpr TestDevice kTestDevices[] = {{48000u, kTestStereo}, {44100u, kTestStereo}, {96000u, kTest51},
-                                       {48000u, kTest71},     {32000u, kTestQuad},   {192000u, kTest51}};
-
 // No output: pulled by the clock, as a device would.
 class NullAudioDevice final : public AudioDevice {
 public:
     explicit NullAudioDevice(std::uint32_t rate) : rate_(rate) {}
 
-    [[nodiscard]] std::uint32_t rate() const override { return rate_.load(std::memory_order_relaxed); }
-
-    [[nodiscard]] std::span<const Speaker> speakers() const noexcept override {
-        return surround_.load(std::memory_order_relaxed) ? speakers_ : AudioDevice::speakers();
-    }
-
-    void set_surround(bool on) override { surround_.store(on, std::memory_order_relaxed); }
+    [[nodiscard]] std::uint32_t rate() const override { return rate_; }
 
     void start(Render render) override {
         std::thread([this, render = std::move(render)] {
             set_audio_thread_name();
             constexpr std::uint32_t kStepsPerSecond = 200u;
             std::vector<float> out;
-            const char* const cycle = ::galaxy::run_options().audio_test_device_cycle;
-            const unsigned steps_each = cycle != nullptr ? static_cast<unsigned>(std::strtoul(cycle, nullptr, 10)) * kStepsPerSecond : 0u;
-            unsigned steps = 0u;
-            unsigned device = 0u;
-            std::vector<double> power;
             auto next = std::chrono::steady_clock::now();
             for (;;) {
-                if (steps_each != 0u && ++steps >= steps_each) {
-                    std::ostringstream line;
-                    line << "[audio] test device " << rate() << " Hz, levels";
-                    for (const double value : power) {
-                        line << ' ' << std::sqrt(value / steps);
-                    }
-                    std::cout << line.str() << std::endl;
-                    power.clear();
-                    steps = 0u;
-                    device = (device + 1u) % static_cast<unsigned>(std::size(kTestDevices));
-                    rate_.store(kTestDevices[device].rate, std::memory_order_relaxed);
-                    speakers_ = kTestDevices[device].speakers;
-                }
                 const std::uint32_t rate_now = rate();
                 const std::uint32_t frames = rate_now / kStepsPerSecond;
                 const std::size_t channels = speakers().size();
@@ -300,12 +51,6 @@ public:
                 }
                 if (!paused_.load(std::memory_order_relaxed)) {
                     render(out.data(), frames, rate_now);
-                    if (steps_each != 0u) {
-                        power.resize(channels);
-                        for (std::size_t i = 0; i < out.size(); ++i) {
-                            power[i % channels] += static_cast<double>(out[i]) * out[i] / frames;
-                        }
-                    }
                 }
             }
         }).detach();
@@ -314,10 +59,8 @@ public:
     void set_paused(bool paused) override { paused_.store(paused, std::memory_order_relaxed); }
 
 private:
-    std::atomic<std::uint32_t> rate_;
+    const std::uint32_t rate_;
     std::atomic<bool> paused_{false};
-    std::atomic<bool> surround_{false};
-    std::span<const Speaker> speakers_{kTestStereo};
 };
 
 }  // namespace
@@ -329,14 +72,12 @@ std::unique_ptr<AudioDevice> open_null_audio_device(std::uint32_t rate) {
 struct NativeGameAudio::State {
     std::unique_ptr<AudioDevice> device;
     std::unique_ptr<galaxy::audio::AudioMixer> mixer;
-    AudioWavDump wav;
     float master{1.0f};
     bool master_started{};
     // 1 while heard, 0 while the window is in the background with focus_loss=mute; ramped across a frame on a change.
     float audible{1.0f};
     std::vector<float> speaker_frame;  // the remote speaker's frame on its own, while `audible` ramps
     galaxy::SoundOutput sound_output{galaxy::SoundOutput::Stereo};
-    std::vector<std::byte> wav_block;
     // The frames made and not yet pulled, interleaved; the device's thread only. Center, surround left and right apart
     // from them while the device has rear speakers.
     std::vector<float> pending;
@@ -427,8 +168,9 @@ void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const Nebu
     State& s = *state_;
     std::uint32_t rate = 48000u;
     if (device) {
-        // GALAXY_AUDIO_WAV_DUMP_ONLY: the clock pulls, nothing reaches a device.
-        s.device = ::galaxy::run_option_flag(::galaxy::run_options().audio_wav_dump_only, false) ? open_null_audio_device(rate) : open_audio_device();
+        // An extension's NEBULA_EXT_NO_SOUND_DEVICE: the clock pulls, nothing reaches a device.
+        s.device = (galaxy::extensions::flags() & NEBULA_EXT_NO_SOUND_DEVICE) != 0u ? open_null_audio_device(rate)
+                                                                                    : open_audio_device();
         rate = s.device->rate();
     }
     s.sound_output = galaxy::get_runtime_settings().audio.sound_output;
@@ -535,22 +277,14 @@ void NativeGameAudio::frame() {
         first_sound = true;
         std::fprintf(stderr, "[read] first sound\n");
     }
-    static const bool dump = ::galaxy::run_options().audio_wav_dump != nullptr;
-    if (dump) {
-        s.wav_block.resize(frames * 4u);
-        for (std::size_t i = 0; i < frames * 2u; ++i) {
-            const float value = std::clamp(out[i] * 32768.0f, -32768.0f, 32767.0f);
-            const auto bits = static_cast<std::uint16_t>(static_cast<std::int16_t>(std::lrint(value)));
-            s.wav_block[i * 2u] = static_cast<std::byte>(bits & 0xFFu);
-            s.wav_block[i * 2u + 1u] = static_cast<std::byte>(bits >> 8u);
-        }
-        (void)s.wav.append(s.wav_block, s.mixer->rate());
+    if (galaxy::extensions::hears_sound()) {
+        galaxy::extensions::sound(out.data(), static_cast<std::uint32_t>(frames), 2u, s.mixer->rate());
     }
     for (float& value : out) {
         value = std::clamp(value, -1.0f, 1.0f);
     }
     if (s.device == nullptr) {
-        s.pending.clear();  // nothing pulls: the frame goes no further than the dump
+        s.pending.clear();  // nothing pulls: the frame goes no further than the extensions
     }
 }
 

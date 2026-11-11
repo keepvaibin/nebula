@@ -6,6 +6,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setup_f1, "setup.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePos_f1, "updatePos.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePos_f2, "updatePos.f2", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointing_f1, "exePointing.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePointing_f2, "exePointing.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNotSelected_f1, "exeNotSelected.f1", 150.0f);
 
 namespace {
     static const s32 cAppearWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
@@ -40,6 +48,7 @@ namespace NrvScenarioSelectStar {
 ScenarioSelectStar::ScenarioSelectStar(EffectSystem* pSystem)
     : MultiSceneActor("シナリオ選択のスター", "PowerStar", false), mStarCollectedStatus(0), mScenarioNo(1), mStarId(0), mIsPointing(false),
       mRotateSpeed(0.0f), mBasePos(gZeroVec), mTranslationOnSelect(gZeroVec), mAppearFrame(::cAppearFrame), mScaleOnSelect(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ScenarioSelectStar >);
     initEffect(pSystem, 0, "ScenarioStar");
 }
 
@@ -98,7 +107,7 @@ void ScenarioSelectStar::setup(s32 scenarioNo, int starCollectedStatus, const Ve
     mBasePos.set(rPos);
     mStarId = starId;
 
-    mRotation.set< f32 >(0.0f, 0.0f, 150.0f * mStarId);
+    mRotation.set< f32 >(0.0f, 0.0f, cNum_setup_f1 * mStarId);
     mAppearFrame = mStarId * ::cAppearDelayFrame + ::cAppearWaitFrame;
     mRotateTime = mStarId * 15 + (mStarId % 2 ? 0 : 90);
 }
@@ -125,7 +134,7 @@ bool ScenarioSelectStar::tryEndPointing() {
 }
 
 void ScenarioSelectStar::updatePos() {
-    Vec3f offset(0.0f, MR::sinDegree(MR::repeat((mRotateTime * 360.0f) / ::cMoveInterval, 0.0f, 360.0f)) * ::cMoveDistance, 0.0f);
+    Vec3f offset(0.0f, MR::sinDegree(MR::repeat((mRotateTime * cNum_updatePos_f1) / ::cMoveInterval, 0.0f, cNum_updatePos_f2)) * ::cMoveDistance, 0.0f);
     mTranslation.add(mBasePos, offset);
 }
 
@@ -166,7 +175,7 @@ void ScenarioSelectStar::exePointing() {
 
     if (MultiScene::isLessStep(this, ::cStartPointingFrame)) {
         f32 t = MultiScene::calcNerveRate(this, ::cStartPointingFrame);
-        f32 reaction = MR::getScaleWithReactionValueZeroToOne(t, 1.5f, -0.25f);
+        f32 reaction = MR::getScaleWithReactionValueZeroToOne(t, cNum_exePointing_f1, -cNum_exePointing_f2);
         f32 linerVal = MR::getLinerValue(reaction, ::cNotPointingScale, ::cPointingScale, 1.0f);
         mScale.setAll< f32 >(linerVal);
     } else {
@@ -233,7 +242,7 @@ void ScenarioSelectStar::exeNotSelected() {
 
     if (MultiScene::isStep(this, hideDelay)) {
         mRotateSpeed = 0.0f;
-        mRotation.z = 150.0f * mStarId;
+        mRotation.z = cNum_exeNotSelected_f1 * mStarId;
         MultiScene::startBck(this, "ScenarioHide");
         MultiScene::deleteEffectAll(this);
     }

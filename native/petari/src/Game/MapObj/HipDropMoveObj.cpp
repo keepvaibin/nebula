@@ -3,6 +3,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 225.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
 
 namespace {
     static const char* cMoveJointName = "Move";
@@ -17,6 +22,7 @@ namespace NrvHipDropMoveObj {
 };  // namespace NrvHipDropMoveObj
 
 HipDropMoveObj::HipDropMoveObj(const char* pName) : LiveActor(pName), mModelName() {
+    lumacore::setClass(this, lumacore::kClassId< HipDropMoveObj >);
 }
 
 void HipDropMoveObj::init(const TableIter& rIter) {
@@ -27,9 +33,9 @@ void HipDropMoveObj::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     initHitSensor(1);
-    HitSensor* pSensor = MR::addHitSensorAtJointMapObj(this, "body", ::cSwitchJointName, 0, 225.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    HitSensor* pSensor = MR::addHitSensorAtJointMapObj(this, "body", ::cSwitchJointName, 0, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, mModelName, pSensor, MR::getJointMtx(this, ::cMoveJointName));
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f2);
     MR::setGroupClipping(this, rIter, 8);
     MR::useStageSwitchWriteA(this, rIter);
     initNerve(GET_NERVE(HipDropMoveObj, HostTypeWait));
@@ -131,6 +137,7 @@ void HipDropMoveObj::exeDone() {
 }
 
 HipDropDemoMoveObj::HipDropDemoMoveObj(const char* pName) : HipDropMoveObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< HipDropDemoMoveObj >);
     mMtx.identity();
 }
 

@@ -12,6 +12,12 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 180.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sFlyUpDirDegreeMax, 45.0f);
@@ -28,6 +34,7 @@ namespace NrvKoopaFireStairs {
 KoopaFireStairs::KoopaFireStairs(const char* pName, bool isKoopaJr)
     : LiveActor(pName), mIsKoopaJr(isKoopaJr), mStair(nullptr), mFront(0.0f, 0.0f, 1.0f), mStartPos(0.0f, 0.0f, 0.0f), mFlyUpDir(0.0f, 1.0f, 0.0f),
       mBreakModel(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaFireStairs >);
 }
 
 void KoopaFireStairs::init(const TableIter& /*rIter*/) {
@@ -36,13 +43,13 @@ void KoopaFireStairs::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemy(this);
 
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "Fire", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "Fire", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, "Hit");
-    MR::setEffectBaseScale(this, "Hit", 2.0f);
+    MR::setEffectBaseScale(this, "Hit", cNum_init_f2);
 
     initSound(4, false);
-    MR::initShadowVolumeSphere(this, 60.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
     initNerve(GET_NERVE(KoopaFireStairs, KoopaFireStairsNrvFly));
     MR::invalidateClipping(this);
 
@@ -124,7 +131,7 @@ void KoopaFireStairs::exeFly() {
         Vec3f prevPos(mPosition);
         f32 rate = mStair->calcTimeRate();
         mPosition = mStartPos * (1.0f - rate) + mStair->mTargetPos * rate;
-        f32 arc = MR::sinDegree(180.0f * rate);
+        f32 arc = MR::sinDegree(cNum_exeFly_f1 * rate);
         mPosition.add(mFlyUpDir * arc * sArcHeight);
 
         Vec3f moved = mPosition - prevPos;

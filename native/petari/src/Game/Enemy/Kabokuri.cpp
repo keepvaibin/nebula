@@ -23,6 +23,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityToRailPoint_f1, "addVelocityToRailPoint.f1", 0.4f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_1, "addVelocityBase.reboundVelocityFromCollision.1", 0.0f);
@@ -71,6 +76,7 @@ namespace NrvKabokuri {
 Kabokuri::Kabokuri(const char* pName)
     : LiveActor(pName), mKuribo(), mBreakModel(), mAnimeScale(), mStateBindStartPointer(), mRotationQuat(0.0f, 0.0f, 0.0f, 1.0f),
       mFrontVec(0.0f, 0.0f, 1.0f), mIsValidDropFire() {
+    lumacore::setClass(this, lumacore::kClassId< Kabokuri >);
     KabokuriFireHolderFunc::createHolder();
 }
 
@@ -101,7 +107,7 @@ void Kabokuri::init(const TableIter& rIter) {
     initSensor();
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     initNerve(GET_NERVE(Kabokuri, KabokuriNrvWait));
-    MR::initStarPointerTarget(this, 90.0f * mScale.y, Vec3f(0.0f, 90.0f * mScale.y, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f1 * mScale.y, Vec3f(0.0f, cNum_init_f2 * mScale.y, 0.0f));
 
     mAnimeScale = new AnimScaleController(nullptr);
     mAnimeScale->setParamTight();
@@ -205,7 +211,7 @@ void Kabokuri::addVelocityToRailPoint(f32 speed) {
 
     Vec3f velocity;
     MR::calcVelocityMoveToTarget(&velocity, this, MR::getRailPos(this), 1.0f);
-    if (velocity.dot(mFrontVec) > 0.4f) {
+    if (velocity.dot(mFrontVec) > cNum_addVelocityToRailPoint_f1) {
         mVelocity.add(velocity * speed);
     }
 }

@@ -1,7 +1,9 @@
 #include "Game/Player/MarioHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MarioHolder::MarioHolder() : NameObj("マリオ保持") {
+    lumacore::setClass(this, lumacore::kClassId< MarioHolder >);
     mActor = nullptr;
 }
 

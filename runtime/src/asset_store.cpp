@@ -66,12 +66,36 @@ AssetStore::~AssetStore() {
     close();
 }
 
+namespace {
+// A language folder's name: a release ("Us", "Eu", "Jp", "Kr", "Cn", "Tw") then a capitalised word ("UsEnglish").
+bool is_language_folder(std::string_view name) {
+    static constexpr std::string_view kRegions[] = {"Us", "Eu", "Jp", "Kr", "Cn", "Tw"};
+    for (const std::string_view region : kRegions) {
+        const std::string_view rest = name.substr(std::min(name.size(), region.size()));
+        if (name.starts_with(region) && !rest.empty() && std::isupper(static_cast<unsigned char>(rest[0])) != 0 &&
+            std::all_of(rest.begin(), rest.end(), [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; })) {
+            return true;
+        }
+    }
+    return false;
+}
+}  // namespace
+
 bool AssetStore::attach_overlay(const std::filesystem::path& path) {
     // Over the last one attached: the newest wins.
     if (overlay_ != nullptr) return overlay_->attach_overlay(path);
     auto overlay = std::make_unique<AssetStore>();
     if (!overlay->open(path)) return false;
     overlay_ = std::move(overlay);
+    language_fallback_.clear();
+    for (const std::string& folder : language_folders()) {
+        if (!find_own(folder)) continue;
+        if (language_fallback_.empty()) language_fallback_ = folder;
+        if (folder.ends_with("English")) {
+            language_fallback_ = folder;
+            break;
+        }
+    }
     return true;
 }
 
@@ -392,6 +416,21 @@ std::optional<Entry> AssetStore::added_child(std::string_view path, std::uint32_
 }
 
 std::optional<Entry> AssetStore::find(std::string_view path) const {
+    std::optional<Entry> found = find_merged(path);
+    if (found || language_fallback_.empty()) {
+        return found;
+    }
+    // A language a mod adds (German on a US disc) without this file: the game's own language has it.
+    const std::string_view rest = path.substr(path.find_first_not_of('/') == std::string_view::npos ? path.size() : path.find_first_not_of('/'));
+    const std::size_t slash = rest.find('/');
+    const std::string_view folder = rest.substr(0, slash == std::string_view::npos ? rest.size() : slash);
+    if (slash == std::string_view::npos || !is_language_folder(folder) || find_own(folder) || !overlay_->find(folder)) {
+        return std::nullopt;
+    }
+    return find_merged(language_fallback_ + std::string(rest.substr(slash)));
+}
+
+std::optional<Entry> AssetStore::find_merged(std::string_view path) const {
     if (overlay_ != nullptr) {
         // A file or an archive of the mods first. A plain folder of theirs only lists what they change: the game's
         // stands, unless the game has none of that name.
@@ -462,25 +501,21 @@ std::optional<Entry> AssetStore::find_own(std::string_view path) const {
 
 std::vector<std::string> AssetStore::language_folders() const {
     std::vector<std::string> folders;
-    static constexpr std::string_view kRegions[] = {"Us", "Eu", "Jp", "Kr", "Cn", "Tw"};
     for (std::uint32_t i = 0;; i++) {
         const std::optional<Entry> item = child(0, i);
         if (!item) {
-            return folders;
+            break;
         }
-        if (!item->folder) {
-            continue;
-        }
-        const std::string_view name = item->name;
-        for (const std::string_view region : kRegions) {
-            const std::string_view rest = name.substr(std::min(name.size(), region.size()));
-            if (name.starts_with(region) && !rest.empty() && std::isupper(static_cast<unsigned char>(rest[0])) != 0 &&
-                std::all_of(rest.begin(), rest.end(), [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; })) {
-                folders.emplace_back(name);
-                break;
-            }
+        if (item->folder && is_language_folder(item->name)) {
+            folders.emplace_back(item->name);
         }
     }
+    if (overlay_ != nullptr) {
+        for (std::string& added : overlay_->language_folders()) {
+            if (std::find(folders.begin(), folders.end(), added) == folders.end()) folders.push_back(std::move(added));
+        }
+    }
+    return folders;
 }
 
 }  // namespace galaxy::assets

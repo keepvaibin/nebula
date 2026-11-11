@@ -3,6 +3,11 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.5f);
 
 namespace {
     NEBULA_TUNABLE(f32, sDefaultHeight, 500.0f);
@@ -20,6 +25,7 @@ namespace NrvWaterLeakPipe {
 };  // namespace NrvWaterLeakPipe
 
 IceStepNoSlip::IceStepNoSlip(MtxPtr mtx) : ModelObj("アイス床", "IceStepNoSlip", mtx, MR::DrawBufferType_IndirectMapObjStrongLight, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< IceStepNoSlip >);
 }
 
 void IceStepNoSlip::init(const TableIter& rIter) {
@@ -53,6 +59,7 @@ void IceStepNoSlip::exeBreak() {
 
 WaterLeakPipe::WaterLeakPipe(const char* pName)
     : LiveActor(pName), mIceStep(), mPipeHeight(::sDefaultHeight), mTopMtx(), mBottomMtx(), mClippingCenter(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< WaterLeakPipe >);
 }
 
 void WaterLeakPipe::init(const TableIter& rIter) {
@@ -65,12 +72,12 @@ void WaterLeakPipe::init(const TableIter& rIter) {
     initPipeHeight();
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);
-    MR::addHitSensorAtJointMapObj(this, "ice", "Top", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "ice", "Top", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::calcUpVec(&upVec, this);
-    mClippingCenter.scaleAdd(0.5f * mPipeHeight, upVec, mPosition);
-    MR::setClippingTypeSphere(this, (0.5f * mPipeHeight), &mClippingCenter);
+    mClippingCenter.scaleAdd(cNum_init_f2 * mPipeHeight, upVec, mPosition);
+    MR::setClippingTypeSphere(this, (cNum_init_f3 * mPipeHeight), &mClippingCenter);
     mIceStep = new IceStepNoSlip(mTopMtx);
     mIceStep->initWithoutIter();
     mIceStep->makeActorDead();

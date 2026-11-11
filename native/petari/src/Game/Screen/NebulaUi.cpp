@@ -214,56 +214,110 @@ namespace NebulaUi {
         pText->mSize = Ui::Size(size * 2.0f, size * 2.0f);
     }
 
-    // A glyph picture's coverage at (x, y) of its sheet, 0-15: its alpha where it has one, else its intensity. The
-    // sheets are records.
-    s32 glyphCoverage(const Ui::Glyph& rGlyph, s32 x, s32 y) {
-        const u8* pData = static_cast< const u8* >(rGlyph.pTexture);
-        // A cooked sheet (nebula_cooked_texture.h): texels in rows; the same 4-bit coverage as the tiles gave.
-        if (const NebulaTexture* pRecord = nebula_texture_record(pData)) {
-            const u8* pTexels = pData + NEBULA_TEXTURE_HEADER;
-            const s32 at = y * rGlyph.texWidth + x;
-            switch (pRecord->layout) {
-            case NEBULA_TEXTURE_L8:
-                return pTexels[at] >> 4;
-            case NEBULA_TEXTURE_LA8:
-                return pTexels[at * 2 + 1] >> 4;
-            case NEBULA_TEXTURE_RGBA8:
-                return pTexels[at * 4 + 3] >> 4;
-            default:
-                return -1;
-            }
+    // A sheet texel's ink, 0-255, at (x, y) in the record's own texels: its alpha, an L8 sheet's intensity (what the
+    // font's shader takes as coverage, font_text.hlsl); -1 for a layout it cannot read.
+    static s32 sheetInk(const NebulaTexture* pRecord, u32 x, u32 y) {
+        const u8* pTexels = reinterpret_cast< const u8* >(pRecord) + NEBULA_TEXTURE_HEADER;
+        const u32 at = y * pRecord->width + x;
+        switch (pRecord->layout) {
+        case NEBULA_TEXTURE_L8:
+            return pTexels[at];
+        case NEBULA_TEXTURE_LA8:
+            return pTexels[at * 2 + 1];
+        case NEBULA_TEXTURE_RGBA8:
+            return pTexels[at * 4 + 3];
+        default:
+            return -1;
         }
-        return -1;
     }
 
-    // The ink box of `code`'s picture, in its cell's pixels (x from the cell's left, y from its top); false when
-    // the picture cannot be read or holds no ink.
-    bool glyphInkBox(const Ui::Font* pFont, u16 code, s32* pLeft, s32* pTop, s32* pRight, s32* pBottom) {
+    // The ink box of `code`'s picture as the font's shader draws it, in its cell's pixels (x from the cell's left, y from
+    // its top, right and bottom the far edges); false when the picture cannot be read or holds no ink. A distance sheet
+    // (Font::GetFieldRange) is larger than the glyph's sheet size, its texels finer; its edge is where the field crosses
+    // one half between two texels' centres, as the GPU samples it. A picture's ink is a texel at a quarter or more.
+    bool glyphInkBox(const Ui::Font* pFont, u16 code, f32* pLeft, f32* pTop, f32* pRight, f32* pBottom) {
         Ui::Glyph glyph;
         pFont->GetGlyph(&glyph, code);
-        if (glyph.pTexture == nullptr) {
+        const u8* pData = static_cast< const u8* >(glyph.pTexture);
+        const NebulaTexture* pRecord = pData != nullptr ? nebula_texture_record(pData) : nullptr;
+        if (pRecord == nullptr || glyph.texWidth == 0 || glyph.texHeight == 0 || glyph.widths.glyphWidth <= 0 || glyph.height == 0) {
             return false;
         }
-        *pLeft = glyph.widths.glyphWidth;
-        *pTop = glyph.height;
-        *pRight = -1;
-        *pBottom = -1;
-        for (s32 y = 0; y < glyph.height; y++) {
-            for (s32 x = 0; x < glyph.widths.glyphWidth; x++) {
-                const s32 ink = glyphCoverage(glyph, glyph.cellX + x, glyph.cellY + y);
+        const f32 scaleX = static_cast< f32 >(pRecord->width) / static_cast< f32 >(glyph.texWidth);
+        const f32 scaleY = static_cast< f32 >(pRecord->height) / static_cast< f32 >(glyph.texHeight);
+        const s32 cellRight = glyph.cellX + glyph.widths.glyphWidth;
+        const s32 cellBottom = glyph.cellY + glyph.height;
+        const s32 x0 = static_cast< s32 >(glyph.cellX * scaleX + 0.5f);
+        const s32 y0 = static_cast< s32 >(glyph.cellY * scaleY + 0.5f);
+        s32 x1 = static_cast< s32 >(cellRight * scaleX + 0.5f);
+        s32 y1 = static_cast< s32 >(cellBottom * scaleY + 0.5f);
+        x1 = x1 > static_cast< s32 >(pRecord->width) ? static_cast< s32 >(pRecord->width) : x1;
+        y1 = y1 > static_cast< s32 >(pRecord->height) ? static_cast< s32 >(pRecord->height) : y1;
+        if (x1 <= x0 || y1 <= y0) {
+            return false;
+        }
+        const bool field = pFont->GetFieldRange() != 0;
+        const s32 edge = field ? 128 : 64;
+        // Outside the cell nothing is drawn.
+        const auto inkAt = [&](s32 x, s32 y) -> s32 {
+            return x < x0 || x >= x1 || y < y0 || y >= y1 ? 0 : sheetInk(pRecord, static_cast< u32 >(x), static_cast< u32 >(y));
+        };
+        // From an outside texel's centre (ink `a`) toward an inside one's (ink `b`), a texel apart: where the edge is.
+        const auto cross = [&](s32 a, s32 b) -> f32 {
+            return field && b > a ? static_cast< f32 >(edge - a) / static_cast< f32 >(b - a) : 0.5f;
+        };
+        f32 left = 1e9f;
+        f32 right = -1e9f;
+        f32 top = 1e9f;
+        f32 bottom = -1e9f;
+        for (s32 y = y0; y < y1; y++) {
+            for (s32 x = x0; x < x1; x++) {
+                const s32 ink = inkAt(x, y);
                 if (ink < 0) {
                     return false;
                 }
-                if (ink >= 4) {
-                    *pLeft = x < *pLeft ? x : *pLeft;
-                    *pRight = x > *pRight ? x : *pRight;
-                    *pTop = y < *pTop ? y : *pTop;
-                    *pBottom = y > *pBottom ? y : *pBottom;
+                if (ink < edge) {
+                    continue;
+                }
+                const f32 cx = static_cast< f32 >(x) + 0.5f;
+                const f32 cy = static_cast< f32 >(y) + 0.5f;
+                s32 next = inkAt(x - 1, y);
+                if (next < edge) {
+                    const f32 at = cx - 1.0f + cross(next, ink);
+                    left = at < left ? at : left;
+                }
+                next = inkAt(x + 1, y);
+                if (next < edge) {
+                    const f32 at = cx + 1.0f - cross(next, ink);
+                    right = at > right ? at : right;
+                }
+                next = inkAt(x, y - 1);
+                if (next < edge) {
+                    const f32 at = cy - 1.0f + cross(next, ink);
+                    top = at < top ? at : top;
+                }
+                next = inkAt(x, y + 1);
+                if (next < edge) {
+                    const f32 at = cy + 1.0f - cross(next, ink);
+                    bottom = at > bottom ? at : bottom;
                 }
             }
         }
-        return *pRight >= 0;
+        if (right <= left || bottom <= top) {
+            return false;
+        }
+        // Within the drawn cell, in the glyph's pixels.
+        left = left < static_cast< f32 >(x0) ? static_cast< f32 >(x0) : left;
+        top = top < static_cast< f32 >(y0) ? static_cast< f32 >(y0) : top;
+        right = right > static_cast< f32 >(x1) ? static_cast< f32 >(x1) : right;
+        bottom = bottom > static_cast< f32 >(y1) ? static_cast< f32 >(y1) : bottom;
+        *pLeft = left / scaleX - static_cast< f32 >(glyph.cellX);
+        *pRight = right / scaleX - static_cast< f32 >(glyph.cellX);
+        *pTop = top / scaleY - static_cast< f32 >(glyph.cellY);
+        *pBottom = bottom / scaleY - static_cast< f32 >(glyph.cellY);
+        return true;
     }
+
     bool inkOffset(const TextBox* pText, f32* pX, f32* pY, f32* pWidth, f32* pHeight) {
         const Ui::Font* pFont = pText->mpFont;
         const char16_t* pString = pText->mTextBuf;
@@ -277,7 +331,7 @@ namespace NebulaUi {
         if (!stringInkBox(pFont, pString, pText->mCharSpace / scaleX, true, &left, &top, &right, &bottom, &cursor)) {
             return false;
         }
-        s32 aLeft, aTop, aRight, aBottom;
+        f32 aLeft, aTop, aRight, aBottom;
         if (!glyphInkBox(pFont, u'A', &aLeft, &aTop, &aRight, &aBottom)) {
             return false;
         }
@@ -287,7 +341,7 @@ namespace NebulaUi {
             *pHeight = (bottom - top) * scaleY;
         }
         // The cell's y runs down, the layout's up.
-        *pY = -((top + bottom) * 0.5f - (aTop + aBottom + 1) * 0.5f) * scaleY;
+        *pY = -((top + bottom) * 0.5f - (aTop + aBottom) * 0.5f) * scaleY;
         return true;
     }
 
@@ -303,12 +357,12 @@ namespace NebulaUi {
             if (p != pString) {
                 cursor += space;
             }
-            s32 l, t, r, b;
+            f32 l, t, r, b;
             if (glyphInkBox(pFont, static_cast< u16 >(*p), &l, &t, &r, &b)) {
                 left = cursor + widths.left + l < left ? cursor + widths.left + l : left;
-                right = cursor + widths.left + r + 1 > right ? cursor + widths.left + r + 1 : right;
+                right = cursor + widths.left + r > right ? cursor + widths.left + r : right;
                 top = t < top ? t : top;
-                bottom = b + 1 > bottom ? b + 1 : bottom;
+                bottom = b > bottom ? b : bottom;
             } else if (strict) {
                 return false;
             }

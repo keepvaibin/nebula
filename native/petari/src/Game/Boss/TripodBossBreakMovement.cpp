@@ -8,6 +8,17 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_TripodBossBreakMovement_f1, "TripodBossBreakMovement.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_TripodBossBreakMovement_f2, "TripodBossBreakMovement.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.995f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f2, "start.f2", 0.997f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f3, "start.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f4, "start.f4", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setBreakDownLevel_f1, "setBreakDownLevel.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setBreakDownLevel_f2, "setBreakDownLevel.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setBreakDownLevel_f3, "setBreakDownLevel.f3", 50.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sBreakRandamaize, 1.0f);
@@ -24,11 +35,12 @@ namespace NrvTripodBossBreakMovement {
 
 TripodBossBreakMovement::TripodBossBreakMovement(const char* pName)
     : LiveActor(pName), mSpring(), mMoment(0, 0, 0), mBreakVelocity(0, 0, 0), mFlyDir(0, 1, 0), mFlyDirRandomRate(0.3f), mFlySpeed(), mDamping(0.9f), mJointIndex(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossBreakMovement >);
     mMtx.identity();
     initNerve(GET_NERVE(TripodBossBreakMovement, TripodBossBreakMovementNrvWait));
     MR::invalidateClipping(this);
     mSpring = new SpringValue();
-    mSpring->setParam(0.0f, 0.0f, 0.2f, 0.9f, 0.0f);
+    mSpring->setParam(0.0f, 0.0f, cNum_TripodBossBreakMovement_f1, cNum_TripodBossBreakMovement_f2, 0.0f);
     setBreakDownLevel(1);
 }
 
@@ -41,7 +53,7 @@ void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
     MR::normalizeOrZero(&mMoment);
     mMoment *= MR::getRandom(::sMinStartMoment, ::sMaxStartMoment);
 
-    mDamping = MR::getRandom(0.995f, 0.997f);
+    mDamping = MR::getRandom(cNum_start_f1, cNum_start_f2);
 
     MR::zeroVelocity(this);
 
@@ -56,7 +68,7 @@ void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
                       MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
     mFlyDir += jitter * mFlyDirRandomRate;
 
-    mSpring->mVelocity += MR::getRandom(20.0f, 25.0f);
+    mSpring->mVelocity += MR::getRandom(cNum_start_f3, cNum_start_f4);
 
     setNerve(GET_NERVE(TripodBossBreakMovement, TripodBossBreakMovementNrvStartBreak));
     MR::invalidateClipping(this);
@@ -80,10 +92,10 @@ void TripodBossBreakMovement::setBreakDownLevel(s32 level) {
     case 0:
     case 1:
     case 2:
-        mFlySpeed = MR::getRandom(50.0f, 90.0f);
+        mFlySpeed = MR::getRandom(cNum_setBreakDownLevel_f1, cNum_setBreakDownLevel_f2);
         break;
     case 3:
-        mFlySpeed = 50.0f;
+        mFlySpeed = cNum_setBreakDownLevel_f3;
         mFlyDirRandomRate = 0.0f;
         break;
     }

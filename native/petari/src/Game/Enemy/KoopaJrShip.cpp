@@ -23,6 +23,29 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initKiller_f1, "initKiller.f1", 5500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initKiller_f2, "initKiller.f2", 6500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPropellerRotSpeed_f1, "getPropellerRotSpeed.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPropellerRotSpeed_f2, "getPropellerRotSpeed.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getPropellerRotSpeed_f3, "getPropellerRotSpeed.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCoordSpeed_f1, "updateCoordSpeed.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCoordSpeed_f2, "updateCoordSpeed.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCoordSpeed_f3, "updateCoordSpeed.f3", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCoordSpeed_f4, "updateCoordSpeed.f4", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootShell_f1, "shootShell.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootMainShells_f1, "shootMainShells.f1", 23.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootMainShells_f2, "shootMainShells.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootMainShells_f3, "shootMainShells.f3", 23.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootMainShells_f4, "shootMainShells.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_shootMainShells_f5, "shootMainShells.f5", 23.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateKoopaJrPos_f1, "updateKoopaJrPos.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveFrontAttack_f1, "exeMoveFrontAttack.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveFrontAttack_f2, "exeMoveFrontAttack.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTurnFront_f1, "exeTurnFront.f1", 0.60f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_init_setBckRate_1, "init.setBckRate.1", 0.0f);
@@ -46,8 +69,8 @@ namespace {
     const s32 sSpeedEaseTime = NebulaFrameClock::stepsOfSeconds(1);
     NEBULA_TUNABLE(f32, sKillerBackOffset, 100.0f);  // killers start this far behind their cannon
 
-    static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
-    static const Vec sKoopaJrPosFront = {0.0f, 188.0f, 135.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sKoopaJrPos, {135.0f, 188.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sKoopaJrPosFront, {0.0f, 188.0f, 135.0f});
 
     static const char* const cJointNameCannon[] = {"FirePoint0", "FirePoint1", "FirePoint2", "FirePoint4", "FirePoint5", "FirePoint6"};
     static const char* const cEffectNameShoot[] = {"ShootJ0", "ShootJ1", "ShootJ2", "ShootJ4", "ShootJ5", "ShootJ6"};
@@ -87,6 +110,7 @@ namespace NrvKoopaJrShip {
 KoopaJrShip::KoopaJrShip(const char* pName)
     : LiveActor(pName), mShellHolder(nullptr), mMainShellHolder(nullptr), mJr(nullptr), mShipBreakModel(nullptr), mPodModel(nullptr), mHitPoint(5),
       mHitPos(gZeroVec), mHitDir(0.0f, 0.0f, 1.0f), mPropAngle(0), mPropRotateSpeed(20.0f), mCoordSpeed(0.0f), mSpeedEaseStep(0), mJrLocalPos(::sKoopaJrPos), mInitPos(gZeroVec) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaJrShip >);
     mScrew00Mtx.identity();
     mScrew01Mtx.identity();
     mPropellerMtx.identity();
@@ -206,7 +230,7 @@ void KoopaJrShip::initKiller() {
     for (HomingKiller** pActor = mKillers.begin(); pActor != mKillers.end(); pActor++) {
         *pActor = new HomingKiller("ホーミングキラー");
         (*pActor)->initWithoutIter();
-        (*pActor)->setChaseStartEndDistance(5500.0f, 6500.0f);
+        (*pActor)->setChaseStartEndDistance(cNum_initKiller_f1, cNum_initKiller_f2);
     }
 }
 
@@ -245,7 +269,7 @@ s32 KoopaJrShip::getNumShootShells() const {
 
 f32 KoopaJrShip::getPropellerRotSpeed() const {
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreakStart))) {
-        return (40.0f * (1.0f - MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1))));
+        return (cNum_getPropellerRotSpeed_f1 * (1.0f - MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1))));
     }
 
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreak))) {
@@ -253,25 +277,25 @@ f32 KoopaJrShip::getPropellerRotSpeed() const {
     }
 
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp)) || (2 >= mHitPoint && !isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage)))) {
-        return 40.0f;
+        return cNum_getPropellerRotSpeed_f2;
     }
 
-    return 20.0f;
+    return cNum_getPropellerRotSpeed_f3;
 }
 
 // Slows into each rail point (top speed 4, 2 once at 2 hit points) and eases back up over sSpeedEaseTime after a stop.
 void KoopaJrShip::updateCoordSpeed() {
     f32 rate = 0.0f;
     MR::calcRailRateToNextPoint(&rate, this);
-    const f32 topSpeed = mHitPoint <= 2 ? 2.0f : 4.0f;
+    const f32 topSpeed = mHitPoint <= 2 ? cNum_updateCoordSpeed_f1 : cNum_updateCoordSpeed_f2;
 
-    if (0.95f < rate) {
+    if (cNum_updateCoordSpeed_f3 < rate) {
         mCoordSpeed = MR::getEaseInValue(rate, topSpeed, 1.0f, 1.0f);
         return;
     }
 
     if (mSpeedEaseStep >= 0) {
-        mCoordSpeed = MR::getEaseInValue(mSpeedEaseStep, topSpeed, 0.0f, 60.0f);
+        mCoordSpeed = MR::getEaseInValue(mSpeedEaseStep, topSpeed, 0.0f, cNum_updateCoordSpeed_f4);
         mSpeedEaseStep = mSpeedEaseStep - 1;
         MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_ACCEL");
     }
@@ -299,7 +323,7 @@ void KoopaJrShip::shootShell(s32 idx) {
     if (shell != nullptr) {
         Vec3f pos, dir;
         calcLauncherInfo(&pos, &dir, idx);
-        shell->launch(pos, dir * 15.0f);
+        shell->launch(pos, dir * cNum_shootShell_f1);
     }
 
     MR::emitEffect(this, ::cEffectNameShoot[idx]);
@@ -366,10 +390,10 @@ void KoopaJrShip::shootMainShells() {
         m.getZDir(forward);
         MR::normalize(&forward);
         CannonShellBase* p = mMainShellHolder->getValidShell();
-        p->launch(pos, forward * 23.0f);
+        p->launch(pos, forward * cNum_shootMainShells_f1);
     }
 
-    MR::rotateMtxLocalYDegree(m, 15.0f);
+    MR::rotateMtxLocalYDegree(m, cNum_shootMainShells_f2);
 
     // Side
     {
@@ -377,10 +401,10 @@ void KoopaJrShip::shootMainShells() {
         m.getZDir(forward);
         MR::normalize(&forward);
         CannonShellBase* p = mMainShellHolder->getValidShell();
-        p->launch(pos, forward * 23.0f);
+        p->launch(pos, forward * cNum_shootMainShells_f3);
     }
 
-    MR::rotateMtxLocalYDegree(m, -30.0f);
+    MR::rotateMtxLocalYDegree(m, -cNum_shootMainShells_f4);
 
     // Other side
     {
@@ -388,7 +412,7 @@ void KoopaJrShip::shootMainShells() {
         m.getZDir(forward);
         MR::normalize(&forward);
         CannonShellBase* p = mMainShellHolder->getValidShell();
-        p->launch(pos, forward * 23.0f);
+        p->launch(pos, forward * cNum_shootMainShells_f5);
     }
 }
 
@@ -417,7 +441,7 @@ void KoopaJrShip::updateKoopaJrPos() {
         jointMtx.set(MR::getJointMtx(mPodModel, ::cJointNamePodPos));
     } else {
         jointMtx.set(MR::getJointMtx(this, ::cJointNameKoopaJrPos));
-        MR::faceToPoint(jointMtx, *MR::getPlayerPos(), 5.0f);
+        MR::faceToPoint(jointMtx, *MR::getPlayerPos(), cNum_updateKoopaJrPos_f1);
     }
 
     jointMtx.mult(mJrLocalPos, mJr->mPosition);
@@ -475,7 +499,7 @@ void KoopaJrShip::exeAppear() {
 
 void KoopaJrShip::exeMove() {
     if (MR::isFirstStep(this)) {
-        f32 speed = mHitPoint <= 2 ? 2.0f : 4.0f;
+        f32 speed = mHitPoint <= 2 ? cNum_exeMove_f1 : cNum_exeMove_f2;
         MR::setRailCoordSpeed(this, speed);
     }
 
@@ -498,7 +522,7 @@ void KoopaJrShip::exeMove() {
 
 void KoopaJrShip::exeMoveFrontAttack() {
     if (MR::isFirstStep(this)) {
-        f32 speed = mHitPoint <= 2 ? 2.0f : 4.0f;
+        f32 speed = mHitPoint <= 2 ? cNum_exeMoveFrontAttack_f1 : cNum_exeMoveFrontAttack_f2;
         MR::setRailCoordSpeed(this, speed);
         MR::emitEffect(this, "HeadShootSign");
     }
@@ -720,7 +744,7 @@ void KoopaJrShip::exeTurnFront() {
     MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_3RD_DEMO");
 
     if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
-        mRotation.y += 0.60f;
+        mRotation.y += cNum_exeTurnFront_f1;
     }
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {

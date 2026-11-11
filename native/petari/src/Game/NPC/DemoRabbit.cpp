@@ -3,6 +3,17 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_fadeIn_f1, "fadeIn.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fadeIn_f2, "fadeIn.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateStopVelocity_f1, "updateStopVelocity.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRun_f1, "updateRun.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRun_f2, "updateRun.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRun_f3, "updateRun.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_f1, "exeGuide.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_f2, "exeGuide.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_f3, "exeGuide.f3", 2.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", -0.05f);
@@ -54,6 +65,7 @@ namespace NrvDemoRabbit {
 };  // namespace NrvDemoRabbit
 
 DemoRabbit::DemoRabbit(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< DemoRabbit >);
 }
 
 void DemoRabbit::init(const TableIter& rIter) {
@@ -131,7 +143,7 @@ void DemoRabbit::fadeIn() {
     MR::calcGravityVector(this, railEndPos, &gravityVector, nullptr, 0);
 
 
-    MR::getFirstPolyOnLineToMap(&railEndPos, nullptr, railEndPos - gravityVector * 100.0f, gravityVector * 1000.0f);
+    MR::getFirstPolyOnLineToMap(&railEndPos, nullptr, railEndPos - gravityVector * cNum_fadeIn_f1, gravityVector * cNum_fadeIn_f2);
     mPosition.set(railEndPos);
 
     MR::timeKeepDemoFadeIn();
@@ -145,7 +157,7 @@ void DemoRabbit::updateStopVelocity() {
     // No ground within 10 units: the up vector (the fall kept, the drift stopped). Left unset, `normal` can be a long
     // vector, which makes the kept part of the velocity grow each frame until the binder steps through the ground.
     Vec3f normal(-mGravity);
-    MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * 10.0f, nullptr, nullptr);
+    MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * cNum_updateStopVelocity_f1, nullptr, nullptr);
     MR::vecKillElement(mVelocity, normal, &normal);
     mVelocity.sub(normal);
 }
@@ -171,13 +183,13 @@ void DemoRabbit::updateRun(const Vec3f& targetDir, bool /*unused*/) {
 
     f32 accel = MR::calcNerveValue(this, ::sRunawayDeccelTime, ::sRunawayAccel, ::sRunawayEndAccel);
 
-    while (MR::isExistMapCollision(mPosition, mFrontVec * 200.0f)) {
+    while (MR::isExistMapCollision(mPosition, mFrontVec * cNum_updateRun_f1)) {
         f32 oldLength = mFrontVec.length();
-        mFrontVec = (mFrontVec + -mGravity) / 2.0f;
+        mFrontVec = (mFrontVec + -mGravity) / cNum_updateRun_f2;
         mFrontVec.setLength(oldLength);
     }
 
-    MR::addVelocityMoveToDirection(this, mFrontVec, mAirTimer < ::sIsAirTime ? accel : accel / 2.0f);
+    MR::addVelocityMoveToDirection(this, mFrontVec, mAirTimer < ::sIsAirTime ? accel : accel / cNum_updateRun_f3);
 }
 
 void DemoRabbit::updateJump() {
@@ -308,12 +320,12 @@ void DemoRabbit::exeGuide() {
     }
 
     Vec3f railPosFrontCoord;
-    MR::calcRailPosFrontCoord(&railPosFrontCoord, this, 200.0f);
+    MR::calcRailPosFrontCoord(&railPosFrontCoord, this, cNum_exeGuide_f1);
 
     if (MR::isRailReachedNearGoal(this, ::sNearGoalDistance)) {
-        updateRun(railPosFrontCoord - mGravity * 2.0f, true);
+        updateRun(railPosFrontCoord - mGravity * cNum_exeGuide_f2, true);
     } else {
-        updateRun(railPosFrontCoord - mGravity * 2.0f, false);
+        updateRun(railPosFrontCoord - mGravity * cNum_exeGuide_f3, false);
     }
 
     updateNormalVelocity();

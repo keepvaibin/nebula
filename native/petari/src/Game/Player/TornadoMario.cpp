@@ -6,8 +6,15 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
 
 TornadoMario::TornadoMario(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< TornadoMario >);
 }
 
 void TornadoMario::init(const TableIter& rIter) {
@@ -17,10 +24,10 @@ void TornadoMario::init(const TableIter& rIter) {
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
     MR::initJointTransform(this);
-    MR::initShadowVolumeCylinder(this, 80.0f);
-    MR::setShadowDropLength(this, nullptr, 3000.0f);
+    MR::initShadowVolumeCylinder(this, cNum_init_f1);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f2);
     MR::onShadowVolumeCutDropLength(this, nullptr);
-    MR::setShadowVolumeEndDropOffset(this, nullptr, 50.0f);
+    MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init_f3);
     MR::onCalcShadow(this, nullptr);
     MR::invalidateClipping(this);
     appear();

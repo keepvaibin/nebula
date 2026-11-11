@@ -29,6 +29,23 @@
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f1, "initPoints.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f1, "drawDirect.f1", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f2, "drawDirect.f2", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f3, "drawDirect.f3", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f4, "drawDirect.f4", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f5, "drawDirect.f5", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f6, "drawDirect.f6", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f7, "drawDirect.f7", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f8, "drawDirect.f8", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f9, "drawDirect.f9", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f10, "drawDirect.f10", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f11, "drawDirect.f11", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDirect_f12, "drawDirect.f12", 16384.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_roadMaterial_f1, "roadMaterial.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappear_f1, "exeDisappear.f1", 255.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sRiderSpeedMin, 100.0f);
@@ -123,7 +140,7 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
     f32 lineDelta = MR::getRailTotalLength(pRoad) / (intervalCount > 0 ? intervalCount : 1);
 
     Vec3f up = pRoad->mBaseUp;
-    f32 loopInterval = MR::toRadian(360.0f / mNumLoopPoints);
+    f32 loopInterval = MR::toRadian(cNum_initPoints_f1 / mNumLoopPoints);
 
     mPoints = new Vec3f[mNumPoints];
     mNormals = new Vec3s[mNumPoints];
@@ -295,9 +312,9 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             const Vec3s& normA = mNormals[calcPointIndex(lineIdx, loopIdx)];
             const Vec3s& normB = mNormals[calcPointIndex(lineIdx, nextLoopIdx)];
 
-            *vtx++ = {pointA.x, pointA.y, pointA.z, normA.x / 16384.0f, normA.y / 16384.0f, normA.z / 16384.0f, texU0A, texV0, texU1A, texV1, texU2A, texV2};
+            *vtx++ = {pointA.x, pointA.y, pointA.z, normA.x / cNum_drawDirect_f1, normA.y / cNum_drawDirect_f2, normA.z / cNum_drawDirect_f3, texU0A, texV0, texU1A, texV1, texU2A, texV2};
 
-            *vtx++ = {pointB.x, pointB.y, pointB.z, normB.x / 16384.0f, normB.y / 16384.0f, normB.z / 16384.0f, texU0B, texV0, texU1B, texV1, texU2B, texV2};
+            *vtx++ = {pointB.x, pointB.y, pointB.z, normB.x / cNum_drawDirect_f4, normB.y / cNum_drawDirect_f5, normB.z / cNum_drawDirect_f6, texU0B, texV0, texU1B, texV1, texU2B, texV2};
         }
 
         if (pointNum < mNumLinePoints) {
@@ -334,9 +351,9 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             f32 texV1 = MR::getRailCoord(pRoad) * ::sTexRateV1;
             f32 texV2 = MR::getRailCoord(pRoad) * ::sTexRateV2;
 
-            *vtx++ = {vA.x, vA.y, vA.z, nA.x / 16384.0f, nA.y / 16384.0f, nA.z / 16384.0f, texU0A, texV0, texU1A, texV1, texU2A, texV2};
+            *vtx++ = {vA.x, vA.y, vA.z, nA.x / cNum_drawDirect_f7, nA.y / cNum_drawDirect_f8, nA.z / cNum_drawDirect_f9, texU0A, texV0, texU1A, texV1, texU2A, texV2};
 
-            *vtx++ = {vB.x, vB.y, vB.z, nB.x / 16384.0f, nB.y / 16384.0f, nB.z / 16384.0f, texU0B, texV0, texU1B, texV1, texU2B, texV2};
+            *vtx++ = {vB.x, vB.y, vB.z, nB.x / cNum_drawDirect_f10, nB.y / cNum_drawDirect_f11, nB.z / cNum_drawDirect_f12, texU0B, texV0, texU1B, texV1, texU2B, texV2};
         }
 
         texU0A = texU0B;
@@ -389,7 +406,7 @@ namespace {
         material.setColor(4, ::sStageColor2.r, ::sStageColor2.g, ::sStageColor2.b, ::sStageColor2.a);
         material.constants[8] = high ? 1.0f : 0.0f;
         material.constants[9] = ::sIndirectScale;
-        material.constants[10] = alpha / 255.0f;
+        material.constants[10] = alpha / cNum_roadMaterial_f1;
         material.constants[12] = static_cast< f32 >(screen.getWidth());
         material.constants[13] = static_cast< f32 >(screen.getHeight());
         material.setTexture(0, pRoad->mTexture);
@@ -414,6 +431,7 @@ WaterRoad::WaterRoad(const char* pName)
     : LiveActor(pName), mModelInfoHigh(), mModelInfoLow(), mRadius(::sDefaultRadius), mAlpha(0xFF), mBaseUp(0.0f, 1.0f, 0.0f), mRider(),
       mTexUV0(0.0f, 0.0f), mTexUV1(0.0f, 0.0f), mTexUV2(0.0f, 0.0f), mTexture(), mIndirect(), mEnvMap(), mClippingCenter(0.0f, 0.0f, 0.0f),
       mCamRailNearestPos(0.0f, 0.0f, 0.0f), mSoundObj(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< WaterRoad >);
     mBaseMtx.identity();
     mRiderMtx.identity();
     mBoundingBox.zero();
@@ -589,7 +607,7 @@ void WaterRoad::exeDemoWaitEnd() {
 }
 
 void WaterRoad::exeDisappear() {
-    mAlpha = (s32)(MR::calcNerveValue(this, ::sDisappearStep, 255.0f, 0.0f));
+    mAlpha = (s32)(MR::calcNerveValue(this, ::sDisappearStep, cNum_exeDisappear_f1, 0.0f));
 
     if (MR::isStep(this, ::sDisappearStep)) {
         kill();

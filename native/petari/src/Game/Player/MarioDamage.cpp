@@ -22,6 +22,39 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_damageFloorCheck_f1, "damageFloorCheck.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_damageWallCheck_f1, "damageWallCheck.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_damageWallCheck_f2, "damageWallCheck.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_damagePolygonCheck_f1, "damagePolygonCheck.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_stopHead_f1, "stopHead.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_stopHead_f2, "stopHead.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f7, "update.f7", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f8, "update.f8", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f9, "update.f9", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f10, "update.f10", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f11, "update.f11", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f12, "update.f12", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f13, "update.f13", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f14, "update.f14", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f15, "update.f15", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f16, "update.f16", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f17, "update.f17", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_close_f1, "close.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f2, "start.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_impact_f1, "impact.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_impact_f2, "impact.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_impact_f3, "impact.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f18, "update.f18", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f19, "update.f19", 50.0f);
 
 namespace {
     const char sDamageAirAnimation[] = "中ダメージ空中";
@@ -263,7 +296,7 @@ bool Mario::damageFloorCheck() {
             return false;
         }
 
-        if (damage(mGroundNorm * 10.0f)) {
+        if (damage(mGroundNorm * cNum_damageFloorCheck_f1)) {
             return true;
         }
 
@@ -292,7 +325,7 @@ bool Mario::damageWallCheck() {
 
     Vec3f normal;
     if (checkWallCodeNorm(CollisionWallCode_Rebound, &normal, false)) {
-        return doFlipJump(normal * 5.0f);
+        return doFlipJump(normal * cNum_damageWallCheck_f1);
     }
 
     if (checkWallFloorCode(CollisionFloorCode_Death)) {
@@ -316,7 +349,7 @@ bool Mario::damageWallCheck() {
         return true;
     }
 
-    if (checkWallFloorCode(CollisionFloorCode_DamageNormal) && damage(getWallNorm() * 10.0f)) {
+    if (checkWallFloorCode(CollisionFloorCode_DamageNormal) && damage(getWallNorm() * cNum_damageWallCheck_f2)) {
         return true;
     }
 
@@ -345,7 +378,7 @@ bool Mario::damagePolygonCheck(const Triangle* pTriangle) {
 
         break;
     case CollisionFloorCode_DamageNormal:
-        mSwim->addDamage(*MR::getNormal(pTriangle) * 10.0f);
+        mSwim->addDamage(*MR::getNormal(pTriangle) * cNum_damagePolygonCheck_f1);
         return true;
     case CollisionFloorCode_DamageElectric:
         if (doParalyze()) {
@@ -503,7 +536,7 @@ void MarioDamage::stopHead(const Vec3f& rNormal) {
         f32 towardWall = MR::vecKillElement(horizontal, rNormal, &mVelocity);
         mVelocity += mActor->mGravityVec * verticalSpeed;
         if (towardWall < 0.0f) {
-            mVelocity += rNormal * -towardWall * 0.5f;
+            mVelocity += rNormal * -towardWall * cNum_stopHead_f1;
         }
     } else {
         Vec3f horizontal;
@@ -511,7 +544,7 @@ void MarioDamage::stopHead(const Vec3f& rNormal) {
         if (!MR::normalizeOrZero(&horizontal)) {
             f32 towardWall = MR::vecKillElement(mVelocity, rNormal, &mVelocity);
             if (towardWall < 0.0f) {
-                mVelocity += rNormal * -towardWall * 0.5f;
+                mVelocity += rNormal * -towardWall * cNum_stopHead_f2;
             }
         }
     }
@@ -534,18 +567,18 @@ bool MarioDamage::update() {
 
             if (getPlayer()->mHitStates.gravityChangeSeen) {
                 f32 vertical = MR::vecKillElement(mVelocity, getAirGravityVec(), &mVelocity);
-                mVelocity.x *= 0.95f;
-                mVelocity.y *= 0.95f;
-                mVelocity.z *= 0.95f;
+                mVelocity.x *= cNum_update_f1;
+                mVelocity.y *= cNum_update_f2;
+                mVelocity.z *= cNum_update_f3;
                 mVelocity += getAirGravityVec() * vertical;
             }
         }
 
         if (getPlayer()->mMovementStates.onGround) {
             MarioActor* actor;
-            if (getPlayer()->mVerticalSpeed > 30.0f && (actor = mActor, actor->selectDamagePop(getSensor(getGroundPolygon())))) {
+            if (getPlayer()->mVerticalSpeed > cNum_update_f4 && (actor = mActor, actor->selectDamagePop(getSensor(getGroundPolygon())))) {
                 Mario* player = getPlayer();
-                mVelocity += player->mGroundNorm * 20.0f;
+                mVelocity += player->mGroundNorm * cNum_update_f5;
                 getPlayer()->mMovementStates.onGround = false;
                 getPlayer()->mMovementStates.jumping = true;
             } else {
@@ -578,9 +611,9 @@ bool MarioDamage::update() {
 
         MR::vecKillElement(mVelocity, getAirGravityVec(), &mVelocity);
         addVelocity(mVelocity);
-        mVelocity.x *= 0.95f;
-        mVelocity.y *= 0.95f;
-        mVelocity.z *= 0.95f;
+        mVelocity.x *= cNum_update_f6;
+        mVelocity.y *= cNum_update_f7;
+        mVelocity.z *= cNum_update_f8;
         if (!isAnimationRun(mLandAnimation)) {
             return false;
         }
@@ -750,14 +783,14 @@ bool MarioFireRun::update() {
             getPlayer()->mJumpVec = getAirGravityVec() * mVerticalSpeed;
             addVelocity(getAirGravityVec() * mVerticalSpeed);
             mVerticalSpeed += mActor->getConst().getTable()->mFireRunGravity;
-            if (mVerticalSpeed > 50.0f) {
-                mVerticalSpeed = 50.0f;
+            if (mVerticalSpeed > cNum_update_f9) {
+                mVerticalSpeed = cNum_update_f10;
             }
 
             const Vec3f& velocity = mActor->mLastPushMove;
-            if (velocity.dot(getAirGravityVec()) < -10.0f) {
+            if (velocity.dot(getAirGravityVec()) < -cNum_update_f11) {
                 mVerticalSpeed = 0.0f;
-                addVelocity(getFrontVec() * 5.0f);
+                addVelocity(getFrontVec() * cNum_update_f12);
             }
         } else if (mTimer) {
             mTimer--;
@@ -792,7 +825,7 @@ bool MarioFireRun::update() {
 
         return move();
     case 2:
-        if (mActor->isEnableNerveChange() && getStickP() > 0.7f) {
+        if (mActor->isEnableNerveChange() && getStickP() > cNum_update_f13) {
             return false;
         }
 
@@ -800,14 +833,14 @@ bool MarioFireRun::update() {
             getPlayer()->mJumpVec = getAirGravityVec() * mVerticalSpeed;
             addVelocity(getAirGravityVec() * mVerticalSpeed);
             mVerticalSpeed += mActor->getConst().getTable()->mFireRunGravity;
-            if (mVerticalSpeed > 50.0f) {
-                mVerticalSpeed = 50.0f;
+            if (mVerticalSpeed > cNum_update_f14) {
+                mVerticalSpeed = cNum_update_f15;
             }
 
             const Vec3f& velocity = mActor->mLastPushMove;
-            if (velocity.dot(getAirGravityVec()) < -10.0f) {
+            if (velocity.dot(getAirGravityVec()) < -cNum_update_f16) {
                 mVerticalSpeed = 0.0f;
-                addVelocity(getFrontVec() * 5.0f);
+                addVelocity(getFrontVec() * cNum_update_f17);
             }
 
             if (mTimer) {
@@ -849,7 +882,7 @@ bool MarioFireRun::close() {
         stopAnimation("炎のランナー", "落下");
     } else {
         stopAnimation("炎のランナー", "基本");
-        if (getStickP() < 0.1f) {
+        if (getStickP() < cNum_close_f1) {
             playSound("声炎ダメージ終了");
         }
     }
@@ -1030,8 +1063,8 @@ bool MarioFireDance::start() {
     mWallStart = 0;
     mTurnLockTimer = 0;
     if (getPlayer()->mDrawStates.wallDamageCheck) {
-        mVerticalSpeed *= 0.25f;
-        mMoveVelocity = getPlayer()->getWallNorm() * mActor->getConst().getTable()->mFireDanceFirstJump * 0.5f;
+        mVerticalSpeed *= cNum_start_f1;
+        mMoveVelocity = getPlayer()->getWallNorm() * mActor->getConst().getTable()->mFireDanceFirstJump * cNum_start_f2;
         getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
         mWallStart = 1;
         mTurnLockTimer = 60;
@@ -1048,11 +1081,11 @@ bool MarioFireDance::start() {
 void MarioFireDance::impact() {
     changeAnimation("ファイアダンス");
     if (!getPlayer()->mDrawStates.wallDamageCheck) {
-        if (mMoveVelocity.length() > 2.0f * mActor->getConst().getTable()->mFireDanceMoveSpeed) {
-            mMoveVelocity.setLength(2.0f * mActor->getConst().getTable()->mFireDanceMoveSpeed);
+        if (mMoveVelocity.length() > cNum_impact_f1 * mActor->getConst().getTable()->mFireDanceMoveSpeed) {
+            mMoveVelocity.setLength(cNum_impact_f2 * mActor->getConst().getTable()->mFireDanceMoveSpeed);
         }
 
-        mMoveVelocity.setLength(0.5f * mMoveVelocity.length());
+        mMoveVelocity.setLength(cNum_impact_f3 * mMoveVelocity.length());
     }
 
     getPlayer()->mMovementStates.onGround = false;
@@ -1131,8 +1164,8 @@ bool MarioFireDance::update() {
         mVerticalSpeed += mActor->getConst().getTable()->mFireDanceGravityDrop;
     }
 
-    if (mVerticalSpeed > 50.0f) {
-        mVerticalSpeed = 50.0f;
+    if (mVerticalSpeed > cNum_update_f18) {
+        mVerticalSpeed = cNum_update_f19;
     }
 
     if (getStickP() != 0.0f) {

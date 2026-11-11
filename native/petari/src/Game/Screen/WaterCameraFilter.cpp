@@ -23,6 +23,27 @@
 #include <NebulaGpuTypes.h>
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_filterMaterial_f1, "filterMaterial.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_filterMaterial_f2, "filterMaterial.f2", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAirToWater_f1, "exeAirToWater.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAirToWater_f2, "exeAirToWater.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAirToWater_f3, "exeAirToWater.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWaterToAir_f1, "exeWaterToAir.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f1, "loadMaterial.f1", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f2, "loadMaterial.f2", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f3, "loadMaterial.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f4, "loadMaterial.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f5, "loadMaterial.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterial_f6, "loadMaterial.f6", 0.5f);
 
 namespace {
     // runtime/src/render/materials/water_camera.hlsl: the screen (texture 1) warped by the filter texture (texture 0,
@@ -39,8 +60,8 @@ namespace {
                 material.constants[4 + row * 4 + column] = rFilterMtx.mMtx[row][column];
             }
         }
-        material.constants[12] = 0.05f / pScreen->getWidth();
-        material.constants[13] = 0.05f / pScreen->getHeight();
+        material.constants[12] = cNum_filterMaterial_f1 / pScreen->getWidth();
+        material.constants[13] = cNum_filterMaterial_f2 / pScreen->getHeight();
         material.setTexture(0, pFilter);
         material.setTexture(1, pScreen);
         return material;
@@ -59,6 +80,7 @@ static NebulaColor8 sDefaultColor;
 
 WaterCameraFilter::WaterCameraFilter()
     : LiveActor("水中カメラフィルター"), mWaterAlpha(), mWavePhase(), mWaterColor(::sDefaultColor), mScreenTex(), mFilterTex() {
+    lumacore::setClass(this, lumacore::kClassId< WaterCameraFilter >);
 }
 
 void WaterCameraFilter::init(const TableIter& /*rIter*/) {
@@ -80,9 +102,9 @@ void WaterCameraFilter::exeAirToWater() {
     if (!MR::isCameraInWater()) {
         setNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvWaterToAir));
     } else {
-        mWaterAlpha += 20.0f;
-        if (MR::isDemoActive() || mWaterAlpha >= 255.0f) {
-            mWaterAlpha = 255.0f;
+        mWaterAlpha += cNum_exeAirToWater_f1;
+        if (MR::isDemoActive() || mWaterAlpha >= cNum_exeAirToWater_f2) {
+            mWaterAlpha = cNum_exeAirToWater_f3;
             setNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvWater));
         }
     }
@@ -92,7 +114,7 @@ void WaterCameraFilter::exeWaterToAir() {
     if (MR::isCameraInWater()) {
         setNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvAirToWater));
     } else {
-        mWaterAlpha -= 20.0f;
+        mWaterAlpha -= cNum_exeWaterToAir_f1;
         if (MR::isDemoActive() || mWaterAlpha <= 0.0f) {
             mWaterAlpha = 0.0f;
             setNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvAir));
@@ -104,14 +126,14 @@ static NebulaColor8 sWaterColor = {0x32, 0x32, 0, 0};
 
 void WaterCameraFilter::control() {
     if (MR::isCameraInWater()) {
-        mWavePhase += 0.5f;
+        mWavePhase += cNum_control_f1;
 
-        if (mWavePhase > 360.0f) {
-            mWavePhase -= 360.0f;
+        if (mWavePhase > cNum_control_f2) {
+            mWavePhase -= cNum_control_f3;
         }
 
-        f32 depth = MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 0.0f, 3000.0f);
-        Color8 color(MR::lerp(::sDefaultColor, ::sWaterColor, depth / 3000.0f));
+        f32 depth = MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 0.0f, cNum_control_f4);
+        Color8 color(MR::lerp(::sDefaultColor, ::sWaterColor, depth / cNum_control_f5));
         mWaterColor.mRGBA = color.mRGBA;
     }
 }
@@ -132,7 +154,7 @@ void WaterCameraFilter::draw() const {
     pos.x /= MR::getScreenWidth();
     pos.y /= MR::getScreenHeight();
 
-    f32 halfSize = 0.5f;
+    f32 halfSize = cNum_draw_f1;
     f32 centerU = 1.0f - pos.x;
     f32 centerV = 1.0f - pos.y;
 
@@ -155,7 +177,7 @@ void WaterCameraFilter::draw() const {
 SiteMaterial WaterCameraFilter::loadMaterial() const {
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
-    NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getScreenWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getScreenWidth(), -cNum_loadMaterial_f1, cNum_loadMaterial_f2);
     Frame::setOrthographic(projection);
     Vec2f screenPos;
     screenPos.x = 0.0f;
@@ -169,12 +191,12 @@ SiteMaterial WaterCameraFilter::loadMaterial() const {
     textureMtx.identity();
     Pos3f translation;
     translation.identity();
-    translation.setTrans(Vec3f(-0.5f, -0.5f, 0.0f));
+    translation.setTrans(Vec3f(-cNum_loadMaterial_f3, -cNum_loadMaterial_f4, 0.0f));
     Pos3f rotation;
     rotation.identity();
     MR::makeMtxRotate(rotation, 0.0f, 0.0f, mWavePhase);
     MR::multMtx(textureMtx, translation, rotation);
-    translation.setTrans(Vec3f(0.5f, 0.5f, 0.0f));
+    translation.setTrans(Vec3f(cNum_loadMaterial_f5, cNum_loadMaterial_f6, 0.0f));
     MR::multMtx(textureMtx, textureMtx, translation);
     return filterMaterial(mFilterTex, mScreenTex, textureMtx,
                           Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));

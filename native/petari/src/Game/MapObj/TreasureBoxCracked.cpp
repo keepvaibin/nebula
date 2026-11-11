@@ -10,6 +10,11 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeItemBound_f1, "exeItemBound.f1", 720.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeOpenWait_1, "exeOpenWait.1", 10);
@@ -24,13 +29,13 @@ namespace NrvTreasureBoxCracked {
 
 namespace {
     Color8 sPointLightColor(0xFF, 0xFF, 0x96, 0xFF);
-    const Vec sTopOpenStartOffset = {0.0f, -100.0f, -250.0f};
-    const Vec sTopOpenEndOffset = {0.0f, 23.0f, -250.0f};
-    const Vec sCoinOffset = {0.0f, 130.0f, 0.0f};
-    const Vec sChipOffset = {0.0f, 170.0f, 0.0f};
-    const Vec sKinokoOneUpOffset = {0.0f, 130.0f, 0.0f};
-    const Vec sKinokoLifeUpOffset = {0.0f, 130.0f, 0.0f};
-    const Vec sAirBubbleOffset = {0.0f, 220.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sTopOpenStartOffset, {0.0f, -100.0f, -250.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sTopOpenEndOffset, {0.0f, 23.0f, -250.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sCoinOffset, {0.0f, 130.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sChipOffset, {0.0f, 170.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sKinokoOneUpOffset, {0.0f, 130.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sKinokoLifeUpOffset, {0.0f, 130.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sAirBubbleOffset, {0.0f, 220.0f, 0.0f});
     NEBULA_TUNABLE(f32, sFirstSpeed, 15.0f);
     NEBULA_TUNABLE(f32, sAccelRate, 1.2f);
     NEBULA_TUNABLE(f32, sBoundSpeedMax, 15.0f);
@@ -43,6 +48,7 @@ namespace {
 TreasureBoxCracked::TreasureBoxCracked(const char* pName)
     : LiveActor(pName), mBoxCollider(), mBoxType(), mOpenCondition(), mItem(), mItemType(1), mItemVelocity(0.0f), mItemTargetPos(0.0f),
       mIsItemMoving(), mWaitForSwitchOn(::sDefaultWaitForSwitchOn), mPowerStarId(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TreasureBoxCracked >);
     mTopMtx.identity();
 }
 
@@ -72,7 +78,7 @@ void TreasureBoxCracked::init(const TableIter& rIter) {
 
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 200.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     mTopMtx.set(MR::getJointMtx(this, "Top"));
     MR::initCollisionParts(this, "Top", getSensor("body"), mTopMtx.toMtxPtr());
     mBoxCollider = MR::createCollisionPartsFromLiveActor(this, "Box", getSensor("body"), MR::CollisionScaleType_Default);
@@ -171,7 +177,7 @@ void TreasureBoxCracked::exeItemBound() {
     Vec3f up;
     MR::calcUpVec(&up, this);
     f32 amplitude = ::sBoundSpeedMax - (::sBoundSpeedMax / ::sBoundTime) * getNerveStep();
-    f32 height = amplitude * MR::sinDegree((720.0f / ::sBoundTime) * getNerveStep());
+    f32 height = amplitude * MR::sinDegree((cNum_exeItemBound_f1 / ::sBoundTime) * getNerveStep());
     Vec3f position;
     position.scaleAdd(height, up, mItemTargetPos);
     mItem->mPosition.set(position);

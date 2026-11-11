@@ -9,6 +9,9 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_appearPiece_f1, "appearPiece.f1", 2.0f);
 
 namespace {
     const char* const sPieceModelTable[] = {
@@ -34,6 +37,7 @@ namespace {
 };  // namespace
 
 MogucchiHillPiece::MogucchiHillPiece(const char* pName) : LiveActor(pName), mHost(), mModelName(), mJointName(), mAutoEffectName(), mIsHostLeft(), mIsHostTouching() {
+    lumacore::setClass(this, lumacore::kClassId< MogucchiHillPiece >);
     mMtx.identity();
 }
 
@@ -270,6 +274,7 @@ bool MogucchiHillPiece::isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiv
 MogucchiHill::MogucchiHill(LiveActor* pHost, s32 pieceCount, const char* pName)
     : LiveActor(pName), mHost(pHost), mPieces(), mPieceNum(pieceCount), mPieceIndex(), mHasReserveMtx(), mAppearDistance(100.0f), mAppearDistanceMax(150.0f), mModelNum(3), mModelNameTable(::sPieceModelTable),
       mJointName("MogucchiHill"), mAutoEffectName("MogucchiHill"), mHasLightCtrl(), mSizeAnimState(), mSizeStep(), mAppearNum() {
+    lumacore::setClass(this, lumacore::kClassId< MogucchiHill >);
     if (pieceCount > 100) {
         mPieceNum = 100;
     }
@@ -422,7 +427,7 @@ void MogucchiHill::appearPiece() {
     }
 
     if (mSizeStep != 0) {
-        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / 2.0f));
+        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / cNum_appearPiece_f1));
         MogucchiHillPiece* pPiece = &mPieces[mPieceIndex];
         pPiece->mMtx.setInline(mReserveMtx);
         pPiece->mMtx.getTrans(pPiece->mPosition);

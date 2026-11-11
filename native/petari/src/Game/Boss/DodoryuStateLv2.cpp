@@ -9,6 +9,19 @@
 
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpOut_f1, "exeJumpOut.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_f1, "exeEscapeJump.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeJump_f2, "exeEscapeJump.f2", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFindPos_f1, "exeFindPos.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFindPos_f2, "exeFindPos.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideAttack_f1, "exeHideAttack.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChaseMoreStart_f1, "exeChaseMoreStart.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChaseMoreStart_f2, "exeChaseMoreStart.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_catchPlayerAttack_f1, "catchPlayerAttack.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRandomVelocity_f1, "calcRandomVelocity.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcLimitedRotateMtx_f1, "calcLimitedRotateMtx.f1", 180.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeReadyAppear_shakeCameraInfinity_1, "exeReadyAppear.shakeCameraInfinity.1", 0.2f);
@@ -74,6 +87,7 @@ DodoryuStateLv2::DodoryuStateLv2(Dodoryu* pHost, const DodoryuChaseParam* pChase
     : DodoryuStateBase(pHost, pName), mAttackDir(0.0f, 0.0f, 0.0f), mReadyAppearStep(),
       mChaseAppearStep(), mChaseAppearEndCounter(), mEscapeStepMaxLeft(), mEscapeStepMinLeft(), mFindPosStep(), mChaseMoreCounter(),
       mIsChaseMoreBrake(true), mChaseParam(pChaseParam), mIsPlayerStaggering() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuStateLv2 >);
     initWithoutIter();
 }
 
@@ -281,7 +295,7 @@ void DodoryuStateLv2::exeJumpOut() {
         MR::startSound(mHost, "SE_BM_DODORYU_JUMP_OUT");
         MR::startSound(mHost, "SE_BV_DODORYU_HIPDRP_DAMAGE");
         MR::validateShadowAll(mHost);
-        mHost->shiftMoveStateJumpOut(mChaseParam->mJumpOutSpeed, 3.0f);
+        mHost->shiftMoveStateJumpOut(mChaseParam->mJumpOutSpeed, cNum_exeJumpOut_f1);
     }
 
     if (MR::isBckOneTimeAndStopped(mHost)) {
@@ -322,7 +336,7 @@ void DodoryuStateLv2::endEscape() {
 void DodoryuStateLv2::exeEscapeJump() {
     if (MR::isFirstStep(this)) {
         Dodoryu* pHost = mHost;
-        pHost->mVelocity.set(pHost->mGravity * -30.0f);
+        pHost->mVelocity.set(pHost->mGravity * -cNum_exeEscapeJump_f1);
         mHost->shiftMoveStateNull();
     }
 
@@ -337,7 +351,7 @@ void DodoryuStateLv2::exeEscapeJump() {
         mHost->snapToGround();
     } else {
         Dodoryu* pHost = mHost;
-        pHost->mVelocity += pHost->mGravity * 1.2f;
+        pHost->mVelocity += pHost->mGravity * cNum_exeEscapeJump_f2;
     }
 }
 
@@ -462,7 +476,7 @@ void DodoryuStateLv2::exeFindPos() {
             mtx.set(mHost->mBaseMtx);
             Vec3f trans;
             mtx.getTrans(trans);
-            trans += offset * 150.0f;
+            trans += offset * cNum_exeFindPos_f1;
             mtx.setTrans(trans);
             mHost->setMtx(mtx);
         }
@@ -473,7 +487,7 @@ void DodoryuStateLv2::exeFindPos() {
     if (MR::isGreaterEqualStep(this, mFindPosStep + 1)) {
         Vec3f toPlayer;
         MR::calcVecToPlayerH(&toPlayer, mHost, nullptr);
-        turnToward(toPlayer, 180.0f);
+        turnToward(toPlayer, cNum_exeFindPos_f2);
         mHost->mVelocity.zero();
         mHost->endPlayerCenterCamera();
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvReadyChase));
@@ -489,7 +503,7 @@ void DodoryuStateLv2::exeHideAttack() {
         startAnim(mChaseParam->mAnimSetReadyAppearWalk);
     }
 
-    if (MR::calcDistanceToPlayer(mHost) > 1000.0f) {
+    if (MR::calcDistanceToPlayer(mHost) > cNum_exeHideAttack_f1) {
         mHost->stopHill();
         startAnim(mChaseParam->mAnimSetChaseHide);
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvChaseHide));
@@ -514,7 +528,7 @@ void DodoryuStateLv2::exeChaseMoreStart() {
         }
 
         f32 bckEnd = static_cast< f32 >(MR::getBckCtrl(mHost)->getEnd());
-        mHost->mVelocity.set(toPlayer * (bckEnd > 0.0f ? 1000.0f / bckEnd : 0.0f));
+        mHost->mVelocity.set(toPlayer * (bckEnd > 0.0f ? cNum_exeChaseMoreStart_f1 / bckEnd : 0.0f));
     }
 
     MR::startLevelSound(mHost, "SE_BV_LV_DODORYU_COUNTER");
@@ -528,7 +542,7 @@ void DodoryuStateLv2::exeChaseMoreStart() {
 
     Vec3f toPlayer;
     MR::calcVecToPlayerH(&toPlayer, mHost, nullptr);
-    turnToward(toPlayer, 180.0f);
+    turnToward(toPlayer, cNum_exeChaseMoreStart_f2);
 
     if (MR::isBckOneTimeAndStopped(mHost)) {
         mHost->mVelocity.zero();
@@ -700,7 +714,7 @@ bool DodoryuStateLv2::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
             mAttackDir.negate();
         }
 
-        turnToward(-mAttackDir, 180.0f);
+        turnToward(-mAttackDir, cNum_catchPlayerAttack_f1);
         MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::stopScene(::sStopSceneFrame);
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvKnockDown));
@@ -834,7 +848,7 @@ void DodoryuStateLv2::updateDiveShake() {
 void DodoryuStateLv2::calcRandomVelocity(s32 time) {
     Vec3f frontVec;
     MR::getPlayerFrontVec(&frontVec);
-    f32 randomAngle = MR::getRandom() * 2.0f * MR::pi();
+    f32 randomAngle = MR::getRandom() * cNum_calcRandomVelocity_f1 * MR::pi();
     const Vec3f* gravityVec = MR::getPlayerGravity();
     Pos3f rotateMtx;
     rotateMtx.makeRotate(*gravityVec, randomAngle);
@@ -939,7 +953,7 @@ void DodoryuStateLv2::addVelocity(bool snapToGround) {
 }
 
 void DodoryuStateLv2::calcLimitedRotateMtx(Pos3f* pMtx, const Vec3f& rFrom, const Vec3f& rTo, f32 rate) {
-    f32 maxAngle = rate * MR::pi() / 180.0f;
+    f32 maxAngle = rate * MR::pi() / cNum_calcLimitedRotateMtx_f1;
     f32 absAngle = rFrom.angle(rTo);
     f32 ratio = 1.0f;
 

@@ -6,6 +6,10 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setParamFromChunk_f1, "setParamFromChunk.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_arrangeHorizontalPose_f1, "arrangeHorizontalPose.f1", 0.7f);
 
 namespace {
     NEBULA_TUNABLE(f32, sAttenuation, 0.05f);
@@ -40,6 +44,7 @@ namespace {
 CameraTower::CameraTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleX(), mAngleYRoundSpeed(), mDist(2000.0f), mPos(0.0f, 0.0f, 0.0f),
       mIsRounding(), mRoundIntervalNum(), mAngleYSpeed(), mIsRoundLeftValid(), mIsRoundRightValid() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTower >);
     createVPanObj();
 }
 
@@ -83,7 +88,7 @@ CameraTargetObj* CameraTower::calc() {
 
 void CameraTower::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * 0.5f));
+    setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * cNum_setParamFromChunk_f1));
 }
 
 bool CameraTower::isEnableToRoundLeft() const {
@@ -154,7 +159,7 @@ void CameraTower::arrangeHorizontalPose() {
 
     f32 newAngleY;
     if (CameraLocalUtil::tryCameraReset()) {
-        roundAngle *= 0.7f;
+        roundAngle *= cNum_arrangeHorizontalPose_f1;
         newAngleY = angleY + roundAngle;
     } else {
         if (left) {

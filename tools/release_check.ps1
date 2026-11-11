@@ -1,20 +1,18 @@
 # release_check.ps1 -Path <folder> [-Installer <file>...] [-Allow <file>] [-RequireSigned] [-SkipDefender]
 # The gate every release folder passes before it is published. It checks, and exits 1 listing each failure:
-#   1. The release flag. tools/test_driver/switches.h is read: every test switch name sits in the NEBULA_DEV branch of its
-#      function and the release branch reads no environment; the files of tools/test_driver compile to nothing without
-#      NEBULA_DEV; each .inc there is included only under NEBULA_DEV; the CMake files define NEBULA_DEV only when
-#      NEBULA_RELEASE is off.
-#      A game-module file that names a test option (NEBULA_OPTION_TEST_*) holds it under a NEBULA_DEV conditional.
+#   1. One build. No production source (native, runtime, platform; tools/ and *_tests.* are test code) names
+#      NEBULA_DEV, NEBULA_RELEASE or a test option (NEBULA_OPTION_TEST_), or includes tools/test_driver; no CMake file
+#      defines either name; -Path holds no test extension (nebula_test_extension.*).
 #   2. Every file of -Path and every -Installer file (and the entries of the .zip/.apk/.jar/.nupkg files among them),
-#      as bytes (ASCII and UTF-8 text) and as UTF-16 text, holds none of: a test switch's name (the names read from switches.h, plus the
+#      as bytes (ASCII and UTF-8 text) and as UTF-16 text, holds none of: a test's environment name (the
 #      prefixes below: GALAXY_TEST_, NEBULA_OPTION_TEST_, NEBULA_TEST_, NEBULA_DEV and others), a Windows or Unix user-profile path (drive:\Users\<name>\, /Users/<name>/, /home/<name>/), an
 #      e-mail address other than a GitHub noreply one, a MAC address (six hex pairs joined by colons or
 #      hyphens, three hex quads joined by dots, or 12 hex digits after "mac"/"bdaddr"/"bluetooth"), or a personal term from the release key's
 #      private-terms.txt (one per line; kept out of the repository, so no name is ever written here). A finding prints
 #      its kind, file and offset with the private part masked. -Allow names a local file of literal match texts to let
 #      through (one per line, # starts a comment): a third-party library's own address, say.
-#      The same personal-detail checks (paths, e-mail, MAC, private terms; not the switch names, which sources hold on
-#      purpose) run over every text file git tracks in this repository, except third_party/ and docs/licenses/ (their authors'
+#      The same personal-detail checks (paths, e-mail, MAC, private terms; not the environment names, which the test tools hold
+#      on purpose) run over every text file git tracks in this repository, except third_party/ and docs/licenses/ (their authors'
 #      details). -SkipSource leaves that out.
 #   3. Every .exe and .dll carries version information (product, file version, description).
 #   4. Signatures. Authenticode of every .exe, .dll and .msi: Valid passes; NotSigned is reported as "unsigned" and is
@@ -38,110 +36,28 @@ $failures = New-Object System.Collections.Generic.List[string]
 $notes = New-Object System.Collections.Generic.List[string]
 $repo = Split-Path -Parent $PSScriptRoot
 
-# ---- 1. The release flag --------------------------------------------------------------------------------------------
-$switchesFile = Join-Path $repo "tools\test_driver\switches.h"
-$switchNames = New-Object System.Collections.Generic.HashSet[string]
-if (-not (Test-Path -LiteralPath $switchesFile)) {
-    $failures.Add("tools/test_driver/switches.h is missing: the test switches could not be listed")
-} else {
-    $mode = "none"
-    $ifs = 0
-    $elses = 0
-    $number = 0
-    foreach ($line in [IO.File]::ReadAllLines($switchesFile)) {
-        $number++
-        if ($line -match '^#if !defined\(NEBULA_DEV\)\s*$') { $mode = "release"; $ifs++; continue }
-        if ($line -match '^#else\s*$') { if ($mode -eq "release") { $mode = "dev"; $elses++ } else { $failures.Add("switches.h:$number a #else outside a NEBULA_DEV pair") }; continue }
-        if ($line -match '^#endif\s*$') { $mode = "none"; continue }
-        if ($line -match '^#\s*(if|ifdef|ifndef|elif)\b' -and $line -notmatch '^#if defined\(_MSC_VER\)\s*$') {
-            $failures.Add("switches.h:$number has a conditional this check does not read: $line")
-            continue
-        }
-        if ($line -match '^#if defined\(_MSC_VER\)\s*$') { continue }
-        $names = [regex]::Matches($line, 'L?"((?:GALAXY|NEBULA)_[A-Z0-9_]+)"')
-        foreach ($m in $names) {
-            $name = $m.Groups[1].Value
-            if ($mode -eq "dev") { [void]$switchNames.Add($name) }
-            elseif ($mode -eq "release") { $failures.Add("switches.h:$number $name sits in the release branch, so a release build holds it") }
-            else { $failures.Add("switches.h:$number $name is outside any NEBULA_DEV branch, so a release build holds it") }
-        }
-        if ($mode -eq "release" -and $line -match 'getenv|GetEnvironmentVariable') {
-            $failures.Add("switches.h:$number the release branch reads the environment: $($line.Trim())")
-        }
-    }
-    if ($ifs -eq 0 -or $ifs -ne $elses) { $failures.Add("switches.h has $ifs release branches and $elses dev branches: the pairs do not match") }
-    if ($switchNames.Count -eq 0) { $failures.Add("switches.h lists no test switch names: the check could not read it") }
-}
-# A file that is test code is whole inside NEBULA_DEV.
-foreach ($name in @("run_options.cpp", "scripted_input.cpp", "data_guard.cpp")) {
-    $file = Join-Path $repo "tools\test_driver\$name"
-    if (-not (Test-Path -LiteralPath $file)) { $failures.Add("tools/test_driver/$name is missing"); continue }
-    $text = [IO.File]::ReadAllText($file)
-    if ($text -notmatch '(?s)\A(?:\s*//[^\n]*\n)*\s*#if defined\(NEBULA_DEV\)' -or $text -notmatch '#endif\s*\z') {
-        $failures.Add("tools/test_driver/$name is not whole inside #if defined(NEBULA_DEV) ... #endif")
-    }
-}
-# Each .inc of the test driver is included only where NEBULA_DEV is defined.
-$incNames = @(Get-ChildItem -LiteralPath (Join-Path $repo "tools\test_driver") -Filter "*.inc" | ForEach-Object { $_.Name })
-foreach ($folder in @("native", "runtime", "platform", "tools")) {
+# ---- 1. One build ------------------------------------------------------------------------------------------------------
+foreach ($folder in @("native", "runtime", "platform")) {
     $root = Join-Path $repo $folder
-    if (-not (Test-Path -LiteralPath $root)) { continue }
-    foreach ($source in Get-ChildItem -LiteralPath $root -Recurse -File -Include "*.cpp", "*.h", "*.hpp", "*.c", "*.inc") {
-        if ($source.DirectoryName -like "*\tools\test_driver") { continue }
+    if (-not (Test-Path -LiteralPath $root)) { $failures.Add("$folder is missing"); continue }
+    foreach ($source in Get-ChildItem -LiteralPath $root -Recurse -File -Include "*.cpp", "*.h", "*.hpp", "*.c", "*.inc", "*.mm", "*.kt", "*.java") {
+        if ($source.BaseName -like "*_tests" -or $source.FullName -like "*\third_party\*") { continue }
         $text = [IO.File]::ReadAllText($source.FullName)
-        $hit = $false
-        foreach ($inc in $incNames) { if ($text.Contains($inc)) { $hit = $true; break } }
-        if (-not $hit) { continue }
-        $stack = New-Object System.Collections.Generic.List[object]
-        $number = 0
-        foreach ($line in [IO.File]::ReadAllLines($source.FullName)) {
-            $number++
-            if ($line -match '^\s*#\s*(ifdef|ifndef|if)\b(.*)$') {
-                $kind = $Matches[1]
-                $cond = $Matches[2].Trim()
-                if ($kind -eq "ifdef") { $cond = "defined($cond)" } elseif ($kind -eq "ifndef") { $cond = "!defined($cond)" }
-                $stack.Add(@{ Cond = $cond; Else = $false })
-                continue
-            }
-            if ($line -match '^\s*#\s*elif\b(.*)$' -and $stack.Count -gt 0) { $stack[$stack.Count - 1] = @{ Cond = $Matches[1].Trim(); Else = $false }; continue }
-            if ($line -match '^\s*#\s*else\b' -and $stack.Count -gt 0) { $stack[$stack.Count - 1].Else = $true; continue }
-            if ($line -match '^\s*#\s*endif\b' -and $stack.Count -gt 0) { $stack.RemoveAt($stack.Count - 1); continue }
-            if ($line -match '^\s*#\s*include\s+"[^"]*?([A-Za-z0-9_]+\.inc)"') {
-                $incName = $Matches[1]
-                if ($incNames -notcontains $incName) { continue }
-                $guarded = $false
-                foreach ($entry in $stack) {
-                    $positive = ($entry.Cond -match '(?<!!)defined\(NEBULA_DEV\)') -and ($entry.Cond -notmatch '\|\|') -and ($entry.Cond -notmatch '!\s*defined\(NEBULA_DEV\)')
-                    $negative = $entry.Cond -match '!\s*defined\(NEBULA_DEV\)'
-                    if (($positive -and -not $entry.Else) -or ($negative -and $entry.Else)) { $guarded = $true }
-                }
-                if (-not $guarded) { $failures.Add("$($source.FullName.Substring($repo.Length + 1)):$number includes $incName outside NEBULA_DEV") }
-            }
+        $relative = $source.FullName.Substring($repo.Length + 1)
+        foreach ($name in @("NEBULA_DEV", "NEBULA_RELEASE", "NEBULA_OPTION_TEST_", "tools/test_driver")) {
+            if ($text.Contains($name)) { $failures.Add("$relative names $name: a release and a test run use the same source") }
         }
     }
 }
-# The build defines NEBULA_DEV only when NEBULA_RELEASE is off.
-foreach ($cmake in @("CMakeLists.txt", "native\CMakeLists.txt", "platform\sdl\CMakeLists.txt")) {
-    $file = Join-Path $repo $cmake
-    if (-not (Test-Path -LiteralPath $file)) { $failures.Add("$cmake is missing"); continue }
-    $text = [IO.File]::ReadAllText($file)
-    if ($text -notmatch '(?s)if\(NEBULA_RELEASE\)[^\r\n]*\r?\n[^\r\n]*NEBULA_RELEASE=1[^\r\n]*\r?\nelse\(\)\s*\r?\n[^\r\n]*NEBULA_DEV=1') {
-        $failures.Add("$cmake does not define NEBULA_DEV only in the else() of if(NEBULA_RELEASE)")
-    }
-    if ([regex]::Matches($text, 'NEBULA_DEV=1').Count -ne 1) {
-        $failures.Add("$cmake defines NEBULA_DEV in $([regex]::Matches($text, 'NEBULA_DEV=1').Count) places; exactly one, in the else() branch, is expected")
+foreach ($cmake in Get-ChildItem -LiteralPath $repo -Recurse -File -Include "CMakeLists.txt", "*.cmake" |
+                   Where-Object { $_.FullName -notlike "*\third_party\*" -and $_.FullName -notlike "*\build*" }) {
+    $text = [IO.File]::ReadAllText($cmake.FullName)
+    if ($text -match 'NEBULA_DEV|NEBULA_RELEASE') {
+        $failures.Add("$($cmake.FullName.Substring($repo.Length + 1)) defines a build kind: there is one build")
     }
 }
-
-# A game-module file that names a test option holds the read under a NEBULA_DEV conditional.
-$petariSource = Join-Path $repo "native\petari\src"
-if (Test-Path -LiteralPath $petariSource) {
-    foreach ($source in Get-ChildItem -LiteralPath $petariSource -Recurse -File -Include "*.cpp", "*.hpp", "*.c", "*.h") {
-        $text = [IO.File]::ReadAllText($source.FullName)
-        if ($text.Contains("NEBULA_OPTION_TEST_") -and $text -notmatch 'defined\(NEBULA_DEV\)') {
-            $failures.Add("$($source.FullName.Substring($repo.Length + 1)) names a test option outside any NEBULA_DEV conditional")
-        }
-    }
+foreach ($file in Get-ChildItem -LiteralPath $Path -Recurse -File -Filter "nebula_test_extension.*" -ErrorAction SilentlyContinue) {
+    $failures.Add("$($file.FullName) is the test extension: tests attach it, a release never holds it")
 }
 
 # ---- 2. What may not be in any shipped file ------------------------------------------------------------------------
@@ -406,7 +322,6 @@ if (-not ('NebulaReleaseScan' -as [type])) {
 }
 $options = New-Object NebulaScanOptions
 $options.Prefixes = [string[]]$prefixes
-$options.Names = [string[]]@($switchNames)
 $options.Terms = [string[]]$terms.ToArray()
 $options.Allow = [string[]]$allowed.ToArray()
 
@@ -528,5 +443,5 @@ if ($failures.Count -ne 0) {
     $failures | ForEach-Object { Write-Output "  $_" }
     exit 1
 }
-Write-Output "release_check: $($shipped.Count) files passed (release flag, version information, no test switches, user paths, e-mail or MAC addresses, signatures, Defender)"
+Write-Output "release_check: $($shipped.Count) files passed (one build, version information, no test names, user paths, e-mail or MAC addresses, signatures, Defender)"
 exit 0

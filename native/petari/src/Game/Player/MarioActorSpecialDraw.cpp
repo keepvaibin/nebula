@@ -19,6 +19,71 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include <new>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenBoxRange_f1, "calcScreenBoxRange.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenBoxRange_f2, "calcScreenBoxRange.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcScreenBoxRange_f3, "calcScreenBoxRange.f3", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeBackScreenBox_f1, "writeBackScreenBox.f1", 0.9999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeBackScreenBox_f2, "writeBackScreenBox.f2", 0.9999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeBackScreenBox_f3, "writeBackScreenBox.f3", 0.9999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_writeBackScreenBox_f4, "writeBackScreenBox.f4", 0.9999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc1stPersonView_f1, "calc1stPersonView.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc1stPersonView_f2, "calc1stPersonView.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc1stPersonView_f3, "calc1stPersonView.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f1, "calcFogLighting.f1", 63.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f2, "calcFogLighting.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f3, "calcFogLighting.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f4, "calcFogLighting.f4", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f5, "calcFogLighting.f5", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f6, "calcFogLighting.f6", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f7, "calcFogLighting.f7", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFogLighting_f8, "calcFogLighting.f8", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f1, "drawScreenBlend.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f2, "drawScreenBlend.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f3, "drawScreenBlend.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f4, "drawScreenBlend.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f5, "drawScreenBlend.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f6, "drawScreenBlend.f6", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f7, "drawScreenBlend.f7", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawScreenBlend_f8, "drawScreenBlend.f8", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRandomTexture_f1, "updateRandomTexture.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f1, "drawWallShade.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f2, "drawWallShade.f2", 0.3926991f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f3, "drawWallShade.f3", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f4, "drawWallShade.f4", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f5, "drawWallShade.f5", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f6, "drawWallShade.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f7, "drawWallShade.f7", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f8, "drawWallShade.f8", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f9, "drawWallShade.f9", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawWallShade_f10, "drawWallShade.f10", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawColdWaterDamage_f1, "drawColdWaterDamage.f1", 89.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawColdWaterDamage_f2, "drawColdWaterDamage.f2", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawColdWaterDamage_f3, "drawColdWaterDamage.f3", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setRasterScroll_f1, "setRasterScroll.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setRasterScroll_f2, "setRasterScroll.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRasterScroll_f1, "updateRasterScroll.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSpinEffect_f1, "calcSpinEffect.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSpinEffect_f2, "calcSpinEffect.f2", 5.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSpinEffect_f3, "calcSpinEffect.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSpinEffect_f4, "calcSpinEffect.f4", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcSpinEffect_f5, "calcSpinEffect.f5", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f1, "drawSpinEffect.f1", 0.09817477f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f2, "drawSpinEffect.f2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f3, "drawSpinEffect.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f4, "drawSpinEffect.f4", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f5, "drawSpinEffect.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f6, "drawSpinEffect.f6", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSpinEffect_f7, "drawSpinEffect.f7", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSphereMask_f1, "drawSphereMask.f1", 0.00001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSphereMask_f2, "drawSphereMask.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDarkMask_f1, "drawDarkMask.f1", 240.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDarkMask_f2, "drawDarkMask.f2", 240.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDarkMask_f3, "drawDarkMask.f3", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDarkMask_f4, "drawDarkMask.f4", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDarkMask_f5, "drawDarkMask.f5", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawDarkMask_f6, "drawDarkMask.f6", 4.0f);
 
 void MarioActor::initScreenBox() {
     mScreenBoxKey = new u8[32];  // the frame read's key
@@ -54,9 +119,9 @@ void MarioActor::calcScreenBoxRange() {
     Vec2f minimum;
     Vec2f maximum;
     MR::calcScreenPosition(&center, position);
-    MR::calcScreenPosition(&x, position + Vec3f(80.0f, 0.0f, 0.0f));
-    MR::calcScreenPosition(&y, position + Vec3f(0.0f, 80.0f, 0.0f));
-    MR::calcScreenPosition(&z, position + Vec3f(0.0f, 0.0f, 80.0f));
+    MR::calcScreenPosition(&x, position + Vec3f(cNum_calcScreenBoxRange_f1, 0.0f, 0.0f));
+    MR::calcScreenPosition(&y, position + Vec3f(0.0f, cNum_calcScreenBoxRange_f2, 0.0f));
+    MR::calcScreenPosition(&z, position + Vec3f(0.0f, 0.0f, cNum_calcScreenBoxRange_f3));
     Vec3f radius((x - center).length(), (y - center).length(), (z - center).length());
     f32 range = radius.length();
     minimum = center - Vec2f(range, range);
@@ -142,17 +207,17 @@ void MarioActor::writeBackScreenBox() const {
     material.setTexture(0, texture);
     TypedDraw site = TDDraw::site(material, 2);
     VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
-    *vtx++ = {minimum.x, minimum.y, 0.9999f, u0, v0};
-    *vtx++ = {maximum.x, minimum.y, 0.9999f, u1, v0};
-    *vtx++ = {maximum.x, maximum.y, 0.9999f, u1, v1};
-    *vtx++ = {minimum.x, maximum.y, 0.9999f, u0, v1};
+    *vtx++ = {minimum.x, minimum.y, cNum_writeBackScreenBox_f1, u0, v0};
+    *vtx++ = {maximum.x, minimum.y, cNum_writeBackScreenBox_f2, u1, v0};
+    *vtx++ = {maximum.x, maximum.y, cNum_writeBackScreenBox_f3, u1, v1};
+    *vtx++ = {minimum.x, maximum.y, cNum_writeBackScreenBox_f4, u0, v1};
     TDDraw::close();
 }
 
 void MarioActor::calc1stPersonView() {
     f32 length = (mCamPos - mPosition).length();
-    f32 minVal = 300.0f;
-    f32 maxVal = 1000.0f;
+    f32 minVal = cNum_calc1stPersonView_f1;
+    f32 maxVal = cNum_calc1stPersonView_f2;
     f32 val;
 
     if (length > maxVal) {
@@ -163,7 +228,7 @@ void MarioActor::calc1stPersonView() {
         val = 1.0f - (maxVal - length) / (maxVal - minVal);
     }
 
-    u8 compareVal = (s32)(255.0f * val);
+    u8 compareVal = (s32)(cNum_calc1stPersonView_f3 * val);
 
     if (compareVal == 0) {
         mFpViewHidden = true;
@@ -194,26 +259,26 @@ void MarioActor::calcFogLighting() {
     Color8 fog(240, 16, 80, 0);
 
     if (!mMario->isStatusActive(MarioStatus_Paralyze) && isNeedDamageFog()) {
-        f32 phase = ((mFogWaveTimer + 31) & 63) / 63.0f;
+        f32 phase = ((mFogWaveTimer + 31) & 63) / cNum_calcFogLighting_f1;
 
-        if (phase > 0.5f) {
+        if (phase > cNum_calcFogLighting_f2) {
             phase = 1.0f - phase;
         }
 
-        f32 wave = 2.0f * phase;
+        f32 wave = cNum_calcFogLighting_f3 * phase;
         f32 low = getConst().getTable()->mDamageFogLow;
-        mFogRate = (low + wave * (getConst().getTable()->mDamageFogHigh - getConst().getTable()->mDamageFogLow)) / 255.0f;
+        mFogRate = (low + wave * (getConst().getTable()->mDamageFogHigh - getConst().getTable()->mDamageFogLow)) / cNum_calcFogLighting_f4;
     } else if (mFlashFogTimer) {
         fog.mRGBA = mFlashFogColor.mRGBA;
 
         if (mFlashFogOn) {
-            fog.g = (s32)(255.0f * MR::sin(FloatUtil::PI() * (mFlashFogTimer / 20.0f)));
+            fog.g = (s32)(cNum_calcFogLighting_f5 * MR::sin(FloatUtil::PI() * (mFlashFogTimer / cNum_calcFogLighting_f6)));
         }
 
         mFogRate = mFlashFogRate * MR::sin((mFlashFogTimer / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * FloatUtil::PI());
     } else if (mMario->mItemDashTimer) {
         fog.set(255, 255, 0, 0);
-        mFogRate = 0.8f * MR::sin(((mMario->mItemDashTimer / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / 2.0f);
+        mFogRate = cNum_calcFogLighting_f7 * MR::sin(((mMario->mItemDashTimer / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / cNum_calcFogLighting_f8);
     } else {
         resetFog();
     }
@@ -304,8 +369,8 @@ void MarioActor::drawScreenBlend() const {
         Vec2f minimum;
         Vec2f maximum;
         TDDraw::project2D(&position, mMario->mShadowPos);
-        opposite = position + Vec2f(100.0f, 100.0f);
-        position = position + Vec2f(-100.0f, -100.0f);
+        opposite = position + Vec2f(cNum_drawScreenBlend_f1, cNum_drawScreenBlend_f2);
+        position = position + Vec2f(-cNum_drawScreenBlend_f3, -cNum_drawScreenBlend_f4);
 
         if (position.x >= opposite.x) {
             minimum.x = opposite.x;
@@ -323,8 +388,8 @@ void MarioActor::drawScreenBlend() const {
             maximum.y = opposite.y;
         }
 
-        position = minimum + Vec2f(-10.0f, -10.0f);
-        opposite = maximum + Vec2f(10.0f, 10.0f);
+        position = minimum + Vec2f(-cNum_drawScreenBlend_f5, -cNum_drawScreenBlend_f6);
+        opposite = maximum + Vec2f(cNum_drawScreenBlend_f7, cNum_drawScreenBlend_f8);
         // Where the wall's shadow was marked: darkened, the mark going with it.
         SiteMaterial material;
         TDDraw::setupNative(&material, 0, 0, 2);
@@ -356,7 +421,7 @@ void MarioActor::updateRandomTexture(f32 distance) {
     mMaskIndex = 1 - mMaskIndex;
     u8* pixel;
     u8* image = mMaskTextures[mMaskIndex]->image();
-    distance = 1.0f - distance / 1000.0f;
+    distance = 1.0f - distance / cNum_updateRandomTexture_f1;
     f32 probability = MR::clamp(distance, 0.0f, 1.0f);
 
     // LA8 texels in rows: intensity 0, the alpha in 16 levels (level * 17).
@@ -390,7 +455,7 @@ namespace {
 };  // namespace
 
 void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32 unused) const {
-    f32 radius = 100.0f;
+    f32 radius = cNum_drawWallShade_f1;
     SiteMaterial material;
     TDDraw::setupNative(&material, 1, 1, 0);
     material.setShader(NEBULA_SHADER_TEX_VERTEX_ALPHA);
@@ -406,15 +471,15 @@ void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32
     }
 
     MR::normalizeOrZero(&tangent);
-    NebulaMtxRotAxisRad(rotation, &rNormal, 0.3926991f);
+    NebulaMtxRotAxisRad(rotation, &rNormal, cNum_drawWallShade_f2);
     TypedDraw site = TDDraw::site(material, 0);
     VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_FAN, 18);
-    *vtx++ = {rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z, Rgba8(128), 0.0f, 0.0f};
+    *vtx++ = {rPosition.x - cNum_drawWallShade_f3 * rNormal.x, rPosition.y - cNum_drawWallShade_f4 * rNormal.y, rPosition.z - cNum_drawWallShade_f5 * rNormal.z, Rgba8(128), 0.0f, 0.0f};
 
     for (u32 i = 0; i <= 16; i++) {
-        f32 angle = 2.0f * ((i / 16.0f) * FloatUtil::PI());
-        Vec3f point = subtractOffset(rPosition, rNormal * 5.0f) + tangent * radius;
-        *vtx++ = {point.x, point.y, point.z, Rgba8(1), 10.0f * Angle::cosRadian(angle), 10.0f * MR::sin(angle)};
+        f32 angle = cNum_drawWallShade_f6 * ((i / cNum_drawWallShade_f7) * FloatUtil::PI());
+        Vec3f point = subtractOffset(rPosition, rNormal * cNum_drawWallShade_f8) + tangent * radius;
+        *vtx++ = {point.x, point.y, point.z, Rgba8(1), cNum_drawWallShade_f9 * Angle::cosRadian(angle), cNum_drawWallShade_f10 * MR::sin(angle)};
         NebulaMtxMultVecSR(rotation, &tangent, &tangent);
     }
 }
@@ -452,18 +517,18 @@ namespace {
 }  // namespace
 
 void MarioActor::drawColdWaterDamage() const {
-    f32 frequency = 89.0f * MR::sin((TWO_PI * mMario->mSwim->mColdWaterDamageInterval) / 120.0f);
+    f32 frequency = cNum_drawColdWaterDamage_f1 * MR::sin((TWO_PI * mMario->mSwim->mColdWaterDamageInterval) / cNum_drawColdWaterDamage_f2);
 
     if (frequency > 0.0f) {
         frequency = 0.0f;
     }
 
-    drawFrameRipple(mRippleKey, 5.0f, mFrameCount, frequency, 0.0f);
+    drawFrameRipple(mRippleKey, cNum_drawColdWaterDamage_f3, mFrameCount, frequency, 0.0f);
 }
 
 void MarioActor::setRasterScroll(s32 amp, s32 phase, s32 wave) {
     mRasterScrollPhase = phase;
-    mRasterScrollAmp = 0.9f * mRasterScrollAmp + 0.1f * amp;
+    mRasterScrollAmp = cNum_setRasterScroll_f1 * mRasterScrollAmp + cNum_setRasterScroll_f2 * amp;
     mRasterScrollWave = wave;
     mRasterScrollSet = 1;
 }
@@ -474,7 +539,7 @@ void MarioActor::updateRasterScroll() {
         return;
     }
 
-    mRasterScrollAmp *= 0.9f;
+    mRasterScrollAmp *= cNum_updateRasterScroll_f1;
 
     if (mRasterScrollAmp < 1.0f) {
         mRasterScrollPhase = 0;
@@ -506,8 +571,8 @@ void MarioActor::drawLifeUp() const {
 }
 
 void MarioActor::calcSpinEffect() {
-    f32 baseRadius = 30.0f;
-    f32 radiusScale = 5.8f;
+    f32 baseRadius = cNum_calcSpinEffect_f1;
+    f32 radiusScale = cNum_calcSpinEffect_f2;
     mSpinEffectRadius = 0.0f;
     mSpinEffectHeight = 0.0f;
 
@@ -535,13 +600,13 @@ void MarioActor::calcSpinEffect() {
     }
 
     if (frame < 10) {
-        mSpinEffectRadius = baseRadius + (frame / 10.0f) * (mPunchFrame * radiusScale);
-        mSpinEffectHeight = 120.0f;
+        mSpinEffectRadius = baseRadius + (frame / cNum_calcSpinEffect_f3) * (mPunchFrame * radiusScale);
+        mSpinEffectHeight = cNum_calcSpinEffect_f4;
         return;
     }
 
     mSpinEffectRadius = baseRadius + mPunchFrame * radiusScale;
-    mSpinEffectHeight = 120.0f;
+    mSpinEffectHeight = cNum_calcSpinEffect_f5;
 }
 
 void MarioActor::drawSpinEffect() const {
@@ -559,14 +624,14 @@ void MarioActor::drawSpinEffect() const {
     Vec3f center = mCenterPos + mMario->mHeadVec * mSpinEffectHeight;
     Vec3f direction(mMario->mFrontVec);
     Vec3f previous;
-    NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
-    material.mState.line_width = 6.0f;
+    NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, cNum_drawSpinEffect_f1);
+    material.mState.line_width = cNum_drawSpinEffect_f2;
     TypedDraw site3 = TDDraw::site(material, 0);
 
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
         point.setLength(mSpinEffectRadius);
-        point += mMario->mHeadVec * MR::getRandom() * 10.0f;
+        point += mMario->mHeadVec * MR::getRandom() * cNum_drawSpinEffect_f3;
 
         if (i) {
             TDDraw::drawLine(site3, center + previous, center + point, 0xFFFFFF20);
@@ -576,16 +641,16 @@ void MarioActor::drawSpinEffect() const {
         NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
-    material.mState.line_width = 3.0f;
+    material.mState.line_width = cNum_drawSpinEffect_f4;
     site3.setMaterial(material);
 
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
         point.setLength(mSpinEffectRadius);
-        point += mMario->mHeadVec * MR::getRandom() * 10.0f;
-        f32 wave = MR::sin((((mFrameCount + i) & 31) / 32.0f) * FloatUtil::PI());
+        point += mMario->mHeadVec * MR::getRandom() * cNum_drawSpinEffect_f5;
+        f32 wave = MR::sin((((mFrameCount + i) & 31) / cNum_drawSpinEffect_f6) * FloatUtil::PI());
         f32 square = wave * wave;
-        u32 alpha = 160.0f * (square * square);
+        u32 alpha = cNum_drawSpinEffect_f7 * (square * square);
 
         if (i) {
             TDDraw::drawLine(site3, center + previous, center + point, alpha | 0x40FF00 | (alpha << 24));
@@ -605,13 +670,13 @@ void MarioActor::drawSphereMask() const {
 
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
-    Frame::setZScaleOffset(1.0f, 0.00001f);
+    Frame::setZScaleOffset(1.0f, cNum_drawSphereMask_f1);
     material.mState.cull = NEBULA_CULL_FRONT;
     material.setDepth(true, NEBULA_COMPARE_GREATER, true);
     Vec3f position;
     getRealPos("Spine1", &position);
     TypedDraw site4 = TDDraw::site(material, 0);
-    TDDraw::drawSphere3D(site4, position, 180.0f, 0xFFFFFF30, 16);
+    TDDraw::drawSphere3D(site4, position, cNum_drawSphereMask_f2, 0xFFFFFF30, 16);
     Frame::setZScaleOffset(1.0f, 0.0f);
 }
 
@@ -670,8 +735,8 @@ bool MarioActor::drawDarkMask() const {
     getRealPos("Spine1", &spine);
     f32 radius = mDarkMaskTimer;
 
-    if (radius >= 240.0f) {
-        radius = 240.0f;
+    if (radius >= cNum_drawDarkMask_f1) {
+        radius = cNum_drawDarkMask_f2;
     }
 
     Vec3f position(mPosition);
@@ -688,9 +753,9 @@ bool MarioActor::drawDarkMask() const {
     TypedDraw site = TDDraw::site(material, 2);
     VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
     *vtx++ = {minimum.x, minimum.y, 0.0f, 0.0f, 0.0f};
-    *vtx++ = {maximum.x, minimum.y, 0.0f, 4.0f, 0.0f};
-    *vtx++ = {maximum.x, maximum.y, 0.0f, 4.0f, 4.0f};
-    *vtx++ = {minimum.x, maximum.y, 0.0f, 0.0f, 4.0f};
+    *vtx++ = {maximum.x, minimum.y, 0.0f, cNum_drawDarkMask_f3, 0.0f};
+    *vtx++ = {maximum.x, maximum.y, 0.0f, cNum_drawDarkMask_f4, cNum_drawDarkMask_f5};
+    *vtx++ = {minimum.x, maximum.y, 0.0f, 0.0f, cNum_drawDarkMask_f6};
     TDDraw::close();
     return true;
 }

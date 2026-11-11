@@ -22,6 +22,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f1, "exeTurn.f1", 2.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, cBinderRadius, 70.0f);
@@ -62,13 +65,13 @@ namespace {
     NEBULA_TUNABLE(f32, cStarPieceSpeedH, 10.0f);
     NEBULA_TUNABLE(f32, cStarPieceSpeedV, 40.0f);
 
-    const MR::ActorMoveParam cNoMoveNoTurnParam = {0.0f, 1.2f, 0.8f, 0.0f};
-    const MR::ActorMoveParam cNoMoveNoTurnOnAirParam = {0.0f, 2.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam cWalkParam = {0.12f, 1.2f, 0.95f, 2.0f};
-    const MR::ActorMoveParam cSearchParam = {0.0f, 1.2f, 0.95f, 2.0f};
-    const MR::ActorMoveParam cPursueParam = {0.25f, 1.2f, 0.95f, 2.0f};
-    const MR::ActorMoveParam cHitReactionOnGroundParam = {0.0f, 1.2f, 0.8f, 5.0f};
-    const MR::ActorMoveParam cHitReactionAirParam = {0.0f, 2.0f, 0.95f, 5.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cNoMoveNoTurnParam, {0.0f, 1.2f, 0.8f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cNoMoveNoTurnOnAirParam, {0.0f, 2.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cWalkParam, {0.12f, 1.2f, 0.95f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSearchParam, {0.0f, 1.2f, 0.95f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cPursueParam, {0.25f, 1.2f, 0.95f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cHitReactionOnGroundParam, {0.0f, 1.2f, 0.8f, 5.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cHitReactionAirParam, {0.0f, 2.0f, 0.95f, 5.0f});
 }  // namespace
 
 namespace NrvKaron {
@@ -92,6 +95,7 @@ namespace NrvKaron {
 
 Karon::Karon(const char* pName)
     : LiveActor(pName), mTerritoryMover(nullptr), mStopSwAnim(false), mScaleController(nullptr), mStateStarPointer(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< Karon >);
 }
 
 void Karon::init(const TableIter& rIter) {
@@ -226,7 +230,7 @@ void Karon::exeTurn() {
     Vec3f front;
     MR::calcFrontVec(&front, this);
     if (MR::isGreaterStep(this, ::cTurnMinTime) &&
-        MR::isFaceToTargetHorizontalDegree(this, mTerritoryMover->mTarget, front, ::cSearchParam.mTurnDegree * 2.0f)) {
+        MR::isFaceToTargetHorizontalDegree(this, mTerritoryMover->mTarget, front, ::cSearchParam.mTurnDegree * cNum_exeTurn_f1)) {
         if (isFallNextMove(false)) {
             setNerve(GET_NERVE(Karon, HostTypeNrvTurn));
         } else {

@@ -36,7 +36,7 @@ void TripodBossMovableArea::setBaseAxis(const Vec3f& rAxis) {
     MR::normalizeOrZero(&mBaseAxis);
 }
 
-// mFront is stored as given; the base axis is normalized again (see NATIVE-STATE-Q, TripodBossMovableArea).
+// mFront is stored as given; the base axis is normalized again.
 void TripodBossMovableArea::setFrontVector(const Vec3f& rFront) {
     mFront = rFront;
     MR::normalizeOrZero(&mBaseAxis);
@@ -102,7 +102,7 @@ bool TripodBossMovableArea::collideSphere(HitResult* pResult, const Vec3f& rStar
 }
 
 // The surface point toward rPos, its base-axis cosine held to mRangeMin..mRangeMax.
-// The clamped branch returns it relative to mCenter (see NATIVE-STATE-Q, TripodBossMovableArea).
+// The clamped branch returns it relative to mCenter.
 void TripodBossMovableArea::calcNearLandingPosition(Vec3f* pPos, const Vec3f& rPos) const {
     f32 dist;
     Vec3f dir(rPos);

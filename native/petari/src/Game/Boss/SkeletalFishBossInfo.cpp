@@ -3,6 +3,11 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_createLevelStatus_f1, "createLevelStatus.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createLevelStatus_f2, "createLevelStatus.f2", 2000.0f);
 
 namespace {
     static const char* sParamFileName = "Param";
@@ -19,6 +24,7 @@ namespace {
 
 SkeletalFishBossInfo::SkeletalFishBossInfo(SkeletalFishBoss* pBoss, s32 levelNum, s32 guardNum, const char* pName)
     : NameObj(pName), mFishBoss(pBoss), mLevelNum(levelNum), mGuardNum(guardNum), mLevelStatusArray() {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossInfo >);
     createLevelStatus();
 }
 
@@ -39,9 +45,9 @@ void SkeletalFishBossInfo::createLevelStatus() {
 
     for (s32 i = 0; i < mLevelNum; i++) {
         getLevelStatus(i)->mEnergyLevel = 1;
-        getLevelStatus(i)->mSpeedLevel = 20.0f;
+        getLevelStatus(i)->mSpeedLevel = cNum_createLevelStatus_f1;
         getLevelStatus(i)->mRailIDLevel = 0;
-        getLevelStatus(i)->mGuardOffsLevel = 2000.0f;
+        getLevelStatus(i)->mGuardOffsLevel = cNum_createLevelStatus_f2;
         getLevelStatus(i)->mGuardAppearNumLevel = 0;
         getLevelStatus(i)->mStatusArray = new GuardStatus[mGuardNum];
 

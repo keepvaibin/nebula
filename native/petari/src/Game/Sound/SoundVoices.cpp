@@ -4,22 +4,60 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f64, cNum_effectOsc_f1, "effectOsc.f1", 0.5);
+NEBULA_TUNABLE_NAMED(f32, cNum_sumPan_f1, "sumPan.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sumPan_f2, "sumPan.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sumPan_f3, "sumPan.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sumPan_f4, "sumPan.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initVoice_f1, "initVoice.f1", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initVoice_f2, "initVoice.f2", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initVoice_f3, "initVoice.f3", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initVoice_f4, "initVoice.f4", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setVoiceRate_f1, "setVoiceRate.f1", 8000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f1, "pow2.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f2, "pow2.f2", 0.70710677f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f3, "pow2.f3", 0.6931472f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f4, "pow2.f4", 0.24022661f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f5, "pow2.f5", 0.055502914f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f6, "pow2.f6", 0.009625022f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f7, "pow2.f7", 0.0013131053f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f8, "pow2.f8", 1.8300806E-4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f9, "pow2.f9", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f10, "pow2.f10", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f11, "pow2.f11", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_pow2_f12, "pow2.f12", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initStart_f1, "initStart.f1", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_release_f1, "release.f1", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateCurrentValue_f1, "updateCurrentValue.f1", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_incCounter_f1, "incCounter.f1", 72.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initialUpdate_f1, "initialUpdate.f1", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_effectorParams_f1, "effectorParams.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_effectorParams_f2, "effectorParams.f2", 127.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_effectorParams_f3, "effectorParams.f3", 0.707f);
+NEBULA_TUNABLE_NAMED(f32, cNum_mixerVolumes_f1, "mixerVolumes.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_mixerVolumes_f2, "mixerVolumes.f2", 0.34776f);
+NEBULA_TUNABLE_NAMED(f32, cNum_mixerVolumes_f3, "mixerVolumes.f3", 0.32612f);
+NEBULA_TUNABLE_NAMED(f32, cNum_mixerVolumes_f4, "mixerVolumes.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_mixerVolumes_f5, "mixerVolumes.f5", 0.5f);
+
 namespace {
-    const f32 cCurveLinear[17] = {
+    NEBULA_TUNABLE_LIST(f32, cCurveLinear, 17, {
         1.0f, 0.9375f, 0.875f, 0.8125f, 0.75f, 0.6875f, 0.625f, 0.5625f, 0.5f, 0.4375f, 0.375f, 0.3125f, 0.25f, 0.1875f, 0.125f, 0.0625f, 0.0f,
-    };
-    const f32 cCurveSampleCell[17] = {1.0f,          0.9704890251159668f,   0.7812740206718445f,  0.5462809801101685f,   0.39979198575019836f,
+    });
+    NEBULA_TUNABLE_LIST(f32, cCurveSampleCell, 17, {1.0f,          0.9704890251159668f,   0.7812740206718445f,  0.5462809801101685f,   0.39979198575019836f,
                                       0.28931498527526855f, 0.21210399270057678f, 0.15747599303722382f, 0.1126129999756813f,  0.08178959786891937f,
                                       0.057985201478004456f, 0.04364150017499924f, 0.03082370012998581f, 0.023712899535894394f, 0.015259300358593464f,
-                                      0.00915555004030466f,  0.0f};
-    const f32 cCurveSqRoot[17] = {1.0f,      0.8789060115814209f, 0.765625f, 0.6601560115814209f, 0.5625f,   0.4726560115814209f,
+                                      0.00915555004030466f,  0.0f});
+    NEBULA_TUNABLE_LIST(f32, cCurveSqRoot, 17, {1.0f,      0.8789060115814209f, 0.765625f, 0.6601560115814209f, 0.5625f,   0.4726560115814209f,
                                   0.390625f, 0.3164060115814209f, 0.25f,     0.1914059966802597f, 0.140625f, 0.09765619784593582f,
-                                  0.0625f,   0.03515620157122612f, 0.015625f, 0.00390625f,        0.0f};
-    const f32 cCurveSquare[17] = {
+                                  0.0625f,   0.03515620157122612f, 0.015625f, 0.00390625f,        0.0f});
+    NEBULA_TUNABLE_LIST(f32, cCurveSquare, 17, {
         1.0f,  0.9682459831237793f, 0.9354140162467957f, 0.9013879895210266f, 0.8660249710083008f,  0.8291559815406799f,
         0.790569007396698f, 0.75f, 0.7071070075035095f, 0.66143798828125f,   0.6123719811439514f,  0.55901700258255f,
         0.5f,  0.433012992143631f,  0.35355299711227417f, 0.25f,              0.0f,
-    };
+    });
     const f32* const cCurves[4] = {cCurveLinear, cCurveSquare, cCurveSqRoot, cCurveSampleCell};
 
     // A full note's gain on its way to the mix.
@@ -38,7 +76,7 @@ namespace {
             pEffect->mVolume *= value;
             break;
         case Oscillator::TARGET_PAN:
-            value -= 0.5;
+            value -= cNum_effectOsc_f1;
             pEffect->mPan += value;
             break;
         case Oscillator::TARGET_FXMIX:
@@ -63,7 +101,7 @@ namespace {
     }
 
     f32 sumPan(f32 sound, f32 effect, f32 channel) {
-        return 0.5f + (sound - 0.5f) + (effect - 0.5f) + (channel - 0.5f);
+        return cNum_sumPan_f1 + (sound - cNum_sumPan_f2) + (effect - cNum_sumPan_f3) + (channel - cNum_sumPan_f4);
     }
 
     // The volume setting of a sound id: its archive section in the high byte, its sound table category in the next.
@@ -117,20 +155,20 @@ namespace {
         for (int i = 0; i < 8; i++) {
             pVoice->fir[i] = 0.0f;
         }
-        pVoice->fir[0] = 32767.0f / 32768.0f;
+        pVoice->fir[0] = cNum_initVoice_f1 / cNum_initVoice_f2;
         for (int i = 0; i < 4; i++) {
             pVoice->iir[i] = 0.0f;
         }
-        pVoice->iir[0] = 32767.0f / 32768.0f;
+        pVoice->iir[0] = cNum_initVoice_f3 / cNum_initVoice_f4;
     }
 
     // `skip`: samples to start into the wave (1: from its loop start). A wave stored as PCM16 in the game's data is music unless a sound
     // names the voice.
-    void setVoiceWave(NebulaVoice* pVoice, const Note& rNote, u32 skip) {
-        const u8 kind = rNote.mFormat & Note::FORMAT_MASK;
+    void setVoiceWave(NebulaVoice* pVoice, const SoundNote& rNote, u32 skip) {
+        const u8 kind = rNote.mFormat & SoundNote::FORMAT_MASK;
         pVoice->wave = rNote.mWave;
-        pVoice->format = kind < Note::FORMAT_SAMPLED_NUM ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
-        pVoice->category = kind == Note::FORMAT_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
+        pVoice->format = kind < SoundNote::FORMAT_SAMPLED_NUM ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
+        pVoice->category = kind == SoundNote::FORMAT_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
         pVoice->restart = 0;
         if (pVoice->format == NEBULA_AUDIO_SILENT) {
             return;
@@ -151,16 +189,16 @@ namespace {
     }
 
     void setVoiceRate(NebulaVoice* pVoice, f32 samples) {
-        pVoice->rate = pVoice->format == NEBULA_AUDIO_OSCILLATOR && pVoice->oscillator == NEBULA_AUDIO_CONSTANT ? samples / 8000.0f : samples;
+        pVoice->rate = pVoice->format == NEBULA_AUDIO_OSCILLATOR && pVoice->oscillator == NEBULA_AUDIO_CONSTANT ? samples / cNum_setVoiceRate_f1 : samples;
     }
 }  // namespace
 
 f32 SoundMath::pow2(f32 x) {
-    const f32 scaleFrac[] = {0.0f, 0.5f};
-    const f32 twoToFrac[] = {1.0f, 0.70710677f};
-    const f32 twoToX[] = {0.6931472f, 0.24022661f, 0.055502914f, 0.009625022f, 0.0013131053f, 1.8300806E-4f};
+    const f32 scaleFrac[] = {0.0f, cNum_pow2_f1};
+    const f32 twoToFrac[] = {1.0f, cNum_pow2_f2};
+    const f32 twoToX[] = {cNum_pow2_f3, cNum_pow2_f4, cNum_pow2_f5, cNum_pow2_f6, cNum_pow2_f7, cNum_pow2_f8};
     s32 fracIndex = 0;
-    s32 exponent = x >= 0.0f ? static_cast< s32 >(x - 0.5f) : static_cast< s32 >(x + 0.5f);
+    s32 exponent = x >= 0.0f ? static_cast< s32 >(x - cNum_pow2_f9) : static_cast< s32 >(x + cNum_pow2_f10);
     const f32 rest = x - exponent;
     if (exponent > 128) {
         return __builtin_inff();
@@ -175,7 +213,7 @@ f32 SoundMath::pow2(f32 x) {
     const f32 frac = rest + scaleFrac[fracIndex];
     // 2^frac - 1 by its series.
     const f32 fracPowMinusOne = frac * (frac * (frac * (frac * (frac * (frac * twoToX[5] + twoToX[4]) + twoToX[3]) + twoToX[2]) + twoToX[1]) + twoToX[0]);
-    return scale * (0.75f * twoToFrac[fracIndex] + ((0.25f + fracPowMinusOne) * twoToFrac[fracIndex]));
+    return scale * (cNum_pow2_f11 * twoToFrac[fracIndex] + ((cNum_pow2_f12 + fracPowMinusOne) * twoToFrac[fracIndex]));
 }
 
 void Oscillator::initStart(const OscData* pData) {
@@ -194,7 +232,7 @@ void Oscillator::initStart(const OscData* pData) {
         mValue = 1.0f;
         return;
     }
-    mTo = mData->mTable[0].mValue / 32768.0f;
+    mTo = mData->mTable[0].mValue / cNum_initStart_f1;
     mCurve = mData->mTable[0].mMode;
     mState = RUN;
 }
@@ -225,7 +263,7 @@ void Oscillator::release() {
     if (mData->mTable != mData->mRelease) {
         mTime = 0.0f;
         mFrom = mValue;
-        mTo = mData->mRelease[0].mValue / 32768.0f;
+        mTo = mData->mRelease[0].mValue / cNum_release_f1;
         mPoint = 0;
         mCurve = mData->mRelease[0].mMode;
     }
@@ -270,7 +308,7 @@ void Oscillator::update() {
             break;
         default:
             mCurve = rNext.mMode;
-            mTo = rNext.mValue / 32768.0f;
+            mTo = rNext.mValue / cNum_update_f1;
             break;
         }
     }
@@ -279,7 +317,7 @@ void Oscillator::update() {
 
 void Oscillator::updateCurrentValue(f32 length) {
     const f32* table = cCurves[mCurve];
-    const f32 position = 16.0f * (mTime / length);
+    const f32 position = cNum_updateCurrentValue_f1 * (mTime / length);
     const u32 index = static_cast< u32 >(position);
     const f32 fraction = position - index;
     const f32 curve = (1.0f - fraction) * table[index] + fraction * table[index + 1];
@@ -301,13 +339,13 @@ void Lfo::incCounter(f32 step) {
         mWait--;
         return;
     }
-    mPhase += step * ((1.0f / 72.0f) * mPitch);
+    mPhase += step * ((1.0f / cNum_incCounter_f1) * mPitch);
     if (mPhase >= 1.0f) {
         mPhase -= 1.0f;
     }
 }
 
-void Voices::setup(SoundEngine* pEngine, NebulaVoice* pVoices, u32 count, Slot* pSlots, Note* pNotes) {
+void Voices::setup(SoundEngine* pEngine, NebulaVoice* pVoices, u32 count, Slot* pSlots, SoundNote* pNotes) {
     mEngine = pEngine;
     mVoices = pVoices;
     mCount = count;
@@ -343,7 +381,7 @@ s32 Voices::lowestSlot(int priority) {
 void Voices::endNote(s32 slot) {
     Slot& rSlot = mSlots[slot];
     rSlot.mHasNote = false;
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     rNote.mSlot = -1;
     if (rNote.mOwner != OWNER_NONE) {
         mEngine->noteEvent(&rNote, NOTE_STOP, nullptr);
@@ -369,13 +407,13 @@ void Voices::drop(s32 slot) {
     }
 }
 
-Note* Voices::play(const Note& rPrepared, bool force) {
+SoundNote* Voices::play(const SoundNote& rPrepared, bool force) {
     const u8 priority = rPrepared.mPriority & 0xff;
     const s32 slot = lowestSlot(priority);
     if (slot < 0) {
         // The note never played: its owner hears it stop.
         if (rPrepared.mOwner != OWNER_NONE) {
-            Note dead = rPrepared;
+            SoundNote dead = rPrepared;
             mEngine->noteEvent(&dead, NOTE_STOP, nullptr);
         }
         return nullptr;
@@ -388,16 +426,16 @@ Note* Voices::play(const Note& rPrepared, bool force) {
     rSlot.mPriority = priority;
     rSlot.mAge = 0;
     rSlot.mHasNote = true;
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     rNote = rPrepared;
     rNote.mSlot = slot;
     rSlot.mFlags |= 1;
-    rNote.mStatus = Note::STATUS_PLAY;
+    rNote.mStatus = SoundNote::STATUS_PLAY;
     return &rNote;
 }
 
-void Voices::releaseNote(Note* pNote, u16 directRelease) {
-    if (pNote->mStatus != Note::STATUS_PLAY) {
+void Voices::releaseNote(SoundNote* pNote, u16 directRelease) {
+    if (pNote->mStatus != SoundNote::STATUS_PLAY) {
         return;
     }
     if (directRelease != 0) {
@@ -409,7 +447,7 @@ void Voices::releaseNote(Note* pNote, u16 directRelease) {
         }
     }
     mSlots[pNote->mSlot].mPriority = pNote->mPriority >> 8;
-    pNote->mStatus = Note::STATUS_RELEASE;
+    pNote->mStatus = SoundNote::STATUS_RELEASE;
 }
 
 s32 Voices::noteCallback(s32 slot, u32 type) {
@@ -485,7 +523,7 @@ void Voices::forgetOwners(const void* pBegin, const void* pEnd) {
     const u8* const begin = static_cast< const u8* >(pBegin);
     const u8* const end = static_cast< const u8* >(pEnd);
     for (u32 i = 0; i < mUsed; i++) {
-        Note& rNote = mNotes[i];
+        SoundNote& rNote = mNotes[i];
         const u8* const owner = static_cast< const u8* >(rNote.mOwnerData);
         if (mSlots[i].mHasNote && rNote.mOwner != OWNER_NONE && owner >= begin && owner < end) {
             rNote.free();
@@ -514,7 +552,7 @@ void Voices::nameSound(s32 slot) {
 }
 
 s32 Voices::initialUpdate(s32 slot) {
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     NebulaVoice* voice = &mVoices[slot];
     if (rNote.isDolbyMode()) {
         if (voice->panner) {
@@ -533,11 +571,11 @@ s32 Voices::initialUpdate(s32 slot) {
         return -1;
     }
     switch (rNote.mKind) {
-    case Note::KIND_WAVE:
+    case SoundNote::KIND_WAVE:
         setVoiceWave(voice, rNote, rNote.mSkipSamples);
         voice->wave_end = rNote.mWaveEnd;
         break;
-    case Note::KIND_OSC:
+    case SoundNote::KIND_OSC:
         voice->wave = nullptr;
         voice->format = NEBULA_AUDIO_OSCILLATOR;
         voice->category = NEBULA_SOUND_EFFECT;
@@ -576,7 +614,7 @@ s32 Voices::initialUpdate(s32 slot) {
         voice->sends[i].current = volumes[i];
         voice->sends[i].target = volumes[i];
     }
-    f32 pitch = SoundMath::pow2(rNote.mParams.mBend + (rNote.mKey + rNote.mKeySweep) / 12.0f + effect.mVibrato * rNote.mVibrato.getValue());
+    f32 pitch = SoundMath::pow2(rNote.mParams.mBend + (rNote.mKey + rNote.mKeySweep) / cNum_initialUpdate_f1 + effect.mVibrato * rNote.mVibrato.getValue());
     pitch = rNote.mSound.mPitch * effect.mPitch * pitch * rNote.mParams.mPitch;
     if (pitch < 0.0f) {
         pitch = 0.0f;
@@ -587,7 +625,7 @@ s32 Voices::initialUpdate(s32 slot) {
 }
 
 s32 Voices::update(s32 slot) {
-    Note& rNote = mNotes[slot];
+    SoundNote& rNote = mNotes[slot];
     NebulaVoice* voice = &mVoices[slot];
     if (rNote.mOwner != OWNER_NONE) {
         mEngine->noteEvent(&rNote, NOTE_PLAY, voice);
@@ -633,7 +671,7 @@ s32 Voices::update(s32 slot) {
             voice->sends[i].target = volumes[i];
         }
     }
-    f32 pitch = SoundMath::pow2(rNote.mParams.mBend + (rNote.mKey + rNote.mKeySweep) / 12.0f + effect.mVibrato * rNote.mVibrato.getValue());
+    f32 pitch = SoundMath::pow2(rNote.mParams.mBend + (rNote.mKey + rNote.mKeySweep) / cNum_update_f2 + effect.mVibrato * rNote.mVibrato.getValue());
     pitch = rNote.mSound.mPitch * effect.mPitch * pitch * rNote.mParams.mPitch;
     if (pitch < 0.0f) {
         pitch = 0.0f;
@@ -646,8 +684,8 @@ s32 Voices::update(s32 slot) {
     return 0;
 }
 
-void Voices::effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, const OscEffect& rEffect) {
-    f32 pan = 0.5f;
+void Voices::effectorParams(SoundNote& rNote, NebulaVoice* pVoice, f32* pVolumes, const OscEffect& rEffect) {
+    f32 pan = cNum_effectorParams_f1;
     f32 dolby = 0.0f;
     switch (mEngine->outputMode()) {
     case 0:
@@ -661,7 +699,7 @@ void Voices::effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, con
         break;
     }
     f32 fxmix = sumEffect(rNote.mSound.mFxMix, rEffect.mFxMix, rNote.mParams.mFxMix);
-    f32 volume = rNote.mVelocity / 127.0f;
+    f32 volume = rNote.mVelocity / cNum_effectorParams_f2;
     volume *= volume;
     volume *= rNote.mSound.mVolume * rEffect.mVolume * rNote.mParams.mVolume * (rEffect.mTremolo * rNote.mTremolo.getValue() + 1.0f);
     if (volume < 0.0f) {
@@ -672,7 +710,7 @@ void Voices::effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, con
     dolby = SoundMath::clamp01(dolby);
     if (rNote.isDolbyMode()) {
         if (mEngine->outputMode() == 0) {
-            volume *= 0.707f;
+            volume *= cNum_effectorParams_f3;
         }
         volume = SoundMath::clamp01(volume);
         pVoice->pan = pan;
@@ -685,7 +723,7 @@ void Voices::effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, con
     }
 }
 
-void Voices::mixerVolumes(const Note& rNote, f32 volumeIn, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes) {
+void Voices::mixerVolumes(const SoundNote& rNote, f32 volumeIn, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes) {
     const bool flat = mEngine->outputMode() == 0;
     for (u32 i = 0; i < 6; i++) {
         f32 volume = volumeIn;
@@ -725,7 +763,7 @@ void Voices::mixerVolumes(const Note& rNote, f32 volumeIn, f32 pan, f32 fxmix, f
                 volume *= scale;
                 break;
             default:
-                volume *= flat ? scale : Angle::sinRadian(scale * FloatUtil::PI() * 0.5f);
+                volume *= flat ? scale : Angle::sinRadian(scale * FloatUtil::PI() * cNum_mixerVolumes_f1);
                 break;
             }
         }
@@ -753,14 +791,14 @@ void Voices::mixerVolumes(const Note& rNote, f32 volumeIn, f32 pan, f32 fxmix, f
             switch (mode1) {
             case 3:
             case 7:
-                volume *= Angle::sinRadian((scale * 0.34776f + 0.32612f) * FloatUtil::PI() * 0.5f);
+                volume *= Angle::sinRadian((scale * cNum_mixerVolumes_f2 + cNum_mixerVolumes_f3) * FloatUtil::PI() * cNum_mixerVolumes_f4);
                 break;
             case 2:
             case 6:
                 volume *= scale;
                 break;
             default:
-                volume *= flat ? scale : Angle::sinRadian(scale * FloatUtil::PI() * 0.5f);
+                volume *= flat ? scale : Angle::sinRadian(scale * FloatUtil::PI() * cNum_mixerVolumes_f5);
                 break;
             }
         }

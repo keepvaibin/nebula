@@ -5,6 +5,14 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 4.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, cAngleIncY, 0.001f);
@@ -19,13 +27,14 @@ FileSelectSky::~FileSelectSky() {
 }
 
 FileSelectSky::FileSelectSky(const char* pName) : LiveActor(pName), mAngleX(), mAngleY(), mProjmapEffectMtxSetter() {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectSky >);
 }
 
 void FileSelectSky::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("CometNearOrbitSky", nullptr, false);
-    mScale.x = 0.8f;
-    mScale.y = 0.8f;
-    mScale.z = 0.8f;
+    mScale.x = cNum_init_f1;
+    mScale.y = cNum_init_f2;
+    mScale.z = cNum_init_f3;
     mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
     MR::connectToSceneSky(this);
     initEffectKeeper(0, nullptr);
@@ -65,6 +74,6 @@ void FileSelectSky::exeWait() {
     mBaseMtx.invert(mBaseMtx);
     f32 step = (getNerveStep() * PI) / ::cCycleX;
 
-    mAngleX = 0.5f * (1.0f - MR::cos(step)) * MR::pi() * 3.0f / 4.0f;
+    mAngleX = cNum_exeWait_f1 * (1.0f - MR::cos(step)) * MR::pi() * cNum_exeWait_f2 / cNum_exeWait_f3;
     mAngleY += ::cAngleIncY;
 }

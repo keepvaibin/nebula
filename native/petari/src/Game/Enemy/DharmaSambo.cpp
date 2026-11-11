@@ -26,6 +26,28 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 99999.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 59.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f1, "exePursue.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeRun_f1, "exeEscapeRun.f1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeEscapeLand_f1, "exeEscapeLand.f1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideAppear_f1, "exeHideAppear.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f3, "attackSensor.f3", 0.25f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_setBckRate_1, "exeAppear.setBckRate.1", 1.0f);
@@ -114,6 +136,7 @@ namespace NrvDharmaSamboParts {
 DharmaSambo::DharmaSambo(const char* pName)
     : LiveActor(pName), mStarPointerBindEndNerve(), mInitialPos(0, 0, 0), mHideTimer(::hAppearTime), mPartsCount(::hBodyPartsNum), mHitSensor(),
       mAnimScaleController() {
+    lumacore::setClass(this, lumacore::kClassId< DharmaSambo >);
 }
 
 void DharmaSambo::init(const TableIter& rIter) {
@@ -126,7 +149,7 @@ void DharmaSambo::init(const TableIter& rIter) {
     initModelManagerWithAnm("DharmaSambo", nullptr, false);
     MR::connectToSceneEnemy(this);
     f32 scale = mScale.y;
-    initBinder(80.0f * scale, 80.0f * scale, 0);
+    initBinder(cNum_init_f1 * scale, cNum_init_f2 * scale, 0);
     initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
@@ -162,7 +185,7 @@ void DharmaSambo::init(const TableIter& rIter) {
         }
 
         mParts.push_back(part);
-        mFixedPositions.push_back(new FixedPosition(this, joint_name[i], Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f)));
+        mFixedPositions.push_back(new FixedPosition(this, joint_name[i], Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -cNum_init_f3, -cNum_init_f4)));
     }
 }
 
@@ -209,7 +232,7 @@ void DharmaSambo::control() {
         isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeRun)) || isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeLand)) ||
         isNerve(GET_NERVE(DharmaSambo, HostTypeNrvStarPointerBind)) ||
         (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvSpinHitted)) && MR::isGreaterStep(this, ::hSpinHittedBlowableTime))) {
-        f32 closest = 99999.0f;
+        f32 closest = cNum_control_f1;
         DharmaSamboParts* hit = nullptr;
 
         for (s32 i = 0; i < count; i++) {
@@ -320,7 +343,7 @@ void DharmaSambo::exeAppear() {
         startActionAllParts("Appear");
 
         if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvAppearImmediately))) {
-            MR::setBckFrameAndStop(this, 59.0f);
+            MR::setBckFrameAndStop(this, cNum_exeAppear_f1);
             MR::setBckRate(this, cNum_exeAppear_setBckRate_1);
         }
     }
@@ -346,7 +369,7 @@ void DharmaSambo::exePursue() {
     bool inRange = false;
     f32 distance = MR::calcDistanceToPlayer(this);
 
-    if (2000.0f < distance || ::hInitPosRange * ::hInitPosRange < mPosition.squared(mInitialPos)) {
+    if (cNum_exePursue_f1 < distance || ::hInitPosRange * ::hInitPosRange < mPosition.squared(mInitialPos)) {
         setNerve(GET_NERVE(DharmaSambo, HostTypeNrvHide));
         return;
     }
@@ -494,7 +517,7 @@ void DharmaSambo::exeEscapeRun() {
             MR::startSound(this, "SE_EM_SAMBOHEAD_HOP");
         }
 
-        MR::setBckRate(getHeadParts(), 1.2f);
+        MR::setBckRate(getHeadParts(), cNum_exeEscapeRun_f1);
     }
 
     if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeWaitRun))) {
@@ -535,7 +558,7 @@ void DharmaSambo::exeEscapeLand() {
             MR::startAction(getHeadParts(), "Land");
         }
 
-        MR::setBckRate(getHeadParts(), 1.2f);
+        MR::setBckRate(getHeadParts(), cNum_exeEscapeLand_f1);
     }
 
     if (isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeWaitLand))) {
@@ -631,7 +654,7 @@ void DharmaSambo::exeHideAppear() {
             part->setHead(i == count - 1);
             part->setNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
             MR::startAction(part, "Wait");
-            MR::setBckFrameAndStop(part, 5.0f);
+            MR::setBckFrameAndStop(part, cNum_exeHideAppear_f1);
             mFixedPositions[i]->copyTrans(&part->mPosition);
             MR::resetPosition(part);
         }
@@ -741,6 +764,7 @@ DharmaSamboParts::DharmaSamboParts(DharmaSambo* pHost, const char* pName, const 
                                    int calcAnimType)
     : ModelObj(pName, pModelName, pMtx, drawBufferType, movementType, calcAnimType, false), mHost(pHost), mOriginalIndex(-1), mIndex(-1),
       mSpinHitController(), mHitDistance(-1.0f), mIsHead() {
+    lumacore::setClass(this, lumacore::kClassId< DharmaSamboParts >);
 }
 
 void DharmaSamboParts::init(const TableIter& /*rIter*/) {
@@ -748,10 +772,10 @@ void DharmaSamboParts::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
     f32 scale = mScale.y;
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 16, 80.0f * scale, Vec3f(0.0f, 80.0f * scale, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, cNum_init_f5 * scale, Vec3f(0.0f, cNum_init_f6 * scale, 0.0f));
     MR::initLightCtrl(this);
-    MR::initShadowVolumeSphere(this, 80.0f * mScale.y);
-    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    MR::initShadowVolumeSphere(this, cNum_init_f7 * mScale.y);
+    MR::initStarPointerTarget(this, cNum_init_f8, Vec3f(0.0f, cNum_init_f9, 0.0f));
 }
 
 void DharmaSamboParts::appear() {
@@ -766,7 +790,7 @@ void DharmaSamboParts::kill() {
     MR::startSound(this, "SE_EM_EXPLODE_S");
 
     if (mIsHead) {
-        MR::appearStarPiece(mHost, mPosition, MR::getDeclareRemnantStarPieceCount(mHost), 10.0f, 40.0f, false);
+        MR::appearStarPiece(mHost, mPosition, MR::getDeclareRemnantStarPieceCount(mHost), cNum_kill_f1, cNum_kill_f2, false);
         MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
     }
 }
@@ -844,7 +868,7 @@ void DharmaSamboParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (mIsHead) {
         if (mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeRun)) || mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvEscapeLand))) {
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }
@@ -860,7 +884,7 @@ void DharmaSamboParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
                 return;
             }
 
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f2) || MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }
@@ -878,7 +902,7 @@ void DharmaSamboParts::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvWaitUnderGround)) ||
             mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvStarPointerBind)) ||
             mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvAppearImmediately)) || mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvHide)) ||
-            mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvHideAppear)) || MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f) ||
+            mHost->isNerve(GET_NERVE(DharmaSambo, HostTypeNrvHideAppear)) || MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f3) ||
             MR::isPlayerHipDropFalling() || MR::isPlayerHipDropLand()) {
             MR::sendMsgPush(pReceiver, pSender);
             return;

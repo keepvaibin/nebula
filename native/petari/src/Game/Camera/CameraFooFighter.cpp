@@ -6,6 +6,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.995f);
 
 namespace {
     NEBULA_TUNABLE(f32, sRateWhenBraking, 0.05f);
@@ -14,6 +19,7 @@ namespace {
 CameraFooFighter::CameraFooFighter(const char* pName)
     : Camera(pName), mDistMin(300.0f), mDistMax(1200.0f), mAngleXRateMin(0.03f), mAngleXRate(0.03f), mCollideCount(),
       mTargetLastMoveDir(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraFooFighter >);
 }
 
 void CameraFooFighter::reset() {
@@ -28,7 +34,7 @@ void CameraFooFighter::reset() {
 
 CameraTargetObj* CameraFooFighter::calc() {
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_calc_f1 / cNum_calc_f2);
 
     Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
     Vec3f newFront, newUp, newSide;
@@ -66,7 +72,7 @@ CameraTargetObj* CameraFooFighter::calc() {
         MR::normalize(&targetSide);
 
         f32 rate = mAngleXRateMin * MR::abs(gravUp.dot(newFront));
-        mAngleXRate *= 0.995f;
+        mAngleXRate *= cNum_calc_f3;
         if (mAngleXRate < rate) {
             mAngleXRate = rate;
         }

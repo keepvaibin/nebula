@@ -7,6 +7,18 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_FirePressureRadiate_f1, "FirePressureRadiate.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 51.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 50.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exePrepareToRadiate_1, "exePrepareToRadiate.1", 34);
@@ -23,13 +35,14 @@ namespace NrvFirePressureRadiate {
 };  // namespace NrvFirePressureRadiate
 
 FirePressureRadiate::FirePressureRadiate(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FirePressureRadiate >);
     mJointController = nullptr;
     mCannonRotation = 0.0f;
     mWaitTime = NebulaFrameClock::stepsOfSeconds(5);
     mShootTime = NebulaFrameClock::stepsOfSeconds(5);
     mRadiateStep = -1;
     mRadiateLength = 0.0f;
-    mRadiateMaxLength = 500.0f;
+    mRadiateMaxLength = cNum_FirePressureRadiate_f1;
     mGroup = nullptr;
     mIsGroupLeader = 0;
     mRadiateMtx.identity();
@@ -40,9 +53,9 @@ void FirePressureRadiate::init(const TableIter& rIter) {
     initModelManagerWithAnm("FirePressure", nullptr, false);
     MR::connectToSceneNoShadowedMapObjStrongLight(this);
     initHitSensor(3);
-    MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, 30.0f, 0.0f));
-    MR::addHitSensorAtJointMapObj(this, "cannon", "Cannon1", 8, 70.0f, Vec3f(40.0f, 0.0f, 0.0f));
-    MR::addHitSensorCallbackEnemyAttack(this, "radiate", 8, 50.0f);
+    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "cannon", "Cannon1", 8, cNum_init_f3, Vec3f(cNum_init_f4, 0.0f, 0.0f));
+    MR::addHitSensorCallbackEnemyAttack(this, "radiate", 8, cNum_init_f5);
     MR::invalidateHitSensor(this, "radiate");
     initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "Fire", mRadiateMtx.mMtx);
@@ -172,7 +185,7 @@ void FirePressureRadiate::exeWait() {
 void FirePressureRadiate::control() {
     if (mRadiateStep != -1) {
         if (mRadiateStep < 70) {
-            f32 liner = MR::getLinerValue(mRadiateStep / 70.0f, 51.0f, mRadiateMaxLength, 1.0f);
+            f32 liner = MR::getLinerValue(mRadiateStep / cNum_control_f1, cNum_control_f2, mRadiateMaxLength, 1.0f);
             mRadiateLength = liner;
             mRadiateStep = mRadiateStep + 1;
         } else {
@@ -222,9 +235,9 @@ void FirePressureRadiate::updateHitSensor(HitSensor* pSensor) {
     Vec3f position;
     mRadiateMtx.getTrans(position);
     Vec3f start;
-    NebulaVecScaleAdd(&direction, &position, &start, 50.0f);
+    NebulaVecScaleAdd(&direction, &position, &start, cNum_updateHitSensor_f1);
     Vec3f end;
-    NebulaVecScaleAdd(&direction, &start, &end, mRadiateLength - 50.0f);
+    NebulaVecScaleAdd(&direction, &start, &end, mRadiateLength - cNum_updateHitSensor_f2);
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), start, end);
 }
 

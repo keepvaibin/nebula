@@ -5,6 +5,18 @@
 #include <new>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f1, "updateChannelParams.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f2, "updateChannelParams.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f3, "updateChannelParams.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f4, "updateChannelParams.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f5, "updateChannelParams.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_parse_f1, "parse.f1", 127.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_parse_f2, "parse.f2", 127.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_parse_f3, "parse.f3", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_parse_f4, "parse.f4", 32767.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_parse_f5, "parse.f5", 32767.0f);
+
 namespace {
     const SeqPoint cAdsTable[4] = {{0, 0, 0x7fff}, {0, 0, 0x7fff}, {0, 0, 0}, {0xe, 0, 0}};
     const OscData cEnvOsc = {Oscillator::TARGET_VOLUME, 1.0f, nullptr, nullptr, 1.0f, 0.0f};
@@ -114,7 +126,7 @@ void MeTrack::init() {
     mTrackInfo = TrackInfo();
     mVolume = 1.0f;
     mPitchBend = 0.0f;
-    mPan = 0.5f;
+    mPan = cNum_init_f1;
     mFxMix = 0.0f;
     mDolby = 0.0f;
     mBaseNote = 60;
@@ -299,10 +311,10 @@ void MeTrack::noteOffAll(u16 directRelease) {
 bool MeTrack::noteOn(u32 key, u32 velocity) {
     mMgr.releaseNote(0);
     SoundEngine* const engine = mSystem->engine();
-    Note prepared;
+    SoundNote prepared;
     prepared.mOwner = OWNER_ME;
     prepared.mOwnerData = &mMgr;
-    Note* note = nullptr;
+    SoundNote* note = nullptr;
     if (engine->prepareNote(mTrackInfo.mBankNumber, mTrackInfo.mProgNumber, static_cast< u8 >(key), static_cast< u8 >(velocity),
                             static_cast< u16 >(mTrackInfo.mReleasePriority << 8 | mTrackInfo.mPlayPriority), &prepared)) {
         note = engine->voices().play(prepared, false);
@@ -320,7 +332,7 @@ bool MeTrack::noteOn(u32 key, u32 velocity) {
     return note != nullptr;
 }
 
-void MeTrack::overwriteOsc(Note* pNote) {
+void MeTrack::overwriteOsc(SoundNote* pNote) {
     for (u32 i = 0; i < 2; i++) {
         if (mOscParam[i].mTable != nullptr) {
             pNote->mOsc[i].initStart(&mOscParam[i]);
@@ -356,7 +368,7 @@ void MeTrack::startNote() {
 }
 
 // The note's mix values as it starts and each update; its timer is never set (MeChannelMgr).
-void MeTrack::noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, MeChannelMgr* pMgr) {
+void MeTrack::noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, MeChannelMgr* pMgr) {
     (void)pVoice;
     switch (event) {
     case NOTE_PLAY:
@@ -387,14 +399,14 @@ void MeTrack::updateChannelParams() {
     f32 vol = mVolume;
     vol *= vol;
     f32 pitch = 1.0f;
-    const f32 bend = mPitchBend * mTrackInfo.mBendSense * (1.0f / 3.0f);
-    f32 pan = mPan - 0.5f;
+    const f32 bend = mPitchBend * mTrackInfo.mBendSense * (1.0f / cNum_updateChannelParams_f1);
+    f32 pan = mPan - cNum_updateChannelParams_f2;
     f32 dolby = mDolby;
     f32 fxmix = mFxMix;
     const SoundParams& rSound = mMgr.mSound;
     vol *= rSound.mVolume;
     pitch *= rSound.mPitch;
-    pan += rSound.mPan - 0.5f;
+    pan += rSound.mPan - cNum_updateChannelParams_f3;
     fxmix += rSound.mFxMix;
     dolby += rSound.mDolby;
     NoteParams& rParams = mMgr.mParams;
@@ -409,12 +421,12 @@ void MeTrack::updateChannelParams() {
         const NoteParams& rParent = mParent->mMgr.mParams;
         rParams.mVolume = rParent.mVolume * vol;
         rParams.mPitch = rParent.mPitch * pitch;
-        rParams.mPan = (rParent.mPan - 0.5f) + pan;
+        rParams.mPan = (rParent.mPan - cNum_updateChannelParams_f4) + pan;
         rParams.mFxMix = rParent.mFxMix + fxmix;
         rParams.mDolby = rParent.mDolby + dolby;
         rParams.mBend = rParent.mBend + bend;
     }
-    rParams.mPan += 0.5f;
+    rParams.mPan += cNum_updateChannelParams_f5;
 }
 
 void MeTrack::gframeProc() {
@@ -871,22 +883,22 @@ s32 MeTrack::parse() {
         mNoStartRange = true;
         return 0;
     case 0x58:
-        mPan = static_cast< u8 >(read8()) / 127.0f;
+        mPan = static_cast< u8 >(read8()) / cNum_parse_f1;
         return 0;
     case 0x59:
-        mDolby = static_cast< u8 >(read8()) / 127.0f;
+        mDolby = static_cast< u8 >(read8()) / cNum_parse_f2;
         return 0;
     case 0x5A:
-        mVolume = static_cast< u16 >(read16()) / 32767.0f;
+        mVolume = static_cast< u16 >(read16()) / cNum_parse_f3;
         return 0;
     case 0x5B:
-        mPitchBend = static_cast< s16 >(read16()) / 32767.0f;
+        mPitchBend = static_cast< s16 >(read16()) / cNum_parse_f4;
         return 0;
     case 0x5C:
         mTrackInfo.mBendSense = static_cast< u8 >(read8());
         return 0;
     case 0x5D:
-        mFxMix = static_cast< u16 >(read16()) / 32767.0f;
+        mFxMix = static_cast< u16 >(read16()) / cNum_parse_f5;
         return 0;
     case 0x60:  // the register the note goes to
         mTrackInfo.mNoteReg = read8();

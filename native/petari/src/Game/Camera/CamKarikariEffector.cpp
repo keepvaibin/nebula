@@ -7,6 +7,11 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFovy_f1, "calcFovy.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 180.0f);
+
 namespace {
     NEBULA_TUNABLE(f32, sKarikariViewRate, 0.8f);
     NEBULA_TUNABLE(s32, sKarikariCounterMax, 30);
@@ -16,7 +21,7 @@ namespace {
     f32 calcFovy(f32 dist) {
         f32 fovAngle = MR::asin(::sPlayerRadius / dist);
 
-        return MR::atan2((dist * MR::tan(fovAngle)) / 0.3f, dist);
+        return MR::atan2((dist * MR::tan(fovAngle)) / cNum_calcFovy_f1, dist);
     }
 };  // namespace
 
@@ -66,7 +71,7 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
     Vec3f toPlayerPos(diffPlayerPos);
     MR::normalize(&toPlayerPos);
 
-    f32 rotRatio = MR::clamp((1.0f - MR::cos(mCounter * MR::pi() / ::sKarikariCounterMax)) * 0.5f, 0.0f, 1.0f);
+    f32 rotRatio = MR::clamp((1.0f - MR::cos(mCounter * MR::pi() / ::sKarikariCounterMax)) * cNum_update_f1, 0.0f, 1.0f);
     Quat4f rot;
     rot.setRotate(toWatchPos, toPlayerPos, rotRatio);
     rot.transform(diffWatchPos);
@@ -79,7 +84,7 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
 
     f32 fovy = ::calcFovy(diffPlayerPos.length());
 
-    if (fovy < CameraLocalUtil::getFovy(pCameraMan) * MR::pi() / 180.0f) {
-        CameraLocalUtil::setFovy(pCameraMan, (fovy * 180.0f * t) / MR::pi() + (1.0f - t) * CameraLocalUtil::getFovy(pCameraMan));
+    if (fovy < CameraLocalUtil::getFovy(pCameraMan) * MR::pi() / cNum_update_f2) {
+        CameraLocalUtil::setFovy(pCameraMan, (fovy * cNum_update_f3 * t) / MR::pi() + (1.0f - t) * CameraLocalUtil::getFovy(pCameraMan));
     }
 }

@@ -7,6 +7,13 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 20.0f);
 
 namespace {
     const char* const sChipPainName[] = {"Chip1", "Chip2", "Chip3", "Chip4", "Chip5"};
@@ -24,6 +31,7 @@ namespace NrvChipCounter {
 };  // namespace NrvChipCounter
 
 ChipCounter::ChipCounter(const char* pName, s32 type) : LayoutActor(pName, true), mCollectCounter(), mCount(), mType(type), mGroupId(-1), mShowRate(1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ChipCounter >);
 }
 
 void ChipCounter::init(const TableIter& /*rIter*/) {
@@ -48,7 +56,7 @@ void ChipCounter::init(const TableIter& /*rIter*/) {
     }
 
     MR::startAnim(this, "ShowHide", 1);
-    MR::setAnimFrameAndStop(this, mShowRate * 20.0f, 1);
+    MR::setAnimFrameAndStop(this, mShowRate * cNum_init_f1, 1);
 
     mCollectCounter = new CollectCounter("集め数字");
     mCollectCounter->initWithoutIter();
@@ -58,20 +66,20 @@ void ChipCounter::init(const TableIter& /*rIter*/) {
 
 void ChipCounter::control() {
     if (MR::isActiveTalkBalloonShort()) {
-        mShowRate -= 0.05f;
+        mShowRate -= cNum_control_f1;
 
         if (mShowRate < 0.0f) {
             mShowRate = 0.0f;
         }
     } else {
-        mShowRate += 0.05f;
+        mShowRate += cNum_control_f2;
 
         if (mShowRate > 1.0f) {
             mShowRate = 1.0f;
         }
     }
 
-    MR::setAnimFrameAndStop(this, mShowRate * 20.0f, 1);
+    MR::setAnimFrameAndStop(this, mShowRate * cNum_control_f3, 1);
 }
 
 void ChipCounter::setCount(s32 count) {

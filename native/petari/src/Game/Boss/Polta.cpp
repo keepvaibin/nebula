@@ -26,6 +26,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f1, "appearStarPiece.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f2, "appearStarPiece.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcToPlayerRotateSpeed_f1, "calcToPlayerRotateSpeed.f1", 10.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, sBombTeresaBufferSize, 6);
@@ -130,7 +135,7 @@ void Polta::appearBreakModelLast(const Vec3f& rVec) {
 void Polta::appearStarPiece(s32 appearNum) {
     Vec3f head3JointPos;
     MR::copyJointPos(this, "Head3", &head3JointPos);
-    MR::appearStarPieceToDirection(this, head3JointPos, -mGravity, appearNum, 50.0f, 60.0f, false);
+    MR::appearStarPieceToDirection(this, head3JointPos, -mGravity, appearNum, cNum_appearStarPiece_f1, cNum_appearStarPiece_f2, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }
 
@@ -145,6 +150,7 @@ void BombTeresaHolder::disperseAll() {
 Polta::Polta(const char* pName)
     : LiveActor(pName), mSensorCtrl(), mLeftArm(), mRightArm(), mSequencer(), mBombTeresaHolder(), mRockHolder(), mGroundRockHolder(), mCameraInfo(),
       mBreakModel(), mFormationModel(), mPoseQuat(0, 0, 0, 1), mFront(0, 0, 1), mStartQuat(0, 0, 0, 1), mStartPos(0, 0, 0), mRotateSpeed() {
+    lumacore::setClass(this, lumacore::kClassId< Polta >);
 }
 
 void Polta::initSensor() {
@@ -182,7 +188,7 @@ void Polta::rotateToPlayer() {
 f32 Polta::calcToPlayerRotateSpeed() const {
     f32 speed = mRotateSpeed;
 
-    if (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f)) {
+    if (MR::isFaceToPlayerHorizontalDegree(this, mFront, cNum_calcToPlayerRotateSpeed_f1)) {
         speed *= ::sTurnBreakFric;
     } else {
         Vec3f sideVec;

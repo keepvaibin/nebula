@@ -1,8 +1,10 @@
 #include "Game/Boss/TripodBossRailMoveParts.hpp"
 #include "Game/Boss/TripodBossFixParts.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
+#include "Game/System/LumaCore.hpp"
 
 TripodBossRailMoveParts::TripodBossRailMoveParts(const char* pName) : TripodBossFixParts(pName), mRailMover() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossRailMoveParts >);
 }
 
 void TripodBossRailMoveParts::init(const TableIter& rIter) {

@@ -5,12 +5,10 @@ What a mod's code builds against. The guide is [LumaLink's docs/plugins.md](http
 | Path | What it is |
 |---|---|
 | `../include/nebula_mod_api.h` | The stable interface, plain C. Fields are only added, at the end. |
-| `include/nebula_game_sdk.h` | For a plugin built with the game's own headers, tied to those exact headers. |
 | LumaLink's `examples/one-health`, `coin-kills`, `boss-music`, `double-jump`, `achievements`, `little-boss`, `gold-flower` | Whole mods with code, each built for every device by `lumalink build`: the player's state, events, music, a new move, achievements, a new enemy, a new power-up. |
 | `examples/movie_start` | Plays a movie in a level and stops it. |
 | `examples/cutscene_log` | Says each cutscene's name as it starts and ends. |
 | `examples/cube` | A new object with the stable interface and a model. |
-| `examples/pulse` | A new object with the game's headers, and a function hook. |
 | `examples/selftest` | Calls everything in the interface and says what came back. |
 | LumaLink's `examples/gecko-<code>` | Popular cheat codes done through the interface, one mod each, built for every device: moon jump, infinite health and lives, star bits, low gravity, power-ups anywhere or lasting, rainbow, freeze timer, free camera, wide fov, hide HUD, no fall death, slow motion and frame advance, position display, freeze enemies, warp anywhere, Mario's size, no spin cooldown, spin and pointer from the start. LumaLink names the one that does a code it reads. |
 
@@ -29,4 +27,6 @@ symbol undefined and the build stops; the interface answers them instead: `alloc
 for printf's formatting, `log` for text. clang can still turn a large copy or clear into a call to `memcpy` or
 `memset`; a plugin the linker stops on one defines it in its own source.
 
-A plugin with the game's headers links against the `smg_game.lib` of the build it's for. The game leaves out one built against other headers and says why.
+Every capability is also reachable without code (luma.json rows and LumaScript), which every device runs, iOS
+included. `hook` and `find_function` rewrite a function's first instructions: they work only where a device lets a
+plugin load and patch code (Windows, Linux, macOS, Android), and nothing in Nebula depends on them.

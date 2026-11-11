@@ -12,6 +12,12 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 3750.0f);
 
 namespace NrvTripodBossFixParts {
     NEW_NERVE(TripodBossFixPartsNrvNonActive, TripodBossFixParts, NonActive);
@@ -46,6 +52,7 @@ namespace {
 
 TripodBossFixParts::TripodBossFixParts(const char* pName)
     : TripodBossFixPartsBase(pName), mBreakType(-1), mBreakKillStep(180), mHasCollision(), mHasBreakMovement(true), mIsMarioOn(), mIsPlayingWarning() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossFixParts >);
 }
 
 void TripodBossFixParts::init(const TableIter& rIter) {
@@ -75,7 +82,7 @@ void TripodBossFixParts::init(const TableIter& rIter) {
     }
 
     if (MR::isEqualString(objName, "TriPodBossBodyA")) {
-        setClippingSphere(Vec3f(250.0f, 1000.0f, 0.0f), 3750.0f);
+        setClippingSphere(Vec3f(cNum_init_f1, cNum_init_f2, 0.0f), cNum_init_f3);
     } else {
         initClippingSphere();
     }

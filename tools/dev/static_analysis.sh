@@ -23,12 +23,12 @@
 #                         (index arithmetic everywhere), macro-parentheses (the game's own macros), narrowing-conversions
 #                         (the f32/s32 mixing is audited by native/tools/narrowing.py and narrow_float_audit.py) and
 #                         reserved-identifier (the C library layer of the module).
-#   performance-*         Avoidable cost the owner's rule asks to remove: copies of large parameters and loop variables,
+#   performance-*         Avoidable cost: copies of large parameters and loop variables,
 #                         needless value parameters, string and container misuse, move of a const. Off:
 #                         no-int-to-ptr (the host calls hand pointers over as integers by design).
 #   modernize-use-nullptr  NULL and 0 used as pointers: an ambiguity in overload resolution, a real bug class, not style.
 #   modernize-use-override A virtual function that no longer overrides anything after a base change silently becomes a
-#                         new function. Every override has the keyword now (batch 11); this keeps it so.
+#                         new function. Every override has the keyword; this keeps it so.
 #   readability-*         Only checks that find mistakes: container-size-empty (size() == 0 on a container whose empty()
 #                         is cheaper), delete-null-pointer (an if around delete), duplicate-include, misleading-indentation
 #                         (an if body that is not the next line), redundant-control-flow, redundant-smartptr-get,

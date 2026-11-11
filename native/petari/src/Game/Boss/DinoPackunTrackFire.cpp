@@ -10,6 +10,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 2.0f);
@@ -34,6 +39,7 @@ DinoPackunTrackFireHolder::DinoPackunTrackFireHolder(s32 max) : DeriveActorGroup
 }
 
 DinoPackunTrackFire::DinoPackunTrackFire(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunTrackFire >);
     mMtx.identity();
 }
 
@@ -45,13 +51,13 @@ void DinoPackunTrackFire::init(const TableIter& rIter) {
     sensorOffs.x = 0.0f;
     sensorOffs.y = 0.0f;
     sensorOffs.z = 0.0f;
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 60.0f, sensorOffs);
+    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_init_f1, sensorOffs);
     Vec3f spOffs;
     spOffs.x = 0.0f;
     spOffs.y = 0.0f;
     spOffs.z = 0.0f;
-    MR::initStarPointerTarget(this, 60.0f, spOffs);
-    initBinder(60.0f, 0.0f, 0);
+    MR::initStarPointerTarget(this, cNum_init_f2, spOffs);
+    initBinder(cNum_init_f3, 0.0f, 0);
     initNerve(GET_NERVE(DinoPackunFire, DinoPackunTrackFireNrvWait));
     MR::onCalcGravity(this);
     MR::invalidateClipping(this);

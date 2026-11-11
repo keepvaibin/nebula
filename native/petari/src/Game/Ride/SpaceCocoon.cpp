@@ -28,6 +28,19 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindAim_f1, "exeBindAim.f1", 100.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_addVelocitySeparateHV_1, "receiveMsgPlayerAttack.addVelocitySeparateHV.1", 0.0f);
@@ -100,6 +113,7 @@ SpaceCocoon::SpaceCocoon(const char* pName)
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mHeight(::sDefaultHeight), mPointerPos(0.0f, 0.0f, 0.0f), mPadChannel(-1),
       mCocoonPos(0.0f, 0.0f, 0.0f), mSpringVel(0.0f, 0.0f, 0.0f), mAttackTime(::sDefaultStepBindAttack), mTouchTime(), mRider(), mNumPoints(),
       mPlantPoints(), mCameraTargetMtx(), mCameraInfo(), mCocoonModel(), mTexture() {
+    lumacore::setClass(this, lumacore::kClassId< SpaceCocoon >);
     mBaseMtx.identity();
     mTopMtx.identity();
 }
@@ -125,10 +139,10 @@ void SpaceCocoon::init(const TableIter& rIter) {
     mPointerPos.set(mNeutralPos);
 
     initHitSensor(3);
-    MR::addHitSensorTransferableBinder(this, "Bind", 8, 200.0f, Vec3f(0.0f, 100.0f, 0.0f));
-    MR::addHitSensorMapObj(this, "Push", 8, 50.0f, Vec3f(0.0f, -50.0f, 0.0f));
-    MR::addHitSensor(this, "Attack", ATYPE_SPRING_ATTACKER, 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(50.0f, 50.0f, 8);
+    MR::addHitSensorTransferableBinder(this, "Bind", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::addHitSensorMapObj(this, "Push", 8, cNum_init_f3, Vec3f(0.0f, -cNum_init_f4, 0.0f));
+    MR::addHitSensor(this, "Attack", ATYPE_SPRING_ATTACKER, 8, cNum_init_f5, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(cNum_init_f6, cNum_init_f7, 8);
     MR::offBind(this);
 
     initSound(6, false);
@@ -169,11 +183,11 @@ void SpaceCocoon::init(const TableIter& rIter) {
     mCocoonModel->initWithoutIter();
 
     updateDrawPoints();
-    MR::initStarPointerTarget(this, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f8, Vec3f(0.0f, cNum_init_f9, 0.0f));
 
     MR::calcGravity(this);
 
-    MR::initShadowVolumeSphere(this, 100.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f10);
     MR::setClippingFar200m(this);
 
     mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
@@ -305,7 +319,7 @@ void SpaceCocoon::exeBindAim() {
 
     f32 dist = mPosition.distance(mNeutralPos);
     if (dist >= ::sAimDistanceMin) {
-        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sDistanceMax - ::sAimDistanceMin)) * 100.0f);
+        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sDistanceMax - ::sAimDistanceMin)) * cNum_exeBindAim_f1);
     }
 
     if (!tryRelease()) {

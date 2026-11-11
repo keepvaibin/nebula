@@ -10,6 +10,21 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
 #include <string.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_loadPrjAnm_f1, "loadPrjAnm.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadPrjAnm_f2, "loadPrjAnm.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_rotTypeXYZ_f1, "rotTypeXYZ.f1", 0.333333f);
+NEBULA_TUNABLE_NAMED(f32, cNum_rotTypeXYZ_f2, "rotTypeXYZ.f2", 0.57735f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawLine_f1, "ParticleDrawLine.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripe_f1, "ParticleDrawStripe.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripe_f2, "ParticleDrawStripe.f2", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripeX_f1, "ParticleDrawStripeX.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripeX_f2, "ParticleDrawStripeX.f2", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripeX_f3, "ParticleDrawStripeX.f3", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripeX_f4, "ParticleDrawStripeX.f4", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripeX_f5, "ParticleDrawStripeX.f5", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ParticleDrawStripeX_f6, "ParticleDrawStripeX.f6", 0.01f);
 
 // What the emitters draw, as runs of one material: quads as instances in the frame's particles, other shapes as corners
 // in the frame's ring. Everything a particle changes rides on it; a new image, size or material ends the run.
@@ -264,8 +279,8 @@ namespace {
     void loadPrjAnm(EmitterWork const* pWork, const Mtx pSrt) {
         f32 frame = pWork->mpEmtr->getAge();
         const ParticleShape* pShape = pWork->mpRes->getBsp();
-        f32 pivotS = 0.5f * (1.0f + pShape->getTilingS());
-        f32 pivotT = 0.5f * (1.0f + pShape->getTilingT());
+        f32 pivotS = cNum_loadPrjAnm_f1 * (1.0f + pShape->getTilingS());
+        f32 pivotT = cNum_loadPrjAnm_f2 * (1.0f + pShape->getTilingT());
         f32 translationS = (frame * pShape->getIncTransX()) + pShape->getInitTransX();
         f32 translationT = (frame * pShape->getIncTransY()) + pShape->getInitTransY();
         f32 scaleS = (frame * pShape->getIncScaleX()) + pShape->getInitScaleX();
@@ -385,8 +400,8 @@ namespace {
     }
 
     void rotTypeXYZ(f32 sin, f32 cos, Mtx& rMtx) {
-        f32 third = 0.333333f * (1.0f - cos);
-        f32 scaledSin = 0.57735f * sin;
+        f32 third = cNum_rotTypeXYZ_f1 * (1.0f - cos);
+        f32 scaledSin = cNum_rotTypeXYZ_f2 * sin;
         f32 plus = third + scaledSin;
         rMtx[0][0] = (third + cos);
         rMtx[0][1] = (third - scaledSin);
@@ -774,7 +789,7 @@ void ParticleDrawLine(EmitterWork* pWork, ParticleCore* pParticle) {
         return;
     }
 
-    end.setLength(pWork->mGlobalPtclScl.y * (25.0f * pParticle->mParticleScaleY));
+    end.setLength(pWork->mGlobalPtclScl.y * (cNum_ParticleDrawLine_f1 * pParticle->mParticleScaleY));
     end.sub(position, end);
     ParticleDraw::primitive(NEBULA_PRIMITIVE_LINES);
     ParticleDraw::corner(0, position.x, position.y, position.z, 0.0f, 0.0f);
@@ -790,8 +805,8 @@ void ParticleDrawStripe(EmitterWork* pWork) {
 
     f32 texCoord = 0.0f;
     f32 texStep = 1.0f / (count - 1.0f);
-    f32 leftWidth = (1.0f + pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
-    f32 rightWidth = (1.0f - pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
+    f32 leftWidth = (1.0f + pWork->mPivot.x) * (cNum_ParticleDrawStripe_f1 * pWork->mGlobalPtclScl.x);
+    f32 rightWidth = (1.0f - pWork->mPivot.x) * (cNum_ParticleDrawStripe_f2 * pWork->mGlobalPtclScl.x);
     ParticleSlot* pFirst;
     bool backward = false;
     if (pShape->isDrawFwdAhead()) {
@@ -868,10 +883,10 @@ void ParticleDrawStripeX(EmitterWork* pWork) {
     f32 startTexCoord = 0.0f;
     f32 texCoord = 0.0f;
     f32 texStep = 1.0f / (count - 1.0f);
-    f32 leftWidth = (1.0f + pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
-    f32 rightWidth = (1.0f - pWork->mPivot.x) * (25.0f * pWork->mGlobalPtclScl.x);
-    f32 topWidth = (1.0f + pWork->mPivot.y) * (25.0f * pWork->mGlobalPtclScl.y);
-    f32 bottomWidth = (1.0f - pWork->mPivot.y) * (25.0f * pWork->mGlobalPtclScl.y);
+    f32 leftWidth = (1.0f + pWork->mPivot.x) * (cNum_ParticleDrawStripeX_f1 * pWork->mGlobalPtclScl.x);
+    f32 rightWidth = (1.0f - pWork->mPivot.x) * (cNum_ParticleDrawStripeX_f2 * pWork->mGlobalPtclScl.x);
+    f32 topWidth = (1.0f + pWork->mPivot.y) * (cNum_ParticleDrawStripeX_f3 * pWork->mGlobalPtclScl.y);
+    f32 bottomWidth = (1.0f - pWork->mPivot.y) * (cNum_ParticleDrawStripeX_f4 * pWork->mGlobalPtclScl.y);
     ParticleSlot* pFirst;
     bool backward = false;
     if (pShape->isDrawFwdAhead()) {
@@ -917,7 +932,7 @@ void ParticleDrawStripeX(EmitterWork* pWork) {
             MR::normalize(&side);
         }
 
-        if (MR::isSameDirection(direction, side, 0.01f)) {
+        if (MR::isSameDirection(direction, side, cNum_ParticleDrawStripeX_f5)) {
             side.set< f32 >(0.0f, 1.0f, 0.0f);
         }
 
@@ -969,7 +984,7 @@ void ParticleDrawStripeX(EmitterWork* pWork) {
             MR::normalize(&side);
         }
 
-        if (MR::isSameDirection(direction, side, 0.01f)) {
+        if (MR::isSameDirection(direction, side, cNum_ParticleDrawStripeX_f6)) {
             side.set< f32 >(0.0f, 1.0f, 0.0f);
         }
 

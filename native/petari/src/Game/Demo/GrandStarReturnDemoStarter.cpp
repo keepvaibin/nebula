@@ -22,6 +22,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRushStarPos_f1, "updateRushStarPos.f1", 100.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeRevival_1, "exeRevival.1", 40);
@@ -35,6 +38,7 @@ namespace {
 GrandStarReturnDemoStarter::GrandStarReturnDemoStarter(const char* pName)
     : LiveActor(pName), mReturnDemoRailMove(), mStageResultInformer(), mPowerStar(), mDistanceToCore(0.0f, 0.0f, 1.0f), mPowerStarPosition(gZeroVec),
       mActorCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< GrandStarReturnDemoStarter >);
     mPrevTransform.identity();
     mTransform.identity();
 }
@@ -148,7 +152,7 @@ void GrandStarReturnDemoStarter::updateRushStarPos(const Vec3f& rPosition, s32 f
     Vec3f offset;
     Vec3f newPosition;
 
-    offset.scale(100.0f * frame, mDistanceToCore);
+    offset.scale(cNum_updateRushStarPos_f1 * frame, mDistanceToCore);
     newPosition.add(rPosition, offset);
     mTransform.setTrans(newPosition);
 }

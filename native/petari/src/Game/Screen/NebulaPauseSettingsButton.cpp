@@ -12,6 +12,7 @@
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Pane.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // The middle of the pause menu's lower band, between its counters' two rows (4 and -32 about their pane at -147).
@@ -21,6 +22,7 @@ namespace {
 };  // namespace
 
 NebulaPauseSettingsButton::NebulaPauseSettingsButton() : LayoutActor("NebulaPauseSettings", true), mButton(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaPauseSettingsButton >);
 }
 
 void NebulaPauseSettingsButton::init(const TableIter& /*rIter*/) {

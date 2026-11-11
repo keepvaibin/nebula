@@ -3,6 +3,8 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+
 namespace {
     DynamicJointCtrlParam sDefaultParam = {0.3f, 0.98f, 0.01f, 45.0f, -1};
     NEBULA_TUNABLE(s32, sDefaultCtrlTime, 10);
@@ -165,7 +167,7 @@ void DynamicJointCtrl::init() {
 
     mCtrlNodes = new DynamicJointCtrlNode*[mNodeNum];
     Vec3f previousPos(0.0f, 0.0f, 0.0f);
-    f32 length = 100.0f;
+    f32 length = cNum_init_f1;
 
     for (s32 i = 0; i < mNodeNum; i++) {
         MtxPtr mtx = nullptr;

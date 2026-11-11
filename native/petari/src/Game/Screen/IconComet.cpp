@@ -2,12 +2,14 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvIconComet {
     NEW_NERVE(IconCometNrvWait, IconComet, Wait);
 };  // namespace NrvIconComet
 
 IconComet::IconComet() : LayoutActor("コメットアイコン", true) {
+    lumacore::setClass(this, lumacore::kClassId< IconComet >);
 }
 
 void IconComet::init(const TableIter& /*rIter*/) {

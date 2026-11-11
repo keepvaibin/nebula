@@ -8,6 +8,10 @@
 #include "Game/MapObj/CocoNut.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f1, "initModel.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f2, "initModel.f2", 90.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_1, "exeDown.1", 2);
@@ -16,7 +20,7 @@ NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_2, "exeDown.2", 3);
 namespace {
     const s32 cCocoNutNum = 4;
     const s32 cFireBallNum = 3;
-    const Vec cSensorOffset = {0.0f, 180.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cSensorOffset, {0.0f, 180.0f, 0.0f});
     NEBULA_TUNABLE(f32, cSensorRadius, 300.0f);
     const s32 cWaitFrameMin = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cWaitFrameMax = NebulaFrameClock::stepsOfMilliseconds(1500);
@@ -43,6 +47,7 @@ namespace NrvOtaRock {
 OtaRock::OtaRock(const char* pName)
     : LiveActor(pName), mNoThrowCocoNut(false), mCocoNutArray(nullptr), mFireBallArray(nullptr), mFixedPosition(nullptr),
       mThrowCocoNutCounter(0), mWaitFrame(0), mBaseMtx(), mFront(0.0f, 0.0f, 1.0f), mAnimScaleController(0) {
+    lumacore::setClass(this, lumacore::kClassId< OtaRock >);
     mBaseMtx.identity();
 }
 
@@ -140,7 +145,7 @@ void OtaRock::initModel() {
         mFireBallArray[i].mHost = this;
     }
 
-    mFixedPosition = new FixedPosition(this, "Mouth", Vec3f(0.0f, 0.0f, 50.0f), Vec3f(0.0f, 0.0f, -90.0f));
+    mFixedPosition = new FixedPosition(this, "Mouth", Vec3f(0.0f, 0.0f, cNum_initModel_f1), Vec3f(0.0f, 0.0f, -cNum_initModel_f2));
 
     Pos3f mtxTR;
     MR::makeMtxTR(mtxTR.toMtxPtr(), this);

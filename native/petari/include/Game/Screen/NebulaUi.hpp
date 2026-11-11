@@ -107,10 +107,9 @@ namespace NebulaUi {
     // from the middle of a capital A's ink, where textCentre puts a capital's middle (y, up), and its size, in the box's
     // units. Read from the font's own glyph pictures; false when one cannot be read.
     bool inkOffset(const TextBox* pText, f32* pX, f32* pY, f32* pWidth = nullptr, f32* pHeight = nullptr);
-    // A glyph picture's coverage at (x, y) of its sheet, 0-15 (-1 for a sheet format it cannot read), and `code`'s ink
-    // box in its cell's pixels (false when there is none to read).
-    s32 glyphCoverage(const Ui::Glyph& rGlyph, s32 x, s32 y);
-    bool glyphInkBox(const Ui::Font* pFont, u16 code, s32* pLeft, s32* pTop, s32* pRight, s32* pBottom);
+    // `code`'s ink box as the font's shader draws it, in its cell's pixels, right and bottom its far edges (false when
+    // there is none to read). A distance sheet is read at its own size, its edge where the field crosses one half.
+    bool glyphInkBox(const Ui::Font* pFont, u16 code, f32* pLeft, f32* pTop, f32* pRight, f32* pBottom);
     // `pString`'s letters side by side as the font's writer sets them (`space` between them, in the font's pixels),
     // their ink boxes joined: in the font's pixels from the first cell's top left, and the cursor after the last
     // letter. False without ink, or (`strict`) when a letter's ink cannot be read.

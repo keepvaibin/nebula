@@ -17,6 +17,20 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f1, "FallOutFieldDraw.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f2, "FallOutFieldDraw.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f3, "FallOutFieldDraw.f3", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f4, "FallOutFieldDraw.f4", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f5, "FallOutFieldDraw.f5", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f6, "FallOutFieldDraw.f6", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f7, "FallOutFieldDraw.f7", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_FallOutFieldDraw_f8, "FallOutFieldDraw.f8", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 0.004f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f3, "draw.f3", 5.0f);
 
 namespace {
     static Color8 sFillColor = Color8(0, 0, 0, 255);
@@ -24,16 +38,17 @@ namespace {
 };  // namespace
 
 FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), mFillInsideVolume() {
+    lumacore::setClass(this, lumacore::kClassId< FallOutFieldDraw >);
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
     mDepthKey = ImageEffectLocalUtil::createFrameKey();
-    mMask = GameTexture::createTarget(0.5f, 0.5f);
+    mMask = GameTexture::createTarget(cNum_FallOutFieldDraw_f1, cNum_FallOutFieldDraw_f2);
     mMask->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
-    mBlurScratch = GameTexture::createTarget(0.25f, 0.25f);
+    mBlurScratch = GameTexture::createTarget(cNum_FallOutFieldDraw_f3, cNum_FallOutFieldDraw_f4);
     mBlurScratch->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
-    mEdge = GameTexture::createTarget(0.25f, 0.25f);
+    mEdge = GameTexture::createTarget(cNum_FallOutFieldDraw_f5, cNum_FallOutFieldDraw_f6);
     mEdge->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
-    mEdgeBlurred = GameTexture::createTarget(0.25f, 0.25f);
+    mEdgeBlurred = GameTexture::createTarget(cNum_FallOutFieldDraw_f7, cNum_FallOutFieldDraw_f8);
     mEdgeBlurred->setSampling(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
 }
 
@@ -98,7 +113,7 @@ void FallOutFieldDraw::draw() const {
     mask.init(NEBULA_SHADER_FRAME_DEPTH, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
     mask.mState.color_write = 0;
     mask.mState.alpha_write = 1;
-    mask.constants[0] = mFillInsideVolume ? 1.0f : 2.0f;
+    mask.constants[0] = mFillInsideVolume ? 1.0f : cNum_draw_f1;
     mask.setTexture(0, mDepthKey);
     ImageEffectLocalUtil::drawQuad(mask);
     Frame::targetEnd(mMask->image(), NEBULA_TARGET_ALPHA);
@@ -108,7 +123,7 @@ void FallOutFieldDraw::draw() const {
     ImageEffectLocalUtil::drawTexture(mMask, 255, ImageEffectLocalUtil::TexDrawType_0);
     Frame::targetEnd(mEdge->image(), NEBULA_TARGET_ALPHA);
 
-    ImageEffectLocalUtil::blurTexture(mEdge, mBlurScratch, mEdgeBlurred, 0.004f, NEBULA_TARGET_ALPHA, 5.0f);
+    ImageEffectLocalUtil::blurTexture(mEdge, mBlurScratch, mEdgeBlurred, cNum_draw_f2, NEBULA_TARGET_ALPHA, cNum_draw_f3);
 
     // The glow, then the fill over it and the depth behind everything.
     ImageEffectLocalUtil::setWrites(true, false);

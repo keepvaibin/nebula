@@ -22,6 +22,29 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f2, "exeAppear.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f3, "exeAppear.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f4, "exeAppear.f4", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApart_f1, "exeApart.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApart_f2, "exeApart.f2", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeApart_f3, "exeApart.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollow_f1, "exeFollow.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollow_f2, "exeFollow.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollow_f3, "exeFollow.f3", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollow_f4, "exeFollow.f4", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFollow_f5, "exeFollow.f5", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeNumb_f1, "exeNumb.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerInAttackRange_f1, "isPlayerInAttackRange.f1", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayerInAttackRange_f2, "isPlayerInAttackRange.f2", 180.0f);
 
 namespace {
     NEW_NERVE(SkeletalFishGuardNrvWait, SkeletalFishGuard, Wait);
@@ -46,6 +69,7 @@ SkeletalFishGuard::SkeletalFishGuard(SkeletalFishBoss* pFishBoss, const char* pN
     : LiveActor(pName), mFishBoss(pFishBoss), mGuardOffset(0.0f, 0.0f, 0.0f), mAppearWaitStep(), mApartVelocity(0.0f, 0.0f, 0.0f), mApartFallSpeed(),
       mAttackDelay(), mSpeed(), mNumbReturnNerve(), mFront(0.0f, 0.0f, 0.0f), mAppearRandomDir(0.0f, 0.0f, 0.0f), mTargetRailPos(0.0f, 0.0f, 0.0f),
       mTargetPos(0.0f, 0.0f, 0.0f), mTargetRailDir(0.0f, 0.0f, 1.0f), mAppearStartPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishGuard >);
     mScaleController = new AnimScaleController(nullptr);
 }
 
@@ -61,10 +85,10 @@ void SkeletalFishGuard::init(const TableIter& /*rIter*/) {
     MR::addEffect(this, "PointerTouchManual");
     MR::setEffectHostMtx(this, "PointerTouchManual", MR::getJointMtx(this, "Head"));
     initSound(6, false);
-    initBinder(120.0f, 0.0f, 0);
+    initBinder(cNum_init_f1, 0.0f, 0);
     MR::invalidateClipping(this);
     MR::setBinderExceptActor(this, mFishBoss->getHeadActor());
-    MR::initStarPointerTargetAtJoint(this, "Joint00", 170.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Joint00", cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
     MR::declareStarPiece(this, 128);
 }
 
@@ -109,12 +133,12 @@ void SkeletalFishGuard::exeAppear() {
 
     Vec3f gravity;
     MR::calcGravityVector(this, mAppearStartPos, &gravity, nullptr, nullptr);
-    Vec3f turnPoint = mAppearStartPos - gravity * 1000.0f;
+    Vec3f turnPoint = mAppearStartPos - gravity * cNum_exeAppear_f1;
     calcTarget(&mTargetRailPos, &mTargetPos, &mTargetRailDir, cAppearSteps - getNerveStep());
     Vec3f appearDir = mAppearRandomDir;
     appearDir.orthogonalize(gravity);
     MR::normalizeOrZero(&appearDir);
-    turnPoint += appearDir * 500.0f;
+    turnPoint += appearDir * cNum_exeAppear_f2;
     appearDir += Vec3f(0.0f, 1.0f, 0.0f);
     MR::normalize(&appearDir);
     Vec3f lastPos = mPosition;
@@ -122,13 +146,13 @@ void SkeletalFishGuard::exeAppear() {
     if (getNerveStep() < cAppearRiseSteps) {
         const f32 steps = cAppearRiseSteps;
         f32 rate = getNerveStep() / steps;
-        mPosition.cubic(mAppearStartPos, Vec3f(0.0f, 0.0f, 0.0f), appearDir * 10.0f * steps, turnPoint, rate);
+        mPosition.cubic(mAppearStartPos, Vec3f(0.0f, 0.0f, 0.0f), appearDir * cNum_exeAppear_f3 * steps, turnPoint, rate);
     } else {
         const f32 steps = cAppearJoinSteps;
         f32 step = getNerveStep() - cAppearRiseSteps;
         f32 rate = step / steps;
         f32 railSpeed = MR::getRailCoordSpeed(mFishBoss->getCurrentRail());
-        mPosition.cubic(turnPoint, appearDir * 10.0f * steps, mTargetRailDir * railSpeed * steps, mTargetPos, rate);
+        mPosition.cubic(turnPoint, appearDir * cNum_exeAppear_f4 * steps, mTargetRailDir * railSpeed * steps, mTargetPos, rate);
     }
 
     Vec3f move = mPosition - lastPos;
@@ -171,12 +195,12 @@ void SkeletalFishGuard::exeApart() {
 
     if (!MR::isNearZero(brake)) {
         MR::normalize(&brake);
-        brake.setLength(0.3f);
+        brake.setLength(cNum_exeApart_f1);
 
         if (brake.squared() >= mApartVelocity.squared()) {
             mApartVelocity.zero();
         } else {
-            mApartVelocity.sub(brake * 0.3f);
+            mApartVelocity.sub(brake * cNum_exeApart_f2);
         }
     }
 
@@ -187,7 +211,7 @@ void SkeletalFishGuard::exeApart() {
     gravityTurn.setRotate(lastGravity, mGravity);
     gravityTurn.transform(mFront);
     gravityTurn.transform(mApartVelocity);
-    f32 turnRadian = (rate * (rate * (6 * MR::pi()))) / 180.0f;
+    f32 turnRadian = (rate * (rate * (6 * MR::pi()))) / cNum_exeApart_f3;
     lookToPlayer(turnRadian, turnRadian);
     mPosition += mGravity * fall + mApartVelocity;
     MR::calcGravity(this);
@@ -215,13 +239,13 @@ void SkeletalFishGuard::exeFollow() {
     }
 
     f32 distance = MR::getPlayerCenterPos()->distance(mPosition);
-    f32 rate = MR::clamp((distance - 1000.0f) / 500.0f, 0.0f, 1.0f);
+    f32 rate = MR::clamp((distance - cNum_exeFollow_f1) / cNum_exeFollow_f2, 0.0f, 1.0f);
     f32 rest = 1.0f - rate;
     rest *= rest;
     f32 ease = 1.0f - rest;
-    f32 yawDegree = 1.5f * ease;
+    f32 yawDegree = cNum_exeFollow_f3 * ease;
     f32 pitchDegree = ease;
-    lookToPlayer(yawDegree * MR::pi() / 180.0f, pitchDegree * MR::pi() / 180.0f);
+    lookToPlayer(yawDegree * MR::pi() / cNum_exeFollow_f4, pitchDegree * MR::pi() / cNum_exeFollow_f5);
     MR::calcGravity(this);
 
     if (!tryShiftNumb(GET_NERVE_ANON(SkeletalFishGuardNrvFollow))) {
@@ -273,7 +297,7 @@ void SkeletalFishGuard::exeNumb() {
         MR::startPointerHitSound();
         MR::stopBck(this);
         mEffectKeeper->forceDeleteEmitterAll();
-        MR::emitEffectWithScale(this, "PointerTouchManual", 1.5f, -1);
+        MR::emitEffectWithScale(this, "PointerTouchManual", cNum_exeNumb_f1, -1);
         mScaleController->startPointerHitVibration();
     }
 
@@ -398,7 +422,7 @@ bool SkeletalFishGuard::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, 
     }
 
     if (MR::isMsgJetTurtleAttack(msg)) {
-        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, 3, cNum_receiveMsgPlayerAttack_f1, cNum_receiveMsgPlayerAttack_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W_F");
         setNerve(GET_NERVE_ANON(SkeletalFishGuardNrvKill));
         return true;
@@ -409,8 +433,8 @@ bool SkeletalFishGuard::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, 
 
 void SkeletalFishGuard::initSensor() {
     initHitSensor(2);
-    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointEnemy(this, "body", "Joint02", 16, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, cNum_initSensor_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Joint02", 16, cNum_initSensor_f2, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 // Rides its slot by the boss; mApartVelocity keeps the last step's move for exeApart.
@@ -549,7 +573,7 @@ bool SkeletalFishGuard::isInScreen() const {
 bool SkeletalFishGuard::isPlayerInAttackRange() const {
     Vec3f toPlayer = *MR::getPlayerCenterPos() - mPosition;
 
-    if (toPlayer.length() > 5000.0f) {
+    if (toPlayer.length() > cNum_isPlayerInAttackRange_f1) {
         return false;
     }
 
@@ -558,7 +582,7 @@ bool SkeletalFishGuard::isPlayerInAttackRange() const {
     }
 
     MR::normalize(&toPlayer);
-    return !(toPlayer.dot(mFront) < MR::cosDegree(180.0f));
+    return !(toPlayer.dot(mFront) < MR::cosDegree(cNum_isPlayerInAttackRange_f2));
 }
 
 // No map between the guard and the player or the camera, and the boss's body (seen across the rail) not between

@@ -38,14 +38,19 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f1, "DodoryuRabbit.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f2, "DodoryuRabbit.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f3, "DodoryuRabbit.f3", 100.0f);
 
 namespace {
-    const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
-    const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
-    const Vec sLegOffset = {40.0f, 0.0f, 0.0f};
-    const Vec sArmOffset = {0.0f, 0.0f, 0.0f};
-    const Vec sTailOffset = {50.0f, 0.0f, 0.0f};
-    const Vec sStarPieceSensorOffset = {-150.0f, 0.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sHeadOffset, {50.0f, 30.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sBodyOffset, {0.0f, 0.0f, 30.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sLegOffset, {40.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sArmOffset, {0.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sTailOffset, {50.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sStarPieceSensorOffset, {-150.0f, 0.0f, 0.0f});
     const char* const sHeadSensorName = "head";
     const char* const sHeadJointName = "Head";
     NEBULA_TUNABLE(f32, sHeadRadius, 210.0f);
@@ -270,6 +275,7 @@ Dodoryu::Dodoryu(const char* pName)
     : LiveActor(pName), mCameraRegisterPos(0.0f, 0.0f, 0.0f), mStateIndex(), mState(), mMoveStateHolder(), mHill(), mLeadHill(), mBank(), mRabbit(),
       mGroundNormal(0.0f, 1.0f, 0.0f), mWallNormal(1.0f, 0.0f, 0.0f), mClosedAreaObj(), mIsSwitchOn(false), mDemoCameraTarget(new CameraTargetMtx("カメラターゲットダミー")),
       mSpinOutCameraTarget(new CameraTargetMtx("カメラターゲットダミー")), mIsRumbling(false), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
+    lumacore::setClass(this, lumacore::kClassId< Dodoryu >);
     mBaseMtx.identity();
 }
 
@@ -797,6 +803,7 @@ void Dodoryu::updateCameraTarget() {
 }
 
 DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", mBankMtx.mMtx, MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuBank >);
     mBankMtx.identity();
 }
 
@@ -815,6 +822,7 @@ void DodoryuBank::exeAppear() {
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
     : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", mRabbitMtx.mMtx, MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost),
       mRailCoord(), mTalkCtrl(), mTalkSwitchStep(::sRabbitTalkSwitchSteps), mTalkNode(), mTrampleRumbler(), mStarPieceRumbler(), mIsDisplayMessage() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuRabbit >);
     mRabbitMtx.identity();
 
     initWithoutIter();
@@ -822,7 +830,7 @@ DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
     mTalkMtx.identity();
     mTalkMtx.setTrans(mPosition);
 
-    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(100.0f, 150.0f, 100.0f), mTalkMtx);
+    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(cNum_DodoryuRabbit_f1, cNum_DodoryuRabbit_f2, cNum_DodoryuRabbit_f3), mTalkMtx);
     MR::setDistanceToTalk(mTalkCtrl, ::sRabbitTalkDistance);
 }
 
@@ -1065,6 +1073,7 @@ bool DodoryuRabbit::tryTalk() {
 }
 
 DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("ドドリュウ塚先頭"), mHostBaseMtx(pHost->getBaseMtx()), mSpinAngle() {
+    lumacore::setClass(this, lumacore::kClassId< DodoryuLeadHill >);
     for (int i = 0; i < ARRAY_SIZE(mJointCtrls); i++) {
         mJointCtrls[i] = nullptr;
     }

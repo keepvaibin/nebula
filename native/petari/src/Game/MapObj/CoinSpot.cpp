@@ -7,6 +7,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 60.0f);
 
 namespace NrvCoinSpot {
     NEW_NERVE(CoinSpotNrvWait, CoinSpot, Wait);
@@ -14,6 +18,7 @@ namespace NrvCoinSpot {
 };  // namespace NrvCoinSpot
 
 CoinSpot::CoinSpot(const char* pName) : LiveActor(pName), mCoinCount(8), mIsInTornado(), mSpawnTimer(4), mSpawnedCount() {
+    lumacore::setClass(this, lumacore::kClassId< CoinSpot >);
 }
 
 void CoinSpot::init(const TableIter& rIter) {
@@ -41,7 +46,7 @@ void CoinSpot::init(const TableIter& rIter) {
 void CoinSpot::initSensor() {
     f32 scale = mScale.y;
     initHitSensor(1);
-    Vec3f offset(0.0f, 60.0f * scale, 0.0f);
+    Vec3f offset(0.0f, cNum_initSensor_f1 * scale, 0.0f);
     MR::addHitSensorMapObj(this, "body", 32, offset.y, offset);
 }
 

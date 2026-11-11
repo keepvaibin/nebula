@@ -6,6 +6,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     MiniatureGalaxyHolder* getHolder() {
@@ -15,6 +16,7 @@ namespace {
 
 MiniatureGalaxyHolder::MiniatureGalaxyHolder()
     : LiveActor("ミニチュアギャラクシー保持"), mMiniatureGalaxyGroup(), mIsRegistered(), mCometGalaxy(), mCometID(-1) {
+    lumacore::setClass(this, lumacore::kClassId< MiniatureGalaxyHolder >);
     mMiniatureGalaxyGroup = new LiveActorGroup("ミニチュアギャラクシーグループ", 16);
 }
 

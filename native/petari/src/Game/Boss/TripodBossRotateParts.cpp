@@ -3,8 +3,10 @@
 #include "Game/MapObj/MapPartsRotator.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 TripodBossRotateParts::TripodBossRotateParts(const char* pName) : TripodBossFixParts(pName), mRotator() {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossRotateParts >);
 }
 
 void TripodBossRotateParts::init(const TableIter& rIter) {

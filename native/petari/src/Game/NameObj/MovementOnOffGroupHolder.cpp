@@ -2,8 +2,10 @@
 #include "Game/NameObj/NameObjGroup.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 MovementOnOffGroupHolder::MovementOnOffGroupHolder(const char* pName) : NameObj(pName), mGroups() {
+    lumacore::setClass(this, lumacore::kClassId< MovementOnOffGroupHolder >);
 }
 
 NameObjGroup* MovementOnOffGroupHolder::joinToGroup(const char* pName, NameObj* pObj, u32 numMax) {

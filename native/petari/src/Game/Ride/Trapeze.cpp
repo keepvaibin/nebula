@@ -22,6 +22,19 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryJump_f1, "tryJump.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f1, "updateHangPoint.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f2, "updateHangPoint.f2", 100.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sStickLength, 120.0f);
@@ -67,6 +80,7 @@ Trapeze::Trapeze(const char* pName)
     : LiveActor(pName), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRopeLength(), mStickPoint(), mTrapezeModel(),
       mRider(), mHangPoint(), mGrabCoord(), mSwingVel(), mSwingReverse(), mIsSwingFront(), mIsSwingBack(), mWasSwingFront(), mWasSwingBack(),
       mCameraInfo(), mPrevSoundLvl() {
+    lumacore::setClass(this, lumacore::kClassId< Trapeze >);
     mPosMtx.identity();
 }
 
@@ -82,7 +96,7 @@ void Trapeze::init(const TableIter& rIter) {
     mtx.getYDir(mUp);
     mtx.getZDir(mFront);
 
-    mRopeLength = mScale.y * 100.0f;
+    mRopeLength = mScale.y * cNum_init_f1;
     mScale.set(1.0f, 1.0f, 1.0f);
 
     Vec3f spawnPos(mPosition.x, mPosition.y - mRopeLength, mPosition.z);
@@ -95,8 +109,8 @@ void Trapeze::init(const TableIter& rIter) {
     initNerve(GET_NERVE(Trapeze, TrapezeNrvFree));
 
     initHitSensor(2);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, 200.0f);
-    MR::addHitSensorCallbackRide(this, "body", 8, 130.0f);
+    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f2);
+    MR::addHitSensorCallbackRide(this, "body", 8, cNum_init_f3);
 
     MR::calcGravity(this);
 
@@ -108,7 +122,7 @@ void Trapeze::init(const TableIter& rIter) {
     mTrapezeModel->initWithoutIter();
 
     MR::initShadowFromCSV(mTrapezeModel, "Shadow");
-    MR::setShadowDropLength(mTrapezeModel, nullptr, mRopeLength + 1000.0f);
+    MR::setShadowDropLength(mTrapezeModel, nullptr, mRopeLength + cNum_init_f4);
     MR::registerDemoSimpleCastAll(mTrapezeModel);
     MR::initActorCamera(this, rIter, &mCameraInfo);
     makeActorAppeared();
@@ -121,8 +135,8 @@ void Trapeze::draw() const {
 
     TypedDraw site(MR::getSceneObj< TrapezeRopeDrawInit >(SceneObj_TrapezeRopeDrawInit)->mMaterial, nullptr, MR::getCameraViewMtx());
 
-    Vec3f left = mSide * -(::sStickLength / 2.0f);
-    Vec3f right = mSide * (::sStickLength / 2.0f);
+    Vec3f left = mSide * -(::sStickLength / cNum_draw_f1);
+    Vec3f right = mSide * (::sStickLength / cNum_draw_f2);
 
     Vec3f grabLeft = left;
     Vec3f grabRight = right;
@@ -431,7 +445,7 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
         Vec3f swingVel = mFront;
         // A slow player takes the hang point's speed, but only when it swings forward (no abs on it).
-        if (MR::abs(vel) < 3.0f && 3.0f < projGrabPointVel) {
+        if (MR::abs(vel) < cNum_receiveOtherMsg_f1 && cNum_receiveOtherMsg_f2 < projGrabPointVel) {
             vel = projGrabPointVel;
         }
         swingVel.scale(vel);
@@ -489,7 +503,7 @@ bool Trapeze::tryJump() {
         jumpVel.y = MR::clamp(jumpVel.y, ::sJumpSpeedMinY, ::sJumpSpeedMaxY);
 
         Vec3f grabVel(jumpVel.x, 0.0f, jumpVel.z);
-        if (grabVel.squared() > 300.0f) {
+        if (grabVel.squared() > cNum_tryJump_f1) {
             MR::normalize(&grabVel);
             grabVel.scale(::sJumpSpeedMaxXZ);
             jumpVel.x = grabVel.x;
@@ -594,7 +608,7 @@ void Trapeze::updateHangPoint() {
         mSwingVel *= -1.0f;
     }
 
-    s32 soundLvl = (mHangPoint->mVelocity.length() / 40.0f) * 100.0f;
+    s32 soundLvl = (mHangPoint->mVelocity.length() / cNum_updateHangPoint_f1) * cNum_updateHangPoint_f2;
     if (soundLvl > 100) {
         soundLvl = 100;
     }
@@ -729,6 +743,7 @@ void Trapeze::drawRope(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB,
 }
 
 TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< TrapezeRopeDrawInit >);
     mTexture = new GameTexture(MR::loadTexFromArc("Trapeze", "TrapezeRope.bti"));
 
     mMaterial = makeMaterial();

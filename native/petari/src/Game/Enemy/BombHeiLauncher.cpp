@@ -12,6 +12,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 30.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, hThrowVel, 35.0f);
@@ -25,6 +28,7 @@ namespace NrvBombHeiLauncher {
 };  // namespace NrvBombHeiLauncher
 
 BombHeiLauncher::BombHeiLauncher(const char* pName) : LiveActor(pName), mBomb(), mCountdown(), mConnector(), mIsActive(true) {
+    lumacore::setClass(this, lumacore::kClassId< BombHeiLauncher >);
     mConnector = new MapObjConnector(this);
 }
 
@@ -91,7 +95,7 @@ void BombHeiLauncher::init(const TableIter& rIter) {
 void BombHeiLauncher::initAfterPlacement() {
     Vec3f up;
     MR::calcUpVec(&up, this);
-    MR::resetPosition(mBomb, mPosition + up * 30.0f);
+    MR::resetPosition(mBomb, mPosition + up * cNum_initAfterPlacement_f1);
     mBomb->mGravity.set(-up);
     mBomb->initAfterPlacement();
     mConnector->attachToUnder();

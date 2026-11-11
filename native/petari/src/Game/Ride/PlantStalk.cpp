@@ -15,6 +15,10 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerCoord_f1, "calcPlayerCoord.f1", 100000000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerCoord_f2, "calcPlayerCoord.f2", 15.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sGrowSpeedMin, 15.0f);
@@ -43,6 +47,7 @@ PlantStalk::PlantStalk()
     : LiveActor("茎"), mNumPlantPoints(), mPlantPoints(), mRailInfo(), mStalkLength(), mGrowthPercent(),
       mGrowSpeed(MR::getRandom(::sGrowSpeedMin, ::sGrowSpeedMax)), mGrowAccelTime(MR::getRandom(::sGrowAccelTimeMin, ::sGrowAccelTimeMax)),
       mGrownPlantPoints() {
+    lumacore::setClass(this, lumacore::kClassId< PlantStalk >);
 }
 
 void PlantStalk::init(const TableIter& rIter) {
@@ -139,7 +144,7 @@ void PlantStalk::calcNearestPos(Vec3f* pRailPos, const Vec3f& rSrcPos) const {
 
 f32 PlantStalk::calcPlayerCoord() const {
     Vec3f playerPos = *MR::getPlayerCenterPos();
-    f32 closestMag = 100000000.0f;
+    f32 closestMag = cNum_calcPlayerCoord_f1;
     s32 closestPoint = 0;
 
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
@@ -151,7 +156,7 @@ f32 PlantStalk::calcPlayerCoord() const {
         }
     }
 
-    if (mStalkLength > 15.0f) {
+    if (mStalkLength > cNum_calcPlayerCoord_f2) {
         f32 maxLength = MR::getRailTotalLength(this);
         return MR::clamp(((static_cast< f32 >(mGrownPlantPoints - closestPoint) * ::sInterval) / mStalkLength) * MR::getRailTotalLength(this), 0.0f, maxLength);
     } else {
@@ -201,6 +206,7 @@ void PlantStalk::drawGrowUp(TypedDraw& rDraw) const {
 }
 
 PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PlantStalkDrawInit >);
     mTexture = nullptr;
     mTexture = new GameTexture(MR::loadTexFromArc("Plant", "PlantStalk.bti"));
 

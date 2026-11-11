@@ -1,7 +1,9 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 GlobalGravityObj::GlobalGravityObj(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< GlobalGravityObj >);
     mGravityCreator = nullptr;
 }
 

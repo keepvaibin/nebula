@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <string_view>
+#include <vector>
 
 namespace galaxy {
 
@@ -27,6 +28,8 @@ enum Diagnostic : unsigned {
     kDiagnoseRtInputs = 1u << 13u,       // rt-inputs: what ray tracing reads of each frame list, checked and counted
     kDiagnoseRtView = 1u << 14u,         // rt-view: the tracer's scene drawn over the game's, each instance its own colour
     kDiagnoseRtCheck = 1u << 15u,        // rt-check: the tracer's scene against the depth the game drew, coloured and counted
+    kDiagnoseDeviceFaults = 1u << 16u,   // device-faults: a lost device's breadcrumbs and the driver's fault data
+    kDiagnoseTelemetry = 1u << 17u,      // telemetry: frame counts in shared memory each second (tools/telemetry)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -53,6 +56,8 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-inputs", kDiagnoseRtInputs},
     {"rt-view", kDiagnoseRtView},
     {"rt-check", kDiagnoseRtCheck},
+    {"device-faults", kDiagnoseDeviceFaults},
+    {"telemetry", kDiagnoseTelemetry},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
@@ -103,6 +108,7 @@ struct LaunchArgs {
     // status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
+    std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
 };
 
 inline LaunchArgs g_launch_args;

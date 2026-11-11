@@ -3,6 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvQuarterRollGravityRoomArrow {
     NEW_NERVE(QuarterRollGravityRoomArrowNrvWait, QuarterRollGravityRoomArrow, Wait);
@@ -13,6 +14,7 @@ namespace NrvQuarterRollGravityRoomArrow {
 };  // namespace NrvQuarterRollGravityRoomArrow
 
 QuarterRollGravityRoomArrow::QuarterRollGravityRoomArrow(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< QuarterRollGravityRoomArrow >);
 }
 
 void QuarterRollGravityRoomArrow::init(const TableIter& rIter) {

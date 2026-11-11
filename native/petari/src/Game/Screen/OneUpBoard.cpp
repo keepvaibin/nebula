@@ -6,6 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sOffsetY, 60.0f);
@@ -18,6 +19,7 @@ namespace NrvOneUpBoard {
 };  // namespace NrvOneUpBoard
 
 OneUpBoard::OneUpBoard() : LayoutActor("1UPボード", true) {
+    lumacore::setClass(this, lumacore::kClassId< OneUpBoard >);
 }
 
 void OneUpBoard::init(const TableIter& /*rIter*/) {

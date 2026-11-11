@@ -5,9 +5,11 @@
 #include "Game/NPC/PowerStarEventKeeper.hpp"
 #include "Game/NPC/StageStateKeeper.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 EventDirector::EventDirector()
     : NameObj("イベント指揮"), mPowerStarEventKeeper(), mStageStateKeeper(), mPowerStarHolder(), mCometEventKeeper() {
+    lumacore::setClass(this, lumacore::kClassId< EventDirector >);
 }
 
 void EventDirector::init(const TableIter& /*rIter*/) {

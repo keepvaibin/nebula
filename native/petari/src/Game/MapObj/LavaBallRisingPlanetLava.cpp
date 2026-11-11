@@ -5,6 +5,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeScaleUp_f1, "exeScaleUp.f1", 1.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeScaleDown_f1, "exeScaleDown.f1", 1.1f);
 
 namespace NrvLavaBallRisingPlanetLava {
     NEW_NERVE(LavaBallRisingPlanetLavaNrvWaitSmall, LavaBallRisingPlanetLava, Wait);
@@ -19,6 +24,7 @@ namespace {
 };  // namespace
 
 LavaBallRisingPlanetLava::LavaBallRisingPlanetLava(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< LavaBallRisingPlanetLava >);
 }
 
 void LavaBallRisingPlanetLava::init(const TableIter& rIter) {
@@ -45,11 +51,11 @@ void LavaBallRisingPlanetLava::exeWait() {
 }
 
 void LavaBallRisingPlanetLava::exeScaleUp() {
-    updateScale(1.0f, 1.1f, GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitBig));
+    updateScale(1.0f, cNum_exeScaleUp_f1, GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitBig));
 }
 
 void LavaBallRisingPlanetLava::exeScaleDown() {
-    updateScale(1.1f, 1.0f, GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitSmall));
+    updateScale(cNum_exeScaleDown_f1, 1.0f, GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitSmall));
 }
 
 void LavaBallRisingPlanetLava::updateScale(f32 startScale, f32 endScale, const Nerve* pNextNerve) {

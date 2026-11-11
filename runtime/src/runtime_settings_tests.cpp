@@ -32,61 +32,6 @@ private:
     std::filesystem::path old_;
 };
 
-class ScopedEnv {
-public:
-    explicit ScopedEnv(const char* name) : name_(name) {
-        char* old = nullptr;
-        std::size_t length = 0;
-        if (_dupenv_s(&old, &length, name_) == 0 && old != nullptr) {
-            had_old_ = true;
-            old_value_ = old;
-            std::free(old);
-        }
-    }
-
-    ~ScopedEnv() {
-        _putenv_s(name_, had_old_ ? old_value_.c_str() : "");
-    }
-
-    ScopedEnv(const ScopedEnv&) = delete;
-    ScopedEnv& operator=(const ScopedEnv&) = delete;
-
-private:
-    const char* name_;
-    bool had_old_ = false;
-    std::string old_value_;
-};
-
-class ScopedWideEnv {
-public:
-    explicit ScopedWideEnv(const wchar_t* name) : name_(name) {
-        wchar_t* old = nullptr;
-        std::size_t length = 0u;
-        if (_wdupenv_s(&old, &length, name_) != 0) {
-            throw std::runtime_error("cannot snapshot test environment");
-        }
-        if (old != nullptr) {
-            try {
-                old_value_ = old;
-                had_old_ = true;
-            } catch (...) {
-                std::free(old);
-                throw;
-            }
-            std::free(old);
-        }
-    }
-    ~ScopedWideEnv() {
-        (void)_wputenv_s(name_, had_old_ ? old_value_.c_str() : L"");
-    }
-    ScopedWideEnv(const ScopedWideEnv&) = delete;
-    ScopedWideEnv& operator=(const ScopedWideEnv&) = delete;
-private:
-    const wchar_t* name_;
-    bool had_old_ = false;
-    std::wstring old_value_;
-};
-
 class ScopedNumericLocale {
 public:
     ScopedNumericLocale() : old_thread_mode_(_configthreadlocale(_ENABLE_PER_THREAD_LOCALE)) {
@@ -131,6 +76,15 @@ void write_text(const std::filesystem::path& path, std::string_view text) {
     }
 }
 
+// A line after the file's: read last, so it wins over the same key earlier (or is ignored when it is not valid).
+void append_text(const std::filesystem::path& path, std::string_view text) {
+    std::ofstream file(path, std::ios::binary | std::ios::app);
+    file.write(text.data(), static_cast<std::streamsize>(text.size()));
+    if (!file) {
+        throw std::runtime_error("cannot append to settings fixture");
+    }
+}
+
 std::string read_text(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::binary);
     return {
@@ -143,14 +97,6 @@ std::string read_text(const std::filesystem::path& path) {
 int main() {
     bool passed = true;
 
-    const ScopedEnv scoped_input("GALAXY_INPUT_MODE");
-    const ScopedEnv scoped_master("GALAXY_AUDIO_MASTER_GAIN");
-    const ScopedEnv scoped_music("GALAXY_AUDIO_MUSIC_GAIN");
-    const ScopedEnv scoped_sfx("GALAXY_AUDIO_SFX_GAIN");
-    const ScopedEnv scoped_effects("GALAXY_AUDIO_EFFECTS_GAIN");
-    const ScopedEnv scoped_voice("GALAXY_AUDIO_VOICE_GAIN");
-    const ScopedEnv scoped_ambience("GALAXY_AUDIO_AMBIENCE_GAIN");
-
     const std::filesystem::path root = galaxy::test_temp_path("galaxy_runtime_settings_tests");
     std::filesystem::remove_all(root);  // left by an earlier run that had this process id
     const std::filesystem::path settings_path = root / "runtime_settings.ini";
@@ -160,15 +106,6 @@ int main() {
     }
     const ScopedSettingsFolder settings_folder(root);
 
-    _putenv_s("GALAXY_INPUT_MODE", "");
-    _putenv_s("GALAXY_AUDIO_MASTER_GAIN", "");
-    _putenv_s("GALAXY_AUDIO_MUSIC_GAIN", "");
-    _putenv_s("GALAXY_AUDIO_SFX_GAIN", "");
-    _putenv_s("GALAXY_AUDIO_EFFECTS_GAIN", "");
-    _putenv_s("GALAXY_AUDIO_VOICE_GAIN", "");
-    _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "");
-    _putenv_s("GALAXY_TEXT_SPEED", "");
-    _putenv_s("GALAXY_LANGUAGE", "");
     std::filesystem::remove(settings_path);
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
@@ -231,40 +168,39 @@ int main() {
         "a version-2 file keeps a chosen keyboard_mouse override");
 
     write_text(settings_path, "input_mode=controller\n");
-    _putenv_s("GALAXY_INPUT_MODE", "auto");
+    append_text(settings_path, "input_mode=auto\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
             galaxy::RuntimeInputMode::Auto,
-        "env input_mode=auto overrides the file mode");
+        "a later input_mode=auto replaces the mode before it");
 
-    _putenv_s("GALAXY_INPUT_MODE", "keyboard_mouse");
+    append_text(settings_path, "input_mode=keyboard_mouse\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
             galaxy::RuntimeInputMode::KeyboardMouse,
-        "env input_mode=keyboard_mouse is accepted");
+        "input_mode=keyboard_mouse is accepted");
 
-    _putenv_s("GALAXY_INPUT_MODE", "controller");
+    append_text(settings_path, "input_mode=controller\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
             galaxy::RuntimeInputMode::Controller,
-        "env input_mode=controller is accepted");
+        "input_mode=controller is accepted");
 
-    _putenv_s("GALAXY_INPUT_MODE", "wiimote");
+    append_text(settings_path, "input_mode=wiimote\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
             galaxy::RuntimeInputMode::RealWiimote,
-        "env input_mode=wiimote selects the real Wii Remote source");
+        "input_mode=wiimote selects the real Wii Remote source");
     passed &= expect(
         std::string(galaxy::runtime_input_mode_name(
             galaxy::RuntimeInputMode::RealWiimote)) == "real_wiimote",
         "RuntimeInputMode::RealWiimote serializes as real_wiimote");
 
     write_text(settings_path, "input_mode=real_wiimote\n");
-    _putenv_s("GALAXY_INPUT_MODE", "");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
@@ -322,12 +258,11 @@ int main() {
         loaded_audio.wiimote_speaker == 0.0f,
         "a settings file without the Wiimote sounds key keeps them off");
 
-    _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "0.250");
+    append_text(settings_path, "audio_ambience_gain=0.250\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().audio.ambience == 0.25f,
-        "ambience environment override is independent from SFX");
-    _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "");
+        "the ambience gain is independent from SFX");
 
     write_text(settings_path, "audio_wiimote_speaker_gain=0.750\n");
     galaxy::load_runtime_settings_from_file();
@@ -335,12 +270,11 @@ int main() {
         galaxy::get_runtime_settings().audio.wiimote_speaker == 0.75f &&
             galaxy::get_runtime_settings().audio.master == 1.0f,
         "the Wiimote sounds gain loads on its own");
-    _putenv_s("GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "0.5");
+    append_text(settings_path, "audio_wiimote_speaker_gain=0.5\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().audio.wiimote_speaker == 0.5f,
-        "the Wiimote sounds gain has an environment override");
-    _putenv_s("GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "");
+        "a later Wiimote sounds gain replaces the one before it");
     passed &= expect(
         galaxy::save_runtime_settings_to_file() &&
             read_text(settings_path).find("audio_wiimote_speaker_gain=0.5") != std::string::npos,
@@ -390,7 +324,6 @@ int main() {
                 after_sanitized_auto.mode,
         "auto transition advances exactly one coherent generation");
 
-    _putenv_s("GALAXY_INPUT_MODE", "");
     write_text(settings_path, "sentinel=old\n");
     HANDLE locked = CreateFileW(
         settings_path.c_str(),
@@ -432,20 +365,19 @@ int main() {
 
     for (const char* invalid : {"0.25junk", "1e999", "1e-999", "nan", "inf", "0,5"}) {
         write_text(settings_path, "audio_master_gain=0.75\n");
-        _putenv_s("GALAXY_AUDIO_MASTER_GAIN", invalid);
+        append_text(settings_path, std::string("audio_master_gain=") + invalid + "\n");
         galaxy::load_runtime_settings_from_file();
         passed &= expect(
             galaxy::get_runtime_settings().audio.master == 0.75f,
             "malformed/range-error gain preserves the valid file value");
     }
     for (const char* valid : {"+0.5", "0x1p-1", "5e-1", " .5 "}) {
-        _putenv_s("GALAXY_AUDIO_MASTER_GAIN", valid);
+        append_text(settings_path, std::string("audio_master_gain=") + valid + "\n");
         galaxy::load_runtime_settings_from_file();
         passed &= expect(
             galaxy::get_runtime_settings().audio.master == 0.5f,
             "complete C-locale decimal/hex/exponent/sign gain is accepted");
     }
-    _putenv_s("GALAXY_AUDIO_MASTER_GAIN", "");
 
     {
         const ScopedNumericLocale locale_scope;
@@ -614,10 +546,9 @@ int main() {
     write_text(settings_path, "text_speed=9\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "an unknown text speed keeps the game's pace");
-    _putenv_s("GALAXY_TEXT_SPEED", "2");
+    append_text(settings_path, "text_speed=2\n");
     galaxy::load_runtime_settings_from_file();
-    passed &= expect(galaxy::get_runtime_settings().text_speed == 2u, "text speed has an environment override");
-    _putenv_s("GALAXY_TEXT_SPEED", "");
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 2u, "a later text speed replaces the one before it");
     passed &= expect(
         galaxy::save_runtime_settings_to_file() &&
             read_text(settings_path).find("text_speed=2") != std::string::npos,
@@ -659,10 +590,9 @@ int main() {
     write_text(settings_path, "text_speed=2\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::Auto, "no language set is Auto");
-    _putenv_s("GALAXY_LANGUAGE", "french");
+    append_text(settings_path, "language=french\n");
     galaxy::load_runtime_settings_from_file();
-    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::French, "language has an environment override");
-    _putenv_s("GALAXY_LANGUAGE", "");
+    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::French, "a language after other keys loads");
     passed &= expect(
         galaxy::save_runtime_settings_to_file() &&
             read_text(settings_path).find("language=french") != std::string::npos,

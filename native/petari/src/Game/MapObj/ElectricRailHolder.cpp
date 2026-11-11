@@ -16,6 +16,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, cHitSensorRadius, 30.0f);
@@ -51,6 +52,7 @@ namespace {
 };  // namespace
 
 ElectricRailHolder::ElectricRailHolder(const char* pName) : LiveActor(pName), mIsActive() {
+    lumacore::setClass(this, lumacore::kClassId< ElectricRailHolder >);
     MR::zeroMemory(&mRailModels, sizeof(mRailModels));
     MR::zeroMemory(&mRailItems, sizeof(mRailItems.mArray));
 }

@@ -5,6 +5,9 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide0_f1, "exeGuide0.f1", 100.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, sDemoCameraZoomOutStartFrame, 630);
@@ -30,6 +33,7 @@ namespace NrvRunawayTico {
 };  // namespace NrvRunawayTico
 
 RunawayTico::RunawayTico(const char* pName) : Tico(pName), mCameraInfo(), mRole(), mDemoCastID(), mIsStartRunaway(), mIsAllCaught() {
+    lumacore::setClass(this, lumacore::kClassId< RunawayTico >);
 }
 
 void RunawayTico::init(const TableIter& rIter) {
@@ -166,7 +170,7 @@ void RunawayTico::exeGuide0() {
     }
 
     if (MR::isGreaterEqualStep(this, ::sFloatSeStartFrame)) {
-        MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT_DEMO", sFloatSeMinVolume * 100.0f);
+        MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT_DEMO", sFloatSeMinVolume * cNum_exeGuide0_f1);
     }
 
     if (MR::isStep(this, ::sDemoCameraZoomOutBgmStartFrame)) {

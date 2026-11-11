@@ -5,6 +5,11 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initWindModel_f1, "initWindModel.f1", 2000.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sBaseWindWidth, 400.0f);
@@ -18,6 +23,7 @@ namespace NrvBigFan {
 
 BigFan::BigFan(const char* pName)
     : LiveActor(pName), mWindModel(), mClippingCenter(0.0f, 0.0f, 0.0f), mWindLength(4000.0f), mWindSpeed(100.0f), mIsTeresaGalaxy() {
+    lumacore::setClass(this, lumacore::kClassId< BigFan >);
     BigFanFunction::createBigFanHolder();
     BigFanFunction::registerBigFan(this);
 }
@@ -40,8 +46,8 @@ void BigFan::init(const TableIter& rIter) {
     initWindModel();
     Vec3f front;
     MR::calcFrontVec(&front, this);
-    mClippingCenter.scaleAdd(mWindLength * 0.5f, front, mPosition);
-    MR::setClippingTypeSphere(this, 400.0f + mWindLength, &mClippingCenter);
+    mClippingCenter.scaleAdd(mWindLength * cNum_init_f1, front, mPosition);
+    MR::setClippingTypeSphere(this, cNum_init_f2 + mWindLength, &mClippingCenter);
     initSound(4, false);
 
     if (MR::isEqualStageName("TeresaMario2DGalaxy")) {
@@ -67,7 +73,7 @@ void BigFan::initWindModel() {
     MR::invalidateClipping(mWindModel);
     MR::startBtk(mWindModel, "BigFanWind");
     MR::registerDemoSimpleCastAll(mWindModel);
-    mWindModel->mScale.z = mWindLength / 2000.0f;
+    mWindModel->mScale.z = mWindLength / cNum_initWindModel_f1;
 }
 
 void BigFan::calcWindInfo(Vec3f* pWindInfo, const Vec3f& rPos) {

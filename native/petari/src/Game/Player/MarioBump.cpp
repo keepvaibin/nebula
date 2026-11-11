@@ -4,6 +4,13 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_startBump_f1, "startBump.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startBump_f2, "startBump.f2", 0.52359879f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.1f);
 
 void Mario::checkBump() {
     if (!mMovementStates.jumping && !mMovementStates.squat && mMovementStates.onGround) {
@@ -27,7 +34,7 @@ void Mario::checkBump() {
 }
 
 void Mario::startBump(const Vec3f& rVec) {
-    if ((getTrans() - rVec).length() >= 100.0f) {
+    if ((getTrans() - rVec).length() >= cNum_startBump_f1) {
         return;
     }
 
@@ -36,7 +43,7 @@ void Mario::startBump(const Vec3f& rVec) {
     const Vec3f* norm = mBumpPolygon->getNormal(0);
     MR::vecKillElement(*norm, *grav, &v21);
 
-    if (!MR::normalizeOrZero(&v21) && MR::diffAngleAbsHorizontal(mFrontVec, -v21, getAirGravityVec()) > 0.52359879f) {
+    if (!MR::normalizeOrZero(&v21) && MR::diffAngleAbsHorizontal(mFrontVec, -v21, getAirGravityVec()) > cNum_startBump_f2) {
         Vec3f v20;
         if (MR::vecKillElement(getTrans() - rVec, getAirGravityVec(), &v20) > 0.0f) {
             return;
@@ -71,7 +78,7 @@ bool MarioBump::start() {
 
     MR::clamp(mStartSpeed, 0.0f, 1.0f);
 
-    s32 blendTimer = 0x14 - static_cast< s32 >(16.0f * mStartSpeed);
+    s32 blendTimer = 0x14 - static_cast< s32 >(cNum_start_f1 * mStartSpeed);
 
     if (blendTimer < 4) {
         blendTimer = 4;
@@ -95,8 +102,8 @@ bool MarioBump::update() {
         clearVelocity();
         f32 val = getPlayer()->mWalkSpeed;
 
-        if (val < 0.1f) {
-            val = 0.1f;
+        if (val < cNum_update_f1) {
+            val = cNum_update_f2;
         }
 
         getPlayer()->mWalkSpeed = val;

@@ -14,6 +14,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f2, "exeFly.f2", 4.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeErase2P_setBckRate_1, "exeErase2P.setBckRate.1", 3.0f);
@@ -39,6 +48,7 @@ namespace NrvKoopaFireShort {
 
 KoopaFireShort::KoopaFireShort(const Koopa* pKoopa)
     : LiveActor("クッパの炎（ショート）"), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mSpeed(), mDuration(), mOffset() {
+    lumacore::setClass(this, lumacore::kClassId< KoopaFireShort >);
 }
 
 void KoopaFireShort::init(const TableIter& /*rIter*/) {
@@ -51,8 +61,8 @@ void KoopaFireShort::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
 
     Vec3f sensorOffset = Vec3f(0.0f, 0.0f, 0.0f);
-    MR::addHitSensor(this, "Attack", ATYPE_KOOPA_FIRE, 8, 130.0f, sensorOffset);
-    initBinder(50.0f, 0.0f, 0);
+    MR::addHitSensor(this, "Attack", ATYPE_KOOPA_FIRE, 8, cNum_init_f1, sensorOffset);
+    initBinder(cNum_init_f2, 0.0f, 0);
 
     MR::offBind(this);
     MR::onCalcGravity(this);
@@ -66,8 +76,8 @@ void KoopaFireShort::init(const TableIter& /*rIter*/) {
 
     Vec3f pointerOffset;
     pointerOffset.set(0.0f);
-    MR::initStarPointerTarget(this, 100.0f, pointerOffset);
-    MR::initShadowVolumeSphere(this, 200.0f);
+    MR::initStarPointerTarget(this, cNum_init_f3, pointerOffset);
+    MR::initShadowVolumeSphere(this, cNum_init_f4);
 
     MR::invalidateClipping(this);
 
@@ -94,7 +104,7 @@ void KoopaFireShort::appear() {
         MR::normalize(&mVelocity);
     }
 
-    f32 radius = 80.0f * mScale.x;
+    f32 radius = cNum_appear_f1 * mScale.x;
     mVelocity.x *= ::sFlySpeedNormal;
     mVelocity.y *= ::sFlySpeedNormal;
     mVelocity.z *= ::sFlySpeedNormal;
@@ -161,7 +171,7 @@ void KoopaFireShort::exeFly() {
         Vec3f gravity = -mGravity;
         MR::calcStarPointerWorldVelocityDirectionOnPlane(&mVelocity, mPosition, gravity, 1);
 
-        mSpeed = 80.0f;
+        mSpeed = cNum_exeFly_f1;
 
         MR::tryRumblePadMiddle(this, PLAYER_2);
 
@@ -174,7 +184,7 @@ void KoopaFireShort::exeFly() {
         updateFly();
 
         if (MR::isLessStep(this, cStep_exeFly_1)) {
-            mPosition += mGravity * 4.0f;
+            mPosition += mGravity * cNum_exeFly_f2;
         }
 
         if (MR::isGreaterStep(this, mDuration)) {

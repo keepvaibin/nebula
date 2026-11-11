@@ -5,6 +5,11 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPathPosDir_f1, "calcPathPosDir.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupPathDrawForGraneStarReturnDemo_f1, "setupPathDrawForGraneStarReturnDemo.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupPathDrawForGraneStarReturnDemo_f2, "setupPathDrawForGraneStarReturnDemo.f2", 0.1f);
 
 namespace {
     void setResultFlyStartFrame(LiveActor* liveActor, s32 frame) {
@@ -61,13 +66,13 @@ void ReturnDemoRailMove::calcPathPosDir(Vec3f* position, Vec3f* direction, f32 t
     }
 
     if (direction != nullptr) {
-        mShootPath->calcDirection(direction, t, 0.01f);
+        mShootPath->calcDirection(direction, t, cNum_calcPathPosDir_f1);
     }
 };
 
 void ReturnDemoRailMove::setupPathDrawForGraneStarReturnDemo() {
-    mPathDrawer->setMaskLength(100.0f);
-    mPathDrawer->setFadeScale(0.1f);
+    mPathDrawer->setMaskLength(cNum_setupPathDrawForGraneStarReturnDemo_f1);
+    mPathDrawer->setFadeScale(cNum_setupPathDrawForGraneStarReturnDemo_f2);
 };
 
 void ReturnDemoRailMove::start() {

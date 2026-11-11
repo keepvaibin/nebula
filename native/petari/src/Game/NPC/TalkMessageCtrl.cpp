@@ -26,6 +26,7 @@
 
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // Indexed by a select branch's mNextIdx.
@@ -64,6 +65,7 @@ TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rBalloonOffset, 
       mMsgBalloonFollowOffs(rBalloonOffset), mTalkDistance(::sDefaultTalkDistance), mAlreadyDoneFlag(), mAlreadyDoneFlags(), mIsOnRootNodeAuto(),
       mIsOnReadNodeAuto(true), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
       mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
+    lumacore::setClass(this, lumacore::kClassId< TalkMessageCtrl >);
     MR::createSceneObj(SceneObj_TalkDirector);
     TalkFunction::registerTalkSystem(this);
     mZoneID = MR::getCurrentPlacementZoneId();

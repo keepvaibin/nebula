@@ -11,6 +11,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_addDodgeTargetVelocity_f1, "addDodgeTargetVelocity.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryRebound_f1, "tryRebound.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeReverse_f1, "exeReverse.f1", 8.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_requestPunch_addVelocitySeparateHV_1, "requestPunch.addVelocitySeparateHV.1", 120.0f);
@@ -62,6 +70,7 @@ namespace {
 DinoPackunBall::DinoPackunBall(const char* pName, DinoPackun* pParent)
     : DinoPackunTailNode(pName, pParent), mWeakSensor(nullptr), mReboundVelocity(0.0f, 0.0f, 0.0f), mIsBlackDrag(false), mIsOnFire(false),
       mDragSoundStep(-1) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunBall >);
     mDragEffectMtx.identity();
 }
 
@@ -155,7 +164,7 @@ void DinoPackunBall::addDodgeTargetVelocity() {
     f32 awaySpeed = mVelocity.dot(away);
 
     if (MR::isNearZero(distance)) {
-        MR::addRandomVector(&mVelocity, mVelocity, 2.0f);
+        MR::addRandomVector(&mVelocity, mVelocity, cNum_addDodgeTargetVelocity_f1);
         return;
     }
 
@@ -186,7 +195,7 @@ void DinoPackunBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         f32 awaySpeed = mVelocity.dot(away);
 
         if (MR::isSensorPlayer(pReceiver)) {
-            if (awaySpeed < 5.0f) {
+            if (awaySpeed < cNum_attackSensor_f1) {
                 mVelocity.add(away);
             }
         } else if (awaySpeed < 0.0f) {
@@ -202,7 +211,7 @@ void DinoPackunBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         MR::calcSensorDirection(&bounceDir, pReceiver, pSender);
         MR::normalizeOrZero(&bounceDir);
         f32 speed = mVelocity.length();
-        mVelocity.set((bounceDir * speed) * 0.3f);
+        mVelocity.set((bounceDir * speed) * cNum_attackSensor_f2);
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvRebound));
     }
 }
@@ -258,7 +267,7 @@ bool DinoPackunBall::tryRebound() {
 
     Vec3f reaction(*MR::getBindedFixReactionVector(this));
     MR::normalizeOrZero(&reaction);
-    mReboundVelocity.set(reaction * 40.0f);
+    mReboundVelocity.set(reaction * cNum_tryRebound_f1);
     MR::zeroVelocity(this);
     setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvRebound));
     return true;
@@ -269,7 +278,7 @@ void DinoPackunBall::exeWait() {
     MR::attenuateVelocity(this, cNum_exeWait_attenuateVelocity_1);
     MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3);
 
-    if (MR::isBindedGround(this) && mVelocity.length() > 5.0f) {
+    if (MR::isBindedGround(this) && mVelocity.length() > cNum_exeWait_f1) {
         if (!mIsOnFire) {
             MR::emitEffect(this, getDragEffectName());
         }
@@ -324,7 +333,7 @@ void DinoPackunBall::exeReverse() {
     Vec3f toHead;
     toHead.set(MR::getSensorPos(mWeakSensor) - mPosition);
     MR::normalizeOrZero(&toHead);
-    mVelocity.add(toHead * 8.0f);
+    mVelocity.add(toHead * cNum_exeReverse_f1);
     MR::attenuateVelocity(this, cNum_exeReverse_attenuateVelocity_1);
     MR::reboundVelocityFromCollision(this, cNum_exeReverse_reboundVelocityFromCollision_1, cNum_exeReverse_reboundVelocityFromCollision_2, cNum_exeReverse_reboundVelocityFromCollision_3);
     tryRebound();

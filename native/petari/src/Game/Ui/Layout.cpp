@@ -14,6 +14,14 @@
 #include <nebula_module.h>
 #include "Game/Util/MotionSignal.hpp"
 #include <cstring>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_ApplyAnchors_f1, "ApplyAnchors.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ApplyAnchors_f2, "ApplyAnchors.f2", 190.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ApplyAnchor_f1, "ApplyAnchor.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ApplyAnchor_f2, "ApplyAnchor.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ApplyAnchor_f3, "ApplyAnchor.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ApplyAnchor_f4, "ApplyAnchor.f4", 2.0f);
 
 namespace {
     using namespace Ui;
@@ -422,7 +430,7 @@ namespace Ui {
                 if (rCanvas.mVerticalDelta == 0.0f || !(height > 0.0f)) {
                     continue;
                 }
-                f32 closing = (height - 60.0f) / 190.0f;
+                f32 closing = (height - cNum_ApplyAnchors_f1) / cNum_ApplyAnchors_f2;
                 closing = closing < 0.0f ? 0.0f : closing > 1.0f ? 1.0f : closing;
                 pPane->mDrawSize.height = height + closing * rCanvas.mVerticalDelta;
                 if (drawn) {
@@ -467,7 +475,7 @@ namespace Ui {
             const bool up = (rAnchor.mFit & AnchorExtendUp) != 0;
             const f32 height = pPane->mSize.height;
             const s32 row = pPane->mBasePosition / 3;
-            const f32 top = row == 0 ? 0.0f : row == 1 ? height * 0.5f : height;
+            const f32 top = row == 0 ? 0.0f : row == 1 ? height * cNum_ApplyAnchor_f1 : height;
             const f32 m11 = rScreen.mMtx[1][1];
             const f32 m13 = rScreen.mMtx[1][3];
             const f32 a = m11 * top + m13;
@@ -483,14 +491,14 @@ namespace Ui {
             }
         }
         if ((rAnchor.mFit & AnchorFlipSlide) && pPane->mpParent != nullptr && pPane->mTranslate.y != 0.0f) {
-            TranslateBranch(rOrder, place, 0.0f, -2.0f * pPane->mpParent->mGlbMtx.mMtx[1][1] * pPane->mTranslate.y);
+            TranslateBranch(rOrder, place, 0.0f, -cNum_ApplyAnchor_f2 * pPane->mpParent->mGlbMtx.mMtx[1][1] * pPane->mTranslate.y);
         }
         if (rAnchor.mFit & AnchorFrame) {
             const f32 sx = __builtin_fabsf(rScreen.mMtx[0][0]);
             const f32 sy = __builtin_fabsf(rScreen.mMtx[1][1]);
             if (sx > 0.0f && sy > 0.0f) {
-                pPane->mDrawSize = Size(rAnchor.mWidth + 2.0f * rCanvas.mHorizontalDelta / sx,
-                                        rAnchor.mHeight + 2.0f * rCanvas.mVerticalDelta / sy);
+                pPane->mDrawSize = Size(rAnchor.mWidth + cNum_ApplyAnchor_f3 * rCanvas.mHorizontalDelta / sx,
+                                        rAnchor.mHeight + cNum_ApplyAnchor_f4 * rCanvas.mVerticalDelta / sy);
                 pPane->mHasDrawSize = true;
             }
         }

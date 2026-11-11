@@ -7,6 +7,7 @@
 #include <nebula_cooked_texture.h>
 #include <nebula_geometry.hpp>
 #include <string.h>
+#include "Game/Util/Tunable.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -245,7 +246,7 @@ void MaterialEntry::draw() {
     draw.send(mMaterial);
     for (MeshEntry* pShape = mMeshEntry; pShape != nullptr; pShape = pShape->mNext) {
         draw.sendOwn(pShape->mMaterial, mMaterial);
-        if (!pShape->checkFlag(MeshEntry::Flag_Hidden) && pShape->mMesh != nullptr) {
+        if (!pShape->isHidden() && pShape->mMesh != nullptr) {
             draw.draw(pShape->mModel, pShape->mMesh);
         }
     }
@@ -387,7 +388,7 @@ const Mtx cIdentityMtx = {
 };
 
 namespace {
-    const Vec cOneScale = {1.0f, 1.0f, 1.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cOneScale, {1.0f, 1.0f, 1.0f});
     const Mtx cIdentity = {
         {1.0f, 0.0f, 0.0f, 0.0f},
         {0.0f, 1.0f, 0.0f, 0.0f},

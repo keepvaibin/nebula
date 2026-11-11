@@ -3,6 +3,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace NrvSeaBottomTriplePropeller {
     NEW_NERVE(SeaBottomTriplePropellerNrvWait, SeaBottomTriplePropeller, Wait);
@@ -10,6 +14,7 @@ namespace NrvSeaBottomTriplePropeller {
 };  // namespace NrvSeaBottomTriplePropeller
 
 SeaBottomTriplePropeller::SeaBottomTriplePropeller(const char* pName) : LiveActor(pName), mAudSeKeeper() {
+    lumacore::setClass(this, lumacore::kClassId< SeaBottomTriplePropeller >);
     for (u16 i = 0; i < 3; i++) {
         mPropellerCollision[i] = nullptr;
     }
@@ -44,7 +49,7 @@ void SeaBottomTriplePropeller::init(const TableIter& rIter) {
     MR::addJointToSeKeeper(mAudSeKeeper, "Propeller2", nullptr);
     MR::addJointToSeKeeper(mAudSeKeeper, "Propeller3", nullptr);
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::registerDemoActionNerve(this, GET_NERVE(SeaBottomTriplePropeller, SeaBottomTriplePropellerNrvBreak), nullptr);

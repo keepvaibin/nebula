@@ -4,6 +4,7 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvPictureBookCloseButton {
     NEW_NERVE(PictureBookCloseButtonNrvSelect, PictureBookCloseButton, Select);
@@ -13,6 +14,7 @@ namespace NrvPictureBookCloseButton {
 
 PictureBookCloseButton::PictureBookCloseButton(bool canCloseWithPad)
     : LayoutActor("絵本閉じるボタン", true), mPaneCtrl(nullptr), mCanCloseWithPad(canCloseWithPad) {
+    lumacore::setClass(this, lumacore::kClassId< PictureBookCloseButton >);
 }
 
 void PictureBookCloseButton::init(const TableIter& /*rIter*/) {

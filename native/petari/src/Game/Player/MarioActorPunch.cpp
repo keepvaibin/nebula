@@ -7,6 +7,16 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isEnableSpinPunch_f1, "isEnableSpinPunch.f1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_trySpinPunch_f1, "trySpinPunch.f1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_printHitMark_f1, "printHitMark.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactionPunch_f1, "reactionPunch.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactionPunch_f2, "reactionPunch.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactionPunch_f3, "reactionPunch.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reactionPunch_f4, "reactionPunch.f4", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryPunchAirAfter_f1, "tryPunchAirAfter.f1", 4.0f);
 
 bool MarioActor::isEnableSpinPunch() {
     if (getMovementStates().slopeSlide) {
@@ -34,7 +44,7 @@ bool MarioActor::isEnableSpinPunch() {
         return out;
     }
 
-    if (getMovementStates().squat && mMario->calcDistToCeil(false) < 160.0f) {
+    if (getMovementStates().squat && mMario->calcDistToCeil(false) < cNum_isEnableSpinPunch_f1) {
         return false;
     }
 
@@ -53,7 +63,7 @@ bool MarioActor::trySpinPunch() {
         }
 
         if (getMovementStates().squat) {
-            if (mMario->calcDistToCeil(false) > 160.0f) {
+            if (mMario->calcDistToCeil(false) > cNum_trySpinPunch_f1) {
                 changeAnimation("サマーソルト");
                 playSound("スピンジャンプ", -1);
                 playSound("声スピン", -1);
@@ -76,7 +86,7 @@ bool MarioActor::trySpinPunch() {
 
 void MarioActor::printHitMark(HitSensor* pSensor) {
     Vec3f vec(pSensor->mPosition - mCenterPos);
-    vec.setLength(200.0f);
+    vec.setLength(cNum_printHitMark_f1);
     playEffectTrans("パンチヒット", mCenterPos + vec);
 }
 
@@ -89,8 +99,8 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
         mStunTimer = 5;
     } else {
         mStunTimer = 5;
-        if (mMario->mWalkSpeed > 0.1f) {
-            mMario->mWalkSpeed = 0.1f;
+        if (mMario->mWalkSpeed > cNum_reactionPunch_f1) {
+            mMario->mWalkSpeed = cNum_reactionPunch_f2;
             mMario->mTargetWalkSpeedIndex = 1;
         }
     }
@@ -110,13 +120,13 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
 
         Vec3f reactDir(mCenterPos - pSensor->mPosition);
         MR::vecKillElement(reactDir, getGravityVector(), &reactDir);
-        reactDir.setLength(20.0f);
+        reactDir.setLength(cNum_reactionPunch_f3);
         mMario->addReaction(reactDir);
     }
 
     if (mMario->isSwimming()) {
         Vec3f punchDir(mCenterPos - pSensor->mPosition);
-        punchDir.setLength(5.0f);
+        punchDir.setLength(cNum_reactionPunch_f4);
         mMario->mSwim->hitPunch(punchDir);
     }
 }
@@ -167,7 +177,7 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
         Vec3f vec(pSensor->mPosition - getSensor("body")->mPosition);
         MR::vecKillElement(vec, getGravityVector(), &vec);
 
-        if (MR::diffAngleAbs(vec, mMario->mFrontVec) >= MR::pi() / 4.0f) {
+        if (MR::diffAngleAbs(vec, mMario->mFrontVec) >= MR::pi() / cNum_tryPunchAirAfter_f1) {
             return false;
         }
     }

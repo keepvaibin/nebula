@@ -1,6 +1,9 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setBaseDistance_f1, "setBaseDistance.f1", 2000.0f);
 
 ParallelGravity::ParallelGravity()
     : PlanetGravity(), mExtentX(0.0f), mExtentY(0.0f), mExtentZ(0.0f), mPlanePosition(0, 0, 0), mPlaneUpVec(0.0f, 1.0f, 0.0f),
@@ -61,7 +64,7 @@ void ParallelGravity::setRangeType(RANGE_TYPE rangeType) {
 
 void ParallelGravity::setBaseDistance(f32 val) {
     if (val < 0.0f) {
-        mBaseDistance = 2000.0f;
+        mBaseDistance = cNum_setBaseDistance_f1;
     } else {
         mBaseDistance = val;
     }

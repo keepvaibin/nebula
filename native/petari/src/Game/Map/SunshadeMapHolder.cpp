@@ -2,8 +2,10 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SunshadeMapHolder::SunshadeMapHolder() : NameObj("日よけコリジョン管理") {
+    lumacore::setClass(this, lumacore::kClassId< SunshadeMapHolder >);
 }
 
 namespace MR {

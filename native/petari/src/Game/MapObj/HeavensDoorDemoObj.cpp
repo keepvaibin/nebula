@@ -8,6 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvHeavensDoorDemoObj {
     NEW_NERVE(HeavensDoorDemoObjNrvAppear, HeavensDoorDemoObj, Appear);
@@ -16,6 +17,7 @@ namespace NrvHeavensDoorDemoObj {
 };  // namespace NrvHeavensDoorDemoObj
 
 HeavensDoorDemoObj::HeavensDoorDemoObj(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< HeavensDoorDemoObj >);
     mIsInsideCageDemo = false;
 }
 

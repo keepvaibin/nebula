@@ -246,9 +246,9 @@ public:
     u32 outputMode() const {
         return mOutputMode;
     }
-    bool prepareNote(u32 bankNumber, s32 program, u8 key, u8 velocity, u16 priority, Note* pNote);
-    void noteEvent(Note* pNote, u32 event, NebulaVoice* pVoice);
-    u8 noteSound(const Note& rNote, u32* pId) const;
+    bool prepareNote(u32 bankNumber, s32 program, u8 key, u8 velocity, u16 priority, SoundNote* pNote);
+    void noteEvent(SoundNote* pNote, u32 event, NebulaVoice* pVoice);
+    u8 noteSound(const SoundNote& rNote, u32* pId) const;
     void mixVoices(u32 used);
     void releaseHolder(NoteHolder* pHolder);
     void addJob(SoundJob* pJob);

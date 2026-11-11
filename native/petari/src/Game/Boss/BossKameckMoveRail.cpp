@@ -2,8 +2,10 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 BossKameckMoveRail::BossKameckMoveRail(const char* pName) : LiveActor(pName), mRailNo(), mStoppablePointNum() {
+    lumacore::setClass(this, lumacore::kClassId< BossKameckMoveRail >);
 }
 
 void BossKameckMoveRail::init(const TableIter& rIter) {

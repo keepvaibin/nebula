@@ -1,8 +1,10 @@
 #include "Game/AreaObj/BloomArea.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 BloomArea::BloomArea(int formType, const char* pName)
     : ImageEffectArea(IMAGE_EFFECT_TYPE_BLOOM, formType, pName), mThreshold(128), mIntensity(255), mIntensity1(-1), mIntensity2(-1) {
+    lumacore::setClass(this, lumacore::kClassId< BloomArea >);
 }
 
 void BloomArea::init(const TableIter& rIter) {

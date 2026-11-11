@@ -6,7 +6,6 @@
 
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/rt_materials.h"
 #include "nebula_cooked_texture.h"
 #include "nebula_game_api.h"
 
@@ -594,8 +593,6 @@ void TextureStore::create_entry(Op& op) {
     entry->name = op.name;
     if (op.name.named) {
         ++pack_named_;
-        // Keeps the name only under GALAXY_RT_LOG_GLOWS; the RT tables load when RT first reads them, not here.
-        note_rt_texture(op.id, op.name.hash, entry->own.width, entry->own.height, op.name.format);
         if (packs_.dumping()) {
             dump_base_level(op.staged, op.name);
         }

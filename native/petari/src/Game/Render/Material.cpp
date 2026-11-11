@@ -8,6 +8,34 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_format.h>
 #include <string.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f5, "calc.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f6, "calc.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f7, "calc.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f8, "calc.f8", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f1, "setColor.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f2, "setColor.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f3, "setColor.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f4, "setColor.f4", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f1, "fillRow.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f2, "fillRow.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f3, "fillRow.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f4, "fillRow.f4", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f5, "fillRow.f5", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f6, "fillRow.f6", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f7, "fillRow.f7", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f8, "fillRow.f8", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_fillRow_f9, "fillRow.f9", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_overrideAlpha_f1, "overrideAlpha.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setFog_f1, "setFog.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setFog_f2, "setFog.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setFog_f3, "setFog.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setFog_f4, "setFog.f4", 2.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -40,10 +68,10 @@ void CoordMatrix::calc() {
     // [-1, 1] to texture space [0, 1], V flipped. The current forms carry the 0.5 offset through the third input
     // (scaled by it), the old forms as a translation.
     const Mtx cToUV = {
-        {0.5f, 0.0f, 0.5f, 0.0f}, {0.0f, -0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
+        {cNum_calc_f1, 0.0f, cNum_calc_f2, 0.0f}, {0.0f, -cNum_calc_f3, cNum_calc_f4, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
     const Mtx cToUVOld = {
-        {0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f},
+        {cNum_calc_f5, 0.0f, 0.0f, cNum_calc_f6}, {0.0f, -cNum_calc_f7, 0.0f, cNum_calc_f8}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
 
     // The animated SRT: Maya's order or the classic one about mCenter, in the current or the old form.
@@ -109,10 +137,10 @@ namespace {
     f32 sAmbient[2][4];
 
     void setColor(f32* pOut, NebulaColor8 color) {
-        pOut[0] = color.r / 255.0f;
-        pOut[1] = color.g / 255.0f;
-        pOut[2] = color.b / 255.0f;
-        pOut[3] = color.a / 255.0f;
+        pOut[0] = color.r / cNum_setColor_f1;
+        pOut[1] = color.g / cNum_setColor_f2;
+        pOut[2] = color.b / cNum_setColor_f3;
+        pOut[3] = color.a / cNum_setColor_f4;
     }
 }  // namespace
 
@@ -362,17 +390,17 @@ void Material::fillRow(u32 row, f32* pOut) const {
         return;
     }
     if (row == NEBULA_ROW_ALPHA_REF) {
-        pOut[0] = mFile->alpha_ref0 / 255.0f;
-        pOut[1] = mFile->alpha_ref1 / 255.0f;
+        pOut[0] = mFile->alpha_ref0 / cNum_fillRow_f1;
+        pOut[1] = mFile->alpha_ref1 / cNum_fillRow_f2;
         pOut[2] = 0.0f;
         pOut[3] = 0.0f;
         return;
     }
     if (row == NEBULA_ROW_FOG_COLOR) {
         const bool has = (mFile->flags & NEBULA_MATERIAL_HAS_FOG) != 0;
-        pOut[0] = has ? mFog.mColor.r / 255.0f : 0.0f;
-        pOut[1] = has ? mFog.mColor.g / 255.0f : 0.0f;
-        pOut[2] = has ? mFog.mColor.b / 255.0f : 0.0f;
+        pOut[0] = has ? mFog.mColor.r / cNum_fillRow_f3 : 0.0f;
+        pOut[1] = has ? mFog.mColor.g / cNum_fillRow_f4 : 0.0f;
+        pOut[2] = has ? mFog.mColor.b / cNum_fillRow_f5 : 0.0f;
         pOut[3] = has ? static_cast< f32 >(mFog.mType) : 0.0f;
         return;
     }
@@ -402,10 +430,10 @@ void Material::fillRow(u32 row, f32* pOut) const {
     }
     if (stageColors) {
         const NebulaColor16& rRegister = mRegisters[row - NEBULA_ROW_REGISTER];
-        pOut[0] = rRegister.r / 255.0f;
-        pOut[1] = rRegister.g / 255.0f;
-        pOut[2] = rRegister.b / 255.0f;
-        pOut[3] = rRegister.a / 255.0f;
+        pOut[0] = rRegister.r / cNum_fillRow_f6;
+        pOut[1] = rRegister.g / cNum_fillRow_f7;
+        pOut[2] = rRegister.b / cNum_fillRow_f8;
+        pOut[3] = rRegister.a / cNum_fillRow_f9;
     } else {
         pOut[0] = pOut[1] = pOut[2] = pOut[3] = 1.0f;
     }
@@ -490,7 +518,7 @@ void MaterialDraw::override(u32 mode, f32 a0, f32 a1, f32 ref) {
 }
 
 void MaterialDraw::overrideAlpha(f32 alpha) {
-    if (mOverride[0] == 5.0f) {
+    if (mOverride[0] == cNum_overrideAlpha_f1) {
         mOverride[1] = alpha;
     }
 }
@@ -584,10 +612,10 @@ void MaterialDraw::setFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 
     mFogValues[0][1] = end;
     mFogValues[0][2] = nearZ;
     mFogValues[0][3] = farZ;
-    mFogValues[1][0] = color.r / 255.0f;
-    mFogValues[1][1] = color.g / 255.0f;
-    mFogValues[1][2] = color.b / 255.0f;
-    mFogValues[1][3] = 2.0f;
+    mFogValues[1][0] = color.r / cNum_setFog_f1;
+    mFogValues[1][1] = color.g / cNum_setFog_f2;
+    mFogValues[1][2] = color.b / cNum_setFog_f3;
+    mFogValues[1][3] = cNum_setFog_f4;
     mEdits |= Edit_Fog;
     mKey.mFogLinear = (mMaterial->mFile->flags & NEBULA_MATERIAL_HAS_FOG) == 0;
     mForm = -1;

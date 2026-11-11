@@ -11,6 +11,15 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f1, "exeHit.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f2, "exeHit.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f3, "exeHit.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHit_f4, "exeHit.f4", 30.0f);
 
 namespace NrvWoodBox {
     NEW_NERVE(WoodBoxNrvWait, WoodBox, Wait);
@@ -19,6 +28,7 @@ namespace NrvWoodBox {
 };  // namespace NrvWoodBox
 
 WoodBox::WoodBox(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< WoodBox >);
 }
 
 void WoodBox::init(const TableIter& rIter) {
@@ -30,7 +40,7 @@ void WoodBox::init(const TableIter& rIter) {
     initNerve(GET_NERVE(WoodBox, WoodBoxNrvWait));
     initEffectKeeper(0, nullptr);
 
-    f32 radius = 120.0f * mScale.x;
+    f32 radius = cNum_init_f1 * mScale.x;
     initHitSensor(1);
     Vec3f sensorOffset(0.0f, radius, 0.0f);
     MR::addHitSensor(this, "body", ATYPE_PUNCH_BOX, 8, radius, sensorOffset);
@@ -53,7 +63,7 @@ void WoodBox::init(const TableIter& rIter) {
 
     calcAndSetBaseMtx();
     NebulaMtxCopy(getBaseMtx(), mBaseMtx);
-    MR::addTransMtx(mBaseMtx, Vec3f(0.0f, 100.0f, 0.0f));
+    MR::addTransMtx(mBaseMtx, Vec3f(0.0f, cNum_init_f2, 0.0f));
 
     mHasPowerStar = hasPowerStar != 0;
 
@@ -229,7 +239,7 @@ void WoodBox::exeHit() {
         }
 
         if (mStarBitCount != 0) {
-            MR::appearStarPiece(this, mPosition, mStarBitCount, 10.0f, 40.0f, false);
+            MR::appearStarPiece(this, mPosition, mStarBitCount, cNum_exeHit_f1, cNum_exeHit_f2, false);
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         }
 
@@ -239,9 +249,9 @@ void WoodBox::exeHit() {
             Mtx spawnMtx;
             NebulaMtxCopy(getBaseMtx(), spawnMtx);
 
-            MR::addTransMtx(spawnMtx, upVec * 50.0f);
+            MR::addTransMtx(spawnMtx, upVec * cNum_exeHit_f3);
 
-            MR::appearKinokoOneUpPop(mOneUp, spawnMtx, 30.0f);
+            MR::appearKinokoOneUpPop(mOneUp, spawnMtx, cNum_exeHit_f4);
         }
 
         if (MR::isValidSwitchDead(this)) {

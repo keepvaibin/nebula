@@ -5,6 +5,10 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
 namespace NrvStarCounter {
     NEW_NERVE(StarCounterNrvAppear, StarCounter, Appear);
@@ -14,13 +18,14 @@ namespace NrvStarCounter {
 };  // namespace NrvStarCounter
 
 StarCounter::StarCounter() : LayoutActor("スターカウンタ", true), mPowerStarNum(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< StarCounter >);
 }
 
 void StarCounter::init(const TableIter& /*rIter*/) {
     initLayoutManager("StarCounter", 2);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
 
-    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-50.0f, 0.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-cNum_init_f1, 0.0f));
     mPaneRumbler = new CountUpPaneRumbler(this, "Counter");
 
     MR::connectToSceneLayout(this);

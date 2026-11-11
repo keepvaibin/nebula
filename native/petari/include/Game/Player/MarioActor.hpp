@@ -190,6 +190,7 @@ public:
     void initBlur();
     void changeDisplayMode(u8);
     void initModPowerUpModels();
+    void showJointByPlugin(const char* pName, bool show);
     bool isAllHidden() const;
     void calcViewMainModel();
     void initFace();
@@ -650,8 +651,10 @@ public:
     bool mRemoteDemo;  // a remote demo drives him (pad reads stop; readyRemoteDemo)
     Vec3f mRushEndFront;  // the front a rush ends facing
     u16 mRushEndFrontMode;  // 0 keep the base's, 1 keep the up, more: the turn's frames
-    u16 mPlayerMode;
+    u16 mPlayerMode;  // always one of the game's forms (a mod's power-up: the form it acts like)
     u16 mPrevPlayerMode;  // the form before the morph (setPlayerMode)
+    u16 mModForm;  // a mod's power-up (NebulaMods::cFirstPowerUp on), over mPlayerMode; 0: none
+    u16 mPrevModForm;  // the mod power-up before the morph
     u16 mMorphTimer;  // frames left of the morph flash
     u16 mMorphEndTimer;  // frames left after a morph from control
     u16 mPlayerModeTimer;  // frames left of the form (setPlayerMode, updatePlayerMode)
@@ -677,7 +680,7 @@ public:
     u8 mHiddenByDemo;  // hidden (isAllHidden, the shadow, the silhouette) (?)
     bool mHidden;  // the model is hidden (init2, the black hole)
     bool mMorphHidden;  // the model is hidden during the morph
-    bool mModHidden;  // a plugin hid the model (show_model): it stays hidden; he still moves, animates and plays effects
+    bool mModHidden;  // a plugin hid the model (show_model): no model, shadow or silhouette; he still moves and plays effects
     Vec3f mThrowProbePos;  // the throw vector's probe point (updateThrowVector)
     f32 mTakingWobble;  // the taken item's wobble phase
     FixedPosition* mTakingFixedPos;  // the hand point the taken item follows

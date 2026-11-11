@@ -10,6 +10,21 @@
 #include "Game/Util.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 3.1415927f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOverturnFall_f1, "exeOverturnFall.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setOverturnFall_f1, "setOverturnFall.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_applyVelocityDampAndGravity_1, "exeWait.applyVelocityDampAndGravity.1", 1.0f);
@@ -101,6 +116,7 @@ namespace NrvKoteBug {
 KoteBug::KoteBug(const char* pName)
     : LiveActor(pName), mScaleController(), mStampController(), mSpinHitController(), mStarPointer(), mFront(0, 0, 1), mPosture(0, 0, 0, 1),
       mJointController() {
+    lumacore::setClass(this, lumacore::kClassId< KoteBug >);
 }
 
 void KoteBug::init(const TableIter& rIter) {
@@ -120,13 +136,13 @@ void KoteBug::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     f32 scale = mScale.y;
-    initBinder(70.0f * scale, 70.0f * scale, 0);
+    initBinder(cNum_init_f1 * scale, cNum_init_f2 * scale, 0);
     initHitSensor(1);
-    MR::addHitSensorAtJointEnemy(this, "body", "Center", 32, 100.0f * scale, Vec3f(0.0f, 20.0f * scale, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Center", 32, cNum_init_f3 * scale, Vec3f(0.0f, cNum_init_f4 * scale, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(KoteBug, HostTypeNrvWait));
-    MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     mSpinHitController = new SpinHitController(this, 3, false);
@@ -134,7 +150,7 @@ void KoteBug::init(const TableIter& rIter) {
     mStampController = new AnimStampController();
     mStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, 70.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f7 * mScale.y);
     MR::validateClipping(this);
     mJointController = MR::createJointDelegatorWithNullChildFunc(this, &KoteBug::calcJoint, "Center");
     if (MR::isValidSwitchAppear(this)) {
@@ -168,7 +184,7 @@ void KoteBug::control() {
     if (isNerve(GET_NERVE(KoteBug, HostTypeNrvOverturn)) || isNerve(GET_NERVE(KoteBug, HostTypeNrvOverturnFall)) ||
         isNerve(GET_NERVE(KoteBug, HostTypeNrvPreRecover)) || isNerve(GET_NERVE(KoteBug, HostTypeNrvStampDeath))) {
         Quat4f rotation;
-        rotation.setRotate(Vec3f(1, 0, 0), 3.1415927f);
+        rotation.setRotate(Vec3f(1, 0, 0), cNum_control_f1);
         mPosture.slerp(rotation, ::hOverturnRotateRate);
     } else if (isNerve(GET_NERVE(KoteBug, HostTypeNrvFlyPursueLast))) {
         Quat4f rotation;
@@ -363,7 +379,7 @@ void KoteBug::exeOverturnFall() {
     }
 
     MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, cNum_exeOverturnFall_applyVelocityDampAndGravity_1);
-    if (MR::isOnGroundCos(this, 0.75f)) {
+    if (MR::isOnGroundCos(this, cNum_exeOverturnFall_f1)) {
         mScaleController->startAndAddScaleVelocityY(::hHitScaleYSpeed);
         mScaleController->startAnim();
         setNerve(GET_NERVE(KoteBug, HostTypeNrvOverturn));
@@ -499,7 +515,7 @@ bool KoteBug::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
         }
 
         MR::startSound(this, "SE_EM_KOTEBUG_TRAMPLE");
-        mVelocity.add(mFront * -10.0f);
+        mVelocity.add(mFront * -cNum_receiveMsgPlayerAttack_f1);
         setNerve(GET_NERVE(KoteBug, HostTypeNrvOverturnFall));
         return true;
     }
@@ -549,7 +565,7 @@ bool KoteBug::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     }
 
     if (MR::isMsgPlayerKick(msg)) {
-        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
+        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_receiveOtherMsg_f1)) {
             return false;
         }
 
@@ -571,7 +587,7 @@ void KoteBug::setOverturnFall(HitSensor* pSender, HitSensor* pReceiver) {
     direction -= pSender->mPosition;
     MR::vecKillElement(direction, mGravity, &direction);
     MR::normalizeOrZero(&direction);
-    mVelocity.add(direction * 10.0f);
+    mVelocity.add(direction * cNum_setOverturnFall_f1);
 
     setNerve(GET_NERVE(KoteBug, HostTypeNrvOverturnFall));
 }
@@ -616,7 +632,7 @@ void KoteBug::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         if (isNerve(GET_NERVE(KoteBug, HostTypeNrvFlyStart)) || isNerve(GET_NERVE(KoteBug, HostTypeNrvFlyPursue))) {
-            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
+            if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1)) {
                 MR::sendMsgPush(pReceiver, pSender);
                 return;
             }

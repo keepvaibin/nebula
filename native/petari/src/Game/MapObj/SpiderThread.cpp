@@ -21,6 +21,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initMainThreads_f1, "initMainThreads.f1", 360.0f);
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
@@ -57,6 +60,7 @@ SpiderThread::SpiderThread(const char* pName)
       mRadialLines(nullptr), mAnchorPoints(nullptr), mRadialPartsBufferSize(0), mNumRadialParts(0), mRadialParts(nullptr), mNumCircleParts(0),
       mCircleParts(nullptr), mCutPointsBufferSize(0), mNumCutPoints(0), mCutPoints(nullptr), mFront(0.0f, 0.0f, 1.0f), mWindCtrl(nullptr),
       mIsBloomOn(false), mThreadTexture(nullptr), mIndirectTexture(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< SpiderThread >);
     mRadialPartsBufferSize = mNumRadialLines * (::sMainRadialLinePointNum + 1);
     mCirclePartsBufferSize = mNumRadialLines * ::sMainRadialLinePointNum;
     mRadialParts = new SpiderThreadPart*[mRadialPartsBufferSize];
@@ -202,7 +206,7 @@ void SpiderThread::cutSpiderThread() {
 
 void SpiderThread::initMainThreads() {
     Rot3f rotMtx;
-    MR::makeMtxRotate(rotMtx.toMtxPtr(), 0.0f, 0.0f, 360.0f / mNumRadialLines);
+    MR::makeMtxRotate(rotMtx.toMtxPtr(), 0.0f, 0.0f, cNum_initMainThreads_f1 / mNumRadialLines);
     Vec3f down(0.0f, -1.0f, 0.0f);
 
     mMainPoint = new SpiderThreadMainPoint(mPosition, mNumRadialLines + 1);

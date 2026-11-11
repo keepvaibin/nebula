@@ -4,6 +4,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvCinemaFrame {
     NEW_NERVE(CinemaFrameNrvScreen, CinemaFrame, Screen);
@@ -16,6 +17,7 @@ namespace NrvCinemaFrame {
 };  // namespace NrvCinemaFrame
 
 CinemaFrame::CinemaFrame(bool isConnectToScene) : LayoutActor("シネマフレーム", true), mStartAt(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CinemaFrame >);
     if (isConnectToScene) {
         MR::connectToScene(this, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_CinemaFrame);
     }

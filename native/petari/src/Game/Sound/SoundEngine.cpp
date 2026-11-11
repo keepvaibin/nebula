@@ -5,6 +5,12 @@
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <new>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setOutputLevel_f1, "setOutputLevel.f1", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f1, "setEffectLine.f1", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f2, "setEffectLine.f2", 32768.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f3, "setEffectLine.f3", 32768.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -96,10 +102,10 @@ SoundEngine* SoundEngine::create(NebulaArena* pArena) {
         engine->setEffectLine(off);
     }
     Voices::Slot* slots = static_cast< Voices::Slot* >(zeroed(pArena, sizeof(Voices::Slot) * cVoices, 16));
-    Note* notes = static_cast< Note* >(zeroed(pArena, sizeof(Note) * cVoices, 16));
+    SoundNote* notes = static_cast< SoundNote* >(zeroed(pArena, sizeof(SoundNote) * cVoices, 16));
     for (u32 i = 0; i < cVoices; i++) {
         new (&slots[i]) Voices::Slot();
-        new (&notes[i]) Note();
+        new (&notes[i]) SoundNote();
     }
     engine->mVoices.setup(engine, engine->mHostVoices, cVoices, slots, notes);
     engine->mTracksJob.mKind = SoundJob::JOB_TRACKS;
@@ -550,7 +556,7 @@ void SoundEngine::applyPlayer(SoundPlayer* pPlayer, const SoundCommand& rCommand
 
 void SoundEngine::setOutputLevel(f32 level) {
     mOutputLevel = level;
-    mMixerGain = 4.0f * level;
+    mMixerGain = cNum_setOutputLevel_f1 * level;
 }
 
 // Settings change, the line's delay kept; with settings and a restart the line starts over, silent. Without settings the line
@@ -558,13 +564,13 @@ void SoundEngine::setOutputLevel(f32 level) {
 void SoundEngine::setEffectLine(const EffectLineCommand& rLine) {
     NebulaEffectLine& rEffect = mEffects[rLine.mLine];
     if (rLine.mHasConfig) {
-        rEffect.volume_a = rLine.mVolumeA / 32768.0f;
+        rEffect.volume_a = rLine.mVolumeA / cNum_setEffectLine_f1;
         rEffect.bus_a = cEffectDestinations[rLine.mBusA];
-        rEffect.volume_b = rLine.mVolumeB / 32768.0f;
+        rEffect.volume_b = rLine.mVolumeB / cNum_setEffectLine_f2;
         rEffect.bus_b = cEffectDestinations[rLine.mBusB];
         rEffect.subframes = static_cast< u16 >(rLine.mSubframes);
         for (int i = 0; i < 8; i++) {
-            rEffect.fir[i] = rLine.mFir[i] / 32768.0f;
+            rEffect.fir[i] = rLine.mFir[i] / cNum_setEffectLine_f3;
         }
     }
     if (rLine.mRestart && rLine.mHasConfig) {
@@ -597,13 +603,13 @@ void SoundEngine::mixVoices(u32 used) {
     host->voices_mix(host->user, mMixerGain, used);
 }
 
-bool SoundEngine::prepareNote(u32 bankNumber, s32 program, u8 key, u8 velocity, u16 priority, Note* pNote) {
+bool SoundEngine::prepareNote(u32 bankNumber, s32 program, u8 key, u8 velocity, u16 priority, SoundNote* pNote) {
     const SoundBank* bank = bankNumber < cBankNumbers && mHasBank[bankNumber] ? &mBanks[bankNumber] : nullptr;
     const WaveBank* waves = bank != nullptr && bank->waveBank() < mWaveBankCount ? &mWaveBanks[bank->waveBank()] : nullptr;
     return SoundBanks::prepareNote(bank, waves, program, key, velocity, priority, &mInstRandom, pNote);
 }
 
-void SoundEngine::noteEvent(Note* pNote, u32 event, NebulaVoice* pVoice) {
+void SoundEngine::noteEvent(SoundNote* pNote, u32 event, NebulaVoice* pVoice) {
     switch (pNote->mOwner) {
     case OWNER_TRACK:
         SeqTrack::noteEvent(event, pNote, pVoice, static_cast< ChannelMgr* >(pNote->mOwnerData));
@@ -621,7 +627,7 @@ void SoundEngine::noteEvent(Note* pNote, u32 event, NebulaVoice* pVoice) {
 
 // The sound a note plays for, for the host's volume categories: a track's root names it (route 1 effect, 2 sequence), a stream
 // is route 3; the Me tracks name none.
-u8 SoundEngine::noteSound(const Note& rNote, u32* pId) const {
+u8 SoundEngine::noteSound(const SoundNote& rNote, u32* pId) const {
     *pId = 0;
     switch (rNote.mOwner) {
     case OWNER_TRACK: {

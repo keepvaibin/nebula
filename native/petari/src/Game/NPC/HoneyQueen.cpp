@@ -15,6 +15,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeItch_f1, "exeItch.f1", 0.2f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeReady_isNearPlayer_1, "exeReady.isNearPlayer.1", -1.0f);
@@ -45,6 +49,7 @@ namespace NrvHoneyQueen {
 };  // namespace NrvHoneyQueen
 
 HoneyQueen::HoneyQueen(const char* pName) : NPCActor(pName), mWing() {
+    lumacore::setClass(this, lumacore::kClassId< HoneyQueen >);
 }
 
 void HoneyQueen::init(const TableIter& rIter) {
@@ -95,7 +100,7 @@ void HoneyQueen::init(const TableIter& rIter) {
     }
 
     mLodCtrl->setFarClipping(-1.0f);
-    mLodCtrl->setClippingTypeSphereContainsModelBoundingBox(100.0f);
+    mLodCtrl->setClippingTypeSphereContainsModelBoundingBox(cNum_init_f1);
 
     MR::setDistanceToTalk(mMsgCtrl, 0.0f);
 
@@ -198,7 +203,7 @@ void HoneyQueen::exeItch() {
 
     Vec3f vec;
     mInitPoseQuat.getZDir(vec);
-    MR::faceToVector(&mPoseQuat, vec, 0.2f);
+    MR::faceToVector(&mPoseQuat, vec, cNum_exeItch_f1);
     MR::tryTalkNearPlayer(mMsgCtrl);
 }
 

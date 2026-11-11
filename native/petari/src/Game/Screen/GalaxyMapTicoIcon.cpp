@@ -3,10 +3,12 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include <cstdio>
+#include "Game/System/LumaCore.hpp"
 
 GalaxyMapTicoIcon::GalaxyMapTicoIcon(int exclamationGalaxyIndex, const char* pGalaxyName, LayoutActor* pHost, const char* pPaneName)
     : LayoutActor(pGalaxyName, true), mExclamationGalaxyIndex(exclamationGalaxyIndex), mGalaxyName(pGalaxyName), mHost(pHost), mPaneName(nullptr),
       mMode(0) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapTicoIcon >);
     u32 paneNameLen = strlen(pPaneName) + 1;
 
     mPaneName = new char[paneNameLen];

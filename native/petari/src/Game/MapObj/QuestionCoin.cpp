@@ -6,6 +6,13 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f3, "initAfterPlacement.f3", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f4, "initAfterPlacement.f4", 2000.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sHitRadius, 150.0f);
@@ -26,6 +33,7 @@ namespace NrvQuestionCoin {
 QuestionCoin::QuestionCoin(const char* pName)
     : LiveActor(pName), mBoundActor(), mCameraInfo(), mLaunchSpeed(), mIsWeakGravity(), mCalcShadow(), mPoseType(), mShadowDropLengthType(),
       mShadowPos(gZeroVec), mShadowDropLength() {
+    lumacore::setClass(this, lumacore::kClassId< QuestionCoin >);
     mBaseMtx.identity();
     mActorMtx.identity();
     mLaunchQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
@@ -54,7 +62,7 @@ void QuestionCoin::init(const TableIter& rIter) {
     initHitSensor(1);
     f32 radius = ::sHitRadius * mScale.x;
     HitSensor* sensor = MR::addHitSensor(this, "binder", ATYPE_QUESTION_COIN_BIND, 16, radius, Vec3f(0.0f, ::sOffsetY * mScale.y, 0.0f));
-    MR::setClippingTypeSphere(this, 2.0f * radius, &sensor->mPosition);
+    MR::setClippingTypeSphere(this, cNum_init_f1 * radius, &sensor->mPosition);
     initShadow();
     MR::initActorCamera(this, rIter, &mCameraInfo);
     initNerve(GET_NERVE(QuestionCoin, HostTypeWait));
@@ -74,7 +82,7 @@ void QuestionCoin::initAfterPlacement() {
     }
 
     Pos3f rotation;
-    rotation.setEuler(mRotation * (MR::pi() / 180.0f));
+    rotation.setEuler(mRotation * (MR::pi() / cNum_initAfterPlacement_f1));
     Vec3f up;
     rotation.getYDir(up);
     Vec3f side;
@@ -84,12 +92,12 @@ void QuestionCoin::initAfterPlacement() {
     MR::makeMtxUpSide(&launchMtx, up, side);
     launchMtx.getQuat(mLaunchQuat);
 
-    f32 dropLength = 1000.0f;
+    f32 dropLength = cNum_initAfterPlacement_f2;
 
     if (mShadowDropLengthType == 1) {
-        dropLength = 1500.0f;
+        dropLength = cNum_initAfterPlacement_f3;
     } else if (mShadowDropLengthType == 2) {
-        dropLength = 2000.0f;
+        dropLength = cNum_initAfterPlacement_f4;
     }
 
     Vec3f gravity(gZeroVec);

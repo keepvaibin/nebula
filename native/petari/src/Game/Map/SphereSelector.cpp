@@ -5,6 +5,10 @@
 #include "Game/Map/SphereSelectorHandle.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isMoveClickedPos_f1, "isMoveClickedPos.f1", 80.0f);
 
 namespace {
     inline bool isWaitingForClick(const SphereSelector* pSelector) {
@@ -29,6 +33,7 @@ namespace NrvSphereSelector {
 SphereSelector::SphereSelector()
     : LiveActor("スフィアセレクター"), mSphereGroup(), mHandle(), mSelectedTarget(), mNearestTarget(), mPointingTarget(), mClickStep(), mClickPos(0.0f, 0.0f),
       mIsPointingInvalid(), mIsSePlayed() {
+    lumacore::setClass(this, lumacore::kClassId< SphereSelector >);
 }
 
 void SphereSelector::init(const TableIter& /*rIter*/) {
@@ -111,7 +116,7 @@ void SphereSelector::sendMsgToAllActor(u32 msg) {
 }
 
 bool SphereSelector::isMoveClickedPos() const {
-    return 80.0f < FloatUtil::sqrt(mClickPos.squareDist(MR::getStarPointerScreenPositionOrEdge(0)));
+    return cNum_isMoveClickedPos_f1 < FloatUtil::sqrt(mClickPos.squareDist(MR::getStarPointerScreenPositionOrEdge(0)));
 }
 
 void SphereSelector::playSelectedME() {

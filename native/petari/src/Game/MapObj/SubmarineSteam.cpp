@@ -5,6 +5,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.7f);
 
 namespace {
     NEBULA_TUNABLE(f32, sSensorRadius, 400.0f);
@@ -22,6 +26,7 @@ namespace NrvSubmarineSteam {
 };  // namespace NrvSubmarineSteam
 
 SubmarineSteam::SubmarineSteam(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SubmarineSteam >);
 }
 
 void SubmarineSteam::init(const TableIter& rIter) {
@@ -35,7 +40,7 @@ void SubmarineSteam::init(const TableIter& rIter) {
     initHitSensor(1);
     HitSensor* sensor = MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
 
-    MR::setClippingTypeSphere(this, 800.0f, &sensor->mPosition);
+    MR::setClippingTypeSphere(this, cNum_init_f1, &sensor->mPosition);
     MR::setGroupClipping(this, rIter, ::sMaxNumGroupClipping);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
 
@@ -66,7 +71,7 @@ void SubmarineSteam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorPlayer(pReceiver)) {
-        f32 playerRadius = pReceiver->getRadius() * 0.7f;
+        f32 playerRadius = pReceiver->getRadius() * cNum_attackSensor_f1;
         bool hit = false;
 
         if (!hit) {

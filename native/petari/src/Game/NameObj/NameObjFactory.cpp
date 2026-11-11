@@ -4828,6 +4828,10 @@ namespace NameObjFactory {
         if (pName == nullptr) {
             return nullptr;
         }
+        // A change into a mod's own object (luma.json "objects", a plugin's class).
+        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
+            return pPlugin;
+        }
 
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
@@ -4850,6 +4854,14 @@ namespace NameObjFactory {
         }
 
         return false;
+    }
+
+    u32 getCreateTableNum() {
+        return ARRAY_SIZEU(cCreateTable);
+    }
+
+    const char* getCreateTableName(u32 index) {
+        return index < ARRAY_SIZEU(cCreateTable) ? cCreateTable[index].mName : nullptr;
     }
 
     const Name2CreateFunc* getName2CreateFunc(const char* pName) {

@@ -7,8 +7,13 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 20.0f);
 
 AudCameraWatcher::AudCameraWatcher() : NameObj("AudCameraWatcher") {
+    lumacore::setClass(this, lumacore::kClassId< AudCameraWatcher >);
 }
 
 void AudCameraWatcher::playAtmosphereSE() {
@@ -29,7 +34,7 @@ void AudCameraWatcher::movement() {
     MR::setMicMtx(const_cast< Pos3f& >(MR::getCameraViewMtx()), 0);
 
     // A narrow view (first person, a zoom) hears as from afar.
-    const bool isFar = MR::getFovy() < 20.0f;
+    const bool isFar = MR::getFovy() < cNum_movement_f1;
     AudWrap::getSystem()->setFarCamera(isFar);
 
     playAtmosphereSE();

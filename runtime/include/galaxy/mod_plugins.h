@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
-// A .luma's code: native libraries the host loads next to the game module, through nebula_mod_api.h.
+// A .luma's code: native libraries the host loads next to the game module. They talk to the game through
+// nebula_mod_api.h.
 
 #include <nebula_mod_api.h>
 
@@ -17,15 +18,15 @@ struct PluginFile {
     std::filesystem::path path;
     std::string mod_id;
     std::string version;
-    std::map<std::string, std::string> options;  // each option's choice
-    std::string code;  // code_hash of it as the start read it: a library that differs when it loads is not run
+    std::map<std::string, std::string> options;  // option id -> choice id
+    std::string code;  // code_hash taken at start; a library that changed before it loads is not run
 };
 
-// A plugin library as it is: a hash of the files in its folder (their names and bytes: what it brings beside it too),
-// as hex; empty when the folder can't be read. The player's permission names these.
+// A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
+// Empty when the folder can't be read. The player's permission is tied to this hash.
 [[nodiscard]] std::string code_hash(const std::filesystem::path& library);
 
-// A .luma's galaxies, from its luma.json.
+// A galaxy from a .luma's luma.json.
 struct GalaxyToAdd {
     std::string mod_id;
     std::string name;
@@ -40,7 +41,7 @@ struct GalaxyToAdd {
     float map_y = 0.0f;
 };
 
-// A .luma's tracks, from its luma.json.
+// A music track from a .luma's luma.json.
 struct MusicToAdd {
     struct Place {
         std::string stage;
@@ -53,7 +54,7 @@ struct MusicToAdd {
     std::vector<Place> places;
 };
 
-// A row of the game's progression, and a dome's comets.
+// A progression table row, and a dome's comets.
 struct EventFlagToSet {
     std::string mod_id;
     std::string name;
@@ -72,7 +73,7 @@ struct ObjectChangeToSet {
     std::string mod_id;
     int where = 0;
     std::string object;
-    std::string becomes;  // empty: gone
+    std::string becomes;  // empty: removed
 };
 struct CometLimitToSet {
     std::string mod_id;
@@ -114,14 +115,51 @@ struct PlayerAnimationToAdd {
 };
 struct ObjectClassToSet {
     std::string mod_id;
+    std::string mod_version;
     std::string name;
-    std::string like;
+    std::string like;    // empty: one of the game's classes
+    std::string script;  // empty: none
 };
 
-// A mod's achievement for this run (luma::Achievement), its words in the language of play.
+// A power-up from data (luma::Form), for the mod that adds it.
+struct FormToAdd {
+    std::string mod_id;
+    std::string mod_version;
+    std::string name;
+    int acts_like = 0;
+    int looks_like = 0;
+    int color_frame = 0;
+    int frames = 0;
+    std::string model;
+    std::string music;
+    std::string script;
+};
+
+// A mod-wide script (luma.json "scripts"), for the mod that runs it.
+struct ModScriptToAdd {
+    std::string mod_id;
+    std::string mod_version;
+    std::string script;
+};
+
+// An object a script runs (luma::ScriptObject), for the mod that adds it.
+struct ScriptObjectToAdd {
+    std::string mod_id;
+    std::string mod_version;
+    std::string name;
+    std::string script;
+    std::string archive;
+    double radius = 60.0;
+    int kind = 0;
+    bool collision = false;
+    double shadow_radius = 0.0;
+    double clip_radius = 0.0;
+};
+
+// A mod's achievement for this run (luma::Achievement), with text in the language played.
 struct AchievementToAdd {
-    std::string mod_id;  // the mod's folder: the plugin's NebulaPlugin id
-    std::string key;     // "mod:<the .luma's id>/<id>": kept in achievements.ini by it
+    std::string mod_id;  // the mod's folder name, which is also its plugin's NebulaPlugin id
+    std::string key;     // "mod:<.luma id>/<id>", the key in achievements.ini
     std::string name;
     std::string description;
     std::string mod_name;
@@ -132,14 +170,14 @@ struct AchievementToAdd {
     std::int64_t event_value = 0;
 };
 
-// What .luma files say in their luma.json, for the game before it starts.
+// Everything the .luma mods' luma.json files set, handed to the game before it starts.
 struct ModRows {
     std::vector<GalaxyToAdd> galaxies;
     std::vector<MusicToAdd> music;
     struct TextToAdd {
         std::string id;
-        std::string words;  // in the language of play
-        std::string like;   // the game message whose talk a new line takes; empty: none
+        std::string words;  // in the language played
+        std::string like;   // existing message whose talk settings a new message copies; empty: none
     };
     std::vector<TextToAdd> texts;
     std::vector<EventFlagToSet> event_flags;
@@ -150,34 +188,37 @@ struct ModRows {
     std::vector<PlayerConstantToSet> player_constants;
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
+    std::vector<FormToAdd> forms;
+    std::vector<ScriptObjectToAdd> script_objects;
+    std::vector<ModScriptToAdd> mod_scripts;
     std::vector<SoundEffectToAdd> sound_effects;
     std::vector<PlayerAnimationToAdd> player_animations;
     std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
-// `game_api`: the game module's nebula_game_mod_api(); `find_symbol`: a name in the game module, or null. Each plugin that
-// can't start is named in the log and left out; the game carries on without it. What's returned: their count.
+// Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`
+// looks up a name in the game module (null when absent). A plugin that can't start is logged and skipped.
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
                           void (*log)(const char*));
-// Every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each (a list's places as <key>[i]),
-// written to `list_file` (--dump-tunables). False when the game module has no list or the file can't be written.
+// Writes every tunable mods can set to `list_file` (--dump-tunables), one "<key>\t<kind>\t<default>" line each (list
+// entries as <key>[i]). Returns false when the game module has no list or the file can't be written.
 bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file);
-// Where a mod's achievement is kept once unlocked (galaxy::achievements::unlock_mod: true when it is new). Unset (the
-// headless host), an unlock lasts the run.
+// Sets where unlocked mod achievements are saved (galaxy::achievements::unlock_mod, which returns true when new). When
+// unset (the headless host), unlocks last only for the run.
 void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;
-// The running mods' achievements, as start_plugins was given them, in their order.
+// The running mods' achievements, in the order start_plugins received them.
 [[nodiscard]] std::size_t mod_achievement_count() noexcept;
 [[nodiscard]] const AchievementToAdd* mod_achievement(std::size_t index) noexcept;
-// One unlocked since the last call (a plugin's unlock_achievement, or its event), for its pop-up: its index; -1: none.
+// The index of an achievement unlocked since the last call (by a plugin or by its event), for the pop-up; -1 if none.
 [[nodiscard]] std::int32_t next_mod_achievement_unlocked() noexcept;
-// The event an achievement's "when" names, by its name ("star_get"): NEBULA_MOD_EVENT_*, or -1.
+// The NEBULA_MOD_EVENT_* value for an event name ("star_get"), or -1.
 [[nodiscard]] int mod_event_by_name(std::string_view name) noexcept;
 
-// The plugin an address is in: its mod's id, or null.
+// The mod id of the plugin containing `address`, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;
 
 }  // namespace galaxy::mods

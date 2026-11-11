@@ -20,6 +20,28 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindTurn_f1, "exeBindTurn.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindTurn_f2, "exeBindTurn.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindTurn_f3, "exeBindTurn.f3", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindTurn_f4, "exeBindTurn.f4", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindTurn_f5, "exeBindTurn.f5", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindTurn_f6, "exeBindTurn.f6", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindHandstandTurn_f1, "exeBindHandstandTurn.f1", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f3, "receiveOtherMsg.f3", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f4, "receiveOtherMsg.f4", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f5, "receiveOtherMsg.f5", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryJump_f1, "tryJump.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryJump_f2, "tryJump.f2", 360.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sSensorOffsetY, 50.0f);
@@ -79,6 +101,7 @@ Pole::Pole(const char* pName)
     : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mTopPos(0.0f, 0.0f, 0.0f), mHeight(), mDisableHandstand(), mIsSquare(), mNoModel(),
       mInvertStick(), mUsePole9mCollision(), mClimbCoord(), mClimbSpeed(), mRider(), mCameraInfo(), mCenterPos(0.0f, 0.0f, 0.0f),
       mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mTopMtx(), mBottomMtx() {
+    lumacore::setClass(this, lumacore::kClassId< Pole >);
     mPosMtx.identity();
     mBaseMtx.identity();
 }
@@ -115,9 +138,9 @@ void Pole::init(const TableIter& rIter) {
     mPosMtx.zeroTrans();
 
     initHitSensor(3);
-    MR::addHitSensorBinder(this, "bind", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorRide(this, "ride", 8, 100.0f, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
-    MR::addHitSensorPush(this, "push", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorBinder(this, "bind", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorRide(this, "ride", 8, cNum_init_f2, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));
+    MR::addHitSensorPush(this, "push", 8, cNum_init_f3, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (!mNoModel) {
         initModelManagerWithAnm(name, nullptr, false);
@@ -146,7 +169,7 @@ void Pole::init(const TableIter& rIter) {
         updateTopPos(mHeight);
     } else {
         if (MR::isEqualString(name, "TreeCube")) {
-            mHeight = 800.0f;
+            mHeight = cNum_init_f4;
         }
 
         mTopPos.set(mUp);
@@ -174,9 +197,9 @@ void Pole::init(const TableIter& rIter) {
     initNerve(GET_NERVE(Pole, PoleNrvFree));
 
     mCenterPos.set(mUp);
-    mCenterPos.scale(mHeight / 2.0f);
+    mCenterPos.scale(mHeight / cNum_init_f5);
     mCenterPos.add(mBasePos);
-    MR::setClippingTypeSphere(this, mHeight / 2.0f, &mCenterPos);
+    MR::setClippingTypeSphere(this, mHeight / cNum_init_f6, &mCenterPos);
     MR::useStageSwitchSleep(this, rIter);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
@@ -307,16 +330,16 @@ void Pole::exeBindTurn() {
 
     if (!mIsSquare) {
         mRotation.y += ::sRotateSpeedRate * getPoleMoveStickX();
-        mRotation.y = MR::repeat(mRotation.y, 0.0f, 360.0f);
+        mRotation.y = MR::repeat(mRotation.y, 0.0f, cNum_exeBindTurn_f1);
     }
 
     f32 jump = 0.0f;
 
     if (mIsSquare && MR::isGreaterStep(this, ::sStepSquareJumpChangeDir)) {
         if (isNerve(GET_NERVE(Pole, PoleNrvBindTurnLeft))) {
-            jump = -90.0f;
+            jump = -cNum_exeBindTurn_f2;
         } else {
-            jump = 90.0f;
+            jump = cNum_exeBindTurn_f3;
         }
     }
 
@@ -327,12 +350,12 @@ void Pole::exeBindTurn() {
     if (mIsSquare) {
         if (MR::isBckStopped(mRider)) {
             if (isNerve(GET_NERVE(Pole, PoleNrvBindTurnRight))) {
-                mRotation.y += 90.0f;
+                mRotation.y += cNum_exeBindTurn_f4;
             } else {
-                mRotation.y -= 90.0f;
+                mRotation.y -= cNum_exeBindTurn_f5;
             }
 
-            mRotation.y = MR::repeat(mRotation.y, 0.0f, 360.0f);
+            mRotation.y = MR::repeat(mRotation.y, 0.0f, cNum_exeBindTurn_f6);
 
             MR::startBckPlayer("SquarePoleWait", "SquarePoleTurnEnd");
             setNerve(GET_NERVE(Pole, PoleNrvBindTurnEnd));
@@ -489,7 +512,7 @@ void Pole::exeBindHandstandTurn() {
     }
 
     mRotation.y += getPoleMoveStickX() * ::sRotateSpeedRate;
-    mRotation.y = MR::repeat(mRotation.y, 0.0f, 360.0f);
+    mRotation.y = MR::repeat(mRotation.y, 0.0f, cNum_exeBindHandstandTurn_f1);
 
     if (!tryJump(true, 0.0f) && !isEnableTurn()) {
         setNerve(GET_NERVE(Pole, PoleNrvBindHandstandWait));
@@ -562,15 +585,15 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/
         mRotation.y = MR::calcRotateY(front.x, front.z);
 
         if (mIsSquare) {
-            s32 side = (45.0f + mRotation.y) / 90.0f;
-            mRotation.y = 90.0f * side;
+            s32 side = (cNum_receiveOtherMsg_f1 + mRotation.y) / cNum_receiveOtherMsg_f2;
+            mRotation.y = cNum_receiveOtherMsg_f3 * side;
         }
 
         Vec3f climbProj = mPosition;
         climbProj.sub(mBasePos);
         mClimbCoord = climbProj.dot(mUp);
-        if (mClimbCoord < 120.0f) {
-            mClimbCoord = 120.0f;
+        if (mClimbCoord < cNum_receiveOtherMsg_f4) {
+            mClimbCoord = cNum_receiveOtherMsg_f5;
         } else if (mClimbCoord > mHeight) {
             mClimbCoord = mHeight;
         }
@@ -626,7 +649,7 @@ bool Pole::tryJump(bool handstand, f32 rotateSpeed) {
         Pos3f pos;
         calcGravityMtx(&pos);
 
-        f32 frontAngle = MR::repeat(rotateSpeed + mRotation.y + 180.0f, 0.0f, 360.0f);
+        f32 frontAngle = MR::repeat(rotateSpeed + mRotation.y + cNum_tryJump_f1, 0.0f, cNum_tryJump_f2);
         Vec3f jumpFront(0.0f, 0.0f, 0.0f);
         jumpFront.x = Angle::sinDegree(frontAngle);
         jumpFront.z = Angle::cosDegree(frontAngle);

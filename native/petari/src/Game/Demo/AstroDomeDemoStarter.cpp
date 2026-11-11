@@ -5,6 +5,12 @@
 #include "Game/Util.hpp"
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_startJumpOut_f1, "startJumpOut.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_movePlayer_f1, "movePlayer.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_movePlayer_f2, "movePlayer.f2", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinDriverShoot_f1, "exeSpinDriverShoot.f1", 50.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinDriverStart_setBckRate_1, "exeSpinDriverStart.setBckRate.1", 0.0f);
@@ -15,7 +21,7 @@ NEBULA_TUNABLE_NAMED(s32, cStep_exeSpinDriverStart_1, "exeSpinDriverStart.1", 43
 
 namespace {
     const char* const cJumpOutPartName = "飛び出す";
-    const Vec cAppearRotate = {90.0f, -5.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cAppearRotate, {90.0f, -5.0f, 0.0f});
     // const s32 cJumpOutStopStep = _;
     // const s32 cJumpOutStopFrame = _;
     // const f32 cJumpOutStartSpeed = _;
@@ -39,6 +45,7 @@ namespace NrvAstroDomeDemoStarter {
 };  // namespace NrvAstroDomeDemoStarter
 
 AstroDomeDemoStarter::AstroDomeDemoStarter(const char* pName) : LiveActor(pName), mShootPath(), mPathDrawer(), mCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< AstroDomeDemoStarter >);
     mBaseMtx.identity();
     mPlayerDemoMtx.identity();
 }
@@ -82,7 +89,7 @@ void AstroDomeDemoStarter::startJumpOut() {
     mPosition.zero();
     mBaseMtx.identity();
 
-    MR::startAnimCameraTargetSelf(this, mCameraInfo, "AstroDomeDemoCamera", 0, MR::getAnimCameraFrame(this, mCameraInfo, "AstroDomeDemoCamera") / 180.0f);
+    MR::startAnimCameraTargetSelf(this, mCameraInfo, "AstroDomeDemoCamera", 0, MR::getAnimCameraFrame(this, mCameraInfo, "AstroDomeDemoCamera") / cNum_startJumpOut_f1);
     MR::overlayWithPreviousScreen(2);
 }
 
@@ -98,10 +105,10 @@ void AstroDomeDemoStarter::movePlayer() {
 
     Vec3f direction;
 
-    mShootPath->calcDirection(&direction, demoPartStepRate, 0.01f);
+    mShootPath->calcDirection(&direction, demoPartStepRate, cNum_movePlayer_f1);
 
     f32 speed = ::cJumpOutRotateSpeed;
-    f32 spinRate = ::countRotations(speed) + (-MR::pi() / 4.0f);
+    f32 spinRate = ::countRotations(speed) + (-MR::pi() / cNum_movePlayer_f2);
     f32 angle = MR::getEaseOutValue(demoPartStepRate, 0.0f, 1.0f, 1.0f) * spinRate;
 
     Pos3f mtx;
@@ -194,7 +201,7 @@ void AstroDomeDemoStarter::exeSpinDriverShoot() {
 
     Pos3f playerBaseMtx = mBaseMtx;
     Vec3f mult;
-    mBaseMtx.mult(Vec3f(0.0f, getNerveStep() * 50.0f, 0.0f), mult);
+    mBaseMtx.mult(Vec3f(0.0f, getNerveStep() * cNum_exeSpinDriverShoot_f1, 0.0f), mult);
 
     playerBaseMtx.setTrans(mult);
     MR::setPlayerBaseMtx(playerBaseMtx);

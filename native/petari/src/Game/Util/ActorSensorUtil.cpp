@@ -15,6 +15,9 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPosBetweenSensors_f1, "calcPosBetweenSensors.f1", 2.0f);
 
 namespace {
     // The kinds' bounds are markers, not kinds.
@@ -969,7 +972,7 @@ namespace MR {
         f32 dist = pSensor1->mPosition.distance(pSensor2->mPosition);
         f32 radius2 = pSensor2->mRadius;
         f32 radius1 = pSensor1->mRadius;
-        f32 value = (radius1 + radius2 - dist) / 2.0f;
+        f32 value = (radius1 + radius2 - dist) / cNum_calcPosBetweenSensors_f1;
 
         pPos->set(dir);
         *pPos *= value + pSensor1->mRadius + offset;

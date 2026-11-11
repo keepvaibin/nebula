@@ -23,6 +23,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f1, "exeFall.f1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f2, "exeFall.f2", 1.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f3, "exeFall.f3", 35.0f);
 
 namespace {
     const s32 cDemoAppearEffectStep = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -59,6 +64,7 @@ namespace NrvStarReturnDemoStarter {
 
 StarReturnDemoStarter::StarReturnDemoStarter(const char* pName)
     : LiveActor(pName), mReturnDemoRailMove(), mStageResultInformer(), mPosition(gZeroVec), mPowerStar(), mLuma(), mHair(), mFrame() {
+    lumacore::setClass(this, lumacore::kClassId< StarReturnDemoStarter >);
     mTransform.identity();
 }
 
@@ -267,14 +273,14 @@ void StarReturnDemoStarter::exeFall() {
         mPowerStar->kill();
 
         Vec3f scaled;
-        scaled.scale(3000.0f, down);
+        scaled.scale(cNum_exeFall_f1, down);
         MR::getFirstPolyOnLineToMap(&mPosition, nullptr, position, scaled);
     }
 
     Vec3f offset;
-    offset.scale(1.8f * getNerveStep(), down);
+    offset.scale(cNum_exeFall_f2 * getNerveStep(), down);
 
-    offset.y = MR::max(offset.y, -35.0f);
+    offset.y = MR::max(offset.y, -cNum_exeFall_f3);
     position.add(offset);
 
     if (position.y < mPosition.y) {

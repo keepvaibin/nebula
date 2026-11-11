@@ -28,15 +28,26 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initEffectAndStarPointerBind_f1, "initEffectAndStarPointerBind.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f1, "isFallNextMove.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcDirectionAwayFromRail_f1, "calcDirectionAwayFromRail.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_preventSwingby_f1, "preventSwingby.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_preventSlopeBlow_f1, "preventSlopeBlow.f1", 0.5f);
 
 namespace {
-    const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam hReturnMoveParam = {0.2f, 1.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hBrakeParam = {0.0f, 1.0f, 0.7f, 3.0f};
-    const MR::ActorMoveParam hBrakeOnAirParam = {0.0f, 1.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hKeepDistanceFarParam = {0.35f, 1.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hKeepDistanceNearParam = {-0.22f, 1.0f, 0.95f, 3.0f};
-    const MR::ActorMoveParam hKeepDistanceWaitParam = {0.0f, 1.0f, 0.95f, 3.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hReturnWaitParam, {0.0f, 1.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hReturnMoveParam, {0.2f, 1.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hBrakeParam, {0.0f, 1.0f, 0.7f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hBrakeOnAirParam, {0.0f, 1.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hKeepDistanceFarParam, {0.35f, 1.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hKeepDistanceNearParam, {-0.22f, 1.0f, 0.95f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hKeepDistanceWaitParam, {0.0f, 1.0f, 0.95f, 3.0f});
     // Rail contact must last longer than this before it knocks the begoman away.
     NEBULA_TUNABLE(s32, hElectricTouchTime, 40);
     NEBULA_TUNABLE(f32, hReboundWallAddVel, 5.0f);
@@ -131,6 +142,7 @@ BegomanBase::BegomanBase(const char* pName)
     : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), mLastGravity(0.0f, 0.0f, -1.0f), mAnimScale(1.0f, 1.0f, 1.0f),
       mPoseQuat(0, 0, 0, 1), mSpinQuat(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
       mIsTouchElectricRail(false), mCanTrySetReturn(), mInvertSideVec(false) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanBase >);
 }
 
 const BegomanSound* BegomanBase::getSoundNormal() {
@@ -178,7 +190,7 @@ void BegomanBase::initEffectAndStarPointerBind() {
     MR::calcModelBoundingRadius(&pointerRadius, this);
 
     pointerRadius *= ::hStarPointerRadiusRate;
-    MR::initStarPointerTarget(this, pointerRadius, Vec3f(0.0f, 0.5f * pointerRadius, 0.0f));
+    MR::initStarPointerTarget(this, pointerRadius, Vec3f(0.0f, cNum_initEffectAndStarPointerBind_f1 * pointerRadius, 0.0f));
 
     mScaleControler = new AnimScaleController(nullptr);
     mScaleControler->setParamTight();
@@ -214,10 +226,10 @@ void BegomanBase::initSensor(s32 extraSensorNum, f32 radius, f32 pushedRailRadiu
     f32 yScale = mScale.y;
     initHitSensor(extraSensorNum + 3);
 
-    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, Vec3f(0.0f, 0.5f * radius * yScale, 1.5f * radius * yScale));
-    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, Vec3f(0.0f, 0.5f * radius * yScale, 0.0f));
+    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, Vec3f(0.0f, cNum_initSensor_f1 * radius * yScale, cNum_initSensor_f2 * radius * yScale));
+    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, Vec3f(0.0f, cNum_initSensor_f3 * radius * yScale, 0.0f));
     MR::addHitSensorAtJoint(this, "pushed_rail", pSensorJointName, ATYPE_EYE, 32, pushedRailRadius * yScale,
-                            Vec3f(0.0f, 0.5f * pushedRailRadius * yScale, 0.0f));
+                            Vec3f(0.0f, cNum_initSensor_f4 * pushedRailRadius * yScale, 0.0f));
 }
 
 void BegomanBase::initUseSwitchB(const TableIter& rIter, const MR::FunctorBase& rFunctor) {
@@ -737,7 +749,7 @@ void BegomanBase::reboundWallAndGround(Vec3f* pFront, bool emitGroundSpark) {
 
 bool BegomanBase::isFallNextMove(f32 dist, f32 depth) {
     f32 scaledBinderRadius = MR::getBinderRadius(this);
-    scaledBinderRadius = scaledBinderRadius * mScale.y * 2.0f;
+    scaledBinderRadius = scaledBinderRadius * mScale.y * cNum_isFallNextMove_f1;
 
     // Standing still, the check runs along the face.
     if (MR::isNearZero(MR::getVelocityHorizon(this))) {
@@ -762,7 +774,7 @@ void BegomanBase::calcDirectionAwayFromRail(Vec3f* pOut, const Vec3f& rRailPos, 
     if (MR::isNearZero(away)) {
         away.set(-mFaceVec);
     } else {
-        MR::rotateVecDegree(&away, mGravity, 90.0f);
+        MR::rotateVecDegree(&away, mGravity, cNum_calcDirectionAwayFromRail_f1);
     }
 
     Vec3f toRail(rRailPos);
@@ -858,7 +870,7 @@ void BegomanBase::preventSwingby(f32 damp) {
     if (!MR::isOnGround(this)) {
         // Damped by how much gravity turned since the last frame.
         f32 rate = (mGravity - mLastGravity).length();
-        rate *= 0.5f;
+        rate *= cNum_preventSwingby_f1;
         dampingVerticalAndParallelVelocity(damp, rate);
     }
 }
@@ -870,7 +882,7 @@ void BegomanBase::preventSlopeBlow(f32 damp) {
         gravityMinusNormal.sub(-*MR::getGroundNormal(this));
 
         f32 rate = gravityMinusNormal.length();
-        rate *= 0.5f;
+        rate *= cNum_preventSlopeBlow_f1;
         dampingVerticalAndParallelVelocity(damp, rate);
     }
 }
@@ -968,6 +980,7 @@ bool BegomanBase::requestAttack() {
 }
 
 BegomanAttackPermitter::BegomanAttackPermitter(const char* pName) : LiveActor(pName), mBegoman(), mDistToPlayer(::hPermitterNoDist), mHasRequest() {
+    lumacore::setClass(this, lumacore::kClassId< BegomanAttackPermitter >);
 }
 
 void BegomanAttackPermitter::init(const TableIter&) {

@@ -10,6 +10,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEW_NERVE(GamePauseSequenceDeactive, GamePauseSequence, Deactive);
@@ -18,6 +19,7 @@ namespace {
 };  // namespace
 
 GamePauseSequence::GamePauseSequence() : LayoutActor("ポーズ画面管理", true), mMenuType(ActivePause), mPauseMenu(nullptr), mWindowMenuFunc(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< GamePauseSequence >);
 }
 
 void GamePauseSequence::init(const TableIter& /*rIter*/) {

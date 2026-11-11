@@ -15,6 +15,17 @@
 #include "Game/Util/ByteView.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_alpha_f1, "alpha.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_CustomTagProcessor_f1, "CustomTagProcessor.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_CustomTagProcessor_f2, "CustomTagProcessor.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f1, "exeFontSizeGroup.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f2, "exeFontSizeGroup.f2", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f3, "exeFontSizeGroup.f3", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f4, "exeFontSizeGroup.f4", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSystemGroupRuby_f1, "exeSystemGroupRuby.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDisplayGroupOffset_f1, "exeDisplayGroupOffset.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDisplayGroupCenter_f1, "exeDisplayGroupCenter.f1", 2.0f);
+
 
 namespace {
     NEBULA_TUNABLE(f32, mRubyBaseLineOffset, 3.0f);
@@ -85,7 +96,7 @@ void CustomTagAlphaCtrl::init(u32 count, f32 speed, f32 interval, s32 startDelay
 u8 CustomTagAlphaCtrl::alpha() const {
     if (mEnabled) {
         f32 value = mFadeSpeed * (mFrame - mWaitTime) - mCharIndex * mCharInterval;
-        return (s32)(255.0f * std::max(0.0f, std::min(1.0f, value)));
+        return (s32)(cNum_alpha_f1 * std::max(0.0f, std::min(1.0f, value)));
     }
 
     return 255;
@@ -297,8 +308,8 @@ namespace Ui {
 CustomTagProcessor::CustomTagProcessor(Ui::TextBox* textBox)
     : mAlphaCtrl(), mPlayedSounds(), mColorMappingMin(::toColor8(textBox->GetMaterial()->GetStageColor(0))),
       mColorMappingMax(::toColor8(textBox->GetMaterial()->GetStageColor(1))) {
-    mRubyFontWidth = 0.5f * textBox->mFontSize.width;
-    mRubyFontHeight = 0.5f * textBox->mFontSize.height;
+    mRubyFontWidth = cNum_CustomTagProcessor_f1 * textBox->mFontSize.width;
+    mRubyFontHeight = cNum_CustomTagProcessor_f2 * textBox->mFontSize.height;
     mFontWidth = textBox->mFontSize.width;
     mFontHeight = textBox->mFontSize.height;
 
@@ -530,13 +541,13 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(Ui::Rect* rec
     Ui::TextWriterBase< char16_t >* writer = context->writer;
     switch (tag.getTag()) {
     case 0:
-        writer->SetFontSize(0.75f * mFontWidth, 0.75f * mFontHeight);
+        writer->SetFontSize(cNum_exeFontSizeGroup_f1 * mFontWidth, cNum_exeFontSizeGroup_f2 * mFontHeight);
         break;
     case 1:
         writer->SetFontSize(mFontWidth, mFontHeight);
         break;
     case 2:
-        writer->SetFontSize(1.5f * mFontWidth, 1.5f * mFontHeight);
+        writer->SetFontSize(cNum_exeFontSizeGroup_f3 * mFontWidth, cNum_exeFontSizeGroup_f4 * mFontHeight);
         break;
     }
 
@@ -660,7 +671,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* r
             rubyWriter.MoveCursorX(space);
             rubyWriter.SetCharSpace(mRubyCharSpace + space);
         } else {
-            rubyWriter.MoveCursorX(extraWidth / 2.0f);
+            rubyWriter.MoveCursorX(extraWidth / cNum_exeSystemGroupRuby_f1);
         }
 
         rubyWriter.MoveCursorY(mRubyBaseLineOffset + -writer->GetFontAscent());
@@ -691,7 +702,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect
     Ui::Rect bounds;
     if (mTextBox->GetTextPositionV() == 0) {
         writer->CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
-        writer->MoveCursorY((mTextBox->GetDrawSize().height - bounds.GetHeight()) / 2.0f);
+        writer->MoveCursorY((mTextBox->GetDrawSize().height - bounds.GetHeight()) / cNum_exeDisplayGroupOffset_f1);
     }
 
     return OPERATION_NO_CHAR_SPACE;
@@ -703,7 +714,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect
     const char16_t* string = context->str + tag.getSkipLength();
     Ui::Rect bounds;
     writer.CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
-    f32 offset = (mTextBox->GetDrawSize().width - bounds.GetWidth()) / 2.0f;
+    f32 offset = (mTextBox->GetDrawSize().width - bounds.GetWidth()) / cNum_exeDisplayGroupCenter_f1;
     context->writer->MoveCursorX(offset);
     context->xOrigin += offset;
     return OPERATION_NO_CHAR_SPACE;

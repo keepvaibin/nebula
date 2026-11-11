@@ -5,6 +5,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initGuidePoints_f1, "initGuidePoints.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initGuidePoints_f2, "initGuidePoints.f2", 2.0f);
 
 namespace NrvMapPartsRailGuideDrawer {
     NEW_NERVE(HostTypeHideAll, MapPartsRailGuideDrawer, HideAll);
@@ -14,6 +19,7 @@ namespace NrvMapPartsRailGuideDrawer {
 
 MapPartsRailGuideDrawer::MapPartsRailGuideDrawer(LiveActor* pHost, const char* pModelName)
     : MapPartsFunction(pHost, "ガイド描画"), mGuidePoints(), mGuideType(), mRailId(-1), mModelName(pModelName) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailGuideDrawer >);
 }
 
 void MapPartsRailGuideDrawer::init(const TableIter& rIter) {
@@ -79,7 +85,7 @@ void MapPartsRailGuideDrawer::initGuidePoints(const TableIter& rIter) {
         MapPartsRailGuidePoint* pPoint = new MapPartsRailGuidePoint(mHost, mModelName, curLen, hasShadow);
         pPoint->initWithoutIter();
         mGuidePoints.push_back(pPoint);
-        curLen += 200.0f;
+        curLen += cNum_initGuidePoints_f1;
     }
 
     if (mGuideType == 3) {
@@ -88,7 +94,7 @@ void MapPartsRailGuideDrawer::initGuidePoints(const TableIter& rIter) {
         while (curPointNum < MR::getRailPointNum(mHost)) {
             MapPartsRailGuidePoint* pPoint = new MapPartsRailGuidePoint(mHost, mModelName, curPointNum, hasShadow);
             pPoint->initWithoutIter();
-            pPoint->mScale.set(2.0f);
+            pPoint->mScale.set(cNum_initGuidePoints_f2);
             mGuidePoints.push_back(pPoint);
             curPointNum++;
         }

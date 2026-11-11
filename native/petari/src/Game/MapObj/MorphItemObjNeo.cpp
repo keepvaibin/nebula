@@ -26,6 +26,43 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f2, "calcAndSetBaseMtx.f2", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f3, "calcAndSetBaseMtx.f3", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f4, "calcAndSetBaseMtx.f4", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f5, "calcAndSetBaseMtx.f5", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f6, "calcAndSetBaseMtx.f6", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f7, "calcAndSetBaseMtx.f7", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f8, "calcAndSetBaseMtx.f8", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 130.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 190.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f4, "exeWait.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f5, "exeWait.f5", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f6, "exeWait.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f7, "exeWait.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f8, "exeWait.f8", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f2, "exeAppear.f2", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwitchAppear_f1, "exeSwitchAppear.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f1, "exeFly.f1", 0.999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFly_f2, "exeFly.f2", 0.2f);
 
 namespace {
     // Model per PlayerItemStatus.
@@ -42,6 +79,7 @@ namespace {
 };  // namespace
 
 MorphItemObjNeo::MorphItemObjNeo(const char* pName, s32 type) : LiveActor(pName), mMorphType(type), mActorCameraInfo() {
+    lumacore::setClass(this, lumacore::kClassId< MorphItemObjNeo >);
     mSpiralTime = 0;
     mAppearFrames = 0;
     mIsDemoPending = false;
@@ -57,11 +95,11 @@ void MorphItemObjNeo::init(const TableIter& rIter) {
     initModelManagerWithAnm(::cxNameList[mMorphType], nullptr, false);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_MORPH_ITEM, 4, 80.0f, Vec3f(0.0f, 60.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_MORPH_ITEM, 4, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
 
-    MR::initStarPointerTargetAtPos(this, 80.0f, &mPosition, Vec3f(0.0f, 60.0f, 0.0f));
+    MR::initStarPointerTargetAtPos(this, cNum_init_f3, &mPosition, Vec3f(0.0f, cNum_init_f4, 0.0f));
 
-    initBinder(70.0f, 60.0f, 0);
+    initBinder(cNum_init_f5, cNum_init_f6, 0);
     MR::offBind(this);
 
     s32 spiralAppear = -1;
@@ -162,7 +200,7 @@ void MorphItemObjNeo::init(const TableIter& rIter) {
         break;
     case 3:
     case 4:
-        MR::setClippingTypeSphere(this, 2000.0f);
+        MR::setClippingTypeSphere(this, cNum_init_f7);
         ownGravity = true;
         break;
     default:
@@ -171,8 +209,8 @@ void MorphItemObjNeo::init(const TableIter& rIter) {
     }
 
     if (hasShadow) {
-        MR::initShadowVolumeSphere(this, 40.0f);
-        MR::setShadowDropLength(this, nullptr, 2000.0f);
+        MR::initShadowVolumeSphere(this, cNum_init_f8);
+        MR::setShadowDropLength(this, nullptr, cNum_init_f9);
         MR::onShadowVolumeCutDropLength(this, nullptr);
 
         if (ownGravity) {
@@ -326,13 +364,13 @@ void MorphItemObjNeo::control() {
         if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait))) {
             if (mContainerType == Container_None && !mIsUseSwitch) {
                 if ((mRotateMode & 1) != 0) {
-                    mAngle += 2.0f;
+                    mAngle += cNum_control_f1;
                 }
             } else if ((mRotateMode & 2) != 0) {
-                mAngle += 2.0f;
+                mAngle += cNum_control_f2;
             }
         } else if ((mRotateMode & 1) != 0) {
-            mAngle += 2.0f;
+            mAngle += cNum_control_f3;
         }
     }
 
@@ -347,9 +385,9 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
 
             Vec3f yDir;
             MR::extractMtxYDir(getBaseMtx(), &yDir);
-            MR::addTransMtx(getBaseMtx(), yDir * -60.0f);
+            MR::addTransMtx(getBaseMtx(), yDir * -cNum_calcAndSetBaseMtx_f1);
 
-            pMtx = MR::tmpMtxScale(0.8f, 0.8f, 0.8f);
+            pMtx = MR::tmpMtxScale(cNum_calcAndSetBaseMtx_f2, cNum_calcAndSetBaseMtx_f3, cNum_calcAndSetBaseMtx_f4);
             NebulaMtxConcat(getBaseMtx(), pMtx, getBaseMtx());
         } else if (mContainerType == Container_Bubble) {
             MtxPtr pMtx = mContainerModel->getBaseMtx();
@@ -357,9 +395,9 @@ void MorphItemObjNeo::calcAndSetBaseMtx() {
 
             Vec3f yDir;
             MR::extractMtxYDir(getBaseMtx(), &yDir);
-            MR::addTransMtx(getBaseMtx(), yDir * -50.0f);
+            MR::addTransMtx(getBaseMtx(), yDir * -cNum_calcAndSetBaseMtx_f5);
 
-            pMtx = MR::tmpMtxScale(0.8f, 0.8f, 0.8f);
+            pMtx = MR::tmpMtxScale(cNum_calcAndSetBaseMtx_f6, cNum_calcAndSetBaseMtx_f7, cNum_calcAndSetBaseMtx_f8);
             NebulaMtxConcat(getBaseMtx(), pMtx, getBaseMtx());
         } else {
             LiveActor::calcAndSetBaseMtx();
@@ -468,11 +506,11 @@ bool MorphItemObjNeo::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
                 setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvFly));
 
                 mVelocity = MR::getSensorPos(pReceiver) - MR::getSensorPos(pSender);
-                mVelocity.setLength(50.0f);
+                mVelocity.setLength(cNum_receiveOtherMsg_f1);
 
                 MR::calcGravity(this);
 
-                mVelocity += -mGravity * 30.0f;
+                mVelocity += -mGravity * cNum_receiveOtherMsg_f2;
             }
 
             return false;
@@ -599,17 +637,17 @@ void MorphItemObjNeo::exeWait() {
 
     if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait))) {
         if (mContainerType == Container_CrystalBox) {
-            ::getBodySensor(this)->mRadius = 130.0f;
-            MR::setSensorOffset(this, "body", Vec3f(0.0f, 190.0f, 0.0f));
+            ::getBodySensor(this)->mRadius = cNum_exeWait_f1;
+            MR::setSensorOffset(this, "body", Vec3f(0.0f, cNum_exeWait_f2, 0.0f));
         } else if (mContainerType == Container_Bubble) {
-            ::getBodySensor(this)->mRadius = 110.0f;
+            ::getBodySensor(this)->mRadius = cNum_exeWait_f3;
             MR::setSensorOffset(this, "body", Vec3f(0.0f, 0.0f, 0.0f));
         } else {
             glowEffect();
         }
     } else {
-        ::getBodySensor(this)->mRadius = 80.0f;
-        MR::setSensorOffset(this, "body", Vec3f(0.0f, 60.0f, 0.0f));
+        ::getBodySensor(this)->mRadius = cNum_exeWait_f4;
+        MR::setSensorOffset(this, "body", Vec3f(0.0f, cNum_exeWait_f5, 0.0f));
 
         glowEffect();
     }
@@ -620,14 +658,14 @@ void MorphItemObjNeo::exeWait() {
 
     if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2)) && mIsFloating && mBoundCount <= 3) {
         if (MR::isBindedGround(this) && mVelocity.dot(mGravity) > 0.0f) {
-            if (mVelocity.length() < 2.0f) {
+            if (mVelocity.length() < cNum_exeWait_f6) {
                 mVelocity.zero();
 
                 return;
             }
 
             if (mBoundCount < 3) {
-                mVelocity = mVelocity * -0.5f;
+                mVelocity = mVelocity * -cNum_exeWait_f7;
             } else {
                 mVelocity.zero();
             }
@@ -638,7 +676,7 @@ void MorphItemObjNeo::exeWait() {
         }
 
         MR::calcGravity(this);
-        mVelocity += mGravity * 0.75f;
+        mVelocity += mGravity * cNum_exeWait_f8;
 
         return;
     }
@@ -654,7 +692,7 @@ void MorphItemObjNeo::exeAppear() {
     if (MR::isFirstStep(this)) {
         MR::calcGravity(this);
 
-        mVelocity = mGravity * -25.0f;
+        mVelocity = mGravity * -cNum_exeAppear_f1;
 
         if (mIsBind != 0) {
             MR::onBind(this);
@@ -666,7 +704,7 @@ void MorphItemObjNeo::exeAppear() {
             setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2));
         }
 
-        mVelocity += mGravity * 0.75f;
+        mVelocity += mGravity * cNum_exeAppear_f2;
     } else {
         setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2));
     }
@@ -696,7 +734,7 @@ void MorphItemObjNeo::exeSwitchAppear() {
 
         MR::invalidateHitSensors(this);
 
-        mVelocity = mGravity * -10.0f;
+        mVelocity = mGravity * -cNum_exeSwitchAppear_f1;
     }
 
     if (getNerveStep() == NebulaFrameClock::stepsOfSeconds(1)) {
@@ -753,11 +791,11 @@ void MorphItemObjNeo::exeFly() {
         MR::invalidateClipping(this);
     }
 
-    mVelocity.mult(0.999f);
+    mVelocity.mult(cNum_exeFly_f1);
 
     MR::calcGravity(this);
 
-    mVelocity += mGravity * 0.2f;
+    mVelocity += mGravity * cNum_exeFly_f2;
 
     if (getNerveStep() == NebulaFrameClock::stepsOfSeconds(5)) {
         kill();

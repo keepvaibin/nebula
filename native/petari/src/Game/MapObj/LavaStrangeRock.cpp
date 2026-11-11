@@ -3,6 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sHitRange, 870.0f);
@@ -19,6 +20,7 @@ namespace NrvLavaStrangeRock {
 };  // namespace NrvLavaStrangeRock
 
 LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_None), mHitType(), mLodCtrlPlanet() {
+    lumacore::setClass(this, lumacore::kClassId< LavaStrangeRock >);
 }
 
 void LavaStrangeRock::init(const TableIter& rIter) {

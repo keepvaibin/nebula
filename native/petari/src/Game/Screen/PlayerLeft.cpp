@@ -6,6 +6,10 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
 namespace NrvPlayerLeft {
     NEW_NERVE(PlayerLeftNrvHide, PlayerLeft, Hide);
@@ -16,6 +20,7 @@ namespace NrvPlayerLeft {
 
 PlayerLeft::PlayerLeft(const char* pName)
     : LayoutActor(pName, true), mPlayerLeft(0), mLayoutAppearer(nullptr), mPaneRumbler(nullptr), mIsForceAppear(false) {
+    lumacore::setClass(this, lumacore::kClassId< PlayerLeft >);
 }
 
 void PlayerLeft::init(const TableIter& /*rIter*/) {
@@ -23,7 +28,7 @@ void PlayerLeft::init(const TableIter& /*rIter*/) {
     MR::createAndAddPaneCtrl(this, "Counter", 1);
     MR::hidePaneRecursive(this, "CenterPlayerLeft");
 
-    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-50.0f, 0.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-cNum_init_f1, 0.0f));
     mPaneRumbler = new CountUpPaneRumbler(this, "Counter");
     mPlayerLeft = MR::getPlayerLeft();
 

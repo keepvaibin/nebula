@@ -4,6 +4,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLevelOffReady_f1, "exeLevelOffReady.f1", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTurnLeftReady_f1, "exeTurnLeftReady.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTurnRightReady_f1, "exeTurnRightReady.f1", 35.0f);
 
 namespace {
     NEW_NERVE(SurfingGuidanceFadeIn, SurfingGuidance, FadeIn);
@@ -20,6 +26,7 @@ namespace {
 };  // namespace
 
 SurfingGuidance::SurfingGuidance() : LayoutActor("サーフィンガイダンス", true) {
+    lumacore::setClass(this, lumacore::kClassId< SurfingGuidance >);
 }
 
 void SurfingGuidance::init(const TableIter& /*rIter*/) {
@@ -117,7 +124,7 @@ void SurfingGuidance::exeLevelOffReady() {
         }
     }
 
-    if (MR::getAnimFrame(this, 1) == 85.0f) {
+    if (MR::getAnimFrame(this, 1) == cNum_exeLevelOffReady_f1) {
         MR::startSystemSE("SE_SY_CTRL_GUIDE_CHANGE", 1000);
     }
 }
@@ -145,7 +152,7 @@ void SurfingGuidance::exeTurnLeftReady() {
         }
     }
 
-    if (MR::getAnimFrame(this, 1) == 35.0f) {
+    if (MR::getAnimFrame(this, 1) == cNum_exeTurnLeftReady_f1) {
         MR::startSystemSE("SE_SY_CTRL_GUIDE_CHANGE2", 1000);
     }
 }
@@ -173,7 +180,7 @@ void SurfingGuidance::exeTurnRightReady() {
         }
     }
 
-    if (MR::getAnimFrame(this, 1) == 35.0f) {
+    if (MR::getAnimFrame(this, 1) == cNum_exeTurnRightReady_f1) {
         MR::startSystemSE("SE_SY_CTRL_GUIDE_CHANGE2", 1000);
     }
 }

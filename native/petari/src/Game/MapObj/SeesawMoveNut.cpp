@@ -3,6 +3,15 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHalfway_f1, "exeHalfway.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHalfway_f2, "exeHalfway.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHalfway_f3, "exeHalfway.f3", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHalfway_f4, "exeHalfway.f4", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_autoBackHome_f1, "autoBackHome.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_autoBackHome_f2, "autoBackHome.f2", 0.02f);
 
 namespace NrvSeesawMoveNut {
     NEW_NERVE(SeesawMoveNutNrvHalfway, SeesawMoveNut, Halfway);
@@ -10,6 +19,7 @@ namespace NrvSeesawMoveNut {
 };  // namespace NrvSeesawMoveNut
 
 SeesawMoveNut::SeesawMoveNut(const char* pName) : MapObjActor(pName), mSpeed(100.0f), mPrevAngularSpeed(), mBackHomeStep() {
+    lumacore::setClass(this, lumacore::kClassId< SeesawMoveNut >);
 }
 
 void SeesawMoveNut::init(const TableIter& rIter) {
@@ -46,7 +56,7 @@ void SeesawMoveNut::exeHalfway() {
         MR::setRailDirectionToStart(this);
     }
 
-    MR::moveCoordAndFollowTrans(this, MR::abs(angularSpeed * mSpeed * 0.01f));
+    MR::moveCoordAndFollowTrans(this, MR::abs(angularSpeed * mSpeed * cNum_exeHalfway_f1));
 
     autoBackHome();
 
@@ -60,15 +70,15 @@ void SeesawMoveNut::exeHalfway() {
         return;
     }
 
-    if (MR::abs(angularSpeed) >= 0.001f) {
+    if (MR::abs(angularSpeed) >= cNum_exeHalfway_f2) {
         MR::startLevelSound(this, "SE_OJ_LV_SEESAW_NUT_ROT_L");
     }
 
-    if (MR::abs(angularSpeed) >= 0.1f) {
+    if (MR::abs(angularSpeed) >= cNum_exeHalfway_f3) {
         MR::startLevelSound(this, "SE_OJ_LV_SEESAW_NUT_ROT_M");
     }
 
-    if (MR::abs(angularSpeed) >= 0.2f) {
+    if (MR::abs(angularSpeed) >= cNum_exeHalfway_f4) {
         MR::startLevelSound(this, "SE_OJ_LV_SEESAW_NUT_ROT_H");
     }
 
@@ -100,8 +110,8 @@ void SeesawMoveNut::autoBackHome() {
             return;
         }
 
-        if (MR::abs(MapObjActorUtil::getSeesaw1AxisAngularSpeed(this)) < 0.5f) {
-            MapObjActorUtil::forceRotateSeesaw1Axis(this, -0.02f);
+        if (MR::abs(MapObjActorUtil::getSeesaw1AxisAngularSpeed(this)) < cNum_autoBackHome_f1) {
+            MapObjActorUtil::forceRotateSeesaw1Axis(this, -cNum_autoBackHome_f2);
         }
     }
 

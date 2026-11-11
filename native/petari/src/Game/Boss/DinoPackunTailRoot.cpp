@@ -3,12 +3,14 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 typedef JointControlDelegator< DinoPackunTailRoot > Delegator;
 
 typedef bool (DinoPackunTailRoot::*func)(Pos3f*, const JointControllerInfo&);
 
 DinoPackunTailRoot::DinoPackunTailRoot(const char* name, DinoPackun* pPackun) : DinoPackunTailNode(name, pPackun) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunTailRoot >);
 }
 
 void DinoPackunTailRoot::init(const TableIter& /*rIter*/) {

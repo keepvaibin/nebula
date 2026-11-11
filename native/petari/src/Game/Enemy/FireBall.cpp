@@ -15,6 +15,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_f1, "exeThrow.f1", 200.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, cSensorRadius, 40.0f);
@@ -37,6 +40,7 @@ namespace NrvFireBall {
 };  // namespace NrvFireBall
 
 FireBall::FireBall(const char* pName) : LiveActor(pName), mHost(), mUp(0.0f, 1.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< FireBall >);
 }
 
 inline void FireBall::initHitSensors(const char* const hitSensor) {
@@ -215,7 +219,7 @@ void FireBall::exeThrow() {
         MR::startBck(this, "Spin");
     }
 
-    if (MR::changeShowModelFlagSyncNearClipping(this, 200.0f)) {
+    if (MR::changeShowModelFlagSyncNearClipping(this, cNum_exeThrow_f1)) {
         MR::emitEffect(this, "FireBall");
     } else {
         MR::deleteEffect(this, "FireBall");

@@ -4,6 +4,7 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvSandUpDownTriRock {
     NEW_NERVE(SandUpDownTriRockNrvWait, SandUpDownTriRock, Wait);
@@ -14,6 +15,7 @@ namespace NrvSandUpDownTriRock {
 };  // namespace NrvSandUpDownTriRock
 
 SandUpDownTriRock::SandUpDownTriRock(const char* pName) : MapObjActor(pName), mRestStep() {
+    lumacore::setClass(this, lumacore::kClassId< SandUpDownTriRock >);
     for (s32 i = 0; i < ARRAY_SIZE(mRockCollisionParts); i++) {
         mRockCollisionParts[i] = nullptr;
     }

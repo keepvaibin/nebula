@@ -21,6 +21,32 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_zoomIn_f1, "zoomIn.f1", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_zoomIn_f2, "zoomIn.f2", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_zoomIn_f3, "zoomIn.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterCamera_f1, "createDefaultWaterCamera.f1", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterCamera_f2, "createDefaultWaterCamera.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterCamera_f3, "createDefaultWaterCamera.f3", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterCamera_f4, "createDefaultWaterCamera.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterCamera_f5, "createDefaultWaterCamera.f5", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterCamera_f6, "createDefaultWaterCamera.f6", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f1, "createDefaultWaterSurfaceCamera.f1", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f2, "createDefaultWaterSurfaceCamera.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f3, "createDefaultWaterSurfaceCamera.f3", 45.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_createDefaultWaterSurfaceCamera_f4, "createDefaultWaterSurfaceCamera.f4", 900.0);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f5, "createDefaultWaterSurfaceCamera.f5", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f6, "createDefaultWaterSurfaceCamera.f6", 0.174533f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f7, "createDefaultWaterSurfaceCamera.f7", 0.349066f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultWaterSurfaceCamera_f8, "createDefaultWaterSurfaceCamera.f8", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultFooFighterCamera_f1, "createDefaultFooFighterCamera.f1", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultFooFighterCamera_f2, "createDefaultFooFighterCamera.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultFooFighterCamera_f3, "createDefaultFooFighterCamera.f3", 45.0f);
+NEBULA_TUNABLE_NAMED(f64, cNum_createDefaultFooFighterCamera_f4, "createDefaultFooFighterCamera.f4", 1200.0);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultFooFighterCamera_f5, "createDefaultFooFighterCamera.f5", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createDefaultFooFighterCamera_f6, "createDefaultFooFighterCamera.f6", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createZoomCamera_f1, "createZoomCamera.f1", 100.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sMinDistance, 300.0f);
@@ -36,6 +62,7 @@ namespace {
 CameraManGame::CameraManGame(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
     : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mRequestReset(), mKarikari(new CamKarikariEffector()),
       mHeli(new CamHeliEffector()), mTypeState(), mIsStartPosActive(), mInterpolateOffCounter(), mZoomedIn() {
+    lumacore::setClass(this, lumacore::kClassId< CameraManGame >);
     mCamera = mHolder->getDefaultCamera();
     mChunk = nullptr;
     CameraLocalUtil::setWatchPos(this, Vec3f(0.0f, 0.0f, ::sMinDistance));
@@ -88,9 +115,9 @@ void CameraManGame::zoomIn() {
     const Vec3f& watchPos = CameraLocalUtil::getWatchPos(this);
 
     f32 angle = MR::asin(::sZoomRadius / watchPos.distance(pos));
-    angle *= 1.5f;
+    angle *= cNum_zoomIn_f1;
 
-    chunk->mExParam.mFovy = (180.0f * (angle * 2.0f)) / MR::pi();
+    chunk->mExParam.mFovy = (cNum_zoomIn_f2 * (angle * cNum_zoomIn_f3)) / MR::pi();
 }
 
 void CameraManGame::zoomOut() {
@@ -383,13 +410,13 @@ void CameraManGame::createDefaultWaterCamera() {
 
     chunk->setCameraType("CAM_TYPE_WATER_FOLLOW", mHolder);
 
-    chunk->mExParam.setWOffset(Vec3f(0.0f, 170.0f, 0.0f));
-    chunk->mExParam.mLOffset = 100.0f;
-    chunk->mExParam.mFovy = 45.0f;
+    chunk->mExParam.setWOffset(Vec3f(0.0f, cNum_createDefaultWaterCamera_f1, 0.0f));
+    chunk->mExParam.mLOffset = cNum_createDefaultWaterCamera_f2;
+    chunk->mExParam.mFovy = cNum_createDefaultWaterCamera_f3;
     chunk->mExParam.mCamInt = 120;
-    chunk->mGeneralParam->mAxis.x = 1000.0f;
-    chunk->mGeneralParam->mAxis.y = 900.0f;
-    chunk->mGeneralParam->mDist = 0.01f;
+    chunk->mGeneralParam->mAxis.x = cNum_createDefaultWaterCamera_f4;
+    chunk->mGeneralParam->mAxis.y = cNum_createDefaultWaterCamera_f5;
+    chunk->mGeneralParam->mDist = cNum_createDefaultWaterCamera_f6;
 }
 
 void CameraManGame::createDefaultWaterSurfaceCamera() {
@@ -399,15 +426,15 @@ void CameraManGame::createDefaultWaterSurfaceCamera() {
 
     chunk->setCameraType("CAM_TYPE_FOLLOW", mHolder);
 
-    chunk->mExParam.setWOffset(Vec3f(0.0f, 170.0f, 0.0f));
-    chunk->mExParam.mLOffset = 100.0f;
-    chunk->mExParam.mFovy = 45.0f;
+    chunk->mExParam.setWOffset(Vec3f(0.0f, cNum_createDefaultWaterSurfaceCamera_f1, 0.0f));
+    chunk->mExParam.mLOffset = cNum_createDefaultWaterSurfaceCamera_f2;
+    chunk->mExParam.mFovy = cNum_createDefaultWaterSurfaceCamera_f3;
     chunk->mExParam.mCamInt = 120;
-    chunk->mGeneralParam->mAxis.x = 900.0;
-    chunk->mGeneralParam->mAxis.y = 600.0f;
-    chunk->mGeneralParam->mAngleA = 0.174533f;
-    chunk->mGeneralParam->mAngleB = 0.349066f;
-    chunk->mGeneralParam->mDist = 0.15f;
+    chunk->mGeneralParam->mAxis.x = cNum_createDefaultWaterSurfaceCamera_f4;
+    chunk->mGeneralParam->mAxis.y = cNum_createDefaultWaterSurfaceCamera_f5;
+    chunk->mGeneralParam->mAngleA = cNum_createDefaultWaterSurfaceCamera_f6;
+    chunk->mGeneralParam->mAngleB = cNum_createDefaultWaterSurfaceCamera_f7;
+    chunk->mGeneralParam->mDist = cNum_createDefaultWaterSurfaceCamera_f8;
     chunk->mGeneralParam->mNum1 = 0;
 }
 
@@ -418,13 +445,13 @@ void CameraManGame::createDefaultFooFighterCamera() {
 
     chunk->setCameraType("CAM_TYPE_FOO_FIGHTER", mHolder);
 
-    chunk->mExParam.setWOffset(Vec3f(0.0f, 170.0f, 0.0f));
-    chunk->mExParam.mLOffset = 100.0f;
-    chunk->mExParam.mFovy = 45.0f;
+    chunk->mExParam.setWOffset(Vec3f(0.0f, cNum_createDefaultFooFighterCamera_f1, 0.0f));
+    chunk->mExParam.mLOffset = cNum_createDefaultFooFighterCamera_f2;
+    chunk->mExParam.mFovy = cNum_createDefaultFooFighterCamera_f3;
     chunk->mExParam.mCamInt = 120;
-    chunk->mGeneralParam->mAxis.x = 1200.0;
-    chunk->mGeneralParam->mAxis.y = 300.0f;
-    chunk->mGeneralParam->mDist = 0.03f;
+    chunk->mGeneralParam->mAxis.x = cNum_createDefaultFooFighterCamera_f4;
+    chunk->mGeneralParam->mAxis.y = cNum_createDefaultFooFighterCamera_f5;
+    chunk->mGeneralParam->mDist = cNum_createDefaultFooFighterCamera_f6;
 }
 
 void CameraManGame::createStartAnimCamera() {
@@ -455,7 +482,7 @@ void CameraManGame::createZoomCamera() {
 
     chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
     chunk->mExParam.mLOffset = 0.0f;
-    chunk->mExParam.mLOffsetV = 100.0f;
+    chunk->mExParam.mLOffsetV = cNum_createZoomCamera_f1;
 
     chunk->setUseFovy(true);
     chunk->setLOfsErpOff(true);

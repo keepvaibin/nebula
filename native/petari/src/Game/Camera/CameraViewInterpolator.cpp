@@ -12,6 +12,13 @@
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCollision_f1, "calcCollision.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCollision_f2, "calcCollision.f2", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcCollision_f3, "calcCollision.f3", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBinder_f1, "calcBinder.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reduceOscillation_f1, "reduceOscillation.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reduceOscillation_f2, "reduceOscillation.f2", 0.1f);
+
 namespace {
     NEBULA_TUNABLE(f32, sCollisionBallRadius, 10000.0f);
     NEBULA_TUNABLE(f32, sCollisionThroughDistance, 3400.0f);
@@ -132,7 +139,7 @@ bool CameraViewInterpolator::calcCollision(const Pos3f& rMtx) {
 
     mIsCollided = false;
 
-    bindDir *= 0.25f;
+    bindDir *= cNum_calcCollision_f1;
     Vec3f newPos = pos;
     newPos += bindDir;
     Vec3f front = newPos - mTargetPosition;
@@ -147,7 +154,7 @@ bool CameraViewInterpolator::calcCollision(const Pos3f& rMtx) {
     Vec3f up;
     mTargetMtx.getYDir(up);
 
-    if (MR::abs(up.dot(front)) < 0.98f) {
+    if (MR::abs(up.dot(front)) < cNum_calcCollision_f2) {
         Vec3f side = up.cross(front);
         Vec3f newUp = front.cross(side);
         if (!MR::isNearZero(newUp)) {
@@ -159,7 +166,7 @@ bool CameraViewInterpolator::calcCollision(const Pos3f& rMtx) {
         } else {
             mTargetMtx.setTrans(newPos);
         }
-    } else if (MR::abs(prevUp.dot(front)) < 0.98f) {
+    } else if (MR::abs(prevUp.dot(front)) < cNum_calcCollision_f3) {
         Vec3f side = prevUp.cross(front);
         Vec3f newUp = front.cross(side);
         if (!MR::isNearZero(newUp)) {
@@ -192,7 +199,7 @@ bool CameraViewInterpolator::calcBinder(Vec3f* pBindDir, const Vec3f& rTargetPos
 
     // The near plane the picture is drawn with: the render field of view (taller below 4:3) and the screen's own aspect,
     // so the ball keeps the near plane out of walls on any screen, not only 16:9.
-    f32 nearPlaneHeight = MR::tanDegree(MR::getRenderFovy() * 0.5f) * ::sNearZ;
+    f32 nearPlaneHeight = MR::tanDegree(MR::getRenderFovy() * cNum_calcBinder_f1) * ::sNearZ;
     f32 nearPlaneWidth = nearPlaneHeight * MR::getAspect();
 
     mBinder->mRadius = MR::sqrt(::sCollisionBallRadius + nearPlaneHeight * nearPlaneHeight + nearPlaneWidth * nearPlaneWidth);
@@ -234,7 +241,7 @@ void CameraViewInterpolator::reduceOscillation() {
 
     mMtx.makeQuat(rot);
     mMtx.setTrans(pos);
-    mFovy = mFovy * 0.9f + mTargetFovy * 0.1f;
+    mFovy = mFovy * cNum_reduceOscillation_f1 + mTargetFovy * cNum_reduceOscillation_f2;
 }
 
 void CameraViewInterpolator::updateCalcState(const CameraTargetObj* pTargetObj) {

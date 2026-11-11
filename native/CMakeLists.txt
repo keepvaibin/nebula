@@ -23,22 +23,8 @@ set(petari "${NEBULA_PETARI_DIR}")
 file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/Game/*.cpp" "${petari}/src/Game/*.c")
 
-# What a plugin built with the game's headers must match: any change to them may move a field or a virtual function.
-file(GLOB_RECURSE nebula_game_headers "${petari}/include/*"
-    "${CMAKE_CURRENT_SOURCE_DIR}/math/include/*" "${CMAKE_CURRENT_SOURCE_DIR}/include/nebula_prelude.h")
-list(SORT nebula_game_headers)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${nebula_game_headers})
-set(nebula_abi_text "${NEBULA_GAME_VERSION}")
-foreach(header IN LISTS nebula_game_headers)
-    file(SHA256 "${header}" header_hash)
-    string(APPEND nebula_abi_text "${header_hash}")
-endforeach()
-string(SHA256 nebula_abi_hash "${nebula_abi_text}")
-string(SUBSTRING "${nebula_abi_hash}" 0 16 nebula_abi_hash)
-set(NEBULA_GAME_ABI "0x${nebula_abi_hash}ull")
-# For the plugin kit: what a plugin built with these headers says it is.
-file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sdk/nebula_game_abi.h" CONTENT "#define NEBULA_GAME_ABI ${NEBULA_GAME_ABI}\n" @ONLY)
-set_source_files_properties("${petari}/src/Game/System/NebulaMods.cpp" PROPERTIES COMPILE_DEFINITIONS "NEBULA_GAME_ABI=${NEBULA_GAME_ABI}")
+# LumaCore's field rows (tools/lumacore) name private fields too: offsetof reads them with no access check.
+set_source_files_properties("${petari}/src/Game/System/generated/lumacore_fields.cpp" PROPERTIES COMPILE_OPTIONS "-Xclang;-fno-access-control")
 
 add_library(smg_game SHARED
     ${game_sources}
@@ -66,9 +52,9 @@ set_target_properties(smg_game PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON
     CXX_STANDARD 17 CXX_EXTENSIONS ON
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON
-    # A plugin built with the game's headers calls the game's functions as the game itself does.
+    # find_function (a native plugin's hook) finds the game's functions by name.
     WINDOWS_EXPORT_ALL_SYMBOLS ON)
-# Only to measure what those exports cost, or to train the profile (its counters cannot be exported): plugins built with the game's headers cannot load in such a build.
+# Only to measure what those exports cost, or to train the profile (its counters cannot be exported): find_function finds nothing in such a build.
 option(NEBULA_NO_PLUGIN_EXPORTS "Leave the game's functions unexported" OFF)
 if(NEBULA_NO_PLUGIN_EXPORTS OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
     set_target_properties(smg_game PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
@@ -163,13 +149,6 @@ endif()
 
 # A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, tools/verify/pgo_profile.sh): the game's CPU falls about
 # 17 % (docs/NATIVE_PERFORMANCE.md). A profile older than the code still applies to what has not changed.
-option(NEBULA_RELEASE "Leave the test hooks out" OFF)
-if(NEBULA_RELEASE)
-    target_compile_definitions(smg_game PRIVATE NEBULA_RELEASE=1)
-else()
-    target_compile_definitions(smg_game PRIVATE NEBULA_DEV=1)
-endif()
-
 option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)
 if(NEBULA_PGO)
     set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")
@@ -225,7 +204,7 @@ if(WIN32)
     set(nebula_minhook_dir "${CMAKE_CURRENT_LIST_DIR}/../third_party/minhook")
     set(nebula_minhook_sources "${nebula_minhook_dir}/src/buffer.c" "${nebula_minhook_dir}/src/hook.c" "${nebula_minhook_dir}/src/trampoline.c" "${nebula_minhook_dir}/src/hde/hde64.c")
 endif()
-add_executable(nebula_native_host host/host_main.cpp ../tools/test_driver/run_options.cpp
+add_executable(nebula_native_host host/host_main.cpp ../runtime/src/host_extension.cpp
     ../runtime/src/mod_plugins.cpp ${nebula_minhook_sources}
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp

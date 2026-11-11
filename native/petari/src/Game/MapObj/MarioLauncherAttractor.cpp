@@ -2,12 +2,17 @@
 #include "Game/Gravity/GravityCreator.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 
 namespace NrvMarioLauncherAttractor {
     NEW_NERVE(MarioLauncherAttractorNrvWait, MarioLauncherAttractor, Wait);
 };  // namespace NrvMarioLauncherAttractor
 
 MarioLauncherAttractor::MarioLauncherAttractor(const char* pName) : LiveActor(pName), mGravityCreator() {
+    lumacore::setClass(this, lumacore::kClassId< MarioLauncherAttractor >);
 }
 
 void MarioLauncherAttractor::init(const TableIter& rIter) {
@@ -21,7 +26,7 @@ void MarioLauncherAttractor::init(const TableIter& rIter) {
     pGravity->mGravityType = GravityType_MarioLauncher;
 
     // Set clipping & scale
-    f32 scale = pGravity->mRange / 1000.0f;
+    f32 scale = pGravity->mRange / cNum_init_f1;
     MR::setClippingTypeSphere(this, pGravity->mRange);
     MR::setClippingFar200m(this);
 

@@ -2,6 +2,7 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     // A starting capacity: registerGravity grows past it.
@@ -10,6 +11,7 @@ namespace {
 
 PlanetGravityManager::PlanetGravityManager(const char* pName)
     : NameObj(pName), mGravities(new PlanetGravity*[::sFirstCapacity]), mMaxGravities(::sFirstCapacity), mNumGravities(0) {
+    lumacore::setClass(this, lumacore::kClassId< PlanetGravityManager >);
 }
 
 bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, const void* pHost) const {

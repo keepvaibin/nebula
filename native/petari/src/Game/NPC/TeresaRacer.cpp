@@ -18,6 +18,22 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 220.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f3, "exeMove.f3", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f4, "exeMove.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRacer_f1, "updateRacer.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRacer_f2, "updateRacer.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_resetRacer_f1, "resetRacer.f1", 180.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_prepRacer_setRailCoordSpeed_1, "prepRacer.setRailCoordSpeed.1", 0.0f);
@@ -49,6 +65,7 @@ namespace NrvTeresaRacer {
 };  // namespace NrvTeresaRacer
 
 TeresaRacer::TeresaRacer(const char* pName) : NPCActor(pName), mTakeOutStar(), mCameraInfo(), mIsGoal(), mBgmState() {
+    lumacore::setClass(this, lumacore::kClassId< TeresaRacer >);
 }
 
 void TeresaRacer::init(const TableIter& rIter) {
@@ -57,10 +74,10 @@ void TeresaRacer::init(const TableIter& rIter) {
     caps.setIndirect();
     caps.mLodCtrl = false;
     caps.mUseShadow = true;
-    caps.mSensorSize = 220.0f;
+    caps.mSensorSize = cNum_init_f1;
     caps.mSensorOffset.x = 0.0f;
-    caps.mSensorOffset.y = 25.0f;
-    caps.mSensorOffset.z = 40.0f;
+    caps.mSensorOffset.y = cNum_init_f2;
+    caps.mSensorOffset.z = cNum_init_f3;
     caps.mWaitNerve = GET_NERVE(TeresaRacer, TeresaRacerNrvWait);
 
     initialize(rIter, caps);
@@ -77,18 +94,18 @@ void TeresaRacer::init(const TableIter& rIter) {
         MR::registerAnimeFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::animeFunc));
         MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::eventFunc));
 
-        MR::setDistanceToTalk(getMsgCtrl(), 500.0f);
+        MR::setDistanceToTalk(getMsgCtrl(), cNum_init_f4);
         RaceManagerFunction::entryRacerOthers(this);
         MR::initMultiActorCamera(this, rIter, &mCameraInfo, "会話");  // conversation
 
         mParam.setMoveAction("WaitOpen", "WaitOpen");
         mParam.setTalkAction("WaitOpenTalk", "WaitOpenTalk");
         setTalkAction("Chase");
-        mParam.mTurnSpeed = 1.5f;
+        mParam.mTurnSpeed = cNum_init_f5;
         mRailSpeed = ::sSpeed;
         mRailAccel = ::sAccele;
-        mRailPoseRate = 0.05f;
-        mParam.mNearDistance = 3000.0f;
+        mRailPoseRate = cNum_init_f6;
+        mParam.mNearDistance = cNum_init_f7;
 
         mTakeOutStar = new TakeOutStar(this, "TakeOutStarTeresaRacer", "TakeOutStarTeresaRacer", GET_NERVE(TeresaRacer, TeresaRacerNrvTakeOutStar));
     }
@@ -200,12 +217,12 @@ void TeresaRacer::exeMove() {
         MR::adjustmentRailCoordSpeed(this, mRailSpeed, mRailAccel);
         MR::moveRailRider(this);
         if (mRacerId == -1) {
-            MR::decidePose(this, up, MR::getRailDirection(this), MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
+            MR::decidePose(this, up, MR::getRailDirection(this), MR::getRailPos(this), 1.0f, cNum_exeMove_f1, cNum_exeMove_f2);
         } else {
             Vec3f dir = MR::getRailDirection(this) + -MR::getCamZdir() * ::sCameraDirScale;
 
             if (!MR::normalizeOrZero(&dir)) {
-                MR::decidePose(this, up, dir, MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
+                MR::decidePose(this, up, dir, MR::getRailPos(this), 1.0f, cNum_exeMove_f3, cNum_exeMove_f4);
             }
         }
     }
@@ -270,11 +287,11 @@ bool TeresaRacer::updateRacer(const RaceManager* pRaceManager) {
     f32 length = MR::getRailTotalLength(pRaceManager->mPlayerRacer);
     mPrevPosition.set(mCurrPosition);
     mCurrPosition.set(mPosition);
-    if (MR::fabs(mRailCoord - coord) < 2000.0f) {
+    if (MR::fabs(mRailCoord - coord) < cNum_updateRacer_f1) {
         mRailCoord = coord;
     }
 
-    if (MR::fabs(mRailCoord - length) < 100.0f) {
+    if (MR::fabs(mRailCoord - length) < cNum_updateRacer_f2) {
         mIsGoal = pRaceManager->isGoal(this);
         return mIsGoal;
     }
@@ -297,7 +314,7 @@ void TeresaRacer::resetRacer(const RaceManager* pRaceManager) {
         setInitPose();
     }
 
-    turnToPlayer(180.0f);
+    turnToPlayer(cNum_resetRacer_f1);
     setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvPost));
     MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話");
     mParam.mTurnWhenNear = true;

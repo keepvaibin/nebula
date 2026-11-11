@@ -9,6 +9,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const TimingInfo cTimingInfo[] = {{"GameScreen", 32, 1}, {"Indirect", 1, 0},    {"Camera", 4, 1},
@@ -16,6 +17,7 @@ namespace {
 };  // namespace
 
 CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), mRequestedTiming(nullptr), mTimingType("Indirect"), mTexture(nullptr), mIsCaptureRequested(false), mRequestedInfo(nullptr), mTimingInfo(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< CaptureScreenDirector >);
     NebulaArena::CurrentScope heapRestorer(Arenas::permanent());
 
     mTexture = GameTexture::createTarget(1.0f, 1.0f);
@@ -93,6 +95,7 @@ const TimingInfo* CaptureScreenDirector::findFromName(const char* pName) const {
 }
 
 CaptureScreenActor::CaptureScreenActor(u32 drawType, const char* pCameraName) : NameObj("画面キャプチャ"), mCameraName(pCameraName) {
+    lumacore::setClass(this, lumacore::kClassId< CaptureScreenActor >);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, drawType);
 }
 

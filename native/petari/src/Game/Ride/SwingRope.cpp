@@ -22,6 +22,14 @@
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f1, "updateHangPoint.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f2, "updateHangPoint.f2", 100.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sPointInterval, 50.0f);
@@ -91,6 +99,7 @@ SwingRope::SwingRope(const char* pName)
     : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mRopeLength(), mIsStretched(), mStretchTime(), mAccelTime(), mNumPoints(), mPoints(), mRider(),
       mGrabCoord(), mGrabPointNum(), mSlideSpeed(), mSledPoint(), mCameraInfo(), mFootPos(0.0f, 0.0f, 0.0f),
       mShadowDropPos(0.0f, 0.0f, 0.0f), mPrevSoundLvl() {
+    lumacore::setClass(this, lumacore::kClassId< SwingRope >);
     mRideMtx.identity();
 }
 
@@ -100,20 +109,20 @@ void SwingRope::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mBasePos.set(mPosition);
-    mRopeLength = mScale.y * 100.0f;
+    mRopeLength = mScale.y * cNum_init_f1;
 
     MR::calcGravity(this);
     initPoints();
 
     initHitSensor(2);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, 200.0f);
-    MR::addHitSensorCallbackRide(this, "body", 8, 150.0f);
+    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f2);
+    MR::addHitSensorCallbackRide(this, "body", 8, cNum_init_f3);
 
     initSound(4, false);
 
     MR::setClippingTypeSphere(this, mRopeLength);
 
-    MR::initShadowSurfaceCircle(this, 50.0f);
+    MR::initShadowSurfaceCircle(this, cNum_init_f4);
     MR::onCalcShadow(this, nullptr);
     MR::setShadowDropPositionPtr(this, nullptr, &mShadowDropPos);
 
@@ -491,7 +500,7 @@ void SwingRope::updateHangPoint() {
     mShadowDropPos.x = mSledPoint->mPosition.x;
     mShadowDropPos.z = mSledPoint->mPosition.z;
 
-    s32 soundLvl = (mSledPoint->mVelocity.length() / 40.0f) * 100.0f;
+    s32 soundLvl = (mSledPoint->mVelocity.length() / cNum_updateHangPoint_f1) * cNum_updateHangPoint_f2;
     if (soundLvl > 100) {
         soundLvl = 100;
     }
@@ -735,6 +744,7 @@ void SwingRope::drawFree(TypedDraw& rDraw) const {
 }
 
 SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SwingRopeGroup >);
     mTexture = new GameTexture(MR::loadTexFromArc("SwingRope", "SwingRope.bti"));
 
     mMaterial = makeMaterial();

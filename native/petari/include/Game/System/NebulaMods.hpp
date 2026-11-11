@@ -28,6 +28,14 @@ namespace NebulaMods {
         ~StageFrame();
     };
 
+    // A game scene's animation or drawing: in a stage for the mod API as its update is (a plugin's hook on
+    // GameScene::draw changes the stage, sets flags and places the player), with no frame events.
+    struct InStage {
+        explicit InStage(bool on);
+        ~InStage();
+        bool mOn;
+    };
+
     // Power-ups plugins add. Numbers from here on are theirs; a mode below is the game's and these do nothing.
     const u16 cFirstPowerUp = 32;
     // How long it lasts, once started on the player.
@@ -38,6 +46,9 @@ namespace NebulaMods {
     const char* powerUpModel(s32 index);
     // The game's power-up a mode looks like: itself, if it's the game's.
     u16 powerUpLook(u16 mode);
+    // A mod's power-up: whether `mode` is one, and the game's form the player is in under it (what he can do).
+    bool isPowerUp(u16 mode);
+    u16 powerUpActsLike(u16 mode);
     // The frame of Mario.arc's ColorChange the player wears in mode (a game's or a mod's power-up).
     u32 powerUpColorFrame(u16 mode);
     // A mod's words for a message: nullptr if none has any. ppLike, if given: the game message whose talk a new line takes
@@ -60,6 +71,9 @@ namespace NebulaMods {
     typedef NameObj* (*CreatorFuncPtr)(const char*);
     // A plugin's object by its placed name: how to make it. nullptr: not a plugin's.
     CreatorFuncPtr findCreator(const char* pName);
+    // The mod object (luma.json "objects", a plugin's class) a placed name makes: by its own name, or by what an
+    // object change turns it into. Null for the game's own.
+    const char* modObjectName(const char* pPlacedName);
     // What a mod has made of an object of the game's, where `where` (NEBULA_OBJECTS_*) is: its own name unchanged, another's, or null: gone.
     const char* objectBecomes(s32 where, const char* pName);
     // Frames, from what mods say of a comet mission; 0: they say nothing.
@@ -120,6 +134,10 @@ namespace NebulaMods {
     inline f32 cameraNear(f32 nearZ) {
         return sCameraNear > 0.0f ? sCameraNear : nearZ;
     }
+    // The game's own camera this frame, before a plugin's (CameraDirector::calcPose), for game_camera.
+    void recordGameCamera(f32 x, f32 y, f32 z, f32 targetX, f32 targetY, f32 targetZ);
+    // Where a plugin wants the large talk box (place_talk_box): its middle in screen coordinates. False: its own place.
+    bool talkBoxPlace(f32* pX, f32* pY);
     // The angle of view: a plugin's, else the game's `fovy`. Kept as the last drawn.
     f32 cameraFov(f32 fovy);
     // The HUD parts plugins hide (NEBULA_HUD_*).

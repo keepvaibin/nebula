@@ -185,6 +185,45 @@ int main() {
     }
     std::filesystem::remove(path);
 
+    // A language pack: a mod's EuGerman on a US disc is a language the setting offers, and a file the pack leaves out
+    // comes from the disc's own English.
+    {
+        const std::vector<Item> disc = {
+            {"", "", 1, 1, 0, true},
+            {"UsEnglish", "UsEnglish", 2, 2, 0, true},
+            {"UsEnglish/LayoutData", "LayoutData", 4, 1, 1, true},
+            {"UsEnglish/MessageData", "MessageData", 5, 1, 1, true},
+            {"UsEnglish/LayoutData/Menu.arc", "Menu.arc", 0x2000, 10, 2, false},
+            {"UsEnglish/MessageData/Message.arc", "Message.arc", 0x3000, 20, 3, false},
+        };
+        const std::vector<Item> pack = {
+            {"", "", 1, 1, 0, true},
+            {"EuGerman", "EuGerman", 2, 1, 0, true},
+            {"EuGerman/MessageData", "MessageData", 3, 1, 1, true},
+            {"EuGerman/MessageData/Message.arc", "Message.arc", 0x100, 30, 2, false},
+        };
+        const std::vector<std::uint8_t> disc_bytes = store_of(disc);
+        const std::vector<std::uint8_t> pack_bytes = store_of(pack);
+        const auto pack_path = galaxy::test_temp_path("nebula_asset_store_pack.pak");
+        std::ofstream(pack_path, std::ios::binary)
+            .write(reinterpret_cast<const char*>(pack_bytes.data()), static_cast<std::streamsize>(pack_bytes.size()));
+        {
+            // The store maps the pack's file until it goes.
+            AssetStore game;
+            passed &= expect(game.load(disc_bytes.data(), disc_bytes.size()) && game.attach_overlay(pack_path), "a disc and a language pack");
+            passed &= expect(game.language_folders() == std::vector<std::string>{"UsEnglish", "EuGerman"},
+                             "the pack's language is listed after the disc's");
+            const auto message = game.find("EuGerman/MessageData/Message.arc");
+            passed &= expect(message && message->length == 30, "the pack's own text");
+            const auto menu = game.find("/EuGerman/LayoutData/Menu.arc");
+            passed &= expect(menu && menu->length == 10, "a file the pack leaves out is the disc's English one");
+            passed &= expect(!game.find("EuGerman/LayoutData/None.arc") && !game.find("UsEnglish/None.arc") &&
+                                 !game.find("EuFrench/LayoutData/Menu.arc"),
+                             "only files the disc has, and only for a language a mod adds");
+        }
+        std::filesystem::remove(pack_path);
+    }
+
     if (!passed) {
         return 1;
     }

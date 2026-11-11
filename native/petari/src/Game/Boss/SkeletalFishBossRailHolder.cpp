@@ -1,8 +1,10 @@
 #include "Game/Boss/SkeletalFishBossRailHolder.hpp"
 #include "Game/Boss/SkeletalFishBossRail.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SkeletalFishBossRailHolder::SkeletalFishBossRailHolder(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossRailHolder >);
     // The place getByID answers with when no rail was added.
     mRails[0] = nullptr;
 }

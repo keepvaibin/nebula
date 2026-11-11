@@ -6,9 +6,15 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/LiveActor/RailRider.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 
 CameraRailWatch::CameraRailWatch(const char* pName)
     : Camera(pName), mRailRider(), mDirection(), mSetDirection(), mRailCoordOffset(), mDist(1200.0f), mAngleX() {
+    lumacore::setClass(this, lumacore::kClassId< CameraRailWatch >);
 }
 
 void CameraRailWatch::reset() {
@@ -35,7 +41,7 @@ CameraTargetObj* CameraRailWatch::calc() {
 
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, cNum_calc_f1 / cNum_calc_f2);
 
     if (mSetDirection != 0) {
         mDirection = mSetDirection;

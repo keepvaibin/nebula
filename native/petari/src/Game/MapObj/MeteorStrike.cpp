@@ -16,6 +16,14 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSpeed_f1, "getSpeed.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isInScreen_f1, "isInScreen.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 120.0f);
 
 namespace {
     inline f32 toDegree(f32 angle) {
@@ -38,6 +46,7 @@ namespace NrvMeteorStrike {
 
 MeteorStrike::MeteorStrike(const char* pName)
     : LiveActor(pName), mType(), mStepSize(10.0f), mRailDir(0.0f, -1.0f, 0.0f), mBrokenModel(), mStepsLeft(), mTotalSteps() {
+    lumacore::setClass(this, lumacore::kClassId< MeteorStrike >);
     mLavaColumnPos.identity();
 }
 
@@ -79,7 +88,7 @@ void MeteorStrike::init(const TableIter& rIter) {
     initRailDirection();
 
     MR::initShadowVolumeSphere(this, ::cShadowRadius);
-    MR::setShadowDropLength(this, nullptr, 3000.0f);
+    MR::setShadowDropLength(this, nullptr, cNum_init_f1);
     MR::offShadowVisibleSyncHost(this, nullptr);
     MR::invalidateShadow(this, nullptr);
 
@@ -102,13 +111,13 @@ void MeteorStrike::initAfterPlacement() {
     Vec3f gravityVec;
     MR::calcGravityVector(this, pos0, &gravityVec, nullptr, 0);
 
-    gravityVec.scale(80.0f);
+    gravityVec.scale(cNum_initAfterPlacement_f1);
     pos0.add(gravityVec);
 
     MR::calcRailPointPos(&pos1, this, 1);
     MR::calcGravityVector(this, pos1, &gravityVec, nullptr, 0);
 
-    gravityVec.scale(80.0f);
+    gravityVec.scale(cNum_initAfterPlacement_f2);
     pos1.add(gravityVec);
 
     Vec3f toNextPos;
@@ -181,7 +190,7 @@ bool MeteorStrike::getMovedPos(Vec3f* pDst, s32 step) const {
 }
 
 f32 MeteorStrike::getSpeed(const TableIter& rIter) {
-    f32 speed = 10.0f;
+    f32 speed = cNum_getSpeed_f1;
     MR::getPlacementArg0NoInit(rIter, &speed);
     return speed;
 }
@@ -302,7 +311,7 @@ bool MeteorStrike::isInScreen() const {
     Vec3f step(mRailDir * mStepSize);
     nextPos.add(mPosition, step);
 
-    return !MR::isJudgedToClipFrustum(nextPos, 200.0f);
+    return !MR::isJudgedToClipFrustum(nextPos, cNum_isInScreen_f1);
 }
 
 void MeteorStrike::exeMove() {
@@ -340,7 +349,7 @@ void MeteorStrike::exeMove() {
         }
 
         if (frame >= 0) {
-            MR::setShadowVolumeSphereRadius(this, nullptr, MR::getLinerValue(frame, 0.0f, 120.0f, MR::min(mStepsLeft, ::cShowShadowFrame)));
+            MR::setShadowVolumeSphereRadius(this, nullptr, MR::getLinerValue(frame, 0.0f, cNum_exeMove_f1, MR::min(mStepsLeft, ::cShowShadowFrame)));
 
             MR::validateShadow(this, nullptr);
         } else {

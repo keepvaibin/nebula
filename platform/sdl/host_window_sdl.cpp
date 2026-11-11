@@ -1104,6 +1104,7 @@ void pump_events(int timeout_ms) noexcept {
     };
     std::vector<MenuKey> menu_keys;
     int menu_wheel = 0;
+    std::vector<std::filesystem::path> dropped;
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
@@ -1217,6 +1218,15 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_GAMEPAD_REMOVED:
             close_gamepad(event.gdevice.which);
             break;
+#if !defined(__ANDROID__)
+        // Files dropped on the window: mods to the importer, Mii files to the Mii import (native_settings_files_dropped,
+        // after the input lock). Android's launcher takes files there ("Open with", share, drag and drop).
+        case SDL_EVENT_DROP_FILE:
+            if (event.drop.data != nullptr) {
+                dropped.emplace_back(galaxy::text_path(event.drop.data));
+            }
+            break;
+#endif
         default:
             break;
         }
@@ -1263,6 +1273,9 @@ void pump_events(int timeout_ms) noexcept {
             std::lock_guard<std::mutex> lock(g_input_mutex);
             set_key(key.key, key.down);
         }
+    }
+    if (!dropped.empty()) {
+        galaxy::render::native_settings_files_dropped(std::move(dropped));
     }
     run_requests();
 }
@@ -1592,7 +1605,22 @@ bool window_modal_active() noexcept {
     return false;
 }
 
-void test_resize_window(unsigned long, unsigned long) noexcept {}
+void resize_window_client(unsigned width, unsigned height) noexcept {
+    // SDL's window calls belong to its main thread; the size is in the window's points.
+    const auto packed = static_cast<std::uintptr_t>(width) << 16u | static_cast<std::uintptr_t>(height & 0xFFFFu);
+    (void)SDL_RunOnMainThread(
+        [](void* size) {
+            SDL_Window* const window = galaxy::sdl::g_window;
+            if (window == nullptr) {
+                return;
+            }
+            const auto value = reinterpret_cast<std::uintptr_t>(size);
+            const float density = std::max(SDL_GetWindowPixelDensity(window), 1.0f);
+            (void)SDL_SetWindowSize(window, static_cast<int>(std::lround(static_cast<float>(value >> 16u) / density)),
+                                    static_cast<int>(std::lround(static_cast<float>(value & 0xFFFFu) / density)));
+        },
+        reinterpret_cast<void*>(packed), false);
+}
 
 #if defined(__ANDROID__)
 // The document picker (GameActivity.pickFiles): Android hands back copies of the chosen files the game reads by path

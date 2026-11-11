@@ -3,8 +3,10 @@
 #include "Game/Screen/PlayerActionGuidance.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 SpinGuidanceArea::SpinGuidanceArea(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< SpinGuidanceArea >);
 }
 
 void SpinGuidanceArea::init(const TableIter& rIter) {

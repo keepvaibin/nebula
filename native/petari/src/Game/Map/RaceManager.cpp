@@ -19,6 +19,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_playGo_f1, "playGo.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isPlayCountAnim_f1, "isPlayCountAnim.f1", 180.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeIntro_1, "exeIntro.1", 110);
@@ -61,6 +65,7 @@ namespace {
 };  // namespace
 
 RaceManagerLayout::RaceManagerLayout(const char* pName) : LayoutActor(pName, true) {
+    lumacore::setClass(this, lumacore::kClassId< RaceManagerLayout >);
 }
 
 void RaceManagerLayout::init(const TableIter& /*rIter*/) {
@@ -85,7 +90,7 @@ void RaceManagerLayout::playCountAndGo() {
 void RaceManagerLayout::playGo() {
     MR::showPane(this, "Go");
     MR::startPaneAnim(this, "Go", "Count", 0);
-    MR::setPaneAnimFrame(this, "Go", 180.0f, 0);
+    MR::setPaneAnimFrame(this, "Go", cNum_playGo_f1, 0);
     MR::emitEffect(this, "RaceStart");
 }
 
@@ -138,7 +143,7 @@ void RaceManagerLayout::hideAllPane() {
 }
 
 bool RaceManagerLayout::isPlayCountAnim() const {
-    return MR::getPaneAnimFrame(this, "Go", 0) < 180.0f;
+    return MR::getPaneAnimFrame(this, "Go", 0) < cNum_isPlayCountAnim_f1;
 }
 
 bool RaceManagerLayout::isPlayCountAndGoAnim() const {
@@ -173,6 +178,7 @@ namespace NrvRaceManager {
 
 RaceManager::RaceManager()
     : LiveActor("レース管理"), mLayout(nullptr), mRacerNum(0), mAudienceNum(0), mRank(0), mBestTime(0), mTime(0), mPlayerRacer(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< RaceManager >);
     mGoalInvMtx.identity();
 }
 

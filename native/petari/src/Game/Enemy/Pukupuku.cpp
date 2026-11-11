@@ -23,6 +23,15 @@
 #include "Game/Util/ValueControl.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseByJumpPath_f1, "updatePoseByJumpPath.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
 
 namespace {
     NEW_NERVE(PukupukuStateLandingLandingMoveLand, PukupukuStateLanding, LandingMoveLand);
@@ -154,7 +163,7 @@ void PukupukuStateLanding::tryEndJumpOnLand() {
 
 void PukupukuStateLanding::updatePoseByJumpPath(f32 rate) {
     Vec3f direction;
-    mPath->calcDirection(&direction, mValueCtrl->getValue(), 0.01f);
+    mPath->calcDirection(&direction, mValueCtrl->getValue(), cNum_updatePoseByJumpPath_f1);
     MR::normalize(&direction);
 
     Vec3f up = -mHost->mGravity;
@@ -242,6 +251,7 @@ void PukupukuStateLanding::emitGroundHitEffect() {
 Pukupuku::Pukupuku(const char* pName)
     : LiveActor(pName), mStateLanding(nullptr), mScaleCtrl(nullptr), mStarPointer(nullptr), mBckBeforeBind(nullptr), mNerveAfterBind(nullptr),
       mBckFrameBeforeBind(0.0f), mBtpFrameBeforeBind(0.0f), mIsTrampled(false) {
+    lumacore::setClass(this, lumacore::kClassId< Pukupuku >);
     mClipCenter.zero();
     mBinderOffset.zero();
     mPoseQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
@@ -265,15 +275,15 @@ void Pukupuku::init(const TableIter& rIter) {
     MR::makeMtxTR(mtx, this);
     mtx.getQuat(mPoseQuat);
     updatePoseByRail();
-    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f1, cNum_init_f2);
     initEffectKeeper(1, nullptr);
     MR::declareCoin(this, 1);
     MR::declareStarPiece(this, 3);
-    MR::initShadowVolumeSphere(this, 50.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
     initSound(8, false);
     initNerve(GET_NERVE_ANON(PukupukuWait));
     mStateLanding = new PukupukuStateLanding(this);
-    MR::initStarPointerTarget(this, 60.0f);
+    MR::initStarPointerTarget(this, cNum_init_f4);
     mScaleCtrl = new AnimScaleController(nullptr);
     mStarPointer = new WalkerStateBindStarPointer(this, mScaleCtrl);
     MR::addToAttributeGroupSearchTurtle(this);
@@ -297,7 +307,7 @@ void Pukupuku::kill() {
     if (mIsTrampled) {
         MR::appearCoinPop(this, mPosition, 1);
     } else {
-        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
         if (isInWater()) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
         } else {

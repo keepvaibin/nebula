@@ -4,6 +4,15 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 45.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f5, "calc.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f6, "calc.f6", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f7, "calc.f7", 180.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sDistance, 200.0f);
@@ -35,6 +44,7 @@ namespace {
 };  // namespace
 
 CameraSubjective::CameraSubjective(const char* pName) : Camera(pName), mAngleVel(0.0f, 0.0f), mAngle(0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraSubjective >);
     mMtx.identity();
 }
 
@@ -60,19 +70,19 @@ CameraTargetObj* CameraSubjective::calc() {
     accel.x -= stick.x;
     accel.y -= stick.y;
 
-    mAngle.x = MR::clamp(mAngle.x + mAngleVel.x * ::sRotSpeedEff, -45.0f, ::sRotYMax);
+    mAngle.x = MR::clamp(mAngle.x + mAngleVel.x * ::sRotSpeedEff, -cNum_calc_f1, ::sRotYMax);
     mAngle.y = MR::clamp(mAngle.y + mAngleVel.y * ::sRotSpeedEff, -::sRotXMax, ::sRotXMax);
 
-    mAngleVel.x *= 0.9f;
-    mAngleVel.y *= 0.9f;
+    mAngleVel.x *= cNum_calc_f2;
+    mAngleVel.y *= cNum_calc_f3;
 
-    mAngleVel.x = MR::clamp(mAngleVel.x + accel.y / ::sDivH, -1.0f, 2.0f);
-    mAngleVel.y = MR::clamp(mAngleVel.y + accel.x / ::sDivW, -1.0f, 2.0f);
+    mAngleVel.x = MR::clamp(mAngleVel.x + accel.y / ::sDivH, -1.0f, cNum_calc_f4);
+    mAngleVel.y = MR::clamp(mAngleVel.y + accel.x / ::sDivW, -1.0f, cNum_calc_f5);
 
     Pos3f rotX;
-    rotX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngle.x * MR::pi() / 180.0f);
+    rotX.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngle.x * MR::pi() / cNum_calc_f6);
     Pos3f rotY;
-    rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngle.y * MR::pi() / 180.0f);
+    rotY.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), mAngle.y * MR::pi() / cNum_calc_f7);
 
     Pos3f rot;
     rot.concat(mMtx, rotY);

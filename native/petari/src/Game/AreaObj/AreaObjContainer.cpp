@@ -9,6 +9,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct IsManagerName {
@@ -362,6 +363,7 @@ namespace {
 };  // namespace
 
 AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName), mIndex(), mHashesShared(false) {
+    lumacore::setClass(this, lumacore::kClassId< AreaObjContainer >);
 }
 
 void AreaObjContainer::init(const TableIter& /*rIter*/) {
@@ -381,6 +383,14 @@ void AreaObjContainer::init(const TableIter& /*rIter*/) {
             mHashesShared = true;
         }
     }
+}
+
+u32 AreaObjContainer::getKindNum() {
+    return ARRAY_SIZE(::cCreateTable);
+}
+
+const char* AreaObjContainer::getKindName(u32 index) {
+    return ::cCreateTable[index].mName;
 }
 
 // The first manager in table order whose name heads pName; null for none. Each prefix of pName is looked up by its

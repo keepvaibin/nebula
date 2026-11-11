@@ -6,6 +6,22 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f1, "initMember.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f1, "placeOnCollisionFormCircle.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f2, "placeOnCollisionFormCircle.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f3, "placeOnCollisionFormCircle.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f4, "placeOnCollisionFormCircle.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f1, "calcBoundingSphereRadius.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f2, "calcBoundingSphereRadius.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f3, "calcBoundingSphereRadius.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f4, "calcBoundingSphereRadius.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f5, "calcBoundingSphereRadius.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f1, "generateItem.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f2, "generateItem.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPosture_f1, "initPosture.f1", 0.01f);
 
 namespace {
     NEBULA_TUNABLE(s32, hIsShakableStep, 20);
@@ -37,6 +53,7 @@ namespace NrvPlantMember {
 PlantGroup::PlantGroup(const char* pName)
     : LiveActor(pName), mMembers(), mMemberCount(7), mPlantType(), mIsStarPiece(), mHintPosition(0.0f), mHintRotation(0.0f),
       mHintTimer(::sHintEffectEmitInterval), mHintIndex() {
+    lumacore::setClass(this, lumacore::kClassId< PlantGroup >);
 }
 
 void PlantGroup::init(const TableIter& rIter) {
@@ -145,14 +162,14 @@ void PlantGroup::initMember(s32 itemCount, const TableIter&) {
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "境界球", 16, 100.0f, Vec3f(gZeroVec));
+    MR::addHitSensorMapObj(this, "境界球", 16, cNum_initMember_f1, Vec3f(gZeroVec));
 }
 
 s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity, const Vec3f& rAxisX, const Vec3f& rAxisY) {
     pCenter->set(0, 0, 0);
     s32 ring = 0;
     f32 angle = 0.0f;
-    f32 angleStep = 2.0f * PI;
+    f32 angleStep = cNum_placeOnCollisionFormCircle_f1 * PI;
     f32 radius = ::sSize * (s16)ring;
     s32 placedCount = 0;
 
@@ -163,7 +180,7 @@ s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity
         offset.scale(radius);
         Vec3f start(mPosition);
         start += offset;
-        const Vec3f up = rGravity * 100.0f;
+        const Vec3f up = rGravity * cNum_placeOnCollisionFormCircle_f2;
         const Vec3f* pUp = &up;
         start -= *pUp;
 
@@ -180,10 +197,10 @@ s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity
         mMembers[i]->initPosture();
         angle += angleStep;
 
-        if (angle >= 2.0f * PI) {
+        if (angle >= cNum_placeOnCollisionFormCircle_f3 * PI) {
             ring++;
             angle = 0.0f;
-            angleStep = 2.0f * PI / (ring * 6);
+            angleStep = cNum_placeOnCollisionFormCircle_f4 * PI / (ring * 6);
             radius = ::sSize * ring;
         }
     }
@@ -229,22 +246,22 @@ f32 PlantGroup::calcBoundingSphereRadius(const Vec3f& rCenter) {
         }
     }
 
-    mPosition.set((max + min) / 2.0f);
+    mPosition.set((max + min) / cNum_calcBoundingSphereRadius_f1);
     Vec3f size(max - min);
 
     if (size.x < size.y) {
         if (size.y < size.z) {
-            return size.z / 2.0f;
+            return size.z / cNum_calcBoundingSphereRadius_f2;
         }
 
-        return size.y / 2.0f;
+        return size.y / cNum_calcBoundingSphereRadius_f3;
     }
 
     if (size.x < size.z) {
-        return size.z / 2.0f;
+        return size.z / cNum_calcBoundingSphereRadius_f4;
     }
 
-    return size.x / 2.0f;
+    return size.x / cNum_calcBoundingSphereRadius_f5;
 }
 
 void PlantGroup::initAfterPlacement() {
@@ -324,7 +341,7 @@ void PlantGroup::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         Vec3f velocity(pReceiver->mHost->mVelocity);
         MR::vecKillElement(velocity, pReceiver->mHost->mGravity, &velocity);
 
-        if (velocity.squared() < 2.0f) {
+        if (velocity.squared() < cNum_attackSensor_f1) {
             return;
         }
 
@@ -437,7 +454,7 @@ bool PlantMember::generateItem(PlantGroup* pGroup) {
 
         if (pGroup->mIsStarPiece) {
             MR::startSound(pGroup, "SE_OJ_STAR_PIECE_BURST");
-            MR::appearStarPiece(pGroup, mPosition, 1, 10.0f, 40.0f, false);
+            MR::appearStarPiece(pGroup, mPosition, 1, cNum_generateItem_f1, cNum_generateItem_f2, false);
         } else {
             MR::appearCoinPop(pGroup, mPosition, 1);
         }
@@ -454,7 +471,7 @@ void PlantMember::initPosture() {
     Vec3f axis;
     axis.set(1, 0, 0);
 
-    if (MR::isSameDirection(mGravity, axis, 0.01f)) {
+    if (MR::isSameDirection(mGravity, axis, cNum_initPosture_f1)) {
         axis.set(0, 1, 0);
     }
 

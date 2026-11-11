@@ -3,6 +3,13 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcVolumeMatrix_f1, "calcVolumeMatrix.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isInArea_f1, "isInArea.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ClipAreaShapeCone_f1, "ClipAreaShapeCone.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ClipAreaShapeCone_f2, "ClipAreaShapeCone.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ClipAreaShapeBox_f1, "ClipAreaShapeBox.f1", 500.0f);
 
 ClipAreaShape::ClipAreaShape(const char* pName) : mModelData() {
     mModelData = MR::getModelData(pName);
@@ -47,7 +54,7 @@ void ClipAreaShapeSphere::calcVolumeMatrix(Pos3f* pPos, const Pos3f& rPos, const
 
     // The volume model is 100 units across.
     Vec3f volumeScale(rVec.scaleInline(mRadius));
-    volumeScale.scale(0.01f);
+    volumeScale.scale(cNum_calcVolumeMatrix_f1);
     MR::preScaleMtx(pPos->toMtxPtr(), volumeScale);
 }
 
@@ -56,7 +63,7 @@ bool ClipAreaShapeBox::isInArea(const Vec3f& rVec) const {
     case 0:
         return (MR::isInRange(rVec.x, -mRadius, mRadius) && MR::isInRange(rVec.y, -mRadius, mRadius) && MR::isInRange(rVec.z, -mRadius, mRadius));
     case 1:
-        return (MR::isInRange(rVec.x, -mRadius, mRadius) && MR::isInRange(rVec.y, 0.0f, 2.0f * mRadius) && MR::isInRange(rVec.z, -mRadius, mRadius));
+        return (MR::isInRange(rVec.x, -mRadius, mRadius) && MR::isInRange(rVec.y, 0.0f, cNum_isInArea_f1 * mRadius) && MR::isInRange(rVec.z, -mRadius, mRadius));
     }
 
     return false;
@@ -73,8 +80,8 @@ void ClipAreaShapeBox::calcVolumeMatrix(Pos3f* pPos, const Pos3f& rPos, const Ve
 }
 
 ClipAreaShapeCone::ClipAreaShapeCone(s32 originType) : ClipAreaShape("ClipVolumeSphere") {
-    mRadius = 500.0f;
-    mHeight = 1000.0f;
+    mRadius = cNum_ClipAreaShapeCone_f1;
+    mHeight = cNum_ClipAreaShapeCone_f2;
     mOriginType = originType;
 }
 
@@ -103,6 +110,6 @@ ClipAreaShapeSphere::ClipAreaShapeSphere() : ClipAreaShape("ClipVolumeSphere"), 
 }
 
 ClipAreaShapeBox::ClipAreaShapeBox(s32 u1) : ClipAreaShape("ClipVolumeBox") {
-    mRadius = 500.0f;
+    mRadius = cNum_ClipAreaShapeBox_f1;
     mOriginType = u1;
 }

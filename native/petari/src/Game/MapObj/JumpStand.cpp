@@ -7,6 +7,17 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTrampleBound_f1, "exeTrampleBound.f1", 32.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTrampleBound_f2, "exeTrampleBound.f2", 26.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHipDropBound_f1, "exeHipDropBound.f1", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHipDropBound_f2, "exeHipDropBound.f2", 43.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBindActorMtx_f1, "updateBindActorMtx.f1", 0.40f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endBindAndShootUp_f1, "endBindAndShootUp.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endBindAndShootUp_f2, "endBindAndShootUp.f2", 3.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeTrampleBound_1, "exeTrampleBound.1", 5);
@@ -29,6 +40,7 @@ namespace {
 };  // namespace
 
 JumpStand::JumpStand(const char* pName) : LiveActor(pName), mBindedActor(), mIsMarioJumpingHigh() {
+    lumacore::setClass(this, lumacore::kClassId< JumpStand >);
     mCollisionMtx.identity();
 }
 
@@ -40,8 +52,8 @@ void JumpStand::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
     Vec3f binderOffs;
-    binderOffs.set(0.0f, 100.0f, 0.0f);
-    MR::addHitSensorPriorBinder(this, "binder", 4, 200.0f, binderOffs);
+    binderOffs.set(0.0f, cNum_init_f1, 0.0f);
+    MR::addHitSensorPriorBinder(this, "binder", 4, cNum_init_f2, binderOffs);
     MR::invalidateHitSensor(this, "binder");
     mCollisionMtx.set(MR::getJointMtx(this, "JumpStandJoint03"));
     MR::initCollisionParts(this, "JumpStand", getSensor("body"), mCollisionMtx);
@@ -78,11 +90,11 @@ void JumpStand::exeTrampleBound() {
         if (mIsMarioJumpingHigh) {
             MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_M");
             MR::startSoundPlayer("SE_PV_JUMP_L");
-            endBindAndShootUp(32.0f, Jump_Middle);
+            endBindAndShootUp(cNum_exeTrampleBound_f1, Jump_Middle);
         } else {
             MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_S");
             MR::startSoundPlayer("SE_PV_JUMP_M");
-            endBindAndShootUp(26.0f, Jump_Low);
+            endBindAndShootUp(cNum_exeTrampleBound_f2, Jump_Low);
         }
 
         MR::validateCollisionParts(this);
@@ -107,7 +119,7 @@ void JumpStand::exeHipDropBound() {
 
     // Presses the player down into the stand for 15 steps, 6 a step easing to 5.
     if (MR::isLessStep(this, cStep_exeHipDropBound_1) && mBindedActor != nullptr) {
-        f32 pressDepth = (6.0f - MR::calcNerveEaseOutRate(this, 15));
+        f32 pressDepth = (cNum_exeHipDropBound_f1 - MR::calcNerveEaseOutRate(this, 15));
         Vec3f up;
         MR::calcUpVec(&up, this);
         mBindedActor->mPosition.scaleAdd(-pressDepth, up, mBindedActor->mPosition);
@@ -116,7 +128,7 @@ void JumpStand::exeHipDropBound() {
     if (MR::isStep(this, cStep_exeHipDropBound_2)) {
         MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_L");
         MR::startSoundPlayer("SE_PV_JUMP_JOY");
-        endBindAndShootUp(43.0f, Jump_High);
+        endBindAndShootUp(cNum_exeHipDropBound_f2, Jump_High);
     }
 
     if (MR::isStep(this, cStep_exeHipDropBound_3)) {
@@ -209,7 +221,7 @@ void JumpStand::updateBindActorMtx() {
     Vec3f padDir;
     MR::calcPlayerWorldPadDir(&padDir, MR::getMoveStickX(0), MR::getMoveStickY(0));
     MR::calcMtxFromGravityAndZAxis(&mtx, mBindedActor, mGravity, padDir);
-    MR::blendMtxRotate(mBindedActor->getBaseMtx(), mtx, 0.40f, mtx);
+    MR::blendMtxRotate(mBindedActor->getBaseMtx(), mtx, cNum_updateBindActorMtx_f1, mtx);
     mtx.setTrans(mBindedActor->mPosition);
     MR::setBaseTRMtx(mBindedActor, mtx);
 }
@@ -228,13 +240,13 @@ void JumpStand::endBindAndShootUp(f32 speed, JumpType type) {
         jumpVel *= speed;
         f32 stickLen = MR::sqrt(MR::getMoveStickX(PLAYER_1) * MR::getMoveStickX(PLAYER_1) +
                                 MR::getMoveStickY(PLAYER_1) * MR::getMoveStickY(PLAYER_1));
-        if (stickLen > 0.1f) {
+        if (stickLen > cNum_endBindAndShootUp_f1) {
             Vec3f jumpDir;
             MR::normalize(jumpVel, &jumpDir);
             Vec3f padDir;
             MR::calcPlayerWorldPadDir(&padDir, MR::getMoveStickX(PLAYER_1), MR::getMoveStickY(PLAYER_1));
             Vec3f steer;
-            steer.scale(3.0f * stickLen, padDir);
+            steer.scale(cNum_endBindAndShootUp_f2 * stickLen, padDir);
             steer.orthogonalize(jumpDir);
             jumpVel.add(steer);
         }

@@ -2,7 +2,6 @@
 // TextureStore's Vulkan side (gpu_texture_backend.h).
 
 #include "galaxy/render/gpu_texture_backend.h"
-#include "galaxy/run_options.h"
 
 #include "barriers_vk.h"
 

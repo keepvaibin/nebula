@@ -13,6 +13,27 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_game_api.h>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 75.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPositionCount_f1, "calcPositionCount.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcPositionCount_f2, "calcPositionCount.f2", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPositionList_f1, "initPositionList.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPositionList_f2, "initPositionList.f2", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initClipping_f1, "initClipping.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initClipping_f2, "initClipping.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPathEnd_f1, "initPathEnd.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setFadeScale_f1, "setFadeScale.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setFadeScale_f2, "setFadeScale.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f3, "draw.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f4, "draw.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f5, "draw.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f6, "draw.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f7, "draw.f7", 0.5f);
 
 namespace {
     // runtime/src/render/materials/spin_driver_path.hlsl: the path's colour texture (0) at its alpha times the mask's
@@ -32,6 +53,7 @@ namespace {
 
 SpinDriverPathDrawInit::SpinDriverPathDrawInit()
     : NameObj("スピンドライバーレール描画初期化"), mOrangeTexture(), mGreenTexture(), mPinkTexture(), mMaskTexture(), mIsPathAtOpa() {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriverPathDrawInit >);
     MR::registerPreDrawFunction(MR::Functor(this, &SpinDriverPathDrawInit::initDraw), MR::DrawType_SpinDriverPathDrawer);
 
     mOrangeTexture = new GameTexture(MR::loadTexFromArc("SpinDriverPath", "NormalColor.bti"));
@@ -43,6 +65,7 @@ SpinDriverPathDrawInit::SpinDriverPathDrawInit()
 SpinDriverPathDrawer::SpinDriverPathDrawer(SpinDriverShootPath* pShootPath)
     : LiveActor("パス描画"), mShootPath(pShootPath), mPositions(), mSides(), mUps(), mCoords(), mPositionCount(), mCoord(), mMaxCoord(), mColor(-1), mEndCut(),
       mFadeScale(1.0f), mMaskLength(5000.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriverPathDrawer >);
     MR::createSceneObj(SceneObj_SpinDriverPathDrawInit);
 }
 
@@ -88,7 +111,7 @@ namespace MR {
 void SpinDriverPathDrawer::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_SpinDriverPathDrawer);
 
-    initPositionList(75.0f, 20.0f);
+    initPositionList(cNum_init_f1, cNum_init_f2);
     initClipping();
     initPathEnd();
 
@@ -102,7 +125,7 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 sampleStep, f32 minSideOffset) c
     mShootPath->calcPosition(&pos0, 0.0f);
 
     Vec3f dir0;
-    mShootPath->calcDirection(&dir0, 0.0f, 0.01f);
+    mShootPath->calcDirection(&dir0, 0.0f, cNum_calcPositionCount_f1);
 
     s32 count = 2;
 
@@ -117,7 +140,7 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 sampleStep, f32 minSideOffset) c
 
         if (pos.length() > minSideOffset) {
             pos0 = posI;
-            mShootPath->calcDirection(&dir0, posStep, 0.01f);
+            mShootPath->calcDirection(&dir0, posStep, cNum_calcPositionCount_f2);
 
             count++;
         }
@@ -139,7 +162,7 @@ void SpinDriverPathDrawer::initPositionList(f32 sampleStep, f32 minSideOffset) {
     mShootPath->calcPosition(&pos0, 0.0f);
 
     Vec3f dir0;
-    mShootPath->calcDirection(&dir0, 0.0f, 0.01f);
+    mShootPath->calcDirection(&dir0, 0.0f, cNum_initPositionList_f1);
 
     mPositions[0] = pos0;
     mCoords[0] = 0.0f;
@@ -163,7 +186,7 @@ void SpinDriverPathDrawer::initPositionList(f32 sampleStep, f32 minSideOffset) {
         if (pos.length() > minSideOffset) {
             pos0 = posI;
 
-            mShootPath->calcDirection(&dir0, posStep, 0.01f);
+            mShootPath->calcDirection(&dir0, posStep, cNum_initPositionList_f2);
 
             if (MR::abs(dir0.dot(mSides[count - 1])) > MR::abs(dir0.dot(mUps[count - 1]))) {
                 MR::makeAxisFrontSide(&mUps[count], &mSides[count], dir0, mSides[count - 1]);
@@ -186,7 +209,7 @@ void SpinDriverPathDrawer::initPositionList(f32 sampleStep, f32 minSideOffset) {
 
 void SpinDriverPathDrawer::initClipping() {
     f32 radius = 0.0f;
-    mShootPath->calcClippingInfo(&mPosition, &radius, 150.0f, 150.0f);
+    mShootPath->calcClippingInfo(&mPosition, &radius, cNum_initClipping_f1, cNum_initClipping_f2);
     MR::setClippingTypeSphere(this, radius);
 
     MR::validateClipping(this);
@@ -198,7 +221,7 @@ void SpinDriverPathDrawer::initPathEnd() {
     MR::getRailArg1WithInit(mShootPath->mRailRider, &endCutPerMille);
 
     if (endCutPerMille >= 0) {
-        mEndCut = endCutPerMille / 1000.0f;
+        mEndCut = endCutPerMille / cNum_initPathEnd_f1;
     } else {
         mEndCut = 0.0f;
     }
@@ -251,8 +274,8 @@ void SpinDriverPathDrawer::setMaskLength(f32 mask) {
 }
 
 void SpinDriverPathDrawer::setFadeScale(f32 fade) {
-    if (fade < 0.001f) {
-        mFadeScale = 0.001f;
+    if (fade < cNum_setFadeScale_f1) {
+        mFadeScale = cNum_setFadeScale_f2;
     } else {
         mFadeScale = fade;
     }
@@ -285,7 +308,7 @@ void SpinDriverPathDrawer::draw() const {
     Pos3f mtx;
     mtx.identity();
     mtx[1][1] = -maskSteps;
-    mtx[1][3] = 0.5f + maskSteps * drawCode;
+    mtx[1][3] = cNum_draw_f1 + maskSteps * drawCode;
 
     sPathMaterial.setMatrix(0, 1, mtx);
 
@@ -298,8 +321,8 @@ void SpinDriverPathDrawer::draw() const {
     TypedDraw site(sPathMaterial, nullptr, MR::getCameraViewMtx());
     for (u32 i = 1; i < mPositionCount; i++) {
         Vec3f prevPos(mPositions[i - 1]), currPos(mPositions[i]);
-        Vec3f prevSide(mSides[i - 1] * 100.0f), currSide(mSides[i] * 100.0f);
-        Vec3f prevUp(mUps[i - 1] * 100.0f), currUp(mUps[i] * 100.0f);
+        Vec3f prevSide(mSides[i - 1] * cNum_draw_f2), currSide(mSides[i] * cNum_draw_f3);
+        Vec3f prevUp(mUps[i - 1] * cNum_draw_f4), currUp(mUps[i] * cNum_draw_f5);
 
         f32 prevCoord = mCoords[i - 1];
         f32 currCoord = mCoords[i];
@@ -309,8 +332,8 @@ void SpinDriverPathDrawer::draw() const {
             VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
             sendPoint(vtx, prevPos - rPrevHalf, 0.0f, prevCoord);
             sendPoint(vtx, currPos - rCurrHalf, 0.0f, currCoord);
-            sendPoint(vtx, prevPos, 0.5f, prevCoord);
-            sendPoint(vtx, currPos, 0.5f, currCoord);
+            sendPoint(vtx, prevPos, cNum_draw_f6, prevCoord);
+            sendPoint(vtx, currPos, cNum_draw_f7, currCoord);
             sendPoint(vtx, prevPos + rPrevHalf, 1.0f, prevCoord);
             sendPoint(vtx, currPos + rCurrHalf, 1.0f, currCoord);
         };

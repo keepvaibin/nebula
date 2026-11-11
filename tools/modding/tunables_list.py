@@ -1,9 +1,8 @@
 """tunables_list.py <Nebula tree> <out.md>: docs/modding/TUNABLES.md
 
-Every tunable of the game, from its source (NEBULA_TUNABLE, NEBULA_TUNABLE_NAMED and NEBULA_TUNABLE_LIST in
-native/petari/src): the key a
-mod sets it by (luma.json "tunables", set_tunable), its type and the game's value as written, grouped by the game's
-folders. The game's own list at runtime (--dump-tunables <file>) holds the same keys.
+Every tunable of the game, from its source (NEBULA_TUNABLE, NEBULA_TUNABLE_NAMED, NEBULA_TUNABLE_LIST and
+NEBULA_TUNABLE_RECORD(S) in native/petari/src): the key a mod sets it by (luma.json "tunables", set_tunable), its type
+and the game's value as written, grouped by the game's folders. The game's own list at runtime (--dump-tunables <file>) holds the same keys.
 """
 import pathlib
 import re
@@ -13,6 +12,8 @@ from collections import defaultdict
 ONE = re.compile(r"NEBULA_TUNABLE\(\s*(\w+)\s*,\s*(\w+)\s*,\s*(.+?)\);")
 NAMED = re.compile(r"NEBULA_TUNABLE_NAMED\(\s*(\w+)\s*,\s*\w+\s*,\s*\"([^\"]+)\"\s*,\s*(.+?)\);")
 LIST = re.compile(r"NEBULA_TUNABLE_LIST\(\s*(\w+)\s*,\s*(\w+)\s*,\s*([^,]*),\s*\{(.*?)\}\s*\);", re.S)
+# A record of floats, or a list of records: its floats in order, one list.
+RECORD = re.compile(r"NEBULA_TUNABLE_RECORDS?\(\s*([\w:]+)\s*,\s*(\w+)\s*,(?:\s*[^,{]*,)?\s*(\{.*?\})\s*\);", re.S)
 # The kinds the game's list names (--dump-tunables); a tunable of another type would be listed under a name it doesn't use.
 KINDS = {"f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"}
 
@@ -38,6 +39,10 @@ def main():
             values = [v.strip() for v in m.group(4).replace("\n", " ").split(",") if v.strip()]
             by_folder[folder].append((f"{stem}.{m.group(2)}", f"{m.group(1)}[{len(values)}]", ", ".join(values)))
             count += 1
+        for m in RECORD.finditer(text):
+            values = [v for v in re.findall(r"-?[\d.]+(?:[eE][-+]?\d+)?f?", m.group(3))]
+            by_folder[folder].append((f"{stem}.{m.group(2)}", f"f32[{len(values)}]", ", ".join(values)))
+            count += 1
     lines = [
         "# Tunables",
         "",
@@ -45,7 +50,9 @@ def main():
         "",
         "A mod sets one by its key in a luma.json layer's `\"tunables\"` (with `\"requires\": [\"tunables\"]`), or from a",
         "plugin with `set_tunable`; `get_tunable` reads one. A list's place is `key[i]`. Values are the game's, as written.",
-        "`<file>.<function>.<k>` is the k-th step count (frames) in that function; `<file>.<function>.<call>.<k>` the k-th number it gives that call.",
+        "`<file>.<function>.<k>` is the k-th step count (frames) in that function; `<file>.<function>.<call>.<k>` the k-th number it gives that call;",
+        "`<file>.<function>.f<k>` the k-th other number written in that function. A record (a position, a move's speed, gravity,",
+        "damping and turn) is a list of its numbers in order.",
         "",
     ]
     odd = [f"{key}: {kind}" for rows in by_folder.values() for key, kind, _ in rows if kind.split("[")[0] not in KINDS]

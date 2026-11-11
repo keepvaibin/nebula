@@ -6,6 +6,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sQuakeInterval, 400);
@@ -21,6 +22,7 @@ namespace NrvQuakeEffectGenerator {
 };  // namespace NrvQuakeEffectGenerator
 
 QuakeEffectGenerator::QuakeEffectGenerator() : LiveActor("地震効果生成") {
+    lumacore::setClass(this, lumacore::kClassId< QuakeEffectGenerator >);
 }
 
 void QuakeEffectGenerator::init(const TableIter& /*rIter*/) {

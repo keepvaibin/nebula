@@ -10,7 +10,7 @@
 #include "Game/Util/Tunable.hpp"
 
 namespace {
-    const MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sFallParam, {0.0f, 1.0f, 1.0f, 0.0f});
     NEBULA_TUNABLE(s32, sStepEmit, 15);
     NEBULA_TUNABLE(s32, sEmitNumMax, 16);
     NEBULA_TUNABLE(f32, sTurnSpeed, 3.0f);

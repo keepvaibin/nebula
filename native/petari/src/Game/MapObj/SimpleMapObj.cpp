@@ -5,6 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     static const SoundEffectDataEntry sSeDataTable[] = {
@@ -66,6 +67,7 @@ void GlaringLight::connectToScene(const MapObjActorInitInfo& rInfo) {
 }
 
 SimpleMirrorObj::SimpleMirrorObj(const char* pName, const char* pObjName, MtxPtr mtx) : MapObjActor(pName, pObjName) {
+    lumacore::setClass(this, lumacore::kClassId< SimpleMirrorObj >);
     mMtx = mtx;
     MR::createMirrorCamera();
 }
@@ -107,6 +109,7 @@ namespace {
 };  // namespace
 
 SimpleSeesawObj::SimpleSeesawObj(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SimpleSeesawObj >);
 }
 
 void SimpleSeesawObj::init(const TableIter& rIter) {

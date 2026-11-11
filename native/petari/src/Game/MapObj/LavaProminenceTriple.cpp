@@ -7,11 +7,17 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 360.0f);
 
 namespace {
-    static const f32 sNoSensorTable[] = {
+    NEBULA_TUNABLE_LIST(f32, sNoSensorTable, , {
         0.0f, 59.765598f, 134.2f, 176.045f, 222.6f, 278.26199f, 360.0f,
-    };
+    });
 
     NEBULA_TUNABLE(f32, sInitRotateVel, 100.0f);
     // Distance a head must pass beyond the view before its drop effect is deleted (it is made at the view's edge).
@@ -23,6 +29,7 @@ namespace {
 LavaProminenceTriple::LavaProminenceTriple(const char* pName)
     : LiveActor(pName), mBloomModel(), mBaseRot(0, 0, 0, 1), mCurrRot(0, 0, 0, 1), mSide(0, 0, 1), mFront(1, 0, 0), mRotateVel(::sInitRotateVel),
       mIsAppearDrop1(), mIsAppearDrop2(), mIsAppearDrop3(), mIsEnvironment(), mDefaultAppearTime() {
+    lumacore::setClass(this, lumacore::kClassId< LavaProminenceTriple >);
     mBloomMtx.identity();
 }
 
@@ -63,7 +70,7 @@ void LavaProminenceTriple::init(const TableIter& rIter) {
 
     if (!mIsEnvironment) {
         initHitSensor(1);
-        MR::addHitSensorCallbackMapObj(this, "attack", 1, 80.0f * mScale.y);
+        MR::addHitSensorCallbackMapObj(this, "attack", 1, cNum_init_f1 * mScale.y);
     }
 
     initEffectKeeper(0, nullptr);
@@ -102,7 +109,7 @@ void LavaProminenceTriple::control() {
         return;
     }
 
-    mRotation.y += mRotateVel / 100.0f;
+    mRotation.y += mRotateVel / cNum_control_f1;
     MR::repeatDegree(&mRotation.y);
     mCurrRot.setRotate(Vec3f(0, 1, 0), MR::toRadian(mRotation.y));
     mBloomModel->mPosition.set(mPosition);
@@ -148,13 +155,13 @@ void LavaProminenceTriple::updateHitSensor(HitSensor* pSensor) {
     for (int i = 0; i < 3; i++) {
         s32 index = i * 2;
         s32 nextIndex = index + 1;
-        f32 half = (::sNoSensorTable[index] + ::sNoSensorTable[nextIndex]) / 2.0f;
+        f32 half = (::sNoSensorTable[index] + ::sNoSensorTable[nextIndex]) / cNum_updateHitSensor_f1;
 
         if (angle < half) {
             int j;
 
             if (i == 0) {
-                angle += 360.0f;
+                angle += cNum_updateHitSensor_f2;
                 j = 2;
             } else {
                 j = i - 1;

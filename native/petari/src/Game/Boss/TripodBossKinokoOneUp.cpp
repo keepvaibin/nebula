@@ -4,6 +4,7 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTripodBossKinokoOneUp {
     NEW_NERVE(TripodBossKinokoOneUpNrvActive, TripodBossKinokoOneUp, Active);
@@ -11,6 +12,7 @@ namespace NrvTripodBossKinokoOneUp {
 };  // namespace NrvTripodBossKinokoOneUp
 
 TripodBossKinokoOneUp::TripodBossKinokoOneUp(const char* pName) : LiveActor(pName), mOneUp(), mJointID(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossKinokoOneUp >);
     mLocalMtx.identity();
     mMtx.identity();
 }

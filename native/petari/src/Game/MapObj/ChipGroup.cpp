@@ -7,8 +7,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUIRange_f1, "updateUIRange.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateUIRange_f2, "updateUIRange.f2", 2.0f);
 
 ChipGroup::ChipGroup(const char* pName, s32 chipType) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ChipGroup >);
     mSwitchCtrl = nullptr;
     mGotCount = 0;
     mTotalCount = 0;
@@ -33,7 +39,7 @@ void ChipGroup::updateUIRange() {
             Vec3f pos = mChips[i].mChip->mPosition;
 
             Vec3f center = pos;
-            Vec3f pad(2000.0f);
+            Vec3f pad(cNum_updateUIRange_f1);
             currBound.set(center - pad, center + pad);
 
             if (i == 0) {
@@ -48,7 +54,7 @@ void ChipGroup::updateUIRange() {
 
         Vec3f diff;
         diff.sub(range.f, range.i);
-        mUIRange = diff.length() / 2.0f;
+        mUIRange = diff.length() / cNum_updateUIRange_f2;
     } else {
         mUIRange = mUIRangeFixed;
     }
@@ -109,9 +115,11 @@ bool ChipGroup::isComplete() const {
 }
 
 BlueChipGroup::BlueChipGroup(const char* pName) : ChipGroup(pName, ChipBase::Type_Blue) {
+    lumacore::setClass(this, lumacore::kClassId< BlueChipGroup >);
 }
 
 YellowChipGroup::YellowChipGroup(const char* pName) : ChipGroup(pName, ChipBase::Type_Yellow) {
+    lumacore::setClass(this, lumacore::kClassId< YellowChipGroup >);
 }
 
 void ChipGroup::init(const TableIter& rIter) {

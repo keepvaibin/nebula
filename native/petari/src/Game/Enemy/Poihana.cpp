@@ -22,6 +22,26 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShake_f1, "exeShake.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShake_f2, "exeShake.f2", 36.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f1, "calcBound.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f2, "calcBound.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f3, "calcBound.f3", 9.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f4, "calcBound.f4", 27.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f5, "calcBound.f5", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBound_f6, "calcBound.f6", 18.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sGravity, 2.0f);
@@ -64,8 +84,8 @@ namespace {
     static const s32 sStepToAppearEffectEnd = NebulaFrameClock::stepsOfSeconds(1);
     NEBULA_TUNABLE(f32, sGravityOffsetY, 20.0f);
 
-    const Vec sNormalBinderPos = {0.0f, 130.0f, 120.0f};
-    const Vec sTrampleBinderPos = {0.0f, 150.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sNormalBinderPos, {0.0f, 130.0f, 120.0f});
+    NEBULA_TUNABLE_RECORD(Vec, sTrampleBinderPos, {0.0f, 150.0f, 0.0f});
 };  // namespace
 
 namespace NrvPoihana {
@@ -94,6 +114,7 @@ namespace NrvPoihana {
 Poihana::Poihana(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mCamInfo(), mBindedActor(), mLaunchIntensity(), mRespawnPos(0.0f), mHomePos(0.0f),
       mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(Behavior_Normal), mCanDrown(), mWaterColumn(), mIsActive() {
+    lumacore::setClass(this, lumacore::kClassId< Poihana >);
 }
 
 void Poihana::init(const TableIter& rIter) {
@@ -105,15 +126,15 @@ void Poihana::init(const TableIter& rIter) {
 
     initHitSensor(2);
     MR::addHitSensorPriorBinder(this, "binder", 8, ::sNormalBinderRadius, ::sNormalBinderPos);
-    MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, 70.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJoint(this, "body", "Body", ATYPE_KILLER_TARGET_ENEMY, 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
 
     bool useSmallBinder = false;
     MR::getPlacementArg7NoInit(rIter, &useSmallBinder);
 
     if (useSmallBinder) {
-        initBinder(100.0f, 100.0f, 0);
+        initBinder(cNum_init_f2, cNum_init_f3, 0);
     } else {
-        initBinder(150.0f, 150.0f, 0);
+        initBinder(cNum_init_f4, cNum_init_f5, 0);
     }
 
     mIsActive = true;
@@ -121,11 +142,11 @@ void Poihana::init(const TableIter& rIter) {
     initEffectKeeper(1, nullptr);
     initSound(4, false);
 
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
     mAnimScaleCtrl = new AnimScaleController(nullptr);
     mBindStarPointer = new WalkerStateBindStarPointer(this, mAnimScaleCtrl);
 
-    MR::initShadowVolumeSphere(this, 80.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f8);
     MR::addToAttributeGroupSearchTurtle(this);
 
     mRespawnPos.set(mPosition);
@@ -144,7 +165,7 @@ void Poihana::init(const TableIter& rIter) {
 
     if (mCanDrown) {
         mWaterColumn = MR::createModelObjMapObj("エフェクト水柱", "WaterColumn", getBaseMtx());
-        mWaterColumn->mScale.set(2.0f);
+        mWaterColumn->mScale.set(cNum_init_f9);
         makeActorDead();
     }
 
@@ -185,7 +206,7 @@ void Poihana::calcAndSetBaseMtx() {
     MR::calcMtxFromGravityAndZAxis(&baseMtx, this, mGravity, mFrontVec);
 
     if (isNerveTypeWalkOrWait()) {
-        MR::blendMtx(getBaseMtx(), baseMtx.toMtxPtr(), 0.3f, baseMtx.toMtxPtr());
+        MR::blendMtx(getBaseMtx(), baseMtx.toMtxPtr(), cNum_calcAndSetBaseMtx_f1, baseMtx.toMtxPtr());
     }
 
     MR::setBaseTRMtx(this, baseMtx);
@@ -462,8 +483,8 @@ void Poihana::exeRecover() {
 }
 
 void Poihana::exeShake() {
-    f32 amplitude = ::sShakeAmpMax - 0.01f * getNerveStep();
-    f32 scale = MR::sinDegree(getNerveStep() * 36.0f) * amplitude + 1.0f;
+    f32 amplitude = ::sShakeAmpMax - cNum_exeShake_f1 * getNerveStep();
+    f32 scale = MR::sinDegree(getNerveStep() * cNum_exeShake_f2) * amplitude + 1.0f;
     mScale.set(scale);
 
     if (MR::isStep(this, ::sStepForShake)) {
@@ -726,11 +747,11 @@ void Poihana::calcBound() {
 
     mBoundTimer++;
 
-    f32 amplitude = ::sBoundAmpMax - mBoundTimer * 0.01f;
+    f32 amplitude = ::sBoundAmpMax - mBoundTimer * cNum_calcBound_f1;
 
-    f32 scaleX = amplitude * 0.9f * MR::sinDegree(mBoundTimer * 9.0f) + 1.0f;
-    f32 scaleY = amplitude * MR::sinDegree(mBoundTimer * 27.0f) + 1.0f;
-    f32 scaleZ = amplitude * 0.9f * MR::sinDegree(mBoundTimer * 18.0f) + 1.0f;
+    f32 scaleX = amplitude * cNum_calcBound_f2 * MR::sinDegree(mBoundTimer * cNum_calcBound_f3) + 1.0f;
+    f32 scaleY = amplitude * MR::sinDegree(mBoundTimer * cNum_calcBound_f4) + 1.0f;
+    f32 scaleZ = amplitude * cNum_calcBound_f5 * MR::sinDegree(mBoundTimer * cNum_calcBound_f6) + 1.0f;
     mScale.set(scaleX, scaleY, scaleZ);
 }
 

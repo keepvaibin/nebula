@@ -12,6 +12,24 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "math_types.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_site_f1, "site.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_site_f2, "site.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawCircle_f1, "drawCircle.f1", 6.2831855f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFillCircle_f1, "drawFillCircle.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFillCircle_f2, "drawFillCircle.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFillCircle_f3, "drawFillCircle.f3", 6.2831855f);
+NEBULA_TUNABLE_NAMED(f32, cNum_cameraInit2D_f1, "cameraInit2D.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_cameraInit2D_f2, "cameraInit2D.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_cameraInit2D_f3, "cameraInit2D.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_cameraInit2D_f4, "cameraInit2D.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_cameraInit2D_f5, "cameraInit2D.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_invProject_f1, "invProject.f1", 16777215.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_invProject_f2, "invProject.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_invProject_f3, "invProject.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_invProject_f4, "invProject.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_invProject_f5, "invProject.f5", 2.0f);
 
 namespace TDDraw {
     void close() {
@@ -39,7 +57,7 @@ namespace TDDraw {
     TypedDraw site(const SiteMaterial& rMaterial, u8 viewMode) {
         if (viewMode == 2) {
             Mtx mtx;
-            NebulaMtxTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
+            NebulaMtxTrans(mtx, -MR::getScreenWidth() / cNum_site_f1, MR::getScreenHeight() / cNum_site_f2, 0.0f);
             mtx[1][1] = -1.0f;
             return TypedDraw::eyeSpace(rMaterial, mtx);
         }
@@ -70,7 +88,7 @@ namespace TDDraw {
     void drawCircle(TypedDraw& rDraw, const Vec3f& rCenter, const Vec3f& rNormal, const Vec3f& rAxis, f32 radius, u32 color, u32 segments) {
         Vec3f axis(rAxis);
         Mtx rotation;
-        NebulaMtxRotAxisRad(rotation, rNormal, 6.2831855f / segments);
+        NebulaMtxRotAxisRad(rotation, rNormal, cNum_drawCircle_f1 / segments);
 
         VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_LINE_STRIP, segments + 1);
         for (u32 i = 0; i <= segments; i++) {
@@ -87,8 +105,8 @@ namespace TDDraw {
         *vtx++ = {rCenter.x, rCenter.y, rCenter.z, Rgba8(centerColor)};
 
         for (u32 i = 0; i <= segments; i++) {
-            point.x = rCenter.x - radius * MR::cos(2.0f * ((static_cast< f32 >(i) / segments) * FloatUtil::PI()));
-            point.y = rCenter.y + radius * MR::sin(2.0f * ((static_cast< f32 >(i) / segments) * FloatUtil::PI()));
+            point.x = rCenter.x - radius * MR::cos(cNum_drawFillCircle_f1 * ((static_cast< f32 >(i) / segments) * FloatUtil::PI()));
+            point.y = rCenter.y + radius * MR::sin(cNum_drawFillCircle_f2 * ((static_cast< f32 >(i) / segments) * FloatUtil::PI()));
             *vtx++ = {point.x, point.y, point.z, Rgba8(edgeColor)};
         }
     }
@@ -103,7 +121,7 @@ namespace TDDraw {
 
         MR::normalizeOrZero(&axis);
         Mtx rotation;
-        NebulaMtxRotAxisRad(rotation, rNormal, (6.2831855f / segments));
+        NebulaMtxRotAxisRad(rotation, rNormal, (cNum_drawFillCircle_f3 / segments));
 
         VertexPC* vtx = rDraw.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2);
         {
@@ -335,8 +353,8 @@ namespace TDDraw {
     }
 
     void cameraInit2D() {
-        const Vec3f camLoc(MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, -30.0f);
-        const Vec3f objPt(MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
+        const Vec3f camLoc(MR::getScreenWidth() / cNum_cameraInit2D_f1, MR::getScreenHeight() / cNum_cameraInit2D_f2, -cNum_cameraInit2D_f3);
+        const Vec3f objPt(MR::getScreenWidth() / cNum_cameraInit2D_f4, MR::getScreenHeight() / cNum_cameraInit2D_f5, 0.0f);
         const Vec3f up(0, -10, 0);
 
         f32 width, nearZ, farZ, height;
@@ -353,7 +371,7 @@ namespace TDDraw {
     void invProject(Vec3f* pDest, const Vec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {
         f32 screenZ;
         if (!normalizedZ) {
-            screenZ = rScreen.z / 16777215.0f;
+            screenZ = rScreen.z / cNum_invProject_f1;
         } else {
             screenZ = rScreen.z;
         }
@@ -362,8 +380,8 @@ namespace TDDraw {
         f32 w;
         f32 projectedZ = (depth * pProjection[6]) / (depth + pProjection[5] * (pViewport[5] - pViewport[4]));
         w = pProjection[5] / (pProjection[6] - projectedZ);
-        const f32 x = ((rScreen.x / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
-        const f32 y = (-(rScreen.y / MR::getScreenHeight() - (pViewport[1] + pViewport[3] / 2.0f)) / w) / (pViewport[3] / 2.0f);
+        const f32 x = ((rScreen.x / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / cNum_invProject_f2)) / w) / (pViewport[2] / cNum_invProject_f3);
+        const f32 y = (-(rScreen.y / MR::getScreenHeight() - (pViewport[1] + pViewport[3] / cNum_invProject_f4)) / w) / (pViewport[3] / cNum_invProject_f5);
         Vec3f viewPos;
         if (pProjection[0] == 0.0f) {
             viewPos.z = (projectedZ - pProjection[6]) / pProjection[5];

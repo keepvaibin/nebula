@@ -8,6 +8,25 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_convertTransAndRotate_f1, "convertTransAndRotate.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getSphereRadius_f1, "getSphereRadius.f1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcUV_f1, "calcUV.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_convertMercatorPlaneToSphereTransAndRotate_f1, "convertMercatorPlaneToSphereTransAndRotate.f1", 57.29577951308232f);
+NEBULA_TUNABLE_NAMED(f32, cNum_convertMercatorPlaneToSphereTransAndRotate_f2, "convertMercatorPlaneToSphereTransAndRotate.f2", 57.29577951308232f);
+NEBULA_TUNABLE_NAMED(f32, cNum_convertMercatorPlaneToSphereTransAndRotate_f3, "convertMercatorPlaneToSphereTransAndRotate.f3", 57.29577951308232f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDefaultPosForMercator_f1, "initDefaultPosForMercator.f1", 57.29577951308232f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDefaultPosForMercator_f2, "initDefaultPosForMercator.f2", 57.29577951308232f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initDefaultPosForMercator_f3, "initDefaultPosForMercator.f3", 57.29577951308232f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNearestRailPosForMercator_f1, "calcNearestRailPosForMercator.f1", 3.4028234663852886e38f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcRailClippingInfoForMercator_f1, "calcRailClippingInfoForMercator.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDivideMercatorRailPosition_f1, "getDivideMercatorRailPosition.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDivideMercatorRailPosition_f2, "getDivideMercatorRailPosition.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDivideMercatorRailPosition_f3, "getDivideMercatorRailPosition.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDivideMercatorRailPosition_f4, "getDivideMercatorRailPosition.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getDivideMercatorRailPosition_f5, "getDivideMercatorRailPosition.f5", 0.5f);
 
 namespace {
     MercatorTransformCube* getMercatorCube() {
@@ -24,6 +43,7 @@ namespace {
 };  // namespace
 
 MercatorTransformCube::MercatorTransformCube(int formType, const char* pName) : AreaObj(formType, pName) {
+    lumacore::setClass(this, lumacore::kClassId< MercatorTransformCube >);
     mPlacementMtx.identity();
 }
 
@@ -53,7 +73,7 @@ void MercatorTransformCube::convertTransAndRotate(Vec3f* pPos, Pos3f* pRotation,
     point.add(offset);
     Vec3f up(0.0f, 1.0f, 0.0f);
     Vec3f front;
-    if (MR::isSameDirection(point, up, 0.01f)) {
+    if (MR::isSameDirection(point, up, cNum_convertTransAndRotate_f1)) {
         front.set(0.0f, 0.0f, MR::sign(point.y));
     } else {
         Vec3f side;
@@ -79,7 +99,7 @@ void MercatorTransformCube::convertTransAndRotate(Vec3f* pPos, Pos3f* pRotation,
 
 f32 MercatorTransformCube::getSphereRadius() const {
     if (mObjArg0 == -1) {
-        return 3000.0f;
+        return cNum_getSphereRadius_f1;
     }
 
     return mObjArg0;
@@ -88,7 +108,7 @@ f32 MercatorTransformCube::getSphereRadius() const {
 void MercatorTransformCube::calcUV(Vec2f* pUV, const Vec3f& rPos) const {
     Vec3f boxSize;
     calcLocalBoxSize(&boxSize);
-    boxSize *= 0.5f;
+    boxSize *= cNum_calcUV_f1;
 
     Vec3f localPos;
     MR::calcCubeLocalPos(&localPos, this, rPos);
@@ -119,7 +139,7 @@ namespace MR {
         ::getMercatorCube()->convertTransAndRotate(pPos, &rotation, rPos, applyInverse);
         Vec3f angles;
         rotation.getEulerXYZ(angles);
-        pRotation->set< f32 >(57.29577951308232f * angles.x, 57.29577951308232f * angles.y, 57.29577951308232f * angles.z);
+        pRotation->set< f32 >(cNum_convertMercatorPlaneToSphereTransAndRotate_f1 * angles.x, cNum_convertMercatorPlaneToSphereTransAndRotate_f2 * angles.y, cNum_convertMercatorPlaneToSphereTransAndRotate_f3 * angles.z);
     }
 
     void initDefaultPosForMercator(LiveActor* pActor, const TableIter& rIter, bool applyInverse) {
@@ -133,7 +153,7 @@ namespace MR {
         ::getMercatorCube()->convertTransAndRotate(&pos, &sphereRotation, pActor->mPosition, applyInverse);
         rotation.concat(sphereRotation, rotation);
         rotation.getEulerXYZ(angles);
-        angles.set< f32 >(57.29577951308232f * angles.x, 57.29577951308232f * angles.y, 57.29577951308232f * angles.z);
+        angles.set< f32 >(cNum_initDefaultPosForMercator_f1 * angles.x, cNum_initDefaultPosForMercator_f2 * angles.y, cNum_initDefaultPosForMercator_f3 * angles.z);
         pActor->mPosition.set(pos);
         pActor->mRotation.set(angles);
         getPlacementScale(rIter, &pActor->mScale);
@@ -141,7 +161,7 @@ namespace MR {
 
     void calcNearestRailPosForMercator(Vec3f* pPos, const LiveActor* pActor, f32 step) {
         pPos->zero();
-        f32 nearest = 3.4028234663852886e38f;
+        f32 nearest = cNum_calcNearestRailPosForMercator_f1;
         for (f32 coord = 0.0f; coord <= getRailTotalLength(pActor); coord += step) {
             Vec3f pos;
             ::calcRailPosForMercator(&pos, pActor, coord);
@@ -175,7 +195,7 @@ namespace MR {
         box.getCenter(pCenter);
         Vec3f size;
         size.sub(box.f, box.i);
-        *pRadius = 0.5f * size.length();
+        *pRadius = cNum_calcRailClippingInfoForMercator_f1 * size.length();
     }
 
     void initAndSetRailClippingForMercator(Vec3f* pCenter, LiveActor* pActor, f32 step, f32 padding) {
@@ -206,7 +226,7 @@ namespace MR {
             return;
         }
 
-        f32 total = calcRailTotalLengthForMercator(pActor, 100.0f);
+        f32 total = calcRailTotalLengthForMercator(pActor, cNum_getDivideMercatorRailPosition_f1);
         f32 railSpacing;
         f32 spacing;
         if (isLoopRail(pActor)) {
@@ -226,7 +246,7 @@ namespace MR {
         f32 targetDistance = spacing;
         f32 lower = 0.0f;
         f32 coord = railSpacing;
-        f32 upper = 2.0f * railSpacing;
+        f32 upper = cNum_getDivideMercatorRailPosition_f2 * railSpacing;
         Vec3f previous;
         ::calcRailPosForMercator(&previous, pActor, 0.0f);
         pInfo->setPosition(0, previous);
@@ -256,10 +276,10 @@ namespace MR {
                 if (remaining > 0.0f) {
                     lower = coord;
                     if (!bracketed) {
-                        upper += 2.0f * railSpacing;
+                        upper += cNum_getDivideMercatorRailPosition_f3 * railSpacing;
                     }
 
-                    coord = 0.5f * (coord + upper);
+                    coord = cNum_getDivideMercatorRailPosition_f4 * (coord + upper);
                     distance += segment;
                     previous = pos;
                 } else {
@@ -268,7 +288,7 @@ namespace MR {
                     }
 
                     upper = coord;
-                    coord = 0.5f * (lower + coord);
+                    coord = cNum_getDivideMercatorRailPosition_f5 * (lower + coord);
                 }
 
                 if (bracketed) {

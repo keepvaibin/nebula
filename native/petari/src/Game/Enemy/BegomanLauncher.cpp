@@ -15,6 +15,14 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f1, "exeLaunch.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f2, "exeLaunch.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f3, "exeLaunch.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f4, "exeLaunch.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDisappear_f1, "exeDisappear.f1", 90.0f);
 
 namespace NrvBegomanLauncher {
     NEW_NERVE(HostTypeNrvWaitAfterSwitchOn, BegomanLauncher, WaitAfterSwitchOn);
@@ -30,6 +38,7 @@ namespace {
 };  // namespace
 
 BegomanLauncher::BegomanLauncher(const char* pName) : LiveActor(pName), mBegomanCount(), mAppearDelay(), mBegomanArray(), mLaunchType(3) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanLauncher >);
 }
 
 void BegomanLauncher::init(const TableIter& rIter) {
@@ -79,7 +88,7 @@ void BegomanLauncher::init(const TableIter& rIter) {
     initNerve(GET_NERVE(BegomanLauncher, HostTypeNrvWait));
     initEffectKeeper(0, "BegomanLauncher");
     initSound(8, false);
-    MR::initShadowVolumeSphere(this, 100.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f1);
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::listenStageSwitchOnAppear(this, MR::Functor(this, &BegomanLauncher::onSwitchAppear));
         makeActorDead();
@@ -158,7 +167,7 @@ void BegomanLauncher::exeLaunch() {
 
     if (MR::isGreaterStep(this, ::sLaunchTime)) {
         if (mLaunchType == 2) {
-            BegomanBase::launchBegomanBabyLauncher(this, mBegomanArray, mBegomanCount, 100.0f, 10.0f, 30.0f,
+            BegomanBase::launchBegomanBabyLauncher(this, mBegomanArray, mBegomanCount, cNum_exeLaunch_f1, cNum_exeLaunch_f2, cNum_exeLaunch_f3,
                                                    nullptr);
             setNerve(GET_NERVE(BegomanLauncher, HostTypeNrvDisappear));
         } else {
@@ -166,7 +175,7 @@ void BegomanLauncher::exeLaunch() {
                 if (MR::isDead(mBegomanArray[i])) {
                     MR::calcGravity(this);
                     mBegomanArray[i]->mPosition.set(mPosition);
-                    mBegomanArray[i]->mVelocity.set(mGravity * -30.0f);
+                    mBegomanArray[i]->mVelocity.set(mGravity * -cNum_exeLaunch_f4);
                     mBegomanArray[i]->appear();
                     setNerve(GET_NERVE(BegomanLauncher, HostTypeNrvDisappear));
                     return;
@@ -194,7 +203,7 @@ void BegomanLauncher::exeDisappear() {
     if (MR::isFirstStep(this)) {
         MR::showModel(this);
         MR::startBck(this, "BegomanLauncher");
-        MR::setBckFrame(this, 90.0f);
+        MR::setBckFrame(this, cNum_exeDisappear_f1);
         MR::deleteEffect(this, "Launcher");
     }
 

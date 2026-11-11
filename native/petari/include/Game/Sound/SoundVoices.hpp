@@ -96,7 +96,7 @@ struct NoteHolder {
     void* mPlayer = nullptr;
 };
 
-struct Note {
+struct SoundNote {
     enum Status : s32 { STATUS_STOP, STATUS_PLAY, STATUS_RELEASE };
     enum Kind : u32 { KIND_WAVE = 0, KIND_OSC = 2 };
     // mFormat's low three bits: the wave's format on the disc (the store's samples are all PCM16). Below FORMAT_SAMPLED_NUM
@@ -163,11 +163,11 @@ public:
         bool mHasNote = false;
     };
 
-    void setup(SoundEngine* pEngine, NebulaVoice* pVoices, u32 count, Slot* pSlots, Note* pNotes);
+    void setup(SoundEngine* pEngine, NebulaVoice* pVoices, u32 count, Slot* pSlots, SoundNote* pNotes);
     // A note to its slot: the lowest priority slot is taken, its note dropped. Null when none is free.
-    Note* play(const Note& rPrepared, bool force);
+    SoundNote* play(const SoundNote& rPrepared, bool force);
     // Its envelopes to their release (directRelease nonzero: that release instead), its slot to the release priority.
-    void releaseNote(Note* pNote, u16 directRelease);
+    void releaseNote(SoundNote* pNote, u16 directRelease);
     void updateAll();
     // Every playing slot's note gone (the reset's end).
     void dropActive();
@@ -191,14 +191,14 @@ private:
     void endNote(s32 slot);
     s32 initialUpdate(s32 slot);
     s32 update(s32 slot);
-    void effectorParams(Note& rNote, NebulaVoice* pVoice, f32* pVolumes, const OscEffect& rEffect);
-    void mixerVolumes(const Note& rNote, f32 volume, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes);
+    void effectorParams(SoundNote& rNote, NebulaVoice* pVoice, f32* pVolumes, const OscEffect& rEffect);
+    void mixerVolumes(const SoundNote& rNote, f32 volume, f32 pan, f32 fxmix, f32 dolby, f32* pVolumes);
     void nameSound(s32 slot);
 
     SoundEngine* mEngine = nullptr;
     NebulaVoice* mVoices = nullptr;
     Slot* mSlots = nullptr;
-    Note* mNotes = nullptr;
+    SoundNote* mNotes = nullptr;
     u32 mCount = 0;
     // Slots past this have never been used: nothing walks them.
     u32 mUsed = 0;

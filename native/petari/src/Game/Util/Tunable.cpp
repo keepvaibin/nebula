@@ -1,5 +1,17 @@
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f64, cNum_clampTo_f1, "clampTo.f1", 0.5);
+NEBULA_TUNABLE_NAMED(f64, cNum_clampTo_f2, "clampTo.f2", 0.5);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f1, "store.f1", 2147483648.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f2, "store.f2", 2147483647.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f3, "store.f3", 4294967295.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f4, "store.f4", 32768.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f5, "store.f5", 32767.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f6, "store.f6", 65535.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f7, "store.f7", 128.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f8, "store.f8", 127.0);
+NEBULA_TUNABLE_NAMED(f64, cNum_store_f9, "store.f9", 255.0);
+
 // The records lie between two markers: on Windows the linker orders "nebtun$a" < "nebtun$m" < "nebtun$z" and may pad
 // between object files with zeros (a record whose name is null is padding); on ELF the linker names the section's ends.
 namespace {
@@ -77,7 +89,7 @@ namespace {
             return static_cast<T>(high);
         }
         // Halves away from zero: 2.5 sets 3, -2.5 sets -3.
-        return static_cast<T>(value < 0.0 ? value - 0.5 : value + 0.5);
+        return static_cast<T>(value < 0.0 ? value - cNum_clampTo_f1 : value + cNum_clampTo_f2);
     }
 
     void store(void* pAddress, u32 kind, u32 place, f64 value) {
@@ -89,22 +101,22 @@ namespace {
             static_cast<f64*>(pAddress)[place] = value;
             break;
         case nebula::TunableKind_S32:
-            static_cast<s32*>(pAddress)[place] = clampTo<s32>(value, -2147483648.0, 2147483647.0);
+            static_cast<s32*>(pAddress)[place] = clampTo<s32>(value, -cNum_store_f1, cNum_store_f2);
             break;
         case nebula::TunableKind_U32:
-            static_cast<u32*>(pAddress)[place] = clampTo<u32>(value, 0.0, 4294967295.0);
+            static_cast<u32*>(pAddress)[place] = clampTo<u32>(value, 0.0, cNum_store_f3);
             break;
         case nebula::TunableKind_S16:
-            static_cast<s16*>(pAddress)[place] = clampTo<s16>(value, -32768.0, 32767.0);
+            static_cast<s16*>(pAddress)[place] = clampTo<s16>(value, -cNum_store_f4, cNum_store_f5);
             break;
         case nebula::TunableKind_U16:
-            static_cast<u16*>(pAddress)[place] = clampTo<u16>(value, 0.0, 65535.0);
+            static_cast<u16*>(pAddress)[place] = clampTo<u16>(value, 0.0, cNum_store_f6);
             break;
         case nebula::TunableKind_S8:
-            static_cast<s8*>(pAddress)[place] = clampTo<s8>(value, -128.0, 127.0);
+            static_cast<s8*>(pAddress)[place] = clampTo<s8>(value, -cNum_store_f7, cNum_store_f8);
             break;
         case nebula::TunableKind_U8:
-            static_cast<u8*>(pAddress)[place] = clampTo<u8>(value, 0.0, 255.0);
+            static_cast<u8*>(pAddress)[place] = clampTo<u8>(value, 0.0, cNum_store_f9);
             break;
         case nebula::TunableKind_Bool:
             static_cast<bool*>(pAddress)[place] = value != 0.0;

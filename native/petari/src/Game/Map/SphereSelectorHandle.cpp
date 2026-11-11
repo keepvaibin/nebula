@@ -5,6 +5,13 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f1, "playRotateSE.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f2, "playRotateSE.f2", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f3, "playRotateSE.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f4, "playRotateSE.f4", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f5, "playRotateSE.f5", 1.6f);
 
 namespace {
     NEBULA_TUNABLE(s32, cHoldReduceOutScreenFrame, 5);
@@ -51,6 +58,7 @@ namespace NrvSphereSelectorHandle {
 SphereSelectorHandle::SphereSelectorHandle(const char* pName)
     : LiveActor(pName), mIsFileSelectMode(), mFront(0.0f, 0.0f, -1.0f), mRotateSpeed(), mTargetRotateSpeed(), mRotateSpeedX(), mPrevRotateSpeedX(), mSide(1.0f, 0.0f, 0.0f),
       mUp(0.0f, 1.0f, 0.0f), mPointerVelocities(), mNotPointingStep(), mIsRotateBgm() {
+    lumacore::setClass(this, lumacore::kClassId< SphereSelectorHandle >);
     clearPointerVelocity();
     mBaseMtx.identity();
 }
@@ -258,16 +266,16 @@ void SphereSelectorHandle::playRotateSE() {
         return;
     }
 
-    f32 verticalRate = MR::abs(mRotateSpeedX) / 2.0f;
-    f32 horizontalRate = MR::abs(mRotateSpeed) / 5.0f;
+    f32 verticalRate = MR::abs(mRotateSpeedX) / cNum_playRotateSE_f1;
+    f32 horizontalRate = MR::abs(mRotateSpeed) / cNum_playRotateSE_f2;
     f32 rate = verticalRate > horizontalRate ? verticalRate : horizontalRate;
 
     if (rate > 1.0f) {
         rate = 1.0f;
     }
 
-    MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_1", static_cast< s32 >(100.0f * rate));
-    if (!(MR::abs(mRotateSpeed) >= 4.0f) && !(MR::abs(mRotateSpeedX) >= 1.6f)) {
+    MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_1", static_cast< s32 >(cNum_playRotateSE_f3 * rate));
+    if (!(MR::abs(mRotateSpeed) >= cNum_playRotateSE_f4) && !(MR::abs(mRotateSpeedX) >= cNum_playRotateSE_f5)) {
         return;
     }
 

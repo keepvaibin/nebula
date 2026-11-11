@@ -3,8 +3,10 @@
 #include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NamePosHolder::NamePosHolder() : NameObj("位置テーブル保持"), mPosNum(), mInfos(), mIndex(), mNextSame() {
+    lumacore::setClass(this, lumacore::kClassId< NamePosHolder >);
     mPosNum = MR::getGeneralPosNum();
     mInfos = new NamePosInfo[mPosNum];
     mNextSame = new s32[mPosNum > 0 ? mPosNum : 1];

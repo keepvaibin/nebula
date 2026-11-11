@@ -4,6 +4,7 @@
 #include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     BaseMatrixFollowTargetHolder* getBaseMatrixFollowTargetHolder() {
@@ -75,6 +76,7 @@ bool BaseMatrixFollowTarget::isValid(s32 followId) const {
 }
 
 BaseMatrixFollowTargetHolder::BaseMatrixFollowTargetHolder(const char* pName, s32 targetCapacity, s32 followerCapacity) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< BaseMatrixFollowTargetHolder >);
     mTargets.init(targetCapacity);
     mFollowers.init(followerCapacity);
     MR::connectToSceneMapObjMovement(this);

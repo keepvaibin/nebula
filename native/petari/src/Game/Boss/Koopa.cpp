@@ -11,9 +11,15 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
 
 Koopa::Koopa(const char* pName, KoopaSequencer* pSequencer)
     : LiveActor(pName), mFront(0.0f, 0.0f, 1.0f), mSequencer(pSequencer), mSensorCtrl(), mParts(), mJointCtrl() {
+    lumacore::setClass(this, lumacore::kClassId< Koopa >);
 }
 
 void Koopa::kill() {
@@ -61,7 +67,7 @@ void Koopa::init(const TableIter& rIter) {
     mSensorCtrl = new KoopaSensorCtrl(this);
     mSensorCtrl->initSensor();
 
-    initBinder(200.0f, 200.0f, 0);
+    initBinder(cNum_init_f1, cNum_init_f2, 0);
     initEffectKeeper(0, nullptr);
     initSound(16, false);
 

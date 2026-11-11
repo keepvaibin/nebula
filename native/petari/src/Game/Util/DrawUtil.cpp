@@ -15,6 +15,19 @@
 #include <NebulaGpuTypes.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setupScreen2D_f1, "setupScreen2D.f1", 30000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupScreen2D_f2, "setupScreen2D.f2", 30000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadProjectionMtxFor2D_f1, "loadProjectionMtxFor2D.f1", 30000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadProjectionMtxFor2D_f2, "loadProjectionMtxFor2D.f2", 30000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupDrawForLayout_f1, "setupDrawForLayout.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupDrawForLayout_f2, "setupDrawForLayout.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupDrawForLayout_f3, "setupDrawForLayout.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupDrawForLayout_f4, "setupDrawForLayout.f4", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTexProjectionMtx_f1, "calcTexProjectionMtx.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTexProjectionMtx_f2, "calcTexProjectionMtx.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTexProjectionMtx_f3, "calcTexProjectionMtx.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTexProjectionMtx_f4, "calcTexProjectionMtx.f4", 0.5f);
+
 namespace {
     NEBULA_TUNABLE(f32, cNearZ, -10000.0f);
     NEBULA_TUNABLE(f32, cFarZ, 10000.0f);
@@ -63,7 +76,7 @@ namespace MR {
     void setupScreen2D() {
         setDefaultViewportAndScissor();
         Mtx44 projection;
-        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenWidth(), -30000.0f, 30000.0f);
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getScreenWidth(), -cNum_setupScreen2D_f1, cNum_setupScreen2D_f2);
         Frame::setOrthographic(projection);
     }
 
@@ -108,7 +121,7 @@ namespace MR {
     void loadProjectionMtxFor2D() {
         MR::setupScreen2D();
         Mtx44 projection;
-        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getScreenWidth(), -30000.0f, 30000.0f);
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getScreenWidth(), -cNum_loadProjectionMtxFor2D_f1, cNum_loadProjectionMtxFor2D_f2);
         Frame::setOrthographic(projection);
     }
 
@@ -120,10 +133,10 @@ namespace MR {
             height *= MR::getDisplay().vertical_fit;
             width = MR::getDisplay().layout_width;
         }
-        f32 halfWidth = width / 2.0f;
-        height *= 0.5f;
+        f32 halfWidth = width / cNum_setupDrawForLayout_f1;
+        height *= cNum_setupDrawForLayout_f2;
         Mtx44 projMtx;
-        NebulaMtxOrtho(projMtx, height, -height, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+        NebulaMtxOrtho(projMtx, height, -height, -halfWidth, halfWidth, -cNum_setupDrawForLayout_f3, cNum_setupDrawForLayout_f4);
         Frame::setOrthographic(projMtx);
     }
 
@@ -260,10 +273,10 @@ namespace MR {
         MR::multMtx(matrix, MR::getCameraViewMtx(), cameraProjection);
         Pos3f mat;
         mat.identity();
-        mat[0][0] = 0.5f;
-        mat[0][2] = 0.5f;
-        mat[1][1] = -0.5f;
-        mat[1][2] = 0.5f;
+        mat[0][0] = cNum_calcTexProjectionMtx_f1;
+        mat[0][2] = cNum_calcTexProjectionMtx_f2;
+        mat[1][1] = -cNum_calcTexProjectionMtx_f3;
+        mat[1][2] = cNum_calcTexProjectionMtx_f4;
         MR::multMtx(*pMtx, matrix, mat);
     }
 
@@ -273,7 +286,7 @@ namespace MR {
             MeshEntry* pShapePacket = pModel->getMeshEntry(pMaterial->getMesh()->getIndex());
             MaterialDraw draw(pMatPacket->getMaterial());
             draw.sendOwn(pShapePacket->mMaterial, pMatPacket->getMaterial());
-            if (!pShapePacket->checkFlag(MeshEntry::Flag_Hidden)) {
+            if (!pShapePacket->isHidden()) {
                 draw.draw(pModel, pShapePacket->getMesh());
             }
         }

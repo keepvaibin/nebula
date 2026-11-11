@@ -8,9 +8,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const MR::ActorMoveParam sGuardFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sGuardFallParam, {0.0f, 1.0f, 0.98f, 0.0f});
 };  // namespace
 
 namespace NrvKoopaStateGuard {

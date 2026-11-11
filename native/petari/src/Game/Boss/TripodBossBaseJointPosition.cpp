@@ -5,8 +5,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 TripodBossBaseJointPosition::TripodBossBaseJointPosition(const char* pName) : LiveActor(pName), mID(-1) {
+    lumacore::setClass(this, lumacore::kClassId< TripodBossBaseJointPosition >);
     mMtx.identity();
 }
 

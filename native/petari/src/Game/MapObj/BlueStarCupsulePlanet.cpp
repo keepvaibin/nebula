@@ -19,6 +19,9 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 600.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_isReleaseForce_isNearPlayer_1, "isReleaseForce.isNearPlayer.1", 0.0f);
@@ -51,6 +54,7 @@ namespace NrvBlueStarCupsulePlanet {
 };  // namespace NrvBlueStarCupsulePlanet
 
 BlueStarCupsulePlanet::BlueStarCupsulePlanet(const char* pName) : LiveActor(pName), mRailMover(), mRotator(), mName(), mIsStepUpdatable() {
+    lumacore::setClass(this, lumacore::kClassId< BlueStarCupsulePlanet >);
     MR::createGCapture();
 }
 
@@ -75,7 +79,7 @@ void BlueStarCupsulePlanet::init(const TableIter& rIter) {
     // A model name outside the table takes the first entry's radius.
     const BlueStarCupsulePlanetParam* pParam = ::getParam(mName);
     MR::initStarPointerTarget(this, pParam != nullptr ? pParam->mRadius : ::sParams[0].mRadius, offset);
-    MR::setClippingTypeSphere(this, 600.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f1);
 
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);

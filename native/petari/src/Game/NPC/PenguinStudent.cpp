@@ -15,6 +15,22 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwim_f1, "exeSwim.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwim_f2, "exeSwim.f2", 7.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwim_f3, "exeSwim.f3", 0.017453292f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLead_f1, "exeLead.f1", 7.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLead_f2, "exeLead.f2", 7.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSlow_f1, "exeSlow.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSlow_f2, "exeSlow.f2", 5.0f);
 
 namespace NrvPenguinStudent {
     NEW_NERVE(PenguinStudentNrvSwim, PenguinStudent, Swim);
@@ -23,6 +39,7 @@ namespace NrvPenguinStudent {
 };  // namespace NrvPenguinStudent
 
 PenguinStudent::PenguinStudent(const char* pName) : NPCActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< PenguinStudent >);
     mRemovableTurtle = nullptr;
     mActor = nullptr;
     mObjArg0 = -1;
@@ -35,11 +52,11 @@ void PenguinStudent::init(const TableIter& rIter) {
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
     initHitSensor(1);
-    MR::addHitSensorPush(this, "push", 8, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorPush(this, "push", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(4, false);
-    MR::initShadowVolumeSphere(this, 50.0f);
-    NPCActor::initTalkCtrl(rIter, "PenguinStudent", Vec3f(0.0f, 150.0f, 0.0f), nullptr);
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    NPCActor::initTalkCtrl(rIter, "PenguinStudent", Vec3f(0.0f, cNum_init_f4, 0.0f), nullptr);
     NPCActorCaps caps = "";
     caps.mLodCtrl = 1;
     caps.mNerve = false;
@@ -60,11 +77,11 @@ void PenguinStudent::init(const TableIter& rIter) {
     } else {
         s32 railSpacing = 10;
         MR::getPlacementArg1NoInit(rIter, &railSpacing);
-        mRailOffset = 100.0f * railSpacing;
+        mRailOffset = cNum_init_f5 * railSpacing;
     }
 
     mUseReactionActions = false;
-    mRailAccel = 0.3f;
+    mRailAccel = cNum_init_f6;
     MR::useStageSwitchReadA(this, rIter);
     s32 colorFrame = 0;
     MR::getPlacementArg7NoInit(rIter, &colorFrame);
@@ -120,7 +137,7 @@ void PenguinStudent::exeSwim() {
     if (mActor == nullptr) {
         return;
     }
-    f32 speed = ((200.0f * MR::getRailCoordSpeed(mActor)) / 7.0f);
+    f32 speed = ((cNum_exeSwim_f1 * MR::getRailCoordSpeed(mActor)) / cNum_exeSwim_f2);
     MR::setRailCoord(this, MR::getRailCoord(mActor) - mRailOffset);
     MR::moveCoordAndFollowTrans(this);
     MR::followRailPose(this, mRailPoseRate, 1.0f);
@@ -128,7 +145,7 @@ void PenguinStudent::exeSwim() {
     Vec3f front, up, circleDir;
     MR::calcUpVec(&up, this);
     MR::calcFrontVec(&front, this);
-    MR::rotAxisVecRad(up, front, &circleDir, 0.017453292f * (getNerveStep() % 360));
+    MR::rotAxisVecRad(up, front, &circleDir, cNum_exeSwim_f3 * (getNerveStep() % 360));
     mPosition.set(mPosition + circleDir * speed);
     if (mMsgCtrl) {
         MR::tryTalkNearPlayer(mMsgCtrl);
@@ -139,11 +156,11 @@ void PenguinStudent::exeLead() {
     if (MR::isFirstStep(this)) {
         mMoveAction = "SwimTurtle";
         mMoveTalkAction = "SwimTurtle";
-        mRailSpeed = 7.0f;
+        mRailSpeed = cNum_exeLead_f1;
     }
     MR::startLevelSound(this, "SE_SM_LV_PENGUIN_SWIM_JET");
     MR::tryStartMoveTalkAction(this);
-    if (MR::getRailCoordSpeed(this) <= 7.0f) {
+    if (MR::getRailCoordSpeed(this) <= cNum_exeLead_f2) {
         MR::tryTalkNearPlayer(mMsgCtrl);
     }
 }
@@ -152,11 +169,11 @@ void PenguinStudent::exeSlow() {
     if (MR::isFirstStep(this)) {
         mMoveAction = "Swim";
         mMoveTalkAction = "Swim";
-        mRailSpeed = 5.0f;
+        mRailSpeed = cNum_exeSlow_f1;
     }
 
     MR::tryStartMoveTalkAction(this);
-    if (MR::getRailCoordSpeed(this) <= 5.0f) {
+    if (MR::getRailCoordSpeed(this) <= cNum_exeSlow_f2) {
         MR::tryTalkNearPlayer(mMsgCtrl);
     }
 

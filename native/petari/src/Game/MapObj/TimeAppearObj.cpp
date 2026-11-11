@@ -7,6 +7,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sDefaultTimer = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -18,6 +19,7 @@ namespace NrvTimeAppearObj {
 };  // namespace NrvTimeAppearObj
 
 TimeAppearObj::TimeAppearObj(const char* pName) : MapObjActor(pName), mTimer(::sDefaultTimer) {
+    lumacore::setClass(this, lumacore::kClassId< TimeAppearObj >);
 }
 
 void TimeAppearObj::init(const TableIter& rIter) {

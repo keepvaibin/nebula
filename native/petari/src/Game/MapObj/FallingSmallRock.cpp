@@ -6,6 +6,12 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 800.0f);
 
 namespace NrvFallingSmallRock {
     NEW_NERVE(HostTypeWait, FallingSmallRock, Wait);
@@ -13,15 +19,16 @@ namespace NrvFallingSmallRock {
 };  // namespace NrvFallingSmallRock
 
 FallingSmallRock::FallingSmallRock(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FallingSmallRock >);
 }
 
 void FallingSmallRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initSound(4, false);
-    initBinder(10.0f, 800.0f, 0);
+    initBinder(cNum_init_f1, cNum_init_f2, 0);
     initEffectKeeper(0, "FallingSmallRock");
     MR::needStageSwitchReadA(this, rIter);
-    MR::setClippingTypeSphere(this, 800.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f3);
     initNerve(GET_NERVE(FallingSmallRock, HostTypeWait));
     MR::connectToSceneMapObjMovement(this);
     makeActorAppeared();

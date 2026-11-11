@@ -6,12 +6,14 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTicoStarRing {
     NEW_NERVE(TicoStarRingNrvWait, TicoStarRing, Wait);
 };  // namespace NrvTicoStarRing
 
 TicoStarRing::TicoStarRing(const char* pName) : Tico(pName), mGalaxyName(), mAppearActor(), mTicoGalaxy() {
+    lumacore::setClass(this, lumacore::kClassId< TicoStarRing >);
 }
 
 void TicoStarRing::init(const TableIter& rIter) {

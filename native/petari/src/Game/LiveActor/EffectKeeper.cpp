@@ -14,6 +14,9 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_module.h>
 #include <algorithm>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacementForAttributeEffect_f1, "initAfterPlacementForAttributeEffect.f1", 100.0f);
 
 namespace {
     const char* cAttributeEffectTag = "Attr";
@@ -97,7 +100,7 @@ void EffectKeeper::initAfterPlacementForAttributeEffect(MtxPtr pMtx) {
 
     checkExistenceAttributeEffect();
     if (mHasAttributeEffect && pMtx != nullptr) {
-        s32 code = ::getFloorCodeBelow(pMtx, 100.0f);
+        s32 code = ::getFloorCodeBelow(pMtx, cNum_initAfterPlacementForAttributeEffect_f1);
         if (code >= 0) {
             mFloorCode = code;
             mEffectFloorCode = code;

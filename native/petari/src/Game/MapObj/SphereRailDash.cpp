@@ -8,6 +8,18 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f4, "exeWait.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f5, "exeWait.f5", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f6, "exeWait.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f7, "exeWait.f7", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailMove_f1, "exeRailMove.f1", 0.85f);
 
 namespace NrvSphereRailDash {
     NEW_NERVE(SphereRailDashNrvWait, SphereRailDash, Wait);
@@ -16,6 +28,7 @@ namespace NrvSphereRailDash {
 
 SphereRailDash::SphereRailDash(const char* pName)
     : LiveActor(pName), mBinderSensor(), mOffset(0.0f, 0.0f, 0.0f), mEndSpeed(50.0f), mCoordCubic(), mCoordQuadratic(), mCoordLinear(), mMoveStep() {
+    lumacore::setClass(this, lumacore::kClassId< SphereRailDash >);
 }
 
 void SphereRailDash::init(const TableIter& rIter) {
@@ -24,7 +37,7 @@ void SphereRailDash::init(const TableIter& rIter) {
     MR::moveCoordToStartPos(this);
     Vec3f railPosition(MR::getRailPos(this));
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_SPHERE_DASH, 5, 200.0f, railPosition);
+    MR::addHitSensor(this, "body", ATYPE_SPHERE_DASH, 5, cNum_init_f1, railPosition);
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);
     MR::getPlacementArg1NoInit(rIter, &mEndSpeed);
@@ -58,13 +71,13 @@ void SphereRailDash::exeWait() {
 
         f32 endSpeed = mEndSpeed;
         // No speed at either end (the arg is 0 and the player stands still) crosses the rail in one step.
-        const f32 speedSum = speed + 2.0f * endSpeed;
-        f32 duration = speedSum > 0.0f ? 3.0f * MR::getRailTotalLength(this) / speedSum : 1.0f;
-        f32 acceleration = 2.0f * (endSpeed - speed) / duration;
-        mCoordCubic = -acceleration / (2.0f * duration) / 3.0f;
-        mCoordQuadratic = acceleration / 2.0f;
+        const f32 speedSum = speed + cNum_exeWait_f1 * endSpeed;
+        f32 duration = speedSum > 0.0f ? cNum_exeWait_f2 * MR::getRailTotalLength(this) / speedSum : 1.0f;
+        f32 acceleration = cNum_exeWait_f3 * (endSpeed - speed) / duration;
+        mCoordCubic = -acceleration / (cNum_exeWait_f4 * duration) / cNum_exeWait_f5;
+        mCoordQuadratic = acceleration / cNum_exeWait_f6;
         mCoordLinear = speed;
-        mMoveStep = duration + (duration - static_cast< s32 >(duration) > 0.0001f ? 1.0f : 0.0f);
+        mMoveStep = duration + (duration - static_cast< s32 >(duration) > cNum_exeWait_f7 ? 1.0f : 0.0f);
 
         if (mMoveStep < 0) {
             mMoveStep = 0;
@@ -90,7 +103,7 @@ void SphereRailDash::exeRailMove() {
     const f32 railLength = MR::getRailTotalLength(this);
     f32 progress = railLength > 0.0f ? MR::getRailCoord(this) / railLength : 1.0f;
     mOffset += mOffsetVelocity;
-    mOffsetVelocity.mult(0.85f);
+    mOffsetVelocity.mult(cNum_exeRailMove_f1);
     Vec3f previousPosition(mBinderSensor->mHost->mPosition);
     Vec3f position = MR::getRailPos(this) + mOffset.multInLine2(1.0f - progress);
     Vec3f& rVelocity = mBinderSensor->mHost->mVelocity;

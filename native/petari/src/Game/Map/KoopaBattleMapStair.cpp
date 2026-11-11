@@ -11,6 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     struct EdgeOffset {
@@ -34,8 +35,8 @@ namespace {
     NEBULA_TUNABLE(f32, cBigClippingRadius, 800.0f);
     NEBULA_TUNABLE(f32, cDisappearBrkRate, 0.25f);
     // The eight edge and corner points round the stair top, in units of the half widths.
-    const EdgeOffset cEdgeOffset[] = {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
-                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}};
+    NEBULA_TUNABLE_RECORDS(EdgeOffset, cEdgeOffset, , {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
+                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}});
 }  // namespace
 
 namespace NrvKoopaBattleMapStair {
@@ -49,6 +50,7 @@ namespace NrvKoopaBattleMapStair {
 KoopaBattleMapStair::KoopaBattleMapStair(const char* pName)
     : LiveActor(pName), mTimeToBreak(::cDefaultTimeToBreak), mFireAttackStep(-1), mLevel(), mTargetCorner(-1), mIsJumpAfterAttack(), mType(), mIsBig(),
       mIsTurn(), mIsKoopaAttack(), mTargetPos(0.0f, 0.0f, 0.0f), mWaitFallStep(::cDefaultStepWaitFall), mFallStep(::cDefaultStepFall) {
+    lumacore::setClass(this, lumacore::kClassId< KoopaBattleMapStair >);
 }
 
 void KoopaBattleMapStair::init(const TableIter& rIter) {

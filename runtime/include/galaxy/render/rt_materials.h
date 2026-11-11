@@ -62,8 +62,8 @@ enum class RtSurfaceClass : std::uint8_t {
 
 enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 
-// The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (the owner, 27 October
-// 2026: ice 20 to 25 % of its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
+// The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (ice 20 to 25 % of
+// its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
 // multiply and add (material and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
 // it by (0, 40, 65), its sheen by (55, 77, 92)); their textures are grey and what shows through them (the screen
 // capture the ice refracts, its reflection) keeps its own colours. Those colours keep that share of their chroma, their
@@ -239,13 +239,6 @@ inline constexpr std::uint64_t kRtEffectHash = 0xFFFFFFFFFFFFFFFEull;
 // The loaded stage's material for its untextured surfaces (0: the stage has no `untextured` row).
 [[nodiscard]] std::uint16_t rt_stage_untextured_material() noexcept;
 [[nodiscard]] const RtMaterial* rt_material(std::uint16_t index) noexcept;
-// GALAXY_RT_LOG_GLOWS=1: the texture-pack name of each texture as uploaded, kept by address, and
-// printed for the glow draws ([rt-glow]) and the traced surfaces ([rt-surface]) the table does not name.
-void note_rt_texture(std::uint64_t address, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
-                     std::uint32_t format);
-void note_rt_unnamed_glow(std::uint64_t address);
-void note_rt_unnamed_surface(std::uint64_t address);
-[[nodiscard]] bool rt_log_glows() noexcept;
 // The loaded stage: its rows of the table (RtMaterialTable::stage_materials) take effect.
 void rt_materials_set_stage(std::string_view stage);
 // Counts the stages set: a new value is a new stage.

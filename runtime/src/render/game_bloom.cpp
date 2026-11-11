@@ -2,7 +2,6 @@
 // GameBloom: the game's bloom at the internal resolution (game_bloom.h).
 #include "galaxy/render/game_bloom.h"
 #include "barriers_d3d12.h"
-#include "galaxy/run_options.h"
 
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/renderer_d3d12.h"

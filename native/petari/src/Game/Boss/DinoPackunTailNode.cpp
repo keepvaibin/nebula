@@ -4,6 +4,11 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcJointScale_f1, "calcJointScale.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcJointScale_f2, "calcJointScale.f2", 5.0f);
 
 typedef JointControlDelegator< DinoPackunTailNode > Delegator;
 
@@ -12,7 +17,9 @@ typedef bool (DinoPackunTailNode::*func)(Pos3f*, const JointControllerInfo&);
 DinoPackunTailNode::DinoPackunTailNode(const char* pName, DinoPackun* pParent)
     : LiveActor(pName), mParent(pParent), mNodeDirection(0.0f, 0.0f, 0.0f), mJointPos(0.0f, 0.0f, 0.0f), mJointFront(0.0f, 0.0f, 0.0f),
       mPrevNode(nullptr), mNextNode(nullptr), mJointMtx(nullptr), mPreCalcJointCtrl(nullptr), mJointCtrl(nullptr), mLinkLength(90.0f),
-      mKeepBendPower(10.0f), mIsLocked(false) {}
+      mKeepBendPower(10.0f), mIsLocked(false) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunTailNode >);
+}
 
 void DinoPackunTailNode::createJointController(LiveActor* pHost, const char* pJointName) {
     mJointCtrl = static_cast< Delegator* >(createJointControllerOwn(pHost, pJointName));
@@ -80,7 +87,7 @@ bool DinoPackunTailNode::calcJointScale(Pos3f* pMtx, const JointControllerInfo& 
 
     // Stretches along the link and thins to keep the volume.
     f32 distance = mNextNode->mPosition.distance(mPosition);
-    f32 stretch = MR::clamp(distance / mLinkLength, 0.2f, 5.0f);
+    f32 stretch = MR::clamp(distance / mLinkLength, cNum_calcJointScale_f1, cNum_calcJointScale_f2);
     f32 shrink = MR::sqrt(1.0f / stretch);
     MR::preScaleMtx(*pMtx, stretch, shrink, shrink);
     return true;

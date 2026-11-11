@@ -1,6 +1,7 @@
 #include "Game/MapObj/MapPartsRailPosture.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvMapPartsRailPosture {
     NEW_NERVE(HostTypeDoNothing, MapPartsRailPosture, DoNothing);
@@ -8,6 +9,7 @@ namespace NrvMapPartsRailPosture {
 };  // namespace NrvMapPartsRailPosture
 
 MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "姿勢制御"), mMovePosture(POSTURE_NONE) {
+    lumacore::setClass(this, lumacore::kClassId< MapPartsRailPosture >);
     mPostureMtx.identity();
 }
 

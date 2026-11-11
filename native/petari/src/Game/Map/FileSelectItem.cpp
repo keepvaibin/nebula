@@ -22,6 +22,44 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 27.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createNew_f1, "createNew.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createMii_f1, "createMii.f1", 27.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f1, "checkCollisionOfPointAndTriangle.f1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f2, "checkCollisionOfPointAndTriangle.f2", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f3, "checkCollisionOfPointAndTriangle.f3", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f4, "checkCollisionOfPointAndTriangle.f4", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f5, "checkCollisionOfPointAndTriangle.f5", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f6, "checkCollisionOfPointAndTriangle.f6", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkCollisionOfPointAndTriangle_f7, "checkCollisionOfPointAndTriangle.f7", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f1, "updateRotate.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f2, "updateRotate.f2", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f3, "updateRotate.f3", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f4, "updateRotate.f4", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f5, "updateRotate.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f6, "updateRotate.f6", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f7, "updateRotate.f7", 0.03f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f8, "updateRotate.f8", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f9, "updateRotate.f9", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f10, "updateRotate.f10", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f11, "updateRotate.f11", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f12, "updateRotate.f12", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f13, "updateRotate.f13", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f14, "updateRotate.f14", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f15, "updateRotate.f15", 360.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeToBig_f1, "exeToBig.f1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f1, "exeOpen.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f2, "exeOpen.f2", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSleep_f1, "exeSleep.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBig_f1, "exeBig.f1", 1.2f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_1, "exeFormat.1", 40);
@@ -68,7 +106,7 @@ namespace {
                                         "FileSelectDataPeach"};
     const s32 sFellowNum = ARRAY_SIZE(sFellowModel);
 
-    static const Vec sDataInfoOffset = {0.0f, 2150.0f, 0.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sDataInfoOffset, {0.0f, 2150.0f, 0.0f});
 };  // namespace
 
 namespace FileSelectItemSub {
@@ -83,6 +121,7 @@ namespace FileSelectItemSub {
 };  // namespace FileSelectItemSub
 
 FileSelectItem::FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconID& rID, const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FileSelectItem >);
     mIsNewFile = isNewFile;
     mPlanetMapObj = nullptr;
     mIconID = new FileSelectIconID(rID);
@@ -122,7 +161,7 @@ void FileSelectItem::init(const TableIter& /*rIter*/) {
     createFellows();
     createMii();
     createNumber();
-    MR::initStarPointerTarget(this, 1000.0f, Vec3f(0.0f, 900.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(FileSelectItemNrvNewWait));
     MR::createCenterScreenBlur();
@@ -369,20 +408,20 @@ void FileSelectItem::control() {
     Vec3f trans;
     mtx.getTrans(trans);
     mPlanetMtx.set(mtx);
-    mPlanetMtx.setTrans(trans + yDir * 30.0f * 30.0f);
+    mPlanetMtx.setTrans(trans + yDir * cNum_control_f1 * cNum_control_f2);
 
     mFellowMtx.set(mtx);
     mFaceMtx.set(mtx);
 
     mScaleCtrl->updateNerve();
 
-    mPlanetMapObj->mScale.setAll< f32 >(30.0f * mScaleCtrl->getScale());
+    mPlanetMapObj->mScale.setAll< f32 >(cNum_control_f3 * mScaleCtrl->getScale());
 
     for (s32 i = 0; i < ::sFellowNum; i++) {
-        mModels[i]->mScale.setAll< f32 >(30.0f * mScaleCtrl->getScale());
+        mModels[i]->mScale.setAll< f32 >(cNum_control_f4 * mScaleCtrl->getScale());
     }
 
-    mFaceParts->mScale.setAll< f32 >(27.0f * mScaleCtrl->getScale());
+    mFaceParts->mScale.setAll< f32 >(cNum_control_f5 * mScaleCtrl->getScale());
 
     mBlinkCtrl->updateNerve();
 
@@ -395,7 +434,7 @@ void FileSelectItem::control() {
 
 void FileSelectItem::createNew() {
     mPlanetMapObj = MR::createPartsModelMapObj(this, "ニューフェイス", "FileSelectDataPlanet", mPlanetMtx);
-    mPlanetMapObj->mScale.set(30.0f);
+    mPlanetMapObj->mScale.set(cNum_createNew_f1);
     mPlanetMapObj->makeActorDead();
 }
 
@@ -414,7 +453,7 @@ void FileSelectItem::createMii() {
     }
 
     mFaceParts->initFixedPosition(mFaceMtx, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
-    mFaceParts->mScale.set(27.0f);
+    mFaceParts->mScale.set(cNum_createMii_f1);
     mFaceParts->initEffectKeeper(0, "FileSelectDataMii");
     MR::invalidateClipping(mFaceParts);
     mFaceParts->makeActorDead();
@@ -512,7 +551,7 @@ namespace {
         bool containsPoint;
         bool collides;
 
-        if (MR::abs(planeDistance) >= 900.0f) {
+        if (MR::abs(planeDistance) >= cNum_checkCollisionOfPointAndTriangle_f1) {
             collides = false;
         } else {
             Vec3f projected;
@@ -520,18 +559,18 @@ namespace {
             containsPoint = triangle.contains(projected);
             if (containsPoint) {
                 collides = true;
-            } else if (triangle.mVertexA.distance(rCenter) <= 900.0f) {
+            } else if (triangle.mVertexA.distance(rCenter) <= cNum_checkCollisionOfPointAndTriangle_f2) {
                 collides = true;
-            } else if (triangle.mVertexB.distance(rCenter) <= 900.0f) {
+            } else if (triangle.mVertexB.distance(rCenter) <= cNum_checkCollisionOfPointAndTriangle_f3) {
                 collides = true;
-            } else if (triangle.mVertexC.distance(rCenter) <= 900.0f) {
+            } else if (triangle.mVertexC.distance(rCenter) <= cNum_checkCollisionOfPointAndTriangle_f4) {
                 collides = true;
-            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexA, triangle.mEdgeAB, 900.0f)) {
+            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexA, triangle.mEdgeAB, cNum_checkCollisionOfPointAndTriangle_f5)) {
                 collides = true;
-            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexB, triangle.mEdgeBC, 900.0f)) {
+            } else if (::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexB, triangle.mEdgeBC, cNum_checkCollisionOfPointAndTriangle_f6)) {
                 collides = true;
             } else {
-                collides = ::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexC, triangle.mEdgeCA, 900.0f);
+                collides = ::checkCollisionOfPointAndCylinder(rCenter, triangle.mVertexC, triangle.mEdgeCA, cNum_checkCollisionOfPointAndTriangle_f7);
             }
         }
 
@@ -566,14 +605,14 @@ void FileSelectItem::updateRotate() {
             mTurnTime = 0;
         }
 
-        f32 angle = MR::repeat(mRotation.y, -180.0f, 360.0f);
+        f32 angle = MR::repeat(mRotation.y, -cNum_updateRotate_f1, cNum_updateRotate_f2);
         mRotation.y = angle - angle * rate;
         FileSelectItemSub::BlinkController* pBlink = mBlinkCtrl;
         pBlink->open();
         pBlink->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
         return;
     } else if (MR::isStarPointerInScreen(0)) {
-        Vec3f center = mPosition + Vec3f(0.0f, 900.0f, 0.0f);
+        Vec3f center = mPosition + Vec3f(0.0f, cNum_updateRotate_f3, 0.0f);
         Vec2f screenPos(*MR::getStarPointerScreenPosition(0));
 
         if (mIsPointerOut) {
@@ -584,15 +623,15 @@ void FileSelectItem::updateRotate() {
         Vec3f cameraPosition = MR::getCamPos();
         Vec3f cameraToCenter = center - cameraPosition;
 
-        f32 pointerDistance = (900.0f + cameraToCenter.length());
-        if (FloatUtil::sqrt(screenPos.squareDist(mPrevPointerPos)) < 2.0f) {
+        f32 pointerDistance = (cNum_updateRotate_f4 + cameraToCenter.length());
+        if (FloatUtil::sqrt(screenPos.squareDist(mPrevPointerPos)) < cNum_updateRotate_f5) {
             Vec3f pointerPosition;
             MR::calcWorldPositionFromScreen(&pointerPosition, screenPos, pointerDistance);
             Vec3f pointerDirection = pointerPosition - cameraPosition;
             MR::normalize(&pointerDirection);
             Vec3f crossDirection = cameraToCenter.cross(pointerDirection);
 
-            if (crossDirection.length() < 900.0f) {
+            if (crossDirection.length() < cNum_updateRotate_f6) {
                 mIsDragging = 1;
             }
         } else {
@@ -609,8 +648,8 @@ void FileSelectItem::updateRotate() {
 
         if (mIsDragging) {
             Vec2f delta = screenPos - mPrevPointerPos;
-            mRotateSpeed += 0.03f * delta.x / mScale.x;
-            mRotateSpeed = MR::clamp(mRotateSpeed, -25.0f, 25.0f);
+            mRotateSpeed += cNum_updateRotate_f7 * delta.x / mScale.x;
+            mRotateSpeed = MR::clamp(mRotateSpeed, -cNum_updateRotate_f8, cNum_updateRotate_f9);
         }
 
         mPrevPointerPos = screenPos;
@@ -618,17 +657,17 @@ void FileSelectItem::updateRotate() {
         mIsPointerOut = 1;
     }
 
-    mRotateSpeed *= 0.98f;
+    mRotateSpeed *= cNum_updateRotate_f10;
 
-    if (mRotateSpeed >= 0.0f && mRotateSpeed < 0.5f) {
-        mRotateSpeed = 0.5f;
+    if (mRotateSpeed >= 0.0f && mRotateSpeed < cNum_updateRotate_f11) {
+        mRotateSpeed = cNum_updateRotate_f12;
     }
 
-    if (mRotateSpeed < 0.0f && mRotateSpeed > -0.5f) {
-        mRotateSpeed = -0.5f;
+    if (mRotateSpeed < 0.0f && mRotateSpeed > -cNum_updateRotate_f13) {
+        mRotateSpeed = -cNum_updateRotate_f14;
     }
 
-    mRotation.y = MR::repeat(mRotation.y + mRotateSpeed, 0.0f, 360.0f);
+    mRotation.y = MR::repeat(mRotation.y + mRotateSpeed, 0.0f, cNum_updateRotate_f15);
     mIsDragging = 0;
 }
 
@@ -772,7 +811,7 @@ namespace FileSelectItemSub {
     void ScaleController::exeToBig() {
         if (MR::isLessEqualStep(this, cScaleEaseSteps)) {
             f32 rate = (static_cast< f32 >(getNerveStep()) / static_cast< f32 >(cScaleEaseSteps));
-            mScale += rate * (1.2f - mScale);
+            mScale += rate * (cNum_exeToBig_f1 - mScale);
         }
 
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), cScaleEaseSteps);
@@ -794,10 +833,10 @@ namespace FileSelectItemSub {
         // 1.5-3 s of spinning puts the icon to sleep.
         f32 spinSpeed = MR::abs(mItem->mRotateSpeed);
 
-        if (spinSpeed > 10.0f) {
+        if (spinSpeed > cNum_exeOpen_f1) {
             mBlinkStep += 2;
         } else {
-            if (spinSpeed > 6.0f) {
+            if (spinSpeed > cNum_exeOpen_f2) {
                 mBlinkStep++;
             } else {
                 mBlinkStep = 0;
@@ -832,7 +871,7 @@ namespace FileSelectItemSub {
 
         mBlinkStep++;
 
-        if (MR::abs(mItem->mRotateSpeed) > 2.0f) {
+        if (MR::abs(mItem->mRotateSpeed) > cNum_exeSleep_f1) {
             mBlinkStep = 0;
         }
 
@@ -901,7 +940,7 @@ namespace FileSelectItemSub {
     }
 
     void ScaleController::exeBig() {
-        mScale = 1.2f;
+        mScale = cNum_exeBig_f1;
     }
 
     void ScaleController::exeSmall() {

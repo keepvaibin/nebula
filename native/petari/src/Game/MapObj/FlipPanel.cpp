@@ -8,6 +8,9 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcJointMove_f1, "calcJointMove.f1", 25.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeEndPrepare_1, "exeEndPrepare.1", 20);
@@ -50,6 +53,7 @@ namespace NrvFlipPanelObserver {
 };  // namespace NrvFlipPanelObserver
 
 FlipPanel::FlipPanel(const char* pName) : MapObjActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FlipPanel >);
     mDelegator = 0;
     mIsPlayerOn = 0;
     mIsFlipped = 0;
@@ -227,7 +231,7 @@ bool FlipPanel::calcJointMove(Pos3f* pPos, const JointControllerInfo& /*rInfo*/)
     MR::copyJointPos(this, "Panel", &jointPos);
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    jointPos.scaleAdd(-25.0f, upVec, jointPos);
+    jointPos.scaleAdd(-cNum_calcJointMove_f1, upVec, jointPos);
     pPos->setTrans(jointPos);
     return true;
 }
@@ -265,6 +269,7 @@ bool FlipPanel::checkPlayerOnTop() {
 }
 
 FlipPanelObserver::FlipPanelObserver(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< FlipPanelObserver >);
     mGroup = 0;
     mFlippedNum = 0;
     mDemoDelay = 0;

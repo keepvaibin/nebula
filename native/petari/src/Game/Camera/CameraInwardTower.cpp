@@ -5,6 +5,12 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f1, "calcIdealPose.f1", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f2, "calcIdealPose.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f3, "calcIdealPose.f3", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIdealPose_f4, "calcIdealPose.f4", 0.1f);
 
 namespace {
     NEBULA_TUNABLE(f32, sRoundThreshold, 0.3f);
@@ -15,6 +21,7 @@ namespace {
 CameraInwardTower::CameraInwardTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleX(), mAngleMax(), mDist(2000.0f), mPos(0.0f, 10.0f, 0.0f), mAngleY(),
       mIsResetting() {
+    lumacore::setClass(this, lumacore::kClassId< CameraInwardTower >);
     createVPanObj();
 }
 
@@ -96,13 +103,13 @@ void CameraInwardTower::calcIdealPose() {
             if (angle > mAngleMax) {
                 angle = mAngleMax;
             }
-            mAngleY = mAngleY * 0.9f + angle * 0.1f;
+            mAngleY = mAngleY * cNum_calcIdealPose_f1 + angle * cNum_calcIdealPose_f2;
         } else if (rate < -::sRoundThreshold) {
             angle -= speed;
             if (angle < -mAngleMax) {
                 angle = -mAngleMax;
             }
-            mAngleY = mAngleY * 0.9f + angle * 0.1f;
+            mAngleY = mAngleY * cNum_calcIdealPose_f3 + angle * cNum_calcIdealPose_f4;
         }
     }
 

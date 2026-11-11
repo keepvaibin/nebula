@@ -6,6 +6,9 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 6.2831855f);
 
 namespace {
     // Rim segments of the fan.
@@ -16,6 +19,7 @@ ShadowSurfaceCircle::~ShadowSurfaceCircle() {
 }
 
 ShadowSurfaceCircle::ShadowSurfaceCircle() : ShadowSurfaceDrawer("影描画[水面円]"), mRadius(100.0f) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceCircle >);
 }
 
 void ShadowSurfaceCircle::setRadius(f32 radius) {
@@ -64,7 +68,7 @@ void ShadowSurfaceCircle::draw() const {
     circleMtx.setXYZDir(axis, quarter, down);
     circleMtx.setTrans(pos + normal);
 
-    const f32 step = 6.2831855f / static_cast< f32 >(cSegments);
+    const f32 step = cNum_draw_f1 / static_cast< f32 >(cSegments);
     TypedDraw site(ShadowSurfaceDrawInit::material(), circleMtx.toMtxPtr(), MR::getCameraViewMtx());
     VertexPC* vtx = site.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_FAN, cSegments + 2);
     *vtx++ = {0.0f, 0.0f, 0.0f, Rgba8(0x80)};

@@ -7,6 +7,16 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceAppear_f1, "isDistanceAppear.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceAppear_f2, "isDistanceAppear.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceAppear_f3, "isDistanceAppear.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceDisappear_f1, "isDistanceDisappear.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceDisappear_f2, "isDistanceDisappear.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isDistanceDisappear_f3, "isDistanceDisappear.f3", 100.0f);
 
 namespace NrvHalo {
     NEW_NERVE(HostTypeAppear, Halo, Appear);
@@ -32,6 +42,7 @@ namespace {
 };  // namespace
 
 Halo::Halo(const char* pName) : MapObjActor(pName), mDistance(70.0f) {
+    lumacore::setClass(this, lumacore::kClassId< Halo >);
 }
 
 void Halo::init(const TableIter& rIter) {
@@ -40,7 +51,7 @@ void Halo::init(const TableIter& rIter) {
     info.setupDefaultPos();
     info.setupConnectToScene();
     info.setupNerve(GET_NERVE(Halo, HostTypeAppear));
-    info.setupClippingRadius(::getParam(mObjectName)->mClippingRadius * 100.0f);
+    info.setupClippingRadius(::getParam(mObjectName)->mClippingRadius * cNum_init_f1);
     info.setupFarClipping(-1.0f);
     info.setupAffectedScale();
     initialize(rIter, info);
@@ -88,8 +99,8 @@ void Halo::connectToScene(const MapObjActorInitInfo& /*rIter*/) {
 }
 
 bool Halo::isDistanceAppear() const {
-    f32 offset = (mDistance + 20.0f) * 100.0f;
-    f32 distance = mDistance * 100.0f;
+    f32 offset = (mDistance + cNum_isDistanceAppear_f1) * cNum_isDistanceAppear_f2;
+    f32 distance = mDistance * cNum_isDistanceAppear_f3;
 
     if (distance < offset) {
         return offset < getDistance();
@@ -99,8 +110,8 @@ bool Halo::isDistanceAppear() const {
 }
 
 bool Halo::isDistanceDisappear() const {
-    f32 offset = (mDistance + 20.0f) * 100.0f;
-    f32 distance = mDistance * 100.0f;
+    f32 offset = (mDistance + cNum_isDistanceDisappear_f1) * cNum_isDistanceDisappear_f2;
+    f32 distance = mDistance * cNum_isDistanceDisappear_f3;
 
     if (distance < offset) {
         return getDistance() < distance;
@@ -146,6 +157,7 @@ void Halo::exeDisappear() {
 }
 
 PowerStarHalo::PowerStarHalo(const char* pName) : Halo(pName), mAppearDuringOpeningCam(-1) {
+    lumacore::setClass(this, lumacore::kClassId< PowerStarHalo >);
 }
 
 void PowerStarHalo::init(const TableIter& rIter) {

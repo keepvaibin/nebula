@@ -58,7 +58,7 @@ public:
     [[nodiscard]] std::optional<Entry> added_child(std::string_view path, std::uint32_t index) const;
     [[nodiscard]] std::string_view game_id() const noexcept { return game_id_; }
     [[nodiscard]] unsigned revision() const noexcept { return revision_; }
-    // The game's language folders at the root ("UsEnglish", ...), in the store's order.
+    // The language folders at the root ("UsEnglish", ...): the game's in the store's order, then those the mods add.
     [[nodiscard]] std::vector<std::string> language_folders() const;
 
 private:
@@ -80,11 +80,14 @@ private:
 
     void close();
     [[nodiscard]] std::optional<Entry> find_own(std::string_view path) const;
+    [[nodiscard]] std::optional<Entry> find_merged(std::string_view path) const;
     bool parse(const std::uint8_t* header, const std::uint8_t* index, std::uint64_t index_at, std::uint64_t size);
 
     // Positions past this are the overlay's; indices past count_ are its nodes.
     static constexpr std::uint64_t kOverlayPosition = std::uint64_t{1} << 50u;
     std::unique_ptr<AssetStore> overlay_;
+    // With mods: the game's own language folder (its English, else its first) that a language a mod adds falls back to.
+    std::string language_fallback_;
     std::vector<std::uint8_t> index_;
     const std::uint8_t* image_ = nullptr;
     const std::uint8_t* view_ = nullptr;

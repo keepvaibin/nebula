@@ -5,6 +5,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setNumber_f1, "setNumber.f1", 128.0f);
 
 namespace NrvFullnessMeter {
     NEW_NERVE(FullnessMeterNrvAppear, FullnessMeter, Appear);
@@ -13,6 +17,7 @@ namespace NrvFullnessMeter {
 };  // namespace NrvFullnessMeter
 
 FullnessMeter::FullnessMeter(LiveActor* pHost, s32 a2, s32 a3) : LayoutActor("満腹計", true), mNumber(a3), mNumberMax(a2), mHost(pHost) {
+    lumacore::setClass(this, lumacore::kClassId< FullnessMeter >);
     MR::connectToSceneTalkLayout(this);
     initLayoutManager("StarPieceTargetMeter", 1);
     MR::createAndAddPaneCtrl(this, "TargetMeter", 1);
@@ -37,7 +42,7 @@ void FullnessMeter::setNumber(s32 num) {
 
     // A target of 0 or less (placement data) is already full, not a division by 0.
     const f32 fullness = mNumberMax > 0 ? static_cast< f32 >(mNumber) / mNumberMax : 1.0f;
-    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - fullness)));
+    s32 frame = 128 - (u16)(s32)((cNum_setNumber_f1 * (1.0f - fullness)));
 
     MR::startPaneAnim(this, "TargetMeter", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "TargetMeter", frame, 0);

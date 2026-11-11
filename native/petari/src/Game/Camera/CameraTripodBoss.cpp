@@ -1,8 +1,10 @@
 #include "Game/Camera/CameraTripodBoss.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
+#include "Game/System/LumaCore.hpp"
 
 CameraTripodBoss::CameraTripodBoss(const char* pName) : CameraTower(pName), mAngleY() {
+    lumacore::setClass(this, lumacore::kClassId< CameraTripodBoss >);
 }
 
 void CameraTripodBoss::setParamFromChunk(const CameraParamChunk* pChunk) {

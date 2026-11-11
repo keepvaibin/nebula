@@ -144,6 +144,33 @@ namespace MR {
         showJointAndChildren(MR::getModel(pActor), pName);
     }
 
+    // A plugin's hide (show_joint): the joint's meshes and its children's, on this model only.
+    void showJointAndChildrenOn(Model* pModel, Joint* pJoint, bool show) {
+        for (Material* mat = pJoint->getMesh(); mat != nullptr; mat = mat->mNext) {
+            MeshEntry* pEntry = pModel->getMeshEntry(mat->getMesh()->getIndex());
+            if (show) {
+                pEntry->offFlag(MeshEntry::Flag_PluginHidden);
+            } else {
+                pEntry->onFlag(MeshEntry::Flag_PluginHidden);
+            }
+        }
+        for (Joint* pChild = pJoint->mChild; pChild != nullptr; pChild = pChild->mYounger) {
+            showJointAndChildrenOn(pModel, pChild, show);
+        }
+    }
+
+    bool isJointUnder(const Joint* pTop, const Joint* pJoint) {
+        if (pTop == pJoint) {
+            return true;
+        }
+        for (const Joint* pChild = pTop->mChild; pChild != nullptr; pChild = pChild->mYounger) {
+            if (isJointUnder(pChild, pJoint)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     f32 getJointTransX(const Joint* pJoint) {
         return pJoint->mTransformInfo.mTranslate.x;
     }

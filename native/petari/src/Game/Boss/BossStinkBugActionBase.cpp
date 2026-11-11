@@ -18,6 +18,44 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionBase_f1, "BossStinkBugActionBase.f1", 0.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_BossStinkBugActionBase_f2, "BossStinkBugActionBase.f2", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFlyDash_f1, "updateFlyDash.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFlyDash_f2, "updateFlyDash.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcShakeOffSignSpeed_f1, "calcShakeOffSignSpeed.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcShakeOffSignSpeed_f2, "calcShakeOffSignSpeed.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcShakeOffSpeed_f1, "calcShakeOffSpeed.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcShakeOffEndSpeed_f1, "calcShakeOffEndSpeed.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcKeepRollTime_f1, "calcKeepRollTime.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcKeepRollTime_f2, "calcKeepRollTime.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f1, "calcFlySoundVol.f1", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f2, "calcFlySoundVol.f2", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f3, "calcFlySoundVol.f3", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f4, "calcFlySoundVol.f4", 2500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f5, "calcFlySoundVol.f5", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f6, "calcFlySoundVol.f6", 550.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcFlySoundVol_f7, "calcFlySoundVol.f7", 12.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIIRCutOff_f1, "calcIIRCutOff.f1", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIIRCutOff_f2, "calcIIRCutOff.f2", 4500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIIRCutOff_f3, "calcIIRCutOff.f3", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIIRCutOff_f4, "calcIIRCutOff.f4", 4500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIIRCutOff_f5, "calcIIRCutOff.f5", 126.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcIIRCutOff_f6, "calcIIRCutOff.f6", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGroundShakeOff_f1, "updateGroundShakeOff.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGroundAttackSuccess_f1, "updateGroundAttackSuccess.f1", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateGroundCoolDown_f1, "updateGroundCoolDown.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFlyShakeOffSign_f1, "updateFlyShakeOffSign.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFlyShakeOffWait_f1, "updateFlyShakeOffWait.f1", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFall_f1, "updateFall.f1", 0.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateFall_f2, "updateFall.f2", 1100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateToGround_f1, "updateToGround.f1", 1.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateToGround_f2, "updateToGround.f2", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateToGround_f3, "updateToGround.f3", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateToGround_f4, "updateToGround.f4", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateLand_f1, "updateLand.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateToFly_f1, "updateToFly.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateToFly_f2, "updateToFly.f2", 40.0f);
+
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_updateFlyDash_1, "updateFlyDash.1", 100);
 NEBULA_TUNABLE_NAMED(s32, cStep_calcShakeOffSignSpeed_1, "calcShakeOffSignSpeed.1", 10);
@@ -32,7 +70,7 @@ NEBULA_TUNABLE_NAMED(s32, cStep_updateLand_1, "updateLand.1", 20);
 BossStinkBugActionBase::BossStinkBugActionBase(const char* pName, BossStinkBug* pStinkBug)
     : ActorStateBase< BossStinkBug >(pName, pStinkBug), mSpringValue(), mRailDiff(0.0f, 0.0f, 0.0f), mTurnFront(0.0f, 0.0f, 1.0f), mFlySpeed(15.0f), mHeightOffset(), mLocalHeightOffset(),
       mThrowBombTimer(), mIsRailToEnd(true), mCameraDistance(), mPrevCameraDistance(), mApproachStep() {
-    mSpringValue = new SpringValue(mHeightOffset, mHeightOffset, 0.02f, 0.95f, 0.0f);
+    mSpringValue = new SpringValue(mHeightOffset, mHeightOffset, cNum_BossStinkBugActionBase_f1, cNum_BossStinkBugActionBase_f2, 0.0f);
 }
 
 bool BossStinkBugActionBase::updateGroundWalk(f32 speed) {
@@ -107,9 +145,9 @@ bool BossStinkBugActionBase::updateFlyDash(f32 startSpeed) {
     startSoundFly(0);
 
     if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
-        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfMilliseconds(500), startSpeed, 40.0f);
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfMilliseconds(500), startSpeed, cNum_updateFlyDash_f1);
     } else {
-        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfMilliseconds(500), 100, 40.0f, mFlySpeed);
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfMilliseconds(500), 100, cNum_updateFlyDash_f2, mFlySpeed);
     }
 
     BossStinkBugFunction::regainToRail(getHost(), mRailDiff, MR::calcNerveRate(this, 100), mSpeed, mHeightOffset, mLocalHeightOffset);
@@ -136,23 +174,23 @@ void BossStinkBugActionBase::resetThrowBombTiming() {
 
 f32 BossStinkBugActionBase::calcShakeOffSignSpeed(s32 numSteps) const {
     if (MR::isLessStep(this, cStep_calcShakeOffSignSpeed_1)) {
-        return MR::calcNerveEaseInOutValue(this, numSteps, mFlySpeed, 3.0f);
+        return MR::calcNerveEaseInOutValue(this, numSteps, mFlySpeed, cNum_calcShakeOffSignSpeed_f1);
     } else {
-        return 3.0f;
+        return cNum_calcShakeOffSignSpeed_f2;
     }
 }
 
 f32 BossStinkBugActionBase::calcShakeOffSpeed() const {
-    return MR::calcNerveEaseInOutValue(this, MR::getBckFrameMax(getHost(), "FlyRollRight"), 3.0f, mFlySpeed);
+    return MR::calcNerveEaseInOutValue(this, MR::getBckFrameMax(getHost(), "FlyRollRight"), cNum_calcShakeOffSpeed_f1, mFlySpeed);
 }
 
 f32 BossStinkBugActionBase::calcShakeOffEndSpeed() const {
-    return MR::calcNerveEaseInOutValue(this, MR::getBckFrameMax(getHost(), "FlyRollEndRight"), 35.0f, mFlySpeed);
+    return MR::calcNerveEaseInOutValue(this, MR::getBckFrameMax(getHost(), "FlyRollEndRight"), cNum_calcShakeOffEndSpeed_f1, mFlySpeed);
 }
 
 // Half of what two thirds of the rail leaves after the roll animations and the given wait.
 s32 BossStinkBugActionBase::calcKeepRollTime(s32 waitTime) const {
-    f32 railTime = (MR::getRailTotalLength(getHost()) * (2.0f / 3.0f)) / mFlySpeed;
+    f32 railTime = (MR::getRailTotalLength(getHost()) * (cNum_calcKeepRollTime_f1 / cNum_calcKeepRollTime_f2)) / mFlySpeed;
 
     f32 rollTime = 0.0f;
     rollTime += MR::getBckFrameMax(getHost(), "FlyRollRight");
@@ -171,16 +209,16 @@ s32 BossStinkBugActionBase::calcKeepRollTime(s32 waitTime) const {
 s32 BossStinkBugActionBase::calcFlySoundVol() const {
     s32 vol = 550;
     if (mApproachStep > 0) {
-        if (mCameraDistance < 1500.0f) {
+        if (mCameraDistance < cNum_calcFlySoundVol_f1) {
             vol = 1000;
             if (mApproachStep < 12) {
-                vol = MR::getLinerValue(mApproachStep, 0.0f, 1.0f, 12.0f);
+                vol = MR::getLinerValue(mApproachStep, 0.0f, 1.0f, cNum_calcFlySoundVol_f2);
                 vol = 450 * vol + 550;
             }
         } else if (mCameraDistance < 2500) {
-            vol = MR::getLinerValueFromMinMax(mCameraDistance, 1500.0f, 2500.0f, 1000.0f, 550.0f);
+            vol = MR::getLinerValueFromMinMax(mCameraDistance, cNum_calcFlySoundVol_f3, cNum_calcFlySoundVol_f4, cNum_calcFlySoundVol_f5, cNum_calcFlySoundVol_f6);
             if (mApproachStep < 12) {
-                vol = MR::getLinerValue(mApproachStep, 0.0f, 1.0f, 12.0f);
+                vol = MR::getLinerValue(mApproachStep, 0.0f, 1.0f, cNum_calcFlySoundVol_f7);
                 vol = 450 * vol + 550;
             }
         } else {
@@ -192,10 +230,10 @@ s32 BossStinkBugActionBase::calcFlySoundVol() const {
 }
 
 s32 BossStinkBugActionBase::calcIIRCutOff() const {
-    if (mCameraDistance < 2000.0f) {
+    if (mCameraDistance < cNum_calcIIRCutOff_f1) {
         return 126;
-    } else if (mCameraDistance < 4500.0f) {
-        return MR::getLinerValueFromMinMax(mCameraDistance, 2000.0f, 4500.0f, 126.0f, 20.0f);
+    } else if (mCameraDistance < cNum_calcIIRCutOff_f2) {
+        return MR::getLinerValueFromMinMax(mCameraDistance, cNum_calcIIRCutOff_f3, cNum_calcIIRCutOff_f4, cNum_calcIIRCutOff_f5, cNum_calcIIRCutOff_f6);
     }
 
     return 20;
@@ -266,7 +304,7 @@ bool BossStinkBugActionBase::updateGroundShakeOff() {
         MR::startBck(getHost(), "GroundRide");
     }
 
-    mSpeed *= 0.95f;
+    mSpeed *= cNum_updateGroundShakeOff_f1;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
@@ -305,7 +343,7 @@ bool BossStinkBugActionBase::updateGroundAttackSuccess() {
         MR::startSound(getHost(), "SE_BV_BOSS_BUG_GLAD");
     }
 
-    mSpeed *= 0.75f;
+    mSpeed *= cNum_updateGroundAttackSuccess_f1;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
@@ -326,7 +364,7 @@ bool BossStinkBugActionBase::updateGroundCoolDown() {
         MR::startLevelSound(getHost(), "SE_BM_LV_BOSS_BUG_RUN_ADD_WATER");
     }
 
-    mSpeed *= 0.95f;
+    mSpeed *= cNum_updateGroundCoolDown_f1;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
     if (MR::isBckStopped(getHost())) {
@@ -406,7 +444,7 @@ bool BossStinkBugActionBase::updateFlyShakeOffSign(s32 numSteps) {
         MR::startBck(getHost(), "FlyRide");
         mSpringValue->mSpringValue = mHeightOffset;
         mSpringValue->mRestValue = mHeightOffset;
-        mSpringValue->mVelocity = -15.0f;
+        mSpringValue->mVelocity = -cNum_updateFlyShakeOffSign_f1;
     }
 
     startSoundFly(0);
@@ -447,7 +485,7 @@ bool BossStinkBugActionBase::updateFlyShakeOffWait(s32 numSteps) {
 
     startSoundFly(0);
 
-    mSpeed = 35.0f;
+    mSpeed = cNum_updateFlyShakeOffWait_f1;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, mHeightOffset, mLocalHeightOffset);
 
     if (MR::isGreaterStep(this, numSteps)) {
@@ -545,7 +583,7 @@ bool BossStinkBugActionBase::updateFall() {
 
     MR::startLevelSound(getHost(), "SE_BM_LV_BOSS_BUG_FLY_ADD", 600, 126);
 
-    BossStinkBugFunction::setFallVelocity(getHost(), mRailDiff, MR::calcNerveRate(this, 80), 0.3f, 1100.0f);
+    BossStinkBugFunction::setFallVelocity(getHost(), mRailDiff, MR::calcNerveRate(this, 80), cNum_updateFall_f1, cNum_updateFall_f2);
 
     if (MR::isBinded(getHost())) {
         MR::offBind(getHost());
@@ -601,11 +639,11 @@ bool BossStinkBugActionBase::updateToGround() {
     mLandingHeight += mLandingHeightSpeed;
 
     if (MR::isLessEqualStep(this, cStep_updateToGround_1)) {
-        mLandingHeightSpeed += 1.2f;
+        mLandingHeightSpeed += cNum_updateToGround_f1;
     }
 
     mLandingHeightSpeed -= 1.0f;
-    mLandingHeightSpeed *= 0.99f;
+    mLandingHeightSpeed *= cNum_updateToGround_f2;
 
     if (mLandingHeight < 0.0f) {
         mLandingHeight = 0.0f;
@@ -613,9 +651,9 @@ bool BossStinkBugActionBase::updateToGround() {
 
     f32 nerveRate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1));
     getHost()->mLegIKRate = nerveRate;
-    MR::rotateVecDegree(&getHost()->mFront, MR::getRailDirection(getHost()), getHost()->mGravity, MR::calcNerveValue(this, NebulaFrameClock::stepsOfSeconds(1), 0.0f, 180.0f));
+    MR::rotateVecDegree(&getHost()->mFront, MR::getRailDirection(getHost()), getHost()->mGravity, MR::calcNerveValue(this, NebulaFrameClock::stepsOfSeconds(1), 0.0f, cNum_updateToGround_f3));
 
-    mSpeed *= 0.9f;
+    mSpeed *= cNum_updateToGround_f4;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, mLandingHeight, 0.0f);
 
     if (mLandingHeight <= 0.0f) {
@@ -632,7 +670,7 @@ bool BossStinkBugActionBase::updateLand() {
         getHost()->mLegIKRate = 1.0f;
     }
 
-    mSpeed *= 0.99f;
+    mSpeed *= cNum_updateLand_f1;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
     if (MR::isGreaterStep(this, cStep_updateLand_1)) {
@@ -659,9 +697,9 @@ bool BossStinkBugActionBase::updateToFly() {
     }
 
     if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
-        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), mToFlyStartSpeed, 40.0f);
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), mToFlyStartSpeed, cNum_updateToFly_f1);
     } else {
-        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), NebulaFrameClock::stepsOfSeconds(2), 40.0f, mFlySpeed);
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), NebulaFrameClock::stepsOfSeconds(2), cNum_updateToFly_f2, mFlySpeed);
     }
 
     f32 nerveEaseInOutValue = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(2), 0.0f, mHeightOffset + mLocalHeightOffset);

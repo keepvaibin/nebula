@@ -1,7 +1,9 @@
 #include "Game/Scene/PlacementStateChecker.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaCore.hpp"
 
 PlacementStateChecker::PlacementStateChecker(const char* pName) : NameObj(pName), mCurrentZoneId(-1) {
+    lumacore::setClass(this, lumacore::kClassId< PlacementStateChecker >);
 }
 
 void PlacementStateChecker::setCurrentPlacementZoneId(int zoneID) {

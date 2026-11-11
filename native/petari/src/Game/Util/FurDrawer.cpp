@@ -8,6 +8,15 @@
 #include <cmath>
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_setChannelColor_f1, "setChannelColor.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupMaterial_f1, "setupMaterial.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupMaterial_f2, "setupMaterial.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupMaterial_f3, "setupMaterial.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupLayerMaterial_f1, "setupLayerMaterial.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupLayerMaterial_f2, "setupLayerMaterial.f2", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setupLayerMaterial_f3, "setupLayerMaterial.f3", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_createFurMap_f1, "createFurMap.f1", 255.0f);
+
 namespace {
     NEBULA_TUNABLE(u32, cFurMapSeed, 1);
     // Shell pixels at or under this alpha (0-255) are not drawn.
@@ -18,7 +27,7 @@ namespace {
     SiteMaterial sMaterial;
 
     void setChannelColor(f32* pOut, u8 intensity) {
-        pOut[0] = pOut[1] = pOut[2] = intensity / 255.0f;
+        pOut[0] = pOut[1] = pOut[2] = intensity / cNum_setChannelColor_f1;
         pOut[3] = 1.0f;
     }
 }  // namespace
@@ -61,9 +70,9 @@ void FurDrawer::setupMaterial(const DynamicFurParam& rParam) const {
     pFog[1] = rFog.mEndZ;
     pFog[2] = rFog.mNearZ;
     pFog[3] = rFog.mFarZ;
-    pFog[4] = rFog.mColor.r / 255.0f;
-    pFog[5] = rFog.mColor.g / 255.0f;
-    pFog[6] = rFog.mColor.b / 255.0f;
+    pFog[4] = rFog.mColor.r / cNum_setupMaterial_f1;
+    pFog[5] = rFog.mColor.g / cNum_setupMaterial_f2;
+    pFog[6] = rFog.mColor.b / cNum_setupMaterial_f3;
     pFog[7] = rFog.mType;
 
     Mtx bodyMtx;
@@ -83,9 +92,9 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
     const f32 alpha = mAlpha.calcValue(mNumLayers - layer - 1, mNumLayers);
     const f32 baseAlpha = mColorBlend.calcValue(mNumLayers - layer - 1, mNumLayers);
     // The shell's brightness, alpha and base alpha as 8-bit values.
-    sMaterial.constants[16] = static_cast< u8 >(static_cast< s32 >(brightness)) / 255.0f;
-    sMaterial.constants[17] = static_cast< u8 >(static_cast< s32 >(alpha)) / 255.0f;
-    sMaterial.constants[18] = static_cast< u8 >(static_cast< s32 >(baseAlpha)) / 255.0f;
+    sMaterial.constants[16] = static_cast< u8 >(static_cast< s32 >(brightness)) / cNum_setupLayerMaterial_f1;
+    sMaterial.constants[17] = static_cast< u8 >(static_cast< s32 >(alpha)) / cNum_setupLayerMaterial_f2;
+    sMaterial.constants[18] = static_cast< u8 >(static_cast< s32 >(baseAlpha)) / cNum_setupLayerMaterial_f3;
     sMaterial.constants[19] = 1.0f;
     sMaterial.setColor(20, mColor.r, mColor.g, mColor.b, 255);
     sMaterial.constants[60] = mShells[layer];
@@ -154,7 +163,7 @@ void FurDrawer::createFurMap(const FurParam& rParam) {
             if (texelX < width && texelY < height) {
                 u8* pTexel = pTexels + 2 * (texelX + width * texelY);
                 pTexel[0] = static_cast< u8 >(255 - rParam.mLengthMap[type]);
-                pTexel[1] = static_cast< u8 >(static_cast< s32 >(255.0f * rParam.mThickness[type]));
+                pTexel[1] = static_cast< u8 >(static_cast< s32 >(cNum_createFurMap_f1 * rParam.mThickness[type]));
             }
         }
     }

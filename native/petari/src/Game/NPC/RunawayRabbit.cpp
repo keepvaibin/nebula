@@ -26,6 +26,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 1.3f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
@@ -110,6 +114,7 @@ RunawayRabbit::RunawayRabbit(const char* pName, RunawayRabbitCollect* pCollect)
     : LiveActor(pName), mStateRunaway(), mStateBlowDamage(), mCollect(pCollect), mFootPrint(), mSpotMarkLight(), mMsgCtrl(), mPoseQuat(0, 0, 0, 1),
       mFrontVec(0, 0, 1), mPlayerPoseQuat(0, 0, 0, 1), mPlayerBindPos(0, 0, 1), mGroupId(-1), mRunawayLevel(), mHideLocation(HideLocation_None),
       mPressureTimer(), mNotCaughtableTimer(), mIsActive(true), mIsLinked(), mNearSoundRadius(-1.0f) {
+    lumacore::setClass(this, lumacore::kClassId< RunawayRabbit >);
 }
 
 void RunawayRabbit::init(const TableIter& rIter) {
@@ -140,7 +145,7 @@ void RunawayRabbit::init(const TableIter& rIter) {
         MR::declareCameraRegisterVec(this, cameraRegisterVec, &mPosition);
     }
 
-    mSpotMarkLight = new SpotMarkLight(this, 100.0f, ::sLightLength, nullptr);
+    mSpotMarkLight = new SpotMarkLight(this, cNum_init_f1, ::sLightLength, nullptr);
     mSpotMarkLight->initWithoutIter();
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
@@ -403,7 +408,7 @@ void RunawayRabbit::exeRunaway() {
         f32 rate = MR::clamp(static_cast< f32 >(runawayTimer - ::sPressureDeccelStart) / deccelTime, 0.0f, 1.0f);
         runawaySpeed = MR::getLinerValue(rate, ::sRunawayAccelMax, ::sRunawayAccelMin, 1.0f);
 
-        if (runawaySpeed < 1.3f) {
+        if (runawaySpeed < cNum_exeRunaway_f1) {
             MR::startAction(this, "RunTired");
         } else {
             MR::startAction(this, "Run");

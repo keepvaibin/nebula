@@ -6,6 +6,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sShakeDistance, 800.0f);
@@ -20,6 +23,7 @@ namespace NrvSubmarineVolcanoBigColumn {
 };  // namespace NrvSubmarineVolcanoBigColumn
 
 SubmarineVolcanoBigColumn::SubmarineVolcanoBigColumn(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SubmarineVolcanoBigColumn >);
     mBreakModel = nullptr;
     mIsSmallColumn = false;
 }
@@ -37,7 +41,7 @@ void SubmarineVolcanoBigColumn::init(const TableIter& rIter) {
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
     initEffectKeeper(0, nullptr);
     initSound(2, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {

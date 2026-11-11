@@ -7,6 +7,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* const cSoundNameTable[] = {"SE_AT_LV_MAGMA_AMBIENT",      "SE_OJ_LV_FLOATING_SAND",    "SE_AT_LV_WIND_DESERT",
@@ -15,6 +16,7 @@ namespace {
 
 SoundEmitterSphere::SoundEmitterSphere(int formType, const char* pName)
     : AreaObj(formType, pName), mSoundObj(), mSoundPos(0.0f, 0.0f, 0.0f), mSoundName(), mSoundIndex() {
+    lumacore::setClass(this, lumacore::kClassId< SoundEmitterSphere >);
 }
 
 void SoundEmitterSphere::init(const TableIter& rIter) {

@@ -11,6 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 sDefaultTimer = NebulaFrameClock::stepsOfSeconds(5);
@@ -24,6 +25,7 @@ namespace NrvTimerMoveWall {
 };  // namespace NrvTimerMoveWall
 
 TimerMoveWall::TimerMoveWall(const char* pName) : MapObjActor(pName), mTimer(::sDefaultTimer), mMoveLength(::sDefaultMoveLength) {
+    lumacore::setClass(this, lumacore::kClassId< TimerMoveWall >);
 }
 
 void TimerMoveWall::init(const TableIter& rIter) {

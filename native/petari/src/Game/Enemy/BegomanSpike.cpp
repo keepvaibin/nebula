@@ -21,6 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvBegomanSpike {
     NEW_NERVE_ONEND(HostTypeNrvNoCalcWait, BegomanSpike, NoCalcWait, NoCalcWait);
@@ -45,13 +46,13 @@ namespace NrvBegomanSpike {
 };  // namespace NrvBegomanSpike
 
 namespace {
-    const MR::ActorMoveParam cWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
-    const MR::ActorMoveParam cSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
-    const MR::ActorMoveParam cPursueParam = {0.4f, 3.0f, 0.97f, 3.0f};
-    const MR::ActorMoveParam cTurnParam = {0.4f, 3.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam cStopParam = {0.0f, 3.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam cHitReactionParam = {0.0f, 3.0f, 0.95f, 0.0f};
-    const MR::ActorMoveParam cTiredParam = {0.2f, 1.0f, 0.95f, 3.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cWaitParam, {0.0f, 3.0f, 0.95f, 1.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSignAttackParam, {0.0f, 3.0f, 0.8f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cPursueParam, {0.4f, 3.0f, 0.97f, 3.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cTurnParam, {0.4f, 3.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cStopParam, {0.0f, 3.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cHitReactionParam, {0.0f, 3.0f, 0.95f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cTiredParam, {0.2f, 1.0f, 0.95f, 3.0f});
 
     NEBULA_TUNABLE(f32, cBinderRadius, 100.0f);
     NEBULA_TUNABLE(f32, cBodyRadius, 70.0f);
@@ -92,6 +93,7 @@ namespace {
 }  // namespace
 
 BegomanSpike::BegomanSpike(const char* pName) : BegomanBase(pName), mHead(nullptr), mBrokenModel(nullptr), mTurnAfterBlow(false) {
+    lumacore::setClass(this, lumacore::kClassId< BegomanSpike >);
     mHeadMatrix.identity();
     mWaterColumnMatrix.identity();
 }

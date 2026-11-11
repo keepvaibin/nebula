@@ -8,6 +8,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShowToHide_f1, "exeShowToHide.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideToShow_f1, "exeHideToShow.f1", 10.0f);
 
 namespace {
     static const s32 sStepShowWait = NebulaFrameClock::stepsOfSeconds(3);
@@ -26,6 +30,7 @@ namespace NrvNoteCounter {
 
 NoteCounter::NoteCounter(const char* pName)
     : LayoutActor(pName, true), mNoteNum(), mNoteAddNum(), mNoteMissNum(), mMelodyNo(-1), mRailLength(), mHost() {
+    lumacore::setClass(this, lumacore::kClassId< NoteCounter >);
 }
 
 void NoteCounter::init(const TableIter& /*rIter*/) {
@@ -87,7 +92,7 @@ void NoteCounter::exeShowWait() {
 }
 
 void NoteCounter::exeShowToHide() {
-    f32 y = MR::getEaseOutValue(getNerveStep() / 10.0f, ::sTransMaxY, ::sTransMinY, 1.0f);
+    f32 y = MR::getEaseOutValue(getNerveStep() / cNum_exeShowToHide_f1, ::sTransMaxY, ::sTransMinY, 1.0f);
     setTrans(Vec2f(getTrans().x, y));
 
     if (MR::isStep(this, ::sStepMove)) {
@@ -100,7 +105,7 @@ void NoteCounter::exeHideToShow() {
         MR::showLayout(this);
     }
 
-    f32 y = MR::getEaseOutValue(getNerveStep() / 10.0f, ::sTransMinY, ::sTransMaxY, 1.0f);
+    f32 y = MR::getEaseOutValue(getNerveStep() / cNum_exeHideToShow_f1, ::sTransMinY, ::sTransMaxY, 1.0f);
     setTrans(Vec2f(getTrans().x, y));
 
     if (MR::isStep(this, ::sStepMove)) {

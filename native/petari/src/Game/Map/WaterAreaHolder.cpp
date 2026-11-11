@@ -12,6 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
 
@@ -24,6 +25,7 @@ WaterAreaHolder::WaterAreaHolder()
     : NameObj("水エリア保持"), mNumOceanBowls(0), mOceanBowls(), mNumOceanRings(0), mOceanRings(), mNumOceanSpheres(0),
       mOceanSpheres(), mNumWhirlPools(0), mWhirlPools(), mNumWhirlPoolAccelerators(0), mWhirlPoolAccelerators(),
       mCamInWater(false), mCameraFilter(nullptr), mUseBloom(false) {
+    lumacore::setClass(this, lumacore::kClassId< WaterAreaHolder >);
     mWaterInfo.clear();
 
     if (MR::isEqualStageName("HeavenlyBeachGalaxy") || MR::isEqualStageName("OceanRingGalaxy")) {

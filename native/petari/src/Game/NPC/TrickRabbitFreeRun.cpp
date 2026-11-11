@@ -9,6 +9,14 @@
 #include "Game/NPC/TrickRabbitUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgBlowDamage_f1, "receiveMsgBlowDamage.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgBlowDamage_f2, "receiveMsgBlowDamage.f2", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePowerStarDemo_f1, "exePowerStarDemo.f1", 200.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeRunawayStart_checkPassBckFrame_1, "exeRunawayStart.checkPassBckFrame.1", 3.0f);
@@ -42,6 +50,7 @@ namespace NrvTrickRabbitFreeRun {
 TrickRabbitFreeRun::TrickRabbitFreeRun(const char* pName)
     : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mFrontVec(0.0f, 0.0f, 1.0f), mStateWaitStart(), mStateRunaway(), mStateBlowDamage(),
       mStateCaught(), mMsgCtrl(), mFootPrint(), mSpotMarkLight() {
+    lumacore::setClass(this, lumacore::kClassId< TrickRabbitFreeRun >);
 }
 
 void TrickRabbitFreeRun::init(const TableIter& rIter) {
@@ -51,7 +60,7 @@ void TrickRabbitFreeRun::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     MR::makeQuatAndFrontFromRotate(&mRotateQuat, &mFrontVec, this);
 
-    mSpotMarkLight = new SpotMarkLight(this, 100.0f, 1500.0f, nullptr);
+    mSpotMarkLight = new SpotMarkLight(this, cNum_init_f1, cNum_init_f2, nullptr);
     mSpotMarkLight->initWithoutIter();
 
     MR::initShadowFromCSV(this, "Shadow");
@@ -64,7 +73,7 @@ void TrickRabbitFreeRun::init(const TableIter& rIter) {
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, cNum_init_f3, 0.0f), nullptr);
 
     initState();
     initSound(4, false);
@@ -169,7 +178,7 @@ bool TrickRabbitFreeRun::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
 
 bool TrickRabbitFreeRun::receiveMsgBlowDamage(HitSensor* pSender, HitSensor* pReceiver) {
     if (isEnableBlowDamage()) {
-        MR::setVelocitySeparateHV(this, pSender, pReceiver, 20.0f, 20.0f);
+        MR::setVelocitySeparateHV(this, pSender, pReceiver, cNum_receiveMsgBlowDamage_f1, cNum_receiveMsgBlowDamage_f2);
         setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitFreeRunNrvBlowDamage));
 
         return true;
@@ -266,7 +275,7 @@ void TrickRabbitFreeRun::exePowerStarDemo() {
     if (MR::isFirstStep(this)) {
         MR::endDemo(this, "捕まり");
         MR::startAfterBossBGM();
-        MR::requestAppearPowerStar(this, mPosition - mGravity * 200.0f);
+        MR::requestAppearPowerStar(this, mPosition - mGravity * cNum_exePowerStarDemo_f1);
         MR::startAction(this, "Wait");
         mFootPrint->clear();
         mSpotMarkLight->kill();

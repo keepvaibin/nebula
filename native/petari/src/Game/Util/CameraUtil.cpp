@@ -21,6 +21,24 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNormalizedScreenPosToScreenPos_f1, "calcNormalizedScreenPosToScreenPos.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNormalizedScreenPosToScreenPos_f2, "calcNormalizedScreenPosToScreenPos.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNormalizedScreenPosToScreenPos_f3, "calcNormalizedScreenPosToScreenPos.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNormalizedScreenPosToScreenPos_f4, "calcNormalizedScreenPosToScreenPos.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreen_f1, "calcWorldPositionFromScreen.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromScreen_f2, "calcWorldPositionFromScreen.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromCenterScreen_f1, "calcWorldPositionFromCenterScreen.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWorldPositionFromCenterScreen_f2, "calcWorldPositionFromCenterScreen.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareGlobalEventCameraDead_f1, "declareGlobalEventCameraDead.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherCamera_f1, "declareLauncherCamera.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherCamera_f2, "declareLauncherCamera.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherCamera_f3, "declareLauncherCamera.f3", 6.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherCamera_f4, "declareLauncherCamera.f4", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherCamera_f5, "declareLauncherCamera.f5", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherFlightCamera_f1, "declareLauncherFlightCamera.f1", 900.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_declareLauncherFlightCamera_f2, "declareLauncherFlightCamera.f2", 1.4f);
 
 
 namespace {
@@ -35,7 +53,7 @@ namespace {
         f32 width = MR::getScreenWidth();
         f32 height = MR::getScreenHeight();
 
-        pScreenPos->set< f32 >(width * 0.5f + rNormalizedPos.x * width * 0.5f, height * 0.5f + rNormalizedPos.y * height * 0.5f, rNormalizedPos.z);
+        pScreenPos->set< f32 >(width * cNum_calcNormalizedScreenPosToScreenPos_f1 + rNormalizedPos.x * width * cNum_calcNormalizedScreenPosToScreenPos_f2, height * cNum_calcNormalizedScreenPosToScreenPos_f3 + rNormalizedPos.y * height * cNum_calcNormalizedScreenPosToScreenPos_f4, rNormalizedPos.z);
     }
 
 };  // namespace
@@ -86,14 +104,14 @@ namespace MR {
         f32 width = MR::getScreenWidth();
         f32 height = MR::getScreenHeight();
 
-        Vec2f center(rScreenPos.x - width * 0.5f, rScreenPos.y - height * 0.5f);
+        Vec2f center(rScreenPos.x - width * cNum_calcWorldPositionFromScreen_f1, rScreenPos.y - height * cNum_calcWorldPositionFromScreen_f2);
 
         return calcWorldPositionFromCenterScreen(pPos, center, distZ);
     }
 
     bool calcWorldPositionFromCenterScreen(Vec3f* pPos, const Vec2f& rScreenPos, f32 distZ) {
         f32 height = MR::getScreenHeight();
-        f32 focalLength = height * 0.5f / MR::tan(MR::toRadian(::getCameraContext()->mFovy) * 0.5f);
+        f32 focalLength = height * cNum_calcWorldPositionFromCenterScreen_f1 / MR::tan(MR::toRadian(::getCameraContext()->mFovy) * cNum_calcWorldPositionFromCenterScreen_f2);
 
         f32 dist = (distZ >= 0.0f ? distZ : focalLength);
         f32 ratio = dist / focalLength;
@@ -319,7 +337,7 @@ namespace MR {
             chunk->mGeneralParam->mNum2 = type;
             chunk->setLOfsErpOff(true);
             chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
-            chunk->mExParam.mLOffsetV = 100.0f;
+            chunk->mExParam.mLOffsetV = cNum_declareGlobalEventCameraDead_f1;
             chunk->mIsCodeChunk = true;
         }
     }
@@ -393,13 +411,13 @@ namespace MR {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, ::sLauncherCameraName);
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_DPD", getCameraDirector()->mHolder);
-            chunk->mGeneralParam->mDist = 120.0f;
+            chunk->mGeneralParam->mDist = cNum_declareLauncherCamera_f1;
             chunk->mGeneralParam->mNum1 = CameraPointer::CameraType_UpdateWithTarget;
-            chunk->mGeneralParam->mAngleA = MR::pi() / 3.0f;
-            chunk->mGeneralParam->mAngleB = MR::pi() / 6.0f;
+            chunk->mGeneralParam->mAngleA = MR::pi() / cNum_declareLauncherCamera_f2;
+            chunk->mGeneralParam->mAngleB = MR::pi() / cNum_declareLauncherCamera_f3;
             chunk->mGeneralParam->mWPoint.z = 0.0f;
-            chunk->mGeneralParam->mWPoint.x = 0.05f;
-            chunk->mGeneralParam->mWPoint.y = 0.99f;
+            chunk->mGeneralParam->mWPoint.x = cNum_declareLauncherCamera_f4;
+            chunk->mGeneralParam->mWPoint.y = cNum_declareLauncherCamera_f5;
             chunk->mGeneralParam->mUp.zero();
             chunk->mGeneralParam->mNum2 = 0;
             chunk->mIsCodeChunk = true;
@@ -437,8 +455,8 @@ namespace MR {
             chunk->setCameraType("CAM_TYPE_OBJ_PARALLEL", getCameraDirector()->mHolder);
             chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
             chunk->mExParam.mLOffset = 0.0f;
-            chunk->mGeneralParam->mDist = 900.0f;
-            chunk->mGeneralParam->mAngleA = 1.4f;
+            chunk->mGeneralParam->mDist = cNum_declareLauncherFlightCamera_f1;
+            chunk->mGeneralParam->mAngleA = cNum_declareLauncherFlightCamera_f2;
             chunk->mGeneralParam->mAngleB = MR::pi();
             chunk->setCollisionOff(true);
             chunk->mIsCodeChunk = true;

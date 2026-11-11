@@ -8,6 +8,17 @@
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 350.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setAnim_f1, "setAnim.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePstWipeOut_f1, "exePstWipeOut.f1", 1.3f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_setRailCoordSpeed_1, "exeWait.setRailCoordSpeed.1", 0.0f);
@@ -40,6 +51,7 @@ namespace NrvCaretaker {
 };  // namespace NrvCaretaker
 
 Caretaker::Caretaker(const char* pName) : NPCActor(pName), mBombTimerLayout(), mTidyTimeLimit(::sTidyTimeLimit) {
+    lumacore::setClass(this, lumacore::kClassId< Caretaker >);
 }
 
 void Caretaker::init(const TableIter& rIter) {
@@ -50,7 +62,7 @@ void Caretaker::init(const TableIter& rIter) {
     caps.mRailRider = true;
     caps.mUseShadow = 1;
     caps.mWaitNerve = GET_NERVE(Caretaker, CaretakerNrvTalk);
-    caps.mSensorSize = 100.0f;
+    caps.mSensorSize = cNum_init_f1;
     initialize(rIter, caps);
     s32 bodyColorFrame = 0;
     MR::getPlacementArg3NoInit(rIter, &bodyColorFrame);
@@ -69,10 +81,10 @@ void Caretaker::init(const TableIter& rIter) {
     setTalkAction("BWaitRun", "BRunTalk");
     mParam.mTurnWhenNear = 0;
     mParam.mTurnOnTalk = 1;
-    mParam.mTurnSpeed = 3.0f;
-    mRailSpeed = 2.0f;
-    mRailAccel = 0.1f;
-    mRailPoseRate = 0.05f;
+    mParam.mTurnSpeed = cNum_init_f2;
+    mRailSpeed = cNum_init_f3;
+    mRailAccel = cNum_init_f4;
+    mRailPoseRate = cNum_init_f5;
     mIsRailOnGround = 1;
 
     setAnim(talkAnim);
@@ -127,7 +139,7 @@ void Caretaker::init(const TableIter& rIter) {
             MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &Caretaker::branchFuncStar));
             MR::registerAnimeFunc(getMsgCtrl(), TalkMessageFunc(this, &Caretaker::animeFunc));
             MR::setMessageArg(mMsgCtrl, mTidyTimeLimit);
-            MR::setDistanceToTalk(mMsgCtrl, 350.0f);
+            MR::setDistanceToTalk(mMsgCtrl, cNum_init_f6);
         }
 
         mCameraInfo = MR::createActorCameraInfo(rIter);
@@ -255,7 +267,7 @@ void Caretaker::setAnim(s32 anim) {
         break;
     case 6:
         MR::invalidateLodCtrl(this);
-        MR::setBtkFrameAndStop(this, 2.0f);
+        MR::setBtkFrameAndStop(this, cNum_setAnim_f1);
         mParam.setMoveTalkNoTurnAction("BTalkSurvive", "BTalkSurvive");
         break;
     }
@@ -325,7 +337,7 @@ void Caretaker::exeTalk() {
 
 void Caretaker::exeWait() {
     if (MR::tryTalkNearPlayerAndStartMoveTalkAction(this)) {
-        MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), 1.3f, -1);
+        MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), cNum_exeWait_f1, -1);
         MR::setRailCoordSpeed(this, cNum_exeWait_setRailCoordSpeed_1);
         setNerve(GET_NERVE(Caretaker, CaretakerNrvPreTalk));
     } else if (MR::tryStartReactionAndPushNerve(this, GET_NERVE(Caretaker, CaretakerNrvReaction))) {
@@ -476,7 +488,7 @@ void Caretaker::exePstWipeOut() {
     MR::tryPlayerKillTakingActor();
     MR::setPlayerPosOnGroundAndWait("バトルシップ・タイムアタック後位置");
     MR::startBckPlayer("Watch");
-    MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), 1.3f, 1);
+    MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), cNum_exePstWipeOut_f1, 1);
     setNerve(GET_NERVE(Caretaker, CaretakerNrvPstWipeIn));
 }
 

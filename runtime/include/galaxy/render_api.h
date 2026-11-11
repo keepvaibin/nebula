@@ -185,12 +185,8 @@ bool native_settings_pad_key(std::uintptr_t virtual_key);
 [[nodiscard]] bool native_settings_wheel(int delta);
 void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 void native_settings_window_resized(unsigned width, unsigned height);
-// Waits until the settings files the overlay queued are written (saves run on a worker).
-// The controllers the CONTROLS page lists in place of the attached ones, and
-// the device marked active.
-// The Joy-Con halves connected, for tests.
-// The text of a row of the open page as drawn.
-// The settings the menu would apply (its draft), for tests.
+// The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
+void lose_gpu_device() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 // The mods saved differ from the ones this run started with.

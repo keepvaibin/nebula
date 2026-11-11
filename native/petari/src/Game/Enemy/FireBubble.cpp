@@ -3,6 +3,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateChaseFrontVec_f1, "updateChaseFrontVec.f1", 40.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_checkPassBckFrame_1, "exeChase.checkPassBckFrame.1", 0.0f);
@@ -25,8 +30,8 @@ namespace {
     const s32 cReflectWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
     NEBULA_TUNABLE(f32, cReflectCursorSpeed, 10.0f);
     const s32 cAppearInterval = NebulaFrameClock::stepsOfSeconds(2);
-    const Vec cAppearVelocity = {0.0f, 35.0f, 6.0f};
-    const Vec cReflectVelocity = {0.0f, 40.0f, -15.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cAppearVelocity, {0.0f, 35.0f, 6.0f});
+    NEBULA_TUNABLE_RECORD(Vec, cReflectVelocity, {0.0f, 40.0f, -15.0f});
 };  // namespace
 
 namespace NrvFireBubble {
@@ -43,6 +48,7 @@ namespace NrvFireBubble {
 FireBubble::FireBubble(const char* pName)
     : LiveActor(pName), mIsValidInfo(), mAppearPos(gZeroVec), mAppearFront(0.0f, 0.0f, 1.0f), mAppearVelocity(::cAppearVelocity), mFront(0.0f, 0.0f, 1.0f), mActFrame(),
       mChaseCounter() {
+    lumacore::setClass(this, lumacore::kClassId< FireBubble >);
 }
 
 inline void FireBubble::initHitSensors(const char* const hitSensor1, const char* const hitSensor2) {
@@ -58,11 +64,11 @@ void FireBubble::init(const TableIter& rIter) {
     initModelManagerWithAnm("FireBubble", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensors("body", "Body");
-    initBinder(::cBinderRadius, 40.0f, 0);
+    initBinder(::cBinderRadius, cNum_init_f1, 0);
     initEffectKeeper(1, nullptr);
     MR::initStarPointerTargetAtJoint(this, "Body", ::cStarWandRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initSound(4, false);
-    MR::initShadowVolumeCylinder(this, 40.0f);
+    MR::initShadowVolumeCylinder(this, cNum_init_f2);
     MR::invalidateClipping(this);
     MR::declareCoin(this, ::cCoinMaxNum);
     initNerve(GET_NERVE(FireBubble, FireBubbleNrvAppear));
@@ -166,7 +172,7 @@ void FireBubble::updateChaseFrontVec(f32 turnDegree) {
 
     MR::getPlayerUpVec(&playerUpVec);
     MR::normalize(&playerUpVec);
-    playerUpVec.scale(40.0f);
+    playerUpVec.scale(cNum_updateChaseFrontVec_f1);
 
     pos.add(*MR::getPlayerPos(), playerUpVec);
     toPlayer.sub(pos, *getPosition());

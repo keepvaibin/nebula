@@ -5,6 +5,11 @@
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_isDisableStayHere_f1, "isDisableStayHere.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.5f);
 
 namespace {
     static bool sIsDisabled;
@@ -43,7 +48,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (mWalkSpeed > 0.01f) {
+    if (mWalkSpeed > cNum_isDisableStayHere_f1) {
         return true;
     }
 
@@ -129,7 +134,7 @@ bool MarioFpView::start() {
 
     mDelay = 0;
     mIsActive = true;
-    mBlurOffset = 30.0f;
+    mBlurOffset = cNum_start_f1;
 
     return true;
 }
@@ -140,7 +145,7 @@ bool MarioFpView::update() {
         return true;
     }
 
-    mBlurOffset -= 0.5f;
+    mBlurOffset -= cNum_update_f1;
     if (mBlurOffset < 0.0f) {
         mBlurOffset = 0.0f;
     }

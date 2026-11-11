@@ -13,6 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_updatePowerUp_1, "updatePowerUp.1", 200);
@@ -29,6 +30,7 @@ namespace {
 };  // namespace
 
 BossKameckDemoPosition::BossKameckDemoPosition() : LiveActor("キャスト位置") {
+    lumacore::setClass(this, lumacore::kClassId< BossKameckDemoPosition >);
     makeActorDead();
 }
 

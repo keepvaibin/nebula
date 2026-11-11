@@ -20,6 +20,24 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 110.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePreJump_f1, "exePreJump.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f1, "exeJump.f1", 22.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_f2, "exeJump.f2", 0.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpEnd_f1, "exeJumpEnd.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHitToPlayer_f1, "exeHitToPlayer.f1", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeStampFall_f1, "exeStampFall.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 0.25f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeJump_applyVelocityDampAndGravity_1, "exeJump.applyVelocityDampAndGravity.1", 0.3f);
@@ -69,6 +87,7 @@ namespace NrvJumpSpider {
 };  // namespace NrvJumpSpider
 
 JumpSpider::JumpSpider(const char* pName) : LiveActor(pName), mSpinHitController(), mScaleController(), mFront(0, 0, 1), mJumpPos(0, 0, 0) {
+    lumacore::setClass(this, lumacore::kClassId< JumpSpider >);
 }
 
 void JumpSpider::init(const TableIter& rIter) {
@@ -85,19 +104,19 @@ void JumpSpider::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     f32 scaleY = mScale.y;
-    initBinder(scaleY * 100.0f, scaleY * 100.0f, 0);
+    initBinder(scaleY * cNum_init_f1, scaleY * cNum_init_f2, 0);
     initHitSensor(1);
     Vec3f offset1;
-    offset1.set(0.0f, 60.0f * scaleY, 0.0f);
-    MR::addHitSensorEnemy(this, "body", 32, scaleY * 100.0f, offset1);
+    offset1.set(0.0f, cNum_init_f3 * scaleY, 0.0f);
+    MR::addHitSensorEnemy(this, "body", 32, scaleY * cNum_init_f4, offset1);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(JumpSpider, HostTypeNrvWait));
     Vec3f offset2;
     offset2.x = 0.0f;
-    offset2.y = 80.0f;
+    offset2.y = cNum_init_f5;
     offset2.z = 0.0f;
-    MR::initStarPointerTarget(this, 110.0f, offset2);
+    MR::initStarPointerTarget(this, cNum_init_f6, offset2);
     MR::declareStarPiece(this, 3);
     MR::declareCoin(this, 1);
     mSpinHitController = new SpinHitController(this, 3, false);
@@ -110,10 +129,10 @@ void JumpSpider::init(const TableIter& rIter) {
 
 void JumpSpider::initAfterPlacement() {
     MR::calcGravity(this);
-    Vec3f lineStart(mPosition - mGravity * 10.0f);
+    Vec3f lineStart(mPosition - mGravity * cNum_initAfterPlacement_f1);
     Vec3f floorNormal, floorPos;
 
-    if (MR::getFirstPolyNormalOnLineToMap(&floorNormal, lineStart, mGravity * 300.0f, &floorPos, nullptr)) {
+    if (MR::getFirstPolyNormalOnLineToMap(&floorNormal, lineStart, mGravity * cNum_initAfterPlacement_f2, &floorPos, nullptr)) {
         mJumpPos.set(floorPos);
         mPosition.set(floorPos);
         mGravity.set(-floorNormal);
@@ -160,7 +179,7 @@ void JumpSpider::exeWait() {
         MR::startBck(this, "Wait");
     }
 
-    if (MR::calcDistanceToPlayer(this) < 1000.0f) {
+    if (MR::calcDistanceToPlayer(this) < cNum_exeWait_f1) {
         MR::startSound(this, "SE_EV_JUMPSPIDER_FIND");
         setNerve(GET_NERVE(JumpSpider, HostTypeNrvPreJump));
     }
@@ -174,7 +193,7 @@ void JumpSpider::exePreJump() {
 
     Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
-    MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.05f, mGravity);
+    MR::turnVecToVecRadian(&mFront, mFront, heightVec, cNum_exePreJump_f1, mGravity);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(JumpSpider, HostTypeNrvJump));
@@ -185,13 +204,13 @@ void JumpSpider::exeJump() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Jump");
         MR::startSound(this, "SE_EM_JUMPSPIDER_JUMP");
-        mVelocity.set(-mGravity * 22.0f);
+        mVelocity.set(-mGravity * cNum_exeJump_f1);
     }
 
     MR::applyVelocityDampAndGravity(this, cNum_exeJump_applyVelocityDampAndGravity_1, ::hGroundDamp, ::hAirDampH, ::hAirDampV, ::hJumpVelV);
     Vec3f heightVec;
     MR::calcVecToPlayerH(&heightVec, this, nullptr);
-    MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.02f, mGravity);
+    MR::turnVecToVecRadian(&mFront, mFront, heightVec, cNum_exeJump_f2, mGravity);
 
     if (MR::isOnGround(this)) {
         MR::startSound(this, "SE_EM_JUMPSPIDER_LAND");
@@ -207,7 +226,7 @@ void JumpSpider::exeJumpEnd() {
     mPosition.set(mJumpPos);
 
     if (MR::isBckStopped(this)) {
-        if (1000.0f < MR::calcDistanceToPlayer(this)) {
+        if (cNum_exeJumpEnd_f1 < MR::calcDistanceToPlayer(this)) {
             setNerve(GET_NERVE(JumpSpider, HostTypeNrvWait));
         } else {
             setNerve(GET_NERVE(JumpSpider, HostTypeNrvPreJump));
@@ -228,7 +247,7 @@ void JumpSpider::exeHitToPlayer() {
     if (MR::isGreaterStep(this, cStep_exeHitToPlayer_1)) {
         Vec3f heightVec;
         MR::calcVecToPlayerH(&heightVec, this, nullptr);
-        MR::turnVecToVecRadian(&mFront, mFront, heightVec, 0.05f, mGravity);
+        MR::turnVecToVecRadian(&mFront, mFront, heightVec, cNum_exeHitToPlayer_f1, mGravity);
     }
 
     if (MR::isBckStopped(this)) {
@@ -238,7 +257,7 @@ void JumpSpider::exeHitToPlayer() {
 
 void JumpSpider::exeStampFall() {
     if (MR::isFirstStep(this)) {
-        mVelocity.set(mGravity * 30.0f);
+        mVelocity.set(mGravity * cNum_exeStampFall_f1);
         MR::invalidateClipping(this);
     }
 
@@ -403,7 +422,7 @@ void JumpSpider::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             return;
         }
 
-        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, 0.25f)) {
+        if (MR::isPlayerExistUp(this, getSensor("body")->mRadius, cNum_attackSensor_f1)) {
             MR::sendMsgPush(pReceiver, pSender);
             return;
         }

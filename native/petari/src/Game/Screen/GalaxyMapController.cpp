@@ -24,6 +24,14 @@
 #include "Game/Render/GameTexture.hpp"
 #include <Game/Ui/DrawInfo.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_capture_f1, "capture.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_capture_f2, "capture.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_capture_f3, "capture.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_capture_f4, "capture.f4", 1000.0f);
 
 namespace {
     NEBULA_TUNABLE(s32, sDisplayKeepFrame, 30);
@@ -67,6 +75,7 @@ namespace {
 GalaxyMapController::GalaxyMapController()
     : LayoutActor("GalaxyMapController", true), mMap(), mMapBackground(), mPowerStarList(), mBackButton(), mWipe(), mCaptureTexture(), mMode(),
       mWipeFrame(::sMapFadeinoutFrame) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyMapController >);
 }
 
 void GalaxyMapController::init(const TableIter& /*rIter*/) {
@@ -96,7 +105,7 @@ void GalaxyMapController::init(const TableIter& /*rIter*/) {
     {
         NebulaArena::CurrentScope heapRestorer(Arenas::scene());
 
-        mCaptureTexture = GameTexture::createTarget(0.5f, 0.5f);
+        mCaptureTexture = GameTexture::createTarget(cNum_init_f1, cNum_init_f2);
     }
 
     capture();
@@ -619,9 +628,9 @@ void GalaxyMapController::setFaderParam(NebulaColor8 color, int frame) {
 
 void GalaxyMapController::capture() {
     Mtx44 projectionMtx;
-    f32 halfHeight = MR::getScreenHeight() * 0.5f;
-    f32 halfWidth = NebulaFrameClock::cLayoutWidth * 0.5f;
-    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+    f32 halfHeight = MR::getScreenHeight() * cNum_capture_f1;
+    f32 halfWidth = NebulaFrameClock::cLayoutWidth * cNum_capture_f2;
+    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -cNum_capture_f3, cNum_capture_f4);
     Frame::targetBegin(mCaptureTexture->image(), mCaptureTexture->shareAcross(), mCaptureTexture->shareDown(), 0);
     Frame::setOrthographic(projectionMtx);
     drawForCapture();

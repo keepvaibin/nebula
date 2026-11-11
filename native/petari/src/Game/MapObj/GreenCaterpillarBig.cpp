@@ -4,6 +4,13 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyDir_f1, "calcBodyDir.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyDir_f2, "calcBodyDir.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWriggle_f1, "exeWriggle.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initBodyParts_f1, "initBodyParts.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryGenerateBodyParts_f1, "tryGenerateBodyParts.f1", 300.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWriggle_moveCoordAndFollowTrans_1, "exeWriggle.moveCoordAndFollowTrans.1", 50.0f);
@@ -18,6 +25,7 @@ namespace NrvGreenCaterpillarBig {
 
 GreenCaterpillarBigBody::GreenCaterpillarBigBody(LiveActor* pCaterpillar, MtxPtr mtx)
     : ModelObj("オオムイムイ体", "GreenCaterpillarBigBody", mtx, -2, -2, -2, false) {
+    lumacore::setClass(this, lumacore::kClassId< GreenCaterpillarBigBody >);
     mCaterpillar = pCaterpillar;
     mFrontVec.x = 0.0f;
     mFrontVec.y = 0.0f;
@@ -64,7 +72,7 @@ void GreenCaterpillarBigBody::calcAndSetBaseMtx() {
 
 void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, Vec3f* pOutDir) {
     f32 nearRailCoord = MR::calcNearestRailCoord(pActor, mPosition);
-    f32 coord = nearRailCoord - 300.0f;
+    f32 coord = nearRailCoord - cNum_calcBodyDir_f1;
     if (coord <= 0.0f) {
         MR::calcRailDirectionAtCoord(pOutDir, pActor, nearRailCoord);
     } else {
@@ -72,11 +80,12 @@ void GreenCaterpillarBigBody::calcBodyDir(LiveActor* pActor, Vec3f* pOutDir) {
         MR::calcRailPosAtCoord(&railPos, pActor, coord);
         endVec.sub(mPosition, railPos);
         MR::normalize(&endVec);
-        MR::blendVec(pOutDir, *pOutDir, endVec, 0.1f);
+        MR::blendVec(pOutDir, *pOutDir, endVec, cNum_calcBodyDir_f2);
     }
 }
 
 GreenCaterpillarBig::GreenCaterpillarBig(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< GreenCaterpillarBig >);
     mBodyArray = nullptr;
     mBodyArrayLength = 0;
     mCurBodyParts = 0;
@@ -144,7 +153,7 @@ void GreenCaterpillarBig::exeWriggle() {
                 MR::startSound(this, "SE_OJ_GRN_CATERP_IN");
             } else if (point_arg == 1.0f) {
                 setNerve(GET_NERVE(GreenCaterpillarBig, GreenCaterpillarBigNrvRest));
-            } else if (point_arg == 2.0f) {
+            } else if (point_arg == cNum_exeWriggle_f1) {
                 leaveApple();
             }
         }
@@ -168,7 +177,7 @@ void GreenCaterpillarBig::exeEnd() {
 }
 
 void GreenCaterpillarBig::initBodyParts(const TableIter& rIter) {
-    s32 count = MR::getRailTotalLength(this) / 300.0f;
+    s32 count = MR::getRailTotalLength(this) / cNum_initBodyParts_f1;
     mBodyArrayLength = count;
     mBodyArray = new GreenCaterpillarBigBody*[count];
     GreenCaterpillarBig* caterpillar = this;
@@ -188,7 +197,7 @@ bool GreenCaterpillarBig::tryGenerateBodyParts() {
 
     f32 coord = !mCurBodyParts ? MR::getRailCoord(this) : MR::calcNearestRailCoord(this, mBodyArray[mCurBodyParts - 1]->mPosition);
 
-    if (coord < 300.0f) {
+    if (coord < cNum_tryGenerateBodyParts_f1) {
         return false;
     }
 

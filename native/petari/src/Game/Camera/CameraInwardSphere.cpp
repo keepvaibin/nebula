@@ -8,6 +8,22 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f4, "calc.f4", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f5, "calc.f5", 0.7f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f6, "calc.f6", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f7, "calc.f7", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f8, "calc.f8", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f9, "calc.f9", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f10, "calc.f10", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f11, "calc.f11", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f12, "calc.f12", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcGravityCenter_f1, "calcGravityCenter.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcGravityCenter_f2, "calcGravityCenter.f2", 0.001f);
 
 namespace {
     NEBULA_TUNABLE(f32, sBaseDist, 300.0f);
@@ -15,6 +31,7 @@ namespace {
 
 CameraInwardSphere::CameraInwardSphere(const char* pName)
     : Camera(pName), mDistMax(1500.0f), mDistMin(500.0f), mDistBase(::sBaseDist), mVelocity(0.0f, 0.0f, 0.0f), mPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraInwardSphere >);
 }
 
 void CameraInwardSphere::reset() {
@@ -30,7 +47,7 @@ void CameraInwardSphere::reset() {
 
 CameraTargetObj* CameraInwardSphere::calc() {
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_calc_f1 / cNum_calc_f2);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
     Vec3f camOffset = mPos - CameraLocalUtil::getWatchPos(this);
@@ -60,15 +77,15 @@ CameraTargetObj* CameraInwardSphere::calc() {
 
     Vec3f newPos;
     Vec3f mapPos;
-    if (MR::getFirstPolyOnLineToMap(&mapPos, &tri, camOffsetPos - grav * 1000.0f, grav * 2000.0f, nullptr, &filterFunc)) {
+    if (MR::getFirstPolyOnLineToMap(&mapPos, &tri, camOffsetPos - grav * cNum_calc_f3, grav * cNum_calc_f4, nullptr, &filterFunc)) {
         newPos = mapPos - grav * mDistBase;
     } else {
         newPos = camOffsetPos;
     }
 
-    mVelocity.add(grav * 0.7f);
-    if (mVelocity.length() > 35.0f) {
-        mVelocity.setLength(35.0f);
+    mVelocity.add(grav * cNum_calc_f5);
+    if (mVelocity.length() > cNum_calc_f6) {
+        mVelocity.setLength(cNum_calc_f7);
     }
     newPos.add(mVelocity);
 
@@ -88,14 +105,14 @@ CameraTargetObj* CameraInwardSphere::calc() {
 
     mPos.set(newPos);
 
-    Vec3f upPos = newPos - grav * 1000.0f;
+    Vec3f upPos = newPos - grav * cNum_calc_f8;
     f32 oldDist = (CameraLocalUtil::getPos(this) - upPos).length();
     f32 newDist = (newPos - upPos).length();
 
-    newDist = oldDist * 0.9f + newDist * 0.1f;
+    newDist = oldDist * cNum_calc_f9 + newDist * cNum_calc_f10;
     CameraLocalUtil::setPos(this, upPos + grav * newDist);
 
-    Vec3f up = CameraLocalUtil::getUpVec(this) * 0.9f - grav * 0.1f;
+    Vec3f up = CameraLocalUtil::getUpVec(this) * cNum_calc_f11 - grav * cNum_calc_f12;
     MR::normalize(&up);
     CameraLocalUtil::setUpVec(this, up);
     CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
@@ -123,7 +140,7 @@ void CameraInwardSphere::calcGravityCenter() {
         pos2 = CameraLocalUtil::getTarget(this)->getSideVec();
         pos2.orthogonalize(up1);
     }
-    pos2.setLength(1000.0f);
+    pos2.setLength(cNum_calcGravityCenter_f1);
     pos2.add(CameraLocalUtil::getTarget(this)->getPosition());
 
     Vec3f up2;
@@ -139,7 +156,7 @@ void CameraInwardSphere::calcGravityCenter() {
     f32 proj1 = front1.dot(up2);
     f32 proj2 = front2.dot(up1);
     f32 cosDiff = sq1 * sq2 - dotSq;
-    if (cosDiff < 0.001f) {
+    if (cosDiff < cNum_calcGravityCenter_f2) {
         mGravityCenter = CameraLocalUtil::getTarget(this)->getPosition();
     } else {
         f32 dist = 1.0f / cosDiff * (sq2 * proj2 + dot * proj1);

@@ -17,6 +17,25 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_tryAttackWait_f1, "tryAttackWait.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f3, "exeMove.f3", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f4, "exeMove.f4", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f5, "exeMove.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f6, "exeMove.f6", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideMove_f1, "exeHideMove.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideMove_f2, "exeHideMove.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideMove_f3, "exeHideMove.f3", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideMove_f4, "exeHideMove.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHideMove_f5, "exeHideMove.f5", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackWait_f1, "exeAttackWait.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackWait_f2, "exeAttackWait.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f1, "exeRecover.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f2, "exeRecover.f2", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f3, "exeRecover.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeGuard_f1, "exeGuard.f1", 0.3f);
+
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.96f);
 NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_isNearPlayer_1, "exeMove.isNearPlayer.1", 400.0f);
@@ -164,7 +183,7 @@ void BossKameckStateBattle::control() {
 }
 
 bool BossKameckStateBattle::tryAttackWait() {
-    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && MR::isNear(mHost, mMoveTarget, 100.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && MR::isNear(mHost, mMoveTarget, cNum_tryAttackWait_f1)) {
         if (tryChargeBeam()) {
             setNerve(GET_NERVE(BossKameckStateBattle, BossKameckStateBattleNrvAttackWait));
         } else {
@@ -243,22 +262,22 @@ void BossKameckStateBattle::exeMove() {
         selectPosition();
     }
 
-    MR::startLevelSound(mHost, "SE_BM_LV_KAMECK_FLOAT", mHost->mVelocity.length() * 100.0f);
+    MR::startLevelSound(mHost, "SE_BM_LV_KAMECK_FLOAT", mHost->mVelocity.length() * cNum_exeMove_f1);
 
     s32 step = mIsFinal ? ::sFinalMoveTime : ::sMoveTime;
 
     if (MR::isLessEqualStep(this, step)) {
-        if (MR::isNear(mHost, mMoveTarget, 100.0f) || MR::isNearPlayer(mMoveTarget, cNum_exeMove_isNearPlayer_1)) {
+        if (MR::isNear(mHost, mMoveTarget, cNum_exeMove_f2) || MR::isNearPlayer(mMoveTarget, cNum_exeMove_isNearPlayer_1)) {
             selectPosition();
         }
 
         BossKameck* boss = mHost;
-        MR::addVelocityAwayFromTarget(boss, *MR::getPlayerPos(), 1.5f, 0.0f, 0.0f, 500.0f);
+        MR::addVelocityAwayFromTarget(boss, *MR::getPlayerPos(), cNum_exeMove_f3, 0.0f, 0.0f, cNum_exeMove_f4);
     }
 
     MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, ::sTurnPlayerDegree);
     MR::addVelocityMoveToTarget(mHost, mMoveTarget, cNum_exeMove_addVelocityMoveToTarget_1 * cNum_exeMove_addVelocityMoveToTarget_2, cNum_exeMove_addVelocityMoveToTarget_3, cNum_exeMove_addVelocityMoveToTarget_4, cNum_exeMove_addVelocityMoveToTarget_5);
-    MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, 0.5f, 50.0f);
+    MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, cNum_exeMove_f5, cNum_exeMove_f6);
     MR::attenuateVelocity(mHost, cNum_exeMove_attenuateVelocity_1);
 
     if (tryAttackWait()) {
@@ -294,17 +313,17 @@ void BossKameckStateBattle::exeHideMove() {
     f32 maxSpeed;
 
     if (mIsFinal) {
-        maxSpeed = 20.0f;
+        maxSpeed = cNum_exeHideMove_f1;
     } else {
-        maxSpeed = 15.0f;
+        maxSpeed = cNum_exeHideMove_f2;
     }
 
     MR::addVelocityMoveToTarget(mHost, mMoveTarget, maxSpeed * cNum_exeHideMove_addVelocityMoveToTarget_1, maxSpeed, cNum_exeHideMove_addVelocityMoveToTarget_2, cNum_exeHideMove_addVelocityMoveToTarget_3);
-    MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, 0.5f, 50.0f);
+    MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, cNum_exeHideMove_f3, cNum_exeHideMove_f4);
     MR::attenuateVelocity(mHost, cNum_exeHideMove_attenuateVelocity_1);
     MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, ::sTurnPlayerDegree);
 
-    if (MR::isNear(mHost, mMoveTarget, 100.0f)) {
+    if (MR::isNear(mHost, mMoveTarget, cNum_exeHideMove_f5)) {
         if (mMoveNumMax <= mMoveNum) {
             setNerve(GET_NERVE(BossKameckStateBattle, BossKameckStateBattleNrvHideMoveEnd));
         } else {
@@ -373,7 +392,7 @@ void BossKameckStateBattle::exeAttackWait() {
     MR::startLevelSound(mHost, "SE_BM_LV_KAMECK_STAFF_TURN");
     MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, ::sTurnPlayerDegree);
     MR::addVelocityMoveToTarget(mHost, mMoveTarget, cNum_exeAttackWait_addVelocityMoveToTarget_1 * cNum_exeAttackWait_addVelocityMoveToTarget_2, cNum_exeAttackWait_addVelocityMoveToTarget_3, cNum_exeAttackWait_addVelocityMoveToTarget_4, cNum_exeAttackWait_addVelocityMoveToTarget_5);
-    MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, 0.2f, 50.0f);
+    MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, cNum_exeAttackWait_f1, cNum_exeAttackWait_f2);
     MR::attenuateVelocity(mHost, cNum_exeAttackWait_attenuateVelocity_1);
 
     if (MR::isGreaterStep(this, ::sAttackWaitTime)) {
@@ -438,12 +457,12 @@ void BossKameckStateBattle::exeRecover() {
     if (MR::isGreaterStep(this, ::sRecoverMoveStartTime)) {
         MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, ::sTurnPlayerDegree);
         MR::addVelocityMoveToTarget(mHost, mMoveTarget, cNum_exeRecover_addVelocityMoveToTarget_1 * cNum_exeRecover_addVelocityMoveToTarget_2, cNum_exeRecover_addVelocityMoveToTarget_3, cNum_exeRecover_addVelocityMoveToTarget_4, cNum_exeRecover_addVelocityMoveToTarget_5);
-        MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, 0.5f, 50.0f);
+        MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, cNum_exeRecover_f1, cNum_exeRecover_f2);
         MR::attenuateVelocity(mHost, cNum_exeRecover_attenuateVelocity_1);
     }
 
     if (MR::isGreaterStep(this, ::sRecoverMoveStartTime)) {
-        if (MR::isNear(mHost, mMoveTarget, 100.0f)) {
+        if (MR::isNear(mHost, mMoveTarget, cNum_exeRecover_f3)) {
             MR::validateHitSensors(mHost);
             startMove();
         }
@@ -453,7 +472,7 @@ void BossKameckStateBattle::exeRecover() {
 void BossKameckStateBattle::exeGuard() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "Guard");
-        MR::turnDirectionToTarget(mHost, &mHost->mFront, *MR::getPlayerPos(), 0.3f);
+        MR::turnDirectionToTarget(mHost, &mHost->mFront, *MR::getPlayerPos(), cNum_exeGuard_f1);
     }
 
     MR::attenuateVelocity(mHost, cNum_exeGuard_attenuateVelocity_1);

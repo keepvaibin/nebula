@@ -7,12 +7,20 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f2, "reset.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.05f);
 
 namespace {
     NEBULA_TUNABLE(f32, sRateWhenBraking, 0.05f);
 };  // namespace
 
 CameraFooFighterPlanet::CameraFooFighterPlanet(const char* pName) : Camera(pName), mDistMin(500.0f), mDistMax(2000.0f), mPitchMax(MR::pi() / 4.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraFooFighterPlanet >);
 }
 
 void CameraFooFighterPlanet::reset() {
@@ -21,7 +29,7 @@ void CameraFooFighterPlanet::reset() {
     Vec3f up = CameraLocalUtil::getUpVec(mCameraMan);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_reset_f1 / cNum_reset_f2);
 
     Vec3f front = watchPos - pos;
     if (MR::isNearZero(front)) {
@@ -55,7 +63,7 @@ CameraTargetObj* CameraFooFighterPlanet::calc() {
     Vec3f up = CameraLocalUtil::getUpVec(this);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_calc_f1 / cNum_calc_f2);
 
     Vec3f front = watchPos - pos;
     if (MR::isNearZero(front)) {
@@ -82,7 +90,7 @@ CameraTargetObj* CameraFooFighterPlanet::calc() {
     f32 length, angleX, angleY;
     MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
     if (angleX < mPitchMax) {
-        angleX += (mPitchMax - angleX) * 0.05f;
+        angleX += (mPitchMax - angleX) * cNum_calc_f3;
     }
     MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
     targetFrame.mult(pos, pos);

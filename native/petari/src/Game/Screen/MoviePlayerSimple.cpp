@@ -14,6 +14,12 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setVolume_f1, "setVolume.f1", 127.0f);
 
 namespace {
     const NebulaColor8 cBlack = {0, 0, 0, 255};
@@ -27,6 +33,7 @@ namespace {
 MoviePlayerSimple::MoviePlayerSimple()
     : LayoutActor("ムービープレイヤー", true), ArenaOwned(), mMovieName(""), mStream(nullptr), mLoop(false),
       mInputCheckedBefore(false) {
+    lumacore::setClass(this, lumacore::kClassId< MoviePlayerSimple >);
 }
 
 MoviePlayerSimple::~MoviePlayerSimple() {
@@ -62,8 +69,8 @@ void MoviePlayerSimple::draw() const {
     } else {
         width = screenWidth * movieAspect / screenAspect;
     }
-    const f32 x = (screenWidth - width) * 0.5f;
-    const f32 y = (screenHeight - height) * 0.5f;
+    const f32 x = (screenWidth - width) * cNum_draw_f1;
+    const f32 y = (screenHeight - height) * cNum_draw_f2;
 
     drawBands(x, y, width, height);
     MovieDraw::setLinearFilter(true);
@@ -136,7 +143,7 @@ s32 MoviePlayerSimple::getTotalFrame() const {
 }
 
 void MoviePlayerSimple::setVolume(f32 volume, s32 time) {
-    mStream->setVolume(volume * 127.0f, time);
+    mStream->setVolume(volume * cNum_setVolume_f1, time);
 }
 
 // Before the nerve feeds this frame's sound: the host fades the sound back in after the hold.

@@ -25,6 +25,48 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_Teresa_f1, "Teresa.f1", 600.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initBind_f1, "initBind.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendTeresaQuat_f1, "blendTeresaQuat.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_blendTeresaQuat_f2, "blendTeresaQuat.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.95f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_f1, "receiveMsgPush.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryHideWater_f1, "tryHideWater.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_tryAscension_f1, "tryAscension.f1", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateAppear_f1, "updateAppear.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f1, "exeWalk.f1", 0.9995f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f2, "exeWalk.f2", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailWalk_f1, "exeRailWalk.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailWalk_f2, "exeRailWalk.f2", 0.9995f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailWalk_f3, "exeRailWalk.f3", 0.35f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailTurn_f1, "exeRailTurn.f1", 0.9997f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailTurn_f2, "exeRailTurn.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLoveFind_f1, "exeLoveFind.f1", 0.98f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLoveChase_f1, "exeLoveChase.f1", 0.999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeLoveChase_f2, "exeLoveChase.f2", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_f1, "exeChase.f1", 0.999f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_f2, "exeChase.f2", 0.75f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShay_f1, "exeShay.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackSuccess_f1, "exeAttackSuccess.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDrift_f1, "exeDrift.f1", 0.96f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_f1, "updateNormalVelocity.f1", 85.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_f2, "updateNormalVelocity.f2", 0.40f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_f3, "updateNormalVelocity.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addDriftVelocity_f1, "addDriftVelocity.f1", 0.12f);
+NEBULA_TUNABLE_NAMED(f32, cNum_addDriftVelocity_f2, "addDriftVelocity.f2", 1.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftAnimScale_f1, "updateDriftAnimScale.f1", 0.30f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftAnimScale_f2, "updateDriftAnimScale.f2", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftAnimScale_f3, "updateDriftAnimScale.f3", 53.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateDriftTransparency_f1, "updateDriftTransparency.f1", 4.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalTransparency_f1, "updateNormalTransparency.f1", 0.02f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setTransparency_f1, "setTransparency.f1", 9.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_requestLoveHit_addVelocitySeparateHV_1, "requestLoveHit.addVelocitySeparateHV.1", 20.0f);
@@ -84,7 +126,8 @@ namespace NrvTeresa {
 Teresa::Teresa(const char* pName)
     : LiveActor(pName), mDisplayModel(), mKeySwitch(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mWallNormal(0, 0, 1), mWallHitPos(0, 0, 0),
       mInitPos(0, 0, 0), mAnimScale(1, 1, 1), mWalkTarget(0, 0, 0) {
-    mWalkRange = 600.0f;
+    lumacore::setClass(this, lumacore::kClassId< Teresa >);
+    mWalkRange = cNum_Teresa_f1;
     mTransparency = 1.0f;
     mAppearanceType = -1;
     mHasCoin = true;
@@ -123,7 +166,7 @@ void Teresa::init(const TableIter& rIter) {
         mHasCoin = false;
         mIsChief = true;
         MR::invalidateClipping(this);
-        MR::setShadowDropLength(this, nullptr, 3000.0f);
+        MR::setShadowDropLength(this, nullptr, cNum_init_f1);
     }
 
     if (mHasCoin) {
@@ -170,14 +213,14 @@ void Teresa::initFromPlacementParam(const TableIter& rIter) {
 void Teresa::initSensor() {
     f32 scale = mScale.x;
     initHitSensor(2);
-    MR::addHitSensorEnemyAttack(this, "attack", 8, 70.0f * scale, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "body", 8, 85.0f * scale, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTarget(this, 85.0f * scale, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, cNum_initSensor_f1 * scale, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, cNum_initSensor_f2 * scale, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, cNum_initSensor_f3 * scale, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 void Teresa::initBind() {
     const f32 scale = mScale.x;
-    initBinder(60.0f * scale, 0.0f, 0);
+    initBinder(cNum_initBind_f1 * scale, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterDelegator(this, &Teresa::filterBind));
 }
 
@@ -230,20 +273,20 @@ void Teresa::kill() {
 
 namespace {
     inline void blendTeresaQuat(Quat4f* pQuat, const Vec3f& rGravity, const Vec3f& rFront) {
-        MR::blendQuatUpFront(pQuat, -rGravity, rFront, 0.1f, 0.2f);
+        MR::blendQuatUpFront(pQuat, -rGravity, rFront, cNum_blendTeresaQuat_f1, cNum_blendTeresaQuat_f2);
     }
 };  // namespace
 
 void Teresa::control() {
     if (!isNerve(GET_NERVE(Teresa, TeresaNrvDrift)) && !isNerve(GET_NERVE(Teresa, TeresaNrvAscension))) {
-        mAnimScale.x = 1.0f + (0.95f * (mAnimScale.x - 1.0f));
+        mAnimScale.x = 1.0f + (cNum_control_f1 * (mAnimScale.x - 1.0f));
         mAnimScale.z = 1.0f / mAnimScale.x;
     }
 
     tryHideWater();
     ::blendTeresaQuat(&mPoseQuat, mGravity, mWallNormal);
 
-    if (mTransparency > 0.9f) {
+    if (mTransparency > cNum_control_f2) {
         MR::requestPointLight(this, mPosition, ::sPointLightColor, 1.0f, -1);
     }
 }
@@ -270,7 +313,7 @@ bool Teresa::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pSender)) {
         Vec3f away = MR::getSensorPos(pReceiver) - MR::getSensorPos(pSender);
         MR::normalizeOrZero(&away);
-        mVelocity.add(away * 0.1f);
+        mVelocity.add(away * cNum_receiveMsgPush_f1);
         return true;
     }
 
@@ -564,7 +607,7 @@ bool Teresa::tryDriftEnd() {
 
 bool Teresa::tryHideWater() {
     Vec3f footPos;
-    footPos.scaleAdd(70.0f * mScale.y, mGravity, mPosition);
+    footPos.scaleAdd(cNum_tryHideWater_f1 * mScale.y, mGravity, mPosition);
 
     if (isCheckWater() && MR::isInWater(footPos)) {
         Pos3f effectMtx;
@@ -614,7 +657,7 @@ bool Teresa::tryHideWallEnd() {
 }
 
 bool Teresa::tryAscension() {
-    if (MR::isInAreaObj("GlaringLightArea", mPosition) || !MR::isInShadeFromTheSun(mPosition, 10000.0f)) {
+    if (MR::isInAreaObj("GlaringLightArea", mPosition) || !MR::isInShadeFromTheSun(mPosition, cNum_tryAscension_f1)) {
         setNerve(GET_NERVE(Teresa, TeresaNrvAscension));
         return true;
     }
@@ -650,7 +693,7 @@ void Teresa::updateAppear(const Vec3f& rDir, const char* pAction) {
     }
 
     Vec3f push(rDir);
-    push *= 0.2f;
+    push *= cNum_updateAppear_f1;
     mVelocity.add(push);
     MR::attenuateVelocity(this, cNum_updateAppear_attenuateVelocity_1);
     f32 rate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1));
@@ -689,8 +732,8 @@ void Teresa::exeWalk() {
         MR::startBtp(this, "Normal");
     }
 
-    MR::turnDirectionToTarget(this, &mWallNormal, mWalkTarget, 0.9995f);
-    MR::addVelocityMoveToDirection(this, mWallNormal, 0.2f);
+    MR::turnDirectionToTarget(this, &mWallNormal, mWalkTarget, cNum_exeWalk_f1);
+    MR::addVelocityMoveToDirection(this, mWallNormal, cNum_exeWalk_f2);
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -704,12 +747,12 @@ void Teresa::exeRailWalk() {
     Vec3f toRail;
     toRail.killElement(MR::getRailPos(this) - mPosition, mGravity);
 
-    if (toRail.length() < 10.0f) {
+    if (toRail.length() < cNum_exeRailWalk_f1) {
         MR::moveCoord(this, cNum_exeRailWalk_moveCoord_1);
     }
 
-    MR::turnDirectionToTarget(this, &mWallNormal, MR::getRailPos(this), 0.9995f);
-    MR::addVelocityMoveToTarget(this, MR::getRailPos(this), 0.35f);
+    MR::turnDirectionToTarget(this, &mWallNormal, MR::getRailPos(this), cNum_exeRailWalk_f2);
+    MR::addVelocityMoveToTarget(this, MR::getRailPos(this), cNum_exeRailWalk_f3);
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -720,10 +763,10 @@ void Teresa::exeRailWalk() {
 
 void Teresa::exeRailTurn() {
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
-        MR::turnDirection(this, &mWallNormal, MR::getRailDirection(this), 0.9997f);
+        MR::turnDirection(this, &mWallNormal, MR::getRailDirection(this), cNum_exeRailTurn_f1);
     }
 
-    MR::addVelocityMoveToTarget(this, MR::getRailPos(this), 0.1f);
+    MR::addVelocityMoveToTarget(this, MR::getRailPos(this), cNum_exeRailTurn_f2);
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -739,7 +782,7 @@ void Teresa::exeLoveFind() {
         MR::startSound(this, "SE_EV_TERESA_LAUGH");
     }
 
-    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), 0.98f);
+    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), cNum_exeLoveFind_f1);
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -753,8 +796,8 @@ void Teresa::exeLoveChase() {
         MR::startAction(this, "LoveChase");
     }
 
-    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), 0.999f);
-    MR::addVelocityMoveToDirection(this, mWallNormal, (0.75f * MR::calcNerveRate(this, 20)));
+    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), cNum_exeLoveChase_f1);
+    MR::addVelocityMoveToDirection(this, mWallNormal, (cNum_exeLoveChase_f2 * MR::calcNerveRate(this, 20)));
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -798,8 +841,8 @@ void Teresa::exeChase() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_TERESA_MOVE");
-    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), 0.999f);
-    MR::addVelocityMoveToDirection(this, mWallNormal, (0.75f * MR::calcNerveRate(this, 20)));
+    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), cNum_exeChase_f1);
+    MR::addVelocityMoveToDirection(this, mWallNormal, (cNum_exeChase_f2 * MR::calcNerveRate(this, 20)));
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -820,7 +863,7 @@ void Teresa::exeShay() {
     }
 
     if (mDisplayModel != nullptr) {
-        setTransparency(MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), mTransparency, 0.5f));
+        setTransparency(MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), mTransparency, cNum_exeShay_f1));
     } else {
         updateNormalTransparency();
     }
@@ -853,7 +896,7 @@ void Teresa::exeAttackSuccess() {
         MR::startSound(this, "SE_EV_TERESA_ATTACK_SUCCESS");
     }
 
-    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), 0.99f);
+    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), cNum_exeAttackSuccess_f1);
     updateNormalTransparency();
     updateNormalVelocity();
 
@@ -875,7 +918,7 @@ void Teresa::exeDrift() {
         }
     }
 
-    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), 0.96f);
+    MR::turnDirectionToTarget(this, &mWallNormal, *MR::getPlayerPos(), cNum_exeDrift_f1);
     addDriftVelocity();
     updateNormalVelocity();
     updateDriftAnimScale();
@@ -941,7 +984,7 @@ void Teresa::endAppearFromWall() {
 }
 
 void Teresa::updateNormalVelocity() {
-    MR::addVelocityKeepHeightUseShadow(this, sFloatHeight + (85.0f * (mScale.y - 1.0f)), 0.40f, 40.0f, nullptr);
+    MR::addVelocityKeepHeightUseShadow(this, sFloatHeight + (cNum_updateNormalVelocity_f1 * (mScale.y - 1.0f)), cNum_updateNormalVelocity_f2, cNum_updateNormalVelocity_f3, nullptr);
     MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, cNum_updateNormalVelocity_reboundVelocityFromCollision_2, cNum_updateNormalVelocity_reboundVelocityFromCollision_3);
     MR::attenuateVelocity(this, cNum_updateNormalVelocity_attenuateVelocity_1);
 }
@@ -950,11 +993,11 @@ void Teresa::addDriftVelocity() {
     if (MR::isLessEqualStep(this, cStep_addDriftVelocity_1)) {
         Vec3f pull;
         MR::calcPlayerSpinPullVelocity(&pull, mPosition);
-        pull *= 0.12f;
+        pull *= cNum_addDriftVelocity_f1;
         mVelocity.add(pull);
     }
 
-    MR::addVelocityAwayFromTarget(this, *MR::getPlayerPos(), -1.25f);
+    MR::addVelocityAwayFromTarget(this, *MR::getPlayerPos(), -cNum_addDriftVelocity_f2);
 }
 
 void Teresa::updateDriftAnimScale() {
@@ -962,7 +1005,7 @@ void Teresa::updateDriftAnimScale() {
     Vec3f side;
     mPoseQuat.getXDir(side);
     f32 sideSpeed = side.dot(mVelocity);
-    f32 stretch = 1.0f + (0.30f * MR::normalize(MR::abs(sideSpeed), 3.0f, 53.0f));
+    f32 stretch = 1.0f + (cNum_updateDriftAnimScale_f1 * MR::normalize(MR::abs(sideSpeed), cNum_updateDriftAnimScale_f2, cNum_updateDriftAnimScale_f3));
     mAnimScale.x = stretch;
     mAnimScale.z = 1.0f / stretch;
 }
@@ -970,7 +1013,7 @@ void Teresa::updateDriftAnimScale() {
 void Teresa::updateDriftTransparency() {
     // Fades to see-through and back over the drift: 1 - (4r(r-1))^2.
     f32 rate = MR::calcNerveRate(this, 50);
-    f32 bump = (4.0f * rate) * (rate - 1.0f);
+    f32 bump = (cNum_updateDriftTransparency_f1 * rate) * (rate - 1.0f);
     f32 target = 1.0f - (bump * bump);
     setTransparency(MR::calcNerveValue(this, 25, mTransparency, target));
     MR::setShadowVolumeSphereRadius(this, nullptr, sShadowRadius * target);
@@ -978,7 +1021,7 @@ void Teresa::updateDriftTransparency() {
 
 void Teresa::updateNormalTransparency() {
     if (mTransparency < 1.0f) {
-        mTransparency += 0.02f;
+        mTransparency += cNum_updateNormalTransparency_f1;
 
         if (mTransparency > 1.0f) {
             mTransparency = 1.0f;
@@ -989,7 +1032,7 @@ void Teresa::updateNormalTransparency() {
 }
 
 void Teresa::setTransparency(f32 val) {
-    MR::setBrkFrameAndStop(this, (9.0f * (1.0f - val)));
+    MR::setBrkFrameAndStop(this, (cNum_setTransparency_f1 * (1.0f - val)));
 
     // The dummy model inside shows through only while see-through.
     if (mDisplayModel != nullptr) {

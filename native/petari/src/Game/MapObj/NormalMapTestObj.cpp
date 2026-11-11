@@ -3,8 +3,10 @@
 #include "Game/MapObj/NormalMapBase.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 NormalMapTestObj::NormalMapTestObj(const char* pName) : NormalMapBase(pName) {
+    lumacore::setClass(this, lumacore::kClassId< NormalMapTestObj >);
 }
 
 void NormalMapTestObj::init(const TableIter& rIter) {

@@ -12,6 +12,18 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 170.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 260.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJut_f1, "exeJut.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJut_f2, "exeJut.f2", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJut_f3, "exeJut.f3", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeJut_f4, "exeJut.f4", 2000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f1, "exeBreak.f1", 800.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f2, "exeBreak.f2", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f3, "exeBreak.f3", 2000.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeJut_1, "exeJut.1", 20);
@@ -25,6 +37,7 @@ namespace NrvPoltaGroundRock {
 
 PoltaGroundRock::PoltaGroundRock(const char* pName)
     : LiveActor(pName), mOwner(nullptr), mBreakModel(nullptr), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mGroundPos(0.0f, 0.0f, 0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< PoltaGroundRock >);
 }
 
 void PoltaGroundRock::init(const TableIter& rIter) {
@@ -34,7 +47,7 @@ void PoltaGroundRock::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "collision", 0, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemy(this, "body", 16, 170.0f, Vec3f(0.0f, 260.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 16, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
     MR::initCollisionParts(this, "PoltaGroundRock", getSensor("collision"), nullptr);
     initEffectKeeper(0, nullptr);
     MR::setEffectHostSRT(this, "Shadow", &mGroundPos, nullptr, nullptr);
@@ -66,7 +79,7 @@ void PoltaGroundRock::start(LiveActor* pOwner, const Vec3f& rVec1) {
     setNerve(GET_NERVE(PoltaGroundRock, PoltaGroundRockNrvSign));
     mGroundPos.set(rVec1);
     MR::calcGravity(this, rVec1);
-    mPosition.scaleAdd(500.0f, mGravity, mGroundPos);
+    mPosition.scaleAdd(cNum_start_f1, mGravity, mGroundPos);
     Pos3f poseMtx;
     MR::makeMtxUpNoSupportPos(&poseMtx, -mGravity, mPosition);
     MR::rotateMtxLocalY(poseMtx, MR::getRandom(0.0f, TWO_PI));
@@ -139,9 +152,9 @@ void PoltaGroundRock::exeJut() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_POLTA_G_ROCK_JUT");
     }
-    mPosition.scaleAdd(MR::calcNerveEaseOutValue(this, 20, 500.0f, 0.0f), mGravity, mGroundPos);
+    mPosition.scaleAdd(MR::calcNerveEaseOutValue(this, 20, cNum_exeJut_f1, 0.0f), mGravity, mGroundPos);
     if (MR::isGreaterStep(this, cStep_exeJut_1)) {
-        MR::tryRumblePadAndCameraDistanceMiddle(this, 800.0f, 1200.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceMiddle(this, cNum_exeJut_f2, cNum_exeJut_f3, cNum_exeJut_f4);
         setNerve(GET_NERVE(PoltaGroundRock, PoltaGroundRockNrvWait));
         MR::deleteEffect(this, "Shadow");
     }
@@ -162,7 +175,7 @@ void PoltaGroundRock::exeBreak() {
         MR::startSound(this, "SE_OJ_POLTA_G_ROCK_BREAK");
         MR::hideModel(this);
         MR::invalidateCollisionParts(this);
-        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
+        MR::tryRumblePadAndCameraDistanceStrong(this, cNum_exeBreak_f1, cNum_exeBreak_f2, cNum_exeBreak_f3);
     }
     if (MR::isActionEnd(mBreakModel)) {
         kill();

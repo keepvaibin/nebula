@@ -18,6 +18,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 140.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, cBodyRadius, 145.0f);
@@ -56,6 +61,7 @@ namespace NrvJumpBeamer {
 // A spring-headed pillar that rises from the ground with its group and fires rings of beams; trampled, its head is a
 // spring.
 JumpBeamer::JumpBeamer(const char* pName) : JumpEmitter(pName), mBeams() {
+    lumacore::setClass(this, lumacore::kClassId< JumpBeamer >);
 }
 
 // The head follows the body's top joint, turned and scaled by the head model.
@@ -79,12 +85,12 @@ void JumpBeamer::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, cBodyRadius, MR::getJointMtx(mHeadModel, "SpringJoint3"), Vec3f(0.0f, -100.0f, 0.0f));
-    MR::addHitSensorMtxEnemy(this, "Body", 8, cBodyRadius, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 35.0f, 0.0f));
+    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, cBodyRadius, MR::getJointMtx(mHeadModel, "SpringJoint3"), Vec3f(0.0f, -cNum_init_f1, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "Body", 8, cBodyRadius, MR::getJointMtx(this, "Body"), Vec3f(0.0f, cNum_init_f2, 0.0f));
     getSensor("Body")->setType(ATYPE_BEGOMAN);
     getSensor("Body")->validate();
     getSensor("Jump")->invalidate();
-    MR::initShadowVolumeSphere(this, 140.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f3);
     MR::invalidateShadow(this, nullptr);
     initEffectKeeper(1, nullptr);
     initSound(8, false);

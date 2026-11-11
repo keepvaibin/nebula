@@ -40,7 +40,7 @@ struct MeChannelMgr {
     // The game's values for the phrase (AudMe::updateTimedParams), and what the note gets.
     SoundParams mSound;
     NoteParams mParams;
-    Note* mNote = nullptr;
+    SoundNote* mNote = nullptr;
 };
 
 // The tracks of one phrase, in the memory the game gave its player.
@@ -83,7 +83,7 @@ public:
     void setSound(const SoundParams& rSound) {
         mMgr.mSound = rSound;
     }
-    static void noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, MeChannelMgr* pMgr);
+    static void noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, MeChannelMgr* pMgr);
 
     s32 mStatus = STATUS_FREE;
     u32 mMeId = 0;
@@ -116,7 +116,7 @@ private:
     void noteOffAll(u16 directRelease);
     bool noteOn(u32 key, u32 velocity);
     void startNote();
-    void overwriteOsc(Note* pNote);
+    void overwriteOsc(SoundNote* pNote);
     void setOscAdsr(s16 attack, s16 decay, s16 sustainTime, s16 sustainLevel, u16 release);
     void updateChannelParams();
     // numNotes is the phrase's count byte, so a list of cNoteListRoom always holds it.

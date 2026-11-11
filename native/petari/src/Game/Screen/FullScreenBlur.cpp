@@ -10,10 +10,19 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f1, "drawFullScreenBlur.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f2, "drawFullScreenBlur.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f3, "drawFullScreenBlur.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f4, "drawFullScreenBlur.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f5, "drawFullScreenBlur.f5", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f6, "drawFullScreenBlur.f6", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawFullScreenBlur_f7, "drawFullScreenBlur.f7", 2.0f);
 
 namespace MR {
     void drawFullScreenBlur(f32 param1) {
-        drawFullScreenBlur(param1, param1, (s32)(param1 / 30.0f), (s32)((param1 / 30.0f) / 2.0f));
+        drawFullScreenBlur(param1, param1, (s32)(param1 / cNum_drawFullScreenBlur_f1), (s32)((param1 / cNum_drawFullScreenBlur_f2) / cNum_drawFullScreenBlur_f3));
     }
 
     void drawFullScreenBlur(f32 param1, f32 param2, u8 param3, u8 param4) {
@@ -29,11 +38,11 @@ namespace MR {
         layer.setColor(0, 0, 0, 0, param3);
         layer.setTexture(0, &texture);
         TypedDraw site = TDDraw::site(layer, 2);
-        TDDraw::drawTexture(site, Vec2f(-param1, -param1), &texture, Vec2f(screenWidth + param1 * 2.0f, NebulaFrameClock::cScreenHeight + param1 * 2.0f));
+        TDDraw::drawTexture(site, Vec2f(-param1, -param1), &texture, Vec2f(screenWidth + param1 * cNum_drawFullScreenBlur_f4, NebulaFrameClock::cScreenHeight + param1 * cNum_drawFullScreenBlur_f5));
 
         layer.setColor(0, 0, 0, 0, param4);
         layer.setTexture(0, MR::getFullScreenBlurTexture());
-        TDDraw::drawTexture(site, Vec2f(-param2, -param2), MR::getFullScreenBlurTexture(), Vec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
+        TDDraw::drawTexture(site, Vec2f(-param2, -param2), MR::getFullScreenBlurTexture(), Vec2f(screenWidth + param2 * cNum_drawFullScreenBlur_f6, NebulaFrameClock::cScreenHeight + param2 * cNum_drawFullScreenBlur_f7));
 
         // The next frame's blur: the screen shrunk into the blur texture, a pass into its own target.
         GameTexture* pBlur = MR::getFullScreenBlurTexture();

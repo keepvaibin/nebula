@@ -215,7 +215,6 @@ public:
     [[nodiscard]] PFN_vkCmdPipelineBarrier2 pipeline_barrier2() const noexcept { return pipeline_barrier2_; }
     // The largest device-local heap's use and budget (the driver's with VK_EXT_memory_budget, else VMA's estimate).
     bool device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
-#if defined(NEBULA_DEV)
     // The allocator's own count of memory it holds for one group of heaps: blocks taken from the driver and the bytes the
     // images and buffers occupy in them (the `[vram] breakdown` line).
     struct HeapStats {
@@ -224,7 +223,6 @@ public:
     };
     // `device_local`: the largest device-local heap (device_memory_budget's); `other`: every other heap, summed. False: no allocator.
     bool heap_stats(HeapStats& device_local, HeapStats& other) const noexcept;
-#endif
 
     // Submits command buffers in order (waiting on `wait_semaphore` at `wait_stage` and signalling `signal_semaphore`
     // when given; `transfer_wait`, when not 0, also waits for the transfer queue to pass that value before the fragment
@@ -348,7 +346,7 @@ private:
     bool device_mapped_memory_ = false; // see device_mapped_memory()
     RtCaps rt_caps_{};
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
-    bool device_fault_binary_ = false;  // and its vendor binary feature
+    bool device_fault_binary_ = false;  // and its vendor binary feature (--diagnostics device-faults)
     std::atomic<bool> fault_reported_{false};
     std::atomic<bool> simulated_loss_{false};  // simulate_device_loss: asked, not yet submitted
     bool loss_was_simulated_ = false;          // the last loss was a simulated one: no fault to ask the driver for

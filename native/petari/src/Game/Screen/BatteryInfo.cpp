@@ -7,6 +7,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 #define INPUT_BATTERY_EMPTY -1
 
@@ -197,6 +198,7 @@ bool BatteryInfo::tryChangeNerveWithBatteryLeftAlreadyAppear() {
 }
 
 BatteryLayout::BatteryLayout() : LayoutActor("BatteryLayout", true), mInfo1P(nullptr), mInfo2P(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< BatteryLayout >);
 }
 
 void BatteryLayout::init(const TableIter& /*rIter*/) {

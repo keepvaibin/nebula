@@ -7,8 +7,10 @@
 #include "Game/Screen/PaneEffectKeeper.hpp"
 #include "Game/Screen/StarPointerTarget.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 LayoutActor::LayoutActor(const char* pName, bool) : NameObj(pName), mLayoutManager(), mSpine(), mEffectKeeper(), mPointingTarget() {
+    lumacore::setClass(this, lumacore::kClassId< LayoutActor >);
 }
 
 void LayoutActor::movement() {

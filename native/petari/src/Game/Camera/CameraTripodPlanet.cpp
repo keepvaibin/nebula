@@ -3,16 +3,22 @@
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 
 CameraTripodPlanet::CameraTripodPlanet(const char* pName)
     : Camera(pName), mAxis(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mAngleX(), mAngleY(), mDist(1000.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraTripodPlanet >);
 }
 
 CameraTargetObj* CameraTripodPlanet::calc() {
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, cNum_calc_f1 / cNum_calc_f2);
 
     Pos3f mtx = mZoneMatrix;
     Pos3f inv = mtx;

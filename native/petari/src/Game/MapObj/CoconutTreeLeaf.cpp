@@ -3,6 +3,9 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sPointInterval, 100.0f);
@@ -34,6 +37,7 @@ CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJoi
       mRestUp(pJointMtx[0][1], pJointMtx[1][1], pJointMtx[2][1]), mAxisX(pJointMtx[0][0], pJointMtx[1][0], pJointMtx[2][0]),
       mAxisY(pJointMtx[0][1], pJointMtx[1][1], pJointMtx[2][1]), mAxisZ(pJointMtx[0][2], pJointMtx[1][2], pJointMtx[2][2]), mJointMtx(pJointMtx),
       mWindStep(), mWindStartStep(), mWindAccel(0.0f), mWindDirection(pWindDirection) {
+    lumacore::setClass(this, lumacore::kClassId< CoconutTreeLeaf >);
     mPosition.set< f32 >(pJointMtx[0][3], pJointMtx[1][3], pJointMtx[2][3]);
     mRestTipPosition.set(mAxisZ);
     mRestTipPosition.mult(::sPointInterval);
@@ -151,6 +155,7 @@ bool CoconutTreeLeaf::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, Hi
 
 CoconutTreeLeafGroup::CoconutTreeLeafGroup(const char* pName)
     : LiveActor(pName), mNumLeaves(), mLeaves(), mWindDirection(0.0f, 0.0f, 1.0f), mDistanceToPlayer() {
+    lumacore::setClass(this, lumacore::kClassId< CoconutTreeLeafGroup >);
 }
 
 void CoconutTreeLeafGroup::init(const TableIter& rIter) {
@@ -171,7 +176,7 @@ void CoconutTreeLeafGroup::init(const TableIter& rIter) {
 
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
-    MR::setClippingTypeSphere(this, 500.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f1);
     makeActorAppeared();
 }
 

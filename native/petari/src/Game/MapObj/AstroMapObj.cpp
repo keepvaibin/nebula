@@ -10,6 +10,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 cAstroPathAppearStep = NebulaFrameClock::stepsOfMilliseconds(1500);
@@ -55,6 +56,7 @@ AstroMapObj::AstroMapObj(const char* pName)
     : MapObjActor(pName), mNamePlateTable(nullptr), mNamePlate(nullptr), mObjName(nullptr), mCloseCollision(nullptr), mOpenCollision(nullptr),
       mDomeId(-1), mEngineSound(nullptr), mRevivalSound(nullptr), mIsDoor(false), mIsDomeEntrance(false), mIsStarPlate(false),
       mIsKitchenEntrance(false) {
+    lumacore::setClass(this, lumacore::kClassId< AstroMapObj >);
 }
 
 // A part of the observatory, dead (a dark shape) until its dome's revival demo, then alive; doors open in a later demo.
@@ -283,6 +285,7 @@ bool AstroMapObj::isPlayMachineSE() const {
 }
 
 AstroSimpleObj::AstroSimpleObj(const char* pName) : SimpleMapObjFarMax(pName), mNamePlateTable(nullptr), mNamePlate(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< AstroSimpleObj >);
 }
 
 void AstroSimpleObj::init(const TableIter& rIter) {

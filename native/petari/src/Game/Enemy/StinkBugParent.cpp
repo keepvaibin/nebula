@@ -15,6 +15,23 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 250.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBack_f1, "exeBack.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f1, "exeDemoAnger.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f2, "exeDemoAnger.f2", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f3, "exeDemoAnger.f3", 25.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoAnger_f4, "exeDemoAnger.f4", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 2.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sTurnRateSearch, 1.0f);
@@ -70,17 +87,18 @@ namespace NrvStinkBugParent {
 };  // namespace NrvStinkBugParent
 
 StinkBugParent::StinkBugParent(const char* pName) : StinkBugBase(pName), mParentOnlyParts(nullptr), mIsChildAlive(true) {
+    lumacore::setClass(this, lumacore::kClassId< StinkBugParent >);
 }
 
 void StinkBugParent::init(const TableIter& rIter) {
     StinkBugBase::init(rIter);
     initHitSensor(2);
-    MR::addHitSensorEye(this, "body", 4, 250.0f, Vec3f(0.0f, 150.0f, 0.0f));
-    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 160.0f, Vec3f(0.0f, -50.0f, 80.0f));
+    MR::addHitSensorEye(this, "body", 4, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, cNum_init_f3, Vec3f(0.0f, -cNum_init_f4, cNum_init_f5));
     // With the child on its back first; its own collision takes over when the child is gone.
     MR::initCollisionParts(this, "SwitchChildJ", getSensor("body"), nullptr);
     mParentOnlyParts = MR::createCollisionPartsFromLiveActor(this, "Switch", getSensor("body"), getBaseMtx(), MR::CollisionScaleType_Default);
-    initBinder(300.0f, 300.0f, 0);
+    initBinder(cNum_init_f6, cNum_init_f7, 0);
     MR::setBinderExceptActor(this, this);
     MR::setBinderIgnoreMovingCollision(this);
     MR::declarePowerStar(this);
@@ -90,8 +108,8 @@ void StinkBugParent::init(const TableIter& rIter) {
         MR::registerDemoActionNerve(this, GET_NERVE(StinkBugParent, StinkBugParentNrvDemoAnger), "ダメージ中");
     }
 
-    mTerritoryAngle = 50.0f;
-    mRadius = 1200.0f;
+    mTerritoryAngle = cNum_init_f8;
+    mRadius = cNum_init_f9;
     MR::startBrk(this, "Anger");
     MR::setBrkFrameAndStop(this, 0.0f);
     initNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
@@ -190,7 +208,7 @@ void StinkBugParent::exeBack() {
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_L_BACK");
 
     const Param& rParam = getParam(mIsChildAlive);
-    if (MR::isNear(this, mInitPos, (2.0f * rParam.mBackSpeed))) {
+    if (MR::isNear(this, mInitPos, (cNum_exeBack_f1 * rParam.mBackSpeed))) {
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
         return;
     }
@@ -329,7 +347,7 @@ void StinkBugParent::exeDemoAnger() {
         // Without the point the bug turns to its home.
         Vec3f demoEndPos(mInitPos);
         MR::findNamePos(cDemoEndPointName, &demoEndPos, nullptr);
-        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, demoEndPos, 180.0f);
+        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, demoEndPos, cNum_exeDemoAnger_f1);
     }
 
     MR::startLevelSound(this, "SE_EV_LV_STINKBUG_L_ANGRY");
@@ -338,11 +356,11 @@ void StinkBugParent::exeDemoAnger() {
     if (MR::isBckStopped(this)) {
         // Star pieces burst ahead and up.
         Vec3f piecePos;
-        piecePos.scaleAdd(200.0f, mFront, mPosition);
+        piecePos.scaleAdd(cNum_exeDemoAnger_f2, mFront, mPosition);
         Vec3f pieceDir;
         pieceDir.scaleAdd(-1.0f, mGravity, mFront);
         MR::normalize(&pieceDir);
-        MR::appearStarPieceToDirection(this, piecePos, pieceDir, 8, 25.0f, 40.0f, false);
+        MR::appearStarPieceToDirection(this, piecePos, pieceDir, 8, cNum_exeDemoAnger_f3, cNum_exeDemoAnger_f4, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_F");
         MR::validateHitSensors(this);
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
@@ -369,7 +387,7 @@ void StinkBugParent::control() {
     // Moves along the ground and falls.
     MR::onBind(this);
     mVelocity.scaleAdd(-mGravity.dot(mVelocity), mGravity, mVelocity);
-    mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
+    mVelocity.scaleAdd(cNum_control_f1, mGravity, mVelocity);
 }
 
 void StinkBugParent::calcAndSetBaseMtx() {

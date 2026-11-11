@@ -8,8 +8,10 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ShadowSurfaceDrawInit::ShadowSurfaceDrawInit(const char* pName) : NameObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceDrawInit >);
     MR::registerPreDrawFunction(MR::Functor(&ShadowSurfaceDrawInit::initDraw), MR::DrawType_ShadowSurface);
 }
 
@@ -34,6 +36,7 @@ void ShadowSurfaceDrawInit::initDraw() {
 }
 
 ShadowSurfaceDrawer::ShadowSurfaceDrawer(const char* pName) : ShadowDrawer(pName) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceDrawer >);
     MR::createSceneObj(SceneObj_ShadowSurfaceDrawInit);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ShadowSurface);
 }

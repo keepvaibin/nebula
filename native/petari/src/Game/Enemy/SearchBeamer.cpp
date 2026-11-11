@@ -9,6 +9,19 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBeamShadow_f1, "updateBeamShadow.f1", 2.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseSearch_1, "exeCloseSearch.1", 50);
@@ -63,6 +76,7 @@ SearchBeamer::SearchBeamer(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mBindStarPointer(nullptr), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 0.0f, 0.0f), mPropellerAngle(0.0f),
       mPropellerSpeed(0.0f), mPropellerJointCtrl(nullptr), mBeamStartJointCtrl(nullptr), mBeamEndJointCtrl(nullptr), mBeamStart(0.0f, 0.0f, 0.0f),
       mBeamEnd(0.0f, 0.0f, 0.0f), mBeamAimSpeed(8.0f), mTerritoryRadius(1000.0f), mBeamLength(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< SearchBeamer >);
     mCollisionMtx.identity();
 }
 
@@ -72,25 +86,25 @@ void SearchBeamer::init(const TableIter& rIter) {
     MR::connectToSceneCollisionMapObjStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, -80.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(0.0f, -cNum_init_f2, 0.0f));
     MR::addHitSensorCallbackEnemyAttack(this, "beam", 8, cBeamWidth);
     MR::invalidateHitSensor(this, "beam");
     mCollisionMtx.setInline(getBaseMtx());
     MR::initCollisionParts(this, "Face", getSensor("body"), mCollisionMtx);
     initEffectKeeper(1, nullptr);
     initSound(4, false);
-    MR::initStarPointerTarget(this, 80.0f, Vec3f(0, 0, 0));
+    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0, 0, 0));
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
 
     MR::initShadowController(this, 2);
-    MR::addShadowVolumeCylinder(this, "body", 80.0f);
-    MR::addShadowVolumeBox(this, "beam", Vec3f(10.0f, 10.0f, 100.0f), MR::getJointMtx(this, "BeamStart"));
-    MR::setShadowVolumeStartDropOffset(this, "body", 100.0f);
+    MR::addShadowVolumeCylinder(this, "body", cNum_init_f4);
+    MR::addShadowVolumeBox(this, "beam", Vec3f(cNum_init_f5, cNum_init_f6, cNum_init_f7), MR::getJointMtx(this, "BeamStart"));
+    MR::setShadowVolumeStartDropOffset(this, "body", cNum_init_f8);
     MR::invalidateShadow(this, "beam");
-    MR::setShadowDropLength(this, "body", 200.0f);
-    MR::setShadowDropLength(this, "beam", 200.0f);
+    MR::setShadowDropLength(this, "body", cNum_init_f9);
+    MR::setShadowDropLength(this, "beam", cNum_init_f10);
     MR::useStageSwitchSleep(this, rIter);
     MR::useStageSwitchReadA(this, rIter);
 
@@ -422,7 +436,7 @@ void SearchBeamer::updateBeamShadow() {
     f32 dist = mPosition.distance(mBeamEnd);
     Vec3f boxSize(cBeamWidth, cBeamWidth, dist);
     MR::setShadowVolumeBoxSize(this, "beam", boxSize);
-    Vec3f dropOffset(0.0f, 0.0f, dist / 2.0f);
+    Vec3f dropOffset(0.0f, 0.0f, dist / cNum_updateBeamShadow_f1);
     MR::setShadowDropPositionMtxPtr(this, "beam", MR::getJointMtx(this, "BeamStart"), dropOffset);
 }
 

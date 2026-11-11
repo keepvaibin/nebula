@@ -9,12 +9,19 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 0.9f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw_f3, "draw.f3", 0.9f);
 
 
 ShadowSurfaceOval::~ShadowSurfaceOval() {
 }
 
 ShadowSurfaceOval::ShadowSurfaceOval() : ShadowSurfaceDrawer("影描画[水面楕円影]"), mModelData(), mSize(100.0f, 100.0f, 200.0f), mColor(0, 0, 0, 64) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowSurfaceOval >);
     mModelData = MR::getModelData("ShadowVolumeSphere");
 }
 
@@ -40,7 +47,7 @@ void ShadowSurfaceOval::draw() const {
     }
 
     beginDrawObject();
-    Vec3f size(mSize / 100.0f);
+    Vec3f size(mSize / cNum_draw_f1);
     if (controller->isFollowHostScale()) {
         size *= controller->getHost()->mScale;
     }
@@ -56,10 +63,10 @@ void ShadowSurfaceOval::draw() const {
     mtx.setTrans(pos);
     TypedDraw site(ShadowSurfaceDrawInit::material(), mtx.toMtxPtr(), MR::getCameraViewMtx());
     site.drawModelFile(mModelData);
-    MR::preScaleMtx(mtx, 0.9f);
+    MR::preScaleMtx(mtx, cNum_draw_f2);
     site.setWorld(mtx.toMtxPtr());
     site.drawModelFile(mModelData);
-    MR::preScaleMtx(mtx.toMtxPtr(), 0.9f);
+    MR::preScaleMtx(mtx.toMtxPtr(), cNum_draw_f3);
     site.setWorld(mtx.toMtxPtr());
     site.drawModelFile(mModelData);
     ShadowSurfaceDrawInit::sendColor(Color8(128));

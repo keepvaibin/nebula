@@ -25,6 +25,12 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_startSwoon_f1, "startSwoon.f1", 180.0f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_startSwoon_turnDirectionToPlayerDegree_1, "startSwoon.turnDirectionToPlayerDegree.1", 180.0f);
@@ -63,12 +69,12 @@ namespace {
     NEBULA_TUNABLE(s32, cGroupClippingNum, 32);
     NEBULA_TUNABLE(s32, cStarPieceNum, 3);
 
-    const MR::ActorMoveParam cFallParam = {0.0f, 3.0f, 0.99f, 0.0f};
-    const MR::ActorMoveParam cDontMoveParam = {0.0f, 2.0f, 0.5f, 0.0f};
-    const MR::ActorMoveParam cSkateMoveParam = {0.0f, 2.0f, 0.98f, 0.0f};
-    const MR::ActorMoveParam cWalkAroundParam = {0.25f, 2.0f, 0.92f, 2.0f};
-    const MR::ActorMoveParam cSearchParam = {0.0f, 2.0f, 0.5f, 5.0f};
-    const MR::ActorMoveParam cChaseParam = {0.8f, 2.0f, 0.9f, 2.0f};
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cFallParam, {0.0f, 3.0f, 0.99f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cDontMoveParam, {0.0f, 2.0f, 0.5f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSkateMoveParam, {0.0f, 2.0f, 0.98f, 0.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cWalkAroundParam, {0.25f, 2.0f, 0.92f, 2.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSearchParam, {0.0f, 2.0f, 0.5f, 5.0f});
+    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cChaseParam, {0.8f, 2.0f, 0.9f, 2.0f});
 
     bool isFallNext(const Metbo* pMetbo, const Vec3f& rDir) {
         return MR::isFallNextMove(pMetbo->mPosition, rDir, pMetbo->mGravity, ::cFallCheckAhead, ::cFallCheckHeight, ::cFallCheckDepth, nullptr);
@@ -98,6 +104,7 @@ namespace NrvMetbo {
 Metbo::Metbo(const char* pName)
     : LiveActor(pName), mSpinHitController(nullptr), mAnimScaleController(nullptr), mStarPointerBind(nullptr), mWalkCenter(0.0f, 0.0f, 0.0f),
       mFront(0.0f, 0.0f, 1.0f), mWalkDir(0.0f, 0.0f, 0.0f), mIsClipped(false) {
+    lumacore::setClass(this, lumacore::kClassId< Metbo >);
 }
 
 void Metbo::init(const TableIter& rIter) {
@@ -129,7 +136,7 @@ void Metbo::init(const TableIter& rIter) {
     mAnimScaleController->setParamTight();
     mStarPointerBind = new WalkerStateBindStarPointer(this, mAnimScaleController);
     MR::calcFrontVec(&mFront, this);
-    mSpinHitController = new SpinHitController(this, 20, 20, 4, 0.2f, 40.0f, 20.0f, 3, false);
+    mSpinHitController = new SpinHitController(this, 20, 20, 4, cNum_init_f1, cNum_init_f2, cNum_init_f3, 3, false);
     mWalkCenter.set(mPosition);
     initNerve(GET_NERVE(Metbo, MetboNrvWait));
     makeActorAppeared();
@@ -560,7 +567,7 @@ void Metbo::startSwoon(bool isFromPlayer) {
     mVelocity.scale(::cSpinPower, launch);
 
     if (isFromPlayer) {
-        MR::turnDirectionFromPlayerDegree(this, &mFront, 180.0f);
+        MR::turnDirectionFromPlayerDegree(this, &mFront, cNum_startSwoon_f1);
     } else {
         MR::turnDirectionToPlayerDegree(this, &mFront, cNum_startSwoon_turnDirectionToPlayerDegree_1);
     }

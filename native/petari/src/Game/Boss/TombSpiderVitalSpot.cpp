@@ -3,6 +3,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvTombSpiderVitalSpot {
     NEW_NERVE(TombSpiderVitalSpotNrvWait, TombSpiderVitalSpot, Wait);
@@ -14,6 +15,7 @@ namespace NrvTombSpiderVitalSpot {
 
 TombSpiderVitalSpot::TombSpiderVitalSpot(LiveActor* pActor, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName)
     : PartsModel(pActor, pName, "TombSpiderVitalSpot", nullptr, MR::DrawBufferType_Enemy, false) {
+    lumacore::setClass(this, lumacore::kClassId< TombSpiderVitalSpot >);
     MR::initLightCtrl(this);
     initFixedPosition(rPos, rRotate, pJointName);
 }

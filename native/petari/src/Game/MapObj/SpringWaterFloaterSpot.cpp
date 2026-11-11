@@ -16,6 +16,23 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/ModelData.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 70.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFloatSignal_f1, "exeFloatSignal.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFloatSignal_f2, "exeFloatSignal.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_boundFloater_f1, "boundFloater.f1", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_boundFloater_f2, "boundFloater.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_boundFloater_f3, "boundFloater.f3", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_boundFloater_f4, "boundFloater.f4", 9.6f);
+NEBULA_TUNABLE_NAMED(f32, cNum_floatFloater_f1, "floatFloater.f1", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_floatFloater_f2, "floatFloater.f2", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_floatFloater_f3, "floatFloater.f3", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isModelLongSide_f1, "isModelLongSide.f1", 2.0f);
 
 namespace NrvSpringWaterFloaterSpot {
     NEW_NERVE(SpringWaterFloaterSpotNrvWait, SpringWaterFloaterSpot, Wait);
@@ -27,6 +44,7 @@ namespace NrvSpringWaterFloaterSpot {
 SpringWaterFloaterSpot::SpringWaterFloaterSpot(const char* pName)
     : LiveActor(pName), mRiseSpeed(), mRiseAccel(20.0f), mHeight(), mWaterCheckOffset(), mBoundStep(), mFloatPos(0.0f, 0.0f, 0.0f), mBoundSize(), mIsOnPlayer(), mNeedsBound(), mHasSurfaced(),
       mFloatTimer() {
+    lumacore::setClass(this, lumacore::kClassId< SpringWaterFloaterSpot >);
 }
 
 void SpringWaterFloaterSpot::init(const TableIter& rIter) {
@@ -49,7 +67,7 @@ void SpringWaterFloaterSpot::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     initSound(4, 0);
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
 
     MR::onCalcGravity(this);
 
@@ -60,7 +78,7 @@ void SpringWaterFloaterSpot::init(const TableIter& rIter) {
     MR::tryRegisterDemoCast(this, rIter);
 
     MR::getPlacementArg0NoInit(rIter, &mRiseAccel);
-    mRiseAccel /= 100.0f;
+    mRiseAccel /= cNum_init_f2;
 
     MR::getPlacementArg1NoInit(rIter, &mWaterCheckOffset);
 
@@ -84,7 +102,7 @@ void SpringWaterFloaterSpot::control() {
     MR::makeMtxUpNoSupportPos(&mFloatMtx, -mGravity, mFloatPos);
 
     Vec3f waterCheckPos;
-    Vec3f waterCheckOffset(0.0f, -70.0f + mWaterCheckOffset, 0.0f);
+    Vec3f waterCheckOffset(0.0f, -cNum_control_f1 + mWaterCheckOffset, 0.0f);
     NebulaMtxMultVec(mFloatMtx, waterCheckOffset, waterCheckPos);
     mFloatMtx.setTrans(waterCheckPos);
 }
@@ -113,7 +131,7 @@ void SpringWaterFloaterSpot::exeWait() {
     waterCheckPos.scale(mWaterCheckOffset, up);
 
     if (MR::isInWater(this, waterCheckPos)) {
-        if (mHeight >= 90.0f) {
+        if (mHeight >= cNum_exeWait_f1) {
             setNerve(GET_NERVE(SpringWaterFloaterSpot, SpringWaterFloaterSpotNrvFloatSignal));
         } else {
             mHeight += 1.0f;
@@ -122,7 +140,7 @@ void SpringWaterFloaterSpot::exeWait() {
 }
 
 void SpringWaterFloaterSpot::exeFloatSignal() {
-    f32 scale = 3.0f * (getNerveStep() % 8 < 4 ? 1.0f : -1.0f);
+    f32 scale = cNum_exeFloatSignal_f1 * (getNerveStep() % 8 < 4 ? 1.0f : -1.0f);
 
     Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
@@ -136,7 +154,7 @@ void SpringWaterFloaterSpot::exeFloatSignal() {
     }
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
-        mVelocity.scale(0.5f, -mGravity);
+        mVelocity.scale(cNum_exeFloatSignal_f2, -mGravity);
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_SPR_FLOATER_SIGN");
@@ -209,8 +227,8 @@ bool SpringWaterFloaterSpot::boundFloater() {
         return true;
     }
 
-    f32 scale = 20.0f - mBoundStep * (2.0f / 15.0f);
-    mBoundSize = scale * MR::sinDegree(9.6f * static_cast< f32 >(mBoundStep));
+    f32 scale = cNum_boundFloater_f1 - mBoundStep * (cNum_boundFloater_f2 / cNum_boundFloater_f3);
+    mBoundSize = scale * MR::sinDegree(cNum_boundFloater_f4 * static_cast< f32 >(mBoundStep));
     mBoundStep++;
 
     return false;
@@ -224,12 +242,12 @@ void SpringWaterFloaterSpot::floatFloater() {
     scaledUp.scale(mWaterCheckOffset, up);
 
     if (MR::isInWater(this, scaledUp)) {
-        if (mHeight >= 90.0f) {
+        if (mHeight >= cNum_floatFloater_f1) {
             mVelocity.scale(1.0f + mRiseSpeed, up);
 
-            mHeight = 90.0f;
+            mHeight = cNum_floatFloater_f2;
 
-            if (mRiseSpeed < 40.0f) {
+            if (mRiseSpeed < cNum_floatFloater_f3) {
                 mRiseSpeed += mRiseAccel;
             }
 
@@ -258,7 +276,7 @@ void SpringWaterFloaterSpot::floatFloater() {
 
 bool SpringWaterFloaterSpot::isModelLongSide() {
     Joint* joint = MR::getJoint(this, static_cast< u16 >(0));
-    return (joint->getMax()->x + joint->getMax()->z) / 2.0f > joint->getMax()->y;
+    return (joint->getMax()->x + joint->getMax()->z) / cNum_isModelLongSide_f1 > joint->getMax()->y;
 }
 
 bool SpringWaterFloaterSpot::isNeedsForBound() {

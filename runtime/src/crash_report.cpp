@@ -176,7 +176,7 @@ Report classify(const Facts& facts) noexcept {
     // A mod's code: the fault in its plugin, or in the game's code a call of its plugin reached.
     if (facts.kind == Facts::Kind::Fault && !facts.plugin_mod.empty()) {
         set(r, "NEB-M03", "A mod's code crashed the game",
-            "Turn this mod off in Settings > Mods or in the launcher's Mods tab, and send its author the report file.");
+            "Turn this mod off in Settings > Mods or the launcher, and send its author the report file.");
         put(r.detail, sizeof(r.detail),
             facts.in_plugin ? "The game crashed in the code of the mod %.*s." : "The game crashed in a call the code of the mod %.*s made.",
             static_cast<int>(facts.plugin_mod.size()), facts.plugin_mod.data());
@@ -193,16 +193,16 @@ Report classify(const Facts& facts) noexcept {
         if (fatal && !text.empty()) put(said, sizeof(said), " The game reported: %.*s", text_len, text.data());
         if (!facts.last_mod_read.empty() && facts.last_mod_seconds >= 0.0 && facts.last_mod_seconds <= kRecentModRead) {
             set(r, "NEB-M02", "A mod's file crashed the game",
-                "Turn this mod off in Settings > Mods or in the launcher's Mods tab, or check that it is made for this "
-                "game's region and version.");
+                "Turn this mod off in Settings > Mods or the launcher, or check that it is made for this game's "
+                "region and version.");
             put(r.detail, sizeof(r.detail), "The game %s %.0f s after it read a file from a mod (%.*s).%s", what,
                 facts.last_mod_seconds, static_cast<int>(facts.last_mod_read.size()), facts.last_mod_read.data(), said);
             return r;
         }
         if (facts.mods_change_game) {
             set(r, "NEB-M01", "The game crashed with mods that change it",
-                "Turn the mods off in Settings > Mods or in the launcher's Mods tab and play again. If it no longer "
-                "happens, turn them back on one at a time to find the one.");
+                "Turn off the mods in Settings > Mods or the launcher. If that fixes it, turn them back on one at a "
+                "time to find which one.");
             put(r.detail, sizeof(r.detail), "The game %s while mods changed its files or code.%s", what, said);
             return r;
         }

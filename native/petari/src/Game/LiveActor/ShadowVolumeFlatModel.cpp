@@ -5,15 +5,18 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Render/ModelData.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ShadowVolumeFlatModel::ShadowVolumeFlatModel(const char* pModelName)
     : ShadowVolumeModel("板状シャドウボリューム描画"), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeFlatModel >);
     initVolumeModel(pModelName);
     initJointDrawMtxResister();
 }
 
 ShadowVolumeFlatModel::ShadowVolumeFlatModel()
     : ShadowVolumeModel("板状シャドウボリューム描画"), mBaseMtx(), mRootJoint(-1), mDropJoint(-1) {
+    lumacore::setClass(this, lumacore::kClassId< ShadowVolumeFlatModel >);
 }
 
 void ShadowVolumeFlatModel::setBaseMatrixPtr(MtxPtr pMtx) {

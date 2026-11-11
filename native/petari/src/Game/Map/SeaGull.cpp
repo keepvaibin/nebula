@@ -8,6 +8,28 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHoverFront_f1, "exeHoverFront.f1", 0.995f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHoverFront_f2, "exeHoverFront.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHoverLeft_f1, "exeHoverLeft.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeHoverRight_f1, "exeHoverRight.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f1, "updateHover.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f2, "updateHover.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f3, "updateHover.f3", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f4, "updateHover.f4", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f5, "updateHover.f5", 0.05f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f6, "updateHover.f6", 0.04f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f7, "updateHover.f7", 0.005f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f8, "updateHover.f8", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateHover_f9, "updateHover.f9", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
 
 namespace NrvSeaGull {
     NEW_NERVE(SeaGullNrvHoverFront, SeaGull, HoverFront);
@@ -19,6 +41,7 @@ SeaGull::SeaGull(SeaGullGroup* pGroup)
     : LiveActor("カモメ"), mSeaGullGroup(pGroup), mPointIndex(), mIsReverse(), mTargetUpdateTimer(MR::getRandom(0, 180)), mTargetPosition(),
       mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mBankedUp(0.0f, 1.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mHoverTimer(), mBankAngle(),
       mGlideTimer(), mLiftTimer(), mChirpTimer() {
+    lumacore::setClass(this, lumacore::kClassId< SeaGull >);
 }
 
 void SeaGull::init(const TableIter& rIter) {
@@ -32,7 +55,7 @@ void SeaGull::init(const TableIter& rIter) {
     f32 railLength = MR::getRailTotalLength(mSeaGullGroup);
     f32 maxRailCoord = railLength - 1.0f;
     f32 railCoord = MR::getRandom(1.0f, maxRailCoord);
-    mPointIndex = railCoord / 500.0f;
+    mPointIndex = railCoord / cNum_init_f1;
     MR::calcRailPosAtCoord(&mPosition, mSeaGullGroup, railCoord);
     mIsReverse = MR::isHalfProbability();
     mTargetPosition = mSeaGullGroup->updatePosInfo(&mPointIndex, mIsReverse);
@@ -66,7 +89,7 @@ void SeaGull::exeHoverFront() {
         mHoverTimer = MR::getRandom(0, 60);
     }
 
-    mBankAngle *= 0.995f;
+    mBankAngle *= cNum_exeHoverFront_f1;
 
     if (mHoverTimer >= 0) {
         mHoverTimer--;
@@ -74,7 +97,7 @@ void SeaGull::exeHoverFront() {
         Vec3f forward(*mTargetPosition);
         forward.sub(mPosition);
 
-        if (mPosition.distance(*mTargetPosition) > 500.0f) {
+        if (mPosition.distance(*mTargetPosition) > cNum_exeHoverFront_f2) {
             f32 prod = mSide.dot(forward);
 
             if (prod > 0.0f) {
@@ -91,7 +114,7 @@ void SeaGull::exeHoverLeft() {
         mHoverTimer = MR::getRandom(60, 120);
     }
 
-    mBankAngle -= 0.1f;
+    mBankAngle -= cNum_exeHoverLeft_f1;
 
     if (MR::isStep(this, mHoverTimer)) {
         setNerve(GET_NERVE(SeaGull, SeaGullNrvHoverFront));
@@ -103,7 +126,7 @@ void SeaGull::exeHoverRight() {
         mHoverTimer = MR::getRandom(60, 120);
     }
 
-    mBankAngle += 0.1f;
+    mBankAngle += cNum_exeHoverRight_f1;
 
     if (MR::isStep(this, mHoverTimer)) {
         setNerve(GET_NERVE(SeaGull, SeaGullNrvHoverFront));
@@ -113,13 +136,13 @@ void SeaGull::exeHoverRight() {
 void SeaGull::control() {
     updateHover();
 
-    mVelocity.mult(0.99f);
+    mVelocity.mult(cNum_control_f1);
 
     f32 mag = mVelocity.length();
 
-    if (mag > 10.0f) {
+    if (mag > cNum_control_f2) {
         MR::normalize(&mVelocity);
-        mVelocity.mult(10.0f);
+        mVelocity.mult(cNum_control_f3);
     }
 
     mSide.cross(mBankedUp, mFront);
@@ -140,7 +163,7 @@ void SeaGull::control() {
         mChirpTimer--;
     }
 
-    if (MR::isJudgedToClipFrustum300m(mPosition, 200.0f)) {
+    if (MR::isJudgedToClipFrustum300m(mPosition, cNum_control_f4)) {
         if (!MR::isHiddenModel(this)) {
             MR::hideModel(this);
         }
@@ -152,10 +175,10 @@ void SeaGull::control() {
 }
 
 void SeaGull::updateHover() {
-    if (MR::abs(mBankAngle) > 0.01f) {
+    if (MR::abs(mBankAngle) > cNum_updateHover_f1) {
         mUp.set(mGravity);
         mUp.mult(-1.0f);
-        mBankAngle = MR::clamp(mBankAngle, -30.0f, 30.0f);
+        mBankAngle = MR::clamp(mBankAngle, -cNum_updateHover_f2, cNum_updateHover_f3);
 
         Pos3f rotation;
         rotation.identity();
@@ -163,17 +186,17 @@ void SeaGull::updateHover() {
         rotation.setRotate(mFront, PI_180 * angle);
         mBankedUp.set(mUp);
         rotation.mult(mBankedUp, mBankedUp);
-        rotation.setRotate(mUp, -(PI_180 * (0.01f * mBankAngle)));
+        rotation.setRotate(mUp, -(PI_180 * (cNum_updateHover_f4 * mBankAngle)));
         rotation.mult(mFront, mFront);
     }
 
     Vec3f forward(mFront);
-    forward.scale(0.05f);
+    forward.scale(cNum_updateHover_f5);
     mVelocity.add(forward);
 
     if (mLiftTimer > 0) {
         Vec3f lift(mBankedUp);
-        lift.scale(0.04f);
+        lift.scale(cNum_updateHover_f6);
         mVelocity.add(lift);
         mLiftTimer--;
 
@@ -181,17 +204,17 @@ void SeaGull::updateHover() {
             mGlideTimer = MR::getRandom(60, 300);
         }
     } else {
-        mVelocity.y -= 0.005f;
+        mVelocity.y -= cNum_updateHover_f7;
         Vec3f toTarget(*mTargetPosition);
         toTarget.sub(mPosition);
 
         f32 height = toTarget.dot(mUp);
-        if (height < 500.0f) {
+        if (height < cNum_updateHover_f8) {
             mGlideTimer = NebulaFrameClock::stepsOfSeconds(5);
         } else {
             mGlideTimer--;
 
-            if (height > 500.0f || mGlideTimer <= 0) {
+            if (height > cNum_updateHover_f9 || mGlideTimer <= 0) {
                 mLiftTimer = MR::getRandom(30, 180);
             }
         }
@@ -217,6 +240,7 @@ void SeaGull::calcAndSetBaseMtx() {
 }
 
 SeaGullGroup::SeaGullGroup(const char* pName) : LiveActor(pName), mPointCount(), mPoints() {
+    lumacore::setClass(this, lumacore::kClassId< SeaGullGroup >);
 }
 
 void SeaGullGroup::init(const TableIter& rIter) {
@@ -224,7 +248,7 @@ void SeaGullGroup::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &birdCount);
     initRailRider(rIter);
     mPosition.set(MR::getRailPos(this));
-    mPointCount = static_cast< s32 >(MR::getRailTotalLength(this) / 500.0f) + 1;
+    mPointCount = static_cast< s32 >(MR::getRailTotalLength(this) / cNum_init_f2) + 1;
     f32 interval = MR::getRailTotalLength(this) / mPointCount;
     mPoints = new Vec3f[mPointCount];
 

@@ -4,6 +4,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100000.0f);
 
 namespace NrvRockCreator {
     NEW_NERVE(RockCreatorNrvActive, RockCreator, Active);
@@ -13,6 +18,7 @@ namespace NrvRockCreator {
 RockCreator::RockCreator(const char* pName)
     : LiveActor(pName), mRocks(nullptr), mRockSpeed(10.0f), mBreakModelOnRailGoal(false), mSpawnDelay(-1), mNumRocks(0), mSpawnTimer(0),
       mIsValid(true) {
+    lumacore::setClass(this, lumacore::kClassId< RockCreator >);
 }
 
 void RockCreator::init(const TableIter& rIter) {
@@ -35,7 +41,7 @@ void RockCreator::init(const TableIter& rIter) {
     } else {
         // A speed of 0 or less crosses the rail in no steps (the quotient would be infinite or negative).
         const f32 travelSteps = mRockSpeed > 0.0f ? MR::getRailTotalLength(this) / mRockSpeed : 0.0f;
-        const s32 frames = static_cast< s32 >(travelSteps < 100000.0f ? travelSteps : 100000.0f) + Rock::getAppearFrame();
+        const s32 frames = static_cast< s32 >(travelSteps < cNum_init_f1 ? travelSteps : cNum_init_f2) + Rock::getAppearFrame();
         mNumRocks = (mSpawnDelay != 0 ? frames / mSpawnDelay : frames < 0 ? -1 : 0) + 2;
 
         // At least one rock; a spawn delay of a step or two on a long rail holds at most 1024.

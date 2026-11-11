@@ -5,8 +5,10 @@
 #include "Game/MapObj/ChipGroup.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 ChipHolder::ChipHolder(const char* pName, s32 chipType) : NameObj(pName), mChipCounter(), mChipGroups(), mNumChipGroups(), mChipType(chipType) {
+    lumacore::setClass(this, lumacore::kClassId< ChipHolder >);
 }
 
 void ChipHolder::registerChipGroup(ChipGroup* pChipGroup) {

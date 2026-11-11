@@ -4,6 +4,9 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "math_types.hpp"
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_addRailToGraph_f1, "addRailToGraph.f1", 100.0f);
 
 namespace {
     inline void addRailToGraph(RailGraph* pGraph, TableIter currentRail, const Table* pPoints) {
@@ -15,7 +18,7 @@ namespace {
         for (s32 i = 0; i < pointCount; i++) {
             Vec3f position;
             MR::getRailPointPos0(TableIter(pPoints, i), &position);
-            s32 nearNode = MR::getNearNodeIndex(pGraph, position, 100.0f, nullptr);
+            s32 nearNode = MR::getNearNodeIndex(pGraph, position, cNum_addRailToGraph_f1, nullptr);
             s32 node;
             if (nearNode == -1) {
                 node = pGraph->addNode(position);

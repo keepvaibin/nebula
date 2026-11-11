@@ -1,6 +1,13 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_value_f1, "value.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_colorByte_f1, "colorByte.f1", 255.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkPass_f1, "checkPass.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_checkPass_f2, "checkPass.f2", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.001f);
 
 Clip* Clip::load(const void* pFile) {
     if (pFile == nullptr) {
@@ -102,7 +109,7 @@ f32 Clip::value(const NebulaClipTrack& rTrack, f32 rest) const {
         if (mFrame < 0.0f) {
             return pValues[0];
         }
-        const u32 frame = static_cast< u32 >(mFrame + 0.5f);
+        const u32 frame = static_cast< u32 >(mFrame + cNum_value_f1);
         return frame >= rTrack.count ? pValues[rTrack.count - 1] : pValues[frame];
     }
     default:
@@ -122,7 +129,7 @@ u8 Clip::colorByte(const NebulaClipTrack& rTrack) const {
     if (color < 0.0f) {
         return 0;
     }
-    return color > 255.0f ? 255 : nebula_f32_to_u8(color);
+    return color > cNum_colorByte_f1 ? 255 : nebula_f32_to_u8(color);
 }
 
 void Clip::getTransform(u32 joint, TransformInfo* pOut) const {
@@ -209,7 +216,7 @@ int FrameCtrl::checkPass(f32 passFrame) {
         }
 
         if (next_frame >= mEnd) {
-            next_frame = mEnd - 0.001f;
+            next_frame = mEnd - cNum_checkPass_f1;
         }
 
         if (mFrame <= next_frame) {
@@ -296,7 +303,7 @@ int FrameCtrl::checkPass(f32 passFrame) {
     case 3:
     case 4:
         if (next_frame >= mEnd) {
-            next_frame = mEnd - 0.001f;
+            next_frame = mEnd - cNum_checkPass_f2;
         }
 
         if (next_frame < mStart) {
@@ -334,7 +341,7 @@ void FrameCtrl::update() {
         }
 
         if (mFrame >= mEnd) {
-            mFrame = mEnd - 0.001f;
+            mFrame = mEnd - cNum_update_f1;
             mRate = 0.0f;
             mState |= (u8)1;
         }

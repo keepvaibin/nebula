@@ -19,7 +19,7 @@ struct ChannelMgr {
     NoteParams mParams;
     // The sound's values for this channel (the player's), or none.
     const SoundParams* mSound = nullptr;
-    Note** mNotes = nullptr;
+    SoundNote** mNotes = nullptr;
     u32 mSlots = 0;
 };
 
@@ -145,7 +145,7 @@ public:
     // The tick's work of a playing root: its ticks as tempo and clock say, then the mix values down the tree. <0: it ended.
     s32 seqMain();
     // The engine's dispatch of a note event for a note this track holds.
-    static void noteEvent(u32 event, Note* pNote, NebulaVoice* pVoice, ChannelMgr* pMgr);
+    static void noteEvent(u32 event, SoundNote* pNote, NebulaVoice* pVoice, ChannelMgr* pMgr);
 
     // Read by the game's snapshot and the rhythm parser.
     // A register as the program reads it: 0x00-0x3F the registers, 0x40-0x4F the ports, 0x60 and up the track's fields.
@@ -211,9 +211,9 @@ private:
     void updateTempo();
     void updateSeq(bool update, f32 pan);
     u32 seqTimeToDspTime(f32 seqTime);
-    Note* channelStart(ChannelMgr* pMgr, u32 key, u32 velocity, u32 updateTimer);
-    void overwriteOsc(Note* pNote);
-    void updateChannel(Note* pNote, NebulaVoice* pVoice);
+    SoundNote* channelStart(ChannelMgr* pMgr, u32 key, u32 velocity, u32 updateTimer);
+    void overwriteOsc(SoundNote* pNote);
+    void updateChannel(SoundNote* pNote, NebulaVoice* pVoice);
     void setChannelPauseFlag(bool pause);
     void setOscTable(u32 osc, const u8* pBigEndian);
     void setOscAdsr(s16 attack, s16 decay, s16 sustain, s16 release, u16 directRelease);

@@ -259,13 +259,10 @@ public:
     struct Kept {
         HWND window = nullptr;
         LUID card{};
-#if defined(NEBULA_DEV)
-        Microsoft::WRL::ComPtr<ID3D12DebugDevice> debug_device;
-#endif
+        Microsoft::WRL::ComPtr<ID3D12DebugDevice> debug_device;  // with --gpu-validation
     };
-#if defined(NEBULA_DEV)
+    // With --gpu-validation: the lost device's objects still alive, to stderr ([D3D12-LIVE-OBJECT]).
     static void list_live_objects(Kept& kept);
-#endif
     void set_window_owner(WindowOwner& owner) noexcept { window_owner_ = &owner; }
     [[nodiscard]] Kept take_apart_lost_device();
     void keep(const Kept& kept, bool same_card) noexcept {
@@ -321,7 +318,7 @@ public:
     // present(), after scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     // Test only (GALAXY_TEST_DEVICE_LOST): the device removed, as a driver reset leaves it.
-    void test_lose_device();
+    void lose_device();
     void begin_frame();
     // Called after the queue signal, before pacing and Present; the context is not retained.
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);
@@ -717,9 +714,7 @@ private:
     bool device_gone_ = false;
     bool same_card_only_ = false;
     LUID card_{};
-#if defined(NEBULA_DEV)
-    Microsoft::WRL::ComPtr<ID3D12DebugDevice> debug_device_;
-#endif
+    Microsoft::WRL::ComPtr<ID3D12DebugDevice> debug_device_;  // with --gpu-validation (the debug layer has one)
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     // The device's enhanced-barrier interface when it has them (BarrierPath::device points at it).
     Microsoft::WRL::ComPtr<ID3D12Device10> barrier_device_;

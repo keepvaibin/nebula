@@ -13,6 +13,10 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "math_types.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtx_f1, "calcAndSetBaseMtx.f1", 180.0f);
 
 namespace {
     struct Param {
@@ -44,6 +48,7 @@ namespace {
 };  // namespace
 
 OceanWaveFloater::OceanWaveFloater(const char* pName) : MapObjActor(pName), mSpring(), mForce(), mRipplePos(gZeroVec), mSoundDelay(), mCanRipple() {
+    lumacore::setClass(this, lumacore::kClassId< OceanWaveFloater >);
 }
 
 void OceanWaveFloater::init(const TableIter& rIter) {
@@ -131,7 +136,7 @@ void OceanWaveFloater::control() {
 void OceanWaveFloater::calcAndSetBaseMtx() {
     Pos3f baseMtx;
     baseMtx.identity();
-    baseMtx.setEuler(mRotation * (PI / 180.0f));
+    baseMtx.setEuler(mRotation * (PI / cNum_calcAndSetBaseMtx_f1));
     baseMtx.setTrans(mPosition - mGravity * mForce->getCurrentValue());
     MR::setBaseTRMtx(this, baseMtx);
 }

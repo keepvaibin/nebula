@@ -4,11 +4,19 @@
 #include "Game/Util.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1000.0f);
 
 BigBubbleMoveLimitter::BigBubbleMoveLimitter(const char* pName, s32 limitterType)
     : NameObj(pName), mID(-1), mPosition(0, 0, 0), mAxis(0, 1, 0), mSide(1, 0, 0), mUp(0, 1, 0), mFront(0, 0, 1),
       mCylinderRadius(500.0f), mCylinderHeight(500.0f), mPlaneWidth(500.0f), mPlaneHeight(500.0f), mLimitMarginType(LimitterMarginType_Center),
       mType(limitterType) {
+    lumacore::setClass(this, lumacore::kClassId< BigBubbleMoveLimitter >);
 }
 
 void BigBubbleMoveLimitter::init(const TableIter& rIter) {
@@ -23,10 +31,10 @@ void BigBubbleMoveLimitter::init(const TableIter& rIter) {
 
     Vec3f scale;
     MR::getPlacementScale(rIter, &scale);
-    mCylinderRadius = scale.x * 500.0f;
-    mCylinderHeight = scale.y * 500.0f;
-    mPlaneWidth = scale.x * 500.0f;
-    mPlaneHeight = scale.y * 1000.0f;
+    mCylinderRadius = scale.x * cNum_init_f1;
+    mCylinderHeight = scale.y * cNum_init_f2;
+    mPlaneWidth = scale.x * cNum_init_f3;
+    mPlaneHeight = scale.y * cNum_init_f4;
 
     MR::createBigBubbleHolder();
     MR::addBigBubbleMoveLimitter(this);

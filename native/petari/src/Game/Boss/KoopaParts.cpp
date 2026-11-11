@@ -19,6 +19,8 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+NEBULA_TUNABLE_NAMED(f32, cNum_initVs3_f1, "initVs3.f1", 40000.0f);
+
 namespace {
     NEBULA_TUNABLE(s32, sFireStairsNum, 16);
     NEBULA_TUNABLE(s32, sFireShortNum, 32);
@@ -216,7 +218,7 @@ void KoopaParts::initVs3() {
     createPlanetShadow();
 
     mHoleSunPlanetOutside = MR::createModelObjMapObj("穴あき太陽（外側）", "KoopaVS3HoleSunPlanet", nullptr);
-    MR::setClippingTypeSphere(mHoleSunPlanetOutside, 40000.0f);
+    MR::setClippingTypeSphere(mHoleSunPlanetOutside, cNum_initVs3_f1);
     MR::setClippingFarMax(mHoleSunPlanetOutside);
     MR::resetPosition(mHoleSunPlanetOutside, "惑星Ｌｖ３");
     MR::tryStartAllAnim(mHoleSunPlanetOutside, "KoopaVS3HoleSunPlanet");

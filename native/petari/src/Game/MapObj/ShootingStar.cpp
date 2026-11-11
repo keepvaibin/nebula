@@ -8,6 +8,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sFallHeight, 2000.0f);
@@ -30,6 +34,7 @@ namespace NrvShootingStar {
 ShootingStar::ShootingStar(const char* pName)
     : LiveActor(pName), mBasePos(0, 0, 0), mFallAxis(0, 0, 1), mGravityPreShoot(0, -1, 0), mNumBurstStarPiece(sDefaultStarPieceNum),
       mWaitForNextShootTime(sWaitForNextShootTime), mFallHeight(sFallHeight) {
+    lumacore::setClass(this, lumacore::kClassId< ShootingStar >);
 }
 
 // Falls along its local -Y from its fall height onto the placed point and bursts into star pieces, again after a wait
@@ -58,14 +63,14 @@ void ShootingStar::init(const TableIter& rIter) {
     MR::getPlacementArg3NoInit(rIter, &totalNum);
     MR::declareStarPiece(this, totalNum);
 
-    initBinder(100.0f, 0.0f, 0);
+    initBinder(cNum_init_f1, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterFunc(MR::isWallCodeNoAction));
     initNerve(GET_NERVE(ShootingStar, HostTypeNrvPreShooting));
     initEffectKeeper(0, "ShootingStar");
     initSound(4, false);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "message", 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initShadowVolumeSphere(this, 30.0f);
+    MR::initShadowVolumeSphere(this, cNum_init_f2);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::listenStageSwitchOnOffAppear(this, MR::Functor(this, &ShootingStar::appearPreShooting), MR::Functor< LiveActor >(this, &LiveActor::kill));

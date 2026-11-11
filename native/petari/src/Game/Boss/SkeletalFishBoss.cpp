@@ -42,6 +42,33 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f1, "calcAnim.f1", 1.8325958f);
+NEBULA_TUNABLE_NAMED(f32, cNum_damage_f1, "damage.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_damage_f2, "damage.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwim_f1, "exeSwim.f1", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSwim_f2, "exeSwim.f2", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOpenWait_f1, "exeOpenWait.f1", 7000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeOpenWait_f2, "exeOpenWait.f2", 7000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_f1, "exeDamage.f1", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_f2, "exeDamage.f2", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exePowerUpDemo_f1, "exePowerUpDemo.f1", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreakDemo_f1, "exeBreakDemo.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBreakDemo_f2, "exeBreakDemo.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_getBodyThickness_f1, "getBodyThickness.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initShadow_f1, "initShadow.f1", 4000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcGravityCenter_f1, "calcGravityCenter.f1", 0.001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateBgm_f1, "updateBgm.f1", 4200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_resetCamera_f1, "resetCamera.f1", 1200.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_endBreakDemo_f1, "endBreakDemo.f1", 1573.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SkeletalFishBossHead_f1, "SkeletalFishBossHead.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SkeletalFishBossHead_f2, "SkeletalFishBossHead.f2", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SkeletalFishBossHead_f3, "SkeletalFishBossHead.f3", 320.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SkeletalFishBossHead_f4, "SkeletalFishBossHead.f4", 9.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SkeletalFishBossHead_f5, "SkeletalFishBossHead.f5", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_SkeletalFishBossHead_f6, "SkeletalFishBossHead.f6", 270.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemo_1, "exeAppearDemo.1", 280);
@@ -103,6 +130,7 @@ namespace {
 };  // namespace
 
 SkeletalFishBoss::SkeletalFishBoss(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBoss >);
     mJointIndicies = nullptr;
     mPartsArray = nullptr;
     mBossHead = nullptr;
@@ -163,7 +191,7 @@ void SkeletalFishBoss::init(const TableIter& rIter) {
     initSound(4, false);
     initNerve(GET_NERVE_ANON(SkeletalFishBossNrvSwim));
     MR::invalidateClipping(this);
-    MR::setClippingTypeSphere(this, 1000.0f);
+    MR::setClippingTypeSphere(this, cNum_init_f1);
     mBossDirector = new SkeletalFishBossBattleDirector(this);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     MR::connectToSceneCollisionEnemy(this);
@@ -271,7 +299,7 @@ void SkeletalFishBoss::calcAnim() {
             Vec3f gravity;
             MR::calcGravityVector(this, position, &gravity, nullptr, 0);
 
-            if (cameraDir.dot(gravity) < Angle::cosRadian(1.8325958f)) {
+            if (cameraDir.dot(gravity) < Angle::cosRadian(cNum_calcAnim_f1)) {
                 MR::invalidateShadow(this, pShadow->mName);
             } else {
                 MR::validateShadow(this, pShadow->mName);
@@ -313,7 +341,7 @@ void SkeletalFishBoss::damage(const HitSensor* /*pSensor*/, const Vec3f& rStarPi
             }
         } else {
             u32 numStarPiece = (mLevel + 1 == mLevelNum) ? 15 : 10;
-            MR::appearStarPiece(this, rStarPieceOffs, numStarPiece, 10.0f, 40.0f, false);
+            MR::appearStarPiece(this, rStarPieceOffs, numStarPiece, cNum_damage_f1, cNum_damage_f2, false);
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W_F");
             setNerve(GET_NERVE_ANON(SkeletalFishBossNrvDamage));
         }
@@ -333,9 +361,9 @@ void SkeletalFishBoss::exeSwim() {
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_FAR");
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_NEAR");
     Vec3f mouthPos;
-    getMouthSensorCenterPos(mouthPos, 5000.0f);
+    getMouthSensorCenterPos(mouthPos, cNum_exeSwim_f1);
 
-    bool isClose = mouthPos.distance(*MR::getPlayerPos()) < 5000.0f;
+    bool isClose = mouthPos.distance(*MR::getPlayerPos()) < cNum_exeSwim_f2;
 
     if (isClose) {
         setNerve(GET_NERVE_ANON(SkeletalFishBossNrvOpen));
@@ -359,8 +387,8 @@ void SkeletalFishBoss::exeOpen() {
 
 void SkeletalFishBoss::exeOpenWait() {
     Vec3f mouthPos;
-    getMouthSensorCenterPos(mouthPos, 7000.0f);
-    bool isClose = mouthPos.distance(*MR::getPlayerPos()) < 7000.0f;
+    getMouthSensorCenterPos(mouthPos, cNum_exeOpenWait_f1);
+    bool isClose = mouthPos.distance(*MR::getPlayerPos()) < cNum_exeOpenWait_f2;
 
     if (!isClose) {
         setNerve(GET_NERVE_ANON(SkeletalFishBossNrvClose));
@@ -420,7 +448,7 @@ void SkeletalFishBoss::exeDamage() {
         }
 
         setNerve(GET_NERVE_ANON(SkeletalFishBossNrvSwim));
-        MR::appearStarPiece(this, mPosition, 6, 10.0f, 40.0f, false);
+        MR::appearStarPiece(this, mPosition, 6, cNum_exeDamage_f1, cNum_exeDamage_f2, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W_F");
     }
 }
@@ -521,7 +549,7 @@ void SkeletalFishBoss::exePowerUpDemo() {
         powerUp();
         mGuardHolder->invalidate();
         mGuardHolder->forceKillAll();
-        mRailControl->mSpeed = 60.0f;
+        mRailControl->mSpeed = cNum_exePowerUpDemo_f1;
 
         if (mLevel == 1) {
             MR::startBck(this, "PowerUp1");
@@ -607,11 +635,11 @@ void SkeletalFishBoss::exeBreakDemo() {
     }
 
     if (MR::isStep(this, 0)) {
-        MR::startCenterScreenBlur(60, 5.0f, 0x50, 5, 30);
+        MR::startCenterScreenBlur(60, cNum_exeBreakDemo_f1, 0x50, 5, 30);
     }
 
     if (MR::isStep(this, cStep_exeBreakDemo_3)) {
-        MR::startCenterScreenBlur(60, 80.0f, 0x50, 5, 30);
+        MR::startCenterScreenBlur(60, cNum_exeBreakDemo_f2, 0x50, 5, 30);
     }
 
     if (MR::isBckStopped(mBreakModel)) {
@@ -642,7 +670,7 @@ LiveActor* SkeletalFishBoss::getCurrentRail() {
 }
 
 f32 SkeletalFishBoss::getBodyThickness() const {
-    return 400.0f;
+    return cNum_getBodyThickness_f1;
 }
 
 SkeletalFishBossHead* SkeletalFishBoss::getHeadActor() const {
@@ -734,7 +762,7 @@ void SkeletalFishBoss::initShadow() {
         const char* pName = rShadow.mName;
         MtxPtr pMtx = MR::getJointMtx(this, rShadow.mJointName);
         MR::addShadowVolumeFlatModel(this, pName, rShadow.mShadowName, pMtx);
-        MR::setShadowDropLength(this, pName, 4000.0f);
+        MR::setShadowDropLength(this, pName, cNum_initShadow_f1);
     }
 
     MR::excludeCalcShadowToSensorAll(this, mBossHead->getSensor("body"));
@@ -841,7 +869,7 @@ bool SkeletalFishBoss::calcGravityCenter(Vec3f* pOut, const Vec3f& rFirstPoint, 
     f32 dotFirst = distanceVector.dot(secondGravityVector);
     f32 dotSecond = reversedDistanceVector.dot(firstGravityVector);
 
-    if (((firstGravitySquared * secondGravitySquared) - dotProductSquared) < 0.001f) {
+    if (((firstGravitySquared * secondGravitySquared) - dotProductSquared) < cNum_calcGravityCenter_f1) {
         return false;
     }
 
@@ -871,7 +899,7 @@ void SkeletalFishBoss::updateBgm() {
         mBgmHoldStep = -1;
         s32 bgType, fadeTime;
 
-        if (MR::calcDistanceToPlayer(this) <= 4200.0f) {
+        if (MR::calcDistanceToPlayer(this) <= cNum_updateBgm_f1) {
             bgType = 2;
             fadeTime = NebulaFrameClock::stepsOfSeconds(1);
         } else {
@@ -912,7 +940,7 @@ void SkeletalFishBoss::resetCamera() {
     Vec3f targetPosition;
     playerMtx.getYDir(targetPosition);
     Vec3f frontDirection;
-    Vec3f cameraTarget = position + targetPosition * 1200.0f;
+    Vec3f cameraTarget = position + targetPosition * cNum_resetCamera_f1;
     targetPosition = cameraTarget;
     playerMtx.getZDir(frontDirection);
     MR::setProgrammableCameraParam("デモ終了後カメラ", position, targetPosition, frontDirection, true);
@@ -1035,7 +1063,7 @@ void SkeletalFishBoss::endBreakDemo() {
     MR::showPlayer();
     mBreakModel->makeActorDead();
     MR::hideModel(this);
-    Vec3f offset(0.0f, 1573.0f, 0.0f);
+    Vec3f offset(0.0f, cNum_endBreakDemo_f1, 0.0f);
     mPlacementMtx.mult(offset, offset);
     MR::requestAppearPowerStar(this, offset);
 }
@@ -1049,16 +1077,17 @@ bool SkeletalFishBoss::isEnableToBeDamaged() const {
 
 SkeletalFishBossHead::SkeletalFishBossHead(LiveActor* pActor)
     : PartsModel(pActor, "スカルシャーク頭", "SkeletalFishBossHeadA", nullptr, MR::DrawBufferType_Enemy, false), mIsEyeLightOn(true) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossHead >);
     initFixedPosition("Head");
     // The body and one sensor per wound.
     initHitSensor(1 + ARRAY_SIZE(::sHitPosData));
-    MR::addHitSensorAtJointEnemy(this, "body", "Head", 8, 400.0f, Vec3f(0.0f, -120.0f, 320.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Head", 8, cNum_SkeletalFishBossHead_f1, Vec3f(0.0f, -cNum_SkeletalFishBossHead_f2, cNum_SkeletalFishBossHead_f3));
 
     for (u32 i = 0; i < ARRAY_SIZE(::sHitPosData); i++) {
         Vec3f offset(::sHitPosData[i].mOffset);
 
-        offset.scale(9.0f / 10.0f);
-        MR::addHitSensorAtJointEnemyAttack(this, ::sHitPosData[i].mName, ::sHitPosData[i].mSensorName, 8, 270.0f, offset);
+        offset.scale(cNum_SkeletalFishBossHead_f4 / cNum_SkeletalFishBossHead_f5);
+        MR::addHitSensorAtJointEnemyAttack(this, ::sHitPosData[i].mName, ::sHitPosData[i].mSensorName, 8, cNum_SkeletalFishBossHead_f6, offset);
     }
 
     MR::initLightCtrl(this);
@@ -1174,6 +1203,7 @@ void SkeletalFishBossHead::createSubModel() {
 
 SkeletalFishBossScarFlash::SkeletalFishBossScarFlash(LiveActor* pActor)
     : PartsModel(pActor, "スカルシャーク傷跡エフェクトモデル", "SkeletalFishBossScarFlash", nullptr, MR::DrawBufferType_Enemy, false) {
+    lumacore::setClass(this, lumacore::kClassId< SkeletalFishBossScarFlash >);
     initFixedPosition("Head");
 }
 

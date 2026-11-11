@@ -12,6 +12,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_f1, "exeDamage.f1", 2.0f);
 
 namespace NrvPoltaArm {
     NEW_NERVE(PoltaArmNrvControlled, PoltaArm, Controlled);
@@ -27,6 +31,7 @@ namespace NrvPoltaArm {
 PoltaArm::PoltaArm(const char* pName, const char* pModelName, MtxPtr pMtx)
     : ModelObj(pName, pModelName, pMtx, MR::DrawBufferType_Enemy, -2, -2, false), mFormationModel(), mBreakModel(), mHitPoint(2), mHitPointMax(2), mBrokenCounter(),
       mIsLeftArm(true) {
+    lumacore::setClass(this, lumacore::kClassId< PoltaArm >);
     mBreakModelMtx.identity();
     MR::initLightCtrl(this);
 
@@ -85,7 +90,7 @@ void PoltaArm::exeDamage() {
         MR::startAction(this, "Damage");
         MR::startBva(this, "BreakLevel");
         f32 ratio = static_cast< f32 >(mHitPoint) / static_cast< f32 >(mHitPointMax);
-        f32 bvaFrame = (1.0f - ratio) * 2.0f;
+        f32 bvaFrame = (1.0f - ratio) * cNum_exeDamage_f1;
         MR::setBvaFrameAndStop(this, bvaFrame);
         MR::startSound(this, "SE_BM_POLTA_ROCK_DAMAGE");
         MR::tryRumblePadStrong(this, PLAYER_1);

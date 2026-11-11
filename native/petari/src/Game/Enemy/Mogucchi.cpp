@@ -24,6 +24,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeScatter_f1, "exeScatter.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_makeEulerRotation_f1, "makeEulerRotation.f1", 180.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_updateReferenceMtx_f1, "updateReferenceMtx.f1", 180.0f);
 
 namespace {
     NEW_NERVE_ONEND(MogucchiNrvStroll, Mogucchi, Stroll, Stroll);
@@ -33,7 +38,7 @@ namespace {
     NEW_NERVE(MogucchiNrvScatter, Mogucchi, Scatter);
     NEW_NERVE(MogucchiNrvDie, Mogucchi, Die);
 
-    const Vec cHeadOffset = {40.0f, 0.0f, -8.0f};
+    NEBULA_TUNABLE_RECORD(Vec, cHeadOffset, {40.0f, 0.0f, -8.0f});
     NEBULA_TUNABLE(f32, cHeadRadius, 83.0f);
     NEBULA_TUNABLE(f32, cBodyRadius, 120.0f);
     NEBULA_TUNABLE(f32, cSpinRadius, 180.0f);
@@ -63,6 +68,7 @@ namespace {
 Mogucchi::Mogucchi(const char* pName)
     : LiveActor(pName), mHill(), mHole(), mScatterUpSpeed(), mScatterDir(0.0f, 0.0f, 1.0f), mStrollSpeed(), mMaxStrollSpeed(::cDefaultMaxStrollSpeed),
       mIsStoppedByP2() {
+    lumacore::setClass(this, lumacore::kClassId< Mogucchi >);
     mHoleMtx.identity();
 }
 
@@ -217,7 +223,7 @@ void Mogucchi::exeScatter() {
         mtx.setYDir(-mRailGravity);
         mtx.setZDir(-mScatterDir);
         mtx.getEulerXYZ(mRotation);
-        mRotation.mult(180.0f / PI);
+        mRotation.mult(cNum_exeScatter_f1 / PI);
     }
 
     mPosition.add(mRailGravity.scaleInline(-mScatterUpSpeed) + mScatterDir.multInLine(::cScatterSideSpeed));
@@ -362,7 +368,7 @@ void Mogucchi::makeEulerRotation() {
     Pos3f mtx;
     MR::makeMtxUpFront(&mtx, -mRailGravity, MR::getRailDirection(this));
     mtx.getEulerXYZ(mRotation);
-    mRotation.mult(180.0f / PI);
+    mRotation.mult(cNum_makeEulerRotation_f1 / PI);
 }
 
 void Mogucchi::calcScatterVec(const Vec3f& rStart, const Vec3f& rEnd) {
@@ -449,7 +455,7 @@ bool Mogucchi::receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor*
 
 // The hole model follows Mogucchi through mHoleMtx.
 void Mogucchi::updateReferenceMtx() {
-    Vec3f rotate = mRotation * (PI / 180.0f);
+    Vec3f rotate = mRotation * (PI / cNum_updateReferenceMtx_f1);
 
     mHoleMtx.setRT(rotate, mPosition);
 

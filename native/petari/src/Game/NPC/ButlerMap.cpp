@@ -17,6 +17,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     const char* cDemoNameMapLecture = "バトラーマップレクチャー";
@@ -32,6 +33,7 @@ namespace NrvButlerMap {
 };  // namespace NrvButlerMap
 
 ButlerMap::ButlerMap(const char* pName) : NPCActor(pName), mStateStarPieceReaction(), mObjArg0() {
+    lumacore::setClass(this, lumacore::kClassId< ButlerMap >);
 }
 
 void ButlerMap::init(const TableIter& rIter) {

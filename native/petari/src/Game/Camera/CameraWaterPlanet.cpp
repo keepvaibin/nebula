@@ -4,8 +4,17 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f1, "reset.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_reset_f2, "reset.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calc_f3, "calc.f3", 0.05f);
 
 CameraWaterPlanet::CameraWaterPlanet(const char* pName) : Camera(pName), mDistMin(500.0f), mDistMax(2000.0f), mAngleX(MR::pi() / 4.0f) {
+    lumacore::setClass(this, lumacore::kClassId< CameraWaterPlanet >);
 }
 
 void CameraWaterPlanet::reset() {
@@ -14,7 +23,7 @@ void CameraWaterPlanet::reset() {
     Vec3f up = CameraLocalUtil::getUpVec(mCameraMan);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), cNum_reset_f1 / cNum_reset_f2);
 
     Vec3f front = watchPos - pos;
     if (MR::isNearZero(front)) {
@@ -48,7 +57,7 @@ CameraTargetObj* CameraWaterPlanet::calc() {
 
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, cNum_calc_f1 / cNum_calc_f2);
 
     Vec3f front = currWatchPos - pos;
     if (MR::isNearZero(front)) {
@@ -76,7 +85,7 @@ CameraTargetObj* CameraWaterPlanet::calc() {
     MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
     if (angleX < mAngleX) {
-        angleX += (mAngleX - angleX) * 0.05f;
+        angleX += (mAngleX - angleX) * cNum_calc_f3;
         MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
     }
 

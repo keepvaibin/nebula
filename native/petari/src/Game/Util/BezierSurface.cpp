@@ -2,6 +2,11 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTrianglePatchVertix_f1, "calcTrianglePatchVertix.f1", 0.000001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTrianglePatchNormal_f1, "calcTrianglePatchNormal.f1", 0.000001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcTrianglePatchNormal_f2, "calcTrianglePatchNormal.f2", 0.000001f);
 
 namespace {
     typedef f32 TrianglePatchCoefs[13];
@@ -446,7 +451,7 @@ namespace {
         {0.0f, -0.0f, -0.0f, -0.0f, 0.0f, -0.0f, -0.0f, -0.0f, 0.0f, -0.0f, -0.0f, -3.0f, 3.0f}};
 
     // non-projected coordinated of triangular bezier surface
-    const Vec sBezierTriangleST0[] = {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}};
+    NEBULA_TUNABLE_RECORDS(Vec, sBezierTriangleST0, , {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}});
     const Vec sBezierTriangleST1[] = {{1.0f, 0.0f, 0.0f}, {1.0f / 2.0f, 1.0f / 2.0f, 0.0f}, {1.0f / 2.0f, 0.0f, 1.0f / 2.0f},
                                       {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f / 2.0f, 1.0f / 2.0f}, {0.0f, 0.0f, 1.0f}};
     const Vec sBezierTriangleST2[] = {{1.0f, 0.0f, 0.0f},
@@ -664,7 +669,7 @@ void BezierSurface::calcTrianglePatchVertix(Vec3f* pVertexPatch) const {
         for (index.x = 0; index.x < 13; index.x++) {
             f32 scale = coefTable[index.y][index.x];
 
-            if (scale > MR::abs(0.000001f)) {
+            if (scale > MR::abs(cNum_calcTrianglePatchVertix_f1)) {
                 MR::vecScaleAdd(&pVertexPatch[index.y], &mCtrlPts[index.x], scale);
             }
         }
@@ -684,13 +689,13 @@ void BezierSurface::calcTrianglePatchNormal(Vec3f* pNormalPatch) const {
         for (index.x = 0; index.x < 13; index.x++) {
             f32 scaleS = tangentSTable[index.y][index.x];
 
-            if (MR::abs(scaleS) > 0.000001f) {
+            if (MR::abs(scaleS) > cNum_calcTrianglePatchNormal_f1) {
                 MR::vecScaleAdd(&tangentS, &mCtrlPts[index.x], scaleS);
             }
 
             f32 scaleT = tangentTTable[index.y][index.x];
 
-            if (MR::abs(scaleT) > 0.000001f) {
+            if (MR::abs(scaleT) > cNum_calcTrianglePatchNormal_f2) {
                 MR::vecScaleAdd(&tangentT, &mCtrlPts[index.x], scaleT);
             }
         }

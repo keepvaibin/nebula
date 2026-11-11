@@ -5,6 +5,20 @@
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFloatSignal_f1, "exeFloatSignal.f1", 3.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailMove_f1, "exeRailMove.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRailMove_f2, "exeRailMove.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_boundFloater_f1, "boundFloater.f1", 7.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_boundFloater_f2, "boundFloater.f2", 9.6f);
+NEBULA_TUNABLE_NAMED(f32, cNum_floatFloater_f1, "floatFloater.f1", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_floatFloater_f2, "floatFloater.f2", 150.0f);
 
 namespace NrvOceanSmallTurtle {
     NEW_NERVE(OceanSmallTurtleNrvWait, OceanSmallTurtle, Wait);
@@ -33,12 +47,13 @@ OceanSmallTurtle::OceanSmallTurtle(const char* pName)
     : LiveActor(pName), mRailMover(), mFloatUpSpeed(), mAccelRate(::sDefaultAccelRate), mStartNearestRailPos(0.0f), mFloatDelayTimer(), mArg1(),
       mBoundTimer(), mMercatorPos(0.0f), mBoundDisplacement(), mRailClippingPos(0.0f), mRailClippingRadius(), mStartRotationX(), mIsOnPlayer(),
       isBound(), isStartFloat() {
+    lumacore::setClass(this, lumacore::kClassId< OceanSmallTurtle >);
     mEffectMtx.identity();
 }
 
 void OceanSmallTurtle::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mAccelRate);
-    mAccelRate /= 100.0f;
+    mAccelRate /= cNum_init_f1;
 
     MR::getPlacementArg1NoInit(rIter, &mArg1);
     MR::getPlacementRotate(rIter, &mInfoRotate);
@@ -60,8 +75,8 @@ void OceanSmallTurtle::init(const TableIter& rIter) {
     initRailRider(rIter);
 
     MR::calcNearestRailPosForMercator(&mStartNearestRailPos, this, ::sJudgeForCatchRail);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
-    MR::calcRailClippingInfoForMercator(&mRailClippingPos, &mRailClippingRadius, this, 100.0f, 500.0f);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f2);
+    MR::calcRailClippingInfoForMercator(&mRailClippingPos, &mRailClippingRadius, this, cNum_init_f3, cNum_init_f4);
     mRailMover = MR::createMapPartsRailMoverForMercator(this, rIter, false);
 
     MR::onCalcGravity(this);
@@ -129,7 +144,7 @@ void OceanSmallTurtle::exeWait() {
     scaledUp.scale(mArg1, up);
 
     if (MR::isInWater(this, scaledUp)) {
-        if (mFloatDelayTimer >= 150.0f) {
+        if (mFloatDelayTimer >= cNum_exeWait_f1) {
             setNerve(GET_NERVE(OceanSmallTurtle, OceanSmallTurtleNrvFloatSignal));
         } else {
             mFloatDelayTimer += 1.0f;
@@ -138,7 +153,7 @@ void OceanSmallTurtle::exeWait() {
 }
 
 void OceanSmallTurtle::exeFloatSignal() {
-    f32 speedAndDir = 3.0f * (getNerveStep() % 8 < 4 ? ::sRambleSide : -::sRambleSide);
+    f32 speedAndDir = cNum_exeFloatSignal_f1 * (getNerveStep() % 8 < 4 ? ::sRambleSide : -::sRambleSide);
     Vec3f sideVec;
     MR::calcSideVec(&sideVec, this);
 
@@ -195,7 +210,7 @@ void OceanSmallTurtle::exeCatchRail() {
 void OceanSmallTurtle::exeRailMove() {
     if (MR::isFirstStep(this)) {
         MR::validateClipping(this);
-        MR::initAndSetRailClippingForMercator(&mRailClippingPos, this, 100.0f, 500.0f);
+        MR::initAndSetRailClippingForMercator(&mRailClippingPos, this, cNum_exeRailMove_f1, cNum_exeRailMove_f2);
         MR::setClippingTypeSphere(this, mRailClippingRadius, &mRailClippingPos);
     }
 
@@ -232,9 +247,9 @@ bool OceanSmallTurtle::boundFloater() {
         return true;
     }
 
-    f32 boundAmp = (::sBoundAmpMax - (mBoundTimer * (1.0f / 7.5f)));
+    f32 boundAmp = (::sBoundAmpMax - (mBoundTimer * (1.0f / cNum_boundFloater_f1)));
 
-    mBoundDisplacement = boundAmp * MR::sinDegree(mBoundTimer * 9.6f);
+    mBoundDisplacement = boundAmp * MR::sinDegree(mBoundTimer * cNum_boundFloater_f2);
 
     mBoundTimer++;
     return false;
@@ -261,9 +276,9 @@ void OceanSmallTurtle::floatFloater() {
     scaledUp.scale(mArg1, up);
 
     if (MR::isInWater(this, scaledUp)) {
-        if (mFloatDelayTimer >= 150.0f) {
+        if (mFloatDelayTimer >= cNum_floatFloater_f1) {
             mVelocity.scale(::sStartFloatPower + mFloatUpSpeed, up);
-            mFloatDelayTimer = 150.0f;
+            mFloatDelayTimer = cNum_floatFloater_f2;
             if (mFloatUpSpeed < ::sAccelMax) {
                 mFloatUpSpeed += mAccelRate;
             }

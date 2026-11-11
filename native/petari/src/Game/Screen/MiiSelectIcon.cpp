@@ -9,11 +9,16 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <Game/Ui/TexMap.hpp>
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_appearMiiDummy_f1, "appearMiiDummy.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appearMiiDummy_f2, "appearMiiDummy.f2", 5.0f);
 
 namespace {
-    static const f32 sCharacterTexFrame[] = {
+    NEBULA_TUNABLE_LIST(f32, sCharacterTexFrame, , {
         0.0f, 4.0f, 3.0f, 2.0f, 1.0f,
-    };
+    });
 
     NEW_NERVE(MiiSelectIconNrvCreate, MiiSelectIcon, Create);
     NEW_NERVE(MiiSelectIconNrvWait, MiiSelectIcon, Wait);
@@ -24,6 +29,7 @@ namespace {
 MiiSelectIcon::MiiSelectIcon(int movementType, int calcAnimType, int drawType, const char* pName)
     : LayoutActor(pName, true), mActiveButton(), mFellowButton(), mMiiButton(), mIcon(), mMiiTexMap(), mFellowTexMap(), mIconID(new FileSelectIconID()), mIsMiiDummy(),
       mIsEnabled(true) {
+    lumacore::setClass(this, lumacore::kClassId< MiiSelectIcon >);
     initLayoutManager("MiiIcon", 1);
     MR::createAndAddPaneCtrl(this, "MarioIcon", 3);
     MR::createAndAddPaneCtrl(this, "MiiIcon", 3);
@@ -98,9 +104,9 @@ void MiiSelectIcon::appearMiiDummy() {
 
     MR::showLayout(this);
     MR::startAnim(this, "Character", 0);
-    MR::setAnimFrameAndStop(this, 5.0f, 0);
+    MR::setAnimFrameAndStop(this, cNum_appearMiiDummy_f1, 0);
     MR::startPaneAnim(this, "MarioIcon", "Character", 1);
-    MR::setPaneAnimFrameAndStop(this, "MarioIcon", 5.0f, 1);
+    MR::setPaneAnimFrameAndStop(this, "MarioIcon", cNum_appearMiiDummy_f2, 1);
     mActiveButton = mFellowButton;
     MR::hidePane(this, "MiiIcon");
     MR::showPane(this, "MarioIcon");

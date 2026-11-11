@@ -4,6 +4,15 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_initStarPointer_f1, "initStarPointer.f1", 120.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 100.0f);
 
 namespace NrvBanekiti {
     NEW_NERVE(BanekitiNrvWait, Banekiti, Wait);
@@ -12,12 +21,13 @@ namespace NrvBanekiti {
 };  // namespace NrvBanekiti
 
 Banekiti::Banekiti(const char* pName) : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mRailMover() {
+    lumacore::setClass(this, lumacore::kClassId< Banekiti >);
 }
 
 inline void Banekiti::initStarPointer() {
     Vec3f offset;
     offset.set(0.0f);
-    MR::initStarPointerTarget(this, 120.0f, offset);
+    MR::initStarPointerTarget(this, cNum_initStarPointer_f1, offset);
 }
 
 void Banekiti::init(const TableIter& rIter) {
@@ -26,9 +36,9 @@ void Banekiti::init(const TableIter& rIter) {
     MR::connectToSceneMapObjStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(3);
-    MR::addHitSensorMapObjSimple(this, "body", 4, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorMapObjSimple(this, "right", 4, 80.0f, Vec3f(-100.0f, 0.0f, 0.0f));
-    MR::addHitSensorMapObjSimple(this, "left", 4, 80.0f, Vec3f(100.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "body", 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "right", 4, cNum_init_f2, Vec3f(-cNum_init_f3, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "left", 4, cNum_init_f4, Vec3f(cNum_init_f5, 0.0f, 0.0f));
     initEffectKeeper(1, nullptr);
     initSound(4, false);
     initRailRider(rIter);

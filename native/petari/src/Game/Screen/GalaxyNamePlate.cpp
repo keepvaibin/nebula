@@ -8,6 +8,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, cAppearReadyFrame, 40);
@@ -22,6 +23,7 @@ namespace NrvGalaxyNamePlate {
 GalaxyNamePlate::GalaxyNamePlate(const char* pGalaxyName, bool param2)
     : LayoutActor("ギャラクシー名プレート", true), mGalaxyName(pGalaxyName), mIsShownThisFrame(false), mIsAppearNow(false), mShowBalloonNozzle(true), mDrawerEntry(nullptr),
       mStateFrame(0), mPlayNewSe(true) {
+    lumacore::setClass(this, lumacore::kClassId< GalaxyNamePlate >);
     initLayoutManager("GalaxyNamePlate", 3);
 
     if (param2) {

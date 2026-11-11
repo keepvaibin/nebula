@@ -25,12 +25,22 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_isLookDirRailDirection_f1, "isLookDirRailDirection.f1", 0.01f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyAway_f1, "exeFlyAway.f1", 15.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyAway_f2, "exeFlyAway.f2", 35.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyAway_f3, "exeFlyAway.f3", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeFlyAway_f4, "exeFlyAway.f4", 0.99f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeTurnLoop_f1, "exeTurnLoop.f1", 139.0f);
 
 // The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
 NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyAway_1, "exeFlyAway.1", 33);
 
 namespace {
-    const Vec sSensorOffsetNormal = {0.0f, 0.0f, 30.0f};
+    NEBULA_TUNABLE_RECORD(Vec, sSensorOffsetNormal, {0.0f, 0.0f, 30.0f});
     NEBULA_TUNABLE(f32, sSensorRadiusNormal, 120.0f);
     NEBULA_TUNABLE(f32, sSensorRadiusAttack, 60.0f);
     NEBULA_TUNABLE(f32, sSensorRadiusShell, 50.0f);
@@ -85,6 +95,7 @@ namespace NrvNokonokoLand {
 NokonokoLand::NokonokoLand(const char* pName)
     : LiveActor(pName), mJetTurtle(new JetTurtle("陸ノコ用ジェット亀")), mRailPointPassChecker(new MapPartsRailPointPassChecker(this)),
       mAnimScaleController(nullptr), mBindStarPointerState(nullptr), mTurtleType(0), mAppearPos(gZeroVec), mTurnAxis(Vec3f(0.0f, 1.0f, 0.0f)) {
+    lumacore::setClass(this, lumacore::kClassId< NokonokoLand >);
     mTargetQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
@@ -104,7 +115,7 @@ void NokonokoLand::init(const TableIter& rIter) {
     initHitSensor(3);
     MR::addHitSensorMtxEnemy(this, "body", 8, ::sSensorRadiusNormal, MR::getJointMtx(this, "Center"), Vec3f(::sSensorOffsetNormal));
     MR::addHitSensorMtxEnemyAttack(this, "attack", 8, ::sSensorRadiusAttack, MR::getJointMtx(this, "Center"), Vec3f(::sSensorOffsetNormal));
-    MR::addHitSensorMtx(this, "shell", 0x22, 8, ::sSensorRadiusShell, MR::getJointMtx(this, "Turtle"), Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorMtx(this, "shell", 0x22, 8, ::sSensorRadiusShell, MR::getJointMtx(this, "Turtle"), Vec3f(0.0f, cNum_init_f1, 0.0f));
     MR::invalidateHitSensor(this, "shell");
 
     initRailRider(rIter);
@@ -117,7 +128,7 @@ void NokonokoLand::init(const TableIter& rIter) {
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     MR::onCalcShadow(this, nullptr);
-    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
+    MR::initStarPointerTarget(this, cNum_init_f2, Vec3f(0.0f));
     initNerve(GET_NERVE(NokonokoLand, HostTypeWalk));
     mAnimScaleController = new AnimScaleController(nullptr);
     mAnimScaleController->setParamTight();
@@ -299,7 +310,7 @@ bool NokonokoLand::isLookDirRailDirection() const {
     Vec3f front;
     mTargetQuat.getZDir(front);
     Vec3f railDirection(MR::getRailDirection(this));
-    if (!MR::isSameDirection(front, railDirection, 0.01f)) {
+    if (!MR::isSameDirection(front, railDirection, cNum_isLookDirRailDirection_f1)) {
         return false;
     }
 
@@ -526,12 +537,12 @@ void NokonokoLand::exeFlyAway() {
         MR::vecKillElement(mVelocity, -mGravity, &direction);
         MR::normalize(&direction);
         Vec3f up(-mGravity);
-        mVelocity.set(direction * 15.0f + up.multInLine(35.0f));
+        mVelocity.set(direction * cNum_exeFlyAway_f1 + up.multInLine(cNum_exeFlyAway_f2));
         MR::makeQuatFromVec(&mTargetQuat, -direction, -mGravity);
     }
 
-    mVelocity.add(mGravity * 1.5f);
-    mVelocity.mult(0.99f);
+    mVelocity.add(mGravity * cNum_exeFlyAway_f3);
+    mVelocity.mult(cNum_exeFlyAway_f4);
     if (MR::isStep(this, cStep_exeFlyAway_1)) {
         mVelocity.zero();
         setNerve(GET_NERVE(NokonokoLand, HostTypeDead));
@@ -608,7 +619,7 @@ void NokonokoLand::exeTurnLoop() {
     }
 
     Quat4f rotation;
-    rotation.setRotate(mTurnAxis, -PI / 139.0f);
+    rotation.setRotate(mTurnAxis, -PI / cNum_exeTurnLoop_f1);
     mTargetQuat.mult(rotation);
     if (isLookDirRailDirection()) {
         setNerve(GET_NERVE(NokonokoLand, HostTypeTurnEnd));

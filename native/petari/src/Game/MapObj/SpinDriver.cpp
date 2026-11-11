@@ -26,6 +26,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShootStart_f1, "exeShootStart.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShootStart_f2, "exeShootStart.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeShootStart_f3, "exeShootStart.f3", 2.0f);
 
 namespace {
     NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
@@ -78,6 +83,7 @@ SpinDriver::SpinDriver(const char* pName)
       mClippingCenter(0, 0, 0), mClippingRadius(), mCaptureRate(), mShadowDropLength(-1.0f), mShootTime(300), mFlyShortStep(-1), mFlyEndStep(240),
       mFallStep(270), mSpaceFlyEndFrame(::sDefaultSpaceFlyEndFrame), mInitPoseAngle(), mCanBind(true), mCoolDown(), mIsCoolingDown(),
       mIsPlayerAway(true), mIsAppearSilent() {
+    lumacore::setClass(this, lumacore::kClassId< SpinDriver >);
 }
 
 void SpinDriver::init(const TableIter& rIter) {
@@ -467,7 +473,7 @@ void SpinDriver::exeShootStart() {
 
     // The dip is (2p - 1)^4 deep; the player reaches the dip point by half way.
     f32 progress = MR::clamp(getNerveStep() / ::sShootStartFrameF, 0.0f, 1.0f);
-    f32 half = 2.0f * (progress - 0.5f);
+    f32 half = cNum_exeShootStart_f1 * (progress - cNum_exeShootStart_f2);
     f32 square = half * half;
     f32 dip = square * square;
 
@@ -477,7 +483,7 @@ void SpinDriver::exeShootStart() {
     Vec3f dipPos;
     dipPos.set(mPosition - up * ::sShootStartDip * (1.0f - dip));
 
-    f32 moveRate = MR::clamp(2.0f * progress, 0.0f, 1.0f);
+    f32 moveRate = MR::clamp(cNum_exeShootStart_f3 * progress, 0.0f, 1.0f);
     mBindPos.set(mCaptureStartPos * (1.0f - moveRate) + dipPos * moveRate);
 
     updateBindActorMatrix(moveRate + mCaptureRate * (1.0f - moveRate));

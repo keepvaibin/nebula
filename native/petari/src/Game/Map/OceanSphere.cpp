@@ -15,6 +15,39 @@
 #include <nebula_geometry.hpp>
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_OceanSpherePlane_f1, "OceanSpherePlane.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_OceanSpherePlane_f2, "OceanSpherePlane.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_OceanSpherePlane_f3, "OceanSpherePlane.f3", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_OceanSpherePlaneEdge_f1, "OceanSpherePlaneEdge.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_appear_f1, "appear.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRiseUp_f1, "exeRiseUp.f1", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeRiseUp_f2, "exeRiseUp.f2", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcWaterInfo_f1, "calcWaterInfo.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f1, "initPoints.f1", 300.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f2, "initPoints.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f3, "initPoints.f3", 1000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f4, "initPoints.f4", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f5, "initPoints.f5", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f6, "initPoints.f6", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f7, "initPoints.f7", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f8, "initPoints.f8", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f9, "initPoints.f9", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f10, "initPoints.f10", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f11, "initPoints.f11", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f12, "initPoints.f12", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f13, "initPoints.f13", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f14, "initPoints.f14", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initPoints_f15, "initPoints.f15", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 0.0008f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 0.0008f);
+NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBack_f1, "loadMaterialBack.f1", 0.779175f);
 
 NebulaColor8 sOceanSphereStageColor0Face = {0x48, 0x80, 0xBE, 0x1C};
 NebulaColor8 sOceanSphereStageColor1FrontDefault = {0x00, 0x51, 0x70, 0x6F};
@@ -60,10 +93,10 @@ OceanSpherePlane::OceanSpherePlane(s32 pointCount, const Vec3f* pCenter, const V
 
     Rot3f rot;
     rot.identity();
-    Vec2f texCenter(0.5f, 0.5f);
+    Vec2f texCenter(cNum_OceanSpherePlane_f1, cNum_OceanSpherePlane_f2);
 
     for (s32 row = 1; row < pointCount - 1; row++) {
-        rot.setRotate(rAxis2, (static_cast< f32 >(row) / (pointCount - 1)) * (MR::pi() / 2.0f));
+        rot.setRotate(rAxis2, (static_cast< f32 >(row) / (pointCount - 1)) * (MR::pi() / cNum_OceanSpherePlane_f3));
         Vec3f vec(rAxis1);
         rot.mult(vec, vec);
         f32 rowRate = static_cast< f32 >(row) / (pointCount - 1);
@@ -110,7 +143,7 @@ OceanSpherePlaneEdge::OceanSpherePlaneEdge(s32 pointCount, const Vec3f* pCenter,
     MR::normalize(&axis);
     Rot3f rot;
     rot.identity();
-    rot.setRotate(axis, (1.0f / (pointCount - 1)) * (MR::pi() / 2.0f));
+    rot.setRotate(axis, (1.0f / (pointCount - 1)) * (MR::pi() / cNum_OceanSpherePlaneEdge_f1));
     Vec3f vec(rAxis1);
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -131,6 +164,7 @@ OceanSphere::OceanSphere(const char* pName)
     : LiveActor(pName), mRadius(), mRadiusTarget(), mPointCount(), mAxisPointPX(), mAxisPointNX(), mAxisPointPY(), mAxisPointNY(), mAxisPointPZ(),
       mAxisPointNZ(), mPlaneLeftUpper(), mPlaneRightUpper(), mPlaneLeftLower(), mPlaneRightLower(), mEdge0(), mEdge1(), mEdge2(), mEdge3(), mEdge4(),
       mEdge5(), mEdge6(), mEdge7(), mWaveTime1(), mWaveTime2(), mTexOffs0X(), mTexOffs0Y(), mTexOffs1X(), mTexOffs1Y(), mWaterTex(), mWaterEnvTex() {
+    lumacore::setClass(this, lumacore::kClassId< OceanSphere >);
     NebulaColor8 front = sOceanSphereStageColor1FrontDefault;
     mStageColor1Front = front;
 
@@ -147,7 +181,7 @@ OceanSphere::OceanSphere(const char* pName)
 void OceanSphere::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanSphere);
     MR::initDefaultPos(this, rIter);
-    mRadius = 100.0f * mScale.x;
+    mRadius = cNum_init_f1 * mScale.x;
     mRadiusTarget = mRadius;
     initPoints();
     updatePoints();
@@ -190,7 +224,7 @@ void OceanSphere::init(const TableIter& rIter) {
 
 void OceanSphere::appear() {
     LiveActor::appear();
-    mRadius = 1000.0f;
+    mRadius = cNum_appear_f1;
     setNerve(GET_NERVE(OceanSphere, OceanSphereNrvRiseUp));
 }
 
@@ -199,7 +233,7 @@ void OceanSphere::exeWait() {
 
 void OceanSphere::exeRiseUp() {
     f32 rate = MR::calcDemoPartStepRate("湧き水上昇");
-    mRadius = 1000.0f + (rate * (mRadiusTarget - 1000.0f));
+    mRadius = cNum_exeRiseUp_f1 + (rate * (mRadiusTarget - cNum_exeRiseUp_f2));
 
     if (MR::isDemoPartLastStep("湧き水上昇")) {
         setNerve(GET_NERVE(OceanSphere, OceanSphereNrvWait));
@@ -221,7 +255,7 @@ bool OceanSphere::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterI
     const f32 alongGravity = MR::vecKillElement(offset, -rGravity, &offset);
     // A sphere placed with no scale (radius 0) holds no water: height 0, not a division by 0.
     const f32 reach = radius > 0.0f ? offset.length() / radius : 1.0f;
-    const f32 height = radius * MR::cos(reach * MR::pi() / 2.0f);
+    const f32 height = radius * MR::cos(reach * MR::pi() / cNum_calcWaterInfo_f1);
     pInfo->mCamWaterDepth = height - alongGravity;
     pInfo->mDepth = height + alongGravity;
 
@@ -233,11 +267,11 @@ bool OceanSphere::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterI
 }
 
 void OceanSphere::initPoints() {
-    if (mRadius <= 300.0f) {
+    if (mRadius <= cNum_initPoints_f1) {
         mPointCount = 8;
-    } else if (mRadius <= 500.0f) {
+    } else if (mRadius <= cNum_initPoints_f2) {
         mPointCount = 10;
-    } else if (mRadius <= 1000.0f) {
+    } else if (mRadius <= cNum_initPoints_f3) {
         mPointCount = 15;
     } else {
         mPointCount = 20;
@@ -251,10 +285,10 @@ void OceanSphere::initPoints() {
     pPoint = new OceanSpherePoint(&mPosition, -::sPosAxisX, 0.0f, 0.0f, Vec2f(0.0f, 1.0f));
     mAxisPointNX = pPoint;
 
-    pPoint = new OceanSpherePoint(&mPosition, ::sPosAxisY, 0.0f, 0.0f, Vec2f(0.5f, 0.5f));
+    pPoint = new OceanSpherePoint(&mPosition, ::sPosAxisY, 0.0f, 0.0f, Vec2f(cNum_initPoints_f4, cNum_initPoints_f5));
     mAxisPointPY = pPoint;
 
-    pPoint = new OceanSpherePoint(&mPosition, -::sPosAxisY, 0.0f, 0.0f, Vec2f(0.5f, 0.5f));
+    pPoint = new OceanSpherePoint(&mPosition, -::sPosAxisY, 0.0f, 0.0f, Vec2f(cNum_initPoints_f6, cNum_initPoints_f7));
     mAxisPointNY = pPoint;
 
     pPoint = new OceanSpherePoint(&mPosition, ::sPosAxisZ, 0.0f, 0.0f, Vec2f(1.0f, 1.0f));
@@ -277,13 +311,13 @@ void OceanSphere::initPoints() {
     pPlane = new OceanSpherePlane(mPointCount, &mPosition, -::sPosAxisY, ::sPosAxisX, Vec2f(1.0f, 0.0f), Vec2f(0.0f, 0.0f), Vec2f(1.0f, 1.0f));
     mPlaneRightLower = pPlane;
 
-    mEdge0 = new OceanSpherePlaneEdge(mPointCount, &mPosition, ::sPosAxisY, ::sPosAxisZ, Vec2f(0.5f, 0.5f), Vec2f(1.0f, 1.0f));
+    mEdge0 = new OceanSpherePlaneEdge(mPointCount, &mPosition, ::sPosAxisY, ::sPosAxisZ, Vec2f(cNum_initPoints_f8, cNum_initPoints_f9), Vec2f(1.0f, 1.0f));
 
-    mEdge1 = new OceanSpherePlaneEdge(mPointCount, &mPosition, ::sPosAxisY, -::sPosAxisZ, Vec2f(0.5f, 0.5f), Vec2f(0.0f, 0.0f));
+    mEdge1 = new OceanSpherePlaneEdge(mPointCount, &mPosition, ::sPosAxisY, -::sPosAxisZ, Vec2f(cNum_initPoints_f10, cNum_initPoints_f11), Vec2f(0.0f, 0.0f));
 
-    mEdge2 = new OceanSpherePlaneEdge(mPointCount, &mPosition, -::sPosAxisY, ::sPosAxisZ, Vec2f(0.5f, 0.5f), Vec2f(1.0f, 1.0f));
+    mEdge2 = new OceanSpherePlaneEdge(mPointCount, &mPosition, -::sPosAxisY, ::sPosAxisZ, Vec2f(cNum_initPoints_f12, cNum_initPoints_f13), Vec2f(1.0f, 1.0f));
 
-    mEdge3 = new OceanSpherePlaneEdge(mPointCount, &mPosition, -::sPosAxisY, -::sPosAxisZ, Vec2f(0.5f, 0.5f), Vec2f(0.0f, 0.0f));
+    mEdge3 = new OceanSpherePlaneEdge(mPointCount, &mPosition, -::sPosAxisY, -::sPosAxisZ, Vec2f(cNum_initPoints_f14, cNum_initPoints_f15), Vec2f(0.0f, 0.0f));
 
     mEdge4 = new OceanSpherePlaneEdge(mPointCount, &mPosition, ::sPosAxisZ, -::sPosAxisX, Vec2f(1.0f, 1.0f), Vec2f(0.0f, 1.0f));
 
@@ -404,18 +438,18 @@ void OceanSphere::control() {
         }
     }
 
-    mWaveTime1 += -0.1f;
-    mWaveTime2 += -0.1f;
+    mWaveTime1 += -cNum_control_f1;
+    mWaveTime2 += -cNum_control_f2;
 
-    if (!mAlwaysUseRealDrawing && MR::calcDistanceToPlayer(this) > 10000.0f) {
+    if (!mAlwaysUseRealDrawing && MR::calcDistanceToPlayer(this) > cNum_control_f3) {
         mUseMesh = true;
     } else {
         mUseMesh = false;
         updatePoints();
     }
 
-    const f32 add = 0.0008f;
-    const f32 sub = -0.0008f;
+    const f32 add = cNum_control_f4;
+    const f32 sub = -cNum_control_f5;
 
     mTexOffs0X = MR::repeat(add + mTexOffs0X, 0.0f, 1.0f);
     mTexOffs0Y = MR::repeat(add + mTexOffs0Y, 0.0f, 1.0f);
@@ -708,7 +742,7 @@ SiteMaterial OceanSphere::loadMaterialBack() const {
     Pos3f pos;
     pos.set(MR::getCameraViewMtx());
     pos.zeroTrans();
-    pos.scale(0.779175f);
+    pos.scale(cNum_loadMaterialBack_f1);
     // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereStageColor0Env
     // toward sOceanSphereStageColor1Env; opaque, depth tested and written, front faces culled, no fog.
     SiteMaterial material;

@@ -4,6 +4,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_exeSetCenter_f1, "exeSetCenter.f1", 0.0001f);
+NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f1, "bindHole.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f2, "bindHole.f2", 0.1f);
 
 namespace {
     NEBULA_TUNABLE(f32, sGravityAcc, 1.2f);
@@ -28,6 +33,7 @@ namespace NrvBallOpener {
 
 BallOpener::BallOpener(const char* pName)
     : LiveActor(pName), mBoundSensor(), mInitialVelocity(0, 0, 0), mBindVelocity(0, 0, 0), mSettledFrames() {
+    lumacore::setClass(this, lumacore::kClassId< BallOpener >);
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
@@ -93,7 +99,7 @@ void BallOpener::exeSetCenter() {
 
     bindHole();
 
-    if (mBindVelocity.squared() < 0.0001f) {
+    if (mBindVelocity.squared() < cNum_exeSetCenter_f1) {
         mSettledFrames++;
     } else {
         mSettledFrames = 0;
@@ -167,7 +173,7 @@ void BallOpener::bindHole() {
     mBindVelocity *= MR::calcNerveValue(this, ::sForceSetStartTime, ::sForceSetEndTime, ::sBallToCenterFreq, ::sBallToCenterEndFreq);
     mBoundSensor->mHost->mVelocity.set(position - previous);
 
-    if (position.squared(previous) < 0.1f * 0.1f) {
+    if (position.squared(previous) < cNum_bindHole_f1 * cNum_bindHole_f2) {
         mBindVelocity.zero();
     }
 }

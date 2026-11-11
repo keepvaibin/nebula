@@ -4,6 +4,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(f32, sRotateSpeedNormal, 1.0f);
@@ -21,6 +22,7 @@ namespace NrvSpaceMine {
 
 SpaceMine::SpaceMine(const char* pName)
     : MapObjActor(pName), mRotateSpeed(::sRotateSpeedNormal), mClippingRange(gZeroVec), mShadowType(-1), mIsPlayerNear() {
+    lumacore::setClass(this, lumacore::kClassId< SpaceMine >);
 }
 
 void SpaceMine::init(const TableIter& rIter) {

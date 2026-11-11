@@ -4,8 +4,10 @@
 #include "Game/Util/DemoUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/System/LumaCore.hpp"
 
 AstroEffectObj::AstroEffectObj(const char* pName) : SimpleEffectObj(pName) {
+    lumacore::setClass(this, lumacore::kClassId< AstroEffectObj >);
     mDomeId = -1;
 }
 

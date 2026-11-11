@@ -4,12 +4,10 @@
 
 #include "galaxy/render/host_window.h"
 #include "galaxy/launch_args.h"
-#include "galaxy/run_options.h"
 #include "galaxy/virtual_keys.h"
 #include "galaxy/path_text.h"
 #include "galaxy/ui/settings_save_model.h"
 #include "galaxy/windows_power.h"
-#include "../../../tools/test_driver/switches.h"
 #include "galaxy/controller_hid.h"
 
 #include "galaxy/render/display_modes.h"
@@ -2294,7 +2292,8 @@ void select_mods_row(const RenderConfig& render, const std::string& key) {
 
 // What a mod changes, its conflicts by the draft's order, or why it does nothing: the line under the page.
 std::string mod_details(const galaxy::mods::ModInfo& mod) {
-    if (!mod.problem.empty() && (mod.unreadable || mod.pack_textures != nullptr || mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
+    // A .luma's problem is why it is refused (another region, a newer Nebula...): it does nothing, whatever it holds.
+    if (!mod.problem.empty() && (mod.package || mod.unreadable || mod.pack_textures != nullptr || mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
         return mods_ui_text(mod.problem, 120u);
     }
     std::string kinds = galaxy::mods::change_kinds(mod);
@@ -3507,93 +3506,15 @@ bool hidden_window_mode_enabled() {
 
 NativeSettingsView build_native_settings_view();
 
-void native_settings_test_frame(std::uint32_t frame) {
-    // GALAXY_TEST_SETTINGS_OPEN=<page>[:<frame>]: hidden test runs open the menu on that page once, at that game
-    // frame.
-    static int test_page = -1;
-    static unsigned long test_frame = 0u;
-    static const bool test_read = [] {
-        char value[32]{};
-        std::size_t length = 0u;
-        if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_settings_open) == 0 && length > 1u) {
-            char* end = nullptr;
-            test_page = static_cast<int>(std::strtol(value, &end, 10));
-            if (end != nullptr && *end == ':') test_frame = std::strtoul(end + 1, nullptr, 10);
-        }
-        return true;
-    }();
-    (void)test_read;
-    static bool test_opened = false;
-    if (test_page >= 0 && !test_opened && frame >= test_frame) {
-        test_opened = true;
-        const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-        s_native_settings_tab.store(static_cast<unsigned>(test_page) % kNativeSettingsTabCount, std::memory_order_relaxed);
-        s_native_settings_row.store(0u, std::memory_order_relaxed);
-        set_native_settings_visible(true);
-    }
-    // GALAXY_TEST_SETTINGS_KEYS=<frame>:<key>,...: keys pressed in the menu at those game frames (up, down, left,
-    // right, enter, esc, tab, backspace, space; f1 opens and closes the menu).
-    static const std::vector<std::pair<unsigned long, std::uintptr_t>> test_keys = [] {
-        std::vector<std::pair<unsigned long, std::uintptr_t>> keys;
-        const char* const text = ::galaxy::run_options().test_settings_keys;
-        if (text == nullptr || text[0] == '\0') return keys;
-        static constexpr std::pair<std::string_view, std::uintptr_t> kNames[] = {
-            {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
-            {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
-        std::string_view rest(text);
-        while (!rest.empty()) {
-            const std::size_t comma = rest.find(',');
-            const std::string_view item = rest.substr(0, comma);
-            rest = comma == std::string_view::npos ? std::string_view() : rest.substr(comma + 1u);
-            const std::size_t colon = item.find(':');
-            if (colon == std::string_view::npos) continue;
-            const unsigned long at = std::strtoul(std::string(item.substr(0, colon)).c_str(), nullptr, 10);
-            for (const auto& [name, key] : kNames) {
-                if (item.substr(colon + 1u) == name) keys.emplace_back(at, key);
-            }
-        }
-        return keys;
-    }();
-    static std::size_t next_key = 0u;
-    while (next_key < test_keys.size() && frame >= test_keys[next_key].first) {
-        handle_native_settings_key(test_keys[next_key].second, false);
-        ++next_key;
-    }
+void open_native_settings(unsigned page) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    s_native_settings_tab.store(page % kNativeSettingsTabCount, std::memory_order_relaxed);
+    s_native_settings_row.store(0u, std::memory_order_relaxed);
+    set_native_settings_visible(true);
 }
 
 void native_settings_present() {
     poll_dlss_download();
-    {
-        static unsigned long presents = 0u;
-        ++presents;
-        // GALAXY_TEST_WINDOW_SIZES=<present>:<width>x<height>,...: the window resized at those presents, whatever is
-        // open (a live resize).
-        struct TestSize {
-            unsigned long at;
-            unsigned long width;
-            unsigned long height;
-        };
-        static const std::vector<TestSize> test_sizes = [] {
-            std::vector<TestSize> sizes;
-            const char* value = ::galaxy::run_options().test_window_sizes;
-            if (value == nullptr || value[0] == '\0') return sizes;
-            for (const char* item = value; item != nullptr && *item != '\0';) {
-                char* end = nullptr;
-                TestSize size{std::strtoul(item, &end, 10), 0u, 0u};
-                if (end != nullptr && *end == ':') size.width = std::strtoul(end + 1, &end, 10);
-                if (end != nullptr && *end == 'x') size.height = std::strtoul(end + 1, &end, 10);
-                if (size.width != 0u && size.height != 0u) sizes.push_back(size);
-                item = end != nullptr ? std::strchr(end, ',') : nullptr;
-                if (item != nullptr) ++item;
-            }
-            return sizes;
-        }();
-        static std::size_t next_size = 0u;
-        while (next_size < test_sizes.size() && presents >= test_sizes[next_size].at) {
-            test_resize_window(test_sizes[next_size].width, test_sizes[next_size].height);
-            ++next_size;
-        }
-    }
 }
 
 // The menu as it stands: its pages, the open page's rows (label, value, a heading or not, whether it changes), the

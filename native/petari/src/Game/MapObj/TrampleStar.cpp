@@ -11,6 +11,63 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f15, "init.f15", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f16, "init.f16", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f17, "init.f17", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f18, "init.f18", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f19, "init.f19", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f20, "init.f20", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f21, "init.f21", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f22, "init.f22", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f23, "init.f23", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f24, "init.f24", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f25, "init.f25", 500.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f26, "init.f26", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_divide_f1, "divide.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_divide_f2, "divide.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveVtx_f1, "moveVtx.f1", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveVtx_f2, "moveVtx.f2", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_moveVtx_f3, "moveVtx.f3", 400.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f1, "calcAnim.f1", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f2, "calcAnim.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_offLod_f1, "offLod.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingCapture_f1, "exeBindingCapture.f1", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingCapture_f2, "exeBindingCapture.f2", 0.85f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f1, "exeBindingShoot.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f2, "exeBindingShoot.f2", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f3, "exeBindingShoot.f3", 0.8f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f4, "exeBindingShoot.f4", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f5, "exeBindingShoot.f5", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f6, "exeBindingShoot.f6", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_exeBindingShoot_f7, "exeBindingShoot.f7", 1.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_calcNearestVtxIndex_f1, "calcNearestVtxIndex.f1", 5000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 30.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f3, "receiveOtherMsg.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f4, "receiveOtherMsg.f4", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f5, "receiveOtherMsg.f5", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f6, "receiveOtherMsg.f6", 20.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSelf_f1, "drawSelf.f1", 1000000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSelf_f2, "drawSelf.f2", 1000000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSelf_f3, "drawSelf.f3", 1000000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawSelf_f4, "drawSelf.f4", 255.0f);
 
 namespace {
     // Shadow-space x and z onto the shadow texture: s = x * scale + 0.5, t = -z * scale + 0.5, q = 1.
@@ -26,6 +83,7 @@ namespace {
 };  // namespace
 
 TrampleStarShare::TrampleStarShare(TrampleStar* pTrampleStar) : LiveActor("TrampleStarShare"), mTrampleStar(pTrampleStar) {
+    lumacore::setClass(this, lumacore::kClassId< TrampleStarShare >);
     makeActorDead();
 }
 
@@ -40,6 +98,7 @@ void TrampleStarShare::copy(TrampleStar* pTrampleStar) const {
 }
 
 TrampleStar::TrampleStar(const char* pName) : LiveActor(pName), mIsLod(false) {
+    lumacore::setClass(this, lumacore::kClassId< TrampleStar >);
 }
 
 void TrampleStar::init(const TableIter& rIter) {
@@ -48,7 +107,7 @@ void TrampleStar::init(const TableIter& rIter) {
 
     mTexture = new GameTexture(MR::loadTexFromArc("TrampleStar", "TrampleStar.bti"));
 
-    f32 scale = 500.0f;
+    f32 scale = cNum_init_f1;
     scale *= mScale.x;
     initHitSensor(1);
     MR::addHitSensorPriorBinder(this, "body", 4, scale, Vec3f(0.0f, 0.0f, 0.0f));
@@ -77,14 +136,14 @@ void TrampleStar::init(const TableIter& rIter) {
         mVtxOverlap = new s16[mNumVtxs * 256];
         mTexST = new Vec2f[mNumVtxs * 256];
 
-        mVtxs[0].set(-500.0f, -500.0f, -500.0f);
-        mVtxs[1].set(-500.0f, -500.0f, 500.0f);
-        mVtxs[2].set(500.0f, -500.0f, 500.0f);
-        mVtxs[3].set(500.0f, -500.0f, -500.0f);
-        mVtxs[4].set(-500.0f, 500.0f, -500.0f);
-        mVtxs[5].set(-500.0f, 500.0f, 500.0f);
-        mVtxs[6].set(500.0f, 500.0f, 500.0f);
-        mVtxs[7].set(500.0f, 500.0f, -500.0f);
+        mVtxs[0].set(-cNum_init_f2, -cNum_init_f3, -cNum_init_f4);
+        mVtxs[1].set(-cNum_init_f5, -cNum_init_f6, cNum_init_f7);
+        mVtxs[2].set(cNum_init_f8, -cNum_init_f9, cNum_init_f10);
+        mVtxs[3].set(cNum_init_f11, -cNum_init_f12, -cNum_init_f13);
+        mVtxs[4].set(-cNum_init_f14, cNum_init_f15, -cNum_init_f16);
+        mVtxs[5].set(-cNum_init_f17, cNum_init_f18, cNum_init_f19);
+        mVtxs[6].set(cNum_init_f20, cNum_init_f21, cNum_init_f22);
+        mVtxs[7].set(cNum_init_f23, cNum_init_f24, -cNum_init_f25);
 
         mVtxs[8] = mVtxs[0];
         mVtxs[9] = mVtxs[3];
@@ -170,7 +229,7 @@ void TrampleStar::init(const TableIter& rIter) {
 
     for (u32 vtx = 0; vtx < mNumVtxs; vtx++) {
         mDeformCoeff[vtx] = 0.0f;
-        mDrawDeformCoeffs[vtx] = -0.1f;
+        mDrawDeformCoeffs[vtx] = -cNum_init_f26;
     }
 
     calcSurface(false);
@@ -223,9 +282,9 @@ void TrampleStar::divide() {
             if (readCheckFlag(vtx1, vtx2) != 0) {
                 midpoints[idx] = readCheckFlag(vtx1, vtx2);
             } else {
-                mVtxs[numVtxs] = (mVtxs[vtx1] + mVtxs[vtx2]) * 0.5f;
+                mVtxs[numVtxs] = (mVtxs[vtx1] + mVtxs[vtx2]) * cNum_divide_f1;
 
-                mTexST[numVtxs] = (mTexST[vtx1] + mTexST[vtx2]) * 0.5f;
+                mTexST[numVtxs] = (mTexST[vtx1] + mTexST[vtx2]) * cNum_divide_f2;
 
                 writeCheckFlag(vtx1, vtx2, numVtxs);
                 midpoints[idx] = numVtxs;
@@ -253,15 +312,15 @@ void TrampleStar::moveVtx(f32 deformRate, u32 vtxIdx, u32 /* unused */, f32 /* u
     for (u32 vtx = 0; vtx < mNumVtxs; vtx++) {
         f32 dist = (mVtxs[vtx] - vtxPos).length();
 
-        if (!(dist >= 400.0f)) {
-            f32 t = (400.0f - dist) / 400.0f;
+        if (!(dist >= cNum_moveVtx_f1)) {
+            f32 t = (cNum_moveVtx_f2 - dist) / cNum_moveVtx_f3;
             mDeformCoeff[vtx] += deformRate * (t * t);
         }
     }
 }
 
 void TrampleStar::control() {
-    if (MR::calcDistanceToPlayer(this) >= 5000.0f) {
+    if (MR::calcDistanceToPlayer(this) >= cNum_control_f1) {
         onLod();
     } else {
         offLod();
@@ -276,10 +335,10 @@ void TrampleStar::calcAnim() {
             s16 idx2 = mVtxOverlap[idx];
 
             if (idx2 != -1) {
-                f32 coeff = (mDeformCoeff[idx] + mDeformCoeff[idx2]) * 0.5f;
+                f32 coeff = (mDeformCoeff[idx] + mDeformCoeff[idx2]) * cNum_calcAnim_f1;
                 mDeformCoeff[idx] = coeff;
                 mDeformCoeff[mVtxOverlap[idx]] = coeff;
-                f32 speed = (mDeformSpeed[idx] + mDeformSpeed[mVtxOverlap[idx]]) * 0.5f;
+                f32 speed = (mDeformSpeed[idx] + mDeformSpeed[mVtxOverlap[idx]]) * cNum_calcAnim_f2;
                 mDeformSpeed[idx] = speed;
                 mDeformSpeed[mVtxOverlap[idx]] = speed;
             }
@@ -355,7 +414,7 @@ void TrampleStar::offLod() {
 
         for (u32 idx = 0; idx < mNumVtxs; idx++) {
             mDeformCoeff[idx] = 0.0f;
-            mDrawDeformCoeffs[idx] = -0.1f;
+            mDrawDeformCoeffs[idx] = -cNum_offLod_f1;
         }
 
         calcSurface(true);
@@ -373,8 +432,8 @@ void TrampleStar::exeBindingCapture() {
 
     Vec3f down = -mVtxs[mCaptureVtx];
     MR::normalizeOrZero(&down);
-    moveVtx(mDeformRate, mCaptureVtx, 8, 0.8f, 0);
-    mDeformRate = 0.85f * mDeformRate;
+    moveVtx(mDeformRate, mCaptureVtx, 8, cNum_exeBindingCapture_f1, 0);
+    mDeformRate = cNum_exeBindingCapture_f2 * mDeformRate;
 
     if (getNerveStep() > mCaptureFrames) {
         setNerve(GET_NERVE_ANON(TrampleStarNrvBindingShoot));
@@ -384,13 +443,13 @@ void TrampleStar::exeBindingCapture() {
 void TrampleStar::exeBindingShoot() {
     if (MR::isFirstStep(this)) {
         mDeformRate = 0.0f;
-        mSpringRate = 0.1f;
+        mSpringRate = cNum_exeBindingShoot_f1;
 
         for (u32 vtx = 0; vtx < mNumVtxs; vtx++) {
             s16 vtx2 = mVtxOverlap[vtx];
 
             if (vtx2 != -1) {
-                f32 coeff = (mDeformCoeff[vtx] + mDeformCoeff[vtx2]) * 0.5f;
+                f32 coeff = (mDeformCoeff[vtx] + mDeformCoeff[vtx2]) * cNum_exeBindingShoot_f2;
                 mDeformCoeff[vtx] = coeff;
                 mDeformCoeff[mVtxOverlap[vtx]] = coeff;
             }
@@ -407,18 +466,18 @@ void TrampleStar::exeBindingShoot() {
         f32 springRate = mSpringRate;
         mDeformCoeff[vtx] = coeff - speed;
         mDeformSpeed[vtx] += coeff * springRate;
-        mDeformCoeff[vtx] *= 0.8f;
+        mDeformCoeff[vtx] *= cNum_exeBindingShoot_f3;
 
         if (vtx == mCaptureVtx) {
             if (coeff * mDeformCoeff[vtx] <= 0.0f) {
-                mSpringRate = 0.2f;
+                mSpringRate = cNum_exeBindingShoot_f4;
 
                 if (MR::isPlayerInBind()) {
                     Vec3f up = mVtxs[mCaptureVtx];
                     MR::normalizeOrZero(&up);
 
                     if (MR::getPlayerHeldJump()) {
-                        mJumpVel *= 1.5f;
+                        mJumpVel *= cNum_exeBindingShoot_f5;
                         MR::startSoundPlayer("SE_OJ_TRAMPOLINE_BOUND_L");
                         MR::startSoundPlayer("SE_PV_JUMP_JOY");
                     } else {
@@ -433,7 +492,7 @@ void TrampleStar::exeBindingShoot() {
             }
 
             if (speed * mDeformSpeed[vtx] <= 0.0f) {
-                mSpringRate = 0.1f;
+                mSpringRate = cNum_exeBindingShoot_f6;
             }
         }
     }
@@ -444,7 +503,7 @@ void TrampleStar::exeBindingShoot() {
             MR::normalizeOrZero(&up);
 
             if (MR::getPlayerHeldJump()) {
-                mJumpVel *= 1.5f;
+                mJumpVel *= cNum_exeBindingShoot_f7;
             }
 
             MR::endBindAndPlayerJump(this, up * mJumpVel, 0);
@@ -463,7 +522,7 @@ void TrampleStar::exeBindingShoot() {
 }
 
 u32 TrampleStar::calcNearestVtxIndex(const Vec3f& rPos) {
-    f32 nearestDistance = 5000.0f;
+    f32 nearestDistance = cNum_calcNearestVtxIndex_f1;
     u32 nearestIndex = 0;
 
     for (u32 vtx = 0; vtx < mNumVtxs; vtx++) {
@@ -490,19 +549,19 @@ bool TrampleStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pRec
         mCaptureFrames = 10;
         mDeformRate = MR::getPlayerVelocity()->length();
 
-        if (mDeformRate < 30.0f) {
-            mDeformRate = 30.0f;
+        if (mDeformRate < cNum_receiveOtherMsg_f1) {
+            mDeformRate = cNum_receiveOtherMsg_f2;
         }
 
-        if (mDeformRate > 50.0f) {
-            mDeformRate = 50.0f;
+        if (mDeformRate > cNum_receiveOtherMsg_f3) {
+            mDeformRate = cNum_receiveOtherMsg_f4;
             mCaptureFrames = 15;
         }
 
         mJumpVel = mDeformRate;
 
-        if (mDeformRate < 20.0f) {
-            mJumpVel = 20.0f;
+        if (mDeformRate < cNum_receiveOtherMsg_f5) {
+            mJumpVel = cNum_receiveOtherMsg_f6;
         }
 
         mCaptureVtx = calcNearestVtxIndex(pSender->mPosition);
@@ -557,7 +616,7 @@ void TrampleStar::drawSelf() const {
     if (MR::vecKillElement(diff, shadowPos, &diff) > 0.0f) {
         NebulaMtxTrans(toPlayer, -playerPos.x, -playerPos.y, -playerPos.z);
     } else {
-        NebulaMtxTrans(toPlayer, 1000000.0f, 1000000.0f, 1000000.0f);
+        NebulaMtxTrans(toPlayer, cNum_drawSelf_f1, cNum_drawSelf_f2, cNum_drawSelf_f3);
     }
 
     MR::makeMtxRotate(rot, -*MR::getPlayerRotate());
@@ -606,7 +665,7 @@ void TrampleStar::drawSelf() const {
     material.setMatrix(3, 0, texMtx);
     material.setColor(0, 0xCC, 0xCC, 0xCC, 0xFF);
     material.setColor(4, 0x7F, 0x7F, 0x93, 0xC3);
-    material.constants[8] = 0xB4 / 255.0f;
+    material.constants[8] = 0xB4 / cNum_drawSelf_f4;
     material.constants[9] = MR::getPlayerShadowHeight() < MR::calcDistanceToPlayer(this) ? 0.0f : 1.0f;
     material.setTexture(0, mTexture);
     material.setTexture(1, MR::getMarioShadowTexForLoad());

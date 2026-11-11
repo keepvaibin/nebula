@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     NEBULA_TUNABLE(s32, sLandMotionStartTime, 28);
@@ -15,6 +16,7 @@ namespace NrvDinoPackunDemoPosition {
 };  // namespace NrvDinoPackunDemoPosition
 
 DinoPackunDemoPosition::DinoPackunDemoPosition(const char* pName) : LiveActor(pName) {
+    lumacore::setClass(this, lumacore::kClassId< DinoPackunDemoPosition >);
 }
 
 void DinoPackunDemoPosition::init(const TableIter& rIter) {

@@ -23,6 +23,7 @@
 #include <Game/Ui/Window.hpp>
 #include <Game/Ui/Font.hpp>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace {
     enum {
@@ -41,7 +42,7 @@ namespace {
     NEBULA_TUNABLE(f32, cIconSize, 60.0f);
     NEBULA_TUNABLE(f32, cLineSpace, 8.0f);
     NEBULA_TUNABLE(f32, cTextMax, 440.0f);
-    NEBULA_TUNABLE(f32, cScale, 0.5f);
+    NEBULA_TUNABLE(f32, cScale, 0.65f);
     NEBULA_TUNABLE(f32, cMargin, 8.0f);
 
     NEBULA_TUNABLE(s32, cRiseFrames, 24);
@@ -84,6 +85,21 @@ namespace {
     void fitText(Ui::Pane* pParent, f32 fontSize, f32 lineSpace, f32* pWidth, f32* pHeight) {
         *pWidth = 0.0f;
         *pHeight = 0.0f;
+        // The Japanese boxes (InformationWindow's "JpJa" ones) sit by their top centre, 251 to the right; the others by
+        // their top-left. Every language's at the top-left, the shadow kept at its offset from the text.
+        Vec3f textAt(0.0f, 0.0f, 0.0f);
+        for (Ui::Pane* pChild : pParent->GetChildList()) {
+            if (asTextBox(pChild) != nullptr && MR::isEqualStringPrefix(pChild->mName, "Inf")) {
+                textAt = pChild->mTranslate;
+            }
+        }
+        for (Ui::Pane* pChild : pParent->GetChildList()) {
+            if (asTextBox(pChild) != nullptr) {
+                pChild->mBasePosition = 0;
+                pChild->mTranslate.x -= textAt.x;
+                pChild->mTranslate.y -= textAt.y;
+            }
+        }
         for (Ui::Pane* pChild : pParent->GetChildList()) {
             Ui::TextBox* pText = asTextBox(pChild);
             if (pText == nullptr || !pText->IsVisible()) {
@@ -133,6 +149,7 @@ namespace {
 NebulaAchievementToast::NebulaAchievementToast()
     : LayoutActor("NebulaAchievementToast", true), mToast(nullptr), mWindow(nullptr), mText(nullptr), mGlyph(nullptr), mIcon(nullptr),
       mPicture(nullptr), mTextures(nullptr), mStep(StepIdle), mFrame(0), mHoldFrames(cHoldFrames), mWidth(0.0f), mHeight(0.0f) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaAchievementToast >);
 }
 
 void NebulaAchievementToast::init(const TableIter& /*rIter*/) {

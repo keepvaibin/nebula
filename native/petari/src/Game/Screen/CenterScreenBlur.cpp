@@ -5,6 +5,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvCenterScreenBlur {
     NEW_NERVE(CenterScreenBlurNrvFadeIn, CenterScreenBlur, FadeIn);
@@ -13,6 +14,7 @@ namespace NrvCenterScreenBlur {
 };  // namespace NrvCenterScreenBlur
 
 CenterScreenBlur::CenterScreenBlur() : LiveActor("画面中心ブラー"), mTime(), mFadeIn(), mFadeOut(), mOffset(), mAlpha(), mBlendRate() {
+    lumacore::setClass(this, lumacore::kClassId< CenterScreenBlur >);
 }
 
 void CenterScreenBlur::init(const TableIter& /*rIter*/) {

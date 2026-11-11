@@ -33,6 +33,7 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
 
 namespace NrvNebulaAchievementBoard {
     NEW_NERVE(NebulaAchievementBoardNrvAppear, NebulaAchievementBoard, Appear);
@@ -1110,6 +1111,7 @@ namespace {
 
 NebulaAchievementBoard::NebulaAchievementBoard()
     : LayoutActor("NebulaAchievementBoard", true), mParts(nullptr), mBackground(nullptr), mIsOpen(false) {
+    lumacore::setClass(this, lumacore::kClassId< NebulaAchievementBoard >);
 }
 
 void NebulaAchievementBoard::init(const TableIter& /*rIter*/) {

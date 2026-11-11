@@ -15,6 +15,18 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ThrowingIce_f1, "ThrowingIce.f1", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ThrowingIce_f2, "ThrowingIce.f2", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_ThrowingIce_f3, "ThrowingIce.f3", 1.3f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 80.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 90.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doBehavior_f1, "doBehavior.f1", 0.25f);
 
 // The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
 NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_applyVelocityDampAndGravity_1, "exeFall.applyVelocityDampAndGravity.1", 2.0f);
@@ -39,17 +51,18 @@ namespace NrvMoguStone {
 MoguStone::MoguStone(const char* pName, const char* pModelName)
     : ModelObj(pName, pModelName, nullptr, -2, -2, -2, false), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mThrowDir(0.0f, 0.0f, 1.0f), mThrowSpeed(0.0f),
       mIsThrowHorizontal(true) {
+    lumacore::setClass(this, lumacore::kClassId< MoguStone >);
 }
 
 void MoguStone::init(const TableIter& rIter) {
-    initBinder(40.0f * mScale.y, 0.0f, 0);
+    initBinder(cNum_init_f1 * mScale.y, 0.0f, 0);
     ModelObj::init(rIter);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, 80.0f * mScale.y, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 32, cNum_init_f2 * mScale.y, Vec3f(0.0f, 0.0f, 0.0f));
     initNerve(GET_NERVE(MoguStone, MoguStoneNrvTaken));
     MR::invalidateClipping(this);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, 50.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f3 * mScale.y);
     makeActorDead();
 }
 
@@ -188,19 +201,20 @@ void MoguStone::calcAndSetBaseMtx() {
 }
 
 ThrowingIce::ThrowingIce(const char* pName) : MoguStone(pName, "IceManIce"), mPath(nullptr) {
+    lumacore::setClass(this, lumacore::kClassId< ThrowingIce >);
     mPath = new ParabolicPath();
-    mScale.set(1.3f, 1.3f, 1.3f);
+    mScale.set(cNum_ThrowingIce_f1, cNum_ThrowingIce_f2, cNum_ThrowingIce_f3);
 }
 
 void ThrowingIce::init(const TableIter& rIter) {
-    initBinder(60.0f * mScale.y, 0.0f, 0);
+    initBinder(cNum_init_f4 * mScale.y, 0.0f, 0);
     ModelObj::init(rIter);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 32, 80.0f * mScale.y, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 32, cNum_init_f5 * mScale.y, Vec3f(0.0f, 0.0f, 0.0f));
     initNerve(GET_NERVE(MoguStone, MoguStoneNrvTaken));
     MR::invalidateClipping(this);
     MR::onCalcGravity(this);
-    MR::initShadowVolumeSphere(this, 90.0f * mScale.y);
+    MR::initShadowVolumeSphere(this, cNum_init_f6 * mScale.y);
     makeActorDead();
 }
 
@@ -221,7 +235,7 @@ void ThrowingIce::emitIce(const Vec3f& rFrom, const Vec3f& rTo, f32 speed, const
 void ThrowingIce::doBehavior() {
     if (MR::isFirstStep(this)) {
         Vec3f spinAxis = mThrowDir.cross(mGravity);
-        mRotateQuat.setRotate(spinAxis, 0.25f);
+        mRotateQuat.setRotate(spinAxis, cNum_doBehavior_f1);
     }
 
     f32 rate = MR::calcNerveRate(this, sIcePathSteps);

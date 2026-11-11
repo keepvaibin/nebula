@@ -23,6 +23,47 @@
 #include <cstdint>
 #include <cstring>
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/LumaCore.hpp"
+
+NEBULA_TUNABLE_NAMED(f32, cNum_setMode_f1, "setMode.f1", 50.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setMode_f2, "setMode.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setMode_f3, "setMode.f3", 18.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_create_f1, "create.f1", 0.1f);
+NEBULA_TUNABLE_NAMED(f32, cNum_create_f2, "create.f2", 0.707f);
+NEBULA_TUNABLE_NAMED(f32, cNum_create_f3, "create.f3", 0.15f);
+NEBULA_TUNABLE_NAMED(f32, cNum_create_f4, "create.f4", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_sendPolygons_f1, "sendPolygons.f1", 5.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCaptureTex_f1, "initCaptureTex.f1", 0.25f);
+NEBULA_TUNABLE_NAMED(f32, cNum_initCaptureTex_f2, "initCaptureTex.f2", 0.35f);
+NEBULA_TUNABLE_NAMED(f32, cNum_setViewMtx_f1, "setViewMtx.f1", 10000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f1, "drawAndCaptureTex.f1", 160.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f2, "drawAndCaptureTex.f2", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f3, "drawAndCaptureTex.f3", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f4, "drawAndCaptureTex.f4", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f5, "drawAndCaptureTex.f5", 150.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f6, "drawAndCaptureTex.f6", 10.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f7, "drawAndCaptureTex.f7", 100000.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f8, "drawAndCaptureTex.f8", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f9, "drawAndCaptureTex.f9", 0.2f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f10, "drawAndCaptureTex.f10", 1.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f11, "drawAndCaptureTex.f11", 1.4f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f12, "drawAndCaptureTex.f12", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f13, "drawAndCaptureTex.f13", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f14, "drawAndCaptureTex.f14", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f15, "drawAndCaptureTex.f15", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f16, "drawAndCaptureTex.f16", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f17, "drawAndCaptureTex.f17", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f18, "drawAndCaptureTex.f18", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f19, "drawAndCaptureTex.f19", 16.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f20, "drawAndCaptureTex.f20", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f21, "drawAndCaptureTex.f21", 0.385f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f22, "drawAndCaptureTex.f22", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawAndCaptureTex_f23, "drawAndCaptureTex.f23", 0.5f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawVolumeBox_f1, "drawVolumeBox.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_drawVolumeBox_f2, "drawVolumeBox.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw3_f1, "draw3.f1", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_draw3_f2, "draw3.f2", 2.0f);
+NEBULA_TUNABLE_NAMED(f32, cNum_doSortPolygons_f1, "doSortPolygons.f1", 0.33333334f);
 
 namespace {
     f32 cCheckOffset0 = 5.0f;
@@ -73,11 +114,11 @@ void CollisionShadow::setMode(u32 mode) {
         mDrawOffset = ::cDrawOffset0;
         break;
     case 1:
-        mCheckOffset = 50.0f;
-        mDrawOffset = -150.0f;
+        mCheckOffset = cNum_setMode_f1;
+        mDrawOffset = -cNum_setMode_f2;
         break;
     case 2:
-        mCheckOffset = 18.0f;
+        mCheckOffset = cNum_setMode_f3;
         mDrawOffset = 0.0f;
         break;
     }
@@ -86,6 +127,7 @@ void CollisionShadow::setMode(u32 mode) {
 }
 
 CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャドウ") {
+    lumacore::setClass(this, lumacore::kClassId< CollisionShadow >);
     mCenter.zero();
     mCaptureTex = nullptr;
     mSnapDirection = false;
@@ -146,7 +188,7 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
     Vec3f corners[8];
     Vec3f blended;
     Vec3f vertical(rUp);
-    bool success = MR::vecBlendSphere(mDirection, rDirection, &blended, 0.1f);
+    bool success = MR::vecBlendSphere(mDirection, rDirection, &blended, cNum_create_f1);
     if (MR::isNearZero(mDirection) || !success || mSnapDirection) {
         blended = rDirection;
     }
@@ -221,11 +263,11 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
             continue;
         }
 
-        if (normal.dot(MR::getCamZdir()) > 0.707f) {
+        if (normal.dot(MR::getCamZdir()) > cNum_create_f2) {
             continue;
         }
 
-        if (MR::isNearZero(facing, 0.15f)) {
+        if (MR::isNearZero(facing, cNum_create_f3)) {
             mEdgePolygons[mEdgePolygonCount] = i;
             mEdgePolygonCount++;
         } else {
@@ -238,7 +280,7 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
     }
 
     mPolygonCount = polygonCount;
-    f32 tolerance = 2.0f + mDrawOffset;
+    f32 tolerance = cNum_create_f4 + mDrawOffset;
     mVertexCount = 0;
     s32 index = 0;
     for (u32 i = 0; i < mPolygonCount; i++) {
@@ -322,7 +364,7 @@ void CollisionShadow::draw1() const {
 void CollisionShadow::sendPolygons(TypedDraw& rDraw, u32 partBase, bool sorted, bool offset) const {
     Vec3f shift(0.0f, 0.0f, 0.0f);
     if (offset) {
-        shift = -mDirection * 5.0f;
+        shift = -mDirection * cNum_sendPolygons_f1;
     }
 
     for (u32 i = 0; i < mPolygonCount; i++) {
@@ -338,7 +380,7 @@ void CollisionShadow::sendPolygons(TypedDraw& rDraw, u32 partBase, bool sorted, 
 void CollisionShadow::initCaptureTex() {
     {
         NebulaArena::CurrentScope restorer(Arenas::scene());
-        mCaptureTex = GameTexture::createTarget(0.25f, 0.35f);
+        mCaptureTex = GameTexture::createTarget(cNum_initCaptureTex_f1, cNum_initCaptureTex_f2);
         MR::setMarioShadowTex(mCaptureTex);
     }
 
@@ -348,7 +390,7 @@ void CollisionShadow::initCaptureTex() {
 void CollisionShadow::setViewMtx(const Vec3f& rDirection) {
     Vec3f normal = rDirection;
     MR::normalize(&normal);
-    Vec3f eye = mCenter - normal * 10000.0f;
+    Vec3f eye = mCenter - normal * cNum_setViewMtx_f1;
 
     Pos3f matrix;
     matrix.identity();
@@ -402,7 +444,7 @@ void CollisionShadow::drawAndCaptureTex(PlayerModel* pModel, const Vec3f& rPosit
     const void* destination = image->image();
     Frame::targetBegin(destination, mCaptureTex->shareAcross(), mCaptureTex->shareDown(), 0);
     // A pixel of the picture's edge stays clear for the texture's clamp.
-    const f32 cEdge = 1.0f / 160.0f;
+    const f32 cEdge = 1.0f / cNum_drawAndCaptureTex_f1;
 
     if (!(mDrawFlags & 2)) {
         setViewMtx(mDirection);
@@ -410,18 +452,18 @@ void CollisionShadow::drawAndCaptureTex(PlayerModel* pModel, const Vec3f& rPosit
         SiteMaterial view;
         TDDraw::setupNative(&view, 0, 0, 1);
         Mtx44 projection;
-        NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
+        NebulaMtxOrtho(projection, -cNum_drawAndCaptureTex_f2, cNum_drawAndCaptureTex_f3, cNum_drawAndCaptureTex_f4, -cNum_drawAndCaptureTex_f5, cNum_drawAndCaptureTex_f6, cNum_drawAndCaptureTex_f7);
         Frame::setOrthographic(projection);
         if (mCaptureOn) {
-            Frame::setViewport(-0.2f, -0.2f, 1.4f, 1.4f, 0.0f, 1.0f);
-            Frame::setScissor(cEdge, cEdge, 1.0f - 2.0f * cEdge, 1.0f - 2.0f * cEdge);
+            Frame::setViewport(-cNum_drawAndCaptureTex_f8, -cNum_drawAndCaptureTex_f9, cNum_drawAndCaptureTex_f10, cNum_drawAndCaptureTex_f11, 0.0f, 1.0f);
+            Frame::setScissor(cEdge, cEdge, 1.0f - cNum_drawAndCaptureTex_f12 * cEdge, 1.0f - cNum_drawAndCaptureTex_f13 * cEdge);
             pModel->setDrawView(2);
             pModel->mDrawPasses = PlayerModel::Pass_ShadowLight | PlayerModel::Pass_ShadowCapture;
             pModel->directDraw();
         }
 
         Frame::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
-        Frame::setScissor(cEdge, cEdge, 1.0f - 2.0f * cEdge, 1.0f - 2.0f * cEdge);
+        Frame::setScissor(cEdge, cEdge, 1.0f - cNum_drawAndCaptureTex_f14 * cEdge, 1.0f - cNum_drawAndCaptureTex_f15 * cEdge);
         pModel->setDrawView(2);
         pModel->mDrawPasses = PlayerModel::Pass_ShadowCapture;
         pModel->directDraw();
@@ -438,10 +480,10 @@ void CollisionShadow::drawAndCaptureTex(PlayerModel* pModel, const Vec3f& rPosit
         circle.setBlend(NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ZERO);
         TypedDraw site = TypedDraw::eyeSpace(circle, cIdentityMtx);
     VertexPC* vtx = site.vertices< VertexPC >(NEBULA_PRIMITIVE_TRIANGLE_FAN, 18);
-        *vtx++ = {0.5f, 0.5f, 0.0f, Rgba8(0xFFFFFFC0u)};
+        *vtx++ = {cNum_drawAndCaptureTex_f16, cNum_drawAndCaptureTex_f17, 0.0f, Rgba8(0xFFFFFFC0u)};
         for (u32 i = 0; i <= 16; i++) {
-            const f32 angle = 2.0f * (static_cast< f32 >(i) / 16.0f) * PI;
-            *vtx++ = {0.5f - 0.385f * MR::cos(angle), 0.5f + 0.5f * MR::sin(angle), 0.0f, Rgba8(0u)};
+            const f32 angle = cNum_drawAndCaptureTex_f18 * (static_cast< f32 >(i) / cNum_drawAndCaptureTex_f19) * PI;
+            *vtx++ = {cNum_drawAndCaptureTex_f20 - cNum_drawAndCaptureTex_f21 * MR::cos(angle), cNum_drawAndCaptureTex_f22 + cNum_drawAndCaptureTex_f23 * MR::sin(angle), 0.0f, Rgba8(0u)};
         }
     }
 
@@ -470,11 +512,11 @@ void CollisionShadow::drawVolumeBox(const Vec3f& rPosition, const Vec3f& rDepth)
     material.mState.cull = NEBULA_CULL_BACK;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
-    TDDraw::drawFillBox3D(site, rPosition, rDepth * 2.0f, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
+    TDDraw::drawFillBox3D(site, rPosition, rDepth * cNum_drawVolumeBox_f1, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
     material.mState.cull = NEBULA_CULL_FRONT;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
     site.setMaterial(material);
-    TDDraw::drawFillBox3D(site, rPosition, rDepth * 2.0f, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
+    TDDraw::drawFillBox3D(site, rPosition, rDepth * cNum_drawVolumeBox_f2, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
 }
 
 void CollisionShadow::draw() const {
@@ -528,7 +570,7 @@ void CollisionShadow::draw3() const {
     }
 
     // The shadow's colour at its texture's alpha where the mark stands, nearest polygon first; the mark goes as it is drawn.
-    material.constants[5] = 2.0f;
+    material.constants[5] = cNum_draw3_f1;
     material.mState.color_write = 1;
     material.setDepth(false, NEBULA_COMPARE_ALWAYS, false);
     material.setBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
@@ -550,12 +592,12 @@ void CollisionShadow::draw3() const {
     Vec3f side;
     side.cross(mDirection, up);
     MR::normalizeOrZero(&side);
-    TDDraw::drawFillBox3D(site, position, mDirection * mLength * 2.0f, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
+    TDDraw::drawFillBox3D(site, position, mDirection * mLength * cNum_draw3_f2, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
 }
 
 void CollisionShadow::doSortPolygons() {
     f32* distances = mSortDistances;
-    f32 inverseVertexCount = 0.33333334f;
+    f32 inverseVertexCount = cNum_doSortPolygons_f1;
     for (u32 i = 0; i < mPolygonCount; i++) {
         Vec3f center(getDrawPos(0));
         center += getDrawPos(1);

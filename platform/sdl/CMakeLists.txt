@@ -8,13 +8,6 @@ file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../../CMakeLists.txt" nebula_project_lin
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" nebula_version "${nebula_project_line}")
 add_compile_definitions(NEBULA_VERSION="${nebula_version}")
 
-option(NEBULA_RELEASE "Leave the test hooks out" OFF)
-if(NEBULA_RELEASE)
-    add_compile_definitions(NEBULA_RELEASE=1)
-else()
-    add_compile_definitions(NEBULA_DEV=1)
-endif()
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -112,7 +105,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/rt_backend_vk.cpp
     ${rt}/render/rt/rt_geometry.cpp
     ${rt}/render/rt/rt_scene.cpp
-    $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:${rt}/frame_telemetry.cpp>
+    ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
     ${rt}/render/vk/vk_context.cpp
     ${rt}/render/vk/device_quirks_vk.cpp
@@ -136,7 +129,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/game_bloom_vk.cpp
     "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     ${rt}/runtime_settings.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test_driver/run_options.cpp
+    ${rt}/host_extension.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp

@@ -86,6 +86,26 @@ namespace nebula {
     NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
         __FILE_NAME__, key, &name, &name##_nebula_game, ::nebula::TunableKindOf<type>::value, 1u}
 
+// A record of floats only (a Vec, an MR::ActorMoveParam), as a list of its floats in order:
+// NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hWaitParam, {0.0f, 3.0f, 0.95f, 1.0f}); for
+// `const MR::ActorMoveParam hWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};`. luma.json sets "<file stem>.hWaitParam" as a list.
+#define NEBULA_TUNABLE_RECORD(type, name, ...)                                                                                \
+    static type name = __VA_ARGS__;                                                                                           \
+    static const type name##_nebula_game = __VA_ARGS__;                                                                       \
+    static_assert(sizeof(type) % sizeof(f32) == 0 && alignof(type) == alignof(f32), #type " is not floats only");             \
+    NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
+        __FILE_NAME__, #name, &name, &name##_nebula_game, ::nebula::TunableKind_F32,                                          \
+        static_cast<u32>(sizeof(type) / sizeof(f32))}
+
+// A list of such records, as one list of all their floats: NEBULA_TUNABLE_RECORDS(Vec, sOffsets, 2, {{...}, {...}});
+#define NEBULA_TUNABLE_RECORDS(type, name, size, ...)                                                                         \
+    static type name[size] = __VA_ARGS__;                                                                                     \
+    static const type name##_nebula_game[size] = __VA_ARGS__;                                                                 \
+    static_assert(sizeof(type) % sizeof(f32) == 0 && alignof(type) == alignof(f32), #type " is not floats only");             \
+    NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
+        __FILE_NAME__, #name, name, name##_nebula_game, ::nebula::TunableKind_F32,                                            \
+        static_cast<u32>(sizeof(name) / sizeof(name[0]) * (sizeof(type) / sizeof(f32)))}
+
 // A list: NEBULA_TUNABLE_LIST(f32, cSpeeds, 3, {1.0f, 2.0f, 4.0f}); for `const f32 cSpeeds[3] = {1.0f, 2.0f, 4.0f};`
 // (the size may be left empty, as the definition had it). luma.json sets it as a list, null keeping a place.
 #define NEBULA_TUNABLE_LIST(type, name, size, ...)                                                                            \

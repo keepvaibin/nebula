@@ -8,6 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/LumaCore.hpp"
 
 // Not entirely sure if the createSceneObj would've been here or not. There's no evidence for or against it being here.
 namespace {
@@ -19,6 +20,7 @@ namespace {
 };  // namespace
 
 OceanHomeMapCtrl::OceanHomeMapCtrl() : NameObj("オーシャンホーム地形制御") {
+    lumacore::setClass(this, lumacore::kClassId< OceanHomeMapCtrl >);
     mOceanHomePlanet = nullptr;
     mOceanRingPlanet = nullptr;
     mOceanRingPlanetLowInWater = nullptr;
