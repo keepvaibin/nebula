@@ -371,10 +371,13 @@ private:
     // The drops by the 16-pixel screen tiles their reach covers: rt_tiles_ (two words a tile: its first entry, how
     // many) and rt_tile_entries_ (a drop each).
     void rt_drop_bins(unsigned width, unsigned height, const float ray[4]);
-    // The stage's shadow sun: one direction every sun shadow of the scene comes from, in the scene camera's eye space.
-    // The visible sun's where the stage has one, else its key light's; a light fixed to the camera is held in the
-    // world (taken anew at a cut, then following with a second's lag) so shadows do not swing as the player looks
-    // around, and it stands at least 30 degrees above the player's horizon (decision D2).
+    // The stage's shadow sun (RT-MASTER-PLAN 7.1): one direction every sun shadow of the scene comes from, in the
+    // scene camera's eye space; false: the scene has none. The stage's row (rt_stages.tsv `sun`) decides; by default
+    // the visible sun where the stage draws one, else its key light, none where the key is off (under 0.05). A key
+    // the game moves with the camera is latched in the world when the zone's light changes (and at a cut) and held,
+    // so shadows do not swing as the player looks around; a change of source or zone eases over 30 frames. It stands
+    // at least 30 degrees above the player's horizon (decision D2), the player's up easing where it turns faster than
+    // a degree a frame (a jump between planets).
     [[nodiscard]] bool rt_sun(float eye_direction[3]);
     // The lit programs' key light from the sun's direction: light 0 of every light set an area lights (in the scene
     // camera's space) is placed far along it, in this walk's rows, before the scene's first draw. Lit faces and the
@@ -384,6 +387,13 @@ private:
     bool rt_sun_now_ = false;  // this walk's scene has its sun
     float rt_sun_world_[3]{};
     bool rt_sun_known_ = false;
+    float rt_sun_from_[3]{};            // an ease's start, in the world
+    float rt_sun_to_[3]{};              // the direction it eases to (a latched key's, held)
+    std::uint32_t rt_sun_ease_ = 0u;    // frames of the ease left
+    std::uint64_t rt_sun_light_ = 0u;   // the key latched (its world light's id), 0: none
+    std::uint8_t rt_sun_source_ = 0u;   // 0 none, 1 the visible sun, 2 the key, 3 the row's direction, 4 overhead
+    float rt_sun_up_[3]{};              // the player's up as the lift uses it, in the world
+    bool rt_sun_up_known_ = false;
     [[nodiscard]] std::uint32_t rt_scene_image(rt::ImageFormat format, unsigned width, unsigned height);
     // The traced light. Before the scene's draws, its opaque surfaces go into depth and the item target (the prepass:
     // every scene item that core::prepass_draws takes, under the scene's camera); the frame's passes give each pixel

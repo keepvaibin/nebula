@@ -11,6 +11,7 @@
 #include "galaxy/render/rt_caps.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/post_process_settings.h"
+#include "galaxy/render/rt_materials.h"
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
 
@@ -30,9 +31,12 @@ namespace {
 #include "render/rt/rt_effect_lights.inc"
 #include "render/rt/rt_blue_noise.inc"
 
-// A particle effect's luminance (candela a square metre of what it draws), by the name its draws carry: -1 for a
-// name that is not one of the game's own effects (a mod's, another archive's).
+// A particle effect's luminance (candela a square metre of what it draws), by the name its draws carry: the pak's row
+// (rt_effects.tsv, a mod's pack may add its effects), else the compiled table's; -1 for a name neither holds.
 float effect_luminance(std::uint32_t name) noexcept {
+    if (const RtEffectRow* const row = rt_effect(name); row != nullptr) {
+        return row->luminance;
+    }
     const RtEffectLight* const end = std::end(kRtEffectLights);
     const RtEffectLight* const at =
         std::lower_bound(std::begin(kRtEffectLights), end, name, [](const RtEffectLight& e, std::uint32_t n) { return e.name < n; });
@@ -141,6 +145,10 @@ void RenderCore::rt_stop() noexcept {
     rt_skin_retired_.clear();
     rt_drop_volumes_.clear();
     rt_sun_known_ = false;
+    rt_sun_ease_ = 0u;
+    rt_sun_light_ = 0u;
+    rt_sun_source_ = 0u;
+    rt_sun_up_known_ = false;
     rt_scene_pass_ = NEBULA_NONE32;
     rt_scene_view_ = NEBULA_NONE32;
     rt_scene_.clear();
@@ -250,7 +258,8 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                                     eye[r * 4u + 3u];
                 emitter.colour[r] = light.color[r] * std::min(candela, 5000.0f);
             }
-            emitter.radius = 25.0f;
+            // Its body's size where the game knows it (the actor's binder), else a small lamp's.
+            emitter.radius = light.radius > 0.0f && std::isfinite(light.radius) ? std::clamp(light.radius, 5.0f, 400.0f) : 25.0f;
             emitter.reach = 0.0f;
             emitter.slot = NEBULA_NONE32;
             emitter.kind = 0u;
@@ -1964,15 +1973,24 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         v[2] /= size;
         return true;
     };
+    const auto dot = [](const float x[3], const float y[3]) { return x[0] * y[0] + x[1] * y[1] + x[2] * y[2]; };
+    const bool report = ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs) && rt_light_frames_ == 0u;
+    const RtStage* const row = rt_stage(list.stage_hash);
+    const RtStage::Sun mode = row != nullptr ? row->sun : RtStage::Sun::Auto;
+    const bool fresh = !rt_sun_known_ || walk_.time.reset || now.cut;
     float up[3]{};
-    const bool up_known = list.sky_up_known != 0u;
-    if (up_known) {
-        to_world(sky_up_, up);
-    }
+    const bool up_known = list.sky_up_known != 0u && (to_world(sky_up_, up), unit(up));
     float target[3]{};
-    bool known = false, follows = false;
+    std::uint8_t source = 0u;
+    std::uint64_t key_id = 0u;
+    bool follows = false;
+    float key_brightness = -1.0f;
+    if (mode == RtStage::Sun::Fixed) {
+        std::memcpy(target, row->direction, sizeof(target));
+        source = unit(target) ? 3u : 0u;
+    }
     // The sun the player sees, where the stage has one: `position` is the unit direction from the camera to it.
-    for (std::uint32_t i = 0; i < list.world_light_count && !known; ++i) {
+    for (std::uint32_t i = 0; i < list.world_light_count && source == 0u && (mode == RtStage::Sun::Auto || mode == RtStage::Sun::Object); ++i) {
         const NebulaFrameWorldLight& light = list.world_lights[i];
         if (light.kind == NEBULA_WORLD_LIGHT_SUN) {
             if ((light.flags & NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA) != 0u) {
@@ -1980,66 +1998,127 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
             } else {
                 std::memcpy(target, light.position, sizeof(target));
             }
-            known = unit(target);
+            source = unit(target) ? 1u : 0u;
         }
     }
-    // Else the stage's key light, from where the camera stands.
-    if (!known && list.stage_light_known != 0u) {
+    // Else the stage's key light, from where the camera stands; none where the key is off (an interior, a night).
+    if (source == 0u && (mode == RtStage::Sun::Auto || mode == RtStage::Sun::Key) && list.stage_light_known != 0u) {
         if (const NebulaFrameWorldLight* key = core::find_world_light(list, list.stage_light); key != nullptr) {
-            follows = (key->flags & NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA) != 0u;
-            if (follows) {
-                to_world(key->position, target);
-            } else {
-                const float offset[3] = {view[3], view[7], view[11]};
-                float camera[3];
-                to_world(offset, camera);  // the camera stands at -R^T t
-                for (unsigned c = 0; c < 3u; ++c) {
-                    target[c] = key->position[c] + camera[c];
+            key_brightness = 0.2126f * key->color[0] + 0.7152f * key->color[1] + 0.0722f * key->color[2];
+            if (mode == RtStage::Sun::Key || key_brightness >= 0.05f) {
+                follows = (key->flags & NEBULA_WORLD_LIGHT_FOLLOWS_CAMERA) != 0u;
+                if (follows) {
+                    to_world(key->position, target);
+                } else {
+                    const float offset[3] = {view[3], view[7], view[11]};
+                    float camera[3];
+                    to_world(offset, camera);  // the camera stands at -R^T t
+                    for (unsigned c = 0; c < 3u; ++c) {
+                        target[c] = key->position[c] + camera[c];
+                    }
+                }
+                if (unit(target)) {
+                    source = 2u;
+                    key_id = list.stage_light;
                 }
             }
-            known = unit(target);
         }
     }
-    // Else straight overhead.
-    if (!known && up_known) {
+    // Else, for a stage that says nothing of its light, straight overhead.
+    if (source == 0u && mode == RtStage::Sun::Auto && list.stage_light_known == 0u && up_known) {
         std::memcpy(target, up, sizeof(target));
-        known = unit(target);
+        source = 4u;
     }
-    if (!known) {
+    if (source == 0u) {
+        if (report) {
+            std::fprintf(stderr, "[rt-inputs] sun: none (stage %08x %s, key %.3f)\n", list.stage_hash, row != nullptr ? "row" : "default",
+                         static_cast<double>(key_brightness));
+        }
+        rt_sun_known_ = false;
+        rt_sun_source_ = 0u;
+        rt_sun_light_ = 0u;
+        rt_sun_ease_ = 0u;
         return false;
     }
-    if (follows && rt_sun_known_ && !walk_.time.reset && !now.cut) {
+    // Where it is held: a key that moves with the camera keeps the direction it was latched at until the zone's light
+    // changes (or a cut); a change of source or zone eases over 30 frames; a direction of the world follows at once.
+    constexpr std::uint32_t kEase = 30u;
+    const bool jump = source != rt_sun_source_ || key_id != rt_sun_light_;
+    if (fresh) {
+        std::memcpy(rt_sun_world_, target, sizeof(target));
+        std::memcpy(rt_sun_to_, target, sizeof(target));
+        rt_sun_ease_ = 0u;
+    } else if (jump) {
+        std::memcpy(rt_sun_from_, rt_sun_world_, sizeof(target));
+        std::memcpy(rt_sun_to_, target, sizeof(target));
+        rt_sun_ease_ = kEase;
+    } else if (!follows) {
+        std::memcpy(rt_sun_to_, target, sizeof(target));
+    }
+    if (rt_sun_ease_ > 0u) {
         if (!walk_.between) {
-            constexpr float kShare = 1.0f / 60.0f;  // a second's lag at the game's 60 frames
-            for (unsigned c = 0; c < 3u; ++c) {
-                rt_sun_world_[c] += (target[c] - rt_sun_world_[c]) * kShare;
-            }
-            if (!unit(rt_sun_world_)) {
-                std::memcpy(rt_sun_world_, target, sizeof(target));
-            }
+            --rt_sun_ease_;
+        }
+        const float t = 1.0f - static_cast<float>(rt_sun_ease_) / static_cast<float>(kEase);
+        const float share = t * t * (3.0f - 2.0f * t);
+        for (unsigned c = 0; c < 3u; ++c) {
+            rt_sun_world_[c] = rt_sun_from_[c] + (rt_sun_to_[c] - rt_sun_from_[c]) * share;
+        }
+        if (!unit(rt_sun_world_)) {
+            std::memcpy(rt_sun_world_, rt_sun_to_, sizeof(target));
+            rt_sun_ease_ = 0u;
         }
     } else {
-        std::memcpy(rt_sun_world_, target, sizeof(target));
+        std::memcpy(rt_sun_world_, rt_sun_to_, sizeof(target));
     }
     rt_sun_known_ = true;
+    rt_sun_source_ = source;
+    rt_sun_light_ = key_id;
+    // The player's up as the lift uses it: as given, but where it turns more than a degree in a frame (a jump between
+    // planets, a gravity change) it eases there, so the shadows do not snap.
+    if (up_known) {
+        if (fresh || !rt_sun_up_known_ || dot(rt_sun_up_, up) >= 0.99985f) {
+            std::memcpy(rt_sun_up_, up, sizeof(up));
+        } else if (!walk_.between) {
+            for (unsigned c = 0; c < 3u; ++c) {
+                rt_sun_up_[c] += (up[c] - rt_sun_up_[c]) * 0.125f;
+            }
+            if (!unit(rt_sun_up_)) {
+                std::memcpy(rt_sun_up_, up, sizeof(up));
+            }
+        }
+        rt_sun_up_known_ = true;
+    } else {
+        rt_sun_up_known_ = false;
+    }
     float sun[3] = {rt_sun_world_[0], rt_sun_world_[1], rt_sun_world_[2]};
-    if (up_known && unit(up)) {
+    bool lifted = false;
+    if (rt_sun_up_known_) {
+        const float* const held = rt_sun_up_;
         constexpr float kLeastRise = 0.5f, kFlat = 0.8660254f;  // 30 degrees above the player's horizon
-        const float rise = sun[0] * up[0] + sun[1] * up[1] + sun[2] * up[2];
+        const float rise = dot(sun, held);
         if (rise < kLeastRise) {
-            float flat[3] = {sun[0] - up[0] * rise, sun[1] - up[1] * rise, sun[2] - up[2] * rise};
+            lifted = true;
+            float flat[3] = {sun[0] - held[0] * rise, sun[1] - held[1] * rise, sun[2] - held[2] * rise};
             if (!unit(flat)) {
                 // Straight below: any side will do.
-                const float side[3] = {std::fabs(up[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(up[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
-                flat[0] = up[1] * side[2] - up[2] * side[1];
-                flat[1] = up[2] * side[0] - up[0] * side[2];
-                flat[2] = up[0] * side[1] - up[1] * side[0];
+                const float side[3] = {std::fabs(held[0]) < 0.9f ? 1.0f : 0.0f, std::fabs(held[0]) < 0.9f ? 0.0f : 1.0f, 0.0f};
+                flat[0] = held[1] * side[2] - held[2] * side[1];
+                flat[1] = held[2] * side[0] - held[0] * side[2];
+                flat[2] = held[0] * side[1] - held[1] * side[0];
                 static_cast<void>(unit(flat));
             }
             for (unsigned c = 0; c < 3u; ++c) {
-                sun[c] = flat[c] * kFlat + up[c] * kLeastRise;
+                sun[c] = flat[c] * kFlat + held[c] * kLeastRise;
             }
         }
+    }
+    if (report) {
+        static constexpr const char* kSources[] = {"none", "the visible sun", "the key", "the row", "overhead"};
+        std::fprintf(stderr, "[rt-inputs] sun: %s%s, world %.3f %.3f %.3f%s, easing %u (stage %08x %s, key %.3f)\n", kSources[source],
+                     follows ? " (latched)" : "", static_cast<double>(sun[0]), static_cast<double>(sun[1]), static_cast<double>(sun[2]),
+                     lifted ? " lifted" : "", rt_sun_ease_, list.stage_hash, row != nullptr ? "row" : "default",
+                     static_cast<double>(key_brightness));
     }
     for (unsigned r = 0; r < 3u; ++r) {
         eye_direction[r] = view[r * 4u] * sun[0] + view[r * 4u + 1u] * sun[1] + view[r * 4u + 2u] * sun[2];

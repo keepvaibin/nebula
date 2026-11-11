@@ -97,12 +97,15 @@ typedef struct NebulaFrameLightOwner {
    item block ...). The game itself keeps one of them, blended toward whoever is nearest the player; a renderer that
    lights from every source takes them all. `position` in the world; `half_distance`: where its light is half what
    it is at the source (the request's brightness over the game's reference distance); `color` 0 to 1; `candela`:
-   its intensity where the caller knows it (a star bit), else 0 and the half distance says it. */
+   its intensity where the caller knows it (a star bit), else 0 and the half distance says it; `radius`: the glowing
+   body's own radius in the world's units where the caller knows it (the actor's binder), else 0. */
 typedef struct NebulaFramePointLight {
     float position[3];
     float half_distance;
     float color[3];
     float candela;
+    float radius;
+    float reserved[3];
 } NebulaFramePointLight;
 
 /* A drop shadow: what the game draws as a stencil volume under an actor, for a renderer that traces it instead. It
@@ -377,7 +380,8 @@ typedef struct NebulaFrameList {
     uint64_t stage_light;        /* the light of the stage's surfaces where the player is (the area's planet light): the
                                     world lights `stage_light` and `stage_light + 1` */
     float stage_ambient[3];      /* and its ambient, 0 to 1 */
-    float stage_reserved;
+    uint32_t stage_hash;         /* the stage being played: FNV-1a (32 bits) of its name as the game gives it
+                                    (MR::getCurrentStageName), 0 becoming 1; 0: none */
     uint64_t ring_vertex_bytes;
     uint32_t ring_index_count;
     uint32_t instance_row_count;

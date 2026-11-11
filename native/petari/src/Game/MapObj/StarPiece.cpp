@@ -341,6 +341,7 @@ void StarPiece::control() {
             light.color[1] = static_cast< f32 >(mColor.g) / top;
             light.color[2] = static_cast< f32 >(mColor.b) / top;
             light.candela = 40.0f;
+            light.radius = getBinder() != nullptr ? MR::getBinderRadius(this) : 0.0f;
             Frame::pointLight(light);
         }
     }

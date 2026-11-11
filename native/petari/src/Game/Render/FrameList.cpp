@@ -288,6 +288,8 @@ namespace {
     u64 sStageLight = 0;
     f32 sStageAmbient[3] = {};
     bool sStageLightKnown = false;
+    // The stage being played (NebulaFrameList::stage_hash).
+    u32 sStageHash = 0;
 
     // The pass's own decisions.
     bool sPassAlpha = false;
@@ -493,6 +495,7 @@ namespace Frame {
         rList.stage_ambient[0] = sStageAmbient[0];
         rList.stage_ambient[1] = sStageAmbient[1];
         rList.stage_ambient[2] = sStageAmbient[2];
+        rList.stage_hash = sStageHash;
         // A scene that stops saying what its light is has none on the next frame.
         sStageLightKnown = false;
         rList.constants = pStore->mConstants.mData;
@@ -834,6 +837,23 @@ namespace Frame {
             sStageAmbient[c] = pAmbient[c];
         }
         sStageLightKnown = true;
+    }
+
+    void setStage(const char* pName) {
+        u32 hash = 0;
+        if (pName != nullptr && pName[0] != '\0') {
+            hash = 2166136261u;
+            for (const char* c = pName; *c != '\0'; c++) {
+                hash = (hash ^ static_cast< u8 >(*c)) * 16777619u;
+            }
+            hash = hash != 0 ? hash : 1;
+        }
+        if (hash != sStageHash) {
+            sStageHash = hash;
+            if (pName != nullptr && host()->game_stage != nullptr) {
+                host()->game_stage(host()->user, pName);
+            }
+        }
     }
 
     // Lights 0-31 at once.

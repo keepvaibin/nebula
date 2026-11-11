@@ -1,0 +1,4 @@
+# Each stage's ray tracing numbers (RT-MASTER-PLAN 23.2), cooked to NebulaData/RtStages.tsv; read by
+# runtime/src/render/rt_materials.cpp (RtStageTable), whose header says each column. A row exists only where a
+# picture showed a default wrong; its note says what. Empty fields keep the defaults.
+stage	sun	sun gain	sun size	ambient gain	sky gain	exposure low	exposure high	air	water clear	shadow sets	note
