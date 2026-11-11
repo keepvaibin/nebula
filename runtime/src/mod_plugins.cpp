@@ -70,6 +70,9 @@ std::unique_ptr<std::atomic<bool>[]> g_achievement_done;
 bool (*g_achievement_store)(std::string_view key) = nullptr;
 std::mutex g_unlocked_mutex;
 std::vector<std::int32_t> g_unlocked;
+// Z-10: each mod whose code did not start, and why; written by start_plugins, read by the Mods page.
+std::mutex g_not_started_mutex;
+std::vector<NotStarted> g_not_started;
 
 // NebulaModEvent's names in lower case, in its order: what an achievement's "when" names.
 constexpr const char* kEventNames[] = {
@@ -243,6 +246,40 @@ std::string refusal_text(const LumaRefusal& refusal) {
     return text;
 }
 
+// Z-10: a record kept for the Mods page, once per mod (the first reason is the one the log said).
+void keep_not_started(NotStarted record) {
+    const std::lock_guard<std::mutex> lock(g_not_started_mutex);
+    for (const NotStarted& kept : g_not_started) {
+        if (kept.mod_id == record.mod_id) return;
+    }
+    g_not_started.push_back(std::move(record));
+}
+
+// A mod's code did not start for a reason the host words: `logged` to the log as before, `sentence` (host capitals,
+// a row of the text table) for the Mods page.
+void not_started(const PluginFile& file, const std::string& logged, std::string sentence) {
+    say(logged);
+    NotStarted record;
+    record.mod_id = file.mod_id;
+    record.library = file.path.filename().string();
+    record.sentence = std::move(sentence);
+    keep_not_started(std::move(record));
+}
+
+// A mod's code was refused by the loader or the order: the refusal said in the played language, and kept whole.
+void not_started(const PluginFile& file, const LumaRefusal& refusal) {
+    say(refusal_text(refusal));
+    NotStarted record;
+    record.mod_id = file.mod_id;
+    record.library = file.path.filename().string();
+    record.code = refusal.code;
+    const std::uint32_t count = refusal.count < LUMA_REFUSAL_MOST ? refusal.count : LUMA_REFUSAL_MOST;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        record.values.emplace_back(refusal.names[i] != nullptr ? refusal.names[i] : "?", refusal.values[i] != nullptr ? refusal.values[i] : "");
+    }
+    keep_not_started(std::move(record));
+}
+
 std::string load_error() {
 #if defined(_WIN32)
     const DWORD code = GetLastError();
@@ -255,6 +292,25 @@ std::string load_error() {
     const char* text = dlerror();
     return text != nullptr ? text : "unknown";
 #endif
+}
+
+// load_error()'s words as the Mods page says them: the three a mod's author meets by their rows (on Linux and Android
+// read from the dynamic loader's message: glibc's and bionic's), a Windows error by its number, anything else as "did
+// not load", the loader's own words in the log.
+std::string load_sentence(const std::string& why) {
+    const auto has = [&why](const char* part) { return why.find(part) != std::string::npos; };
+    if (why == "a library it needs isn't there" || has("cannot open shared object file") || (has("library \"") && has("\" not found"))) {
+        return "ITS CODE DID NOT START. A LIBRARY IT NEEDS ISN'T THERE";
+    }
+    if (why == "it was built for another version of the game" || has("undefined symbol") || has("cannot locate symbol")) {
+        return "ITS CODE DID NOT START. IT WAS BUILT FOR ANOTHER VERSION OF THE GAME";
+    }
+    if (why == "it is not for this kind of computer" || has("wrong ELF class") || has("invalid ELF header") || has("bad ELF magic") ||
+        has(" instead of EM_") || has("unexpected e_machine")) {
+        return "ITS CODE DID NOT START. IT IS NOT FOR THIS KIND OF COMPUTER";
+    }
+    if (why.starts_with("error ")) return "ITS CODE DID NOT LOAD (ERROR " + why.substr(6) + ")";
+    return "ITS CODE DID NOT LOAD";
 }
 
 void* api_alloc(uint64_t bytes) {
@@ -698,6 +754,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
     }
     g_starting = true;
+    {
+        const std::lock_guard<std::mutex> lock(g_not_started_mutex);
+        g_not_started.clear();
+    }
     // The needs order (loader D3-3): a mod's needed mods start before it; otherwise the list's order. `index` stays the
     // mod's place in the list, its order for hooks and who wins. A cycle starts none of its mods, each named (L800).
     std::vector<std::size_t> sequence;
@@ -780,8 +840,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
                     if (plugins[j].mod_id == need && !placed[j]) other = need;
                 }
             }
-            say(plugins[i].mod_id + " (" + plugins[i].path.filename().string() + ") not started: it needs " + other +
-                ", which did not start");
+            not_started(plugins[i], plugins[i].mod_id + " (" + plugins[i].path.filename().string() + ") not started: it needs " + other +
+                ", which did not start", "ITS CODE DID NOT START. IT NEEDS A MOD THAT DID NOT START: " + other);
             continue;
         }
         // Said as the validator says L800 for Validator.Need.Cycle, values "T:" a literal and "P:" a phrase as the
@@ -806,7 +866,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         cycle.names[5] = "chain";
         cycle.values[5] = circle.c_str();
         cycle.count = 6;
-        say(refusal_text(cycle));
+        not_started(plugins[i], cycle);
     }
     std::vector<std::string> started;
     for (const std::size_t index : sequence) {
@@ -821,17 +881,24 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             }
         }
         if (!missing.empty()) {
-            say(name + " not started: it needs " + missing + ", which did not start");
+            not_started(file, name + " not started: it needs " + missing + ", which did not start",
+                        "ITS CODE DID NOT START. IT NEEDS A MOD THAT DID NOT START: " + missing);
             continue;
         }
         const std::filesystem::path running = running_copy(file.path, index);
         if (file.code.empty() || code_hash(running) != file.code) {
-            say(name + (file.code.empty() ? " not started: its code can't be read" : " not started: its code changed after it was allowed"));
+            if (file.code.empty()) {
+                not_started(file, name + " not started: its code can't be read", "ITS CODE DID NOT START. ITS CODE CAN'T BE READ");
+            } else {
+                not_started(file, name + " not started: its code changed after it was allowed",
+                            "ITS CODE DID NOT START. ITS CODE CHANGED AFTER IT WAS ALLOWED");
+            }
             continue;
         }
         void* const module = open_library(running);
         if (module == nullptr) {
-            say(name + " not started: " + load_error());
+            const std::string why = load_error();
+            not_started(file, name + " not started: " + why, load_sentence(why));
             continue;
         }
         // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all. `plugins` is top of the
@@ -841,7 +908,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             const auto load = reinterpret_cast<LumaLoadMod>(g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
             if (load == nullptr) {
                 // The game module is this build's: it always has the loader. Said, never silent.
-                say(name + " not started: luma_load_mod is missing from the game module");
+                not_started(file, name + " not started: luma_load_mod is missing from the game module", "ITS CODE DID NOT START");
                 close_library(module);
                 continue;
             }
@@ -851,7 +918,11 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             // refused by name, never allowed by omission (loader D3-2).
             if (load(static_cast<const LumaModInfo*>(info), file.mod_id.c_str(), library.c_str(), static_cast<std::int32_t>(index), module,
                      close_luma_library, nullptr, 0u, &refusal) == 0) {
-                say(refusal.code != 0 ? refusal_text(refusal) : name + " not started: the loader gave no reason");
+                if (refusal.code != 0) {
+                    not_started(file, refusal);
+                } else {
+                    not_started(file, name + " not started: the loader gave no reason", "ITS CODE DID NOT START");
+                }
                 continue;
             }
             auto loaded = std::make_unique<Loaded>();
@@ -867,28 +938,32 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         const auto api_version = reinterpret_cast<std::uint32_t (*)()>(symbol_in(module, "nebula_plugin_api"));
         const auto start = reinterpret_cast<void (*)(const NebulaModApi*, const NebulaPlugin*)>(symbol_in(module, "nebula_plugin_start"));
         if (api_version == nullptr || start == nullptr) {
-            say(name + " not started: it is not a Nebula plugin");
+            not_started(file, name + " not started: it is not a Nebula plugin", "ITS CODE DID NOT START. IT IS NOT A MOD'S CODE");
             close_library(module);
             continue;
         }
         if (api_version() > NEBULA_MOD_API_VERSION) {
-            say(name + " not started: it needs a newer Nebula");
+            not_started(file, name + " not started: it needs a newer Nebula", "THIS MOD NEEDS A NEWER NEBULA");
             close_library(module);
             continue;
         }
         // Version 3 only added calls at the end: a version 2 plugin runs as it is.
         if (api_version() < 2u) {
-            say(name + " not started: it was built for plugin interface " + std::to_string(api_version()) +
-                "; rebuild it with this nebula_mod_api.h (setting() is now get_tunable(), object_arg(index) is "
-                "placement_number(\"Obj_argN\"))");
+            not_started(file,
+                        name + " not started: it was built for plugin interface " + std::to_string(api_version()) +
+                            "; rebuild it with this nebula_mod_api.h (setting() is now get_tunable(), object_arg(index) is "
+                            "placement_number(\"Obj_argN\"))",
+                        "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
             close_library(module);
             continue;
         }
         // A plugin built with the game's own headers (an earlier kit's nebula_game_sdk.h): no longer offered, and its
         // classes would not match this build.
         if (symbol_in(module, "nebula_plugin_game_abi") != nullptr) {
-            say(name + " not started: it was built with the game's headers, which plugins no longer use; rebuild it with "
-                       "nebula_mod_api.h only");
+            not_started(file,
+                        name + " not started: it was built with the game's headers, which plugins no longer use; rebuild it with "
+                               "nebula_mod_api.h only",
+                        "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
             close_library(module);
             continue;
         }
@@ -908,6 +983,31 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     }
     g_starting = false;
     return g_loaded.size();
+}
+
+std::vector<NotStarted> plugins_not_started() {
+    const std::lock_guard<std::mutex> lock(g_not_started_mutex);
+    return g_not_started;
+}
+
+NotStartedText plugin_not_started_text(std::string_view mod_id) {
+    NotStarted record;
+    {
+        const std::lock_guard<std::mutex> lock(g_not_started_mutex);
+        const auto it = std::find_if(g_not_started.begin(), g_not_started.end(), [&](const NotStarted& r) { return r.mod_id == mod_id; });
+        if (it == g_not_started.end()) return {};
+        record = *it;
+    }
+    if (record.code == 0) return {record.sentence, false};
+    // The refusal as the validator words it, in the played language (set_message_language): already the player's.
+    LumaRefusal refusal{};
+    refusal.code = static_cast<std::uint16_t>(record.code);
+    for (const auto& [name, value] : record.values) {
+        if (refusal.count == LUMA_REFUSAL_MOST) break;
+        refusal.names[refusal.count] = name.c_str();
+        refusal.values[refusal.count++] = value.c_str();
+    }
+    return {refusal_text(refusal), true};
 }
 
 void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept {

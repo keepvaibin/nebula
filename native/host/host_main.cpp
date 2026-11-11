@@ -1707,6 +1707,7 @@ struct SettingsContent {
     std::vector<std::string> pages;
     std::vector<SettingsRowContent> rows;
     std::string help;
+    uint32_t help_as_is = 0;
     std::string status_text;
     std::string long_text;
     // Held here while the view points at its pixels; the same pointer is the same picture.
@@ -1795,6 +1796,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     next.selected = static_cast<uint32_t>(selected);
     next.selected_button = source.selected_button;
     next.help = source.help;
+    next.help_as_is = source.help_as_is ? 1u : 0u;
     next.status = static_cast<uint32_t>(source.status);
     next.status_number = source.status_number;
     next.status_text = source.status_text;
@@ -1828,6 +1830,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     view->mod_list_count[0] = content.mod_list_count[0];
     view->mod_list_count[1] = content.mod_list_count[1];
     view->help = content.help.c_str();
+    view->help_as_is = content.help_as_is;
     view->status = content.status;
     view->status_number = content.status_number;
     view->status_text = content.status_text.c_str();
