@@ -819,7 +819,13 @@ def run_one(test, renderer, args, run_folder, previous):
     plan.write_text(plan_text(test, run_folder.as_posix()), encoding="utf-8", newline="\n")
     pak = (bin_folder / "pak.path").read_text(encoding="utf-8").strip()
     env = dict(os.environ)
+    # The test extension's data guard (tools/test_driver/extension/data_guard.cpp) declines to start unless the run
+    # names its own work folder and every private folder lies inside it, away from the player's data.
     env.update({
+        "NEBULA_WORK": str(run_folder),
+        "NEBULA_SETTINGS": str(settings),
+        "NEBULA_SAVES": str(run_folder / "saves"),
+        "NEBULA_APPDATA": str(run_folder / "appdata"),
         "GALAXY_RENDER_CONFIG_PATH": str(settings / "config.ini"),
         "GALAXY_RUNTIME_SETTINGS_PATH": str(settings / "runtime_settings.ini"),
         "LOCALAPPDATA": str(run_folder / "appdata"),
@@ -908,7 +914,12 @@ def evaluate(test, renderer, run_folder, ran):
     stop = by_key.get("harness.stop", [])
     end = by_key.get("harness.end", [])
     verdict, reason = None, None
-    if dumps or any("crash:" in line for line in log_lines):
+    declined = [line for line in log_lines if "fatal: --extension" in line or "extension: test extension:" in line]
+    if declined and not dumps:
+        # The extension refused the run's folders: the runner's fault, not the game's.
+        verdict = "harness-error"
+        reason = "the test extension declined the run: %s" % " | ".join(declined)
+    elif dumps or any("crash:" in line for line in log_lines):
         verdict = "crashed"
         reason = "dump %s; last lines: %s" % (", ".join(dumps) or "none", " | ".join(log_lines[-5:]))
     elif stop:
