@@ -33,6 +33,7 @@ enum Diagnostic : unsigned {
     kDiagnoseRtLight = 1u << 18u,        // rt-light: the light pass's shares as the scene's colours (sun red, ground green, lamp blue)
     kDiagnoseRtAdded = 1u << 19u,        // rt-added: the scene under its emitters alone (no sun, no sky): where each light source lights
     kDiagnoseRtMotion = 1u << 22u,       // rt-motion: where each pixel's point was the frame before, as colours (across red, down green, unknown blue)
+    kDiagnoseRtToggle = 1u << 23u,       // rt-toggle: ray tracing switched off and on every 90 frames (the setting changed while the game runs)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -64,6 +65,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-light", kDiagnoseRtLight},
     {"rt-added", kDiagnoseRtAdded},
     {"rt-motion", kDiagnoseRtMotion},
+    {"rt-toggle", kDiagnoseRtToggle},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

@@ -76,7 +76,8 @@ constexpr bool item_is_sky(const NebulaFrameItem& item) noexcept {
 // Ray tracing starts with the device when the setting is on and the device can trace (rt_caps.h). A change of the
 // setting takes a new device (Vulkan makes its device with the tracer's extensions or without them).
 void RenderCore::rt_start() {
-    if (!get_render_config().ray_tracing_enabled || !rt_capable(rt_caps())) {
+    if (!get_render_config().ray_tracing_enabled || !rt_capable(rt_caps()) ||
+        (::galaxy::diagnosing(::galaxy::kDiagnoseRtToggle) && rt_setting_ == 0)) {
         return;
     }
     if (!rt_backend_.start(renderer_.device())) {
@@ -88,7 +89,34 @@ void RenderCore::rt_start() {
     rt_building_ = false;
 }
 
-// Before the device's memory goes (it is lost: nothing recorded runs any more).
+// The setting changed while the game runs (plan 5.3 G-6): the tracer starts or stops here, between frames, on the same
+// device. The GPU finishes first, so nothing it still reads goes; the draws give back the light pictures. With
+// --diagnostics rt-toggle (and the setting on) it is switched off and on every 90 walks.
+void RenderCore::rt_follow_setting(const RenderConfig& render) {
+    bool wanted = render.ray_tracing_enabled;
+    if (wanted && ::galaxy::diagnosing(::galaxy::kDiagnoseRtToggle)) {
+        wanted = (rt_toggle_walks_++ / 90u) % 2u == 0u;
+    }
+    const int now = wanted ? 1 : 0;
+    if (rt_setting_ < 0 || now == rt_setting_) {
+        rt_setting_ = now;  // the device started as the setting said
+        return;
+    }
+    rt_setting_ = now;
+    renderer_.rt_wait_idle();
+    if (!wanted) {
+        if (rt_backend_.started()) {
+            renderer_.rt_unpublish_lights(texture_store_);
+            rt_stop();
+        }
+    } else if (!rt_backend_.started() && rt_capable(rt_caps())) {
+        (void)rt::shaders_load(renderer_.device());
+        rt_start();
+    }
+    std::fprintf(stderr, "[rt] the setting changed: ray tracing %s\n", rt_backend_.started() ? "on" : "off");
+}
+
+// Before the device's memory goes (it is lost: nothing recorded runs any more), or when the setting turns it off.
 void RenderCore::rt_stop() noexcept {
     registries_.tell_retired_meshes(false);
     rt_view_image_ = rt::kNoImage;  // the back end's stop frees its images and buffers

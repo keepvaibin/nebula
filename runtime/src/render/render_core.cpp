@@ -1983,6 +1983,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     enhanced_lighting_ = render.enhanced_lighting;
     pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
+    rt_follow_setting(render);
     ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready();
     // The complete native list is available before begin_frame can resize a
     // ring. Include all eye/world rows, even rows a particular program omits.
@@ -2219,7 +2220,8 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         const bool layer = motion && renderer_.has_layer_targets();
         const unsigned samples = renderer_.scene_samples_log2();
         const std::uint32_t settings =
-            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u);
+            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u) |
+            (rt_backend_.started() ? 64u : 0u);  // tracing turned on: every pipeline again, with its traced forms
         if (settings != pipelines_settings_) {
             pipelines_settings_ = settings;
             pipelines_queued_.store(0u, std::memory_order_relaxed);

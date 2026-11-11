@@ -5584,6 +5584,19 @@ void RendererD3D12::rt_light_end() {
     uses.issue();
 }
 
+void RendererD3D12::rt_unpublish_lights(TextureStore& textures) {
+    for (unsigned which = 0u; which < 4u; ++which) {
+        const auto found = pictures_.find(kRtLightPicture + which);
+        if (found == pictures_.end()) {
+            continue;
+        }
+        if (found->second.view != ~0u) {
+            textures.retire_view(found->second.view, std::move(found->second.viewed));
+        }
+        pictures_.erase(found);
+    }
+}
+
 std::uint32_t RendererD3D12::rt_publish_light(void* image, TextureStore& textures, unsigned which) {
     auto* const resource = static_cast<ID3D12Resource*>(image);
     if (resource == nullptr) {

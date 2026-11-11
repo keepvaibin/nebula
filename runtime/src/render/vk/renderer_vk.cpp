@@ -289,7 +289,7 @@ bool RendererVk::create_surface_and_device() {
     };
     if (!vk::Context::get().initialize(get_render_config().gpu.data(), validation,
                                        host_window::vulkan_instance_extensions(), make_surface, &surface_,
-                                       get_render_config().ray_tracing_enabled)) {
+                                       true)) {  // the tracer's features wherever it can trace: the setting changes in play (G-6)
         return false;
     }
     const vk::Context& context = vk::Context::get();
