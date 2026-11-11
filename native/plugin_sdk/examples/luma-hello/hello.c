@@ -101,7 +101,7 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(get_player_pos, "MR::getPlayerPos", "Vec3f *()"),
     LUMA_FUNCTION(get_star_bits, "MR::getStarPieceNum", "s32()"),
     LUMA_FUNCTION(add_star_bits, "MR::addStarPiece", "void(int)"),
-    LUMA_FIELD(actor_position, "LiveActor.mPosition", "TVec3f"),
+    LUMA_FIELD(actor_position, "LiveActor.mPosition", "Vec3f"),
     LUMA_HOOK_ON("GameScene::start", "void()", LUMA_BEFORE, stage_start),
     LUMA_HOOK_ON("MR::addStarPiece", "void(int)", LUMA_WRAP, double_star_bits),
     LUMA_HOOK_ON("MarioActor::control", "void()", LUMA_AFTER, player_frame),

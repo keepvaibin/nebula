@@ -1266,7 +1266,7 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(create_file, "GameSequenceFunction::startCreateUserFileSequence", "void(int)"),
     LUMA_FUNCTION(save_busy, "GameSequenceFunction::isActiveSaveDataHandleSequence", "bool()"),
     LUMA_FIELD(field_name, "NameObj.mName", "const char *"),
-    LUMA_FIELD(field_position, "LiveActor.mPosition", "TVec3f"),
+    LUMA_FIELD(field_position, "LiveActor.mPosition", "Vec3f"),
     /* Optional: a class outside the game's object tree may have no fields by name yet (census D3, task 1.2); the item
        that needs one then fails, naming it. */
     {LUMA_IMPORT_FIELD, LUMA_OPTIONAL, "GameDataHolder.mIsMario", "bool", &field_is_mario, 0, 0, 0},
