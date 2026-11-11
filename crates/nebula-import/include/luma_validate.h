@@ -113,6 +113,18 @@ const char* luma_report_id(const LumaReport* report);
 const char* luma_report_version(const LumaReport* report);
 void luma_report_free(LumaReport* report);
 
+/* A refusal said as the validator says its findings (loader contract 3; the cook's `failed` facts): rule `code`'s
+   message with its parameters, names[i] = values[i]. A value "T:<text>" (or one with neither prefix) is a literal,
+   "P:<phrase id>" a phrase, itself translated; the place goes in as "mod", "file", "line", "column". A parameter the
+   text needs and the call lacks shows as {name}. `language` as luma_report_at. Never null; valid until the next
+   luma_validate_message or luma_validate_reason on the same thread. */
+const char* luma_validate_message(uint16_t code, const char* const* names, const char* const* values, uint32_t count,
+                                  const char* language);
+/* Why, without where: the `why` or `found` phrase filled (the Mods screen puts it after the mod and file it names),
+   else the whole message. As luma_validate_message otherwise. */
+const char* luma_validate_reason(uint16_t code, const char* const* names, const char* const* values, uint32_t count,
+                                 const char* language);
+
 #ifdef __cplusplus
 }
 #endif

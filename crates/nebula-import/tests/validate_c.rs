@@ -385,3 +385,31 @@ fn the_c_store_lists_folders_and_reads_tables_as_the_rust_one() {
     let bad = c_store((&*junk as *const CTable).cast_mut().cast());
     assert!(nebula_import::validate_c::store_for_tests(&bad).table(TABLE).is_none());
 }
+
+/// luma_validate_message and luma_validate_reason say a refusal from (code, parameters) as the validator says its own
+/// findings: a phrase by `P:`, a literal by `T:` or plain, the place by name; a missing parameter shows as `{name}`;
+/// null entries are left out, never read.
+#[test]
+fn a_refusal_is_said_from_its_code_and_parameters_in_every_language() {
+    let names = [c"why", c"row", c"where", c"mod", c"file", c"line"];
+    let values = [c"P:Patch.KeyInGroup", c"T:5", c"layerb", c"T:low", c"T:layers/base/patches/x.json", c"3"];
+    let n: Vec<*const c_char> = names.iter().map(|s| s.as_ptr()).collect();
+    let v: Vec<*const c_char> = values.iter().map(|s| s.as_ptr()).collect();
+    let args: Vec<(&str, &str)> = names.iter().zip(&values).map(|(a, b)| (a.to_str().unwrap(), b.to_str().unwrap())).collect();
+    for language in luma_validate::LANGUAGES {
+        let l = CString::new(language).unwrap();
+        let said = unsafe { CStr::from_ptr(luma_validate_message(402, n.as_ptr(), v.as_ptr(), 6, l.as_ptr())) }.to_str().unwrap().to_string();
+        assert_eq!(said, luma_validate::message_of(402, &args, language));
+        assert!(!said.contains('{') && said.contains("low"), "{language}: {said}");
+        let why = unsafe { CStr::from_ptr(luma_validate_reason(402, n.as_ptr(), v.as_ptr(), 6, l.as_ptr())) }.to_str().unwrap().to_string();
+        assert_eq!(why, luma_validate::reason_of(402, &args, language));
+        assert!(!why.contains('{') && why.contains('5'), "{language}: {why}");
+    }
+    // A parameter the text needs and the call lacks is seen, not dropped; null lists and entries are no fault.
+    let missing = unsafe { CStr::from_ptr(luma_validate_message(402, n.as_ptr(), v.as_ptr(), 1, null())) }.to_str().unwrap().to_string();
+    assert!(missing.contains("{mod}"), "{missing}");
+    let nulls = [null(), c"x".as_ptr()];
+    let none = unsafe { CStr::from_ptr(luma_validate_message(402, nulls.as_ptr(), nulls.as_ptr(), 2, null())) };
+    assert!(!none.to_bytes().is_empty());
+    assert!(!unsafe { luma_validate_reason(402, null(), null(), 3, null()) }.is_null());
+}

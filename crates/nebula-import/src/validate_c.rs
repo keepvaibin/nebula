@@ -3,7 +3,7 @@
 //! (the rules that read the whole `.luma` are taken from it when it is for the same `.luma` and the same game). The
 //! findings and their text are those of `luma_validate::validate`, field for field.
 
-use luma_validate::{message, phrase, recheck, Game, Input, Installed, Level, Names, Report, Saved, Source, Store, Table};
+use luma_validate::{message, message_of, phrase, reason_of, recheck, Game, Input, Installed, Level, Names, Report, Saved, Source, Store, Table};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ffi::{c_char, c_void, CStr, CString};
@@ -98,6 +98,53 @@ pub struct LumaReport {
     shown_not_checked: RefCell<Option<CString>>,
     /// Why the input was not valid (for the developer's log, in English).
     invalid: Option<CString>,
+}
+
+thread_local! {
+    /// The text luma_validate_message and luma_validate_reason gave last on this thread.
+    static SAID: RefCell<CString> = RefCell::new(CString::default());
+}
+
+/// The parameters a caller gives by name: an entry whose name or value is null is left out (the template then shows
+/// `{name}`, so it is seen).
+unsafe fn given(names: *const *const c_char, values: *const *const c_char, count: u32) -> Vec<(String, String)> {
+    let names = list(names, count);
+    let values = list(values, count);
+    names.iter().zip(values).filter_map(|(n, v)| Some((text(*n)?, text(*v)?))).collect()
+}
+
+unsafe fn say(code: u16, names: *const *const c_char, values: *const *const c_char, count: u32, language: *const c_char,
+              how: fn(u16, &[(&str, &str)], &str) -> String) -> *const c_char {
+    let args = given(names, values, count);
+    let args: Vec<(&str, &str)> = args.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect();
+    let said = c(&how(code, &args, &text(language).unwrap_or_default()));
+    SAID.with(|s| {
+        *s.borrow_mut() = said;
+        s.borrow().as_ptr()
+    })
+}
+
+/// Rule `code`'s message with its parameters (`names[i]` = `values[i]`; a value `T:<text>` or plain is a literal,
+/// `P:<id>` a phrase; the place as `mod`, `file`, `line`, `column`) in `language`. Valid until the next call of this
+/// or luma_validate_reason on the same thread.
+///
+/// # Safety
+/// `names` and `values` are null or hold `count` pointers, each null or NUL-terminated; `language` null or NUL-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn luma_validate_message(code: u16, names: *const *const c_char, values: *const *const c_char, count: u32,
+                                               language: *const c_char) -> *const c_char {
+    say(code, names, values, count, language, message_of)
+}
+
+/// Why, without where: the `why` or `found` phrase filled with the parameters (else the whole message), as a screen
+/// that names the mod and the file itself says it (the Mods screen). As luma_validate_message otherwise.
+///
+/// # Safety
+/// As luma_validate_message.
+#[no_mangle]
+pub unsafe extern "C" fn luma_validate_reason(code: u16, names: *const *const c_char, values: *const *const c_char, count: u32,
+                                              language: *const c_char) -> *const c_char {
+    say(code, names, values, count, language, reason_of)
 }
 
 unsafe fn text(p: *const c_char) -> Option<String> {

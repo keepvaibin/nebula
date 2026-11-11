@@ -377,6 +377,24 @@ fn every_rule_has_a_broken_mod() {
             None => failures.push(format!("case {i}: kept report does not read back")),
         }
         let start = recheck_with(bytes, setup, Some(&saved), "game");
+        // Said again from its carried parameters (the facts file, the loader's refusals): the same words in every
+        // language (audit 3.12 C-1, loader contract 3).
+        for f in &report.findings {
+            let carried = luma_validate::args_text(f);
+            let mut args: Vec<(String, String)> = carried.iter().filter_map(|a| a.split_once('=')).map(|(n, v)| (n.to_string(), v.to_string())).collect();
+            args.push(("mod".into(), format!("T:{}", f.mod_id.clone().unwrap_or_else(|| f.file.clone()))));
+            args.push(("file".into(), format!("T:{}", f.file)));
+            args.extend(f.line.map(|l| ("line".to_string(), l.to_string())));
+            args.extend(f.column.map(|c| ("column".to_string(), c.to_string())));
+            let args: Vec<(&str, &str)> = args.iter().map(|(n, v)| (n.as_str(), v.as_str())).collect();
+            for language in luma_validate::LANGUAGES {
+                if luma_validate::message_of(f.code, &args, language) != luma_validate::message(f, language)
+                    || luma_validate::reason_of(f.code, &args, language) != luma_validate::reason(f, language)
+                {
+                    failures.push(format!("case {i}: L{} in {language} differs when said from {carried:?}", f.code));
+                }
+            }
+        }
         if start.findings != report.findings || start.not_checked != report.not_checked || start.touches != report.touches {
             failures.push(format!("case {i}: the start's check differs: {:?} {:?} {:?}
   full: {:?} {:?} {:?}", start.findings, start.not_checked, start.touches, report.findings, report.not_checked, report.touches));

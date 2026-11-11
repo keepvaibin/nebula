@@ -220,6 +220,7 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
     tables.sort_by_key(|(key, _)| luma_validate::scenario_table_galaxy(key).is_none());
     // Each patch file read once; one that is not JSON is a fact of its table.
     let mut json: BTreeMap<PathBuf, Option<serde_json::Value>> = BTreeMap::new();
+    let mut view = CookView { base: base_store.as_ref(), temporary, placed: placed.as_slice(), patched: BTreeMap::new() };
     for p in &plan.patches {
         if json.contains_key(&p.source) {
             continue;
@@ -228,7 +229,10 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
             Ok(bytes) => {
                 let value = serde_json::from_slice(&bytes).ok();
                 if value.is_none() {
-                    facts.push(unreadable(&store::store_path(&p.path), &p.mod_id, &p.entry, &bytes));
+                    // Named as the store holds the table, as every other fact (C-2); the mod's case when no store has it.
+                    let path = store::store_path(&p.path);
+                    let table = view.path(&path.to_ascii_lowercase()).unwrap_or(path);
+                    facts.push(unreadable(&table, &p.mod_id, &p.entry, &bytes));
                 }
                 json.insert(p.source.clone(), value);
             }
@@ -242,7 +246,6 @@ pub fn apply_patches(plan: &PlanPatches, base: Option<&Path>, pak: &mut File, te
         list.iter().filter_map(|p| Some((p.mod_id.clone(), p.entry.clone(), json.get(&p.source)?.clone()?))).collect()
     };
     let mods: Vec<&str> = plan.mods.iter().map(String::as_str).collect();
-    let mut view = CookView { base: base_store.as_ref(), temporary, placed: placed.as_slice(), patched: BTreeMap::new() };
     let mut layer_sets: BTreeMap<String, Option<Vec<luma_validate::LayerSet>>> = BTreeMap::new();
     let mut done: Vec<(String, Vec<u8>)> = Vec::new();
     for (key, list) in &tables {
@@ -324,12 +327,14 @@ fn field(text: &str) -> String {
 /// The facts file's text: one fact a line, `kind table mod file other row column selector rows code why`,
 /// tab-separated, a field empty where the fact has none (luma_patch.h's LumaPatchFact, with the table). Kinds:
 /// conflict (mod is the higher, used; other the lower), missing (other removed the row, or empty), selected, failed
-/// (code is the validator's rule, why in English).
+/// (code is the validator's rule, why in English for the log). A `failed` line goes on with the refusal's parameters,
+/// one a field, `name=T:<text>` or `name=P:<phrase id>` (audit 3.12 C-1): with code, mod and file they are what
+/// luma_validate_reason says in the player's language.
 pub fn facts_text(facts: &[Fact]) -> String {
     let mut out = String::new();
     for fact in facts {
-        let line: [String; 11] = match fact {
-            Fact::Conflict { table, row, column, lower, higher } => [
+        let line: Vec<String> = match fact {
+            Fact::Conflict { table, row, column, lower, higher } => vec![
                 "conflict".into(),
                 table.clone(),
                 higher.clone(),
@@ -342,7 +347,7 @@ pub fn facts_text(facts: &[Fact]) -> String {
                 String::new(),
                 String::new(),
             ],
-            Fact::Missing { table, row, mod_id, file, removed_by } => [
+            Fact::Missing { table, row, mod_id, file, removed_by } => vec![
                 "missing".into(),
                 table.clone(),
                 mod_id.clone(),
@@ -355,7 +360,7 @@ pub fn facts_text(facts: &[Fact]) -> String {
                 String::new(),
                 String::new(),
             ],
-            Fact::Selected { table, mod_id, file, selector, rows } => [
+            Fact::Selected { table, mod_id, file, selector, rows } => vec![
                 "selected".into(),
                 table.clone(),
                 mod_id.clone(),
@@ -368,7 +373,7 @@ pub fn facts_text(facts: &[Fact]) -> String {
                 String::new(),
                 String::new(),
             ],
-            Fact::Failed { table, mod_id, file, refusal, why } => [
+            Fact::Failed { table, mod_id, file, refusal, why } => vec![
                 "failed".into(),
                 table.clone(),
                 mod_id.clone(),
@@ -380,7 +385,10 @@ pub fn facts_text(facts: &[Fact]) -> String {
                 String::new(),
                 refusal.code.to_string(),
                 why.clone(),
-            ],
+            ]
+            .into_iter()
+            .chain(luma_validate::args_text(refusal))
+            .collect(),
         };
         out.push_str(&line.iter().map(|f| field(f)).collect::<Vec<_>>().join("\t"));
         out.push('\n');
@@ -476,9 +484,19 @@ mod tests {
             facts.iter().any(|f| f.starts_with("failed\tStageData/Zone/jmp/Start/LayerB/StartInfo\tlow\tlayers/base/patches/") && f.contains("\t402\t")),
             "{facts:?}"
         );
+        // Its parameters follow (C-1), and the validator says it from them in every language.
+        let failed = facts.iter().find(|f| f.starts_with("failed\tStageData/Zone/jmp/Start/LayerB/")).unwrap();
+        let fields: Vec<&str> = failed.split('\t').collect();
+        assert_eq!(fields[11], "why=P:Patch.KeyInGroup", "{failed}");
+        let args: Vec<(&str, &str)> = fields[11..].iter().filter_map(|a| a.split_once('=')).collect();
+        assert_eq!(luma_validate::reason_of(402, &args, "UsEnglish"), fields[10], "{failed}");
+        for language in luma_validate::LANGUAGES {
+            assert!(!luma_validate::reason_of(402, &args, language).contains('{'), "{language}: {failed}");
+        }
         assert_eq!(rows(&out, &start("LayerB")), vec![vec!["5".to_string()]]);
         // Not JSON: L400, named by its file.
-        assert!(facts.iter().any(|f| f.starts_with("failed\tObjectData/Things/Shadow.bcsv\ttop\t") && f.contains("\t400\t")), "{facts:?}");
+        assert!(facts.iter().any(|f| f.starts_with("failed\tObjectData/Things/Shadow.bcsv\ttop\t") && f.contains("\t400\t") && f.contains("\tfound=P:Json.")),
+                "{facts:?}");
         // A table no store has: in the left-out list, by mod and file.
         assert!(left_out.contains("patch/low/layers/base/patches/ObjectData/Nothing/Shadow.bcsv.json: the game has no table"), "{left_out}");
         // The zone's archive is whole in the store: its other tables come from the game.

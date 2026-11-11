@@ -407,13 +407,78 @@ pub fn reason(f: &Finding, language: &str) -> String {
     }
 }
 
+/// A finding's own parameters as the facts file and the C functions carry them, in its order: `name=T:<text>` for a
+/// literal, `name=P:<phrase id>` for a phrase (the kept report's form). The place (`mod`, `file`, `line`, `column`)
+/// is not among them; whoever says the message gives it.
+pub fn args_text(f: &Finding) -> Vec<String> {
+    f.args
+        .iter()
+        .map(|(name, arg)| match arg {
+            Arg::Text(t) => format!("{name}=T:{t}"),
+            Arg::Phrase(id) => format!("{name}=P:{id}"),
+        })
+        .collect()
+}
+
+/// A parameter given by value: `T:<text>` a literal, `P:<phrase id>` a phrase, anything else a literal as written.
+fn given(value: &str) -> Val {
+    match (value.strip_prefix("T:"), value.strip_prefix("P:")) {
+        (Some(t), _) => Val::Text(t.to_string()),
+        (_, Some(id)) => Val::Phrase(id.to_string()),
+        _ => Val::Text(value.to_string()),
+    }
+}
+
+/// The message of rule `code` with its parameters by name, values as `args_text` writes them, in one of the game's
+/// languages (an unknown one gives `UsEnglish`): what the loader and the cook refuse with, said as the validator says
+/// its own findings (loader contract 3). The place is given by the names `mod`, `file`, `line` and `column`. A name
+/// the template has and the parameters lack stays in the text as `{name}`, so a missing one is seen, never dropped.
+pub fn message_of(code: u16, args: &[(&str, &str)], language: &str) -> String {
+    let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
+    let look = |name: &str| args.iter().find(|(n, _)| *n == name).map(|(_, v)| given(v));
+    fill_by(&text::get(&format!("L{code}"), lang), &look, lang, 0)
+}
+
+/// As `reason` for a finding: the `why` or `found` phrase filled with the parameters, else the whole message.
+pub fn reason_of(code: u16, args: &[(&str, &str)], language: &str) -> String {
+    let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
+    let look = |name: &str| args.iter().find(|(n, _)| *n == name).map(|(_, v)| given(v));
+    // The first `why` or `found`, as `reason` takes it.
+    match args.iter().find(|(n, _)| *n == "why" || *n == "found").map(|(_, v)| given(v)) {
+        Some(Val::Phrase(id)) => fill_by(&text::get(&id, lang), &look, lang, 1),
+        _ => message_of(code, args, language),
+    }
+}
+
 /// The words for a phrase id in one language (for reasons of not-checked rules, and screens that list them).
 pub fn phrase(id: &str, language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
     text::get(id, lang)
 }
 
+/// A template parameter's value: a literal, or a phrase id (itself a template).
+enum Val {
+    Text(String),
+    Phrase(String),
+}
+
 fn fill(template: &str, f: &Finding, lang: usize, depth: u32) -> String {
+    // The finding's own arguments first (a table's {column} in L403, L404, L406), then the place.
+    let look = |name: &str| match f.args.iter().find(|(n, _)| *n == name) {
+        Some((_, Arg::Text(t))) => Some(Val::Text(t.clone())),
+        Some((_, Arg::Phrase(id))) => Some(Val::Phrase(id.to_string())),
+        None => match name {
+            "mod" => Some(Val::Text(f.mod_id.clone().unwrap_or_else(|| f.file.clone()))),
+            "file" => Some(Val::Text(f.file.clone())),
+            "line" => f.line.map(|l| Val::Text(l.to_string())),
+            "column" => f.column.map(|c| Val::Text(c.to_string())),
+            _ => None,
+        },
+    };
+    fill_by(template, &look, lang, depth)
+}
+
+fn fill_by(template: &str, look: &dyn Fn(&str) -> Option<Val>, lang: usize, depth: u32) -> String {
     let mut out = String::with_capacity(template.len() + 32);
     let mut rest = template;
     while let Some(open) = rest.find('{') {
@@ -424,18 +489,11 @@ fn fill(template: &str, f: &Finding, lang: usize, depth: u32) -> String {
             return out;
         };
         let name = &after[..close];
-        // The finding's own arguments first (a table's {column} in L403, L404, L406), then the place.
-        let value = match f.args.iter().find(|(n, _)| *n == name) {
-            Some((_, Arg::Text(t))) => Some(t.clone()),
-            Some((_, Arg::Phrase(id))) if depth < 2 => Some(fill(&text::get(id, lang), f, lang, depth + 1)),
-            Some((_, Arg::Phrase(id))) => Some(id.to_string()),
-            None => match name {
-                "mod" => Some(f.mod_id.clone().unwrap_or_else(|| f.file.clone())),
-                "file" => Some(f.file.clone()),
-                "line" => f.line.map(|l| l.to_string()),
-                "column" => f.column.map(|c| c.to_string()),
-                _ => None,
-            },
+        let value = match look(name) {
+            Some(Val::Text(t)) => Some(t),
+            Some(Val::Phrase(id)) if depth < 2 => Some(fill_by(&text::get(&id, lang), look, lang, depth + 1)),
+            Some(Val::Phrase(id)) => Some(id),
+            None => None,
         };
         match value {
             Some(v) => out.push_str(&v),
