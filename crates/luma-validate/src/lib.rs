@@ -9,6 +9,7 @@ pub mod zip;
 
 mod binary;
 mod rules;
+mod saved;
 mod source;
 mod text;
 
@@ -16,6 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub use names::Names;
+pub use saved::{About, Saved};
 
 /// The validator's version: `<format major>.<rules minor>` (validator contract 6).
 pub const VERSION: (u32, u32) = (1, 0);
@@ -89,6 +91,13 @@ pub struct Report {
     pub touches: Touches,
     pub validator: (u32, u32),
     pub format: (u32, u32),
+    /// The mod's id, version and conflicts, when luma.json gives them.
+    pub about: Option<About>,
+    /// The `.luma`'s fingerprint: SHA-1 over its zip directory (each entry's name, method, flags, checksum, sizes and
+    /// place), which changes with any entry's data. None for a folder.
+    pub fingerprint: Option<String>,
+    /// Whether every rule ran (false: a start's check, with the whole-file rules' findings from the kept report).
+    pub full: bool,
 }
 
 impl Report {
@@ -180,6 +189,8 @@ pub struct Touches {
     pub removes: Vec<String>,
     /// The mod's own assets, by mod path.
     pub assets: Vec<String>,
+    /// The game's functions its code replaces (LUMA_REPLACE): name and signature, joined by U+001F (L805).
+    pub functions: Vec<String>,
 }
 
 pub struct Input<'a> {
@@ -197,10 +208,25 @@ pub struct Input<'a> {
 
 /// Validates a mod: every rule, every finding, in one pass. Never panics.
 pub fn validate(input: &Input) -> Report {
-    let mut report = rules::run(input);
+    finish(rules::run(input, None))
+}
+
+/// The check at each start (validator contract 2): when `saved` is this `.luma`'s kept report, made by this validator
+/// against the game `game` identifies, the rules that read the whole `.luma` are not run again and their findings are
+/// taken from it; every other rule runs. Otherwise every rule runs, as `validate`. Never panics.
+pub fn recheck(input: &Input, saved: Option<&Saved>, game: &str) -> Report {
+    finish(rules::run(input, saved.map(|s| (s, game))))
+}
+
+fn finish(mut report: Report) -> Report {
     report.findings.sort();
     report.findings.dedup();
     report.not_checked.sort();
+    report.not_checked.dedup();
+    for list in [&mut report.touches.replaces, &mut report.touches.cells, &mut report.touches.adds, &mut report.touches.removes, &mut report.touches.assets, &mut report.touches.functions] {
+        list.sort();
+        list.dedup();
+    }
     report
 }
 
@@ -266,5 +292,5 @@ pub fn level_of(code: u16) -> Level {
 pub const CODES: &[u16] = &[
     100, 101, 102, 103, 104, 105, 106, 107, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
     214, 215, 216, 217, 300, 301, 302, 303, 304, 305, 306, 307, 400, 401, 402, 403, 404, 405, 406, 407, 500, 501,
-    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804,
+    502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 700, 701, 702, 800, 801, 802, 803, 804, 805,
 ];

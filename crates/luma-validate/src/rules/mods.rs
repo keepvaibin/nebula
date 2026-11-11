@@ -1,4 +1,4 @@
-//! L800-L803, L305, L404: the mod against the game's release and the other installed mods.
+//! L800-L803, L805, L305, L404: the mod against the game's release and the other installed mods.
 
 use super::patches::SEP;
 use super::{p, t, Ctx};
@@ -76,6 +76,15 @@ pub(crate) fn check(ctx: &mut Ctx) {
                 ctx.add(404, "luma.json", None, None, vec![
                     ("other", t(other.id.clone())), ("target", t(parts[0])), ("row", t(row)), ("what", p("Clash.Column")), ("column", t(column)), ("winner", t(winner.clone())),
                 ]);
+            }
+        }
+        // L805: a function this mod replaces that a mod loading before it replaces already; the game refuses the later
+        // replacement, so the mod loading later is off.
+        if i < position {
+            for f in touches.functions.iter().filter(|f| other.touches.functions.contains(f)) {
+                let (name, sig) = f.split_once(SEP).unwrap_or((f.as_str(), ""));
+                let file = ctx.input.platforms.first().and_then(|p| super::code::entry_path(p)).unwrap_or_else(|| "luma.json".to_string());
+                ctx.add(805, &file, None, None, vec![("other", t(other.id.clone())), ("found", t(name)), ("sig", t(sig))]);
             }
         }
         for row in touches.adds.iter().filter(|r| other.touches.removes.contains(r)).chain(touches.removes.iter().filter(|r| other.touches.adds.contains(r))) {

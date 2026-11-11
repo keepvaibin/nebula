@@ -15,6 +15,7 @@ use std::sync::Arc;
 mod c_api;
 pub mod cook;
 mod jni;
+pub mod validate_c;
 
 /// Super Mario Galaxy, North America.
 pub const RMGE01_GAME_ID: &str = "RMGE01";

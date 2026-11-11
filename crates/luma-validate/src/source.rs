@@ -72,6 +72,27 @@ impl<'a> Mod<'a> {
         Ok(Mod { shown, items, backing: Backing::Zip { bytes, entries }, kept: BTreeMap::new() })
     }
 
+    /// SHA-1 over the zip directory as read: each entry's raw name, method, flags, checksum, sizes and data offset.
+    /// Any change to an entry's data changes its checksum or sizes, so a `.luma` with the same fingerprint holds the
+    /// same entries (the game's reader checks each entry's checksum as it unpacks it). None for a folder.
+    pub fn fingerprint(&self) -> Option<String> {
+        use sha1::{Digest, Sha1};
+        let Backing::Zip { entries, .. } = &self.backing else { return None };
+        let mut h = Sha1::new();
+        h.update((entries.len() as u64).to_le_bytes());
+        for e in entries {
+            h.update((e.raw_name.len() as u64).to_le_bytes());
+            h.update(&e.raw_name);
+            h.update(e.method_found.to_le_bytes());
+            h.update([e.encrypted as u8]);
+            h.update(e.crc.to_le_bytes());
+            h.update(e.packed.to_le_bytes());
+            h.update(e.unpacked.to_le_bytes());
+            h.update(e.data_at.unwrap_or(u64::MAX).to_le_bytes());
+        }
+        Some(h.finalize().iter().map(|b| format!("{b:02x}")).collect())
+    }
+
     pub fn is_zip(&self) -> bool {
         matches!(self.backing, Backing::Zip { .. })
     }

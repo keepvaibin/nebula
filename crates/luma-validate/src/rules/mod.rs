@@ -10,7 +10,8 @@ mod patches;
 
 use crate::json::{self, Pos};
 use crate::source::{Mod, OpenError};
-use crate::{level_of, Arg, Finding, Input, NotChecked, Report};
+use crate::saved::{kept_at_start, Saved, NOT_CHECKED_AT_START};
+use crate::{level_of, About, Arg, Finding, Input, NotChecked, Report};
 use std::collections::BTreeMap;
 
 pub(crate) struct Ctx<'i, 'a> {
@@ -23,6 +24,8 @@ pub(crate) struct Ctx<'i, 'a> {
     pub manifest: Option<json::Value>,
     /// What the other blocks need from the manifest.
     pub facts: manifest::Facts,
+    /// A start's check: the rules that read every entry's data do not run (their findings come from the kept report).
+    pub start: bool,
 }
 
 pub(crate) fn t(text: impl Into<String>) -> Arg {
@@ -56,8 +59,17 @@ impl<'i, 'a> Ctx<'i, 'a> {
     }
 }
 
-pub(crate) fn run(input: &Input) -> Report {
-    let mut report = Report { findings: Vec::new(), not_checked: Vec::new(), touches: Default::default(), validator: crate::VERSION, format: crate::FORMAT };
+pub(crate) fn run(input: &Input, start: Option<(&Saved, &str)>) -> Report {
+    let mut report = Report {
+        findings: Vec::new(),
+        not_checked: Vec::new(),
+        touches: Default::default(),
+        validator: crate::VERSION,
+        format: crate::FORMAT,
+        about: None,
+        fingerprint: None,
+        full: true,
+    };
     let m = match Mod::open(&input.source) {
         Ok(m) => m,
         Err((shown, error)) => {
@@ -83,16 +95,33 @@ pub(crate) fn run(input: &Input) -> Report {
             return report;
         }
     };
-    let mut ctx = Ctx { input, m, mod_id: None, findings: Vec::new(), not_checked: BTreeMap::new(), manifest: None, facts: Default::default() };
+    let fingerprint = m.fingerprint();
+    // A kept report is used only for the same `.luma`, checked by this validator against the same game.
+    let saved = start.and_then(|(s, game)| (s.fingerprint.is_some() && s.fingerprint == fingerprint && s.validator == crate::VERSION && s.game == game).then_some(s));
+    let mut ctx = Ctx { input, m, mod_id: None, findings: Vec::new(), not_checked: BTreeMap::new(), manifest: None, facts: Default::default(), start: saved.is_some() };
     container::check(&mut ctx);
     manifest::check(&mut ctx);
     if ctx.manifest.is_some() {
         layers::check(&mut ctx);
-        patches::check(&mut ctx);
+        if saved.is_none() {
+            patches::check(&mut ctx);
+        }
         code::check(&mut ctx);
         kit::check(&mut ctx);
+        if let Some(s) = saved {
+            ctx.facts.touches = s.touches.clone();
+        }
         mods::check(&mut ctx);
     }
+    if let Some(s) = saved {
+        ctx.findings.extend(s.findings.iter().filter(|f| kept_at_start(f)).cloned());
+        for n in s.not_checked.iter().filter(|n| NOT_CHECKED_AT_START.contains(&n.code)) {
+            *ctx.not_checked.entry((n.code, n.because)).or_insert(0) += n.places;
+        }
+    }
+    report.fingerprint = fingerprint;
+    report.full = saved.is_none();
+    report.about = about(&ctx);
     // Findings made before the id was known (container rules) carry it too once it is.
     if let Some(id) = &ctx.mod_id {
         for f in &mut ctx.findings {
@@ -105,6 +134,18 @@ pub(crate) fn run(input: &Input) -> Report {
     report.findings = ctx.findings;
     report.not_checked = ctx.not_checked.into_iter().map(|((code, because), places)| NotChecked { code, because, places }).collect();
     report
+}
+
+/// The mod's id, version and conflicts, when luma.json gives them well formed.
+fn about(ctx: &Ctx) -> Option<About> {
+    let root = ctx.manifest.as_ref()?;
+    let id = ctx.mod_id.clone()?;
+    let version = crate::semver::Version::parse(root.get("version")?.as_str()?)?;
+    let conflicts = root
+        .get("conflicts")
+        .map(|c| c.items().iter().filter_map(|x| Some(x.get("id")?.as_str()?.to_string())).collect())
+        .unwrap_or_default();
+    Some(About { id, version, conflicts })
 }
 
 /// A JSON pointer segment, escaped (RFC 6901).

@@ -456,6 +456,7 @@ version = "0.1.0"
 dependencies = [
  "crc32fast",
  "miniz_oxide 0.8.9",
+ "sha1",
 ]
 
 [[package]]
@@ -495,10 +496,12 @@ name = "nebula-import"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "crc32fast",
  "encoding_rs",
  "jni-sys",
  "lewton",
  "luma-validate",
+ "miniz_oxide 0.8.9",
  "nod",
  "png",
  "serde_json",

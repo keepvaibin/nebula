@@ -9,3 +9,4 @@ rust-version.workspace = true
 [dependencies]
 miniz_oxide = "0.8"
 crc32fast = "1"
+sha1.workspace = true

@@ -163,7 +163,11 @@ pub(crate) fn check(ctx: &mut Ctx) {
         ctx.add(107, &file, None, None, vec![("entry", t(name))]);
     }
 
-    // Every entry's data, unpacked once in a stream: its size and checksum against the stated ones, and overlaps.
+    // Every entry's data, unpacked once in a stream: its size and checksum against the stated ones, and overlaps. At a
+    // start these findings come from the kept report of the same `.luma`.
+    if ctx.start {
+        return;
+    }
     let overlaps = match &ctx.m.backing {
         Backing::Zip { entries, .. } => zip::overlaps(entries),
         Backing::Folder(_) => Vec::new(),

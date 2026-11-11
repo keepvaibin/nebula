@@ -26,6 +26,11 @@ fn platform(name: &str) -> Option<(&'static str, Format, Machine)> {
     })
 }
 
+/// The entry library's path in a mod for a platform.
+pub(crate) fn entry_path(plat: &str) -> Option<String> {
+    platform(plat).map(|(entry, _, _)| format!("code/{plat}/{entry}"))
+}
+
 /// A system library's name as an argument; an ELF import names none (the loader finds it in any library loaded).
 fn library_arg(library: &str) -> crate::Arg {
     if library.is_empty() { p("Lib.AnyLibrary") } else { t(library) }
@@ -228,6 +233,10 @@ fn library(ctx: &mut Ctx, plat: &str, file: &str, is_entry: bool, format: Format
             ctx.not_checked(505, "Missing.SelfDescription");
             continue;
         };
+        if row.kind == 4 && row.hook_kind == 3 && ctx.input.platforms.contains(&plat) {
+            let sig = row.signature.clone().unwrap_or_default();
+            ctx.facts.touches.functions.push(format!("{}{}{sig}", row.name, super::patches::SEP));
+        }
         let optional = row.flags & LUMA_OPTIONAL != 0;
         let (kind, ok) = match row.kind {
             0 | 4 => {

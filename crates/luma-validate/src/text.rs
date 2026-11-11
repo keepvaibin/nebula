@@ -11,6 +11,22 @@ pub(crate) fn get(id: &str, lang: usize) -> String {
     }
 }
 
+/// A phrase id as the compiled table holds it (for a kept report read back): None when there is no such row.
+pub(crate) fn static_id(id: &str) -> Option<&'static str> {
+    TEXT.binary_search_by(|(other, _)| (*other).cmp(id)).ok().map(|i| TEXT[i].0)
+}
+
+/// The names a finding's parameters have (every `("name", ...)` the rules write; the round trip of every broken mod's
+/// report through a kept report proves the list whole).
+const ARG_NAMES: [&str; 24] = [
+    "column", "count", "detail", "entry", "expected", "found", "key", "kind", "layer", "library", "max", "method", "min",
+    "module", "other", "platform", "row", "sig", "target", "value", "version", "what", "why", "winner",
+];
+
+pub(crate) fn static_name(name: &str) -> Option<&'static str> {
+    ARG_NAMES.iter().find(|n| **n == name).copied()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
