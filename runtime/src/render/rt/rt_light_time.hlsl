@@ -65,8 +65,17 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
 #ifdef RT_LIGHTS
+    // Low's checkerboard (rt_lights.hlsl, R-2): a pixel the lights pass left out (g -1) takes its left or right
+    // neighbour's share, whichever lies nearer its depth (both were traced).
+    const bool left_out = g_raw.Load(int3(pixel, 0)).g < 0.0f;
+    if (left_out) {
+        const int2 left = int2(max(pixel.x - 1, 0), pixel.y), right = int2(min(pixel.x + 1, int(width) - 1), pixel.y);
+        const float to_left = left.x == pixel.x ? 1e30f : abs(g_guide.Load(int3(left, 0)).r - guide.r);
+        const float to_right = right.x == pixel.x ? 1e30f : abs(g_guide.Load(int3(right, 0)).r - guide.r);
+        raw = g_raw.Load(int3(to_left <= to_right ? left : right, 0)).rba;
+    }
     const float own = g_reservoirs_now.Load(int3(pixel, 0)).b;
-    if (own > 0.0f) {
+    if (own > 0.0f && !left_out) {
         float total = 0.0f, lit = 0.0f;
         for (int y = -1; y <= 1; ++y) {
             for (int x = -1; x <= 1; ++x) {
@@ -93,7 +102,13 @@ void main(uint3 id : SV_DispatchThreadID) {
             const int2 at = clamp(pixel + int2(x, y), int2(0, 0), int2(width, height) - 1);
             const float4 near = g_guide.Load(int3(at, 0));
             if (near.a != 0.0f && near.g == guide.g && near.b == guide.b) {
-                const float3 value = g_raw.Load(int3(at, 0)).rba;
+                const float4 shares = g_raw.Load(int3(at, 0));
+#ifdef RT_LIGHTS
+                if (shares.g < 0.0f) {
+                    continue;  // left out by Low's checkerboard
+                }
+#endif
+                const float3 value = shares.rba;
                 first += value;
                 square += value * value;
                 taps += 1.0f;
