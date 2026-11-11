@@ -396,6 +396,22 @@ fn mesh_bounds(positions: &[[f32; 3]]) -> ([f32; 3], [f32; 3]) {
 }
 
 pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
+    // The game binds a clip's tracks by these hashes (Clip::bind, ModelData::findMaterial): two names a clip could
+    // tell apart must not share one, or the tracks land on the wrong joint or material with nothing said.
+    for (kind, names) in [
+        ("joint", ir.joints.iter().map(|j| j.name.as_str()).collect::<Vec<_>>()),
+        ("material", ir.materials.iter().map(|m| m.name.as_str()).collect::<Vec<_>>()),
+    ] {
+        let mut seen: HashMap<u32, &str> = HashMap::new();
+        for name in names {
+            match seen.insert(name_hash(name), name) {
+                Some(other) if other != name => {
+                    bail!("{stem}: the {kind}s \"{other}\" and \"{name}\" share a name hash: a clip bound to one would drive the other")
+                }
+                _ => {}
+            }
+        }
+    }
     let curved = model_curves(ir);
     let mut b = Blob(vec![0u8; HEADER_WORDS * 4]);
     let mut strings: Vec<(usize, String)> = Vec::new();
