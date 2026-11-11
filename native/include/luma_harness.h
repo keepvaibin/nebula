@@ -15,6 +15,7 @@ extern "C" {
 
 #define LUMA_HARNESS_NAME "harness"
 #define LUMA_HARNESS_MAJOR 1u
+#define LUMA_HARNESS_MINOR 1u /* a mod asking for a later minor is not given the service */
 
 typedef struct LumaHarness {
     uint32_t size;
@@ -28,6 +29,10 @@ typedef struct LumaHarness {
     void (*done)(int32_t ok, const char* why);
     /* A fact: `key` and its value as JSON text, on the test clock's current frame. */
     void (*fact)(const char* key, const char* json);
+    /* Revision 1.1. Runs fn(user) on a thread of its own and returns when it has ended (the game thread waits): 1, or
+       0 when no thread could be made. For a test of what a hook sees off the game thread, which a harness run
+       otherwise never has (its sound ticks on the game thread). */
+    int32_t (*other_thread)(void (*fn)(void* user), void* user);
 } LumaHarness;
 
 #ifdef __cplusplus

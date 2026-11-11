@@ -782,8 +782,7 @@ static void setup_player(const Words* w) {
             finish(0, "player.position is three numbers");
             return;
         }
-        Vec3* p = &place;
-        call1(set_player_pos, &p, 0);
+        call1(set_player_pos, &place, 0); /* const Vec3f &: the argument is the vector's address (luma.h) */
         Vec3* back = 0;
         call0(player_pos, &back);
         Out o;
@@ -946,7 +945,9 @@ static void do_call(const char* key, const char* rest) {
             values[i].v.z = good ? to_float(xyz.word[2], &g3) : 0.0f;
             good = good && g1 && g2 && g3;
             vec_pointers[i] = &values[i].v;
-            args[i + 1] = (same(type, "Vec3f") || same(type, "TVec3f")) ? (void*)&values[i].v : (void*)&vec_pointers[i];
+            /* A pointer parameter: args[n] points at the pointer. A reference or a value: at the vector itself (luma.h). */
+            const int pointer = same(type, "Vec3f *") || same(type, "const Vec3f *");
+            args[i + 1] = pointer ? (void*)&vec_pointers[i] : (void*)&values[i].v;
         } else if (same(type, "LiveActor *") || same(type, "const LiveActor *") || same(type, "NameObj *") || same(type, "const NameObj *") ||
                    same(type, "MarioActor *")) {
             values[i].p = object_of(text);

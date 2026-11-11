@@ -217,22 +217,22 @@ namespace luma {
         };
 
         // A chain without the hooks `keep` refuses; null when none is left.
+        // The chain without the hooks `keep` refuses (null when none is left). `keep` is asked once per hook, in order:
+        // removeHook's takes only the first match, so asking twice would keep what the first pass took out.
         template <class Keep> Chain* without(const Chain* pChain, Keep keep, u32* pRemoved) {
-            u32 kept = 0;
-            for (u32 i = 0; i < pChain->count; i++) {
-                kept += keep(pChain->hooks[i]) ? 1u : 0u;
-            }
-            *pRemoved = pChain->count - kept;
-            if (kept == 0) {
-                return nullptr;
-            }
-            Chain* const pNew = newChain(kept);
+            Chain* const pNew = newChain(pChain->count);
             u32 at = 0;
             for (u32 i = 0; i < pChain->count; i++) {
                 if (keep(pChain->hooks[i])) {
                     pNew->hooks[at++] = pChain->hooks[i];
                 }
             }
+            *pRemoved = pChain->count - at;
+            if (at == 0) {
+                ::free(pNew);
+                return nullptr;
+            }
+            pNew->count = at;
             return pNew;
         }
     }

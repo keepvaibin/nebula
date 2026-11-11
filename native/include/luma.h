@@ -21,7 +21,9 @@ extern "C" {
 #define LUMA_MAX_MODS 256u
 
 /* A function of the game. `invoke` calls it: args[0] is `this` (null for a function without one), args[1..] point at
-   the arguments, and `result` is where what it returns is put. Hooks on the function run. */
+   the arguments, and `result` is where what it returns is put. Hooks on the function run. A parameter of reference
+   type is the object itself: its args[n] is the object's address (for `const Vec3f &`, a `Vec3f *`); a pointer
+   parameter's args[n] points at the pointer. */
 typedef struct LumaFunction {
     const char* name;      /* "Kuribo::exeWander"; "Game/Enemy/Kuribo.cpp#name" for one only its file sees */
     const char* signature; /* "void(f32, const TVec3f &)", as the game's source writes it */

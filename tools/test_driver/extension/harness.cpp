@@ -38,6 +38,8 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <thread>
 #include <vector>
 
 namespace harness {
@@ -769,6 +771,23 @@ void run_step(Step& s, std::int64_t now) {
 
 // --- The service the game half asks ------------------------------------------------------------------------------
 
+// Revision 1.1: fn(user) on a thread of its own; the game thread waits until it ends.
+std::int32_t service_other_thread(void (*fn)(void*), void* user) {
+    if (fn == nullptr) {
+        return 0;
+    }
+    try {
+        std::thread worker(fn, user);
+        worker.join();
+        return 1;
+    } catch (const std::system_error&) {
+        if (g.log != nullptr) {
+            g.log("harness: other_thread: no thread could be made");
+        }
+        return 0;
+    }
+}
+
 const char* service_next() {
     std::lock_guard<std::recursive_mutex> hold(g_lock);
     g.given.clear();
@@ -914,6 +933,7 @@ bool start(const NebulaHostForExtension* host, const std::string& plan, void (*l
     g_service.next = service_next;
     g_service.done = service_done;
     g_service.fact = service_fact;
+    g_service.other_thread = service_other_thread;
     log("harness: plan read: " + std::to_string(g.setup.size()) + " setup lines, " + std::to_string(g.steps.size()) + " steps");
     return true;
 }
@@ -1088,8 +1108,9 @@ void log_line(const char* tag, const char* line) {
     }
 }
 
-const void* service(const char* name, std::uint32_t major, std::uint32_t /*minor*/) {
-    if (!g.on || name == nullptr || std::strcmp(name, LUMA_HARNESS_NAME) != 0 || major != LUMA_HARNESS_MAJOR) {
+const void* service(const char* name, std::uint32_t major, std::uint32_t minor) {
+    if (!g.on || name == nullptr || std::strcmp(name, LUMA_HARNESS_NAME) != 0 || major != LUMA_HARNESS_MAJOR ||
+        minor > LUMA_HARNESS_MINOR) {
         return nullptr;
     }
     return &g_service;

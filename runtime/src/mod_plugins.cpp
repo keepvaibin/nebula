@@ -184,7 +184,10 @@ extern "C" void close_luma_library(void* module) {
 
 // A LumaCore refusal in the validator's own words (loader contract 3): luma_validate_message from the importer's
 // library (nebula_import.dll beside the game on Windows, libnebula_import.so in the app on Android and Linux). Without
-// it the line gives the code and every parameter as the loader gave them, never nothing.
+// it the line gives the code and every parameter as the loader gave them, never nothing, and the log says once why.
+// On Windows the library's own dependencies (its C runtime) come from System32: with the application folder alone the
+// loader does not find them.
+std::string load_error();
 using ValidateMessage = const char* (*)(std::uint16_t code, const char* const* names, const char* const* values,
                                         std::uint32_t count, const char* language);
 
@@ -194,12 +197,18 @@ ValidateMessage validate_message() {
     if (!looked) {
         looked = true;
 #if defined(_WIN32)
-        void* const importer = LoadLibraryExW(L"nebula_import.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR);
+        void* const importer =
+            LoadLibraryExW(L"nebula_import.dll", nullptr, LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+        const std::string why = importer == nullptr ? "nebula_import.dll did not load (" + load_error() + ")" : "";
 #else
         void* const importer = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL);
+        const std::string why = importer == nullptr ? "libnebula_import.so did not load (" + load_error() + ")" : "";
 #endif
         if (importer != nullptr) {
             found = reinterpret_cast<ValidateMessage>(symbol_in(importer, "luma_validate_message"));
+        }
+        if (found == nullptr) {
+            say("mods: refusals are given as codes: " + (why.empty() ? std::string("the importer has no luma_validate_message") : why));
         }
     }
     return found;
