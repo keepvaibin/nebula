@@ -950,8 +950,19 @@ std::string refusal(const Manifest& manifest, const std::string& game_id, std::s
     }
     for (const Plugin& plugin : manifest.plugins) {
         if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
-        if (plugin.api != 0u && plugin.api < kOldestPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H";
+        if (plugin.api != 0u && plugin.api < kOldestPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA";
         if (plugin.binaries.find(std::string(plugin_target())) == plugin.binaries.end()) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
+    }
+    return {};
+}
+
+std::string refusal_detail(const Manifest& manifest) {
+    for (std::size_t i = 0; i < manifest.plugins.size(); ++i) {
+        const std::uint32_t api = manifest.plugins[i].api;
+        if (api > kPluginApi || (api != 0u && api < kOldestPluginApi)) {
+            return "luma.json: plugins[" + std::to_string(i) + "].api is " + std::to_string(api) + "; this game runs plugins built with nebula_mod_api.h " +
+                   std::to_string(kOldestPluginApi) + " to " + std::to_string(kPluginApi) + ", and a LumaCore library (luma.h) gives no api";
+        }
     }
     return {};
 }

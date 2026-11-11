@@ -1172,6 +1172,10 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     mod.pack_author += (mod.pack_author.empty() ? "" : ", ") + author;
                 }
                 mod.problem = luma::refusal(*manifest, region_id, NEBULA_VERSION, luma::this_platform());
+                if (!mod.problem.empty()) {
+                    const std::string detail = luma::refusal_detail(*manifest);
+                    std::fprintf(stderr, "[mods] %s: %s%s%s\n", mod.id.c_str(), mod.problem.c_str(), detail.empty() ? "" : ": ", detail.c_str());
+                }
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
                 if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed)) {

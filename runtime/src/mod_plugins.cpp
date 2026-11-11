@@ -633,6 +633,25 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(name + " not started: " + load_error());
             continue;
         }
+        // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all.
+        if (const void* const info = symbol_in(module, "luma_mod"); info != nullptr) {
+            const auto load = reinterpret_cast<std::int32_t (*)(const void*, const char*, std::int32_t, char*, std::uint32_t)>(
+                g_find_symbol != nullptr ? g_find_symbol("luma_load_mod") : nullptr);
+            char missing[1024] = {};
+            if (load == nullptr || load(info, file.mod_id.c_str(), static_cast<std::int32_t>(index), missing, sizeof(missing)) == 0) {
+                say(name + " not started: " + (load == nullptr ? std::string("this game has no LumaCore") : std::string(missing[0] != 0 ? missing : "the game refused it and said nothing")));
+                close_library(module);
+                continue;
+            }
+            auto loaded = std::make_unique<Loaded>();
+            loaded->mod_id = file.mod_id;
+            loaded->version = file.version;
+            loaded->options = file.options;
+            loaded->module = module;
+            g_loaded.push_back(std::move(loaded));
+            say(name + " started");
+            continue;
+        }
         const auto api_version = reinterpret_cast<std::uint32_t (*)()>(symbol_in(module, "nebula_plugin_api"));
         const auto start = reinterpret_cast<void (*)(const NebulaModApi*, const NebulaPlugin*)>(symbol_in(module, "nebula_plugin_start"));
         if (api_version == nullptr || start == nullptr) {

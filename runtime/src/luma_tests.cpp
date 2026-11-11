@@ -178,8 +178,12 @@ int main() {
     later.plugins[0].api = kOldestPluginApi;
     check(refusal(later, "RMGE01", "2.1.0", "windows").empty(), "a plugin for the oldest API still running");
     later.plugins[0].api = kOldestPluginApi - 1u;
-    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H",
-          "a plugin for plugin API 1 names the replacement");
+    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD'S CODE IS FOR AN OLDER NEBULA", "a plugin for plugin API 1");
+    check(refusal_detail(later) == "luma.json: plugins[0].api is 1; this game runs plugins built with nebula_mod_api.h 2 to 3, and a LumaCore "
+                                   "library (luma.h) gives no api",
+          "the log names the file, the field and what this game takes");
+    later.plugins[0].api = 0u;
+    check(refusal_detail(later).empty(), "no detail when no field is at fault");
 
     // Objects a script runs.
     {
