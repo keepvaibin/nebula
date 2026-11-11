@@ -28,6 +28,7 @@ static const LumaFunction* player_pos;      /* Vec3f *MR::getPlayerPos() */
 static const LumaFunction* set_player_pos;  /* void MR::setPlayerPos(const Vec3f &) */
 static const LumaFunction* player_gravity;  /* const Vec3f *MR::getPlayerGravity() */
 static const LumaFunction* set_mode;        /* void MarioActor::setPlayerMode(u16, bool) */
+static const LumaFunction* input_disabled;  /* bool MarioModule::isInputDisable() const */
 static const LumaFunction* grant_spin;      /* void MR::onGameEventFlagEnableToSpinAndStarPointer() */
 static const LumaFunction* set_swing;       /* void MR::setPlayerSwingPermission(bool) */
 static const LumaFunction* passed_story;    /* bool GameDataFunction::isPassedStoryEvent(const char *) */
@@ -337,6 +338,27 @@ static int32_t frame_now = -1;
 
 static const char* const kForms[] = {"normal", "rainbow", "fire", "ice", "bee", "spring", "boo", "flying", 0, "tornado"};
 
+/* The player's Mario, as its own Mario::checkKeyLock last saw it this stage (0 until it runs on the new stage). */
+static void* player_mario;
+
+static int32_t on_key_lock(LumaCall* call, void* user) {
+    (void)user;
+    player_mario = LUMA_THIS(call, void);
+    return 0;
+}
+
+/* The game's own answer to "does the player take input": MarioModule::isInputDisable, which holds the first 75
+   frames on a stage (Mario::checkKeyLock), the landing and stage-in animations and a remote demo (run 8). */
+static int player_takes_input(void) {
+    if (player_mario == 0) {
+        return 0;
+    }
+    unsigned char disabled = 1;
+    void* args[] = {player_mario};
+    input_disabled->invoke(args, &disabled);
+    return disabled == 0;
+}
+
 static int stage_ready(void) {
     const char* name = 0;
     int32_t scenario = 0;
@@ -349,7 +371,7 @@ static int stage_ready(void) {
        demo runs. */
     call0(demo_active, &demo);
     return name != 0 && same(name, pending_stage) && scenario == pending_scenario && opening == 0 && starting == 0 &&
-           demo == 0 && player() != 0;
+           demo == 0 && player() != 0 && player_takes_input();
 }
 
 /* User file <n> made current as the file select does: loaded when the saves hold it, else made through the game's
@@ -440,6 +462,7 @@ static void start_stage(const char* name, const char* scenario_text, int is_step
     pending_frames = 0;
     pending_is_step = is_step;
     pending = Pending_Stage;
+    player_mario = 0;
     object_count = 0;
     objects_lost = 0;
     const char* stage = pending_stage;
@@ -1003,6 +1026,8 @@ static const LumaImport imports[] = {
     LUMA_FIELD(field_mode, "MarioActor.mPlayerMode", "u16"),
     LUMA_FIELD(field_health, "MarioActor.mHealth", "u32"),
     LUMA_HOOK_ON("LiveActor::LiveActor", "(const char *)", LUMA_AFTER, on_object),
+    LUMA_FUNCTION(input_disabled, "MarioModule::isInputDisable", "bool() const"),
+    LUMA_HOOK_ON("Mario::checkKeyLock", "void()", LUMA_AFTER, on_key_lock),
     LUMA_HOOK_ON("GameSystem::update", "void()", LUMA_AFTER, on_frame),
 };
 
