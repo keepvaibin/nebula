@@ -31,6 +31,7 @@ void SceneCensus::add(const SceneCount& count) noexcept {
     each(&SceneCount::flat);
     each(&SceneCount::sprites);
     each(&SceneCount::other_view);
+    each(&SceneCount::outside);
     each(&SceneCount::repeats);
     sum_triangles += count.triangles;
     sum_skinned_triangles += count.skinned_triangles;
@@ -49,7 +50,8 @@ void SceneCensus::report(std::uint64_t scene_bytes) {
     std::fprintf(stderr,
                  "[rt-inputs] scene over %u frames, mean (most): instances %.1f (%u) opaque %.1f (%u) blended %.1f (%u) triangles %.0f (%llu) "
                  "waiting %.2f (%u) repeats %.1f (%u) skinned %.1f (%u) of %.0f (%llu) triangles, rebuilt %.2f (%u); left out: ring %.1f "
-                 "(%u) of %.0f (%llu) vertices, site %.1f (%u), flat %.1f (%u), sprites %.1f (%u), other-view %.1f (%u); memory %.2f MB\n",
+                 "(%u) of %.0f (%llu) vertices, site %.1f (%u), flat %.1f (%u), sprites %.1f (%u), other-view %.1f (%u); outside-view %.1f (%u); "
+                 "memory %.2f MB\n",
                  scenes, mean(&SceneCount::instances), most.instances, mean(&SceneCount::opaque), most.opaque, mean(&SceneCount::blended),
                  most.blended, static_cast<double>(sum_triangles) / n, static_cast<unsigned long long>(most.triangles),
                  mean(&SceneCount::waiting), most.waiting, mean(&SceneCount::repeats), most.repeats, mean(&SceneCount::skinned), most.skinned,
@@ -57,7 +59,7 @@ void SceneCensus::report(std::uint64_t scene_bytes) {
                  mean(&SceneCount::rebuilt), most.rebuilt, mean(&SceneCount::ring), most.ring, static_cast<double>(sum_ring_vertices) / n,
                  static_cast<unsigned long long>(most.ring_vertices), mean(&SceneCount::site), most.site, mean(&SceneCount::flat), most.flat,
                  mean(&SceneCount::sprites), most.sprites, mean(&SceneCount::other_view), most.other_view,
-                 static_cast<double>(scene_bytes) / 1048576.0);
+                 mean(&SceneCount::outside), most.outside, static_cast<double>(scene_bytes) / 1048576.0);
     *this = SceneCensus{};
 }
 

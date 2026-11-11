@@ -42,6 +42,9 @@ const std::vector<Variant>& variants() {
         {kProgramPrepass, false, false, {"NATIVE_PREPASS"}, true},
         {kProgramTraced, false, false, {"NATIVE_TRACED"}, true},
         {kProgramTracedMotion, false, false, {"NATIVE_TRACED", "NATIVE_MOTION"}, true},
+        {kProgramTracedReactive, false, false, {"NATIVE_TRACED", "NATIVE_REACTIVE"}, true},
+        {kProgramTracedLayer, false, false, {"NATIVE_TRACED", "NATIVE_REACTIVE", "NATIVE_LAYER"}, true},
+        {kProgramPrepassItem, false, false, {"NATIVE_PREPASS", "NATIVE_PREPASS_ITEM"}, true},
     };
     return list;
 }

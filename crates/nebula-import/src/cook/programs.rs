@@ -716,6 +716,8 @@ fn stage_lines(p: &mut Pixel, registers: &Registers) -> Result<bool> {
             let sampled = p.sample(map, &coord);
             let sampled = format!("{sampled}.{}", swizzle(&p.m.swaps[s.texture_swap as usize & 3]));
             let wrapped = if p.form.lit && p.env_coords.contains(&c) { format!("enh_env({sampled})") } else { sampled };
+            // A painted environment: the traced form's reflection takes its place (program.hlsli ENV_FETCH).
+            let wrapped = if p.env_coords.contains(&c) { format!("ENV_FETCH({wrapped})") } else { wrapped };
             p.lines.push(format!("        const float4 t = {wrapped};"));
         } else if reads_t {
             p.lines.push("        const float4 t = float4(0.0, 0.0, 0.0, 0.0);".into());
@@ -822,7 +824,10 @@ fn channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str, nrm: &st
         let terms: Vec<String> =
             light_list(c).iter().map(|(n, atten, diffuse)| format!("light_term({base}, {n}u, {atten}u, {diffuse}u, {eye}, {nrm}).{part}")).collect();
         let terms = if terms.is_empty() { "0.0".to_string() } else { terms.join(" + ") };
-        out.push(format!("    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);"));
+        // Channel 0's light level, which the traced form keeps (program.hlsli TRACED_LEVEL: the added light's base).
+        let level = format!("saturate((AMBIENT_TERM({amb}) * 255.0 + {terms}) / 255.0)");
+        let level = if ch == 0 && part == "rgb" { format!("TRACED_LEVEL({level})") } else { level };
+        out.push(format!("    {target}.{part} = {mat} * {level};"));
     }
 }
 
@@ -842,7 +847,7 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
         out.push(format!("        const float3 enh_mat = {mat};"));
         out.push(format!("        const float3 enh_amb = {amb};"));
         out.push("        const float3 enh_amb_lin = enh_lin(enh_amb);".into());
-        out.push("        float3 enh_acc = enh_amb_lin * enh_sky(g_enh);".into());
+        out.push("        float3 enh_acc = AMBIENT_TERM(enh_amb_lin * enh_sky(g_enh));".into());
         for (i, (n, atten, diffuse)) in light_list(c).iter().enumerate() {
             out.push(format!(
                 "        enh_add_light({base}, {n}u, {}, {diffuse}u, {}, {metal}, {eye}, enh_amb, enh_amb_lin, enh_acc);",
@@ -851,7 +856,9 @@ fn enhanced_channel_lines(m: &MaterialIr, ch: usize, names: &Channel, eye: &str,
             ));
         }
         out.push("        enh_acc *= enh_sky_reflection(g_enh, enh_amb_lin);".into());
-        out.push(format!("        {target}.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));"));
+        let level = "enh_srgb(enh_shoulder(max(enh_acc, 0.0)))";
+        let level = if ch == 0 { format!("TRACED_LEVEL({level})") } else { level.to_string() };
+        out.push(format!("        {target}.rgb = enh_mat * {level};"));
         out.push("    }".into());
     } else {
         let mat = if c.material_source != 0 { format!("{vtx}.rgb") } else { format!("{}.rgb", rows.at(ROW_MATERIAL_COLOR + ch as u32)) };
@@ -1126,7 +1133,9 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     }
     vertex_in.push_str("};\n");
 
-    let mut vertex = String::from("#include \"program.hlsli\"\n");
+    // A vertex stage that sums lights takes the game's ambient: the traced light reaches only a pixel stage
+    // (program_lit.hlsli's AMBIENT_TERM).
+    let mut vertex = String::from("#include \"program.hlsli\"\n#define AMBIENT_TERM(x) (x)\n");
     vertex.push_str(&v_rows.declare(1, "MaterialVertex"));
     vertex.push_str(&vertex_in);
     vertex.push_str(&vary);

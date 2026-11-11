@@ -11,14 +11,24 @@ struct MaterialConstants {
 };
 
 #define NATIVE_COORDS 2
+#define NATIVE_LIT 1
 #include "native_material.hlsli"
 
+// Channel 0's colour at a place: light 0 over the ambient.
+float3 trample_light(float3 eye, float3 nrm) {
+    return material.mat_color.rgb * saturate((AMBIENT_TERM(material.amb_color.rgb) * 255.0 + channel_light(0u, 3u, 2u, eye, nrm).rgb) / 255.0);
+}
+
+#if NATIVE_TRACED
+bool material_relight(inout NativeVaryings i, float3 nrm) {
+    i.color.rgb = trample_light(i.lit_eye, nrm);
+    return true;
+}
+#endif
+
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    const uint nq = v.pn_row;
-    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm),
-                             dot(native_normal_row(nq + 2u).xyz, v.nrm));
-    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
-    o.color.rgb = material.mat_color.rgb * saturate((material.amb_color.rgb * 255.0 + channel_light(0u, 3u, 2u, v.eye, nrm).rgb) / 255.0);
+    const float3 nrm = native_lit_normal(v);
+    o.color.rgb = trample_light(v.eye, nrm);
     o.color.a = material.mat_color.a * saturate((material.amb_color.a * 255.0 + channel_light(2u, 3u, 2u, v.eye, nrm).a) / 255.0);
     o.uv[0] = float4(v.uv[0], 1.0, 0.0);
     const float4 p = float4(v.pos, 1.0);

@@ -21,8 +21,9 @@ cbuffer FrameConstants : register(b0) {
     float4 g_stage;     // x: the stage's ambient, y: its key light, as brightness: a painted surface in the key's
                         // shadow keeps x / (x + y * n.l) of its colour; z, w: retired (the drops)
     float4 g_look;      // x: what a surface in the sun's shadow keeps of the sky's light (the sky turned down so the
-                        // sun's shadows read); y 1: a painted surface is shadowed by lit things only (the painted
-                        // style), else by everything solid; z: the facing (n.l) from which a painted surface keeps
+                        // sun's shadows read); y 1: a painted surface whose model's paint holds its shadows (hit
+                        // flag NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only (the painted style, 14.6),
+                        // 0: every painted surface by everything solid; z: the facing (n.l) from which a painted surface keeps
                         // its authored brightness; w: how far the sky's ray looks for what stands near
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many

@@ -58,10 +58,16 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         }
         const float3 from = (turned >= 0.0f ? s.origin : s.at - s.normal * s.skin) + within_pixel;
-        // A lit surface is shadowed by everything solid; so is a painted one, unless the painted style asks for lit
-        // things only (what the painting could not know).
+        // A lit surface is shadowed by everything solid; so is a painted one, unless its model's paint holds the
+        // shadows things cast on it (hit flag NEBULA_HIT_PAINTED_SHADOW, item word 11 bits 8-15) and the painted style
+        // asks for that (g_look.y): then by lit things only, what the painting could not know (14.6).
+        bool paint_holds = false;
+        if (!lit && g_look.y != 0.0f) {
+            const uint item = g_item_map.Load(int3(pixel, 0)).x;
+            paint_holds = item != 0u && (g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u) >> 8u & kHitPaintedShadow) != 0u;
+        }
         uint met;
-        const float occluder = occluder_at(from, toward, 200000.0f, lit || g_look.y == 0.0f ? kMaskSolid | kMaskCutout : kMaskLit, true, met);
+        const float occluder = occluder_at(from, toward, 200000.0f, paint_holds ? kMaskLit : kMaskSolid | kMaskCutout, true, met);
         if (occluder >= 0.0f) {
             v = float4(0.0f, 0.0f, 0.0f, min(occluder, kNoOccluder - 1.0f));
             InterlockedAdd(g_counters[18], 1u);

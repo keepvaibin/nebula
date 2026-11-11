@@ -35,6 +35,8 @@ pub enum Class {
     Painted = 7,
     /// Blended without a reflection: soft translucents (smoke sheets, decals, shadows' blobs).
     Translucent = 8,
+    /// A water surface (data/rt_water.tsv).
+    Water = 9,
 }
 
 impl Class {
@@ -49,7 +51,24 @@ impl Class {
             Class::Emissive => "emissive",
             Class::Painted => "painted",
             Class::Translucent => "translucent",
+            Class::Water => "water",
         }
+    }
+
+    pub fn by_name(name: &str) -> Option<Class> {
+        [
+            Class::Dielectric,
+            Class::Gloss,
+            Class::Metal,
+            Class::Glass,
+            Class::Ramp,
+            Class::Emissive,
+            Class::Painted,
+            Class::Translucent,
+            Class::Water,
+        ]
+        .into_iter()
+        .find(|c| c.name() == name)
     }
 }
 
@@ -93,11 +112,83 @@ pub struct Reading {
     pub ior: f32,
     pub transmission: f32,
     pub rule: &'static str,
+    /// nebula_model.h NebulaModelHit.glow_source (L-1).
+    pub glow_source: u8,
+    /// Units light crosses inside it (13.2): the model's meshes give it (model_write::Measure); 0 until then.
+    pub thickness: f32,
+    /// Its painted reflection's colour, largest channel 1 (the map's mean joins at the cook).
+    pub env_tint: [f32; 3],
+    /// The map read through the normal, 255 none.
+    pub env_map: u8,
+    /// The review's numbers (rt_materials.tsv); below 0: the class's own.
+    pub body: f32,
+    pub shine: f32,
+    pub tint_keep: f32,
 }
 
 /// The models that glow (data/rt_glow.tsv): a model's file stem to its light's colour (None: the material's own) and
 /// strength.
 const GLOW_TABLE: &str = include_str!("../../data/rt_glow.tsv");
+
+/// Mod packs' own rows for the tables here (their `merge/NebulaData/RtMaterials.tsv`, `RtGlow.tsv`, `RtWater.tsv`:
+/// cook/overlay.rs), in the mods' order, read after the game's: a pack's row decides for its models. Empty but while
+/// an overlay cooks.
+#[derive(Default)]
+pub struct PackTables {
+    pub materials: Vec<String>,
+    pub glow: Vec<String>,
+    pub water: Vec<String>,
+}
+
+static PACK_TABLES: std::sync::RwLock<PackTables> =
+    std::sync::RwLock::new(PackTables { materials: Vec::new(), glow: Vec::new(), water: Vec::new() });
+
+/// The packs' tables while an overlay cooks; the game's alone again once it is dropped.
+pub struct PackTablesInUse;
+
+impl PackTablesInUse {
+    pub fn set(tables: PackTables) -> Self {
+        *PACK_TABLES.write().unwrap_or_else(|e| e.into_inner()) = tables;
+        PackTablesInUse
+    }
+}
+
+impl Drop for PackTablesInUse {
+    fn drop(&mut self) {
+        *PACK_TABLES.write().unwrap_or_else(|e| e.into_inner()) = PackTables::default();
+    }
+}
+
+/// Why a pack's table (`kind` 0 RtMaterials, 1 RtGlow, 2 RtWater) cannot be used; None: it can.
+pub fn pack_table_problem(kind: usize, text: &str) -> Option<String> {
+    match kind {
+        0 => {
+            let (head, _) = rows_of(text);
+            let (game, _) = rows_of(MATERIALS_TABLE);
+            if !head.iter().any(|h| h == "model") || !head.iter().any(|h| h == "material") {
+                return Some("its header row names no model or material column".to_string());
+            }
+            head.iter().find(|h| !game.contains(*h)).map(|h| format!("the column {h:?} is not one of the game's ({})", game.join(", ")))
+        }
+        2 => {
+            let (head, _) = rows_of(text);
+            (head.len() != 2 || head[0] != "model" || head[1] != "material").then(|| "its header row is not: model, material".to_string())
+        }
+        _ => text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.trim().is_empty() && !l.starts_with('#')).find_map(|line| {
+            let fields: Vec<&str> = line.split('\t').collect();
+            (fields.len() < 3 || fields[2].trim().parse::<f32>().is_err()).then(|| format!("the row {line:?} is not: model, colour or own, candela"))
+        }),
+    }
+}
+
+/// A glow table's row for `wanted` (a model's stem, or `model/material`): its colour and strength fields.
+fn glow_row<'a>(table: &'a str, wanted: &str) -> Option<(&'a str, &'a str)> {
+    table.lines().filter(|line| !line.starts_with('#')).find_map(|line| {
+        let mut fields = line.split('\t');
+        let (Some(name), Some(colour), Some(strength)) = (fields.next(), fields.next(), fields.next()) else { return None };
+        (name.trim() == wanted).then_some((colour, strength))
+    })
+}
 
 /// The light a material of the model `stem` gives: its colour and, last, its strength (0: none). From the table by
 /// the model's name; else a surface that is added to what is behind it and bright lights by its own colour.
@@ -117,20 +208,30 @@ pub fn drawn_shadow(stem: &str, material: &str, class: Class) -> bool {
         && matches!(class, Class::Translucent | Class::Painted | Class::Glass)
 }
 
-pub fn glow_of(stem: &str, r: &Reading) -> [f32; 4] {
+pub fn glow_of(stem: &str, material: &str, r: &Reading) -> [f32; 4] {
+    // Water is never a light, whatever its brightness.
+    if r.class == Class::Water {
+        return [0.0; 4];
+    }
     let stem = stem.to_ascii_lowercase();
+    // A row may name one material of the model (`model/material`): it alone glows, and it comes before a row of the
+    // whole model.
+    let one = format!("{stem}/{}", material.to_ascii_lowercase());
     let own = || {
         // The material's bright colour, its strongest channel at 1.
         let c = if luminance(r.emission) > 0.05 { r.emission } else { r.base };
         let top = c[0].max(c[1]).max(c[2]).max(1e-3);
         [c[0] / top, c[1] / top, c[2] / top]
     };
-    for line in GLOW_TABLE.lines() {
-        let mut fields = line.split('\t');
-        let (Some(name), Some(colour), Some(strength)) = (fields.next(), fields.next(), fields.next()) else { continue };
-        if line.starts_with('#') || name != stem {
-            continue;
-        }
+    // A pack's row first (the last pack's before the others'), then the game's.
+    let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
+    let found = packs
+        .glow
+        .iter()
+        .rev()
+        .find_map(|table| glow_row(table, &one).or_else(|| glow_row(table, &stem)))
+        .or_else(|| glow_row(GLOW_TABLE, &one).or_else(|| glow_row(GLOW_TABLE, &stem)));
+    if let Some((colour, strength)) = found {
         let strength: f32 = strength.trim().parse().unwrap_or(0.0);
         let parts: Vec<f32> = colour.split_whitespace().filter_map(|v| v.parse().ok()).collect();
         let c = if parts.len() == 3 { [parts[0], parts[1], parts[2]] } else { own() };
@@ -429,7 +530,25 @@ pub fn read(m: &MaterialIr) -> Reading {
     // material alone gives (the textures' own means refine it at the cook).
     let base = full.map(|v| (v * 2.0).clamp(0.0, 1.0));
     let dark_base = luminance(full) < 0.2;
-    let mut r = Reading { class: Class::Dielectric, signals: s, base, emission: [0.0; 3], roughness: 0.45, metal: 0.0, ior: 1.5, transmission: 0.0, rule: "" };
+    let env_map = environment_maps(m).first().copied().unwrap_or(0xFF);
+    let mut r = Reading {
+        class: Class::Dielectric,
+        signals: s,
+        base,
+        emission: [0.0; 3],
+        roughness: 0.45,
+        metal: 0.0,
+        ior: 1.5,
+        transmission: 0.0,
+        rule: "",
+        glow_source: 0,
+        thickness: 0.0,
+        env_tint: unit_colour(s.environment_tint),
+        env_map,
+        body: -1.0,
+        shine: -1.0,
+        tint_keep: -1.0,
+    };
     let metal_hue = s.environment_saturation < 0.15 || (8.0..=60.0).contains(&s.environment_hue);
     if s.blend == 2 {
         // Only what is added to the picture behind it is a glow by the data alone: a blended, bright, unlit surface
@@ -447,11 +566,6 @@ pub fn read(m: &MaterialIr) -> Reading {
         r.class = Class::Translucent;
         r.transmission = 0.5;
         r.rule = "blended, no reflection";
-    } else if s.alpha_test {
-        r.class = Class::Cutout;
-        r.roughness = 0.5;
-        r.transmission = if s.two_sided { 0.25 } else { 0.0 };
-        r.rule = if s.two_sided { "alpha test, two-sided: a thin sheet" } else { "alpha test" };
     } else if s.ramp {
         r.class = Class::Ramp;
         r.rule = "a ramp map";
@@ -483,7 +597,199 @@ pub fn read(m: &MaterialIr) -> Reading {
     } else {
         r.rule = "lit, opaque, no painted reflection";
     }
+    // Holes are not a look (14.2 change 1): an alpha-tested material keeps the class its look gives; a two-sided one
+    // is a thin sheet that lets some light through.
+    if s.alpha_test && s.blend == 0 && s.two_sided {
+        r.transmission = r.transmission.max(0.25);
+    }
+    r.glow_source = glow_source(m);
     r
+}
+
+/// A colour with its largest channel at 1 (black stays black).
+fn unit_colour(c: [f32; 3]) -> [f32; 3] {
+    let top = c[0].max(c[1]).max(c[2]);
+    if top <= 1e-4 {
+        return [0.0; 3];
+    }
+    c.map(|v| (v / top).clamp(0.0, 1.0))
+}
+
+/// Which of the material's colours carries what it shows unlit (RT-MASTER-PLAN 8.1 L-1), as NebulaModelHit.glow_source:
+/// 1 + the NEBULA_ROW_* code (registers 1 to 3: 0 to 2, constants 0 to 3: 3 to 6, material colours: 7, 8) of the one
+/// whose loss darkens the unlit result most, when that is a quarter of it or more; 16 the vertex colour; 0 none (a
+/// glow then keeps the colour it was cooked with).
+pub fn glow_source(m: &MaterialIr) -> u8 {
+    let shown = |m: &MaterialIr| luminance(signals(m).unlit);
+    let whole = shown(m);
+    if whole < 0.02 {
+        return 0;
+    }
+    let mut best = (0.0f32, 0u8);
+    let mut consider = |drop: f32, code: u8| {
+        if drop > best.0 {
+            best = (drop, code);
+        }
+    };
+    for r in 0..3 {
+        let mut t = m.clone();
+        t.registers[r][0] = 0;
+        t.registers[r][1] = 0;
+        t.registers[r][2] = 0;
+        consider(whole - shown(&t), 1 + r as u8);
+    }
+    for k in 0..4 {
+        let mut t = m.clone();
+        t.constants[k][0] = 0;
+        t.constants[k][1] = 0;
+        t.constants[k][2] = 0;
+        consider(whole - shown(&t), 4 + k as u8);
+    }
+    for n in 0..2 {
+        let mut t = m.clone();
+        t.material_color[n][0] = 0;
+        t.material_color[n][1] = 0;
+        t.material_color[n][2] = 0;
+        consider(whole - shown(&t), 8 + n as u8);
+    }
+    if m.channel_count != 0 && m.channels[0].material_source != 0 {
+        // The vertex colour: the reading takes it as mid grey; with the register as black instead, what it carried.
+        let mut t = m.clone();
+        t.channels[0].material_source = 0;
+        t.material_color[0] = [0, 0, 0, t.material_color[0][3]];
+        consider(whole - shown(&t), 16);
+    }
+    if best.0 >= 0.25 * whole {
+        best.1
+    } else {
+        0
+    }
+}
+
+/// Water surfaces (data/rt_water.tsv, RT-MASTER-PLAN 13.3): a model's file stem and a material name (a trailing `*`:
+/// names that begin so), both in any case.
+const WATER_TABLE: &str = include_str!("../../data/rt_water.tsv");
+
+/// The review's overrides (data/rt_materials.tsv, RT-MASTER-PLAN 14.2 change 8 and 14.4).
+const MATERIALS_TABLE: &str = include_str!("../../data/rt_materials.tsv");
+
+fn name_matches(pattern: &str, name: &str) -> bool {
+    let (pattern, name) = (pattern.trim().to_ascii_lowercase(), name.to_ascii_lowercase());
+    match pattern.strip_suffix('*') {
+        Some(head) => name.starts_with(head),
+        None => pattern == name,
+    }
+}
+
+fn rows_of(table: &str) -> (Vec<String>, Vec<Vec<&str>>) {
+    let mut lines = table.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.is_empty() && !l.starts_with('#'));
+    let head = lines.next().map(|h| h.split('\t').map(|c| c.trim().to_ascii_lowercase().replace('_', " ")).collect()).unwrap_or_default();
+    (head, lines.map(|l| l.split('\t').collect()).collect())
+}
+
+/// What the tables say of the material `name` of the model `stem` (its file stem): water first, then the review's
+/// overrides, last. `measured`: the thickness its meshes give.
+pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    r.thickness = measured;
+    let packs = PACK_TABLES.read().unwrap_or_else(|e| e.into_inner());
+    let is_water = |table: &str| {
+        rows_of(table).1.iter().any(|row| row.len() >= 2 && row[0].trim().eq_ignore_ascii_case(&stem) && name_matches(row[1], name))
+    };
+    if is_water(WATER_TABLE) || packs.water.iter().any(|table| is_water(table.as_str())) {
+        r.class = Class::Water;
+        r.ior = 1.33;
+        r.roughness = 0.03;
+        r.metal = 0.0;
+        r.transmission = 1.0;
+        r.rule = "water (rt_water.tsv)";
+    }
+    review(MATERIALS_TABLE, &stem, name, r);
+    for table in &packs.materials {
+        review(table, &stem, name, r);
+    }
+}
+
+/// A review table's rows (the game's data/rt_materials.tsv, or a pack's) for the material `name` of the model `stem`
+/// (lower case): each matching row's fields over what `r` holds.
+fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
+    let (head, rows) = rows_of(table);
+    let column = |what: &str| head.iter().position(|h| h == what);
+    let (model, material) = (column("model"), column("material"));
+    let (Some(model), Some(material)) = (model, material) else { return };
+    for row in rows {
+        let field = |what: &str| column(what).and_then(|c| row.get(c)).map(|v| v.trim()).filter(|v| !v.is_empty());
+        let number = |what: &str| field(what).and_then(|v| v.parse::<f32>().ok()).filter(|v| v.is_finite());
+        let numbers = |what: &str| field(what).map(|v| v.split_whitespace().filter_map(|x| x.parse::<f32>().ok()).collect::<Vec<f32>>());
+        if !row.get(model).is_some_and(|m| m.trim().eq_ignore_ascii_case(&stem)) || !row.get(material).is_some_and(|m| name_matches(m, name)) {
+            continue;
+        }
+        if let Some(class) = field("class").and_then(|c| Class::by_name(&c.to_ascii_lowercase())) {
+            r.class = class;
+            r.rule = "the review (rt_materials.tsv)";
+        }
+        if let Some(v) = number("roughness") {
+            r.roughness = v.clamp(0.0, 1.0);
+        }
+        if let Some(v) = number("metal") {
+            r.metal = v.clamp(0.0, 1.0);
+        }
+        if let Some(v) = number("ior") {
+            r.ior = v.clamp(1.0, 3.0);
+        }
+        if let Some(v) = number("thickness") {
+            r.thickness = v.max(0.0);
+        }
+        if let Some(v) = number("tint keep") {
+            r.tint_keep = v.clamp(0.0, 1.0);
+        }
+        if let Some(v) = number("body") {
+            r.body = v.clamp(0.0, 1.0);
+        }
+        if let Some(v) = number("shine") {
+            r.shine = v.clamp(0.0, 16.0);
+        }
+        if let Some(v) = numbers("emission").filter(|v| v.len() == 3) {
+            r.emission = [v[0], v[1], v[2]].map(|x| x.clamp(0.0, 16.0));
+        }
+    }
+}
+
+/// Roughness from the art (14.2 change 4): a painted environment map's sharpness, the mean size of its luminance's
+/// gradient over level 0's texels (0 to 1 a texel), as roughness: crisp chrome 0.03, a soft gradient 0.35.
+pub fn roughness_of_map(width: u32, height: u32, texels: &[[u8; 4]]) -> Option<f32> {
+    let (w, h) = (width as usize, height as usize);
+    if w < 2 || h < 2 || texels.len() < w * h {
+        return None;
+    }
+    let l = |x: usize, y: usize| {
+        let t = texels[y * w + x];
+        (0.2126 * f32::from(t[0]) + 0.7152 * f32::from(t[1]) + 0.0722 * f32::from(t[2])) / 255.0
+    };
+    let mut sum = 0.0f64;
+    for y in 0..h - 1 {
+        for x in 0..w - 1 {
+            let (dx, dy) = (l(x + 1, y) - l(x, y), l(x, y + 1) - l(x, y));
+            sum += f64::from((dx * dx + dy * dy).sqrt());
+        }
+    }
+    let s = (sum / ((w - 1) * (h - 1)) as f64) as f32;
+    Some((0.35 - 3.5 * s).clamp(0.03, 0.35))
+}
+
+/// The mean colour of level 0's texels, largest channel 1.
+pub fn mean_colour(texels: &[[u8; 4]]) -> Option<[f32; 3]> {
+    if texels.is_empty() {
+        return None;
+    }
+    let mut sum = [0.0f64; 3];
+    for t in texels {
+        for c in 0..3 {
+            sum[c] += f64::from(t[c]);
+        }
+    }
+    let n = texels.len() as f64 * 255.0;
+    Some(unit_colour([(sum[0] / n) as f32, (sum[1] / n) as f32, (sum[2] / n) as f32]))
 }
 
 /// Every material of every model under CONTENT, one row each, and the classes' counts.
@@ -492,7 +798,8 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     writeln!(
         out,
         "model\tmaterial\tname\tclass\trule\tlit\tspecular\tvertex colour\tenvironment\tenvironment share\tenvironment hue\tenvironment saturation\t\
-         ramp\tbump\twarp\talpha test\tblend\ttwo-sided\tdepth write\tanimated coordinates\tunlit\tlit gain\tbase\temission\troughness\tmetal\ttransmission\tstages\tmaps\tglow"
+         ramp\tbump\twarp\talpha test\tblend\ttwo-sided\tdepth write\tanimated coordinates\tunlit\tlit gain\tbase\temission\troughness\tmetal\ttransmission\tstages\tmaps\tglow\t\
+         ior\tthickness\tglow source\tenvironment map\tenvironment tint\tbody\tshine\ttint keep"
     )?;
     let mut classes: BTreeMap<Class, (u32, u32)> = BTreeMap::new();
     let mut stats = Stats::default();
@@ -512,16 +819,18 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             }
         };
         models += 1;
+        let stem = name.rsplit('/').next().unwrap_or(name);
+        let measured = super::model_write::material_measures(&ir, stem);
         for (i, m) in ir.materials.iter().enumerate() {
-            let r = read(m);
+            let mut r = read(m);
+            super::model_write::finish_reading(&ir, stem, i, measured.get(i).copied().unwrap_or(0.0), &mut r);
             let s = r.signals;
-            let stem = name.rsplit('/').next().unwrap_or(name);
-            let glow = glow_of(stem.split('.').next().unwrap_or(stem), &r);
+            let glow = glow_of(stem.split('.').next().unwrap_or(stem), &m.name, &r);
             let triple = |v: [f32; 3]| format!("{:.2} {:.2} {:.2}", v[0], v[1], v[2]);
             let flag = |b: bool| u8::from(b);
             writeln!(
                 out,
-                "{name}\t{i}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}",
+                "{name}\t{i}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{:.2}\t{}\t{}\t{}\t{:.2}\t{:.0}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}",
                 m.name,
                 r.class.name(),
                 r.rule,
@@ -555,7 +864,15 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
                     format!("{:.2} {:.2} {:.2} {:.0} cd/m2", glow[0], glow[1], glow[2], -glow[3])
                 } else {
                     String::new()
-                }
+                },
+                r.ior,
+                r.thickness,
+                r.glow_source,
+                if r.env_map == 0xFF { String::new() } else { r.env_map.to_string() },
+                if r.env_map == 0xFF { String::new() } else { triple(r.env_tint) },
+                r.body,
+                r.shine,
+                r.tint_keep
             )?;
             glowing += u32::from(glow[3] != 0.0);
             let entry = classes.entry(r.class).or_default();
@@ -620,5 +937,66 @@ mod tests {
         m.blend_src = 4;
         m.blend_dst = 1;
         assert_eq!(read(&m).class, Class::Emissive);
+    }
+
+    fn painted() -> MaterialIr {
+        let mut m = MaterialIr { pixel_stage_count: 1, channel_count: 1, depth_write: 1, cull: 2, alpha_comp0: 7, alpha_comp1: 7, ..Default::default() };
+        let mut s = stage([15, 15, 15, 10], [7, 7, 7, 5]);
+        s.channel = 0;
+        m.stages.push(s);
+        m.swaps = [[0, 1, 2, 3]; 4];
+        m.material_color = [[255; 4]; 2];
+        m
+    }
+
+    #[test]
+    fn an_alpha_tested_material_keeps_its_look() {
+        // Holes are not a look: an unlit alpha-tested sheet is painted and lets some light through, two-sided.
+        let mut m = painted();
+        m.alpha_comp0 = 4;
+        m.alpha_ref0 = 128;
+        m.alpha_comp1 = 0;
+        m.alpha_op = 0;
+        m.cull = 0;
+        let r = read(&m);
+        assert_eq!(r.class, Class::Painted);
+        assert!(r.signals.alpha_test && r.transmission >= 0.25);
+    }
+
+    #[test]
+    fn the_colour_a_glow_shows_is_found() {
+        // The stage passes the raster colour, the register's material colour: losing it loses everything.
+        let m = painted();
+        assert_eq!(glow_source(&m), 8, "material colour 0: NEBULA_ROW_MATERIAL_COLOR + 1");
+        let mut dark = painted();
+        dark.material_color = [[0, 0, 0, 255]; 2];
+        assert_eq!(glow_source(&dark), 0, "nothing shown: no source");
+    }
+
+    #[test]
+    fn water_and_overrides_finish_a_reading() {
+        let m = painted();
+        let mut r = read(&m);
+        finish("heavenlybeachplanetwater.bdl", "CxSeaMat", 40.0, &mut r);
+        assert_eq!(r.class, Class::Water);
+        assert!((r.ior - 1.33).abs() < 1e-6 && (r.thickness - 40.0).abs() < 1e-6);
+        let mut other = read(&m);
+        finish("somethingelse", "CxSeaMat", 3.0, &mut other);
+        assert_eq!(other.class, Class::Painted);
+        assert!(name_matches("Water*", "watermat_v_x") && !name_matches("Water", "watermat"));
+    }
+
+    #[test]
+    fn a_crisp_map_is_smooth_and_a_soft_one_rough() {
+        let flat = vec![[128u8, 128, 128, 255]; 16];
+        assert!((roughness_of_map(4, 4, &flat).unwrap() - 0.35).abs() < 1e-6, "no detail: the softest");
+        let mut checker = vec![[0u8, 0, 0, 255]; 16];
+        for (i, t) in checker.iter_mut().enumerate() {
+            if (i % 4 + i / 4) % 2 == 0 {
+                *t = [255, 255, 255, 255];
+            }
+        }
+        assert!((roughness_of_map(4, 4, &checker).unwrap() - 0.03).abs() < 1e-6, "every texel an edge: chrome");
+        assert_eq!(mean_colour(&[[255, 128, 0, 255]]).unwrap()[0], 1.0);
     }
 }

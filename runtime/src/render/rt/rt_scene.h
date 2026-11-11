@@ -52,6 +52,7 @@ struct SceneCount {
     std::uint32_t flat = 0u;         // no depth test or no colour: sky, volumes
     std::uint32_t sprites = 0u;      // particles, glyphs, widened lines
     std::uint32_t other_view = 0u;   // under another camera or an orthographic view
+    std::uint32_t outside = 0u;      // taken, outside the view: the raster passes leave them out (5.3 G-1)
     std::uint32_t repeats = 0u;      // the same mesh under the same matrix again
     std::uint64_t triangles = 0u;    // under the instances that stand still
     std::uint64_t skinned_triangles = 0u;

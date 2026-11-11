@@ -353,6 +353,7 @@ bool RendererVk::create_layouts() {
                                  " maps in a table, and it has no descriptor indexing");
     }
     program_use_bound_tables(!bindless_);
+    program_use_triangle_ids(context.rt_caps().triangle_ids);
     static_assert(kSamplerHeapSlots == vk::kBindlessSamplerSlots);
     {
         // Set 0: b0, b1, b2, the composed rows, the instance table and, with descriptor indexing, the frame's texture lists.

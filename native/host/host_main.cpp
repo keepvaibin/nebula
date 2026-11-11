@@ -3905,9 +3905,6 @@ int main(int argc, char** argv) {
     std::error_code error;
     if (!open_pak(pak)) return 2;
     boot_mark("disc opened");
-#if defined(NEBULA_HOST_RENDERER)
-    load_rt_tables();
-#endif
     load_module(module);
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
@@ -3999,6 +3996,11 @@ int main(int argc, char** argv) {
             galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
             prepare_mod_files(settings_folder, game_id, std::move(mods));
         }
+#if defined(NEBULA_HOST_RENDERER)
+        // Ray tracing's tables, with the mods' rows (their merge/NebulaData/RtStages.tsv and RtEffects.tsv) now that
+        // their store is attached.
+        load_rt_tables();
+#endif
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.
             std::string lines;

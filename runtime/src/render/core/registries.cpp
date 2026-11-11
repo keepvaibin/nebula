@@ -341,6 +341,7 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
         GpuMesh& gpu_mesh = meshes[m];
         if (hits != nullptr && mesh.material < header.material_count) {
             const NebulaModelHit& hit = hits[mesh.material];
+            const NebulaModelMaterial& material = at<NebulaModelMaterial>(file, header.materials_at)[mesh.material];
             gpu_mesh.hit_class = hit.klass;
             gpu_mesh.hit_flags = hit.flags;
             std::copy_n(hit.emission, 3u, gpu_mesh.hit_emission);
@@ -350,8 +351,45 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_transmission = hit.transmission;
             gpu_mesh.hit_environment = hit.environment_share;
             std::copy_n(hit.glow, 4u, gpu_mesh.glow);
+            gpu_mesh.glow_source = hit.glow_source;
+            gpu_mesh.hit_ior = hit.ior;
+            gpu_mesh.hit_thickness = hit.thickness;
+            std::copy_n(hit.env_tint, 3u, gpu_mesh.hit_env_tint);
+            gpu_mesh.hit_env_map = hit.env_map;
+            gpu_mesh.hit_body = hit.body;
+            gpu_mesh.hit_shine = hit.shine;
+            gpu_mesh.hit_tint_keep = hit.tint_keep;
+            // Where glow_source's colour sits among the rows of the material's own stages (the first form that
+            // replaces nothing), and its cooked value: registers r (code r) are signed, the others bytes, all /255
+            // as Material::fillRow fills them.
+            const std::uint32_t code = hit.glow_source - 1u;
+            if (hit.glow_source >= 1u && hit.glow_source <= 9u && material.forms_at != 0u) {
+                const auto* forms = at<NebulaModelForm>(file, material.forms_at);
+                for (std::uint32_t f = 0; f < material.form_count; ++f) {
+                    const NebulaModelForm& form = forms[f];
+                    if (form.replace != 0u) {
+                        continue;
+                    }
+                    const auto* codes = at<std::uint32_t>(file, form.pixel_rows_at);
+                    for (std::uint32_t p = 0; p < form.pixel_row_count; ++p) {
+                        if (codes[p] == code && form.vertex_row_count + p < 0xFFFFu &&
+                            form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
+                            gpu_mesh.glow_row = static_cast<std::uint16_t>(form.vertex_row_count + p);
+                            gpu_mesh.glow_row_count = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
+                            break;
+                        }
+                    }
+                    break;
+                }
+                for (unsigned c = 0; c < 3u; ++c) {
+                    const float value = code <= NEBULA_ROW_REGISTER + 2u ? static_cast<float>(material.registers[code][c])
+                                        : code < NEBULA_ROW_MATERIAL_COLOR
+                                            ? static_cast<float>(material.constants[code - NEBULA_ROW_CONSTANT][c])
+                                            : static_cast<float>(material.material_color[code - NEBULA_ROW_MATERIAL_COLOR][c]);
+                    gpu_mesh.glow_cooked[c] = value / 255.0f;
+                }
+            }
             // The alpha test's first comparison, where it is "greater" or "greater or equal" (4, 6): its reference.
-            const NebulaModelMaterial& material = at<NebulaModelMaterial>(file, header.materials_at)[mesh.material];
             if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
                 gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
             }
