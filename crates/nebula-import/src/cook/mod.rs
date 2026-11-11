@@ -39,6 +39,9 @@ pub mod ui_layout;
 pub mod sound;
 pub mod store;
 pub mod table;
+pub mod table_keys;
+pub mod patch;
+pub mod table_columns;
 pub mod texture;
 pub mod thp;
 

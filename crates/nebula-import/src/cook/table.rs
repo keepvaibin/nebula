@@ -56,9 +56,21 @@ pub struct TableIr {
     pub rows: Vec<Vec<Cell>>,
 }
 
-/// A column's hash, as the game's tables have it.
+/// A column's hash, as the game's tables have it: x31 of the bytes, each signed as MR::getHashCode takes it.
 pub fn column_hash(name: &str) -> u32 {
-    name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(u32::from(byte)))
+    name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(byte as i8 as u32))
+}
+
+/// A word's bytes from JSON: a string, or `{ "bytes": "<hex>" }`.
+pub(crate) fn word_bytes(value: &Value) -> Option<Vec<u8>> {
+    if let Some(text) = value.as_str() {
+        return Some(text.as_bytes().to_vec());
+    }
+    let hex = value.as_object().filter(|o| o.len() == 1)?.get("bytes")?.as_str()?;
+    if hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(hex.get(i..i + 2)?, 16).ok()).collect()
 }
 
 /// A column a mod's JSON names: by its name, or by its hash ("0x0a3b36a3") for one whose name nobody knows, as
@@ -314,23 +326,24 @@ impl TableIr {
         out
     }
 
-    fn column_of(&self, key: &str) -> Result<Option<usize>> {
+    pub(crate) fn column_of(&self, key: &str) -> Result<Option<usize>> {
         let hash = key_hash(key)?;
         Ok(self.columns.iter().position(|c| c.hash == hash))
     }
 
-    /// A cell of `column` holding a mod's value.
-    fn cell(column: &Column, key: &str, value: &Value) -> Result<Cell> {
+    /// A cell of `column` holding a mod's value. A word may be `{ "bytes": "<hex>" }` for one that is not UTF-8
+    /// (contract table-keys 5).
+    pub(crate) fn cell(column: &Column, key: &str, value: &Value) -> Result<Cell> {
         Ok(match column.kind {
-            Kind::Text => Cell::Text(value.as_str().with_context(|| format!("{key} is a word"))?.as_bytes().to_vec()),
+            Kind::Text => Cell::Text(word_bytes(value).with_context(|| format!("{key} is a word"))?),
             Kind::Float => Cell::Bits((value.as_f64().with_context(|| format!("{key} is a number"))? as f32).to_bits()),
             Kind::Int | Kind::Field => Cell::Bits(value.as_i64().with_context(|| format!("{key} is a whole number"))? as u32 & column.mask),
         })
     }
 
-    fn cell_is(column: &Column, cell: &Cell, wanted: &Value) -> bool {
+    pub(crate) fn cell_is(column: &Column, cell: &Cell, wanted: &Value) -> bool {
         match (column.kind, cell) {
-            (Kind::Text, Cell::Text(word)) => wanted.as_str().map(str::as_bytes) == Some(word.as_slice()),
+            (Kind::Text, Cell::Text(word)) => word_bytes(wanted).as_deref() == Some(word.as_slice()),
             (Kind::Float, Cell::Bits(bits)) => wanted.as_f64().is_some_and(|w| (w as f32 - f32::from_bits(*bits)).abs() < 0.0001),
             (_, Cell::Bits(bits)) => wanted.as_i64().is_some_and(|w| w as u32 & column.mask == *bits),
             _ => false,

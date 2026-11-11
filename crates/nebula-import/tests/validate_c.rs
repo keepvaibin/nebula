@@ -28,6 +28,7 @@ impl Store for RustStore {
             columns: vec![("name".into(), ColumnType::Text), ("count".into(), ColumnType::Int { min: 0, max: 10 })],
             rows: Some(HashSet::from(["Alpha".to_string()])),
             case_insensitive: false,
+            ..Default::default()
         })
     }
     fn may_be_new(&self, path: &str) -> bool {

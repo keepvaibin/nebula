@@ -29,6 +29,7 @@ impl Store for FakeStore {
             columns: vec![("name".into(), ColumnType::Text), ("count".into(), ColumnType::Int { min: 0, max: 10 })],
             rows: Some(HashSet::from(["Alpha".to_string()])),
             case_insensitive: self.case_insensitive,
+            ..Default::default()
         })
     }
     fn may_be_new(&self, path: &str) -> bool {
@@ -226,7 +227,7 @@ fn every_rule_has_a_broken_mod() {
     // The rules no broken mod here can reach yet, each with why (`libraries.rs` covers the code rules on libraries).
     let elsewhere: [(u16, &str); 12] = [
         (304, "what a source may stand in for is each content kind's contract (3.2 to 3.10)"),
-        (407, "matched at load (3.11)"),
+        (407, "table_keys.rs"),
         (503, "libraries.rs"),
         (504, "libraries.rs"),
         (505, "libraries.rs"),

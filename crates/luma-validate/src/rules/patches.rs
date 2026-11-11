@@ -2,10 +2,12 @@
 
 use super::{p, seg, t, Ctx};
 use crate::json::{self, Kind, Value};
-use crate::{Arg, ColumnType, Table};
+use crate::{same_column, Arg, ColumnType, Table};
 
 pub const MAX_PATCH: u64 = 64 << 20;
-const KEYS: [&str; 6] = ["patch", "key", "set", "add", "remove", "select"];
+const KEYS: [&str; 7] = ["patch", "key", "set", "add", "remove", "select", "rows"];
+/// The key of a table whose rows are named by place (contract table-keys 3).
+const PLACE: &str = "#";
 const MATCH_KINDS: [&str; 3] = ["equals", "prefix", "glob"];
 /// The separator of key values in a row id (`Table::rows`, `Touches`).
 pub const SEP: char = '\u{1f}';
@@ -25,21 +27,57 @@ impl P<'_, '_, '_> {
     }
 }
 
-/// A cell's value as text for row ids: strings as they are, numbers as written.
+/// A cell's value as text for row ids: strings as they are, numbers as written, a word given as
+/// `{ "bytes": "<hex>" }` as its text when that is UTF-8 and `{bytes:<hex>}` when not (table-keys 5).
 fn cell_text(v: &Value) -> Option<String> {
     match &v.kind {
         Kind::String(s) => Some(s.clone()),
         Kind::Number(_, text) => Some(text.clone()),
         Kind::Bool(b) => Some(if *b { "1".into() } else { "0".into() }),
+        Kind::Object(_) => {
+            let bytes = word_bytes(v)?;
+            Some(match String::from_utf8(bytes) {
+                Ok(text) => text,
+                Err(e) => format!("{{bytes:{}}}", e.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>()),
+            })
+        }
         _ => None,
     }
+}
+
+/// The bytes of `{ "bytes": "<hex>" }`: an even number of hex digits, nothing else in the object.
+fn word_bytes(v: &Value) -> Option<Vec<u8>> {
+    let members = v.members();
+    if members.len() != 1 || members[0].key != "bytes" {
+        return None;
+    }
+    let hex = members[0].value.as_str()?;
+    if hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    (0..hex.len()).step_by(2).map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok()).collect()
+}
+
+/// Whether a value is the byte form (well made or not), to say so rather than call it the wrong kind.
+fn is_byte_form(v: &Value) -> bool {
+    v.is_object() && v.members().iter().any(|m| m.key == "bytes")
 }
 
 fn fits(v: &Value, column: ColumnType) -> bool {
     match column {
         ColumnType::Int { min, max } => v.as_i64().is_some_and(|n| n >= min && n <= max),
         ColumnType::Float => v.as_f64().is_some(),
-        ColumnType::Text => v.as_str().is_some(),
+        ColumnType::Text => v.as_str().is_some() || word_bytes(v).is_some(),
+    }
+}
+
+/// `*` any run of characters, `?` one, as the applier's select does (it compares bytes; a selector is UTF-8).
+fn glob(pattern: &[u8], word: &[u8]) -> bool {
+    match pattern.split_first() {
+        None => word.is_empty(),
+        Some((b'*', rest)) => (0..=word.len()).any(|skip| glob(rest, &word[skip..])),
+        Some((b'?', rest)) => !word.is_empty() && glob(rest, &word[1..]),
+        Some((c, rest)) => word.first() == Some(c) && glob(rest, &word[1..]),
     }
 }
 
@@ -168,7 +206,9 @@ fn one(pc: &mut P, root: &Value, target: &str) {
     if table.is_some() && rows.is_none() {
         pc.ctx.not_checked(402, "Missing.Rows");
     }
-    let column = |name: &str| table.as_ref().and_then(|tb| tb.columns.iter().find(|(c, _)| c == name).map(|(_, ty)| *ty));
+    let column = |name: &str| table.as_ref().and_then(|tb| tb.columns.iter().find(|(c, _)| same_column(c, name)).map(|(_, ty)| *ty));
+    let by_place = key == [PLACE];
+    let repeated = |id: &str| table.as_ref().and_then(|tb| tb.repeated.get(id).copied());
     let row_id = |obj: &Value| -> Option<String> {
         let mut parts = Vec::new();
         for k in &key {
@@ -180,14 +220,17 @@ fn one(pc: &mut P, root: &Value, target: &str) {
 
     let target_shown = target.to_lowercase();
     // Values against the column types (L403), every column named existing.
-    let check_values = |pc: &mut P, values: &Value, ptr: &str| {
-        for m in values.members() {
-            let vp = format!("{ptr}/{}", seg(&m.key));
-            if table.is_none() {
-                continue;
-            }
+    let check_value = |pc: &mut P, m: &json::Member, vp: &str| {
+        if table.is_none() {
+            return;
+        }
+        {
+            let vp = vp.to_string();
             match column(&m.key) {
                 None => pc.at(403, &m.value, &vp, vec![("why", p("Patch.NoSuchColumn")), ("column", t(m.key.clone())), ("target", t(target_shown.clone()))]),
+                Some(_) if is_byte_form(&m.value) && word_bytes(&m.value).is_none() => {
+                    pc.at(403, &m.value, &vp, vec![("why", p("Patch.BytesShape")), ("column", t(m.key.clone()))]);
+                }
                 Some(ty) if !fits(&m.value, ty) => {
                     let found = match &m.value.kind {
                         crate::json::Kind::String(s) => t(format!("\"{s}\"")),
@@ -209,6 +252,35 @@ fn one(pc: &mut P, root: &Value, target: &str) {
             }
         }
     };
+    let check_values = |pc: &mut P, values: &Value, ptr: &str| {
+        for m in values.members() {
+            check_value(pc, m, &format!("{ptr}/{}", seg(&m.key)));
+        }
+    };
+    // A key's values: `#` a place (0 or more), others as their column holds them; without the game, a value that
+    // names no row (an array, null, a malformed "bytes") is still wrong. False when one is wrong (it is named).
+    let check_key = |pc: &mut P, obj: &Value, ptr: &str| -> bool {
+        let mut ok = true;
+        for m in obj.members() {
+            let vp = format!("{ptr}/{}", seg(&m.key));
+            if m.key == PLACE {
+                if !m.value.as_i64().is_some_and(|n| n >= 0) {
+                    pc.at(403, &m.value, &vp, vec![("why", p("Patch.KeyValue")), ("column", t(m.key.clone()))]);
+                    ok = false;
+                }
+            } else if is_byte_form(&m.value) && word_bytes(&m.value).is_none() {
+                pc.at(403, &m.value, &vp, vec![("why", p("Patch.BytesShape")), ("column", t(m.key.clone()))]);
+                ok = false;
+            } else if cell_text(&m.value).is_none() {
+                pc.at(403, &m.value, &vp, vec![("why", p("Patch.KeyValue")), ("column", t(m.key.clone()))]);
+                ok = false;
+            } else if column(&m.key).is_some_and(|ty| !fits(&m.value, ty)) || (table.is_some() && column(&m.key).is_none()) {
+                check_value(pc, m, &vp);
+                ok = false;
+            }
+        }
+        ok
+    };
 
     if let Some(set) = root.get("set") {
         if !set.is_array() {
@@ -229,10 +301,17 @@ fn one(pc: &mut P, root: &Value, target: &str) {
                 pc.bad(w, &format!("{ep}/where"), "Patch.WhereNotKey", key.join(", "));
                 continue;
             }
+            if !check_key(pc, w, &format!("{ep}/where")) {
+                check_values(pc, values, &format!("{ep}/values"));
+                continue;
+            }
             let id = row_id(w);
             if let (Some(rows), Some(id)) = (rows, &id) {
                 if !rows.contains(id) {
-                    pc.at(402, w, &format!("{ep}/where"), vec![("why", p("Patch.RowNotFound")), ("row", t(id.replace(SEP, ", ")))]);
+                    let why = if by_place { "Patch.PlaceNotFound" } else { "Patch.RowNotFound" };
+                    pc.at(402, w, &format!("{ep}/where"), vec![("why", p(why)), ("row", t(id.replace(SEP, ", "))), ("count", t(rows.len().to_string()))]);
+                } else if let Some(n) = repeated(id) {
+                    pc.at(402, w, &format!("{ep}/where"), vec![("why", p("Patch.KeyRepeated")), ("row", t(id.replace(SEP, ", "))), ("count", t(n.to_string()))]);
                 }
             }
             check_values(pc, values, &format!("{ep}/values"));
@@ -253,10 +332,21 @@ fn one(pc: &mut P, root: &Value, target: &str) {
                 pc.bad(row, &rp, "Patch.RowShape", "");
                 continue;
             }
-            let Some(id) = row_id(row) else {
+            if by_place {
+                // A row added to a table named by place goes at the end (table-keys 3): it has no key to give.
+                check_values(pc, row, &rp);
+                pc.ctx.facts.touches.adds.push(format!("{target_shown}{SEP}+{i}"));
+                continue;
+            }
+            if key.iter().any(|k| row.get(k).is_none()) {
                 pc.bad(row, &rp, "Patch.AddNoKey", key.join(", "));
                 continue;
-            };
+            }
+            let key_only = Value { pos: row.pos, kind: json::Kind::Object(row.members().iter().filter(|m| key.contains(&m.key)).cloned().collect()) };
+            if !check_key(pc, &key_only, &rp) {
+                continue;
+            }
+            let Some(id) = row_id(row) else { continue };
             if rows.is_some_and(|rows| rows.contains(&id)) {
                 pc.at(402, row, &rp, vec![("why", p("Patch.RowExists")), ("row", t(id.replace(SEP, ", ")))]);
             }
@@ -270,17 +360,42 @@ fn one(pc: &mut P, root: &Value, target: &str) {
         }
         for (i, row) in remove.items().iter().enumerate() {
             let rp = format!("/remove/{i}");
+            if by_place {
+                pc.at(402, row, &rp, vec![("why", p("Patch.RemoveByPlace")), ("row", t("")), ("count", t(""))]);
+                continue;
+            }
             let names: Vec<&str> = row.members().iter().map(|m| m.key.as_str()).collect();
             if names != key.iter().map(String::as_str).collect::<Vec<_>>() {
                 pc.bad(row, &rp, "Patch.WhereNotKey", key.join(", "));
                 continue;
             }
+            if !check_key(pc, row, &rp) {
+                continue;
+            }
             let Some(id) = row_id(row) else { continue };
             if rows.is_some_and(|rows| !rows.contains(&id)) {
                 pc.at(402, row, &rp, vec![("why", p("Patch.RowNotFound")), ("row", t(id.replace(SEP, ", ")))]);
+            } else if let Some(n) = repeated(&id) {
+                pc.at(402, row, &rp, vec![("why", p("Patch.KeyRepeated")), ("row", t(id.replace(SEP, ", "))), ("count", t(n.to_string()))]);
             }
             pc.ctx.facts.touches.removes.push(format!("{target_shown}{SEP}{id}"));
         }
+    }
+    if let Some(whole) = root.get("rows") {
+        if !whole.is_array() {
+            pc.bad(whole, "/rows", "Patch.NotArray", "rows");
+        } else if table.is_some() && !by_place {
+            pc.at(402, whole, "/rows", vec![("why", p("Patch.RowsNotByPlace")), ("row", t("")), ("count", t(""))]);
+        }
+        for (i, row) in whole.items().iter().enumerate() {
+            let rp = format!("/rows/{i}");
+            if !row.is_object() {
+                pc.bad(row, &rp, "Patch.RowShape", "");
+                continue;
+            }
+            check_values(pc, row, &rp);
+        }
+        pc.ctx.facts.touches.adds.push(format!("{target_shown}{SEP}*"));
     }
     if let Some(select) = root.get("select") {
         if !select.is_array() {
@@ -311,9 +426,44 @@ fn one(pc: &mut P, root: &Value, target: &str) {
             }
             check_values(pc, values, &format!("{ep}/values"));
         }
-        // How many rows a selector matches is known at load (3.11): L407 is the content system's.
-        if !select.items().is_empty() {
-            pc.ctx.not_checked(407, "Missing.Load");
+        // A selector that matches none of the game's rows (nor a row this patch adds) is L407 now; at load the applier
+        // counts again over every mod's changes (3.11, its Selected fact). Without the game's values it waits for the
+        // load.
+        let cells = table.as_ref().and_then(|tb| tb.cells.as_ref().map(|c| (tb, c)));
+        for (i, entry) in select.items().iter().enumerate() {
+            let Some(m) = entry.get("match") else { continue };
+            let Some((tb, game_rows)) = cells else {
+                pc.ctx.not_checked(407, "Missing.Load");
+                break;
+            };
+            let mut tests = Vec::new();
+            for c in m.members() {
+                let one = c.value.members();
+                let (Some(at), [only]) = (tb.columns.iter().position(|(name, _)| same_column(name, &c.key)), one) else { continue };
+                let Some(value) = cell_text(&only.value) else { continue };
+                tests.push((at, only.key.clone(), value));
+            }
+            if tests.len() != m.members().len() {
+                continue; // L406 named it
+            }
+            let hit = |row: &[String]| {
+                tests.iter().all(|(at, kind, value)| {
+                    let cell = row.get(*at).map(String::as_str).unwrap_or("");
+                    match kind.as_str() {
+                        "equals" => cell == value || cell.parse::<f64>().ok().zip(value.parse::<f64>().ok()).is_some_and(|(a, b)| (a - b).abs() < 1e-4),
+                        "prefix" => cell.starts_with(value.as_str()),
+                        _ => glob(value.as_bytes(), cell.as_bytes()),
+                    }
+                })
+            };
+            let added = root.get("add").map(|a| a.items().to_vec()).unwrap_or_default();
+            let added_rows: Vec<Vec<String>> = added
+                .iter()
+                .map(|row| tb.columns.iter().map(|(name, _)| row.members().iter().find(|mm| same_column(name, &mm.key)).and_then(|mm| cell_text(&mm.value)).unwrap_or_default()).collect())
+                .collect();
+            if !game_rows.iter().chain(added_rows.iter()).any(|r| hit(r)) {
+                pc.at(407, m, &format!("/select/{i}/match"), vec![("target", t(target_shown.clone()))]);
+            }
         }
     }
 }

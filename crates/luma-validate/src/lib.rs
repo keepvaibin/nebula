@@ -120,16 +120,40 @@ pub enum Source<'a> {
     Folder(&'a Path),
 }
 
-/// A game path's rows, as the content system defines them (luma-format 5.1; F-4).
+/// A game path's rows, as the content system defines them (luma-format 5.1; contract table-keys).
+#[derive(Default)]
 pub struct Table {
-    /// The columns that make a row's key, in order.
+    /// The columns that make a row's key, in order; `["#"]` for a table whose rows are named by place (table-keys 3).
     pub key: Vec<String>,
-    /// Every column and its type.
+    /// Every column and its type. A column whose name is not known is `0x` and the 8 hex digits of its hash (the
+    /// game's x31 of the name): a patch's name for it then matches by hash.
     pub columns: Vec<(String, ColumnType)>,
-    /// The key values of each row the game has, joined by U+001F, when known.
+    /// The key values of each row the game has, joined by U+001F, when known; for `#`, "0" to the last row's place.
     pub rows: Option<std::collections::HashSet<String>>,
+    /// Keys the game itself gives more than one row (table-keys 4), with how many.
+    pub repeated: std::collections::HashMap<String, usize>,
+    /// Each row's values as text (the same text as `rows`' parts), in `columns`' order, when known: for L407.
+    pub cells: Option<Vec<Vec<String>>>,
     /// Whether a key matches a row whatever its case (the table's own rule: RtEffects, RtMaterials, RtWater, RtGlow).
     pub case_insensitive: bool,
+}
+
+/// A column name's hash, as the game's tables keep it (x31 of the bytes, each byte signed as MR::getHashCode takes it).
+pub fn column_hash(name: &str) -> u32 {
+    name.bytes().fold(0u32, |hash, byte| hash.wrapping_mul(31).wrapping_add(byte as i8 as u32))
+}
+
+/// Whether a patch's column name names a table's column: the same name, or the same hash (a name the store does not
+/// know is `0x` and its hash; a patch may also write a column as its hash).
+pub fn same_column(table_name: &str, patch_name: &str) -> bool {
+    if table_name == patch_name {
+        return true;
+    }
+    let hash_of = |n: &str| match n.strip_prefix("0x").filter(|h| h.len() == 8) {
+        Some(hex) => u32::from_str_radix(hex, 16).ok(),
+        None => Some(column_hash(n)),
+    };
+    hash_of(table_name).is_some() && hash_of(table_name) == hash_of(patch_name)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

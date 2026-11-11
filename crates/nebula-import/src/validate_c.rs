@@ -175,7 +175,9 @@ impl Store for CStore {
                 })
                 .collect();
             let rows = (!t.rows.is_null()).then(|| list(t.rows, t.row_count).iter().filter_map(|&r| text(r)).collect::<HashSet<_>>());
-            Some(Table { key, columns, rows, case_insensitive: t.case_insensitive != 0 })
+            let mut table = Table { key, columns, rows, case_insensitive: t.case_insensitive != 0, ..Default::default() };
+            crate::store_view::widen_view(&path.to_string_lossy(), &mut table);
+            Some(table)
         }
     }
     fn may_be_new(&self, path: &str) -> bool {
