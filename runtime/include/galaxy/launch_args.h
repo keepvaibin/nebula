@@ -32,6 +32,7 @@ enum Diagnostic : unsigned {
     kDiagnoseTelemetry = 1u << 17u,      // telemetry: frame counts in shared memory each second (tools/telemetry)
     kDiagnoseRtLight = 1u << 18u,        // rt-light: the light pass's shares as the scene's colours (sun red, ground green, lamp blue)
     kDiagnoseRtAdded = 1u << 19u,        // rt-added: the scene under its emitters alone (no sun, no sky): where each light source lights
+    kDiagnoseRtMotion = 1u << 22u,       // rt-motion: where each pixel's point was the frame before, as colours (across red, down green, unknown blue)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -62,6 +63,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"telemetry", kDiagnoseTelemetry},
     {"rt-light", kDiagnoseRtLight},
     {"rt-added", kDiagnoseRtAdded},
+    {"rt-motion", kDiagnoseRtMotion},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

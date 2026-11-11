@@ -25,6 +25,7 @@ using core::kRowsPerMatrix;
 namespace {
 
 #include "render/rt/rt_effect_lights.inc"
+#include "render/rt/rt_blue_noise.inc"
 
 // A particle effect's luminance (candela a square metre of what it draws), by the name its draws carry: -1 for a
 // name that is not one of the game's own effects (a mod's, another archive's).
@@ -93,6 +94,7 @@ void RenderCore::rt_stop() noexcept {
     rt_view_image_ = rt::kNoImage;  // the back end's stop frees its images and buffers
     rt_view_retired_.clear();
     rt_images_ = rt_no_images();
+    rt_noise_filled_ = false;
     rt_light_frame_ = RtFrame{};
     rt_light_history_ = false;
     rt_light_retired_.clear();
@@ -773,7 +775,7 @@ namespace {
 
 // The traced light's images (render_core.h RtImage), in its order: name, format, size, and the passes that need one
 // (RenderCore::kRtPass*): an image is made only while one of them runs.
-enum : std::uint8_t { kRtFull, kRtHalf, kRtVolume };
+enum : std::uint8_t { kRtFull, kRtHalf, kRtVolume, kRtNoise, kRtTiles };
 struct RtImageKind {
     const char* name;
     rt::ImageFormat format;
@@ -803,6 +805,14 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Reservoirs A", kHalf4, kRtFull, kForLight},
     {"Nebula RT Reservoirs B", kHalf4, kRtFull, kForLight},
     {"Nebula RT Mirror", kHalf4, kRtFull, kForLight},
+    {"Nebula RT Blue Noise", rt::ImageFormat::Rgba8, kRtNoise, kForLight},
+    {"Nebula RT Sun Tiles", rt::ImageFormat::R8, kRtTiles, kForLight},
+    {"Nebula RT Sun Average A", kHalf4, kRtFull, kForLight},
+    {"Nebula RT Sun Average B", kHalf4, kRtFull, kForLight},
+    {"Nebula RT Sun Distance A", rt::ImageFormat::R16f, kRtFull, kForLight},
+    {"Nebula RT Sun Distance B", rt::ImageFormat::R16f, kRtFull, kForLight},
+    {"Nebula RT Sun Blur", kHalf4, kRtFull, kForLight},
+    {"Nebula RT Sun", kHalf4, kRtFull, kForLight},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average B", kHalf4, kRtHalf, kForIndirect},
@@ -871,6 +881,11 @@ bool RenderCore::rt_images(unsigned width, unsigned height, std::uint32_t wanted
         if (needed && image == rt::kNoImage) {
             if (kind.size == kRtVolume) {
                 image = rt_backend_.make_image(kind.format, kRtVolumeCells[0], kRtVolumeCells[1], kind.name, kRtVolumeCells[2]);
+            } else if (kind.size == kRtNoise) {
+                image = rt_backend_.make_image(kind.format, kRtBlueNoiseSize, kRtBlueNoiseSize, kind.name);
+                rt_noise_filled_ = false;
+            } else if (kind.size == kRtTiles) {
+                image = rt_backend_.make_image(kind.format, (width + 15u) / 16u, (height + 15u) / 16u, kind.name);
             } else if (kind.size == kRtHalf) {
                 image = rt_backend_.make_image(kind.format, (width + 1u) / 2u, (height + 1u) / 2u, kind.name);
             } else {
@@ -887,23 +902,87 @@ bool RenderCore::rt_images(unsigned width, unsigned height, std::uint32_t wanted
     return whole;
 }
 
-// A pass's own constants (b1): its layer, a filter's step and whether it is the last.
-rt::BufferView RenderCore::rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last) {
+// A pass's own constants (b1): its layer, a filter's step and whether it is the last, and a word of its own.
+rt::BufferView RenderCore::rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last, std::uint32_t free) {
     RtPassConstants constants{};
     constants.pass[0] = layer;
     constants.pass[1] = step;
     constants.pass[2] = last;
+    constants.pass[3] = free;
     const UploadRing::Allocation at = renderer_.constant_ring().allocate(256u, 256u);
     std::memcpy(at.cpu, &constants, sizeof(constants));
     return {at.gpu, 256u};
 }
 
 // What every pass of the frame binds: the scene, the frame's buffers and mesh memory, the depth and the item map, the
-// frame's constants, the layer's.
+// frame's constants, the layer's, and the blue noise (t20: rt_sample.hlsli).
 rt::PassBinds RenderCore::rt_pass_binds() const {
     rt::PassBinds binds = rt_light_frame_.binds;
     binds.pass_constants = rt_light_frame_.pass;
+    binds.reads[rt::kPassReads - 1u] = rt_image(RtImage::BlueNoise);
     return binds;
+}
+
+// The blue noise into its image, once each time the image is made: the bytes of rt_blue_noise.inc through the upload
+// ring (t1, at byte g_pass.w) into the Rgba8 image (rt_noise_fill.hlsl).
+void RenderCore::rt_noise_fill() {
+    const std::uint32_t noise = rt_image(RtImage::BlueNoise);
+    if (rt_noise_filled_ || noise == rt::kNoImage) {
+        return;
+    }
+    static_assert(sizeof(kRtBlueNoise) == std::size_t{kRtBlueNoiseSize} * kRtBlueNoiseSize * 4u);
+    const UploadRing::Allocation bytes = renderer_.matrix_ring().allocate(sizeof(kRtBlueNoise), 256u);
+    std::memcpy(bytes.cpu, kRtBlueNoise, sizeof(kRtBlueNoise));
+    std::uint32_t offset = 0u;
+    rt::PassBinds binds;
+    binds.buffers[0] = rt_backend_.view_of(bytes.gpu, sizeof(kRtBlueNoise), offset);
+    binds.constants = rt_light_frame_.binds.constants;
+    binds.pass_constants = rt_pass_constants(0u, 0u, 0u, offset);
+    binds.writes[0] = noise;
+    rt_backend_.dispatch(RtShader::NoiseFill, binds, kRtBlueNoiseSize / 8u, kRtBlueNoiseSize / 8u);
+    rt_noise_filled_ = true;
+}
+
+// The sun's V filtered (plan 7.3), the opaque layer only: the tiles that hold a penumbra (rt_sun_tiles), the average
+// over time with the occluder's distance (rt_sun_time), then two blurs as wide as the penumbra is (rt_sun_blur). The
+// light pass reads the last.
+void RenderCore::rt_sun_filter() {
+    const RtFrame& frame = rt_light_frame_;
+    const std::uint32_t guide = rt_now(RtImage::GuideA), tiles = rt_image(RtImage::SunTiles), raw = rt_image(RtImage::SunRaw);
+    const std::uint32_t average = rt_now(RtImage::SunAverageA), distance = rt_now(RtImage::SunDistanceA);
+    rt::PassBinds tile;
+    tile.constants = frame.binds.constants;
+    tile.pass_constants = frame.pass;
+    tile.reads[0] = raw;
+    tile.reads[2] = guide;
+    tile.writes[0] = tiles;
+    rt_backend_.dispatch(RtShader::SunTiles, tile, (frame.width + 15u) / 16u, (frame.height + 15u) / 16u);
+    rt::PassBinds over_time;
+    over_time.constants = frame.binds.constants;
+    over_time.pass_constants = frame.pass;
+    over_time.reads[0] = raw;
+    over_time.reads[1] = rt_before(RtImage::SunAverageA);
+    over_time.reads[2] = guide;
+    over_time.reads[3] = rt_before(RtImage::GuideA);
+    over_time.reads[4] = rt_image(RtImage::Motion);
+    over_time.reads[5] = tiles;
+    over_time.reads[6] = rt_before(RtImage::SunDistanceA);
+    over_time.writes[0] = average;
+    over_time.writes[1] = distance;
+    rt_backend_.dispatch(RtShader::SunTime, over_time, frame.across, frame.down);
+    for (std::uint32_t pass = 0u; pass < 2u; ++pass) {
+        rt::PassBinds blur;
+        blur.constants = frame.binds.constants;
+        blur.pass_constants = rt_pass_constants(0u, pass, pass == 1u ? 1u : 0u);
+        blur.reads[0] = pass == 0u ? average : rt_image(RtImage::SunBlur);
+        blur.reads[1] = distance;
+        blur.reads[2] = guide;
+        blur.reads[3] = rt_image(RtImage::Normal);
+        blur.reads[5] = tiles;
+        blur.reads[rt::kPassReads - 1u] = rt_image(RtImage::BlueNoise);
+        blur.writes[0] = rt_image(pass == 0u ? RtImage::SunBlur : RtImage::SunOut);
+        rt_backend_.dispatch(RtShader::SunBlur, blur, frame.across, frame.down);
+    }
 }
 
 // The guide the layer's passes write and read: this frame's; the second layer's goes to the frame before's, done
@@ -955,7 +1034,8 @@ void RenderCore::rt_pass_light() {
     binds.reads[0] = rt_layer_guide();
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
-    binds.reads[3] = rt_image(RtImage::SunRaw);
+    binds.reads[3] = rt_image(rt_light_frame_.layer == 0u ? RtImage::SunOut : RtImage::SunRaw);  // the second layer has no sun filter
+    binds.reads[4] = rt_image(RtImage::Material);
     binds.writes[0] = rt_image(RtImage::Light);
     binds.writes[1] = rt_image(RtImage::Mirror);
     rt_backend_.dispatch(RtShader::Light, binds, rt_light_frame_.across, rt_light_frame_.down);
@@ -991,6 +1071,7 @@ void RenderCore::rt_filters() {
         over_space.pass_constants = steps[step];
         over_space.reads[0] = step == 0u ? average : step == 1u ? light : light_step;
         over_space.reads[2] = guide;
+        over_space.reads[3] = step == 2u ? motion : rt::kNoImage;  // the last step's, for --diagnostics rt-motion
         over_space.writes[0] = step == 1u ? light_step : light;
         rt_backend_.dispatch(RtShader::LightSpace, over_space, frame.across, frame.down);
     }
@@ -1376,6 +1457,12 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         constants.more[2] = (constants.more[2] & ~32u) | 128u;
         rt_tint_[0] = rt_tint_[1] = rt_tint_[2] = 0.0f;
     }
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion)) {
+        // Each point's motion in place of the light (shown the way rt-light shows it), nothing added over it.
+        constants.more[2] |= 512u;
+        constants.glow[3] = 0u;
+        rt_tint_[0] = rt_tint_[1] = rt_tint_[2] = 0.0f;
+    }
     // A ray that leaves the scene and meets no sky (a stage without a dome): the stage's ambient colour.
     for (unsigned c = 0; c < 3u; ++c) {
         constants.sky[c] = list.stage_light_known != 0u ? list.stage_ambient[c] : 0.25f;
@@ -1430,8 +1517,10 @@ void RenderCore::rt_light() {
                             affine_inverse(view_now, world_from_now);
             rt_tables(world_from_now);
             frame.pass = rt_pass_constants(0u, 0u, 0u);
+            rt_noise_fill();
             rt_pass_surface();
             rt_pass_sun();
+            rt_sun_filter();
             rt_pass_lights();
             rt_pass_indirect();
             rt_pass_light();
@@ -1455,7 +1544,7 @@ void RenderCore::rt_light() {
                 rt_added_slot_ = renderer_.rt_publish_light(added, texture_store_, 1u);
                 rt_mirror_slot_ = renderer_.rt_publish_light(mirror, texture_store_, 2u);
                 rt_light_on_ = true;
-                view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight) ? 16u : 0u);
+                view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u);
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {

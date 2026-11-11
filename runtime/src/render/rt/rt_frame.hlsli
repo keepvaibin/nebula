@@ -13,7 +13,8 @@ cbuffer FrameConstants : register(b0) {
                         // turn); z: bit 0 the sun is traced, bit 3 the sky's light near the surface, bit 5 mirrors (what
                         // glass, metal and gloss show of the scene), bit 6 the actors' point lights are emitters (the
                         // light set's own lamp is put out), bit 7 the emitters alone (--diagnostics rt-added: no sun, no
-                        // sky). Bits 1, 2 and 4 are retired (the set's lamp, the drops, the second layer: g_pass.x).
+                        // sky), bit 9 the point's motion shown (--diagnostics rt-motion). Bits 1, 2 and 4 are retired
+                        // (the set's lamp, the drops, the second layer: g_pass.x).
     uint4 g_grid;       // tiles across, tiles down, pixels a tile
     float4 g_sun;       // xyz: the direction to the shadow sun; w: the tangent of its half angle
     float4 g_stage;     // x: the stage's ambient, y: its key light, as brightness: a painted surface in the key's
@@ -50,6 +51,9 @@ static const uint kItemBytes = 64u;
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
 static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u;
+
+// What V raw's distance says where nothing stood on the sun's ray: the largest half float.
+static const float kNoOccluder = 65504.0f;
 
 bool rt_second_layer() {
     return g_pass.x != 0u;

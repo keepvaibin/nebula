@@ -413,7 +413,11 @@ private:
     // lights; the sky and bounce light; the shares the programs read with what the surfaces mirror; the reflections;
     // the light volume; then the filters, and the report (--diagnostics rt-inputs).
     void rt_tables(const Affine34& world_from_now);
-    [[nodiscard]] rt::BufferView rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last);
+    [[nodiscard]] rt::BufferView rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last, std::uint32_t free = 0u);
+    // The blue noise into its image once it is made (rt_sample.hlsli), and the sun's filter (plan 7.3).
+    void rt_noise_fill();
+    void rt_sun_filter();
+    bool rt_noise_filled_ = false;
     [[nodiscard]] rt::PassBinds rt_pass_binds() const;
     [[nodiscard]] std::uint32_t rt_layer_guide() const noexcept;
     void rt_pass_surface();
@@ -441,6 +445,7 @@ private:
     enum class RtImage : std::uint8_t {
         GuideA, GuideB, Normal, Motion, Material, Base, SunRaw, Light, LightStep, LightAverageA, LightAverageB, Lights,
         LightsAverageA, LightsAverageB, LightsMomentsA, LightsMomentsB, Added, ReservoirsA, ReservoirsB, Mirror,
+        BlueNoise, SunTiles, SunAverageA, SunAverageB, SunDistanceA, SunDistanceB, SunBlur, SunOut,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
         VolumeB, Count

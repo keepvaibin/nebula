@@ -6,8 +6,9 @@
 // is removed by holding the history inside what this frame's rays saw around the pixel: their mean, give or take
 // their spread, over five by five pixels of the same object (three by three of one ray each is all lit or all dark
 // too often inside a penumbra, and the history then jumps: speckles).
-// Channels (rt_light.hlsl): r the sun's share, b the lamp's, a the ground's; g here is how many frames the average
-// holds, over kMostFrames.
+// Channels (rt_light.hlsl): r V (filtered already by the sun's own filter), b how the surface faces the sun, a the
+// sky's share: a alone is averaged here, r and b go through as this frame has them; g here is how many frames the
+// average holds, over kMostFrames.
 // Compiled a second time as rt_lights_time.hlsl (RT_LIGHTS) for the local lights' share: red, green, blue in r, b, a,
 // light of any size. One ray to one light chosen of many is noisier than a coin toss and by no fixed amount, so that
 // kind also keeps what its noise is (Schied et al. 2017, "Spatiotemporal Variance-Guided Filtering"): the first and
@@ -119,7 +120,11 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 history = clamp(sum / weight, low, high);
     const float count = min(frames / weight * kMostFrames + 1.0f, kMostFrames);
     const float3 now = lerp(history, raw, max(1.0f / count, 0.06f));
+#ifdef RT_LIGHTS
     g_out[id.xy] = float4(now.x, count / kMostFrames, now.y, now.z);
+#else
+    g_out[id.xy] = float4(raw.x, count / kMostFrames, raw.y, now.z);
+#endif
 #ifdef RT_LIGHTS
     const float2 both = lerp(moments / weight, float2(bright, bright * bright), max(1.0f / count, 0.06f));
     const float over_time = max(both.y - both.x * both.x, 0.0f);

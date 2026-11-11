@@ -46,7 +46,8 @@ int main() {
     for (const DiagnosticName& entry : kDiagnosticNames) {
         every |= entry.what;
     }
-    ok &= expect(every == (kDiagnoseRtAdded << 1u) - 1u, "every diagnostic has a name");
+    // Bits 20 and 21 (rt-reference, rt-signals) come with the reference's own commit.
+    ok &= expect(every == (((kDiagnoseRtAdded << 1u) - 1u) | kDiagnoseRtMotion), "every diagnostic has a name");
     std::cout << (ok ? "launch args tests passed\n" : "launch args tests failed\n");
     return ok ? 0 : 1;
 }
