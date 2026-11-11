@@ -1,5 +1,5 @@
 # Compiles every part of Nebula and runs its tests on each pull request and each push to main (docs/BUILDING.md), and
-# keeps what it built as test builds for Windows, Linux and Android: downloads for 14 days.
+# keeps what it built as test builds for Windows, Linux, Android and macOS: downloads for 14 days.
 # Releases are made by hand (installer/build-native-setup.ps1, platform/android/build_apk.ps1).
 name: Build
 
@@ -8,16 +8,9 @@ on:
   # twice at once.
   push:
     branches: [main]
-    # Only changes that can affect the build: not documentation or the other workflows.
-    paths:
-      - "**"
-      - "!**.md"
-      - "!docs/**"
-      - "!LICENSE"
-      - "!.github/**"
-      - ".github/workflows/build.yml"
-  # Every pull request, so that the Build result check always reports and can be required: a pull request that changes
-  # nothing the build uses (the push paths above) skips the jobs, which counts as passing.
+  # Every pull request, so that the Build result check always reports and can be required. Which jobs run is decided by
+  # the Changes job below, for pushes to main and pull requests alike: a change that touches nothing they use skips
+  # them, which counts as passing.
   pull_request:
   workflow_dispatch:
 
@@ -39,36 +32,68 @@ env:
   SPIRV_HEADERS_COMMIT: 496543121ce6419f23d6fa5d7194ba66c36212d2
 
 jobs:
+  # Sorts the changed files into what they affect:
+  #   game:      the host, the game module, the disc import tool and the Windows, Linux, Android and macOS builds;
+  #   installer: the launcher, Nebula Settings and Setup (installer/), and their tests.
+  # Documentation and the other workflows affect neither. A file both use (the icon the host and
+  # the launcher are both built with, the save format version the launcher reads) and this workflow itself run both.
+  # Run workflow builds everything.
   changes:
     name: Changes
     runs-on: ubuntu-24.04
     outputs:
-      build: ${{ steps.filter.outputs.build }}
+      game: ${{ steps.filter.outputs.game }}
+      installer: ${{ steps.filter.outputs.installer }}
     steps:
       - uses: actions/Checkout@v7
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         with:
-          # The pull request's merge commit and the base branch it was merged onto (its first parent).
-          fetch-depth: 2
+          # A pull request: its merge commit and the base branch it was merged onto (the first parent).
+          # A push: the pushed commit (the commit before it is fetched below).
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
       - id: filter
-        # The same files as the push paths: anything but documentation and the other workflows.
+        env:
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
-            echo build=true >> "$GITHUB_OUTPUT"
+          all() {
+            echo "Building everything: $1"
+            { echo game=true; echo installer=true; } >> "$GITHUB_OUTPUT"
             exit 0
-          fi
-          files=$(git diff --name-only HEAD^1 HEAD)
-          if printf '%s\n' "$files" | grep -qxF .github/workflows/build.yml ||
-             printf '%s\n' "$files" | grep -vE '\.md$|^docs/|^LICENSE$|^\.github/' | grep -q .; then
-            echo build=true >> "$GITHUB_OUTPUT"
-          else
-            echo build=false >> "$GITHUB_OUTPUT"
-          fi
+          }
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              files=$(git diff --name-only HEAD^1 HEAD) ;;
+            push)
+              # A new branch, or a commit no longer on GitHub (a force push): nothing to compare with.
+              if [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ] ||
+                 ! git fetch -q --depth=1 origin "$BEFORE"; then
+                all "no earlier commit to compare with"
+              fi
+              files=$(git diff --name-only "$BEFORE" HEAD) ;;
+            *)
+              all "$GITHUB_EVENT_NAME" ;;
+          esac
+          game=false
+          installer=false
+          while IFS= read -r file; do
+            case "$file" in
+              "") ;;
+              .github/workflows/build.yml) game=true; installer=true ;;
+              *.md | docs/* | LICENSE | .github/*) ;;
+              installer/assets/* | runtime/include/galaxy/store_version.inc) game=true; installer=true ;;
+              installer/*) installer=true ;;
+              *) game=true ;;
+            esac
+          done <<< "$files"
+          echo "$(printf '%s\n' "$files" | grep -c .) changed files, the first 100:"
+          printf '%s\n' "$files" | head -n 100 | sed 's/^/  /'
+          echo "Game: $game. Installer: $installer."
+          { echo "game=$game"; echo "installer=$installer"; } >> "$GITHUB_OUTPUT"
 
   import:
     name: Disc import tool (Rust)
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.game == 'true'
     runs-on: windows-2025
     env:
       # The C runtime linked in, as Setup ships it: it runs on PCs without the Visual C++ runtime.
@@ -91,7 +116,7 @@ jobs:
   host:
     name: Host (${{ matrix.renderer }})
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.game == 'true'
     # Visual Studio 2022's MSVC: with 2026's (MSVC 19.51, windows-2025) the frame interpolation and interp GPU
     # tests fail every palette check, which no other compiler reproduces.
     runs-on: windows-2022
@@ -177,7 +202,7 @@ jobs:
   game:
     name: Game module
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.game == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/Checkout@v7
@@ -222,7 +247,7 @@ jobs:
     name: Linux
     # Needs the game module job: if the game module doesn't build, the Linux binary is useless.
     needs: [changes, game]
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.game == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/Checkout@v7
@@ -287,7 +312,7 @@ jobs:
     # The Vulkan host build's shader tools compile the SPIR-V the APK carries.
     # Also needs the game module: if it doesn't build, the APK is useless.
     needs: [changes, host, game]
-    if: needs.changes.outputs.build == 'true'
+    if: needs.changes.outputs.game == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/Checkout@v7
@@ -338,12 +363,106 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-  # The one check to require before merging: it fails when any job above failed or was cancelled, and passes when they
-  # passed or were skipped.
+  macos:
+    name: macOS
+    # Apple silicon only (the runner's own processor), as platform/apple/build_macos.sh builds it (docs/APPLE.md):
+    # the Metal renderer, Apple's host and the game module, packed as Nebula.app. Not in Build result's needs: the
+    # Mac build is new to CI, so it doesn't block a merge.
+    # Also needs the game module job: if it doesn't build, the app is useless.
+    needs: [changes, game]
+    if: needs.changes.outputs.game == 'true'
+    runs-on: macos-15
+    env:
+      # docs/APPLE.md, "Toolchain": LLVM 19 (LLVM's own macOS package), and libc++ built from the same release.
+      LLVM_VERSION: 19.1.7
+      MOLTENVK_TAG: v1.4.2
+    steps:
+      - uses: actions/Checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Ninja
+        run: brew install ninja
+      # LLVM and the libc++ build_libcxx.sh makes from its sources: the slow part, kept until either changes.
+      - name: Cache the toolchain
+        id: toolchain
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/apple/toolchain
+          key: macos-toolchain-arm64-${{ env.LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
+      - name: Toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          tools="$RUNNER_TEMP/apple"
+          release="https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION"
+          mkdir -p "$tools/toolchain/llvm" "$RUNNER_TEMP/llvm-src"
+          curl -fsSL "$release/LLVM-$LLVM_VERSION-macOS-ARM64.tar.xz" | tar -xJ --strip-components=1 -C "$tools/toolchain/llvm"
+          curl -fsSL "$release/llvm-project-$LLVM_VERSION.src.tar.xz" | tar -xJ --strip-components=1 -C "$RUNNER_TEMP/llvm-src"
+          "$tools/toolchain/llvm/bin/clang" --version
+          platform/apple/build_libcxx.sh "$RUNNER_TEMP/llvm-src" "$tools/toolchain/llvm" "$tools/toolchain/libcxx" macos arm64
+          rm -rf "$tools/toolchain/libcxx/build-macos-arm64"
+      - name: Dependencies
+        # What the Linux job checks out, and MoltenVK and SPIRV-Cross (platform/apple/CMakeLists.txt).
+        run: |
+          mkdir -p "$RUNNER_TEMP/apple/deps" && cd "$RUNNER_TEMP/apple/deps"
+          clone() { git -c advice.detachedHead=false clone -q --depth 1 --branch "$2" "https://github.com/$1" "$3"; }
+          pin() { mkdir -p "$3" && git -C "$3" init -q && git -C "$3" fetch -q --depth 1 "https://github.com/$1" "$2" &&
+                  git -C "$3" -c advice.detachedHead=false checkout -q FETCH_HEAD; }
+          clone libsdl-org/SDL "$SDL_TAG" SDL3-3.4.18
+          clone KhronosGroup/Vulkan-Headers "$VULKAN_SDK_TAG" Vulkan-Headers-vulkan-sdk-1.4.350.1
+          clone zeux/volk "$VULKAN_SDK_TAG" volk-vulkan-sdk-1.4.350.1
+          clone GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator "$VMA_TAG" VulkanMemoryAllocator-v3.4.0
+          clone KhronosGroup/glslang "$GLSLANG_TAG" glslang-src
+          pin KhronosGroup/SPIRV-Tools "$SPIRV_TOOLS_COMMIT" glslang-src/External/spirv-tools
+          pin KhronosGroup/SPIRV-Headers "$SPIRV_HEADERS_COMMIT" glslang-src/External/spirv-tools/external/spirv-headers
+          clone KhronosGroup/SPIRV-Cross "$VULKAN_SDK_TAG" SPIRV-Cross-vulkan-sdk-1.4.350.1
+          mkdir -p MoltenVK
+          curl -fsSL "https://github.com/KhronosGroup/MoltenVK/releases/download/$MOLTENVK_TAG/MoltenVK-all.tar" | tar -x -C MoltenVK
+          if [ ! -f MoltenVK/MoltenVK/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib ]; then
+            echo "::error::libMoltenVK.dylib is not where platform/apple/CMakeLists.txt looks for it:"
+            find MoltenVK -name libMoltenVK.dylib
+            exit 1
+          fi
+      - name: Build
+        run: platform/apple/build_macos.sh -t "$RUNNER_TEMP/apple" -w "$RUNNER_TEMP/apple-build" -a arm64
+      - name: Stage
+        run: |
+          mkdir -p dist
+          cp "$RUNNER_TEMP/apple-build/Nebula-macOS.zip" dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nebula-macos-arm64
+          path: dist
+          retention-days: 14
+          if-no-files-found: error
+
+  installer:
+    name: Installer tests
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: windows-2025
+    # Windows PowerShell, as the scripts are run by hand: they compile with the in-box .NET Framework csc.exe and load
+    # its System.Drawing.
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/Checkout@v7
+      # The launcher's first start, settings form, launch arguments and folder moves, Setup's cases, and nebula.ico in
+      # every executable: against a stub game, with its own %LOCALAPPDATA%.
+      - name: Launcher and Setup
+        run: .\installer\tests\run-launcher-tests.ps1
+      - name: Update channels
+        run: .\installer\tests\run-beta-updater-tests.ps1
+      # The update path end to end on a local release server, with a signing key made for the run.
+      - name: Update flow
+        run: .\installer\tests\run-update-flow-tests.ps1
+
+  # The one check to require before merging: it fails when any job above but macOS failed or was cancelled, and passes
+  # when they passed or were skipped.
   result:
     name: Build result
     if: always()
-    needs: [changes, import, host, game, windows, linux, android]
+    needs: [changes, import, host, game, windows, linux, android, installer]
     runs-on: ubuntu-24.04
     steps:
       - name: Check
