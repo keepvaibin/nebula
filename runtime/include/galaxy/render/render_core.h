@@ -413,6 +413,7 @@ private:
     std::uint8_t rt_sun_source_ = 0u;   // 0 none, 1 the visible sun, 2 the key, 3 the row's direction, 4 overhead
     float rt_sun_up_[3]{};              // the player's up as the lift uses it, in the world
     bool rt_sun_up_known_ = false;
+    std::uint32_t rt_sun_frame_ = 0u;   // the game frame the sun's eases last stepped on (l57)
     [[nodiscard]] std::uint32_t rt_scene_image(rt::ImageFormat format, unsigned width, unsigned height);
     // The traced light. Before the scene's draws, its opaque surfaces go into depth and the item target (the prepass:
     // every scene item that core::prepass_draws takes, under the scene's camera); the frame's passes give each pixel

@@ -20,7 +20,8 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_grid;       // tiles across, tiles down, pixels a tile
     float4 g_sun;       // xyz: the direction to the shadow sun; w: the tangent of its half angle
     float4 g_stage;     // x: the stage's ambient, y: its key light, as brightness: a painted surface in the key's
-                        // shadow keeps x / (x + y * n.l) of its colour; z, w: retired (the drops)
+                        // shadow keeps x / (x + y * n.l) of its colour; z: the game's time at the frame in seconds,
+                        // wrapped at an hour (the caustics' drift); w: retired (the drops)
     float4 g_look;      // x: what a surface in the sun's shadow keeps of the sky's light (the sky turned down so the
                         // sun's shadows read); y 1: a painted surface whose model's paint holds its shadows (hit
                         // flag NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only (the painted style, 14.6),

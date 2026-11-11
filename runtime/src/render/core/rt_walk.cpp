@@ -1764,7 +1764,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.sun[3] = stage_row.sun_size > 0.0f ? stage_row.sun_size : kSunTan;
     constants.stage[0] = ambient;
     constants.stage[1] = key;
-    constants.stage[2] = 128.0f / 255.0f;  // the game's fill: black at alpha 0x80 (MR::fillSilhouetteColor)
+    // The game's time at the frame in seconds, wrapped at an hour (l58: the caustics' drift keeps the game's pace at
+    // any display rate).
+    constants.stage[2] = static_cast<float>(std::fmod((static_cast<double>(list.game_frame) - 1.0 + static_cast<double>(walk_.time.t)) / 60.0, 3600.0));
     constants.stage[3] = kDropTan;
     constants.look[0] = kSkyInShadow;
     constants.look[1] = kPaintedStyle;
@@ -2261,6 +2263,9 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
         rt_sun_source_ = 0u;
         rt_sun_light_ = 0u;
         rt_sun_ease_ = 0u;
+        if (!walk_.between) {
+            rt_sun_frame_ = list.game_frame;
+        }
         return false;
     }
     // Where it is held: a key that moves with the camera keeps the direction it was latched at until the zone's light
@@ -2278,10 +2283,14 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     } else if (!follows) {
         std::memcpy(rt_sun_to_, target, sizeof(target));
     }
+    // The game frames since the eases last stepped (l57): a dropped list (a display under 60 Hz) steps them as many,
+    // so they take the same time at any rate; a long gap (a pause, a load) counts as four. 0 between real walks.
+    const std::uint32_t steps = walk_.between ? 0u : std::min(list.game_frame - rt_sun_frame_, 4u);
+    if (!walk_.between) {
+        rt_sun_frame_ = list.game_frame;
+    }
     if (rt_sun_ease_ > 0u) {
-        if (!walk_.between) {
-            --rt_sun_ease_;
-        }
+        rt_sun_ease_ -= std::min(rt_sun_ease_, steps);
         const float t = 1.0f - static_cast<float>(rt_sun_ease_) / static_cast<float>(kEase);
         const float share = t * t * (3.0f - 2.0f * t);
         for (unsigned c = 0; c < 3u; ++c) {
@@ -2302,9 +2311,9 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     if (up_known) {
         if (fresh || !rt_sun_up_known_ || dot(rt_sun_up_, up) >= 0.99985f) {
             std::memcpy(rt_sun_up_, up, sizeof(up));
-        } else if (!walk_.between) {
-            // A tenth of the angle a frame, about the axis of the turn (any axis across the old up for a flip): a blend
-            // of the two would hold a flip still (half of v and of -v points along v).
+        } else if (steps != 0u) {
+            // A tenth of the angle a game frame (1 - 0.9^n over n), about the axis of the turn (any axis across the old
+            // up for a flip): a blend of the two would hold a flip still (half of v and of -v points along v).
             float axis[3] = {rt_sun_up_[1] * up[2] - rt_sun_up_[2] * up[1], rt_sun_up_[2] * up[0] - rt_sun_up_[0] * up[2],
                              rt_sun_up_[0] * up[1] - rt_sun_up_[1] * up[0]};
             if (!unit(axis)) {
@@ -2314,7 +2323,7 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
                 axis[2] = rt_sun_up_[0] * side[1] - rt_sun_up_[1] * side[0];
                 static_cast<void>(unit(axis));
             }
-            const float step = 0.1f * std::acos(std::clamp(dot(rt_sun_up_, up), -1.0f, 1.0f));
+            const float step = (1.0f - std::pow(0.9f, static_cast<float>(steps))) * std::acos(std::clamp(dot(rt_sun_up_, up), -1.0f, 1.0f));
             const float c = std::cos(step), s = std::sin(step);
             const float across[3] = {axis[1] * rt_sun_up_[2] - axis[2] * rt_sun_up_[1], axis[2] * rt_sun_up_[0] - axis[0] * rt_sun_up_[2],
                                      axis[0] * rt_sun_up_[1] - axis[1] * rt_sun_up_[0]};

@@ -247,7 +247,7 @@ float caustic_there(uint item, uint triangle_, float2 where_) {
     const float2 c1 = asfloat(arena_words(first.z, base + first.w + corner.y * 24u + 12u).yz);
     const float2 c2 = asfloat(arena_words(first.z, base + first.w + corner.z * 24u + 12u).yz);
     const float2 coordinate = c0 * (1.0f - where_.x - where_.y) + c1 * where_.x + c2 * where_.y;
-    const float seconds = float(g_more.y % 216000u) / 60.0f;
+    const float seconds = g_stage.z;  // the game's time (l58), not the frames shown
     const float3 luma = float3(0.2126f, 0.7152f, 0.0722f);
     const float a = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate + seconds * float2(0.03f, 0.017f), 0.0f).rgb, luma);
     const float b = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate * 1.37f - seconds * float2(0.019f, 0.03f), 0.0f).rgb, luma);
