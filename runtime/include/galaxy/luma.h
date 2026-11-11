@@ -290,6 +290,9 @@ inline constexpr std::uint32_t kOldestPluginApi = 2;
 [[nodiscard]] std::string refusal(const Manifest& manifest, const std::string& game_id, std::string_view nebula_version,
                                   std::string_view platform);
 
+// For the log, beside a refusal: the file, the field and what this game expects, when the refusal comes from one field.
+[[nodiscard]] std::string refusal_detail(const Manifest& manifest);
+
 // The current game, used to decide whether a layer applies.
 struct Situation {
     std::string version;   // the game's version letter
