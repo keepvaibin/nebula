@@ -755,8 +755,15 @@ static void setup_player(const Words* w) {
             const int64_t n = to_int(w->word[3], &good);
             void* const object = good ? object_named(w->word[2], n) : 0;
             if (object == 0) {
-                finish(0, objects_lost != 0 ? "player.at: more objects than the harness keeps (" MOST_OBJECTS_TEXT ")"
-                                            : "player.at: no live object of that name and number");
+                /* Named as the test names it (name#n). */
+                static Out why;
+                out_empty(&why);
+                put(&why, objects_lost != 0 ? "player.at: more objects than the harness keeps (" MOST_OBJECTS_TEXT "); " : "player.at: ");
+                put(&why, "no live object ");
+                put(&why, w->word[2]);
+                put(&why, "#");
+                put(&why, w->word[3]);
+                finish(0, why.text);
                 return;
             }
             if (!object_is(object, class_live_actor)) {
