@@ -814,7 +814,7 @@ static void do_line(const char* line) {
             const char* name = 0;
             call0(language_name, &name);
             fact_text("setup.language", name != 0 ? name : "");
-            harness->done(name != 0 && same(name, w.word[2]), "language did not take (setup.language holds the one the game took)");
+            harness->done(name != 0 && same(name, w.word[2]), "language did not take: the game took the one setup.language holds (a disc offers only its own languages)");
         } else if (same(item, "done")) {
             fact_bool("setup.done", 1);
             harness->done(1, 0);

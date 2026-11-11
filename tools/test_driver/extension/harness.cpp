@@ -712,7 +712,10 @@ const char* service_next() {
         return nullptr;
     }
     if (!g.base) {
-        if (g.setup_given || g.next_setup >= g.setup.size()) {
+        // No setup before the title screen: during the game's system setup the save's current file
+        // (SaveDataHandleSequence::initAfterResourceLoaded) and the scenario list
+        // (GameSystemSceneController::initAfterSystemArchiveLoaded) do not exist yet (run 5).
+        if (!g.title_seen || g.setup_given || g.next_setup >= g.setup.size()) {
             return nullptr;
         }
         g.setup_given = true;
