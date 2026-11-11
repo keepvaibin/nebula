@@ -10,6 +10,9 @@ The table: UTF-8, tab-separated, one row per string id, one column per language 
 empty cell uses the language's fallback (NebulaText.cpp). In a cell, \\n is a line break and \\\\ a backslash. "L." rows
 are the launcher's and Setup's (installer/src/Common/NebulaText.cs, which finds any row by its English cell): the game's
 table leaves them out. "C." rows are the crash dialog's, written to runtime/src/crash_text_table.inc for the host.
+"Validator." rows are the mod validator's (crates/luma-validate, which reads this file at build and checks their named
+places): the game's table leaves them out too, so a game with no mod carries none of them. The font check keeps them,
+since the Mods screen draws them.
 """
 import glob
 import os
@@ -106,7 +109,7 @@ def generate():
            '};',
            'const NebulaTextRow cNebulaTextRows[] = {']
     for key, texts in rows:
-        if key.startswith(('L.', 'C.')):
+        if key.startswith(NOT_THE_GAMES):
             continue
         out.append('    {"%s",' % key)
         out.append('     {' + ', '.join(c_wide(t) if t else 'nullptr' for t in texts) + '}},')
@@ -200,6 +203,10 @@ def host_literals():
                 if not re.search('[A-Z]{2}', text) or re.search('[a-z\\\\]', re.sub('%[a-z.0-9]+', '', text)):
                     continue
                 yield re.sub('%%', '%', re.sub('%[.0-9]*[a-z]+', '0', text))
+
+
+# Rows the game's own table leaves out: the launcher's and Setup's, the crash dialog's, the mod validator's.
+NOT_THE_GAMES = ('L.', 'C.', 'Validator.')
 
 
 def coverage():
