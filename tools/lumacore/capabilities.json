@@ -10,6 +10,12 @@
     "kernel.hook.wrap": "A wrap on any function: runs around it and calls proceed (0.2, 1.1)",
     "kernel.hook.replace": "A replace on any function: one mod holds it, a second is refused naming the first (0.2, 1.1)",
     "kernel.refusal": "Every refusal to load a mod names its cause in the log and on the Mods screen (0.2 Z-1, 1.1)",
-    "kernel.service": "A mod finds a service by name and version through LumaCore.service (0.3, 2.x)"
+    "kernel.service": "A mod finds a service by name and version through LumaCore.service (0.3, 2.x)",
+    "kernel.memory": "Memory for a mod from LumaCore.alloc: aligned up to 65536, counted per mod, null when there is none, freed when the mod is taken out (1.1)",
+    "kernel.report": "A mod's runtime reports an error by code: said once in English with its place, kept for the Mods page in the player's language, repeats counted (1.1)",
+    "kernel.unhook": "Hooks added and taken out while the game runs: a call already running keeps its hooks (1.1)",
+    "kernel.threads": "A hook runs on its caller's thread and knows whether it is the game thread; hook and unhook only from the game thread (1.1)",
+    "kernel.released": "A mod's handles to objects are emptied when their memory goes (lumacore::released) (1.1)",
+    "kernel.cxx": "A mod written in C++: globals built before start in order, new and delete on the mod's memory, destructors at its end (1.1)"
   }
 }
