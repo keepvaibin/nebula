@@ -88,8 +88,15 @@ float3 ref_ratio(float3 origin, float3 n, inout uint seed) {
         if (h.klass == kRtMetal || h.klass == kRtGlass) {
             c += g_shade.ambient.rgb * h.share;
         }
-        result += mul(through, k * c);
-        through = mul(through, float3x3(k.x * m[0], k.y * m[1], k.z * m[2]));
+        // What shines of itself counts as it is; a surface lit by the scene against the mean of such hits, counted at
+        // the first as the real-time pass shades it (its own ratio kHitSky) (FB b46).
+        const bool shines = h.glows && !h.listed;
+        if (!shines && bounce == 0u && s_count_dome) {
+            rt_count_hit(k * (c + mul(m, float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y))));
+        }
+        const float3 kh = shines ? k : k * g_shade.authored.w;
+        result += mul(through, kh * c);
+        through = mul(through, float3x3(kh.x * m[0], kh.y * m[1], kh.z * m[2]));
         if (h.glows && !h.listed) {
             break;
         }

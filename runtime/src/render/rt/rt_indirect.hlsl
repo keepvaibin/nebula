@@ -200,7 +200,16 @@ void main(uint3 id : SV_DispatchThreadID) {
                         o = seen;
                     }
                 }
-                fresh.light = g_shade.gains.z * rt_hit_radiance(h, options, o, seed) / max(g_shade.authored.rgb, 0.02f);
+                const float3 bounce = g_shade.gains.z * rt_hit_radiance(h, options, o, seed) / max(g_shade.authored.rgb, 0.02f);
+                if (h.glows && !h.listed) {
+                    fresh.light = bounce;  // it shines of itself: its light as it is
+                } else {
+                    // A surface lit by the scene: against the mean of such hits (FB b46), as the sky against its own.
+                    if (((id.x | id.y) & 3u) == 0u) {
+                        rt_count_hit(bounce);
+                    }
+                    fresh.light = bounce * g_shade.authored.w;
+                }
             }
         }
         // Cosine sampling: the first weight is the target over the chance, pi * lum(L).

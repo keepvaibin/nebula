@@ -635,6 +635,7 @@ private:
     unsigned rt_bounce_width_ = 0u, rt_bounce_height_ = 0u;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_bounce_retired_;  // frame, image
     float rt_dome_mean_ = 0.0f;  // the sky dome's mean luminance as the bounce rays see it (11.1); 0 not yet known
+    float rt_hit_mean_ = 0.0f;   // the mean ratio of the surfaces they meet (rt_count_hit; FB b46); 0 not yet known
     // The reference's sums, V D I R this walk's and the walk before's by turns (rt_ref_now_: this walk's first), and
     // what starts them again.
     std::uint32_t rt_ref_images_[8] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,

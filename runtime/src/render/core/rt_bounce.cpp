@@ -111,6 +111,8 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
     frame.look[0] = kSkyMin;
     frame.look[1] = kHitDark;
     frame.look[2] = rt_dome_mean_ > 1e-3f ? 1.0f / rt_dome_mean_ : 0.0f;
+    // A surface met counts against the mean of such hits, only ever down: dark surroundings keep their darkening (b46).
+    frame.authored[3] = rt_hit_mean_ > 1.0f ? 1.0f / rt_hit_mean_ : 1.0f;
     frame.look[3] = kSunGlint;
     frame.grid[3] = rt_light_frame_.turn;
 }
@@ -280,7 +282,8 @@ std::uint32_t RenderCore::rt_bounce_image(std::uint32_t& image, rt::ImageFormat 
 
 // The dome's mean luminance as the bounce rays see it (11.1): what they added to the counters 44 and 45 (the frame
 // slot's last frame), a running mean (0.05 a frame), kept still once a hold has measured it over its first walks so
-// the reference adds up under one light. False when it is kept.
+// the reference adds up under one light. False when it is kept. Beside it the mean ratio of the surfaces they meet
+// (counters 46 and 47, rt_count_hit; FB b46), kept the same way.
 bool RenderCore::rt_dome_read() {
     if (rt_hold_left_ != 0u && rt_hold_walks_ - rt_hold_left_ > kDomeWalks) {
         return false;
@@ -290,6 +293,10 @@ bool RenderCore::rt_dome_read() {
     if (counted[45] != 0u) {
         const float mean = static_cast<float>(counted[44]) / 256.0f / static_cast<float>(counted[45]);
         rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * 0.05f : mean;
+    }
+    if (counted[47] != 0u) {
+        const float hits = static_cast<float>(counted[46]) / 256.0f / static_cast<float>(counted[47]);
+        rt_hit_mean_ = rt_hit_mean_ > 0.0f ? rt_hit_mean_ + (hits - rt_hit_mean_) * 0.05f : hits;
     }
     return true;
 }
@@ -578,6 +585,7 @@ void RenderCore::rt_bounce_stop() noexcept {
     rt_bounce_retired_.clear();
     rt_bounce_width_ = rt_bounce_height_ = 0u;
     rt_dome_mean_ = 0.0f;
+    rt_hit_mean_ = 0.0f;
     rt_ref_list_ = nullptr;
     rt_ref_ready_ = false;
     rt_ref_now_ = 0u;

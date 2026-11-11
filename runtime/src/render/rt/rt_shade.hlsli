@@ -20,7 +20,8 @@ struct RtShadeFrame {
     float4 gains;     // x kAreaEmission, y kHitSky, z kBounce, w kBounceMax
     float4 axis[3];   // the world light grid: cell k along axis i = floor(dot(at, axis[i].xyz) + axis[i].w)
     float4 look;      // x kSkyMin, y kHitDark, z 1 / the dome's mean luminance (0: not known yet), w kSunGlint
-    float4 authored;  // rgb the stage's ambient as authored (A without kAmbientGain): what the indirect ratio is a ratio to
+    float4 authored;  // rgb the stage's ambient as authored (A without kAmbientGain): what the indirect ratio is a ratio to;
+                      // w the gain of a surface met (1 / the running mean of such hits, at most 1: rt_count_hit; FB b46)
     uint4 grid;       // x the grid's cells' first byte in t4, y its entries', z 1 when it holds any, w the frame's number
     uint4 spare[5];
 };
@@ -337,6 +338,14 @@ float3 rt_sky_ratio(float3 dome) {
 void rt_count_dome(float3 dome) {
     InterlockedAdd(g_counters[44], uint(clamp(rt_lum(dome), 0.0f, 64.0f) * 256.0f));
     InterlockedAdd(g_counters[45], 1u);
+}
+
+// A surface met (not shining of itself) as a ratio before the gain, kBounce * L / A, into the counters 46 and 47 for the
+// host's running mean of such hits (FB b46): a surface met counts against it, as the sky against the dome's mean. Held
+// to 16 so a 4K frame's sum stays inside 32 bits with the reference counting too.
+void rt_count_hit(float3 ratio) {
+    InterlockedAdd(g_counters[46], uint(clamp(rt_lum(ratio), 0.0f, 16.0f) * 256.0f));
+    InterlockedAdd(g_counters[47], 1u);
 }
 
 // ---- Light.
