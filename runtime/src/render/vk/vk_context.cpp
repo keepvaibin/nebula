@@ -1108,6 +1108,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     allocator_info.device = device_;
     allocator_info.instance = instance_;
     allocator_info.pVulkanFunctions = &functions;
+    // Blocks of a large heap: VMA makes the first ones 1/8, 1/4 and 1/2 of this, so a device holds about what it places
+    // (8 MB first, against 32 MB with VMA's 256 MB default). Larger resources than half of it have memory of their own.
+    allocator_info.preferredLargeHeapBlockSize = VkDeviceSize{64} << 20u;
     if (memory_budget_) {
         allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     }

@@ -14,8 +14,10 @@ namespace galaxy::render {
 
 namespace {
 
-// A heap of the usual size; a texture that takes more than half of one has a heap of its own.
+// The largest shared heap; a texture that takes more than half of one has a heap of its own. The first shared heap is
+// kFirstHeapBytes, each further one twice the largest held.
 constexpr std::uint64_t kHeapBytes = 64ull << 20u;
+constexpr std::uint64_t kFirstHeapBytes = 8ull << 20u;
 // The array's first length in slots (it doubles as the store's indices reach its end).
 constexpr std::uint32_t kFirstArraySlots = 4096u;
 
@@ -281,7 +283,15 @@ mtl::Object TextureBackend::allocate(void* descriptor, mtl::Object& heap_out) {
     // that read them on a GPU that runs independent passes side by side (Apple's). Tracked by the heap, the uploads'
     // blit and each pass that names the heap run in the order they were recorded.
     heap_descriptor.hazardTrackingMode = MTLHazardTrackingModeTracked;
-    heap_descriptor.size = single ? ((need.size + need.align - 1u) / need.align) * need.align : kHeapBytes;
+    // A shared heap: twice the largest shared heap held (kFirstHeapBytes when none), at least twice the texture, at most
+    // kHeapBytes.
+    std::uint64_t shared_size = kFirstHeapBytes;
+    for (const Heap& held : heaps_) {
+        if (!held.single) shared_size = std::max<std::uint64_t>(shared_size, std::uint64_t{held.size} * 2u);
+    }
+    while (shared_size < std::uint64_t{need.size} * 2u) shared_size *= 2u;
+    shared_size = std::min(shared_size, kHeapBytes);
+    heap_descriptor.size = single ? ((need.size + need.align - 1u) / need.align) * need.align : shared_size;
     id<MTLHeap> const fresh = [device() newHeapWithDescriptor:heap_descriptor];
     if (fresh == nil) {
         return nullptr;

@@ -16,6 +16,8 @@ namespace galaxy::render::core {
 
 namespace {
 
+// Mesh pages: the first 8 MB, each further one twice the largest held, up to 64 MB.
+constexpr std::size_t kFirstArenaPage = 8ull << 20u;
 constexpr std::size_t kArenaPage = 64ull << 20u;
 constexpr std::size_t kSlotPage = 1ull << 20u;
 constexpr std::size_t kSlotAlign = 256u;
@@ -181,7 +183,14 @@ Registries::Placed Registries::place(std::size_t bytes) {
             break;
         }
     }
-    const std::size_t page = std::max(bytes, kArenaPage);
+    // Twice the largest page held (kFirstArenaPage when none), as large as the range needs, at most kArenaPage; a range
+    // larger than that has a page of its own size.
+    std::size_t page = kFirstArenaPage;
+    for (const Arena& held : arenas_) {
+        if (held.memory) page = std::max(page, held.bytes * 2u);
+    }
+    while (page < bytes && page < kArenaPage) page *= 2u;
+    page = std::max(std::min(page, kArenaPage), bytes);
     // Geometry is written once, in order, and read by the GPU every frame it draws: video memory where the device maps it.
     gpu::UploadMemory memory = gpu::create_upload_memory(device_, page, "Nebula Meshes", gpu::UploadPlace::GpuLocal);
     if (!memory) {
@@ -235,9 +244,9 @@ void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t 
     if (arena.live != 0u) {
         return;
     }
-    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of an
-    // unusual size, or a second empty one, gives its memory back; one empty page stays for the next scene.
-    bool release = arena.bytes != kArenaPage;
+    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of its own
+    // for one large range, or a second empty one, gives its memory back; one empty page stays for the next scene.
+    bool release = arena.bytes > kArenaPage;
     for (std::uint32_t other = 0; other < arenas_.size() && !release; ++other) {
         release = other != index && arenas_[other].memory && arenas_[other].live == 0u;
     }
