@@ -41,6 +41,8 @@ namespace {
 static RenderConfig s_config{};
 static RenderFeatureCaps s_feature_caps{};
 static std::shared_mutex s_lock;
+// Raised, under s_lock, with every write of s_config: a reader's kept copy is current while the number is the same.
+static std::atomic<std::uint64_t> s_config_generation{1u};
 // Last-write time of config.ini when this process last read or wrote it.
 static std::uint64_t s_config_write_time = 0u;
 // The gpu config.ini named when this process last read or wrote it (next_start_gpu).
@@ -365,9 +367,15 @@ std::atomic<unsigned> s_tracing{0u};
 }  // namespace
 
 RenderConfig get_render_config_chosen() {
-    s_lock.lock_shared();
-    const RenderConfig copy = s_config;
-    s_lock.unlock_shared();
+    // Each thread keeps the copy it took last and takes the lock only when a write has moved the generation.
+    thread_local std::uint64_t seen = 0u;
+    thread_local RenderConfig copy{};
+    if (s_config_generation.load(std::memory_order_acquire) != seen) {
+        s_lock.lock_shared();
+        copy = s_config;
+        seen = s_config_generation.load(std::memory_order_relaxed);
+        s_lock.unlock_shared();
+    }
     return copy;
 }
 
@@ -487,6 +495,7 @@ void set_render_config(const RenderConfig& cfg) {
     clamp_unimplemented_features(sanitized);
     s_lock.lock();
     s_config = sanitized;
+    s_config_generation.fetch_add(1u, std::memory_order_release);
     s_lock.unlock();
 }
 
@@ -528,6 +537,7 @@ void load_render_config_from_file() {
 
     s_lock.lock();
     s_config = cfg;
+    s_config_generation.fetch_add(1u, std::memory_order_release);
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -560,6 +570,7 @@ bool reload_render_config_if_changed() {
 
     s_lock.lock();
     s_config = cfg;
+    s_config_generation.fetch_add(1u, std::memory_order_release);
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
