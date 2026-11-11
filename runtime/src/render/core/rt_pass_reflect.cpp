@@ -111,8 +111,8 @@ void RenderCore::rt_pass_guides() {
     binds.writes[1] = rt_image(RtImage::RrSpecular);
     binds.writes[2] = rt_image(RtImage::RrNormalRoughness);
     binds.writes[3] = rt_image(RtImage::RrHit);
-    for (const std::uint32_t image : binds.writes) {
-        if (image == rt::kNoImage) {
+    for (unsigned i = 0u; i < 4u; ++i) {  // its own four (the pass's other writes stay unbound)
+        if (binds.writes[i] == rt::kNoImage) {
             return;
         }
     }

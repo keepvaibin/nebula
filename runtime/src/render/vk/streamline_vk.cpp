@@ -4,6 +4,7 @@
 
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/streamline_bridge.h"
+#include "galaxy/render/vk/vk_context.h"
 #include "../streamline_common.h"
 #include "../streamline_frame_generation.h"
 
@@ -12,6 +13,7 @@
 #include <sl.h>
 #include <sl_consts.h>
 #include <sl_dlss.h>
+#include <sl_dlss_d.h>
 #include <sl_helpers_vk.h>
 #include <sl_security.h>
 
@@ -41,8 +43,11 @@ struct Api {
     PFun_slFreeResources* free_resources{};
     PFun_slDLSSGetOptimalSettings* dlss_get_optimal_settings{};
     PFun_slDLSSSetOptions* dlss_set_options{};
+    PFun_slDLSSDSetOptions* dlssd_set_options{};
     bool initialized = false;
     bool dlss = false;
+    bool dlssd = false;         // DLSS Ray Reconstruction runs on the adapter
+    bool dlssd_loaded = false;  // its plugins installed, loaded and asking nothing this device set-up cannot give
 };
 Api g_api;
 vk::streamline_vk::Needs g_needs;
@@ -106,6 +111,8 @@ bool rtx_adapter_present() {
 namespace streamline {
 
 bool dlss_supported() noexcept { return g_api.initialized && g_api.dlss; }
+
+bool dlss_rr_supported() noexcept { return g_api.initialized && g_api.dlss && g_api.dlssd; }
 
 bool frame_generation_supported() noexcept { return g_api.initialized && g_generation.supported(); }
 
@@ -187,9 +194,21 @@ bool start() noexcept {
         };
         const bool generation = installed(L"sl.dlss_g.dll") && installed(L"nvngx_dlssg.dll") && installed(L"sl.reflex.dll") &&
                                 installed(L"sl.pcl.dll");
-        static const sl::Feature features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex, sl::kFeaturePCL};
+        // DLSS Ray Reconstruction (the tracer's outside denoiser, 22.20): loaded whenever it is installed.
+        const bool rr = installed(L"sl.dlss_d.dll") && installed(L"nvngx_dlssd.dll");
+        static sl::Feature features[5]{};
+        std::uint32_t feature_count = 0u;
+        features[feature_count++] = sl::kFeatureDLSS;
+        if (generation) {
+            features[feature_count++] = sl::kFeatureDLSS_G;
+            features[feature_count++] = sl::kFeatureReflex;
+            features[feature_count++] = sl::kFeaturePCL;
+        }
+        if (rr) {
+            features[feature_count++] = sl::kFeatureDLSS_RR;
+        }
         preferences.featuresToLoad = features;
-        preferences.numFeaturesToLoad = generation ? 4u : 1u;
+        preferences.numFeaturesToLoad = feature_count;
         preferences.engine = sl::EngineType::eCustom;
         preferences.engineVersion = "Nebula";
         preferences.projectId = "7c3e2b1a-5d4f-4e8a-9b6c-1f2e3d4c5b6a";
@@ -230,6 +249,37 @@ bool start() noexcept {
                 g_needs.generation_graphics_queues = own.vkNumGraphicsQueuesRequired;
                 g_needs.generation_compute_queues = own.vkNumComputeQueuesRequired;
             }
+        }
+        if (rr) {
+            // Its extensions and features join DLSS's; Vulkan 1.3 features it may not ask (the device is made for 1.2's).
+            sl::FeatureRequirements own{};
+            if (api.get_feature_requirements(sl::kFeatureDLSS_RR, own) == sl::Result::eOk && own.vkNumFeatures13 == 0u &&
+                (static_cast<std::uint32_t>(own.flags) & static_cast<std::uint32_t>(sl::FeatureRequirementFlags::eVulkanSupported)) != 0u) {
+                add_names(g_needs.instance_extensions, own.vkInstanceExtensions, own.vkNumInstanceExtensions);
+                add_names(g_needs.device_extensions, own.vkDeviceExtensions, own.vkNumDeviceExtensions);
+                // Its Vulkan 1.2 features join DLSS's (every field the structure holds: VkBool32s after its type and pointer).
+                const VkPhysicalDeviceVulkan12Features more =
+                    sl::getVkPhysicalDeviceVulkan12Features(own.vkNumFeatures12, own.vkFeatures12);
+                constexpr std::size_t kHeader = offsetof(VkPhysicalDeviceVulkan12Features, samplerMirrorClampToEdge);
+                auto* into = reinterpret_cast<VkBool32*>(reinterpret_cast<char*>(&g_needs.features12) + kHeader);
+                const auto* from = reinterpret_cast<const VkBool32*>(reinterpret_cast<const char*>(&more) + kHeader);
+                for (std::size_t i = 0u; i < (sizeof(more) - kHeader) / sizeof(VkBool32); ++i) {
+                    into[i] = (into[i] == VK_TRUE || from[i] == VK_TRUE) ? VK_TRUE : VK_FALSE;
+                }
+                api.dlssd_loaded = true;
+            } else {
+                std::cerr << "[streamline] DLSS Ray Reconstruction: not on Vulkan here\n";
+            }
+        }
+        // VK_EXT_buffer_device_address is the old name of what Vulkan 1.2 made core (the device takes the core feature;
+        // a device may not enable both): the core feature stands for it.
+        auto& names = g_needs.device_extensions;
+        const auto old_address = std::remove_if(names.begin(), names.end(), [](const char* name) {
+            return std::strcmp(name, "VK_EXT_buffer_device_address") == 0;
+        });
+        if (old_address != names.end()) {
+            names.erase(old_address, names.end());
+            g_needs.features12.bufferDeviceAddress = VK_TRUE;
         }
         api.initialized = true;
         g_api = api;
@@ -363,6 +413,19 @@ bool attach(VkInstance instance, VkPhysicalDevice physical, VkDevice device, std
     g_api.dlss_set_options = reinterpret_cast<PFun_slDLSSSetOptions*>(options);
     g_api.dlss = true;
     std::cerr << "[streamline] DLSS ready\n";
+    if (g_api.dlssd_loaded) {
+        void* rr_options = nullptr;
+        result = g_api.is_feature_supported(sl::kFeatureDLSS_RR, adapter);
+        if (result == sl::Result::eOk &&
+            g_api.get_feature_function(sl::kFeatureDLSS_RR, "slDLSSDSetOptions", rr_options) == sl::Result::eOk &&
+            rr_options != nullptr) {
+            g_api.dlssd_set_options = reinterpret_cast<PFun_slDLSSDSetOptions*>(rr_options);
+            g_api.dlssd = true;
+            std::cerr << "[streamline] DLSS Ray Reconstruction ready\n";
+        } else {
+            std::cerr << "[streamline] DLSS Ray Reconstruction unavailable: " << static_cast<int>(result) << '\n';
+        }
+    }
     if (frame_generation) {
         g_generation.attach(adapter);
     }
@@ -410,6 +473,7 @@ void shutdown() noexcept {
     }
     g_api.initialized = false;
     g_api.dlss = false;
+    g_api.dlssd = false;
     g_generation.shutdown();
 }
 
@@ -427,16 +491,33 @@ sl::Resource resource(const TemporalImage& image, VkImageLayout layout) {
     return out;
 }
 
-class DlssUpscaler final : public TemporalUpscaler {
+// One of the tracer's images (Backend::image_to_sample: a vk::Texture in the shader-read layout) as Streamline takes it.
+sl::Resource traced(void* texture) {
+    const auto& t = *static_cast<const vk::Texture*>(texture);
+    return resource(TemporalImage{t.image, t.view, VK_IMAGE_ASPECT_COLOR_BIT, t.format, t.width, t.height, t.usage},
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+class DlssUpscaler final : public TemporalUpscaler, public rt::Denoiser {
 public:
-    explicit DlssUpscaler(unsigned quality) : mode_(streamline_common::dlss_mode(quality)) {}
+    DlssUpscaler(unsigned quality, bool ray_reconstruction)
+        : mode_(streamline_common::dlss_mode(quality)), rr_(ray_reconstruction) {}
 
     ~DlssUpscaler() override {
         // The renderer waits for the GPU before it replaces an upscaler.
         if (g_api.dlss && g_api.free_resources != nullptr) {
             (void)g_api.free_resources(sl::kFeatureDLSS, viewport_);
+            if (rr_) {
+                (void)g_api.free_resources(sl::kFeatureDLSS_RR, viewport_);  // and DLSS alone, for frames without guides
+            }
         }
     }
+
+    // rt::Denoiser: DLSS Ray Reconstruction takes every signal raw and the guides of each frame.
+    [[nodiscard]] std::uint32_t raw_signals() const noexcept override { return rr_ ? rt::kSignalAll : 0u; }
+    void guides(const rt::DenoiseGuides& guides) noexcept override { guides_ = guides; }
+    rt::DenoiseGuides pending_guides() const noexcept override { return guides_; }
+    [[nodiscard]] rt::Denoiser* denoiser() noexcept override { return rr_ ? this : nullptr; }
 
     bool evaluate(const TemporalUpscaleInputs& in) override {
         if (!streamline::dlss_supported() || in.commands == VK_NULL_HANDLE) {
@@ -455,6 +536,11 @@ public:
         }
         sl::Constants constants{};
         streamline_common::fill_constants(constants, in);
+        // Ray Reconstruction where the tracer left this frame's guides; a frame without them (the title, a menu: the
+        // tracer did not run) takes DLSS alone.
+        if (rr_ && guides_.valid) {
+            return evaluate_rr(in, *token, constants);
+        }
         if (g_api.set_constants(constants, *token, viewport_) != sl::Result::eOk) {
             return failed("constants");
         }
@@ -509,13 +595,91 @@ public:
         streamline_common::jitter(index, phase_count, x, y);
     }
 
-    const char* name() const noexcept override { return "DLSS"; }
+    const char* name() const noexcept override { return rr_ ? "DLSS Ray Reconstruction" : "DLSS"; }
 
 private:
+    // DLSS Ray Reconstruction: the composited picture of this frame's raw signals with the tracer's guides
+    // (rt_rr_guides.hlsl), denoised and upscaled in one.
+    bool evaluate_rr(const TemporalUpscaleInputs& in, sl::FrameToken& token, sl::Constants& constants) {
+        const rt::DenoiseGuides guides = guides_;
+        guides_.valid = false;  // each frame's own
+        if (!streamline::dlss_rr_supported()) {
+            return failed("ray reconstruction not supported");
+        }
+        streamline_common::rr_projection(constants, in);
+        if (g_api.set_constants(constants, token, viewport_) != sl::Result::eOk) {
+            return failed("ray reconstruction constants");
+        }
+        if (rr_options_.outputWidth != in.output_width || rr_options_.outputHeight != in.output_height ||
+            std::memcmp(rr_view_, guides.world_to_view, sizeof(rr_view_)) != 0) {
+            rr_options_.mode = mode_;
+            rr_options_.outputWidth = in.output_width;
+            rr_options_.outputHeight = in.output_height;
+            rr_options_.colorBuffersHDR = sl::Boolean::eFalse;  // display values in RGBA8
+            rr_options_.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
+            streamline_common::camera_matrices(guides.world_to_view, rr_options_.worldToCameraView, rr_options_.cameraViewToWorld);
+            std::memcpy(rr_view_, guides.world_to_view, sizeof(rr_view_));
+            if (g_api.dlssd_set_options(viewport_, rr_options_) != sl::Result::eOk) {
+                rr_options_.outputWidth = 0u;
+                return failed("ray reconstruction options");
+            }
+            if (!rr_reported_) {
+                rr_reported_ = true;
+                std::cerr << "[dlss] ray reconstruction (Vulkan): " << in.render_width << 'x' << in.render_height << " -> "
+                          << in.output_width << 'x' << in.output_height << ", jitter " << in.jitter_x << ' ' << in.jitter_y
+                          << ", motion in render pixels (current to previous, unjittered), depth reversed, reset "
+                          << (in.reset ? 1 : 0) << '\n';
+            }
+        }
+        temporal_barriers(in, false);
+        sl::Resource color = resource(in.color, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        sl::Resource depth = resource(in.depth, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        sl::Resource motion = resource(in.motion, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        sl::Resource output = resource(in.output, VK_IMAGE_LAYOUT_GENERAL);
+        sl::Resource diffuse = traced(guides.diffuse_albedo);
+        sl::Resource specular = traced(guides.specular_albedo);
+        sl::Resource normal = traced(guides.normal_roughness);
+        sl::Resource hit = traced(guides.hit_distance);
+        sl::Extent render{};
+        render.width = in.render_width;
+        render.height = in.render_height;
+        sl::Extent upscaled{};
+        upscaled.width = in.output_width;
+        upscaled.height = in.output_height;
+        const sl::ResourceTag tags[] = {
+            sl::ResourceTag(&color, sl::kBufferTypeScalingInputColor, sl::ResourceLifecycle::eValidUntilEvaluate, &render),
+            sl::ResourceTag(&output, sl::kBufferTypeScalingOutputColor, sl::ResourceLifecycle::eValidUntilEvaluate, &upscaled),
+            sl::ResourceTag(&depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eValidUntilEvaluate, &render),
+            sl::ResourceTag(&motion, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eValidUntilEvaluate, &render),
+            sl::ResourceTag(&diffuse, sl::kBufferTypeAlbedo, sl::ResourceLifecycle::eValidUntilEvaluate, &render),
+            sl::ResourceTag(&specular, sl::kBufferTypeSpecularAlbedo, sl::ResourceLifecycle::eValidUntilEvaluate, &render),
+            sl::ResourceTag(&normal, sl::kBufferTypeNormalRoughness, sl::ResourceLifecycle::eValidUntilEvaluate, &render),
+            sl::ResourceTag(&hit, sl::kBufferTypeSpecularHitDistance, sl::ResourceLifecycle::eValidUntilEvaluate, &render)};
+        bool recorded = g_api.set_tag_for_frame(token, viewport_, tags, 8u, in.commands) == sl::Result::eOk;
+        if (!recorded) {
+            failed("ray reconstruction tags");
+        } else {
+            const sl::BaseStructure* inputs[] = {&viewport_};
+            recorded = g_api.evaluate_feature(sl::kFeatureDLSS_RR, token, inputs, 1u, in.commands) == sl::Result::eOk;
+            if (!recorded) {
+                failed("ray reconstruction evaluate");
+            }
+        }
+        temporal_barriers(in, true);
+        return recorded;
+    }
+
+    // Each different failure once (the reasons are literals).
     bool failed(const char* what) {
-        if (!reported_) {
-            reported_ = true;
-            std::cerr << "[dlss] evaluate failed: " << what << '\n';
+        for (const char*& seen : reported_) {
+            if (seen == what) {
+                break;
+            }
+            if (seen == nullptr) {
+                seen = what;
+                std::cerr << "[dlss] evaluate failed: " << what << '\n';
+                break;
+            }
         }
         return false;
     }
@@ -523,7 +687,12 @@ private:
     sl::ViewportHandle viewport_{0u};
     sl::DLSSMode mode_;
     sl::DLSSOptions options_{};
-    bool reported_ = false;
+    const char* reported_[16] = {};
+    bool rr_ = false;
+    rt::DenoiseGuides guides_{};
+    sl::DLSSDOptions rr_options_{};
+    float rr_view_[12] = {};
+    bool rr_reported_ = false;
     bool evaluated_ = false;
     std::uint32_t evaluated_index_ = 0u;
 };
@@ -615,10 +784,11 @@ void tag_hudless(VkCommandBuffer commands, const TemporalImage* picture) noexcep
 }
 
 std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, unsigned render_height, unsigned output_width,
-                                                       unsigned output_height, unsigned quality) {
+                                                       unsigned output_height, unsigned quality, bool ray_reconstruction) {
     if (!streamline::dlss_supported() || render_width == 0u || render_height == 0u || output_width == 0u || output_height == 0u) {
         return nullptr;
     }
+    ray_reconstruction = ray_reconstruction && streamline::dlss_rr_supported();
     // A mode evaluates only render widths inside its range: the requested one, else the next higher-quality one that holds
     // this width.
     const unsigned mode = quality == 5u ? 1u : std::min(quality, 4u);  // no ultra quality mode: quality
@@ -632,12 +802,12 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
             render_width <= settings.renderWidthMax) {
             std::cerr << "[dlss] " << render_width << 'x' << render_height << " -> " << output_width << 'x' << output_height << " mode "
                       << candidate << " of requested " << quality << '\n';
-            return std::make_unique<DlssUpscaler>(candidate);
+            return std::make_unique<DlssUpscaler>(candidate, ray_reconstruction);
         }
     }
     std::cerr << "[dlss] " << render_width << 'x' << render_height << " -> " << output_width << 'x' << output_height
               << ": outside every mode's range\n";
-    return std::make_unique<DlssUpscaler>(mode);
+    return std::make_unique<DlssUpscaler>(mode, ray_reconstruction);
 }
 
 }  // namespace vk::streamline_vk

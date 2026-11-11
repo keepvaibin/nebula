@@ -93,6 +93,15 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
 #endif
+    if ((g_more.z & 2048u) != 0u) {
+        // Raw signals for an outside denoiser (FB, 22.20): this frame's value as traced (Low's fill and the boiling
+        // filter done), one frame, no history.
+        g_out[id.xy] = float4(raw.x, 1.0f / most_frames(), raw.y, raw.z);
+#ifdef RT_LIGHTS
+        g_moments[id.xy] = float4(dot(raw, kLuminance), dot(raw, kLuminance) * dot(raw, kLuminance), 0.0f, 0.0f);
+#endif
+        return;
+    }
     // What this frame's rays saw around the pixel on the same object: the history may not leave their mean by more
     // than their spread.
     float3 first = float3(0.0f, 0.0f, 0.0f), square = float3(0.0f, 0.0f, 0.0f);

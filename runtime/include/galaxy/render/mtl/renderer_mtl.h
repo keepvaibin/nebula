@@ -25,6 +25,7 @@
 #include "galaxy/render/mtl/fx_mtl.h"
 #include "galaxy/render/mtl/mtl_context.h"
 #include "galaxy/render/rt/rt_backend.h"
+#include "galaxy/render/rt/rt_denoiser.h"
 #include "galaxy/render/mtl/temporal_upscaler_mtl.h"
 #include "galaxy/render/mtl/utility_msl.h"
 #include "galaxy/render/post_process_settings.h"
@@ -186,6 +187,7 @@ public:
     void rt_light_end() {}
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView&) { return false; }
     void rt_reactive_end() {}
+    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return nullptr; }
     [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
     void rt_unpublish_lights(TextureStore&) {}
     void rt_wait_idle() { wait_for_gpu_idle(); }

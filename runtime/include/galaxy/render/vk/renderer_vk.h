@@ -20,6 +20,7 @@
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/rt/rt_backend.h"
+#include "galaxy/render/rt/rt_denoiser.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/ambient_occlusion_vk.h"
@@ -171,6 +172,8 @@ public:
     // the device cannot. Until rt_reactive_end.
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
     void rt_reactive_end();
+    // The tracer's outside denoiser this frame (rt_denoiser.h: DLSS Ray Reconstruction), null for the built-in filters.
+    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return temporal_ ? temporal_->denoiser() : nullptr; }
     // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
     // textures (the view constants' view_traced). `which`: 0 the traced light, 1 the added light.
     [[nodiscard]] std::uint32_t rt_publish_light(void* image, TextureStore& textures, unsigned which = 0u);
@@ -799,6 +802,7 @@ private:
     unsigned temporal_output_h_ = 0u;
     unsigned temporal_frame_ = 0u;
     unsigned temporal_kind_ = 0u;
+    bool temporal_rr_ = false;  // DLSS made as Ray Reconstruction (the tracer running)
     unsigned temporal_quality_ = 0u;
     bool temporal_history_valid_ = false;
     bool scene_temporal_ = false;

@@ -391,6 +391,8 @@ void set_render_tracing(bool tracing, bool fsr3) noexcept {
     s_tracing.store((tracing ? 1u : 0u) | (tracing && fsr3 ? 2u : 0u), std::memory_order_relaxed);
 }
 
+bool render_tracing() noexcept { return (s_tracing.load(std::memory_order_relaxed) & 1u) != 0u; }
+
 namespace {
 std::atomic<bool> s_frame_generation_running{false};
 std::atomic<bool> s_frame_generation_allowed{false};

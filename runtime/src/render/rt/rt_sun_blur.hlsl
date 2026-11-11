@@ -57,7 +57,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const int2 pixel = int2(id.xy);
     const float4 centre = g_in.Load(int3(pixel, 0));
     const float4 guide = g_guide.Load(int3(pixel, 0));
-    if (guide.a == 0.0f || !in_penumbra(id.xy)) {
+    if (guide.a == 0.0f || !in_penumbra(id.xy) || (g_more.z & 2048u) != 0u) {  // raw signals (FB, 22.20): copied through
         g_out[id.xy] = centre;
         return;
     }

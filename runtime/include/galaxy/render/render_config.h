@@ -292,6 +292,8 @@ struct RenderFeatureCaps {
 [[nodiscard]] RenderConfig get_render_config_chosen();
 // Set as the tracer starts (with whether FSR 3 runs on this device) and stops.
 void set_render_tracing(bool tracing, bool fsr3) noexcept;
+// Whether the tracer runs (set_render_tracing).
+[[nodiscard]] bool render_tracing() noexcept;
 
 // FSR 3 frame generation is built into this renderer (RenderConfig::frame_generation 2; 1 is DLSS).
 [[nodiscard]] bool fsr_frame_generation_compiled() noexcept;

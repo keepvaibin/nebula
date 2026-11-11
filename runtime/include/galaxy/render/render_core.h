@@ -459,11 +459,11 @@ private:
         BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, IndirectGuideA, IndirectGuideB, IndirectMotion, IndirectStep, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
-        VolumeB, Scatter, ReflectMoved, Count
+        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, Count
     };
     // The passes an image is made for.
     static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
-                                   kRtPassTransmit = 16u, kRtPassBlend = 32u;
+                                   kRtPassTransmit = 16u, kRtPassBlend = 32u, kRtPassGuides = 64u;
     // The second layer's history images are made once a frame has had blended things to trace (rt_blended).
     std::uint32_t rt_light_wanted_ = 0u;
     bool rt_blend_seen_ = false;
@@ -610,6 +610,11 @@ private:
     bool rt_volume_drawn_ = false, rt_scatter_drawn_ = false;
     // The reflections' change was written this frame (rt_pass_reflect.cpp): the reactive mask reads it (rt_reactive).
     bool rt_reflect_moved_ = false;
+    // An outside denoiser (rt_denoiser.h; rt_pass_reflect.cpp): the signals go to it raw this frame (g_more.z bit
+    // 2048); its guides were written this frame.
+    bool rt_raw_ = false, rt_guides_drawn_ = false;
+    void rt_pass_guides();
+    void rt_guides_publish();
     std::uint32_t rt_volume_turn_ = 0u, rt_volume_slot_ = 0u, rt_volume_sampler_ = 0u, rt_scatter_slot_ = 0u;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_view_retired_;  // frame, image
     std::uint64_t rt_check_sum_[8]{};

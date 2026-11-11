@@ -2,6 +2,7 @@
 // RenderCore's part of ray tracing: when the tracer runs, which meshes it holds structures for, and what a frame
 // builds (render/rt holds the policy, rt_backend.h the API).
 #include "galaxy/render/render_core.h"
+#include "galaxy/render/rt/rt_denoiser.h"
 
 #include "galaxy/launch_args.h"
 #include "galaxy/render/ambient_occlusion_shape.h"
@@ -848,7 +849,7 @@ struct RtImageKind {
     std::uint8_t size;
     std::uint8_t passes;
 };
-constexpr std::uint8_t kForLight = 1u, kForIndirect = 2u, kForReflect = 4u, kForVolume = 8u, kForTransmit = 16u, kForBlend = 32u;
+constexpr std::uint8_t kForLight = 1u, kForIndirect = 2u, kForReflect = 4u, kForVolume = 8u, kForTransmit = 16u, kForBlend = 32u, kForGuides = 64u;
 constexpr rt::ImageFormat kHalf4 = rt::ImageFormat::Rgba16f;  // shares as fractions: an average over time in bytes stalls
 constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Guide A", kHalf4, kRtFull, kForLight},
@@ -917,6 +918,10 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Volume B", kHalf4, kRtVolume, kForVolume},
     {"Nebula RT Scatter", kHalf4, kRtVolume, kForVolume},  // FB: the light in the air, integrated (rt_scatter.hlsl)
     {"Nebula RT Reflect Moved", rt::ImageFormat::R8, kRtFull, kForReflect},  // FB: where R changed (rt_reflect_time.hlsl)
+    {"Nebula RT Guide Diffuse", rt::ImageFormat::Rgba8, kRtFull, kForGuides},  // FB: an outside denoiser's (rt_rr_guides.hlsl)
+    {"Nebula RT Guide Specular", rt::ImageFormat::Rgba8, kRtFull, kForGuides},
+    {"Nebula RT Guide Normal Roughness", kHalf4, kRtFull, kForGuides},
+    {"Nebula RT Guide Hit", rt::ImageFormat::R16f, kRtFull, kForGuides},
 };
 // The light volume's cells: across, down and deep over the scene camera's view.
 constexpr std::uint32_t kRtVolumeCells[3] = {96u, 54u, 48u};
@@ -947,7 +952,7 @@ struct RtPassConstants {
 bool RenderCore::rt_images(unsigned width, unsigned height, std::uint32_t wanted) {
     static_assert(std::size(kRtImageKinds) == kRtImages);
     static_assert(kRtPassLight == kForLight && kRtPassIndirect == kForIndirect && kRtPassReflect == kForReflect && kRtPassVolume == kForVolume &&
-                  kRtPassTransmit == kForTransmit && kRtPassBlend == kForBlend);
+                  kRtPassTransmit == kForTransmit && kRtPassBlend == kForBlend && kRtPassGuides == kForGuides);
     std::erase_if(rt_light_retired_, [&](const std::pair<std::uint64_t, std::uint32_t>& retired) {
         if (retired.first + rt::kFramesToRelease > frame_index_) {
             return false;
@@ -1617,6 +1622,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         }
     }
     rt_light_ticks_before_ = ticks;
+    constants.more[2] |= rt_raw_ ? 2048u : 0u;  // FB (22.20): the signals raw, for an outside denoiser
     constants.kept[3] = std::bit_cast<std::uint32_t>(std::clamp(rt_frame_rate_ / 60.0f, 0.5f, 2.0f));
     std::memcpy(constants.before, before_from_now.data(), sizeof(constants.before));
     if (::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded)) {
@@ -1660,7 +1666,10 @@ void RenderCore::rt_light() {
     unsigned width = 0u, height = 0u;
     if (renderer_.rt_light_begin(depth, items, width, height)) {
         rt_backend_.begin(commands.commands, renderer_.frame_slot(), commands.descriptors);
-        const std::uint32_t wanted = kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
+        // FB (22.20): the renderer's outside denoiser takes the signals raw (rt_denoiser.h).
+        const rt::Denoiser* const denoiser = renderer_.rt_denoiser();
+        rt_raw_ = denoiser != nullptr && denoiser->raw_signals() == rt::kSignalAll;
+        const std::uint32_t wanted = (rt_raw_ ? kRtPassGuides : 0u) | kRtPassLight | (rt_pass_indirect_on() ? kRtPassIndirect : 0u) |
                                      (rt_pass_reflect_on() ? kRtPassReflect : 0u) | (rt_pass_volume_on() ? kRtPassVolume : 0u) |
                                      (rt_blend_seen_ ? kRtPassBlend : 0u);
         rt_light_wanted_ = wanted & ~kRtPassBlend;
@@ -1703,6 +1712,7 @@ void RenderCore::rt_light() {
             rt_pass_light();
             rt_pass_reflect();
             rt_pass_volume();
+            rt_pass_guides();
             rt_pass_reference();
             rt_backend_.end_counters();
             rt_filters();
@@ -1745,6 +1755,7 @@ void RenderCore::rt_light() {
                     }
                 }
                 rt_light_on_ = true;
+                rt_guides_publish();
                 view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
                                (rt_lamps_own_ ? 32u : 0u);  // local lights off: the programs' own lamp (FC)
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
