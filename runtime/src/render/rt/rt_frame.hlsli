@@ -31,7 +31,9 @@ cbuffer FrameConstants : register(b0) {
     float4 g_before[3];    // the frame before's eye space from this frame's (rows of a 3x4 matrix): for a pixel whose
                            // mesh the pass cannot read, only the camera's move is known
     uint4 g_kept;          // x: the first byte, in the drops' buffer, of where each emitter of the frame before is in
-                           // this frame's list (a uint each; past the list: gone); y: how many the frame before had;
+                           // this frame's list (a uint each; past the list: gone), then (from x + max(y, 1) x 4)
+                           // where each emitter of this frame's list was in the frame before (float4 each: centre in
+                           // that frame's eye space, reach; reach 0: it was not there); y: how many the frame before had;
                            // z 1: there is a frame before to read (the filters' history and the reservoirs')
 };
 

@@ -1250,7 +1250,8 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     }
     const std::size_t drops_only = std::max<std::size_t>(rt_drops_.size() * sizeof(RtDrop), sizeof(RtDrop));
     const std::size_t remap_at = drops_only + rt_emitters_.size() * sizeof(RtEmitter);
-    const std::size_t drop_bytes = remap_at + std::max<std::size_t>(rt_emitter_ids_before_.size(), 1u) * sizeof(std::uint32_t);
+    const std::size_t was_at = remap_at + std::max<std::size_t>(rt_emitter_ids_before_.size(), 1u) * sizeof(std::uint32_t);
+    const std::size_t drop_bytes = was_at + std::max<std::size_t>(rt_emitters_.size(), 1u) * 4u * sizeof(float);
     const std::size_t drop_tile_words = rt_tiles_.size() + rt_tile_entries_.size();
     const std::size_t tile_words = drop_tile_words + rt_glow_tiles_.size() + rt_glow_entries_.size();
     const UploadRing::Allocation items_at = ring.allocate(item_bytes, 256u);
@@ -1289,11 +1290,24 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         if (!rt_emitter_remap_.empty()) {
             std::memcpy(drops_at.cpu + remap_at, rt_emitter_remap_.data(), rt_emitter_remap_.size() * sizeof(std::uint32_t));
         }
+        // Where each of this frame's emitters was in the frame before, and how far it reached (the buffer is zeroed:
+        // reach 0 for a new one): the reservoirs' bias correction asks what the frame before's tries could reach.
+        for (std::size_t e = rt_emitter_remap_.size(); e-- > 0;) {
+            const std::uint32_t to_now = rt_emitter_remap_[e];
+            if (to_now < rt_emitters_.size() && (e + 1u) * 4u <= rt_emitter_places_before_.size()) {
+                std::memcpy(drops_at.cpu + was_at + to_now * 4u * sizeof(float), rt_emitter_places_before_.data() + e * 4u,
+                            4u * sizeof(float));
+            }
+        }
         constants.kept[0] = static_cast<std::uint32_t>(remap_at);
         constants.kept[1] = static_cast<std::uint32_t>(rt_emitter_ids_before_.size());
         rt_emitter_ids_before_.resize(rt_emitters_.size());
+        rt_emitter_places_before_.resize(rt_emitters_.size() * 4u);
         for (std::size_t e = 0; e < rt_emitters_.size(); ++e) {
             rt_emitter_ids_before_[e] = rt_emitters_[e].reserved[1];
+            const RtEmitter& emitter = rt_emitters_[e];
+            const float place[4] = {emitter.centre[0], emitter.centre[1], emitter.centre[2], emitter.reach};
+            std::memcpy(rt_emitter_places_before_.data() + e * 4u, place, sizeof(place));
         }
     }
     std::memcpy(constants.ray, frame.ray, sizeof(constants.ray));

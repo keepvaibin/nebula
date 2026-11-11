@@ -128,9 +128,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                     if (!(behind > 0.0f)) {
                         continue;
                     }
-                    // Where that surface point is in this frame's eye space (the camera's move undone).
-                    const float3 moved = place_before - float3(g_before[0].w, g_before[1].w, g_before[2].w);
-                    others[j] = g_before[0].xyz * moved.x + g_before[1].xyz * moved.y + g_before[2].xyz * moved.z;
+                    others[j] = place_before;  // in the frame before's eye space, as its lights were
                     others_count[j] = behind;
                     counted += behind;
                     const uint was_index = uint(theirs.r) + uint(theirs.g) * 1024u;
@@ -161,12 +159,13 @@ void main(uint3 id : SV_DispatchThreadID) {
             float weight = 0.0f;
             if (kept != 0xFFFFFFFFu) {
                 // How many of the candidates could have chosen this light: this frame's, and each reservoir's whose
-                // surface the light reaches.
-                const float reach = asfloat(g_drops.Load(g_glow.x + kept * 48u + 28u));
+                // surface the light reached when it was written (the frame before's place and reach of the light: one
+                // that moved in or is new was not among those tries, and counting them would darken it).
+                const float4 was = asfloat(g_drops.Load4(g_kept.x + max(g_kept.y, 1u) * 4u + kept * 16u));
                 float could = float(tries);
                 for (uint j = 0u; j < 3u; ++j) {
-                    const float3 to_it = kept_at.xyz - others[j];
-                    if (others_count[j] > 0.0f && dot(to_it, to_it) < reach * reach) {
+                    const float3 to_it = was.xyz - others[j];
+                    if (others_count[j] > 0.0f && dot(to_it, to_it) < was.w * was.w) {
                         could += others_count[j];
                     }
                 }
