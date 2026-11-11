@@ -57,7 +57,10 @@ typedef struct LumaPatchInput {
        row stays). */
     const LumaLinkTable* links;
     uint32_t link_count;
-    const char* const* mods; /* every mod that is on, by id, from the bottom of the list up (for which is higher) */
+    /* Every mod that is on, by id, from the bottom of the list up: which of two mods adding one key in the group is
+       higher. When a link table has a patch, every mod with a patch here or in `links` must be named, else the state
+       is -1 and luma_patched_error names the mod (F3.11-1): never guessed. */
+    const char* const* mods;
     uint32_t mod_count;
 } LumaPatchInput;
 

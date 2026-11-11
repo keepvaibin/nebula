@@ -210,7 +210,8 @@ fn a_link_key_is_new_to_the_zone_through_the_c_call() {
     let common_path = CString::new(OBJINFO).unwrap();
     // A disc path names the same table (its archive is a folder of the store).
     let a_path = CString::new("StageData/AstroGalaxy/AstroGalaxy.arc/jmp/Placement/LayerA/ObjInfo").unwrap();
-    let ids = [CString::new("low").unwrap(), CString::new("high").unwrap()];
+    // Every mod with a patch here, from the bottom of the list up (F3.11-1: one it leaves out is refused below).
+    let ids = [CString::new("low").unwrap(), CString::new("taken").unwrap(), CString::new("high").unwrap()];
     let mods: Vec<*const c_char> = ids.iter().map(|m| m.as_ptr()).collect();
     let input = |path: &CString, table: &[u8], patches: &[LumaTablePatch], links: &[LumaLinkTable]| LumaPatchInput {
         size: std::mem::size_of::<LumaPatchInput>() as u32,
@@ -250,6 +251,14 @@ fn a_link_key_is_new_to_the_zone_through_the_c_call() {
         assert!(why.contains("LayerA/ObjInfo") && why.contains("50"), "{why}");
         let mut size = 0;
         assert_eq!(ids_of(std::slice::from_raw_parts(luma_patched_table(r, &mut size), size as usize)), vec![1, 2, 70]);
+        luma_patched_free(r);
+
+        // A mod the list does not name cannot be ordered: -1, naming it, and the game's table stands (F3.11-1).
+        let short = LumaPatchInput { mod_count: 1, ..input(&common_path, &common, &low_c, &links) };
+        let r = luma_patch_table(&short);
+        assert_eq!(luma_patched_state(r), -1);
+        assert!(s(luma_patched_error(r)).is_some_and(|e| e.starts_with("taken: ")), "{:?}", s(luma_patched_error(r)));
+        assert!(luma_patched_table(r, &mut size).is_null());
         luma_patched_free(r);
 
         // LayerA, with Common and low's patches as its group: high's 60 stays, and the conflict is Common's fact only.
