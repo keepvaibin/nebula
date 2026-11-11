@@ -17,6 +17,23 @@ void* malloc(size_t size) {
     return sHost->heap_alloc(sHost->user, size);
 }
 
+/* `count` items of `size` bytes, zeroed; null when the size does not fit. LLVM makes a call to calloc out of malloc
+   followed by zeroing, so the module defines it. heap_alloc is not malloc to the optimizer, so this is never turned
+   into a call to itself. */
+void* calloc(size_t count, size_t size) {
+    if (size != 0 && count > (size_t)-1 / size) {
+        return NULL;
+    }
+    const size_t bytes = count * size;
+    unsigned char* const block = (unsigned char*)sHost->heap_alloc(sHost->user, bytes);
+    if (block != NULL) {
+        for (size_t i = 0; i < bytes; i++) {
+            block[i] = 0;
+        }
+    }
+    return block;
+}
+
 void* realloc(void* data, size_t size) {
     return sHost->heap_realloc(sHost->user, data, size);
 }
