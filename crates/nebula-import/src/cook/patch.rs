@@ -8,7 +8,8 @@
 use super::table::{Cell, Column, Kind, TableIr};
 use super::table_columns::{columns_of, widen_empty, KindColumn};
 use super::table_keys::{rule_for, Key};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
+use luma_validate::{Arg, ColumnType, Finding, Level};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 
@@ -30,8 +31,48 @@ pub enum Fact {
     /// How many rows a mod's selector matched (0 is a Note: L407).
     Selected { table: String, mod_id: String, file: String, selector: usize, rows: usize },
     /// A mod's patch could not apply (the validator passed it against another game, or the mod changed since): the
-    /// whole patch is left out, the other mods' still apply. `why` is English, for the log.
-    Failed { table: String, mod_id: String, file: String, why: String },
+    /// whole patch is left out, the other mods' still apply. `refusal` is the validator's finding for it (its code and
+    /// parameters, said in any language by `luma_validate::reason`); `why` is that in English, for the log.
+    Failed { table: String, mod_id: String, file: String, refusal: Finding, why: String },
+}
+
+/// Why a patch cannot apply, as the validator names the same fault (its L400, L402, L403 and L406 with the same
+/// phrases and parameters), so the Mods screen says it in the player's language (F, INBOX-G 18). The applier's only
+/// error kind for a patch; any other error is about the game's table and goes to the caller.
+#[derive(Debug)]
+pub struct Refusal(pub Finding);
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "L{} {}", self.0.code, luma_validate::reason(&self.0, "UsEnglish"))
+    }
+}
+
+impl std::error::Error for Refusal {}
+
+pub(crate) fn refuse(code: u16, args: Vec<(&'static str, Arg)>) -> anyhow::Error {
+    anyhow::Error::new(Refusal(Finding { code, level: Level::Error, mod_id: None, file: String::new(), line: None, column: None, pointer: None, args }))
+}
+
+/// L400 with a shape phrase, as the validator's `bad`.
+pub(crate) fn shape(why: &'static str, detail: impl Into<String>) -> anyhow::Error {
+    refuse(400, vec![("found", Arg::Phrase(why)), ("detail", Arg::Text(detail.into()))])
+}
+
+fn text(s: impl Into<String>) -> Arg {
+    Arg::Text(s.into())
+}
+
+/// A value as the validator quotes it in Patch.ValueType: text in quotation marks, a number as written, else its kind.
+fn found(v: &Value) -> Arg {
+    match v {
+        Value::String(s) => text(format!("\"{s}\"")),
+        Value::Number(n) => text(n.to_string()),
+        Value::Null => Arg::Phrase("Type.Null"),
+        Value::Bool(_) => Arg::Phrase("Type.Bool"),
+        Value::Array(_) => Arg::Phrase("Type.Array"),
+        Value::Object(_) => Arg::Phrase("Type.Object"),
+    }
 }
 
 /// Who changed what, so the next mod's change to it is named.
@@ -97,37 +138,47 @@ pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Ve
             *a.table = table;
             a.owners = owners;
             a.facts.truncate(facts);
-            a.facts.push(Fact::Failed { table: a.path.clone(), mod_id: p.mod_id.into(), file: p.file.into(), why: format!("{e:#}") });
+            let mut refusal = match e.downcast::<Refusal>() {
+                Ok(Refusal(f)) => f,
+                Err(other) => return Err(other),
+            };
+            refusal.mod_id = Some(p.mod_id.into());
+            refusal.file = p.file.into();
+            let why = luma_validate::reason(&refusal, "UsEnglish");
+            a.facts.push(Fact::Failed { table: a.path.clone(), mod_id: p.mod_id.into(), file: p.file.into(), refusal, why });
         }
     }
     Ok(a.facts)
 }
 
-fn object<'v>(v: &'v Value, what: &str) -> Result<&'v Map<String, Value>> {
-    v.as_object().with_context(|| format!("{what} is not a set of columns"))
+fn object(v: &Value, refused: impl FnOnce() -> anyhow::Error) -> Result<&Map<String, Value>> {
+    v.as_object().ok_or_else(refused)
 }
 
 fn list<'v>(root: &'v Value, name: &str) -> Result<&'v [Value]> {
     match root.get(name) {
         None => Ok(&[]),
-        Some(v) => Ok(v.as_array().with_context(|| format!("{name} is not a list"))?.as_slice()),
+        Some(v) => Ok(v.as_array().ok_or_else(|| shape("Patch.NotArray", name))?.as_slice()),
     }
 }
 
 impl Applier<'_> {
     fn one(&mut self, p: &ModPatch) -> Result<()> {
         let root = p.patch;
-        if root.get("patch").and_then(Value::as_u64) != Some(1) {
-            bail!("not a patch of form 1");
+        let root_object = object(root, || shape("Patch.NotObject", ""))?;
+        match root_object.get("patch") {
+            None => return Err(shape("Patch.NoVersion", "")),
+            Some(v) if v.as_u64() != Some(1) => return Err(shape("Patch.Version", v.to_string())),
+            Some(_) => {}
         }
         if let Some(rows) = root.get("rows") {
-            self.whole(p, rows.as_array().context("rows is not a list")?)?;
+            self.whole(p, rows.as_array().ok_or_else(|| shape("Patch.NotArray", "rows"))?)?;
         }
-        for (i, w) in list(root, "remove")?.iter().enumerate() {
+        for w in list(root, "remove")? {
             if self.positional {
-                bail!("remove {}: rows of this table are named by place, which a remove would move (table-keys 3)", i + 1);
+                return Err(refuse(402, vec![("why", Arg::Phrase("Patch.RemoveByPlace")), ("row", text("")), ("count", text(""))]));
             }
-            let Some(at) = self.find(p, w, &format!("remove {}", i + 1))? else { continue };
+            let Some(at) = self.find(p, w)? else { continue };
             let id = self.row_id(at);
             self.conflict_row(&id, p.mod_id);
             let mine = self.owners.cells.keys().filter(|(r, _)| *r == id).cloned().collect::<Vec<_>>();
@@ -138,20 +189,19 @@ impl Applier<'_> {
             self.table.rows.remove(at);
             self.owners.removed.insert(id, p.mod_id.to_string());
         }
-        for (i, s) in list(root, "set")?.iter().enumerate() {
-            let what = format!("set {}", i + 1);
-            let w = s.get("where").with_context(|| format!("{what} has no where"))?;
-            let values = object(s.get("values").with_context(|| format!("{what} has no values"))?, &what)?;
-            let cells = self.cells(values, &what)?;
-            if let Some(at) = self.find(p, w, &what)? {
+        for s in list(root, "set")? {
+            let set_shape = || shape("Patch.SetShape", "");
+            let w = s.get("where").ok_or_else(set_shape)?;
+            let values = object(s.get("values").ok_or_else(set_shape)?, set_shape)?;
+            let cells = self.cells(values)?;
+            if let Some(at) = self.find(p, w)? {
                 self.write(at, &cells, p.mod_id);
             }
         }
-        for (i, row) in list(root, "add")?.iter().enumerate() {
-            let what = format!("add {}", i + 1);
-            let fields = object(row, &what)?;
+        for row in list(root, "add")? {
+            let fields = object(row, || shape("Patch.RowShape", ""))?;
             let mut cells = self.new_row();
-            for (c, cell) in self.cells(fields, &what)? {
+            for (c, cell) in self.cells(fields)? {
                 cells[c] = cell;
             }
             if self.positional {
@@ -174,15 +224,16 @@ impl Applier<'_> {
             self.owners.rows.insert(id, p.mod_id.to_string());
         }
         for (i, s) in list(root, "select")?.iter().enumerate() {
-            let what = format!("select {}", i + 1);
-            let wanted = object(s.get("match").with_context(|| format!("{what} has no match"))?, &what)?;
-            let values = object(s.get("values").with_context(|| format!("{what} has no values"))?, &what)?;
-            let cells = self.cells(values, &what)?;
+            let select_shape = || shape("Patch.SelectShape", "");
+            let wanted = object(s.get("match").ok_or_else(select_shape)?, select_shape)?;
+            let values = object(s.get("values").ok_or_else(select_shape)?, select_shape)?;
+            let cells = self.cells(values)?;
             let mut tests = Vec::with_capacity(wanted.len());
             for (name, test) in wanted {
-                let c = self.table.column_of(name)?.with_context(|| format!("{what}: no column {name}"))?;
-                let one = object(test, &what)?;
-                let (kind, value) = one.iter().next().filter(|_| one.len() == 1).with_context(|| format!("{what}: {name} takes one of equals, prefix, glob"))?;
+                let match_kind = || refuse(406, vec![("why", Arg::Phrase("Select.MatchKind")), ("column", text(name.clone()))]);
+                let c = self.column(name).ok_or_else(|| refuse(406, vec![("why", Arg::Phrase("Select.NoSuchColumn")), ("column", text(name.clone()))]))?;
+                let one = object(test, match_kind)?;
+                let (kind, value) = one.iter().next().filter(|_| one.len() == 1).ok_or_else(match_kind)?;
                 tests.push((c, kind.clone(), value.clone()));
             }
             let mut count = 0;
@@ -200,17 +251,16 @@ impl Applier<'_> {
     /// `rows`: the whole of a `#` table.
     fn whole(&mut self, p: &ModPatch, rows: &[Value]) -> Result<()> {
         if !self.positional {
-            bail!("rows gives a whole table, which only a table named by place takes (table-keys 3)");
+            return Err(refuse(402, vec![("why", Arg::Phrase("Patch.RowsNotByPlace")), ("row", text("")), ("count", text(""))]));
         }
         let lower = self.owners.whole.clone().or_else(|| self.owners.rows.values().chain(self.owners.cells.values()).next().cloned());
         if let Some(lower) = lower {
             self.push_conflict("*", None, lower, p.mod_id);
         }
         let mut whole = Vec::with_capacity(rows.len());
-        for (i, row) in rows.iter().enumerate() {
-            let what = format!("rows {}", i + 1);
+        for row in rows {
             let mut cells = self.new_row();
-            for (c, cell) in self.cells(object(row, &what)?, &what)? {
+            for (c, cell) in self.cells(object(row, || shape("Patch.RowShape", ""))?)? {
                 cells[c] = cell;
             }
             whole.push(cells);
@@ -226,13 +276,41 @@ impl Applier<'_> {
         self.table.columns.iter().map(|c| self.kind.iter().find(|k| k.column.hash == c.hash).map_or_else(|| blank(c), |k| usual(c, &k.usual))).collect()
     }
 
-    fn cells(&self, values: &Map<String, Value>, what: &str) -> Result<Vec<(usize, Cell)>> {
+    /// A column by name; None for one the table lacks (or a name no column could have).
+    fn column(&self, name: &str) -> Option<usize> {
+        self.table.column_of(name).ok().flatten()
+    }
+
+    fn cells(&self, values: &Map<String, Value>) -> Result<Vec<(usize, Cell)>> {
         let mut out = Vec::with_capacity(values.len());
         for (name, value) in values {
-            let c = self.table.column_of(name)?.with_context(|| format!("{what}: no column {name}"))?;
-            out.push((c, TableIr::cell(&self.table.columns[c], name, value)?));
+            let c = self.column(name).ok_or_else(|| {
+                refuse(403, vec![("why", Arg::Phrase("Patch.NoSuchColumn")), ("column", text(name.clone())), ("target", text(self.path.clone()))])
+            })?;
+            out.push((c, self.cell(c, name, value)?));
         }
         Ok(out)
+    }
+
+    /// A value as a cell of column `c`, or the validator's L403 for a value the column cannot hold.
+    fn cell(&self, c: usize, name: &str, value: &Value) -> Result<Cell> {
+        let column = &self.table.columns[c];
+        TableIr::cell(column, name, value).map_err(|_| {
+            if value.get("bytes").is_some() {
+                return refuse(403, vec![("why", Arg::Phrase("Patch.BytesShape")), ("column", text(name))]);
+            }
+            let mut args = vec![("why", Arg::Phrase("Patch.ValueType")), ("column", text(name)), ("found", found(value))];
+            match crate::store_view::column_type(column) {
+                ColumnType::Int { min, max } => {
+                    args.push(("expected", Arg::Phrase("Column.Int")));
+                    args.push(("min", text(min.to_string())));
+                    args.push(("max", text(max.to_string())));
+                }
+                ColumnType::Float => args.push(("expected", Arg::Phrase("Column.Float"))),
+                ColumnType::Text => args.push(("expected", Arg::Phrase("Column.Text"))),
+            }
+            refuse(403, args)
+        })
     }
 
     fn write(&mut self, at: usize, cells: &[(usize, Cell)], mod_id: &str) {
@@ -249,10 +327,11 @@ impl Applier<'_> {
     }
 
     /// The row a `where` names, or None with a fact when it is not there.
-    fn find(&mut self, p: &ModPatch, w: &Value, what: &str) -> Result<Option<usize>> {
-        let w = object(w, what)?;
+    fn find(&mut self, p: &ModPatch, w: &Value) -> Result<Option<usize>> {
+        let not_key = || shape("Patch.WhereNotKey", if self.positional { "#".to_string() } else { self.key_names.join(", ") });
+        let w = object(w, not_key)?;
         let id = if self.positional {
-            let n = w.get("#").and_then(Value::as_u64).filter(|_| w.len() == 1).with_context(|| format!("{what}: a row of this table is named by \"#\""))?;
+            let n = w.get("#").and_then(Value::as_u64).filter(|_| w.len() == 1).ok_or_else(not_key)?;
             if (n as usize) < self.table.rows.len() {
                 return Ok(Some(n as usize));
             }
@@ -260,11 +339,12 @@ impl Applier<'_> {
         } else {
             let mut parts = Vec::with_capacity(self.key.len());
             if w.len() != self.key.len() {
-                bail!("{what}: where names the key {}", self.key_names.join(", "));
+                return Err(not_key());
             }
             for (name, &c) in self.key_names.iter().zip(&self.key) {
-                let v = w.get(name).with_context(|| format!("{what}: where names the key {}", self.key_names.join(", ")))?;
-                let cell = TableIr::cell(&self.table.columns[c], name, v)?;
+                let v = w.get(name).ok_or_else(not_key)?;
+                let cell = TableIr::cell(&self.table.columns[c], name, v)
+                    .map_err(|_| refuse(403, vec![("why", Arg::Phrase("Patch.KeyValue")), ("column", text(name.clone()))]))?;
                 parts.push(self.cell_text(c, &cell));
             }
             let id = self.fold(parts.join("\u{1f}"));
@@ -515,6 +595,66 @@ mod tests {
         let p = json!({"patch": 1, "set": [{"where": {"l_id": 1}, "values": {"Obj_arg7": 3}}]});
         let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "m", file: "pm", patch: &p }]).unwrap();
         assert!(matches!(&facts[..], [Fact::Failed { why, .. }] if why.contains("Obj_arg7")), "{facts:?}");
+        // The validator's finding: L403 Patch.NoSuchColumn, said in each language with the column's name.
+        let Fact::Failed { refusal, .. } = &facts[0] else { unreachable!() };
+        assert_eq!((refusal.code, refusal.mod_id.as_deref(), refusal.file.as_str()), (403, Some("m"), "pm"));
+        assert_eq!(luma_validate::reason(refusal, "UsEnglish"), format!("\"{OBJINFO}\" has no column \"Obj_arg7\""));
+        for language in ["EuFrench", "JpJapanese", "KrKorean"] {
+            let said = luma_validate::reason(refusal, language);
+            assert!(said.contains("Obj_arg7") && !said.contains('{') && said != luma_validate::reason(refusal, "UsEnglish"), "{language}: {said}");
+        }
+    }
+
+    #[test]
+    fn every_fault_is_the_validators_finding_in_every_language() {
+        let keyed = |patch: Value| {
+            let mut t = objinfo();
+            let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "m", file: "f.json", patch: &patch }]).unwrap();
+            let [Fact::Failed { refusal, .. }] = &facts[..] else { panic!("{patch}: {facts:?}") };
+            refusal.clone()
+        };
+        let col = |name: &str, kind| Column { hash: column_hash(name), mask: u32::MAX, kind, width: 32 };
+        let by_place = |patch: Value| {
+            let mut t = TableIr { columns: vec![col("frame", Kind::Int)], rows: vec![] };
+            t.add_rows(&[json!({"frame": 0})]).unwrap();
+            let facts = apply("ObjectData/Kuribo/Move.pa", &mut t, &[ModPatch { mod_id: "m", file: "f.json", patch: &patch }]).unwrap();
+            let [Fact::Failed { refusal, .. }] = &facts[..] else { panic!("{patch}: {facts:?}") };
+            refusal.clone()
+        };
+        let set = |w: Value, values: Value| json!({"patch": 1, "key": ["l_id"], "set": [{"where": w, "values": values}]});
+        let cases: Vec<(luma_validate::Finding, u16, &str)> = vec![
+            (keyed(json!([1])), 400, "Patch.NotObject"),
+            (keyed(json!({"key": ["l_id"]})), 400, "Patch.NoVersion"),
+            (keyed(json!({"patch": 2})), 400, "Patch.Version"),
+            (keyed(json!({"patch": 1, "set": 5})), 400, "Patch.NotArray"),
+            (keyed(json!({"patch": 1, "rows": []})), 402, "Patch.RowsNotByPlace"),
+            (by_place(json!({"patch": 1, "remove": [{"#": 0}]})), 402, "Patch.RemoveByPlace"),
+            (by_place(json!({"patch": 1, "set": [{"where": {"frame": 0}, "values": {"frame": 1}}]})), 400, "Patch.WhereNotKey"),
+            (keyed(json!({"patch": 1, "set": [{"where": {"l_id": 1}}]})), 400, "Patch.SetShape"),
+            (keyed(json!({"patch": 1, "add": [7]})), 400, "Patch.RowShape"),
+            (keyed(json!({"patch": 1, "select": [{"values": {"speed": 1.0}}]})), 400, "Patch.SelectShape"),
+            (keyed(json!({"patch": 1, "select": [{"match": {"colour": {"equals": 1}}, "values": {"speed": 1.0}}]})), 406, "Select.NoSuchColumn"),
+            (keyed(json!({"patch": 1, "select": [{"match": {"name": {"equals": "a", "glob": "b"}}, "values": {"speed": 1.0}}]})), 406, "Select.MatchKind"),
+            (keyed(set(json!({"l_id": 1}), json!({"colour": 1}))), 403, "Patch.NoSuchColumn"),
+            (keyed(set(json!({"l_id": 1}), json!({"l_id": "one"}))), 403, "Patch.ValueType"),
+            (keyed(set(json!({"l_id": 1}), json!({"speed": [1]}))), 403, "Patch.ValueType"),
+            (keyed(set(json!({"l_id": 1}), json!({"name": 3}))), 403, "Patch.ValueType"),
+            (keyed(set(json!({"l_id": 1}), json!({"name": {"bytes": "zz"}}))), 403, "Patch.BytesShape"),
+            (keyed(set(json!({"name": "Kuribo"}), json!({"speed": 1.0}))), 400, "Patch.WhereNotKey"),
+            (keyed(set(json!({"l_id": [1]}), json!({"speed": 1.0}))), 403, "Patch.KeyValue"),
+        ];
+        for (refusal, code, phrase) in &cases {
+            let said = refusal.args.iter().find(|(n, _)| *n == "why" || *n == "found").map(|(_, a)| a.clone());
+            assert_eq!((refusal.code, said), (*code, Some(Arg::Phrase(phrase))), "{refusal:?}");
+            assert_eq!((refusal.mod_id.as_deref(), refusal.file.as_str()), (Some("m"), "f.json"));
+            for language in luma_validate::LANGUAGES {
+                let words = luma_validate::reason(refusal, language);
+                assert!(!words.is_empty() && !words.contains('{'), "{phrase} in {language}: {words}");
+            }
+        }
+        // The int column's range is the validator's, from the column's width.
+        let wrong_int = &cases[13].0;
+        assert_eq!(luma_validate::reason(wrong_int, "UsEnglish"), format!("column \"l_id\" holds whole numbers from {} to {}; \"one\" does not fit", i32::MIN, i32::MAX));
     }
 
     #[test]
@@ -529,6 +669,9 @@ mod tests {
         let Fact::Failed { mod_id, file, why, .. } = &facts[0] else { panic!("{facts:?}") };
         assert_eq!((mod_id.as_str(), file.as_str()), ("m", "layers/base/patches/x.json"));
         assert!(why.contains("l_id"), "{why}");
+        let Fact::Failed { refusal, .. } = &facts[0] else { unreachable!() };
+        assert_eq!(refusal.code, 400);
+        assert_eq!(luma_validate::reason(refusal, "UsEnglish"), "it must give exactly the key columns, in order: l_id");
         assert_eq!(speed(&t, 1), speed(&before, 1));
         assert_eq!(speed(&t, 0), 9.0);
         // A table its rule cannot read is an error for the caller.

@@ -8,6 +8,10 @@ use serde_json::json;
 use std::ffi::{c_char, CStr, CString};
 use std::ptr::null;
 
+fn nebula_import_reason(f: &luma_validate::Finding, language: &str) -> String {
+    luma_validate::reason(f, language)
+}
+
 const OBJINFO: &str = "StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo";
 
 fn objinfo() -> TableIr {
@@ -79,7 +83,13 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
         assert_eq!(n as usize, rust.len() + 1);
         let first = &*luma_patched_fact_at(r, 0);
         assert_eq!((first.kind, s(first.mod_id).as_deref(), s(first.file).as_deref()), (LUMA_PATCH_FAILED, Some("not.json"), Some("pn.json")));
-        assert!(s(first.why).unwrap().starts_with("not JSON"));
+        // Not JSON: the validator's L400 with its own reading of the fault, said in each language.
+        assert_eq!(first.code, 400);
+        let english = s(luma_patched_fact_reason(r, 0, null())).unwrap();
+        assert_eq!(s(first.why).as_deref(), Some(english.as_str()));
+        let lang = CString::new("EuFrench").unwrap();
+        let french = s(luma_patched_fact_reason(r, 0, lang.as_ptr())).unwrap();
+        assert!(!english.is_empty() && french != english && !french.contains('{'), "{english} / {french}");
         for (i, fact) in rust.iter().enumerate() {
             let c = &*luma_patched_fact_at(r, i as u32 + 1);
             match fact {
@@ -94,8 +104,11 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
                 Fact::Selected { mod_id, selector, rows, .. } => {
                     assert_eq!((c.kind, s(c.mod_id), c.selector as usize, c.rows as usize), (LUMA_PATCH_SELECTED, Some(mod_id.clone()), *selector, *rows));
                 }
-                Fact::Failed { mod_id, why, .. } => {
+                Fact::Failed { mod_id, why, refusal, .. } => {
                     assert_eq!((c.kind, s(c.mod_id), s(c.why)), (LUMA_PATCH_FAILED, Some(mod_id.clone()), Some(why.clone())));
+                    assert_eq!(c.code, u32::from(refusal.code));
+                    let lang = CString::new("JpJapanese").unwrap();
+                    assert_eq!(s(luma_patched_fact_reason(r, i as u32 + 1, lang.as_ptr())), Some(nebula_import_reason(refusal, "JpJapanese")));
                 }
             }
         }
@@ -104,6 +117,10 @@ fn the_c_call_gives_the_rust_applier_table_and_facts() {
         let kinds: Vec<u32> = (1..n).map(|i| (*luma_patched_fact_at(r, i)).kind).collect();
         assert_eq!(kinds, vec![LUMA_PATCH_FAILED, LUMA_PATCH_CONFLICT, LUMA_PATCH_MISSING, LUMA_PATCH_SELECTED], "{rust:?}");
         assert!(luma_patched_fact_at(r, n).is_null());
+        assert!(luma_patched_fact_reason(r, n, null()).is_null());
+        let conflict = (0..n).find(|&i| (*luma_patched_fact_at(r, i)).kind == LUMA_PATCH_CONFLICT).unwrap();
+        assert!(luma_patched_fact_reason(r, conflict, null()).is_null());
+        assert_eq!((*luma_patched_fact_at(r, conflict)).code, 0);
         luma_patched_free(r);
     }
     assert!(rust.iter().any(|f| matches!(f, Fact::Conflict { lower, higher, .. } if lower == "a" && higher == "b")));
@@ -154,6 +171,7 @@ fn every_input_fault_is_refused_with_its_reason() {
         assert_eq!(luma_patched_state(null()), -1);
         assert_eq!(luma_patched_fact_count(null()), 0);
         assert!(luma_patched_fact_at(null(), 0).is_null());
+        assert!(luma_patched_fact_reason(null(), 0, null()).is_null());
         luma_patched_free(std::ptr::null_mut());
     }
 }

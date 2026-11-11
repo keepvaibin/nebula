@@ -262,6 +262,17 @@ pub fn message(f: &Finding, language: &str) -> String {
     fill(&text::get(&format!("L{}", f.code), lang), f, lang, 0)
 }
 
+/// Why the finding was made, without where (its `why` or `found` phrase, filled with its parameters), in one of the
+/// game's languages: what a screen that names the mod and the file itself puts after them (the Mods screen's
+/// Mods.Patch.Failed, F INBOX-G 18). A finding with neither phrase gives its whole message.
+pub fn reason(f: &Finding, language: &str) -> String {
+    let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);
+    match f.args.iter().find(|(n, _)| *n == "why" || *n == "found") {
+        Some((_, Arg::Phrase(id))) => fill(&text::get(id, lang), f, lang, 1),
+        _ => message(f, language),
+    }
+}
+
 /// The words for a phrase id in one language (for reasons of not-checked rules, and screens that list them).
 pub fn phrase(id: &str, language: &str) -> String {
     let lang = LANGUAGES.iter().position(|&l| l == language).unwrap_or(0);

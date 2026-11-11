@@ -1,8 +1,10 @@
 //! The applier's C interface (`include/luma_patch.h`, contract table-keys 8): the game gives one cooked table and the
 //! patches of the mods that are on, and takes back the patched table and the facts for the Mods screen.
 
-use crate::cook::patch::{apply, Fact, ModPatch};
+use crate::cook::patch::{apply, refuse, Fact, ModPatch};
 use crate::cook::table::TableIr;
+use luma_validate::{Arg, Finding};
+use std::cell::RefCell;
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
 
@@ -40,6 +42,7 @@ pub struct LumaPatchFact {
     pub why: *const c_char,
     pub selector: u32,
     pub rows: u32,
+    pub code: u32,
 }
 
 pub struct LumaPatched {
@@ -48,6 +51,10 @@ pub struct LumaPatched {
     /// The texts the facts point into; a CString's bytes stay put when this list grows.
     texts: Vec<CString>,
     facts: Vec<LumaPatchFact>,
+    /// Each fact's validator finding (LUMA_PATCH_FAILED), for its reason in a language.
+    refusals: Vec<Option<Finding>>,
+    /// Reasons said so far, kept until the result is freed.
+    said: RefCell<Vec<CString>>,
 }
 
 fn cstring(text: &str) -> CString {
@@ -81,7 +88,14 @@ unsafe fn bytes<'a>(p: *const u8, size: u64) -> Option<&'a [u8]> {
 }
 
 fn failed(why: &str) -> *mut LumaPatched {
-    Box::into_raw(Box::new(LumaPatched { error: Some(cstring(why)), table: Vec::new(), texts: Vec::new(), facts: Vec::new() }))
+    Box::into_raw(Box::new(LumaPatched {
+        error: Some(cstring(why)),
+        table: Vec::new(),
+        texts: Vec::new(),
+        facts: Vec::new(),
+        refusals: Vec::new(),
+        said: RefCell::new(Vec::new()),
+    }))
 }
 
 unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
@@ -112,15 +126,40 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
         let json = bytes(p.json, p.json_size).ok_or_else(|| format!("{mod_id}: {file}: its bytes are null"))?;
         match serde_json::from_slice::<serde_json::Value>(json) {
             Ok(value) => owned.push((mod_id, file, value)),
-            Err(e) => unread.push(Fact::Failed { table: path.to_string(), mod_id, file, why: format!("not JSON: {e}") }),
+            Err(_) => {
+                // The validator's own reading names the fault as its L400 does (Json.Truncated, Json.Comment...).
+                let (what, detail) = match luma_validate::json::parse(json) {
+                    Err(e) => (e.what, e.detail),
+                    Ok(_) => ("Json.Unreadable", String::new()),
+                };
+                let mut refusal = match refuse(400, vec![("found", Arg::Phrase(what)), ("detail", Arg::Text(detail))]).downcast::<crate::cook::patch::Refusal>() {
+                    Ok(r) => r.0,
+                    Err(e) => return Err(format!("{e:#}")),
+                };
+                refusal.mod_id = Some(mod_id.clone());
+                refusal.file = file.clone();
+                let why = luma_validate::reason(&refusal, "UsEnglish");
+                unread.push(Fact::Failed { table: path.to_string(), mod_id, file, refusal, why });
+            }
         }
     }
     let patches: Vec<ModPatch> = owned.iter().map(|(mod_id, file, patch)| ModPatch { mod_id, file, patch }).collect();
     let mut facts = unread;
     facts.extend(apply(path, &mut table, &patches).map_err(|e| format!("{e:#}"))?);
 
-    let mut out = LumaPatched { error: None, table: table.to_ntbl(), texts: Vec::new(), facts: Vec::new() };
+    let mut out = LumaPatched {
+        error: None,
+        table: table.to_ntbl(),
+        texts: Vec::new(),
+        facts: Vec::new(),
+        refusals: Vec::new(),
+        said: RefCell::new(Vec::new()),
+    };
     for fact in &facts {
+        out.refusals.push(match fact {
+            Fact::Failed { refusal, .. } => Some(refusal.clone()),
+            _ => None,
+        });
         let t = &mut out.texts;
         let c = match fact {
             Fact::Conflict { row, column, lower, higher, .. } => LumaPatchFact {
@@ -133,6 +172,7 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
                 why: ptr::null(),
                 selector: 0,
                 rows: 0,
+                code: 0,
             },
             Fact::Missing { row, mod_id, file, removed_by, .. } => LumaPatchFact {
                 kind: LUMA_PATCH_MISSING,
@@ -144,6 +184,7 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
                 why: ptr::null(),
                 selector: 0,
                 rows: 0,
+                code: 0,
             },
             Fact::Selected { mod_id, file, selector, rows, .. } => LumaPatchFact {
                 kind: LUMA_PATCH_SELECTED,
@@ -155,8 +196,9 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
                 why: ptr::null(),
                 selector: u32::try_from(*selector).unwrap_or(u32::MAX),
                 rows: u32::try_from(*rows).unwrap_or(u32::MAX),
+                code: 0,
             },
-            Fact::Failed { mod_id, file, why, .. } => LumaPatchFact {
+            Fact::Failed { mod_id, file, why, refusal, .. } => LumaPatchFact {
                 kind: LUMA_PATCH_FAILED,
                 mod_id: put(t, Some(mod_id)),
                 file: put(t, Some(file)),
@@ -166,6 +208,7 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
                 why: put(t, Some(why)),
                 selector: 0,
                 rows: 0,
+                code: u32::from(refusal.code),
             },
         };
         out.facts.push(c);
@@ -192,6 +235,18 @@ pub unsafe extern "C" fn luma_patched_state(result: *const LumaPatched) -> i32 {
         Some(r) if r.error.is_none() => 0,
         _ => -1,
     }
+}
+
+/// # Safety
+/// `result` as `luma_patched_state`; `language` null or a NUL-ended name.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_fact_reason(result: *const LumaPatched, index: u32, language: *const c_char) -> *const c_char {
+    let Some(r) = result.as_ref() else { return ptr::null() };
+    let Some(Some(refusal)) = r.refusals.get(index as usize) else { return ptr::null() };
+    let language = text(language).unwrap_or("UsEnglish");
+    let mut said = r.said.borrow_mut();
+    said.push(cstring(&luma_validate::reason(refusal, language)));
+    said.last().expect("just pushed").as_ptr()
 }
 
 /// # Safety

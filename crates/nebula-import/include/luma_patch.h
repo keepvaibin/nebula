@@ -41,7 +41,9 @@ enum {
     LUMA_PATCH_MISSING = 1,  /* mod_id's file names `row`, which is not there: other removed it, or (null) an
                                 lower mod's whole table left it out */
     LUMA_PATCH_SELECTED = 2, /* mod_id's selector number `selector` matched `rows` rows (0: a note, L407) */
-    LUMA_PATCH_FAILED = 3    /* mod_id's file could not apply and is left out; `why` in English, for the log */
+    LUMA_PATCH_FAILED = 3    /* mod_id's file could not apply and is left out: `code` is the validator's rule (L400,
+                                L402, L403, L406), luma_patched_fact_reason says why in a language (Mods.Patch.Failed's
+                                {2}), `why` is that in English, for the log */
 };
 
 typedef struct LumaPatchFact {
@@ -51,9 +53,10 @@ typedef struct LumaPatchFact {
     const char* other;      /* the other mod, or null */
     const char* row;        /* the row's key values joined by U+001F, "#<n>" by place, "*" the whole table; or null */
     const char* column;     /* "0x" and the column's hash, or null */
-    const char* why;        /* LUMA_PATCH_FAILED only */
+    const char* why;        /* LUMA_PATCH_FAILED only: the reason in English */
     uint32_t selector;
     uint32_t rows;
+    uint32_t code;          /* LUMA_PATCH_FAILED only: the validator's rule, 403 for L403; 0 for the other kinds */
 } LumaPatchFact;
 
 typedef struct LumaPatched LumaPatched;
@@ -69,6 +72,10 @@ const uint8_t* luma_patched_table(const LumaPatched* result, uint64_t* size);
 uint32_t luma_patched_fact_count(const LumaPatched* result);
 /* Null past the last. Valid until luma_patched_free. */
 const LumaPatchFact* luma_patched_fact_at(const LumaPatched* result, uint32_t index);
+/* A LUMA_PATCH_FAILED fact's reason in one of the game's 14 languages by its name ("EuFrench"; null or unknown:
+   "UsEnglish"), as the validator words the same fault, without the mod and file (the Mods screen names them). Null
+   for a fact of another kind or past the last. Valid until luma_patched_free. */
+const char* luma_patched_fact_reason(const LumaPatched* result, uint32_t index, const char* language);
 void luma_patched_free(LumaPatched* result);
 
 #ifdef __cplusplus

@@ -131,7 +131,7 @@ impl PakStore {
 }
 
 /// A column's type for the validator: an int by its width, a field by its mask.
-fn column_type(c: &Column) -> ColumnType {
+pub(crate) fn column_type(c: &Column) -> ColumnType {
     match c.kind {
         Kind::Int => {
             let width = u32::from(c.width.clamp(1, 32));
