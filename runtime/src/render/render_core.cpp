@@ -1994,13 +1994,22 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     // ring. Include all eye/world rows, even rows a particular program omits.
     const NebulaFrameList& list = *entry.data.list;
     std::size_t matrix_bytes = std::size_t{list.item_count} * 16u + 32u;
+    // The frame's incoming models (a load's) by id, sorted once: an id's first entry, the one a search from the front finds.
+    const auto& models = entry.registry_ops.models;
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> incoming;
+    if (!models.empty()) {
+        incoming.reserve(models.size());
+        for (std::uint32_t i = 0; i < models.size(); ++i) {
+            incoming.emplace_back(models[i].first, i);
+        }
+        std::sort(incoming.begin(), incoming.end());
+    }
     for (std::uint32_t b = 0; b < list.block_count; ++b) {
         const auto& block = list.blocks[b];
         std::size_t matrices = block.joint_count;
         if (block.model != 0u) {
-            const auto incoming = std::find_if(entry.registry_ops.models.begin(), entry.registry_ops.models.end(),
-                [&](const auto& m) { return m.first == block.model; });
-            matrices = incoming != entry.registry_ops.models.end() ? incoming->second.draw_matrices.size()
+            const auto found = std::lower_bound(incoming.begin(), incoming.end(), std::pair{block.model, 0u});
+            matrices = found != incoming.end() && found->first == block.model ? models[found->second].second.draw_matrices.size()
                 : registries_.model(block.model).draw_matrices.size();
         }
         matrix_bytes += matrices * core::kRowsPerMatrix * 16u * 2u;
