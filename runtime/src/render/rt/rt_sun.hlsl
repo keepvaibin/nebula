@@ -2,8 +2,8 @@
 // The sun pass: how much of the stage's one shadow sun reaches each pixel's surface (plan 7.2). One ray a pixel
 // toward a point of the sun's disc, from a place within the pixel (both by rt_sample: another each frame, so the
 // average over time holds the share of the disc and of the pixel a hard edge covers). Writes V raw:
-//   rgb  1 where the ray reaches the sun, 0 where something stands on it (later: times what a translucent thing on
-//        it lets through);
+//   rgb  1 where the ray reaches the sun, 0 where something solid stands on it, else what the blended things on it
+//        let through (let_through: a red crystal's shadow is red);
 //   a    how far along the ray that thing stood, in units (kNoOccluder: nothing): the sun filter's blur follows the
 //        penumbra's true width by it (rt_sun_time, rt_sun_blur).
 // A surface turned from the sun takes none of its key whatever V is: no ray, V = 1 and no occluder, so the filter
@@ -65,6 +65,12 @@ void main(uint3 id : SV_DispatchThreadID) {
         if (occluder >= 0.0f) {
             v = float4(0.0f, 0.0f, 0.0f, min(occluder, kNoOccluder - 1.0f));
             InterlockedAdd(g_counters[18], 1u);
+        } else {
+            float first;
+            const float3 tint = let_through(from, toward, 200000.0f, first);
+            if (first >= 0.0f) {
+                v = float4(tint, min(first, kNoOccluder - 1.0f));
+            }
         }
     }
     g_sun_raw[id.xy] = v;

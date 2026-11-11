@@ -159,6 +159,23 @@ float clear_to(float3 origin, float3 direction, float reach) {
     return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? query.CommittedRayT() : reach;
 }
 
+// The alpha of item `item`'s first map where a ray meets its triangle `triangle_` at `where_` (1: no map to read).
+float alpha_there(uint item, uint triangle_, float2 where_) {
+    const uint at = g_at.x + item * kItemBytes;
+    const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
+    const uint map = g_items.Load(at + 32u);
+    if (first.z >= 8u || map == 0xFFFFFFFFu) {
+        return 1.0f;
+    }
+    const uint base = mesh_at(first.z);
+    const uint3 corner = triangle_corners(first, second, triangle_);
+    const float2 c0 = asfloat(arena_words(first.z, base + first.w + corner.x * 24u + 12u).yz);
+    const float2 c1 = asfloat(arena_words(first.z, base + first.w + corner.y * 24u + 12u).yz);
+    const float2 c2 = asfloat(arena_words(first.z, base + first.w + corner.z * 24u + 12u).yz);
+    const float2 coordinate = c0 * (1.0f - where_.x - where_.y) + c1 * where_.x + c2 * where_.y;
+    return g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate, 0.0f).a;
+}
+
 // Whether an alpha-tested surface is there where a ray meets it: item `item`'s triangle `triangle_`, at `where_`
 // among its corners (the second and third's weights). Its first map's alpha at the vertices' first coordinates,
 // against the material's threshold: what the cutout of a leaf, a fence or a flower is drawn by. Where the item gives
@@ -210,6 +227,48 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
     }
     met = query.CommittedInstanceID();
     return query.CommittedRayT();
+}
+
+// What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
+// none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
+// crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
+// 1 - F at normal incidence (index 1.5); water 0.9; a translucent thing (a cloud, a ghost, jelly) 1 - 0.5 alpha at
+// the hit; what glows, what is painted and the rest nothing.
+float3 let_through(float3 origin, float3 direction, float reach, out float first) {
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, kMaskBlended, ray);
+    float3 tint = float3(1.0f, 1.0f, 1.0f);
+    uint weighed = 0u;
+    first = -1.0f;
+    while (query.Proceed()) {
+        const uint item = query.CandidateInstanceID();
+        const uint at = g_at.x + item * kItemBytes;
+        const uint class_ = g_items.Load(at + 44u) & 255u;
+        float3 passes = float3(1.0f, 1.0f, 1.0f);
+        if (class_ == kClassGlass) {
+            const uint colour = g_items.Load(at + 48u);
+            const float3 base = float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f;
+            passes = sqrt(max(base, 0.02f)) * 0.96f;
+        } else if (class_ == kClassWater) {
+            passes = float3(0.9f, 0.9f, 0.9f);
+        } else if (class_ == kClassTranslucent) {
+            passes = (1.0f - 0.5f * alpha_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())).xxx;
+        } else {
+            continue;
+        }
+        tint *= passes;
+        const float t = query.CandidateTriangleRayT();
+        first = first < 0.0f ? t : min(first, t);
+        if (++weighed == 4u) {
+            query.Abort();
+        }
+    }
+    return tint;
 }
 
 // Whether anything of `mask` stands on the ray (occluder_at).

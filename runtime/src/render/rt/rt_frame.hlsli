@@ -51,7 +51,8 @@ cbuffer PassConstants : register(b1) {
 static const uint kItemBytes = 64u;
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
-static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassWater = 9u;
+static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassTranslucent = 8u,
+                  kClassWater = 9u;
 
 // What V raw's distance says where nothing stood on the sun's ray: the largest half float.
 static const float kNoOccluder = 65504.0f;
