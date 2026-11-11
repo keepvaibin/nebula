@@ -102,6 +102,9 @@ struct PassBinds {
     BufferView pass_constants{};               // b1: the same
     bool counters = false;                     // u8
     std::uint32_t write_buffer = kNoBuffer;    // u9: a buffer of the tracer's, whole (make_buffer)
+    TextureView write_texture{};               // u7 in writes[7]'s place: an image of the renderer's (the reactive mask),
+                                               // in the use the renderer gave it (Direct3D 12: its format; Vulkan: a
+                                               // storage view, general layout)
 };
 
 class Backend {

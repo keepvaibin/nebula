@@ -181,6 +181,8 @@ public:
     [[nodiscard]] bool rt_items_begin() { return false; }
     [[nodiscard]] bool rt_light_begin(rt::TextureView&, rt::TextureView&, unsigned&, unsigned&) { return false; }
     void rt_light_end() {}
+    [[nodiscard]] bool rt_reactive_begin(rt::TextureView&) { return false; }
+    void rt_reactive_end() {}
     [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
     void rt_unpublish_lights(TextureStore&) {}
     void rt_wait_idle() { wait_for_gpu_idle(); }

@@ -29,7 +29,8 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments_before : register(t14);            // the frame before's moments
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_moments : register(u1);  // r, g: the luminance's first and second moment over time;
-                                                                  // b: the variance of the average
+                                                                  // b: the variance of the average; a 1 where the average
+                                                                  // moved by more than a quarter (rt_reactive.hlsl)
 Texture2D<float4> g_reservoirs_now : register(t15);           // this frame's reservoirs: b the kept light's weight
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
@@ -160,6 +161,9 @@ void main(uint3 id : SV_DispatchThreadID) {
 #ifdef RT_LIGHTS
     const float2 both = lerp(moments / weight, float2(bright, bright * bright), max(1.0f / count, 0.06f / rt_history_scale()));
     const float over_time = max(both.y - both.x * both.x, 0.0f);
-    g_moments[id.xy] = float4(both, (count < 4.0f ? max(over_time, around) : over_time) / min(count, 16.0f), 0.0f);
+    // The upscaler's history lags a light that changed: its reactive mask takes this frame there (plan 16.4). The
+    // averages are compared, not this frame's rays (their noise is no change), and the history before its clamp.
+    const float changed = abs(dot(now, kLuminance) - dot(sum / weight, kLuminance)) > 0.25f ? 1.0f : 0.0f;
+    g_moments[id.xy] = float4(both, (count < 4.0f ? max(over_time, around) : over_time) / min(count, 16.0f), changed);
 #endif
 }

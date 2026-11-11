@@ -1738,6 +1738,32 @@ void RenderCore::rt_report() {
     rt_light_frames_ = 0u;
 }
 
+// The scene's blended draws wrote their alpha into the upscaler's reactive mask; the tracer raises it where the added
+// light changed by more than a quarter since the frame before (plan 16.4: rt_reactive.hlsl), so the upscaler takes
+// this frame's colour there and a flickering light leaves no trail. Only with a temporal upscaler (its mask).
+void RenderCore::rt_reactive() {
+    if (!rt_light_on_ || !temporal_scene_ || rt_light_frame_.across == 0u) {
+        return;
+    }
+    const std::uint32_t moments = rt_now(RtImage::LightsMomentsA);
+    if (moments == rt::kNoImage) {
+        return;
+    }
+    const Renderer::RtCommands commands = renderer_.rt_commands_begin();
+    rt::TextureView reactive{};
+    if (renderer_.rt_reactive_begin(reactive)) {
+        rt_backend_.begin(commands.commands, renderer_.frame_slot(), commands.descriptors);
+        rt::PassBinds binds;
+        binds.constants = rt_light_frame_.binds.constants;
+        binds.pass_constants = rt_light_frame_.pass;
+        binds.reads[0] = moments;
+        binds.write_texture = reactive;
+        rt_backend_.dispatch(RtShader::Reactive, binds, rt_light_frame_.across, rt_light_frame_.down);
+        renderer_.rt_reactive_end();
+    }
+    renderer_.rt_commands_end();
+}
+
 // The scene is over: what is drawn after it reads no traced light.
 void RenderCore::rt_light_end() noexcept {
     if (rt_light_on_) {
