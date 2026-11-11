@@ -54,6 +54,13 @@ pub fn name_problem(name: &str) -> Option<&'static str> {
             return Some("Name.Reserved");
         }
     }
+    let parts: Vec<&str> = name.splitn(4, '/').collect();
+    if parts.len() >= 2 && parts[0] == "layers" {
+        let own_path = parts.len() == 4 && matches!(parts[2], "files" | "assets") && parts[3].starts_with('@');
+        if parts[1].starts_with('@') || own_path {
+            return Some("Name.LeadingAt");
+        }
+    }
     None
 }
 
@@ -221,6 +228,11 @@ mod tests {
             ("/a", Some("Name.Absolute")),
             ("a\\b", Some("Name.Backslash")),
             ("layers/base/files/CON.txt", Some("Name.Reserved")),
+            ("layers/base/assets/@other/a.png", Some("Name.LeadingAt")),
+            ("layers/base/files/@x", Some("Name.LeadingAt")),
+            ("layers/@base/files/a", Some("Name.LeadingAt")),
+            ("layers/base/patches/@other.mod/a.bcsv.json", None),
+            ("layers/base/assets/a@b.png", None),
             ("layers/base/files/com1", Some("Name.Reserved")),
             ("layers/base/files/COM¹", Some("Name.Reserved")),
             ("layers/base/files/COMPUTER.txt", None),
