@@ -1,0 +1,236 @@
+//! The applier's C interface (`include/luma_patch.h`, contract table-keys 8): the game gives one cooked table and the
+//! patches of the mods that are on, and takes back the patched table and the facts for the Mods screen.
+
+use crate::cook::patch::{apply, Fact, ModPatch};
+use crate::cook::table::TableIr;
+use std::ffi::{c_char, CStr, CString};
+use std::ptr;
+
+#[repr(C)]
+pub struct LumaTablePatch {
+    pub mod_id: *const c_char,
+    pub file: *const c_char,
+    pub json: *const u8,
+    pub json_size: u64,
+}
+
+#[repr(C)]
+pub struct LumaPatchInput {
+    pub size: u32,
+    pub path: *const c_char,
+    pub table: *const u8,
+    pub table_size: u64,
+    pub patches: *const LumaTablePatch,
+    pub patch_count: u32,
+}
+
+pub const LUMA_PATCH_CONFLICT: u32 = 0;
+pub const LUMA_PATCH_MISSING: u32 = 1;
+pub const LUMA_PATCH_SELECTED: u32 = 2;
+pub const LUMA_PATCH_FAILED: u32 = 3;
+
+#[repr(C)]
+pub struct LumaPatchFact {
+    pub kind: u32,
+    pub mod_id: *const c_char,
+    pub file: *const c_char,
+    pub other: *const c_char,
+    pub row: *const c_char,
+    pub column: *const c_char,
+    pub why: *const c_char,
+    pub selector: u32,
+    pub rows: u32,
+}
+
+pub struct LumaPatched {
+    error: Option<CString>,
+    table: Vec<u8>,
+    /// The texts the facts point into; a CString's bytes stay put when this list grows.
+    texts: Vec<CString>,
+    facts: Vec<LumaPatchFact>,
+}
+
+fn cstring(text: &str) -> CString {
+    CString::new(text.replace('\0', "\u{fffd}")).expect("no NUL is left")
+}
+
+unsafe fn text<'a>(p: *const c_char) -> Option<&'a str> {
+    if p.is_null() {
+        None
+    } else {
+        CStr::from_ptr(p).to_str().ok()
+    }
+}
+
+/// A text kept in `texts`, as a pointer the facts hold (null for none).
+fn put(texts: &mut Vec<CString>, s: Option<&str>) -> *const c_char {
+    match s {
+        None => ptr::null(),
+        Some(s) => {
+            texts.push(cstring(s));
+            texts.last().expect("just pushed").as_ptr()
+        }
+    }
+}
+
+unsafe fn bytes<'a>(p: *const u8, size: u64) -> Option<&'a [u8]> {
+    if p.is_null() {
+        return (size == 0).then_some(&[]);
+    }
+    Some(std::slice::from_raw_parts(p, usize::try_from(size).ok()?))
+}
+
+fn failed(why: &str) -> *mut LumaPatched {
+    Box::into_raw(Box::new(LumaPatched { error: Some(cstring(why)), table: Vec::new(), texts: Vec::new(), facts: Vec::new() }))
+}
+
+unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
+    if input.is_null() {
+        return Err("the input is null".into());
+    }
+    if ((*input).size as usize) < std::mem::size_of::<LumaPatchInput>() {
+        return Err(format!("the input's size is {}, not {}", (*input).size, std::mem::size_of::<LumaPatchInput>()));
+    }
+    let input = &*input;
+    let path = text(input.path).ok_or("the path is null or not UTF-8")?;
+    let table_bytes = bytes(input.table, input.table_size).ok_or("the table is null")?;
+    let mut table = TableIr::from_ntbl(table_bytes).map_err(|e| format!("{path}: {e:#}"))?;
+    let given = if input.patch_count == 0 {
+        &[][..]
+    } else if input.patches.is_null() {
+        return Err("the patches are null".into());
+    } else {
+        std::slice::from_raw_parts(input.patches, input.patch_count as usize)
+    };
+
+    // A patch that is not JSON is a mod that cannot apply, named like any other.
+    let mut owned = Vec::with_capacity(given.len());
+    let mut unread = Vec::new();
+    for (i, p) in given.iter().enumerate() {
+        let mod_id = text(p.mod_id).ok_or_else(|| format!("patch {i}: its mod id is null or not UTF-8"))?.to_string();
+        let file = text(p.file).ok_or_else(|| format!("patch {i}: its file is null or not UTF-8"))?.to_string();
+        let json = bytes(p.json, p.json_size).ok_or_else(|| format!("{mod_id}: {file}: its bytes are null"))?;
+        match serde_json::from_slice::<serde_json::Value>(json) {
+            Ok(value) => owned.push((mod_id, file, value)),
+            Err(e) => unread.push(Fact::Failed { table: path.to_string(), mod_id, file, why: format!("not JSON: {e}") }),
+        }
+    }
+    let patches: Vec<ModPatch> = owned.iter().map(|(mod_id, file, patch)| ModPatch { mod_id, file, patch }).collect();
+    let mut facts = unread;
+    facts.extend(apply(path, &mut table, &patches).map_err(|e| format!("{e:#}"))?);
+
+    let mut out = LumaPatched { error: None, table: table.to_ntbl(), texts: Vec::new(), facts: Vec::new() };
+    for fact in &facts {
+        let t = &mut out.texts;
+        let c = match fact {
+            Fact::Conflict { row, column, earlier, later, .. } => LumaPatchFact {
+                kind: LUMA_PATCH_CONFLICT,
+                mod_id: put(t, Some(later)),
+                file: ptr::null(),
+                other: put(t, Some(earlier)),
+                row: put(t, Some(row)),
+                column: put(t, column.as_deref()),
+                why: ptr::null(),
+                selector: 0,
+                rows: 0,
+            },
+            Fact::Missing { row, mod_id, file, removed_by, .. } => LumaPatchFact {
+                kind: LUMA_PATCH_MISSING,
+                mod_id: put(t, Some(mod_id)),
+                file: put(t, Some(file)),
+                other: put(t, removed_by.as_deref()),
+                row: put(t, Some(row)),
+                column: ptr::null(),
+                why: ptr::null(),
+                selector: 0,
+                rows: 0,
+            },
+            Fact::Selected { mod_id, file, selector, rows, .. } => LumaPatchFact {
+                kind: LUMA_PATCH_SELECTED,
+                mod_id: put(t, Some(mod_id)),
+                file: put(t, Some(file)),
+                other: ptr::null(),
+                row: ptr::null(),
+                column: ptr::null(),
+                why: ptr::null(),
+                selector: u32::try_from(*selector).unwrap_or(u32::MAX),
+                rows: u32::try_from(*rows).unwrap_or(u32::MAX),
+            },
+            Fact::Failed { mod_id, file, why, .. } => LumaPatchFact {
+                kind: LUMA_PATCH_FAILED,
+                mod_id: put(t, Some(mod_id)),
+                file: put(t, Some(file)),
+                other: ptr::null(),
+                row: ptr::null(),
+                column: ptr::null(),
+                why: put(t, Some(why)),
+                selector: 0,
+                rows: 0,
+            },
+        };
+        out.facts.push(c);
+    }
+    Ok(out)
+}
+
+/// # Safety
+/// `input` is null or a valid `LumaPatchInput` whose pointers are valid for the call.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patch_table(input: *const LumaPatchInput) -> *mut LumaPatched {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(input))) {
+        Ok(Ok(result)) => Box::into_raw(Box::new(result)),
+        Ok(Err(why)) => failed(&why),
+        Err(_) => failed("the applier panicked"),
+    }
+}
+
+/// # Safety
+/// `result` is null or from `luma_patch_table` and not freed.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_state(result: *const LumaPatched) -> i32 {
+    match result.as_ref() {
+        Some(r) if r.error.is_none() => 0,
+        _ => -1,
+    }
+}
+
+/// # Safety
+/// As `luma_patched_state`.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_error(result: *const LumaPatched) -> *const c_char {
+    result.as_ref().and_then(|r| r.error.as_ref()).map_or(ptr::null(), |e| e.as_ptr())
+}
+
+/// # Safety
+/// As `luma_patched_state`; `size` is null or writable.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_table(result: *const LumaPatched, size: *mut u64) -> *const u8 {
+    let table = result.as_ref().filter(|r| r.error.is_none()).map(|r| r.table.as_slice());
+    if !size.is_null() {
+        *size = table.map_or(0, |t| t.len() as u64);
+    }
+    table.map_or(ptr::null(), <[u8]>::as_ptr)
+}
+
+/// # Safety
+/// As `luma_patched_state`.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_fact_count(result: *const LumaPatched) -> u32 {
+    result.as_ref().map_or(0, |r| r.facts.len() as u32)
+}
+
+/// # Safety
+/// As `luma_patched_state`.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_fact_at(result: *const LumaPatched, index: u32) -> *const LumaPatchFact {
+    result.as_ref().and_then(|r| r.facts.get(index as usize)).map_or(ptr::null(), |f| f as *const LumaPatchFact)
+}
+
+/// # Safety
+/// `result` is null or from `luma_patch_table`, freed once.
+#[no_mangle]
+pub unsafe extern "C" fn luma_patched_free(result: *mut LumaPatched) {
+    if !result.is_null() {
+        drop(Box::from_raw(result));
+    }
+}

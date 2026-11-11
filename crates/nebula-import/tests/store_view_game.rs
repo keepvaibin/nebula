@@ -55,7 +55,8 @@ fn every_table_of_the_game_has_its_keyed_rows() {
         }
         let patch = json!({"patch": 1, "key": table.key, "add": [Value::Object(row)]});
         match apply(path, &mut ir, &[ModPatch { mod_id: "test", file: "patch.json", patch: &patch }]) {
-            Ok(_) if ir.rows.len() == before + 1 => {}
+            Ok(facts) if ir.rows.len() == before + 1 && facts.is_empty() => {}
+            Ok(facts) if !facts.is_empty() => failures.push(format!("{path}: an added row: {facts:?}")),
             Ok(_) => failures.push(format!("{path}: an added row made {} rows of {before}", ir.rows.len())),
             Err(e) => failures.push(format!("{path}: an added row: {e:#}")),
         }

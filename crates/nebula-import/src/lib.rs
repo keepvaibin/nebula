@@ -15,6 +15,7 @@ use std::sync::Arc;
 mod c_api;
 pub mod cook;
 mod jni;
+pub mod patch_c;
 pub mod store_view;
 pub mod validate_c;
 

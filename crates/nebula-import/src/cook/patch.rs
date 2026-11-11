@@ -29,10 +29,13 @@ pub enum Fact {
     Missing { table: String, row: String, mod_id: String, file: String, removed_by: Option<String> },
     /// How many rows a mod's selector matched (0 is a Note: L407).
     Selected { table: String, mod_id: String, file: String, selector: usize, rows: usize },
+    /// A mod's patch could not apply (the validator passed it against another game, or the mod changed since): the
+    /// whole patch is left out, the other mods' still apply. `why` is English, for the log.
+    Failed { table: String, mod_id: String, file: String, why: String },
 }
 
 /// Who changed what, so the next mod's change to it is named.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Owners {
     rows: HashMap<String, String>,
     cells: HashMap<(String, u32), String>,
@@ -54,9 +57,12 @@ struct Applier<'t> {
     facts: Vec<Fact>,
 }
 
-/// The table with every patch applied, and the facts. An error is a patch the validator should have refused; it names
-/// the mod and the file.
+/// The table with every patch applied, and the facts. A patch that cannot apply is left out whole (Fact::Failed, naming
+/// the mod and the file); an error is a game table its rule cannot read (a key column missing from a table with rows).
 pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Vec<Fact>> {
+    // A disc path names the same table as its store path (an archive is a folder of the store).
+    let store_path = super::store::store_path(path.trim_start_matches('/'));
+    let path = store_path.as_str();
     let rule = rule_for(path);
     let kind = columns_of(path).unwrap_or(&[]);
     if !patches.is_empty() {
@@ -86,7 +92,13 @@ pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Ve
         facts: Vec::new(),
     };
     for p in patches {
-        a.one(p).with_context(|| format!("{}: {}", p.mod_id, p.file))?;
+        let (table, owners, facts) = (a.table.clone(), a.owners.clone(), a.facts.len());
+        if let Err(e) = a.one(p) {
+            *a.table = table;
+            a.owners = owners;
+            a.facts.truncate(facts);
+            a.facts.push(Fact::Failed { table: a.path.clone(), mod_id: p.mod_id.into(), file: p.file.into(), why: format!("{e:#}") });
+        }
     }
     Ok(a.facts)
 }
@@ -450,7 +462,8 @@ mod tests {
         assert!(apply(path, &mut first, &[ModPatch { mod_id: "a", file: "pa", patch: &a }]).unwrap().is_empty());
         assert_eq!(first.rows.len(), 3);
         let removing = json!({"patch": 1, "remove": [{"#": 0}]});
-        assert!(apply(path, &mut t.clone(), &[ModPatch { mod_id: "r", file: "pr", patch: &removing }]).is_err());
+        let facts = apply(path, &mut t.clone(), &[ModPatch { mod_id: "r", file: "pr", patch: &removing }]).unwrap();
+        assert!(matches!(&facts[..], [Fact::Failed { mod_id, .. }] if mod_id == "r"), "{facts:?}");
         let whole = json!({"patch": 1, "rows": [{"frame": 0, "value": 9.0}]});
         let facts = apply(path, &mut t, &[ModPatch { mod_id: "a", file: "pa", patch: &a }, ModPatch { mod_id: "w", file: "pw", patch: &whole }]).unwrap();
         assert_eq!(t.rows.len(), 1);
@@ -500,15 +513,26 @@ mod tests {
             row.remove(gone);
         }
         let p = json!({"patch": 1, "set": [{"where": {"l_id": 1}, "values": {"Obj_arg7": 3}}]});
-        assert!(apply(OBJINFO, &mut t, &[ModPatch { mod_id: "m", file: "pm", patch: &p }]).is_err());
+        let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "m", file: "pm", patch: &p }]).unwrap();
+        assert!(matches!(&facts[..], [Fact::Failed { why, .. }] if why.contains("Obj_arg7")), "{facts:?}");
     }
 
     #[test]
-    fn a_wrong_patch_names_its_mod_and_file() {
+    fn a_patch_that_cannot_apply_is_left_out_whole_and_named() {
         let mut t = objinfo();
-        let p = json!({"patch": 1, "set": [{"where": {"name": "Kuribo"}, "values": {"speed": 1.0}}]});
-        let e = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "m", file: "layers/base/patches/x.json", patch: &p }]).unwrap_err();
-        let text = format!("{e:#}");
-        assert!(text.starts_with("m: layers/base/patches/x.json") && text.contains("l_id"), "{text}");
+        let before = t.clone();
+        let good = json!({"patch": 1, "set": [{"where": {"l_id": 1}, "values": {"speed": 9.0}}]});
+        // Its first change applies, its second cannot: neither is kept.
+        let bad = json!({"patch": 1, "set": [{"where": {"l_id": 2}, "values": {"speed": 5.0}}, {"where": {"name": "Kuribo"}, "values": {"speed": 1.0}}]});
+        let facts = apply(OBJINFO, &mut t, &[ModPatch { mod_id: "m", file: "layers/base/patches/x.json", patch: &bad }, ModPatch { mod_id: "g", file: "pg", patch: &good }]).unwrap();
+        assert_eq!(facts.len(), 1, "{facts:?}");
+        let Fact::Failed { mod_id, file, why, .. } = &facts[0] else { panic!("{facts:?}") };
+        assert_eq!((mod_id.as_str(), file.as_str()), ("m", "layers/base/patches/x.json"));
+        assert!(why.contains("l_id"), "{why}");
+        assert_eq!(speed(&t, 1), speed(&before, 1));
+        assert_eq!(speed(&t, 0), 9.0);
+        // A table its rule cannot read is an error for the caller.
+        let mut t = TableIr { columns: before.columns[1..].to_vec(), rows: before.rows.iter().map(|r| r[1..].to_vec()).collect() };
+        assert!(apply(OBJINFO, &mut t, &[ModPatch { mod_id: "g", file: "pg", patch: &good }]).is_err());
     }
 }
