@@ -141,27 +141,36 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
     }
     if (rt_on) {
-        // rt_quality: 0 medium, 1 high, 2 low; a change restarts the ray tracer (RendererD3D12::reconcile_ray_tracing).
-        static constexpr unsigned kOrder[] = {2u, 0u, 1u};
-        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW"};
-        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, 2u)],
-                        [&host](RenderConfig& draft, int delta) {
-                            const unsigned quality = std::min(draft.rt_quality, 2u);
-                            const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
-                            draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
+        // The preset sets every part (plan 19.1); a part changed by itself makes it CUSTOM. All switch live.
+        static constexpr unsigned kOrder[] = {2u, 0u, 1u, kRtPresetReference};  // low, medium, high, reference
+        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW", "REFERENCE", "CUSTOM"};
+        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, kRtPresetCustom)],
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned quality = std::min(draft.rt_quality, kRtPresetCustom);
+                            const unsigned at = quality == 2u ? 0u : quality == 1u ? 2u : quality == kRtPresetReference ? 3u : 1u;
+                            draft.rt_quality = kOrder[settings_step(at, 4u, delta)];
+                            rt_apply_preset(draft);
                         },
-                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER"});
-        // The effects players choose, each switched live.
-        const auto effect_row = [&](const char* name, bool RenderConfig::*field, const char* help) {
-            rows.push_back({name, render.*field ? "ON" : "OFF",
-                            [field](RenderConfig& draft, int) { draft.*field = !(draft.*field); }, help});
+                        "SETS EVERY PART BELOW. REFERENCE: PATH TRACED, FOR COMPARISON"});
+        static constexpr const char* kLevels[] = {"OFF", "LOW", "MEDIUM", "HIGH"};
+        const auto part_row = [&](const char* name, RtPart part, const char* help) {
+            rows.push_back({name, kLevels[rt_part(render, part)],
+                            [part](RenderConfig& draft, int delta) {
+                                const auto at = static_cast<std::size_t>(part);
+                                draft.rt_parts[at] = static_cast<std::uint8_t>(settings_step(rt_part(draft, part), 4u, delta));
+                                draft.rt_quality = kRtPresetCustom;
+                            },
+                            help});
         };
-        effect_row("REFLECTIONS", &RenderConfig::rt_reflections,
-                   "TRACED REFLECTIONS ON METAL, GLOSSY FLOORS, GLASS AND CRYSTAL");
-        effect_row("WATER REFLECTIONS", &RenderConfig::rt_water,
-                   "TRACED REFLECTIONS AND REFRACTION ON SEAS, LAKES AND POOLS");
-        effect_row("SUN RAYS", &RenderConfig::rt_sun_rays, "SHAFTS OF LIGHT THE AIR SCATTERS AROUND THE SUN");
-        effect_row("LENS BLOOM", &RenderConfig::rt_lens_bloom, "LIGHT THE LENS SCATTERS AROUND EVERY BRIGHT SURFACE");
+        part_row("SUN SHADOWS", RtPart::Sun, "THE SUN'S SHADOWS, TRACED. HIGH: TINTED THROUGH GLASS AND WATER");
+        part_row("LOCAL LIGHTS", RtPart::Lights, "LAMPS AND GLOWING THINGS LIGHT THE WORLD AND CAST SHADOWS. HIGH: HIGHLIGHTS");
+        part_row("SKY AND BOUNCE LIGHT", RtPart::Indirect, "THE SKY'S LIGHT AND LIGHT BOUNCED OFF SURFACES");
+        part_row("REFLECTIONS", RtPart::Reflect, "TRACED REFLECTIONS ON METAL, GLOSSY FLOORS, GLASS AND CRYSTAL");
+        part_row("GLASS AND WATER", RtPart::Transmit, "LIGHT THROUGH GLASS, CRYSTAL AND WATER. HIGH: REFRACTION");
+        part_row("LIGHT IN THE AIR", RtPart::Volume, "LIGHT THE AIR SCATTERS. HIGH: SHAFTS OF LIGHT");
+        rows.push_back({"LENS BLOOM", render.rt_lens_bloom ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.rt_lens_bloom = !draft.rt_lens_bloom; },
+                        "LIGHT THE LENS SCATTERS AROUND EVERY BRIGHT SURFACE"});
     }
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});

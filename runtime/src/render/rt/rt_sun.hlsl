@@ -67,7 +67,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             InterlockedAdd(g_counters[18], 1u);
         } else {
             float first;
-            const float3 tint = let_through(from, toward, 200000.0f, first);
+            float3 tint = float3(1.0f, 1.0f, 1.0f);  // below high, blended things cast no shadow (plan 19.1)
+            first = -1.0f;
+            if (rt_part(kPartSun) >= 3u) {
+                tint = let_through(from, toward, 200000.0f, first);
+            }
             if (first >= 0.0f) {
                 v = float4(tint, min(first, kNoOccluder - 1.0f));
             }

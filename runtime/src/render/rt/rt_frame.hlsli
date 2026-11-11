@@ -14,7 +14,8 @@ cbuffer FrameConstants : register(b0) {
                         // glass, metal and gloss show of the scene), bit 6 the actors' point lights are emitters (the
                         // light set's own lamp is put out), bit 7 the emitters alone (--diagnostics rt-added: no sun, no
                         // sky), bit 9 the point's motion shown (--diagnostics rt-motion). Bits 1, 2 and 4 are retired
-                        // (the set's lamp, the drops, the second layer: g_pass.x).
+                        // (the set's lamp, the drops, the second layer: g_pass.x). w: ray tracing's parts as the
+                        // player set them (rt_part), bit 12 the reference preset.
     uint4 g_grid;       // tiles across, tiles down, pixels a tile
     float4 g_sun;       // xyz: the direction to the shadow sun; w: the tangent of its half angle
     float4 g_stage;     // x: the stage's ambient, y: its key light, as brightness: a painted surface in the key's
@@ -68,6 +69,12 @@ bool rt_second_layer() {
 float rt_history_scale() {
     const float scale = asfloat(g_kept.w);
     return scale > 0.0f ? scale : 1.0f;
+}
+
+// Ray tracing's parts as the player set them (plan 19.1; RtPart's order): 0 off, 1 low, 2 medium, 3 high.
+static const uint kPartSun = 0u, kPartLights = 1u, kPartIndirect = 2u, kPartReflect = 3u, kPartTransmit = 4u, kPartVolume = 5u;
+uint rt_part(uint part) {
+    return g_more.w >> (part * 2u) & 3u;
 }
 
 // Whether the layer's images of the frame before hold its surfaces (the camera did not cut; the second layer was

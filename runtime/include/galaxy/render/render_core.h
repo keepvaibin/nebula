@@ -391,6 +391,7 @@ private:
     void rt_light();
     void rt_light_end() noexcept;
     void rt_reactive();  // the reactive mask where the added light changed (plan 16.4)
+    bool rt_lamps_own_ = false;  // local lights off (plan 19.1): the programs light by their own lamp (view_flags bit 32)
     // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
     // item target and the light pass run over them, into the picture the opaque draws are done reading.
     void rt_blended(const NebulaFramePass& end);

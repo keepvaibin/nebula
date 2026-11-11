@@ -51,6 +51,11 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     g_reservoirs[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // none, until the lights say otherwise
     g_lights_spec[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    const uint level = rt_part(kPartLights);  // off: none; low: four candidates, the frame before's alone
+    if (level == 0u) {
+        g_lights[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        return;
+    }
     const float4 guide = g_guide.Load(int3(pixel, 0));
     const uint2 tile = id.xy / max(g_grid.z, 1u);
     float3 added = float3(0.0f, 0.0f, 0.0f);
@@ -70,8 +75,8 @@ void main(uint3 id : SV_DispatchThreadID) {
             float kept_target = 0.0f;
             float4 kept_at = float4(0.0f, 0.0f, 0.0f, 0.0f);
             // This frame's candidates.
-            const uint tries = min(lights, 8u);
-            const uint strong = lights > tries ? 4u : 0u;  // the list's first four, the tile's strongest: each for certain
+            const uint tries = min(lights, level >= 2u ? 8u : 4u);
+            const uint strong = lights > tries ? tries / 2u : 0u;  // the list's first, the tile's strongest: each for certain
             const float each = float(lights - strong) / float(max(tries - strong, 1u));  // what one of the others stands for
             const float tried = rt_sample(id.xy, g_more.y, kSampleLightTry).x;  // where in its run each candidate is
             for (uint k = 0u; k < tries; ++k) {
@@ -112,7 +117,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 const float2 was = float2(id.xy) + 0.5f + motion.xy;
                 const float3 before = rt_eye_ray(g_ray_before, was) * away_before;
                 const float3 facing_before = float3(dot(g_before[0].xyz, s.smooth_), dot(g_before[1].xyz, s.smooth_), dot(g_before[2].xyz, s.smooth_));
-                for (uint j = 0u; j < 3u; ++j) {
+                for (uint j = 0u; j < (level >= 2u ? 3u : 1u); ++j) {
                     float2 from_at = was;
                     if (j != 0u) {
                         seed = rt_hash(seed + 977u);
@@ -205,8 +210,8 @@ void main(uint3 id : SV_DispatchThreadID) {
                 // light without its wrap of facing), by the same weight.
                 const float4 material = g_material.Load(int3(pixel, 0));
                 const uint class_ = uint(material.b * 255.0f + 0.5f) & 15u;
-                if (weight > 0.0f && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass ||
-                                         class_ == kClassWater)) {
+                if (weight > 0.0f && level >= 3u && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass ||
+                                                        class_ == kClassWater)) {
                     const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
                     const float3 v = -normalize(s.at);
                     const float nl = dot(s.smooth_, l), nv = dot(s.smooth_, v);

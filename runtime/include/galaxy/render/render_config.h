@@ -118,19 +118,16 @@ struct RenderConfig {
     bool     hdr                 = false;
     unsigned paper_white         = 200;
 
-    // Ray tracing, on a device that can trace (rt_caps.h); ignored elsewhere. The fields below are the settings the
-    // tracer being rebuilt will read: rt_shadow_quality and rt_ao_enabled are clamped off until their effects exist.
+    // Ray tracing, on a device that can trace (rt_caps.h); ignored elsewhere.
     bool     ray_tracing_enabled = false;
-    // The preset: 0 medium, 1 high, 2 low.
-    unsigned rt_quality          = 1;
-    // The ray-traced effects players choose: reflections (off: the game's painted ones), lens bloom, light shafts,
-    // traced water (off: the game's own).
-    bool     rt_reflections      = true;
+    // The preset (plan 19.1): 0 medium, 1 high, 2 low, 3 reference (path traced, to compare), 4 custom (the parts as
+    // set one by one). A preset sets every part (rt_apply_preset).
+    unsigned rt_quality          = 0;
+    // The parts, each its own setting, in RtPart's order (sun shadows, local lights, sky and bounce light, reflections,
+    // glass and water, light in the air): 0 off, 1 low, 2 medium, 3 high.
+    std::array<std::uint8_t, 6> rt_parts{2u, 2u, 2u, 2u, 2u, 2u};
+    // Light the lens scatters around every bright surface.
     bool     rt_lens_bloom       = true;
-    bool     rt_sun_rays         = true;
-    bool     rt_water            = true;
-    unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
-    bool     rt_ao_enabled       = false;
 
     // Texture packs (texture_pack.h): replacements from the mods'
     // textures/ folders. preload loads the whole pack at start instead of each texture at its first
@@ -311,10 +308,12 @@ void note_camera_water(float depth) noexcept;
 }
 void set_render_config(const RenderConfig& cfg);
 
-// The ray-traced effects players choose (RenderConfig::rt_reflections, rt_water, rt_sun_rays, rt_lens_bloom), as the
-// frame being drawn takes them.
-enum class RtEffect : std::uint8_t { Reflections, Water, SunRays, LensBloom };
-[[nodiscard]] bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept;
+// Ray tracing's parts (plan 19.1), in RenderConfig::rt_parts' order; each 0 off, 1 low, 2 medium, 3 high.
+enum class RtPart : std::uint8_t { Sun, Lights, Indirect, Reflect, Transmit, Volume, Count };
+inline constexpr unsigned kRtPresetReference = 3u, kRtPresetCustom = 4u;
+[[nodiscard]] unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept;
+// Every part as the preset has it; a custom one leaves them.
+void rt_apply_preset(RenderConfig& cfg) noexcept;
 // Whether the renderer refines curved surfaces: the CURVED SURFACES row is offered and
 // RenderConfig::curved_surfaces takes effect.
 void set_curved_surfaces_offered(bool offered) noexcept;
