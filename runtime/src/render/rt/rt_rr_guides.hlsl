@@ -12,6 +12,7 @@
 //     bit 0 says it ran).
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
+#include "rt_mirror.hlsli"  // mirror_terms: the split sum's fit, the composite's own (FB b47; l61)
 
 Texture2D<float4> g_material : register(t9);   // S.material: r roughness, b the class and its flags (bytes)
 Texture2D<float4> g_base : register(t10);      // S.base
@@ -23,15 +24,6 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_normal_roughness : register(u2);
 RT_FORMAT(r16f) RWTexture2D<float> g_hit : register(u3);
 
 static const uint kGlass = 3u, kWater = 9u, kMetal = 2u;
-
-// Karis's fit of the split-sum's scale and bias (A, B) by roughness and n.v.
-float2 environment_terms(float roughness, float facing) {
-    const float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
-    const float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
-    const float4 r = roughness * c0 + c1;
-    const float a004 = min(r.x * r.x, exp2(-9.28f * facing)) * r.x + r.y;
-    return float2(-1.04f, 1.04f) * a004 + r.zw;
-}
 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -64,7 +56,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     } else if (klass == kMetal) {
         f0 = base;
     }
-    const float2 terms = environment_terms(roughness, facing);
+    const float2 terms = mirror_terms(roughness, facing);
     const float3 world_normal = normalize(float3(dot(g_pass_value[0].xyz, eye_normal), dot(g_pass_value[1].xyz, eye_normal),
                                                  dot(g_pass_value[2].xyz, eye_normal)));
     float hit = 0.0f;
