@@ -96,9 +96,9 @@ target_compile_definitions(nebula_native PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_H
 set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/host_window_apple.mm" "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/setup_apple.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 
-# The importer (crates/nebula-import), linked into the app for the first start's setup: its static library for this
-# processor, made by cargo (the crate's own manifest builds a shared library for the launcher; this asks for the
-# archive without touching it).
+# The importer (crates/nebula-import), linked into each program for the first start's setup, the mods' cooker and
+# the refusals' words: its static library for this processor, made by cargo (the crate's own manifest builds a shared
+# library for the launcher; this asks for the archive without touching it).
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(nebula_apple_rust_triple "aarch64-apple-ios")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
@@ -116,8 +116,13 @@ add_custom_command(OUTPUT "${nebula_apple_importer}"
     DEPENDS ${nebula_apple_importer_sources} "${nebula_root}/crates/nebula-import/Cargo.toml"
     USES_TERMINAL VERBATIM)
 add_custom_target(nebula_apple_importer_file DEPENDS "${nebula_apple_importer}")
-add_dependencies(nebula_native nebula_apple_importer_file)
-target_link_libraries(nebula_native PRIVATE "${nebula_apple_importer}" "-liconv" "-lresolv" "-framework Security")
+# Every program that compiles mod_plugins.cpp (galaxy_render_vk, whose sources galaxy_render_mtl takes) or host_main.cpp
+# calls luma_validate_message and nebula_cook_overlay directly on Apple: main (MoltenVK on macOS, UIKit on iOS),
+# nebula_metal and nebula_native.
+foreach(program IN ITEMS main nebula_metal nebula_native)
+    add_dependencies(${program} nebula_apple_importer_file)
+    target_link_libraries(${program} PRIVATE "${nebula_apple_importer}" "-liconv" "-lresolv" "-framework Security")
+endforeach()
 target_link_libraries(nebula_native PRIVATE galaxy_render_mtl
     "-framework AppKit" "-framework GameController" "-framework CoreHaptics" "-framework AudioToolbox"
     "-framework CoreAudio" "-framework CoreVideo")
