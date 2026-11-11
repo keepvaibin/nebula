@@ -437,6 +437,14 @@ private:
     std::vector<std::uint32_t> next_in_slot_;
     std::vector<std::uint8_t> used_;
     std::vector<std::uint32_t> next_item_;
+    // The last list's items by identity (slot, generation, part): the first of each, `next_item_` chaining the rest.
+    struct ItemEntry {
+        std::uint32_t stamp = 0u;
+        std::uint32_t slot = 0u, generation = 0u, part = 0u;
+        std::uint32_t head = NEBULA_NONE32;
+    };
+    std::vector<ItemEntry> item_table_;
+    std::uint32_t item_stamp_ = 0u;
     // OTHER-role cameras pair by the nearest view matrix: every (now, before) candidate, closest first.
     struct CameraCandidate {
         float distance;

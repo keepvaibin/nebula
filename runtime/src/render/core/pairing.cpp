@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
-#include <unordered_map>
 
 namespace galaxy::render::core {
 
@@ -162,37 +161,54 @@ void Pairing::pair(ListData& now, const ListData* before) {
 
     // Items pair by identity, nth with nth: the rest of an item's data pairs through its pair.
     {
-        struct ItemKey {
-            std::uint32_t slot, generation, part;
-            bool operator==(const ItemKey&) const = default;
-        };
-        struct ItemHash {
-            std::size_t operator()(const ItemKey& key) const noexcept {
-                std::uint64_t h = key.slot;
-                h = (h ^ key.generation) * 0x100000001B3ull;
-                return static_cast<std::size_t>((h ^ key.part) * 0x100000001B3ull);
+        // An open-addressed table at most half full, its entries emptied by the stamp: no allocation once grown.
+        std::size_t capacity = 64u;
+        while (capacity < std::size_t{last.item_count} * 2u) capacity *= 2u;
+        if (item_table_.size() < capacity) {
+            item_table_.assign(capacity, ItemEntry{});
+            item_stamp_ = 0u;
+        }
+        if (++item_stamp_ == 0u) {
+            for (ItemEntry& entry : item_table_) entry.stamp = 0u;
+            item_stamp_ = 1u;
+        }
+        const std::uint32_t item_stamp = item_stamp_;
+        const auto mask = static_cast<std::uint32_t>(capacity - 1u);
+        // The item's identity's entry, or the empty entry where it would go.
+        const auto entry_of = [&](const NebulaFrameItem& item) -> ItemEntry& {
+            std::uint64_t h = item.slot;
+            h = (h ^ item.generation) * 0x100000001B3ull;
+            h = (h ^ item.part) * 0x100000001B3ull;
+            auto at = static_cast<std::uint32_t>(h ^ (h >> 32u)) & mask;
+            for (;;) {
+                ItemEntry& entry = item_table_[at];
+                if (entry.stamp != item_stamp ||
+                    (entry.slot == item.slot && entry.generation == item.generation && entry.part == item.part)) {
+                    return entry;
+                }
+                at = (at + 1u) & mask;
             }
         };
-        const auto item_key = [](const NebulaFrameItem& item) {
-            return ItemKey{item.slot, item.generation, item.part};
-        };
-        std::unordered_map<ItemKey, std::uint32_t, ItemHash> items;
-        items.reserve(last.item_count);
         next_item_.resize(last.item_count);
         for (std::uint32_t i = last.item_count; i != 0u; --i) {
-            const auto [found, inserted] = items.try_emplace(item_key(last.items[i - 1u]), i - 1u);
-            next_item_[i - 1u] = inserted ? NEBULA_NONE32 : found->second;
-            found->second = i - 1u;
+            const NebulaFrameItem& item = last.items[i - 1u];
+            ItemEntry& entry = entry_of(item);
+            if (entry.stamp == item_stamp) {
+                next_item_[i - 1u] = entry.head;
+            } else {
+                entry = ItemEntry{item_stamp, item.slot, item.generation, item.part, NEBULA_NONE32};
+                next_item_[i - 1u] = NEBULA_NONE32;
+            }
+            entry.head = i - 1u;
         }
         for (std::uint32_t i = 0; i < list.item_count; ++i) {
             const NebulaFrameItem& item = list.items[i];
-            const auto found = items.find(item_key(item));
-            if (found == items.end()) {
+            ItemEntry& entry = entry_of(item);
+            if (entry.stamp != item_stamp || entry.head == NEBULA_NONE32) {
                 continue;
             }
-            const std::uint32_t pair = found->second;
-            if (next_item_[pair] != NEBULA_NONE32) found->second = next_item_[pair];
-            else items.erase(found);  // a previous draw can be consumed only once
+            const std::uint32_t pair = entry.head;
+            entry.head = next_item_[pair];  // a previous draw can be consumed only once
             const NebulaFrameItem& other = last.items[pair];
             if (item.pipeline != other.pipeline || item.mesh != other.mesh || item.textures != other.textures ||
                 item.matrix != other.matrix || item.flags != other.flags || item.source_hash != other.source_hash ||
