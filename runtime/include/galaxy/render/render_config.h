@@ -316,9 +316,24 @@ void set_render_config(const RenderConfig& cfg);
 // Ray tracing's parts (plan 19.1), in RenderConfig::rt_parts' order; each 0 off, 1 low, 2 medium, 3 high.
 enum class RtPart : std::uint8_t { Sun, Lights, Indirect, Reflect, Transmit, Volume, Count };
 inline constexpr unsigned kRtPresetReference = 3u, kRtPresetCustom = 4u;
-[[nodiscard]] unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept;
-// Every part as the preset has it; a custom one leaves them.
-void rt_apply_preset(RenderConfig& cfg) noexcept;
+inline unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept {
+    return part < RtPart::Count ? std::min<unsigned>(cfg.rt_parts[static_cast<std::size_t>(part)], 3u) : 0u;
+}
+
+// The presets' parts (plan 19.1): low leaves the painted reflections; reference takes high's parts and the reference
+// path tracer draws the picture (FB's 22.9).
+inline void rt_apply_preset(RenderConfig& cfg) noexcept {
+    constexpr std::uint8_t kParts[4][6] = {
+        {2u, 2u, 2u, 2u, 2u, 2u},  // medium
+        {3u, 3u, 3u, 3u, 3u, 3u},  // high
+        {1u, 1u, 1u, 0u, 1u, 1u},  // low
+        {3u, 3u, 3u, 3u, 3u, 3u},  // reference
+    };
+    if (cfg.rt_quality < kRtPresetCustom) {
+        std::copy(std::begin(kParts[cfg.rt_quality]), std::end(kParts[cfg.rt_quality]), cfg.rt_parts.begin());
+    }
+}
+
 // Whether the renderer refines curved surfaces: the CURVED SURFACES row is offered and
 // RenderConfig::curved_surfaces takes effect.
 void set_curved_surfaces_offered(bool offered) noexcept;

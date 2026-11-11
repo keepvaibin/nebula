@@ -458,24 +458,6 @@ RenderFeatureStatus make_render_feature_status(
     return status;
 }
 
-unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept {
-    return part < RtPart::Count ? std::min<unsigned>(cfg.rt_parts[static_cast<std::size_t>(part)], 3u) : 0u;
-}
-
-// The presets' parts (plan 19.1): low leaves the painted reflections; reference takes high's parts and the reference
-// path tracer draws the picture (FB's 22.9).
-void rt_apply_preset(RenderConfig& cfg) noexcept {
-    static constexpr std::uint8_t kParts[4][6] = {
-        {2u, 2u, 2u, 2u, 2u, 2u},  // medium
-        {3u, 3u, 3u, 3u, 3u, 3u},  // high
-        {1u, 1u, 1u, 0u, 1u, 1u},  // low
-        {3u, 3u, 3u, 3u, 3u, 3u},  // reference
-    };
-    if (cfg.rt_quality < kRtPresetCustom) {
-        std::copy(std::begin(kParts[cfg.rt_quality]), std::end(kParts[cfg.rt_quality]), cfg.rt_parts.begin());
-    }
-}
-
 namespace {
 std::atomic<bool> s_curved_surfaces_offered{false};
 }  // namespace
