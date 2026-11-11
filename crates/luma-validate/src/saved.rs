@@ -1,6 +1,6 @@
 //! The report the game keeps beside each installed mod (validator contract 2): written after the full check at
 //! import, read at each start. It holds what the start's check reuses (the findings of the rules that read the whole
-//! `.luma`) and what the other mods' checks need of this one (its id, version, conflicts and what it changes), with
+//! `.luma`) and what the other mods' checks need of this one (its id, version, conflicts, needs and what it changes), with
 //! the fingerprint of the `.luma` and of the game it was checked against. A different fingerprint, a different game or
 //! a report that cannot be read means a full check, never a partial one on stale data.
 //!
@@ -8,12 +8,13 @@
 //! `%09`, `%0D`, `%0A`:
 //!
 //! ```text
-//! luma-saved	1
+//! luma-saved	2
 //! validator	<major>.<minor>
 //! fingerprint	<hex>|-
 //! game	<the game's key>
 //! about	<id>	<version>
 //! conflict	<id>
+//! need	<id>
 //! touch	replaces|cells|adds|removes|assets|functions|links|scenarios	<value>
 //! finding	<code>	<file>	<line>|-	<column>|-	<pointer>|-	<mod id>|-	(<name>=T:<text> | <name>=P:<phrase id>)...
 //! not-checked	<code>	<phrase id>	<places>
@@ -31,6 +32,8 @@ pub struct About {
     pub version: crate::semver::Version,
     /// The ids its `conflicts` names.
     pub conflicts: Vec<String>,
+    /// The ids its `needs` names, in its order (L800's cycle).
+    pub needs: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,7 +50,8 @@ pub struct Saved {
 }
 
 const MAGIC: &str = "luma-saved";
-const FORM: u32 = 1;
+// 2: `need` lines. A form 1 report does not read, so a mod checked before them is checked in full again.
+const FORM: u32 = 2;
 const MAX_SAVED: usize = 64 << 20;
 
 fn esc(s: &str) -> String {
@@ -127,6 +131,9 @@ impl Saved {
             for c in &a.conflicts {
                 out += &format!("conflict\t{}\n", esc(c));
             }
+            for n in &a.needs {
+                out += &format!("need\t{}\n", esc(n));
+            }
         }
         for (kind, list) in touch_lists(&self.touches) {
             for v in list {
@@ -191,9 +198,10 @@ impl Saved {
                     seen_game = true;
                 }
                 ("about", 3) => {
-                    s.about = Some(About { id: unesc(f[1])?, version: crate::semver::Version::parse(&unesc(f[2])?)?, conflicts: Vec::new() });
+                    s.about = Some(About { id: unesc(f[1])?, version: crate::semver::Version::parse(&unesc(f[2])?)?, conflicts: Vec::new(), needs: Vec::new() });
                 }
                 ("conflict", 2) => s.about.as_mut()?.conflicts.push(unesc(f[1])?),
+                ("need", 2) => s.about.as_mut()?.needs.push(unesc(f[1])?),
                 ("touch", 3) => {
                     let v = unesc(f[2])?;
                     let t = &mut s.touches;
@@ -247,7 +255,7 @@ impl Saved {
     /// This mod as another mod's check sees it.
     pub fn installed(&self, file: &str, on: bool) -> Option<Installed> {
         let a = self.about.as_ref()?;
-        Some(Installed { id: a.id.clone(), version: a.version.clone(), on, file: file.to_string(), conflicts: a.conflicts.clone(), touches: self.touches.clone() })
+        Some(Installed { id: a.id.clone(), version: a.version.clone(), on, file: file.to_string(), conflicts: a.conflicts.clone(), needs: a.needs.clone(), touches: self.touches.clone() })
     }
 }
 
