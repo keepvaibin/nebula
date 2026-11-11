@@ -12,6 +12,22 @@
 #include <stdlib.h>
 
 namespace luma {
+    // `count` zeroed items of `size` bytes from the module's malloc (it has no calloc); null when there is no memory or
+    // the size does not fit.
+    static void* zeroed(size_t count, size_t size) {
+        if (size != 0 && count > static_cast<size_t>(-1) / size) {
+            return nullptr;
+        }
+        const size_t bytes = count * size;
+        unsigned char* const p = static_cast<unsigned char*>(::malloc(bytes != 0 ? bytes : 1));
+        if (p != nullptr) {
+            for (size_t i = 0; i < bytes; i++) {
+                p[i] = 0;
+            }
+        }
+        return p;
+    }
+
     // One block a mod took with core->alloc, just before the bytes it gives. `free` reads it only after finding the
     // pointer in the mod's own set (D2-3); the check word is a second check.
     struct Block {
@@ -48,7 +64,7 @@ namespace luma {
         bool add(uintptr_t p) {
             if ((used + 1) * 2 > capacity) {
                 const u32 grown = capacity == 0 ? 64u : capacity * 2u;
-                uintptr_t* const pSlots = static_cast<uintptr_t*>(::calloc(grown, sizeof(uintptr_t)));
+                uintptr_t* const pSlots = static_cast<uintptr_t*>(zeroed(grown, sizeof(uintptr_t)));
                 if (pSlots == nullptr) {
                     return false;
                 }
@@ -553,7 +569,7 @@ namespace luma {
                 }
                 if (!kept && pMod->reportCount < kReportsKept) {
                     if (pMod->reports == nullptr) {
-                        pMod->reports = static_cast<Report*>(::calloc(kReportsKept, sizeof(Report)));
+                        pMod->reports = static_cast<Report*>(zeroed(kReportsKept, sizeof(Report)));
                         if (pMod->reports == nullptr) {
                             unlockMod(pMod);
                             NEBULA_PANIC("LumaCore: no memory for %s's reports", pMod->name);
@@ -857,7 +873,7 @@ namespace luma {
         pMod->library = pLibrary;
         pMod->close = close;
         if (pGranted != nullptr && grantedCount != 0) {
-            pMod->granted = static_cast<char**>(::calloc(grantedCount, sizeof(char*)));
+            pMod->granted = static_cast<char**>(zeroed(grantedCount, sizeof(char*)));
             if (pMod->granted == nullptr) {
                 NEBULA_PANIC("LumaCore: no memory to keep %s's permissions", pMod->name);
             }

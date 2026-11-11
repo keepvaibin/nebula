@@ -999,9 +999,12 @@ static void do_call(const char* key, const char* rest) {
         finish(0, text.text);
         return;
     }
+    /* Filled with 0xA5, not zero (run 16, R16-1): a function that runs writes its result over it, so a result still
+       0 after a skip is the kernel's value-initialisation (Z-2), never the harness's. */
     union Value result;
-    result.d = 0.0;
-    result.v.x = result.v.y = result.v.z = 0.0f;
+    for (uint32_t b = 0; b < sizeof(result); b++) {
+        ((unsigned char*)&result)[b] = 0xA5;
+    }
     f->invoke(args, same(ret, "void") ? (void*)0 : (void*)&result);
     if (same(key, "-")) {
         finish(1, 0);

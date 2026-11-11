@@ -541,16 +541,19 @@ def read_expect(t, bare, steps):
             out.append({"kind": "fact", "key": plain(c["fact"], path + ".fact"), "op": op, "value": value,
                         "within": within, "when": when, "frames": frames, "source": c})
         elif "log" in c or "no_log" in c:
-            keys_known(c, path, {"log", "no_log"})
-            if len(c) != 1:
+            keys_known(c, path, {"log", "no_log", "times"})
+            if ("log" in c) == ("no_log" in c):
                 raise HarnessError("%s: log and no_log are separate checks" % path)
-            key = next(iter(c))
+            key = "log" if "log" in c else "no_log"
             pattern = text(c, key, path)
+            times = c.get("times")
+            if times is not None and (key != "log" or not isinstance(times, int) or isinstance(times, bool) or times < 0):
+                raise HarnessError("%s.times must be a whole number of at least 0, on a log check" % path)
             try:
                 re.compile(pattern)
             except re.error:
                 raise HarnessError("%s.%s is not a regular expression" % (path, key))
-            out.append({"kind": key, "pattern": pattern, "source": c})
+            out.append({"kind": key, "pattern": pattern, "times": times, "source": c})
         elif "picture" in c:
             keys_known(c, path, {"picture", "like", "unlike", "within", "beyond", "box", "mean_rgb"})
             name = text(c, "picture", path)
@@ -1013,7 +1016,10 @@ def evaluate(test, renderer, run_folder, ran):
         elif c["kind"] in ("log", "no_log"):
             pattern = re.compile(c["pattern"])
             hits = [line for line in log_lines if pattern.search(line)]
-            if c["kind"] == "log":
+            if c["kind"] == "log" and c.get("times") is not None:
+                # exactly n lines: "said once" is a count, not a presence (run 16, R16-2)
+                add("log matches %s %d times" % (c["pattern"], c["times"]), len(hits) == c["times"], [len(hits)] + hits[:3])
+            elif c["kind"] == "log":
                 add("log matches %s" % c["pattern"], bool(hits), hits[:1])
             else:
                 add("no log line matches %s" % c["pattern"], not hits, hits[:3])
