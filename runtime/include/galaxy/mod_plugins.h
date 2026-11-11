@@ -244,6 +244,17 @@ struct NotStartedText {
 };
 [[nodiscard]] NotStartedText plugin_not_started_text(std::string_view mod_id);
 
+// A validator code (L203 is 203) and its parameters (names and values, "T:"/"P:" values as the validator gives them)
+// as luma_validate_message words them in `language` (a language folder, "UsEnglish"; empty: the played language). When
+// the importer's library has no words (missing or old), the code and every parameter as given, and `worded` false.
+// The mod log's host entries (J's mod_log.cpp).
+struct ValidatorText {
+    std::string text;
+    bool worded = false;
+};
+[[nodiscard]] ValidatorText validator_text(std::uint32_t code, const std::vector<std::pair<std::string, std::string>>& values,
+                                           std::string_view language = {});
+
 // The mod id of the plugin containing `address`, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;
 

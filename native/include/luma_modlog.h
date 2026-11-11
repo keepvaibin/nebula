@@ -50,6 +50,9 @@ typedef struct LumaModLogEntry {
     const char* text;    /* the line in the played language, already rendered by the source (UTF-8); null: the log
                             renders it (contract section 3) */
     const char* english; /* the same line in English for the game's log (UTF-8); null: rendered as above */
+    const char* host;    /* a host sentence (English capitals, as the Mods page's: "ITS CODE DID NOT START"), used when
+                            text is null: the words are its translation as the settings menu translates host text, and
+                            english is the sentence as given. Read only when size covers it; null: none */
 } LumaModLogEntry;
 
 /* The smallest `size` the log reads: every field up to and including `english`. */

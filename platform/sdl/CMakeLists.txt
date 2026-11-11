@@ -152,6 +152,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
     ${rt}/luma.cpp
+    ${rt}/mod_log.cpp
     ${rt}/mod_plugins.cpp
     ${rt}/mods.cpp
     ${rt}/texture_categories.cpp

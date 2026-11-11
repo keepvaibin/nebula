@@ -1,5 +1,6 @@
 #include "Game/System/LumaModLog.hpp"
 
+#include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_modlog.h>
 #include <nebula_format.h>
@@ -311,10 +312,30 @@ namespace luma {
                 bool bare;            // the code and values only: no words were found
             };
 
-            void wordsOf(const LumaModLogEntry& rEntry, const char* pRowId, Words* pWords) {
+            // The entry's host sentence, when its size covers the field.
+            const char* hostOf(const LumaModLogEntry& rEntry) {
+                return rEntry.size >= offsetof(LumaModLogEntry, host) + sizeof(const char*) ? rEntry.host : nullptr;
+            }
+
+            void wordsOf(const LumaModLogEntry& rEntry, const char* pRowId, bool own, Words* pWords) {
                 pWords->played = nullptr;
                 pWords->english = nullptr;
                 pWords->bare = false;
+                const char* const pHost = rEntry.text == nullptr ? hostOf(rEntry) : nullptr;
+                if (pHost != nullptr) {
+                    // A host sentence (the Mods page's): translated as the settings menu translates host text; its
+                    // English as given.
+                    const u32 room = 4 * lengthOf(pHost) + 256;
+                    pWords->played = static_cast< char16_t* >(::malloc(room * sizeof(char16_t)));
+                    pWords->englishBytes = lengthOf(pHost);
+                    pWords->english = static_cast< char* >(::malloc(pWords->englishBytes + 1));
+                    if (pWords->played == nullptr || pWords->english == nullptr) {
+                        NEBULA_PANIC("LumaCore: no memory for %s's mod-log line %u", rEntry.mod, rEntry.code);
+                    }
+                    pWords->playedUnits = static_cast< u32 >(NebulaSettingsMenu::translateHost(pWords->played, static_cast< s32 >(room), pHost));
+                    copy(pWords->english, pHost);
+                    return;
+                }
                 if (rEntry.text != nullptr) {
                     // The host's: already in both languages.
                     pWords->playedUnits = put8Units(nullptr, 0, rEntry.text);
@@ -331,8 +352,7 @@ namespace luma {
                     return;
                 }
                 // The module's own sources, and the log's own lines (code 0) whatever their source, by their row.
-                const bool fromRow =
-                    pRowId != nullptr && (rEntry.source >= LUMA_MODLOG_CODE || rEntry.code == 0) && NebulaText::has(pRowId);
+                const bool fromRow = pRowId != nullptr && (rEntry.source >= LUMA_MODLOG_CODE || own) && NebulaText::has(pRowId);
                 if (fromRow) {
                     const s32 length = NebulaText::length(pRowId);
                     char16_t* const pTemplate = static_cast< char16_t* >(::malloc((length + 1) * sizeof(char16_t)));
@@ -532,23 +552,31 @@ namespace luma {
                 ::free(pJson);
             }
 
+            void keep(const LumaModLogEntry& rEntry, const char* pRowId, bool own);
+
             // The log's own Notes and Errors about an entry (ModLog.ArgsCut, ModLog.NoText): once per key.
             void addOwn(const char* pMod, u32 source, u32 level, const char* pRow) {
                 LumaModLogEntry own = {};
                 own.size = sizeof(own);
                 own.source = source;
                 own.level = level;
-                own.code = 0;  // no source's code is 0: the log's own lines
+                own.code = 0;
                 own.mod = pMod;
-                own.file = pRow;  // and their row is the key's file, so each is said once
+                own.file = pRow;  // their row is the key's file, so each is said once a mod and source
                 own.names[0] = "mod";
                 own.values[0] = pMod;
                 own.count = 1;
-                add(own, pRow);
+                keep(own, pRow, true);
             }
         }  // namespace
 
         void add(const LumaModLogEntry& rEntry, const char* pRowId) {
+            keep(rEntry, pRowId, false);
+        }
+
+        namespace {
+        // `own`: one of the log's own lines (addOwn), which may be a Note of any source and writes its own log line.
+        void keep(const LumaModLogEntry& rEntry, const char* pRowId, bool own) {
             // Section 6: the caller's mistakes are Nebula's bugs; nothing is kept, the game's log names them.
             if (rEntry.size < LUMA_MODLOG_ENTRY_SIZE || rEntry.mod == nullptr || rEntry.source >= LUMA_MODLOG_SOURCE_COUNT ||
                 rEntry.level > LUMA_MODLOG_NOTE) {
@@ -558,13 +586,13 @@ namespace luma {
                            rEntry.source, rEntry.level, rEntry.code);
                 return;
             }
-            // Section 3.1: the module's own sources are Errors (the log's own lines, code 0, are as they say).
-            if (rEntry.source >= LUMA_MODLOG_CODE && rEntry.code != 0 && rEntry.level != LUMA_MODLOG_ERROR) {
+            // Section 3.1: the module's own sources are Errors (the log's own lines are as they say).
+            if (rEntry.source >= LUMA_MODLOG_CODE && !own && rEntry.level != LUMA_MODLOG_ERROR) {
                 nebula_log("LumaCore: mod-log entry %s %s %u given as a Note; kept as an Error (a bug in its caller)\n", rEntry.mod,
                            sourceName(rEntry.source), rEntry.code);
                 LumaModLogEntry asError = rEntry;
                 asError.level = LUMA_MODLOG_ERROR;
-                add(asError, pRowId);
+                keep(asError, pRowId, own);
                 return;
             }
             const char* const pFile = rEntry.file != nullptr ? rEntry.file : "";
@@ -591,7 +619,7 @@ namespace luma {
 
             // Made outside the lock; another thread may keep the same key meanwhile (looked up again below).
             Words words;
-            wordsOf(rEntry, pRowId, &words);
+            wordsOf(rEntry, pRowId, own, &words);
             Entry* pMade = make(rEntry, pFile, words);
             Mod* pNewMod = pMod == nullptr ? makeMod(rEntry.mod) : nullptr;
             ::free(words.played);
@@ -640,10 +668,10 @@ namespace luma {
 
             // The game's log has every line once: CODE's are the kernel's own (record), the host's are the host's; the
             // content's and the log's own are written here.
-            if (pMade->source == LUMA_MODLOG_CONTENT || pMade->code == 0) {
+            if (pMade->source == LUMA_MODLOG_CONTENT || own) {
                 if (pMade->line != 0) {
                     nebula_log("[mod %s] %s:%u: %s\n", pMade->mod, pMade->file, pMade->line, pMade->english);
-                } else if (pMade->file[0] != 0 && pMade->code != 0) {
+                } else if (pMade->file[0] != 0 && !own) {
                     nebula_log("[mod %s] %s: %s\n", pMade->mod, pMade->file, pMade->english);
                 } else {
                     nebula_log("[mod %s] %s\n", pMade->mod, pMade->english);
@@ -654,10 +682,11 @@ namespace luma {
             if (rEntry.count > LUMA_MODLOG_ARGS) {
                 addOwn(rEntry.mod, rEntry.source, LUMA_MODLOG_NOTE, cArgsCut);
             }
-            if (words.bare && rEntry.text == nullptr && rEntry.source <= LUMA_MODLOG_COOK && rEntry.code != 0) {
+            if (words.bare && rEntry.text == nullptr && rEntry.source <= LUMA_MODLOG_COOK && !own) {
                 addOwn(cNebula, rEntry.source, LUMA_MODLOG_ERROR, cNoText);
             }
         }
+        }  // namespace
 
         void session(u32 modsOn, LumaModLogFact pFact) {
             __atomic_store_n(&sModsOn, modsOn, __ATOMIC_RELEASE);
