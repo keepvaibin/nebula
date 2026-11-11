@@ -1217,6 +1217,10 @@ def write_refs(args):
 
 
 def main():
+    # Names and reasons may be any language (a Japanese object name, run 13): the console or the file the output goes
+    # to takes them as UTF-8, whatever the system's code page.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     parser = argparse.ArgumentParser(description="The proof harness's runner (contract harness, revision 1).")
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run")

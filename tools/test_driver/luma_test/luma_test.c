@@ -64,6 +64,8 @@ static int32_t field_is_mario = -1; /* GameDataHolder.mIsMario */
 static int32_t field_user = -1;     /* GameDataHolder.mUser */
 static int32_t field_mode = -1;     /* MarioActor.mPlayerMode */
 static int32_t field_health = -1;   /* MarioActor.mHealth */
+static int32_t class_live_actor = -1; /* LiveActor's class number (is_a) */
+static int32_t class_mario_actor = -1; /* MarioActor's */
 
 /* --- Text ------------------------------------------------------------------------------------------------------------ */
 
@@ -96,11 +98,21 @@ static void out_empty(Out* out) {
 }
 
 static void put(Out* out, const char* text) {
+    if (out->cut != 0u) {
+        return;
+    }
     while (*text != 0 && out->at + 1 < sizeof(out->text)) {
         out->text[out->at++] = *text++;
     }
     if (*text != 0) {
+        /* A cut text says so at its end (audit 0.3 H-13): a fact that is cut is not written (fact), a message is. */
+        static const char said[] = " (cut)";
         out->cut = 1u;
+        out->at = (uint32_t)(sizeof(out->text) - sizeof(said));
+        for (uint32_t i = 0; i < sizeof(said); i++) {
+            out->text[out->at + i] = said[i];
+        }
+        out->at += (uint32_t)(sizeof(said) - 1u);
     }
     out->text[out->at] = 0;
 }
@@ -123,8 +135,9 @@ static void put_int(Out* out, int64_t value) {
     }
 }
 
-/* A float as JSON, to 1/1000 (enough for positions in game units and for factors). */
-static void put_float(Out* out, float value) {
+/* A number as JSON, to 1/1000 (enough for positions in game units and for factors); an f64 is taken whole, never
+   through float (audit 0.3 H-12). */
+static void put_float(Out* out, double value) {
     double v = value;
     /* NaN, the infinities and anything past 2^63 (whose whole part does not fit the conversion below) are null. */
     if (v != v || v >= 9223372036854775808.0 || v <= -9223372036854775808.0) {
@@ -329,14 +342,29 @@ static void fact_text(const char* key, const char* value) {
 
 /* --- Objects by name ------------------------------------------------------------------------------------------------- */
 
-#define MOST_OBJECTS 4096
+/* Every NameObj made (NameObj::NameObj, so actors, areas, layouts, cameras...), in creation order. One that goes leaves
+   a hole (null), so a destructor costs no move of the rest; holes are closed when the list is full or an arena goes. */
+#define MOST_OBJECTS 65536u
+#define MOST_OBJECTS_TEXT "65,536"
 static void* objects[MOST_OBJECTS];
 static uint32_t object_count;
 static uint32_t objects_lost;
 
+static void close_holes(void) {
+    uint32_t kept = 0;
+    for (uint32_t i = 0; i < object_count; i++) {
+        if (objects[i] != 0) {
+            objects[kept++] = objects[i];
+        }
+    }
+    object_count = kept;
+}
+
 static int32_t on_object(LumaCall* call, void* user) {
-    (void)call;
     (void)user;
+    if (object_count == MOST_OBJECTS) {
+        close_holes();
+    }
     if (object_count < MOST_OBJECTS) {
         objects[object_count++] = LUMA_THIS(call, void);
     } else {
@@ -345,20 +373,14 @@ static int32_t on_object(LumaCall* call, void* user) {
     return 0;
 }
 
-static void drop_object(uint32_t i) {
-    for (; i + 1 < object_count; i++) {
-        objects[i] = objects[i + 1];
-    }
-    object_count--;
-}
-
-/* A NameObj's destructor: it leaves the list (creation order kept), so its memory, used again, is never taken for it. */
+/* A NameObj's destructor: it leaves the list, so its memory, used again, is never taken for it. The newest go first
+   most often, so the search starts at the end. */
 static int32_t on_object_gone(LumaCall* call, void* user) {
     (void)user;
     void* const gone = LUMA_THIS(call, void);
-    for (uint32_t i = 0; i < object_count; i++) {
+    for (uint32_t i = object_count; i-- > 0;) {
         if (objects[i] == gone) {
-            drop_object(i);
+            objects[i] = 0;
             break;
         }
     }
@@ -372,15 +394,17 @@ static void* player_mario;
 static int32_t on_arena_gone(LumaCall* call, void* user) {
     (void)user;
     void* const arena = LUMA_ARG(call, 1, void*);
-    for (uint32_t i = 0; i < object_count;) {
+    for (uint32_t i = 0; i < object_count; i++) {
+        if (objects[i] == 0) {
+            continue;
+        }
         void* in = 0;
         call1(arena_of, &objects[i], &in);
         if (in == arena) {
-            drop_object(i);
-        } else {
-            i++;
+            objects[i] = 0;
         }
     }
+    close_holes();
     if (player_mario != 0) {
         void* in = 0;
         call1(arena_of, &player_mario, &in);
@@ -391,15 +415,26 @@ static int32_t on_arena_gone(LumaCall* call, void* user) {
     return 0;
 }
 
-/* The n-th live object (creation order) whose name is `name`, or null. */
+/* Whether an object of the game is of a class or one made from it. */
+static int object_is(const void* object, int32_t class_number) {
+    return object != 0 && class_number >= 0 && core->is_a(object, class_number) != 0;
+}
+
+/* The n-th live object (creation order) whose name is `name`, or null. Live: not destroyed, and for an actor not
+   dead (MR::isDead). */
 static void* object_named(const char* name, int64_t n) {
     for (uint32_t i = 0; i < object_count; i++) {
+        if (objects[i] == 0) {
+            continue;
+        }
         const char* const its = *(const char* const*)((const char*)objects[i] + field_name);
-        unsigned char dead = 1;
         if (its == 0 || !same(its, name)) {
             continue;
         }
-        call1(is_dead, &objects[i], &dead);
+        unsigned char dead = 0;
+        if (object_is(objects[i], class_live_actor)) {
+            call1(is_dead, &objects[i], &dead);
+        }
         if (dead == 0 && n-- == 0) {
             return objects[i];
         }
@@ -720,7 +755,12 @@ static void setup_player(const Words* w) {
             const int64_t n = to_int(w->word[3], &good);
             void* const object = good ? object_named(w->word[2], n) : 0;
             if (object == 0) {
-                finish(0, objects_lost != 0 ? "player.at: more objects than the harness keeps" : "player.at: no live object of that name and number");
+                finish(0, objects_lost != 0 ? "player.at: more objects than the harness keeps (" MOST_OBJECTS_TEXT ")"
+                                            : "player.at: no live object of that name and number");
+                return;
+            }
+            if (!object_is(object, class_live_actor)) {
+                finish(0, "player.at: that object is no actor (it has no position)");
                 return;
             }
             const Vec3* const at = (const Vec3*)((const char*)object + field_position);
@@ -905,8 +945,15 @@ static void do_call(const char* key, const char* rest) {
             values[i].p = object_of(text);
             args[i + 1] = &values[i].p;
             if (values[i].p == 0) {
-                finish(0, objects_lost != 0 && !same(text, "player") ? "call: more objects than the harness keeps (4,096): the object may be one of those"
+                finish(0, objects_lost != 0 && !same(text, "player") ? "call: more objects than the harness keeps (" MOST_OBJECTS_TEXT "): the object may be one of those"
                                                                      : "call: an argument names no live object");
+                return;
+            }
+            const int32_t needs = same(type, "MarioActor *") ? class_mario_actor
+                                 : same(type, "LiveActor *") || same(type, "const LiveActor *") ? class_live_actor
+                                                                                                : -1;
+            if (needs >= 0 && !object_is(values[i].p, needs)) {
+                finish(0, needs == class_mario_actor ? "call: a MarioActor * takes the player" : "call: an argument is no actor, and the parameter takes one");
                 return;
             }
         } else {
@@ -972,7 +1019,7 @@ static void do_call(const char* key, const char* rest) {
     } else if (same(ret, "s8")) {
         put_int(&o, result.sb);
     } else if (same(ret, "f64") || same(ret, "double")) {
-        put_float(&o, (float)result.d);
+        put_float(&o, result.d);
     } else if (same(ret, "bool")) {
         put(&o, result.b != 0 ? "true" : "false");
     } else if (same(ret, "const char *")) {
@@ -1025,9 +1072,13 @@ static void do_read(const Words* w) {
     void* const object = object_of(w->word[2]);
     const int32_t offset = cf.count == 2u ? core->field(cf.word[0], cf.word[1], type) : -1;
     if (object == 0 || offset < 0) {
-        finish(0, object == 0 ? (objects_lost != 0 ? "read: more objects than the harness keeps (4,096): the object may be one of those"
+        finish(0, object == 0 ? (objects_lost != 0 ? "read: more objects than the harness keeps (" MOST_OBJECTS_TEXT "): the object may be one of those"
                                                    : "no live object of that name and number")
                               : "the game has no field of that name and type");
+        return;
+    }
+    if (!object_is(object, core->class_of(cf.word[0]))) {
+        finish(0, "read: the object is not of the field's class");
         return;
     }
     const char* const at = (const char*)object + offset;
@@ -1211,7 +1262,9 @@ static const LumaImport imports[] = {
     {LUMA_IMPORT_FIELD, LUMA_OPTIONAL, "GameDataHolder.mUser", "s32", &field_user, 0, 0, 0},
     LUMA_FIELD(field_mode, "MarioActor.mPlayerMode", "u16"),
     LUMA_FIELD(field_health, "MarioActor.mHealth", "u32"),
-    LUMA_HOOK_ON("LiveActor::LiveActor", "(const char *)", LUMA_AFTER, on_object),
+    LUMA_HOOK_ON("NameObj::NameObj", "(const char *)", LUMA_AFTER, on_object),
+    LUMA_CLASS(class_live_actor, "LiveActor"),
+    LUMA_CLASS(class_mario_actor, "MarioActor"),
     LUMA_HOOK_ON("NameObj::~NameObj", "()", LUMA_AFTER, on_object_gone),
     LUMA_FUNCTION(arena_of, "NebulaArena::findFromRoot", "NebulaArena *(void *)"),
     LUMA_HOOK_ON("NebulaArena::destroy", "void(NebulaArena *)", LUMA_BEFORE, on_arena_gone),
