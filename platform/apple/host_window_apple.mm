@@ -288,9 +288,10 @@ void feed_pad_motion(std::size_t index, const float (&gyro)[3], const float (&ac
     g_pads[index].last_feed_us = now_us;
 }
 
-// A pad's sensors and touch surface, as they stand at this pump. The sensors' axes are turned into the frame the
-// motion code takes on every system (x to the right, y up through the face, z towards the player), as SDL turns the
-// same framework's. Called with g_input_mutex held.
+// A pad's sensors and touch surface, as they stand at this pump. The framework gives a controller's motion in the
+// frame the motion code takes on every system (x to the right, y up, z towards the player: GCEulerAngles has pitch,
+// yaw and roll about x, y and z), so the rates go in as they are. Turned as SDL turns the same framework's (x, z, -y),
+// the roll rate landed in yaw's place and a sideways tilt steered the pointer. Called with g_input_mutex held.
 void sample_pad_motion(std::size_t index) {
     Pad& pad = g_pads[index];
     PadMotion& motion = g_input.motion[index];
@@ -302,7 +303,7 @@ void sample_pad_motion(std::size_t index) {
         if (sensors != nil && pad.has_gyro && (!sensors.sensorsRequireManualActivation || sensors.sensorsActive)) {
             const GCRotationRate rate = sensors.rotationRate;
             const GCAcceleration pull = sensors.acceleration;
-            const float gyro[3] = {static_cast<float>(rate.x), static_cast<float>(rate.z), static_cast<float>(-rate.y)};
+            const float gyro[3] = {static_cast<float>(rate.x), static_cast<float>(rate.y), static_cast<float>(rate.z)};
             const float accel[3] = {static_cast<float>(-pull.x), static_cast<float>(-pull.y), static_cast<float>(-pull.z)};
             // A pad at rest always reads gravity: all zeros is no sample yet.
             if (!pad.has_accel || accel[0] != 0.0f || accel[1] != 0.0f || accel[2] != 0.0f) {
@@ -1278,7 +1279,7 @@ bool window_modal_active() noexcept {
     return galaxy::sdl::g_panels.load(std::memory_order_relaxed) != 0;
 }
 
-void test_resize_window(unsigned long width, unsigned long height) noexcept {
+void resize_window_client(unsigned width, unsigned height) noexcept {
     using namespace galaxy::sdl;
     on_main(^{
         if (g_window != nil && g_view != nil) {
@@ -1486,8 +1487,11 @@ std::optional<input::InputSource> take_controller_binding_capture() noexcept {
     return result;
 }
 
+// The style Auto shows now (button_icons sets it, the settings menu reads it).
+std::atomic<input::ButtonIconStyle> g_auto_icon_style{input::ButtonIconStyle::Game};
+
 input::ButtonIconStyle button_icons_auto_style() noexcept {
-    return input::ButtonIconStyle::Game;
+    return g_auto_icon_style.load(std::memory_order_relaxed);
 }
 
 void note_keyboard_input() noexcept {
@@ -1584,6 +1588,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     } else if (pad.has_value()) {
         style = input::button_icon_style(*pad);
     }
+    g_auto_icon_style.store(style, std::memory_order_relaxed);
     switch (get_runtime_settings().button_icons) {
     case ButtonIcons::Auto: break;
     case ButtonIcons::Game: style = ButtonIconStyle::Game; break;

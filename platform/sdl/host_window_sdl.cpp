@@ -1946,8 +1946,11 @@ std::optional<input::InputSource> take_controller_binding_capture() noexcept {
     return result;
 }
 
+// The style Auto shows now (button_icons sets it, the settings menu reads it).
+std::atomic<input::ButtonIconStyle> g_auto_icon_style{input::ButtonIconStyle::Game};
+
 input::ButtonIconStyle button_icons_auto_style() noexcept {
-    return input::ButtonIconStyle::Game;
+    return g_auto_icon_style.load(std::memory_order_relaxed);
 }
 
 void note_keyboard_input() noexcept {
@@ -2106,6 +2109,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     } else if (pad.has_value()) {
         style = input::button_icon_style(*pad);
     }
+    g_auto_icon_style.store(style, std::memory_order_relaxed);
     switch (get_runtime_settings().button_icons) {
     case ButtonIcons::Auto: break;
     case ButtonIcons::Game: style = ButtonIconStyle::Game; break;
