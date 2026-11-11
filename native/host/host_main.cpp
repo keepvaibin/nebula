@@ -3821,8 +3821,6 @@ int main(int argc, char** argv) {
     if (::galaxy::launch_args().started_hidden) {
         log_line("host:", "started hidden");
     }
-    attach_extensions();
-    boot_mark("main");
     fs::path pak, saves, module;
     // A path in the command line: argv is in the system's code page, which cannot hold every folder name.
     const auto arg_path = [&](int index) {
@@ -3836,6 +3834,55 @@ int main(int argc, char** argv) {
 #endif
         return fs::path(argv[index]);
     };
+    const auto default_module = [&] {
+#if defined(_WIN32)
+        return arg_path(0).parent_path() / "smg_game.dll";
+#elif defined(__APPLE__)
+        return fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
+#else
+        return fs::path(argv[0]).parent_path() / "libsmg_game.so";
+#endif
+    };
+    // --luma-describe <file> [--module <path>]: the module's type rows as JSON (contract types), compared by the build
+    // with the generator's (tools/lumacore/compare_types.py). No disc; the module is attached with its heap, log and fatal
+    // errors (to stderr) only, as its malloc is the host's and its constructors run at attach.
+    if (argc >= 2 && std::strcmp(argv[1], "--luma-describe") == 0) {
+        // Exactly `<file>` or `<file> --module <path>`: anything else is said, never ignored (A-LD1).
+        if (!(argc == 3 || (argc == 5 && std::strcmp(argv[3], "--module") == 0))) {
+            die("usage: --luma-describe <file> [--module <path>] (docs/COMMAND_LINE.md)");
+        }
+        const fs::path out = arg_path(2);
+        const fs::path from = argc == 5 ? arg_path(4) : default_module();
+        load_module(from);
+        static NebulaHostServices bare{};
+        bare.version = NEBULA_GAME_API_VERSION;
+        bare.size = sizeof(bare);
+        bare.log = [](void*, const char* text) { std::fprintf(stderr, "%s\n", text); };
+        bare.fatal = [](void*, const char* text) {
+            std::fprintf(stderr, "luma-describe: the game module stopped: %s\n", text);
+            std::fflush(stderr);
+            std::_Exit(3);
+        };
+        bare.heap_alloc = [](void*, size_t size) -> void* { return std::malloc(size); };
+        bare.heap_realloc = [](void*, void* data, size_t size) -> void* { return std::realloc(data, size); };
+        bare.heap_free = [](void*, void* data) { std::free(data); };
+        if (gModule.attach(&bare) != NEBULA_GAME_API_VERSION) {
+            die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
+        }
+        const auto describe =
+            reinterpret_cast<decltype(&nebula_game_luma_describe)>(find_symbol(gModule.module, "nebula_game_luma_describe"));
+        std::ofstream file(out, std::ios::binary | std::ios::trunc);
+        describe([](void* user, const char* text, uint32_t length) { static_cast<std::ofstream*>(user)->write(text, length); },
+                 &file);
+        file.close();
+        if (!file) {
+            std::fprintf(stderr, "luma-describe: %s could not be written\n", utf8_of(out).c_str());
+            return 2;
+        }
+        return 0;
+    }
+    attach_extensions();
+    boot_mark("main");
     double seconds = 0;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
@@ -3859,13 +3906,7 @@ int main(int argc, char** argv) {
         die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)");
     }
     if (module.empty()) {
-#if defined(_WIN32)
-        module = arg_path(0).parent_path() / "smg_game.dll";
-#elif defined(__APPLE__)
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
-#else
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
-#endif
+        module = default_module();
     }
     gSaveRoot = saves;
     std::error_code error;

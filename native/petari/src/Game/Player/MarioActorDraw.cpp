@@ -6,6 +6,7 @@
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
+#include "Game/Player/JetTurtleShadow.hpp"
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/ModelData.hpp"
@@ -52,11 +53,6 @@ NEBULA_TUNABLE_NAMED(f32, cNum_drawReflectModel_f1, "drawReflectModel.f1", 0.000
 namespace MR {
     void showMaterial(Model*, const char*);
 };  // namespace MR
-
-class JetTurtleShadow : public LiveActor {
-public:
-    void drawType0() const;
-};
 
 void MarioActor::initDrawAndModel() {
     mNumModPowerUps = NebulaMods::powerUpCount();

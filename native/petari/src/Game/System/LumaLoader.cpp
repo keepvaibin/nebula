@@ -3,6 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
 #include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaTypes.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
 #include <nebula_format.h>
@@ -175,23 +176,6 @@ namespace luma {
             }
         }
 
-        // "Class.field" split at its first dot.
-        bool splitField(const char* pName, char* pClass, u32 classSize, const char** ppField) {
-            u32 i = 0;
-            for (; pName[i] != 0 && pName[i] != '.'; i++) {
-                if (i + 1 >= classSize) {
-                    return false;
-                }
-                pClass[i] = pName[i];
-            }
-            pClass[i] = 0;
-            if (pName[i] != '.' || i == 0 || pName[i + 1] == 0) {
-                return false;
-            }
-            *ppField = pName + i + 1;
-            return true;
-        }
-
         // A refusal as the validator says it (loader contract 3): the code, the place, then the rule's parameters.
         struct Refuse {
             LumaRefusal* refusal;
@@ -267,26 +251,16 @@ namespace luma {
 
         s32 apiClassOf(const char* pClass) { return pClass != nullptr ? lumacore::findClass(pClass) : -1; }
 
-        s32 apiSizeOf(const char* pClass) {
-            const s32 id = apiClassOf(pClass);
-            return id < 0 ? -1 : static_cast<s32>(lumacore::classRow(static_cast<u16>(id)).size);
+        // Any record the game defines (contract types), by its name or an alias's.
+        s32 apiSizeOf(const char* pType) {
+            const TypeRow* const pRow = findType(pType);
+            return pRow != nullptr ? static_cast<s32>(pRow->size) : -1;
         }
 
-        s32 apiField(const char* pClass, const char* pField, const char* /*pType*/) {
-            const s32 id = apiClassOf(pClass);
-            if (id < 0 || pField == nullptr) {
-                return -1;
-            }
-            // A field of a base is found on the base it belongs to.
-            for (u16 at = static_cast<u16>(id);; at = lumacore::classRow(at).base) {
-                const lumacore::FieldRow* pRow = lumacore::findField(at, pField);
-                if (pRow != nullptr) {
-                    return static_cast<s32>(pRow->offset);
-                }
-                if (at == 0 || lumacore::classRow(at).base == at) {
-                    return -1;
-                }
-            }
+        // As kind 1 binds it: through the record's bases, a bit-field's position in bits; with a type, only that type.
+        s32 apiField(const char* pType, const char* pField, const char* pTypeText) {
+            const FieldBind bind = findField(pType, pField, pTypeText);
+            return bind.found && (pTypeText == nullptr || bind.sameType) ? bind.value : -1;
         }
 
         s32 apiIsA(const void* pObject, s32 classNumber) {
@@ -740,7 +714,8 @@ namespace luma {
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport,
         };
 
-        // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none.
+        // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
+        // or (a field) not of the type the import names.
         bool resolve(const LumaImport& rImport, const Function** ppFunction, s32* pNumber) {
             *ppFunction = nullptr;
             *pNumber = -1;
@@ -750,19 +725,19 @@ namespace luma {
                 *ppFunction = findFunction(rImport.name, rImport.signature, nullptr);
                 return *ppFunction != nullptr;
             case LUMA_IMPORT_FIELD: {
-                char className[96];
-                const char* pField = nullptr;
-                if (!splitField(rImport.name, className, sizeof(className), &pField)) {
+                const FieldBind bind = findField(rImport.name, rImport.signature);
+                if (!bind.found || (rImport.signature != nullptr && !bind.sameType)) {
                     return false;
                 }
-                *pNumber = apiField(className, pField, rImport.signature);
-                return *pNumber >= 0;
+                *pNumber = bind.value;
+                return true;
             }
             case LUMA_IMPORT_SIZE:
                 *pNumber = apiSizeOf(rImport.name);
                 return *pNumber >= 0;
             case LUMA_IMPORT_SERVICE:
-                return false;  // bindService
+            case LUMA_IMPORT_GLOBAL:
+                return false;  // their own passes
             default:
                 *pNumber = apiClassOf(rImport.name);
                 return *pNumber >= 0;
@@ -781,8 +756,21 @@ namespace luma {
                 return "Name.Service";
             case LUMA_IMPORT_MOD_FUNCTION:
                 return "Name.ModFunction";
+            case LUMA_IMPORT_GLOBAL:
+                return rImport.signature != nullptr ? "Name.GlobalSig" : "Name.Global";
+            case LUMA_IMPORT_SIZE:
+                return "Name.Type";
             default:
                 return "Name.Class";
+            }
+        }
+
+        // The reason a name is unbound, after kind, found and sig (contract types TY-7, TY2-1): its id, and the names
+        // it holds when it holds any.
+        void putWhy(Refuse& rRefuse, const char* pWhy, const char* pWhat) {
+            rRefuse.put("why", 'P', pWhy);
+            if (pWhat != nullptr) {
+                rRefuse.put("what", 'T', pWhat);
             }
         }
 
@@ -933,6 +921,8 @@ namespace luma {
         if (!onGameThread()) {
             NEBULA_PANIC("a LumaCore mod was loaded off the game thread");
         }
+        // The type rows are sorted here, before any mod's code runs, so later lookups from any thread only read.
+        prepareTypes();
         gSkipRefused = skipRefused;
         gNoResult = noResult;
         LumaMod* const pMod = new LumaMod();
@@ -983,7 +973,7 @@ namespace luma {
         // Pass 1, every name; pass 2, every hook as `hook` would take it. Nothing is bound yet (LR-2).
         for (u32 i = 0; !refused && i < pInfo->import_count; i++) {
             const LumaImport& rImport = pInfo->imports[i];
-            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_MOD_FUNCTION ||
+            if (rImport.name == nullptr || rImport.kind > LUMA_IMPORT_GLOBAL ||
                 (rImport.kind == LUMA_IMPORT_HOOK && (rImport.hook == nullptr || rImport.hook_kind >= Hook_KindCount))) {
                 refuse.start(512);
                 refuse.put("why", 'P', "Lib.ImportRowBad");
@@ -1040,6 +1030,25 @@ namespace luma {
                 refused = true;
                 break;
             }
+            // A global (types 1.2): by name, then its type text. L505 as the validator gives it: one the generator
+            // left out is Name.GlobalUnbound with its reason; else Name.Global, or Name.GlobalSig with a signature.
+            if (rImport.kind == LUMA_IMPORT_GLOBAL) {
+                const GlobalRow* const pGlobal = findGlobal(rImport.name);
+                const bool same = pGlobal != nullptr && (rImport.signature == nullptr || sameText(rImport.signature, pGlobal->type));
+                if (same || (rImport.flags & LUMA_OPTIONAL) != 0) {
+                    continue;
+                }
+                const LeftRow* const pLeft = pGlobal == nullptr ? leftOut(rImport.kind, rImport.name) : nullptr;
+                refuse.start(505);
+                refuse.put("kind", 'P', pLeft != nullptr ? "Name.GlobalUnbound" : missingKind(rImport));
+                refuse.put("found", 'T', rImport.name);
+                refuse.put("sig", 'T', rImport.signature != nullptr ? rImport.signature : "");
+                if (pLeft != nullptr) {
+                    putWhy(refuse, pLeft->why, pLeft->what);
+                }
+                refused = true;
+                break;
+            }
             const Function* pFunction = nullptr;
             s32 number = -1;
             if (!resolve(rImport, &pFunction, &number)) {
@@ -1047,9 +1056,37 @@ namespace luma {
                     continue;
                 }
                 refuse.start(505);
-                refuse.put("kind", 'P', missingKind(rImport));
-                refuse.put("found", 'T', rImport.name);
-                refuse.put("sig", 'T', rImport.signature);
+                if (rImport.kind == LUMA_IMPORT_FIELD) {
+                    // One of another type is Name.FieldSig (Z-4). A name some base has twice, or through a virtual
+                    // base, is Name.FieldUnbound with the kernel's own reason and names (TY2-1; the build's comparison
+                    // proves them the generator's); any other name the generator left out, with its reason. Else
+                    // Name.Field, or Name.FieldSig with a signature.
+                    const FieldBind bind = findField(rImport.name, rImport.signature);
+                    const LeftRow* const pLeft = !bind.found && bind.why == FieldBind::kNone ? leftOut(rImport.kind, rImport.name) : nullptr;
+                    refuse.put("kind", 'P', bind.found ? "Name.FieldSig"
+                                            : bind.why != FieldBind::kNone || pLeft != nullptr ? "Name.FieldUnbound"
+                                                                                               : missingKind(rImport));
+                    refuse.put("found", 'T', rImport.name);
+                    refuse.put("sig", 'T', rImport.signature != nullptr ? rImport.signature : "");
+                    if (bind.why != FieldBind::kNone) {
+                        putWhy(refuse, bind.why == FieldBind::kAmbiguous ? "LeftOut.Ambiguous" : "LeftOut.VirtualBase", bind.whyNames);
+                    } else if (pLeft != nullptr) {
+                        putWhy(refuse, pLeft->why, pLeft->what);
+                    }
+                } else if (rImport.kind == LUMA_IMPORT_SIZE) {
+                    // A record by its name or an alias's: Name.Type, or Name.TypeUnbound with the generator's reason.
+                    const LeftRow* const pLeft = leftOut(rImport.kind, rImport.name);
+                    refuse.put("kind", 'P', pLeft != nullptr ? "Name.TypeUnbound" : "Name.Type");
+                    refuse.put("found", 'T', rImport.name);
+                    refuse.put("sig", 'T', rImport.signature);
+                    if (pLeft != nullptr) {
+                        putWhy(refuse, pLeft->why, pLeft->what);
+                    }
+                } else {
+                    refuse.put("kind", 'P', missingKind(rImport));
+                    refuse.put("found", 'T', rImport.name);
+                    refuse.put("sig", 'T', rImport.signature);
+                }
                 refused = true;
                 break;
             }
@@ -1123,6 +1160,13 @@ namespace luma {
                         pMod->uses[pMod->useCount++] = pOwner;
                     }
                 }
+                continue;
+            }
+            if (rImport.kind == LUMA_IMPORT_GLOBAL) {
+                // Pass 1 checked it; an optional one the game lacks, or of another type, stays null.
+                const GlobalRow* const pGlobal = findGlobal(rImport.name);
+                const bool same = pGlobal != nullptr && (rImport.signature == nullptr || sameText(rImport.signature, pGlobal->type));
+                *static_cast<void**>(rImport.slot) = same ? pGlobal->address : nullptr;
                 continue;
             }
             const Function* pFunction = nullptr;

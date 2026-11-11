@@ -5,7 +5,13 @@ function it defines. That line is the function's row in LumaCore's name table an
 to its hooks (native/include/luma_hook.h). The build compiles OUTPUT in SOURCE's place; SOURCE is never changed, and
 OUTPUT keeps SOURCE's line numbers.
 
-Beside OUTPUT: OUTPUT.rows (name, signature, kind, line of every row) and OUTPUT.left (what got no row, and why).
+Beside OUTPUT: OUTPUT.rows (name, signature, kind, line of every row), OUTPUT.left (what got no row, and why) and
+OUTPUT.globals (the mangled name of every variable with external linkage SOURCE defines: gen_types.py gives a header's
+global a row only when some unit defines it) and OUTPUT.types (this unit's part of the self-description).
+
+The records, aliases and globals only SOURCE can name (a nerve class, a file's own struct) get their type rows at the end
+of OUTPUT (gen_types.py's unit pass), as members of the unit's LumaUnitRows. Each record SOURCE writes declares it a
+friend (on the line of its opening brace), so the rows' offsetof and & are the compiler's own, private members too.
 
 The arguments of SOURCE's own compile command are read from --commands, where the build lists OUTPUT (or --entry).
 --root: the folder the names of file-local functions are relative to.
@@ -46,12 +52,15 @@ INCLUSION = ctypes.CFUNCTYPE(None, c_void_p, POINTER(CXSourceLocation), c_uint, 
 # CXCursorKind
 K_UNEXPOSED_DECL, K_STRUCT, K_UNION, K_CLASS, K_FUNCTION, K_METHOD, K_NAMESPACE, K_LINKAGE = 1, 2, 3, 4, 8, 21, 22, 23
 K_CONSTRUCTOR, K_DESTRUCTOR, K_CONVERSION, K_FUNCTION_TEMPLATE, K_CLASS_TEMPLATE, K_CLASS_PARTIAL = 24, 25, 26, 30, 31, 32
-K_TRANSLATION_UNIT, K_COMPOUND = 350, 202
+K_TRANSLATION_UNIT, K_COMPOUND, K_VAR = 350, 202, 9
 FUNCTIONS = (K_FUNCTION, K_METHOD, K_CONSTRUCTOR, K_DESTRUCTOR, K_CONVERSION)
 SCOPES = (K_UNEXPOSED_DECL, K_STRUCT, K_UNION, K_CLASS, K_NAMESPACE, K_LINKAGE)
 # CXTypeKind
 T_VOID, T_LVALUE, T_RVALUE = 2, 103, 104
-LINKAGE_INTERNAL = 2
+T_UNEXPOSED, T_POINTER, T_BLOCK_POINTER, T_RECORD, T_ENUM, T_TYPEDEF = 1, 101, 102, 105, 106, 107
+T_FUNCTION_NO_PROTO, T_FUNCTION_PROTO, T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY, T_VARIABLE_ARRAY = 110, 111, 112, 114, 115
+T_DEPENDENT_ARRAY, T_MEMBER_POINTER, T_ELABORATED, T_ATTRIBUTED = 116, 117, 119, 163
+LINKAGE_INTERNAL, LINKAGE_EXTERNAL = 2, 4
 
 
 def load(path):
@@ -96,11 +105,24 @@ def load(path):
     api.isStatic = fn('clang_CXXMethod_isStatic', c_uint, CXCursor)
     api.isConst = fn('clang_CXXMethod_isConst', c_uint, CXCursor)
     api.linkage = fn('clang_getCursorLinkage', c_int, CXCursor)
+    api.mangling = fn('clang_Cursor_getMangling', CXString, CXCursor)
     api.specialized = fn('clang_getSpecializedCursorTemplate', CXCursor, CXCursor)
     api.isNull = fn('clang_Cursor_isNull', c_int, CXCursor)
     api.definition = fn('clang_getCursorDefinition', CXCursor, CXCursor)
     api.inclusions = fn('clang_getInclusions', None, c_void_p, INCLUSION, c_void_p)
     api.fileName = fn('clang_getFileName', CXString, c_void_p)
+    # A type's text with every name qualified (TY-9): LLVM 21 and later.
+    if not hasattr(lib, 'clang_getFullyQualifiedName'):
+        sys.exit(f'instrument.py: {path} has no clang_getFullyQualifiedName (LLVM 21 or later is needed)')
+    api.fullyQualified = fn('clang_getFullyQualifiedName', CXString, CXType, c_void_p, c_uint)
+    api.printingPolicy = fn('clang_getCursorPrintingPolicy', c_void_p, CXCursor)
+    api.pointeeType = fn('clang_getPointeeType', CXType, CXType)
+    api.elementType = fn('clang_getArrayElementType', CXType, CXType)
+    api.classType = fn('clang_Type_getClassType', CXType, CXType)
+    api.numArgTypes = fn('clang_getNumArgTypes', c_int, CXType)
+    api.namedType = fn('clang_Type_getNamedType', CXType, CXType)
+    api.modifiedType = fn('clang_Type_getModifiedType', CXType, CXType)
+    api.unqualified = fn('clang_getUnqualifiedType', CXType, CXType)
     return api
 
 
@@ -143,6 +165,11 @@ class Unit:
         self.edits = []
         self.rows = []
         self.left = []
+        self.defines = set()
+        self.main_file = None
+        self.types_head = b''   # before the source: what the type rows need
+        self.types_tail = b''   # after it: the rows
+        self.types_part = {}
 
     def string(self, cx):
         raw = self.api.cstring(cx)
@@ -177,6 +204,16 @@ class Unit:
     def in_main(self, cursor):
         return bool(self.api.inMain(self.api.location(cursor)))
 
+    def expanded_in_main(self, cursor):
+        """Written in the main file, or made there by a macro whose use is in it (NEW_NERVE's sInstance)."""
+        file, line, column, offset = c_void_p(), c_uint(), c_uint(), c_uint()
+        self.api.expansion(self.api.location(cursor), byref(file), byref(line), byref(column), byref(offset))
+        if not file.value:
+            return False
+        if self.main_file is None:
+            self.main_file = os.path.normcase(os.path.abspath(self.source))
+        return os.path.normcase(os.path.abspath(self.string(self.api.fileName(file)))) == self.main_file
+
     def defined_here(self, cursor):
         definition = self.api.definition(cursor)
         return not self.api.isNull(definition) and self.in_main(definition)
@@ -207,6 +244,9 @@ class Unit:
             if child.kind in FUNCTIONS:
                 if self.api.isDefinition(child) and self.in_main(child):
                     self.function(child)
+            elif child.kind == K_VAR:
+                if self.api.isDefinition(child) and self.api.linkage(child) == LINKAGE_EXTERNAL and self.expanded_in_main(child):
+                    self.defines.add(self.string(self.api.mangling(child)))
             elif child.kind in SCOPES and self.in_main(child):
                 self.walk(child)
 
@@ -214,8 +254,48 @@ class Unit:
         self.left.append(f'{name}\t{line}\t{why}')
 
     def type_text(self, cxtype):
-        text = self.string(self.api.typeSpelling(cxtype)).replace('(anonymous namespace)::', '')
+        """A type as the rows write it (contract types TY-3, TY-9): every record, enum and alias by its qualified name,
+        the one its own row has (`Mario::MovementStates &`, not `MovementStates &`), so no reader repeats C++'s lookup;
+        an alias stays an alias (`u32`, `uint32_t`). None for a type no mod can write."""
+        policy = self.__dict__.get('policy')
+        if policy is None:
+            policy = self.policy = self.api.printingPolicy(self.api.cursor(self.tu))
+        text = self.string(self.api.fullyQualified(cxtype, policy, 0))
+        # clang qualifies through pointers, references and pointers to members, but leaves an array's element and a
+        # function type's result and parameters as written: each named part there is put in its qualified form, the
+        # longest first, where it stands as a whole name (not after `::`, which is already a qualified one's tail).
+        named = {}
+        self.named_parts(cxtype, named, policy)
+        for written in sorted(named, key=len, reverse=True):
+            if named[written] != written:
+                qualified = named[written]
+                text = re.sub(r'(?<![\w:])' + re.escape(written) + r'(?![\w])', lambda _: qualified, text)
+        text = text.replace('(anonymous namespace)::', '')
         return None if re.search(r'\(unnamed|\(anonymous|\(lambda|type-parameter-|decltype\(|__va_list|\bva_list\b', text) else text
+
+    def named_parts(self, t, named, policy):
+        """The named types a type is made of (records, enums, typedefs; not inside template arguments, which a name's
+        qualified form holds): written spelling -> qualified spelling."""
+        api = self.api
+        k = t.kind
+        if k in (T_ELABORATED,):
+            self.named_parts(api.namedType(t), named, policy)
+        elif k == T_ATTRIBUTED:
+            self.named_parts(api.modifiedType(t), named, policy)
+        elif k in (T_POINTER, T_BLOCK_POINTER, T_LVALUE, T_RVALUE):
+            self.named_parts(api.pointeeType(t), named, policy)
+        elif k in (T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY, T_VARIABLE_ARRAY, T_DEPENDENT_ARRAY):
+            self.named_parts(api.elementType(t), named, policy)
+        elif k == T_MEMBER_POINTER:
+            self.named_parts(api.pointeeType(t), named, policy)
+            self.named_parts(api.classType(t), named, policy)
+        elif k in (T_FUNCTION_NO_PROTO, T_FUNCTION_PROTO):
+            self.named_parts(api.resultType(t), named, policy)
+            for i in range(max(api.numArgTypes(t), 0)):
+                self.named_parts(api.argType(t, i), named, policy)
+        elif k in (T_UNEXPOSED, T_RECORD, T_ENUM, T_TYPEDEF):
+            u = api.unqualified(t)
+            named.setdefault(self.string(api.typeSpelling(u)), self.string(api.fullyQualified(u, policy, 0)))
 
     def function(self, cursor):
         api = self.api
@@ -306,14 +386,85 @@ class Unit:
         self.edits += edits
         self.rows.append(f'{name}\t{signature}\t{kind}\t{line}')
 
+    def type_rows(self, types):
+        """The unit pass's rows (types: gen_types.Reader after its unit-pass walk). A record written by a macro gets no
+        friend; one that would need it (a member that is not public) stops the build, naming it."""
+        api = self.api
+        instances = []  # explicit instantiations: (name, file, line)
+        closing = {}  # records named through a scope that is not public: name -> offset of their closing brace
+        for key, cursor in types.cursors.items():
+            if isinstance(key, tuple):
+                # A static member that is not public is reached through its class's friend.
+                parent = api.semanticParent(cursor)
+                if types.api.access(cursor) in (2, 3) and parent.kind in (K_STRUCT, K_UNION, K_CLASS) and \
+                        self.offset(api.rangeStart(api.extent(parent))) is None:
+                    sys.exit(f'instrument.py: {self.source}: {key[1]} is not public and its class is written by a macro: '
+                             'its row cannot name it')
+                continue
+            start = self.offset(api.rangeStart(api.extent(cursor)))
+            end = self.offset(api.rangeEnd(api.extent(cursor)))
+            if start is None or end is None:
+                hidden = types.api.access(cursor) in (2, 3) or any(
+                    f['access'] in ('private', 'protected') for f in types.records[key]['fields'])
+                if hidden:
+                    sys.exit(f'instrument.py: {self.source}: {key} is written by a macro and has members that are not '
+                             'public: its row cannot name them')
+                continue
+            brace = self.text.find(b'{', start, end)
+            if brace < 0 and not api.isNull(api.specialized(cursor)):
+                # `template class X<T>;`: an instance of a header's template, the header pass's row
+                file, line = types.where(cursor)
+                instances.append((key, types.label(file), line))
+                continue
+            if brace < 0:
+                sys.exit(f'instrument.py: {self.source}: no opening brace in the definition of {key}')
+            if self.named_privately(cursor):
+                # Its rows are its own static members (gen_types.py cpp_rows): declared before its closing brace.
+                close = self.text.rfind(b'}', brace, end)
+                if close < 0:
+                    sys.exit(f'instrument.py: {self.source}: no closing brace in the definition of {key}')
+                closing[key] = close
+                continue
+            self.edits.append((brace + 1, b' friend struct ::LumaUnitRows;'))
+        for key, _, _ in instances:
+            del types.records[key]
+            del types.cursors[key]
+        types.inside = set(closing)
+        lines = types.cpp_rows(True)
+        for key, close in closing.items():
+            self.edits.append((close, types.inside_decls[key].encode()))
+        self.types_part = types.unit_part()
+        self.types_part['instances'] = [{'name': key, 'file': file, 'line': line} for key, file, line in instances]
+        if types.row_count:
+            self.types_head = b'#include <luma_types.h>\nnamespace { struct LumaUnitRows; }\n'
+            self.types_tail = ('\n// The type rows of what only this unit names (tools/lumacore/gen_types.py, unit pass).\n'
+                               '#pragma clang diagnostic push\n#pragma clang diagnostic ignored "-Winvalid-offsetof"\n' +
+                               '\n'.join(lines) + '#pragma clang diagnostic pop\n').encode()
+
+    def named_privately(self, cursor):
+        """Whether a record's qualified name passes through a member of a class that is not public (A::B with B
+        private in A): no code outside A's members may write it."""
+        api = self.api
+        while True:
+            parent = api.semanticParent(cursor)
+            if parent.kind not in (K_STRUCT, K_UNION, K_CLASS, K_CLASS_TEMPLATE, K_CLASS_PARTIAL):
+                return False
+            if api.access(cursor) in (2, 3):
+                return True
+            cursor = parent
+
     def write(self, output):
         text = self.text
         for at, added in sorted(self.edits, key=lambda e: e[0], reverse=True):
             text = text[:at] + added + text[at:]
         marker = f'#include <luma_hook.h>\n#line 1 "{self.source.resolve().as_posix()}"\n'.encode()
-        write_if_changed(output, marker + text)
+        if self.types_tail and not text.endswith(b'\n'):
+            text += b'\n'
+        write_if_changed(output, self.types_head + marker + text + self.types_tail)
+        write_if_changed(output + '.types', (json.dumps(self.types_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
+        write_if_changed(output + '.globals', ''.join(name + '\n' for name in sorted(self.defines) if name).encode())
 
 
 def qualified_call(scope):
@@ -405,7 +556,9 @@ def main():
     resource_dir = own_resource_dir(libclang, args[0])
     if resource_dir is not None and '-resource-dir' not in args:
         args = args[:1] + ['-resource-dir', resource_dir] + args[1:]
-    api = load(libclang)
+    import gen_types  # the type rows' reader; it imports this module (see the end of this file)
+    gen_types.set_target(args)
+    api = gen_types.Api(libclang)
     os.chdir(directory)
     index = api.createIndex(0, 0)
     tu = c_void_p()
@@ -423,6 +576,9 @@ def main():
         sys.exit(f'instrument.py: {source} does not compile:\n' + '\n'.join(errors[:20]))
     unit = Unit(api, tu, source, root)
     unit.walk(api.cursor(tu))
+    types = gen_types.Reader(api, tu, [], unit_pass=True)
+    types.walk(api.cursor(tu))
+    unit.type_rows(types)
     unit.write(output)
     if '--depfile' in options:
         included = []
@@ -435,4 +591,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # As the module gen_types imports, so both use one set of ctypes structures.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import instrument
+    instrument.main()

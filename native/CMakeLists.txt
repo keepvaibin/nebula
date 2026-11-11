@@ -34,6 +34,8 @@ option(NEBULA_LUMA_HOOKS "Every game function carries its LumaCore row and hook 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(luma_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/instrument.py")
+# instrument.py runs gen_types.py's unit pass: a copy is out of date when either changes.
+set(luma_types_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/gen_types.py")
 # The row generator parses with libclang on the build machine. A compiler of the build machine has it beside itself
 # (LLVM's packages); a cross compiler may not (Android's NDK ships none), so a cross build finds the build machine's.
 set(NEBULA_LIBCLANG "" CACHE FILEPATH "The build machine's libclang for the row generator (default: beside the compiler)")
@@ -55,22 +57,56 @@ if(NEBULA_LIBCLANG)
     set(luma_libclang --libclang "${NEBULA_LIBCLANG}")
 endif()
 set(module_sources)
+set(luma_defined_lists)
 foreach(source IN LISTS game_sources)
-    if(NEBULA_LUMA_HOOKS AND source MATCHES "\\.cpp$" AND NOT source MATCHES "/System/(Luma(Hook|Loader)\\.cpp$|generated/)")
+    if(NEBULA_LUMA_HOOKS AND source MATCHES "\\.cpp$" AND NOT source MATCHES "/System/(Luma(Hook|Loader|Types)\\.cpp$|generated/)")
         file(RELATIVE_PATH relative "${petari}/src" "${source}")
         get_filename_component(folder "${source}" DIRECTORY)
         set(copy "${CMAKE_CURRENT_BINARY_DIR}/luma/${relative}")
         add_custom_command(OUTPUT "${copy}"
+            BYPRODUCTS "${copy}.globals" "${copy}.types"
             COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" "${source}" "${copy}"
                     --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${petari}/src" --depfile "${copy}.d"
                     ${luma_libclang}
-            DEPENDS "${source}" "${luma_tool}" DEPFILE "${copy}.d" VERBATIM)
+            DEPENDS "${source}" "${luma_tool}" "${luma_types_tool}" DEPFILE "${copy}.d" VERBATIM)
         set_source_files_properties("${copy}" PROPERTIES COMPILE_OPTIONS "-iquote${folder}")
         list(APPEND module_sources "${copy}")
+        list(APPEND luma_defined_lists "${copy}.globals" "${copy}.types")
     else()
         list(APPEND module_sources "${source}")
     endif()
 endforeach()
+
+# The type rows (contract types, plan 1.2): every record, field, base, alias and global of the game's headers, from one
+# libclang parse of all of them with a game unit's command (tools/lumacore/gen_types.py). The numbers are the
+# compiler's own: the table is compiled here, with no access check, since offsetof names private fields. A global gets a
+# row only when a unit defines it (the copies' .globals lists); what a .cpp defines is in its copy's .types.
+if(NEBULA_LUMA_HOOKS)
+    set(luma_types "${CMAKE_CURRENT_BINARY_DIR}/luma_types")
+    add_custom_command(OUTPUT "${luma_types}/luma_types_table.cpp"
+        BYPRODUCTS "${luma_types}/luma_types.json" "${luma_types}/luma_types.left"
+        COMMAND "${Python3_EXECUTABLE}" "${luma_types_tool}" --commands "${CMAKE_BINARY_DIR}/compile_commands.json"
+                --out "${luma_types}" --defined "${CMAKE_CURRENT_BINARY_DIR}/luma" --depfile "${luma_types}/luma_types_table.d"
+                ${luma_libclang}
+        DEPENDS "${luma_types_tool}" "${luma_tool}" ${luma_defined_lists} DEPFILE "${luma_types}/luma_types_table.d" VERBATIM)
+    set_source_files_properties("${luma_types}/luma_types_table.cpp" PROPERTIES COMPILE_OPTIONS "-Xclang;-fno-access-control")
+    list(APPEND module_sources "${luma_types}/luma_types_table.cpp")
+    # The module's rows against the generator's, after each link; any difference fails the build, naming the row. A
+    # cross build cannot run its module here: the test run compares (tools/lumacore/luma_test.py).
+    if(NOT CMAKE_CROSSCOMPILING)
+        add_executable(luma_describe tools/luma_describe.c)
+        target_include_directories(luma_describe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+        target_link_libraries(luma_describe PRIVATE ${CMAKE_DL_LIBS})
+        add_custom_command(OUTPUT "${luma_types}/luma_types_described.json"
+            COMMAND luma_describe "$<TARGET_FILE:smg_game>" "${luma_types}/luma_types_described.json"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/compare_types.py"
+                    "${luma_types}/luma_types.json" "${luma_types}/luma_types_described.json"
+            DEPENDS smg_game luma_describe "${luma_types}/luma_types.json"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/compare_types.py" "${luma_types_tool}"
+            VERBATIM)
+        add_custom_target(luma_types_check ALL DEPENDS "${luma_types}/luma_types_described.json")
+    endif()
+endif()
 
 add_library(smg_game SHARED
     ${module_sources}

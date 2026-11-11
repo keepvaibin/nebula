@@ -54,14 +54,20 @@ enum {
 
 enum {
     LUMA_IMPORT_FUNCTION = 0, /* slot: const LumaFunction** */
-    LUMA_IMPORT_FIELD = 1,    /* name "Class.field", signature its type; slot: int32_t* (the offset in the object) */
-    LUMA_IMPORT_SIZE = 2,     /* name "Class"; slot: int32_t* (its size in bytes) */
+    LUMA_IMPORT_FIELD = 1,    /* name "Type.field" of any record the game defines ("MarioModule::Data.mSpeed",
+                                 "Vec3<f32>.x", a member of an anonymous type "LiveActor.mFlag.mIsDead"; a base's field
+                                 through the type), signature its type text as the self-description writes it ("f32");
+                                 slot: int32_t* (the offset in the object). A bit-field's signature is "<type> : <width>"
+                                 and its slot gets its position in bits (LUMA_BITS_GET, LUMA_BITS_SET) */
+    LUMA_IMPORT_SIZE = 2,     /* name any record ("Class", "Vec3<f32>"); slot: int32_t* (its size in bytes) */
     LUMA_IMPORT_CLASS = 3,    /* name "Class"; slot: int32_t* (its number, for is_a) */
     LUMA_IMPORT_HOOK = 4,     /* a hook on the function `name` with `signature`: `hook`, `hook_kind`, `user` */
     LUMA_IMPORT_SERVICE = 5,  /* a service: `name`, `signature` its "major.minor"; slot: const void** (its table) */
-    LUMA_IMPORT_MOD_FUNCTION = 6 /* another mod's function (loader D3-3): `name` "<mod id>/<export name>", `signature`
+    LUMA_IMPORT_MOD_FUNCTION = 6, /* another mod's function (loader D3-3): `name` "<mod id>/<export name>", `signature`
                                     the export's ("lumi1:" and 16 hex digits, lumascript-abi R-2); slot: const void**.
                                     That mod is among this one's `needs`, so it is loaded first */
+    LUMA_IMPORT_GLOBAL = 7    /* a global the game defines (types 1.2): `name` qualified ("SoundEngine::sEngine"),
+                                 `signature` its type text; slot: void** (its address; const void** for a const one) */
 };
 #define LUMA_OPTIONAL 1u
 
@@ -95,9 +101,11 @@ typedef struct LumaCore {
     /* From a wrap or a replace: runs the wraps after it, then the function. */
     void (*proceed)(LumaCall* call);
 
-    /* A field's offset in its object, or -1. `type` may be null; when given it must be the field's type. */
+    /* A field's offset in an object of any record the game defines (by its name or an alias's; a base's field through
+       the record; a bit-field: its position in bits), or -1, as kind 1 binds it. `type` may be null; when given it
+       must be the field's type text. */
     int32_t (*field)(const char* class_name, const char* field, const char* type);
-    /* A class's size, or -1. */
+    /* Any record's size, or -1. */
     int32_t (*size_of)(const char* class_name);
     /* A class's number, or -1; is_a says whether an object of the game is of that class or one made from it. */
     int32_t (*class_of)(const char* class_name);
@@ -175,6 +183,25 @@ typedef struct LumaModInfo {
 #define LUMA_CLASS(slot, class_name) {LUMA_IMPORT_CLASS, 0, class_name, 0, &slot, 0, 0, 0}
 #define LUMA_HOOK_ON(name, signature, kind, hook) {LUMA_IMPORT_HOOK, 0, name, signature, 0, hook, kind, 0}
 #define LUMA_SERVICE(slot, name, major_minor) {LUMA_IMPORT_SERVICE, 0, name, major_minor, &slot, 0, 0, 0}
+#define LUMA_GLOBAL(slot, name, type) {LUMA_IMPORT_GLOBAL, 0, name, type, &slot, 0, 0, 0}
+/* A bit-field bound by kind 1 (its slot is its position in bits): read and write `width` bits of `object`. */
+#define LUMA_BITS_GET(object, position, width) luma_bits_get((const void*)(object), (position), (width))
+#define LUMA_BITS_SET(object, position, width, value) luma_bits_set((void*)(object), (position), (width), (value))
+static inline uint32_t luma_bits_get(const void* object, int32_t position, uint32_t width) {
+    const unsigned char* at = (const unsigned char*)object + position / 8;
+    uint64_t word = 0;
+    for (uint32_t i = 0; i < (position % 8 + width + 7) / 8; i++) word |= (uint64_t)at[i] << (8 * i);
+    return (uint32_t)((word >> (position % 8)) & ((width >= 32 ? 0xFFFFFFFFull : (1ull << width) - 1)));
+}
+static inline void luma_bits_set(void* object, int32_t position, uint32_t width, uint32_t value) {
+    unsigned char* at = (unsigned char*)object + position / 8;
+    const uint32_t bytes = (position % 8 + width + 7) / 8;
+    uint64_t word = 0;
+    for (uint32_t i = 0; i < bytes; i++) word |= (uint64_t)at[i] << (8 * i);
+    const uint64_t mask = (width >= 32 ? 0xFFFFFFFFull : (1ull << width) - 1) << (position % 8);
+    word = (word & ~mask) | (((uint64_t)value << (position % 8)) & mask);
+    for (uint32_t i = 0; i < bytes; i++) at[i] = (unsigned char)(word >> (8 * i));
+}
 #define LUMA_MOD_FUNCTION(slot, mod_and_name, signature) {LUMA_IMPORT_MOD_FUNCTION, 0, mod_and_name, signature, &slot, 0, 0, 0}
 #define LUMA_EXPORT_FUNCTION(name, signature, function) {name, signature, (const void*)(function)}
 

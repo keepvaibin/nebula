@@ -954,6 +954,10 @@ NEBULA_GAME_API void nebula_game_sound_frame(void);
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
 /* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */
 NEBULA_GAME_API void nebula_game_mii_changed(void);
+/* The module's type rows as JSON (contract types; the host's --luma-describe), given to `write` in pieces in order.
+   Needs no attach; reads only the rows. */
+typedef void (*NebulaDescribeWrite)(void* user, const char* text, uint32_t length);
+NEBULA_GAME_API void nebula_game_luma_describe(NebulaDescribeWrite write, void* user);
 #ifdef __cplusplus
 }
 #endif
