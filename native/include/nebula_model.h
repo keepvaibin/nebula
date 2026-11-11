@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 4u
+#define NEBULA_MODEL_VERSION 5u
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -56,6 +56,8 @@ typedef struct NebulaModelHeader {
     uint32_t draw_matrices_at, envelopes_at, mixes_at, inverse_binds_at, important_at;
     uint32_t meshes_at, materials_at, textures_at;
     uint32_t geometry_at, geometry_size; /* every stream, for one copy to the GPU */
+    uint32_t hits_at;  /* material_count NebulaModelHit, in the materials' order */
+    uint32_t reserved;
 } NebulaModelHeader;
 
 /* Joints by number, the number animation tracks and the game use. */
@@ -260,6 +262,60 @@ typedef struct NebulaModelMaterial {
     uint32_t coords_at, slots_at, matrices_at, warps_at, forms_at;
 } NebulaModelMaterial;
 
+/* What a ray reads of a material where it meets it (crates/nebula-import/src/cook/hit_record.rs): its class, from
+   the material's own data, the numbers that class takes, and the material's stages as data, for a shader that cannot
+   run the material's program (a ray's hit is not a pixel of its draw). */
+enum {
+    NEBULA_HIT_DIELECTRIC = 0, /* lit, opaque, no painted reflection */
+    NEBULA_HIT_GLOSS = 1,      /* a lit base under a painted reflection or an authored highlight */
+    NEBULA_HIT_METAL = 2,      /* a painted reflection carries the look over a dark base */
+    NEBULA_HIT_GLASS = 3,      /* blended, with a painted reflection or a warp */
+    NEBULA_HIT_CUTOUT = 4,     /* alpha-tested */
+    NEBULA_HIT_RAMP = 5,       /* shaded through a ramp map */
+    NEBULA_HIT_EMISSIVE = 6,   /* shows itself without light: added to what is behind it, or blended, unlit and bright */
+    NEBULA_HIT_PAINTED = 7,    /* not lit, opaque: its colours are its light */
+    NEBULA_HIT_TRANSLUCENT = 8, /* blended, no reflection */
+    NEBULA_HIT_CLASS_COUNT
+};
+
+/* NebulaModelHit.flags */
+enum {
+    NEBULA_HIT_LIT = 1u << 0,          /* a colour channel sums lights */
+    NEBULA_HIT_TWO_SIDED = 1u << 1,
+    NEBULA_HIT_ALPHA_TEST = 1u << 2,
+    NEBULA_HIT_VERTEX_COLOUR = 1u << 3, /* its material colour is the vertex's */
+    NEBULA_HIT_ENVIRONMENT = 1u << 4,   /* it reads a map through the normal */
+    NEBULA_HIT_DRAWN_SHADOW = 1u << 5,  /* it is a shadow drawn by hand (a shadow model or decal): a renderer that
+                                           traces shadows neither draws it nor lets it cast one */
+};
+
+/* One combiner stage as the game's file orders it (the cooker's StageIr). */
+typedef struct NebulaModelStage {
+    uint8_t coord, map, channel;
+    uint8_t color_in[4], color_op, color_bias, color_scale, color_clamp, color_out;
+    uint8_t alpha_in[4], alpha_op, alpha_bias, alpha_scale, alpha_clamp, alpha_out;
+    uint8_t raster_swap, texture_swap, color_constant, alpha_constant;
+    uint8_t warp[9];
+    uint8_t reserved[2];
+} NebulaModelStage;
+
+typedef struct NebulaModelHit {
+    uint8_t klass;       /* NEBULA_HIT_* */
+    uint8_t stage_count;
+    uint8_t flags;
+    uint8_t reserved;
+    float roughness, metal, ior, transmission;
+    float base[3];      /* its colour under full light, maps mid grey: 0 to 1 */
+    float emission[3];  /* what it shows with no light at all */
+    float environment_share; /* how much of its look a painted reflection carries, 0 to 1 */
+    uint32_t stages_at; /* stage_count NebulaModelStage, from the model's start; 0: none */
+    uint8_t swaps[4][4];
+    uint32_t reserved2;
+    float glow[4];      /* a model that glows (the cooker's rt_glow.tsv, or a surface added to what is behind it): the
+                           light's colour, 0 to 1, and in w its intensity in candela (100 units a metre); below
+                           zero: a luminance, candela a square metre of the mesh; 0: it lights nothing */
+} NebulaModelHit;
+
 typedef struct NebulaModelTexture {
     uint32_t name_at, record_at;
     uint32_t width, height;
@@ -276,7 +332,9 @@ static_assert(sizeof(NebulaModelMeshCoord) == 4);
 static_assert(sizeof(NebulaModelSlot) == 8);
 static_assert(sizeof(NebulaModelStep) == 8);
 static_assert(sizeof(NebulaModelDrawMatrix) == 8);
-static_assert(sizeof(NebulaModelHeader) == 28 * 4);
+static_assert(sizeof(NebulaModelHeader) == 30 * 4);
+static_assert(sizeof(NebulaModelStage) == 36);
+static_assert(sizeof(NebulaModelHit) == 88);
 static_assert(sizeof(NebulaModelJoint) == 96);
 static_assert(sizeof(NebulaModelMesh) == 100);
 static_assert(sizeof(NebulaModelForm) == 64);

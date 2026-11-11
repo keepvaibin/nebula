@@ -23,6 +23,13 @@ static const float kEnhEnvGraze = 0.80;      // gain added at grazing angles, Sc
 
 bool enh_on() { return (view_flags & 2u) != 0u; }
 
+#if NATIVE_TRACED
+// The pixel's traced light (program.hlsli traced_at): how much of the light set's key (light 0: the sun's share),
+// fill (light 1) and point light (light 4) reaches it; all of every other light.
+static float3 g_traced = float3(1.0, 1.0, 1.0);
+float traced_light(uint n) { return n == 0u ? g_traced.x : n == 1u ? g_traced.y : n == 4u ? g_traced.z : 1.0; }
+#endif
+
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
 float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
 
@@ -153,6 +160,9 @@ void enh_add_light(uint base, uint n, bool spot, uint diffuse, bool first, bool 
     float3 lcol;
     enh_light(base, n, spot, eye, ldir, attn, lcol);
     const float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
+#if NATIVE_TRACED
+    attn *= traced_light(n);
+#endif
     const float x = attn * facing;
     acc += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
     if (first && diffuse != 0u && g_enh.valid) {
@@ -170,6 +180,9 @@ void enh_key_highlight(uint base, inout EnhShade e, float3 P) {
     float attn;
     float3 lcol;
     enh_light(base, 0u, false, P, ldir, attn, lcol);
+#if NATIVE_TRACED
+    lcol *= traced_light(0u);
+#endif
     if (any(lcol > 0.0)) {
         enh_highlight(e, ldir, enh_lin(lcol), true);
     }
@@ -188,5 +201,16 @@ float3 enh_finish(float3 frag, EnhShade e) {
 float4 enh_env(float4 t) {
     return enh_on() ? float4(saturate(t.rgb * g_enh.env_gain), t.a) : t;
 }
+
+#if NATIVE_TRACED
+// A lit program begins with enh_begin(i.lit_eye, i.lit_nrm) in its entry, whose input `i` holds the pixel (i.pos): the
+// traced form reads the pixel's light there, and every light_term after it is taken by its share.
+EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
+    g_traced = traced_at(pixel).rgb;
+    return enh_begin(P, n);
+}
+#define enh_begin(P, n) enh_begin_traced(P, n, i.pos)
+#define light_term(base, n, atten, diffuse, pos, nrm) (light_term(base, n, atten, diffuse, pos, nrm) * traced_light(n))
+#endif
 
 #endif  // PROGRAM_LIT_HLSLI

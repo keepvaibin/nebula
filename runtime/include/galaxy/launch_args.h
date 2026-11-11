@@ -30,6 +30,8 @@ enum Diagnostic : unsigned {
     kDiagnoseRtCheck = 1u << 15u,        // rt-check: the tracer's scene against the depth the game drew, coloured and counted
     kDiagnoseDeviceFaults = 1u << 16u,   // device-faults: a lost device's breadcrumbs and the driver's fault data
     kDiagnoseTelemetry = 1u << 17u,      // telemetry: frame counts in shared memory each second (tools/telemetry)
+    kDiagnoseRtLight = 1u << 18u,        // rt-light: the light pass's shares as the scene's colours (sun red, ground green, lamp blue)
+    kDiagnoseRtAdded = 1u << 19u,        // rt-added: the scene under its emitters alone (no sun, no sky): where each light source lights
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -58,6 +60,8 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-check", kDiagnoseRtCheck},
     {"device-faults", kDiagnoseDeviceFaults},
     {"telemetry", kDiagnoseTelemetry},
+    {"rt-light", kDiagnoseRtLight},
+    {"rt-added", kDiagnoseRtAdded},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

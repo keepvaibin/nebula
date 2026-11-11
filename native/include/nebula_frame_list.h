@@ -93,6 +93,31 @@ typedef struct NebulaFrameLightOwner {
     float reserved;
 } NebulaFrameLightOwner;
 
+/* A point light an actor asked for this frame (MR::requestPointLight: a Luma, a power star, a fireball, a Boo, an
+   item block ...). The game itself keeps one of them, blended toward whoever is nearest the player; a renderer that
+   lights from every source takes them all. `position` in the world; `half_distance`: where its light is half what
+   it is at the source (the request's brightness over the game's reference distance); `color` 0 to 1; `candela`:
+   its intensity where the caller knows it (a star bit), else 0 and the half distance says it. */
+typedef struct NebulaFramePointLight {
+    float position[3];
+    float half_distance;
+    float color[3];
+    float candela;
+} NebulaFramePointLight;
+
+/* A drop shadow: what the game draws as a stencil volume under an actor, for a renderer that traces it instead. It
+   falls from `position` along `direction` (unit length) for `length`, in the world, and is cast by the draws of the
+   model `caster` (their items' `slot`; 0 when its actor draws no model). `volume`: the slot of the volume's own
+   draws in this list, which such a renderer leaves out. */
+typedef struct NebulaFrameShadowDrop {
+    float position[3];
+    float length;
+    float direction[3];
+    uint32_t caster;
+    uint32_t volume;
+    uint32_t reserved[3];
+} NebulaFrameShadowDrop;
+
 /* Block flags. */
 enum {
     NEBULA_BLOCK_WORLD_ROWS = 1u << 0, /* a material reads world position or normal: keep its world rows for the vertex stage */
@@ -165,6 +190,57 @@ enum {
     NEBULA_ITEM_ONE_MATRIX = 1u << 9,  /* a registered mesh under one matrix, whatever its vertices name */
     NEBULA_ITEM_SPREAD_LINES = 1u << 10,
     NEBULA_ITEM_SPREAD_POINTS = 1u << 11,
+    NEBULA_ITEM_CATEGORY_SHIFT = 16,   /* bits 16-23: the item's category, NEBULA_CATEGORY_* */
+    NEBULA_ITEM_CATEGORY_MASK = 0xFFu << 16,
+};
+
+/* What kind of thing the game drew an item as: the draw buffer its actor registered in (the game's
+   MR::DrawBufferType + 1), or NEBULA_CATEGORY_DRAW + the draw type of a draw made by code; 0 none. The game knows it
+   for every draw, a mod's actors too: a renderer that needs to tell the sky from the world, crystal from stone or a
+   glow from a surface reads it here. */
+enum {
+    NEBULA_CATEGORY_NONE = 0,
+    NEBULA_CATEGORY_CLIPPED_MAP_PARTS = 1,
+    NEBULA_CATEGORY_SKY = 2,
+    NEBULA_CATEGORY_AIR = 3,
+    NEBULA_CATEGORY_SUN = 4,
+    NEBULA_CATEGORY_PLANET = 5,
+    NEBULA_CATEGORY_PLANET_LOW = 6,
+    NEBULA_CATEGORY_ENVIRONMENT = 7,
+    NEBULA_CATEGORY_ENVIRONMENT_STRONG_LIGHT = 8,
+    NEBULA_CATEGORY_MAP_OBJ = 9,
+    NEBULA_CATEGORY_MAP_OBJ_WEAK_LIGHT = 10,
+    NEBULA_CATEGORY_MAP_OBJ_STRONG_LIGHT = 11,
+    NEBULA_CATEGORY_NO_SHADOWED_MAP_OBJ = 12,
+    NEBULA_CATEGORY_NO_SHADOWED_MAP_OBJ_STRONG_LIGHT = 13,
+    NEBULA_CATEGORY_NO_SILHOUETTED_MAP_OBJ = 14,
+    NEBULA_CATEGORY_NO_SILHOUETTED_MAP_OBJ_WEAK_LIGHT = 15,
+    NEBULA_CATEGORY_NO_SILHOUETTED_MAP_OBJ_STRONG_LIGHT = 16,
+    NEBULA_CATEGORY_NPC = 17,
+    NEBULA_CATEGORY_RIDE = 18,
+    NEBULA_CATEGORY_ENEMY = 19,
+    NEBULA_CATEGORY_ENEMY_DECORATION = 20,
+    NEBULA_CATEGORY_PLAYER = 21,
+    NEBULA_CATEGORY_PLAYER_DECORATION = 22,
+    NEBULA_CATEGORY_CRYSTAL_BOX = 23,
+    NEBULA_CATEGORY_PLAYER_PARTS = 24,
+    NEBULA_CATEGORY_INDIRECT_MAP_OBJ = 25,
+    NEBULA_CATEGORY_INDIRECT_MAP_OBJ_STRONG_LIGHT = 26,
+    NEBULA_CATEGORY_INDIRECT_NPC = 27,
+    NEBULA_CATEGORY_INDIRECT_ENEMY = 28,
+    NEBULA_CATEGORY_INDIRECT_PLANET = 29,
+    NEBULA_CATEGORY_BLOOM_MODEL = 30,
+    NEBULA_CATEGORY_TRIPOD_BOSS = 31,
+    NEBULA_CATEGORY_CRYSTAL = 32,
+    NEBULA_CATEGORY_CRYSTAL_ITEM = 33,
+    NEBULA_CATEGORY_GLARING_LIGHT = 34,
+    NEBULA_CATEGORY_ASTRO_DOME_SKY = 35,
+    NEBULA_CATEGORY_MODEL_3D_FOR_2D = 36,
+    NEBULA_CATEGORY_MIRROR_MAP_OBJ = 37,
+    NEBULA_CATEGORY_GAME_SHADOW = 127, /* a shadow the game draws itself: a drop shadow's volume and its fill, the
+                                          player's alpha shadow, a shadow surface. A renderer that traces shadows
+                                          draws none of them. */
+    NEBULA_CATEGORY_DRAW = 128, /* + the game's MR::DrawType (those under 128) */
 };
 
 /* A particle a NEBULA_ITEM_INSTANCES draw places (particle_instances.hlsl): ten rows of four floats. Its corners, in the
@@ -284,6 +360,8 @@ typedef struct NebulaFrameList {
     const uint32_t* light_follow;    /* every set's follow words */
     const NebulaFrameLightOwner* light_set_owners; /* light_set_count of them */
     const NebulaFrameWorldLight* world_lights;     /* the world's lights this frame, ascending by id */
+    const NebulaFrameShadowDrop* shadow_drops;     /* the drop shadows the game drew this frame, in its order */
+    const NebulaFramePointLight* point_lights;     /* the point lights actors asked for this frame, in their order */
     const NebulaFrameConstants* constants;
     const void* ring_vertices;
     const uint32_t* ring_indices;
@@ -293,6 +371,8 @@ typedef struct NebulaFrameList {
     uint32_t block_count, light_set_count, constants_count, probe_count;
     uint32_t light_count, light_follow_count;
     uint32_t world_light_count;
+    uint32_t shadow_drop_count;
+    uint32_t point_light_count;
     uint32_t stage_light_known;  /* stage_light and stage_ambient are set */
     uint64_t stage_light;        /* the light of the stage's surfaces where the player is (the area's planet light): the
                                     world lights `stage_light` and `stage_light + 1` */

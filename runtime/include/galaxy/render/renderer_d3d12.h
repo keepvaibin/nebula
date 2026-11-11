@@ -95,6 +95,8 @@ inline constexpr DXGI_FORMAT kTargetColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 inline constexpr DXGI_FORMAT kSceneHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
+// The tracer's prepass: each pixel's item of the frame's list, from 1 (0: none), and the item's triangle there.
+inline constexpr DXGI_FORMAT kItemFormat = DXGI_FORMAT_R32G32_UINT;
 // Reactive mask for temporal upscaling: blended draws' alpha, max-blended.
 inline constexpr DXGI_FORMAT kReactiveMaskFormat = DXGI_FORMAT_R8_UNORM;
 // The effects layer (kRenderStateLayerTarget): its colour (what the effects added, as they blended into the scene target) and
@@ -388,11 +390,23 @@ public:
     [[nodiscard]] RtCommands rt_commands_begin();
     void rt_commands_end();
     // The scene's depth as a pass reads it, until rt_depth_end, with its size and the format an image must have to be
-    // copied over the scene's colour (rt_copy_to_scene). False when no pass can read it now (a multisampled scene).
-    [[nodiscard]] bool rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color);
+    // copied over the scene's colour (rt_copy_to_scene). With `color_view`, the scene's colour as drawn so far for the
+    // pass to read as well. False when no pass can read them now (a multisampled scene).
+    [[nodiscard]] bool rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
+                                      rt::TextureView* color_view = nullptr);
     void rt_depth_end();
     // An image of the tracer's (Backend::image_to_copy) over the scene's colour: the tracer's views.
     void rt_copy_to_scene(void* image);
+    // The tracer's prepass: the item target (each pixel's item of the list, from 1; 0 none) beside the scene's depth,
+    // made at the scene's size and cleared. Draws of aux kAuxPrepass write it. False when there can be none (a
+    // multisampled scene).
+    [[nodiscard]] bool rt_items_begin();
+    // The scene's depth and the item target as a pass reads them, until rt_light_end.
+    [[nodiscard]] bool rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height);
+    void rt_light_end();
+    // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
+    // textures (the view constants' view_traced). `which`: 0 the traced light, 1 the added light.
+    [[nodiscard]] std::uint32_t rt_publish_light(void* image, TextureStore& textures, unsigned which = 0u);
     // The game's bloom (game_bloom.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
@@ -807,6 +821,12 @@ private:
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
     GpuPass rt_outer_pass_ = GpuPass::Scene;
+    bool rt_color_read_ = false;  // rt_depth_begin put the scene's colour in a pass's hands
+    // The tracer's item target (rt_items_begin).
+    Microsoft::WRL::ComPtr<ID3D12Resource> item_target_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> item_rtv_heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE item_rtv_{};
+    static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics

@@ -25,6 +25,7 @@ mod proof_tests;
 #[cfg(feature = "proof-tools")]
 pub use proof_tests::{clip_census, model_census};
 pub mod programs;
+pub mod hit_record;
 pub mod curves;
 pub mod mesh_order;
 pub mod model_ir;

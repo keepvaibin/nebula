@@ -9,8 +9,10 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 4;
-pub const HEADER_WORDS: usize = 28;
+pub const VERSION: u32 = 5;
+pub const HEADER_WORDS: usize = 30;
+pub const HIT_BYTES: usize = 88;
+pub const STAGE_BYTES: usize = 36;
 pub const JOINT_BYTES: usize = 96;
 pub const MESH_BYTES: usize = 100;
 pub const MESH_COORD_BYTES: usize = 4;
@@ -842,6 +844,78 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         let at = record_at[t.record];
         b.patch32(slot + 4, at);
     }
+    // What a ray reads of each material (nebula_model.h NebulaModelHit), then every material's stages.
+    b.align(4);
+    let hits_at = b.at();
+    let mut stage_slots = Vec::new();
+    for m in &ir.materials {
+        let r = super::hit_record::read(m);
+        let s = &r.signals;
+        let stages = (m.pixel_stage_count as usize).min(m.stages.len());
+        b.u8(r.class as u8);
+        b.u8(stages as u8);
+        b.u8(u8::from(s.lit)
+            | u8::from(s.two_sided) << 1
+            | u8::from(s.alpha_test) << 2
+            | u8::from(s.vertex_colour) << 3
+            | u8::from(s.environment) << 4
+            | u8::from(super::hit_record::drawn_shadow(stem, &m.name, r.class)) << 5);
+        b.u8(0);
+        b.f32(r.roughness);
+        b.f32(r.metal);
+        b.f32(r.ior);
+        b.f32(r.transmission);
+        b.fs(&r.base);
+        b.fs(&r.emission);
+        b.f32(s.environment_share);
+        stage_slots.push(b.0.len());
+        b.u32(0);
+        for table in &m.swaps {
+            for &c in table {
+                b.u8(c);
+            }
+        }
+        b.u32(0);
+        b.fs(&super::hit_record::glow_of(stem, &r));
+    }
+    for (m, &slot) in ir.materials.iter().zip(&stage_slots) {
+        let stages = (m.pixel_stage_count as usize).min(m.stages.len());
+        if stages == 0 {
+            continue;
+        }
+        let at = b.at();
+        b.patch32(slot, at);
+        for s in &m.stages[..stages] {
+            b.u8(s.coord);
+            b.u8(s.map);
+            b.u8(s.channel);
+            for &v in &s.color_in {
+                b.u8(v);
+            }
+            b.u8(s.color_op);
+            b.u8(s.color_bias);
+            b.u8(s.color_scale);
+            b.u8(s.color_clamp);
+            b.u8(s.color_out);
+            for &v in &s.alpha_in {
+                b.u8(v);
+            }
+            b.u8(s.alpha_op);
+            b.u8(s.alpha_bias);
+            b.u8(s.alpha_scale);
+            b.u8(s.alpha_clamp);
+            b.u8(s.alpha_out);
+            b.u8(s.raster_swap);
+            b.u8(s.texture_swap);
+            b.u8(s.color_constant);
+            b.u8(s.alpha_constant);
+            for &v in &s.warp {
+                b.u8(v);
+            }
+            b.u8(0);
+            b.u8(0);
+        }
+    }
     b.align(32);
     let size = b.at();
     let mut flags = u32::from(ir.scale_mode);
@@ -880,6 +954,8 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         textures_at,
         geometry_at,
         geometry_size,
+        hits_at,
+        0,
     ];
     for (i, &v) in header.iter().enumerate() {
         b.patch32(i * 4, v);

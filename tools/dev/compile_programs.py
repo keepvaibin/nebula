@@ -34,13 +34,21 @@ VARIANTS = {
     "motion": (3, ["NATIVE_MOTION"]),
     "sample": (4, ["NATIVE_SAMPLE"]),
 }
+# Ray tracing's forms of a pixel program, stored after the bound-table forms and never in one (a device that traces
+# has descriptor indexing): every program's prepass and traced forms.
+TRACED_VARIANTS = {
+    "prepass": (10, ["NATIVE_PREPASS"]),
+    "traced": (11, ["NATIVE_TRACED"]),
+    "traced_motion": (12, ["NATIVE_TRACED", "NATIVE_MOTION"]),
+}
 VERTEX_FORMS = ("base", "motion")
 # A Vulkan device without descriptor indexing reads each pixel program's bound-table form (program.hlsli
 # NEBULA_BOUND_TABLES): stored at the variant + BOUND_OFFSET, STORED variants to a row (core/program_table.h).
 BOUND_OFFSET = 5
-STORED = 10
+STORED = 13
 READS_WORLD = 1
 LIT = 2
+SUMS_KEY = 4  # a pixel program that sums its light set's first light: light_term or enh_add_light of light 0
 
 
 def native_coords(path):
@@ -80,11 +88,11 @@ def main():
     flags = {}
     coords = {}
 
-    def add(stage, row, source, text, entry, defines, variant):
+    def add(stage, row, source, text, entry, defines, variant, bound_form=True):
         key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + defines)).encode()).hexdigest()
         jobs[key] = (source, stage, entry, defines)
         rows.setdefault((stage, row), {})[variant] = key
-        if backend == "spirv" and stage == "ps":
+        if backend == "spirv" and stage == "ps" and bound_form:
             bound = defines + ["NEBULA_BOUND_TABLES"]
             bound_key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + bound)).encode()).hexdigest()
             jobs[bound_key] = (source, stage, entry, bound)
@@ -102,7 +110,10 @@ def main():
             if name == "sample" and "discard" not in text:
                 continue
             add(stage, row, source, text, entry, defines, index)
-        flags[(stage, row)] = LIT if "program_lit.hlsli" in text else 0
+        for name, (index, defines) in TRACED_VARIANTS.items():
+            add(stage, row, source, text, entry, defines, index, False)
+        flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
+            SUMS_KEY if re.search(r"(light_term|enh_add_light)\(i\.lit_light, 0u", text) else 0)
 
     for number, name in enumerate(WRITTEN, 1):
         source = os.path.join(MATERIALS, name + ".hlsl")
@@ -207,7 +218,7 @@ def main():
             for variant, key in rows[(stage, row)].items():
                 words[variant] = place(key)
             packed.append(struct.pack("<QII", row, flags[(stage, row)], coords.get((stage, row), 0)) + b"".join(struct.pack("<II", *w) for w in words))
-    head = b"NBPROG02" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + b"\0" * 8
+    head = b"NBPROG03" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + b"\0" * 8
     blob = head + b"".join(packed) + b"".join(chunks)
     temp = out + ".tmp"
     with open(temp, "wb") as f:

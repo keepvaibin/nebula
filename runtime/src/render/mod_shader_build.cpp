@@ -28,6 +28,7 @@ struct Variant {
     bool vertex;
     bool only_with_discard;
     std::vector<const char*> defines;
+    bool tracer = false;  // ray tracing's: never in the bound-table form
 };
 
 // compile_programs.py's forms of a generated program.
@@ -38,6 +39,9 @@ const std::vector<Variant>& variants() {
         {kProgramLayer, false, false, {"NATIVE_REACTIVE", "NATIVE_LAYER"}},
         {kProgramMotion, true, false, {"NATIVE_MOTION"}},
         {kProgramSample, false, true, {"NATIVE_SAMPLE"}},
+        {kProgramPrepass, false, false, {"NATIVE_PREPASS"}, true},
+        {kProgramTraced, false, false, {"NATIVE_TRACED"}, true},
+        {kProgramTracedMotion, false, false, {"NATIVE_TRACED", "NATIVE_MOTION"}, true},
     };
     return list;
 }
@@ -153,7 +157,7 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
                     }
                     // A pixel program's second form, where this build has one.
                     for (const bool bound : {false, true}) {
-                        if (bound && (!job.pixel || !mod_shader_has_bound_form())) {
+                        if (bound && (!job.pixel || variant.tracer || !mod_shader_has_bound_form())) {
                             continue;
                         }
                         std::string problem;

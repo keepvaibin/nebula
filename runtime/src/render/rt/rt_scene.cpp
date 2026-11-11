@@ -102,6 +102,9 @@ void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, st
                           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
         flags = (det > 0.0f) == (faces == Faces::Front) ? kInstanceFlip : 0u;
     }
+    if ((kind & kKindCutout) != 0u) {
+        flags |= kInstanceNotOpaque;  // a ray that does not force hits opaque reads its alpha at each one
+    }
     instance.flags = flags << 24u | (kind & 0xFFFFFFu);
     instance.structure = structure;
 }

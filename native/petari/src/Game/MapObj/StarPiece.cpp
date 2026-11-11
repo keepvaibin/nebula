@@ -1,4 +1,5 @@
 #include "Game/MapObj/StarPiece.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -327,6 +328,22 @@ void StarPiece::changeScale(f32 scale) {
 }
 
 void StarPiece::control() {
+    {
+        // A star bit is a small light of its own colour, for a renderer that lights from every source: its colour
+        // at full strength (the pieces' colours are dark so the crystal's shading reads), 40 candela.
+        const f32 top = static_cast< f32 >(mColor.r > mColor.g ? (mColor.r > mColor.b ? mColor.r : mColor.b) : (mColor.g > mColor.b ? mColor.g : mColor.b));
+        if (top > 0.0f) {
+            NebulaFramePointLight light{};
+            light.position[0] = mPosition.x;
+            light.position[1] = mPosition.y;
+            light.position[2] = mPosition.z;
+            light.color[0] = static_cast< f32 >(mColor.r) / top;
+            light.color[1] = static_cast< f32 >(mColor.g) / top;
+            light.color[2] = static_cast< f32 >(mColor.b) / top;
+            light.candela = 40.0f;
+            Frame::pointLight(light);
+        }
+    }
     if (MR::isFirstStep(this)) {
         if (!isNerve(GET_NERVE(StarPiece, HostTypeNrvToTarget)) || mFlags.isGoToPlayer) {
             MR::setBtkFrameAndStop(this, cGiftBtkFrame);

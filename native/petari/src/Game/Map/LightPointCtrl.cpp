@@ -1,4 +1,5 @@
 #include "Game/Map/LightPointCtrl.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -48,6 +49,20 @@ void LightPointCtrl::update() {
 }
 
 void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
+    {
+        // Every request, for a renderer that lights from each source (the game keeps one, below). Its reach as the
+        // game's own falloff gives it: half the light at the reference distance times sqrt(b / (1 - b)).
+        const f32 brightness = MR::clamp(intensity, 0.95f, 0.999999f);
+        NebulaFramePointLight light{};
+        light.position[0] = pos.x;
+        light.position[1] = pos.y;
+        light.position[2] = pos.z;
+        light.half_distance = ::sDefaultDistRef * MR::sqrt(brightness / (1.0f - brightness));
+        light.color[0] = static_cast< f32 >(color.r) / 255.0f;
+        light.color[1] = static_cast< f32 >(color.g) / 255.0f;
+        light.color[2] = static_cast< f32 >(color.b) / 255.0f;
+        Frame::pointLight(light);
+    }
     if (mStep == -1 && isUpdateCandidateActor(pActor)) {
         mCandidateActor = pActor;
         mTargetInfo->mPos = pos;

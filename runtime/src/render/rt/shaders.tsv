@@ -2,3 +2,8 @@ name	file	profile	entry
 probe	rt_probe.hlsl	cs_6_5	main
 view	rt_view.hlsl	cs_6_5	main
 skin	rt_skin.hlsl	cs_6_0	main
+light	rt_light.hlsl	cs_6_5	main
+light_time	rt_light_time.hlsl	cs_6_0	main
+light_space	rt_light_space.hlsl	cs_6_0	main
+lights_time	rt_lights_time.hlsl	cs_6_0	main
+lights_space	rt_lights_space.hlsl	cs_6_0	main

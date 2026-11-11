@@ -238,6 +238,9 @@ namespace {
         Grown< u32 > mLightFollow;
         Grown< NebulaFrameLightOwner > mLightOwners;
         Grown< NebulaFrameWorldLight > mWorldLights;
+        Grown< NebulaFrameShadowDrop > mShadowDrops;
+        Grown< NebulaFramePointLight > mPointLights;
+        Grown< u32 > mCategories;  // pairs: the first item of a run of draws, and the category they are drawn as
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
@@ -322,6 +325,9 @@ namespace {
         pStore->mLightFollow.mCount = 0;
         pStore->mLightOwners.mCount = 0;
         pStore->mWorldLights.mCount = 0;
+        pStore->mShadowDrops.mCount = 0;
+        pStore->mPointLights.mCount = 0;
+        pStore->mCategories.mCount = 0;
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
@@ -468,6 +474,20 @@ namespace Frame {
         rList.light_set_owners = pStore->mLightOwners.mData;
         rList.world_lights = pStore->mWorldLights.mData;
         rList.world_light_count = pStore->mWorldLights.mCount;
+        rList.shadow_drops = pStore->mShadowDrops.mData;
+        rList.shadow_drop_count = pStore->mShadowDrops.mCount;
+        rList.point_lights = pStore->mPointLights.mData;
+        rList.point_light_count = pStore->mPointLights.mCount;
+        // Each item's category, by the runs the draws were made in: a draw writes its item's flags whole when it is
+        // made, so they are set now.
+        for (u32 run = 0; run + 1 < pStore->mCategories.mCount; run += 2) {
+            const u32 next = run + 2 < pStore->mCategories.mCount ? pStore->mCategories.mData[run + 2] : pStore->mItems.mCount;
+            const u32 last = next < pStore->mItems.mCount ? next : pStore->mItems.mCount;
+            const u32 bits = pStore->mCategories.mData[run + 1] << NEBULA_ITEM_CATEGORY_SHIFT;
+            for (u32 item = pStore->mCategories.mData[run]; item < last; item++) {
+                pStore->mItems.mData[item].flags = (pStore->mItems.mData[item].flags & ~static_cast< u32 >(NEBULA_ITEM_CATEGORY_MASK)) | bits;
+            }
+        }
         rList.stage_light_known = sStageLightKnown ? 1u : 0u;
         rList.stage_light = sStageLight;
         rList.stage_ambient[0] = sStageAmbient[0];
@@ -767,6 +787,18 @@ namespace Frame {
             rLights.mData[i] = rLights.mData[i - 1];
         }
         rLights.mData[at] = rLight;
+    }
+
+    void shadowDrop(const NebulaFrameShadowDrop& rDrop) {
+        Grown< NebulaFrameShadowDrop >& rDrops = store()->mShadowDrops;
+        rDrops.add();
+        rDrops.mData[rDrops.mCount - 1] = rDrop;
+    }
+
+    void pointLight(const NebulaFramePointLight& rLight) {
+        Grown< NebulaFramePointLight >& rLights = store()->mPointLights;
+        rLights.add();
+        rLights.mData[rLights.mCount - 1] = rLight;
     }
 
     void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient) {
@@ -1233,6 +1265,20 @@ namespace Frame {
         sPhase = phase;
         sOpenDraw = -1;
         setObject(0, 0);
+    }
+
+    void category(u8 category) {
+        Store* pStore = store();
+        Grown< u32 >& rRuns = pStore->mCategories;
+        if (rRuns.mCount >= 2 && rRuns.mData[rRuns.mCount - 1] == category) {
+            return;  // the run goes on
+        }
+        if (rRuns.mCount >= 2 && rRuns.mData[rRuns.mCount - 2] == pStore->mItems.mCount) {
+            rRuns.mData[rRuns.mCount - 1] = category;  // the run before held no draw
+            return;
+        }
+        rRuns.add() = pStore->mItems.mCount;
+        rRuns.add() = category;
     }
 
     void bloom(u32 kind, u32 arg0, u32 arg1) {

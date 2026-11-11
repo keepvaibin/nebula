@@ -345,13 +345,16 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
     const unsigned program = program_variant(desc.pixel, aux,
         (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
-    const ProgramBytes vs = program_bytes(desc.vertex, program, false);
+    // The tracer's prepass of a motion draw goes through the vertex stage's motion form, as the draw itself will.
+    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramMotion} : program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
         std::fprintf(stderr, "[pipelines] no program %llx %llx variant %u\n", static_cast<unsigned long long>(desc.vertex),
                      static_cast<unsigned long long>(desc.pixel), program);
         return nullptr;
     }
+    const unsigned bound = aux_targets(aux);  // the targets: 0-4, or the prepass's
+    const bool prepass = bound == kAuxPrepass;
     const VkShaderModule vs_module = module_of(device, vs);
     const VkShaderModule ps_module = module_of(device, ps);
     if (vs_module == VK_NULL_HANDLE || ps_module == VK_NULL_HANDLE) {
@@ -395,7 +398,7 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     if (desc.position_stride == 0u) {
         add(kMatrix, VK_FORMAT_R32_UINT, gpu::kStreamMatrix, 4u, 0u);
     }
-    if (aux == 1u) {
+    if (aux_motion_form(aux)) {
         add(kBefore, VK_FORMAT_R32G32B32_SFLOAT, gpu::kStreamBefore, position_stride, 0u);
     }
     for (const NebulaLayoutInput& input : entry.inputs) {
@@ -455,7 +458,8 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         depth.depthCompareOp = kDepth[(state >> 11u) & 7u];
         depth.depthWriteEnable = (state & (1u << 14u)) != 0u ? VK_TRUE : VK_FALSE;
     }
-    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u) {
+    // The prepass leaves the stencil alone: a draw's marks are made once, by the scene pass.
+    if (const std::uint32_t test = (state >> 20u) & 3u; test != 0u && !prepass) {
         static constexpr VkCompareOp kStencilTest[4] = {VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_ALWAYS, VK_COMPARE_OP_EQUAL,
                                                         VK_COMPARE_OP_NOT_EQUAL};
         static constexpr VkStencilOp kStencilOp[4] = {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_INCREMENT_AND_CLAMP,
@@ -498,11 +502,15 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         color.dstAlphaBlendFactor = alpha_factor(color.dstColorBlendFactor);
         color.alphaBlendOp = color.colorBlendOp;
     }
+    if (prepass) {
+        color.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;  // the item target alone: the draw's item and triangle where it is nearest
+        color.blendEnable = VK_FALSE;  // a blended entry's item (the second layer) replaces like any other
+    }
     VkPipelineColorBlendAttachmentState targets[4]{color, {}, {}, {}};
     // Aux 4: the motion pass's second target is there and left as it is.
-    if (aux == 1u) {
+    if (bound == 1u) {
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;
-    } else if (aux == 2u || aux == 3u) {
+    } else if (bound == 2u || bound == 3u) {
         targets[1].blendEnable = VK_TRUE;
         targets[1].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
         targets[1].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -512,7 +520,7 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         targets[1].alphaBlendOp = VK_BLEND_OP_MAX;
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
     }
-    if (aux == 3u) {
+    if (bound == 3u) {
         // The effects layer: render target 2 takes the colour as the scene target blends it, 3 the product of the
         // destination factors (nothing from the source: it keeps what the destination factor lets through). Colour only.
         constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
@@ -527,7 +535,7 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         targets[3].alphaBlendOp = VK_BLEND_OP_ADD;
     }
     VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-    blend.attachmentCount = aux == 3u ? 4u : aux != 0u ? 2u : 1u;
+    blend.attachmentCount = prepass ? 1u : bound == 3u ? 4u : bound != 0u ? 2u : 1u;
     blend.pAttachments = targets;
 
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
@@ -547,7 +555,9 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = layout->layout;
-    info.renderPass = aux != 0u ? layout->aux_pass_for(variant, aux == 4u ? 1u : std::min(aux, 3u)) : layout->pass_for(variant, false);
+    info.renderPass = prepass      ? layout->item_pass
+                      : bound != 0u ? layout->aux_pass_for(variant, bound == 4u ? 1u : std::min(bound, 3u))
+                                    : layout->pass_for(variant, false);
     if (info.renderPass == VK_NULL_HANDLE) {
         // The device cannot draw this variant (the effects layer's pass is absent): the walker misses this draw.
         return nullptr;

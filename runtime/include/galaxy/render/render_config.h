@@ -163,6 +163,12 @@ struct RenderConfig {
     friend bool operator==(const RenderConfig&, const RenderConfig&) = default;
 };
 
+// Whether the lit colour channels are summed at the pixel: asked for, or needed by the enhanced lighting, or by ray
+// tracing (a light's traced share is a pixel's).
+[[nodiscard]] inline bool lights_at_pixel(const RenderConfig& config) noexcept {
+    return config.per_pixel_lighting || config.enhanced_lighting || config.ray_tracing_enabled;
+}
+
 // Frames per second the game picture is presented at. The game renders 60; lower rates present the newest frame on
 // their own cadence, higher rates add interpolated frames between game frames. Unlimited (0) is the display rate (at
 // least 60). VSync limits the rate to the display's.

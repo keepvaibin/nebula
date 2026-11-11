@@ -26,11 +26,16 @@ static_assert(sizeof(Instance) == 64u);
 inline constexpr std::uint32_t kMaskOpaque = 1u;   // writes depth unblended: stops light
 inline constexpr std::uint32_t kMaskBlended = 2u;  // drawn blended or without depth: seen, casts no hard shadow
 inline constexpr std::uint32_t kMaskEarly = 4u;    // opaque and drawn before the scene's opaque end: what the depth holds there
+inline constexpr std::uint32_t kMaskSolid = 8u;    // opaque and no cutout: every triangle of it stops light (a shadow ray's)
+inline constexpr std::uint32_t kMaskLit = 16u;     // solid and drawn by a lit program: what painted light could not know of
+inline constexpr std::uint32_t kMaskSky = 64u;     // the sky's dome: stops no light, is what a mirror shows where nothing else stands
+inline constexpr std::uint32_t kMaskCutout = 32u;  // opaque where its texture's alpha says so (an alpha test): a ray asks at each hit
 // What an instance is, read back at a hit (the instance's contribution field, which inline rays do not use).
 inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may discard (an alpha test): a hit is not yet a surface
 // Instance flags (the same bits in both APIs).
 inline constexpr std::uint32_t kInstanceNoCull = 1u;  // a ray that culls back faces meets both of this instance's
 inline constexpr std::uint32_t kInstanceFlip = 2u;    // its triangles face the other way
+inline constexpr std::uint32_t kInstanceNotOpaque = 8u;  // a hit on it is a candidate the ray's shader decides (a cutout)
 
 // Which faces a draw shows. A ray that culls back faces (the views; a ray that asks what the scene drew) meets the
 // same faces as the draw; a ray without that flag (a shadow's) meets every face.

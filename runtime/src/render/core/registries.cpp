@@ -79,6 +79,16 @@ std::uint64_t Registries::memory_bytes() noexcept {
     return bytes + slot_bytes_;
 }
 
+bool Registries::arena_memory(std::uint32_t index, gpu::Address& base, std::size_t& bytes) noexcept {
+    const std::lock_guard guard(lock_);
+    if (index >= arenas_.size() || !arenas_[index].memory) {
+        return false;
+    }
+    base = arenas_[index].memory.gpu;
+    bytes = arenas_[index].bytes;
+    return true;
+}
+
 Registries::MemoryStats Registries::memory_stats() noexcept {
     const std::lock_guard guard(lock_);
     MemoryStats stats;
@@ -325,9 +335,27 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
 
     meshes.resize(header.mesh_count);
     const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
+    const auto* hits = header.hits_at != 0u ? at<NebulaModelHit>(file, header.hits_at) : nullptr;
     for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
+        if (hits != nullptr && mesh.material < header.material_count) {
+            const NebulaModelHit& hit = hits[mesh.material];
+            gpu_mesh.hit_class = hit.klass;
+            gpu_mesh.hit_flags = hit.flags;
+            std::copy_n(hit.emission, 3u, gpu_mesh.hit_emission);
+            std::copy_n(hit.base, 3u, gpu_mesh.hit_base);
+            gpu_mesh.hit_roughness = hit.roughness;
+            gpu_mesh.hit_metal = hit.metal;
+            gpu_mesh.hit_transmission = hit.transmission;
+            gpu_mesh.hit_environment = hit.environment_share;
+            std::copy_n(hit.glow, 4u, gpu_mesh.glow);
+            // The alpha test's first comparison, where it is "greater" or "greater or equal" (4, 6): its reference.
+            const NebulaModelMaterial& material = at<NebulaModelMaterial>(file, header.materials_at)[mesh.material];
+            if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
+                gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
+            }
+        }
         gpu_mesh.vertex_count = mesh.vertex_count;
         gpu_mesh.refined_vertex_count = mesh.refined_vertex_count;
         gpu_mesh.index_count = mesh.index_count;

@@ -1981,7 +1981,7 @@ void RenderCore::enforce_video_memory() {
 void RenderCore::begin_walk_frame(ListEntry& entry) {
     const RenderConfig render = get_render_config();
     enhanced_lighting_ = render.enhanced_lighting;
-    pixel_lit_ = render.per_pixel_lighting || render.enhanced_lighting;
+    pixel_lit_ = lights_at_pixel(render);
     curved_refine_ = render.curved_surfaces;
     ambient_occlusion_ = render.ambient_occlusion && renderer_.ambient_occlusion_ready();
     // The complete native list is available before begin_frame can resize a
@@ -2008,6 +2008,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         // The scene's instances, and the ring draws' triangles as the tracer takes them.
         matrix_bytes += std::size_t{list.item_count} * sizeof(rt::Instance) + 64u;
         matrix_bytes += std::size_t{list.ring_index_count} * 12u + static_cast<std::size_t>(list.ring_vertex_bytes);
+        // The drop shadows' pass: its drops, each item's slot, and the screen's tiles with their entries (a drop that
+        // covers the screen fills every tile).
+        const std::size_t tiles = (std::size_t{renderer_.frame_map().width} / 16u + 2u) * (std::size_t{renderer_.frame_map().height} / 16u + 2u);
+        matrix_bytes += std::size_t{list.shadow_drop_count} * (48u + tiles * 4u) + tiles * 8u + std::size_t{list.item_count} * 4u + 2048u;
     }
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
@@ -2234,7 +2238,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 if (pipeline.lit_form && !pixel_lit_) {
                     continue;
                 }
-                pipelines_.prepare(id, pipeline, variants, motion, layer, one_pass);
+                pipelines_.prepare(id, pipeline, variants, motion, layer, one_pass, rt_backend_.started());
             }
             pipelines_queued_.store(count, std::memory_order_relaxed);
         }

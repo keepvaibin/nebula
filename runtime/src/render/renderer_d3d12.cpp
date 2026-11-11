@@ -2,6 +2,7 @@
 #include "galaxy/render/utility_shaders.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "galaxy/render/program_table.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/crash_notes.h"
@@ -3062,7 +3063,9 @@ void RendererD3D12::invalidate_draw_bindings() {
 }
 
 void RendererD3D12::set_render_targets(ID3D12GraphicsCommandList* list, unsigned aux) const {
-    if (aux == 3u) {
+    if (aux == kAuxPrepass) {
+        list->OMSetRenderTargets(1, &item_rtv_, FALSE, &scene_dsv_);
+    } else if (aux == 3u) {
         const D3D12_CPU_DESCRIPTOR_HANDLE targets[4]{scene_rtv_, reactive_rtv_, layer_color_rtv_, layer_trans_rtv_};
         list->OMSetRenderTargets(4, targets, FALSE, &scene_dsv_);
     } else if (aux != 0u) {
@@ -5467,12 +5470,18 @@ void RendererD3D12::rt_commands_end() {
     invalidate_draw_bindings();
 }
 
-bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color) {
+bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
+                                   rt::TextureView* color_view) {
     if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
         return false;
     }
     BarriersD3D12 uses{command_list_.Get()};
     uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
+    rt_color_read_ = color_view != nullptr;
+    if (rt_color_read_) {
+        uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+        *color_view = {scene_color_.Get(), static_cast<std::uint32_t>(scene_color_->GetDesc().Format)};
+    }
     uses.issue();
     const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
     depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
@@ -5485,6 +5494,10 @@ bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsi
 void RendererD3D12::rt_depth_end() {
     BarriersD3D12 uses{command_list_.Get()};
     uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
+    if (rt_color_read_) {
+        uses.texture(scene_color_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+        rt_color_read_ = false;
+    }
     uses.issue();
 }
 
@@ -5502,6 +5515,84 @@ void RendererD3D12::rt_copy_to_scene(void* image) {
     uses.issue();
     command_list_->CopyResource(scene_color_.Get(), source);
     uses.undo();
+}
+
+bool RendererD3D12::rt_items_begin() {
+    if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
+        return false;
+    }
+    const D3D12_RESOURCE_DESC depth = scene_depth_->GetDesc();
+    if (!item_target_ || item_target_->GetDesc().Width != depth.Width || item_target_->GetDesc().Height != depth.Height) {
+        if (item_target_) {
+            retired_targets_[frame_slot_].push_back(std::move(item_target_));  // this frame's commands may name it
+        }
+        item_target_.Reset();
+        if (!item_rtv_heap_) {
+            D3D12_DESCRIPTOR_HEAP_DESC heap{};
+            heap.NumDescriptors = 1;
+            heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            if (FAILED(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&item_rtv_heap_)))) {
+                return false;
+            }
+        }
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rd.Width = depth.Width;
+        rd.Height = depth.Height;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = kItemFormat;
+        rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_CLEAR_VALUE cv{};
+        cv.Format = kItemFormat;
+        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite, &cv,
+                                  IID_PPV_ARGS(&item_target_)))) {
+            return false;
+        }
+        item_target_->SetName(L"ray tracing item target");
+        item_rtv_ = item_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+        device_->CreateRenderTargetView(item_target_.Get(), nullptr, item_rtv_);
+    }
+    const float none[4]{};
+    command_list_->ClearRenderTargetView(item_rtv_, none, 0u, nullptr);
+    return true;
+}
+
+bool RendererD3D12::rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height) {
+    if (!scene_depth_ || !item_target_ || scene_msaa_.samples > 1u) {
+        return false;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
+    uses.texture(item_target_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+    uses.issue();
+    const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
+    depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
+    items = {item_target_.Get(), static_cast<std::uint32_t>(kItemFormat)};
+    width = static_cast<unsigned>(desc.Width);
+    height = desc.Height;
+    return true;
+}
+
+void RendererD3D12::rt_light_end() {
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
+    uses.texture(item_target_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+    uses.issue();
+}
+
+std::uint32_t RendererD3D12::rt_publish_light(void* image, TextureStore& textures, unsigned which) {
+    auto* const resource = static_cast<ID3D12Resource*>(image);
+    if (resource == nullptr) {
+        return null_texture_slot_;
+    }
+    const D3D12_RESOURCE_DESC desc = resource->GetDesc();
+    static_cast<void>(publish_picture(kRtLightPicture + which, static_cast<std::uint32_t>(desc.Width), desc.Height,
+                                      gpu::TextureRef(resource), 0u, textures));
+    return pictures_[kRtLightPicture + which].view;
 }
 
 // The scene target's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the

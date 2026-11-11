@@ -192,16 +192,29 @@ bool Backend::start(gpu::Device* device) {
     return true;
 }
 
-// The passes' root signature: b0 constants, t0 the scene, t1-t4 buffers (root descriptors); t5-t12 textures and
-// u0-u3 images (tables); u4 the counters, u5 a buffer written (root descriptors).
+// The passes' root signature: b0 constants, t0 the scene, t1-t4 buffers (root descriptors); t5-t14 textures and
+// u0-u5 images (tables); u6 the counters, u7 a buffer written, t15 up the mesh memory (root descriptors).
 bool Backend::State::make_passes() {
-    D3D12_DESCRIPTOR_RANGE ranges[2]{};
+    D3D12_DESCRIPTOR_RANGE ranges[3]{};
+    // Every texture of the renderer's (t0 up in space1, as the draws' programs see them) and one sampler (s0).
+    ranges[2].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    ranges[2].NumDescriptors = UINT_MAX;
+    ranges[2].RegisterSpace = 1u;
     ranges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     ranges[0].NumDescriptors = kPassTextures + kPassReads;
     ranges[0].BaseShaderRegister = 1u + kPassBuffers;
     ranges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
     ranges[1].NumDescriptors = kPassWrites;
-    D3D12_ROOT_PARAMETER params[10]{};
+    D3D12_ROOT_PARAMETER params[11u + kPassMeshBuffers]{};
+    params[10u + kPassMeshBuffers].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[10u + kPassMeshBuffers].DescriptorTable.NumDescriptorRanges = 1;
+    params[10u + kPassMeshBuffers].DescriptorTable.pDescriptorRanges = &ranges[2];
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     for (unsigned i = 0; i < 1u + kPassBuffers; ++i) {
         params[1u + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -216,8 +229,15 @@ bool Backend::State::make_passes() {
     params[8].Descriptor.ShaderRegister = kPassWrites;
     params[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[9].Descriptor.ShaderRegister = kPassWrites + 1u;
+    // t15 up: the mesh memory (root descriptors: buffers of the renderer's, by address).
+    for (unsigned i = 0; i < kPassMeshBuffers; ++i) {
+        params[10u + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[10u + i].Descriptor.ShaderRegister = 1u + kPassBuffers + kPassTextures + kPassReads + i;
+    }
     D3D12_ROOT_SIGNATURE_DESC desc{};
-    desc.NumParameters = 10;
+    desc.NumParameters = 11u + kPassMeshBuffers;
+    desc.NumStaticSamplers = 1;
+    desc.pStaticSamplers = &sampler;
     desc.pParameters = params;
     ComPtr<ID3DBlob> blob, errors;
     if (FAILED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &errors)) ||
@@ -300,7 +320,9 @@ Structure Backend::make_structure(const Range& range, bool) {
 
 void Backend::free_structure(Structure& structure) noexcept { structure = Structure{}; }
 
-void Backend::frame(unsigned) noexcept {}
+void Backend::frame(unsigned) noexcept {
+    state_->counters_bound = false;  // the frame's first pass that counts zeroes them
+}
 
 void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
     state_->commands.Reset();
@@ -459,6 +481,18 @@ void* Backend::image_to_copy(std::uint32_t image) {
     return target.texture.Get();
 }
 
+void* Backend::image_to_sample(std::uint32_t image) {
+    if (image >= state_->images.size() || state_->images[image].texture == nullptr) {
+        return nullptr;
+    }
+    State::Image& target = state_->images[image];
+    BarriersD3D12 uses{state_->commands.Get()};
+    uses.texture(target.texture.Get(), target.use, gpu::Use::ShaderRead);
+    uses.issue();
+    target.use = gpu::Use::ShaderRead;
+    return target.texture.Get();
+}
+
 void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
     State& s = *state_;
     const auto index = static_cast<unsigned>(shader);
@@ -519,7 +553,10 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         views = views || binds.textures[i].texture != nullptr;
     }
     for (unsigned i = 0; i < kPassReads; ++i) {
-        views = views || image_of(binds.reads[i]) != nullptr || image_of(binds.writes[i]) != nullptr;
+        views = views || image_of(binds.reads[i]) != nullptr;
+    }
+    for (unsigned i = 0; i < kPassWrites; ++i) {
+        views = views || image_of(binds.writes[i]) != nullptr;
     }
     const UINT step = s.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const DescriptorRing::Table table = views ? s.descriptors->allocate(kViews) : DescriptorRing::Table{};
@@ -572,6 +609,12 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             list->SetComputeRootShaderResourceView(2u + i, binds.buffers[i].at);
         }
     }
+    for (unsigned i = 0; i < kPassMeshBuffers; ++i) {
+        if (binds.mesh[i].at != 0u) {
+            list->SetComputeRootShaderResourceView(10u + i, binds.mesh[i].at);
+        }
+    }
+    list->SetComputeRootDescriptorTable(10u + kPassMeshBuffers, s.descriptors->texture_gpu_start());
     if (views) {
         list->SetComputeRootDescriptorTable(6, gpu_at(0u));
         list->SetComputeRootDescriptorTable(7, gpu_at(kPassTextures + kPassReads));
@@ -593,7 +636,6 @@ void Backend::end_counters() {
     s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
     s.commands->CopyResource(s.counters_read[s.frame_slot].Get(), s.counters.Get());
     s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    s.counters_bound = false;
 }
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {

@@ -342,6 +342,119 @@ private:
         bool regenerated = false;      // a draw whose vertices are not last frame's moved
     };
     RtRing rt_rings_[3];
+    // The game's drop shadows, traced in place of their stencil volumes (the light pass, rt_light.hlsl). A drop is
+    // traced when the scene holds its caster's draws; its volume's draws are then left out of the walk.
+    struct RtCaster {
+        float low[3], high[3];  // the eye-space box of a slot's instances
+    };
+    struct RtDrop {
+        float base[3], radius;
+        float direction[3], length;
+        std::uint32_t caster, reserved[3];
+    };
+    std::unordered_map<std::uint32_t, RtCaster> rt_casters_;
+    std::vector<RtDrop> rt_drops_;
+    std::unordered_set<std::uint32_t> rt_drop_volumes_;  // the slots of the volumes' draws left out this walk
+    std::uint32_t rt_scene_pass_ = NEBULA_NONE32;        // this walk's scene begin pass, once its scene is built
+    std::uint32_t rt_scene_view_ = NEBULA_NONE32;        // and the scene's view (the one its opaque end names)
+    std::vector<std::uint32_t> rt_tiles_, rt_tile_entries_;
+    std::vector<std::uint32_t> rt_tile_counts_;
+    std::uint32_t rt_tiles_across_ = 0u, rt_tiles_down_ = 0u;
+    void rt_caster(std::uint32_t slot, const float centre[3], float radius);
+    void rt_drops_collect(const NebulaFramePass& begin);
+    // The drops by the 16-pixel screen tiles their reach covers: rt_tiles_ (two words a tile: its first entry, how
+    // many) and rt_tile_entries_ (a drop each).
+    void rt_drop_bins(unsigned width, unsigned height, const float ray[4]);
+    // The stage's shadow sun: one direction every sun shadow of the scene comes from, in the scene camera's eye space.
+    // The visible sun's where the stage has one, else its key light's; a light fixed to the camera is held in the
+    // world (taken anew at a cut, then following with a second's lag) so shadows do not swing as the player looks
+    // around, and it stands at least 30 degrees above the player's horizon (decision D2).
+    [[nodiscard]] bool rt_sun(float eye_direction[3]);
+    // The lit programs' key light from the sun's direction: light 0 of every light set an area lights (in the scene
+    // camera's space) is placed far along it, in this walk's rows, before the scene's first draw. Lit faces and the
+    // sun's shadows then agree.
+    void rt_sun_keys(const float eye_direction[3]);
+    float rt_sun_eye_[3]{};
+    bool rt_sun_now_ = false;  // this walk's scene has its sun
+    float rt_sun_world_[3]{};
+    bool rt_sun_known_ = false;
+    [[nodiscard]] std::uint32_t rt_scene_image(rt::ImageFormat format, unsigned width, unsigned height);
+    // The traced light. Before the scene's draws, its opaque surfaces go into depth and the item target (the prepass:
+    // every scene item that core::prepass_draws takes, under the scene's camera); a pass gives each pixel the share of
+    // its light set's key, fill and point light that reaches it (rt_light.hlsl); the scene pass then draws those items
+    // over their own depth, the lit programs in their traced form.
+    void rt_prepass(const NebulaFramePass& begin);
+    void rt_light();
+    void rt_light_end() noexcept;
+    // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
+    // item target and the light pass run over them, into the picture the opaque draws are done reading.
+    void rt_blended(const NebulaFramePass& end);
+    [[nodiscard]] bool rt_prepass_draws(const NebulaFrameItem& item, std::uint32_t state) const;
+    void walk_draw_pass_direct(const NebulaFramePass& pass);
+    std::vector<std::uint8_t> rt_prepassed_;  // an item of the list: 1 drawn in this walk's prepass, 2 in its second
+    bool rt_prepass_walk_ = false;            // walk_draw_items draws the prepass
+    bool rt_blended_walk_ = false;            // and it is the second layer's
+    // The light pass as it ran this walk, kept for the second layer: its bindings, its constants, its size, and an
+    // image it is done with (the guide of the frame before).
+    rt::PassBinds rt_light_binds_{};
+    std::uint32_t rt_light_block_[128]{};
+    std::uint32_t rt_light_across_ = 0u, rt_light_down_ = 0u;
+    std::uint32_t rt_light_spare_ = rt::kNoImage;
+    bool rt_light_on_ = false;                // this walk's scene has its traced light: its views carry it
+    std::uint32_t rt_light_slot_ = 0u;        // the light image's place among the textures
+    std::uint32_t rt_scene_camera_ = NEBULA_NONE32;
+    // The light pass's images: [0] this frame's rays, then the filter's last picture (the one the programs read);
+    // [1] between the filter's two steps over space; [2], [3] the averages over time, this frame's and the one
+    // before's by turns; [4], [5] the guides the same way.
+    // [6] the added light (what glows near each pixel). [7] what each pixel mirrors (rt_light.hlsl g_mirror).
+    // [8] where each pixel's point was the frame before (g_motion). [9] the local lights' share as the pass's rays
+    // gave it, then between the filter's steps; [10], [11] its averages over time, by turns; [12], [13] the moments
+    // of its noise, by turns.
+    static constexpr unsigned kRtLightImages = 14u;
+    std::uint32_t rt_light_images_[kRtLightImages] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
+                                                      rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
+                                                      rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage};
+    std::uint32_t rt_mirror_slot_ = 0u;  // the mirror picture's place among the textures
+    std::uint32_t rt_added_slot_ = 0u;  // the added light's place among the textures
+    float rt_tint_[4]{};                // what a shadow takes back from the sky (ViewRows::tint)
+    // What glows in the scene: a draw of a mesh whose material glows (nebula_model.h NebulaModelHit.glow, from the
+    // cooker's table of glowing models and from surfaces added to what is behind them). One a block; the light pass
+    // adds each one's light to the surfaces within its reach, less what stands between.
+    // A light source of the scene. Collected with its intensity (colour times candela; 100 units a metre) and its own
+    // size; rt_emitters_finish turns that into what the light pass reads, by the stage's exposure.
+    struct RtEmitter {
+        float centre[3], radius;  // in the scene camera's eye space; the source's own radius
+        float colour[3], reach;   // collected: colour x candela; finished: the share of a surface's colour at the source. Where its light ends
+        std::uint32_t slot, kind, reserved[2];  // kind: 0 a point light the game asked, 1 a glowing mesh, 2 a particle effect
+    };
+    bool rt_emitters_finished_ = false;
+    float rt_exposure_ = 150.0f;  // the stage's exposure the emitters were finished by (lux)
+    void rt_emitters_finish(float exposure_lux);
+    std::vector<RtEmitter> rt_emitters_;
+    std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_blocks_;
+    std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
+    void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
+                    const float (*place)[4] = nullptr);
+    // A particle draw as a light: every effect that is added to the picture and is a light by its kind
+    // (render/rt/rt_effect_lights.inc, from the census of the game's effects), with the particles' own place, size and
+    // colour this frame. `state`: its pipeline's; `camera`: the scene's.
+    void rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t state, std::uint32_t camera);
+    void rt_emitter_bins(unsigned width, unsigned height, const float ray[4]);
+    unsigned rt_light_width_ = 0u, rt_light_height_ = 0u;
+    // The frame before, for the filter: its camera, its eye rays, the walk it was (history counts from the walk just
+    // before, with no cut between).
+    Affine34 rt_light_view_before_{};
+    float rt_light_ray_before_[4]{};
+    std::uint64_t rt_light_walk_before_ = 0u;
+    bool rt_light_history_ = false;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
+    std::vector<std::uint32_t> rt_item_words_;
+    std::vector<float> rt_set_words_;
+    std::uint64_t rt_light_sum_[9]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays
+    std::uint32_t rt_light_arenas_ = 0u, rt_light_unplaced_ = 0u;  // this walk: mesh arenas bound, items left without
+    std::uint32_t rt_light_skinned_ = 0u;  // this walk: mesh items whose vertices name their own matrices (no mesh words)
+    std::uint32_t rt_light_frames_ = 0u;
+    std::uint32_t rt_light_number_ = 0u;      // the noise's turn: counts the light passes
     // The tracer's views (--diagnostics rt-view, rt-check): the scene drawn by rays over the game's opaque scene.
     void rt_view(const NebulaFramePass& pass);
     std::uint32_t rt_view_image_ = rt::kNoImage;
@@ -376,6 +489,7 @@ private:
     std::uint64_t walk_view_stamp_ = 0u;
     gpu::Address walk_rows_ring_ = 0u, walk_vertex_ring_ = 0u, walk_ring_previous_ = 0u;
     const float (*walk_rows_cpu_)[4] = nullptr;
+    std::byte* walk_rows_upload_ = nullptr;  // the same rows in the frame's upload memory
     std::unordered_map<std::uint32_t, std::uint64_t> generated_written_;
     float sky_up_[3]{0.0f, 1.0f, 0.0f};
     std::uint32_t view_flags_ = 0u;  // ViewRows::view_flags
