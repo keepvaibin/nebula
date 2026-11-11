@@ -223,7 +223,8 @@ pub(crate) struct Facts {
     /// A key this mod adds to a link group (group and key, joined by U+001F), and the tables (store paths, in the game's
     /// case) it adds it to.
     pub link_targets: std::collections::BTreeMap<String, Vec<String>>,
-    /// The cells this mod's patches give the galaxies' scenario tables (table-keys T-4).
+    /// The cells the galaxies' scenario tables get (table-keys T-4), lowest first: the installed mods' below this one,
+    /// this one's (its patches and its new galaxies' own tables), then those above it (the higher wins).
     pub scenario_cells: Vec<crate::ScenarioCell>,
     /// A zone's layer sets (lowercase zone), once read; None inside when the store could not give them.
     pub layer_sets: std::collections::BTreeMap<String, Option<Vec<crate::LayerSet>>>,

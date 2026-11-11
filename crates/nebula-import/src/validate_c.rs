@@ -204,6 +204,10 @@ impl Store for CStore {
         let at = unsafe { text(store_path) }.unwrap_or_else(|| path.to_string());
         Some(crate::store_view::table_view(&crate::cook::store::store_path(at.trim_start_matches('/')), &ir))
     }
+    fn read_table(&self, path: &str, bytes: &[u8]) -> Option<Table> {
+        // Read here, as LumaLink's pak store reads it: the game's store gives only its own tables.
+        crate::store_view::view_of_bytes(path, bytes)
+    }
     fn may_be_new(&self, path: &str) -> bool {
         let store = unsafe { &*self.0 };
         let Some(f) = store.may_be_new else { return false };

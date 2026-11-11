@@ -206,6 +206,20 @@ pub fn table_view(path: &str, ir: &TableIr) -> Table {
     Table { key, columns, rows, repeated, cells: Some(cells), case_insensitive: rule.case_insensitive }
 }
 
+/// A table a mod brings whole as a new file, from its bytes (validator revision 4, `Store::read_table`): the disc's
+/// form (BCSV), the cooked form (NTBL) or the source form (`.json`, as `lumalink extract` writes it), viewed as the
+/// store's own tables are. None when the bytes are none of them.
+pub fn view_of_bytes(path: &str, bytes: &[u8]) -> Option<Table> {
+    let ir = if bytes.starts_with(table::MAGIC) {
+        TableIr::from_ntbl(bytes).ok()?
+    } else if table::is_bcsv(bytes) {
+        TableIr::from_bcsv(bytes).ok().flatten()?
+    } else {
+        TableIr::from_json(bytes).ok()?
+    };
+    Some(table_view(&store_path(path.trim_start_matches('/')), &ir))
+}
+
 /// The game's own view of an empty table (the C store, validate_c) given its kind's columns, as `table_view` does.
 pub fn widen_view(path: &str, table: &mut Table) {
     if !table.rows.as_ref().is_some_and(|r| r.is_empty()) {
@@ -264,6 +278,10 @@ impl Store for PakStore {
         let lower = path.trim_start_matches('/').to_ascii_lowercase();
         let parts: Vec<&str> = lower.split('/').collect();
         self.new.iter().any(|p| table_keys::matches(p, &parts))
+    }
+
+    fn read_table(&self, path: &str, bytes: &[u8]) -> Option<Table> {
+        view_of_bytes(path, bytes)
     }
 }
 
@@ -366,5 +384,22 @@ mod tests {
         // The rule names l_id; this table has none: its rows are unknown, not guessed.
         let t = table_view("StageData/X/jmp/Placement/Common/ObjInfo", &ir);
         assert!(t.rows.is_none() && t.cells.is_some());
+    }
+    #[test]
+    fn a_table_a_mod_brings_whole_is_read_from_its_bytes() {
+        // Validator revision 4: a new galaxy's scenario table, in the source form and cooked; the zone's column is
+        // known by its hash (`same_column` matches the name), ScenarioNo by name (the table's key).
+        let path = "StageData/MoonGalaxyScenario/ScenarioData.bcsv";
+        let json = br#"{"rows": [{"ScenarioNo": 1, "DandelionHillZone": 10}, {"ScenarioNo": 2, "DandelionHillZone": 3}]}"#;
+        let from_json = view_of_bytes(path, json).expect("the source form reads");
+        let ntbl = TableIr::from_json(json).unwrap().to_ntbl();
+        let from_ntbl = view_of_bytes(path, &ntbl).expect("the cooked form reads");
+        for t in [&from_json, &from_ntbl] {
+            let number = t.columns.iter().position(|(c, _)| c == "ScenarioNo").expect("ScenarioNo by name");
+            let zone = t.columns.iter().position(|(c, _)| luma_validate::same_column(c, "DandelionHillZone")).expect("the zone by hash");
+            let cells = t.cells.as_ref().unwrap();
+            assert_eq!(cells.iter().map(|r| (r[number].as_str(), r[zone].as_str())).collect::<Vec<_>>(), vec![("1", "10"), ("2", "3")]);
+        }
+        assert!(view_of_bytes(path, b"not a table").is_none());
     }
 }

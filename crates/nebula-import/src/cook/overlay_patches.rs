@@ -145,6 +145,9 @@ impl Store for CookView<'_> {
     fn may_be_new(&self, _path: &str) -> bool {
         false
     }
+    fn read_table(&self, path: &str, bytes: &[u8]) -> Option<Table> {
+        crate::store_view::view_of_bytes(path, bytes)
+    }
     fn folder(&self, lower: &str) -> Option<Vec<(String, bool)>> {
         let folder = store::store_path(lower.trim_start_matches('/')).trim_end_matches('/').to_ascii_lowercase();
         let mut names: BTreeMap<String, (String, bool)> = BTreeMap::new();

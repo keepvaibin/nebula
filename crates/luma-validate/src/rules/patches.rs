@@ -121,20 +121,81 @@ pub(crate) fn check(ctx: &mut Ctx) {
         parsed.push((name, target, root));
     }
     // The scenario tables' cells first: they say which layers are on together (table-keys T-4).
+    let mut own: Vec<crate::ScenarioCell> = Vec::new();
     if let Some(store) = ctx.game().and_then(|g| g.store) {
+        own = new_scenario_tables(ctx, store);
         for (_, target, root) in &parsed {
             let Some(galaxy) = store.path(&target.to_lowercase()).and_then(|p| crate::scenario_table_galaxy(&p)) else { continue };
-            scenario_cells(ctx, &galaxy, root);
+            own.extend(scenario_cells(&galaxy, root));
         }
     }
+    ctx.facts.touches.scenarios = own.iter().map(crate::ScenarioCell::kept).collect();
+    // With the installed mods' that are on, around this one's, lowest first: those below it, then this one, then those
+    // above it (the higher wins, F INBOX-G 13). `position` says how many are above.
+    let mod_id = ctx.mod_id.clone().unwrap_or_default();
+    let installed: Vec<&crate::Installed> = ctx.input.installed.iter().filter(|m| m.on && m.id != mod_id).collect();
+    let position = ctx.input.position.unwrap_or(installed.len()).min(installed.len());
+    let theirs = |m: &&crate::Installed| m.touches.scenarios.iter().filter_map(|c| crate::ScenarioCell::from_kept(c)).collect::<Vec<_>>();
+    let mut cells: Vec<crate::ScenarioCell> = installed[position..].iter().rev().flat_map(theirs).collect();
+    cells.extend(own);
+    cells.extend(installed[..position].iter().rev().flat_map(theirs));
+    ctx.facts.scenario_cells = cells;
     for (name, target, root) in parsed {
         let mut pc = P { ctx, file: name };
         one(&mut pc, &root, &target);
     }
 }
 
+/// A new galaxy's own scenario table, brought whole (`files/StageData/<galaxy>Scenario/ScenarioData.bcsv`, or its source
+/// form with `.json`; luma-format 5, `stagedata/**` may be new): every row's whole-number cells. A table at a path the
+/// game has is L303's, not read here.
+fn new_scenario_tables(ctx: &mut Ctx, store: &dyn crate::Store) -> Vec<crate::ScenarioCell> {
+    let mut out = Vec::new();
+    let names: Vec<String> = ctx.m.items.iter().filter(|i| i.kind == crate::zip::EntryKind::File).map(|i| i.name.clone()).collect();
+    for name in names {
+        let parts: Vec<&str> = name.splitn(4, '/').collect();
+        if parts.len() != 4 || parts[0] != "layers" || parts[2] != "files" {
+            continue;
+        }
+        let path = parts[3].strip_suffix(".json").unwrap_or(parts[3]).to_string();
+        let lower = path.to_lowercase();
+        let Some(galaxy) = crate::scenario_table_galaxy(&lower) else { continue };
+        if store.path(&lower).is_some() {
+            continue;
+        }
+        let bytes = match ctx.m.kept.get(&name) {
+            Some(b) => b.clone(),
+            None => {
+                let Some(index) = ctx.m.index_of(&name) else { continue };
+                match ctx.m.keep(index, MAX_PATCH) {
+                    Ok(b) => b.to_vec(),
+                    Err(_) => continue, // L105 or L106 already
+                }
+            }
+        };
+        let Some(table) = store.read_table(&path, &bytes) else {
+            ctx.not_checked(402, "Missing.NewScenarios");
+            continue;
+        };
+        let (Some(rows), Some(number)) = (table.cells.as_ref(), table.columns.iter().position(|(c, _)| same_column(c, "ScenarioNo"))) else {
+            ctx.not_checked(402, "Missing.NewScenarios");
+            continue;
+        };
+        for row in rows {
+            let Some(scenario) = row.get(number) else { continue };
+            for (i, (column, _)) in table.columns.iter().enumerate().filter(|(i, _)| *i != number) {
+                if let Some(value) = row.get(i).and_then(|v| v.parse::<i64>().ok()) {
+                    out.push(crate::ScenarioCell { galaxy: galaxy.clone(), scenario: scenario.clone(), column: column.clone(), value });
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The cells a patch of a galaxy's scenario table gives (`set` and `add`, by `ScenarioNo`), each a whole number.
-fn scenario_cells(ctx: &mut Ctx, galaxy: &str, root: &Value) {
+fn scenario_cells(galaxy: &str, root: &Value) -> Vec<crate::ScenarioCell> {
+    let mut out = Vec::new();
     let mut push = |scenario: Option<String>, values: &Value| {
         let Some(scenario) = scenario else { return };
         for m in values.members() {
@@ -142,7 +203,7 @@ fn scenario_cells(ctx: &mut Ctx, galaxy: &str, root: &Value) {
                 continue;
             }
             if let Some(value) = m.value.as_i64() {
-                ctx.facts.scenario_cells.push(crate::ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.clone(), column: m.key.clone(), value });
+                out.push(crate::ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.clone(), column: m.key.clone(), value });
             }
         }
     };
@@ -155,6 +216,7 @@ fn scenario_cells(ctx: &mut Ctx, galaxy: &str, root: &Value) {
     for row in root.get("add").map(|a| a.items()).unwrap_or_default() {
         push(number(row), row);
     }
+    out
 }
 
 /// A zone's layer sets, read once (the store path `own` names the zone in the game's case).

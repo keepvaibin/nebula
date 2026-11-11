@@ -182,6 +182,71 @@ impl Store for ScenarioStore {
             vec![("DandelionHillGalaxyScenario".to_string(), true), ("DandelionHillZone".to_string(), true), ("FakeScenario".to_string(), false)]
         })
     }
+    /// A stand-in for the host's table reader: "name,name;value,value;..." (the real readers are nebula-import's,
+    /// tested there).
+    fn read_table(&self, _path: &str, bytes: &[u8]) -> Option<Table> {
+        let text = std::str::from_utf8(bytes).ok()?.strip_prefix("table:")?;
+        let mut rows = text.split(';');
+        let int = ColumnType::Int { min: 0, max: 65535 };
+        let columns: Vec<(String, ColumnType)> = rows.next()?.split(',').map(|c| (c.to_string(), int)).collect();
+        let cells: Vec<Vec<String>> = rows.map(|r| r.split(',').map(str::to_string).collect()).collect();
+        Some(Table { key: vec!["ScenarioNo".into()], columns, rows: Some(cells.iter().map(|r| r[0].clone()).collect()), cells: Some(cells), ..Default::default() })
+    }
+}
+
+/// Validator revision 4: a new galaxy's own scenario table, brought whole, and the installed mods' scenario cells
+/// join the layer sets (table-keys 13.6).
+#[test]
+fn a_new_galaxy_s_table_and_other_mods_cells_say_which_layers_are_on_together() {
+    let store = ScenarioStore { listed: true };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let layer = [("layers", r#"[{"name": "base"}]"#)];
+    let at = |l: &str| format!("layers/base/patches/{}.json", START.replace("{}", l));
+    let add = |n: u32| format!(r#"{{"patch": 1, "key": ["MarioNo"], "add": [{{"MarioNo": {n}}}]}}"#).into_bytes();
+    let in_group = |r: &Report| r.findings.iter().filter(|f| f.code == 402 && f.args.iter().any(|(n, a)| *n == "why" && *a == Arg::Phrase("Patch.KeyInGroup"))).count();
+    let new_galaxy = "layers/base/files/StageData/MoonGalaxyScenario/ScenarioData.bcsv";
+    let run = |files: &[E], installed: &[luma_validate::Installed], position: Option<usize>| {
+        check(&luma(&layer, files), &Setup { game: Some(&game), installed, position, ..NO_GAME })
+    };
+
+    // Alone, LayerD meets no MarioNo 0. A new galaxy whose scenario 1 turns on LayerB and LayerD (mask 10) in the same
+    // zone puts them together: MarioNo 0 in LayerB is met.
+    assert_eq!(in_group(&run(&[file(&at("LayerD"), &add(0))], &[], None)), 0);
+    let table = |mask: u32| format!("table:ScenarioNo,DandelionHillZone;1,{mask}").into_bytes();
+    let r = run(&[file(new_galaxy, &table(10)), file(&at("LayerD"), &add(0))], &[], None);
+    assert_eq!(in_group(&r), 1, "{:?}", r.findings);
+    assert!(r.not_checked.is_empty(), "{:?}", r.not_checked);
+    assert_eq!(r.touches.scenarios, vec!["moongalaxy\u{1f}1\u{1f}DandelionHillZone\u{1f}10".to_string()]);
+    // The source form at the same path, `.json` added, reads alike.
+    assert_eq!(in_group(&run(&[file(&format!("{new_galaxy}.json"), &table(10)), file(&at("LayerD"), &add(0))], &[], None)), 1);
+    // A table that keeps LayerD apart (LayerA and LayerD, mask 9): nothing met.
+    assert_eq!(in_group(&run(&[file(new_galaxy, &table(9)), file(&at("LayerD"), &add(0))], &[], None)), 0);
+    // A table the store cannot read: said, not guessed.
+    let r = run(&[file(new_galaxy, b"not a table"), file(&at("LayerD"), &add(0))], &[], None);
+    assert_eq!(in_group(&r), 0);
+    assert!(r.not_checked.iter().any(|n| n.code == 402 && n.because == "Missing.NewScenarios"), "{:?}", r.not_checked);
+
+    // Another mod that is on brings that galaxy: its kept cells count for this mod's check, in either place in the list.
+    let mut galaxy_mod = other("moon.mod");
+    galaxy_mod.touches = run(&[file(new_galaxy, &table(10))], &[], None).touches;
+    for position in [Some(0), Some(1), None] {
+        let r = run(&[file(&at("LayerD"), &add(0))], std::slice::from_ref(&galaxy_mod), position);
+        assert_eq!(in_group(&r), 1, "{position:?}: {:?}", r.findings);
+    }
+    galaxy_mod.on = false;
+    assert_eq!(in_group(&run(&[file(&at("LayerD"), &add(0))], std::slice::from_ref(&galaxy_mod), None)), 0);
+    // The higher mod's cell wins: a mod above that sets the galaxy's scenario 1 to LayerA and LayerD (9) over this
+    // one's own 10 keeps LayerB and LayerD apart; below it, this mod's 10 stands.
+    galaxy_mod.on = true;
+    galaxy_mod.touches = run(&[file(new_galaxy, &table(9))], &[], None).touches;
+    let mine = [file(new_galaxy, &table(10)), file(&at("LayerD"), &add(0))];
+    assert_eq!(in_group(&run(&mine, std::slice::from_ref(&galaxy_mod), Some(1))), 0);
+    assert_eq!(in_group(&run(&mine, std::slice::from_ref(&galaxy_mod), Some(0))), 1);
+
+    // The kept report carries the cells.
+    let kept = luma_validate::Saved::from_report(&r, "RMGE01").to_bytes();
+    let back = luma_validate::Saved::parse(&kept).expect("kept report reads back");
+    assert_eq!(back.touches, r.touches);
 }
 
 /// Table-keys T-4: a start or generalpos key is new among Common and the layers a scenario turns on together, by the

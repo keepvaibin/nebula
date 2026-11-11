@@ -178,6 +178,12 @@ pub trait Store {
     fn folder(&self, _lower: &str) -> Option<Vec<(String, bool)>> {
         None
     }
+    /// A table a mod brings whole as a new file, from its bytes, read as the store reads its own tables: the game's
+    /// form, or a source form (`.json`). `path` is the game path it stands at (the mod's spelling, without a source
+    /// ending). None when the store cannot read tables from bytes, or the bytes are no table.
+    fn read_table(&self, _path: &str, _bytes: &[u8]) -> Option<Table> {
+        None
+    }
 }
 
 /// What the validator knows of the game it checks against.
@@ -224,6 +230,10 @@ pub struct Touches {
     pub functions: Vec<String>,
     /// Keys added to a link group's tables (`link_group`): the group and the key values, joined by U+001F (L404).
     pub links: Vec<String>,
+    /// The cells it gives the galaxies' scenario tables, by patch or in a new galaxy's own table (table-keys T-4):
+    /// galaxy (lowercase), ScenarioNo, column and value, joined by U+001F. Another mod's check reads them for the
+    /// layers that are on together.
+    pub scenarios: Vec<String>,
 }
 
 /// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).
@@ -280,8 +290,8 @@ pub struct LayerSet {
     pub layers: u32,
 }
 
-/// A cell of a galaxy's scenario table that a mod's patch gives (`set` or `add`), read before the stage tables' patches
-/// (the game patches the scenario tables first).
+/// A cell of a galaxy's scenario table that a mod gives (a patch's `set` or `add`, or a row of a new galaxy's own
+/// table), read before the stage tables' patches (the game patches the scenario tables first).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScenarioCell {
     /// The galaxy, in lowercase.
@@ -290,6 +300,19 @@ pub struct ScenarioCell {
     /// The column as the patch names it (a zone's name, or its hash as `0x` and 8 hex digits).
     pub column: String,
     pub value: i64,
+}
+
+impl ScenarioCell {
+    /// As `Touches::scenarios` keeps it.
+    pub fn kept(&self) -> String {
+        format!("{}\u{1f}{}\u{1f}{}\u{1f}{}", self.galaxy, self.scenario, self.column, self.value)
+    }
+    /// From `Touches::scenarios`; None for a value that is not one.
+    pub fn from_kept(text: &str) -> Option<ScenarioCell> {
+        let mut parts = text.split('\u{1f}');
+        let (galaxy, scenario, column, value) = (parts.next()?, parts.next()?, parts.next()?, parts.next()?.parse().ok()?);
+        parts.next().is_none().then(|| ScenarioCell { galaxy: galaxy.to_string(), scenario: scenario.to_string(), column: column.to_string(), value })
+    }
 }
 
 /// The galaxy whose scenario table a store path is (`stagedata/<galaxy>scenario/scenariodata.bcsv`), in lowercase.
@@ -303,15 +326,18 @@ pub fn scenario_table_galaxy(store_path: &str) -> Option<String> {
 }
 
 /// Every layer set the game can turn on in a zone (`zone` in the game's case: its column in a scenario table is named
-/// by it): one per scenario row of each galaxy the store lists whose table has the zone's column, with a mod's own
-/// `cells` over the game's. None when the store cannot list its galaxies or give a scenario table's cells.
+/// by it): one per scenario row of each galaxy the store lists whose table has the zone's column, with the mods'
+/// `cells` over the game's in order (a later cell wins), and one per row of a galaxy only the mods' cells give (a new
+/// galaxy's own table). None when the store cannot list its galaxies or give a scenario table's cells.
 pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) -> Option<Vec<LayerSet>> {
     let bits = |mask: i64| ((mask as u32 & 0xffff) << 1) | 1;
     let mut out = Vec::new();
+    let mut listed: Vec<String> = Vec::new();
     // As ScenarioDataParser: a folder whose name ends in "Scenario" (in that case) is a galaxy's.
     for (name, is_folder) in store.folder("stagedata")? {
         let Some(galaxy) = name.strip_suffix("Scenario").filter(|g| is_folder && !g.is_empty()) else { continue };
         let galaxy = galaxy.to_lowercase();
+        listed.push(galaxy.clone());
         let Some(path) = store.path(&format!("stagedata/{}/scenariodata.bcsv", name.to_lowercase())) else { continue };
         let table = store.table(&path)?;
         let rows = table.cells.as_ref()?;
@@ -330,6 +356,13 @@ pub fn zone_layer_sets(store: &dyn Store, zone: &str, cells: &[ScenarioCell]) ->
             }
         }
         out.extend(sets.into_iter().map(|(scenario, layers)| LayerSet { galaxy: galaxy.to_string(), scenario, layers }));
+    }
+    // A galaxy the store does not list: a new one, whose table a mod brings.
+    for c in cells.iter().filter(|c| !listed.contains(&c.galaxy) && same_column(zone, &c.column)) {
+        match out.iter_mut().find(|s| s.galaxy == c.galaxy && s.scenario == c.scenario) {
+            Some(set) => set.layers = bits(c.value),
+            None => out.push(LayerSet { galaxy: c.galaxy.clone(), scenario: c.scenario.clone(), layers: bits(c.value) }),
+        }
     }
     Some(out)
 }
