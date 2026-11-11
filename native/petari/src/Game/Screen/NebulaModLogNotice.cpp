@@ -6,6 +6,7 @@
 #include "Game/Screen/NebulaPaneKit.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/LumaModLog.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/Tunable.hpp"
 #include <Game/Ui/Layout.hpp>
@@ -439,6 +440,18 @@ namespace {
     // This scene's notice; null when the scene has none. Every game scene sets it (make), so it never names the last
     // scene's.
     NebulaModLogNoticeScreen* sScreen = nullptr;
+    // The frame the notice last stepped. Its lines count frames shown, not world steps (services-time 1, item 4: Nebula's
+    // own screens are never moved by the world clock): a frame of several steps steps it once, a held world (no scene
+    // update) steps it from the draw.
+    u32 sSteppedFrame = 0;
+
+    void stepOncePerFrame() {
+        const u32 frame = NebulaFrameClock::count();
+        if (frame != sSteppedFrame) {
+            sSteppedFrame = frame;
+            sScreen->step();
+        }
+    }
 };  // namespace
 
 namespace NebulaModLogNotice {
@@ -459,12 +472,13 @@ namespace NebulaModLogNotice {
 
     void update() {
         if (sScreen != nullptr) {
-            sScreen->step();
+            stepOncePerFrame();
         }
     }
 
     void draw() {
         if (sScreen != nullptr) {
+            stepOncePerFrame();
             sScreen->drawScreen();
         }
     }
