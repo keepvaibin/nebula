@@ -89,7 +89,7 @@ struct Backend::State {
     ComPtr<ID3D12QueryHeap> times;
     ComPtr<ID3D12Resource> times_read;
     const std::uint64_t* times_mapped = nullptr;
-    bool timed[kFramesInFlight]{};
+    bool timed[kFramesInFlight][kTimedStretches]{};
     // Buffers passes write and builds read.
     struct OwnBuffer {
         ComPtr<ID3D12Resource> buffer;
@@ -196,7 +196,7 @@ bool Backend::start(gpu::Device* device) {
     }
     D3D12_QUERY_HEAP_DESC times_desc{};
     times_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-    times_desc.Count = 2u * kFramesInFlight;
+    times_desc.Count = 2u * kTimedStretches * kFramesInFlight;
     if (SUCCEEDED(state->device->CreateQueryHeap(&times_desc, IID_PPV_ARGS(&state->times)))) {
         state->times_read = state->buffer(std::uint64_t{times_desc.Count} * 8u, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
                                           D3D12_RESOURCE_FLAG_NONE, L"Nebula RT Times");
@@ -690,27 +690,27 @@ void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) c
     std::memcpy(out, state_->counters_mapped[frame_slot % kFramesInFlight], std::size_t{kCounters} * 4u);
 }
 
-void Backend::time_mark(bool end) {
+void Backend::time_mark(unsigned stretch, bool end) {
     State& s = *state_;
-    if (s.times == nullptr) {
+    if (s.times == nullptr || stretch >= kTimedStretches) {
         return;
     }
-    const UINT at = s.frame_slot * 2u;
+    const UINT at = (s.frame_slot * kTimedStretches + stretch) * 2u;
     s.commands->EndQuery(s.times.Get(), D3D12_QUERY_TYPE_TIMESTAMP, at + (end ? 1u : 0u));
     if (end) {
         s.commands->ResolveQueryData(s.times.Get(), D3D12_QUERY_TYPE_TIMESTAMP, at, 2u, s.times_read.Get(), std::uint64_t{at} * 8u);
-        s.timed[s.frame_slot] = true;
+        s.timed[s.frame_slot][stretch] = true;
     }
 }
 
-std::uint64_t Backend::timed_ticks(unsigned frame_slot) const {
+std::uint64_t Backend::timed_ticks(unsigned stretch, unsigned frame_slot) const {
     State& s = *state_;
     const unsigned slot = frame_slot % kFramesInFlight;
-    if (s.times_mapped == nullptr || !s.timed[slot]) {
+    if (s.times_mapped == nullptr || stretch >= kTimedStretches || !s.timed[slot][stretch]) {
         return 0u;
     }
-    s.timed[slot] = false;
-    const std::uint64_t* const at = s.times_mapped + std::size_t{slot} * 2u;
+    s.timed[slot][stretch] = false;
+    const std::uint64_t* const at = s.times_mapped + std::size_t{slot * kTimedStretches + stretch} * 2u;
     return at[1] > at[0] ? at[1] - at[0] : 0u;
 }
 

@@ -54,8 +54,8 @@ void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
         out[i] = 0u;
     }
 }
-void Backend::time_mark(bool) {}
-std::uint64_t Backend::timed_ticks(unsigned) const { return 0u; }
+void Backend::time_mark(unsigned, bool) {}
+std::uint64_t Backend::timed_ticks(unsigned, unsigned) const { return 0u; }
 
 }  // namespace rt
 }  // namespace galaxy::render

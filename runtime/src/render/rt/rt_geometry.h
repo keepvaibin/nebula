@@ -51,6 +51,9 @@ struct GeometryStats {
     std::uint64_t refit_triangles = 0u;    // under the moving meshes of the last refit()
     std::uint32_t refits = 0u, rebuilds = 0u;  // of the last refit(): refitted, and built anew
     std::uint64_t most_built_triangles = 0u;  // the most one budgeted frame built, since the start
+    std::uint64_t timed_triangles = 0u;       // the builds of the frame slot's last frame, timed: their triangles
+    std::uint64_t timed_ticks = 0u;           // and their GPU time (0: none timed)
+    std::uint32_t released = 0u;              // static structures released past the ceiling, since the start
 };
 
 class Geometry {
@@ -90,6 +93,10 @@ public:
     static constexpr std::uint64_t kScratchPage = 4ull << 20u;
     static constexpr std::uint32_t kRefitsToRebuild = 30u;
     static constexpr std::uint64_t kFramesToForget = 4u;
+    // 5.3 G-4: past this much structure memory the least recently named static structures go (the whole game compacts
+    // to about 320 MB); one named in the last kFramesToForget frames stays.
+    static constexpr std::uint64_t kStructureCeiling = 512ull << 20u;
+    void set_ceiling(std::uint64_t bytes) noexcept { ceiling_ = bytes; }
 
 private:
     enum class State : std::uint8_t { Waiting, Built, SizeAsked, Compacted };
@@ -104,6 +111,7 @@ private:
         std::uint64_t named_frame = 0u;        // Moving: the last frame move() named it
         bool moved = false;                    // Moving: named this frame, to refit
         bool queued = false;
+        mutable std::uint64_t used_frame = 0u;  // Static: the last frame it was built or named in (the ceiling's order)
     };
     struct Retired {
         std::uint64_t frame = 0u;
@@ -135,7 +143,10 @@ private:
     std::vector<std::pair<std::uint64_t, std::uint32_t>> retired_scratch_;  // frame, page
     std::uint64_t frame_index_ = 0u;
     bool built_since_barrier_ = false;
+    std::uint64_t ceiling_ = kStructureCeiling;
+    std::uint64_t timed_triangles_[kFramesInFlight]{};  // each frame slot's timed builds
     GeometryStats stats_{};
+    void keep_under_ceiling();
 };
 
 }  // namespace galaxy::render::rt

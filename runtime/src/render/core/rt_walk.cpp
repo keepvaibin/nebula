@@ -173,15 +173,29 @@ void RenderCore::rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool 
     rt_geometry_.want(std::uint64_t{id} * 2u + (refined ? 1u : 0u), input);
 }
 
-// Once a frame, before anything is drawn: the builds the frame can afford. With a scene on screen a frame builds a few
-// thousand triangles; a frame with none (a loading screen) builds eight times as many.
+// Once a frame, before anything is drawn: the builds the frame can afford (5.3 G-3, measured, not constant). With a
+// scene on screen, what half the time a frame has left after its scene's GPU time holds at the rate this GPU's builds
+// were timed at, between 4,000 and 64,000 triangles (8,000 until timed); a frame with none (a loading screen) 64,000.
 void RenderCore::rt_frame(const NebulaFrameList& list) {
-    constexpr std::uint64_t kSceneTriangles = 8000u;
-    const std::uint64_t budget = (list.flags & NEBULA_FRAME_HAS_SCENE) != 0u ? kSceneTriangles : kSceneTriangles * 8u;
+    std::uint64_t budget = 64000u;
+    if ((list.flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
+        const double frame_ms = 1000.0 / std::max(static_cast<double>(rt_frame_rate_), 10.0);
+        const double spare_ms = std::max(frame_ms - renderer_.scene_gpu_ema_ms(), 0.0);
+        budget = rt_build_rate_ > 0.0 ? static_cast<std::uint64_t>(std::clamp(rt_build_rate_ * spare_ms * 0.5, 4000.0, 64000.0)) : 8000u;
+    }
+    rt_budget_ = budget;
     rt_backend_.frame(renderer_.frame_slot());
     rt_geometry_.frame(renderer_.rt_commands_begin().commands, renderer_.frame_slot(), frame_index_, budget);
     renderer_.rt_commands_end();
     const rt::GeometryStats& stats = rt_geometry_.stats();
+    // The rate: triangles a millisecond of the builds timed (a frame slot's last frame), over builds of 2,000 or more.
+    if (stats.timed_triangles >= 2000u && stats.timed_ticks != 0u) {
+        const double ms = static_cast<double>(stats.timed_ticks) * renderer_.gpu_ms_per_tick();
+        if (ms > 0.0) {
+            const double rate = static_cast<double>(stats.timed_triangles) / ms;
+            rt_build_rate_ = rt_build_rate_ > 0.0 ? rt_build_rate_ + (rate - rt_build_rate_) * 0.2 : rate;
+        }
+    }
     const bool diagnosing = ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs);
     if (diagnosing && (stats.builds != 0u || stats.compactions != 0u)) {
         std::fprintf(stderr, "[rt] frame %llu: built %u (%llu triangles), compacted %u, waiting %u; %u structures, %.2f MB\n",
@@ -196,10 +210,11 @@ void RenderCore::rt_frame(const NebulaFrameList& list) {
         rt_log_at_ = frame_index_ + 600u;
         std::fprintf(stderr,
                      "[rt] structures: %u built (%u compacted), %u waiting, %llu triangles, %.2f MB in %.2f MB of pages, most in a frame "
-                     "%llu triangles\n",
+                     "%llu triangles; budget %llu, %.0f built a ms, %u released past the ceiling\n",
                      stats.structures, stats.compacted, stats.waiting, static_cast<unsigned long long>(stats.triangles),
                      static_cast<double>(stats.structure_bytes) / 1048576.0, static_cast<double>(stats.page_bytes) / 1048576.0,
-                     static_cast<unsigned long long>(stats.most_built_triangles));
+                     static_cast<unsigned long long>(stats.most_built_triangles), static_cast<unsigned long long>(rt_budget_),
+                     rt_build_rate_, stats.released);
     }
 }
 
@@ -1655,11 +1670,11 @@ void RenderCore::rt_light() {
             rt_pass_surface();
             const bool timed = rt_measure(width);
             if (timed) {
-                rt_backend_.time_mark(false);
+                rt_backend_.time_mark(rt::kTimedSun, false);
             }
             rt_pass_sun();
             if (timed) {
-                rt_backend_.time_mark(true);
+                rt_backend_.time_mark(rt::kTimedSun, true);
             }
             rt_sun_filter();
             rt_pass_lights();
@@ -1713,7 +1728,7 @@ bool RenderCore::rt_measure(unsigned width) {
         rt_measure_done_ = true;
         return false;
     }
-    const std::uint64_t ticks = rt_backend_.timed_ticks(renderer_.frame_slot());
+    const std::uint64_t ticks = rt_backend_.timed_ticks(rt::kTimedSun, renderer_.frame_slot());
     const unsigned output = renderer_.temporal_output_width();
     const float scale = width != 0u && output > width ? static_cast<float>(output) / static_cast<float>(width) : 1.0f;
     if (ticks != 0u && rt_measure_count_ < kRtMeasureFrames) {

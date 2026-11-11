@@ -66,6 +66,9 @@ inline constexpr std::uint64_t kRangeAlign = 256u;
 inline constexpr std::uint32_t kSizeSlots = 1024u;
 // What was last named in a frame's commands may go this many frames later (begin_frame has waited for it by then).
 inline constexpr std::uint64_t kFramesToRelease = kFramesInFlight + 1u;
+// The stretches of a frame's commands the GPU times (Backend::time_mark): the sun pass (the measure of plan 19.2) and
+// the structures' builds (the build budget, 5.3 G-3).
+inline constexpr unsigned kTimedSun = 0u, kTimedBuilds = 1u, kTimedStretches = 2u;
 
 // A pass: one of the tracer's compute shaders (rt_shaders.h) and what it binds, by the registers of rt_bindings.hlsli.
 enum class ImageFormat : std::uint8_t { Rgba8, Rgba16f, Rg16f, R16f, R8, R32f, Rgb10a2, Rgba32f, Rgba32ui, Rg16ui };
@@ -191,11 +194,12 @@ public:
     // the frame slot's last finished frame (zero before one).
     void end_counters();
     void read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const;
-    // The GPU's time over a stretch of this frame's commands: time_mark(false) before it, time_mark(true) after, once a
-    // frame at most. timed_ticks: the frame slot's last finished stretch in the GPU's ticks (the renderer's
-    // gpu_ms_per_tick converts), 0 when that frame timed none or the device has no timestamps; reading clears it.
-    void time_mark(bool end);
-    [[nodiscard]] std::uint64_t timed_ticks(unsigned frame_slot) const;
+    // The GPU's time over stretches of this frame's commands (kTimedStretches): time_mark(stretch, false) before one,
+    // time_mark(stretch, true) after, each once a frame at most. timed_ticks: the stretch's time in the frame slot's
+    // last finished frame in the GPU's ticks (the renderer's gpu_ms_per_tick converts), 0 when that frame timed none
+    // or the device has no timestamps; reading clears it.
+    void time_mark(unsigned stretch, bool end);
+    [[nodiscard]] std::uint64_t timed_ticks(unsigned stretch, unsigned frame_slot) const;
 
 private:
     struct State;
