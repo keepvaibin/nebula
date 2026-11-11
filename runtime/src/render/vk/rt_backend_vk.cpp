@@ -813,6 +813,10 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             next(kImageBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).pImageInfo = &views[view_count++];
         }
     }
+    if (binds.write_texture.texture != nullptr && image_of(binds.writes[kPassWrites - 1u]) == nullptr) {
+        views[view_count] = {VK_NULL_HANDLE, static_cast<VkImageView>(binds.write_texture.texture), VK_IMAGE_LAYOUT_GENERAL};
+        next(kImageBinding + kPassWrites - 1u, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).pImageInfo = &views[view_count++];
+    }
     if (binds.counters) {
         buffers[buffer_count] = {s.counters, 0u, kCountersBytes};
         next(kCountersBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).pBufferInfo = &buffers[buffer_count++];

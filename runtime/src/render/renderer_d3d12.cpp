@@ -4424,11 +4424,16 @@ bool RendererD3D12::ensure_motion_target() {
     }
     rd.Format = kReactiveMaskFormat;
     cv.Format = kReactiveMaskFormat;
+    // The tracer writes into it too where the device can trace (plan 16.4: where the added light changed).
+    if (rt_capable(rt_caps())) {
+        rd.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    }
     if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&reactive_target_)))) {
         motion_target_.Reset();
         return false;
     }
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     rd.Format = kLayerFormat;
     cv.Format = kLayerFormat;
     if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
@@ -5581,6 +5586,24 @@ void RendererD3D12::rt_light_end() {
     BarriersD3D12 uses{command_list_.Get()};
     uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
     uses.texture(item_target_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
+    uses.issue();
+}
+
+bool RendererD3D12::rt_reactive_begin(rt::TextureView& reactive) {
+    if (!reactive_scene_ || !reactive_target_ ||
+        (reactive_target_->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == D3D12_RESOURCE_FLAG_NONE) {
+        return false;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(reactive_target_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeWrite);
+    uses.issue();
+    reactive = {reactive_target_.Get(), static_cast<std::uint32_t>(kReactiveMaskFormat)};
+    return true;
+}
+
+void RendererD3D12::rt_reactive_end() {
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(reactive_target_.Get(), gpu::Use::ComputeWrite, gpu::Use::ColorWrite);
     uses.issue();
 }
 

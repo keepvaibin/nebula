@@ -566,6 +566,7 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     for (unsigned i = 0; i < kPassWrites; ++i) {
         views = views || image_of(binds.writes[i]) != nullptr;
     }
+    views = views || binds.write_texture.texture != nullptr;
     const UINT step = s.device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const DescriptorRing::Table table = views ? s.descriptors->allocate(kViews) : DescriptorRing::Table{};
     const auto cpu = [&](unsigned i) {
@@ -611,6 +612,13 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             }
             s.device->CreateUnorderedAccessView(image->texture.Get(), nullptr, &write, cpu(kPassTextures + kPassReads + i));
         }
+    }
+    if (views && binds.write_texture.texture != nullptr) {
+        D3D12_UNORDERED_ACCESS_VIEW_DESC write{};
+        write.Format = static_cast<DXGI_FORMAT>(binds.write_texture.format);
+        write.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        s.device->CreateUnorderedAccessView(static_cast<ID3D12Resource*>(binds.write_texture.texture), nullptr, &write,
+                                            cpu(kPassTextures + kPassReads + kPassWrites - 1u));
     }
 
     list->SetComputeRootSignature(s.pass_root.Get());

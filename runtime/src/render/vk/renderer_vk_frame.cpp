@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
 
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/program_table.h"
 #include "renderer_vk_internal.h"
 #include "galaxy/render/vk/renderer_vk.h"
@@ -1047,7 +1048,16 @@ bool RendererVk::ensure_motion_targets() {
     const VkImageUsageFlags usage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     gpu::TextureRef motion = context.create_texture(width, height, 1u, VK_FORMAT_R16G16_SFLOAT, usage, true, "motion vectors");
-    gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, usage, true, "reactive mask");
+    // The tracer writes into the reactive mask too (plan 16.4) where the device traces and R8 images store.
+    VkImageUsageFlags reactive_usage = usage;
+    reactive_storable_ = false;
+    if (rt_capable(rt_caps())) {
+        VkFormatProperties formats{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_R8_UNORM, &formats);
+        reactive_storable_ = (formats.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0u;
+        reactive_usage |= reactive_storable_ ? VK_IMAGE_USAGE_STORAGE_BIT : 0u;
+    }
+    gpu::TextureRef reactive = context.create_texture(width, height, 1u, VK_FORMAT_R8_UNORM, reactive_usage, true, "reactive mask");
     if (!motion || !reactive) {
         std::cerr << "[Renderer] motion targets " << width << 'x' << height << " allocation failed\n";
         return false;
@@ -1722,6 +1732,20 @@ void RendererVk::rt_light_end() {
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
                   VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+}
+
+bool RendererVk::rt_reactive_begin(rt::TextureView& reactive) {
+    if (!reactive_scene_ || !motion_.reactive || !reactive_storable_) {
+        return false;
+    }
+    end_scene_pass();
+    image_barrier(commands_, motion_.reactive->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::ComputeWrite);
+    reactive = {motion_.reactive->view, static_cast<std::uint32_t>(VK_IMAGE_LAYOUT_GENERAL)};
+    return true;
+}
+
+void RendererVk::rt_reactive_end() {
+    image_barrier(commands_, motion_.reactive->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeWrite, gpu::Use::ColorWrite);
 }
 
 void RendererVk::rt_unpublish_lights(TextureStore& textures) {
