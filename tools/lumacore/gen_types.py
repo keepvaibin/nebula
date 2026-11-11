@@ -164,6 +164,7 @@ class Api:
         self.evalDouble = fn("clang_EvalResult_getAsDouble", ctypes.c_double, c_void_p)
         self.evalDispose = fn("clang_EvalResult_dispose", None, c_void_p)
         self.pointee = fn("clang_getPointeeType", I.CXType, I.CXType)
+        self.classType = fn("clang_Type_getClassType", I.CXType, I.CXType)
         self.namedType = fn("clang_Type_getNamedType", I.CXType, I.CXType)
         self.copyConstructor = fn("clang_CXXConstructor_isCopyConstructor", c_uint, I.CXCursor)
         self.moveConstructor = fn("clang_CXXConstructor_isMoveConstructor", c_uint, I.CXCursor)
@@ -301,6 +302,13 @@ class Reader:
     # ---- small readers
     def text(self, cx):
         return self.unit.string(cx)
+
+    def at(self, cursor):
+        """Where a cursor is spelled: (file, offset); a special member clang declared implicitly is at its class's
+        name."""
+        f, line, col, off = c_void_p(), c_uint(), c_uint(), c_uint()
+        self.api.spellingLocation(self.api.location(cursor), byref(f), byref(line), byref(col), byref(off))
+        return f.value, off.value
 
     def where(self, cursor):
         """Where a declaration is written; in the unit pass, where the unit writes it (a macro's use, not the macro: a
@@ -501,53 +509,76 @@ class Reader:
                 self.want_signature(m)
         self.fields(c, t, row, "", 0)
         row["polymorphic"] = row["polymorphic"] or any(self.records.get(b["name"], {}).get("polymorphic") for b in row["bases"])
-        row["trivial_copy"], row["trivial_destroy"] = self.trivial(t)
+        row["trivial_copy"], row["trivial_destroy"], can_construct, can_assign = self.trivial(t)
+        row["no_copy"] = not can_construct and not can_assign
 
     def trivial(self, t):
-        """TY-10: (trivially copyable, trivially destructible), as the compiler's traits say; the compiled rows check
-        both. Numbers, enums, pointers and references are both. A record is destructible when its destructor is not its
-        own (implicit or defaulted), not virtual and not deleted, and every base and field is. It is copyable when it is
-        destructible too, has no vtable and no virtual base, no copy or move of its own (defaulted or deleted ones are
-        not its own) and keeps one of those it declares, and every base and field is copyable."""
+        """TY-10: (trivially copyable, trivially destructible, a copy or move constructor can be called, a copy or move
+        assignment can be called), as the compiler says; the compiled rows check them.
+        - Numbers, enums, pointers and references are all four (a reference or const field is the owner's business).
+        - Destructible: the destructor is not the record's own (implicit or defaulted), not virtual, not deleted, and
+          every base and field is destructible.
+        - Copyable (clang's rule): destructible, no vtable, no virtual base, no copy or move of its own (defaulted
+          and deleted ones are not its own), every base and field copyable. Deleted ones do not stop it.
+        - Callable copies: a declared one that is not deleted; else the implicit one, which a user-declared copy or
+          move deletes ([class.copy.ctor] 6, [class.copy.assign] 2), and which needs every base and field to have its
+          own (an assignment also no reference and no const field). libclang also lists a special member clang
+          declared implicitly (a unit used it), written where the class's name is: its deleted flag is clang's own
+          answer for that member, and an implicit move deletes nothing."""
         api = self.api
         t = api.canonical(t)
         while t.kind in (T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY):
             t = api.canonical(api.element(t))
         decl = api.declaration(t)
         if decl.kind not in RECORDS:
-            return True, True
+            return True, True, True, True
         key = self.text(api.typeSpelling(t))
         if key in self.trivial_memo:
             return self.trivial_memo[key]
-        self.trivial_memo[key] = (False, False)  # while it is worked out (a record cannot hold itself by value)
+        self.trivial_memo[key] = (False, False, False, False)  # while worked out (a record cannot hold itself by value)
         if api.sizeOf(t) < 0:
-            return False, False
+            return False, False, False, False
         copy, destroy = True, True
-        declared, kept = 0, 0
+        ctors, assigns, moves = [], [], 0  # declared copy and move constructors and assignments: deleted or not
+        copy_ctor, copy_assign = False, False
+        record_at = self.at(decl)
         for m in api.members(api.visitMethods, t):
             if m.kind == K_METHOD and api.virtualMethod(m):
                 copy = False
             if m.kind == I.K_DESTRUCTOR and (api.deleted(m) or api.virtualMethod(m) or not api.defaulted(m)):
                 destroy = False
-            copy_move = (m.kind == I.K_CONSTRUCTOR and (api.copyConstructor(m) or api.moveConstructor(m))) or \
-                (m.kind == K_METHOD and (api.copyAssignment(m) or api.moveAssignment(m)))
-            if copy_move:
-                declared += 1
-                kept += not api.deleted(m)
+            is_ctor = m.kind == I.K_CONSTRUCTOR and (api.copyConstructor(m) or api.moveConstructor(m))
+            is_assign = m.kind == K_METHOD and (api.copyAssignment(m) or api.moveAssignment(m))
+            if is_ctor or is_assign:
+                (ctors if is_ctor else assigns).append(not api.deleted(m))
                 if not api.defaulted(m) and not api.deleted(m):
                     copy = False
-        if declared and not kept:
-            copy = False  # every copy and move deleted: no way to copy it at all
+                implicit = self.at(m) == record_at
+                if not implicit and ((is_ctor and api.moveConstructor(m)) or (is_assign and api.moveAssignment(m))):
+                    moves += 1
+                copy_ctor = copy_ctor or (is_ctor and bool(api.copyConstructor(m)))
+                copy_assign = copy_assign or (is_assign and bool(api.copyAssignment(m)))
+        parts_construct, parts_assign = True, True
         for b in api.members(api.visitBases, t):
-            c, d = self.trivial(api.type(b))
+            c, d, pc, pa = self.trivial(api.type(b))
             copy = copy and c and not api.virtualBase(b)
             destroy = destroy and d
+            parts_construct, parts_assign = parts_construct and pc, parts_assign and pa
         for f in api.members(api.visitFields, t):
-            c, d = self.trivial(api.type(f))
+            ft = api.type(f)
+            c, d, pc, pa = self.trivial(ft)
             copy, destroy = copy and c, destroy and d
+            parts_construct, parts_assign = parts_construct and pc, parts_assign and pa
+            ft = api.canonical(ft)
+            while ft.kind in (T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY):
+                ft = api.canonical(api.element(ft))
+            if ft.kind in (T_LVALUE, T_RVALUE) or api.constType(ft):
+                parts_assign = False
         copy = copy and destroy
-        self.trivial_memo[key] = (copy, destroy)
-        return copy, destroy
+        can_construct = any(ctors) or (not copy_ctor and not moves and parts_construct)
+        can_assign = any(assigns) or (not copy_assign and not moves and parts_assign)
+        self.trivial_memo[key] = (copy, destroy, can_construct, can_assign)
+        return copy, destroy, can_construct, can_assign
 
     def fields(self, owner, owner_type, row, prefix, base_bits):
         """Fields of `owner`, named prefix + name; base_bits: where owner starts in the row's record. Read through the
@@ -568,8 +599,15 @@ class Reader:
                 count *= n
             bits = self.api.bitWidth(m) if self.api.isBitField(m) else None
             text = self.type_text(element if extents else ft)  # an array: its element's text (TY-3)
+            decl = self.api.declaration(self.api.canonical(element))
+            nested = decl.kind in RECORDS and self.api.anonymous(decl) and not extents
             if text is None:
+                # the member has no type a mod can write; a named member of an anonymous type still has its fields,
+                # as "outer.inner"
                 self.left.append(("field", row["name"] + "." + prefix + spelled, row["file"], row["line"], R_NO_TYPE_NAME))
+                if nested and bits is None:
+                    start = self.api.typeOffsetOf(owner_type, spelled.encode())
+                    self.fields(decl, self.api.type(decl), row, prefix + spelled + ".", base_bits + max(start, 0))
                 continue
             # clang_Type_getOffsetOf finds a field injected from an anonymous member too, in bits from owner_type's start
             at_bits = base_bits + self.api.typeOffsetOf(owner_type, spelled.encode())
@@ -585,25 +623,30 @@ class Reader:
             row["fields"].append(field)
             self.spelling_alias(element)
             self.want(element)
-            decl = self.api.declaration(self.api.canonical(element))
-            if decl.kind in RECORDS and self.api.anonymous(decl) and not extents:
+            if nested:
                 # a named member of an anonymous type: its fields as "outer.inner"
                 start = self.api.typeOffsetOf(owner_type, spelled.encode())
                 self.fields(decl, self.api.type(decl), row, prefix + spelled + ".", base_bits + max(start, 0))
 
     def want(self, t):
-        """A template instance, or a record nested in one, that a type names (by value, pointer, reference or array:
-        TY-9) is a row of its own; else it would be named by texts and described nowhere."""
+        """A template instance, or a record nested in one, that a type names (by value, pointer, reference or array,
+        as a function pointer's result or parameter, as a member pointer's class: TY-9) is a row of its own; else it
+        would be named by texts and described nowhere."""
         if self.unit_pass:
             # A template's instance is the header pass's row; one only a .cpp names is left out there by its name.
-            named = outer_name(self.type_text(t))
-            if named is not None and "<" in named:
-                self.named_instances.add(named)
+            self.named_instances.update(n for n in type_names(self.type_text(t) or "") if "<" in n)
             return
         self.member_alias(t)
         t = self.api.canonical(t)
         while t.kind in (T_POINTER, T_LVALUE, T_RVALUE, T_MEMBER_POINTER, T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY):
+            if t.kind == T_MEMBER_POINTER:
+                self.want(self.api.classType(t))
             t = self.api.canonical(self.api.element(t) if t.kind in (T_CONSTANT_ARRAY, T_INCOMPLETE_ARRAY) else self.api.pointee(t))
+        if t.kind in (I.T_FUNCTION_PROTO, I.T_FUNCTION_NO_PROTO):
+            self.want(self.api.resultType(t))
+            for i in range(max(self.api.numArgTypes(t), 0)):
+                self.want(self.api.argType(t, i))
+            return
         decl = self.api.declaration(t)
         if decl.kind in RECORDS and (not self.api.isNull(self.api.specialized(decl)) or self.in_instance(decl)):
             self.pending.append(decl)
@@ -818,6 +861,17 @@ class Reader:
                      '"TY-10: the generator says %s is %strivially copyable and %strivially destructible");') % (
                 "true" if r.get("trivial_copy") else "false", "true" if r.get("trivial_destroy") else "false", cstr(name),
                 "" if r.get("trivial_copy") else "not ", "" if r.get("trivial_destroy") else "not ")
+            # no_copy: whether any copy or move can be called. The table is built without access control, so its traits
+            # see every member and check both ways; a unit's rows and an in-class claim see public members only, so
+            # they check that a no_copy record has none.
+            callable_ = ("(__is_constructible(%s, const %s &) || __is_constructible(%s, %s &&) || "
+                         "__is_assignable(%s &, const %s &) || __is_assignable(%s &, %s &&))")
+            if r.get("no_copy"):
+                claim += ' static_assert(!%s, "TY-10: the generator says %s has no copy or move to call");' % (
+                    callable_, cstr(name))
+            elif not unit and not mine:
+                claim += ' static_assert(%s, "TY-10: the generator says %s has a copy or move to call");' % (
+                    callable_, cstr(name))
             if mine:
                 decls = []
                 if field_rows:
@@ -827,7 +881,7 @@ class Reader:
                     decls.append("static const luma::TypeBase lumaBases_[];")
                     after.append("const luma::TypeBase %s::lumaBases_[] = {%s};" % (name, ", ".join(base_rows)))
                 decls.append("static const luma::TypeRow lumaRow_;")
-                decls.append("static void lumaTrivial_() { %s }" % (claim % ("::" + name, "::" + name)))
+                decls.append("static void lumaTrivial_() { %s }" % (claim % (("::" + name,) * claim.count("%s"))))
                 after.append('LUMA_TYPE_SECTION const luma::TypeRow %s::lumaRow_ = {"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du};' % (
                     name, cstr(name), name, name, "lumaFields_" if field_rows else "nullptr", len(field_rows),
                     "lumaBases_" if base_rows else "nullptr", len(base_rows)))
@@ -841,7 +895,7 @@ class Reader:
             member("LUMA_TYPE_SECTION ", "TypeRow", "kT%d" % n, '{"%s", sizeof(::%s), alignof(::%s), %s, %du, %s, %du}' % (
                 cstr(name), name, name, "kF%d" % n if field_rows else "nullptr", len(field_rows),
                 "kB%d" % n if base_rows else "nullptr", len(base_rows)))
-            (held if unit else lines).append(claim % ("R%d" % n, "R%d" % n))
+            (held if unit else lines).append(claim % (("R%d" % n,) * claim.count("%s")))
             n += 1
         # Aliases and other spellings of a record (TY-2): kind 1 and kind 2 find the record through them. The header
         # pass's alone, the units' merged (merge_units): a row names its record by name, wherever its row is.
@@ -1009,16 +1063,17 @@ class Reader:
                                   "file": None, "line": None}
 
     def unnamed(self):
-        """TY-9's check: every type a text names (the outermost name, past pointers, references, arrays, cv and a
-        bit-field's width) is a row, a built-in or left out. Function types are the checker's own. Returns the texts
-        that are not, as (where, text, name)."""
+        """TY-9's check: every name a text holds outside template arguments (past pointers, references, arrays, cv
+        and a bit-field's width, in a function pointer's result and parameters, a member pointer's class) is a row, a
+        built-in word or left out. An instance is one name with its arguments. Returns the texts that are not, as
+        (where, text, name)."""
         known = set(self.records) | {e["name"] for e in self.enums.values() if e["name"]} | set(self.aliases)
         known |= {x[1] for x in self.left}
         out = []
         for where, text in self.texts():
-            name = outer_name(text)
-            if name is not None and name not in BUILTIN_NAMES and name not in known:
-                out.append((where, text, name))
+            for name in type_names(text or ""):
+                if name not in known:
+                    out.append((where, text, name))
         return out
 
     def outputs(self, lines):
@@ -1077,6 +1132,41 @@ def outer_name(text):
             out += ch
     words = [w for w in words if w and not w.isdigit() and w not in ("const", "volatile", "struct", "class", "union", "enum", "typename")]
     return " ".join(words) or None
+
+
+TYPE_WORDS = {"const", "volatile", "struct", "class", "union", "enum", "typename", "signed", "unsigned", "char", "short",
+              "int", "long", "float", "double", "bool", "void", "wchar_t", "char8_t", "char16_t", "char32_t", "__int128",
+              "std::nullptr_t"}
+NAME_START = re.compile(r"[A-Za-z_][\w:]*")
+
+
+def type_names(text):
+    """Every name a type text holds outside template arguments, built-in words left out; an instance is one name
+    with its arguments (`FxMid &(*)(FxBase *, FxBox<u16> &)` holds FxMid, FxBase and FxBox<u16>; `s32 Foo::*` holds
+    s32 and Foo)."""
+    out, i = [], 0
+    while i < len(text):
+        m = NAME_START.match(text, i)
+        if not m:
+            i += 1
+            continue
+        name, i = m.group(0), m.end()
+        # template arguments, and a member of an instance after them (`NebulaList<Foo>::Link`, `A<x>::B<y>::C`)
+        while i < len(text) and text[i] == "<":
+            depth, j = 0, i
+            while j < len(text):
+                depth += {"<": 1, ">": -1}.get(text[j], 0)
+                j += 1
+                if depth == 0:
+                    break
+            name, i = name + text[i:j], j
+            m = NAME_START.match(text, i + 2) if text.startswith("::", i) else None
+            if m:
+                name, i = name + "::" + m.group(0), m.end()
+        name = name.rstrip(":")
+        if name and name not in TYPE_WORDS:
+            out.append(name)
+    return out
 
 
 def cstr(s):

@@ -131,9 +131,6 @@ namespace Ui {
         Size() : width(0.0f), height(0.0f) {
         }
 
-        Size(const Size& rOther) : width(rOther.width), height(rOther.height) {
-        }
-
         Size(f32 aWidth, f32 aHeight) : width(aWidth), height(aHeight) {
         }
 

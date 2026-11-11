@@ -15,11 +15,6 @@ public:
 
     void initialize(s32, const TableIter&);
 
-    void operator=(const PlacementId& rhs) {
-        mId = rhs.mId;
-        mZoneID = rhs.mZoneID;
-    }
-
     inline bool operator==(const PlacementId& rOther) const {
         bool ret = false;
 
