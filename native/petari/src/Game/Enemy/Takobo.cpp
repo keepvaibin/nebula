@@ -112,8 +112,10 @@ void Takobo::init(const TableIter& rIter) {
 
     s32 moveSpeed = -1;
     MR::getPlacementArg2NoInit(rIter, &moveSpeed);
-    // Only a positive speed replaces the default: the sweep time below divides by it.
-    if (moveSpeed > 0) {
+    // Any placed speed counts, as the game had it: a placed 0 makes the sweep time below infinite, which is a
+    // placement's way of saying the enemy stands where it is (the Gateway planet's). Taking only positive speeds
+    // set those walking their default range, off their small platforms.
+    if (moveSpeed != -1) {
         mMoveSpeed = moveSpeed;
     }
 
