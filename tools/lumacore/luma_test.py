@@ -819,7 +819,9 @@ def run_one(test, renderer, args, run_folder, previous):
         raise HarnessError("language %s: not built yet (the language packs' setting, task 3.8)" % test["language"])
     bin_folder = pathlib.Path(args.bin).resolve()
     exe = bin_folder / EXES[renderer]
-    for need in (exe, bin_folder / "smg_game.dll", bin_folder / "nebula_test_extension.dll", bin_folder / "pak.path"):
+    # nebula_import.dll gives refusals their words; a run without it would prove only codes (run 17), so it is required.
+    for need in (exe, bin_folder / "smg_game.dll", bin_folder / "nebula_test_extension.dll", bin_folder / "pak.path",
+                 bin_folder / "nebula_import.dll"):
         if not need.is_file():
             raise HarnessError("the bin folder has no %s" % need.name)
     if run_folder.exists():
@@ -841,9 +843,8 @@ def run_one(test, renderer, args, run_folder, previous):
         shutil.copyfile(bin_folder / "nebula-import.exe", run_folder / "bin" / "nebula-import.exe")
     # The game loads the importer's library from its own folder (mod_plugins.cpp validate_message): a run without it
     # gets refusals as codes, so it is frozen with the rest.
-    if (bin_folder / "nebula_import.dll").is_file():
-        shutil.copyfile(bin_folder / "nebula_import.dll", run_folder / "bin" / "nebula_import.dll")
-        frozen["nebula_import.dll"] = sha256(run_folder / "bin" / "nebula_import.dll")
+    shutil.copyfile(bin_folder / "nebula_import.dll", run_folder / "bin" / "nebula_import.dll")
+    frozen["nebula_import.dll"] = sha256(run_folder / "bin" / "nebula_import.dll")
     mod_ids = []
     if not test["bare"]:
         frozen["luma-test.dll"] = sha256(bin_folder / "luma-test.dll")
@@ -985,6 +986,10 @@ def evaluate(test, renderer, run_folder, ran):
         add("the run ended at its end step", end_step["at"] is None or frame == end_step["at"], frame)
     add("no crash dump", not dumps, dumps)
     add("the game quit by itself with exit 0", ran.get("code") == 0, ran.get("code"))
+    # The game says this once when it cannot give a refusal in words (mod_plugins.cpp validate_message): the importer's
+    # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
+    coded = [line for line in log_lines if "refusals are given as codes" in line]
+    add("refusals are given in words", not coded, coded)
     for bad in by_key.get("harness.bad_fact", []):
         add("every fact is JSON", False, bad["value"])
     if not test["bare"]:
