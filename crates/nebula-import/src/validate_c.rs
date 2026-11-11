@@ -25,8 +25,6 @@ pub struct LumaGameStore {
     pub table: Option<
         unsafe extern "C" fn(context: *mut c_void, path: *const c_char, bytes: *mut *const u8, bytes_size: *mut u64, store_path: *mut *const c_char) -> u32,
     >,
-    /// Non-zero when a file at a path the game does not have may be new (a kind the game finds by name).
-    pub may_be_new: Option<unsafe extern "C" fn(context: *mut c_void, path: *const c_char) -> u32>,
     /// The names directly in the folder at `lower`, each through `sink`; how many, or -1 when the path is no folder.
     pub folder: Option<unsafe extern "C" fn(context: *mut c_void, lower: *const c_char, sink: LumaFolderSink, sink_context: *mut c_void) -> i32>,
 }
@@ -211,11 +209,9 @@ impl Store for CStore {
         // Read here, as LumaLink's pak store reads it: the game's store gives only its own tables.
         crate::store_view::view_of_bytes(path, bytes)
     }
+    // The kinds the game finds by name are this library's own list, as LumaLink's PakStore reads it (F INBOX-G 46).
     fn may_be_new(&self, path: &str) -> bool {
-        let store = unsafe { &*self.0 };
-        let Some(f) = store.may_be_new else { return false };
-        let path = c(path);
-        unsafe { f(store.context, path.as_ptr()) != 0 }
+        crate::store_view::may_be_new(path)
     }
     fn folder(&self, lower: &str) -> Option<Vec<(String, bool)>> {
         unsafe extern "C" fn sink(context: *mut c_void, name: *const c_char, is_folder: u32) {
@@ -293,8 +289,8 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
         if s.size as usize != std::mem::size_of::<LumaGameStore>() {
             return Err(format!("store: size is {}, sizeof(LumaGameStore) is {} (luma_validate.h of another revision)", s.size, std::mem::size_of::<LumaGameStore>()));
         }
-        if s.path.is_none() || s.table.is_none() || s.may_be_new.is_none() || s.folder.is_none() {
-            return Err("store: path, table, may_be_new and folder are each needed".to_string());
+        if s.path.is_none() || s.table.is_none() || s.folder.is_none() {
+            return Err("store: path, table and folder are each needed".to_string());
         }
     }
     let store = (!input.store.is_null()).then(|| CStore(input.store));

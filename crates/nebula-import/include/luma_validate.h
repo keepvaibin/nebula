@@ -22,7 +22,8 @@ extern "C" {
    `is_folder` non-zero when it is a folder. The name is read only during the call. */
 typedef void (*LumaFolderSink)(void* sink_context, const char* name, uint32_t is_folder);
 
-/* The player's game files (validator contract, revision 3): all four functions are given. Rust reads each table from
+/* The player's game files (validator contract, revision 3): all three functions are given (which files may be new is
+   the library's own list, as LumaLink's; F INBOX-G 46). Rust reads each table from
    its cooked bytes, so the game's check and LumaLink's build one view with one code (table-keys 11). */
 typedef struct LumaGameStore {
     uint32_t size; /* sizeof(LumaGameStore) */
@@ -34,8 +35,6 @@ typedef struct LumaGameStore {
        *bytes and *bytes_size, and its path in the store, in the game's case, in *store_path (null: `path` is it).
        Returns 0 when the file is no table. The bytes and the path are valid until the next call on this store. */
     uint32_t (*table)(void* context, const char* path, const uint8_t** bytes, uint64_t* bytes_size, const char** store_path);
-    /* Non-zero when a file at a path the game does not have may be new (a kind the game finds by name). */
-    uint32_t (*may_be_new)(void* context, const char* path);
     /* The names directly in the folder at `lower` (a lowercase path; "stagedata" lists the galaxies' folders, as the
        game's ScenarioDataParser does), each through `sink`, in any order; returns how many, or -1 when the path is no
        folder. */

@@ -209,6 +209,8 @@ pub struct Installed {
     pub file: String,
     /// The ids it declares conflicts with.
     pub conflicts: Vec<String>,
+    /// The ids its `needs` names, for a cycle of needs through the checked mod (L800).
+    pub needs: Vec<String>,
     /// What it changes, from its own report (`Report::touches`), for the overlap Notes L305 and L404.
     pub touches: Touches,
 }
@@ -554,6 +556,12 @@ fn fill_by(template: &str, look: &dyn Fn(&str) -> Option<Val>, lang: usize, dept
             None => None,
         };
         match value {
+            // An empty value takes the space before it with it ("{other} {expected}: ..." with no version range).
+            Some(v) if v.is_empty() => {
+                if out.ends_with(' ') {
+                    out.pop();
+                }
+            }
             Some(v) => out.push_str(&v),
             None => {
                 out.push('{');
