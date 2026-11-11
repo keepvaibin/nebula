@@ -139,6 +139,10 @@ pub struct Record {
     /// It has a vtable.
     pub polymorphic: bool,
     pub is_abstract: bool,
+    /// Trivially copyable (types TY-10): a bit copy is the C++ copy.
+    pub trivial_copy: bool,
+    /// Trivially destructible (TY-10): dropping one frees nothing.
+    pub trivial_destroy: bool,
     /// In declaration order.
     pub bases: Vec<Base>,
     /// Its own fields in declaration order.
@@ -286,6 +290,8 @@ impl Types {
                         align: number(row, "align", &at)?,
                         polymorphic: flag(row, "polymorphic", &at)?,
                         is_abstract: flag(row, "abstract", &at)?,
+                        trivial_copy: flag(row, "trivial_copy", &at)?,
+                        trivial_destroy: flag(row, "trivial_destroy", &at)?,
                         ..Record::default()
                     };
                     for (k, b) in items(row, "bases", &at)?.iter().enumerate() {
