@@ -82,6 +82,28 @@ typedef struct NebulaFrameWorldLight {
     float reserved;
 } NebulaFrameWorldLight;
 
+/* A clip area's volume this frame (Matter Splatter, the dark rooms: ClipArea::draw). The map parts the game draws as
+   NEBULA_CATEGORY_CLIPPED_MAP_PARTS are drawn whole and painted over where the list's clip_rule says: what shows of
+   them is their points inside some volume (NEBULA_CLIP_RULE_INSIDE) or outside every one (NEBULA_CLIP_RULE_OUTSIDE).
+   `place`: the world from the volume's own space (rows of a 3x4 matrix), where it is the unit shape `shape`. */
+enum {
+    NEBULA_CLIP_SPHERE,    /* |p| < 1 */
+    NEBULA_CLIP_BOX,       /* |x|, |y|, |z| <= 1 */
+    NEBULA_CLIP_BOX_UP,    /* |x|, |z| <= 1, 0 <= y <= 2: the box standing on its origin */
+    NEBULA_CLIP_CONE_UP,   /* 0 <= y <= 1, x^2 + z^2 < y^2: the tip at the origin */
+    NEBULA_CLIP_CONE_DOWN, /* 0 <= y <= 1, x^2 + z^2 < (1 - y)^2: the tip at y 1 */
+};
+enum {
+    NEBULA_CLIP_RULE_NONE,    /* no clip areas paint this frame: the clipped map parts show whole */
+    NEBULA_CLIP_RULE_INSIDE,  /* they show inside the volumes */
+    NEBULA_CLIP_RULE_OUTSIDE, /* they show outside every volume */
+};
+typedef struct NebulaFrameClipVolume {
+    float place[3][4];
+    uint32_t shape; /* NEBULA_CLIP_* */
+    uint32_t reserved[3];
+} NebulaFrameClipVolume;
+
 /* Whose lights a light set holds, one per set (list->light_set_owners, in the sets' order). `actor_light`: the world
    lights `actor_light` (the key, the set's light 0) and `actor_light + 1` (the fill, its light 1); 0 when the set's
    lights are no light of the world (every light white at the eye). `point_light`: the id of the world light that is
@@ -302,6 +324,8 @@ typedef enum NebulaPassKind {
     NEBULA_PASS_PROBE,       /* depth at `probes`, in `probe_channel`; `arg0` NEBULA_PROBE_* */
     NEBULA_PASS_SHOW,        /* the frame drawn so far is the picture this frame shows */
     NEBULA_PASS_SCENE_BEGIN, /* the 3D scene starts: `scene_camera`, `scene_view` */
+    NEBULA_PASS_TRACED_DRAW, /* items in the ray tracer's scene alone, as things that stop light: never drawn (a body the
+                                game hides from its own camera, which still casts: first-person view) */
 } NebulaPassKind;
 
 /* A probe pass's `arg0`. */
@@ -390,6 +414,9 @@ typedef struct NebulaFrameList {
     float sky_up[3];           /* the player's up, unit length, in eye space of the scene's view */
     uint32_t sky_up_known;
     uint32_t game_frame;       /* set by the host: the game frame that made the list */
+    const NebulaFrameClipVolume* clip_volumes; /* the clip areas' volumes this frame, clip_volume_count of them */
+    uint32_t clip_volume_count;
+    uint32_t clip_rule;        /* NEBULA_CLIP_RULE_*: where the clipped map parts show */
     /* Set by the renderer when it no longer reads this list. */
     volatile uint32_t released;
     uint32_t reserved;

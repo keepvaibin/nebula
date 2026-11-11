@@ -143,7 +143,8 @@ bool rt_closest(float3 origin, float3 direction, float reach, uint mask, out uin
     query.TraceRayInline(g_scene, (mask & kMaskCutout) != 0u ? RAY_FLAG_NONE : RAY_FLAG_FORCE_OPAQUE, mask, ray);
     while (query.Proceed()) {
         if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
-            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
+                         ray.Origin + ray.Direction * query.CandidateTriangleRayT())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }

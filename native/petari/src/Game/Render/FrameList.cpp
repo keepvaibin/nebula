@@ -240,6 +240,8 @@ namespace {
         Grown< NebulaFrameWorldLight > mWorldLights;
         Grown< NebulaFrameShadowDrop > mShadowDrops;
         Grown< NebulaFramePointLight > mPointLights;
+        Grown< NebulaFrameClipVolume > mClipVolumes;
+        u32 mClipRule;
         Grown< u32 > mCategories;  // pairs: the first item of a run of draws, and the category they are drawn as
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
@@ -256,6 +258,7 @@ namespace {
     Store* sCurrent;
     u32 sNumber;
     s32 sOpenDraw = -1;
+    bool sTracedOnly = false;  // Frame::tracedOnly: new draws open NEBULA_PASS_TRACED_DRAW passes
 
     bool sPixelLit;
 
@@ -329,6 +332,8 @@ namespace {
         pStore->mWorldLights.mCount = 0;
         pStore->mShadowDrops.mCount = 0;
         pStore->mPointLights.mCount = 0;
+        pStore->mClipVolumes.mCount = 0;
+        pStore->mClipRule = NEBULA_CLIP_RULE_NONE;
         pStore->mCategories.mCount = 0;
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
@@ -364,6 +369,7 @@ namespace {
         resetStore(pFree);
         sCurrent = pFree;
         sOpenDraw = -1;
+        sTracedOnly = false;
         sViewDirty = true;
         sLightsDirty = true;
         sLightSet = NEBULA_NONE32;
@@ -480,6 +486,9 @@ namespace Frame {
         rList.shadow_drop_count = pStore->mShadowDrops.mCount;
         rList.point_lights = pStore->mPointLights.mData;
         rList.point_light_count = pStore->mPointLights.mCount;
+        rList.clip_volumes = pStore->mClipVolumes.mData;
+        rList.clip_volume_count = pStore->mClipVolumes.mCount;
+        rList.clip_rule = pStore->mClipRule;
         // Each item's category, by the runs the draws were made in: a draw writes its item's flags whole when it is
         // made, so they are set now.
         for (u32 run = 0; run + 1 < pStore->mCategories.mCount; run += 2) {
@@ -560,7 +569,7 @@ namespace Frame {
     NebulaFrameItem& addItem() {
         Store* pStore = store();
         if (sOpenDraw < 0) {
-            NebulaFramePass& rPass = addPass(NEBULA_PASS_DRAW);
+            NebulaFramePass& rPass = addPass(sTracedOnly ? NEBULA_PASS_TRACED_DRAW : NEBULA_PASS_DRAW);
             rPass.first_item = pStore->mItems.mCount;
             sOpenDraw = static_cast< s32 >(pStore->mPasses.mCount - 1);
         }
@@ -802,6 +811,16 @@ namespace Frame {
         Grown< NebulaFramePointLight >& rLights = store()->mPointLights;
         rLights.add();
         rLights.mData[rLights.mCount - 1] = rLight;
+    }
+
+    void clipVolume(const NebulaFrameClipVolume& rVolume) {
+        Grown< NebulaFrameClipVolume >& rVolumes = store()->mClipVolumes;
+        rVolumes.add();
+        rVolumes.mData[rVolumes.mCount - 1] = rVolume;
+    }
+
+    void clipRule(u32 rule) {
+        store()->mClipRule = rule;
     }
 
     void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient) {
@@ -1285,6 +1304,13 @@ namespace Frame {
         sPhase = phase;
         sOpenDraw = -1;
         setObject(0, 0);
+    }
+
+    void tracedOnly(bool on) {
+        if (sTracedOnly != on) {
+            sTracedOnly = on;
+            sOpenDraw = -1;  // the next draw opens a pass of the other kind
+        }
     }
 
     void category(u8 category) {

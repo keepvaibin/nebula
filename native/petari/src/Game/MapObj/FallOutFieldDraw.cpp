@@ -102,6 +102,8 @@ void FallOutFieldDraw::draw() const {
     // What the field fills, by the volumes' stencil (arg 0: inside them, else outside), marked in the depth with the
     // nearest value there is, which nothing in the map reaches. The fill below writes the depth again.
     const u8 filled = mFillInsideVolume ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO;
+    // What shows of the clipped map parts is what the fill leaves: the ray tracer takes them there alone.
+    Frame::clipRule(mFillInsideVolume ? NEBULA_CLIP_RULE_OUTSIDE : NEBULA_CLIP_RULE_INSIDE);
     Frame::setZScaleOffset(0.0f, 0.0f);
     ImageEffectLocalUtil::drawQuad(flatMaterial(::sFillColor, false, filled));
 

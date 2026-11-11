@@ -319,7 +319,9 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
     for (std::uint32_t p = first; p < list.pass_count && list.passes[p].kind != NEBULA_PASS_SCENE_END; ++p) {
         const NebulaFramePass& pass = list.passes[p];
         early = early && pass.kind != NEBULA_PASS_OPAQUE_END;
-        if (pass.kind != NEBULA_PASS_DRAW || pass.layer != NEBULA_LAYER_SCENE || pass.target != 0u) {
+        // A traced pass (NEBULA_PASS_TRACED_DRAW): things the game draws for the tracer alone, which stop its light.
+        const bool traced_only = pass.kind == NEBULA_PASS_TRACED_DRAW;
+        if ((pass.kind != NEBULA_PASS_DRAW && !traced_only) || pass.layer != NEBULA_LAYER_SCENE || pass.target != 0u) {
             continue;
         }
         for (std::uint32_t i = pass.first_item; i < pass.first_item + pass.item_count; ++i) {
@@ -353,14 +355,23 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                                     : cull == NEBULA_CULL_FRONT ? rt::Faces::Back
                                                                 : rt::Faces::Both;
             // A pixel program that can discard has a per-sample form (compile_programs.py): an alpha-tested surface.
-            const std::uint32_t kind = !sky && program_variant(pipeline.desc.pixel, 0u, 1u) == kProgramSample ? rt::kKindCutout : 0u;
+            // A map part the game shows by its clip areas alone (Matter Splatter, plan 26 M10: drawn whole, painted
+            // over where not revealed) stands where a ray meets it inside them only: a cutout the volumes test (g_clip).
+            const bool clipped = list.clip_rule != NEBULA_CLIP_RULE_NONE && item_category(item) == NEBULA_CATEGORY_CLIPPED_MAP_PARTS;
+            // (kKindClipped: no micromap may settle its hits, the volumes move each frame.)
+            const std::uint32_t kind =
+                (!sky && (clipped || program_variant(pipeline.desc.pixel, 0u, 1u) == kProgramSample) ? rt::kKindCutout : 0u) |
+                (!sky && clipped ? rt::kKindClipped : 0u);
+            const bool lit_program = program_lit(pipeline.desc.pixel) || program_sums_key(pipeline.desc.pixel);
             const std::uint32_t mask =
                 sky ? rt::kMaskSky
+                // Seen by no view, mirror or probe; the sun's and the sky's rays stop at it.
+                : traced_only ? (kind != 0u ? rt::kMaskCutout : rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u))
                 : depth_write && (state & 3u) == 0u
                     // What stops light is a surface of the scene's opaque phases; an opaque draw made after them (a
                     // fill, a silhouette, a helper shape) is seen by the views and casts nothing.
                     ? rt::kMaskOpaque | (early ? rt::kMaskEarly : 0u) |
-                          (kind == 0u && early ? rt::kMaskSolid | (program_lit(pipeline.desc.pixel) || program_sums_key(pipeline.desc.pixel) ? rt::kMaskLit : 0u) : 0u) |
+                          (kind == 0u && early ? rt::kMaskSolid | (lit_program ? rt::kMaskLit : 0u) : 0u) |
                           (kind != 0u && early ? rt::kMaskCutout : 0u)
                     : rt::kMaskBlended;
             if ((item.flags & (NEBULA_ITEM_INSTANCES | NEBULA_ITEM_PARTICLE | NEBULA_ITEM_WIDE)) != 0u) {
@@ -1120,6 +1131,7 @@ struct RtFrameConstants {
     float ray_before[4];        // the frame before's eye ray terms
     float before[3][4];         // the frame before's eye space from this frame's
     std::uint32_t kept[4];      // the reservoirs' way from the frame before's emitters to this frame's
+    std::uint32_t clip[4];      // the clip areas' volumes: first byte in the items' buffer, how many, the rule
 };
 // A pass's own (rt_frame.hlsli PassConstants): b1.
 struct RtPassConstants {
@@ -1499,7 +1511,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     std::map<std::uint64_t, std::uint32_t> left_out;
     for (std::uint32_t p = rt_scene_pass_ + 1u; p < list.pass_count && list.passes[p].kind != NEBULA_PASS_SCENE_END; ++p) {
         const NebulaFramePass& pass = list.passes[p];
-        if (pass.kind != NEBULA_PASS_DRAW || pass.layer != NEBULA_LAYER_SCENE) {
+        if ((pass.kind != NEBULA_PASS_DRAW && pass.kind != NEBULA_PASS_TRACED_DRAW) || pass.layer != NEBULA_LAYER_SCENE) {
             continue;
         }
         for (std::uint32_t i = pass.first_item; i < pass.first_item + pass.item_count; ++i) {
@@ -1527,9 +1539,13 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
                 const bool thin = (pipeline.desc.state >> 15u & 3u) == NEBULA_CULL_NONE;  // drawn from both sides: a sheet
                 // 32: a glowing surface too large to be one light (kItemEmissiveArea, rt_emitter, L-3).
                 const bool area = i < rt_emissive_areas_.size() && rt_emissive_areas_[i] != 0u;
+                // 64: a map part its clip areas show (kItemClipped, cutout_there asks the volumes).
+                const bool clipped =
+                    list.clip_rule != NEBULA_CLIP_RULE_NONE && item_category(item) == NEBULA_CATEGORY_CLIPPED_MAP_PARTS;
                 rt_item_words_[i * kItemWords + 1u] = (program_sums_key(pipeline.desc.pixel) ? 1u : 0u) |
                                                       (pass.phase != kPhaseNoShadow ? 2u : 0u) | 4u | (thin ? 8u : 0u) |
-                                                      (area ? 32u : 0u) | (lamp ? (item.light_set + 1u) << 8u : 0u);
+                                                      (area ? 32u : 0u) | (clipped ? 64u : 0u) |
+                                                      (lamp ? (item.light_set + 1u) << 8u : 0u);
             }
             // Its mesh, for a pixel of it and for a ray that meets it.
             if ((item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) != 0u) {
@@ -1690,11 +1706,39 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     const std::size_t drop_bytes = was_at + std::max<std::size_t>(rt_emitters_.size(), 1u) * 4u * sizeof(float);
     const std::size_t drop_tile_words = rt_tiles_.size() + rt_tile_entries_.size();
     const std::size_t tile_words = drop_tile_words + rt_glow_tiles_.size() + rt_glow_entries_.size();
-    const UploadRing::Allocation items_at = ring.allocate(item_bytes, 256u);
+    // The clip areas' volumes (plan 26 M10), after the items: each the rows from the eye to its unit shape, then the
+    // shape (16 words).
+    constexpr std::uint32_t kClipVolumes = 128u;
+    std::uint32_t clip_words[kClipVolumes * 16u];
+    std::uint32_t clip_count = 0u;
+    for (std::uint32_t v = 0; list.clip_rule != NEBULA_CLIP_RULE_NONE && list.clip_volumes != nullptr && v < list.clip_volume_count &&
+                              clip_count < kClipVolumes;
+         ++v) {
+        const NebulaFrameClipVolume& volume = list.clip_volumes[v];
+        Affine34 place{};
+        std::memcpy(place.data(), volume.place, sizeof(volume.place));
+        // From the eye's space (the rays') by the scene camera itself: `world_from_now` is filled with history only.
+        Affine34 unit_from_eye{};
+        if (!affine_inverse(affine_multiply(walk_cameras_[rt_scene_camera_], place), unit_from_eye)) {
+            continue;
+        }
+        std::memcpy(clip_words + clip_count * 16u, unit_from_eye.data(), 12u * sizeof(float));
+        clip_words[clip_count * 16u + 12u] = volume.shape;
+        clip_words[clip_count * 16u + 13u] = clip_words[clip_count * 16u + 14u] = clip_words[clip_count * 16u + 15u] = 0u;
+        ++clip_count;
+    }
+    const std::size_t clip_bytes = std::size_t{clip_count} * 16u * sizeof(std::uint32_t);
+    const UploadRing::Allocation items_at = ring.allocate(item_bytes + clip_bytes, 256u);
     const UploadRing::Allocation sets_at = ring.allocate(set_bytes, 256u);
     const UploadRing::Allocation drops_at = ring.allocate(drop_bytes, 256u);
     const UploadRing::Allocation tiles_at = ring.allocate(tile_words * sizeof(std::uint32_t), 256u);
     std::memcpy(items_at.cpu, rt_item_words_.data(), item_bytes);
+    if (clip_count != 0u) {
+        std::memcpy(items_at.cpu + item_bytes, clip_words, clip_bytes);
+    }
+    constants.clip[0] = static_cast<std::uint32_t>(item_bytes);
+    constants.clip[1] = clip_count;
+    constants.clip[2] = list.clip_rule;
     std::memcpy(sets_at.cpu, rt_set_words_.data(), set_bytes);
     std::memset(drops_at.cpu, 0, drop_bytes);
     if (!rt_drops_.empty()) {
@@ -1750,7 +1794,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     std::memcpy(constants.depth, frame.depth, sizeof(constants.depth));
     std::memcpy(constants.viewport, frame.viewport, sizeof(constants.viewport));
     rt::PassBinds& binds = frame.binds;
-    binds.buffers[0] = rt_backend_.view_of(items_at.gpu, item_bytes, constants.at[0]);
+    binds.buffers[0] = rt_backend_.view_of(items_at.gpu, item_bytes + clip_bytes, constants.at[0]);
     binds.buffers[1] = rt_backend_.view_of(sets_at.gpu, set_bytes, constants.at[1]);
     binds.buffers[2] = rt_backend_.view_of(drops_at.gpu, drop_bytes, constants.at[2]);
     binds.buffers[3] = rt_backend_.view_of(tiles_at.gpu, tile_words * sizeof(std::uint32_t), constants.at[3]);

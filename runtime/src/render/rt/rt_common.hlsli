@@ -176,17 +176,50 @@ float alpha_there(uint item, uint triangle_, float2 where_) {
     return g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate, 0.0f).a;
 }
 
+// Whether the clip areas show a clipped map part's point `at` (the eye's space; plan 26 M10): the game draws the
+// part whole and paints it over where its volumes say (FallOutFieldDraw), so what shows is its points inside some
+// volume (g_clip.z 1) or outside every one (2). The volumes' unit shapes: nebula_frame_list.h NEBULA_CLIP_*.
+bool clip_shows(float3 at) {
+    const float4 p = float4(at, 1.0f);
+    bool inside = false;
+    for (uint v = 0u; v < g_clip.y && !inside; ++v) {
+        const uint base = g_at.x + g_clip.x + v * 64u;
+        const float3 u = float3(dot(asfloat(g_items.Load4(base)), p), dot(asfloat(g_items.Load4(base + 16u)), p),
+                                dot(asfloat(g_items.Load4(base + 32u)), p));
+        const uint shape = g_items.Load(base + 48u);
+        if (shape == 0u) {
+            inside = dot(u, u) < 1.0f;
+        } else if (shape == 1u) {
+            inside = all(abs(u) <= 1.0f);
+        } else if (shape == 2u) {
+            inside = abs(u.x) <= 1.0f && abs(u.z) <= 1.0f && u.y >= 0.0f && u.y <= 2.0f;
+        } else {
+            const float rate = shape == 3u ? u.y : 1.0f - u.y;
+            inside = u.y >= 0.0f && u.y <= 1.0f && u.x * u.x + u.z * u.z < rate * rate;
+        }
+    }
+    return g_clip.z == 2u ? !inside : inside;
+}
+
 // Whether an alpha-tested surface is there where a ray meets it: item `item`'s triangle `triangle_`, at `where_`
-// among its corners (the second and third's weights). Its first map's alpha at the vertices' first coordinates,
-// against the material's threshold: what the cutout of a leaf, a fence or a flower is drawn by. Where the item gives
-// no mesh or no map (a skinned or frame-made mesh), it is not there: a sheet whose holes the pass cannot read casts
-// no shadow rather than a solid one (counted).
-bool cutout_there(uint item, uint triangle_, float2 where_) {
+// among its corners (the second and third's weights), `at_eye` the place met. Its first map's alpha at the vertices'
+// first coordinates, against the material's threshold: what the cutout of a leaf, a fence or a flower is drawn by.
+// Where the item gives no mesh or no map (a skinned or frame-made mesh), it is not there: a sheet whose holes the
+// pass cannot read casts no shadow rather than a solid one (counted). A clipped map part (kItemClipped) is there
+// where its clip areas show it (and its map, if it has one, says so).
+bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
     const uint2 map = g_items.Load2(at + 32u);
     const uint arena = first.z;
+    const bool clipped = (first.y & kItemClipped) != 0u;
+    if (clipped && !clip_shows(at_eye)) {
+        return false;
+    }
     if (arena >= 8u || map.x == 0xFFFFFFFFu) {
+        if (clipped) {
+            return true;
+        }
         InterlockedAdd(g_counters[22], 1u);
         return false;
     }
@@ -216,7 +249,8 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
     query.TraceRayInline(g_scene, flags, mask, ray);
     while (query.Proceed()) {
         if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
-            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
+                         ray.Origin + ray.Direction * query.CandidateTriangleRayT())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }

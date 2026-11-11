@@ -29,6 +29,7 @@ static const uint kMaskCutout = 32u;
 static const uint kMaskSky = 64u;
 // What an instance is (rt_scene.h), read back at a hit: CommittedInstanceContributionToHitGroupIndex.
 static const uint kKindCutout = 1u;
+static const uint kKindClipped = 2u;  // a map part its clip areas show (rt_scene.h)
 
 // The scene camera as a pass reads it (RtView, the occlusion's constants): `ray` gives a pixel's eye ray at distance 1
 // (x = px * ray.x + ray.y, y = py * ray.z + ray.w, z = -1), `depth` turns the depth target's value into eye z

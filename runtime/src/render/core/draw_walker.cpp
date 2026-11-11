@@ -91,7 +91,7 @@ void RenderCore::scan_list(ListData& now) {
     }
     for (std::uint32_t p = 0; p < list.pass_count; ++p) {
         const NebulaFramePass& pass = list.passes[p];
-        if (pass.kind != NEBULA_PASS_DRAW) {
+        if (pass.kind != NEBULA_PASS_DRAW && pass.kind != NEBULA_PASS_TRACED_DRAW) {
             continue;
         }
         for (std::uint32_t i = pass.first_item; i < pass.first_item + pass.item_count; ++i) {
@@ -1500,6 +1500,7 @@ void RenderCore::plan_early_probes(ListData& now) {
     const auto keeps_depth = [&](const NebulaFramePass& pass) {
         switch (pass.kind) {
         case NEBULA_PASS_PROBE:
+        case NEBULA_PASS_TRACED_DRAW:  // draws nothing
             return true;
         case NEBULA_PASS_CLEAR:
             return pass.layer == NEBULA_LAYER_TARGET || (pass.clear_channels & 4u) == 0u;
@@ -1581,7 +1582,7 @@ void RenderCore::plan_late_depth_clears(ListData& now) {
                 break;  // the whole depth again
             } else if (pass.kind == NEBULA_PASS_DRAW) {
                 late = leaves_depth(pass);
-            } else if (pass.kind != NEBULA_PASS_CLEAR && pass.kind != NEBULA_PASS_SHOW) {
+            } else if (pass.kind != NEBULA_PASS_CLEAR && pass.kind != NEBULA_PASS_SHOW && pass.kind != NEBULA_PASS_TRACED_DRAW) {
                 late = false;
             }
         }
@@ -1642,6 +1643,9 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
     const NebulaFrameList& list = *now.list;
     {
         const NebulaFramePass& pass = list.passes[p];
+        if (pass.kind == NEBULA_PASS_TRACED_DRAW) {
+            return;  // the tracer's alone (rt_walk.cpp): nothing drawn, no target closed
+        }
         if (target_open_ && (pass.layer != NEBULA_LAYER_TARGET || (pass.kind == NEBULA_PASS_DRAW && pass.load != 0u))) {
             walk_target_end(target_channels);
         }

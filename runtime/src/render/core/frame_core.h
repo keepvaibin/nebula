@@ -91,6 +91,12 @@ struct GpuMesh {
     std::uint16_t glow_row = 0xFFFFu;
     std::uint16_t glow_row_count = 0u;
     float glow_cooked[3]{};
+    // Map 0's coordinate (plan 13.3, the water's ripple): the first of its two rows (u, v) among the material's own
+    // form's rows (vertex rows first; 0xFFFF none: no stage samples map 0 through a coordinate made from a uv set by a
+    // matrix), the uv set it reads, and that form's row count (a draw's rows are the form's where they agree).
+    std::uint16_t map0_row = 0xFFFFu;
+    std::uint16_t map0_form_rows = 0u;
+    std::uint8_t map0_uv = 0u;
     float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
     float min[3]{}, max[3]{};
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
@@ -142,6 +148,9 @@ struct TextureTable {
 
 struct StaticSlot {
     gpu::Address vertex_rows = 0u, pixel_rows = 0u;
+    // A registered material's rows as registered (vertex rows, then pixel rows): the registries' copy, kept for their
+    // life. Null for a frame's own constants (their rows are the list's).
+    const float* cpu = nullptr;
 };
 
 struct PipelineEntry {

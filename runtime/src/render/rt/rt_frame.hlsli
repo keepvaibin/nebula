@@ -41,6 +41,9 @@ cbuffer FrameConstants : register(b0) {
                            // that frame's eye space, reach; reach 0: it was not there); y: how many the frame before had;
                            // z 1: there is a frame before to read (the filters' history and the reservoirs'); w the
                            // histories' length factor (a float: rt_history_scale)
+    uint4 g_clip;          // the clip areas' volumes (plan 26 M10, clip_shows): x their first byte in the items' buffer
+                           // (after the items; 64 each: the rows from the eye to the unit shape, then the shape), y how
+                           // many, z where the clipped map parts show: 1 inside a volume, 2 outside every one, 0 whole
 };
 
 cbuffer PassConstants : register(b1) {
@@ -55,6 +58,8 @@ cbuffer PassConstants : register(b1) {
 // (shown as it is); bits 8 up its light set from 1.
 static const uint kItemBytes = 80u;  // rt_walk.cpp kRtItemWords
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
+// Bit 6: a map part its clip areas show (g_clip): a ray meets it where it shows alone.
+static const uint kItemClipped = 64u;
 // Material classes (nebula_model.h NEBULA_HIT_*).
 static const uint kClassGloss = 1u, kClassMetal = 2u, kClassGlass = 3u, kClassEmissive = 6u, kClassTranslucent = 8u,
                   kClassWater = 9u;

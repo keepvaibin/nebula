@@ -80,7 +80,8 @@ float3 seen_along(float3 origin, float3 direction, float wide, float widens) {
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, kMaskSolid | kMaskCutout | kMaskSky, ray);
     while (query.Proceed()) {
         if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
-            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
+                         ray.Origin + ray.Direction * query.CandidateTriangleRayT())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }

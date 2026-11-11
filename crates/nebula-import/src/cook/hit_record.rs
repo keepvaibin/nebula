@@ -523,6 +523,13 @@ fn alpha_test_always(m: &MaterialIr) -> bool {
 }
 
 /// The class and numbers the signals give (the design's 2b.3, the rules that need the material alone).
+/// Whether a material's name says it is falling water: "fall" (FallMat, DxFallMat, ExFallMatSplash ...) or "taki"
+/// (waterfall) at its start; not OtaKing.
+fn falling_water(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    name.contains("fall") || name.starts_with("taki")
+}
+
 pub fn read(m: &MaterialIr) -> Reading {
     let s = signals(m);
     let full = [s.unlit[0] + s.lit_gain[0], s.unlit[1] + s.lit_gain[1], s.unlit[2] + s.lit_gain[2]];
@@ -557,6 +564,12 @@ pub fn read(m: &MaterialIr) -> Reading {
         r.class = Class::Emissive;
         r.emission = s.unlit.map(|v| (v * 2.0).min(4.0));
         r.rule = "added to what is behind it";
+    } else if s.blend != 0 && (s.environment || s.warp) && falling_water(&m.name) {
+        // A waterfall's sheet is drawn as glass is (warped or reflecting, blended), but its colour is the white water
+        // (RT-MASTER-PLAN 13.3: translucent, lit; not glass, whose colour gives way to what is behind it).
+        r.class = Class::Translucent;
+        r.transmission = 0.5;
+        r.rule = "falling water (named so), blended";
     } else if s.blend != 0 && (s.environment || s.warp) {
         r.class = Class::Glass;
         r.roughness = 0.02;
@@ -971,6 +984,16 @@ mod tests {
         let mut dark = painted();
         dark.material_color = [[0, 0, 0, 255]; 2];
         assert_eq!(glow_source(&dark), 0, "nothing shown: no source");
+    }
+
+    #[test]
+    fn falling_water_is_named_so() {
+        for name in ["FallMat_v_x", "A_FallMat_v_x", "zz_FallMat_v_x", "DxFallMat_v_x", "HxCupFallMat_v_x", "ExFallMatSplash_v_x", "taki_v_x"] {
+            assert!(falling_water(name), "{name}");
+        }
+        for name in ["glass_v_x", "OtaKingLow_a_v", "crystal_v", "WaterMat_v_x"] {
+            assert!(!falling_water(name), "{name}");
+        }
     }
 
     #[test]

@@ -41,6 +41,10 @@ kinokooneup	0.45 1.0 0.45	60
 ticoshopgoodsoneup	0.45 1.0 0.45	60
 kinokolifeup	1.0 0.45 0.45	60
 ticoshopgoodslifeup	1.0 0.45 0.45	60
+invinciblemario	own	250
+invincibleluigi	own	250
+invinciblemariohandl	own	40
+invinciblemariohandr	own	40
 kinopiogoodslight	1.0 0.95 0.80	400
 astrocore	1.0 0.80 0.50	30000
 fireball	1.0 0.50 0.15	500

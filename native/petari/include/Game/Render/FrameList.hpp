@@ -112,6 +112,10 @@ namespace Frame {
     void shadowDrop(const NebulaFrameShadowDrop& rDrop);
     // A point light an actor asks for this frame (NebulaFramePointLight), into this frame's list.
     void pointLight(const NebulaFramePointLight& rLight);
+    // A clip area's volume as drawn this frame (NebulaFrameClipVolume), and the rule the parts it clips show by
+    // (NEBULA_CLIP_RULE_*), into this frame's list: the ray tracer takes those parts where they show alone.
+    void clipVolume(const NebulaFrameClipVolume& rVolume);
+    void clipRule(u32 rule);
 
     // A state word with what the pass decides: its alpha and its stencil.
     u32 finishState(u32 state);
@@ -175,6 +179,9 @@ namespace Frame {
     void phase(u8 phase);
     // The draws from here on are of this category (NEBULA_CATEGORY_*; 0 none): what the game draws them as.
     void category(u8 category);
+    // The draws from here on (until tracedOnly(false)) are the ray tracer's alone: things that stop its light, never
+    // drawn (NEBULA_PASS_TRACED_DRAW). Only while ray tracing is on.
+    void tracedOnly(bool on);
     void bloom(u32 kind, u32 arg0, u32 arg1);
     void cameraCut(u32 cuts);
 }  // namespace Frame

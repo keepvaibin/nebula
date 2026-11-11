@@ -2,6 +2,7 @@
 #include "render/core/pipelines.h"
 
 #include "render/core/pipeline_cache_file.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
@@ -113,8 +114,8 @@ std::vector<bool> input_locations(const ProgramBytes& program) {
     return reads;
 }
 
-// The prepass's pixel module with an unread input at each location the vertex module writes and it declares none of
-// (defect D10): a 32-bit float or integer scalar or vector as the output is, integers flat, listed in the fragment entry
+// A tracer pipeline's pixel module with an unread input at each location the vertex module writes and it declares
+// none of (defect D10): a 32-bit float or integer scalar or vector as the output is, integers flat, listed in the fragment entry
 // point. Empty when nothing is missing or a module is not as expected (the pipeline then takes the module as it is).
 std::vector<std::uint32_t> with_unread_inputs(const ProgramBytes& pixel, const ProgramBytes& vertex) {
     constexpr std::uint32_t kOpEntryPoint = 15u, kOpTypeInt = 21u, kOpTypeFloat = 22u, kOpTypeVector = 23u, kOpTypePointer = 32u,
@@ -290,11 +291,18 @@ struct WidenedModules {
 };
 WidenedModules gWidened;
 
-ProgramBytes widened_pixel(const ProgramBytes& pixel, const ProgramBytes& vertex) {
+// `named`: with --diagnostics rt-inputs, a pair first widened here is named (a pipeline other than the prepass, whose
+// pixel form should read what its vertex stage writes).
+ProgramBytes widened_pixel(const ProgramBytes& pixel, const ProgramBytes& vertex, std::uint64_t pixel_id, std::uint64_t vertex_id,
+                           unsigned form, unsigned aux, bool named) {
     std::lock_guard guard(gWidened.lock);
     auto [it, made] = gWidened.words.try_emplace({pixel.data, vertex.data});
     if (made) {
         it->second = with_unread_inputs(pixel, vertex);
+        if (named && !it->second.empty() && ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
+            std::fprintf(stderr, "[rt-inputs] vk interface: pixel %016llx form %u (aux %u) lacks varyings vertex %016llx writes\n",
+                         static_cast<unsigned long long>(pixel_id), form, aux, static_cast<unsigned long long>(vertex_id));
+        }
     }
     return it->second.empty() ? pixel : ProgramBytes{it->second.data(), it->second.size() * 4u};
 }
@@ -543,8 +551,10 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     const unsigned bound = aux_targets(aux);  // the targets: 0-4, or the prepass's
     const bool prepass = bound == kAuxPrepass;
     const VkShaderModule vs_module = module_of(device, vs);
-    // The prepass's pixel stage declares every varying its vertex stage writes (D10: no interface notes).
-    const VkShaderModule ps_module = module_of(device, prepass ? widened_pixel(ps, vs) : ps);
+    // A tracer's pipeline (the prepass and the traced forms, made only with ray tracing on): its pixel stage declares
+    // every varying its vertex stage writes (D10: no interface notes). Ray tracing off, every pipeline is as it was.
+    const VkShaderModule ps_module =
+        module_of(device, aux >= kAuxPrepass ? widened_pixel(ps, vs, desc.pixel, desc.vertex, program, aux, !prepass) : ps);
     if (vs_module == VK_NULL_HANDLE || ps_module == VK_NULL_HANDLE) {
         return nullptr;
     }

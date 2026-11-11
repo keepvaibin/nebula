@@ -32,6 +32,7 @@ inline constexpr std::uint32_t kMaskSky = 64u;     // the sky's dome: stops no l
 inline constexpr std::uint32_t kMaskCutout = 32u;  // opaque where its texture's alpha says so (an alpha test): a ray asks at each hit
 // What an instance is, read back at a hit (the instance's contribution field, which inline rays do not use).
 inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may discard (an alpha test): a hit is not yet a surface
+inline constexpr std::uint32_t kKindClipped = 2u;  // with kKindCutout: a map part its clip areas show (c27), every hit asked
 // Instance flags (the same bits in both APIs).
 inline constexpr std::uint32_t kInstanceNoCull = 1u;  // a ray that culls back faces meets both of this instance's
 inline constexpr std::uint32_t kInstanceFlip = 2u;    // its triangles face the other way

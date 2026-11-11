@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 153u
+#define NEBULA_GAME_API_VERSION 155u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */

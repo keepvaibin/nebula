@@ -389,6 +389,45 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
                     gpu_mesh.glow_cooked[c] = value / 255.0f;
                 }
             }
+            // Map 0's coordinate (plan 13.3): the form's texture table's first map, the first stage that samples it,
+            // its coordinate when made from a uv set by a matrix (type 1, sources 4 to 19; not the form's normal
+            // coordinate), and that coordinate's u and v rows among the form's vertex rows.
+            if (material.forms_at != 0u && material.coords_at != 0u && hit.stages_at != 0u) {
+                const auto* forms = at<NebulaModelForm>(file, material.forms_at);
+                for (std::uint32_t f = 0; f < material.form_count; ++f) {
+                    const NebulaModelForm& form = forms[f];
+                    if (form.replace != 0u) {
+                        continue;
+                    }
+                    if (form.texture_count != 0u && form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
+                        const std::uint8_t first = *at<std::uint8_t>(file, form.textures_at);
+                        const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
+                        std::uint32_t coord = 0xFFu;
+                        for (std::uint32_t s = 0; s < hit.stage_count && coord == 0xFFu; ++s) {
+                            if (stages[s].map == first) {
+                                coord = stages[s].coord;
+                            }
+                        }
+                        const bool normal_coord = (form.flags & 1u) != 0u && coord == 0u;
+                        if (coord < material.coord_count && !normal_coord) {
+                            const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
+                            if (c.type == 1u && c.source >= 4u && c.source <= 19u) {
+                                const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
+                                const std::uint32_t coord_code = NEBULA_ROW_COORD + 3u * coord;
+                                for (std::uint32_t r = 0; r + 1u < form.vertex_row_count; ++r) {
+                                    if (codes[r] == coord_code && codes[r + 1u] == coord_code + 1u) {
+                                        gpu_mesh.map0_row = static_cast<std::uint16_t>(r);
+                                        gpu_mesh.map0_form_rows = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
+                                        gpu_mesh.map0_uv = static_cast<std::uint8_t>(c.source - 4u);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
             // The alpha test's first comparison, where it is "greater" or "greater or equal" (4, 6): its reference.
             if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
                 gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
@@ -545,6 +584,7 @@ void Registries::place_slot(const float (*rows)[4], std::uint32_t vertex_rows, s
     StaticSlot slot;
     slot.vertex_rows = vertex_page.gpu + vertex_at;
     slot.pixel_rows = slot_page_.gpu + pixel_at;
+    slot.cpu = &rows[0][0];  // the record's copy (material_register_locked, restart): kept for the registries' life
     incoming_.slots.push_back(slot);
 }
 
@@ -632,15 +672,16 @@ std::uint32_t Registries::material_register_locked(const float (*rows)[4], std::
             return record.id;
         }
     }
-    place_slot(rows, vertex_rows, pixel_rows);
     const std::uint32_t id = next_slot_++;
-    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined.
+    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined. The slot points
+    // at this copy too (StaticSlot::cpu): it lives as long as the registries.
     SlotRecord record;
     record.vertex_rows = vertex_rows;
     record.pixel_rows = pixel_rows;
     record.id = id;
-    record.cpu = std::make_unique<float[]>(count * 4u);
+    record.cpu = std::make_unique<float[]>(std::max<std::size_t>(count, 1u) * 4u);
     std::memcpy(record.cpu.get(), rows, count * 16u);
+    place_slot(reinterpret_cast<const float (*)[4]>(record.cpu.get()), vertex_rows, pixel_rows);
     bucket.push_back(std::move(record));
     return id;
 }
