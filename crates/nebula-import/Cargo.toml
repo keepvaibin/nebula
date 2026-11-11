@@ -15,6 +15,7 @@ folders-only = []
 proof-tools = []
 
 [dependencies]
+luma-validate = { path = "../luma-validate" }
 anyhow.workspace = true
 jni-sys = "0.4"
 nod = "=1.4.4"
