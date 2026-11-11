@@ -13,10 +13,12 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
 
 #include "galaxy/render/program_table.h"
+#include "render/core/pipeline_cache_file.h"
 
 namespace galaxy::render::core {
 
@@ -52,7 +54,14 @@ void Pipelines::shutdown() noexcept {
         thread.join();
     }
     threads_.clear();
+    // The forms stored before the cache's last write are the ones it holds.
+    std::vector<std::uint64_t> stored;
+    try {
+        stored = stored_forms();
+    } catch (...) {
+    }
     destroy_all();
+    save_targets(stored);
     refused_.clear();
     for (auto& root : directories_) {
         if (Directory* directory = root.exchange(nullptr)) {
@@ -147,6 +156,14 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
     if (built == nullptr) {
         refuse(id, entry, variant, aux);
         return nullptr;
+    }
+    if (!linked && target_form(variant, aux)) {
+        try {
+            if (targets_open()) {
+                note_target_stored(form_key(entry, variant, aux));
+            }
+        } catch (...) {
+        }
     }
     gpu::Pipeline* const published = publish(*at, built);
     if (linked && published == built) {
@@ -253,17 +270,29 @@ void Pipelines::worker() {
         }
         try {
             std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
+            // A texture target's form, where the targets file is kept: its key in the file's sets (0, prepared as any other,
+            // when there is none or memory ran out finding it).
+            std::uint64_t form = 0u;
+            if (target_form(job.variant, job.aux)) {
+                try {
+                    form = targets_open() ? form_key(job.entry, job.variant, job.aux) : 0u;
+                } catch (...) {
+                }
+            }
             if (job.optimize) {
                 // The draw's pipeline was linked quickly: the optimised link takes its place for the draws after it (frames in
                 // flight keep the first, which lives until shutdown).
                 if (at != nullptr && !pair_refused(job.entry)) {
                     if (gpu::Pipeline* better = build(job.entry, job.variant, job.aux); better != nullptr) {
                         at->store(better, std::memory_order_release);
+                        note_target_stored(form);
                     }
                 }
             } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
-                gpu::Pipeline* built = build(job.entry, job.variant, job.aux);
-                if (built != nullptr) {
+                if (left_to_cache(form)) {
+                    left_.fetch_add(1u, std::memory_order_relaxed);
+                } else if (gpu::Pipeline* built = build(job.entry, job.variant, job.aux); built != nullptr) {
+                    note_target_stored(form);
                     publish(*at, built);
                 } else {
                     refuse(job.id, job.entry, job.variant, job.aux);
@@ -293,13 +322,244 @@ void Pipelines::drained() noexcept {
     if (reported_.exchange(true, std::memory_order_relaxed)) {
         return;
     }
+    // The forms stored before the cache's write are the ones it holds.
+    std::vector<std::uint64_t> stored;
+    try {
+        stored = stored_forms();
+    } catch (...) {
+    }
     const std::size_t written = unsaved_.exchange(false, std::memory_order_acq_rel) ? save_cache() : 0u;
+    save_targets(stored);
     {
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started_).count();
-        std::fprintf(stderr, "[pipelines] %llu prepared by %u workers at %lld ms (%llu made by draws first, %llu refused), cache %zu bytes written\n",
+        std::fprintf(stderr, "[pipelines] %llu prepared by %u workers at %lld ms (%llu made by draws first, %llu refused, %llu texture "
+                     "target forms left to the cache), cache %zu bytes written\n",
                      static_cast<unsigned long long>(created_.load(std::memory_order_relaxed)), workers_, static_cast<long long>(ms),
                      static_cast<unsigned long long>(misses_.load(std::memory_order_relaxed)), static_cast<unsigned long long>(failures_.load(std::memory_order_relaxed)),
-                     written);
+                     static_cast<unsigned long long>(left_.load(std::memory_order_relaxed)), written);
+    }
+}
+
+// ---- The texture targets' forms (pipelines.h, targets_open).
+
+namespace {
+
+// The targets file: the magic, the hash of the cache data it goes with, the counts of the two sets, then the stored forms' keys
+// and the drawn forms' keys, eight bytes each.
+constexpr char kTargetsMagic[8] = {'N', 'B', 'T', 'G', 'T', 'S', '0', '1'};
+constexpr std::size_t kTargetsHeader = 8u + 8u + 4u + 4u;
+// More keys than the game has pipelines is a file from something else.
+constexpr std::uint32_t kTargetsMost = 1u << 20u;
+
+std::uint64_t mix(std::uint64_t hash, const void* data, std::size_t size) noexcept {
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    for (std::size_t i = 0; i < size; ++i) {
+        hash = (hash ^ bytes[i]) * 1099511628211ull;
+    }
+    return hash;
+}
+
+}  // namespace
+
+bool Pipelines::targets_open() {
+    {
+        std::lock_guard guard(targets_lock_);
+        if (targets_tried_) {
+            return targets_on_;
+        }
+    }
+    // Opening the driver cache takes the backend's own locks: outside this one.
+    std::filesystem::path file;
+    std::uint64_t accepted = 0u;
+    const bool kept = cache_file_state(file, accepted);
+    std::lock_guard guard(targets_lock_);
+    if (targets_tried_) {
+        return targets_on_;
+    }
+    targets_tried_ = true;
+    if (!kept || file.empty()) {
+        return false;
+    }
+    targets_file_ = file;
+    targets_file_ += ".targets";
+    targets_on_ = true;
+    std::ifstream in(targets_file_, std::ios::binary | std::ios::ate);
+    if (!in) {
+        return true;
+    }
+    const auto length = static_cast<std::size_t>(in.tellg());
+    if (length < kTargetsHeader) {
+        return true;
+    }
+    std::vector<char> bytes(length);
+    in.seekg(0);
+    in.read(bytes.data(), static_cast<std::streamsize>(length));
+    if (!in || std::memcmp(bytes.data(), kTargetsMagic, sizeof(kTargetsMagic)) != 0) {
+        return true;
+    }
+    std::uint64_t hash = 0u;
+    std::uint32_t stored = 0u, drawn = 0u;
+    std::memcpy(&hash, bytes.data() + 8u, 8u);
+    std::memcpy(&stored, bytes.data() + 16u, 4u);
+    std::memcpy(&drawn, bytes.data() + 20u, 4u);
+    targets_hash_ = hash;
+    if (stored > kTargetsMost || drawn > kTargetsMost ||
+        length != kTargetsHeader + (std::size_t{stored} + std::size_t{drawn}) * 8u) {
+        return true;
+    }
+    const auto key_at = [&](std::size_t i) {
+        std::uint64_t key;
+        std::memcpy(&key, bytes.data() + kTargetsHeader + i * 8u, 8u);
+        return key;
+    };
+    // What a target pass drew stands whatever the cache; what the cache holds only if it is the data the driver took.
+    for (std::size_t i = 0; i < drawn; ++i) {
+        target_drawn_.insert(key_at(std::size_t{stored} + i));
+    }
+    if (accepted != 0u && hash == accepted) {
+        for (std::size_t i = 0; i < stored; ++i) {
+            target_cached_.insert(key_at(i));
+            target_stored_.insert(key_at(i));
+        }
+    }
+    return true;
+}
+
+// Every field of the description and inputs, the target and aux, and the programs' bytes, so a program cooked again under the
+// same id (a game update) is another form, which no cache of an earlier build holds. 0: no programs.
+std::uint64_t Pipelines::form_key(const PipelineEntry& entry, unsigned variant, unsigned aux) {
+    const NebulaPipelineDesc& desc = entry.desc;
+    const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
+    const unsigned program =
+        program_variant(desc.pixel, aux, (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
+    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramTracedMotion} : program, false);
+    const ProgramBytes ps = program_bytes(desc.pixel, program, true);
+    if (vs.size == 0u || ps.size == 0u) {
+        return 0u;
+    }
+    // A program's bytes are hashed once a run: many pipelines share one.
+    const auto program_hash = [this](const ProgramBytes& bytes) {
+        {
+            std::lock_guard guard(targets_lock_);
+            if (const auto found = program_hashes_.find(bytes.data); found != program_hashes_.end()) {
+                return found->second;
+            }
+        }
+        const std::uint64_t hash = cache_bytes_hash(bytes.data, bytes.size);
+        std::lock_guard guard(targets_lock_);
+        program_hashes_.emplace(bytes.data, hash);
+        return hash;
+    };
+    std::uint64_t hash = 14695981039346656037ull;
+    hash = mix(hash, &desc.vertex, sizeof(desc.vertex));
+    hash = mix(hash, &desc.pixel, sizeof(desc.pixel));
+    hash = mix(hash, &desc.state, sizeof(desc.state));
+    hash = mix(hash, &desc.input_count, sizeof(desc.input_count));
+    hash = mix(hash, &desc.position_stride, sizeof(desc.position_stride));
+    for (const NebulaLayoutInput& input : entry.inputs) {
+        hash = mix(hash, &input.semantic, sizeof(input.semantic));
+        hash = mix(hash, &input.stream, sizeof(input.stream));
+        hash = mix(hash, &input.format, sizeof(input.format));
+        hash = mix(hash, &input.offset, sizeof(input.offset));
+        hash = mix(hash, &input.stride, sizeof(input.stride));
+    }
+    const std::uint64_t values[] = {program, variant, aux, program_hash(vs), program_hash(ps)};
+    hash = mix(hash, values, sizeof(values));
+    return hash != 0u ? hash : 1u;
+}
+
+bool Pipelines::left_to_cache(std::uint64_t form) {
+    if (form == 0u) {
+        return false;
+    }
+    std::lock_guard guard(targets_lock_);
+    return target_cached_.count(form) != 0u && target_drawn_.count(form) == 0u;
+}
+
+void Pipelines::note_target_drawn(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
+    Page* page = page_of(id, key_of(variant, aux) >= kKeys);
+    if (page == nullptr || page->drawn[id & kPageMask].exchange(1u, std::memory_order_relaxed) != 0u) {
+        return;
+    }
+    try {
+        if (!targets_open()) {
+            return;
+        }
+        const std::uint64_t form = form_key(entry, variant, aux);
+        if (form == 0u) {
+            return;
+        }
+        std::lock_guard guard(targets_lock_);
+        if (target_drawn_.insert(form).second) {
+            targets_unsaved_ = true;
+        }
+    } catch (...) {
+        // Memory ran out: the form is prepared again next run, as before.
+    }
+}
+
+void Pipelines::note_target_stored(std::uint64_t form) noexcept {
+    if (form == 0u) {
+        return;
+    }
+    try {
+        std::lock_guard guard(targets_lock_);
+        if (target_stored_.insert(form).second) {
+            targets_unsaved_ = true;
+        }
+    } catch (...) {
+        // Memory ran out: the form is not named in the file, and is prepared next run.
+    }
+}
+
+std::vector<std::uint64_t> Pipelines::stored_forms() {
+    std::lock_guard guard(targets_lock_);
+    if (!targets_on_) {
+        return {};
+    }
+    return {target_stored_.begin(), target_stored_.end()};
+}
+
+// `stored` was taken before the cache's last write, so the data now on disk holds every one of them.
+void Pipelines::save_targets(const std::vector<std::uint64_t>& stored) noexcept {
+    try {
+        std::vector<char> bytes;
+        std::filesystem::path file;
+        {
+            std::lock_guard guard(targets_lock_);
+            // Written when a set grew or the cache file was written since: the file always names the data on disk.
+            const std::uint64_t hash = targets_on_ ? cache_file_hash() : 0u;
+            if (hash == 0u || (!targets_unsaved_ && hash == targets_hash_)) {
+                return;
+            }
+            const auto stored_count = static_cast<std::uint32_t>(stored.size());
+            const auto drawn_count = static_cast<std::uint32_t>(target_drawn_.size());
+            bytes.resize(kTargetsHeader + (std::size_t{stored_count} + std::size_t{drawn_count}) * 8u);
+            char* at = bytes.data();
+            std::memcpy(at, kTargetsMagic, sizeof(kTargetsMagic));
+            std::memcpy(at + 8u, &hash, 8u);
+            std::memcpy(at + 16u, &stored_count, 4u);
+            std::memcpy(at + 20u, &drawn_count, 4u);
+            at += kTargetsHeader;
+            for (const std::uint64_t key : stored) {
+                std::memcpy(at, &key, 8u);
+                at += 8u;
+            }
+            for (const std::uint64_t key : target_drawn_) {
+                std::memcpy(at, &key, 8u);
+                at += 8u;
+            }
+            // Forms stored since `stored` was taken wait for the next write (the set only grows).
+            targets_unsaved_ = target_stored_.size() != stored.size();
+            targets_hash_ = hash;
+            file = targets_file_;
+        }
+        if (!replace_file(file, bytes.data(), bytes.size())) {
+            std::lock_guard guard(targets_lock_);
+            targets_unsaved_ = true;
+            targets_hash_ = 0u;
+        }
+    } catch (...) {
     }
 }
 

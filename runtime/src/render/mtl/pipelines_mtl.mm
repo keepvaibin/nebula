@@ -563,4 +563,13 @@ std::size_t Pipelines::save_cache() noexcept {
     return 0u;
 }
 
+// No file of the renderer's own, so nothing says what the system's cache holds: every texture target form is prepared.
+bool Pipelines::cache_file_state(std::filesystem::path&, std::uint64_t&) {
+    return false;
+}
+
+std::uint64_t Pipelines::cache_file_hash() noexcept {
+    return 0u;
+}
+
 }  // namespace galaxy::render::core

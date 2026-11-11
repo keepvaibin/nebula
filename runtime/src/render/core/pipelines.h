@@ -35,16 +35,26 @@ public:
     // 1 the motion, 2 the reactive mask, 3 the reactive mask and the effects layer, 4 the motion target there but not
     // written (a draw sharing the motion draws' pass); from 5 the tracer's forms (program_table.h kAux*), kept in pages
     // of their own that exist only once one is asked for.
+    // A texture target's form is noted the first time a run draws it (note_target_drawn): the forms a target pass has drawn
+    // are the ones prepared ahead (the targets file).
     gpu::Pipeline* get(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
         const std::uint32_t key = key_of(variant, aux);
-        const Page* page = page_of(id, key >= kKeys);
+        const bool target = target_form(variant, aux);
+        Page* page = page_of(id, key >= kKeys);
         if (page != nullptr) {
             gpu::Pipeline* found = page->rows[id & kPageMask][key & (kKeys - 1u)].load(std::memory_order_acquire);
             if (found != nullptr) {
+                if (target && page->drawn[id & kPageMask].load(std::memory_order_relaxed) == 0u) {
+                    note_target_drawn(id, entry, variant, aux);
+                }
                 return found;
             }
         }
-        return create_now(id, entry, variant, aux);
+        gpu::Pipeline* made = create_now(id, entry, variant, aux);
+        if (made != nullptr && target) {
+            note_target_drawn(id, entry, variant, aux);
+        }
+        return made;
     }
 
     // Queues `id` for every target kind and aux set of the settings, for the background threads: with `motion`, aux 1 and
@@ -71,7 +81,12 @@ private:
     }
     struct Page {
         std::array<std::array<std::atomic<gpu::Pipeline*>, kKeys>, 1u << kPageBits> rows{};
+        std::array<std::atomic<std::uint8_t>, 1u << kPageBits> drawn{};  // the id's texture target form has been drawn this run
     };
+    // A texture target's form: the one kind of pipeline prepared ahead only when the targets file says it is used.
+    [[nodiscard]] static constexpr bool target_form(unsigned variant, unsigned aux) noexcept {
+        return variant == kSceneVariantTarget && aux == 0u;
+    }
     struct Directory {
         std::array<std::atomic<Page*>, kDirectorySize> pages{};
         std::array<std::atomic<Page*>, kDirectorySize> traced_pages{};
@@ -105,8 +120,35 @@ private:
 #endif
     void destroy_all() noexcept;  // per backend
     std::size_t save_cache() noexcept;  // per backend: the driver's pipelines to disk when they changed; bytes written
+    // Per backend: the driver cache's file, opening the cache if it is not yet, and the hash of the data the driver took from
+    // it at the start (0: none, refused, or no file of the renderer's own). False where the renderer keeps no file (Metal: the
+    // system's own cache; a driver whose file is not written).
+    bool cache_file_state(std::filesystem::path& file, std::uint64_t& accepted);
+    // Per backend: the hash of the data the cache file now holds (0 when none), kept after destroy_all.
+    std::uint64_t cache_file_hash() noexcept;
     void drained() noexcept;
     void worker();
+
+    // The texture targets' forms (target_form). Every one prepared and published is in the driver cache, which a later run
+    // loads; a form no target pass has drawn is then left to the cache and made by the draw that first needs it, a load from
+    // the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
+    // the driver refused, written by another run, or holding other programs names nothing, and every form is prepared.
+    bool targets_open();
+    [[nodiscard]] std::uint64_t form_key(const PipelineEntry& entry, unsigned variant, unsigned aux);
+    [[nodiscard]] bool left_to_cache(std::uint64_t form);
+    void note_target_drawn(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
+    void note_target_stored(std::uint64_t form) noexcept;
+    [[nodiscard]] std::vector<std::uint64_t> stored_forms();
+    void save_targets(const std::vector<std::uint64_t>& stored) noexcept;
+    std::mutex targets_lock_;
+    bool targets_tried_ = false, targets_on_ = false, targets_unsaved_ = false;
+    std::uint64_t targets_hash_ = 0u;  // the cache data the targets file names: written again when the cache file moves
+    std::filesystem::path targets_file_;
+    std::unordered_set<std::uint64_t> target_cached_;  // in the cache the driver took at the start
+    std::unordered_set<std::uint64_t> target_stored_;  // put in the cache by this run, or there from the start
+    std::unordered_set<std::uint64_t> target_drawn_;   // drawn by a target pass, this run or an earlier one
+    std::unordered_map<const void*, std::uint64_t> program_hashes_;  // a program's bytes' hash, by its bytes' address
+    std::atomic<std::uint64_t> left_{0u};  // forms left to the cache this run
 
     gpu::Device* device_ = nullptr;
     RootLayout root_{};
