@@ -440,8 +440,11 @@ float4 traced_air(float4 c, float4 pixel) {
 }
 // The light the air between the eye and the pixel scatters toward the eye (rt/rt_scatter.hlsl, 15.4; High, a stage
 // with air), added, for a draw that covers or alpha-blends (draw flag 8): its picture's place + 1 in view_volume[2].w.
+// One medium (DIRECTOR.md, 11-11): a draw with a fog step of the game's (program_fog ran) has the game's fog for its
+// air, and takes none of the traced (FB b56).
+static bool g_fog_step = false;
 float4 traced_scatter(float4 c, float4 pixel) {
-    if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u) {
+    if ((draw_flags & 8u) == 0u || (view_flags & 8u) == 0u || view_volume[2].w == 0.0 || (view_flags & 16u) != 0u || g_fog_step) {
         return c;
     }
     const float4 d = view_volume[0];
@@ -463,6 +466,7 @@ static float g_fog_amount = 0.0;
 float3 program_fog(float3 c, float3 colour, float amount) {
     g_fog_colour = colour;
     g_fog_amount = amount;
+    g_fog_step = true;
     return c;
 }
 float4 program_fogged(float4 c) { return g_fog_amount > 0.0 ? float4(lerp(c.rgb, g_fog_colour, g_fog_amount), c.a) : c; }
