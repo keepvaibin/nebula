@@ -820,6 +820,9 @@ class Reader:
         # The units' records and globals have their rows in the units' copies; from here they are the JSON's.
         self.records.update(unit_records)
         self.globals.update(unit_globals)
+        # A record a header only declares (no size there) and a .cpp defines has that unit's row: a name is a row or
+        # left out, never both (the kernel and the validator would answer it differently).
+        self.left = [x for x in self.left if not (x[0] == "record" and x[1] in self.records)]
         self.foreign_aliases()
         if DEFINED is not None:
             left_records = {x[1] for x in self.left if x[0] == "record"}

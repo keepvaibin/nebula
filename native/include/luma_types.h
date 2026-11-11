@@ -6,7 +6,7 @@
 namespace luma {
     struct TypeField {
         const char* name;   // "mVelocity"; an anonymous member's field "outer.inner"
-        const char* type;   // instrument.py's type text ("TVec3f"; a bit-field "u32 : 4"): Z-4 compares it whole
+        const char* type;   // instrument.py's type text ("Vec3f"; a bit-field "u32 : 4"): Z-4 compares it whole
         unsigned offset;    // bytes from the record's start (a bit-field: the byte its bits start in)
         unsigned count;     // array elements, all extents multiplied; 1 for no array
         unsigned short bit; // a bit-field: its first bit within that byte's word, else 0
