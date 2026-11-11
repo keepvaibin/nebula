@@ -14,6 +14,7 @@
 // code (0 to 1 painted; -1 to -2 lit, -1 - n.l) and a 1; the filter's last step writes V (rgb, from the sun's filter)
 // with the sky's share. The second layer's are written here (O 1).
 #include "rt_common.hlsli"
+#include "rt_mirror.hlsli"  // mirror_terms: the share a rough surface mirrors over its lobe (FB b47)
 
 Texture2D<float4> g_guide : register(t9);
 Texture2D<float4> g_normals : register(t10);
@@ -260,7 +261,8 @@ void main(uint3 id : SV_DispatchThreadID) {
                 const float3 look_along = normalize(s.at);
                 const float3 n = dot(s.smooth_, look_along) < 0.0f ? s.smooth_ : s.normal;
                 const float glance = 1.0f - saturate(-dot(n, look_along));
-                const float share_ = head_on + (1.0f - head_on) * glance * glance * glance * glance * glance;
+                const float2 terms = mirror_terms(rough, 1.0f - glance);  // over its lobe: less at a glance when rough (b47)
+                const float share_ = saturate(head_on * terms.x + terms.y);
                 const float3 turned_ray = reflect(look_along, n);
                 const float pixel_wide = abs(g_ray.x);  // a pixel's width a unit of way from the eye
                 float3 seen_ = seen_along(s.at + n * s.skin, turned_ray, s.away * pixel_wide, pixel_wide);
