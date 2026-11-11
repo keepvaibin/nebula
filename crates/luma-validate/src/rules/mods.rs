@@ -88,6 +88,19 @@ pub(crate) fn check(ctx: &mut Ctx) {
                 ctx.add(805, &file, None, None, vec![("other", t(other.id.clone())), ("found", t(name)), ("sig", t(sig))]);
             }
         }
+        // Two mods adding one key: to one table, or (table-keys 13) to one zone's link group in any layers. The higher
+        // mod's row stays (the applier's conflict fact). Rows added by place (`+n`) are not keys.
+        let same_table = touches.adds.iter().filter(|r| other.touches.adds.contains(r)).filter(|r| {
+            let mut parts = r.split(SEP);
+            let (table, first) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
+            !first.starts_with('+') && crate::link_group(table).is_none()
+        });
+        for row in same_table.chain(touches.links.iter().filter(|k| other.touches.links.contains(k))) {
+            let parts: Vec<&str> = row.split(SEP).collect();
+            ctx.add(404, "luma.json", None, None, vec![
+                ("other", t(other.id.clone())), ("target", t(parts[0])), ("row", t(parts[1..].join(", "))), ("what", p("Clash.Row")), ("winner", t(winner.clone())),
+            ]);
+        }
         for row in touches.adds.iter().filter(|r| other.touches.removes.contains(r)).chain(touches.removes.iter().filter(|r| other.touches.adds.contains(r))) {
             let parts: Vec<&str> = row.split(SEP).collect();
             ctx.add(404, "luma.json", None, None, vec![

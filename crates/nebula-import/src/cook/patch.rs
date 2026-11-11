@@ -75,6 +75,25 @@ fn found(v: &Value) -> Arg {
     }
 }
 
+/// Another table of a table's link group (table-keys 13): one zone's tables of one kind in its other layers, with the
+/// patches of the mods that are on for it, in the order a table's are given.
+pub struct Link<'a> {
+    pub path: &'a str,
+    pub table: &'a TableIr,
+    pub patches: &'a [ModPatch<'a>],
+}
+
+/// What the other tables of a group hold: their game keys, and the keys mods add to them.
+#[derive(Default)]
+struct Group {
+    /// A key the game has in another layer, and that table's path.
+    game: HashMap<String, String>,
+    /// A key mods add to another layer: each mod and the table.
+    adds: HashMap<String, Vec<(String, String)>>,
+    /// Each mod's place in the list, from the bottom up (higher is higher in the list).
+    rank: HashMap<String, usize>,
+}
+
 /// Who changed what, so the next mod's change to it is named.
 #[derive(Clone, Default)]
 struct Owners {
@@ -96,42 +115,47 @@ struct Applier<'t> {
     kind: &'static [KindColumn],
     owners: Owners,
     facts: Vec<Fact>,
+    group: Group,
 }
 
 /// The table with every patch applied, and the facts. A patch that cannot apply is left out whole (Fact::Failed, naming
 /// the mod and the file); an error is a game table its rule cannot read (a key column missing from a table with rows).
 pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Vec<Fact>> {
-    // A disc path names the same table as its store path (an archive is a folder of the store).
-    let store_path = super::store::store_path(path.trim_start_matches('/'));
-    let path = store_path.as_str();
-    let rule = rule_for(path);
-    let kind = columns_of(path).unwrap_or(&[]);
+    apply_linked(path, table, patches, &[], &[])
+}
+
+/// `apply` for a table of a link group (table-keys 13), given the group's other tables with their patches and every
+/// mod that is on from the bottom of the list up. A key a patch adds that the game has in another layer leaves that
+/// patch out (L402 Patch.KeyInGroup, as the validator); a key a higher mod adds to another layer leaves this row out
+/// (a conflict fact, the higher's row stays); a key the same mod adds to another layer leaves the patch out too.
+pub fn apply_linked(path: &str, table: &mut TableIr, patches: &[ModPatch], links: &[Link], mods: &[&str]) -> Result<Vec<Fact>> {
+    let mut group = Group { rank: mods.iter().enumerate().map(|(i, m)| (m.to_string(), i)).collect(), ..Group::default() };
     if !patches.is_empty() {
-        // An empty layer's table often has only a few of its kind's columns (21 generalpos files lack even their key):
-        // it takes the rest, so a row added to it keeps every value (no row is there to read one it never had).
-        widen_empty(path, table);
-    }
-    let (key, key_names, positional) = match &rule.key {
-        Key::Position => (Vec::new(), Vec::new(), true),
-        Key::Columns(names) => {
-            let mut at = Vec::with_capacity(names.len());
-            for name in names {
-                at.push(table.column_of(name)?.with_context(|| format!("{path}: its key column {name} is not in the table"))?);
+        for link in links {
+            let mut other = link.table.clone();
+            let la = Applier::open(link.path, &mut other, true)?;
+            if la.positional {
+                continue;
             }
-            (at, names.clone(), false)
+            for r in 0..la.table.rows.len() {
+                group.game.entry(la.row_id(r)).or_insert_with(|| la.path.clone());
+            }
+            for p in link.patches {
+                let rows = p.patch.get("add").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+                for row in rows {
+                    // A row that cannot be read is that patch's fault, named in its own table's call.
+                    let Some(Ok(cells)) = row.as_object().map(|fields| la.cells(fields)) else { continue };
+                    let mut full = la.new_row();
+                    for (c, cell) in cells {
+                        full[c] = cell;
+                    }
+                    group.adds.entry(la.key_text(&full)).or_default().push((p.mod_id.to_string(), la.path.clone()));
+                }
+            }
         }
-    };
-    let mut a = Applier {
-        path: path.to_string(),
-        table,
-        key,
-        key_names,
-        positional,
-        case_insensitive: rule.case_insensitive,
-        kind,
-        owners: Owners::default(),
-        facts: Vec::new(),
-    };
+    }
+    let mut a = Applier::open(path, table, !patches.is_empty())?;
+    a.group = group;
     for p in patches {
         let (table, owners, facts) = (a.table.clone(), a.owners.clone(), a.facts.len());
         if let Err(e) = a.one(p) {
@@ -149,6 +173,45 @@ pub fn apply(path: &str, table: &mut TableIr, patches: &[ModPatch]) -> Result<Ve
         }
     }
     Ok(a.facts)
+}
+
+impl<'t> Applier<'t> {
+    /// The applier of one table: its store path, its rule's key, its kind's columns. `widen`: an empty table takes its
+    /// kind's columns first (when a patch will add to it, or to read a group's keys).
+    fn open(path: &str, table: &'t mut TableIr, widen: bool) -> Result<Self> {
+        // A disc path names the same table as its store path (an archive is a folder of the store).
+        let store_path = super::store::store_path(path.trim_start_matches('/'));
+        let path = store_path.as_str();
+        let rule = rule_for(path);
+        let kind = columns_of(path).unwrap_or(&[]);
+        if widen {
+            // An empty layer's table often has only a few of its kind's columns (21 generalpos files lack even their
+            // key): it takes the rest, so a row added to it keeps every value (no row is there to read one it never had).
+            widen_empty(path, table);
+        }
+        let (key, key_names, positional) = match &rule.key {
+        Key::Position => (Vec::new(), Vec::new(), true),
+        Key::Columns(names) => {
+            let mut at = Vec::with_capacity(names.len());
+            for name in names {
+                at.push(table.column_of(name)?.with_context(|| format!("{path}: its key column {name} is not in the table"))?);
+            }
+            (at, names.clone(), false)
+        }
+    };
+        Ok(Applier {
+            path: path.to_string(),
+            table,
+            key,
+            key_names,
+            positional,
+            case_insensitive: rule.case_insensitive,
+            kind,
+            owners: Owners::default(),
+            facts: Vec::new(),
+            group: Group::default(),
+        })
+    }
 }
 
 fn object(v: &Value, refused: impl FnOnce() -> anyhow::Error) -> Result<&Map<String, Value>> {
@@ -211,6 +274,23 @@ impl Applier<'_> {
                 continue;
             }
             let id = self.key_text(&cells);
+            // Table-keys 13: the key is new to the zone's other layers, or a higher mod's row there stays.
+            let in_group = |there: &String| refuse(402, vec![("why", Arg::Phrase("Patch.KeyInGroup")), ("row", text(id.replace('\u{1f}', ", "))), ("where", text(there.clone()))]);
+            if let Some(there) = self.group.game.get(&id) {
+                return Err(in_group(there));
+            }
+            if let Some(adders) = self.group.adds.get(&id) {
+                if let Some((_, there)) = adders.iter().find(|(m, _)| m == p.mod_id) {
+                    return Err(in_group(there));
+                }
+                let rank = |m: &str| self.group.rank.get(m).copied();
+                let mine = rank(p.mod_id);
+                let higher = adders.iter().map(|(m, _)| m).filter(|m| rank(m) > mine).max_by_key(|m| rank(m)).cloned();
+                if let Some(higher) = higher {
+                    self.push_conflict(&id, None, p.mod_id.to_string(), &higher);
+                    continue;
+                }
+            }
             match (0..self.table.rows.len()).find(|&r| self.row_id(r) == id) {
                 // A row of that key is there: another mod added it (the validator refuses one the game has).
                 Some(at) => {

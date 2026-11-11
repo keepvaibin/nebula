@@ -220,6 +220,8 @@ pub(crate) struct Facts {
     pub code_platforms: Vec<String>,
     pub has_code_key: bool,
     pub touches: crate::Touches,
+    /// A key this mod adds to a link group (group and key, joined by U+001F), and the patch target that adds it.
+    pub link_targets: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]

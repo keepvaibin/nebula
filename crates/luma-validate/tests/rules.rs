@@ -4,7 +4,7 @@
 
 use luma_validate::semver::Version;
 use luma_validate::{
-    message, recheck, validate, ColumnType, Saved, Game, Input, Installed, Report, Source, Store, Table, Touches,
+    message, recheck, validate, Arg, ColumnType, Saved, Game, Input, Installed, Report, Source, Store, Table, Touches,
 };
 use std::collections::{BTreeSet, HashSet};
 
@@ -19,11 +19,23 @@ struct FakeStore {
     case_insensitive: bool,
 }
 
+/// Two layers of one zone's objects: a link group (table-keys 13).
+const COMMON: &str = "StageData/Zone/jmp/Placement/Common/ObjInfo";
+const LAYER_A: &str = "StageData/Zone/jmp/Placement/LayerA/ObjInfo";
+
 impl Store for FakeStore {
     fn path(&self, lower: &str) -> Option<String> {
-        [TABLE, "ObjectData/Kuribo.arc"].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
+        [TABLE, "ObjectData/Kuribo.arc", COMMON, LAYER_A].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
     }
     fn table(&self, path: &str) -> Option<Table> {
+        if path == COMMON || path == LAYER_A {
+            return Some(Table {
+                key: vec!["l_id".into()],
+                columns: vec![("l_id".into(), ColumnType::Int { min: i64::from(i32::MIN), max: i64::from(i32::MAX) })],
+                rows: Some(HashSet::from([if path == COMMON { "1" } else { "2" }.to_string()])),
+                ..Default::default()
+            });
+        }
         (path == TABLE).then(|| Table {
             key: vec!["name".into()],
             columns: vec![("name".into(), ColumnType::Text), ("count".into(), ColumnType::Int { min: 0, max: 10 })],
@@ -83,6 +95,46 @@ fn a_correct_mod_passes_with_nothing_to_say() {
     );
     let report = check(&bytes, &Setup { game: Some(&game), ..NO_GAME });
     assert!(report.findings.is_empty(), "{:?}", report.findings);
+}
+
+/// Table-keys 13: a key added to one layer of a zone must be new to every layer of it, in the game and in the mod;
+/// two mods adding one key to a group are L404.
+#[test]
+fn a_link_key_is_new_to_the_whole_zone() {
+    let store = FakeStore { case_insensitive: false };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], names: None, store: Some(&store) };
+    let layer = [("layers", r#"[{"name": "base"}]"#)];
+    let common = "layers/base/patches/StageData/Zone/jmp/Placement/Common/ObjInfo.json";
+    let layer_a = "layers/base/patches/StageData/Zone/jmp/Placement/LayerA/ObjInfo.json";
+    let add = |id: u32| format!(r#"{{"patch": 1, "key": ["l_id"], "add": [{{"l_id": {id}}}]}}"#).into_bytes();
+    let in_group = |r: &Report| r.findings.iter().filter(|f| f.code == 402 && f.args.iter().any(|(n, a)| *n == "why" && *a == Arg::Phrase("Patch.KeyInGroup"))).count();
+
+    // LayerA's game row 2: Common may not add it; 9 is new to the zone.
+    let r = check(&luma(&layer, &[file(common, &add(2))]), &Setup { game: Some(&game), ..NO_GAME });
+    assert_eq!(in_group(&r), 1, "{:?}", r.findings);
+    let f = r.findings.iter().find(|f| f.code == 402).unwrap();
+    assert!(f.args.iter().any(|(n, a)| *n == "where" && *a == Arg::Text(LAYER_A.into())), "{:?}", f.args);
+    assert!(message(f, "UsEnglish").contains(LAYER_A), "{}", message(f, "UsEnglish"));
+    let r = check(&luma(&layer, &[file(common, &add(9))]), &Setup { game: Some(&game), ..NO_GAME });
+    assert!(r.findings.is_empty(), "{:?}", r.findings);
+    assert_eq!(r.touches.links, vec!["stagedata/zone/jmp/placement/*/objinfo\u{1f}9".to_string()]);
+
+    // The same mod adding 9 to two layers.
+    let r = check(&luma(&layer, &[file(common, &add(9)), file(layer_a, &add(9))]), &Setup { game: Some(&game), ..NO_GAME });
+    assert_eq!(in_group(&r), 1, "{:?}", r.findings);
+
+    // Another installed mod adding 9 to the zone in another layer, and one adding Beta to a table of no group.
+    let mut adding = other("other.mod");
+    adding.touches.links = vec!["stagedata/zone/jmp/placement/*/objinfo\u{1f}9".into()];
+    adding.touches.adds = vec!["stage/table.bcsv\u{1f}Beta".into()];
+    let beta = br#"{"patch": 1, "key": ["name"], "add": [{"name": "Beta"}]}"#;
+    let r = check(
+        &luma(&layer, &[file(layer_a, &add(9)), file("layers/base/patches/stage/table.bcsv.json", beta)]),
+        &Setup { game: Some(&game), installed: std::slice::from_ref(&adding), ..NO_GAME },
+    );
+    let clashes: Vec<String> = r.findings.iter().filter(|f| f.code == 404).map(|f| message(f, "UsEnglish")).collect();
+    assert_eq!(clashes.len(), 2, "{clashes:?}");
+    assert!(clashes.iter().any(|m| m.contains("stagedata/zone/jmp/placement/*/objinfo")), "{clashes:?}");
 }
 
 #[test]

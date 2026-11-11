@@ -122,6 +122,35 @@ pub(crate) fn check(ctx: &mut Ctx) {
     }
 }
 
+/// A key added to a table of a link group (table-keys 13) must be new to the whole group: in the game's other layers
+/// of the zone (the game finds a linked object, a demo group, a start by it across them) and in this mod's own files
+/// for them. Recorded as a touch of the group, for two mods adding one key (L404).
+fn link_add(pc: &mut P, row: &Value, rp: &str, target: &str, id: &str) {
+    let store = pc.ctx.game().and_then(|g| g.store);
+    let own = store.and_then(|s| s.path(&target.to_lowercase())).unwrap_or_else(|| target.to_string());
+    let Some(group) = crate::link_group(&own) else { return };
+    let mut there: Option<String> = None;
+    if let Some(store) = store {
+        for other in crate::link_paths(&own) {
+            let Some(game_path) = store.path(&other) else { continue };
+            if store.table(&game_path).is_some_and(|tb| tb.rows.as_ref().is_some_and(|r| r.contains(id))) {
+                there = Some(game_path);
+                break;
+            }
+        }
+    }
+    let key = format!("{group}{SEP}{id}");
+    let own_lower = own.to_lowercase();
+    if there.is_none() {
+        there = pc.ctx.facts.link_targets.get(&key).filter(|t| **t != own_lower).cloned();
+    }
+    pc.ctx.facts.link_targets.entry(key.clone()).or_insert(own_lower);
+    if let Some(there) = there {
+        pc.at(402, row, rp, vec![("why", p("Patch.KeyInGroup")), ("row", t(id.replace(SEP, ", "))), ("where", t(there))]);
+    }
+    pc.ctx.facts.touches.links.push(key);
+}
+
 fn one(pc: &mut P, root: &Value, target: &str) {
     if !root.is_object() {
         pc.bad(root, "", "Patch.NotObject", "");
@@ -350,6 +379,8 @@ fn one(pc: &mut P, root: &Value, target: &str) {
             let Some(id) = row_id(row) else { continue };
             if rows.is_some_and(|rows| rows.contains(&id)) {
                 pc.at(402, row, &rp, vec![("why", p("Patch.RowExists")), ("row", t(id.replace(SEP, ", ")))]);
+            } else {
+                link_add(pc, row, &rp, target, &id);
             }
             check_values(pc, row, &rp);
             pc.ctx.facts.touches.adds.push(format!("{target_shown}{SEP}{id}"));

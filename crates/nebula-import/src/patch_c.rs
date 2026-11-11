@@ -1,7 +1,7 @@
 //! The applier's C interface (`include/luma_patch.h`, contract table-keys 8): the game gives one cooked table and the
 //! patches of the mods that are on, and takes back the patched table and the facts for the Mods screen.
 
-use crate::cook::patch::{apply, refuse, Fact, ModPatch};
+use crate::cook::patch::{apply_linked, refuse, Fact, Link, ModPatch};
 use crate::cook::table::TableIr;
 use luma_validate::{Arg, Finding};
 use std::cell::RefCell;
@@ -17,6 +17,15 @@ pub struct LumaTablePatch {
 }
 
 #[repr(C)]
+pub struct LumaLinkTable {
+    pub path: *const c_char,
+    pub table: *const u8,
+    pub table_size: u64,
+    pub patches: *const LumaTablePatch,
+    pub patch_count: u32,
+}
+
+#[repr(C)]
 pub struct LumaPatchInput {
     pub size: u32,
     pub path: *const c_char,
@@ -24,6 +33,23 @@ pub struct LumaPatchInput {
     pub table_size: u64,
     pub patches: *const LumaTablePatch,
     pub patch_count: u32,
+    pub links: *const LumaLinkTable,
+    pub link_count: u32,
+    pub mods: *const *const c_char,
+    pub mod_count: u32,
+}
+
+/// A patch read from the C input: its mod, its file, its JSON.
+type OwnedPatch = (String, String, serde_json::Value);
+
+unsafe fn slice<'a, T>(p: *const T, count: u32, what: &str) -> Result<&'a [T], String> {
+    if count == 0 {
+        Ok(&[])
+    } else if p.is_null() {
+        Err(format!("the {what} are null"))
+    } else {
+        Ok(std::slice::from_raw_parts(p, count as usize))
+    }
 }
 
 pub const LUMA_PATCH_CONFLICT: u32 = 0;
@@ -109,13 +135,7 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
     let path = text(input.path).ok_or("the path is null or not UTF-8")?;
     let table_bytes = bytes(input.table, input.table_size).ok_or("the table is null")?;
     let mut table = TableIr::from_ntbl(table_bytes).map_err(|e| format!("{path}: {e:#}"))?;
-    let given = if input.patch_count == 0 {
-        &[][..]
-    } else if input.patches.is_null() {
-        return Err("the patches are null".into());
-    } else {
-        std::slice::from_raw_parts(input.patches, input.patch_count as usize)
-    };
+    let given = slice(input.patches, input.patch_count, "patches")?;
 
     // A patch that is not JSON is a mod that cannot apply, named like any other.
     let mut owned = Vec::with_capacity(given.len());
@@ -144,8 +164,35 @@ unsafe fn run(input: *const LumaPatchInput) -> Result<LumaPatched, String> {
         }
     }
     let patches: Vec<ModPatch> = owned.iter().map(|(mod_id, file, patch)| ModPatch { mod_id, file, patch }).collect();
+
+    // The group's other tables (table-keys 13). A link patch that is not JSON adds nothing here: its own table's call
+    // names it.
+    let mut link_owned: Vec<(String, TableIr, Vec<OwnedPatch>)> = Vec::new();
+    for (i, l) in slice(input.links, input.link_count, "links")?.iter().enumerate() {
+        let link_path = text(l.path).ok_or_else(|| format!("link {i}: its path is null or not UTF-8"))?.to_string();
+        let link_bytes = bytes(l.table, l.table_size).ok_or_else(|| format!("{link_path}: the table is null"))?;
+        let link_table = TableIr::from_ntbl(link_bytes).map_err(|e| format!("{link_path}: {e:#}"))?;
+        let mut link_patches = Vec::new();
+        for (j, p) in slice(l.patches, l.patch_count, "link's patches")?.iter().enumerate() {
+            let mod_id = text(p.mod_id).ok_or_else(|| format!("{link_path}: patch {j}: its mod id is null or not UTF-8"))?.to_string();
+            let file = text(p.file).ok_or_else(|| format!("{link_path}: patch {j}: its file is null or not UTF-8"))?.to_string();
+            let json = bytes(p.json, p.json_size).ok_or_else(|| format!("{mod_id}: {file}: its bytes are null"))?;
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(json) {
+                link_patches.push((mod_id, file, value));
+            }
+        }
+        link_owned.push((link_path, link_table, link_patches));
+    }
+    let link_patches: Vec<Vec<ModPatch>> =
+        link_owned.iter().map(|(_, _, ps)| ps.iter().map(|(mod_id, file, patch)| ModPatch { mod_id, file, patch }).collect()).collect();
+    let links: Vec<Link> = link_owned.iter().zip(&link_patches).map(|((p, t, _), ps)| Link { path: p, table: t, patches: ps }).collect();
+    let mut mods = Vec::new();
+    for (i, m) in slice(input.mods, input.mod_count, "mods")?.iter().enumerate() {
+        mods.push(text(*m).ok_or_else(|| format!("mod {i}: its id is null or not UTF-8"))?);
+    }
+
     let mut facts = unread;
-    facts.extend(apply(path, &mut table, &patches).map_err(|e| format!("{e:#}"))?);
+    facts.extend(apply_linked(path, &mut table, &patches, &links, &mods).map_err(|e| format!("{e:#}"))?);
 
     let mut out = LumaPatched {
         error: None,

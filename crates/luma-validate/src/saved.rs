@@ -14,7 +14,7 @@
 //! game	<the game's key>
 //! about	<id>	<version>
 //! conflict	<id>
-//! touch	replaces|cells|adds|removes|assets|functions	<value>
+//! touch	replaces|cells|adds|removes|assets|functions|links	<value>
 //! finding	<code>	<file>	<line>|-	<column>|-	<pointer>|-	<mod id>|-	(<name>=T:<text> | <name>=P:<phrase id>)...
 //! not-checked	<code>	<phrase id>	<places>
 //! end	<SHA-1 of every byte before this line, hex>
@@ -92,7 +92,7 @@ fn opt(v: Option<&str>) -> String {
     v.map_or_else(|| "-".to_string(), esc)
 }
 
-fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 6] {
+fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 7] {
     [
         ("replaces", &t.replaces),
         ("cells", &t.cells),
@@ -100,6 +100,7 @@ fn touch_lists(t: &Touches) -> [(&'static str, &Vec<String>); 6] {
         ("removes", &t.removes),
         ("assets", &t.assets),
         ("functions", &t.functions),
+        ("links", &t.links),
     ]
 }
 
@@ -202,6 +203,7 @@ impl Saved {
                         "removes" => t.removes.push(v),
                         "assets" => t.assets.push(v),
                         "functions" => t.functions.push(v),
+                        "links" => t.links.push(v),
                         _ => return None,
                     }
                 }

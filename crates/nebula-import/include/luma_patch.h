@@ -26,6 +26,17 @@ typedef struct LumaTablePatch {
     uint64_t json_size;
 } LumaTablePatch;
 
+/* Another table of the table's link group (contract table-keys 13): the same zone and kind in another layer
+   (StageData/<zone>/jmp/Placement|MapParts|ChildObj|Start|GeneralPos/<layer>/<file>, layer Common or LayerA to
+   LayerP), with the patches of the mods that are on for it, as the input's own. */
+typedef struct LumaLinkTable {
+    const char* path;
+    const uint8_t* table;
+    uint64_t table_size;
+    const LumaTablePatch* patches;
+    uint32_t patch_count;
+} LumaLinkTable;
+
 typedef struct LumaPatchInput {
     uint32_t size;         /* sizeof(LumaPatchInput) as the caller was built; any other size is refused */
     const char* path;      /* the table's path in the store, UTF-8 */
@@ -33,6 +44,14 @@ typedef struct LumaPatchInput {
     uint64_t table_size;
     const LumaTablePatch* patches; /* from the bottom of the mod list up: the last given wins */
     uint32_t patch_count;
+    /* A table of a link group: every other table of its group that the game has, each once (none for a table of no
+       group; read only when the table has a patch). The game links by the group's key across its layers, so a key a
+       patch adds must be new to the group: one the game has there leaves the patch out (LUMA_PATCH_FAILED, L402), one
+       a higher mod adds there leaves this row out (LUMA_PATCH_CONFLICT, the higher's row stays). */
+    const LumaLinkTable* links;
+    uint32_t link_count;
+    const char* const* mods; /* every mod that is on, by id, from the bottom of the list up (for which is higher) */
+    uint32_t mod_count;
 } LumaPatchInput;
 
 enum {

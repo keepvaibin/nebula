@@ -216,6 +216,35 @@ pub struct Touches {
     pub assets: Vec<String>,
     /// The game's functions its code replaces (LUMA_REPLACE): name and signature, joined by U+001F (L805).
     pub functions: Vec<String>,
+    /// Keys added to a link group's tables (`link_group`): the group and the key values, joined by U+001F (L404).
+    pub links: Vec<String>,
+}
+
+/// The layers of a zone, and the folders whose tables the game links by key across them (contract table-keys 13).
+pub const LINK_LAYERS: [&str; 17] = [
+    "common", "layera", "layerb", "layerc", "layerd", "layere", "layerf", "layerg", "layerh", "layeri", "layerj", "layerk", "layerl", "layerm",
+    "layern", "layero", "layerp",
+];
+const LINK_FOLDERS: [&str; 5] = ["placement", "mapparts", "childobj", "start", "generalpos"];
+
+/// A table's link group, in lowercase with the layer as `*` (`stagedata/astrogalaxy/jmp/placement/*/objinfo`): one
+/// zone's tables of one kind, whose key (`l_id`, `MarioNo`, `PosName`+`Obj_ID`) the game finds across every layer.
+/// None for a table in no group. `path` is a store path, or a disc path with the zone's archive (`<zone>/<zone>.arc/`).
+pub fn link_group(path: &str) -> Option<String> {
+    let lower = path.to_lowercase();
+    let mut parts: Vec<&str> = lower.split('/').collect();
+    if parts.len() == 7 && parts[2].strip_suffix(".arc") == Some(parts[1]) {
+        parts.remove(2);
+    }
+    let linked = parts.len() == 6 && parts[0] == "stagedata" && parts[2] == "jmp" && LINK_FOLDERS.contains(&parts[3]) && LINK_LAYERS.contains(&parts[4]);
+    linked.then(|| format!("{}/{}/jmp/{}/*/{}", parts[0], parts[1], parts[3], parts[5]))
+}
+
+/// The other tables of a table's link group, as store paths in lowercase (empty for a table in no group).
+pub fn link_paths(path: &str) -> Vec<String> {
+    let Some(group) = link_group(path) else { return Vec::new() };
+    let own = path.to_lowercase();
+    LINK_LAYERS.iter().map(|l| group.replacen("/*/", &format!("/{l}/"), 1)).filter(|p| *p != own).collect()
 }
 
 pub struct Input<'a> {
@@ -249,7 +278,7 @@ fn finish(mut report: Report) -> Report {
     report.findings.dedup();
     report.not_checked.sort();
     report.not_checked.dedup();
-    for list in [&mut report.touches.replaces, &mut report.touches.cells, &mut report.touches.adds, &mut report.touches.removes, &mut report.touches.assets, &mut report.touches.functions] {
+    for list in [&mut report.touches.replaces, &mut report.touches.cells, &mut report.touches.adds, &mut report.touches.removes, &mut report.touches.assets, &mut report.touches.functions, &mut report.touches.links] {
         list.sort();
         list.dedup();
     }
