@@ -269,6 +269,7 @@ struct NativeSettingsView {
     unsigned selected = 0u;
     unsigned selected_button = 0u;  // the selected row's, when it has buttons
     std::string help;
+    bool help_as_is = false;  // the help is already in the played language (a mod's refusal): not translated
     NativeSettingsStatus status = NativeSettingsStatus::Help;
     int status_number = 0;
     std::string status_text;

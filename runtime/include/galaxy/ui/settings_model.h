@@ -22,7 +22,7 @@ struct SettingsRow {
     std::string help;
     bool heading = false;
     std::string key;  // names the row across rebuilds (a mod's buttons)
-    std::uint8_t names = 0u;  // the mod's own words, shown as they are: 1 its label, 2 its value
+    std::uint8_t names = 0u;  // words shown as they are: 1 its label, 2 its value (a mod's own), 4 its help (already in the played language)
     // A row of buttons (nothing to change): their words, and what pressing the one at an index does. Left and right
     // move between them; A, Space or a click presses one (Right too when there is only one).
     std::vector<std::string> buttons;

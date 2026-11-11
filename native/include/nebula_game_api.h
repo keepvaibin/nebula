@@ -649,6 +649,8 @@ typedef struct NebulaSettingsView {
     const uint8_t* picture;
     uint32_t picture_width;
     uint32_t picture_height;
+    uint32_t help_as_is; /* 1: `help` is already in the played language (a mod's refusal, as the validator words it):
+                            shown as is, not translated */
 } NebulaSettingsView;
 
 /* The player's input to the settings menu (settings_input); the keyboard and controllers reach it through the host. */
