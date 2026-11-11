@@ -618,7 +618,8 @@ private:
         float ambient[4], key[4], fill[4], sky[4], gains[4], axis[3][4], look[4], authored[4];
         std::uint32_t grid[4];
         float dome[4];  // rgb 1 / the dome's mean colour, w 1 when known (rt_shade.hlsli rt_sky_ratio; FB b48)
-        std::uint32_t spare[4][4];
+        float form[4];  // the painted composite's look, rt_look_ (rt_shade.hlsli rt_share_terms; FB b53)
+        std::uint32_t spare[3][4];
     };
     void rt_shade_frame(RtShadeFrame& frame) const;
     void rt_world_grid();

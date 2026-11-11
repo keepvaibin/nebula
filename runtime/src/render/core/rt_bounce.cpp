@@ -125,6 +125,8 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
     // rt_dev.h hit_gain 1: b46's gain against that mean again, for the sheet's comparison.
     frame.authored[3] = rt_dev(RtDev::HitGain, 0.0f) > 0.5f && rt_hit_mean_ > 1.0f ? 1.0f / rt_hit_mean_ : 1.0f;
     frame.look[3] = rt_dev(RtDev::SunGlint, kSunGlint);
+    // The painted composite's look as the programs take it (FC c36's rt_look_; hit shading follows it: FB b53).
+    std::memcpy(frame.form, rt_look_, sizeof(frame.form));
     frame.grid[3] = rt_light_frame_.turn;
 }
 

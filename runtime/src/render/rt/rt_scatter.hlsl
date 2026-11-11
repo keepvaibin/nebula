@@ -5,11 +5,12 @@
 // Hillaire 2015: the froxel integration of Frostbite and Unreal's volumetric fog), so each pixel takes the air in
 // front of it with one trilinear fetch at its own depth (program.hlsli traced_scatter), blended things at theirs.
 // Each thread one column of froxels; through the slices, from the eye to each slice's middle:
-//   source = K V hg(cos) + (A + K) Vol.rgb - K V   (Vol.rgb holds the sun's light as if it went every way:
+//   source = Vol.rgb + K / (A + K) V (hg(cos) - 1)   (Vol.rgb holds the sun's light as if it went every way:
 //            (A s + K V) / (A + K) + local; the sun's part is put back by Henyey-Greenstein, g = kForward)
 //   L += T source (1 - e^(-sigma d)),  T *= e^(-sigma d)
-// Stored (Rgba16f 3D, as the volume) rgb L in the colour the programs write (a white thing under the stage's full
-// light is A + K), a T. sigma: g_pass_value[0].x (kAirDensity, per unit), A and K the stage's (the shading frame).
+// Stored (Rgba16f 3D, as the volume) rgb L in C1's unit, the one traced_scatter adds it to (white air under the
+// stage's full light, every way alike: 1; FB b55), a T. sigma: g_pass_value[0].x (the stage's air, per unit), A and K
+// the stage's (the shading frame).
 // Binds: t4 the shading frame, t9 this frame's volume, u0 the integral. Dispatch: 12 x 7 groups of 8 x 8.
 #include "rt_shade.hlsli"
 
@@ -51,9 +52,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         // The eye ray's length in the slice (its distances are along the view's axis); 0 past the air's reach.
         const float d = max(to - from, 0.0f) / max(-look.z, 0.05f);
         const float4 air = g_air.Load(int4(id.xy, z, 0));
-        float3 source = (a + k) * air.rgb;
+        float3 source = air.rgb;
         if (sun) {
-            source += k * air.a * (phase - 1.0f);
+            source += k / max(a + k, 1e-4f) * air.a * (phase - 1.0f);
         }
         const float kept = exp(-sigma * d);
         light += through * max(source, 0.0f) * (1.0f - kept);

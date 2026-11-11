@@ -24,7 +24,9 @@ struct RtShadeFrame {
                       // w the gain of a surface met (1 / the running mean of such hits, at most 1: rt_count_hit; FB b46)
     uint4 grid;       // x the grid's cells' first byte in t4, y its entries', z 1 when it holds any, w the frame's number
     float4 dome;      // rgb 1 / the dome's mean colour as the bounce rays see it, w 1 when known (rt_sky_ratio; FB b48)
-    uint4 spare[4];
+    float4 form;      // the painted composite's look (FC c36 rt_look_; DIRECTOR.md C3): x kForm, y the stage's m,
+                      // z kDebake, w kAmbientLook (rt_share_terms; FB b53)
+    uint4 spare[3];
 };
 static RtShadeFrame g_shade;
 
@@ -43,7 +45,8 @@ void rt_shade_begin(uint at) {
     g_shade.grid = g_tiles.Load4(at + 160u);
     g_shade.grid.xy += uint2(at, at);
     g_shade.dome = asfloat(g_tiles.Load4(at + 176u));
-    for (uint k = 0u; k < 4u; ++k) {
+    g_shade.form = asfloat(g_tiles.Load4(at + 192u));
+    for (uint k = 0u; k < 3u; ++k) {
         g_shade.spare[k] = uint4(0u, 0u, 0u, 0u);
     }
 }
@@ -412,15 +415,25 @@ void rt_share_terms(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo
         mo = float3x3(d.x, 0.0f, 0.0f, 0.0f, d.y, 0.0f, 0.0f, 0.0f, d.z);
         return;
     }
+    // The painted composite's share as the programs give it (FC c36 traced_painted, DIRECTOR.md C3; FB b53): the art is
+    // taken to hold A + K m, m = lerp(f, the stage's m, kForm), f the sun's facing as the light pass gives a painted
+    // surface; share = lerp(mean, a channel at a time, kShadowTint). Linear in O: s0 + M O.
     const float t = g_shade.key.w;
+    const float f = rt_sun_traced() ? saturate(nl / max(g_look.z, 1e-3f)) : 1.0f;
+    const float m = lerp(f, g_shade.form.y, g_shade.form.x);
+    const float ga = g_shade.form.w;
     const float la = rt_lum(a), lk = rt_lum(k);
-    const float lum_under = max(la + lk * nl, 1e-4f);
-    const float3 under = max(a + k * nl, 1e-4f);
-    const float vmean = (v.x + v.y + v.z) / 3.0f;
-    s0 = (1.0f - t) * (lk * nl * vmean / lum_under) + t * (k * nl * v / under);
-    const float shared_ = (1.0f - t) * la / lum_under / 3.0f;
-    const float3 own = t * a / under;
-    mo = float3x3(shared_ + own.x, shared_, shared_, shared_, shared_ + own.y, shared_, shared_, shared_, shared_ + own.z);
+    const float lum_held = la + lk * m;
+    const float3 held = a + k * m;
+    const float3 ok = float3(held > 1e-4f);  // a channel the art holds nothing of: 1
+    const float3 own_s0 = ok * (k * f * v / max(held, 1e-4f)) + (1.0f - ok);
+    const float3 own = ok * (ga * a / max(held, 1e-4f));
+    const bool whole = lum_held > 1e-4f;
+    const float mean_s0 = whole ? lk * f * rt_lum(v) / lum_held : 1.0f;
+    const float3 shared_ = whole ? ga * float3(0.2126f, 0.7152f, 0.0722f) * a / lum_held : float3(0.0f, 0.0f, 0.0f);
+    s0 = (1.0f - t) * mean_s0 + t * own_s0;
+    const float3 row = (1.0f - t) * shared_;  // every channel takes lum(A O) alike: the same row of columns
+    mo = float3x3(row.x + t * own.x, row.y, row.z, row.x, row.y + t * own.y, row.z, row.x, row.y, row.z + t * own.z);
 }
 
 float3 rt_share(bool lit, float nl, float3 v, float3 o) {
