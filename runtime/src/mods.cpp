@@ -1992,6 +1992,24 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         }
     }
     for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));
+    // The plan is lines of tab-separated fields: a name holding a tab or a line end would be read as other fields or
+    // another line by the cooker, so such a file is left out and named.
+    const auto plain = [](const std::string& text) { return text.find_first_of("\t\r\n") == std::string::npos; };
+    const auto keep_files = [&](std::vector<ModPlan::File>& list, const char* what) {
+        std::erase_if(list, [&](const ModPlan::File& file) {
+            if (plain(file.disc) && plain(galaxy::path_text(file.host))) return false;
+            plan.notes.push_back(std::string(what) + " " + galaxy::path_text(file.host) + " is not used: its name holds a tab or a line end");
+            return true;
+        });
+    };
+    keep_files(plan.files, "the file");
+    keep_files(plan.merges, "the merge file");
+    keep_files(plan.materials, "the material file");
+    std::erase_if(plan.patches, [&](const ModPlan::Patch& patch) {
+        if (plain(patch.entry) && plain(patch.disc) && plain(galaxy::path_text(patch.host))) return false;
+        plan.notes.push_back(patch.mod_id + ": " + galaxy::path_text(patch.host) + " is not used: its name holds a tab or a line end");
+        return true;
+    });
     {
         Session& s = session();
         const std::lock_guard<std::mutex> lock(s.mutex);

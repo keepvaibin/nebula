@@ -292,6 +292,10 @@ bool patches_by_key_in_the_plan() {
     write(root / "mods" / "low" / "layers" / "one" / "patches" / "ObjectData" / "Notes.txt", "not a patch");
     write(root / "mods" / "low" / "layers" / "two" / "patches" / "ObjectData" / "Things.bcsv.json", R"({"patch":1,"key":["name"]})");
     write(root / "mods" / "low" / "layers" / "two" / "patches" / "Effect" / "Particles.json", R"({"patch":1,"key":["name"]})");
+#if !defined(_WIN32)
+    // A name with a tab would be other fields of the cooker's line (Windows has no such names).
+    write(root / "mods" / "low" / "layers" / "two" / "patches" / "ObjectData" / "Tab\tName.bcsv.json", R"({"patch":1,"key":["name"]})");
+#endif
     write(root / "mods.ini", "[top]\nenabled=1\norder=1\n[low]\nenabled=1\norder=2\n");
     galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
     const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
@@ -315,6 +319,11 @@ bool patches_by_key_in_the_plan() {
     ok &= expect(std::any_of(plan.notes.begin(), plan.notes.end(),
                              [](const std::string& n) { return n.find("layers/one/patches/ObjectData/Notes.txt") != std::string::npos; }),
                  "a file that is not a patch is named");
+#if !defined(_WIN32)
+    ok &= expect(std::any_of(plan.notes.begin(), plan.notes.end(),
+                             [](const std::string& n) { return n.find("Tab\tName.bcsv.json is not used: its name holds a tab") != std::string::npos; }),
+                 "a patch whose name holds a tab is left out and named");
+#endif
     const std::string text = galaxy::mods::plan_text(plan, "RMGE01");
     ok &= expect(text.find("\n%mods\tlow\ttop\n") != std::string::npos &&
                      text.find("\n%patch\ttop\tlayers/base/patches/StageData/AstroGalaxy/jmp/Placement/Common/ObjInfo.json\t"
