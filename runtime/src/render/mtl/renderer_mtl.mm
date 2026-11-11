@@ -9,7 +9,6 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/texture_store.h"
-#include "galaxy/run_options.h"
 
 #include <TargetConditionals.h>
 
@@ -42,7 +41,7 @@ unsigned vendor_of(const std::string& name) {
 
 }  // namespace
 
-void RendererMtl::test_lose_device() {
+void RendererMtl::lose_device() {
     std::cerr << "[Renderer] Metal has no device loss to rehearse\n";
 }
 

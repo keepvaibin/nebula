@@ -1278,7 +1278,7 @@ bool window_modal_active() noexcept {
     return galaxy::sdl::g_panels.load(std::memory_order_relaxed) != 0;
 }
 
-void test_resize_window(unsigned long width, unsigned long height) noexcept {
+void resize_window_client(unsigned width, unsigned height) noexcept {
     using namespace galaxy::sdl;
     on_main(^{
         if (g_window != nil && g_view != nil) {

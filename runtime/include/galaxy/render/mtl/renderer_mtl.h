@@ -144,7 +144,7 @@ public:
     [[nodiscard]] bool occluded() const noexcept { return false; }
     void probe_occlusion() noexcept {}
 
-    void test_lose_device();
+    void lose_device();
     void begin_frame();
     std::uint64_t end_frame(bool present_swap_chain = true, SubmissionCallback on_submitted = nullptr,
                             void* submission_context = nullptr, bool generated = false);
