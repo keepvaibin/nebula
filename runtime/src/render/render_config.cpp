@@ -103,6 +103,16 @@ static float parse_float(const char* v, float def) {
         ? value : def;
 }
 
+// A time in milliseconds: any finite number, at least 0.
+static float parse_milliseconds(const char* v, float def) {
+    std::istringstream input(v);
+    input.imbue(std::locale::classic());
+    float value = 0.0f;
+    if (!(input >> value)) return def;
+    input >> std::ws;
+    return input.eof() && std::isfinite(value) && value >= 0.0f ? value : def;
+}
+
 static bool parse_bool(const char* v, bool def) {
     if (std::strcmp(v, "1") == 0 || std::strcmp(v, "true") == 0) return true;
     if (std::strcmp(v, "0") == 0 || std::strcmp(v, "false") == 0) return false;
@@ -201,7 +211,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
             static_cast<std::uint8_t>(parse_choice(val, kLevels, cfg.rt_parts[static_cast<std::size_t>(part)]));
     }
     else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
-    else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_float(val, cfg.rt_probe_ms);
+    else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_milliseconds(val, cfg.rt_probe_ms);
     else if (std::strcmp(key, "rt_chosen") == 0) cfg.rt_chosen = parse_bool(val, cfg.rt_chosen);
     else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
     else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
