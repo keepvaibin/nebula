@@ -1936,8 +1936,9 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             const bool glow_off = mesh.glow[3] != 0.0f && glow_now[3] == 0.0f;
             const bool glow_listed = glow_now[3] != 0.0f && rt_emitter_blocks_.contains(item.block);
             // c81 (L4): bit 25, and the raster's draw flag 256: a light this frame, never duller than its colour.
+            // c99: 2 a hot body (lava, a sun: glowing by its name), raster draw flag 8192 too.
             if (glow_now[3] != 0.0f && i < rt_glow_bodies_.size()) {
-                rt_glow_bodies_[i] = 1u;
+                rt_glow_bodies_[i] = mesh.glow_rule == 2u ? 2u : 1u;
             }
             // c90: bits 26-31 the share of the sun its far side takes x 63 (a crown of leaves, a cloud), whatever its glow.
             words[14] = (glow_off ? 0u

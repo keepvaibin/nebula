@@ -1252,6 +1252,8 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                      (metal ? 128u : 0u) |
                      // c81 (L4): a glowing mesh that is a light this frame: never duller than its own colour.
                      (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] != 0u ? 256u : 0u) |
+                     // c99: a hot body (lava, a sun) burns brighter than a lit surface (program.hlsli traced_colour).
+                     (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] == 2u ? 8192u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) |
                      (rt_light_on_ && rt_volume_drawn_ && scene_layer && rt_volume_reads(item, state) ? 4u : 0u) |
                      // A blended surface off the one the light pass saw (program.hlsli traced_by_air; FB 15.2).

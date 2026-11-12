@@ -1442,6 +1442,26 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
             }
         }
     }
+    // c99: what it shows with its own maps (each map's level 0 mean, RGBA): a glow's colour.
+    let means: Vec<Option<[f32; 4]>> = m
+        .textures
+        .iter()
+        .map(|&t| {
+            let (_, _, texels) = super::texture::record_level0(ir.records.get(ir.textures.get(t as usize)?.record)?)?;
+            if texels.is_empty() {
+                return None;
+            }
+            let mut sum = [0.0f64; 4];
+            for texel in &texels {
+                for c in 0..4 {
+                    sum[c] += f64::from(texel[c]);
+                }
+            }
+            let n = texels.len() as f64 * 255.0;
+            Some(sum.map(|v| (v / n) as f32))
+        })
+        .collect();
+    r.shown = super::hit_record::shown_with_maps(m, &|n| means.get(usize::from(n)).copied().flatten());
     super::hit_record::finish(stem, &m.name, thickness, r);
     // c83 (3.5): a far twin looks as its near model does.
     super::hit_record::follow_twin(stem, &m.name, r);

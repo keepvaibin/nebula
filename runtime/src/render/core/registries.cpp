@@ -368,6 +368,7 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_environment = hit.environment_share;
             std::copy_n(hit.glow, 4u, gpu_mesh.glow);
             gpu_mesh.glow_source = static_cast<std::uint8_t>(hit.glow_source & 31u);  // bits 5-7: why it glows (c81)
+            gpu_mesh.glow_rule = static_cast<std::uint8_t>(hit.glow_source >> 5u);
             gpu_mesh.hit_ior = hit.ior;
             gpu_mesh.hit_thickness = hit.thickness;
             std::copy_n(hit.env_tint, 3u, gpu_mesh.hit_env_tint);

@@ -117,6 +117,9 @@ pub struct Reading {
     /// c81 (L1): what it shows with its glow_source row white, where that row is black at the cook (a lamp the game
     /// lights by a register: the Observatory's StarLightMat_v); 0 otherwise.
     pub glow_lit: [f32; 3],
+    /// c99: what it shows under full light with each map at its own mean (shown_with_maps; the cook's
+    /// model_write::finish_reading fills it); None before, or with no map read.
+    pub shown: Option<[f32; 3]>,
     /// Units light crosses inside it (13.2): the model's meshes give it (model_write::Measure); 0 until then.
     pub thickness: f32,
     /// Its painted reflection's colour, largest channel 1 (the map's mean joins at the cook).
@@ -656,12 +659,14 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
     let one = format!("{stem}/{name}");
     // The material's bright colour: its emission, else its colour under full light, else (black at the cook, a row
     // the game animates lights it: c81) what it shows with that row white.
-    let colour = if luminance(r.emission) > 0.05 {
-        r.emission
-    } else if luminance(r.glow_lit) > luminance(r.base) {
-        r.glow_lit
-    } else {
-        r.base
+    // c99: what it shows with its own maps first (a lava's red map under a yellow register is red-orange light), unless
+    // its row lights it (c81) or it shows almost nothing at the cook.
+    let lamp = luminance(r.glow_lit) > luminance(r.base);
+    let colour = match r.shown {
+        Some(shown) if !lamp && luminance(shown) > 0.02 => shown,
+        _ if luminance(r.emission) > 0.05 => r.emission,
+        _ if lamp => r.glow_lit,
+        _ => r.base,
     };
     let own = || {
         // Its strongest channel at 1.
@@ -1152,45 +1157,63 @@ fn hue_saturation(c: [f32; 3]) -> (f32, f32) {
 }
 
 /// The signals of one material.
+/// Colour channel `code` as the rasteriser hands it over, with `light` of the lights' sum (0 none, 1 full): the
+/// material colour (the register, or mid grey where it is the vertex's) times ambient plus light, clamped.
+fn raster_colour(m: &MaterialIr, code: u8, light: f32) -> [f32; 4] {
+    let channels = 2 * (m.channel_count as usize).min(2);
+    let n = match code {
+        0 | 4 => 0usize,
+        1 | 5 => 1usize,
+        _ => return [0.0; 4],
+    };
+    if n * 2 >= channels {
+        return [1.0; 4];
+    }
+    let colour = &m.channels[n * 2];
+    let base = if colour.material_source != 0 {
+        [0.5f32, 0.5, 0.5, 1.0]
+    } else {
+        let c = m.material_color[n & 1];
+        [f32::from(c[0]) / 255.0, f32::from(c[1]) / 255.0, f32::from(c[2]) / 255.0, f32::from(c[3]) / 255.0]
+    };
+    let mut out = base;
+    if colour.enable != 0 {
+        let a = m.ambient_color[n & 1];
+        let amb = [f32::from(a[0]) / 255.0, f32::from(a[1]) / 255.0, f32::from(a[2]) / 255.0];
+        for c in 0..3 {
+            let sum = if colour.light_mask != 0 { (amb[c] + light).min(1.0) } else { amb[c] };
+            out[c] = base[c] * sum;
+        }
+    }
+    out
+}
+
+/// c99: what the material shows under full light with map n at `mean(n)` (RGBA 0-1; None: mid grey), its environment
+/// maps black (as signals' full): the art's colour as drawn. None when no stage reads a map that is not an environment's.
+pub fn shown_with_maps(m: &MaterialIr, mean: &dyn Fn(u8) -> Option<[f32; 4]>) -> Option<[f32; 3]> {
+    let environment = environment_maps(m);
+    let count = (m.pixel_stage_count as usize).min(m.stages.len());
+    if !m.stages[..count].iter().any(|s| s.map != 0xFF && !environment.contains(&s.map)) {
+        return None;
+    }
+    let map = |n: u8| -> [f32; 4] {
+        if environment.contains(&n) {
+            [0.0, 0.0, 0.0, 1.0]
+        } else {
+            mean(n).unwrap_or([0.5, 0.5, 0.5, 1.0])
+        }
+    };
+    let out = evaluate(m, &map, &|code| raster_colour(m, code, 1.0));
+    Some([out[0], out[1], out[2]].map(|v| v.clamp(0.0, 1.0)))
+}
+
 pub fn signals(m: &MaterialIr) -> Signals {
     let channels = 2 * (m.channel_count as usize).min(2);
     let lit_channel = |k: usize| m.channels[k].enable != 0 && m.channels[k].light_mask != 0;
     let lit = (0..channels).any(lit_channel);
     let environment = environment_maps(m);
     let grey = [0.5f32, 0.5, 0.5, 1.0];
-    let material = |n: usize| {
-        let c = m.material_color[n & 1];
-        [f32::from(c[0]) / 255.0, f32::from(c[1]) / 255.0, f32::from(c[2]) / 255.0, f32::from(c[3]) / 255.0]
-    };
-    let ambient = |n: usize| {
-        let c = m.ambient_color[n & 1];
-        [f32::from(c[0]) / 255.0, f32::from(c[1]) / 255.0, f32::from(c[2]) / 255.0]
-    };
-    // Colour channel n as the rasteriser hands it over, with `light` of the lights' sum (0 none, 1 full): the material
-    // colour (the register, or mid grey where it is the vertex's) times ambient plus light, clamped.
-    let raster = |light: f32| {
-        move |code: u8| -> [f32; 4] {
-            let n = match code {
-                0 | 4 => 0usize,
-                1 | 5 => 1usize,
-                _ => return [0.0; 4],
-            };
-            if n * 2 >= channels {
-                return [1.0; 4];
-            }
-            let colour = &m.channels[n * 2];
-            let base = if colour.material_source != 0 { grey } else { material(n) };
-            let mut out = base;
-            if colour.enable != 0 {
-                let amb = ambient(n);
-                for c in 0..3 {
-                    let sum = if colour.light_mask != 0 { (amb[c] + light).min(1.0) } else { amb[c] };
-                    out[c] = base[c] * sum;
-                }
-            }
-            out
-        }
-    };
+    let raster = |light: f32| move |code: u8| -> [f32; 4] { raster_colour(m, code, light) };
     let map = |environment_value: f32| {
         let environment = environment.clone();
         move |n: u8| -> [f32; 4] { if environment.contains(&n) { [environment_value, environment_value, environment_value, 1.0] } else { grey } }
@@ -1346,6 +1369,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         rule: "",
         glow_source: 0,
         glow_lit: [0.0; 3],
+        shown: None,
         thickness: 0.0,
         env_tint: unit_colour(s.environment_tint),
         env_map,
@@ -2310,6 +2334,14 @@ mod tests {
         assert_eq!(glow_with_rule("vrsky", "CableMat_v", &r).1, GLOW_NONE);
         assert_eq!(glow_with_rule("testmodelbloom", "CableMat_v", &r).1, GLOW_NONE);
         assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &r), ([1.0, 1.0, 1.0, -300.0], GLOW_NAME));
+        // c99: the colour it shows with its own map (a red-orange map under a yellow-green register), not the register's.
+        let mut lava = r.clone();
+        lava.base = [0.55, 1.0, 0.02];
+        lava.shown = Some([0.5, 0.25, 0.0]);
+        assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &lava), ([1.0, 0.5, 0.0, -300.0], GLOW_NAME));
+        // A material showing almost nothing at the cook keeps the colour it had.
+        lava.shown = Some([0.01, 0.0, 0.0]);
+        assert_eq!(glow_with_rule("lavahomeplanet", "lavamat_v", &lava).0[1], 1.0);
         let mut dark = m.clone();
         dark.material_color = [[0, 0, 0, 255]; 2];
         let d = read(&dark);

@@ -684,8 +684,13 @@ float4 traced_colour(float4 c, float4 pixel) {
     // c81, c97 (L4; the director 11-12): a glowing body (draw flag 256: its mesh a light this frame) shows its own
     // drawn colour lit from inside: at least 0.6 and at most 1.2 of its lit value, a channel (hue and pattern kept;
     // its own light at the range of its size no longer washes it white).
+    // c99 (the owner 11-12: the lava is flat): a hot body (draw flag 8192: lava, a sun) at 2 to 2.5 of it, over a
+    // sunlit surface's 1.25, so it burns.
     const float3 lit_value = traced_lin(base);
-    const float3 shown = (draw_flags & 256u) != 0u ? clamp(seen.rgb, 0.6 * lit_value, 1.2 * lit_value) : seen.rgb;
+    const bool hot = (draw_flags & 8192u) != 0u;
+    const float3 shown = (draw_flags & 256u) == 0u ? seen.rgb
+                         : hot ? clamp(seen.rgb, 2.0 * lit_value, 2.5 * lit_value)
+                               : clamp(seen.rgb, 0.6 * lit_value, 1.2 * lit_value);
     return float4(traced_srgb(shown), seen.a);
 }
 // The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag

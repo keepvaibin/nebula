@@ -85,6 +85,7 @@ struct GpuMesh {
     float hit_environment = 0.0f;  // how much of its look a painted reflection carries
     float glow[4]{};  // the light it gives: colour, and its strength (0: none)
     std::uint8_t glow_source = 0u;  // NebulaModelHit.glow_source: where the glow's colour comes from as it animates
+    std::uint8_t glow_rule = 0u;    // its bits 5-7: why it glows (hit_record.rs GLOW_*; 2 a hot body by name: c99)
     std::uint8_t hit_env_map = 0xFFu;
     float hit_ior = 1.5f, hit_thickness = 0.0f;
     float hit_env_tint[3]{};
