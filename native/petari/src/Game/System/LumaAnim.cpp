@@ -398,7 +398,7 @@ namespace luma {
                     nebula_log("anim: %s's %s is not a cooked table; its events are not given\n", sKernel->mod_id(pMod), file);
                     return nullptr;
                 }
-                Table table;
+                ::Table table;
                 table.attach(pFile);
                 const s32 frameColumn = table.searchItemInfo("frame");
                 const s32 nameColumn = table.searchItemInfo("event");
@@ -588,7 +588,7 @@ namespace luma {
                 } else {
                     // A row past the lead's last frame never comes (the cook checks a game clip's, not a mod's own:
                     // animation 2a): Content.EventPastEnd, each start of such a play.
-                    Table table;
+                    ::Table table;
                     table.attach(rPlay.events);
                     const s32 last = static_cast< s32 >(ctrlOf(pActor, lead)->getEnd());
                     for (u32 r = 0; r < rPlay.eventRows; r++) {
@@ -661,7 +661,7 @@ namespace luma {
                     }
                 }
                 if (rPlay.events != nullptr) {
-                    Table table;
+                    ::Table table;
                     table.attach(rPlay.events);
                     for (u32 r = 0; r < rPlay.eventRows; r++) {
                         s32 at = 0;
@@ -826,7 +826,7 @@ namespace luma {
                 if (rPlay.events == nullptr) {
                     return;
                 }
-                Table table;
+                ::Table table;
                 table.attach(rPlay.events);
                 for (u32 r = 0; r < rPlay.eventRows; r++) {
                     s32 at = 0;
