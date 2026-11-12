@@ -59,10 +59,11 @@ class LauncherActivity : ComponentActivity() {
         opened(intent)
     }
 
-    /** "Open with Nebula" and Share to Nebula (the manifest's filters): the files go where a drop would. */
+    /** "Open with Nebula" and Share to Nebula (the manifest's filters): the files go where a drop would. A nebula://
+     *  link (6.1's import by link) only brings Nebula to the front until net.internet ships. */
     private fun opened(intent: Intent?) {
         val uris: List<Uri> = when (intent?.action) {
-            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data).filter { it.scheme != "nebula" }
             Intent.ACTION_SEND -> listOfNotNull(IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java))
             Intent.ACTION_SEND_MULTIPLE ->
                 IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java).orEmpty()

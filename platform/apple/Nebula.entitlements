@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- What the app may do under the hardened runtime (build_macos.sh signs with it). The system's guarded things are
-     each a key here, and an app without the key is refused without the player being asked. Nebula asks for none of
-     them: no microphone (the game only plays sound; without this, an output device that also has inputs, a headset
-     or a controller's, has macOS ask for the microphone on the game's behalf), no camera, no location, no contacts,
-     calendars or photos, no Apple Events.
-     The one key: the game module (Contents/Frameworks/libsmg_game.dylib) is signed as the app is, by no team, and the
-     hardened runtime loads another team's or no team's library only with this. -->
+     each a key here, and an app without the key is refused without the player being asked.
+     The game module (Contents/Frameworks/libsmg_game.dylib) is signed as the app is, by no team, and the hardened
+     runtime loads another team's or no team's library only with disable-library-validation.
+     Plan 2.9: the microphone and the camera are a mod's (capture.audio, capture.video), and no mod can add a key after
+     release, so both are here. An output device that also has inputs (a headset, a controller's) must bring no
+     question for the game's own sound: the game opens its device for output only (audio_device_apple.mm
+     kAudioUnitSubType_DefaultOutput, audio_device_sdl.cpp SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK), so macOS asks only
+     when a mod the player allowed opens capture.audio. No location, contacts, calendars, photos or Apple Events. -->
 <plist version="1.0">
 <dict>
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
     <key>com.apple.security.device.audio-input</key>
-    <false/>
+    <true/>
     <key>com.apple.security.device.camera</key>
-    <false/>
+    <true/>
 </dict>
 </plist>

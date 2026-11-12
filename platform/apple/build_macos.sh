@@ -17,6 +17,8 @@ set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
+# Plan 2.9: every platform's release items (permissions, usage texts, file and link associations) are in the tree.
+python3 "$root/tools/check_platform_items.py" "$root"
 tools=
 work=
 archs=$(uname -m)
@@ -112,6 +114,8 @@ done
 
 version=$(sed -n 's/^project(Nebula VERSION \([0-9.]*\).*/\1/p' "$root/CMakeLists.txt")
 sed "s/@NEBULA_VERSION@/$version/g" "$here/Info.macos.plist.in" > "$app/Contents/Info.plist"
+# The Info.plist's player texts in every language the game ships (plan 2.9).
+python3 "$root/tools/package_text.py" apple "$app/Contents/Resources"
 
 # The icon, from the Windows one.
 iconset="$work/Nebula.iconset"

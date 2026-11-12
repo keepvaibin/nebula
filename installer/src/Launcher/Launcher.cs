@@ -35,6 +35,12 @@ namespace Nebula.Launcher
                     Application.Run(new SettingsForm(new LaunchSession(), args[1]));
                     return 0;
                 }
+                // A nebula:// link (plan 2.9; 6.1's import by link): the Mods page. The link itself waits on net.internet.
+                if (args.Length > 1 && string.Equals(args[0], "--open-link", StringComparison.OrdinalIgnoreCase))
+                {
+                    Application.Run(new SettingsForm(new LaunchSession(), null, true));
+                    return 0;
+                }
                 // The in-game menu runs this: a restart once the game has exited (--record: a diagnostics run).
                 int restartAfter;
                 if (args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
@@ -425,7 +431,7 @@ namespace Nebula.Launcher
             }
         }
 
-        public SettingsForm(LaunchSession session, string importMod = null)
+        public SettingsForm(LaunchSession session, string importMod = null, bool showMods = false)
         {
             this.session = session;
             offeredLanguages = GeneralSettings.Offered(Path.Combine(session.Content, "game.pak"));
@@ -468,12 +474,12 @@ namespace Nebula.Launcher
                 var modsTab = new TabPage(NebulaText.Of("Mods"));
                 pages.Add(modsTab);
                 var mods = new ModsPage(modsTab, session.App, session.Content);
-                if (importMod != null)
+                if (importMod != null || showMods)
                 {
                     Shown += delegate
                     {
                         tabs.SelectedTab = modsTab;
-                        mods.Import(new[] { importMod });
+                        if (importMod != null) mods.Import(new[] { importMod });
                     };
                 }
             }

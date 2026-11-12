@@ -284,6 +284,7 @@ namespace Nebula.Setup
         /// and the registry entries still follow.
         /// </summary>
         private const string LumaFileType = "Nebula.LumaMod";
+        private const string LinkScheme = "nebula";
 
         public static IList<string> Register(InstallLayout layout, string version, bool desktop)
         {
@@ -315,6 +316,15 @@ namespace Nebula.Setup
                 using (var icon = key.CreateSubKey("DefaultIcon")) icon.SetValue("", Path.Combine(app, "Nebula.exe") + ",0");
                 using (var open = key.CreateSubKey(@"shell\open\command"))
                     open.SetValue("", "\"" + Path.Combine(app, "Nebula.exe") + "\" --open-mod \"%1\"");
+            }
+            // nebula:// links (plan 2.9; 6.1's import by link): the Mods page; the link itself waits on net.internet.
+            using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\" + LinkScheme))
+            {
+                key.SetValue("", "URL:Nebula link");
+                key.SetValue("URL Protocol", "");
+                using (var icon = key.CreateSubKey("DefaultIcon")) icon.SetValue("", Path.Combine(app, "Nebula.exe") + ",0");
+                using (var open = key.CreateSubKey(@"shell\open\command"))
+                    open.SetValue("", "\"" + Path.Combine(app, "Nebula.exe") + "\" --open-link \"%1\"");
             }
             using (var key = Registry.CurrentUser.CreateSubKey(UninstallKey))
             {
@@ -424,6 +434,7 @@ namespace Nebula.Setup
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Nebula", false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + LumaFileType, false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\.luma", false);
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\" + LinkScheme, false);
             if (removeUserData && Directory.Exists(NebulaPaths.DataRoot)) FileUtil.DeleteTree(NebulaPaths.DataRoot);
             // The running setup copy deletes itself and the folder after exit.
             if (self.StartsWith(Path.GetFullPath(layout.Root), StringComparison.OrdinalIgnoreCase))

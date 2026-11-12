@@ -136,6 +136,7 @@ std::atomic<std::uint32_t> g_rumble_level{0};
 std::uint32_t g_rumble_sent_pad = 0;
 std::uint32_t g_rumble_sent_level = 0;
 std::uint64_t g_rumble_sent_ms = 0;
+bool g_imports_given = false;  // --import's files handed to the window (the pump's thread)
 
 // A finger's travel on a pointer screen, in pixels, not yet turned into the wheel's steps. Guarded by g_input_mutex.
 float g_menu_swipe_px = 0.0f;
@@ -1106,6 +1107,21 @@ void pump_events(int timeout_ms) noexcept {
     std::vector<MenuKey> menu_keys;
     int menu_wheel = 0;
     std::vector<std::filesystem::path> dropped;
+#if !defined(__ANDROID__)
+    // What the system opened Nebula with (--import, task 6.1; the desktop entry's %u, plan 2.9), at the first pump: a
+    // file goes where a drop goes, as on Windows (host_window_win32.cpp). A nebula:// link is 6.1's import by link,
+    // which waits on net.internet: said in the log, nothing else.
+    if (!g_imports_given) {
+        g_imports_given = true;
+        for (const std::filesystem::path& opened : galaxy::launch_args().imports) {
+            if (galaxy::path_text(opened).rfind("nebula:", 0) == 0) {
+                std::fprintf(stderr, "[open] a nebula:// link: links are not imported yet\n");
+            } else {
+                dropped.push_back(opened);
+            }
+        }
+    }
+#endif
     bool luma_display = false;  // LumaCore's display snapshot changes (services-system 4), read after the events
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);

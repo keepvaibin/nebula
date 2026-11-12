@@ -42,6 +42,8 @@ function Invoke-Checked([string]$File, [string[]]$Arguments) {
 }
 
 try {
+    # Plan 2.9: every platform's release items (permissions, usage texts, file and link associations) are in the tree.
+    Invoke-Checked python @((Join-Path $repo 'tools\check_platform_items.py'), $repo)
     $commit = (& git -C $repo rev-parse HEAD).Trim()
     foreach ($name in 'bin\x64\dxc.exe', 'bin\x64\dxcompiler.dll', 'bin\x64\dxil.dll', 'LICENSE-MS.txt', 'LICENCE-MIT.txt', 'LICENSE-LLVM.txt') {
         if (-not (Test-Path -LiteralPath (Join-Path $Dxc $name))) { throw "The compiler folder has no $name" }
