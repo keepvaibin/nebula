@@ -34,6 +34,7 @@ namespace luma {
                 {"mods.ids", 1, 0, nullptr, "services-mods"},
                 {"mods.install", 1, 0, nullptr, "services-mods"},
                 {"save", 1, 0, nullptr, "services-save"},
+                {"save.global", 1, 0, nullptr, "services-save"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
@@ -84,6 +85,7 @@ namespace luma {
             u32 sCarried = 0;  // nodes taken but kept for a later frame, all mods (game thread)
             void (*sTimePost)() = nullptr;     // time's due timers, before the events; null while no mod has a timer
             void (*sFrameHandler)() = nullptr;  // time's frame handlers, after them; null while no mod has one
+            void (*sSaveWork)() = nullptr;      // save.global's writes; null while no store has work
 
             bool sameText(const char* pA, const char* pB) {
                 if (pA == nullptr || pB == nullptr) {
@@ -593,6 +595,7 @@ namespace luma {
             // The module's own services, each when its contract is signed: time (services-time).
             (void)provide(luma::time::provider());
             (void)provide(luma::save::provider());
+            (void)provide(luma::save::globalProvider());
         }
 
         const void* find(const char* pName, u32 major, u32 minor, const char** ppPermission) {
@@ -754,6 +757,9 @@ namespace luma {
         }
 
         void frameStart() {
+            if (sSaveWork != nullptr) {
+                sSaveWork();
+            }
             if (sTimePost != nullptr) {
                 sTimePost();
             }
@@ -785,6 +791,13 @@ namespace luma {
             }
             sTimePost = pPost;
             sFrameHandler = pAfter;
+        }
+
+        void setSaveHook(void (*pWork)()) {
+            if (!onGameThread()) {
+                NEBULA_PANIC("LumaCore: the save hook was set off the game thread");
+            }
+            sSaveWork = pWork;
         }
 
         const LumaServiceKernel* kernel() { return &sKernel; }

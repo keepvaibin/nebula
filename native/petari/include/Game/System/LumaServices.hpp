@@ -45,6 +45,10 @@ namespace luma {
         // they are given (frame handlers). Each null while no mod needs it, so a frame with no mod pays nothing for them.
         void setTimeHooks(void (*pPost)(), void (*pAfter)());
 
+        // save.global's work at the frame's start, first (contract services-save 7: a change's write, a finished write
+        // let go). Null while no store has work.
+        void setSaveHook(void (*pWork)());
+
         // The kernel's half of luma_service_provider.h, for the module's own providers.
         const LumaServiceKernel* kernel();
 

@@ -85,7 +85,8 @@ namespace {
     }
 }  // namespace
 
-LumaSaveChunk::LumaSaveChunk(const GameDataHolder* pHolder) : mHolder(pHolder), mData(nullptr), mSize(0), mRoom(0), mMods(0) {
+LumaSaveChunk::LumaSaveChunk(const GameDataHolder* pHolder, u32 modMost, u32 chunkMost)
+    : mHolder(pHolder), mModMost(modMost), mChunkMost(chunkMost), mData(nullptr), mSize(0), mRoom(0), mMods(0) {
 }
 
 LumaSaveChunk::~LumaSaveChunk() {
@@ -122,8 +123,19 @@ s32 LumaSaveChunk::deserialize(const u8* pData, u32 size) {
     if (size == 0) {
         return 0;
     }
+    // Broken: said once. No memory for mods' data: the values are not there this time. Either way the file's game
+    // data loads.
+    if (parse(pData, size) == Result_NotFound) {
+        char file[4];
+        fileNumber(file);
+        sayFile(cCodeBroken, "Save.ChunkBroken", file);
+    }
+    return 0;
+}
 
-    bool good = size >= 4 && size - 4 <= cChunkMost && MR::loadSaveU16(pData) == cVersion;
+LumaSaveChunk::Result LumaSaveChunk::parse(const u8* pData, u32 size) {
+    initializeData();
+    bool good = size >= 4 && size - 4 <= mChunkMost && MR::loadSaveU16(pData) == cVersion;
     const u32 mods = good ? MR::loadSaveU16(pData + 2) : 0;
     u32 at = 4;
     for (u32 m = 0; good && m < mods; m++) {
@@ -150,7 +162,7 @@ s32 LumaSaveChunk::deserialize(const u8* pData, u32 size) {
         }
         const u32 bytes = MR::loadSaveU32(pData + at + 1 + idLength);
         const u32 entries = at + 1 + idLength + 4;
-        if (bytes > cModMost || bytes > size - entries) {
+        if (bytes > mModMost || bytes > size - entries) {
             good = false;
             break;
         }
@@ -185,21 +197,17 @@ s32 LumaSaveChunk::deserialize(const u8* pData, u32 size) {
     }
 
     if (!good) {
-        char file[4];
-        fileNumber(file);
-        sayFile(cCodeBroken, "Save.ChunkBroken", file);
-        return 0;
+        return Result_NotFound;
     }
     if (size > 4) {
         if (!splice(0, 0, size - 4)) {
-            // No memory for mods' data: the file's game data still loads; the values are not there this time.
             initializeData();
-            return 0;
+            return Result_Memory;
         }
         MR::copyMemory(mData, pData + 4, size - 4);
     }
     mMods = mods;
-    return 0;
+    return Result_Ok;
 }
 
 void LumaSaveChunk::initializeData() {
@@ -311,10 +319,10 @@ LumaSaveChunk::Result LumaSaveChunk::set(const char* pModId, const char* pKey, c
     const u32 modNow = modAt >= 0 ? modBytes(static_cast< u32 >(modAt)) : 0;
     const u32 modAfter = modNow - oldSize + entrySize;
     const u32 blockHead = modAt >= 0 ? 0 : 1 + idLength + 4;
-    if (modAfter > cModMost) {
+    if (modAfter > mModMost) {
         return Result_Limit;
     }
-    if (mSize - oldSize + entrySize + blockHead > cChunkMost - 4 || (modAt < 0 && mMods >= 0xFFFF)) {
+    if (mSize - oldSize + entrySize + blockHead > mChunkMost - 4 || (modAt < 0 && mMods >= 0xFFFF)) {
         return Result_ChunkFull;
     }
 
@@ -391,7 +399,7 @@ LumaSaveChunk::Result LumaSaveChunk::renameMod(const char* pOldId, const char* p
     }
     const u32 oldLength = mData[modAt];
     const u32 newLength = textLength(pNewId);
-    if (mSize - oldLength + newLength > cChunkMost - 4) {
+    if (mSize - oldLength + newLength > mChunkMost - 4) {
         return Result_ChunkFull;
     }
     if (!splice(static_cast< u32 >(modAt) + 1, oldLength, newLength)) {

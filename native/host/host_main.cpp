@@ -2539,16 +2539,30 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
         if (save_folder_path(name.starts_with("GameData.bin") ? gOldSaveDataPath.c_str() : gSaveDataPath.c_str(), &folder)) {
-            switch (r.op) {
-            case NEBULA_SAVE_READ:
-                result = galaxy::saves::read(folder, name, r.buffer, r.size, r.length);
-                break;
-            case NEBULA_SAVE_WRITE:
-                result = galaxy::saves::write(folder, name, r.buffer, r.size);
-                break;
-            case NEBULA_SAVE_DELETE:
-                result = galaxy::saves::remove(folder, name);
-                break;
+            // A mod's global file (services-save 7): "luma/<id>.bin" in the luma folder, made at its first write, kept
+            // without backups. Any other name is the game's own file, a plain name in the save folder.
+            std::string_view file = name;
+            galaxy::saves::Backups backups = galaxy::saves::Backups::kKeep;
+            bool placed = true;
+            if (name.starts_with(std::string(galaxy::saves::kModFolder) + "/")) {
+                file = galaxy::saves::mod_file_name(name);
+                folder /= fs::path(galaxy::saves::kModFolder);
+                backups = galaxy::saves::Backups::kNone;
+                std::error_code made;
+                placed = !file.empty() && (r.op != NEBULA_SAVE_WRITE || fs::create_directories(folder, made) || !made);
+            }
+            if (placed) {
+                switch (r.op) {
+                case NEBULA_SAVE_READ:
+                    result = galaxy::saves::read(folder, file, r.buffer, r.size, r.length);
+                    break;
+                case NEBULA_SAVE_WRITE:
+                    result = galaxy::saves::write(folder, file, r.buffer, r.size, backups);
+                    break;
+                case NEBULA_SAVE_DELETE:
+                    result = galaxy::saves::remove(folder, file);
+                    break;
+                }
             }
         }
 #if defined(__cpp_lib_atomic_ref)

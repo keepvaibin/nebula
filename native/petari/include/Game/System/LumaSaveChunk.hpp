@@ -31,7 +31,9 @@ public:
         Result_Memory,
     };
 
-    explicit LumaSaveChunk(const GameDataHolder* pHolder);
+    // A file's chunk (its holder names the file in messages), or with a null holder one mod's values across files
+    // (services-save item 7: save.global's store, its own limits, never a chunk of a holder).
+    explicit LumaSaveChunk(const GameDataHolder* pHolder, u32 modMost = cModMost, u32 chunkMost = cChunkMost);
     virtual ~LumaSaveChunk();
 
     virtual u32 makeHeaderHashCode() const;
@@ -43,6 +45,10 @@ public:
     // game data loads as it is (item 3).
     virtual s32 deserialize(const u8* pData, u32 size);
     virtual void initializeData();
+
+    // The data form serialize writes (u16 version, u16 mods, the mods' blocks) read whole, saying nothing:
+    // Result_Ok, Result_NotFound when it does not parse (nothing kept), Result_Memory (nothing kept).
+    Result parse(const u8* pData, u32 size);
 
     // The data serialize writes, header excluded: the make room the save handler gives on top of the fixed part.
     u32 getDataSize() const { return mMods != 0 ? 4 + mSize : 4; }
@@ -73,6 +79,8 @@ private:
     void fileNumber(char (&rText)[4]) const;
 
     const GameDataHolder* mHolder;
+    u32 mModMost;
+    u32 mChunkMost;
     u8* mData;
     u32 mSize;
     u32 mRoom;

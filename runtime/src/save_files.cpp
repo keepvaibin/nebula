@@ -12,6 +12,15 @@ bool is_plain_name(std::string_view name) noexcept {
     return !name.empty() && name != "." && name != ".." && name.find_first_of("/\\:") == std::string_view::npos;
 }
 
+std::string_view mod_file_name(std::string_view request_name) noexcept {
+    if (request_name.size() <= kModFolder.size() + 1u || !request_name.starts_with(kModFolder) ||
+        request_name[kModFolder.size()] != '/') {
+        return {};
+    }
+    const std::string_view name = request_name.substr(kModFolder.size() + 1u);
+    return is_plain_name(name) ? name : std::string_view{};
+}
+
 SaveFolders save_folders(std::string_view code) {
     std::string hex;
     for (const char c : code) {
@@ -51,7 +60,8 @@ Result read(const std::filesystem::path& folder, std::string_view name, void* bu
     }
 }
 
-Result write(const std::filesystem::path& folder, std::string_view name, const void* data, std::uint32_t size) noexcept {
+Result write(const std::filesystem::path& folder, std::string_view name, const void* data, std::uint32_t size,
+             Backups backups) noexcept {
     try {
         if (!is_plain_name(name)) {
             return kFailed;
@@ -60,7 +70,7 @@ Result write(const std::filesystem::path& folder, std::string_view name, const v
         const std::filesystem::path path = folder / std::filesystem::path(name);
         // The last two saves stay beside it, for a player whose newest file is damaged.
         std::error_code error;
-        if (std::filesystem::is_regular_file(path, error)) {
+        if (backups == Backups::kKeep && std::filesystem::is_regular_file(path, error)) {
             std::filesystem::path first = path;
             first += ".1";
             std::filesystem::path second = path;

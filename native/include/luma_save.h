@@ -55,16 +55,18 @@ typedef struct LumaSaveService {
 
 typedef struct LumaSaveGlobalService {
     LumaServiceTable base;
-    /* 1.0. Game thread. As save's get, for this mod's values across files (read from its global file at the mod's
-       first call). LUMA_E_NOT_FOUND when not set, not reported; LUMA_E_ARGUMENT as save's get. size: 0 to 65536
-       used. */
+    /* 1.0. Game thread. As save's get, for this mod's values across files (its global file's read starts as the mod
+       begins; a first call before it ends waits for it). LUMA_E_NOT_FOUND when not set, not reported; LUMA_E_ARGUMENT
+       as save's get. The file could not be read: LUMA_E_IO from every call, and nothing is written over it; no memory
+       for the values: LUMA_E_MEMORY, the same. A file that does not parse: one Error Save.GlobalBroken, the values
+       start empty. size: 0 to 65536 used. */
     int64_t (*get)(const LumaMod* mod, const char* key, void* buf, uint64_t size);
     /* 1.0. Game thread. Sets the value; the mod's global file is written whole on the file thread at the end of the
        frame. LUMA_OK; past 64 KiB a value or 1 MiB the mod's file: LUMA_E_LIMIT, reported; LUMA_E_ARGUMENT as save's
-       set. bytes: 0 to 65536. */
+       set; LUMA_E_IO, LUMA_E_MEMORY as get. bytes: 0 to 65536. */
     int32_t (*set)(const LumaMod* mod, const char* key, const void* value, uint64_t bytes);
     /* 1.0. Game thread. Removes the value, written as set writes. LUMA_OK; LUMA_E_NOT_FOUND when not set, not
-       reported; a key outside the rule: LUMA_E_ARGUMENT, reported. */
+       reported; a key outside the rule: LUMA_E_ARGUMENT, reported; LUMA_E_IO, LUMA_E_MEMORY as get. */
     int32_t (*remove)(const LumaMod* mod, const char* key);
 } LumaSaveGlobalService;
 

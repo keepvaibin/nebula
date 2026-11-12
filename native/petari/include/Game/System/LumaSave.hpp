@@ -14,5 +14,7 @@ namespace luma {
 
         // The service's provider, registered by luma::services::provideOwn.
         const LumaServiceProvider* provider();
+        // save.global's (item 7): each mod's values across files in <save root>/<code>/luma/<id>.bin.
+        const LumaServiceProvider* globalProvider();
     }
 }
