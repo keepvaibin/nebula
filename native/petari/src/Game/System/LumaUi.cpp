@@ -2,6 +2,7 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Render/Clip.hpp"
 #include "Game/System/Arenas.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
@@ -19,6 +20,7 @@
 #include <luma_services.h>
 #include <luma_ui.h>
 #include <nebula_format.h>
+#include <nebula_module.h>
 #include <cstring>
 
 // The ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui). Game thread throughout: the service's calls, the frame,
@@ -43,6 +45,8 @@ namespace luma {
             const u32 cNotTextCode = 573;
             const u32 cNoSceneCode = 574;
             const u32 cNotUtf8Code = 575;
+            const u32 cMissingAnimationCode = 576;
+            const u32 kMostEnds = kMostOpen * 2u;  // end events waiting or being given, across mods
 
             // A layout actor the service made: the game's LayoutActor, connected to the layer it was made for.
             class ScreenActor : public LayoutActor {
@@ -53,7 +57,7 @@ namespace luma {
                     } else {
                         MR::connectToSceneLayout(this);
                     }
-                    initLayoutManager(pLayout, 0);
+                    initLayoutManager(pLayout, 1);  // one animation layer on the root: ui.play
                 }
             };
 
@@ -72,6 +76,22 @@ namespace luma {
                 Made* made;
                 u32 frame;          // frames the frame has seen it
                 bool reused;
+                // The animation play started, until its end is given: who hears it, and whether it loops (no end).
+                bool playing;
+                bool loop;
+                LumaEventFn fn;
+                void* user;
+            };
+
+            // A LUMA_UI_EVENT_ANIMATION_END on its way: its own copy of what it says (its screen may end or be used
+            // again meanwhile). Busy from its post to the start of its deliver, or its drop.
+            struct End {
+                LumaEventNode node;
+                bool busy;
+                LumaHandle screen;
+                s32 status;
+                LumaEventFn fn;
+                void* user;
             };
 
             struct Pane {
@@ -91,6 +111,7 @@ namespace luma {
             LumaHandle sNextHandle = 0;
             Made* sMade = nullptr;
             u32 sMadeCount = 0;
+            End sEnds[kMostEnds];
 
             // ---- Calls ----
 
@@ -239,6 +260,56 @@ namespace luma {
                 luma::modlog::fact(key, json);
             }
 
+            // ---- Animation ends ----
+
+            void deliverEnd(LumaEventNode* pNode) {
+                End* const pEnd = reinterpret_cast< End* >(pNode);
+                const LumaMod* const pMod = pNode->mod;
+                LumaEvent event = {};
+                event.size = sizeof(event);
+                event.kind = LUMA_UI_EVENT_ANIMATION_END;
+                event.status = pEnd->status;
+                event.handle = pEnd->screen;
+                const LumaEventFn fn = pEnd->fn;
+                void* const pUser = pEnd->user;
+                pEnd->busy = false;  // free again before the mod's function, which may play again
+                (void)sKernel->call(pMod, LUMA_UI_NAME, fn, pUser, &event);
+            }
+
+            void dropEnd(LumaEventNode* pNode) {
+                reinterpret_cast< End* >(pNode)->busy = false;
+            }
+
+            // The screen's animation is over (`status`): its end posted when the mod asked for one.
+            void finishPlay(Screen& rScreen, s32 status) {
+                if (!rScreen.playing) {
+                    return;
+                }
+                rScreen.playing = false;
+                if (rScreen.fn == nullptr) {
+                    return;
+                }
+                for (u32 i = 0; i < kMostEnds; i++) {
+                    End& rEnd = sEnds[i];
+                    if (rEnd.busy) {
+                        continue;
+                    }
+                    rEnd.busy = true;
+                    rEnd.node.mod = rScreen.mod;
+                    rEnd.node.deliver = deliverEnd;
+                    rEnd.node.drop = dropEnd;
+                    rEnd.screen = rScreen.handle;
+                    rEnd.status = status;
+                    rEnd.fn = rScreen.fn;
+                    rEnd.user = rScreen.user;
+                    if (sKernel->post(&rEnd.node) != LUMA_OK) {
+                        rEnd.busy = false;  // the mod is gone: no one to tell
+                    }
+                    return;
+                }
+                nebula_log("ui: no room for an animation end of %s; it is not given\n", sKernel->mod_id(rScreen.mod));
+            }
+
             // ---- Ends ----
 
             void endPanes(LumaHandle screen, bool restore) {
@@ -266,8 +337,10 @@ namespace luma {
                     nebula_snprintf(json, sizeof(json), "{\"why\":\"%s\"}", pWhy);
                     luma::modlog::fact(key, json);
                 }
+                finishPlay(rScreen, LUMA_E_CANCELLED);
                 endPanes(rScreen.handle, stop);
                 if (Made* const pMade = rScreen.made; pMade != nullptr && stop) {
+                    MR::stopAnim(pMade->actor, 0);
                     if (!MR::isDead(pMade->actor)) {
                         pMade->actor->kill();
                     }
@@ -577,6 +650,67 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            int32_t svcPlay(const LumaMod* pMod, LumaUiScreen screen, const char* pAnimation, bool loop, LumaEventFn fn,
+                            void* pUser) {
+                const char* const pWhere = "ui.play";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                Screen* const pScreen = screenOf(pMod, screen);
+                if (pScreen == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                if (pAnimation == nullptr || pAnimation[0] == 0) {
+                    report(pMod, pWhere, 101u, "animation", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                ScreenActor* const pActor = pScreen->made->actor;
+                if (pActor->getLayoutManager()->getAnimTransform(pAnimation) == nullptr) {
+                    char column[300];
+                    nebula_snprintf(column, sizeof(column), "%s/%s", pScreen->made->layout, pAnimation);
+                    say(pMod, cMissingAnimationCode, "Ui.MissingAnimation", MR::getHashCode(column), "layout",
+                        pScreen->made->layout, "found", pAnimation);
+                    return LUMA_E_NOT_FOUND;
+                }
+                finishPlay(*pScreen, LUMA_E_CANCELLED);
+                MR::startAnim(pActor, pAnimation, 0);
+                // Once or looping as the mod asks, whatever the data says.
+                MR::getAnimCtrl(pActor, 0)->setAttribute(loop ? FrameCtrl::EMode_LOOP : FrameCtrl::EMode_NONE);
+                pScreen->playing = true;
+                pScreen->loop = loop;
+                pScreen->fn = fn;
+                pScreen->user = pUser;
+                if (luma::modlog::facts()) {
+                    char name[160];
+                    luma::modlog::jsonString(name, sizeof(name), pAnimation);
+                    char json[256];
+                    nebula_snprintf(json, sizeof(json), "{\"animation\":%s,\"loop\":%s,\"frames\":%d}", name,
+                                    loop ? "true" : "false", static_cast< int >(MR::getAnimFrameMax(pActor, 0u)));
+                    char key[48];
+                    nebula_snprintf(key, sizeof(key), "ui.play.%llu", static_cast< unsigned long long >(pScreen->handle));
+                    luma::modlog::fact(key, json);
+                }
+                return LUMA_OK;
+            }
+
+            int32_t svcStop(const LumaMod* pMod, LumaUiScreen screen) {
+                const char* const pWhere = "ui.stop";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                Screen* const pScreen = screenOf(pMod, screen);
+                if (pScreen == nullptr) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                if (pScreen->playing) {
+                    MR::stopAnim(pScreen->made->actor, 0);
+                    finishPlay(*pScreen, LUMA_E_CANCELLED);
+                }
+                return LUMA_OK;
+            }
+
             const LumaUiService cTable = {
                 {sizeof(LumaUiService), LUMA_UI_MAJOR, LUMA_UI_MINOR},
                 svcOpen,
@@ -585,6 +719,8 @@ namespace luma {
                 svcSetVisible,
                 svcShow,
                 svcClose,
+                svcPlay,
+                svcStop,
             };
 
             // The service's rows (services-registry 11: ui's block, 570-619).
@@ -633,7 +769,17 @@ namespace luma {
         }  // namespace
 
         void frame() {
-            if (sLive == 0 || !luma::modlog::facts()) {
+            if (sLive == 0) {
+                return;
+            }
+            // Animations played to their end (a loop never ends).
+            for (u32 i = 0; i < sHigh; i++) {
+                Screen& rScreen = sScreens[i];
+                if (rScreen.handle != 0 && rScreen.playing && !rScreen.loop && MR::isAnimStopped(rScreen.made->actor, 0)) {
+                    finishPlay(rScreen, LUMA_OK);
+                }
+            }
+            if (!luma::modlog::facts()) {
                 return;
             }
             for (u32 i = 0; i < sHigh; i++) {

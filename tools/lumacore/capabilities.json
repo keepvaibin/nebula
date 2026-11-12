@@ -124,6 +124,8 @@
     "ui.refusals": "ui's refusals answer their status and write no handle; close ends a screen and its panes (2.4, 3.8)",
     "ui.reuse": "A screen a mod closed is that mod's again when it opens the layout on the layer: its panes shown as the layout has them (2.4, 3.8)",
     "ui.limit": "ui refuses a mod's open past LUMA_UI_MOST_SCREENS open ones; a close frees one (2.4, 3.8)",
+    "ui.play": "ui plays a layout animation on a screen, once or looping, whatever its data says (2.4, 3.8 layer 3)",
+    "ui.animation_end": "A played animation's end comes as LUMA_UI_EVENT_ANIMATION_END at a frame's start: LUMA_OK at its end, LUMA_E_CANCELLED when stopped first (2.4, 3.8)",
     "model.scene_end": "A model on an actor the scene releases ends \"scene\" once at the release, and nothing of it is touched after (models 7)",
     "model.actor_end": "A model on an actor that dies ends \"actor\" once, as the actor's own parts; the ended handle and an attach on the dead actor are refused (3.2)",
     "model.player_parts": "content.model lists the player's parts and the joints they are drawn at (3.2)",

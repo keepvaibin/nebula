@@ -30,6 +30,12 @@ typedef LumaHandle LumaUiScreen;
 /* A pane of an open screen: ends with its screen. */
 typedef LumaHandle LumaUiPane;
 
+/* The events a screen's animation gives (LumaEvent.kind; handle: the screen). */
+enum {
+    LUMA_UI_EVENT_ANIMATION_END = 1 /* status LUMA_OK: it played to its end; LUMA_E_CANCELLED: another play, stop,
+                                       close, the scene's end or the mod's stopped it first */
+};
+
 /* Where a screen is drawn. */
 typedef enum LumaUiLayer {
     LUMA_UI_HUD = 0,   /* with the game's HUD: drawn and moving while the game runs, stopped under its pause menu */
@@ -66,6 +72,17 @@ typedef struct LumaUiService {
     /* 1.0. Game thread. The screen is no longer drawn; it and its panes' handles end. LUMA_OK; an ended screen:
        LUMA_E_HANDLE, reported. Thread and taking out as open. */
     int32_t (*close)(const LumaMod* mod, LumaUiScreen screen);
+    /* 1.0. Game thread. The layout's animation `animation` (its BRLAN, or a mod layout's named track set, 3.8) played
+       on the whole screen from its first frame: once (`loop` false, then it stays on its last frame) or looping. With
+       `fn`, the screen's LUMA_UI_EVENT_ANIMATION_END comes to fn(user, event) at the frame's start after its last
+       frame (never for a loop), or LUMA_E_CANCELLED when it is stopped first. LUMA_OK; no animation of that name:
+       LUMA_E_NOT_FOUND, Ui.MissingAnimation in the mod log; an ended screen: LUMA_E_HANDLE, reported; a null or empty
+       name: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
+    int32_t (*play)(const LumaMod* mod, LumaUiScreen screen, const char* animation, bool loop, LumaEventFn fn,
+                    void* user);
+    /* 1.0. Game thread. The playing animation stops where it is (its end event: LUMA_E_CANCELLED). LUMA_OK, also with
+       none playing; an ended screen: LUMA_E_HANDLE, reported. Thread and taking out as open. */
+    int32_t (*stop)(const LumaMod* mod, LumaUiScreen screen);
 } LumaUiService;
 
 #ifdef __cplusplus
