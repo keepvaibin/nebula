@@ -1778,8 +1778,13 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
             const auto bits_of = [](float v, float scale, std::uint32_t top) {
                 return std::min(top, static_cast<std::uint32_t>(std::max(v, 0.0f) * scale + 0.5f));
             };
-            words[15] = bits_of(mesh.hit_env_tint[0], 15.0f, 15u) | bits_of(mesh.hit_env_tint[1], 15.0f, 15u) << 4u |
-                        bits_of(mesh.hit_env_tint[2], 15.0f, 15u) << 8u | bits_of(mesh.hit_ior - 1.0f, 100.0f, 255u) << 12u |
+            // The mirror's tint by the material's tint keep (A4-W6): lerp(white, the map's colour, keep), the class's
+            // own keep (below 0) all of it; a clear class's 0 mirrors untinted. No painted map: 0 as before.
+            const bool painted_map = mesh.hit_env_tint[0] > 0.0f || mesh.hit_env_tint[1] > 0.0f || mesh.hit_env_tint[2] > 0.0f;
+            const float keep = mesh.hit_tint_keep < 0.0f ? 1.0f : std::min(mesh.hit_tint_keep, 1.0f);
+            const auto tinted = [&](unsigned c) { return painted_map ? 1.0f + (mesh.hit_env_tint[c] - 1.0f) * keep : 0.0f; };
+            words[15] = bits_of(tinted(0), 15.0f, 15u) | bits_of(tinted(1), 15.0f, 15u) << 4u |
+                        bits_of(tinted(2), 15.0f, 15u) << 8u | bits_of(mesh.hit_ior - 1.0f, 100.0f, 255u) << 12u |
                         (mesh.hit_shine < 0.0f ? 63u : bits_of(mesh.hit_shine, 4.0f, 62u)) << 20u |
                         (mesh.hit_body < 0.0f ? 63u : bits_of(mesh.hit_body, 62.0f, 62u)) << 26u;
             // Its thickness in units (13.2: a body bends what is seen through it, a shell does not; rt_transmit.hlsl).

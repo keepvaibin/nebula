@@ -525,6 +525,18 @@ fn alpha_test_always(m: &MaterialIr) -> bool {
 /// The class and numbers the signals give (the design's 2b.3, the rules that need the material alone).
 /// Whether a material's name says it is falling water: "fallmat" or "fallback" (FallMat, DxFallMat, ExFallMatSplash,
 /// FallBackFaceMat ...: every Fall material of the census) or "taki" (waterfall) at its start; not OtaKing, Rainfall.
+/// A clear material's index and roughness by what the census names it (A4-W6): crystal 1.8 (as the art asks), ice
+/// 1.31 and a little rough, other glass 1.5. `stem` and `name` lower case.
+fn clear_kind(stem: &str, name: &str) -> (f32, Option<f32>) {
+    if name.starts_with("cry") || stem.contains("crystal") {
+        (1.8, None)
+    } else if name.starts_with("ice") || stem.starts_with("ice") || stem.ends_with("ice") {
+        (1.31, Some(0.08))
+    } else {
+        (1.5, None)
+    }
+}
+
 fn falling_water(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name.contains("fallmat") || name.contains("fallback") || name.starts_with("taki")
@@ -717,6 +729,18 @@ pub fn finish(stem: &str, name: &str, measured: f32, r: &mut Reading) {
         r.transmission = 1.0;
         r.rule = "water (rt_water.tsv)";
     }
+    // The clear classes (A4-W6; LIGHT-MODEL.md 6, 7): the surface untinted, the colour absorption; glass's index by
+    // its name. The review's rows come after and may say otherwise.
+    if r.class == Class::Glass || r.class == Class::Water {
+        r.tint_keep = 0.0;
+    }
+    if r.class == Class::Glass {
+        let (ior, roughness) = clear_kind(&stem, &name.to_ascii_lowercase());
+        r.ior = ior;
+        if let Some(roughness) = roughness {
+            r.roughness = roughness;
+        }
+    }
     review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
         review(table, &stem, name, r);
@@ -906,6 +930,16 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clear_kinds_by_name() {
+        assert_eq!(clear_kind("assemblyblockpartsa", "crystal_v"), (1.8, None));
+        assert_eq!(clear_kind("stardustartplanet", "crya_v"), (1.8, None));
+        assert_eq!(clear_kind("smallmazeplanet", "icemat"), (1.31, Some(0.08)));
+        assert_eq!(clear_kind("icecube", "lambert2(2)"), (1.31, Some(0.08)));
+        assert_eq!(clear_kind("karikariice", "omotemat_v"), (1.31, Some(0.08)));
+        assert_eq!(clear_kind("bathtubplanet", "glass_v"), (1.5, None));
+    }
 
     fn stage(colour: [u8; 4], alpha: [u8; 4]) -> StageIr {
         StageIr { coord: 0xFF, map: 0xFF, channel: 0xFF, color_in: colour, alpha_in: alpha, color_clamp: 1, alpha_clamp: 1, ..Default::default() }
