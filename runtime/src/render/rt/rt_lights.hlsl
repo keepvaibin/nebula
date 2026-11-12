@@ -230,9 +230,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 const float3 to = aim - s.at;
                 const float far_ = length(to);
                 const float short_of = far_ - min(max(kept_at.w, 10.0f), 60.0f);
-                uint met;
-                if (short_of > 1.0f && blocked(s.origin, to / max(far_, 1e-3f), short_of, kMaskSolid | kMaskShadowOnly, false, met) &&
-                    g_items.Load(g_at.x + met * kItemBytes) != kept_slot) {
+                if (short_of > 1.0f && blocked_but(s.origin, to / max(far_, 1e-3f), short_of, kMaskSolid | kMaskShadowOnly, kept_slot)) {
                     weight = 0.0f;
                 }
                 // Far over what a picture shows is cut: the filter's moments stay finite.

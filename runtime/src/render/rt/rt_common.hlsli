@@ -350,6 +350,28 @@ bool blocked(float3 origin, float3 direction, float reach, uint mask, bool any, 
     return occluder_at(origin, direction, reach, mask, any, met) >= 0.0f;
 }
 
+// Whether anything of `mask` but the items of slot `own` (a light's own body) stands on the ray before `reach`. The
+// walk ends at the first such hit (A2-14): every candidate is offered (forced non-opaque), the own slot's are passed
+// over.
+bool blocked_but(float3 origin, float3 direction, float reach, uint mask, uint own) {
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_NONE> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, mask, ray);
+    while (query.Proceed()) {
+        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
+            g_items.Load(g_at.x + query.CandidateInstanceID() * kItemBytes) != own) {
+            query.CommitNonOpaqueTriangleHit();
+            query.Abort();
+        }
+    }
+    InterlockedAdd(g_counters[17], 1u);
+    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
 // What an emitter adds at a surface unshadowed, as a share of the surface's own colour: its intensity over the
 // distance squared and its own size squared, by the surface's facing, ending at its reach without a step. Nothing on
 // the thing it belongs to (`self`) nor past its reach.
