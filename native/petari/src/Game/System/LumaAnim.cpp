@@ -181,6 +181,51 @@ namespace luma {
                 }
             }
 
+            // The last frame the kind's clip plays to, as its start sets it (FrameCtrl::init(getFrameMax())), and for a
+            // joint clip started as the clip says (MR::startBck) the model's .banmt end_frame when it lies inside
+            // (BckCtrl::changeBckSetting, BckCtrlFunction::reflectBckCtrlData); -1 without the clip. Read from the
+            // resource before anything starts: the frame control still holds the clip running before.
+            s32 lastOf(const LiveActor* pActor, u32 kind, const char* pClip, bool settings) {
+                const ResourceHolder* const pHolder = MR::getResourceHolder(pActor);
+                const ResTable* pTable = nullptr;
+                switch (kind) {
+                case kBck:
+                    pTable = pHolder->mMotionResTable;
+                    break;
+                case kBtk:
+                    pTable = pHolder->mBtkResTable;
+                    break;
+                case kBrk:
+                    pTable = pHolder->mBrkResTable;
+                    break;
+                case kBpk:
+                    pTable = pHolder->mBpkResTable;
+                    break;
+                case kBtp:
+                    pTable = pHolder->mBtpResTable;
+                    break;
+                default:
+                    pTable = pHolder->mBvaResTable;
+                    break;
+                }
+                const Clip* const pRes = pTable == nullptr ? nullptr : static_cast< const Clip* >(pTable->getRes(pClip));
+                if (pRes == nullptr) {
+                    return -1;
+                }
+                s32 last = pRes->getFrameMax();
+                if (kind == kBck && settings && pHolder->mBckCtrl != nullptr) {
+                    const BckCtrlData* pData = pHolder->mBckCtrl->find(pClip);
+                    if (pData == nullptr || !(pData->mInterpole >= 0 || pData->mPlayFrame >= 0 || pData->mStartFrame >= 0 ||
+                                              pData->mEndFrame >= 0 || pData->mRepeatFrame >= 0 || pData->mLoopMode != 0xFF)) {
+                        pData = &pHolder->mBckCtrl->mDefaultCtrlData;
+                    }
+                    if (pData->mEndFrame >= 0 && pData->mEndFrame <= last) {
+                        last = pData->mEndFrame;
+                    }
+                }
+                return last;
+            }
+
             // Only for a kind the model has (another would make an empty player).
             FrameCtrl* ctrlOf(const LiveActor* pActor, u32 kind) {
                 const ModelManager* const pManager = pActor->mModelManager;
@@ -469,7 +514,7 @@ namespace luma {
                                "found", pClip);
                     return LUMA_E_NOT_FOUND;
                 }
-                if (how.start > static_cast< f32 >(ctrlOf(pActor, lead)->getEnd())) {
+                if (how.start > static_cast< f32 >(lastOf(pActor, lead, pClip, how.blend == LUMA_ANIM_BLEND_CLIP))) {
                     report(pMod, pWhere, 101u, "start", nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
