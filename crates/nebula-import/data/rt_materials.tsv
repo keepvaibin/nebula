@@ -541,3 +541,8 @@ vsbegomanspikeplanet	MetalMat_v	metal	0.29	1							director metal: was gloss; na
 warppod	MetalMat_v	metal	0.24	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 warppod	MetalMat_v(2)	metal	0.24	1							director metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light (V-A6); picture owed
 yellowchip	lambert60	glass	0.02	0	1.8		0	0			director crystal: was metal; OWNER-VERDICT G: crystal, ior 1.8, white mirror, through-colour 0.25 of the art's; picture owed
+# c89: water verdicts (FB measure/water_verdicts.tsv; the director's item 5).
+twinfalllakeplanet	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
+twinfalllakeplanetlow	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
+mirrormodeltwinfalllake	kori_v	glass	0.05	0	1.31						ice (FB water verdict, FC c89): a frozen lake read as metal; glass, ior 1.31 (F0 0.018); picture owed
+twinfalllakeplanetlow	mizu_shita_v_x	dielectric		0							bed (FB water verdict, FC c89): the far stand-in is opaque; its near's water row would make it water by the twin rule (c83)
