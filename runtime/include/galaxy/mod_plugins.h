@@ -25,6 +25,9 @@ struct PluginFile {
     // The permissions the player granted it, for its declarations as they are now (mod_consent.h granted_permissions):
     // what luma_load_mod is given. Filled once when the start's plan is made.
     std::vector<std::string> granted;
+    // The ones the player declined (mod_consent.h declined_permissions): an L506 for one of them is their choice, logged
+    // as that and not as a fault (consent 2.3).
+    std::vector<std::string> declined;
 };
 
 // A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
