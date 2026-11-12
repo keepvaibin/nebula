@@ -60,7 +60,31 @@ typedef struct LumaModsService {
     /* 1.0. Game thread. The mod with id `id`, as `at`; LUMA_E_NOT_FOUND when none (not reported); a null id:
        LUMA_E_ARGUMENT, reported. */
     int32_t (*find)(const LumaMod* mod, const char* id, LumaModsInfo* out);
+    /* 1.0. Game thread. The calling mod's own option `key` (luma.json `options[].key`) as the player has it now, as
+       UTF-8 text with a NUL into buf (director's DECISION 11-11 23:0x, contract section 8):
+         choice: the chosen value ("off" when the player turned an optional choice off);
+         number: the number as the Mods page shows it, shortest decimal ("0.5", "12");
+         toggle: "1" on, "0" off;
+         text:   the player's text (the manifest's `default` until the player types one);
+         key:    the control's name as input's store has it (plan 2.5; the manifest's `default` until the player
+                 binds another), one of the names luma.json takes (input_bindings kTargetIds).
+       Returns the text's length in bytes without the NUL. A null buf with size 0 asks the length only (not reported).
+       Mistakes, each reported and nothing written: a null key, or a key that is not one of this mod's options:
+       LUMA_E_NOT_FOUND (Mods.OptionUnknown); a key naming another mod's option ("<mod id>/<key>"): LUMA_E_DENIED
+       (Mods.OptionNotOwn: a mod reads only its own, item 4); a buf too short for the text and its NUL:
+       LUMA_E_TOO_LARGE (Mods.OptionBufferShort, naming the length needed). */
+    int64_t (*option)(const LumaMod* mod, const char* key, char* buf, uint64_t size);
+    /* 1.0. Game thread. `fn` gets an OPTION event (at the start of a frame, never inside this call) each time the
+       player changes one of this mod's options while it runs: one event an option changed, in luma.json order, after
+       the Mods page applied it (Apply, or leaving the page). The value read by `option` in that call is the new one.
+       A later call replaces fn and user; a null fn stops the events. LUMA_OK. */
+    int32_t (*watch_options)(const LumaMod* mod, LumaEventFn fn, void* user);
 } LumaModsService;
+
+/* Events of mods (LumaEvent.kind) to watch_options' fn; `handle` is 0. */
+typedef enum LumaModsEvent {
+    LUMA_MODS_EVENT_OPTION = 1 /* data: none; value: the option's place in luma.json `options` (0 the first); status: LUMA_OK */
+} LumaModsEvent;
 
 /* The spaces of 1.0 (contract section 3): numbers 0x01000000 to 0x01FFFFFF in each. */
 #define LUMA_MODS_SPACE_MESSAGE "message" /* a message one mod's actors send and another's receive (receiveOtherMsg) */
