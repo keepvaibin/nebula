@@ -1236,13 +1236,19 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         const bool shown = rt_light_on_ && scene_layer &&
                            (sky_draw || ((item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
                                          registries_.mesh(item.mesh).hit_class == NEBULA_HIT_EMISSIVE));
-        // c92 (the director 11-12): a character (its model skinned: envelopes) takes the characters' shade bound
-        // (program.hlsli traced_tint_bound, draw flag 2048); everything else the environment's.
-        const bool character = rt_light_on_ && scene_layer && item.block < list.block_count && list.blocks[item.block].model != 0u &&
-                               !registries_.model(list.blocks[item.block].model).envelopes.empty();
+        // c92, c95 (the director 11-12): the shade's bound by the light set's kind, the art's own split
+        // (program.hlsli traced_tint_bound): 2048 a set of the player, strong, weak or coin records (characters,
+        // enemies, objects), 4096 a planet set (the environment); neither for an unknown set or none.
+        const std::uint32_t set_kind = rt_light_on_ && scene_layer && item.light_set != NEBULA_NONE32 && item.light_set < list.light_set_count &&
+                                               list.light_set_owners != nullptr
+                                           ? list.light_set_owners[item.light_set].kind
+                                           : std::uint32_t{NEBULA_LIGHT_OWNER_NONE};
+        const bool character = set_kind == NEBULA_LIGHT_OWNER_PLAYER || set_kind == NEBULA_LIGHT_OWNER_STRONG ||
+                               set_kind == NEBULA_LIGHT_OWNER_WEAK || set_kind == NEBULA_LIGHT_OWNER_COIN;
+        const bool environment = set_kind == NEBULA_LIGHT_OWNER_PLANET;
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      (shown ? 64u : 0u) |
-                     (character ? 2048u : 0u) |
+                     (character ? 2048u : 0u) | (environment ? 4096u : 0u) |
                      (metal ? 128u : 0u) |
                      // c81 (L4): a glowing mesh that is a light this frame: never duller than its own colour.
                      (rt_light_on_ && scene_layer && i < rt_glow_bodies_.size() && rt_glow_bodies_[i] != 0u ? 256u : 0u) |

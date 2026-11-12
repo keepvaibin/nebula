@@ -461,9 +461,9 @@ float traced_sky_chroma() { return view_dev[1].z > 0.5 ? view_dev[0].z : 0.4; }
 static const float kTintBoundEnvironment = 2.0;
 static const float kTintBoundCharacter = 1.25;
 // c92, c92b (the director 11-12): the draw's bound by its light set's kind, the art's own split: draw flag 2048 a
-// character's or object's set (Player, Strong, Weak; c92's skinned body until the host passes the kind), 4096 the
-// Planet set (the environment). Neither: a lit program takes the character bound (no blue Mario in shade), a painted
-// one the environment's.
+// character's or object's set (player, strong, weak, coin; draw_walker c95, the game's GameLightSignal), 4096 the
+// planet set (the environment). Neither (an unknown set, none, an exe before c95): a lit program takes the character
+// bound (no blue Mario in shade), a painted one the environment's.
 float traced_tint_bound(bool lit) {
     if ((draw_flags & 2048u) != 0u) {
         return kTintBoundCharacter;

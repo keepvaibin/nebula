@@ -28,6 +28,9 @@ namespace GameLightSignal {
     void pointLight(const PointLightInfo* pInfo);
     // MR::requestPointLight: every actor asking for that light, with its brightness at the reference distance.
     void pointRequest(const LiveActor* pActor, const Vec3f& rPosition, Color8 color, f32 brightness);
+    // c95: which of an area's records (MR::LightType: player, strong, weak, planet) the next actorLight loads; said by
+    // its caller (ActorLightCtrl::loadLight, MR::loadLight) just before, forgotten after it.
+    void actorLightType(s32 type);
     // LightFunction::loadActorLightInfo: the record whose key and fill are lights 0 and 1 of the sets made from now on.
     void actorLight(const ActorLightInfo* pInfo);
     // LightFunction::loadLightInfoCoin: the coins' record, whose one light is light 0.

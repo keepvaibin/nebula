@@ -823,9 +823,10 @@ namespace Frame {
         store()->mClipRule = rule;
     }
 
-    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient) {
+    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient, u32 kind) {
         NebulaFrameLightOwner owner = sLightOwner;
         owner.actor_light = pKey != nullptr ? pKey->id : 0;
+        owner.kind = kind;  // c95
         for (u32 c = 0; c < 3; c++) {
             owner.ambient[c] = pAmbient != nullptr ? pAmbient[c] : 0.0f;
         }

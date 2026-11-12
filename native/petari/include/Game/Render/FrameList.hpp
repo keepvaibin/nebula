@@ -100,7 +100,7 @@ namespace Frame {
     void worldLight(const NebulaFrameWorldLight& rLight);
     // Whose lights the sets made from now on hold: the key and fill of an area's light record (ids pKey->id and
     // pKey->id + 1) with its ambient, or none (null: lights that are no light of the world).
-    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient);
+    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient, u32 kind);
     // The world light that is light 4 of the sets made from now on, or null.
     void setLightPointOwner(const NebulaFrameWorldLight* pPoint);
     // The light of the stage's own surfaces this frame (key `id`, fill `id` + 1) and its ambient.

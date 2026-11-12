@@ -107,12 +107,22 @@ typedef struct NebulaFrameClipVolume {
 /* Whose lights a light set holds, one per set (list->light_set_owners, in the sets' order). `actor_light`: the world
    lights `actor_light` (the key, the set's light 0) and `actor_light + 1` (the fill, its light 1); 0 when the set's
    lights are no light of the world (every light white at the eye). `point_light`: the id of the world light that is
-   the set's light 4, or 0. `ambient`: the ambient colour loaded with the lights, 0 to 1. */
+   the set's light 4, or 0. `ambient`: the ambient colour loaded with the lights, 0 to 1. `kind`: which of an area's
+   light records the key and fill are (NEBULA_LIGHT_OWNER_*; the game lights characters, enemies and objects from the
+   player, strong and weak records and the environment from the planet record), none where unknown. */
+enum {
+    NEBULA_LIGHT_OWNER_NONE = 0,
+    NEBULA_LIGHT_OWNER_PLAYER,
+    NEBULA_LIGHT_OWNER_STRONG,
+    NEBULA_LIGHT_OWNER_WEAK,
+    NEBULA_LIGHT_OWNER_PLANET,
+    NEBULA_LIGHT_OWNER_COIN,
+};
 typedef struct NebulaFrameLightOwner {
     uint64_t actor_light;
     uint64_t point_light;
     float ambient[3];
-    float reserved;
+    uint32_t kind; /* NEBULA_LIGHT_OWNER_* */
 } NebulaFrameLightOwner;
 
 /* A point light an actor asked for this frame (MR::requestPointLight: a Luma, a power star, a fireball, a Boo, an

@@ -18,6 +18,7 @@
 #include "Game/AreaObj/LightAreaHolder.hpp"
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Map/LightZoneDataHolder.hpp"
+#include "Game/Scene/SceneFunction.hpp"  // c95: MR::LightType
 #include <nebula_module.h>
 
 NEBULA_TUNABLE_NAMED(f32, cNum_channel_f1, "channel.f1", 255.0f);
@@ -48,6 +49,8 @@ namespace {
     u32 sRequesterCount;
     const LiveActor* sStarCore;
     u32 sFrame;
+    // c95: the record type the next actorLight loads (MR::LightType; -1 unknown).
+    s32 sActorType = -1;
 
     // The sun's world light has no owner record: one sun a scene, under this id (no object's address).
     const u64 cSunId = 1;
@@ -298,12 +301,21 @@ namespace GameLightSignal {
         slot->mFrame = sFrame;
     }
 
+    void actorLightType(s32 type) {
+        sActorType = type;
+    }
+
     void actorLight(const ActorLightInfo* pInfo) {
         const u64 id = NebulaHost::objectId(pInfo);
         const NebulaFrameWorldLight key = lightOf(id, NEBULA_WORLD_LIGHT_KEY, pInfo->mInfo0);
         const NebulaFrameWorldLight fill = lightOf(id + 1, NEBULA_WORLD_LIGHT_FILL, pInfo->mInfo1);
         const f32 ambient[3] = {channel(pInfo->mColor.r), channel(pInfo->mColor.g), channel(pInfo->mColor.b)};
-        Frame::setLightOwner(&key, &fill, ambient);
+        // c95: player, strong, weak, planet (MR::LightType 0 to 3) as NEBULA_LIGHT_OWNER_PLAYER to _PLANET.
+        const u32 kind = sActorType >= MR::LightType_Player && sActorType <= MR::LightType_Planet
+                             ? static_cast< u32 >(NEBULA_LIGHT_OWNER_PLAYER + sActorType)
+                             : static_cast< u32 >(NEBULA_LIGHT_OWNER_NONE);
+        sActorType = -1;
+        Frame::setLightOwner(&key, &fill, ambient, kind);
     }
 
     void coinLight(const LightInfoCoin* pInfo) {
@@ -313,11 +325,11 @@ namespace GameLightSignal {
         NebulaFrameWorldLight fill = {};
         fill.id = id + 1;
         fill.kind = NEBULA_WORLD_LIGHT_FILL;
-        Frame::setLightOwner(&key, &fill, nullptr);
+        Frame::setLightOwner(&key, &fill, nullptr, NEBULA_LIGHT_OWNER_COIN);
     }
 
     void noLight() {
-        Frame::setLightOwner(nullptr, nullptr, nullptr);
+        Frame::setLightOwner(nullptr, nullptr, nullptr, NEBULA_LIGHT_OWNER_NONE);
         Frame::setLightPointOwner(nullptr);
     }
 };  // namespace GameLightSignal
