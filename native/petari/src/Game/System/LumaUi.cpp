@@ -47,6 +47,7 @@ namespace luma {
             const u32 cNotUtf8Code = 575;
             const u32 cMissingAnimationCode = 576;
             const u32 kMostEnds = kMostOpen * 2u;  // end events waiting or being given, across mods
+            const u32 kMostBoxes = 32;              // text boxes one set_text reaches
 
             // A layout actor the service made: the game's LayoutActor, connected to the layer it was made for.
             class ScreenActor : public LayoutActor {
@@ -198,6 +199,27 @@ namespace luma {
                 return nullptr;
             }
 
+            // The text boxes a set_text reaches, as the game's MR::executeTextBoxRecursive walks them: the pane itself
+            // when it holds text, then every text box under it, in the tree's order. At most `most`; returns the count.
+            // A null `ppOut` counts them only.
+            u32 textBoxes(Ui::Pane* pPane, Ui::TextBox** ppOut, u32 count, u32 most) {
+                if (count < most) {
+                    if (Ui::TextBox* const pBox = Ui::PaneCast< Ui::TextBox >(pPane); pBox != nullptr) {
+                        if (ppOut != nullptr) {
+                            ppOut[count] = pBox;
+                        }
+                        count++;
+                    }
+                }
+                for (Ui::Pane* pChild : pPane->GetChildList()) {
+                    if (count >= most) {
+                        break;
+                    }
+                    count = textBoxes(pChild, ppOut, count, most);
+                }
+                return count;
+            }
+
             // ---- Facts (harness only) ----
 
             void openFact(const Screen& rScreen) {
@@ -218,7 +240,10 @@ namespace luma {
                 luma::modlog::jsonString(name, sizeof(name), rPane.pane->mName);
                 char text[1200];
                 text[0] = 0;
-                if (const Ui::TextBox* const pText = Ui::PaneCast< Ui::TextBox >(rPane.pane); pText != nullptr) {
+                Ui::TextBox* pFirst = nullptr;
+                const u32 boxCount = textBoxes(rPane.pane, nullptr, 0, kMostBoxes);
+                textBoxes(rPane.pane, &pFirst, 0, 1);
+                if (const Ui::TextBox* const pText = pFirst; pText != nullptr) {
                     // The text as the pane holds it, back to UTF-8 (the harness compares it with what the mod gave).
                     char utf8[1024];
                     u32 at = 0;
@@ -247,9 +272,13 @@ namespace luma {
                         }
                     }
                     utf8[at] = 0;
-                    char quoted[1100];
-                    luma::modlog::jsonString(quoted, sizeof(quoted), utf8);
-                    nebula_snprintf(text, sizeof(text), ",\"text\":%s", quoted);
+                    // ,"text":<quoted>,"boxes":N in one buffer: the quoted text leaves room for the count after it.
+                    static const char kHead[] = ",\"text\":";
+                    std::memcpy(text, kHead, sizeof(kHead));
+                    const u32 head = sizeof(kHead) - 1u;
+                    luma::modlog::jsonString(text + head, static_cast< u32 >(sizeof(text)) - head - 24u, utf8);
+                    const u32 used = static_cast< u32 >(std::strlen(text));
+                    nebula_snprintf(text + used, sizeof(text) - used, ",\"boxes\":%u", boxCount);
                 }
                 char json[1500];
                 nebula_snprintf(json, sizeof(json), "{\"screen\":%llu,\"pane\":%s,\"kind\":%u,\"visible\":%s%s}",
@@ -570,8 +599,9 @@ namespace luma {
                     report(pMod, pWhere, 102u, nullptr, nullptr);
                     return LUMA_E_HANDLE;
                 }
-                Ui::TextBox* const pBox = Ui::PaneCast< Ui::TextBox >(pPane->pane);
-                if (pBox == nullptr) {
+                Ui::TextBox* boxes[kMostBoxes];
+                const u32 boxCount = textBoxes(pPane->pane, boxes, 0, kMostBoxes);
+                if (boxCount == 0) {
                     report(pMod, pWhere, cNotTextCode, pPane->pane->mName, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
@@ -579,9 +609,16 @@ namespace luma {
                     report(pMod, pWhere, 101u, "text", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                // The pane's buffer holds its 0 as well; 1.0 promises LUMA_UI_TEXT_MOST units.
-                const u32 buffer = pBox->GetStringBufferLength();
-                const u32 most = buffer == 0 ? 0u : buffer - 1u < LUMA_UI_TEXT_MOST ? buffer - 1u : LUMA_UI_TEXT_MOST;
+                // A box's buffer holds its 0 as well; 1.0 promises LUMA_UI_TEXT_MOST units. Every box gets the same
+                // text, so the smallest buffer cuts it.
+                u32 most = LUMA_UI_TEXT_MOST;
+                for (u32 i = 0; i < boxCount; i++) {
+                    const u32 buffer = boxes[i]->GetStringBufferLength();
+                    const u32 holds = buffer == 0 ? 0u : buffer - 1u;
+                    if (holds < most) {
+                        most = holds;
+                    }
+                }
                 char16_t text[LUMA_UI_TEXT_MOST + 1];
                 bool cut = false;
                 if (!toUtf16(pText, text, most, &cut)) {
@@ -594,7 +631,9 @@ namespace luma {
                     say(pMod, cTextCutCode, "Ui.TextCut", MR::getHashCode(pPane->pane->mName), "pane", pPane->pane->mName, "count",
                         limit);
                 }
-                pBox->SetString(text, 0);
+                for (u32 i = 0; i < boxCount; i++) {
+                    boxes[i]->SetString(text, 0);
+                }
                 if (luma::modlog::facts()) {
                     paneFact(*pPane, "text");
                 }

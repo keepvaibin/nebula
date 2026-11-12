@@ -57,9 +57,11 @@ typedef struct LumaUiService {
        ended screen: LUMA_E_HANDLE, reported; an empty or null name, a null out: LUMA_E_ARGUMENT, reported;
        LUMA_UI_MOST_PANES found: LUMA_E_LIMIT, reported. Thread and taking out as open. */
     int32_t (*pane)(const LumaMod* mod, LumaUiScreen screen, const char* name, LumaUiPane* out);
-    /* 1.0. Game thread. A text pane's text, UTF-8 (copied; "" empties it), drawn in the pane's font, size and
-       alignment. Longer than LUMA_UI_TEXT_MOST units (or the pane's own buffer): cut there, LUMA_OK, Ui.TextCut in
-       the mod log. Not a text pane: LUMA_E_ARGUMENT, reported (Ui.NotText); not UTF-8: LUMA_E_ARGUMENT, reported
+    /* 1.0. Game thread. The text of the pane's text boxes, UTF-8 (copied; "" empties it), as the game sets its own:
+       the pane itself when it holds text, and every text box under it (a counter's number and its shadow are two
+       boxes under one pane), each drawn in its font, size and alignment. Longer than LUMA_UI_TEXT_MOST units (or the
+       smallest box's buffer): cut there, LUMA_OK, Ui.TextCut in the mod log. No text box in or under the pane:
+       LUMA_E_ARGUMENT, reported (Ui.NotText); not UTF-8: LUMA_E_ARGUMENT, reported
        (Ui.NotUtf8); null: LUMA_E_ARGUMENT, reported; an ended pane: LUMA_E_HANDLE, reported. Thread and taking out
        as open. */
     int32_t (*set_text)(const LumaMod* mod, LumaUiPane pane, const char* text);
