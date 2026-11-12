@@ -462,6 +462,22 @@ namespace luma {
 
             // One block: the entry, its played text (UTF-16), then its mod, file, played text (UTF-8), English and code
             // name.
+            // The Notes shown as a notice as an Error is (mod-log 4.1, draft 7): a page a mod opened outside the game
+            // (services-system J-SS5), so the player coming back sees which mod it was.
+            const char* const cShownNotes[] = {"System.LinkOpened"};
+
+            bool shownNote(const char* pRowId) {
+                if (pRowId == nullptr) {
+                    return false;
+                }
+                for (const char* pShown : cShownNotes) {
+                    if (same(pShown, pRowId)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             Entry* make(const LumaModLogEntry& rEntry, const char* pFile, const Words& rWords, const char* pRowId) {
                 char codeName[64];
                 codeNameOf(rEntry, pRowId, codeName, sizeof(codeName));
@@ -502,6 +518,7 @@ namespace luma {
                 pEntry->line = rEntry.line;
                 pEntry->column = rEntry.column;
                 pEntry->count = 1;
+                pEntry->shown = rEntry.level == LUMA_MODLOG_ERROR || shownNote(pRowId) ? 1u : 0u;
                 pEntry->mod = pMod;
                 pEntry->file = pPlace;
                 pEntry->text = pText;
@@ -526,20 +543,23 @@ namespace luma {
             }
 
             // Under the lock.
-            Entry* findEntry(Store* pStore, const LumaModLogEntry& rEntry, const char* pFile) {
-                for (Entry* pEntry = pStore->head; pEntry != nullptr; pEntry = pEntry->next) {
-                    if (pEntry->code == rEntry.code && pEntry->source == rEntry.source && pEntry->line == rEntry.line &&
-                        pEntry->column == rEntry.column && same(pEntry->mod, rEntry.mod) && same(pEntry->file, pFile)) {
-                        return pEntry;
+            Mod* findMod(Store* pStore, const char* pId) {
+                for (Mod* pMod = pStore->modHead; pMod != nullptr; pMod = pMod->next) {
+                    if (same(pMod->id, pId)) {
+                        return pMod;
                     }
                 }
                 return nullptr;
             }
 
-            Mod* findMod(Store* pStore, const char* pId) {
-                for (Mod* pMod = pStore->modHead; pMod != nullptr; pMod = pMod->next) {
-                    if (same(pMod->id, pId)) {
-                        return pMod;
+            // Under the lock. The key is the mod, source, code, file, line and column; only that mod's entries are walked
+            // (at most cPerMod), so a repeat from a busy thread holds the lock briefly.
+            Entry* findEntry(Store* pStore, const LumaModLogEntry& rEntry, const char* pFile) {
+                const Mod* const pMod = findMod(pStore, rEntry.mod);
+                for (Entry* pEntry = pMod != nullptr ? pMod->entries : nullptr; pEntry != nullptr; pEntry = pEntry->nextOfMod) {
+                    if (pEntry->code == rEntry.code && pEntry->source == rEntry.source && pEntry->line == rEntry.line &&
+                        pEntry->column == rEntry.column && same(pEntry->file, pFile)) {
+                        return pEntry;
                     }
                 }
                 return nullptr;
@@ -560,9 +580,21 @@ namespace luma {
 
             void bump(Store* pStore) { __atomic_add_fetch(&pStore->revision, 1u, __ATOMIC_RELEASE); }
 
+            // True for the one caller that raises *pSaid to `count`: a fact is written once a count and never for a count
+            // below one already written (session's replay racing a keep, two repeats finishing out of order).
+            bool claimFact(u32* pSaid, u32 count) {
+                u32 seen = __atomic_load_n(pSaid, __ATOMIC_RELAXED);
+                while (seen < count) {
+                    if (__atomic_compare_exchange_n(pSaid, &seen, count, false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             // The JSON of a kept entry for the harness (contract 4.3), at its count.
             void entryFact(const Entry* pEntry, u32 count) {
-                if (!facts()) {
+                if (!facts() || !claimFact(&const_cast< Entry* >(pEntry)->factCount, count)) {
                     return;
                 }
                 const u32 room = 256 + 6 * (lengthOf(pEntry->mod) + lengthOf(pEntry->file) + lengthOf(pEntry->textUtf8) +
@@ -604,7 +636,7 @@ namespace luma {
 
             // ModLog.TooMany as a fact: the mod and how many were not kept.
             void pastFact(const Mod* pMod, u32 past) {
-                if (!facts()) {
+                if (!facts() || !claimFact(&const_cast< Mod* >(pMod)->factPast, past)) {
                     return;
                 }
                 const u32 room = 128 + 6 * lengthOf(pMod->id);
@@ -669,8 +701,9 @@ namespace luma {
                            rEntry.source, rEntry.level, rEntry.code);
                 return nullptr;
             }
-            // Section 3.1: the module's own sources are Errors (the log's own lines are as they say).
-            if (rEntry.source >= LUMA_MODLOG_CODE && !own && rEntry.level != LUMA_MODLOG_ERROR) {
+            // Section 3.1: the module's own sources are Errors (the log's own lines are as they say, and so are the host's
+            // entries that give their row: luma_modlog.h `row`, e.g. services-system's System.LinkOpened Note).
+            if (rEntry.source >= LUMA_MODLOG_CODE && !own && rowOf(rEntry) == nullptr && rEntry.level != LUMA_MODLOG_ERROR) {
                 nebula_log("LumaCore: mod-log entry %s %s %u given as a Note; kept as an Error (a bug in its caller)\n", rEntry.mod,
                            sourceName(rEntry.source), rEntry.code);
                 LumaModLogEntry asError = rEntry;
@@ -739,6 +772,12 @@ namespace luma {
                 __atomic_store_n(&pStore->tail->next, pMade, __ATOMIC_RELEASE);
             }
             pStore->tail = pMade;
+            if (pMod->lastEntry == nullptr) {
+                pMod->entries = pMade;
+            } else {
+                pMod->lastEntry->nextOfMod = pMade;
+            }
+            pMod->lastEntry = pMade;
             pMod->kept++;
             __atomic_add_fetch(&pStore->kept, 1u, __ATOMIC_RELAXED);
             if (pMade->level == LUMA_MODLOG_ERROR) {
@@ -847,7 +886,7 @@ namespace luma {
                     return nullptr;
                 }
                 pStore->noticed = pNext;
-                if (pNext->level == LUMA_MODLOG_ERROR) {
+                if (pNext->shown != 0) {
                     return pNext;
                 }
             }
@@ -861,7 +900,7 @@ namespace luma {
             u32 waiting = 0;
             for (const Entry* pEntry = pStore->noticed != nullptr ? nextOf(pStore->noticed) : first(); pEntry != nullptr;
                  pEntry = nextOf(pEntry)) {
-                waiting += pEntry->level == LUMA_MODLOG_ERROR ? 1u : 0u;
+                waiting += pEntry->shown != 0 ? 1u : 0u;
             }
             return waiting;
         }

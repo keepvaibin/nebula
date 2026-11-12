@@ -22,6 +22,7 @@ namespace luma {
             u32 column;
             u32 count;               // repeats included; atomic
             u32 reload;              // the mod's reload number when it was added (plan 1.11); 0 before any
+            u32 shown;               // 1: shown as a notice (an Error, or a Note of a row in cShownNotes); set at make
             const char* mod;
             const char* file;        // "" when none
             const char16_t* text;    // the played language, for the screen
@@ -29,6 +30,8 @@ namespace luma {
             const char* english;     // for the game's log and the facts
             const char* codeName;    // the code as the page names it: "L203", "Hook.NoResult", "S0901"; "" for none
             Entry* next;             // in added order; atomic
+            Entry* nextOfMod;        // the same mod's next entry, for the repeat lookup; under the store's lock
+            u32 factCount;           // the highest count a fact was written at (one fact a count); atomic
         };
 
         // A mod the log has entries of, in the order its first entry came.
@@ -38,6 +41,9 @@ namespace luma {
             u32 past;    // entries not kept (cPerMod or cSession reached); atomic
             u32 reload;
             Mod* next;   // atomic
+            Entry* entries;    // its entries in added order (Entry::nextOfMod); under the store's lock
+            Entry* lastEntry;  // under the store's lock
+            u32 factPast;      // the highest `past` a fact was written at; atomic
         };
 
         // From the kernel and the game's content (CODE, CONTENT, GUARD): the entry with `text` and `english` null, and
@@ -69,9 +75,10 @@ namespace luma {
         u32 kept();
         u32 errors();
 
-        // The notice's cursor: the next Error entry no notice has taken yet (in added order), taken. Null when none.
+        // The notice's cursor: the next shown entry (Entry::shown) no notice has taken yet (in added order), taken. Null
+        // when none.
         const Entry* takeNotice();
-        // Errors no notice has taken yet.
+        // Shown entries no notice has taken yet.
         u32 noticesWaiting();
         // Once a session, for the first notice made: how many Errors were kept before it (they are taken as one summary
         // line, not one by one). 0 after the first call.
