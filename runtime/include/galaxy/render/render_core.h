@@ -580,6 +580,9 @@ private:
     float rt_exposure_ = 150.0f;  // the stage's exposure the emitters were finished by (lux)
     void rt_emitters_finish(float exposure_lux);
     std::vector<RtEmitter> rt_emitters_;
+    // L6 (l96): the particle lights' places in rt_emitters_, a min-heap by what each gives at the eye (candela over
+    // distance^2 + radius^2): past the frame's bound a new particle takes the weakest one's place, never the nearest's.
+    std::vector<std::uint32_t> rt_particle_heap_;
     // For the reservoirs: the frame before's emitters by what they are, where each is in this frame's list, and this
     // frame's list by what they are; the frame before's emitters' centres and reaches (4 floats each, as ids_before).
     std::vector<std::uint32_t> rt_emitter_ids_before_, rt_emitter_remap_;

@@ -440,6 +440,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
     rt_micromap_wants_.clear();
     rt_casters_.clear();
     rt_emitters_.clear();
+    rt_particle_heap_.clear();
     rt_emitters_finished_ = false;
     // The point lights actors asked for this frame: each a light of its own (the game's one blended light gives way
     // to them in the traced programs, rt_light.hlsl).
@@ -3156,6 +3157,7 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
         return;
     }
     rt_emitters_finished_ = true;
+    rt_particle_heap_.clear();  // l96: its places are the list's before the erase below
     rt_exposure_ = exposure_lux;
     std::size_t points = 0u;
     while (points < rt_emitters_.size() && rt_emitters_[points].kind == 0u) {
@@ -3256,15 +3258,24 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
     const std::uint32_t particles = item.ring_count / ((item.flags & NEBULA_ITEM_INSTANCES) != 0u ? 1u : 4u);
     const std::uint32_t every = std::max<std::uint32_t>((particles + kEach - 1u) / kEach, 1u);
     std::uint32_t ordinal = 0u;
+    // L6 (l96): what a light gives at the eye (its centre is in the eye's space): candela over distance^2 + radius^2.
+    const auto gives = [](const RtEmitter& e) {
+        const float m2 = (e.centre[0] * e.centre[0] + e.centre[1] * e.centre[1] + e.centre[2] * e.centre[2] + e.radius * e.radius) /
+                         (kUnitsPerMetre * kUnitsPerMetre);
+        return std::max({e.colour[0], e.colour[1], e.colour[2]}) / std::max(m2, 1e-4f);
+    };
+    // The heap's order: the light that gives least at its front.
+    const auto gives_more = [&](std::uint32_t a, std::uint32_t b) { return gives(rt_emitters_[a]) > gives(rt_emitters_[b]); };
     // `id`: the particle's number by its place now; `was`: by its place a frame ago (l84).
     const auto take = [&](const float eye[3], double size, const float colour[4], std::uint32_t id, std::uint32_t was) {
         const double shown = size * static_cast<double>(colour[3]) * 0.33;
-        if (ordinal++ % every != 0u || !(shown > 0.0) || !std::isfinite(shown + eye[0] + eye[1] + eye[2]) || rt_emitters_.size() >= kMost) {
+        if (ordinal++ % every != 0u || !(shown > 0.0) || !std::isfinite(shown + eye[0] + eye[1] + eye[2])) {
             return;
         }
         const float candela =
             luminance * static_cast<float>(shown / (static_cast<double>(kUnitsPerMetre) * kUnitsPerMetre)) * static_cast<float>(every);
-        RtEmitter& emitter = rt_emitters_.emplace_back();
+        RtEmitter made{};
+        RtEmitter& emitter = made;
         float linear[3];
         light_colour(colour, linear, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);
         for (unsigned c = 0; c < 3u; ++c) {
@@ -3279,6 +3290,17 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
         // the next frame finds it by the place this frame gives it (l84).
         emitter.reserved[0] = was;
         emitter.reserved[1] = id;
+        // L6 (l96): within the bound it joins the list; past it, it takes the weakest particle's place if it gives more.
+        if (rt_emitters_.size() < kMost) {
+            rt_particle_heap_.push_back(static_cast<std::uint32_t>(rt_emitters_.size()));
+            rt_emitters_.push_back(made);
+        } else if (!rt_particle_heap_.empty() && gives(made) > gives(rt_emitters_[rt_particle_heap_.front()])) {
+            std::pop_heap(rt_particle_heap_.begin(), rt_particle_heap_.end(), gives_more);
+            rt_emitters_[rt_particle_heap_.back()] = made;
+        } else {
+            return;
+        }
+        std::push_heap(rt_particle_heap_.begin(), rt_particle_heap_.end(), gives_more);
     };
     if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
         // Instanced particles: each a matrix in the world, its quad as wide and tall as the matrix's first two columns.
