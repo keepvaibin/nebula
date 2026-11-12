@@ -1840,7 +1840,20 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let mut classes: BTreeMap<Class, (u32, u32)> = BTreeMap::new();
     let mut stats = Stats::default();
     let (mut models, mut materials, mut unread, mut glowing) = (0u32, 0u32, 0u32, 0u32);
-    super::programs::walk_files(input, &mut |name, bytes| {
+    // c98: every model read once first, as the cook's prepare_written_files does (c83's twins: a far twin's class and
+    // glow, a material its bloom twin draws again), so the table is what the cook decides.
+    twins_begin();
+    let filled = super::programs::walk_files(input, &mut |name, bytes| {
+        if super::native_data::is_model_file(&bytes) {
+            twins_add(name, &bytes);
+        }
+        Ok(())
+    });
+    if let Err(error) = filled {
+        twins_clear();
+        return Err(error);
+    }
+    let walked = super::programs::walk_files(input, &mut |name, bytes| {
         let source = Source::of(&bytes);
         if source == Source::Table || bytes.starts_with(b"RLYT") {
             return Ok(());
@@ -2041,7 +2054,9 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             let _ = &mut entry.1;
         }
         Ok(())
-    })?;
+    });
+    twins_clear();
+    walked?;
     out.flush()?;
     sheens.flush()?;
     by_rule.flush()?;
