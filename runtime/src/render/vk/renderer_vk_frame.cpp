@@ -2059,9 +2059,10 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     end_scene_pass();
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
-        if (scene_.samples <= 1u && !scene_.wide) {
-            // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
-            // bloom's objects on black into the new target, over the same depth.
+        if (scene_.samples <= 1u) {
+            // The scene and the bloom's image trade places instead of the scene being copied (the wide scene's too: its
+            // handed-over images take framebuffers of the wide pass, scene_framebuffer). The game draws the bloom's
+            // objects on black into the new target, over the same depth.
             bloom_.keep_picture(swap_scene_color(bloom_.take_kept_image()));
             clear_scene(0u, true, true, false);
             return;
@@ -2903,7 +2904,8 @@ VkFramebuffer RendererVk::scene_framebuffer(bool resolved) {
             const VkImageView views[] = {ms ? scene_.ms_color->target_view : color.target_view,
                 ms ? scene_.ms_depth->target_view : scene_.depth->target_view, color.target_view};
             VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-            info.renderPass = draw_layout_.pass_for(ms ? scene_samples_log2() : 0u, false);
+            // The wide scene's own pass for its images (its colour format), as ensure_wide_set makes its framebuffer.
+            info.renderPass = draw_layout_.pass_for((ms ? scene_samples_log2() : 0u) | (scene_.wide ? kSceneVariantHdr : 0u), false);
             info.attachmentCount = ms ? 3u : 2u;
             info.pAttachments = views;
             info.width = color.width;

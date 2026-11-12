@@ -69,9 +69,10 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
     in.frame_width = std::min(scene_map_.width, scene_.color->width);
     in.frame_height = std::min(scene_map_.height, scene_.color->height);
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
-        if (scene_.samples <= 1u && !scene_.wide) {
-            // The scene and the bloom's texture trade places instead of the scene being copied. The game draws the
-            // bloom's objects on black into the new target, over the same depth.
+        if (scene_.samples <= 1u) {
+            // The scene and the bloom's texture trade places instead of the scene being copied (the wide scene's too: a
+            // pass takes its target's format from the texture). The game draws the bloom's objects on black into the new
+            // target, over the same depth.
             bloom_.keep_picture(swap_scene_color(bloom_.take_kept_image()));
             clear_scene(0u, true, true, false);
             return;
