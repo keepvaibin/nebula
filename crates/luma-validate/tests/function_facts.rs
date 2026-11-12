@@ -29,6 +29,15 @@ fn refused(rows: &[String]) -> String {
     }
 }
 
+/// K's fault on l16 (G, 2026-11-11): a function returning a pointer to an array read `(*)` as its list, so its one
+/// row refused the whole file.
+#[test]
+fn a_declarator_before_the_list_is_no_list() {
+    let rows = [marked("Ui::detail::GetDrawMtx", "const f32 (*)[4]()", "free", "null", (false, false, false), "", "")];
+    let facts = FunctionFacts::from_json(file(&rows).as_bytes()).unwrap_or_else(|e| panic!("{e:?}"));
+    assert_eq!(facts.rows.len(), 1);
+}
+
 #[test]
 fn a_file_in_its_form_reads() {
     let rows = [
@@ -143,4 +152,8 @@ fn a_signatures_parameters_are_counted() {
     assert_eq!(signature_params("bool(const Vec3f &, s32) const"), Some(2));
     assert_eq!(signature_params("void(void (*)(int, int), JGeometry::TVec3<f32, int> *, int[3])"), Some(3));
     assert_eq!(signature_params("void"), None);
+    // A declarator's parentheses before the list (Ui::detail::GetDrawMtx in l16's luma_functions.json, K's fault).
+    assert_eq!(signature_params("const f32 (*)[4]()"), Some(0));
+    assert_eq!(signature_params("const f32 (*)[4](int, char) const"), Some(2));
+    assert_eq!(signature_params("void (*)(int)"), Some(1));
 }

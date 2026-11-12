@@ -412,26 +412,39 @@ pub struct Mark {
 }
 
 /// The number of parameters a row's signature declares (`bool(const Vec3f &, s32) const` -> 2): top-level commas
-/// inside its first parentheses, `()` and `(void)` none. None when the text has no balanced parameter list.
+/// inside its last top-level parentheses, `()` and `(void)` none. None when the text has no balanced parameter list.
 pub fn signature_params(signature: &str) -> Option<usize> {
-    let open = signature.find('(')?;
-    let (mut depth, mut commas, mut end) = (0i32, 0usize, None);
-    for (i, c) in signature[open..].char_indices() {
+    // The function's own list is the last parenthesised group at the top level: a group before it is a declarator
+    // (`const f32 (*)[4]()`, a function returning a pointer to an array), and only qualifiers come after it.
+    let (mut depth, mut open, mut last) = (0i32, 0usize, None);
+    let mut commas = 0usize;
+    let mut last_commas = 0usize;
+    for (i, c) in signature.char_indices() {
         match c {
-            '(' | '<' | '[' => depth += 1,
+            '(' | '<' | '[' => {
+                if depth == 0 && c == '(' {
+                    open = i;
+                    commas = 0;
+                }
+                depth += 1;
+            }
             ')' | '>' | ']' => {
                 depth -= 1;
-                if depth == 0 {
-                    end = Some(open + i);
-                    break;
+                if depth < 0 {
+                    return None;
+                }
+                if depth == 0 && c == ')' {
+                    last = Some((open, i));
+                    last_commas = commas;
                 }
             }
             ',' if depth == 1 => commas += 1,
             _ => {}
         }
     }
-    let inside = signature[open + 1..end?].trim();
-    Some(if inside.is_empty() || inside == "void" { 0 } else { commas + 1 })
+    let (open, close) = last?;
+    let inside = signature[open + 1..close].trim();
+    Some(if inside.is_empty() || inside == "void" { 0 } else { last_commas + 1 })
 }
 
 /// luma_functions.json (types TY-11): each row's facts by its name and signature.
