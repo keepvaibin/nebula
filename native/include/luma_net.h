@@ -3,7 +3,9 @@
    network, permission "net.local". Layer 2: `net.internet` TCP to the hosts the mod's luma.json names, by name or
    address, permission "net.internet" (the player sees the hosts). Every call is the game thread's, never blocks, and
    what waits is an event at a frame's start (services-registry 6). Both share the events, the limits and the
-   socket calls' rules; a handle belongs to the service that made it. */
+   socket calls' rules; a handle belongs to the service that made it. Minor 1 of both adds UDP: a socket open to
+   anyone on this machine or the local network (net.local's udp_open), one tied to a single peer (udp_connect,
+   both services), datagrams sent whole and taken whole. */
 #ifndef LUMA_NET_H
 #define LUMA_NET_H
 
@@ -15,14 +17,15 @@ extern "C" {
 
 #define LUMA_NET_LOCAL_NAME "net.local"
 #define LUMA_NET_LOCAL_MAJOR 1u
-#define LUMA_NET_LOCAL_MINOR 0u
+#define LUMA_NET_LOCAL_MINOR 1u
 #define LUMA_NET_INTERNET_NAME "net.internet"
 #define LUMA_NET_INTERNET_MAJOR 1u
-#define LUMA_NET_INTERNET_MINOR 0u
+#define LUMA_NET_INTERNET_MINOR 1u
 
 #define LUMA_NET_SOCKETS_MOST 16u            /* sockets and listeners a mod holds at once, both services together */
 #define LUMA_NET_SEND_QUEUED_MOST (4u << 20u) /* bytes a mod's sockets hold queued, not yet sent */
 #define LUMA_NET_RECEIVED_MOST (1u << 20u)    /* bytes a socket holds received and not taken; reading pauses past it */
+#define LUMA_NET_DATAGRAM_MOST 65507u        /* 1.1: bytes of one datagram (IPv4's most) */
 
 /* Events (LumaEvent.kind) to the fn given at connect or listen. `handle` is the socket's (ACCEPTED: the listener's). */
 typedef enum LumaNetEvent {
@@ -34,12 +37,22 @@ typedef enum LumaNetEvent {
     LUMA_NET_EVENT_SENT = 4,      /* status LUMA_OK; value: the bytes sent since the last SENT; nothing is queued now */
     LUMA_NET_EVENT_CLOSED = 5,    /* the other side closed (status LUMA_OK) or the connection broke (LUMA_E_IO); the
                                      handle is closed after this event (bytes still waiting came first as DATA) */
-    LUMA_NET_EVENT_ERROR = 6      /* a connect that failed: LUMA_E_UNREACHABLE (nobody listens, no route),
+    LUMA_NET_EVENT_ERROR = 6,     /* a connect that failed: LUMA_E_UNREACHABLE (nobody listens, no route),
                                      LUMA_E_TIMEOUT (10 s, the name's lookup included), LUMA_E_IO; net.internet
                                      also LUMA_E_NOT_FOUND (the name has no address) and LUMA_E_DENIED (its every
                                      address is this machine's, the local network's or not one a host has); the
                                      handle is closed after it */
+    LUMA_NET_EVENT_DATAGRAM = 7   /* 1.1, a UDP socket's: status LUMA_OK; value: the datagrams waiting;
+                                     `take_datagram` inside this call, one datagram each. Datagrams not taken stay,
+                                     and another DATAGRAM follows at a later frame. */
 } LumaNetEvent;
+
+/* 1.1: who sent a datagram. */
+typedef struct LumaNetPeer {
+    char host[48];  /* the address in text, 0-terminated ("192.168.1.20", "fe80::1") */
+    uint16_t port;
+    uint16_t reserved;
+} LumaNetPeer;
 
 typedef struct LumaNetLocalService {
     LumaServiceTable base;
@@ -71,6 +84,31 @@ typedef struct LumaNetLocalService {
        event for the handle after this returns. LUMA_OK; a handle that is not this mod's open one: LUMA_E_HANDLE,
        reported. */
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
+    /* 1.1. A UDP socket on `port` (0: one the system picks; `port` gives it), on this machine only (`local_network`
+       0) or the local network too (1), IPv4. LUMA_OK and *out at once; anyone there may send to it (DATAGRAM); it
+       sends with send_to (`send` on it: LUMA_E_HANDLE, reported). A port in use: LUMA_E_EXISTS (an answer); a
+       local_network other than 0 or 1, a null fn or out: LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT,
+       reported. */
+    int32_t (*udp_open)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
+                        LumaHandle* out);
+    /* 1.1. A UDP socket tied to `host`:`port` (the same hosts as tcp_connect): it sends there with send and hears only
+       from there. LUMA_PENDING and *out: CONNECTED (or ERROR) follows, then DATAGRAM events. Mistakes as
+       tcp_connect's. */
+    int32_t (*udp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
+                           LumaHandle* out);
+    /* 1.1. Queues one datagram of `bytes` (copied) to `host`:`port` from a udp_open socket; a SENT event follows once
+       all queued is sent. `host` as tcp_connect's, IPv4. LUMA_OK; more than LUMA_NET_DATAGRAM_MOST bytes:
+       LUMA_E_TOO_LARGE (an answer); the 4 MiB queue full: LUMA_E_LIMIT, reported; a host outside this machine and the
+       local network, port 0, a null host, a null data with bytes: LUMA_E_ARGUMENT, reported; a handle not this mod's
+       UDP socket, or one made by udp_connect: LUMA_E_HANDLE, reported. On a udp_connect socket, `send` queues one
+       datagram per call (LUMA_E_TOO_LARGE past the most). A datagram the network loses is not told: UDP. */
+    int32_t (*send_to)(const LumaMod* mod, LumaHandle socket, const char* host, uint16_t port, const void* data,
+                       uint64_t bytes);
+    /* 1.1. Inside a DATAGRAM event's call: takes the oldest datagram waiting: up to `size` bytes into buf (the rest of
+       a longer one is lost), its sender into *from (may be null). Returns its whole length (0 is a datagram too);
+       none waiting: LUMA_E_NOT_FOUND (an answer). Outside a DATAGRAM call of this socket: LUMA_E_HANDLE, reported;
+       a null buf with size: LUMA_E_ARGUMENT, reported. `take` on a UDP socket: LUMA_E_HANDLE. */
+    int64_t (*take_datagram)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size, LumaNetPeer* from);
 } LumaNetLocalService;
 
 /* A host name or address in text: at most this many bytes. */
@@ -98,6 +136,18 @@ typedef struct LumaNetInternetService {
     int32_t (*send)(const LumaMod* mod, LumaHandle socket, const void* data, uint64_t bytes);
     int64_t (*take)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
     int32_t (*close)(const LumaMod* mod, LumaHandle handle);
+    /* 1.1. LUMA_E_DENIED, an answer: a socket anyone on the internet may send to is a server (as tcp_listen). */
+    int32_t (*udp_open)(const LumaMod* mod, uint16_t port, uint32_t local_network, LumaEventFn fn, void* user,
+                        LumaHandle* out);
+    /* 1.1. A UDP socket tied to `host`:`port`, the hosts and the rules of this service's tcp_connect (its name looked
+       up, public addresses only, the first one taken: UDP cannot tell which answers). It hears only from there. */
+    int32_t (*udp_connect)(const LumaMod* mod, const char* host, uint16_t port, LumaEventFn fn, void* user,
+                           LumaHandle* out);
+    /* 1.1. LUMA_E_DENIED, an answer (only udp_open's sockets send_to). */
+    int32_t (*send_to)(const LumaMod* mod, LumaHandle socket, const char* host, uint16_t port, const void* data,
+                       uint64_t bytes);
+    /* 1.1. As net.local's. */
+    int64_t (*take_datagram)(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size, LumaNetPeer* from);
 } LumaNetInternetService;
 
 #ifdef __cplusplus

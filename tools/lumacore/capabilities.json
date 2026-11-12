@@ -162,6 +162,7 @@
     "services.fs.exchange": "The Exchange folder shared by the player and mods granted it (2.3)",
     "services.net.local": "TCP on this machine and the local network: connect, listen, send, take, close (2.7 layer 1)",
     "services.net.internet": "TCP to the hosts luma.json names, by name or address, public addresses only: connect, send, take, close (2.7 layer 2)",
+    "services.net.udp": "UDP datagrams (1.1 of net.local and net.internet): udp_open, udp_connect, send_to, take_datagram, DATAGRAM (2.7 layer 2b)",
     "services.assets": "The game's files by path as the game reads them, mods' over the game's or the game's own: find, bytes, a folder's entries (2.8 layer 1)",
     "services.input": "A mod's own actions (its luma.json key options), each following a game control until the player binds keys or buttons to it in Controls, read each game frame (2.5)"
   }
