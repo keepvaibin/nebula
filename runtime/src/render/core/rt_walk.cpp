@@ -3386,6 +3386,11 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
     if (!(luminance > 0.0f) || rt_emitters_.size() >= kMost || camera >= walk_cameras_.size()) {
         return;
     }
+    // d20c: an effect's luminance is on the scale where 150 cd/m2 is a white surface; a white surface of this stage
+    // shows E / pi (as a by-class mesh's, d20b).
+    if (rt_exposure_ > 0.0f) {
+        luminance *= std::min(1.0f, rt_exposure_ / 471.2389f);
+    }
     if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
         ++rt_emitter_sources_[std::uint64_t{2u} << 32u | item.source_hash];
     }
@@ -3423,13 +3428,14 @@ void RenderCore::rt_particle_emitter(const NebulaFrameItem& item, std::uint32_t 
             luminance * static_cast<float>(shown / (static_cast<double>(kUnitsPerMetre) * kUnitsPerMetre)) * static_cast<float>(every);
         RtEmitter made{};
         RtEmitter& emitter = made;
+        const float particle_radius = std::clamp(static_cast<float>(std::sqrt(shown / 3.14159265358979)), 10.0f, 400.0f);
         float linear[3];
         light_colour(colour, linear, rt_dev(RtDev::LightSrgb, 1.0f) > 0.5f);
         for (unsigned c = 0; c < 3u; ++c) {
             emitter.centre[c] = eye[c];
-            emitter.colour[c] = linear[c] * std::min(candela, 20000.0f);
+            emitter.colour[c] = linear[c] * glow_class_bound(std::min(candela, 20000.0f), particle_radius, rt_exposure_);  // d20c
         }
-        emitter.radius = std::clamp(static_cast<float>(std::sqrt(shown / 3.14159265358979)), 10.0f, 400.0f);
+        emitter.radius = particle_radius;
         emitter.reach = 0.0f;
         emitter.slot = item.slot;
         emitter.kind = 2u;
