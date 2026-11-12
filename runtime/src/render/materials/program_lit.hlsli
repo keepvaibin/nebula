@@ -382,7 +382,7 @@ EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     // against white by the draw's bound (the environment's or a character's: traced_tint_bound); Painted keeps FB's
     // coloured O.
     if (view_look.x > 0.0) {
-        const float3 o_sky = traced_bounded(traced_o_shade(g_traced_o), 1.0, float3(1.0, 1.0, 1.0), traced_tint_bound());
+        const float3 o_sky = traced_bounded(traced_o_shade(g_traced_o), 1.0, float3(1.0, 1.0, 1.0), traced_tint_bound(true));
         g_traced_o = lerp(g_traced_o, o_sky, saturate(view_look.x));
     }
     traced_o_held();  // FB b96
@@ -454,7 +454,7 @@ float3 traced_set_level(float3 level) {
     float3 bounded = shade;
     if (shade_l > 1e-4 && full_l > 1e-4) {
         const float3 hue = full / full_l;
-        const float bound = traced_tint_bound();  // c92
+        const float bound = traced_tint_bound(true);  // c92, c92b
         const float3 tint = clamp((shade / shade_l) / max(hue, 1e-4), 1.0 / bound, bound);
         bounded = lerp(shade, shade_l * tint * hue, saturate(view_look.x));
     }

@@ -441,8 +441,19 @@ float traced_sky_chroma() { return view_dev[1].z > 0.5 ? view_dev[0].z : 0.4; }
 // the characters', (0.8, 1.25) (B2: Mario in shade is not blue).
 static const float kTintBoundEnvironment = 2.0;
 static const float kTintBoundCharacter = 1.25;
-// c92 (the director 11-12): the draw's bound: a character's (draw flag 2048: a skinned model), else the environment's.
-float traced_tint_bound() { return (draw_flags & 2048u) != 0u ? kTintBoundCharacter : kTintBoundEnvironment; }
+// c92, c92b (the director 11-12): the draw's bound by its light set's kind, the art's own split: draw flag 2048 a
+// character's or object's set (Player, Strong, Weak; c92's skinned body until the host passes the kind), 4096 the
+// Planet set (the environment). Neither: a lit program takes the character bound (no blue Mario in shade), a painted
+// one the environment's.
+float traced_tint_bound(bool lit) {
+    if ((draw_flags & 2048u) != 0u) {
+        return kTintBoundCharacter;
+    }
+    if ((draw_flags & 4096u) != 0u) {
+        return kTintBoundEnvironment;
+    }
+    return lit ? kTintBoundCharacter : kTintBoundEnvironment;
+}
 // c92: O as it enters shade light (the sky term of a painted surface, a lit program's ambient and fill): its luminance
 // and kShadowTint (view_stage_a.w) of its own hue: the shade's hue is the art's ambient's, the bounce and the dome
 // colour it a little (FB b87's hue stays inside O).
@@ -481,7 +492,7 @@ float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
     const float3 lit = view_relight[1].rgb * traced_o_shade(o3) + view_relight[2].rgb * (nl * v);
     // A3-F8: lit over held in luminance, its colour over held's within the draw's bound (c92: the environment's or a
     // character's).
-    const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb, traced_tint_bound());
+    const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb, traced_tint_bound(false));
     return lerp(painted, relit, view_look.x);
 }
 // c74: the sheen where the pixel mirrors nothing else (its mirror picture a in [0.999, 1.5]: no class's own F), not a
