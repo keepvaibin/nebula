@@ -26,7 +26,7 @@ extern "C" {
 #define LUMA_TIME_TIMERS_MOST 64u
 
 /* What the game is doing (LumaTimeNow.state). */
-enum {
+typedef enum LumaTimeState {
     LUMA_TIME_BOOT = 0,    /* before the first scene: the boot scene and the system's files */
     LUMA_TIME_LOADING = 1, /* a scene is being built or taken down */
     LUMA_TIME_PLAY = 2,    /* a scene runs */
@@ -34,14 +34,17 @@ enum {
                               menu, an error window, the skip's question */
     LUMA_TIME_MOVIE = 4,   /* a movie plays */
     LUMA_TIME_SKIP = 5     /* the cutscene skip runs the scene unseen */
-};
+} LumaTimeState;
 
 /* A timer's clock (timer's `clock`). */
-enum {
+typedef enum LumaTimeClock {
     LUMA_TIME_FRAMES = 0,
     LUMA_TIME_STEPS = 1,
     LUMA_TIME_NANOSECONDS = 2 /* the monotonic clock */
-};
+} LumaTimeClock;
+
+/* A timer (timer's out, cancel's handle): a LumaHandle only time's cancel takes (registry 3, R-9b). */
+typedef LumaHandle LumaTimeTimer;
 
 /* LumaEvent.kind of `time`: a timer came due. `handle` is the timer, `value` how many times it came due since its
    last event (more than 1 when its period is shorter than a frame), `status` LUMA_OK. A timer given once is closed
@@ -54,7 +57,7 @@ typedef enum LumaTimeEvent {
    `step_in_frame`, which an on_step handler sees for its own step. */
 typedef struct LumaTimeNow {
     uint32_t size;          /* sizeof(LumaTimeNow) as the mod was built */
-    uint32_t state;         /* LUMA_TIME_BOOT.. */
+    LumaTimeState state;    /* 4 bytes, a C enum */
     uint64_t frame;         /* frames presented since start (the first is 1) */
     uint64_t step;          /* world steps since start */
     uint32_t steps;         /* the world steps this frame runs (0 held, 1 real time, up to 16) */
@@ -96,31 +99,31 @@ typedef struct LumaTimeService {
     int64_t (*monotonic_ns)(const LumaMod* mod);
     /* 1.0. Any thread. The wall clock now. LUMA_OK. A null out, or a size below 1.0's struct (32): as `now`. */
     int32_t (*wall)(const LumaMod* mod, LumaTimeWall* out);
-    /* 1.0. Game thread. This mod's factor of the world's rate, from the next frame: 1 to 16000 thousandths (1000 takes
-       it back). Outside: LUMA_E_ARGUMENT, reported (Service.Argument "rate"). */
+    /* 1.0. Game thread. This mod's factor of the world's rate in thousandths, from the next frame (1000 takes it
+       back); rate: 1 to 16000. LUMA_OK. Outside: LUMA_E_ARGUMENT, reported (Service.Argument "rate"). */
     int32_t (*set_rate)(const LumaMod* mod, uint32_t rate);
     /* 1.0. Game thread. This mod holds the world from the next frame (holding twice is holding). LUMA_OK. */
     int32_t (*hold)(const LumaMod* mod);
     /* 1.0. Game thread. This mod lets the world go from the next frame, and its owed steps are dropped (not holding:
        nothing to do). LUMA_OK. */
     int32_t (*release)(const LumaMod* mod);
-    /* 1.0. Game thread. `count` more world steps in the next frame (1 to 16 a call, at most 16 owed). LUMA_OK.
+    /* 1.0. Game thread. `count` more world steps in the next frame (count: 1 to 16; at most 16 owed). LUMA_OK.
        This mod does not hold the world: LUMA_E_ARGUMENT, reported (Time.NotHeld). Another mod holds it too, or the
        state is BOOT, LOADING, MOVIE or SKIP: LUMA_E_BUSY (an answer, not reported). `count` 0 or over 16: LUMA_E_ARGUMENT,
        reported; more than 16 owed: LUMA_E_LIMIT, reported. */
     int32_t (*step)(const LumaMod* mod, uint32_t count);
     /* 1.0. Game thread. A timer on `clock` (LUMA_TIME_FRAMES, STEPS, NANOSECONDS): due `after` units from now (at
-       least 1), then every `every` units (0: once). LUMA_PENDING with the timer in *out; its events go to fn.
+       least 1), then every `every` units (0: once). LUMA_PENDING with the timer in *out; a TIMER event follows each time it comes due (to fn).
        A null fn or out, a zero `after`, an unknown clock: LUMA_E_ARGUMENT; a 65th timer: LUMA_E_LIMIT; both
        reported. */
-    int32_t (*timer)(const LumaMod* mod, uint32_t clock, uint64_t after, uint64_t every, LumaEventFn fn, void* user,
-                     LumaHandle* out);
+    int32_t (*timer)(const LumaMod* mod, LumaTimeClock clock, uint64_t after, uint64_t every, LumaEventFn fn, void* user,
+                     LumaTimeTimer* out);
     /* 1.0. Game thread. Ends a timer: no event for it is given after this returns (registry 4.8). LUMA_OK; a handle
        that is not this mod's open timer: LUMA_E_HANDLE, reported. */
-    int32_t (*cancel)(const LumaMod* mod, LumaHandle timer);
-    /* 1.0. Game thread. This mod's frame handler, from the next frame (a null fn removes it). LUMA_OK. */
+    int32_t (*cancel)(const LumaMod* mod, LumaTimeTimer timer);
+    /* 1.0. Game thread. This mod's frame handler, from the next frame (a null fn removes it); set by on frame. LUMA_OK. */
     int32_t (*on_frame)(const LumaMod* mod, LumaTimeFn fn, void* user);
-    /* 1.0. Game thread. This mod's step handler, from the next step (a null fn removes it). LUMA_OK. */
+    /* 1.0. Game thread. This mod's step handler, from the next step (a null fn removes it); set by on step. LUMA_OK. */
     int32_t (*on_step)(const LumaMod* mod, LumaTimeFn fn, void* user);
 } LumaTimeService;
 

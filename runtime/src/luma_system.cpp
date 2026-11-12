@@ -574,7 +574,7 @@ std::int32_t system_facts(const LumaMod* mod, LumaSystemFacts* out) {
     {
         const std::lock_guard<std::mutex> lock(g_renderer_lock);
         if (g_renderer_known) {
-            facts.renderer = g_renderer;
+            facts.renderer = static_cast<LumaSystemRenderer>(g_renderer);
         }
         std::memcpy(facts.gpu, g_gpu.data(), sizeof(facts.gpu));
     }
