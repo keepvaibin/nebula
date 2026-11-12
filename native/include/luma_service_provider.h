@@ -47,9 +47,9 @@ typedef struct LumaServiceKernel {
     int32_t (*mod_live)(const LumaMod* mod);
     /* 1 on the game thread. */
     int32_t (*game_thread)(void);
-    /* A mistake of the mod: the row `code` (the provider's rows, or the registry's 100 to 119) with `args`; `where` is
-       "<service>.<function>". Kept and said as LumaCore.report does: once in the log, kept for the Mods page, repeats
-       counted. */
+    /* A mistake of the mod: the row `code` (the provider's rows, or the registry's 100 to 119); `where` is
+       "<service>.<function>", the row's first argument {where}; `args` are the row's arguments after it, in order (at
+       most 7). Kept and said as LumaCore.report does: once in the log, kept for the Mods page, repeats counted. */
     void (*report)(const LumaMod* mod, const char* where, uint32_t code, const char* const* args, uint32_t arg_count);
     /* Queues `node` for its mod (from any thread). LUMA_OK: queued, or queued already; LUMA_E_CANCELLED: the mod is
        gone or unknown, nothing queued (the node stays the provider's); LUMA_E_ARGUMENT: a null node, mod or deliver. */

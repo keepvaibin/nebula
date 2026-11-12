@@ -49,9 +49,8 @@ Mod* mod_of(const LumaMod* mod) {
 }
 
 void report(const LumaMod* mod, const char* where, std::uint32_t code, std::initializer_list<const char*> args) {
-    // The registry's rows name "where" first (services-registry 11): it is the first argument as well as the place.
-    std::vector<const char*> all{where};
-    all.insert(all.end(), args.begin(), args.end());
+    // The kernel puts `where` first itself (the rows name it first, services-registry 11).
+    const std::vector<const char*> all(args);
     g_kernel->report(mod, where, code, all.data(), static_cast<std::uint32_t>(all.size()));
 }
 

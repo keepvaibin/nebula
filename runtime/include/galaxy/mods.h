@@ -151,6 +151,8 @@ void set_mods_store_file(const std::filesystem::path& store);
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id);
 [[nodiscard]] std::filesystem::path mods_folder();
+// The file given to set_mods_folder for the player's choices (empty before); its folder is the settings folder.
+[[nodiscard]] std::filesystem::path mods_settings_file();
 // Mod code was turned off after a crash in this run; the Mods page says so.
 void set_code_off_after_crash() noexcept;
 // The game id given to set_mods_folder (empty before).

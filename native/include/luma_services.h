@@ -56,6 +56,8 @@ enum {
 /* A handle to something a service made for the mod (a file, a socket, a sound). Never 0; never given twice in one
    session, so a closed handle stays recognisably closed. */
 typedef uint64_t LumaHandle;
+/* A colour a service takes or gives: 0xRRGGBBAA, 8 bits each, alpha 0xFF opaque (registry 3, R-9e). */
+typedef uint32_t LumaColor;
 
 /* An answer from the outside world, delivered on the game thread at the frame's start. Everything it points at is
    valid only during the call: copy what you keep. */
