@@ -3,15 +3,12 @@
 #include <nebula_mod_api.h>
 #include <nebula_game_api.h>
 
-class NameObj;
 class LiveActor;
-class TableIter;
-class TimeLimitLayout;
 
-// The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
+// The game's side of the mods' rows (nebula_mod_api.h). An event nothing waits for is one load and one branch.
 namespace NebulaMods {
     extern bool sWanted[NEBULA_MOD_EVENT_COUNT];
-    // Whether any mod has started: its code may ask for what a scene otherwise only makes when its story needs it.
+    // Whether any mod has rows: a scene then makes what it otherwise only makes when its story needs it.
     bool hasCode();
 
     s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName);
@@ -22,25 +19,14 @@ namespace NebulaMods {
         return sWanted[event] ? dispatch(event, value, pActor, pName) : value;
     }
 
-    // While one lives, a stage's frame is running: the player can be asked for.
-    struct StageFrame {
-        StageFrame();
-        ~StageFrame();
-    };
+    // Each frame of a stage (GameScene::update), before its objects move: the player's spin, jump and landing, then
+    // NEBULA_MOD_EVENT_STAGE_FRAME, for what waits for them (an achievement's "event"). Nothing when none does.
+    void stageFrame();
 
-    // A game scene's animation or drawing: in a stage for the mod API as its update is (a plugin's hook on
-    // GameScene::draw changes the stage, sets flags and places the player), with no frame events.
-    struct InStage {
-        explicit InStage(bool on);
-        ~InStage();
-        bool mOn;
-    };
-
-    // Power-ups plugins add. Numbers from here on are theirs; a mode below is the game's and these do nothing.
+    // Power-ups mods add. Numbers from here on are theirs; a mode below is the game's and these do nothing.
     const u16 cFirstPowerUp = 32;
     // How long it lasts, once started on the player.
     s32 powerUpStart(u16 mode, LiveActor* pPlayer);
-    void powerUpUpdate(u16 mode);
     void powerUpEnd(u16 mode, LiveActor* pPlayer);
     s32 powerUpCount();
     const char* powerUpModel(s32 index);
@@ -68,12 +54,6 @@ namespace NebulaMods {
     // A galaxy whose icon has no pane in the map's layout: the pane to make, under `pParent`.
     bool mapSpot(const char* pGalaxy, f32* pX, f32* pY, s32* pDome);
 
-    typedef NameObj* (*CreatorFuncPtr)(const char*);
-    // A plugin's object by its placed name: how to make it. nullptr: not a plugin's.
-    CreatorFuncPtr findCreator(const char* pName);
-    // The mod object (luma.json "objects", a plugin's class) a placed name makes: by its own name, or by what an
-    // object change turns it into. Null for the game's own.
-    const char* modObjectName(const char* pPlacedName);
     // What a mod has made of an object of the game's, where `where` (NEBULA_OBJECTS_*) is: its own name unchanged, another's, or null: gone.
     const char* objectBecomes(s32 where, const char* pName);
     // Frames, from what mods say of a comet mission; 0: they say nothing.
@@ -104,65 +84,11 @@ namespace NebulaMods {
     inline s32 stageRule(const char* pStage, const char* pAskedName) {
         return sHasStageRules ? stageRuleSlow(pStage, pAskedName) : -1;
     }
-    // With a mod on: an object a level places whose mod-made class or plugin names an archive the store lacks. It's left
-    // out and the log says so, not a stop. The game's own archives are in every store (a mod store lies over the base).
+    // With a mod on: an object a level places whose mod-made class names an archive the store lacks. It's left out and
+    // the log says so, not a stop. The game's own archives are in every store (a mod store lies over the base).
     bool isMissingFiles(const char* pName);
     // A name a level places that a mod has made as another of the game's objects: that object's name. The name itself otherwise.
     const char* objectLike(const char* pName);
     // What a model named by an object of that class comes from.
     const char* modelFor(const char* pObjectName, const char* pModelName);
-
-    // The game's rules as plugins change them (set_gravity_scale, set_game_speed, set_camera, show_hud, the countdown):
-    // with none changed each check is one load.
-    extern f32 sGravityScale;
-    inline f32 gravityScale() {
-        return sGravityScale;
-    }
-    // Whether the scene runs a step this frame: decided once a frame (StageFrame), for the step and the scene's stops.
-    extern bool sSceneStep;
-    inline bool isSceneStep() {
-        return sSceneStep;
-    }
-    // A plugin's camera: bit 0 a position, bit 1 a target, in pPosition and pTarget; 0 when it sets neither.
-    extern bool sCameraSet;
-    u32 cameraPoseSlow(f32* pPosition, f32* pTarget);
-    inline u32 cameraPose(f32* pPosition, f32* pTarget) {
-        return sCameraSet ? cameraPoseSlow(pPosition, pTarget) : 0;
-    }
-    // The near plane: a plugin's, else the game's.
-    extern f32 sCameraNear;
-    inline f32 cameraNear(f32 nearZ) {
-        return sCameraNear > 0.0f ? sCameraNear : nearZ;
-    }
-    // The game's own camera this frame, before a plugin's (CameraDirector::calcPose), for game_camera.
-    void recordGameCamera(f32 x, f32 y, f32 z, f32 targetX, f32 targetY, f32 targetZ);
-    // Where a plugin wants the large talk box (place_talk_box): its middle in screen coordinates. False: its own place.
-    bool talkBoxPlace(f32* pX, f32* pY);
-    // The angle of view: a plugin's, else the game's `fovy`. Kept as the last drawn.
-    f32 cameraFov(f32 fovy);
-    // The HUD parts plugins hide (NEBULA_HUD_*).
-    extern u32 sHudHidden;
-    inline bool isHudHidden(u8 part) {
-        return (sHudHidden & part) != 0u;
-    }
-    // The countdown on the screen while it shows (TimeLimitLayout), and whether plugins hold it.
-    void setCountdown(TimeLimitLayout* pLayout, bool shown);
-    extern bool sCountdownHeld;
-    // The scene ends: what pointed into it goes.
-    void sceneEnded();
-
-    // The lines of text plugins draw over the game (NebulaModText).
-    const s32 cTextLines = 16;
-    const s32 cTextLength = 128;
-    struct TextLine {
-        bool mShown;
-        f32 mX;
-        f32 mY;
-        f32 mSize;
-        u32 mRgba;
-        char16_t mText[cTextLength];
-    };
-    const TextLine& textLine(s32 line);
-    // Counts up with every change to the lines.
-    u32 textRevision();
 }  // namespace NebulaMods

@@ -373,8 +373,6 @@ void MarioActor::resetPlayerModeOnNoDamage() {
 }
 
 void MarioActor::updatePlayerMode() {
-    NebulaMods::powerUpUpdate(mModForm);
-
     if (mPlayerModeTimer == 0) {
         return;
     }

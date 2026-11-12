@@ -117,12 +117,11 @@ struct Tunable {
 // A new object class that is built like one of the game's.
 struct ObjectClass {
     std::string name;
-    std::string like;    // the game's class it is made like; empty: `name` is one of the game's own classes
-    std::string script;  // what runs on every actor of it (scripts/<script>.lumascript); empty: none
+    std::string like;  // the game's class it is made like
 };
 
 // A power-up from data ("forms"): the game's form it acts like and looks like (NEBULA_POWER_UP_*), its colour frame,
-// whole-body model, time, music and script on the player.
+// whole-body model, time and music on the player.
 struct Form {
     std::string name;
     int acts_like = 0;
@@ -131,20 +130,6 @@ struct Form {
     int frames = 0;
     std::string model;   // ObjectData/<model>.arc; empty: the player's own
     std::string music;   // a BGM_ name; empty: the acts_like form's
-    std::string script;  // empty: none
-};
-
-// An object a script runs ("objects"): its shape, and the script (scripts/<script>.lumascript, compiled by LumaLink
-// into files/LumaScripts/<mod id>/<script>.lumascript).
-struct ScriptObject {
-    std::string name;
-    std::string script;
-    std::string archive;  // model and animations: ObjectData/<archive>.arc; empty: invisible
-    double radius = 60.0;
-    int kind = 0;  // NEBULA_OBJECT_*: "enemy", "map", "npc", "ride", "decoration"
-    bool collision = false;
-    double shadow_radius = 0.0;
-    double clip_radius = 0.0;
 };
 
 // A named sound effect loaded from a file.
@@ -229,8 +214,9 @@ struct Layer {
     std::vector<Tunable> tunables;
     std::vector<ObjectClass> object_classes;
     std::vector<Form> forms;
-    std::vector<ScriptObject> objects;
-    std::vector<std::string> scripts;  // mod-wide scripts ("scripts"): scripts/<name>.lumascript, one instance each
+    // pre_standard rows that ran scripts on the interpreter plan 1.10b removed ("script" on a class or form, "objects",
+    // "scripts"): nothing of them is read, and the mod is refused, said on its Mods page (mods.cpp).
+    bool old_scripts = false;
     std::vector<SoundEffect> sound_effects;
     std::vector<PlayerAnimation> player_animations;
     When when;

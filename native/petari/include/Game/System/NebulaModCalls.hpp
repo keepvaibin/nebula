@@ -3,7 +3,7 @@
 #include <nebula_mod_api.h>
 #include "Game/Util.hpp"
 
-// Plugin calls that reach into the game's save, story and scene (nebula_mod_api.h, after add_player_animation), and
+// Calls that reach into the game's save, story and scene, exported by name (the test driver calls them), and
 // what the settings' galaxy select asks of the scene with them.
 extern "C" {
 int32_t nebula_mod_give_star(const char* pGalaxy, int32_t star, int32_t grand);

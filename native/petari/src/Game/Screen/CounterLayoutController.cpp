@@ -44,10 +44,6 @@ void CounterLayoutController::init(const TableIter& /*rIter*/) {
     mPlayerLeft->initWithoutIter();
     mStarCounter = new StarCounter();
     mStarCounter->initWithoutIter();
-    mCoinCounter->mFlag.mHudPart = NEBULA_HUD_COINS;
-    mStarPieceCounter->mFlag.mHudPart = NEBULA_HUD_STAR_BITS;
-    mPlayerLeft->mFlag.mHudPart = NEBULA_HUD_LIVES;
-    mStarCounter->mFlag.mHudPart = NEBULA_HUD_STARS;
 
     appear();
 }

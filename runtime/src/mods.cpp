@@ -1288,6 +1288,14 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     mod.problem = "THIS MOD HAS NO VERSION FOR THIS DEVICE";
                     std::fprintf(stderr, "[mods] %s: %s\n", mod.id.c_str(), mod.problem.c_str());
                 }
+                // Scripts for the interpreter plan 1.10b removed: none of them runs, so the mod does not, and says why.
+                // LumaLink builds a mod's scripts into its code now.
+                if (mod.problem.empty() &&
+                    std::any_of(manifest->layers.begin(), manifest->layers.end(), [](const luma::Layer& layer) { return layer.old_scripts; })) {
+                    mod.problem = "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA";
+                    std::fprintf(stderr, "[mods] %s: %s (its luma.json has scripts for the removed interpreter)\n", mod.id.c_str(),
+                                 mod.problem.c_str());
+                }
                 mod.code_token = plugin_token(dir, *manifest);
                 mod.code_allowed = !mod.code_token.empty() && s != nullptr && s->code_ok == mod.code_token;
                 mod.code_declined = !mod.code_token.empty() && !mod.code_allowed && s != nullptr && s->code_no == mod.code_token;
@@ -2034,18 +2042,11 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                     plan.rows.player_animations.push_back({mod.id, animation.name, animation.file, animation.rate, animation.blend_frames});
                 }
                 for (const luma::ObjectClass& object : layer.object_classes) {
-                    plan.rows.object_classes.push_back({mod.id, mod.luma->version, object.name, object.like, object.script});
+                    plan.rows.object_classes.push_back({mod.id, object.name, object.like});
                 }
                 for (const luma::Form& form : layer.forms) {
-                    plan.rows.forms.push_back({mod.id, mod.luma->version, form.name, form.acts_like, form.looks_like, form.color_frame, form.frames, form.model,
-                                               form.music, form.script});
-                }
-                for (const luma::ScriptObject& object : layer.objects) {
-                    plan.rows.script_objects.push_back({mod.id, mod.luma->version, object.name, object.script, object.archive, object.radius,
-                                                         object.kind, object.collision, object.shadow_radius, object.clip_radius});
-                }
-                for (const std::string& script : layer.scripts) {
-                    plan.rows.mod_scripts.push_back({mod.id, mod.luma->version, script});
+                    plan.rows.forms.push_back({mod.id, form.name, form.acts_like, form.looks_like, form.color_frame, form.frames, form.model,
+                                               form.music});
                 }
                 for (const auto& [material, file] : layer.materials) {
                     plan.materials.push_back({material, mod.path / fs::path(from_utf8(file))});

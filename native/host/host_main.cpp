@@ -3376,12 +3376,6 @@ void svc_app_exit(void*) {
 }
 
 void svc_mods_start(void*) {
-    if (const fs::path& dump = ::galaxy::launch_args().dump_tunables; !dump.empty()) {
-        const auto game_api = reinterpret_cast<const NebulaModApi* (*)()>(find_symbol(gModule.module, "nebula_game_mod_api"));
-        if (game_api == nullptr || !galaxy::mods::dump_tunables(game_api(), dump)) {
-            log_line("mods:", ("the tunables could not be written to " + galaxy::path_text(dump)).c_str());
-        }
-    }
     const fs::path crashed = galaxy::mods::mods_folder() / ".code_crashed";
     std::error_code crash_error;
     if (fs::exists(crashed, crash_error)) {
@@ -3907,8 +3901,6 @@ void read_launch_args(int argc, char** argv) {
             args.gpu_start_retry = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
         } else if (key == "--timeline") {
             args.timeline = path_at(i + 1);
-        } else if (key == "--dump-tunables") {
-            args.dump_tunables = path_at(i + 1);
         } else if (key == "--extension") {
             args.extensions.push_back(path_at(i + 1));
         } else if (key == "--import") {
@@ -4097,7 +4089,7 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension" || key == "--import" ||
+                   key == "--gpu-start-retry" || key == "--extension" || key == "--import" ||
                    key == "--safe-start") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {

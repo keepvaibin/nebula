@@ -13,10 +13,8 @@
 #include <cstring>
 #include <string>
 #include <filesystem>
-#include <cstdarg>
 #include <cstdint>
 #include <cstdlib>
-#include <fstream>
 #include <cstdio>
 #include <map>
 #include <memory>
@@ -34,7 +32,6 @@ namespace galaxy::mods {
 namespace {
 
 struct Loaded {
-    NebulaPlugin self{};
     std::string mod_id;
     std::string library;  // the code's file name (a LumaCore mod's; its Mods page names it once taken out)
     std::string version;
@@ -43,16 +40,6 @@ struct Loaded {
 };
 
 std::vector<std::unique_ptr<Loaded>> g_loaded;
-// Data mods with scripts: their records, one per mod, for the run.
-std::vector<std::unique_ptr<Loaded>> g_data_mods;
-
-Loaded* data_mod(std::unique_ptr<Loaded> made) {
-    for (const auto& mod : g_data_mods) {
-        if (mod->mod_id == made->mod_id) return mod.get();
-    }
-    g_data_mods.push_back(std::move(made));
-    return g_data_mods.back().get();
-}
 NebulaModApi g_api{};
 void* (*g_find_symbol)(const char*) = nullptr;
 void (*g_log)(const char*) = nullptr;
@@ -82,18 +69,6 @@ bool unlock_achievement_at(std::size_t index) {
     const std::lock_guard<std::mutex> lock(g_unlocked_mutex);
     g_unlocked.push_back(static_cast<std::int32_t>(index));
     return true;
-}
-
-// 1 when it was unlocked now; 0 when it was already, or the mod has no achievement of that id.
-int32_t api_unlock_achievement(const NebulaPlugin* self, const char* id) {
-    if (self == nullptr || self->id == nullptr || id == nullptr) return 0;
-    for (std::size_t i = 0; i < g_achievements.size(); ++i) {
-        const AchievementToAdd& achievement = g_achievements[i];
-        const std::string_view key = achievement.key;
-        if (achievement.mod_id != self->id || !key.ends_with(id) || key.size() <= std::strlen(id) || key[key.size() - std::strlen(id) - 1u] != '/') continue;
-        return unlock_achievement_at(i) ? 1 : 0;
-    }
-    return 0;
 }
 
 // An event some achievement's "when" names: each one it matches is unlocked. What the event carries is not changed.
@@ -334,181 +309,7 @@ std::string load_sentence(const std::string& why) {
     return "ITS CODE DID NOT LOAD";
 }
 
-void* api_alloc(uint64_t bytes) {
-    return bytes == 0 || bytes > SIZE_MAX ? nullptr : std::malloc(static_cast<std::size_t>(bytes));
-}
-
-void api_release(void* memory) {
-    std::free(memory);
-}
-
-int32_t api_format(char* buffer, uint64_t size, const char* format, ...) {
-    if (format == nullptr || (buffer == nullptr && size != 0)) return -1;
-    std::va_list args;
-    va_start(args, format);
-    const int written = std::vsnprintf(buffer, static_cast<std::size_t>(size > SIZE_MAX ? SIZE_MAX : size), format, args);
-    va_end(args);
-    return written;
-}
-
-void api_log(const NebulaPlugin* self, const char* text) {
-    say((self != nullptr && self->id != nullptr ? std::string(self->id) : std::string("plugin")) + ": " + (text != nullptr ? text : ""));
-}
-
-const char* api_option(const NebulaPlugin* self, const char* id) {
-    if (self == nullptr || id == nullptr) return nullptr;
-    for (const std::unique_ptr<Loaded>& loaded : g_loaded) {
-        if (&loaded->self != self) continue;
-        const auto it = loaded->options.find(id);
-        return it != loaded->options.end() ? it->second.c_str() : nullptr;
-    }
-    return nullptr;
-}
-
-// A number kept for a mod across plays: one small text file per mod, key=value, beside the mods.
-std::filesystem::path store_file(const NebulaPlugin* self) {
-    return mods_folder() / ".plugin-data" / (std::string(self->id) + ".txt");
-}
-
-std::map<std::string, std::int32_t> read_store(const NebulaPlugin* self) {
-    std::map<std::string, std::int32_t> values;
-    std::ifstream file(store_file(self));
-    std::string line;
-    while (std::getline(file, line)) {
-        const std::size_t equals = line.find('=');
-        if (equals == std::string::npos) continue;
-        char* end = nullptr;
-        const long value = std::strtol(line.c_str() + equals + 1, &end, 10);
-        if (end != nullptr && end != line.c_str() + equals + 1) {
-            values[line.substr(0, equals)] = static_cast<std::int32_t>(
-                std::clamp<long>(value, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max()));
-        }
-    }
-    return values;
-}
-
-// A key is one line's left side.
-bool store_key_ok(const char* key) {
-    if (key == nullptr || key[0] == '\0') return false;
-    for (const char* at = key; *at != '\0'; ++at) {
-        if (*at == '=' || *at == '\n' || *at == '\r') return false;
-    }
-    return true;
-}
-
-std::int32_t api_store_get(const NebulaPlugin* self, const char* key, std::int32_t missing) {
-    if (self == nullptr || self->id == nullptr || !store_key_ok(key)) return missing;
-    const std::map<std::string, std::int32_t> values = read_store(self);
-    const auto it = values.find(key);
-    return it != values.end() ? it->second : missing;
-}
-
-void api_store_set(const NebulaPlugin* self, const char* key, std::int32_t value) {
-    if (self == nullptr || self->id == nullptr || !store_key_ok(key)) return;
-    std::map<std::string, std::int32_t> values = read_store(self);
-    values[key] = value;
-    const std::filesystem::path path = store_file(self);
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    // Written whole and moved over, so that a crash in the middle leaves the last good file.
-    std::filesystem::path temporary = path;
-    temporary += ".tmp";
-    {
-        std::ofstream file(temporary, std::ios::trunc);
-        for (const auto& [name, number] : values) file << name << '=' << number << '\n';
-        if (!file) return;
-    }
-    std::filesystem::rename(temporary, path, error);
-}
-
-// Text beside numbers: each its own file line, "key:text", with what would break a line escaped.
-std::filesystem::path text_store_file(const NebulaPlugin* self) {
-    return mods_folder() / ".plugin-data" / (std::string(self->id) + ".text.txt");
-}
-
-std::map<std::string, std::string> read_text_store(const NebulaPlugin* self) {
-    std::map<std::string, std::string> values;
-    std::ifstream file(text_store_file(self));
-    std::string line;
-    while (std::getline(file, line)) {
-        const std::size_t equals = line.find('=');
-        if (equals == std::string::npos) continue;
-        std::string text;
-        for (std::size_t i = equals + 1u; i < line.size(); ++i) {
-            if (line[i] == '\\' && i + 1u < line.size()) {
-                ++i;
-                text += line[i] == 'n' ? '\n' : line[i] == 'r' ? '\r' : line[i];
-            } else {
-                text += line[i];
-            }
-        }
-        values[line.substr(0, equals)] = std::move(text);
-    }
-    return values;
-}
-
-std::int32_t api_store_get_text(const NebulaPlugin* self, const char* key, char* out, std::int32_t size) {
-    if (self == nullptr || self->id == nullptr || !store_key_ok(key) || out == nullptr || size <= 0) return 0;
-    out[0] = '\0';
-    const std::map<std::string, std::string> values = read_text_store(self);
-    const auto it = values.find(key);
-    if (it == values.end()) return 0;
-    const std::size_t count = std::min(it->second.size(), static_cast<std::size_t>(size - 1));
-    std::memcpy(out, it->second.data(), count);
-    out[count] = '\0';
-    return static_cast<std::int32_t>(count);
-}
-
-void api_store_set_text(const NebulaPlugin* self, const char* key, const char* text) {
-    if (self == nullptr || self->id == nullptr || !store_key_ok(key) || text == nullptr) return;
-    std::map<std::string, std::string> values = read_text_store(self);
-    values[key] = text;
-    const std::filesystem::path path = text_store_file(self);
-    std::error_code error;
-    std::filesystem::create_directories(path.parent_path(), error);
-    std::filesystem::path temporary = path;
-    temporary += ".tmp";
-    {
-        std::ofstream file(temporary, std::ios::trunc | std::ios::binary);
-        for (const auto& [name, words] : values) {
-            file << name << '=';
-            for (const char c : words) {
-                if (c == '\n') file << "\\n";
-                else if (c == '\r') file << "\\r";
-                else if (c == '\\') file << "\\\\";
-                else file << c;
-            }
-            file << '\n';
-        }
-        if (!file) return;
-    }
-    std::filesystem::rename(temporary, path, error);
-}
-
 }  // namespace
-
-bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file) {
-    if (game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return false;
-    std::ofstream out(list_file, std::ios::binary | std::ios::trunc);
-    if (!out) return false;
-    static constexpr const char* kKinds[] = {"?", "f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"};
-    const char* file = nullptr;
-    const char* name = nullptr;
-    int32_t place = -1;
-    int32_t kind = 0;
-    double game_value = 0.0;
-    double value = 0.0;
-    for (int32_t i = 0; game_api->tunable_at(i, &file, &name, &place, &kind, &game_value, &value) == 0; ++i) {
-        std::string stem = file != nullptr ? file : "";
-        if (const std::size_t dot = stem.rfind('.'); dot != std::string::npos) stem.resize(dot);
-        char number[64];
-        std::snprintf(number, sizeof(number), "%.9g", game_value);
-        out << stem << '.' << (name != nullptr ? name : "");
-        if (place >= 0) out << '[' << place << ']';
-        out << '\t' << kKinds[(kind >= 1 && kind <= 9) ? kind : 0] << '\t' << number << '\n';
-    }
-    return static_cast<bool>(out.flush());
-}
 
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
@@ -538,21 +339,6 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         return 0;
     }
     g_api = *game_api;
-    g_api.log = api_log;
-    g_api.option = api_option;
-    // The old plugins' hook and find_function are gone (plan 1.10a): a mod hooks and finds through luma.h.
-    g_api.hook = nullptr;
-    g_api.find_function = nullptr;
-    g_api.store_get = api_store_get;
-    g_api.store_set = api_store_set;
-    g_api.store_get_text = api_store_get_text;
-    g_api.store_set_text = api_store_set_text;
-    g_api.alloc = api_alloc;
-    g_api.release = api_release;
-    g_api.format = api_format;
-    g_api.unlock_achievement = api_unlock_achievement;
-    // The game's scripts log, keep values and format through the completed table.
-    if (g_api.luma_start != nullptr) g_api.luma_start(&g_api);
     g_achievements = rows.achievements;
     g_achievement_done = std::make_unique<std::atomic<bool>[]>(g_achievements.size());
     {
@@ -648,12 +434,10 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(constant.mod_id + ": the player has no number " + constant.name);
         }
     }
+    // The tunables lift is gone (plan 1.5): a number is named by LumaCore's number() and set by set_number() from a
+    // mod's code. Each old row is said, never dropped unsaid.
     for (const TunableToSet& tunable : rows.tunables) {
-        if (!std::isfinite(tunable.value)) {
-            say(tunable.mod_id + ": " + tunable.key + " is set to a number too large to hold");
-        } else if (g_api.set_tunable(tunable.key.c_str(), tunable.value) != 0) {
-            say(tunable.mod_id + ": the game has no tuning number " + tunable.key);
-        }
+        say(tunable.mod_id + ": " + tunable.key + " is not set: tuning numbers are set by a mod's code (LumaCore set_number)");
     }
     for (const auto& [key, value] : rows.story) {
         if (g_api.set_story(key.c_str(), value.c_str()) != 0) say("the story has no " + key);
@@ -673,51 +457,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(object.mod_id + ": the object " + object.name + " can't be added");
         }
     }
-    for (const ScriptObjectToAdd& row : rows.script_objects) {
-        // A data mod has no plugin record of its own: the scripts' mod is this one (its id names their folder and store).
-        auto loaded = std::make_unique<Loaded>();
-        loaded->mod_id = row.mod_id;
-        loaded->version = row.mod_version;
-        loaded->self.size = sizeof(NebulaPlugin);
-        loaded->self.id = loaded->mod_id.c_str();
-        loaded->self.version = loaded->version.c_str();
-        Loaded* const mod = data_mod(std::move(loaded));
-        NebulaObjectClass shape{};
-        shape.size = sizeof(NebulaObjectClass);
-        shape.name = row.name.c_str();
-        shape.archive = row.archive.empty() ? nullptr : row.archive.c_str();
-        shape.radius = static_cast<float>(row.radius);
-        shape.kind = row.kind;
-        shape.collision = row.collision ? 1 : 0;
-        shape.shadow_radius = static_cast<float>(row.shadow_radius);
-        shape.clip_radius = static_cast<float>(row.clip_radius);
-        if (g_api.add_script_object == nullptr || g_api.add_script_object(&mod->self, &shape, row.script.c_str()) != 0) {
-            say(row.mod_id + ": the object " + row.name + " can't be added (its script " + row.script + ")");
-        }
-    }
-    // Class scripts once every class exists (a mod's "like" classes above).
-    for (const ObjectClassToSet& object : rows.object_classes) {
-        if (object.script.empty()) continue;
-        auto loaded = std::make_unique<Loaded>();
-        loaded->mod_id = object.mod_id;
-        loaded->version = object.mod_version;
-        loaded->self.size = sizeof(NebulaPlugin);
-        loaded->self.id = loaded->mod_id.c_str();
-        loaded->self.version = loaded->version.c_str();
-        Loaded* const mod = data_mod(std::move(loaded));
-        if (g_api.set_class_script == nullptr || g_api.set_class_script(&mod->self, object.name.c_str(), object.script.c_str()) != 0) {
-            say(object.mod_id + ": the script " + object.script + " can't run on " + object.name);
-        }
-    }
-    // Power-ups from data: before the mod-wide scripts, which find them in the registry ("form/<name>").
+    // Power-ups from data.
     for (const FormToAdd& row : rows.forms) {
-        auto loaded = std::make_unique<Loaded>();
-        loaded->mod_id = row.mod_id;
-        loaded->version = row.mod_version;
-        loaded->self.size = sizeof(NebulaPlugin);
-        loaded->self.id = loaded->mod_id.c_str();
-        loaded->self.version = loaded->version.c_str();
-        Loaded* const mod = data_mod(std::move(loaded));
         NebulaPowerUpClass form{};
         form.size = sizeof(NebulaPowerUpClass);
         form.name = row.name.c_str();
@@ -727,21 +468,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         form.model = row.model.empty() ? nullptr : row.model.c_str();
         form.looks_like = row.looks_like;
         form.acts_like = row.acts_like;
-        if (g_api.add_form == nullptr || g_api.add_form(&mod->self, &form, row.script.empty() ? nullptr : row.script.c_str()) < 0) {
+        if (g_api.add_power_up(&form) < 0) {
             say(row.mod_id + ": the form " + row.name + " can't be added");
-        }
-    }
-    // Mod-wide scripts after the objects: a script that names a class finds it.
-    for (const ModScriptToAdd& row : rows.mod_scripts) {
-        auto loaded = std::make_unique<Loaded>();
-        loaded->mod_id = row.mod_id;
-        loaded->version = row.mod_version;
-        loaded->self.size = sizeof(NebulaPlugin);
-        loaded->self.id = loaded->mod_id.c_str();
-        loaded->self.version = loaded->version.c_str();
-        Loaded* const mod = data_mod(std::move(loaded));
-        if (g_api.add_mod_script == nullptr || g_api.add_mod_script(&mod->self, row.script.c_str()) != 0) {
-            say(row.mod_id + ": the script " + row.script + " can't start");
         }
     }
     for (const MusicToAdd& track : rows.music) {

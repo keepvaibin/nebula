@@ -23,8 +23,6 @@ set(petari "${NEBULA_PETARI_DIR}")
 file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/Game/*.cpp" "${petari}/src/Game/*.c")
 
-# LumaCore's field rows (tools/lumacore) name private fields too: offsetof reads them with no access check.
-set_source_files_properties("${petari}/src/Game/System/generated/lumacore_fields.cpp" PROPERTIES COMPILE_OPTIONS "-Xclang;-fno-access-control")
 
 # Every function the game defines carries its LumaCore row and hook test (include/luma_hook.h). Each source is compiled
 # from a copy tools/lumacore/instrument.py writes into the build folder; the source itself is never changed. The hook

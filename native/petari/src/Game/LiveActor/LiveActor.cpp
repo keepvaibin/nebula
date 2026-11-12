@@ -28,13 +28,12 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/System/LumaClass.hpp"
 #include "Game/System/LumaCore.hpp"
 
 LiveActor::LiveActor(const char* pName)
     : NameObj(pName), mPosition(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), mVelocity(0.0f, 0.0f, 0.0f),
       mGravity(0.0f, -1.0f, 0.0f), mModelManager(), mAnimKeeper(), mSpine(), mSensorKeeper(), mBinder(), mRailRider(), mEffectKeeper(),
-      mSoundObject(), mShadowControllerList(), mCollisionParts(), mStageSwitchCtrl(), mStarPointerTarget(), mActorLightCtrl(), mCameraCtrl(), mModActor() {
+      mSoundObject(), mShadowControllerList(), mCollisionParts(), mStageSwitchCtrl(), mStarPointerTarget(), mActorLightCtrl(), mCameraCtrl() {
     lumacore::setClass(this, lumacore::kClassId< LiveActor >);
     MR::getAllLiveActorGroup()->registerActor(this);
     MR::getClippingDirector()->registerActor(this);
@@ -76,10 +75,6 @@ void LiveActor::makeActorAppeared() {
     if (!MR::isNoEntryDrawBuffer(this)) {
         MR::connectToDrawTemporarily(this);
     }
-
-    if (mModActor != nullptr) [[unlikely]] {
-        lumacore::classAppear(this);
-    }
 }
 
 void LiveActor::kill() {
@@ -88,9 +83,6 @@ void LiveActor::kill() {
 
 void LiveActor::makeActorDead() {
     NebulaMods::fire(NEBULA_MOD_EVENT_ACTOR_KILL, 0, this, mName);
-    if (mModActor != nullptr) [[unlikely]] {
-        lumacore::classKill(this);
-    }
     MotionSignal::died(this);
     mVelocity.zero();
 
@@ -141,24 +133,15 @@ void LiveActor::movement() {
         return;
     }
 
-    // A mod class (LumaClass.hpp) runs first and may take the class's place this frame: its nerve and control.
-    const bool classRuns = mModActor == nullptr || !lumacore::classControl(this);
+    if (mSpine != nullptr) {
+        mSpine->update();
+    }
 
     if (mFlag.mIsDead) {
         return;
     }
 
-    if (classRuns) [[likely]] {
-        if (mSpine != nullptr) {
-            mSpine->update();
-        }
-
-        if (mFlag.mIsDead) {
-            return;
-        }
-
-        control();
-    }
+    control();
 
     if (mFlag.mIsDead) {
         return;

@@ -847,7 +847,6 @@
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
 #include "Game/Screen/NebulaFileSelectButton.hpp"
-#include "Game/Screen/NebulaModText.hpp"
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
@@ -1545,419 +1544,418 @@ namespace {
     void* lc_cast643(NameObj* p) { return static_cast< ::NebulaAchievementLuma* >(p); }
     void* lc_cast644(NameObj* p) { return static_cast< ::NebulaAchievementToast* >(p); }
     void* lc_cast645(NameObj* p) { return static_cast< ::NebulaFileSelectButton* >(p); }
-    void* lc_cast646(NameObj* p) { return static_cast< ::NebulaModText* >(p); }
-    void* lc_cast647(NameObj* p) { return static_cast< ::NebulaPauseSettingsButton* >(p); }
-    void* lc_cast648(NameObj* p) { return static_cast< ::NeedlePlant* >(p); }
-    void* lc_cast649(NameObj* p) { return static_cast< ::NokonokoLand* >(p); }
-    void* lc_cast650(NameObj* p) { return static_cast< ::NormalMapBase* >(p); }
-    void* lc_cast651(NameObj* p) { return static_cast< ::NormalMapTestObj* >(p); }
-    void* lc_cast652(NameObj* p) { return static_cast< ::Note* >(p); }
-    void* lc_cast653(NameObj* p) { return static_cast< ::NoteCounter* >(p); }
-    void* lc_cast654(NameObj* p) { return static_cast< ::NoteFairy* >(p); }
-    void* lc_cast655(NameObj* p) { return static_cast< ::NoteGroup* >(p); }
-    void* lc_cast656(NameObj* p) { return static_cast< ::OceanBowl* >(p); }
-    void* lc_cast657(NameObj* p) { return static_cast< ::OceanBowlBloomDrawer* >(p); }
-    void* lc_cast658(NameObj* p) { return static_cast< ::OceanFloaterLandParts* >(p); }
-    void* lc_cast659(NameObj* p) { return static_cast< ::OceanHomeMapCtrl* >(p); }
-    void* lc_cast660(NameObj* p) { return static_cast< ::OceanRing* >(p); }
-    void* lc_cast661(NameObj* p) { return static_cast< ::OceanRingBloomDrawer* >(p); }
-    void* lc_cast662(NameObj* p) { return static_cast< ::OceanRingPipe* >(p); }
-    void* lc_cast663(NameObj* p) { return static_cast< ::OceanRingPipeInside* >(p); }
-    void* lc_cast664(NameObj* p) { return static_cast< ::OceanRingPipeOutside* >(p); }
-    void* lc_cast665(NameObj* p) { return static_cast< ::OceanSmallTurtle* >(p); }
-    void* lc_cast666(NameObj* p) { return static_cast< ::OceanSphere* >(p); }
-    void* lc_cast667(NameObj* p) { return static_cast< ::OceanWaveFloater* >(p); }
-    void* lc_cast668(NameObj* p) { return static_cast< ::OneUpBoard* >(p); }
-    void* lc_cast669(NameObj* p) { return static_cast< ::Onimasu* >(p); }
-    void* lc_cast670(NameObj* p) { return static_cast< ::OnimasuJump* >(p); }
-    void* lc_cast671(NameObj* p) { return static_cast< ::OnimasuPivot* >(p); }
-    void* lc_cast672(NameObj* p) { return static_cast< ::OnlyCamera* >(p); }
-    void* lc_cast673(NameObj* p) { return static_cast< ::OtaKing* >(p); }
-    void* lc_cast674(NameObj* p) { return static_cast< ::OtaKingLongFoot* >(p); }
-    void* lc_cast675(NameObj* p) { return static_cast< ::OtaKingMagma* >(p); }
-    void* lc_cast676(NameObj* p) { return static_cast< ::OtaRock* >(p); }
-    void* lc_cast677(NameObj* p) { return static_cast< ::PTimerSwitch* >(p); }
-    void* lc_cast678(NameObj* p) { return static_cast< ::PackunPetit* >(p); }
-    void* lc_cast679(NameObj* p) { return static_cast< ::PalmIsland* >(p); }
-    void* lc_cast680(NameObj* p) { return static_cast< ::PauseMenu* >(p); }
-    void* lc_cast681(NameObj* p) { return static_cast< ::Peach* >(p); }
-    void* lc_cast682(NameObj* p) { return static_cast< ::PeachCastleGardenPlanet* >(p); }
-    void* lc_cast683(NameObj* p) { return static_cast< ::PeachLetter* >(p); }
-    void* lc_cast684(NameObj* p) { return static_cast< ::Penguin* >(p); }
-    void* lc_cast685(NameObj* p) { return static_cast< ::PenguinCoach* >(p); }
-    void* lc_cast686(NameObj* p) { return static_cast< ::PenguinMaster* >(p); }
-    void* lc_cast687(NameObj* p) { return static_cast< ::PenguinRacer* >(p); }
-    void* lc_cast688(NameObj* p) { return static_cast< ::PenguinRacerLeader* >(p); }
-    void* lc_cast689(NameObj* p) { return static_cast< ::PenguinSkater* >(p); }
-    void* lc_cast690(NameObj* p) { return static_cast< ::PenguinStudent* >(p); }
-    void* lc_cast691(NameObj* p) { return static_cast< ::Petari* >(p); }
-    void* lc_cast692(NameObj* p) { return static_cast< ::PhantomShipBoxFloater* >(p); }
-    void* lc_cast693(NameObj* p) { return static_cast< ::PhantomShipBridge* >(p); }
-    void* lc_cast694(NameObj* p) { return static_cast< ::PhantomShipHandle* >(p); }
-    void* lc_cast695(NameObj* p) { return static_cast< ::PhantomTorch* >(p); }
-    void* lc_cast696(NameObj* p) { return static_cast< ::PicketSwitch* >(p); }
-    void* lc_cast697(NameObj* p) { return static_cast< ::PictureBookCloseButton* >(p); }
-    void* lc_cast698(NameObj* p) { return static_cast< ::PictureBookLayout* >(p); }
-    void* lc_cast699(NameObj* p) { return static_cast< ::PlacementStateChecker* >(p); }
-    void* lc_cast700(NameObj* p) { return static_cast< ::PlanetGravityManager* >(p); }
-    void* lc_cast701(NameObj* p) { return static_cast< ::PlanetMapCreator* >(p); }
-    void* lc_cast702(NameObj* p) { return static_cast< ::PlanetMapFarClippable* >(p); }
-    void* lc_cast703(NameObj* p) { return static_cast< ::PlanetMapWithoutHighModel* >(p); }
-    void* lc_cast704(NameObj* p) { return static_cast< ::Plant* >(p); }
-    void* lc_cast705(NameObj* p) { return static_cast< ::PlantGroup* >(p); }
-    void* lc_cast706(NameObj* p) { return static_cast< ::PlantLeaf* >(p); }
-    void* lc_cast707(NameObj* p) { return static_cast< ::PlantLeafDrawInit* >(p); }
-    void* lc_cast708(NameObj* p) { return static_cast< ::PlantMember* >(p); }
-    void* lc_cast709(NameObj* p) { return static_cast< ::PlantStalk* >(p); }
-    void* lc_cast710(NameObj* p) { return static_cast< ::PlantStalkDrawInit* >(p); }
-    void* lc_cast711(NameObj* p) { return static_cast< ::PlayerActionGuidance* >(p); }
-    void* lc_cast712(NameObj* p) { return static_cast< ::PlayerLeft* >(p); }
-    void* lc_cast713(NameObj* p) { return static_cast< ::PlayerMissLeft* >(p); }
-    void* lc_cast714(NameObj* p) { return static_cast< ::PlayerRacer* >(p); }
-    void* lc_cast715(NameObj* p) { return static_cast< ::PlayerSeArea* >(p); }
-    void* lc_cast716(NameObj* p) { return static_cast< ::Poihana* >(p); }
-    void* lc_cast717(NameObj* p) { return static_cast< ::Pole* >(p); }
-    void* lc_cast718(NameObj* p) { return static_cast< ::Polta* >(p); }
-    void* lc_cast719(NameObj* p) { return static_cast< ::PoltaArm* >(p); }
-    void* lc_cast720(NameObj* p) { return static_cast< ::PoltaGroundRock* >(p); }
-    void* lc_cast721(NameObj* p) { return static_cast< ::PoltaGroundRockHolder* >(p); }
-    void* lc_cast722(NameObj* p) { return static_cast< ::PoltaRock* >(p); }
-    void* lc_cast723(NameObj* p) { return static_cast< ::PoltaRockHolder* >(p); }
-    void* lc_cast724(NameObj* p) { return static_cast< ::PomponPlant* >(p); }
-    void* lc_cast725(NameObj* p) { return static_cast< ::PowerStar* >(p); }
-    void* lc_cast726(NameObj* p) { return static_cast< ::PowerStarAppearPoint* >(p); }
-    void* lc_cast727(NameObj* p) { return static_cast< ::PowerStarHalo* >(p); }
-    void* lc_cast728(NameObj* p) { return static_cast< ::PowerStarHolder* >(p); }
-    void* lc_cast729(NameObj* p) { return static_cast< ::PowerStarList* >(p); }
-    void* lc_cast730(NameObj* p) { return static_cast< ::PressureMessenger* >(p); }
-    void* lc_cast731(NameObj* p) { return static_cast< ::PriorDrawAir* >(p); }
-    void* lc_cast732(NameObj* p) { return static_cast< ::PriorDrawAirHolder* >(p); }
-    void* lc_cast733(NameObj* p) { return static_cast< ::PrizeRing* >(p); }
-    void* lc_cast734(NameObj* p) { return static_cast< ::ProjectionMapAir* >(p); }
-    void* lc_cast735(NameObj* p) { return static_cast< ::Sky* >(p); }
-    void* lc_cast736(NameObj* p) { return static_cast< ::ProjectionMapSky* >(p); }
-    void* lc_cast737(NameObj* p) { return static_cast< ::PrologueDirector* >(p); }
-    void* lc_cast738(NameObj* p) { return static_cast< ::PrologueHolder* >(p); }
-    void* lc_cast739(NameObj* p) { return static_cast< ::PrologueLetter* >(p); }
-    void* lc_cast740(NameObj* p) { return static_cast< ::ProloguePictureBook* >(p); }
-    void* lc_cast741(NameObj* p) { return static_cast< ::Pukupuku* >(p); }
-    void* lc_cast742(NameObj* p) { return static_cast< ::PunchBox* >(p); }
-    void* lc_cast743(NameObj* p) { return static_cast< ::PunchingKinoko* >(p); }
-    void* lc_cast744(NameObj* p) { return static_cast< ::PurpleCoinCounter* >(p); }
-    void* lc_cast745(NameObj* p) { return static_cast< ::PurpleCoinHolder* >(p); }
-    void* lc_cast746(NameObj* p) { return static_cast< ::PurpleCoinStarter* >(p); }
-    void* lc_cast747(NameObj* p) { return static_cast< ::QuakeEffectArea* >(p); }
-    void* lc_cast748(NameObj* p) { return static_cast< ::QuakeEffectGenerator* >(p); }
-    void* lc_cast749(NameObj* p) { return static_cast< ::QuarterRollGravityRoomArrow* >(p); }
-    void* lc_cast750(NameObj* p) { return static_cast< ::QuestionBoxGalleryObj* >(p); }
-    void* lc_cast751(NameObj* p) { return static_cast< ::QuestionCoin* >(p); }
-    void* lc_cast752(NameObj* p) { return static_cast< ::Rabbit* >(p); }
-    void* lc_cast753(NameObj* p) { return static_cast< ::RaceManager* >(p); }
-    void* lc_cast754(NameObj* p) { return static_cast< ::RaceManagerLayout* >(p); }
-    void* lc_cast755(NameObj* p) { return static_cast< ::RaceRail* >(p); }
-    void* lc_cast756(NameObj* p) { return static_cast< ::RailBlock* >(p); }
-    void* lc_cast757(NameObj* p) { return static_cast< ::RailCoin* >(p); }
-    void* lc_cast758(NameObj* p) { return static_cast< ::RailDemoMoveObj* >(p); }
-    void* lc_cast759(NameObj* p) { return static_cast< ::RailMoveIndirectObj* >(p); }
-    void* lc_cast760(NameObj* p) { return static_cast< ::RailMoveObjBreakAtEnd* >(p); }
-    void* lc_cast761(NameObj* p) { return static_cast< ::RailMoveObjPress* >(p); }
-    void* lc_cast762(NameObj* p) { return static_cast< ::RailMoveObjSwitchShadow* >(p); }
-    void* lc_cast763(NameObj* p) { return static_cast< ::RailPlanetMap* >(p); }
-    void* lc_cast764(NameObj* p) { return static_cast< ::RailRotateMoveObj* >(p); }
-    void* lc_cast765(NameObj* p) { return static_cast< ::RainCloud* >(p); }
-    void* lc_cast766(NameObj* p) { return static_cast< ::RandomEffectObj* >(p); }
-    void* lc_cast767(NameObj* p) { return static_cast< ::RestartCube* >(p); }
-    void* lc_cast768(NameObj* p) { return static_cast< ::ReverseGravityRoomPlanet* >(p); }
-    void* lc_cast769(NameObj* p) { return static_cast< ::RevolvingWay* >(p); }
-    void* lc_cast770(NameObj* p) { return static_cast< ::RingBeam* >(p); }
-    void* lc_cast771(NameObj* p) { return static_cast< ::RingBeamShadowDrawer* >(p); }
-    void* lc_cast772(NameObj* p) { return static_cast< ::RingBeamer* >(p); }
-    void* lc_cast773(NameObj* p) { return static_cast< ::Rock* >(p); }
-    void* lc_cast774(NameObj* p) { return static_cast< ::RockCreator* >(p); }
-    void* lc_cast775(NameObj* p) { return static_cast< ::Rosetta* >(p); }
-    void* lc_cast776(NameObj* p) { return static_cast< ::RosettaChair* >(p); }
-    void* lc_cast777(NameObj* p) { return static_cast< ::SimpleLayout* >(p); }
-    void* lc_cast778(NameObj* p) { return static_cast< ::RosettaMonologue* >(p); }
-    void* lc_cast779(NameObj* p) { return static_cast< ::RosettaPictureBook* >(p); }
-    void* lc_cast780(NameObj* p) { return static_cast< ::RosettaReading* >(p); }
-    void* lc_cast781(NameObj* p) { return static_cast< ::RotPartsModel* >(p); }
-    void* lc_cast782(NameObj* p) { return static_cast< ::RotateMoveObj* >(p); }
-    void* lc_cast783(NameObj* p) { return static_cast< ::RunawayRabbit* >(p); }
-    void* lc_cast784(NameObj* p) { return static_cast< ::RunawayRabbitCollect* >(p); }
-    void* lc_cast785(NameObj* p) { return static_cast< ::RunawayTico* >(p); }
-    void* lc_cast786(NameObj* p) { return static_cast< ::SamboHead* >(p); }
-    void* lc_cast787(NameObj* p) { return static_cast< ::SandCapsuleInsidePlanet* >(p); }
-    void* lc_cast788(NameObj* p) { return static_cast< ::SandCapsulePressGround* >(p); }
-    void* lc_cast789(NameObj* p) { return static_cast< ::SandUpDownEffectObj* >(p); }
-    void* lc_cast790(NameObj* p) { return static_cast< ::SandUpDownTriRock* >(p); }
-    void* lc_cast791(NameObj* p) { return static_cast< ::Sandstorm* >(p); }
-    void* lc_cast792(NameObj* p) { return static_cast< ::SaveIcon* >(p); }
-    void* lc_cast793(NameObj* p) { return static_cast< ::ScenarioDataParser* >(p); }
-    void* lc_cast794(NameObj* p) { return static_cast< ::ScenarioSelectLayout* >(p); }
-    void* lc_cast795(NameObj* p) { return static_cast< ::ScenarioSelectStar* >(p); }
-    void* lc_cast796(NameObj* p) { return static_cast< ::ScenarioStarter* >(p); }
-    void* lc_cast797(NameObj* p) { return static_cast< ::ScenarioTitle* >(p); }
-    void* lc_cast798(NameObj* p) { return static_cast< ::SceneDataInitializer* >(p); }
-    void* lc_cast799(NameObj* p) { return static_cast< ::SceneNameObjMovementController* >(p); }
-    void* lc_cast800(NameObj* p) { return static_cast< ::ScenePlayingResult* >(p); }
-    void* lc_cast801(NameObj* p) { return static_cast< ::WipeHolderBase* >(p); }
-    void* lc_cast802(NameObj* p) { return static_cast< ::SceneWipeHolder* >(p); }
-    void* lc_cast803(NameObj* p) { return static_cast< ::ScreenBlurArea* >(p); }
-    void* lc_cast804(NameObj* p) { return static_cast< ::ScreenBlurEffect* >(p); }
-    void* lc_cast805(NameObj* p) { return static_cast< ::ScreenPreserver* >(p); }
-    void* lc_cast806(NameObj* p) { return static_cast< ::ScrewSwitch* >(p); }
-    void* lc_cast807(NameObj* p) { return static_cast< ::ScrewSwitchReverse* >(p); }
-    void* lc_cast808(NameObj* p) { return static_cast< ::SeaBottomTriplePropeller* >(p); }
-    void* lc_cast809(NameObj* p) { return static_cast< ::SeaGull* >(p); }
-    void* lc_cast810(NameObj* p) { return static_cast< ::SeaGullGroup* >(p); }
-    void* lc_cast811(NameObj* p) { return static_cast< ::SearchBeamer* >(p); }
-    void* lc_cast812(NameObj* p) { return static_cast< ::SeesawMoveNut* >(p); }
-    void* lc_cast813(NameObj* p) { return static_cast< ::SensorHitChecker* >(p); }
-    void* lc_cast814(NameObj* p) { return static_cast< ::ShadowClipActor* >(p); }
-    void* lc_cast815(NameObj* p) { return static_cast< ::ShadowControllerHolder* >(p); }
-    void* lc_cast816(NameObj* p) { return static_cast< ::ShadowSurfaceDrawer* >(p); }
-    void* lc_cast817(NameObj* p) { return static_cast< ::ShadowSurfaceBox* >(p); }
-    void* lc_cast818(NameObj* p) { return static_cast< ::ShadowSurfaceCircle* >(p); }
-    void* lc_cast819(NameObj* p) { return static_cast< ::ShadowSurfaceDrawInit* >(p); }
-    void* lc_cast820(NameObj* p) { return static_cast< ::ShadowSurfaceOval* >(p); }
-    void* lc_cast821(NameObj* p) { return static_cast< ::ShadowVolumeBox* >(p); }
-    void* lc_cast822(NameObj* p) { return static_cast< ::ShadowVolumeModel* >(p); }
-    void* lc_cast823(NameObj* p) { return static_cast< ::ShadowVolumeCylinder* >(p); }
-    void* lc_cast824(NameObj* p) { return static_cast< ::ShadowVolumeDrawInit* >(p); }
-    void* lc_cast825(NameObj* p) { return static_cast< ::ShadowVolumeFlatModel* >(p); }
-    void* lc_cast826(NameObj* p) { return static_cast< ::ShadowVolumeLine* >(p); }
-    void* lc_cast827(NameObj* p) { return static_cast< ::ShadowVolumeOval* >(p); }
-    void* lc_cast828(NameObj* p) { return static_cast< ::ShadowVolumeOvalPole* >(p); }
-    void* lc_cast829(NameObj* p) { return static_cast< ::ShadowVolumeSphere* >(p); }
-    void* lc_cast830(NameObj* p) { return static_cast< ::Shellfish* >(p); }
-    void* lc_cast831(NameObj* p) { return static_cast< ::ShockWaveGenerator* >(p); }
-    void* lc_cast832(NameObj* p) { return static_cast< ::ShootingStar* >(p); }
-    void* lc_cast833(NameObj* p) { return static_cast< ::SideSpikeMoveStep* >(p); }
-    void* lc_cast834(NameObj* p) { return static_cast< ::SignBoard* >(p); }
-    void* lc_cast835(NameObj* p) { return static_cast< ::SimpleBloomArea* >(p); }
-    void* lc_cast836(NameObj* p) { return static_cast< ::SimpleBreakableObjBase* >(p); }
-    void* lc_cast837(NameObj* p) { return static_cast< ::SimpleBreakableObj* >(p); }
-    void* lc_cast838(NameObj* p) { return static_cast< ::SimpleBreakableIndirectObj* >(p); }
-    void* lc_cast839(NameObj* p) { return static_cast< ::SimpleClipPartsObj* >(p); }
-    void* lc_cast840(NameObj* p) { return static_cast< ::SimpleEffectLayout* >(p); }
-    void* lc_cast841(NameObj* p) { return static_cast< ::SimpleEnvironmentObj* >(p); }
-    void* lc_cast842(NameObj* p) { return static_cast< ::SimpleFloaterObj* >(p); }
-    void* lc_cast843(NameObj* p) { return static_cast< ::SimpleMapObjNoSilhouetted* >(p); }
-    void* lc_cast844(NameObj* p) { return static_cast< ::SimpleMapObjPush* >(p); }
-    void* lc_cast845(NameObj* p) { return static_cast< ::SimpleMirrorObj* >(p); }
-    void* lc_cast846(NameObj* p) { return static_cast< ::SimpleMirrorReflectionObj* >(p); }
-    void* lc_cast847(NameObj* p) { return static_cast< ::SimpleModelDrawer* >(p); }
-    void* lc_cast848(NameObj* p) { return static_cast< ::SimpleNormalMapObj* >(p); }
-    void* lc_cast849(NameObj* p) { return static_cast< ::SimpleSeesawObj* >(p); }
-    void* lc_cast850(NameObj* p) { return static_cast< ::SimpleTextureSwitchChangeObj* >(p); }
-    void* lc_cast851(NameObj* p) { return static_cast< ::SimpleTimerObj* >(p); }
-    void* lc_cast852(NameObj* p) { return static_cast< ::SkeletalFishBaby* >(p); }
-    void* lc_cast853(NameObj* p) { return static_cast< ::SkeletalFishBoss* >(p); }
-    void* lc_cast854(NameObj* p) { return static_cast< ::SkeletalFishBossBattleDirector* >(p); }
-    void* lc_cast855(NameObj* p) { return static_cast< ::SkeletalFishBossHead* >(p); }
-    void* lc_cast856(NameObj* p) { return static_cast< ::SkeletalFishBossInfo* >(p); }
-    void* lc_cast857(NameObj* p) { return static_cast< ::SkeletalFishBossRail* >(p); }
-    void* lc_cast858(NameObj* p) { return static_cast< ::SkeletalFishBossRailHolder* >(p); }
-    void* lc_cast859(NameObj* p) { return static_cast< ::SkeletalFishBossScarFlash* >(p); }
-    void* lc_cast860(NameObj* p) { return static_cast< ::SkeletalFishGuard* >(p); }
-    void* lc_cast861(NameObj* p) { return static_cast< ::SkeletalFishGuardHolder* >(p); }
-    void* lc_cast862(NameObj* p) { return static_cast< ::SleepControllerHolder* >(p); }
-    void* lc_cast863(NameObj* p) { return static_cast< ::SlingShooter* >(p); }
-    void* lc_cast864(NameObj* p) { return static_cast< ::SmallStone* >(p); }
-    void* lc_cast865(NameObj* p) { return static_cast< ::SmallStoneMember* >(p); }
-    void* lc_cast866(NameObj* p) { return static_cast< ::Snakehead* >(p); }
-    void* lc_cast867(NameObj* p) { return static_cast< ::SnowCapsulePlanet* >(p); }
-    void* lc_cast868(NameObj* p) { return static_cast< ::SnowFloor* >(p); }
-    void* lc_cast869(NameObj* p) { return static_cast< ::SnowFloorTile* >(p); }
-    void* lc_cast870(NameObj* p) { return static_cast< ::SnowMan* >(p); }
-    void* lc_cast871(NameObj* p) { return static_cast< ::SnowplowSwitch* >(p); }
-    void* lc_cast872(NameObj* p) { return static_cast< ::SoundEmitter* >(p); }
-    void* lc_cast873(NameObj* p) { return static_cast< ::SoundEmitterCube* >(p); }
-    void* lc_cast874(NameObj* p) { return static_cast< ::SoundEmitterSphere* >(p); }
-    void* lc_cast875(NameObj* p) { return static_cast< ::SpaceCocoon* >(p); }
-    void* lc_cast876(NameObj* p) { return static_cast< ::SpaceInner* >(p); }
-    void* lc_cast877(NameObj* p) { return static_cast< ::SpaceMine* >(p); }
-    void* lc_cast878(NameObj* p) { return static_cast< ::SpaceShipStep* >(p); }
-    void* lc_cast879(NameObj* p) { return static_cast< ::SphereRailDash* >(p); }
-    void* lc_cast880(NameObj* p) { return static_cast< ::SphereSelector* >(p); }
-    void* lc_cast881(NameObj* p) { return static_cast< ::SphereSelectorHandle* >(p); }
-    void* lc_cast882(NameObj* p) { return static_cast< ::SpiderCoin* >(p); }
-    void* lc_cast883(NameObj* p) { return static_cast< ::SpiderMapBlock* >(p); }
-    void* lc_cast884(NameObj* p) { return static_cast< ::SpiderThread* >(p); }
-    void* lc_cast885(NameObj* p) { return static_cast< ::SpinDriver* >(p); }
-    void* lc_cast886(NameObj* p) { return static_cast< ::SpinDriverOperateRing* >(p); }
-    void* lc_cast887(NameObj* p) { return static_cast< ::SpinDriverPathDrawInit* >(p); }
-    void* lc_cast888(NameObj* p) { return static_cast< ::SpinDriverPathDrawer* >(p); }
-    void* lc_cast889(NameObj* p) { return static_cast< ::SpinGuidanceArea* >(p); }
-    void* lc_cast890(NameObj* p) { return static_cast< ::SpinLeverSwitch* >(p); }
-    void* lc_cast891(NameObj* p) { return static_cast< ::SpinningBox* >(p); }
-    void* lc_cast892(NameObj* p) { return static_cast< ::SpotMarkLight* >(p); }
-    void* lc_cast893(NameObj* p) { return static_cast< ::SpringJetWater* >(p); }
-    void* lc_cast894(NameObj* p) { return static_cast< ::SpringWaterFloaterSpot* >(p); }
-    void* lc_cast895(NameObj* p) { return static_cast< ::StaffRoll* >(p); }
-    void* lc_cast896(NameObj* p) { return static_cast< ::StaffRollLine* >(p); }
-    void* lc_cast897(NameObj* p) { return static_cast< ::StaffRollPicture* >(p); }
-    void* lc_cast898(NameObj* p) { return static_cast< ::StageDataHolder* >(p); }
-    void* lc_cast899(NameObj* p) { return static_cast< ::StageResultInformer* >(p); }
-    void* lc_cast900(NameObj* p) { return static_cast< ::StageSwitchContainer* >(p); }
-    void* lc_cast901(NameObj* p) { return static_cast< ::StarCounter* >(p); }
-    void* lc_cast902(NameObj* p) { return static_cast< ::StarPiece* >(p); }
-    void* lc_cast903(NameObj* p) { return static_cast< ::StarPieceCounter* >(p); }
-    void* lc_cast904(NameObj* p) { return static_cast< ::StarPieceDirector* >(p); }
-    void* lc_cast905(NameObj* p) { return static_cast< ::StarPieceFollowGroup* >(p); }
-    void* lc_cast906(NameObj* p) { return static_cast< ::StarPieceGroup* >(p); }
-    void* lc_cast907(NameObj* p) { return static_cast< ::StarPieceMother* >(p); }
-    void* lc_cast908(NameObj* p) { return static_cast< ::StarPieceShooter* >(p); }
-    void* lc_cast909(NameObj* p) { return static_cast< ::StarPieceSpot* >(p); }
-    void* lc_cast910(NameObj* p) { return static_cast< ::StarPointerBlur* >(p); }
-    void* lc_cast911(NameObj* p) { return static_cast< ::StarPointerCommandStream* >(p); }
-    void* lc_cast912(NameObj* p) { return static_cast< ::StarPointerGuidance* >(p); }
-    void* lc_cast913(NameObj* p) { return static_cast< ::StarPointerLayout* >(p); }
-    void* lc_cast914(NameObj* p) { return static_cast< ::StarPointerNumber* >(p); }
-    void* lc_cast915(NameObj* p) { return static_cast< ::StarReturnDemoStarter* >(p); }
-    void* lc_cast916(NameObj* p) { return static_cast< ::StinkBugBase* >(p); }
-    void* lc_cast917(NameObj* p) { return static_cast< ::StinkBugParent* >(p); }
-    void* lc_cast918(NameObj* p) { return static_cast< ::StinkBugSmall* >(p); }
-    void* lc_cast919(NameObj* p) { return static_cast< ::StopSceneController* >(p); }
-    void* lc_cast920(NameObj* p) { return static_cast< ::StrayTico* >(p); }
-    void* lc_cast921(NameObj* p) { return static_cast< ::StringSpider* >(p); }
-    void* lc_cast922(NameObj* p) { return static_cast< ::StringSpiderString* >(p); }
-    void* lc_cast923(NameObj* p) { return static_cast< ::SubMeterLayout* >(p); }
-    void* lc_cast924(NameObj* p) { return static_cast< ::SubmarineSteam* >(p); }
-    void* lc_cast925(NameObj* p) { return static_cast< ::SubmarineVolcanoBigColumn* >(p); }
-    void* lc_cast926(NameObj* p) { return static_cast< ::SuddenDeathMeter* >(p); }
-    void* lc_cast927(NameObj* p) { return static_cast< ::Sun* >(p); }
-    void* lc_cast928(NameObj* p) { return static_cast< ::SunLightArea* >(p); }
-    void* lc_cast929(NameObj* p) { return static_cast< ::SunakazeKunTrap* >(p); }
-    void* lc_cast930(NameObj* p) { return static_cast< ::SunshadeMapHolder* >(p); }
-    void* lc_cast931(NameObj* p) { return static_cast< ::SunshadeMapParts* >(p); }
-    void* lc_cast932(NameObj* p) { return static_cast< ::SuperSpinDriver* >(p); }
-    void* lc_cast933(NameObj* p) { return static_cast< ::SurfRay* >(p); }
-    void* lc_cast934(NameObj* p) { return static_cast< ::SurfingGuidance* >(p); }
-    void* lc_cast935(NameObj* p) { return static_cast< ::SurprisedGalaxy* >(p); }
-    void* lc_cast936(NameObj* p) { return static_cast< ::SwingLight* >(p); }
-    void* lc_cast937(NameObj* p) { return static_cast< ::SwingRope* >(p); }
-    void* lc_cast938(NameObj* p) { return static_cast< ::SwingRopeGroup* >(p); }
-    void* lc_cast939(NameObj* p) { return static_cast< ::SwitchBox* >(p); }
-    void* lc_cast940(NameObj* p) { return static_cast< ::SwitchSynchronizer* >(p); }
-    void* lc_cast941(NameObj* p) { return static_cast< ::SwitchWatcher* >(p); }
-    void* lc_cast942(NameObj* p) { return static_cast< ::SwitchWatcherHolder* >(p); }
-    void* lc_cast943(NameObj* p) { return static_cast< ::Syati* >(p); }
-    void* lc_cast944(NameObj* p) { return static_cast< ::SysInfoWindow* >(p); }
-    void* lc_cast945(NameObj* p) { return static_cast< ::SystemWipeHolder* >(p); }
-    void* lc_cast946(NameObj* p) { return static_cast< ::TakoHei* >(p); }
-    void* lc_cast947(NameObj* p) { return static_cast< ::TakoHeiInk* >(p); }
-    void* lc_cast948(NameObj* p) { return static_cast< ::TakoHeiInkHolder* >(p); }
-    void* lc_cast949(NameObj* p) { return static_cast< ::Takobo* >(p); }
-    void* lc_cast950(NameObj* p) { return static_cast< ::TalkBalloon* >(p); }
-    void* lc_cast951(NameObj* p) { return static_cast< ::TalkBalloonEvent* >(p); }
-    void* lc_cast952(NameObj* p) { return static_cast< ::TalkBalloonShort* >(p); }
-    void* lc_cast953(NameObj* p) { return static_cast< ::TalkBalloonIcon* >(p); }
-    void* lc_cast954(NameObj* p) { return static_cast< ::TalkBalloonInfo* >(p); }
-    void* lc_cast955(NameObj* p) { return static_cast< ::TalkBalloonSign* >(p); }
-    void* lc_cast956(NameObj* p) { return static_cast< ::TalkDirector* >(p); }
-    void* lc_cast957(NameObj* p) { return static_cast< ::TalkMessageCtrl* >(p); }
-    void* lc_cast958(NameObj* p) { return static_cast< ::Tamakoro* >(p); }
-    void* lc_cast959(NameObj* p) { return static_cast< ::TamakoroTutorial* >(p); }
-    void* lc_cast960(NameObj* p) { return static_cast< ::Teresa* >(p); }
-    void* lc_cast961(NameObj* p) { return static_cast< ::TeresaRacer* >(p); }
-    void* lc_cast962(NameObj* p) { return static_cast< ::TeresaWater* >(p); }
-    void* lc_cast963(NameObj* p) { return static_cast< ::ThrowingIce* >(p); }
-    void* lc_cast964(NameObj* p) { return static_cast< ::TicoAstro* >(p); }
-    void* lc_cast965(NameObj* p) { return static_cast< ::TicoEat* >(p); }
-    void* lc_cast966(NameObj* p) { return static_cast< ::TicoComet* >(p); }
-    void* lc_cast967(NameObj* p) { return static_cast< ::TicoDomeLecture* >(p); }
-    void* lc_cast968(NameObj* p) { return static_cast< ::TicoFat* >(p); }
-    void* lc_cast969(NameObj* p) { return static_cast< ::TicoGalaxy* >(p); }
-    void* lc_cast970(NameObj* p) { return static_cast< ::TicoRail* >(p); }
-    void* lc_cast971(NameObj* p) { return static_cast< ::TicoReading* >(p); }
-    void* lc_cast972(NameObj* p) { return static_cast< ::TicoShop* >(p); }
-    void* lc_cast973(NameObj* p) { return static_cast< ::TicoStarRing* >(p); }
-    void* lc_cast974(NameObj* p) { return static_cast< ::TimeAppearObj* >(p); }
-    void* lc_cast975(NameObj* p) { return static_cast< ::TimeLimitLayout* >(p); }
-    void* lc_cast976(NameObj* p) { return static_cast< ::TimeUpLayout* >(p); }
-    void* lc_cast977(NameObj* p) { return static_cast< ::TimerMoveWall* >(p); }
-    void* lc_cast978(NameObj* p) { return static_cast< ::TimerSwitch* >(p); }
-    void* lc_cast979(NameObj* p) { return static_cast< ::TitleSequenceProductSub::LogoLayout* >(p); }
-    void* lc_cast980(NameObj* p) { return static_cast< ::TombSpider* >(p); }
-    void* lc_cast981(NameObj* p) { return static_cast< ::TombSpiderGland* >(p); }
-    void* lc_cast982(NameObj* p) { return static_cast< ::TombSpiderThreadAttacher* >(p); }
-    void* lc_cast983(NameObj* p) { return static_cast< ::TombSpiderVitalSpot* >(p); }
-    void* lc_cast984(NameObj* p) { return static_cast< ::TornadoMario* >(p); }
-    void* lc_cast985(NameObj* p) { return static_cast< ::TrampleStar* >(p); }
-    void* lc_cast986(NameObj* p) { return static_cast< ::TrampleStarShare* >(p); }
-    void* lc_cast987(NameObj* p) { return static_cast< ::TransparentWall* >(p); }
-    void* lc_cast988(NameObj* p) { return static_cast< ::Trapeze* >(p); }
-    void* lc_cast989(NameObj* p) { return static_cast< ::TrapezeRopeDrawInit* >(p); }
-    void* lc_cast990(NameObj* p) { return static_cast< ::TreasureBoxCracked* >(p); }
-    void* lc_cast991(NameObj* p) { return static_cast< ::TreasureSpot* >(p); }
-    void* lc_cast992(NameObj* p) { return static_cast< ::TrickRabbit* >(p); }
-    void* lc_cast993(NameObj* p) { return static_cast< ::TrickRabbitFreeRun* >(p); }
-    void* lc_cast994(NameObj* p) { return static_cast< ::TrickRabbitSnow* >(p); }
-    void* lc_cast995(NameObj* p) { return static_cast< ::TrickRabbitSnowCollect* >(p); }
-    void* lc_cast996(NameObj* p) { return static_cast< ::TripodBoss* >(p); }
-    void* lc_cast997(NameObj* p) { return static_cast< ::TripodBossAccesser* >(p); }
-    void* lc_cast998(NameObj* p) { return static_cast< ::TripodBossBaseJointPosition* >(p); }
-    void* lc_cast999(NameObj* p) { return static_cast< ::TripodBossBreakMovement* >(p); }
-    void* lc_cast1000(NameObj* p) { return static_cast< ::TripodBossCoin* >(p); }
-    void* lc_cast1001(NameObj* p) { return static_cast< ::TripodBossFixPartsBase* >(p); }
-    void* lc_cast1002(NameObj* p) { return static_cast< ::TripodBossCore* >(p); }
-    void* lc_cast1003(NameObj* p) { return static_cast< ::TripodBossFixParts* >(p); }
-    void* lc_cast1004(NameObj* p) { return static_cast< ::TripodBossGuardWall* >(p); }
-    void* lc_cast1005(NameObj* p) { return static_cast< ::TripodBossGuardWallPart* >(p); }
-    void* lc_cast1006(NameObj* p) { return static_cast< ::TripodBossKillerGenerater* >(p); }
-    void* lc_cast1007(NameObj* p) { return static_cast< ::TripodBossKillerGeneraterCircle* >(p); }
-    void* lc_cast1008(NameObj* p) { return static_cast< ::TripodBossKinokoOneUp* >(p); }
-    void* lc_cast1009(NameObj* p) { return static_cast< ::TripodBossLeg* >(p); }
-    void* lc_cast1010(NameObj* p) { return static_cast< ::TripodBossRailMoveParts* >(p); }
-    void* lc_cast1011(NameObj* p) { return static_cast< ::TripodBossRotateParts* >(p); }
-    void* lc_cast1012(NameObj* p) { return static_cast< ::TripodBossShell* >(p); }
-    void* lc_cast1013(NameObj* p) { return static_cast< ::TripodBossStepPoint* >(p); }
-    void* lc_cast1014(NameObj* p) { return static_cast< ::TripodBossStepStartArea* >(p); }
-    void* lc_cast1015(NameObj* p) { return static_cast< ::Tsukidashikun* >(p); }
-    void* lc_cast1016(NameObj* p) { return static_cast< ::TurtlePartsModel* >(p); }
-    void* lc_cast1017(NameObj* p) { return static_cast< ::TypicalDoorOpen* >(p); }
-    void* lc_cast1018(NameObj* p) { return static_cast< ::UFOBase* >(p); }
-    void* lc_cast1019(NameObj* p) { return static_cast< ::UFOBreakable* >(p); }
-    void* lc_cast1020(NameObj* p) { return static_cast< ::UFOKinoko* >(p); }
-    void* lc_cast1021(NameObj* p) { return static_cast< ::UFOKinokoUnderConstruction* >(p); }
-    void* lc_cast1022(NameObj* p) { return static_cast< ::UFOSolid* >(p); }
-    void* lc_cast1023(NameObj* p) { return static_cast< ::Unizo* >(p); }
-    void* lc_cast1024(NameObj* p) { return static_cast< ::UnizoLauncher* >(p); }
-    void* lc_cast1025(NameObj* p) { return static_cast< ::ValveSwitch* >(p); }
-    void* lc_cast1026(NameObj* p) { return static_cast< ::VolumeModelDrawInit* >(p); }
-    void* lc_cast1027(NameObj* p) { return static_cast< ::VolumeModelDrawer* >(p); }
-    void* lc_cast1028(NameObj* p) { return static_cast< ::WarpCube* >(p); }
-    void* lc_cast1029(NameObj* p) { return static_cast< ::WarpCubeMgr* >(p); }
-    void* lc_cast1030(NameObj* p) { return static_cast< ::WarpPod* >(p); }
-    void* lc_cast1031(NameObj* p) { return static_cast< ::WarpPodMgr* >(p); }
-    void* lc_cast1032(NameObj* p) { return static_cast< ::WatchTowerRotateStep* >(p); }
-    void* lc_cast1033(NameObj* p) { return static_cast< ::WaterArea* >(p); }
-    void* lc_cast1034(NameObj* p) { return static_cast< ::WaterAreaHolder* >(p); }
-    void* lc_cast1035(NameObj* p) { return static_cast< ::WaterAreaMgr* >(p); }
-    void* lc_cast1036(NameObj* p) { return static_cast< ::WaterBazooka* >(p); }
-    void* lc_cast1037(NameObj* p) { return static_cast< ::WaterBazookaCapsule* >(p); }
-    void* lc_cast1038(NameObj* p) { return static_cast< ::WaterCameraFilter* >(p); }
-    void* lc_cast1039(NameObj* p) { return static_cast< ::WaterLeakPipe* >(p); }
-    void* lc_cast1040(NameObj* p) { return static_cast< ::WaterPlant* >(p); }
-    void* lc_cast1041(NameObj* p) { return static_cast< ::WaterPlantDrawInit* >(p); }
-    void* lc_cast1042(NameObj* p) { return static_cast< ::WaterPressure* >(p); }
-    void* lc_cast1043(NameObj* p) { return static_cast< ::WaterPressureBullet* >(p); }
-    void* lc_cast1044(NameObj* p) { return static_cast< ::WaterPressureBulletHolder* >(p); }
-    void* lc_cast1045(NameObj* p) { return static_cast< ::WaterRoad* >(p); }
-    void* lc_cast1046(NameObj* p) { return static_cast< ::WaterfallCaveCover* >(p); }
-    void* lc_cast1047(NameObj* p) { return static_cast< ::WhirlPool* >(p); }
-    void* lc_cast1048(NameObj* p) { return static_cast< ::WhirlPoolAccelerator* >(p); }
-    void* lc_cast1049(NameObj* p) { return static_cast< ::WipeLayoutBase* >(p); }
-    void* lc_cast1050(NameObj* p) { return static_cast< ::WipeFade* >(p); }
-    void* lc_cast1051(NameObj* p) { return static_cast< ::WipeGameOver* >(p); }
-    void* lc_cast1052(NameObj* p) { return static_cast< ::WipeKoopa* >(p); }
-    void* lc_cast1053(NameObj* p) { return static_cast< ::WipeRing* >(p); }
-    void* lc_cast1054(NameObj* p) { return static_cast< ::WoodBox* >(p); }
-    void* lc_cast1055(NameObj* p) { return static_cast< ::WormEatenPlanet* >(p); }
-    void* lc_cast1056(NameObj* p) { return static_cast< ::YellowChip* >(p); }
-    void* lc_cast1057(NameObj* p) { return static_cast< ::YellowChipGroup* >(p); }
-    void* lc_cast1058(NameObj* p) { return static_cast< ::YesNoLayout* >(p); }
+    void* lc_cast646(NameObj* p) { return static_cast< ::NebulaPauseSettingsButton* >(p); }
+    void* lc_cast647(NameObj* p) { return static_cast< ::NeedlePlant* >(p); }
+    void* lc_cast648(NameObj* p) { return static_cast< ::NokonokoLand* >(p); }
+    void* lc_cast649(NameObj* p) { return static_cast< ::NormalMapBase* >(p); }
+    void* lc_cast650(NameObj* p) { return static_cast< ::NormalMapTestObj* >(p); }
+    void* lc_cast651(NameObj* p) { return static_cast< ::Note* >(p); }
+    void* lc_cast652(NameObj* p) { return static_cast< ::NoteCounter* >(p); }
+    void* lc_cast653(NameObj* p) { return static_cast< ::NoteFairy* >(p); }
+    void* lc_cast654(NameObj* p) { return static_cast< ::NoteGroup* >(p); }
+    void* lc_cast655(NameObj* p) { return static_cast< ::OceanBowl* >(p); }
+    void* lc_cast656(NameObj* p) { return static_cast< ::OceanBowlBloomDrawer* >(p); }
+    void* lc_cast657(NameObj* p) { return static_cast< ::OceanFloaterLandParts* >(p); }
+    void* lc_cast658(NameObj* p) { return static_cast< ::OceanHomeMapCtrl* >(p); }
+    void* lc_cast659(NameObj* p) { return static_cast< ::OceanRing* >(p); }
+    void* lc_cast660(NameObj* p) { return static_cast< ::OceanRingBloomDrawer* >(p); }
+    void* lc_cast661(NameObj* p) { return static_cast< ::OceanRingPipe* >(p); }
+    void* lc_cast662(NameObj* p) { return static_cast< ::OceanRingPipeInside* >(p); }
+    void* lc_cast663(NameObj* p) { return static_cast< ::OceanRingPipeOutside* >(p); }
+    void* lc_cast664(NameObj* p) { return static_cast< ::OceanSmallTurtle* >(p); }
+    void* lc_cast665(NameObj* p) { return static_cast< ::OceanSphere* >(p); }
+    void* lc_cast666(NameObj* p) { return static_cast< ::OceanWaveFloater* >(p); }
+    void* lc_cast667(NameObj* p) { return static_cast< ::OneUpBoard* >(p); }
+    void* lc_cast668(NameObj* p) { return static_cast< ::Onimasu* >(p); }
+    void* lc_cast669(NameObj* p) { return static_cast< ::OnimasuJump* >(p); }
+    void* lc_cast670(NameObj* p) { return static_cast< ::OnimasuPivot* >(p); }
+    void* lc_cast671(NameObj* p) { return static_cast< ::OnlyCamera* >(p); }
+    void* lc_cast672(NameObj* p) { return static_cast< ::OtaKing* >(p); }
+    void* lc_cast673(NameObj* p) { return static_cast< ::OtaKingLongFoot* >(p); }
+    void* lc_cast674(NameObj* p) { return static_cast< ::OtaKingMagma* >(p); }
+    void* lc_cast675(NameObj* p) { return static_cast< ::OtaRock* >(p); }
+    void* lc_cast676(NameObj* p) { return static_cast< ::PTimerSwitch* >(p); }
+    void* lc_cast677(NameObj* p) { return static_cast< ::PackunPetit* >(p); }
+    void* lc_cast678(NameObj* p) { return static_cast< ::PalmIsland* >(p); }
+    void* lc_cast679(NameObj* p) { return static_cast< ::PauseMenu* >(p); }
+    void* lc_cast680(NameObj* p) { return static_cast< ::Peach* >(p); }
+    void* lc_cast681(NameObj* p) { return static_cast< ::PeachCastleGardenPlanet* >(p); }
+    void* lc_cast682(NameObj* p) { return static_cast< ::PeachLetter* >(p); }
+    void* lc_cast683(NameObj* p) { return static_cast< ::Penguin* >(p); }
+    void* lc_cast684(NameObj* p) { return static_cast< ::PenguinCoach* >(p); }
+    void* lc_cast685(NameObj* p) { return static_cast< ::PenguinMaster* >(p); }
+    void* lc_cast686(NameObj* p) { return static_cast< ::PenguinRacer* >(p); }
+    void* lc_cast687(NameObj* p) { return static_cast< ::PenguinRacerLeader* >(p); }
+    void* lc_cast688(NameObj* p) { return static_cast< ::PenguinSkater* >(p); }
+    void* lc_cast689(NameObj* p) { return static_cast< ::PenguinStudent* >(p); }
+    void* lc_cast690(NameObj* p) { return static_cast< ::Petari* >(p); }
+    void* lc_cast691(NameObj* p) { return static_cast< ::PhantomShipBoxFloater* >(p); }
+    void* lc_cast692(NameObj* p) { return static_cast< ::PhantomShipBridge* >(p); }
+    void* lc_cast693(NameObj* p) { return static_cast< ::PhantomShipHandle* >(p); }
+    void* lc_cast694(NameObj* p) { return static_cast< ::PhantomTorch* >(p); }
+    void* lc_cast695(NameObj* p) { return static_cast< ::PicketSwitch* >(p); }
+    void* lc_cast696(NameObj* p) { return static_cast< ::PictureBookCloseButton* >(p); }
+    void* lc_cast697(NameObj* p) { return static_cast< ::PictureBookLayout* >(p); }
+    void* lc_cast698(NameObj* p) { return static_cast< ::PlacementStateChecker* >(p); }
+    void* lc_cast699(NameObj* p) { return static_cast< ::PlanetGravityManager* >(p); }
+    void* lc_cast700(NameObj* p) { return static_cast< ::PlanetMapCreator* >(p); }
+    void* lc_cast701(NameObj* p) { return static_cast< ::PlanetMapFarClippable* >(p); }
+    void* lc_cast702(NameObj* p) { return static_cast< ::PlanetMapWithoutHighModel* >(p); }
+    void* lc_cast703(NameObj* p) { return static_cast< ::Plant* >(p); }
+    void* lc_cast704(NameObj* p) { return static_cast< ::PlantGroup* >(p); }
+    void* lc_cast705(NameObj* p) { return static_cast< ::PlantLeaf* >(p); }
+    void* lc_cast706(NameObj* p) { return static_cast< ::PlantLeafDrawInit* >(p); }
+    void* lc_cast707(NameObj* p) { return static_cast< ::PlantMember* >(p); }
+    void* lc_cast708(NameObj* p) { return static_cast< ::PlantStalk* >(p); }
+    void* lc_cast709(NameObj* p) { return static_cast< ::PlantStalkDrawInit* >(p); }
+    void* lc_cast710(NameObj* p) { return static_cast< ::PlayerActionGuidance* >(p); }
+    void* lc_cast711(NameObj* p) { return static_cast< ::PlayerLeft* >(p); }
+    void* lc_cast712(NameObj* p) { return static_cast< ::PlayerMissLeft* >(p); }
+    void* lc_cast713(NameObj* p) { return static_cast< ::PlayerRacer* >(p); }
+    void* lc_cast714(NameObj* p) { return static_cast< ::PlayerSeArea* >(p); }
+    void* lc_cast715(NameObj* p) { return static_cast< ::Poihana* >(p); }
+    void* lc_cast716(NameObj* p) { return static_cast< ::Pole* >(p); }
+    void* lc_cast717(NameObj* p) { return static_cast< ::Polta* >(p); }
+    void* lc_cast718(NameObj* p) { return static_cast< ::PoltaArm* >(p); }
+    void* lc_cast719(NameObj* p) { return static_cast< ::PoltaGroundRock* >(p); }
+    void* lc_cast720(NameObj* p) { return static_cast< ::PoltaGroundRockHolder* >(p); }
+    void* lc_cast721(NameObj* p) { return static_cast< ::PoltaRock* >(p); }
+    void* lc_cast722(NameObj* p) { return static_cast< ::PoltaRockHolder* >(p); }
+    void* lc_cast723(NameObj* p) { return static_cast< ::PomponPlant* >(p); }
+    void* lc_cast724(NameObj* p) { return static_cast< ::PowerStar* >(p); }
+    void* lc_cast725(NameObj* p) { return static_cast< ::PowerStarAppearPoint* >(p); }
+    void* lc_cast726(NameObj* p) { return static_cast< ::PowerStarHalo* >(p); }
+    void* lc_cast727(NameObj* p) { return static_cast< ::PowerStarHolder* >(p); }
+    void* lc_cast728(NameObj* p) { return static_cast< ::PowerStarList* >(p); }
+    void* lc_cast729(NameObj* p) { return static_cast< ::PressureMessenger* >(p); }
+    void* lc_cast730(NameObj* p) { return static_cast< ::PriorDrawAir* >(p); }
+    void* lc_cast731(NameObj* p) { return static_cast< ::PriorDrawAirHolder* >(p); }
+    void* lc_cast732(NameObj* p) { return static_cast< ::PrizeRing* >(p); }
+    void* lc_cast733(NameObj* p) { return static_cast< ::ProjectionMapAir* >(p); }
+    void* lc_cast734(NameObj* p) { return static_cast< ::Sky* >(p); }
+    void* lc_cast735(NameObj* p) { return static_cast< ::ProjectionMapSky* >(p); }
+    void* lc_cast736(NameObj* p) { return static_cast< ::PrologueDirector* >(p); }
+    void* lc_cast737(NameObj* p) { return static_cast< ::PrologueHolder* >(p); }
+    void* lc_cast738(NameObj* p) { return static_cast< ::PrologueLetter* >(p); }
+    void* lc_cast739(NameObj* p) { return static_cast< ::ProloguePictureBook* >(p); }
+    void* lc_cast740(NameObj* p) { return static_cast< ::Pukupuku* >(p); }
+    void* lc_cast741(NameObj* p) { return static_cast< ::PunchBox* >(p); }
+    void* lc_cast742(NameObj* p) { return static_cast< ::PunchingKinoko* >(p); }
+    void* lc_cast743(NameObj* p) { return static_cast< ::PurpleCoinCounter* >(p); }
+    void* lc_cast744(NameObj* p) { return static_cast< ::PurpleCoinHolder* >(p); }
+    void* lc_cast745(NameObj* p) { return static_cast< ::PurpleCoinStarter* >(p); }
+    void* lc_cast746(NameObj* p) { return static_cast< ::QuakeEffectArea* >(p); }
+    void* lc_cast747(NameObj* p) { return static_cast< ::QuakeEffectGenerator* >(p); }
+    void* lc_cast748(NameObj* p) { return static_cast< ::QuarterRollGravityRoomArrow* >(p); }
+    void* lc_cast749(NameObj* p) { return static_cast< ::QuestionBoxGalleryObj* >(p); }
+    void* lc_cast750(NameObj* p) { return static_cast< ::QuestionCoin* >(p); }
+    void* lc_cast751(NameObj* p) { return static_cast< ::Rabbit* >(p); }
+    void* lc_cast752(NameObj* p) { return static_cast< ::RaceManager* >(p); }
+    void* lc_cast753(NameObj* p) { return static_cast< ::RaceManagerLayout* >(p); }
+    void* lc_cast754(NameObj* p) { return static_cast< ::RaceRail* >(p); }
+    void* lc_cast755(NameObj* p) { return static_cast< ::RailBlock* >(p); }
+    void* lc_cast756(NameObj* p) { return static_cast< ::RailCoin* >(p); }
+    void* lc_cast757(NameObj* p) { return static_cast< ::RailDemoMoveObj* >(p); }
+    void* lc_cast758(NameObj* p) { return static_cast< ::RailMoveIndirectObj* >(p); }
+    void* lc_cast759(NameObj* p) { return static_cast< ::RailMoveObjBreakAtEnd* >(p); }
+    void* lc_cast760(NameObj* p) { return static_cast< ::RailMoveObjPress* >(p); }
+    void* lc_cast761(NameObj* p) { return static_cast< ::RailMoveObjSwitchShadow* >(p); }
+    void* lc_cast762(NameObj* p) { return static_cast< ::RailPlanetMap* >(p); }
+    void* lc_cast763(NameObj* p) { return static_cast< ::RailRotateMoveObj* >(p); }
+    void* lc_cast764(NameObj* p) { return static_cast< ::RainCloud* >(p); }
+    void* lc_cast765(NameObj* p) { return static_cast< ::RandomEffectObj* >(p); }
+    void* lc_cast766(NameObj* p) { return static_cast< ::RestartCube* >(p); }
+    void* lc_cast767(NameObj* p) { return static_cast< ::ReverseGravityRoomPlanet* >(p); }
+    void* lc_cast768(NameObj* p) { return static_cast< ::RevolvingWay* >(p); }
+    void* lc_cast769(NameObj* p) { return static_cast< ::RingBeam* >(p); }
+    void* lc_cast770(NameObj* p) { return static_cast< ::RingBeamShadowDrawer* >(p); }
+    void* lc_cast771(NameObj* p) { return static_cast< ::RingBeamer* >(p); }
+    void* lc_cast772(NameObj* p) { return static_cast< ::Rock* >(p); }
+    void* lc_cast773(NameObj* p) { return static_cast< ::RockCreator* >(p); }
+    void* lc_cast774(NameObj* p) { return static_cast< ::Rosetta* >(p); }
+    void* lc_cast775(NameObj* p) { return static_cast< ::RosettaChair* >(p); }
+    void* lc_cast776(NameObj* p) { return static_cast< ::SimpleLayout* >(p); }
+    void* lc_cast777(NameObj* p) { return static_cast< ::RosettaMonologue* >(p); }
+    void* lc_cast778(NameObj* p) { return static_cast< ::RosettaPictureBook* >(p); }
+    void* lc_cast779(NameObj* p) { return static_cast< ::RosettaReading* >(p); }
+    void* lc_cast780(NameObj* p) { return static_cast< ::RotPartsModel* >(p); }
+    void* lc_cast781(NameObj* p) { return static_cast< ::RotateMoveObj* >(p); }
+    void* lc_cast782(NameObj* p) { return static_cast< ::RunawayRabbit* >(p); }
+    void* lc_cast783(NameObj* p) { return static_cast< ::RunawayRabbitCollect* >(p); }
+    void* lc_cast784(NameObj* p) { return static_cast< ::RunawayTico* >(p); }
+    void* lc_cast785(NameObj* p) { return static_cast< ::SamboHead* >(p); }
+    void* lc_cast786(NameObj* p) { return static_cast< ::SandCapsuleInsidePlanet* >(p); }
+    void* lc_cast787(NameObj* p) { return static_cast< ::SandCapsulePressGround* >(p); }
+    void* lc_cast788(NameObj* p) { return static_cast< ::SandUpDownEffectObj* >(p); }
+    void* lc_cast789(NameObj* p) { return static_cast< ::SandUpDownTriRock* >(p); }
+    void* lc_cast790(NameObj* p) { return static_cast< ::Sandstorm* >(p); }
+    void* lc_cast791(NameObj* p) { return static_cast< ::SaveIcon* >(p); }
+    void* lc_cast792(NameObj* p) { return static_cast< ::ScenarioDataParser* >(p); }
+    void* lc_cast793(NameObj* p) { return static_cast< ::ScenarioSelectLayout* >(p); }
+    void* lc_cast794(NameObj* p) { return static_cast< ::ScenarioSelectStar* >(p); }
+    void* lc_cast795(NameObj* p) { return static_cast< ::ScenarioStarter* >(p); }
+    void* lc_cast796(NameObj* p) { return static_cast< ::ScenarioTitle* >(p); }
+    void* lc_cast797(NameObj* p) { return static_cast< ::SceneDataInitializer* >(p); }
+    void* lc_cast798(NameObj* p) { return static_cast< ::SceneNameObjMovementController* >(p); }
+    void* lc_cast799(NameObj* p) { return static_cast< ::ScenePlayingResult* >(p); }
+    void* lc_cast800(NameObj* p) { return static_cast< ::WipeHolderBase* >(p); }
+    void* lc_cast801(NameObj* p) { return static_cast< ::SceneWipeHolder* >(p); }
+    void* lc_cast802(NameObj* p) { return static_cast< ::ScreenBlurArea* >(p); }
+    void* lc_cast803(NameObj* p) { return static_cast< ::ScreenBlurEffect* >(p); }
+    void* lc_cast804(NameObj* p) { return static_cast< ::ScreenPreserver* >(p); }
+    void* lc_cast805(NameObj* p) { return static_cast< ::ScrewSwitch* >(p); }
+    void* lc_cast806(NameObj* p) { return static_cast< ::ScrewSwitchReverse* >(p); }
+    void* lc_cast807(NameObj* p) { return static_cast< ::SeaBottomTriplePropeller* >(p); }
+    void* lc_cast808(NameObj* p) { return static_cast< ::SeaGull* >(p); }
+    void* lc_cast809(NameObj* p) { return static_cast< ::SeaGullGroup* >(p); }
+    void* lc_cast810(NameObj* p) { return static_cast< ::SearchBeamer* >(p); }
+    void* lc_cast811(NameObj* p) { return static_cast< ::SeesawMoveNut* >(p); }
+    void* lc_cast812(NameObj* p) { return static_cast< ::SensorHitChecker* >(p); }
+    void* lc_cast813(NameObj* p) { return static_cast< ::ShadowClipActor* >(p); }
+    void* lc_cast814(NameObj* p) { return static_cast< ::ShadowControllerHolder* >(p); }
+    void* lc_cast815(NameObj* p) { return static_cast< ::ShadowSurfaceDrawer* >(p); }
+    void* lc_cast816(NameObj* p) { return static_cast< ::ShadowSurfaceBox* >(p); }
+    void* lc_cast817(NameObj* p) { return static_cast< ::ShadowSurfaceCircle* >(p); }
+    void* lc_cast818(NameObj* p) { return static_cast< ::ShadowSurfaceDrawInit* >(p); }
+    void* lc_cast819(NameObj* p) { return static_cast< ::ShadowSurfaceOval* >(p); }
+    void* lc_cast820(NameObj* p) { return static_cast< ::ShadowVolumeBox* >(p); }
+    void* lc_cast821(NameObj* p) { return static_cast< ::ShadowVolumeModel* >(p); }
+    void* lc_cast822(NameObj* p) { return static_cast< ::ShadowVolumeCylinder* >(p); }
+    void* lc_cast823(NameObj* p) { return static_cast< ::ShadowVolumeDrawInit* >(p); }
+    void* lc_cast824(NameObj* p) { return static_cast< ::ShadowVolumeFlatModel* >(p); }
+    void* lc_cast825(NameObj* p) { return static_cast< ::ShadowVolumeLine* >(p); }
+    void* lc_cast826(NameObj* p) { return static_cast< ::ShadowVolumeOval* >(p); }
+    void* lc_cast827(NameObj* p) { return static_cast< ::ShadowVolumeOvalPole* >(p); }
+    void* lc_cast828(NameObj* p) { return static_cast< ::ShadowVolumeSphere* >(p); }
+    void* lc_cast829(NameObj* p) { return static_cast< ::Shellfish* >(p); }
+    void* lc_cast830(NameObj* p) { return static_cast< ::ShockWaveGenerator* >(p); }
+    void* lc_cast831(NameObj* p) { return static_cast< ::ShootingStar* >(p); }
+    void* lc_cast832(NameObj* p) { return static_cast< ::SideSpikeMoveStep* >(p); }
+    void* lc_cast833(NameObj* p) { return static_cast< ::SignBoard* >(p); }
+    void* lc_cast834(NameObj* p) { return static_cast< ::SimpleBloomArea* >(p); }
+    void* lc_cast835(NameObj* p) { return static_cast< ::SimpleBreakableObjBase* >(p); }
+    void* lc_cast836(NameObj* p) { return static_cast< ::SimpleBreakableObj* >(p); }
+    void* lc_cast837(NameObj* p) { return static_cast< ::SimpleBreakableIndirectObj* >(p); }
+    void* lc_cast838(NameObj* p) { return static_cast< ::SimpleClipPartsObj* >(p); }
+    void* lc_cast839(NameObj* p) { return static_cast< ::SimpleEffectLayout* >(p); }
+    void* lc_cast840(NameObj* p) { return static_cast< ::SimpleEnvironmentObj* >(p); }
+    void* lc_cast841(NameObj* p) { return static_cast< ::SimpleFloaterObj* >(p); }
+    void* lc_cast842(NameObj* p) { return static_cast< ::SimpleMapObjNoSilhouetted* >(p); }
+    void* lc_cast843(NameObj* p) { return static_cast< ::SimpleMapObjPush* >(p); }
+    void* lc_cast844(NameObj* p) { return static_cast< ::SimpleMirrorObj* >(p); }
+    void* lc_cast845(NameObj* p) { return static_cast< ::SimpleMirrorReflectionObj* >(p); }
+    void* lc_cast846(NameObj* p) { return static_cast< ::SimpleModelDrawer* >(p); }
+    void* lc_cast847(NameObj* p) { return static_cast< ::SimpleNormalMapObj* >(p); }
+    void* lc_cast848(NameObj* p) { return static_cast< ::SimpleSeesawObj* >(p); }
+    void* lc_cast849(NameObj* p) { return static_cast< ::SimpleTextureSwitchChangeObj* >(p); }
+    void* lc_cast850(NameObj* p) { return static_cast< ::SimpleTimerObj* >(p); }
+    void* lc_cast851(NameObj* p) { return static_cast< ::SkeletalFishBaby* >(p); }
+    void* lc_cast852(NameObj* p) { return static_cast< ::SkeletalFishBoss* >(p); }
+    void* lc_cast853(NameObj* p) { return static_cast< ::SkeletalFishBossBattleDirector* >(p); }
+    void* lc_cast854(NameObj* p) { return static_cast< ::SkeletalFishBossHead* >(p); }
+    void* lc_cast855(NameObj* p) { return static_cast< ::SkeletalFishBossInfo* >(p); }
+    void* lc_cast856(NameObj* p) { return static_cast< ::SkeletalFishBossRail* >(p); }
+    void* lc_cast857(NameObj* p) { return static_cast< ::SkeletalFishBossRailHolder* >(p); }
+    void* lc_cast858(NameObj* p) { return static_cast< ::SkeletalFishBossScarFlash* >(p); }
+    void* lc_cast859(NameObj* p) { return static_cast< ::SkeletalFishGuard* >(p); }
+    void* lc_cast860(NameObj* p) { return static_cast< ::SkeletalFishGuardHolder* >(p); }
+    void* lc_cast861(NameObj* p) { return static_cast< ::SleepControllerHolder* >(p); }
+    void* lc_cast862(NameObj* p) { return static_cast< ::SlingShooter* >(p); }
+    void* lc_cast863(NameObj* p) { return static_cast< ::SmallStone* >(p); }
+    void* lc_cast864(NameObj* p) { return static_cast< ::SmallStoneMember* >(p); }
+    void* lc_cast865(NameObj* p) { return static_cast< ::Snakehead* >(p); }
+    void* lc_cast866(NameObj* p) { return static_cast< ::SnowCapsulePlanet* >(p); }
+    void* lc_cast867(NameObj* p) { return static_cast< ::SnowFloor* >(p); }
+    void* lc_cast868(NameObj* p) { return static_cast< ::SnowFloorTile* >(p); }
+    void* lc_cast869(NameObj* p) { return static_cast< ::SnowMan* >(p); }
+    void* lc_cast870(NameObj* p) { return static_cast< ::SnowplowSwitch* >(p); }
+    void* lc_cast871(NameObj* p) { return static_cast< ::SoundEmitter* >(p); }
+    void* lc_cast872(NameObj* p) { return static_cast< ::SoundEmitterCube* >(p); }
+    void* lc_cast873(NameObj* p) { return static_cast< ::SoundEmitterSphere* >(p); }
+    void* lc_cast874(NameObj* p) { return static_cast< ::SpaceCocoon* >(p); }
+    void* lc_cast875(NameObj* p) { return static_cast< ::SpaceInner* >(p); }
+    void* lc_cast876(NameObj* p) { return static_cast< ::SpaceMine* >(p); }
+    void* lc_cast877(NameObj* p) { return static_cast< ::SpaceShipStep* >(p); }
+    void* lc_cast878(NameObj* p) { return static_cast< ::SphereRailDash* >(p); }
+    void* lc_cast879(NameObj* p) { return static_cast< ::SphereSelector* >(p); }
+    void* lc_cast880(NameObj* p) { return static_cast< ::SphereSelectorHandle* >(p); }
+    void* lc_cast881(NameObj* p) { return static_cast< ::SpiderCoin* >(p); }
+    void* lc_cast882(NameObj* p) { return static_cast< ::SpiderMapBlock* >(p); }
+    void* lc_cast883(NameObj* p) { return static_cast< ::SpiderThread* >(p); }
+    void* lc_cast884(NameObj* p) { return static_cast< ::SpinDriver* >(p); }
+    void* lc_cast885(NameObj* p) { return static_cast< ::SpinDriverOperateRing* >(p); }
+    void* lc_cast886(NameObj* p) { return static_cast< ::SpinDriverPathDrawInit* >(p); }
+    void* lc_cast887(NameObj* p) { return static_cast< ::SpinDriverPathDrawer* >(p); }
+    void* lc_cast888(NameObj* p) { return static_cast< ::SpinGuidanceArea* >(p); }
+    void* lc_cast889(NameObj* p) { return static_cast< ::SpinLeverSwitch* >(p); }
+    void* lc_cast890(NameObj* p) { return static_cast< ::SpinningBox* >(p); }
+    void* lc_cast891(NameObj* p) { return static_cast< ::SpotMarkLight* >(p); }
+    void* lc_cast892(NameObj* p) { return static_cast< ::SpringJetWater* >(p); }
+    void* lc_cast893(NameObj* p) { return static_cast< ::SpringWaterFloaterSpot* >(p); }
+    void* lc_cast894(NameObj* p) { return static_cast< ::StaffRoll* >(p); }
+    void* lc_cast895(NameObj* p) { return static_cast< ::StaffRollLine* >(p); }
+    void* lc_cast896(NameObj* p) { return static_cast< ::StaffRollPicture* >(p); }
+    void* lc_cast897(NameObj* p) { return static_cast< ::StageDataHolder* >(p); }
+    void* lc_cast898(NameObj* p) { return static_cast< ::StageResultInformer* >(p); }
+    void* lc_cast899(NameObj* p) { return static_cast< ::StageSwitchContainer* >(p); }
+    void* lc_cast900(NameObj* p) { return static_cast< ::StarCounter* >(p); }
+    void* lc_cast901(NameObj* p) { return static_cast< ::StarPiece* >(p); }
+    void* lc_cast902(NameObj* p) { return static_cast< ::StarPieceCounter* >(p); }
+    void* lc_cast903(NameObj* p) { return static_cast< ::StarPieceDirector* >(p); }
+    void* lc_cast904(NameObj* p) { return static_cast< ::StarPieceFollowGroup* >(p); }
+    void* lc_cast905(NameObj* p) { return static_cast< ::StarPieceGroup* >(p); }
+    void* lc_cast906(NameObj* p) { return static_cast< ::StarPieceMother* >(p); }
+    void* lc_cast907(NameObj* p) { return static_cast< ::StarPieceShooter* >(p); }
+    void* lc_cast908(NameObj* p) { return static_cast< ::StarPieceSpot* >(p); }
+    void* lc_cast909(NameObj* p) { return static_cast< ::StarPointerBlur* >(p); }
+    void* lc_cast910(NameObj* p) { return static_cast< ::StarPointerCommandStream* >(p); }
+    void* lc_cast911(NameObj* p) { return static_cast< ::StarPointerGuidance* >(p); }
+    void* lc_cast912(NameObj* p) { return static_cast< ::StarPointerLayout* >(p); }
+    void* lc_cast913(NameObj* p) { return static_cast< ::StarPointerNumber* >(p); }
+    void* lc_cast914(NameObj* p) { return static_cast< ::StarReturnDemoStarter* >(p); }
+    void* lc_cast915(NameObj* p) { return static_cast< ::StinkBugBase* >(p); }
+    void* lc_cast916(NameObj* p) { return static_cast< ::StinkBugParent* >(p); }
+    void* lc_cast917(NameObj* p) { return static_cast< ::StinkBugSmall* >(p); }
+    void* lc_cast918(NameObj* p) { return static_cast< ::StopSceneController* >(p); }
+    void* lc_cast919(NameObj* p) { return static_cast< ::StrayTico* >(p); }
+    void* lc_cast920(NameObj* p) { return static_cast< ::StringSpider* >(p); }
+    void* lc_cast921(NameObj* p) { return static_cast< ::StringSpiderString* >(p); }
+    void* lc_cast922(NameObj* p) { return static_cast< ::SubMeterLayout* >(p); }
+    void* lc_cast923(NameObj* p) { return static_cast< ::SubmarineSteam* >(p); }
+    void* lc_cast924(NameObj* p) { return static_cast< ::SubmarineVolcanoBigColumn* >(p); }
+    void* lc_cast925(NameObj* p) { return static_cast< ::SuddenDeathMeter* >(p); }
+    void* lc_cast926(NameObj* p) { return static_cast< ::Sun* >(p); }
+    void* lc_cast927(NameObj* p) { return static_cast< ::SunLightArea* >(p); }
+    void* lc_cast928(NameObj* p) { return static_cast< ::SunakazeKunTrap* >(p); }
+    void* lc_cast929(NameObj* p) { return static_cast< ::SunshadeMapHolder* >(p); }
+    void* lc_cast930(NameObj* p) { return static_cast< ::SunshadeMapParts* >(p); }
+    void* lc_cast931(NameObj* p) { return static_cast< ::SuperSpinDriver* >(p); }
+    void* lc_cast932(NameObj* p) { return static_cast< ::SurfRay* >(p); }
+    void* lc_cast933(NameObj* p) { return static_cast< ::SurfingGuidance* >(p); }
+    void* lc_cast934(NameObj* p) { return static_cast< ::SurprisedGalaxy* >(p); }
+    void* lc_cast935(NameObj* p) { return static_cast< ::SwingLight* >(p); }
+    void* lc_cast936(NameObj* p) { return static_cast< ::SwingRope* >(p); }
+    void* lc_cast937(NameObj* p) { return static_cast< ::SwingRopeGroup* >(p); }
+    void* lc_cast938(NameObj* p) { return static_cast< ::SwitchBox* >(p); }
+    void* lc_cast939(NameObj* p) { return static_cast< ::SwitchSynchronizer* >(p); }
+    void* lc_cast940(NameObj* p) { return static_cast< ::SwitchWatcher* >(p); }
+    void* lc_cast941(NameObj* p) { return static_cast< ::SwitchWatcherHolder* >(p); }
+    void* lc_cast942(NameObj* p) { return static_cast< ::Syati* >(p); }
+    void* lc_cast943(NameObj* p) { return static_cast< ::SysInfoWindow* >(p); }
+    void* lc_cast944(NameObj* p) { return static_cast< ::SystemWipeHolder* >(p); }
+    void* lc_cast945(NameObj* p) { return static_cast< ::TakoHei* >(p); }
+    void* lc_cast946(NameObj* p) { return static_cast< ::TakoHeiInk* >(p); }
+    void* lc_cast947(NameObj* p) { return static_cast< ::TakoHeiInkHolder* >(p); }
+    void* lc_cast948(NameObj* p) { return static_cast< ::Takobo* >(p); }
+    void* lc_cast949(NameObj* p) { return static_cast< ::TalkBalloon* >(p); }
+    void* lc_cast950(NameObj* p) { return static_cast< ::TalkBalloonEvent* >(p); }
+    void* lc_cast951(NameObj* p) { return static_cast< ::TalkBalloonShort* >(p); }
+    void* lc_cast952(NameObj* p) { return static_cast< ::TalkBalloonIcon* >(p); }
+    void* lc_cast953(NameObj* p) { return static_cast< ::TalkBalloonInfo* >(p); }
+    void* lc_cast954(NameObj* p) { return static_cast< ::TalkBalloonSign* >(p); }
+    void* lc_cast955(NameObj* p) { return static_cast< ::TalkDirector* >(p); }
+    void* lc_cast956(NameObj* p) { return static_cast< ::TalkMessageCtrl* >(p); }
+    void* lc_cast957(NameObj* p) { return static_cast< ::Tamakoro* >(p); }
+    void* lc_cast958(NameObj* p) { return static_cast< ::TamakoroTutorial* >(p); }
+    void* lc_cast959(NameObj* p) { return static_cast< ::Teresa* >(p); }
+    void* lc_cast960(NameObj* p) { return static_cast< ::TeresaRacer* >(p); }
+    void* lc_cast961(NameObj* p) { return static_cast< ::TeresaWater* >(p); }
+    void* lc_cast962(NameObj* p) { return static_cast< ::ThrowingIce* >(p); }
+    void* lc_cast963(NameObj* p) { return static_cast< ::TicoAstro* >(p); }
+    void* lc_cast964(NameObj* p) { return static_cast< ::TicoEat* >(p); }
+    void* lc_cast965(NameObj* p) { return static_cast< ::TicoComet* >(p); }
+    void* lc_cast966(NameObj* p) { return static_cast< ::TicoDomeLecture* >(p); }
+    void* lc_cast967(NameObj* p) { return static_cast< ::TicoFat* >(p); }
+    void* lc_cast968(NameObj* p) { return static_cast< ::TicoGalaxy* >(p); }
+    void* lc_cast969(NameObj* p) { return static_cast< ::TicoRail* >(p); }
+    void* lc_cast970(NameObj* p) { return static_cast< ::TicoReading* >(p); }
+    void* lc_cast971(NameObj* p) { return static_cast< ::TicoShop* >(p); }
+    void* lc_cast972(NameObj* p) { return static_cast< ::TicoStarRing* >(p); }
+    void* lc_cast973(NameObj* p) { return static_cast< ::TimeAppearObj* >(p); }
+    void* lc_cast974(NameObj* p) { return static_cast< ::TimeLimitLayout* >(p); }
+    void* lc_cast975(NameObj* p) { return static_cast< ::TimeUpLayout* >(p); }
+    void* lc_cast976(NameObj* p) { return static_cast< ::TimerMoveWall* >(p); }
+    void* lc_cast977(NameObj* p) { return static_cast< ::TimerSwitch* >(p); }
+    void* lc_cast978(NameObj* p) { return static_cast< ::TitleSequenceProductSub::LogoLayout* >(p); }
+    void* lc_cast979(NameObj* p) { return static_cast< ::TombSpider* >(p); }
+    void* lc_cast980(NameObj* p) { return static_cast< ::TombSpiderGland* >(p); }
+    void* lc_cast981(NameObj* p) { return static_cast< ::TombSpiderThreadAttacher* >(p); }
+    void* lc_cast982(NameObj* p) { return static_cast< ::TombSpiderVitalSpot* >(p); }
+    void* lc_cast983(NameObj* p) { return static_cast< ::TornadoMario* >(p); }
+    void* lc_cast984(NameObj* p) { return static_cast< ::TrampleStar* >(p); }
+    void* lc_cast985(NameObj* p) { return static_cast< ::TrampleStarShare* >(p); }
+    void* lc_cast986(NameObj* p) { return static_cast< ::TransparentWall* >(p); }
+    void* lc_cast987(NameObj* p) { return static_cast< ::Trapeze* >(p); }
+    void* lc_cast988(NameObj* p) { return static_cast< ::TrapezeRopeDrawInit* >(p); }
+    void* lc_cast989(NameObj* p) { return static_cast< ::TreasureBoxCracked* >(p); }
+    void* lc_cast990(NameObj* p) { return static_cast< ::TreasureSpot* >(p); }
+    void* lc_cast991(NameObj* p) { return static_cast< ::TrickRabbit* >(p); }
+    void* lc_cast992(NameObj* p) { return static_cast< ::TrickRabbitFreeRun* >(p); }
+    void* lc_cast993(NameObj* p) { return static_cast< ::TrickRabbitSnow* >(p); }
+    void* lc_cast994(NameObj* p) { return static_cast< ::TrickRabbitSnowCollect* >(p); }
+    void* lc_cast995(NameObj* p) { return static_cast< ::TripodBoss* >(p); }
+    void* lc_cast996(NameObj* p) { return static_cast< ::TripodBossAccesser* >(p); }
+    void* lc_cast997(NameObj* p) { return static_cast< ::TripodBossBaseJointPosition* >(p); }
+    void* lc_cast998(NameObj* p) { return static_cast< ::TripodBossBreakMovement* >(p); }
+    void* lc_cast999(NameObj* p) { return static_cast< ::TripodBossCoin* >(p); }
+    void* lc_cast1000(NameObj* p) { return static_cast< ::TripodBossFixPartsBase* >(p); }
+    void* lc_cast1001(NameObj* p) { return static_cast< ::TripodBossCore* >(p); }
+    void* lc_cast1002(NameObj* p) { return static_cast< ::TripodBossFixParts* >(p); }
+    void* lc_cast1003(NameObj* p) { return static_cast< ::TripodBossGuardWall* >(p); }
+    void* lc_cast1004(NameObj* p) { return static_cast< ::TripodBossGuardWallPart* >(p); }
+    void* lc_cast1005(NameObj* p) { return static_cast< ::TripodBossKillerGenerater* >(p); }
+    void* lc_cast1006(NameObj* p) { return static_cast< ::TripodBossKillerGeneraterCircle* >(p); }
+    void* lc_cast1007(NameObj* p) { return static_cast< ::TripodBossKinokoOneUp* >(p); }
+    void* lc_cast1008(NameObj* p) { return static_cast< ::TripodBossLeg* >(p); }
+    void* lc_cast1009(NameObj* p) { return static_cast< ::TripodBossRailMoveParts* >(p); }
+    void* lc_cast1010(NameObj* p) { return static_cast< ::TripodBossRotateParts* >(p); }
+    void* lc_cast1011(NameObj* p) { return static_cast< ::TripodBossShell* >(p); }
+    void* lc_cast1012(NameObj* p) { return static_cast< ::TripodBossStepPoint* >(p); }
+    void* lc_cast1013(NameObj* p) { return static_cast< ::TripodBossStepStartArea* >(p); }
+    void* lc_cast1014(NameObj* p) { return static_cast< ::Tsukidashikun* >(p); }
+    void* lc_cast1015(NameObj* p) { return static_cast< ::TurtlePartsModel* >(p); }
+    void* lc_cast1016(NameObj* p) { return static_cast< ::TypicalDoorOpen* >(p); }
+    void* lc_cast1017(NameObj* p) { return static_cast< ::UFOBase* >(p); }
+    void* lc_cast1018(NameObj* p) { return static_cast< ::UFOBreakable* >(p); }
+    void* lc_cast1019(NameObj* p) { return static_cast< ::UFOKinoko* >(p); }
+    void* lc_cast1020(NameObj* p) { return static_cast< ::UFOKinokoUnderConstruction* >(p); }
+    void* lc_cast1021(NameObj* p) { return static_cast< ::UFOSolid* >(p); }
+    void* lc_cast1022(NameObj* p) { return static_cast< ::Unizo* >(p); }
+    void* lc_cast1023(NameObj* p) { return static_cast< ::UnizoLauncher* >(p); }
+    void* lc_cast1024(NameObj* p) { return static_cast< ::ValveSwitch* >(p); }
+    void* lc_cast1025(NameObj* p) { return static_cast< ::VolumeModelDrawInit* >(p); }
+    void* lc_cast1026(NameObj* p) { return static_cast< ::VolumeModelDrawer* >(p); }
+    void* lc_cast1027(NameObj* p) { return static_cast< ::WarpCube* >(p); }
+    void* lc_cast1028(NameObj* p) { return static_cast< ::WarpCubeMgr* >(p); }
+    void* lc_cast1029(NameObj* p) { return static_cast< ::WarpPod* >(p); }
+    void* lc_cast1030(NameObj* p) { return static_cast< ::WarpPodMgr* >(p); }
+    void* lc_cast1031(NameObj* p) { return static_cast< ::WatchTowerRotateStep* >(p); }
+    void* lc_cast1032(NameObj* p) { return static_cast< ::WaterArea* >(p); }
+    void* lc_cast1033(NameObj* p) { return static_cast< ::WaterAreaHolder* >(p); }
+    void* lc_cast1034(NameObj* p) { return static_cast< ::WaterAreaMgr* >(p); }
+    void* lc_cast1035(NameObj* p) { return static_cast< ::WaterBazooka* >(p); }
+    void* lc_cast1036(NameObj* p) { return static_cast< ::WaterBazookaCapsule* >(p); }
+    void* lc_cast1037(NameObj* p) { return static_cast< ::WaterCameraFilter* >(p); }
+    void* lc_cast1038(NameObj* p) { return static_cast< ::WaterLeakPipe* >(p); }
+    void* lc_cast1039(NameObj* p) { return static_cast< ::WaterPlant* >(p); }
+    void* lc_cast1040(NameObj* p) { return static_cast< ::WaterPlantDrawInit* >(p); }
+    void* lc_cast1041(NameObj* p) { return static_cast< ::WaterPressure* >(p); }
+    void* lc_cast1042(NameObj* p) { return static_cast< ::WaterPressureBullet* >(p); }
+    void* lc_cast1043(NameObj* p) { return static_cast< ::WaterPressureBulletHolder* >(p); }
+    void* lc_cast1044(NameObj* p) { return static_cast< ::WaterRoad* >(p); }
+    void* lc_cast1045(NameObj* p) { return static_cast< ::WaterfallCaveCover* >(p); }
+    void* lc_cast1046(NameObj* p) { return static_cast< ::WhirlPool* >(p); }
+    void* lc_cast1047(NameObj* p) { return static_cast< ::WhirlPoolAccelerator* >(p); }
+    void* lc_cast1048(NameObj* p) { return static_cast< ::WipeLayoutBase* >(p); }
+    void* lc_cast1049(NameObj* p) { return static_cast< ::WipeFade* >(p); }
+    void* lc_cast1050(NameObj* p) { return static_cast< ::WipeGameOver* >(p); }
+    void* lc_cast1051(NameObj* p) { return static_cast< ::WipeKoopa* >(p); }
+    void* lc_cast1052(NameObj* p) { return static_cast< ::WipeRing* >(p); }
+    void* lc_cast1053(NameObj* p) { return static_cast< ::WoodBox* >(p); }
+    void* lc_cast1054(NameObj* p) { return static_cast< ::WormEatenPlanet* >(p); }
+    void* lc_cast1055(NameObj* p) { return static_cast< ::YellowChip* >(p); }
+    void* lc_cast1056(NameObj* p) { return static_cast< ::YellowChipGroup* >(p); }
+    void* lc_cast1057(NameObj* p) { return static_cast< ::YesNoLayout* >(p); }
 }  // namespace
 
 namespace lumacore {
@@ -2610,421 +2608,420 @@ namespace lumacore {
         {"NebulaAchievementLuma", 642, static_cast< u32 >(sizeof(::NebulaAchievementLuma)), lc_cast643},
         {"NebulaAchievementToast", 52, static_cast< u32 >(sizeof(::NebulaAchievementToast)), lc_cast644},
         {"NebulaFileSelectButton", 52, static_cast< u32 >(sizeof(::NebulaFileSelectButton)), lc_cast645},
-        {"NebulaModText", 52, static_cast< u32 >(sizeof(::NebulaModText)), lc_cast646},
-        {"NebulaPauseSettingsButton", 52, static_cast< u32 >(sizeof(::NebulaPauseSettingsButton)), lc_cast647},
-        {"NeedlePlant", 10, static_cast< u32 >(sizeof(::NeedlePlant)), lc_cast648},
-        {"NokonokoLand", 1, static_cast< u32 >(sizeof(::NokonokoLand)), lc_cast649},
-        {"NormalMapBase", 1, static_cast< u32 >(sizeof(::NormalMapBase)), lc_cast650},
-        {"NormalMapTestObj", 650, static_cast< u32 >(sizeof(::NormalMapTestObj)), lc_cast651},
-        {"Note", 1, static_cast< u32 >(sizeof(::Note)), lc_cast652},
-        {"NoteCounter", 52, static_cast< u32 >(sizeof(::NoteCounter)), lc_cast653},
-        {"NoteFairy", 1, static_cast< u32 >(sizeof(::NoteFairy)), lc_cast654},
-        {"NoteGroup", 6, static_cast< u32 >(sizeof(::NoteGroup)), lc_cast655},
-        {"OceanBowl", 1, static_cast< u32 >(sizeof(::OceanBowl)), lc_cast656},
-        {"OceanBowlBloomDrawer", 0, static_cast< u32 >(sizeof(::OceanBowlBloomDrawer)), lc_cast657},
-        {"OceanFloaterLandParts", 1, static_cast< u32 >(sizeof(::OceanFloaterLandParts)), lc_cast658},
-        {"OceanHomeMapCtrl", 0, static_cast< u32 >(sizeof(::OceanHomeMapCtrl)), lc_cast659},
-        {"OceanRing", 1, static_cast< u32 >(sizeof(::OceanRing)), lc_cast660},
-        {"OceanRingBloomDrawer", 0, static_cast< u32 >(sizeof(::OceanRingBloomDrawer)), lc_cast661},
-        {"OceanRingPipe", 1, static_cast< u32 >(sizeof(::OceanRingPipe)), lc_cast662},
-        {"OceanRingPipeInside", 1, static_cast< u32 >(sizeof(::OceanRingPipeInside)), lc_cast663},
-        {"OceanRingPipeOutside", 1, static_cast< u32 >(sizeof(::OceanRingPipeOutside)), lc_cast664},
-        {"OceanSmallTurtle", 1, static_cast< u32 >(sizeof(::OceanSmallTurtle)), lc_cast665},
-        {"OceanSphere", 1, static_cast< u32 >(sizeof(::OceanSphere)), lc_cast666},
-        {"OceanWaveFloater", 10, static_cast< u32 >(sizeof(::OceanWaveFloater)), lc_cast667},
-        {"OneUpBoard", 52, static_cast< u32 >(sizeof(::OneUpBoard)), lc_cast668},
-        {"Onimasu", 1, static_cast< u32 >(sizeof(::Onimasu)), lc_cast669},
-        {"OnimasuJump", 669, static_cast< u32 >(sizeof(::OnimasuJump)), lc_cast670},
-        {"OnimasuPivot", 669, static_cast< u32 >(sizeof(::OnimasuPivot)), lc_cast671},
-        {"OnlyCamera", 0, static_cast< u32 >(sizeof(::OnlyCamera)), lc_cast672},
-        {"OtaKing", 1, static_cast< u32 >(sizeof(::OtaKing)), lc_cast673},
-        {"OtaKingLongFoot", 69, static_cast< u32 >(sizeof(::OtaKingLongFoot)), lc_cast674},
-        {"OtaKingMagma", 69, static_cast< u32 >(sizeof(::OtaKingMagma)), lc_cast675},
-        {"OtaRock", 1, static_cast< u32 >(sizeof(::OtaRock)), lc_cast676},
-        {"PTimerSwitch", 1, static_cast< u32 >(sizeof(::PTimerSwitch)), lc_cast677},
-        {"PackunPetit", 1, static_cast< u32 >(sizeof(::PackunPetit)), lc_cast678},
-        {"PalmIsland", 1, static_cast< u32 >(sizeof(::PalmIsland)), lc_cast679},
-        {"PauseMenu", 52, static_cast< u32 >(sizeof(::PauseMenu)), lc_cast680},
-        {"Peach", 126, static_cast< u32 >(sizeof(::Peach)), lc_cast681},
-        {"PeachCastleGardenPlanet", 10, static_cast< u32 >(sizeof(::PeachCastleGardenPlanet)), lc_cast682},
-        {"PeachLetter", 52, static_cast< u32 >(sizeof(::PeachLetter)), lc_cast683},
-        {"Penguin", 126, static_cast< u32 >(sizeof(::Penguin)), lc_cast684},
-        {"PenguinCoach", 126, static_cast< u32 >(sizeof(::PenguinCoach)), lc_cast685},
-        {"PenguinMaster", 126, static_cast< u32 >(sizeof(::PenguinMaster)), lc_cast686},
-        {"PenguinRacer", 126, static_cast< u32 >(sizeof(::PenguinRacer)), lc_cast687},
-        {"PenguinRacerLeader", 687, static_cast< u32 >(sizeof(::PenguinRacerLeader)), lc_cast688},
-        {"PenguinSkater", 126, static_cast< u32 >(sizeof(::PenguinSkater)), lc_cast689},
-        {"PenguinStudent", 126, static_cast< u32 >(sizeof(::PenguinStudent)), lc_cast690},
-        {"Petari", 1, static_cast< u32 >(sizeof(::Petari)), lc_cast691},
-        {"PhantomShipBoxFloater", 1, static_cast< u32 >(sizeof(::PhantomShipBoxFloater)), lc_cast692},
-        {"PhantomShipBridge", 1, static_cast< u32 >(sizeof(::PhantomShipBridge)), lc_cast693},
-        {"PhantomShipHandle", 1, static_cast< u32 >(sizeof(::PhantomShipHandle)), lc_cast694},
-        {"PhantomTorch", 1, static_cast< u32 >(sizeof(::PhantomTorch)), lc_cast695},
-        {"PicketSwitch", 1, static_cast< u32 >(sizeof(::PicketSwitch)), lc_cast696},
-        {"PictureBookCloseButton", 52, static_cast< u32 >(sizeof(::PictureBookCloseButton)), lc_cast697},
-        {"PictureBookLayout", 52, static_cast< u32 >(sizeof(::PictureBookLayout)), lc_cast698},
-        {"PlacementStateChecker", 0, static_cast< u32 >(sizeof(::PlacementStateChecker)), lc_cast699},
-        {"PlanetGravityManager", 0, static_cast< u32 >(sizeof(::PlanetGravityManager)), lc_cast700},
-        {"PlanetMapCreator", 0, static_cast< u32 >(sizeof(::PlanetMapCreator)), lc_cast701},
-        {"PlanetMapFarClippable", 381, static_cast< u32 >(sizeof(::PlanetMapFarClippable)), lc_cast702},
-        {"PlanetMapWithoutHighModel", 10, static_cast< u32 >(sizeof(::PlanetMapWithoutHighModel)), lc_cast703},
-        {"Plant", 1, static_cast< u32 >(sizeof(::Plant)), lc_cast704},
-        {"PlantGroup", 1, static_cast< u32 >(sizeof(::PlantGroup)), lc_cast705},
-        {"PlantLeaf", 1, static_cast< u32 >(sizeof(::PlantLeaf)), lc_cast706},
-        {"PlantLeafDrawInit", 1, static_cast< u32 >(sizeof(::PlantLeafDrawInit)), lc_cast707},
-        {"PlantMember", 260, static_cast< u32 >(sizeof(::PlantMember)), lc_cast708},
-        {"PlantStalk", 1, static_cast< u32 >(sizeof(::PlantStalk)), lc_cast709},
-        {"PlantStalkDrawInit", 0, static_cast< u32 >(sizeof(::PlantStalkDrawInit)), lc_cast710},
-        {"PlayerActionGuidance", 52, static_cast< u32 >(sizeof(::PlayerActionGuidance)), lc_cast711},
-        {"PlayerLeft", 52, static_cast< u32 >(sizeof(::PlayerLeft)), lc_cast712},
-        {"PlayerMissLeft", 52, static_cast< u32 >(sizeof(::PlayerMissLeft)), lc_cast713},
-        {"PlayerRacer", 1, static_cast< u32 >(sizeof(::PlayerRacer)), lc_cast714},
-        {"PlayerSeArea", 17, static_cast< u32 >(sizeof(::PlayerSeArea)), lc_cast715},
-        {"Poihana", 1, static_cast< u32 >(sizeof(::Poihana)), lc_cast716},
-        {"Pole", 1, static_cast< u32 >(sizeof(::Pole)), lc_cast717},
-        {"Polta", 1, static_cast< u32 >(sizeof(::Polta)), lc_cast718},
-        {"PoltaArm", 279, static_cast< u32 >(sizeof(::PoltaArm)), lc_cast719},
-        {"PoltaGroundRock", 1, static_cast< u32 >(sizeof(::PoltaGroundRock)), lc_cast720},
-        {"PoltaGroundRockHolder", 6, static_cast< u32 >(sizeof(::PoltaGroundRockHolder)), lc_cast721},
-        {"PoltaRock", 1, static_cast< u32 >(sizeof(::PoltaRock)), lc_cast722},
-        {"PoltaRockHolder", 6, static_cast< u32 >(sizeof(::PoltaRockHolder)), lc_cast723},
-        {"PomponPlant", 1, static_cast< u32 >(sizeof(::PomponPlant)), lc_cast724},
-        {"PowerStar", 1, static_cast< u32 >(sizeof(::PowerStar)), lc_cast725},
-        {"PowerStarAppearPoint", 1, static_cast< u32 >(sizeof(::PowerStarAppearPoint)), lc_cast726},
-        {"PowerStarHalo", 425, static_cast< u32 >(sizeof(::PowerStarHalo)), lc_cast727},
-        {"PowerStarHolder", 0, static_cast< u32 >(sizeof(::PowerStarHolder)), lc_cast728},
-        {"PowerStarList", 52, static_cast< u32 >(sizeof(::PowerStarList)), lc_cast729},
-        {"PressureMessenger", 1, static_cast< u32 >(sizeof(::PressureMessenger)), lc_cast730},
-        {"PriorDrawAir", 2, static_cast< u32 >(sizeof(::PriorDrawAir)), lc_cast731},
-        {"PriorDrawAirHolder", 0, static_cast< u32 >(sizeof(::PriorDrawAirHolder)), lc_cast732},
-        {"PrizeRing", 279, static_cast< u32 >(sizeof(::PrizeRing)), lc_cast733},
-        {"ProjectionMapAir", 2, static_cast< u32 >(sizeof(::ProjectionMapAir)), lc_cast734},
-        {"Sky", 1, static_cast< u32 >(sizeof(::Sky)), lc_cast735},
-        {"ProjectionMapSky", 735, static_cast< u32 >(sizeof(::ProjectionMapSky)), lc_cast736},
-        {"PrologueDirector", 1, static_cast< u32 >(sizeof(::PrologueDirector)), lc_cast737},
-        {"PrologueHolder", 0, static_cast< u32 >(sizeof(::PrologueHolder)), lc_cast738},
-        {"PrologueLetter", 52, static_cast< u32 >(sizeof(::PrologueLetter)), lc_cast739},
-        {"ProloguePictureBook", 52, static_cast< u32 >(sizeof(::ProloguePictureBook)), lc_cast740},
-        {"Pukupuku", 1, static_cast< u32 >(sizeof(::Pukupuku)), lc_cast741},
-        {"PunchBox", 1, static_cast< u32 >(sizeof(::PunchBox)), lc_cast742},
-        {"PunchingKinoko", 1, static_cast< u32 >(sizeof(::PunchingKinoko)), lc_cast743},
-        {"PurpleCoinCounter", 52, static_cast< u32 >(sizeof(::PurpleCoinCounter)), lc_cast744},
-        {"PurpleCoinHolder", 6, static_cast< u32 >(sizeof(::PurpleCoinHolder)), lc_cast745},
-        {"PurpleCoinStarter", 0, static_cast< u32 >(sizeof(::PurpleCoinStarter)), lc_cast746},
-        {"QuakeEffectArea", 17, static_cast< u32 >(sizeof(::QuakeEffectArea)), lc_cast747},
-        {"QuakeEffectGenerator", 1, static_cast< u32 >(sizeof(::QuakeEffectGenerator)), lc_cast748},
-        {"QuarterRollGravityRoomArrow", 10, static_cast< u32 >(sizeof(::QuarterRollGravityRoomArrow)), lc_cast749},
-        {"QuestionBoxGalleryObj", 10, static_cast< u32 >(sizeof(::QuestionBoxGalleryObj)), lc_cast750},
-        {"QuestionCoin", 1, static_cast< u32 >(sizeof(::QuestionCoin)), lc_cast751},
-        {"Rabbit", 126, static_cast< u32 >(sizeof(::Rabbit)), lc_cast752},
-        {"RaceManager", 1, static_cast< u32 >(sizeof(::RaceManager)), lc_cast753},
-        {"RaceManagerLayout", 52, static_cast< u32 >(sizeof(::RaceManagerLayout)), lc_cast754},
-        {"RaceRail", 0, static_cast< u32 >(sizeof(::RaceRail)), lc_cast755},
-        {"RailBlock", 1, static_cast< u32 >(sizeof(::RailBlock)), lc_cast756},
-        {"RailCoin", 212, static_cast< u32 >(sizeof(::RailCoin)), lc_cast757},
-        {"RailDemoMoveObj", 449, static_cast< u32 >(sizeof(::RailDemoMoveObj)), lc_cast758},
-        {"RailMoveIndirectObj", 449, static_cast< u32 >(sizeof(::RailMoveIndirectObj)), lc_cast759},
-        {"RailMoveObjBreakAtEnd", 449, static_cast< u32 >(sizeof(::RailMoveObjBreakAtEnd)), lc_cast760},
-        {"RailMoveObjPress", 449, static_cast< u32 >(sizeof(::RailMoveObjPress)), lc_cast761},
-        {"RailMoveObjSwitchShadow", 449, static_cast< u32 >(sizeof(::RailMoveObjSwitchShadow)), lc_cast762},
-        {"RailPlanetMap", 381, static_cast< u32 >(sizeof(::RailPlanetMap)), lc_cast763},
-        {"RailRotateMoveObj", 449, static_cast< u32 >(sizeof(::RailRotateMoveObj)), lc_cast764},
-        {"RainCloud", 1, static_cast< u32 >(sizeof(::RainCloud)), lc_cast765},
-        {"RandomEffectObj", 40, static_cast< u32 >(sizeof(::RandomEffectObj)), lc_cast766},
-        {"RestartCube", 17, static_cast< u32 >(sizeof(::RestartCube)), lc_cast767},
-        {"ReverseGravityRoomPlanet", 10, static_cast< u32 >(sizeof(::ReverseGravityRoomPlanet)), lc_cast768},
-        {"RevolvingWay", 1, static_cast< u32 >(sizeof(::RevolvingWay)), lc_cast769},
-        {"RingBeam", 1, static_cast< u32 >(sizeof(::RingBeam)), lc_cast770},
-        {"RingBeamShadowDrawer", 330, static_cast< u32 >(sizeof(::RingBeamShadowDrawer)), lc_cast771},
-        {"RingBeamer", 1, static_cast< u32 >(sizeof(::RingBeamer)), lc_cast772},
-        {"Rock", 1, static_cast< u32 >(sizeof(::Rock)), lc_cast773},
-        {"RockCreator", 1, static_cast< u32 >(sizeof(::RockCreator)), lc_cast774},
-        {"Rosetta", 126, static_cast< u32 >(sizeof(::Rosetta)), lc_cast775},
-        {"RosettaChair", 1, static_cast< u32 >(sizeof(::RosettaChair)), lc_cast776},
-        {"SimpleLayout", 52, static_cast< u32 >(sizeof(::SimpleLayout)), lc_cast777},
-        {"RosettaMonologue", 777, static_cast< u32 >(sizeof(::RosettaMonologue)), lc_cast778},
-        {"RosettaPictureBook", 1, static_cast< u32 >(sizeof(::RosettaPictureBook)), lc_cast779},
-        {"RosettaReading", 1, static_cast< u32 >(sizeof(::RosettaReading)), lc_cast780},
-        {"RotPartsModel", 69, static_cast< u32 >(sizeof(::RotPartsModel)), lc_cast781},
-        {"RotateMoveObj", 10, static_cast< u32 >(sizeof(::RotateMoveObj)), lc_cast782},
-        {"RunawayRabbit", 1, static_cast< u32 >(sizeof(::RunawayRabbit)), lc_cast783},
-        {"RunawayRabbitCollect", 1, static_cast< u32 >(sizeof(::RunawayRabbitCollect)), lc_cast784},
-        {"RunawayTico", 642, static_cast< u32 >(sizeof(::RunawayTico)), lc_cast785},
-        {"SamboHead", 1, static_cast< u32 >(sizeof(::SamboHead)), lc_cast786},
-        {"SandCapsuleInsidePlanet", 10, static_cast< u32 >(sizeof(::SandCapsuleInsidePlanet)), lc_cast787},
-        {"SandCapsulePressGround", 10, static_cast< u32 >(sizeof(::SandCapsulePressGround)), lc_cast788},
-        {"SandUpDownEffectObj", 1, static_cast< u32 >(sizeof(::SandUpDownEffectObj)), lc_cast789},
-        {"SandUpDownTriRock", 10, static_cast< u32 >(sizeof(::SandUpDownTriRock)), lc_cast790},
-        {"Sandstorm", 1, static_cast< u32 >(sizeof(::Sandstorm)), lc_cast791},
-        {"SaveIcon", 52, static_cast< u32 >(sizeof(::SaveIcon)), lc_cast792},
-        {"ScenarioDataParser", 0, static_cast< u32 >(sizeof(::ScenarioDataParser)), lc_cast793},
-        {"ScenarioSelectLayout", 52, static_cast< u32 >(sizeof(::ScenarioSelectLayout)), lc_cast794},
-        {"ScenarioSelectStar", 635, static_cast< u32 >(sizeof(::ScenarioSelectStar)), lc_cast795},
-        {"ScenarioStarter", 1, static_cast< u32 >(sizeof(::ScenarioStarter)), lc_cast796},
-        {"ScenarioTitle", 52, static_cast< u32 >(sizeof(::ScenarioTitle)), lc_cast797},
-        {"SceneDataInitializer", 0, static_cast< u32 >(sizeof(::SceneDataInitializer)), lc_cast798},
-        {"SceneNameObjMovementController", 0, static_cast< u32 >(sizeof(::SceneNameObjMovementController)), lc_cast799},
-        {"ScenePlayingResult", 0, static_cast< u32 >(sizeof(::ScenePlayingResult)), lc_cast800},
-        {"WipeHolderBase", 0, static_cast< u32 >(sizeof(::WipeHolderBase)), lc_cast801},
-        {"SceneWipeHolder", 801, static_cast< u32 >(sizeof(::SceneWipeHolder)), lc_cast802},
-        {"ScreenBlurArea", 94, static_cast< u32 >(sizeof(::ScreenBlurArea)), lc_cast803},
-        {"ScreenBlurEffect", 96, static_cast< u32 >(sizeof(::ScreenBlurEffect)), lc_cast804},
-        {"ScreenPreserver", 0, static_cast< u32 >(sizeof(::ScreenPreserver)), lc_cast805},
-        {"ScrewSwitch", 1, static_cast< u32 >(sizeof(::ScrewSwitch)), lc_cast806},
-        {"ScrewSwitchReverse", 1, static_cast< u32 >(sizeof(::ScrewSwitchReverse)), lc_cast807},
-        {"SeaBottomTriplePropeller", 1, static_cast< u32 >(sizeof(::SeaBottomTriplePropeller)), lc_cast808},
-        {"SeaGull", 1, static_cast< u32 >(sizeof(::SeaGull)), lc_cast809},
-        {"SeaGullGroup", 1, static_cast< u32 >(sizeof(::SeaGullGroup)), lc_cast810},
-        {"SearchBeamer", 1, static_cast< u32 >(sizeof(::SearchBeamer)), lc_cast811},
-        {"SeesawMoveNut", 10, static_cast< u32 >(sizeof(::SeesawMoveNut)), lc_cast812},
-        {"SensorHitChecker", 0, static_cast< u32 >(sizeof(::SensorHitChecker)), lc_cast813},
-        {"ShadowClipActor", 1, static_cast< u32 >(sizeof(::ShadowClipActor)), lc_cast814},
-        {"ShadowControllerHolder", 0, static_cast< u32 >(sizeof(::ShadowControllerHolder)), lc_cast815},
-        {"ShadowSurfaceDrawer", 329, static_cast< u32 >(sizeof(::ShadowSurfaceDrawer)), lc_cast816},
-        {"ShadowSurfaceBox", 816, static_cast< u32 >(sizeof(::ShadowSurfaceBox)), lc_cast817},
-        {"ShadowSurfaceCircle", 816, static_cast< u32 >(sizeof(::ShadowSurfaceCircle)), lc_cast818},
-        {"ShadowSurfaceDrawInit", 0, static_cast< u32 >(sizeof(::ShadowSurfaceDrawInit)), lc_cast819},
-        {"ShadowSurfaceOval", 816, static_cast< u32 >(sizeof(::ShadowSurfaceOval)), lc_cast820},
-        {"ShadowVolumeBox", 330, static_cast< u32 >(sizeof(::ShadowVolumeBox)), lc_cast821},
-        {"ShadowVolumeModel", 330, static_cast< u32 >(sizeof(::ShadowVolumeModel)), lc_cast822},
-        {"ShadowVolumeCylinder", 822, static_cast< u32 >(sizeof(::ShadowVolumeCylinder)), lc_cast823},
-        {"ShadowVolumeDrawInit", 0, static_cast< u32 >(sizeof(::ShadowVolumeDrawInit)), lc_cast824},
-        {"ShadowVolumeFlatModel", 822, static_cast< u32 >(sizeof(::ShadowVolumeFlatModel)), lc_cast825},
-        {"ShadowVolumeLine", 330, static_cast< u32 >(sizeof(::ShadowVolumeLine)), lc_cast826},
-        {"ShadowVolumeOval", 822, static_cast< u32 >(sizeof(::ShadowVolumeOval)), lc_cast827},
-        {"ShadowVolumeOvalPole", 822, static_cast< u32 >(sizeof(::ShadowVolumeOvalPole)), lc_cast828},
-        {"ShadowVolumeSphere", 822, static_cast< u32 >(sizeof(::ShadowVolumeSphere)), lc_cast829},
-        {"Shellfish", 1, static_cast< u32 >(sizeof(::Shellfish)), lc_cast830},
-        {"ShockWaveGenerator", 1, static_cast< u32 >(sizeof(::ShockWaveGenerator)), lc_cast831},
-        {"ShootingStar", 1, static_cast< u32 >(sizeof(::ShootingStar)), lc_cast832},
-        {"SideSpikeMoveStep", 10, static_cast< u32 >(sizeof(::SideSpikeMoveStep)), lc_cast833},
-        {"SignBoard", 126, static_cast< u32 >(sizeof(::SignBoard)), lc_cast834},
-        {"SimpleBloomArea", 94, static_cast< u32 >(sizeof(::SimpleBloomArea)), lc_cast835},
-        {"SimpleBreakableObjBase", 10, static_cast< u32 >(sizeof(::SimpleBreakableObjBase)), lc_cast836},
-        {"SimpleBreakableObj", 836, static_cast< u32 >(sizeof(::SimpleBreakableObj)), lc_cast837},
-        {"SimpleBreakableIndirectObj", 837, static_cast< u32 >(sizeof(::SimpleBreakableIndirectObj)), lc_cast838},
-        {"SimpleClipPartsObj", 10, static_cast< u32 >(sizeof(::SimpleClipPartsObj)), lc_cast839},
-        {"SimpleEffectLayout", 777, static_cast< u32 >(sizeof(::SimpleEffectLayout)), lc_cast840},
-        {"SimpleEnvironmentObj", 10, static_cast< u32 >(sizeof(::SimpleEnvironmentObj)), lc_cast841},
-        {"SimpleFloaterObj", 1, static_cast< u32 >(sizeof(::SimpleFloaterObj)), lc_cast842},
-        {"SimpleMapObjNoSilhouetted", 45, static_cast< u32 >(sizeof(::SimpleMapObjNoSilhouetted)), lc_cast843},
-        {"SimpleMapObjPush", 45, static_cast< u32 >(sizeof(::SimpleMapObjPush)), lc_cast844},
-        {"SimpleMirrorObj", 10, static_cast< u32 >(sizeof(::SimpleMirrorObj)), lc_cast845},
-        {"SimpleMirrorReflectionObj", 45, static_cast< u32 >(sizeof(::SimpleMirrorReflectionObj)), lc_cast846},
-        {"SimpleModelDrawer", 1, static_cast< u32 >(sizeof(::SimpleModelDrawer)), lc_cast847},
-        {"SimpleNormalMapObj", 650, static_cast< u32 >(sizeof(::SimpleNormalMapObj)), lc_cast848},
-        {"SimpleSeesawObj", 10, static_cast< u32 >(sizeof(::SimpleSeesawObj)), lc_cast849},
-        {"SimpleTextureSwitchChangeObj", 45, static_cast< u32 >(sizeof(::SimpleTextureSwitchChangeObj)), lc_cast850},
-        {"SimpleTimerObj", 10, static_cast< u32 >(sizeof(::SimpleTimerObj)), lc_cast851},
-        {"SkeletalFishBaby", 1, static_cast< u32 >(sizeof(::SkeletalFishBaby)), lc_cast852},
-        {"SkeletalFishBoss", 1, static_cast< u32 >(sizeof(::SkeletalFishBoss)), lc_cast853},
-        {"SkeletalFishBossBattleDirector", 0, static_cast< u32 >(sizeof(::SkeletalFishBossBattleDirector)), lc_cast854},
-        {"SkeletalFishBossHead", 69, static_cast< u32 >(sizeof(::SkeletalFishBossHead)), lc_cast855},
-        {"SkeletalFishBossInfo", 0, static_cast< u32 >(sizeof(::SkeletalFishBossInfo)), lc_cast856},
-        {"SkeletalFishBossRail", 1, static_cast< u32 >(sizeof(::SkeletalFishBossRail)), lc_cast857},
-        {"SkeletalFishBossRailHolder", 0, static_cast< u32 >(sizeof(::SkeletalFishBossRailHolder)), lc_cast858},
-        {"SkeletalFishBossScarFlash", 69, static_cast< u32 >(sizeof(::SkeletalFishBossScarFlash)), lc_cast859},
-        {"SkeletalFishGuard", 1, static_cast< u32 >(sizeof(::SkeletalFishGuard)), lc_cast860},
-        {"SkeletalFishGuardHolder", 0, static_cast< u32 >(sizeof(::SkeletalFishGuardHolder)), lc_cast861},
-        {"SleepControllerHolder", 0, static_cast< u32 >(sizeof(::SleepControllerHolder)), lc_cast862},
-        {"SlingShooter", 1, static_cast< u32 >(sizeof(::SlingShooter)), lc_cast863},
-        {"SmallStone", 1, static_cast< u32 >(sizeof(::SmallStone)), lc_cast864},
-        {"SmallStoneMember", 279, static_cast< u32 >(sizeof(::SmallStoneMember)), lc_cast865},
-        {"Snakehead", 1, static_cast< u32 >(sizeof(::Snakehead)), lc_cast866},
-        {"SnowCapsulePlanet", 10, static_cast< u32 >(sizeof(::SnowCapsulePlanet)), lc_cast867},
-        {"SnowFloor", 1, static_cast< u32 >(sizeof(::SnowFloor)), lc_cast868},
-        {"SnowFloorTile", 1, static_cast< u32 >(sizeof(::SnowFloorTile)), lc_cast869},
-        {"SnowMan", 1, static_cast< u32 >(sizeof(::SnowMan)), lc_cast870},
-        {"SnowplowSwitch", 1, static_cast< u32 >(sizeof(::SnowplowSwitch)), lc_cast871},
-        {"SoundEmitter", 1, static_cast< u32 >(sizeof(::SoundEmitter)), lc_cast872},
-        {"SoundEmitterCube", 17, static_cast< u32 >(sizeof(::SoundEmitterCube)), lc_cast873},
-        {"SoundEmitterSphere", 17, static_cast< u32 >(sizeof(::SoundEmitterSphere)), lc_cast874},
-        {"SpaceCocoon", 1, static_cast< u32 >(sizeof(::SpaceCocoon)), lc_cast875},
-        {"SpaceInner", 1, static_cast< u32 >(sizeof(::SpaceInner)), lc_cast876},
-        {"SpaceMine", 10, static_cast< u32 >(sizeof(::SpaceMine)), lc_cast877},
-        {"SpaceShipStep", 10, static_cast< u32 >(sizeof(::SpaceShipStep)), lc_cast878},
-        {"SphereRailDash", 1, static_cast< u32 >(sizeof(::SphereRailDash)), lc_cast879},
-        {"SphereSelector", 1, static_cast< u32 >(sizeof(::SphereSelector)), lc_cast880},
-        {"SphereSelectorHandle", 1, static_cast< u32 >(sizeof(::SphereSelectorHandle)), lc_cast881},
-        {"SpiderCoin", 1, static_cast< u32 >(sizeof(::SpiderCoin)), lc_cast882},
-        {"SpiderMapBlock", 1, static_cast< u32 >(sizeof(::SpiderMapBlock)), lc_cast883},
-        {"SpiderThread", 1, static_cast< u32 >(sizeof(::SpiderThread)), lc_cast884},
-        {"SpinDriver", 1, static_cast< u32 >(sizeof(::SpinDriver)), lc_cast885},
-        {"SpinDriverOperateRing", 1, static_cast< u32 >(sizeof(::SpinDriverOperateRing)), lc_cast886},
-        {"SpinDriverPathDrawInit", 0, static_cast< u32 >(sizeof(::SpinDriverPathDrawInit)), lc_cast887},
-        {"SpinDriverPathDrawer", 1, static_cast< u32 >(sizeof(::SpinDriverPathDrawer)), lc_cast888},
-        {"SpinGuidanceArea", 17, static_cast< u32 >(sizeof(::SpinGuidanceArea)), lc_cast889},
-        {"SpinLeverSwitch", 1, static_cast< u32 >(sizeof(::SpinLeverSwitch)), lc_cast890},
-        {"SpinningBox", 1, static_cast< u32 >(sizeof(::SpinningBox)), lc_cast891},
-        {"SpotMarkLight", 69, static_cast< u32 >(sizeof(::SpotMarkLight)), lc_cast892},
-        {"SpringJetWater", 1, static_cast< u32 >(sizeof(::SpringJetWater)), lc_cast893},
-        {"SpringWaterFloaterSpot", 1, static_cast< u32 >(sizeof(::SpringWaterFloaterSpot)), lc_cast894},
-        {"StaffRoll", 52, static_cast< u32 >(sizeof(::StaffRoll)), lc_cast895},
-        {"StaffRollLine", 52, static_cast< u32 >(sizeof(::StaffRollLine)), lc_cast896},
-        {"StaffRollPicture", 52, static_cast< u32 >(sizeof(::StaffRollPicture)), lc_cast897},
-        {"StageDataHolder", 0, static_cast< u32 >(sizeof(::StageDataHolder)), lc_cast898},
-        {"StageResultInformer", 52, static_cast< u32 >(sizeof(::StageResultInformer)), lc_cast899},
-        {"StageSwitchContainer", 0, static_cast< u32 >(sizeof(::StageSwitchContainer)), lc_cast900},
-        {"StarCounter", 52, static_cast< u32 >(sizeof(::StarCounter)), lc_cast901},
-        {"StarPiece", 1, static_cast< u32 >(sizeof(::StarPiece)), lc_cast902},
-        {"StarPieceCounter", 52, static_cast< u32 >(sizeof(::StarPieceCounter)), lc_cast903},
-        {"StarPieceDirector", 6, static_cast< u32 >(sizeof(::StarPieceDirector)), lc_cast904},
-        {"StarPieceFollowGroup", 1, static_cast< u32 >(sizeof(::StarPieceFollowGroup)), lc_cast905},
-        {"StarPieceGroup", 1, static_cast< u32 >(sizeof(::StarPieceGroup)), lc_cast906},
-        {"StarPieceMother", 1, static_cast< u32 >(sizeof(::StarPieceMother)), lc_cast907},
-        {"StarPieceShooter", 1, static_cast< u32 >(sizeof(::StarPieceShooter)), lc_cast908},
-        {"StarPieceSpot", 1, static_cast< u32 >(sizeof(::StarPieceSpot)), lc_cast909},
-        {"StarPointerBlur", 0, static_cast< u32 >(sizeof(::StarPointerBlur)), lc_cast910},
-        {"StarPointerCommandStream", 52, static_cast< u32 >(sizeof(::StarPointerCommandStream)), lc_cast911},
-        {"StarPointerGuidance", 52, static_cast< u32 >(sizeof(::StarPointerGuidance)), lc_cast912},
-        {"StarPointerLayout", 52, static_cast< u32 >(sizeof(::StarPointerLayout)), lc_cast913},
-        {"StarPointerNumber", 52, static_cast< u32 >(sizeof(::StarPointerNumber)), lc_cast914},
-        {"StarReturnDemoStarter", 1, static_cast< u32 >(sizeof(::StarReturnDemoStarter)), lc_cast915},
-        {"StinkBugBase", 1, static_cast< u32 >(sizeof(::StinkBugBase)), lc_cast916},
-        {"StinkBugParent", 916, static_cast< u32 >(sizeof(::StinkBugParent)), lc_cast917},
-        {"StinkBugSmall", 916, static_cast< u32 >(sizeof(::StinkBugSmall)), lc_cast918},
-        {"StopSceneController", 0, static_cast< u32 >(sizeof(::StopSceneController)), lc_cast919},
-        {"StrayTico", 1, static_cast< u32 >(sizeof(::StrayTico)), lc_cast920},
-        {"StringSpider", 1, static_cast< u32 >(sizeof(::StringSpider)), lc_cast921},
-        {"StringSpiderString", 1, static_cast< u32 >(sizeof(::StringSpiderString)), lc_cast922},
-        {"SubMeterLayout", 52, static_cast< u32 >(sizeof(::SubMeterLayout)), lc_cast923},
-        {"SubmarineSteam", 1, static_cast< u32 >(sizeof(::SubmarineSteam)), lc_cast924},
-        {"SubmarineVolcanoBigColumn", 1, static_cast< u32 >(sizeof(::SubmarineVolcanoBigColumn)), lc_cast925},
-        {"SuddenDeathMeter", 52, static_cast< u32 >(sizeof(::SuddenDeathMeter)), lc_cast926},
-        {"Sun", 1, static_cast< u32 >(sizeof(::Sun)), lc_cast927},
-        {"SunLightArea", 17, static_cast< u32 >(sizeof(::SunLightArea)), lc_cast928},
-        {"SunakazeKunTrap", 279, static_cast< u32 >(sizeof(::SunakazeKunTrap)), lc_cast929},
-        {"SunshadeMapHolder", 0, static_cast< u32 >(sizeof(::SunshadeMapHolder)), lc_cast930},
-        {"SunshadeMapParts", 222, static_cast< u32 >(sizeof(::SunshadeMapParts)), lc_cast931},
-        {"SuperSpinDriver", 1, static_cast< u32 >(sizeof(::SuperSpinDriver)), lc_cast932},
-        {"SurfRay", 1, static_cast< u32 >(sizeof(::SurfRay)), lc_cast933},
-        {"SurfingGuidance", 52, static_cast< u32 >(sizeof(::SurfingGuidance)), lc_cast934},
-        {"SurprisedGalaxy", 1, static_cast< u32 >(sizeof(::SurprisedGalaxy)), lc_cast935},
-        {"SwingLight", 10, static_cast< u32 >(sizeof(::SwingLight)), lc_cast936},
-        {"SwingRope", 1, static_cast< u32 >(sizeof(::SwingRope)), lc_cast937},
-        {"SwingRopeGroup", 0, static_cast< u32 >(sizeof(::SwingRopeGroup)), lc_cast938},
-        {"SwitchBox", 1, static_cast< u32 >(sizeof(::SwitchBox)), lc_cast939},
-        {"SwitchSynchronizer", 0, static_cast< u32 >(sizeof(::SwitchSynchronizer)), lc_cast940},
-        {"SwitchWatcher", 0, static_cast< u32 >(sizeof(::SwitchWatcher)), lc_cast941},
-        {"SwitchWatcherHolder", 0, static_cast< u32 >(sizeof(::SwitchWatcherHolder)), lc_cast942},
-        {"Syati", 1, static_cast< u32 >(sizeof(::Syati)), lc_cast943},
-        {"SysInfoWindow", 52, static_cast< u32 >(sizeof(::SysInfoWindow)), lc_cast944},
-        {"SystemWipeHolder", 801, static_cast< u32 >(sizeof(::SystemWipeHolder)), lc_cast945},
-        {"TakoHei", 1, static_cast< u32 >(sizeof(::TakoHei)), lc_cast946},
-        {"TakoHeiInk", 1, static_cast< u32 >(sizeof(::TakoHeiInk)), lc_cast947},
-        {"TakoHeiInkHolder", 6, static_cast< u32 >(sizeof(::TakoHeiInkHolder)), lc_cast948},
-        {"Takobo", 1, static_cast< u32 >(sizeof(::Takobo)), lc_cast949},
-        {"TalkBalloon", 52, static_cast< u32 >(sizeof(::TalkBalloon)), lc_cast950},
-        {"TalkBalloonEvent", 950, static_cast< u32 >(sizeof(::TalkBalloonEvent)), lc_cast951},
-        {"TalkBalloonShort", 950, static_cast< u32 >(sizeof(::TalkBalloonShort)), lc_cast952},
-        {"TalkBalloonIcon", 952, static_cast< u32 >(sizeof(::TalkBalloonIcon)), lc_cast953},
-        {"TalkBalloonInfo", 950, static_cast< u32 >(sizeof(::TalkBalloonInfo)), lc_cast954},
-        {"TalkBalloonSign", 951, static_cast< u32 >(sizeof(::TalkBalloonSign)), lc_cast955},
-        {"TalkDirector", 52, static_cast< u32 >(sizeof(::TalkDirector)), lc_cast956},
-        {"TalkMessageCtrl", 0, static_cast< u32 >(sizeof(::TalkMessageCtrl)), lc_cast957},
-        {"Tamakoro", 1, static_cast< u32 >(sizeof(::Tamakoro)), lc_cast958},
-        {"TamakoroTutorial", 1, static_cast< u32 >(sizeof(::TamakoroTutorial)), lc_cast959},
-        {"Teresa", 1, static_cast< u32 >(sizeof(::Teresa)), lc_cast960},
-        {"TeresaRacer", 126, static_cast< u32 >(sizeof(::TeresaRacer)), lc_cast961},
-        {"TeresaWater", 1, static_cast< u32 >(sizeof(::TeresaWater)), lc_cast962},
-        {"ThrowingIce", 616, static_cast< u32 >(sizeof(::ThrowingIce)), lc_cast963},
-        {"TicoAstro", 642, static_cast< u32 >(sizeof(::TicoAstro)), lc_cast964},
-        {"TicoEat", 642, static_cast< u32 >(sizeof(::TicoEat)), lc_cast965},
-        {"TicoComet", 965, static_cast< u32 >(sizeof(::TicoComet)), lc_cast966},
-        {"TicoDomeLecture", 1, static_cast< u32 >(sizeof(::TicoDomeLecture)), lc_cast967},
-        {"TicoFat", 126, static_cast< u32 >(sizeof(::TicoFat)), lc_cast968},
-        {"TicoGalaxy", 968, static_cast< u32 >(sizeof(::TicoGalaxy)), lc_cast969},
-        {"TicoRail", 1, static_cast< u32 >(sizeof(::TicoRail)), lc_cast970},
-        {"TicoReading", 1, static_cast< u32 >(sizeof(::TicoReading)), lc_cast971},
-        {"TicoShop", 966, static_cast< u32 >(sizeof(::TicoShop)), lc_cast972},
-        {"TicoStarRing", 642, static_cast< u32 >(sizeof(::TicoStarRing)), lc_cast973},
-        {"TimeAppearObj", 10, static_cast< u32 >(sizeof(::TimeAppearObj)), lc_cast974},
-        {"TimeLimitLayout", 52, static_cast< u32 >(sizeof(::TimeLimitLayout)), lc_cast975},
-        {"TimeUpLayout", 52, static_cast< u32 >(sizeof(::TimeUpLayout)), lc_cast976},
-        {"TimerMoveWall", 10, static_cast< u32 >(sizeof(::TimerMoveWall)), lc_cast977},
-        {"TimerSwitch", 1, static_cast< u32 >(sizeof(::TimerSwitch)), lc_cast978},
-        {"TitleSequenceProductSub::LogoLayout", 777, static_cast< u32 >(sizeof(::TitleSequenceProductSub::LogoLayout)), lc_cast979},
-        {"TombSpider", 1, static_cast< u32 >(sizeof(::TombSpider)), lc_cast980},
-        {"TombSpiderGland", 69, static_cast< u32 >(sizeof(::TombSpiderGland)), lc_cast981},
-        {"TombSpiderThreadAttacher", 1, static_cast< u32 >(sizeof(::TombSpiderThreadAttacher)), lc_cast982},
-        {"TombSpiderVitalSpot", 69, static_cast< u32 >(sizeof(::TombSpiderVitalSpot)), lc_cast983},
-        {"TornadoMario", 1, static_cast< u32 >(sizeof(::TornadoMario)), lc_cast984},
-        {"TrampleStar", 1, static_cast< u32 >(sizeof(::TrampleStar)), lc_cast985},
-        {"TrampleStarShare", 1, static_cast< u32 >(sizeof(::TrampleStarShare)), lc_cast986},
-        {"TransparentWall", 458, static_cast< u32 >(sizeof(::TransparentWall)), lc_cast987},
-        {"Trapeze", 1, static_cast< u32 >(sizeof(::Trapeze)), lc_cast988},
-        {"TrapezeRopeDrawInit", 0, static_cast< u32 >(sizeof(::TrapezeRopeDrawInit)), lc_cast989},
-        {"TreasureBoxCracked", 1, static_cast< u32 >(sizeof(::TreasureBoxCracked)), lc_cast990},
-        {"TreasureSpot", 10, static_cast< u32 >(sizeof(::TreasureSpot)), lc_cast991},
-        {"TrickRabbit", 1, static_cast< u32 >(sizeof(::TrickRabbit)), lc_cast992},
-        {"TrickRabbitFreeRun", 1, static_cast< u32 >(sizeof(::TrickRabbitFreeRun)), lc_cast993},
-        {"TrickRabbitSnow", 1, static_cast< u32 >(sizeof(::TrickRabbitSnow)), lc_cast994},
-        {"TrickRabbitSnowCollect", 1, static_cast< u32 >(sizeof(::TrickRabbitSnowCollect)), lc_cast995},
-        {"TripodBoss", 1, static_cast< u32 >(sizeof(::TripodBoss)), lc_cast996},
-        {"TripodBossAccesser", 0, static_cast< u32 >(sizeof(::TripodBossAccesser)), lc_cast997},
-        {"TripodBossBaseJointPosition", 1, static_cast< u32 >(sizeof(::TripodBossBaseJointPosition)), lc_cast998},
-        {"TripodBossBreakMovement", 1, static_cast< u32 >(sizeof(::TripodBossBreakMovement)), lc_cast999},
-        {"TripodBossCoin", 0, static_cast< u32 >(sizeof(::TripodBossCoin)), lc_cast1000},
-        {"TripodBossFixPartsBase", 1, static_cast< u32 >(sizeof(::TripodBossFixPartsBase)), lc_cast1001},
-        {"TripodBossCore", 1001, static_cast< u32 >(sizeof(::TripodBossCore)), lc_cast1002},
-        {"TripodBossFixParts", 1001, static_cast< u32 >(sizeof(::TripodBossFixParts)), lc_cast1003},
-        {"TripodBossGuardWall", 1, static_cast< u32 >(sizeof(::TripodBossGuardWall)), lc_cast1004},
-        {"TripodBossGuardWallPart", 1, static_cast< u32 >(sizeof(::TripodBossGuardWallPart)), lc_cast1005},
-        {"TripodBossKillerGenerater", 1001, static_cast< u32 >(sizeof(::TripodBossKillerGenerater)), lc_cast1006},
-        {"TripodBossKillerGeneraterCircle", 0, static_cast< u32 >(sizeof(::TripodBossKillerGeneraterCircle)), lc_cast1007},
-        {"TripodBossKinokoOneUp", 1, static_cast< u32 >(sizeof(::TripodBossKinokoOneUp)), lc_cast1008},
-        {"TripodBossLeg", 1, static_cast< u32 >(sizeof(::TripodBossLeg)), lc_cast1009},
-        {"TripodBossRailMoveParts", 1003, static_cast< u32 >(sizeof(::TripodBossRailMoveParts)), lc_cast1010},
-        {"TripodBossRotateParts", 1003, static_cast< u32 >(sizeof(::TripodBossRotateParts)), lc_cast1011},
-        {"TripodBossShell", 1001, static_cast< u32 >(sizeof(::TripodBossShell)), lc_cast1012},
-        {"TripodBossStepPoint", 1, static_cast< u32 >(sizeof(::TripodBossStepPoint)), lc_cast1013},
-        {"TripodBossStepStartArea", 17, static_cast< u32 >(sizeof(::TripodBossStepStartArea)), lc_cast1014},
-        {"Tsukidashikun", 10, static_cast< u32 >(sizeof(::Tsukidashikun)), lc_cast1015},
-        {"TurtlePartsModel", 69, static_cast< u32 >(sizeof(::TurtlePartsModel)), lc_cast1016},
-        {"TypicalDoorOpen", 261, static_cast< u32 >(sizeof(::TypicalDoorOpen)), lc_cast1017},
-        {"UFOBase", 1, static_cast< u32 >(sizeof(::UFOBase)), lc_cast1018},
-        {"UFOBreakable", 1018, static_cast< u32 >(sizeof(::UFOBreakable)), lc_cast1019},
-        {"UFOKinoko", 10, static_cast< u32 >(sizeof(::UFOKinoko)), lc_cast1020},
-        {"UFOKinokoUnderConstruction", 10, static_cast< u32 >(sizeof(::UFOKinokoUnderConstruction)), lc_cast1021},
-        {"UFOSolid", 1018, static_cast< u32 >(sizeof(::UFOSolid)), lc_cast1022},
-        {"Unizo", 1, static_cast< u32 >(sizeof(::Unizo)), lc_cast1023},
-        {"UnizoLauncher", 1, static_cast< u32 >(sizeof(::UnizoLauncher)), lc_cast1024},
-        {"ValveSwitch", 1, static_cast< u32 >(sizeof(::ValveSwitch)), lc_cast1025},
-        {"VolumeModelDrawInit", 0, static_cast< u32 >(sizeof(::VolumeModelDrawInit)), lc_cast1026},
-        {"VolumeModelDrawer", 0, static_cast< u32 >(sizeof(::VolumeModelDrawer)), lc_cast1027},
-        {"WarpCube", 17, static_cast< u32 >(sizeof(::WarpCube)), lc_cast1028},
-        {"WarpCubeMgr", 19, static_cast< u32 >(sizeof(::WarpCubeMgr)), lc_cast1029},
-        {"WarpPod", 1, static_cast< u32 >(sizeof(::WarpPod)), lc_cast1030},
-        {"WarpPodMgr", 0, static_cast< u32 >(sizeof(::WarpPodMgr)), lc_cast1031},
-        {"WatchTowerRotateStep", 1, static_cast< u32 >(sizeof(::WatchTowerRotateStep)), lc_cast1032},
-        {"WaterArea", 17, static_cast< u32 >(sizeof(::WaterArea)), lc_cast1033},
-        {"WaterAreaHolder", 0, static_cast< u32 >(sizeof(::WaterAreaHolder)), lc_cast1034},
-        {"WaterAreaMgr", 19, static_cast< u32 >(sizeof(::WaterAreaMgr)), lc_cast1035},
-        {"WaterBazooka", 1, static_cast< u32 >(sizeof(::WaterBazooka)), lc_cast1036},
-        {"WaterBazookaCapsule", 69, static_cast< u32 >(sizeof(::WaterBazookaCapsule)), lc_cast1037},
-        {"WaterCameraFilter", 1, static_cast< u32 >(sizeof(::WaterCameraFilter)), lc_cast1038},
-        {"WaterLeakPipe", 1, static_cast< u32 >(sizeof(::WaterLeakPipe)), lc_cast1039},
-        {"WaterPlant", 1, static_cast< u32 >(sizeof(::WaterPlant)), lc_cast1040},
-        {"WaterPlantDrawInit", 0, static_cast< u32 >(sizeof(::WaterPlantDrawInit)), lc_cast1041},
-        {"WaterPressure", 354, static_cast< u32 >(sizeof(::WaterPressure)), lc_cast1042},
-        {"WaterPressureBullet", 1, static_cast< u32 >(sizeof(::WaterPressureBullet)), lc_cast1043},
-        {"WaterPressureBulletHolder", 0, static_cast< u32 >(sizeof(::WaterPressureBulletHolder)), lc_cast1044},
-        {"WaterRoad", 1, static_cast< u32 >(sizeof(::WaterRoad)), lc_cast1045},
-        {"WaterfallCaveCover", 10, static_cast< u32 >(sizeof(::WaterfallCaveCover)), lc_cast1046},
-        {"WhirlPool", 1, static_cast< u32 >(sizeof(::WhirlPool)), lc_cast1047},
-        {"WhirlPoolAccelerator", 1, static_cast< u32 >(sizeof(::WhirlPoolAccelerator)), lc_cast1048},
-        {"WipeLayoutBase", 52, static_cast< u32 >(sizeof(::WipeLayoutBase)), lc_cast1049},
-        {"WipeFade", 1049, static_cast< u32 >(sizeof(::WipeFade)), lc_cast1050},
-        {"WipeGameOver", 1049, static_cast< u32 >(sizeof(::WipeGameOver)), lc_cast1051},
-        {"WipeKoopa", 1049, static_cast< u32 >(sizeof(::WipeKoopa)), lc_cast1052},
-        {"WipeRing", 1049, static_cast< u32 >(sizeof(::WipeRing)), lc_cast1053},
-        {"WoodBox", 1, static_cast< u32 >(sizeof(::WoodBox)), lc_cast1054},
-        {"WormEatenPlanet", 1, static_cast< u32 >(sizeof(::WormEatenPlanet)), lc_cast1055},
-        {"YellowChip", 99, static_cast< u32 >(sizeof(::YellowChip)), lc_cast1056},
-        {"YellowChipGroup", 101, static_cast< u32 >(sizeof(::YellowChipGroup)), lc_cast1057},
-        {"YesNoLayout", 777, static_cast< u32 >(sizeof(::YesNoLayout)), lc_cast1058},
+        {"NebulaPauseSettingsButton", 52, static_cast< u32 >(sizeof(::NebulaPauseSettingsButton)), lc_cast646},
+        {"NeedlePlant", 10, static_cast< u32 >(sizeof(::NeedlePlant)), lc_cast647},
+        {"NokonokoLand", 1, static_cast< u32 >(sizeof(::NokonokoLand)), lc_cast648},
+        {"NormalMapBase", 1, static_cast< u32 >(sizeof(::NormalMapBase)), lc_cast649},
+        {"NormalMapTestObj", 649, static_cast< u32 >(sizeof(::NormalMapTestObj)), lc_cast650},
+        {"Note", 1, static_cast< u32 >(sizeof(::Note)), lc_cast651},
+        {"NoteCounter", 52, static_cast< u32 >(sizeof(::NoteCounter)), lc_cast652},
+        {"NoteFairy", 1, static_cast< u32 >(sizeof(::NoteFairy)), lc_cast653},
+        {"NoteGroup", 6, static_cast< u32 >(sizeof(::NoteGroup)), lc_cast654},
+        {"OceanBowl", 1, static_cast< u32 >(sizeof(::OceanBowl)), lc_cast655},
+        {"OceanBowlBloomDrawer", 0, static_cast< u32 >(sizeof(::OceanBowlBloomDrawer)), lc_cast656},
+        {"OceanFloaterLandParts", 1, static_cast< u32 >(sizeof(::OceanFloaterLandParts)), lc_cast657},
+        {"OceanHomeMapCtrl", 0, static_cast< u32 >(sizeof(::OceanHomeMapCtrl)), lc_cast658},
+        {"OceanRing", 1, static_cast< u32 >(sizeof(::OceanRing)), lc_cast659},
+        {"OceanRingBloomDrawer", 0, static_cast< u32 >(sizeof(::OceanRingBloomDrawer)), lc_cast660},
+        {"OceanRingPipe", 1, static_cast< u32 >(sizeof(::OceanRingPipe)), lc_cast661},
+        {"OceanRingPipeInside", 1, static_cast< u32 >(sizeof(::OceanRingPipeInside)), lc_cast662},
+        {"OceanRingPipeOutside", 1, static_cast< u32 >(sizeof(::OceanRingPipeOutside)), lc_cast663},
+        {"OceanSmallTurtle", 1, static_cast< u32 >(sizeof(::OceanSmallTurtle)), lc_cast664},
+        {"OceanSphere", 1, static_cast< u32 >(sizeof(::OceanSphere)), lc_cast665},
+        {"OceanWaveFloater", 10, static_cast< u32 >(sizeof(::OceanWaveFloater)), lc_cast666},
+        {"OneUpBoard", 52, static_cast< u32 >(sizeof(::OneUpBoard)), lc_cast667},
+        {"Onimasu", 1, static_cast< u32 >(sizeof(::Onimasu)), lc_cast668},
+        {"OnimasuJump", 668, static_cast< u32 >(sizeof(::OnimasuJump)), lc_cast669},
+        {"OnimasuPivot", 668, static_cast< u32 >(sizeof(::OnimasuPivot)), lc_cast670},
+        {"OnlyCamera", 0, static_cast< u32 >(sizeof(::OnlyCamera)), lc_cast671},
+        {"OtaKing", 1, static_cast< u32 >(sizeof(::OtaKing)), lc_cast672},
+        {"OtaKingLongFoot", 69, static_cast< u32 >(sizeof(::OtaKingLongFoot)), lc_cast673},
+        {"OtaKingMagma", 69, static_cast< u32 >(sizeof(::OtaKingMagma)), lc_cast674},
+        {"OtaRock", 1, static_cast< u32 >(sizeof(::OtaRock)), lc_cast675},
+        {"PTimerSwitch", 1, static_cast< u32 >(sizeof(::PTimerSwitch)), lc_cast676},
+        {"PackunPetit", 1, static_cast< u32 >(sizeof(::PackunPetit)), lc_cast677},
+        {"PalmIsland", 1, static_cast< u32 >(sizeof(::PalmIsland)), lc_cast678},
+        {"PauseMenu", 52, static_cast< u32 >(sizeof(::PauseMenu)), lc_cast679},
+        {"Peach", 126, static_cast< u32 >(sizeof(::Peach)), lc_cast680},
+        {"PeachCastleGardenPlanet", 10, static_cast< u32 >(sizeof(::PeachCastleGardenPlanet)), lc_cast681},
+        {"PeachLetter", 52, static_cast< u32 >(sizeof(::PeachLetter)), lc_cast682},
+        {"Penguin", 126, static_cast< u32 >(sizeof(::Penguin)), lc_cast683},
+        {"PenguinCoach", 126, static_cast< u32 >(sizeof(::PenguinCoach)), lc_cast684},
+        {"PenguinMaster", 126, static_cast< u32 >(sizeof(::PenguinMaster)), lc_cast685},
+        {"PenguinRacer", 126, static_cast< u32 >(sizeof(::PenguinRacer)), lc_cast686},
+        {"PenguinRacerLeader", 686, static_cast< u32 >(sizeof(::PenguinRacerLeader)), lc_cast687},
+        {"PenguinSkater", 126, static_cast< u32 >(sizeof(::PenguinSkater)), lc_cast688},
+        {"PenguinStudent", 126, static_cast< u32 >(sizeof(::PenguinStudent)), lc_cast689},
+        {"Petari", 1, static_cast< u32 >(sizeof(::Petari)), lc_cast690},
+        {"PhantomShipBoxFloater", 1, static_cast< u32 >(sizeof(::PhantomShipBoxFloater)), lc_cast691},
+        {"PhantomShipBridge", 1, static_cast< u32 >(sizeof(::PhantomShipBridge)), lc_cast692},
+        {"PhantomShipHandle", 1, static_cast< u32 >(sizeof(::PhantomShipHandle)), lc_cast693},
+        {"PhantomTorch", 1, static_cast< u32 >(sizeof(::PhantomTorch)), lc_cast694},
+        {"PicketSwitch", 1, static_cast< u32 >(sizeof(::PicketSwitch)), lc_cast695},
+        {"PictureBookCloseButton", 52, static_cast< u32 >(sizeof(::PictureBookCloseButton)), lc_cast696},
+        {"PictureBookLayout", 52, static_cast< u32 >(sizeof(::PictureBookLayout)), lc_cast697},
+        {"PlacementStateChecker", 0, static_cast< u32 >(sizeof(::PlacementStateChecker)), lc_cast698},
+        {"PlanetGravityManager", 0, static_cast< u32 >(sizeof(::PlanetGravityManager)), lc_cast699},
+        {"PlanetMapCreator", 0, static_cast< u32 >(sizeof(::PlanetMapCreator)), lc_cast700},
+        {"PlanetMapFarClippable", 381, static_cast< u32 >(sizeof(::PlanetMapFarClippable)), lc_cast701},
+        {"PlanetMapWithoutHighModel", 10, static_cast< u32 >(sizeof(::PlanetMapWithoutHighModel)), lc_cast702},
+        {"Plant", 1, static_cast< u32 >(sizeof(::Plant)), lc_cast703},
+        {"PlantGroup", 1, static_cast< u32 >(sizeof(::PlantGroup)), lc_cast704},
+        {"PlantLeaf", 1, static_cast< u32 >(sizeof(::PlantLeaf)), lc_cast705},
+        {"PlantLeafDrawInit", 1, static_cast< u32 >(sizeof(::PlantLeafDrawInit)), lc_cast706},
+        {"PlantMember", 260, static_cast< u32 >(sizeof(::PlantMember)), lc_cast707},
+        {"PlantStalk", 1, static_cast< u32 >(sizeof(::PlantStalk)), lc_cast708},
+        {"PlantStalkDrawInit", 0, static_cast< u32 >(sizeof(::PlantStalkDrawInit)), lc_cast709},
+        {"PlayerActionGuidance", 52, static_cast< u32 >(sizeof(::PlayerActionGuidance)), lc_cast710},
+        {"PlayerLeft", 52, static_cast< u32 >(sizeof(::PlayerLeft)), lc_cast711},
+        {"PlayerMissLeft", 52, static_cast< u32 >(sizeof(::PlayerMissLeft)), lc_cast712},
+        {"PlayerRacer", 1, static_cast< u32 >(sizeof(::PlayerRacer)), lc_cast713},
+        {"PlayerSeArea", 17, static_cast< u32 >(sizeof(::PlayerSeArea)), lc_cast714},
+        {"Poihana", 1, static_cast< u32 >(sizeof(::Poihana)), lc_cast715},
+        {"Pole", 1, static_cast< u32 >(sizeof(::Pole)), lc_cast716},
+        {"Polta", 1, static_cast< u32 >(sizeof(::Polta)), lc_cast717},
+        {"PoltaArm", 279, static_cast< u32 >(sizeof(::PoltaArm)), lc_cast718},
+        {"PoltaGroundRock", 1, static_cast< u32 >(sizeof(::PoltaGroundRock)), lc_cast719},
+        {"PoltaGroundRockHolder", 6, static_cast< u32 >(sizeof(::PoltaGroundRockHolder)), lc_cast720},
+        {"PoltaRock", 1, static_cast< u32 >(sizeof(::PoltaRock)), lc_cast721},
+        {"PoltaRockHolder", 6, static_cast< u32 >(sizeof(::PoltaRockHolder)), lc_cast722},
+        {"PomponPlant", 1, static_cast< u32 >(sizeof(::PomponPlant)), lc_cast723},
+        {"PowerStar", 1, static_cast< u32 >(sizeof(::PowerStar)), lc_cast724},
+        {"PowerStarAppearPoint", 1, static_cast< u32 >(sizeof(::PowerStarAppearPoint)), lc_cast725},
+        {"PowerStarHalo", 425, static_cast< u32 >(sizeof(::PowerStarHalo)), lc_cast726},
+        {"PowerStarHolder", 0, static_cast< u32 >(sizeof(::PowerStarHolder)), lc_cast727},
+        {"PowerStarList", 52, static_cast< u32 >(sizeof(::PowerStarList)), lc_cast728},
+        {"PressureMessenger", 1, static_cast< u32 >(sizeof(::PressureMessenger)), lc_cast729},
+        {"PriorDrawAir", 2, static_cast< u32 >(sizeof(::PriorDrawAir)), lc_cast730},
+        {"PriorDrawAirHolder", 0, static_cast< u32 >(sizeof(::PriorDrawAirHolder)), lc_cast731},
+        {"PrizeRing", 279, static_cast< u32 >(sizeof(::PrizeRing)), lc_cast732},
+        {"ProjectionMapAir", 2, static_cast< u32 >(sizeof(::ProjectionMapAir)), lc_cast733},
+        {"Sky", 1, static_cast< u32 >(sizeof(::Sky)), lc_cast734},
+        {"ProjectionMapSky", 734, static_cast< u32 >(sizeof(::ProjectionMapSky)), lc_cast735},
+        {"PrologueDirector", 1, static_cast< u32 >(sizeof(::PrologueDirector)), lc_cast736},
+        {"PrologueHolder", 0, static_cast< u32 >(sizeof(::PrologueHolder)), lc_cast737},
+        {"PrologueLetter", 52, static_cast< u32 >(sizeof(::PrologueLetter)), lc_cast738},
+        {"ProloguePictureBook", 52, static_cast< u32 >(sizeof(::ProloguePictureBook)), lc_cast739},
+        {"Pukupuku", 1, static_cast< u32 >(sizeof(::Pukupuku)), lc_cast740},
+        {"PunchBox", 1, static_cast< u32 >(sizeof(::PunchBox)), lc_cast741},
+        {"PunchingKinoko", 1, static_cast< u32 >(sizeof(::PunchingKinoko)), lc_cast742},
+        {"PurpleCoinCounter", 52, static_cast< u32 >(sizeof(::PurpleCoinCounter)), lc_cast743},
+        {"PurpleCoinHolder", 6, static_cast< u32 >(sizeof(::PurpleCoinHolder)), lc_cast744},
+        {"PurpleCoinStarter", 0, static_cast< u32 >(sizeof(::PurpleCoinStarter)), lc_cast745},
+        {"QuakeEffectArea", 17, static_cast< u32 >(sizeof(::QuakeEffectArea)), lc_cast746},
+        {"QuakeEffectGenerator", 1, static_cast< u32 >(sizeof(::QuakeEffectGenerator)), lc_cast747},
+        {"QuarterRollGravityRoomArrow", 10, static_cast< u32 >(sizeof(::QuarterRollGravityRoomArrow)), lc_cast748},
+        {"QuestionBoxGalleryObj", 10, static_cast< u32 >(sizeof(::QuestionBoxGalleryObj)), lc_cast749},
+        {"QuestionCoin", 1, static_cast< u32 >(sizeof(::QuestionCoin)), lc_cast750},
+        {"Rabbit", 126, static_cast< u32 >(sizeof(::Rabbit)), lc_cast751},
+        {"RaceManager", 1, static_cast< u32 >(sizeof(::RaceManager)), lc_cast752},
+        {"RaceManagerLayout", 52, static_cast< u32 >(sizeof(::RaceManagerLayout)), lc_cast753},
+        {"RaceRail", 0, static_cast< u32 >(sizeof(::RaceRail)), lc_cast754},
+        {"RailBlock", 1, static_cast< u32 >(sizeof(::RailBlock)), lc_cast755},
+        {"RailCoin", 212, static_cast< u32 >(sizeof(::RailCoin)), lc_cast756},
+        {"RailDemoMoveObj", 449, static_cast< u32 >(sizeof(::RailDemoMoveObj)), lc_cast757},
+        {"RailMoveIndirectObj", 449, static_cast< u32 >(sizeof(::RailMoveIndirectObj)), lc_cast758},
+        {"RailMoveObjBreakAtEnd", 449, static_cast< u32 >(sizeof(::RailMoveObjBreakAtEnd)), lc_cast759},
+        {"RailMoveObjPress", 449, static_cast< u32 >(sizeof(::RailMoveObjPress)), lc_cast760},
+        {"RailMoveObjSwitchShadow", 449, static_cast< u32 >(sizeof(::RailMoveObjSwitchShadow)), lc_cast761},
+        {"RailPlanetMap", 381, static_cast< u32 >(sizeof(::RailPlanetMap)), lc_cast762},
+        {"RailRotateMoveObj", 449, static_cast< u32 >(sizeof(::RailRotateMoveObj)), lc_cast763},
+        {"RainCloud", 1, static_cast< u32 >(sizeof(::RainCloud)), lc_cast764},
+        {"RandomEffectObj", 40, static_cast< u32 >(sizeof(::RandomEffectObj)), lc_cast765},
+        {"RestartCube", 17, static_cast< u32 >(sizeof(::RestartCube)), lc_cast766},
+        {"ReverseGravityRoomPlanet", 10, static_cast< u32 >(sizeof(::ReverseGravityRoomPlanet)), lc_cast767},
+        {"RevolvingWay", 1, static_cast< u32 >(sizeof(::RevolvingWay)), lc_cast768},
+        {"RingBeam", 1, static_cast< u32 >(sizeof(::RingBeam)), lc_cast769},
+        {"RingBeamShadowDrawer", 330, static_cast< u32 >(sizeof(::RingBeamShadowDrawer)), lc_cast770},
+        {"RingBeamer", 1, static_cast< u32 >(sizeof(::RingBeamer)), lc_cast771},
+        {"Rock", 1, static_cast< u32 >(sizeof(::Rock)), lc_cast772},
+        {"RockCreator", 1, static_cast< u32 >(sizeof(::RockCreator)), lc_cast773},
+        {"Rosetta", 126, static_cast< u32 >(sizeof(::Rosetta)), lc_cast774},
+        {"RosettaChair", 1, static_cast< u32 >(sizeof(::RosettaChair)), lc_cast775},
+        {"SimpleLayout", 52, static_cast< u32 >(sizeof(::SimpleLayout)), lc_cast776},
+        {"RosettaMonologue", 776, static_cast< u32 >(sizeof(::RosettaMonologue)), lc_cast777},
+        {"RosettaPictureBook", 1, static_cast< u32 >(sizeof(::RosettaPictureBook)), lc_cast778},
+        {"RosettaReading", 1, static_cast< u32 >(sizeof(::RosettaReading)), lc_cast779},
+        {"RotPartsModel", 69, static_cast< u32 >(sizeof(::RotPartsModel)), lc_cast780},
+        {"RotateMoveObj", 10, static_cast< u32 >(sizeof(::RotateMoveObj)), lc_cast781},
+        {"RunawayRabbit", 1, static_cast< u32 >(sizeof(::RunawayRabbit)), lc_cast782},
+        {"RunawayRabbitCollect", 1, static_cast< u32 >(sizeof(::RunawayRabbitCollect)), lc_cast783},
+        {"RunawayTico", 642, static_cast< u32 >(sizeof(::RunawayTico)), lc_cast784},
+        {"SamboHead", 1, static_cast< u32 >(sizeof(::SamboHead)), lc_cast785},
+        {"SandCapsuleInsidePlanet", 10, static_cast< u32 >(sizeof(::SandCapsuleInsidePlanet)), lc_cast786},
+        {"SandCapsulePressGround", 10, static_cast< u32 >(sizeof(::SandCapsulePressGround)), lc_cast787},
+        {"SandUpDownEffectObj", 1, static_cast< u32 >(sizeof(::SandUpDownEffectObj)), lc_cast788},
+        {"SandUpDownTriRock", 10, static_cast< u32 >(sizeof(::SandUpDownTriRock)), lc_cast789},
+        {"Sandstorm", 1, static_cast< u32 >(sizeof(::Sandstorm)), lc_cast790},
+        {"SaveIcon", 52, static_cast< u32 >(sizeof(::SaveIcon)), lc_cast791},
+        {"ScenarioDataParser", 0, static_cast< u32 >(sizeof(::ScenarioDataParser)), lc_cast792},
+        {"ScenarioSelectLayout", 52, static_cast< u32 >(sizeof(::ScenarioSelectLayout)), lc_cast793},
+        {"ScenarioSelectStar", 635, static_cast< u32 >(sizeof(::ScenarioSelectStar)), lc_cast794},
+        {"ScenarioStarter", 1, static_cast< u32 >(sizeof(::ScenarioStarter)), lc_cast795},
+        {"ScenarioTitle", 52, static_cast< u32 >(sizeof(::ScenarioTitle)), lc_cast796},
+        {"SceneDataInitializer", 0, static_cast< u32 >(sizeof(::SceneDataInitializer)), lc_cast797},
+        {"SceneNameObjMovementController", 0, static_cast< u32 >(sizeof(::SceneNameObjMovementController)), lc_cast798},
+        {"ScenePlayingResult", 0, static_cast< u32 >(sizeof(::ScenePlayingResult)), lc_cast799},
+        {"WipeHolderBase", 0, static_cast< u32 >(sizeof(::WipeHolderBase)), lc_cast800},
+        {"SceneWipeHolder", 800, static_cast< u32 >(sizeof(::SceneWipeHolder)), lc_cast801},
+        {"ScreenBlurArea", 94, static_cast< u32 >(sizeof(::ScreenBlurArea)), lc_cast802},
+        {"ScreenBlurEffect", 96, static_cast< u32 >(sizeof(::ScreenBlurEffect)), lc_cast803},
+        {"ScreenPreserver", 0, static_cast< u32 >(sizeof(::ScreenPreserver)), lc_cast804},
+        {"ScrewSwitch", 1, static_cast< u32 >(sizeof(::ScrewSwitch)), lc_cast805},
+        {"ScrewSwitchReverse", 1, static_cast< u32 >(sizeof(::ScrewSwitchReverse)), lc_cast806},
+        {"SeaBottomTriplePropeller", 1, static_cast< u32 >(sizeof(::SeaBottomTriplePropeller)), lc_cast807},
+        {"SeaGull", 1, static_cast< u32 >(sizeof(::SeaGull)), lc_cast808},
+        {"SeaGullGroup", 1, static_cast< u32 >(sizeof(::SeaGullGroup)), lc_cast809},
+        {"SearchBeamer", 1, static_cast< u32 >(sizeof(::SearchBeamer)), lc_cast810},
+        {"SeesawMoveNut", 10, static_cast< u32 >(sizeof(::SeesawMoveNut)), lc_cast811},
+        {"SensorHitChecker", 0, static_cast< u32 >(sizeof(::SensorHitChecker)), lc_cast812},
+        {"ShadowClipActor", 1, static_cast< u32 >(sizeof(::ShadowClipActor)), lc_cast813},
+        {"ShadowControllerHolder", 0, static_cast< u32 >(sizeof(::ShadowControllerHolder)), lc_cast814},
+        {"ShadowSurfaceDrawer", 329, static_cast< u32 >(sizeof(::ShadowSurfaceDrawer)), lc_cast815},
+        {"ShadowSurfaceBox", 815, static_cast< u32 >(sizeof(::ShadowSurfaceBox)), lc_cast816},
+        {"ShadowSurfaceCircle", 815, static_cast< u32 >(sizeof(::ShadowSurfaceCircle)), lc_cast817},
+        {"ShadowSurfaceDrawInit", 0, static_cast< u32 >(sizeof(::ShadowSurfaceDrawInit)), lc_cast818},
+        {"ShadowSurfaceOval", 815, static_cast< u32 >(sizeof(::ShadowSurfaceOval)), lc_cast819},
+        {"ShadowVolumeBox", 330, static_cast< u32 >(sizeof(::ShadowVolumeBox)), lc_cast820},
+        {"ShadowVolumeModel", 330, static_cast< u32 >(sizeof(::ShadowVolumeModel)), lc_cast821},
+        {"ShadowVolumeCylinder", 821, static_cast< u32 >(sizeof(::ShadowVolumeCylinder)), lc_cast822},
+        {"ShadowVolumeDrawInit", 0, static_cast< u32 >(sizeof(::ShadowVolumeDrawInit)), lc_cast823},
+        {"ShadowVolumeFlatModel", 821, static_cast< u32 >(sizeof(::ShadowVolumeFlatModel)), lc_cast824},
+        {"ShadowVolumeLine", 330, static_cast< u32 >(sizeof(::ShadowVolumeLine)), lc_cast825},
+        {"ShadowVolumeOval", 821, static_cast< u32 >(sizeof(::ShadowVolumeOval)), lc_cast826},
+        {"ShadowVolumeOvalPole", 821, static_cast< u32 >(sizeof(::ShadowVolumeOvalPole)), lc_cast827},
+        {"ShadowVolumeSphere", 821, static_cast< u32 >(sizeof(::ShadowVolumeSphere)), lc_cast828},
+        {"Shellfish", 1, static_cast< u32 >(sizeof(::Shellfish)), lc_cast829},
+        {"ShockWaveGenerator", 1, static_cast< u32 >(sizeof(::ShockWaveGenerator)), lc_cast830},
+        {"ShootingStar", 1, static_cast< u32 >(sizeof(::ShootingStar)), lc_cast831},
+        {"SideSpikeMoveStep", 10, static_cast< u32 >(sizeof(::SideSpikeMoveStep)), lc_cast832},
+        {"SignBoard", 126, static_cast< u32 >(sizeof(::SignBoard)), lc_cast833},
+        {"SimpleBloomArea", 94, static_cast< u32 >(sizeof(::SimpleBloomArea)), lc_cast834},
+        {"SimpleBreakableObjBase", 10, static_cast< u32 >(sizeof(::SimpleBreakableObjBase)), lc_cast835},
+        {"SimpleBreakableObj", 835, static_cast< u32 >(sizeof(::SimpleBreakableObj)), lc_cast836},
+        {"SimpleBreakableIndirectObj", 836, static_cast< u32 >(sizeof(::SimpleBreakableIndirectObj)), lc_cast837},
+        {"SimpleClipPartsObj", 10, static_cast< u32 >(sizeof(::SimpleClipPartsObj)), lc_cast838},
+        {"SimpleEffectLayout", 776, static_cast< u32 >(sizeof(::SimpleEffectLayout)), lc_cast839},
+        {"SimpleEnvironmentObj", 10, static_cast< u32 >(sizeof(::SimpleEnvironmentObj)), lc_cast840},
+        {"SimpleFloaterObj", 1, static_cast< u32 >(sizeof(::SimpleFloaterObj)), lc_cast841},
+        {"SimpleMapObjNoSilhouetted", 45, static_cast< u32 >(sizeof(::SimpleMapObjNoSilhouetted)), lc_cast842},
+        {"SimpleMapObjPush", 45, static_cast< u32 >(sizeof(::SimpleMapObjPush)), lc_cast843},
+        {"SimpleMirrorObj", 10, static_cast< u32 >(sizeof(::SimpleMirrorObj)), lc_cast844},
+        {"SimpleMirrorReflectionObj", 45, static_cast< u32 >(sizeof(::SimpleMirrorReflectionObj)), lc_cast845},
+        {"SimpleModelDrawer", 1, static_cast< u32 >(sizeof(::SimpleModelDrawer)), lc_cast846},
+        {"SimpleNormalMapObj", 649, static_cast< u32 >(sizeof(::SimpleNormalMapObj)), lc_cast847},
+        {"SimpleSeesawObj", 10, static_cast< u32 >(sizeof(::SimpleSeesawObj)), lc_cast848},
+        {"SimpleTextureSwitchChangeObj", 45, static_cast< u32 >(sizeof(::SimpleTextureSwitchChangeObj)), lc_cast849},
+        {"SimpleTimerObj", 10, static_cast< u32 >(sizeof(::SimpleTimerObj)), lc_cast850},
+        {"SkeletalFishBaby", 1, static_cast< u32 >(sizeof(::SkeletalFishBaby)), lc_cast851},
+        {"SkeletalFishBoss", 1, static_cast< u32 >(sizeof(::SkeletalFishBoss)), lc_cast852},
+        {"SkeletalFishBossBattleDirector", 0, static_cast< u32 >(sizeof(::SkeletalFishBossBattleDirector)), lc_cast853},
+        {"SkeletalFishBossHead", 69, static_cast< u32 >(sizeof(::SkeletalFishBossHead)), lc_cast854},
+        {"SkeletalFishBossInfo", 0, static_cast< u32 >(sizeof(::SkeletalFishBossInfo)), lc_cast855},
+        {"SkeletalFishBossRail", 1, static_cast< u32 >(sizeof(::SkeletalFishBossRail)), lc_cast856},
+        {"SkeletalFishBossRailHolder", 0, static_cast< u32 >(sizeof(::SkeletalFishBossRailHolder)), lc_cast857},
+        {"SkeletalFishBossScarFlash", 69, static_cast< u32 >(sizeof(::SkeletalFishBossScarFlash)), lc_cast858},
+        {"SkeletalFishGuard", 1, static_cast< u32 >(sizeof(::SkeletalFishGuard)), lc_cast859},
+        {"SkeletalFishGuardHolder", 0, static_cast< u32 >(sizeof(::SkeletalFishGuardHolder)), lc_cast860},
+        {"SleepControllerHolder", 0, static_cast< u32 >(sizeof(::SleepControllerHolder)), lc_cast861},
+        {"SlingShooter", 1, static_cast< u32 >(sizeof(::SlingShooter)), lc_cast862},
+        {"SmallStone", 1, static_cast< u32 >(sizeof(::SmallStone)), lc_cast863},
+        {"SmallStoneMember", 279, static_cast< u32 >(sizeof(::SmallStoneMember)), lc_cast864},
+        {"Snakehead", 1, static_cast< u32 >(sizeof(::Snakehead)), lc_cast865},
+        {"SnowCapsulePlanet", 10, static_cast< u32 >(sizeof(::SnowCapsulePlanet)), lc_cast866},
+        {"SnowFloor", 1, static_cast< u32 >(sizeof(::SnowFloor)), lc_cast867},
+        {"SnowFloorTile", 1, static_cast< u32 >(sizeof(::SnowFloorTile)), lc_cast868},
+        {"SnowMan", 1, static_cast< u32 >(sizeof(::SnowMan)), lc_cast869},
+        {"SnowplowSwitch", 1, static_cast< u32 >(sizeof(::SnowplowSwitch)), lc_cast870},
+        {"SoundEmitter", 1, static_cast< u32 >(sizeof(::SoundEmitter)), lc_cast871},
+        {"SoundEmitterCube", 17, static_cast< u32 >(sizeof(::SoundEmitterCube)), lc_cast872},
+        {"SoundEmitterSphere", 17, static_cast< u32 >(sizeof(::SoundEmitterSphere)), lc_cast873},
+        {"SpaceCocoon", 1, static_cast< u32 >(sizeof(::SpaceCocoon)), lc_cast874},
+        {"SpaceInner", 1, static_cast< u32 >(sizeof(::SpaceInner)), lc_cast875},
+        {"SpaceMine", 10, static_cast< u32 >(sizeof(::SpaceMine)), lc_cast876},
+        {"SpaceShipStep", 10, static_cast< u32 >(sizeof(::SpaceShipStep)), lc_cast877},
+        {"SphereRailDash", 1, static_cast< u32 >(sizeof(::SphereRailDash)), lc_cast878},
+        {"SphereSelector", 1, static_cast< u32 >(sizeof(::SphereSelector)), lc_cast879},
+        {"SphereSelectorHandle", 1, static_cast< u32 >(sizeof(::SphereSelectorHandle)), lc_cast880},
+        {"SpiderCoin", 1, static_cast< u32 >(sizeof(::SpiderCoin)), lc_cast881},
+        {"SpiderMapBlock", 1, static_cast< u32 >(sizeof(::SpiderMapBlock)), lc_cast882},
+        {"SpiderThread", 1, static_cast< u32 >(sizeof(::SpiderThread)), lc_cast883},
+        {"SpinDriver", 1, static_cast< u32 >(sizeof(::SpinDriver)), lc_cast884},
+        {"SpinDriverOperateRing", 1, static_cast< u32 >(sizeof(::SpinDriverOperateRing)), lc_cast885},
+        {"SpinDriverPathDrawInit", 0, static_cast< u32 >(sizeof(::SpinDriverPathDrawInit)), lc_cast886},
+        {"SpinDriverPathDrawer", 1, static_cast< u32 >(sizeof(::SpinDriverPathDrawer)), lc_cast887},
+        {"SpinGuidanceArea", 17, static_cast< u32 >(sizeof(::SpinGuidanceArea)), lc_cast888},
+        {"SpinLeverSwitch", 1, static_cast< u32 >(sizeof(::SpinLeverSwitch)), lc_cast889},
+        {"SpinningBox", 1, static_cast< u32 >(sizeof(::SpinningBox)), lc_cast890},
+        {"SpotMarkLight", 69, static_cast< u32 >(sizeof(::SpotMarkLight)), lc_cast891},
+        {"SpringJetWater", 1, static_cast< u32 >(sizeof(::SpringJetWater)), lc_cast892},
+        {"SpringWaterFloaterSpot", 1, static_cast< u32 >(sizeof(::SpringWaterFloaterSpot)), lc_cast893},
+        {"StaffRoll", 52, static_cast< u32 >(sizeof(::StaffRoll)), lc_cast894},
+        {"StaffRollLine", 52, static_cast< u32 >(sizeof(::StaffRollLine)), lc_cast895},
+        {"StaffRollPicture", 52, static_cast< u32 >(sizeof(::StaffRollPicture)), lc_cast896},
+        {"StageDataHolder", 0, static_cast< u32 >(sizeof(::StageDataHolder)), lc_cast897},
+        {"StageResultInformer", 52, static_cast< u32 >(sizeof(::StageResultInformer)), lc_cast898},
+        {"StageSwitchContainer", 0, static_cast< u32 >(sizeof(::StageSwitchContainer)), lc_cast899},
+        {"StarCounter", 52, static_cast< u32 >(sizeof(::StarCounter)), lc_cast900},
+        {"StarPiece", 1, static_cast< u32 >(sizeof(::StarPiece)), lc_cast901},
+        {"StarPieceCounter", 52, static_cast< u32 >(sizeof(::StarPieceCounter)), lc_cast902},
+        {"StarPieceDirector", 6, static_cast< u32 >(sizeof(::StarPieceDirector)), lc_cast903},
+        {"StarPieceFollowGroup", 1, static_cast< u32 >(sizeof(::StarPieceFollowGroup)), lc_cast904},
+        {"StarPieceGroup", 1, static_cast< u32 >(sizeof(::StarPieceGroup)), lc_cast905},
+        {"StarPieceMother", 1, static_cast< u32 >(sizeof(::StarPieceMother)), lc_cast906},
+        {"StarPieceShooter", 1, static_cast< u32 >(sizeof(::StarPieceShooter)), lc_cast907},
+        {"StarPieceSpot", 1, static_cast< u32 >(sizeof(::StarPieceSpot)), lc_cast908},
+        {"StarPointerBlur", 0, static_cast< u32 >(sizeof(::StarPointerBlur)), lc_cast909},
+        {"StarPointerCommandStream", 52, static_cast< u32 >(sizeof(::StarPointerCommandStream)), lc_cast910},
+        {"StarPointerGuidance", 52, static_cast< u32 >(sizeof(::StarPointerGuidance)), lc_cast911},
+        {"StarPointerLayout", 52, static_cast< u32 >(sizeof(::StarPointerLayout)), lc_cast912},
+        {"StarPointerNumber", 52, static_cast< u32 >(sizeof(::StarPointerNumber)), lc_cast913},
+        {"StarReturnDemoStarter", 1, static_cast< u32 >(sizeof(::StarReturnDemoStarter)), lc_cast914},
+        {"StinkBugBase", 1, static_cast< u32 >(sizeof(::StinkBugBase)), lc_cast915},
+        {"StinkBugParent", 915, static_cast< u32 >(sizeof(::StinkBugParent)), lc_cast916},
+        {"StinkBugSmall", 915, static_cast< u32 >(sizeof(::StinkBugSmall)), lc_cast917},
+        {"StopSceneController", 0, static_cast< u32 >(sizeof(::StopSceneController)), lc_cast918},
+        {"StrayTico", 1, static_cast< u32 >(sizeof(::StrayTico)), lc_cast919},
+        {"StringSpider", 1, static_cast< u32 >(sizeof(::StringSpider)), lc_cast920},
+        {"StringSpiderString", 1, static_cast< u32 >(sizeof(::StringSpiderString)), lc_cast921},
+        {"SubMeterLayout", 52, static_cast< u32 >(sizeof(::SubMeterLayout)), lc_cast922},
+        {"SubmarineSteam", 1, static_cast< u32 >(sizeof(::SubmarineSteam)), lc_cast923},
+        {"SubmarineVolcanoBigColumn", 1, static_cast< u32 >(sizeof(::SubmarineVolcanoBigColumn)), lc_cast924},
+        {"SuddenDeathMeter", 52, static_cast< u32 >(sizeof(::SuddenDeathMeter)), lc_cast925},
+        {"Sun", 1, static_cast< u32 >(sizeof(::Sun)), lc_cast926},
+        {"SunLightArea", 17, static_cast< u32 >(sizeof(::SunLightArea)), lc_cast927},
+        {"SunakazeKunTrap", 279, static_cast< u32 >(sizeof(::SunakazeKunTrap)), lc_cast928},
+        {"SunshadeMapHolder", 0, static_cast< u32 >(sizeof(::SunshadeMapHolder)), lc_cast929},
+        {"SunshadeMapParts", 222, static_cast< u32 >(sizeof(::SunshadeMapParts)), lc_cast930},
+        {"SuperSpinDriver", 1, static_cast< u32 >(sizeof(::SuperSpinDriver)), lc_cast931},
+        {"SurfRay", 1, static_cast< u32 >(sizeof(::SurfRay)), lc_cast932},
+        {"SurfingGuidance", 52, static_cast< u32 >(sizeof(::SurfingGuidance)), lc_cast933},
+        {"SurprisedGalaxy", 1, static_cast< u32 >(sizeof(::SurprisedGalaxy)), lc_cast934},
+        {"SwingLight", 10, static_cast< u32 >(sizeof(::SwingLight)), lc_cast935},
+        {"SwingRope", 1, static_cast< u32 >(sizeof(::SwingRope)), lc_cast936},
+        {"SwingRopeGroup", 0, static_cast< u32 >(sizeof(::SwingRopeGroup)), lc_cast937},
+        {"SwitchBox", 1, static_cast< u32 >(sizeof(::SwitchBox)), lc_cast938},
+        {"SwitchSynchronizer", 0, static_cast< u32 >(sizeof(::SwitchSynchronizer)), lc_cast939},
+        {"SwitchWatcher", 0, static_cast< u32 >(sizeof(::SwitchWatcher)), lc_cast940},
+        {"SwitchWatcherHolder", 0, static_cast< u32 >(sizeof(::SwitchWatcherHolder)), lc_cast941},
+        {"Syati", 1, static_cast< u32 >(sizeof(::Syati)), lc_cast942},
+        {"SysInfoWindow", 52, static_cast< u32 >(sizeof(::SysInfoWindow)), lc_cast943},
+        {"SystemWipeHolder", 800, static_cast< u32 >(sizeof(::SystemWipeHolder)), lc_cast944},
+        {"TakoHei", 1, static_cast< u32 >(sizeof(::TakoHei)), lc_cast945},
+        {"TakoHeiInk", 1, static_cast< u32 >(sizeof(::TakoHeiInk)), lc_cast946},
+        {"TakoHeiInkHolder", 6, static_cast< u32 >(sizeof(::TakoHeiInkHolder)), lc_cast947},
+        {"Takobo", 1, static_cast< u32 >(sizeof(::Takobo)), lc_cast948},
+        {"TalkBalloon", 52, static_cast< u32 >(sizeof(::TalkBalloon)), lc_cast949},
+        {"TalkBalloonEvent", 949, static_cast< u32 >(sizeof(::TalkBalloonEvent)), lc_cast950},
+        {"TalkBalloonShort", 949, static_cast< u32 >(sizeof(::TalkBalloonShort)), lc_cast951},
+        {"TalkBalloonIcon", 951, static_cast< u32 >(sizeof(::TalkBalloonIcon)), lc_cast952},
+        {"TalkBalloonInfo", 949, static_cast< u32 >(sizeof(::TalkBalloonInfo)), lc_cast953},
+        {"TalkBalloonSign", 950, static_cast< u32 >(sizeof(::TalkBalloonSign)), lc_cast954},
+        {"TalkDirector", 52, static_cast< u32 >(sizeof(::TalkDirector)), lc_cast955},
+        {"TalkMessageCtrl", 0, static_cast< u32 >(sizeof(::TalkMessageCtrl)), lc_cast956},
+        {"Tamakoro", 1, static_cast< u32 >(sizeof(::Tamakoro)), lc_cast957},
+        {"TamakoroTutorial", 1, static_cast< u32 >(sizeof(::TamakoroTutorial)), lc_cast958},
+        {"Teresa", 1, static_cast< u32 >(sizeof(::Teresa)), lc_cast959},
+        {"TeresaRacer", 126, static_cast< u32 >(sizeof(::TeresaRacer)), lc_cast960},
+        {"TeresaWater", 1, static_cast< u32 >(sizeof(::TeresaWater)), lc_cast961},
+        {"ThrowingIce", 616, static_cast< u32 >(sizeof(::ThrowingIce)), lc_cast962},
+        {"TicoAstro", 642, static_cast< u32 >(sizeof(::TicoAstro)), lc_cast963},
+        {"TicoEat", 642, static_cast< u32 >(sizeof(::TicoEat)), lc_cast964},
+        {"TicoComet", 964, static_cast< u32 >(sizeof(::TicoComet)), lc_cast965},
+        {"TicoDomeLecture", 1, static_cast< u32 >(sizeof(::TicoDomeLecture)), lc_cast966},
+        {"TicoFat", 126, static_cast< u32 >(sizeof(::TicoFat)), lc_cast967},
+        {"TicoGalaxy", 967, static_cast< u32 >(sizeof(::TicoGalaxy)), lc_cast968},
+        {"TicoRail", 1, static_cast< u32 >(sizeof(::TicoRail)), lc_cast969},
+        {"TicoReading", 1, static_cast< u32 >(sizeof(::TicoReading)), lc_cast970},
+        {"TicoShop", 965, static_cast< u32 >(sizeof(::TicoShop)), lc_cast971},
+        {"TicoStarRing", 642, static_cast< u32 >(sizeof(::TicoStarRing)), lc_cast972},
+        {"TimeAppearObj", 10, static_cast< u32 >(sizeof(::TimeAppearObj)), lc_cast973},
+        {"TimeLimitLayout", 52, static_cast< u32 >(sizeof(::TimeLimitLayout)), lc_cast974},
+        {"TimeUpLayout", 52, static_cast< u32 >(sizeof(::TimeUpLayout)), lc_cast975},
+        {"TimerMoveWall", 10, static_cast< u32 >(sizeof(::TimerMoveWall)), lc_cast976},
+        {"TimerSwitch", 1, static_cast< u32 >(sizeof(::TimerSwitch)), lc_cast977},
+        {"TitleSequenceProductSub::LogoLayout", 776, static_cast< u32 >(sizeof(::TitleSequenceProductSub::LogoLayout)), lc_cast978},
+        {"TombSpider", 1, static_cast< u32 >(sizeof(::TombSpider)), lc_cast979},
+        {"TombSpiderGland", 69, static_cast< u32 >(sizeof(::TombSpiderGland)), lc_cast980},
+        {"TombSpiderThreadAttacher", 1, static_cast< u32 >(sizeof(::TombSpiderThreadAttacher)), lc_cast981},
+        {"TombSpiderVitalSpot", 69, static_cast< u32 >(sizeof(::TombSpiderVitalSpot)), lc_cast982},
+        {"TornadoMario", 1, static_cast< u32 >(sizeof(::TornadoMario)), lc_cast983},
+        {"TrampleStar", 1, static_cast< u32 >(sizeof(::TrampleStar)), lc_cast984},
+        {"TrampleStarShare", 1, static_cast< u32 >(sizeof(::TrampleStarShare)), lc_cast985},
+        {"TransparentWall", 458, static_cast< u32 >(sizeof(::TransparentWall)), lc_cast986},
+        {"Trapeze", 1, static_cast< u32 >(sizeof(::Trapeze)), lc_cast987},
+        {"TrapezeRopeDrawInit", 0, static_cast< u32 >(sizeof(::TrapezeRopeDrawInit)), lc_cast988},
+        {"TreasureBoxCracked", 1, static_cast< u32 >(sizeof(::TreasureBoxCracked)), lc_cast989},
+        {"TreasureSpot", 10, static_cast< u32 >(sizeof(::TreasureSpot)), lc_cast990},
+        {"TrickRabbit", 1, static_cast< u32 >(sizeof(::TrickRabbit)), lc_cast991},
+        {"TrickRabbitFreeRun", 1, static_cast< u32 >(sizeof(::TrickRabbitFreeRun)), lc_cast992},
+        {"TrickRabbitSnow", 1, static_cast< u32 >(sizeof(::TrickRabbitSnow)), lc_cast993},
+        {"TrickRabbitSnowCollect", 1, static_cast< u32 >(sizeof(::TrickRabbitSnowCollect)), lc_cast994},
+        {"TripodBoss", 1, static_cast< u32 >(sizeof(::TripodBoss)), lc_cast995},
+        {"TripodBossAccesser", 0, static_cast< u32 >(sizeof(::TripodBossAccesser)), lc_cast996},
+        {"TripodBossBaseJointPosition", 1, static_cast< u32 >(sizeof(::TripodBossBaseJointPosition)), lc_cast997},
+        {"TripodBossBreakMovement", 1, static_cast< u32 >(sizeof(::TripodBossBreakMovement)), lc_cast998},
+        {"TripodBossCoin", 0, static_cast< u32 >(sizeof(::TripodBossCoin)), lc_cast999},
+        {"TripodBossFixPartsBase", 1, static_cast< u32 >(sizeof(::TripodBossFixPartsBase)), lc_cast1000},
+        {"TripodBossCore", 1000, static_cast< u32 >(sizeof(::TripodBossCore)), lc_cast1001},
+        {"TripodBossFixParts", 1000, static_cast< u32 >(sizeof(::TripodBossFixParts)), lc_cast1002},
+        {"TripodBossGuardWall", 1, static_cast< u32 >(sizeof(::TripodBossGuardWall)), lc_cast1003},
+        {"TripodBossGuardWallPart", 1, static_cast< u32 >(sizeof(::TripodBossGuardWallPart)), lc_cast1004},
+        {"TripodBossKillerGenerater", 1000, static_cast< u32 >(sizeof(::TripodBossKillerGenerater)), lc_cast1005},
+        {"TripodBossKillerGeneraterCircle", 0, static_cast< u32 >(sizeof(::TripodBossKillerGeneraterCircle)), lc_cast1006},
+        {"TripodBossKinokoOneUp", 1, static_cast< u32 >(sizeof(::TripodBossKinokoOneUp)), lc_cast1007},
+        {"TripodBossLeg", 1, static_cast< u32 >(sizeof(::TripodBossLeg)), lc_cast1008},
+        {"TripodBossRailMoveParts", 1002, static_cast< u32 >(sizeof(::TripodBossRailMoveParts)), lc_cast1009},
+        {"TripodBossRotateParts", 1002, static_cast< u32 >(sizeof(::TripodBossRotateParts)), lc_cast1010},
+        {"TripodBossShell", 1000, static_cast< u32 >(sizeof(::TripodBossShell)), lc_cast1011},
+        {"TripodBossStepPoint", 1, static_cast< u32 >(sizeof(::TripodBossStepPoint)), lc_cast1012},
+        {"TripodBossStepStartArea", 17, static_cast< u32 >(sizeof(::TripodBossStepStartArea)), lc_cast1013},
+        {"Tsukidashikun", 10, static_cast< u32 >(sizeof(::Tsukidashikun)), lc_cast1014},
+        {"TurtlePartsModel", 69, static_cast< u32 >(sizeof(::TurtlePartsModel)), lc_cast1015},
+        {"TypicalDoorOpen", 261, static_cast< u32 >(sizeof(::TypicalDoorOpen)), lc_cast1016},
+        {"UFOBase", 1, static_cast< u32 >(sizeof(::UFOBase)), lc_cast1017},
+        {"UFOBreakable", 1017, static_cast< u32 >(sizeof(::UFOBreakable)), lc_cast1018},
+        {"UFOKinoko", 10, static_cast< u32 >(sizeof(::UFOKinoko)), lc_cast1019},
+        {"UFOKinokoUnderConstruction", 10, static_cast< u32 >(sizeof(::UFOKinokoUnderConstruction)), lc_cast1020},
+        {"UFOSolid", 1017, static_cast< u32 >(sizeof(::UFOSolid)), lc_cast1021},
+        {"Unizo", 1, static_cast< u32 >(sizeof(::Unizo)), lc_cast1022},
+        {"UnizoLauncher", 1, static_cast< u32 >(sizeof(::UnizoLauncher)), lc_cast1023},
+        {"ValveSwitch", 1, static_cast< u32 >(sizeof(::ValveSwitch)), lc_cast1024},
+        {"VolumeModelDrawInit", 0, static_cast< u32 >(sizeof(::VolumeModelDrawInit)), lc_cast1025},
+        {"VolumeModelDrawer", 0, static_cast< u32 >(sizeof(::VolumeModelDrawer)), lc_cast1026},
+        {"WarpCube", 17, static_cast< u32 >(sizeof(::WarpCube)), lc_cast1027},
+        {"WarpCubeMgr", 19, static_cast< u32 >(sizeof(::WarpCubeMgr)), lc_cast1028},
+        {"WarpPod", 1, static_cast< u32 >(sizeof(::WarpPod)), lc_cast1029},
+        {"WarpPodMgr", 0, static_cast< u32 >(sizeof(::WarpPodMgr)), lc_cast1030},
+        {"WatchTowerRotateStep", 1, static_cast< u32 >(sizeof(::WatchTowerRotateStep)), lc_cast1031},
+        {"WaterArea", 17, static_cast< u32 >(sizeof(::WaterArea)), lc_cast1032},
+        {"WaterAreaHolder", 0, static_cast< u32 >(sizeof(::WaterAreaHolder)), lc_cast1033},
+        {"WaterAreaMgr", 19, static_cast< u32 >(sizeof(::WaterAreaMgr)), lc_cast1034},
+        {"WaterBazooka", 1, static_cast< u32 >(sizeof(::WaterBazooka)), lc_cast1035},
+        {"WaterBazookaCapsule", 69, static_cast< u32 >(sizeof(::WaterBazookaCapsule)), lc_cast1036},
+        {"WaterCameraFilter", 1, static_cast< u32 >(sizeof(::WaterCameraFilter)), lc_cast1037},
+        {"WaterLeakPipe", 1, static_cast< u32 >(sizeof(::WaterLeakPipe)), lc_cast1038},
+        {"WaterPlant", 1, static_cast< u32 >(sizeof(::WaterPlant)), lc_cast1039},
+        {"WaterPlantDrawInit", 0, static_cast< u32 >(sizeof(::WaterPlantDrawInit)), lc_cast1040},
+        {"WaterPressure", 354, static_cast< u32 >(sizeof(::WaterPressure)), lc_cast1041},
+        {"WaterPressureBullet", 1, static_cast< u32 >(sizeof(::WaterPressureBullet)), lc_cast1042},
+        {"WaterPressureBulletHolder", 0, static_cast< u32 >(sizeof(::WaterPressureBulletHolder)), lc_cast1043},
+        {"WaterRoad", 1, static_cast< u32 >(sizeof(::WaterRoad)), lc_cast1044},
+        {"WaterfallCaveCover", 10, static_cast< u32 >(sizeof(::WaterfallCaveCover)), lc_cast1045},
+        {"WhirlPool", 1, static_cast< u32 >(sizeof(::WhirlPool)), lc_cast1046},
+        {"WhirlPoolAccelerator", 1, static_cast< u32 >(sizeof(::WhirlPoolAccelerator)), lc_cast1047},
+        {"WipeLayoutBase", 52, static_cast< u32 >(sizeof(::WipeLayoutBase)), lc_cast1048},
+        {"WipeFade", 1048, static_cast< u32 >(sizeof(::WipeFade)), lc_cast1049},
+        {"WipeGameOver", 1048, static_cast< u32 >(sizeof(::WipeGameOver)), lc_cast1050},
+        {"WipeKoopa", 1048, static_cast< u32 >(sizeof(::WipeKoopa)), lc_cast1051},
+        {"WipeRing", 1048, static_cast< u32 >(sizeof(::WipeRing)), lc_cast1052},
+        {"WoodBox", 1, static_cast< u32 >(sizeof(::WoodBox)), lc_cast1053},
+        {"WormEatenPlanet", 1, static_cast< u32 >(sizeof(::WormEatenPlanet)), lc_cast1054},
+        {"YellowChip", 99, static_cast< u32 >(sizeof(::YellowChip)), lc_cast1055},
+        {"YellowChipGroup", 101, static_cast< u32 >(sizeof(::YellowChipGroup)), lc_cast1056},
+        {"YesNoLayout", 776, static_cast< u32 >(sizeof(::YesNoLayout)), lc_cast1057},
     };
-    const u16 kClassRowCount = 1059;
+    const u16 kClassRowCount = 1058;
 }  // namespace lumacore
 
 static_assert(__is_base_of(::NameObj, ::LiveActor), "LiveActor does not derive from NameObj");
@@ -3672,7 +3669,6 @@ static_assert(__is_base_of(::NPCActor, ::Tico), "Tico does not derive from NPCAc
 static_assert(__is_base_of(::Tico, ::NebulaAchievementLuma), "NebulaAchievementLuma does not derive from Tico");
 static_assert(__is_base_of(::LayoutActor, ::NebulaAchievementToast), "NebulaAchievementToast does not derive from LayoutActor");
 static_assert(__is_base_of(::LayoutActor, ::NebulaFileSelectButton), "NebulaFileSelectButton does not derive from LayoutActor");
-static_assert(__is_base_of(::LayoutActor, ::NebulaModText), "NebulaModText does not derive from LayoutActor");
 static_assert(__is_base_of(::LayoutActor, ::NebulaPauseSettingsButton), "NebulaPauseSettingsButton does not derive from LayoutActor");
 static_assert(__is_base_of(::MapObjActor, ::NeedlePlant), "NeedlePlant does not derive from MapObjActor");
 static_assert(__is_base_of(::LiveActor, ::NokonokoLand), "NokonokoLand does not derive from LiveActor");

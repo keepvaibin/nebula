@@ -1346,7 +1346,7 @@ void Mario::procJump(bool atStart) {
         gravityScale = 1.0f;
     }
 
-    gravityScale *= mActor->getGravityRatio() * NebulaMods::gravityScale();
+    gravityScale *= mActor->getGravityRatio();
     if (mActor->mGravityJumpTimer != 0) {
         gravityScale *= 0.3f;
         if (!mActor->isInZeroGravitySpot() && mVerticalSpeed < 300.0f) {

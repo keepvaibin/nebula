@@ -123,16 +123,13 @@ struct PlayerAnimationToAdd {
 };
 struct ObjectClassToSet {
     std::string mod_id;
-    std::string mod_version;
     std::string name;
-    std::string like;    // empty: one of the game's classes
-    std::string script;  // empty: none
+    std::string like;
 };
 
 // A power-up from data (luma::Form), for the mod that adds it.
 struct FormToAdd {
     std::string mod_id;
-    std::string mod_version;
     std::string name;
     int acts_like = 0;
     int looks_like = 0;
@@ -140,33 +137,11 @@ struct FormToAdd {
     int frames = 0;
     std::string model;
     std::string music;
-    std::string script;
-};
-
-// A mod-wide script (luma.json "scripts"), for the mod that runs it.
-struct ModScriptToAdd {
-    std::string mod_id;
-    std::string mod_version;
-    std::string script;
-};
-
-// An object a script runs (luma::ScriptObject), for the mod that adds it.
-struct ScriptObjectToAdd {
-    std::string mod_id;
-    std::string mod_version;
-    std::string name;
-    std::string script;
-    std::string archive;
-    double radius = 60.0;
-    int kind = 0;
-    bool collision = false;
-    double shadow_radius = 0.0;
-    double clip_radius = 0.0;
 };
 
 // A mod's achievement for this run (luma::Achievement), with text in the language played.
 struct AchievementToAdd {
-    std::string mod_id;  // the mod's folder name, which is also its plugin's NebulaPlugin id
+    std::string mod_id;  // the mod's folder name
     std::string key;     // "mod:<.luma id>/<id>", the key in achievements.ini
     std::string name;
     std::string description;
@@ -197,14 +172,12 @@ struct ModRows {
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
     std::vector<FormToAdd> forms;
-    std::vector<ScriptObjectToAdd> script_objects;
-    std::vector<ModScriptToAdd> mod_scripts;
     std::vector<SoundEffectToAdd> sound_effects;
     std::vector<PlayerAnimationToAdd> player_animations;
     std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
 // The language refusals are said in (loader contract 3): the played language's folder name, as language_folder gives
@@ -219,9 +192,6 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
 // mods that use it, then it, at the next frame's start; each one's Mods page then reads on and not running, "Taken out
 // while the game runs". False: not queued (no game module with the call, or it refused the id; said in the log).
 bool take_out(std::string_view mod_id);
-// Writes every tunable mods can set to `list_file` (--dump-tunables), one "<key>\t<kind>\t<default>" line each (list
-// entries as <key>[i]). Returns false when the game module has no list or the file can't be written.
-bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file);
 // Sets where unlocked mod achievements are saved (galaxy::achievements::unlock_mod, which returns true when new). When
 // unset (the headless host), unlocks last only for the run.
 void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;

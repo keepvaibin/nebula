@@ -66,6 +66,4 @@ void MarioMeter::init(const TableIter& /*rIter*/) {
     mHitPointMeter->initWithoutIter();
     mSuddenDeathMeter = new SuddenDeathMeter("サドンデスHPメーター", "SuddenDeathMeter");
     mSuddenDeathMeter->initWithoutIter();
-    mHitPointMeter->mFlag.mHudPart = NEBULA_HUD_LIFE_METER;
-    mSuddenDeathMeter->mFlag.mHudPart = NEBULA_HUD_LIFE_METER;
 }

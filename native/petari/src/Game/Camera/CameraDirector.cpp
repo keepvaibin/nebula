@@ -191,21 +191,6 @@ void CameraDirector::calcPose() {
 
     mOnlyCamera->calcPose(getCurrentCameraMan());
     mPoseParam1->copyFrom(*mOnlyCamera->mPoseParam);
-
-    // The game's own pose, for game_camera; then a plugin's camera (set_camera): where it says at once, through walls.
-    NebulaMods::recordGameCamera(mPoseParam1->mPos.x, mPoseParam1->mPos.y, mPoseParam1->mPos.z, mPoseParam1->mWatchPos.x,
-                                 mPoseParam1->mWatchPos.y, mPoseParam1->mWatchPos.z);
-    f32 position[3];
-    f32 target[3];
-    const u32 given = NebulaMods::cameraPose(position, target);
-    if ((given & 1u) != 0u) {
-        mPoseParam1->mPos.set(position[0], position[1], position[2]);
-        mViewInterpolator->mIsCollisionOff = true;
-        mViewInterpolator->mIsForceCameraChange = true;
-    }
-    if ((given & 2u) != 0u) {
-        mPoseParam1->mWatchPos.set(target[0], target[1], target[2]);
-    }
 }
 
 void CameraDirector::calcSubjective() {
@@ -307,7 +292,7 @@ void CameraDirector::createViewMtx() {
     Pos3f view;
     calcViewMtxFromPoseParam(&view, mPoseParam1);
 
-    mViewInterpolator->updateCameraMtx(view, mPoseParam1->getWatchPos(), getTargetObj(), NebulaMods::cameraFov(CameraLocalUtil::getFovy(getCurrentCameraMan())));
+    mViewInterpolator->updateCameraMtx(view, mPoseParam1->getWatchPos(), getTargetObj(), CameraLocalUtil::getFovy(getCurrentCameraMan()));
 }
 
 void CameraDirector::checkStartCondition() {

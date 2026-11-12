@@ -691,7 +691,7 @@ namespace MR {
     }
 
     void addVelocityToGravity(LiveActor* pActor, f32 speed) {
-        addVelocity(pActor, pActor->mGravity * (speed * NebulaMods::gravityScale()));
+        addVelocity(pActor, pActor->mGravity * speed);
     }
 
     void addVelocityToGravityOrGround(LiveActor* pActor, f32 speed) {

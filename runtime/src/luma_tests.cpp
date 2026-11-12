@@ -148,18 +148,19 @@ int main() {
         check(lone && lone->layers.empty(), "a pre_standard layer the form does not list is not read");
     }
     {
-        // Power-ups from data: the game's forms by name, whole numbers, a script name.
+        // Power-ups from data: the game's forms by name, whole numbers.
         const auto forms = [](const char* row) { return parse_manifest(old_layer(std::string(R"("forms":[)") + row + "]")); };
         const std::optional<Manifest> gold =
-            forms(R"({"name":"gold","acts_like":"fire","looks_like":"fire","color_frame":2,"frames":600,"music":"BGM_FIRE_A","script":"gold"})");
+            forms(R"({"name":"gold","acts_like":"fire","looks_like":"fire","color_frame":2,"frames":600,"music":"BGM_FIRE_A"})");
         check(gold && gold->layers[0].forms.size() == 1u && gold->layers[0].forms[0].acts_like == 2 && gold->layers[0].forms[0].color_frame == 2 &&
-                  gold->layers[0].forms[0].frames == 600 && gold->layers[0].forms[0].script == "gold",
+                  gold->layers[0].forms[0].frames == 600 && !gold->layers[0].old_scripts,
               "forms: a power-up from data");
         check(forms(R"({"name":"plain"})") && forms(R"({"name":"plain"})")->layers[0].forms[0].acts_like == 0, "forms: normal unless it says");
         check(!forms(R"({"acts_like":"fire"})"), "forms: a name");
         check(!forms(R"({"name":"x","acts_like":"lava"})"), "forms: only the game's forms");
         check(!forms(R"({"name":"x","frames":1.5})"), "forms: whole frames");
-        check(!forms(R"({"name":"x","script":"../up"})"), "forms: a script inside the mod");
+        const std::optional<Manifest> scripted = forms(R"({"name":"x","script":"gold"})");
+        check(scripted && scripted->layers[0].old_scripts, "forms: a script is the removed interpreter's: marked, the mod refused (mods.cpp)");
     }
     {
         // A player number past a float's range is held as infinite (the start names it and sets nothing), not cast.
@@ -268,33 +269,22 @@ int main() {
         }
     }
 
-    // Objects a script runs (pre_standard).
+    // The removed interpreter's rows (pre_standard "objects", "scripts", a class's "script"): nothing read, the layer
+    // marked, and the mod refused with its reason (mods.cpp); never read as if they would run (plan 1.10b).
     {
-        const std::optional<Manifest> scripted = parse_manifest(old_layer(
-            R"("objects":[{"name":"GlideBlock","script":"blocks/glide","archive":"Kinopio","kind":"map","radius":120,"collision":true,"clip_radius":2000}])"));
-        check(scripted && scripted->layers.size() == 1u && scripted->layers[0].objects.size() == 1u, "an object with a script");
-        if (scripted && !scripted->layers.empty() && !scripted->layers[0].objects.empty()) {
-            const ScriptObject& o = scripted->layers[0].objects[0];
-            check(o.name == "GlideBlock" && o.script == "blocks/glide" && o.archive == "Kinopio" && o.kind == 1 &&
-                      o.radius == 120.0 && o.collision && o.clip_radius == 2000.0 && o.shadow_radius == 0.0,
-                  "its fields");
-            check(layer_sets_game(scripted->layers[0]), "a layer with objects sets the game");
-        }
-        for (const char* bad : {R"("script":"../x")", R"("script":"/x")", R"("script":"a//b")", R"("script":"")",
-                                R"("script":"x","kind":"boss")", R"("script":"x","radius":-1)", R"("script":"x","collision":1)"}) {
-            check(!parse_manifest(old_layer(std::string(R"("objects":[{"name":"A",)") + bad + "}]")), (std::string("refused: ") + bad).c_str());
-        }
-    }
-
-    // Mod-wide scripts (pre_standard).
-    {
+        const std::optional<Manifest> objects = parse_manifest(old_layer(
+            R"("objects":[{"name":"GlideBlock","script":"blocks/glide","archive":"Kinopio","kind":"map"}])"));
+        check(objects && objects->layers.size() == 1u && objects->layers[0].old_scripts, "objects with scripts: marked");
         const std::optional<Manifest> wide = parse_manifest(old_layer(R"("scripts":["main","rules/coins"])"));
-        check(wide && wide->layers.size() == 1u && wide->layers[0].scripts.size() == 2u && wide->layers[0].scripts[1] == "rules/coins",
-              "mod-wide scripts");
-        check(wide && !wide->layers.empty() && layer_sets_game(wide->layers[0]), "a layer with scripts sets the game");
-        for (const char* bad : {R"("scripts":"main")", R"("scripts":[1])", R"("scripts":["../x"])", R"("scripts":[""])"}) {
-            check(!parse_manifest(old_layer(bad)), (std::string("refused: ") + bad).c_str());
-        }
+        check(wide && wide->layers.size() == 1u && wide->layers[0].old_scripts, "mod-wide scripts: marked");
+        const std::optional<Manifest> on_class =
+            parse_manifest(old_layer(R"("object_classes":[{"name":"Kuribo","script":"walk"},{"name":"Big","like":"Kuribo"}])"));
+        check(on_class && on_class->layers.size() == 1u && on_class->layers[0].old_scripts && on_class->layers[0].object_classes.size() == 1u &&
+                  on_class->layers[0].object_classes[0].like == "Kuribo",
+              "a class's script: marked; a class made like another still read");
+        const std::optional<Manifest> plain = parse_manifest(old_layer(R"("object_classes":[{"name":"Big","like":"Kuribo"}])"));
+        check(plain && !plain->layers.empty() && !plain->layers[0].old_scripts, "no script: not marked");
+        check(!parse_manifest(old_layer(R"("object_classes":[{"name":"Big"}])")), "a class row without like: refused");
     }
 
     const std::optional<Manifest> newer = parse_manifest(R"({"format":"2.0","id":"later","everything":"different"})");

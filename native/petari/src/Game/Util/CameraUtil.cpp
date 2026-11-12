@@ -161,7 +161,7 @@ namespace MR {
     }
 
     f32 getRenderNearZ() {
-        return NebulaMods::cameraNear(::getCameraContext()->mNearZ);
+        return ::getCameraContext()->mNearZ;
     }
 
     f32 getFarZ() {

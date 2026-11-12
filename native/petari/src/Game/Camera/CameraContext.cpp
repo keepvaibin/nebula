@@ -74,7 +74,7 @@ void CameraContext::setShakeOffset(f32 x, f32 y) {
 }
 
 void CameraContext::updateProjectionMtx() {
-    mProjection.makePerspective(getRenderFovy(), getAspect(), NebulaMods::cameraNear(mNearZ), mFarZ);
+    mProjection.makePerspective(getRenderFovy(), getAspect(), mNearZ, mFarZ);
 
     Proj3f trans;
     trans.makeTrans(mShakeOffset.x, mShakeOffset.y);

@@ -1,6 +1,6 @@
 # Classes
 
-1059 classes derive from NameObj. `like` names one of them; scripts check an object with `is(object, "Kuribo")`.
+1058 classes derive from NameObj. A luma.json `object_classes` row's `like` names one of them; a mod's code reads the same rows through LumaCore (class count, row, is-a).
 
 | Class | Parent | Header |
 |---|---|---|
@@ -650,7 +650,6 @@
 | NebulaAchievementLuma | Tico | Game/NPC/NebulaAchievementLuma.hpp |
 | NebulaAchievementToast | LayoutActor | Game/Screen/NebulaAchievementToast.hpp |
 | NebulaFileSelectButton | LayoutActor | Game/Screen/NebulaFileSelectButton.hpp |
-| NebulaModText | LayoutActor | Game/Screen/NebulaModText.hpp |
 | NebulaPauseSettingsButton | LayoutActor | Game/Screen/NebulaPauseSettingsButton.hpp |
 | NeedlePlant | MapObjActor | Game/MapObj/NeedlePlant.hpp |
 | NokonokoLand | LiveActor | Game/Enemy/NokonokoLand.hpp |
