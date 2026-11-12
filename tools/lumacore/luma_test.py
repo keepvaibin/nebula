@@ -14,6 +14,9 @@ test and renderer; exit 0 only when every verdict is `pass`.
 The bin folder holds NebulaNative.exe (and NebulaNativeVk.exe for Vulkan), smg_game.dll, nebula_test_extension.dll,
 luma-test.dll (the game half), nebula_import.dll (a refusal's words; without it the game gives codes) and
 nebula-import.exe, pak.path, and dxc/. Nothing outside the work folder is written but the run's own files.
+On Linux (plan 8.1, the container suite) the same with the platform's names: nebula (Vulkan only: give --renderer
+vulkan), libsmg_game.so, libnebula_test_extension.so, luma-test.so, libnebula_import.so and nebula-import; the mods'
+code is code/linux-x64/mod.so, and the game runs on whatever X display DISPLAY names (a virtual one in the container).
 """
 import argparse
 import datetime
@@ -36,7 +39,19 @@ HARNESS = 1
 TREE = pathlib.Path(__file__).resolve().parents[2]
 CAPABILITIES = TREE / "tools" / "lumacore" / "capabilities.json"
 GAME_HALF_ID = "luma-test"
-EXES = {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe"}
+# The platform the runner drives: its game by renderer, its game module, test extension, importer (library and program)
+# and game half by file name, and where a mod's code lies (luma-format 6: code/<platform>/mod.<ending>).
+HOSTS = {
+    "Windows": {"platform": "windows-x64", "exes": {"d3d12": "NebulaNative.exe", "vulkan": "NebulaNativeVk.exe"},
+                "game": "smg_game.dll", "extension": "nebula_test_extension.dll", "importer": "nebula_import.dll",
+                "importer_exe": "nebula-import.exe", "half": "luma-test.dll", "ending": ".dll"},
+    "Linux": {"platform": "linux-x64", "exes": {"vulkan": "nebula"}, "game": "libsmg_game.so",
+              "extension": "libnebula_test_extension.so", "importer": "libnebula_import.so",
+              "importer_exe": "nebula-import", "half": "luma-test.so", "ending": ".so"},
+}
+HOST = HOSTS.get(platform.system(), HOSTS["Windows"])
+HOST["code"] = "code/%s/mod%s" % (HOST["platform"], HOST["ending"])
+EXES = HOST["exes"]
 BUTTONS = {"A", "B", "Z", "C", "PLUS", "MINUS", "ONE", "TWO", "HOME", "UP", "DOWN", "LEFT", "RIGHT"}
 KEYS = {"up", "down", "left", "right", "enter", "esc", "tab", "space", "backspace"}
 LANGUAGES = {
@@ -856,8 +871,8 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     # only has no library here: the game says it has no version for this device.
     code = manifest.get("code")
     platforms = code.get("platforms") if isinstance(code, dict) else None
-    if isinstance(platforms, list) and "windows-x64" in platforms:
-        rel = "code/windows-x64/mod.dll"
+    if isinstance(platforms, list) and HOST["platform"] in platforms:
+        rel = HOST["code"]
         if not (mod_folder / rel).is_file():
             raise HarnessError("%s: the code %s is missing (building is not the runner's job)" % (mod_folder, rel))
         libraries.append(rel)
@@ -889,18 +904,18 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
 
 
 def install_game_half(settings, bin_folder):
-    library = bin_folder / "luma-test.dll"
+    library = bin_folder / HOST["half"]
     if not library.is_file():
-        raise HarnessError("the bin folder has no luma-test.dll (the game half)")
+        raise HarnessError("the bin folder has no %s (the game half)" % HOST["half"])
     if (settings / "mods" / GAME_HALF_ID).exists():
         return  # kept from the test this one continues
     folder = settings / "staging-game-half"
-    (folder / "code" / "windows-x64").mkdir(parents=True)
-    shutil.copyfile(library, folder / "code" / "windows-x64" / "mod.dll")
+    (folder / "code" / HOST["platform"]).mkdir(parents=True)
+    shutil.copyfile(library, folder / HOST["code"])
     (folder / "luma.json").write_text(json.dumps({
         "format": "1.0", "id": GAME_HALF_ID, "name": GAME_HALF_ID, "summary": "The test runner's game half.",
         "authors": ["keepvaibin"], "version": RUNNER_VERSION + ".0", "game": {"id": "RMG"},
-        "code": {"platforms": ["windows-x64"]}}, indent=2), encoding="utf-8")
+        "code": {"platforms": [HOST["platform"]]}}, indent=2), encoding="utf-8")
     install(settings, folder, True, 0)
     shutil.rmtree(folder)
 
@@ -950,7 +965,7 @@ def run_one(test, renderer, args, run_folder, previous):
     """Starts the game for one test and renderer; returns what the checks need."""
     if renderer not in EXES:
         raise HarnessError("no adapter for the renderer %s on this platform" % renderer)
-    if platform.system() != "Windows":
+    if platform.system() not in HOSTS:
         raise HarnessError("no adapter for %s" % platform.system())
     if test["region"] is not None:
         raise HarnessError("region: not built yet (one game per bin folder; the bin names its region in 0.8)")
@@ -964,8 +979,8 @@ def run_one(test, renderer, args, run_folder, previous):
     bin_folder = pathlib.Path(args.bin).resolve()
     exe = bin_folder / EXES[renderer]
     # nebula_import.dll gives refusals their words; a run without it would prove only codes (run 17), so it is required.
-    for need in (exe, bin_folder / "smg_game.dll", bin_folder / "nebula_test_extension.dll", bin_folder / "pak.path",
-                 bin_folder / "nebula_import.dll"):
+    for need in (exe, bin_folder / HOST["game"], bin_folder / HOST["extension"], bin_folder / "pak.path",
+                 bin_folder / HOST["importer"]):
         if not need.is_file():
             raise HarnessError("the bin folder has no %s" % need.name)
     if run_folder.exists():
@@ -978,17 +993,17 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
     frozen = {}
-    for name in (exe.name, "smg_game.dll", "nebula_test_extension.dll"):
-        shutil.copyfile(bin_folder / name, run_folder / "bin" / name)
+    for name in (exe.name, HOST["game"], HOST["extension"]):
+        shutil.copy2(bin_folder / name, run_folder / "bin" / name)  # copy2: the program keeps its mode on Linux
         frozen[name] = sha256(run_folder / "bin" / name)
     if (bin_folder / "dxc").is_dir():
         shutil.copytree(bin_folder / "dxc", run_folder / "bin" / "dxc")
-    if (bin_folder / "nebula-import.exe").is_file():
-        shutil.copyfile(bin_folder / "nebula-import.exe", run_folder / "bin" / "nebula-import.exe")
+    if (bin_folder / HOST["importer_exe"]).is_file():
+        shutil.copy2(bin_folder / HOST["importer_exe"], run_folder / "bin" / HOST["importer_exe"])
     # The game loads the importer's library from its own folder (mod_plugins.cpp validate_message): a run without it
     # gets refusals as codes, so it is frozen with the rest.
-    shutil.copyfile(bin_folder / "nebula_import.dll", run_folder / "bin" / "nebula_import.dll")
-    frozen["nebula_import.dll"] = sha256(run_folder / "bin" / "nebula_import.dll")
+    shutil.copyfile(bin_folder / HOST["importer"], run_folder / "bin" / HOST["importer"])
+    frozen[HOST["importer"]] = sha256(run_folder / "bin" / HOST["importer"])
     # R6-4: the test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
     for hidden in test["hidden"]:
         if not (bin_folder / hidden).is_file():
@@ -999,7 +1014,7 @@ def run_one(test, renderer, args, run_folder, previous):
         frozen.pop(hidden, None)
     mod_ids = []
     if not test["bare"]:
-        frozen["luma-test.dll"] = sha256(bin_folder / "luma-test.dll")
+        frozen[HOST["half"]] = sha256(bin_folder / HOST["half"])
         install_game_half(settings, bin_folder)
     imports = []
     for i, m in enumerate(test["mods"]):
@@ -1016,7 +1031,7 @@ def run_one(test, renderer, args, run_folder, previous):
         mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
                          permissions="ask" if m["code"] == "ask" else m["permissions"])
         mod_ids.append((mod_id, m))
-        for lib in sorted((settings / "mods" / mod_id).rglob("*.dll")):
+        for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
     if test["safe_start"] == "asked":
         imports += ["--safe-start", "1"]
@@ -1048,19 +1063,25 @@ def run_one(test, renderer, args, run_folder, previous):
         "GALAXY_AUDIO_WAV_DUMP_SECONDS": str(int(math.ceil(test["limit"]))),
         "LUMA_HARNESS_PLAN": str(plan),
     })
+    if platform.system() == "Linux":
+        # The importer's library is opened by name (dlopen "libnebula_import.so"), SDL's beside the game.
+        env["LD_LIBRARY_PATH"] = os.pathsep.join([str(run_folder / "bin")] + [p for p in [os.environ.get("LD_LIBRARY_PATH")] if p])
     for name in ("GALAXY_PRESENT_SNAPSHOT_DIR", "GALAXY_INPUT_AUTOPRESS_SCRIPT", "GALAXY_TEST_DETERMINISTIC"):
         env.pop(name, None)
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
-               "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / "nebula_test_extension.dll")] + imports
-    startup = subprocess.STARTUPINFO()
-    startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    startup.wShowWindow = subprocess.SW_HIDE
+               "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
+    hidden = {}
+    if platform.system() == "Windows":
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = subprocess.SW_HIDE
+        hidden["startupinfo"] = startup
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
         try:
-            code = subprocess.call(command, env=env, stdout=log, stderr=subprocess.STDOUT, startupinfo=startup,
-                                   timeout=test["limit"] + 60)
+            code = subprocess.call(command, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=test["limit"] + 60,
+                                   **hidden)
         except subprocess.TimeoutExpired:
             code = None
     seconds = time.time() - began
@@ -1392,7 +1413,8 @@ def run_tests(args):
                     all_pass = False
                 if verdict not in ("crashed",) and (run_folder / "bin").exists():
                     for p in (run_folder / "bin").iterdir():
-                        if p.is_file() and p.suffix in (".exe", ".dll", ".pdb"):
+                        if p.is_file() and (p.suffix in (".exe", ".dll", ".pdb", ".so") or p.name in EXES.values()
+                                            or p.name == HOST["importer_exe"]):
                             p.unlink()
                 setup = {f["key"]: f["value"] for f in facts if f.get("key", "").startswith("setup.")}
                 report(run_folder, test["name"], test["proves"], renderer, verdict, reason, checks, args,
@@ -1413,7 +1435,7 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
     run_folder.mkdir(parents=True, exist_ok=True)
     log_lines = (run_folder / "run.log").read_text(encoding="utf-8", errors="replace").splitlines() if (run_folder / "run.log").exists() else []
     result = {"harness": HARNESS, "runner": RUNNER_VERSION, "test": name, "proves": proves, "renderer": renderer,
-              "platform": "windows-x64", "os": platform.platform(), "gpu": gpu_line(log_lines),
+              "platform": HOST["platform"], "os": platform.platform(), "gpu": gpu_line(log_lines),
               "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
     test_json = extra.pop("test_json", None)
     result.update(extra)
