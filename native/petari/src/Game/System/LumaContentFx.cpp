@@ -21,6 +21,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Tunable.hpp"
+#include "Game/System/GameAssets.hpp"
 #include "Game/System/LumaContentModel.hpp"
 #include <luma.h>
 #include <luma_content_fx.h>
@@ -182,10 +183,170 @@ namespace luma {
                     return true;
                 }
 
-                // The draw group (effects 4) of a mod's effect, from the cook's `<id>:effects`. The cook does not write
-                // it yet (G's form, effects 7): every effect draws in 3D (0), the game's default.
+                // ---- Draw groups (effects 4; D5-5) ----
+
+                // A mod's effects list as the cook writes it (G, effects "G on draft 4"): Luma/<id>/effects.txt, one
+                // line an effect sorted by name, `<name>\t<group>\t<emitters>\n`. Read once a session per mod, ::malloc,
+                // kept to the end (a few bytes an effect).
+                struct GroupRow {
+                    u32 hash;       // MR::getHashCode of the name
+                    s32 group;      // 0 to 5
+                    char name[64];  // the effect's own name (the cook's names are shorter)
+                };
+                struct ModGroups {
+                    ModGroups* next;
+                    char id[68];
+                    u32 count;  // rows; 0 also when the list is absent or damaged (every effect then draws in group 0)
+                    GroupRow rows[1];
+                };
+                ModGroups* sGroups = nullptr;
+                const u32 cEffectsFileCode = 641;
+                const u32 kMostEffectsFile = 64u * 1024u;
+
+                bool nameChar(char c, bool first) {
+                    return (c >= 'a' && c <= 'z') || (!first && ((c >= '0' && c <= '9') || c == '_'));
+                }
+
+                // The list's line `line` (from 1) outside the form: one Content.EffectsFile entry for the mod (its
+                // repeats are counted by the log), and every effect of the mod in group 0.
+                void sayEffectsFile(const char* pId, u32 line) {
+                    char path[96];
+                    char number[16];
+                    nebula_snprintf(path, sizeof(path), "Luma/%s/effects.txt", pId);
+                    nebula_snprintf(number, sizeof(number), "%u", line);
+                    LumaModLogEntry entry = {};
+                    entry.size = sizeof(entry);
+                    entry.source = LUMA_MODLOG_CONTENT;
+                    entry.level = LUMA_MODLOG_ERROR;
+                    entry.code = cEffectsFileCode;
+                    entry.mod = pId;
+                    entry.file = path;
+                    entry.line = line;
+                    entry.names[0] = "line";
+                    entry.values[0] = number;
+                    entry.count = 1;
+                    (void)luma::modlog::add(entry, "Content.EffectsFile");
+                }
+
+                // Parses `pText` (`length` bytes) into `pGroups`; false at the first line outside the form (*pBad its
+                // number).
+                bool parseGroups(const char* pText, u32 length, ModGroups* pGroups, u32* pBad) {
+                    u32 at = 0;
+                    u32 line = 0;
+                    const char* pLast = nullptr;
+                    u32 lastLength = 0;
+                    while (at < length) {
+                        line++;
+                        *pBad = line;
+                        const char* const pName = pText + at;
+                        u32 n = 0;
+                        while (at + n < length && nameChar(pText[at + n], n == 0)) {
+                            n++;
+                        }
+                        if (n == 0 || at + n >= length || pText[at + n] != '\t') {
+                            return false;
+                        }
+                        // Sorted by name in byte order, each once.
+                        if (pLast != nullptr) {
+                            const u32 common = n < lastLength ? n : lastLength;
+                            const s32 order = memcmp(pLast, pName, common);
+                            if (order > 0 || (order == 0 && lastLength >= n)) {
+                                return false;
+                            }
+                        }
+                        u32 p = at + n + 1;
+                        if (p + 1 >= length || pText[p] < '0' || pText[p] > '5' || pText[p + 1] != '\t') {
+                            return false;
+                        }
+                        const s32 group = pText[p] - '0';
+                        p += 2;
+                        u32 emitters = 0;
+                        u32 digits = 0;
+                        while (p < length && pText[p] >= '0' && pText[p] <= '9' && digits < 3) {
+                            emitters = emitters * 10u + static_cast< u32 >(pText[p] - '0');
+                            p++;
+                            digits++;
+                        }
+                        if (digits == 0 || (digits > 1 && pText[p - digits] == '0') || emitters < 1u || emitters > 16u ||
+                            p >= length || pText[p] != '\n') {
+                            return false;
+                        }
+                        char name[64];
+                        if (n >= sizeof(name)) {
+                            return false;
+                        }
+                        memcpy(name, pName, n);
+                        name[n] = 0;
+                        memcpy(pGroups->rows[pGroups->count].name, name, n + 1);
+                        pGroups->rows[pGroups->count].hash = MR::getHashCode(name);
+                        pGroups->rows[pGroups->count].group = group;
+                        pGroups->count++;
+                        pLast = pName;
+                        lastLength = n;
+                        at = p + 1;
+                    }
+                    return true;
+                }
+
+                // The mod's list, read the first time one of its effects is made.
+                const ModGroups* groupsOf(const char* pId, u32 idLength) {
+                    for (const ModGroups* p = sGroups; p != nullptr; p = p->next) {
+                        if (strlen(p->id) == idLength && memcmp(p->id, pId, idLength) == 0) {
+                            return p;
+                        }
+                    }
+                    if (idLength == 0 || idLength >= sizeof(ModGroups::id)) {
+                        return nullptr;
+                    }
+                    char id[sizeof(ModGroups::id)];
+                    memcpy(id, pId, idLength);
+                    id[idLength] = 0;
+                    char path[96];
+                    nebula_snprintf(path, sizeof(path), "/Luma/%s/effects.txt", id);
+                    GameAssets::File file;
+                    const u32 length = GameAssets::open(path, &file) ? file.mLength : 0u;
+                    // At most one row a line, and a line is at least 6 bytes ("a\t0\t1\n").
+                    const u32 most = length <= kMostEffectsFile ? length / 6u + 1u : 1u;
+                    ModGroups* const pGroups = static_cast< ModGroups* >(::malloc(sizeof(ModGroups) + most * sizeof(GroupRow)));
+                    if (pGroups == nullptr) {
+                        return nullptr;
+                    }
+                    memcpy(pGroups->id, id, idLength + 1);
+                    pGroups->count = 0;
+                    if (length > kMostEffectsFile) {
+                        sayEffectsFile(id, 1);
+                    } else if (length > 0) {
+                        char* const pText = static_cast< char* >(::malloc(length));
+                        u32 bad = 0;
+                        if (pText != nullptr && GameAssets::read(&file, pText, static_cast< s32 >(length), 0) >= 0 &&
+                            !parseGroups(pText, length, pGroups, &bad)) {
+                            pGroups->count = 0;
+                            sayEffectsFile(id, bad);
+                        }
+                        ::free(pText);
+                    }
+                    pGroups->next = sGroups;
+                    sGroups = pGroups;
+                    return pGroups;
+                }
+
+                // The draw group (effects 4) of an effect: a mod's (`<id>:<name>`) from its list, the game's own 0 (3D,
+                // the game's default for one with no AutoEffectList row).
                 s32 drawGroupOf(const char* pName) {
-                    (void)pName;
+                    const char* const pColon = strchr(pName, ':');
+                    if (pColon == nullptr) {
+                        return 0;
+                    }
+                    const ModGroups* const pGroups = groupsOf(pName, static_cast< u32 >(pColon - pName));
+                    if (pGroups == nullptr || pGroups->count == 0) {
+                        return 0;
+                    }
+                    const u32 hash = MR::getHashCode(pColon + 1);
+                    for (u32 i = 0; i < pGroups->count; i++) {
+                        if (pGroups->rows[i].hash == hash && strcmp(pGroups->rows[i].name, pColon + 1) == 0) {
+                            return pGroups->rows[i].group;
+                        }
+                    }
                     return 0;
                 }
 
