@@ -200,24 +200,36 @@ unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log
     return samples_log2 != 0u && exists(pixel, kProgramSample, true) ? kProgramSample : kProgramBase;
 }
 
+namespace {
+
+// A program with no row is a mod's: its flags are the cook's (mod_program_flags, flags.tsv). One the cook never named
+// reads the world (the safe choice) and is otherwise plain.
+std::uint32_t flags_of(std::uint64_t id, bool pixel) noexcept {
+    const Row* row = find(id, pixel);
+    if (row != nullptr) {
+        return row->flags;
+    }
+    const ModProgramFlags mod = mod_program_flags(id, pixel);
+    return mod.known ? mod.flags : pixel ? 0u : kReadsWorld;
+}
+
+}  // namespace
+
 bool program_reads_world(std::uint64_t vertex) noexcept {
-    const Row* row = find(vertex, false);
-    return row == nullptr || (row->flags & kReadsWorld) != 0u;
+    return (flags_of(vertex, false) & kReadsWorld) != 0u;
 }
 
 std::uint32_t program_coords(std::uint64_t vertex) noexcept {
     const Row* row = find(vertex, false);
-    return row != nullptr ? row->coords : 0u;
+    return row != nullptr ? row->coords : mod_program_flags(vertex, false).coords;
 }
 
 bool program_lit(std::uint64_t pixel) noexcept {
-    const Row* row = find(pixel, true);
-    return row != nullptr && (row->flags & kLit) != 0u;
+    return (flags_of(pixel, true) & kLit) != 0u;
 }
 
 bool program_sums_key(std::uint64_t pixel) noexcept {
-    const Row* row = find(pixel, true);
-    return row != nullptr && (row->flags & kSumsKey) != 0u;
+    return (flags_of(pixel, true) & kSumsKey) != 0u;
 }
 
 bool program_traced(std::uint64_t pixel) noexcept {

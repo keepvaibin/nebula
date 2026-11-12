@@ -3748,6 +3748,8 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         if (fs::is_regular_file(built, built_error)) {
             galaxy::render::load_mod_shaders(built);
         }
+        // The flags program_table keeps for its own programs, for the mods' (the cook's, beside the texts).
+        galaxy::render::load_mod_program_flags(settings_folder / "mods" / ".cooked" / "mods.sources" / "flags.tsv");
     }
     for (const fs::path& folder : plan.luma_folders) {
         std::error_code shaders_error;

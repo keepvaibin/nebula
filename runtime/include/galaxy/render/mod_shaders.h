@@ -21,6 +21,17 @@ enum class ModShadersResult { Loaded, Unreadable, OtherInterface };
 // headers differ: the mod must be converted again.
 ModShadersResult load_mod_shaders(const std::filesystem::path& file);
 [[nodiscard]] ProgramBytes mod_program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexcept;
+// A mod's program has no program_table row: what the table keeps a row for (its flags: 1 reads the world, 2 lit, 4 sums
+// the key; a vertex stage's coordinates) comes from the cook's flags.tsv beside the texts (one line a text:
+// "<v|p><16 hex digits>\t<flags>\t<coords>"). Loaded once before the renderer starts, with load_mod_shaders; a line
+// that is not one of those is skipped. False when the file is absent or unreadable.
+bool load_mod_program_flags(const std::filesystem::path& file);
+struct ModProgramFlags {
+    bool known = false;  // flags.tsv names the program
+    std::uint32_t flags = 0u;
+    std::uint32_t coords = 0u;
+};
+[[nodiscard]] ModProgramFlags mod_program_flags(std::uint64_t id, bool pixel) noexcept;
 // What building a mod's missing programs came to.
 struct ModShaderBuild {
     unsigned wanted = 0;  // programs neither the build nor `brought` holds
