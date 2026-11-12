@@ -6,3 +6,7 @@
 model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note
 starduststartplanet	CryA_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
 tshapeplanet	crystal_v				2.42						Pull Star Path pillar: tint removed, more reflective (the owner, G2; FB b82)
+itembubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	item bubble: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)
+airbubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	air bubble: a clear shell, not milky (EVERYTHING 6.7; FB b93)
+ufokinoko	lambert4_v	glass	0.02	0	1.5	0	0			0 0 0	the Starshroom's dome: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)
+ufokinokolanding	lambert4_v	glass	0.02	0	1.5	0	0			0 0 0	the Starshroom's dome: a clear shell, not a glowing light (EVERYTHING 6.7; FB b93)

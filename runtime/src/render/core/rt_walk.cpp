@@ -1075,9 +1075,12 @@ bool RenderCore::rt_prepass_draws(const NebulaFrameItem& item, std::uint32_t sta
     if (!rt_blended_walk_) {
         return core::prepass_draws(state);
     }
-    // The second layer: a blended surface whose mesh the light pass reads (its place comes from its triangle).
+    // The second layer: a blended surface whose mesh the light pass reads (its place comes from its triangle); and an
+    // added one whose mesh is a glass row's, a clear shell drawn as an exchange (FB b94, EVERYTHING 6.7).
     const auto i = static_cast<std::size_t>(&item - now.list->items);
-    return core::blended_prepass_draws(state) && (item.flags & NEBULA_ITEM_RING) == 0u &&
+    const bool shell = (item.flags & NEBULA_ITEM_RING) == 0u && core::added_prepass_draws(state) &&
+                       registries_.mesh(item.mesh).hit_class == NEBULA_HIT_GLASS;
+    return (core::blended_prepass_draws(state) || shell) && (item.flags & NEBULA_ITEM_RING) == 0u &&
            i * kRtItemWords + 2u < rt_item_words_.size() && rt_item_words_[i * kRtItemWords + 2u] < rt::kPassMeshArenas;
 }
 

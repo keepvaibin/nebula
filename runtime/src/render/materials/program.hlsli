@@ -478,14 +478,33 @@ float4 traced_sheen_here(float4 pixel, bool metal) {
     const float k = saturate(view_look.x);
     return float4(g_traced_sheen.rgb * k, lerp(1.0, g_traced_sheen.a, k));
 }
+// Set where traced_colour gave an exchange's premultiplied mirror (FB b94): the fog over it in the same form.
+static bool g_exchanged = false;
+// An exchange's draw where it shows no mirror (FB b94): the game's added colour, alpha 0 (premultiplied: an add).
+float4 traced_added(float4 c) {
+    return float4((draw_flags & 512u) != 0u ? c.rgb * c.a : c.rgb, 0.0);
+}
 float4 traced_colour(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
-        return c;
+        return (draw_flags & 256u) != 0u ? traced_added(c) : c;
     }
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
     const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
     if ((view_flags & 16u) != 0u) {
         return float4(float3(light.r, light.a, light.b) * 0.7 + added, c.a);
+    }
+    // An added clear shell (draw flag 256; FB b94, EVERYTHING 6.7), drawn premultiplied: where the mirror picture is
+    // its glass (a: 4 + F, rgb F R), F R and alpha F, so what is behind keeps 1 - F; elsewhere the game's added colour
+    // (by its alpha where the game's add takes it: flag 512) with alpha 0, an add as before.
+    if ((draw_flags & 256u) != 0u) {
+        if (traced_mirror_own(pixel)) {
+            const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
+            if (mirror.a > 3.5) {
+                g_exchanged = true;
+                return float4(traced_srgb(mirror.rgb), saturate(mirror.a - 4.0));
+            }
+        }
+        return traced_added(c);
     }
     // A lit program took its key by V and its fill and ambient by O inside its light sums: nothing more here.
     const float nl = g_traced_lit ? 1.0 : saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
@@ -616,7 +635,9 @@ float4 program_fogged_at(float4 c, float4 pixel) {
         return float4(f / (1.0 + f), c.a);
     }
     // The share is linear light (FB b64), the fog's colour a display value: lit in linear light (M1; c39f).
-    return g_fog_amount > 0.0 ? float4(lerp(c.rgb, traced_srgb(traced_lin(g_fog_colour) * fog_share(pixel)), g_fog_amount), c.a) : c;
+    // An exchange's colour is premultiplied (FB b94): the fog over it by its alpha.
+    const float3 fog = traced_srgb(traced_lin(g_fog_colour) * fog_share(pixel)) * (g_exchanged ? c.a : 1.0);
+    return g_fog_amount > 0.0 ? float4(lerp(c.rgb, fog, g_fog_amount), c.a) : c;
 }
 #endif
 // A program returns inside its entry, whose input `i` holds the pixel. The light on the surface, the game's fog, the

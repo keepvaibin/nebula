@@ -42,6 +42,9 @@ inline constexpr unsigned kAuxPrepass = 5u;        // the prepass: depth and the
 inline constexpr unsigned kAuxPrepassMotion = 6u;  // the same through the vertex stage's motion form (a draw whose own
                                                    // aux is 1: one vertex stage, so one depth, in both passes)
 inline constexpr unsigned kAuxTraced = 8u;         // + 0 to 4: that aux's targets, the pixel program's traced form
+// With kAuxTraced: an added clear shell's traced form, drawn premultiplied (FB b94, EVERYTHING 6.7: the exchange; the
+// pipelines' third page set).
+inline constexpr unsigned kAuxExchange = 16u;
 // The vertex stage's motion form (and its stream of last frame's positions).
 [[nodiscard]] constexpr bool aux_motion_form(unsigned aux) noexcept {
     return aux == 1u || aux == kAuxPrepassMotion || aux == (kAuxTraced | 1u);

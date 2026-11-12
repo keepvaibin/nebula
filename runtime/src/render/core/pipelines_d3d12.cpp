@@ -347,6 +347,18 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         rt.BlendOpAlpha = rt.BlendOp;
     }
 
+    // An added clear shell's traced form (FB b94, EVERYTHING 6.7): an exchange, premultiplied: the program gives F R and
+    // F, what is behind keeps 1 - F.
+    if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    }
+
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     // Culling all has no state: the walker draws nothing.
     switch ((state >> 15u) & 3u) {

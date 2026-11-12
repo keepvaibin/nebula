@@ -58,15 +58,17 @@ void Pipelines::shutdown() noexcept {
         if (Directory* directory = root.exchange(nullptr)) {
             for (auto& page : directory->pages) { delete page.load(); }
             for (auto& page : directory->traced_pages) { delete page.load(); }
+            for (auto& page : directory->exchange_pages) { delete page.load(); }
             delete directory;
         }
     }
 }
 
 std::atomic<gpu::Pipeline*>* Pipelines::cell(std::uint64_t id, unsigned variant, unsigned aux) {
+    static_assert(kExchangeBit == kAuxExchange && kExchangeBit > kAuxTraced + 4u, "the exchange's aux bit (FB b94)");
     const std::uint32_t key = key_of(variant, aux);
-    const bool traced = key >= kKeys;
-    Page* page = page_of(id, traced);
+    const unsigned which = key / kKeys;
+    Page* page = page_of(id, which);
     if (page == nullptr) {
         const auto root = static_cast<std::size_t>(id >> (kPageBits + kDirectoryBits));
         if (root >= directories_.size()) { throw std::out_of_range("pipeline ID outside the native namespaces"); }
@@ -76,7 +78,7 @@ std::atomic<gpu::Pipeline*>* Pipelines::cell(std::uint64_t id, unsigned variant,
             directory = new Directory();
             directories_[root].store(directory, std::memory_order_release);
         }
-        auto& at = (traced ? directory->traced_pages : directory->pages)[(id >> kPageBits) & (kDirectorySize - 1u)];
+        auto& at = directory->set(which)[(id >> kPageBits) & (kDirectorySize - 1u)];
         page = at.load(std::memory_order_acquire);
         if (page == nullptr) { page = new Page(); at.store(page, std::memory_order_release); }
     }
@@ -176,6 +178,11 @@ bool blended_prepass_draws(std::uint32_t state) noexcept {
            ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
 }
 
+bool added_prepass_draws(std::uint32_t state) noexcept {
+    return (state & NEBULA_STATE_COLOR_WRITE) != 0u && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE &&
+           (state & (1u << 10u)) != 0u && ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
+}
+
 void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
                         bool one_pass, bool traced) {
     const auto add = [&](unsigned variant, unsigned aux) {
@@ -189,9 +196,12 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
         }
         // The tracer's forms of a scene draw (no target, one sample): its prepass, and a lit program's traced forms under
         // the aux the scene pass gives an opaque draw.
-        const bool prepass = traced && (prepass_draws(entry.desc.state) || blended_prepass_draws(entry.desc.state));
+        // An added state (FB b94): its prepass and exchange forms, for the glass rows' shells among its draws.
+        const bool added = traced && added_prepass_draws(entry.desc.state);
+        const bool prepass = traced && (prepass_draws(entry.desc.state) || blended_prepass_draws(entry.desc.state) || added);
         const bool lit = prepass && program_traced(entry.desc.pixel);
-        const bool blended = blended_prepass_draws(entry.desc.state);
+        const bool blended = blended_prepass_draws(entry.desc.state) || added;
+        const unsigned exchange = added ? kAuxExchange : 0u;
         for (const unsigned variant : variants) {
             add(variant, 0u);
             const bool scene = (variant & kSceneVariantTarget) == 0u && (variant & kSceneVariantSamplesMask) == 0u;
@@ -203,13 +213,13 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
                 add(variant, writes_motion ? kAuxPrepassMotion : kAuxPrepass);
                 if (lit) {
                     if (!motion || !blended) {
-                        add(variant, kAuxTraced | (writes_motion ? 1u : 0u));
+                        add(variant, kAuxTraced | exchange | (writes_motion ? 1u : 0u));
                     } else if (one_pass) {
-                        add(variant, kAuxTraced | 4u);
+                        add(variant, kAuxTraced | exchange | 4u);
                     } else {
-                        add(variant, kAuxTraced | 2u);
+                        add(variant, kAuxTraced | exchange | 2u);
                         if (layer) {
-                            add(variant, kAuxTraced | 3u);
+                            add(variant, kAuxTraced | exchange | 3u);
                         }
                     }
                 }

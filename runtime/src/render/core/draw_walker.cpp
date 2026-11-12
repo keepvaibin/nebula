@@ -1134,6 +1134,12 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                    program_traced(entry.desc.pixel)) {
             aux = static_cast<std::uint8_t>(aux | kAuxTraced);  // a surface the light pass saw: its colour and lights by their shares
         }
+        // An added clear shell the second layer took (rt_prepass_draws; FB b94, EVERYTHING 6.7): its traced form is an
+        // exchange (premultiplied: F R over what is behind by 1 - F), not a glow.
+        const bool exchange = aux >= kAuxTraced && rt_prepassed_[i] == 2u && core::added_prepass_draws(state);
+        if (exchange) {
+            aux = static_cast<std::uint8_t>(aux | kAuxExchange);
+        }
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
@@ -1220,10 +1226,14 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
                               ((state >> 6u) & 15u) == NEBULA_FACTOR_INV_SRC_ALPHA
                           ? 16u
                           : 0u) |
-                     // A glow (its blend adds): no reflection of its own (program.hlsli traced_mirror_own; FB).
-                     (rt_light_on_ && scene_layer && (state & 3u) == NEBULA_BLEND_ADD && ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE
+                     // A glow (its blend adds): no reflection of its own (program.hlsli traced_mirror_own; FB). An
+                     // added clear shell is no glow: an exchange (256), and 512 where the game's add scales by its alpha.
+                     (rt_light_on_ && scene_layer && !exchange && (state & 3u) == NEBULA_BLEND_ADD &&
+                              ((state >> 6u) & 15u) == NEBULA_FACTOR_ONE
                           ? 32u
                           : 0u) |
+                     (exchange ? 256u : 0u) |
+                     (exchange && ((state >> 2u) & 15u) == NEBULA_FACTOR_SRC_ALPHA ? 512u : 0u) |
                      // The air in front (traced_scatter): a draw that covers what is behind it or blends over it by
                      // its alpha (an added one would add the air twice).
                      (rt_light_on_ && rt_scatter_drawn_ && scene_layer && !sky_draw && state_color_write(state) &&

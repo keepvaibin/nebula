@@ -701,6 +701,17 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         color.dstAlphaBlendFactor = alpha_factor(color.dstColorBlendFactor);
         color.alphaBlendOp = color.colorBlendOp;
     }
+    // An added clear shell's traced form (FB b94, EVERYTHING 6.7): an exchange, premultiplied: the program gives F R and
+    // F, what is behind keeps 1 - F.
+    if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+        color.blendEnable = VK_TRUE;
+        color.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        color.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        color.colorBlendOp = VK_BLEND_OP_ADD;
+        color.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        color.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        color.alphaBlendOp = VK_BLEND_OP_ADD;
+    }
     if (prepass) {
         color.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;  // the item target alone: the draw's item and triangle where it is nearest
         color.blendEnable = VK_FALSE;  // a blended entry's item (the second layer) replaces like any other
