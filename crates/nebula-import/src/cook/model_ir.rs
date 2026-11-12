@@ -1314,6 +1314,8 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
     // c58: and one that is a painted highlight sprite.
     super::hit_record::mark_highlights(&mut ir);
     if source == Source::Table {
+        // c63: a table's fades too (no vertices: their alpha counts 1); a model's are marked at the end, after VTX1.
+        super::hit_record::mark_fades(&mut ir);
         return Ok(ir);
     }
     let inf = parts.get(b"INF1").context("a model without its information block")?;
