@@ -38,7 +38,7 @@ namespace luma {
                 {"mods.ids", 1, 0, nullptr, "services-mods"},
                 {"mods.install", 1, 0, nullptr, "services-mods"},
                 {"content.fx", 1, 0, nullptr, "effects"},
-                {"content.model", 1, 0, nullptr, "models"},
+                {"content.model", 1, 1, nullptr, "models"},
                 {"ui", 1, 0, nullptr, "ui"},
                 {"anim", 1, 1, nullptr, "animation"},
                 {"save", 1, 0, nullptr, "services-save"},

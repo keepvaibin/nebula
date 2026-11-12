@@ -135,6 +135,7 @@
     "anim.frame": "anim reads a play's frame and its clip's last frame (3.6 run time)",
     "anim.refusals": "anim's refusals answer their status and write no handle; a missing clip is Content.MissingAnimation (3.6 run time)",
     "anim.events": "A clip's own events (its <clip>.anim.json, cooked to <clip>.events beside it) come to a play as marks after the mod's own, each with its name (anim 1.1, 3.6 layer 3)",
+    "content.model.set_param": "A material shader's parameter set by name on an attached model (its <model>.params place), refused by name when the model lacks it (content.model 1.1, plan 3.4)",
     "anim.game_clip": "A clip a mod's animation file replaced is the one the game plays and anim plays (3.6 layer 2 and run time)",
     "model.scene_end": "A model on an actor the scene releases ends \"scene\" once at the release, and nothing of it is touched after (models 7)",
     "model.actor_end": "A model on an actor that dies ends \"actor\" once, as the actor's own parts; the ended handle and an attach on the dead actor are refused (3.2)",

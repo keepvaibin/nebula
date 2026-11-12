@@ -17,7 +17,7 @@ extern "C" {
 
 #define LUMA_CONTENT_MODEL_NAME "content.model"
 #define LUMA_CONTENT_MODEL_MAJOR 1u
-#define LUMA_CONTENT_MODEL_MINOR 0u
+#define LUMA_CONTENT_MODEL_MINOR 1u
 
 /* Models one mod has attached and not yet detached, at once. */
 #define LUMA_CONTENT_MODEL_MOST 64u
@@ -65,6 +65,16 @@ typedef struct LumaContentModelService {
        count is 0), and their number in *total (null: not wanted). LUMA_OK; a part's size below 1.0's, or a null parts
        with a count: LUMA_E_ARGUMENT, reported (Service.StructSize). */
     int32_t (*player_parts)(const LumaMod* mod, LumaPlayerPart* parts, uint32_t count, uint32_t* total);
+    /* 1.1. Game thread. A parameter of a material shader (plan 3.4, contract materials 9): the attached model's material
+       `material` takes `rgba` (four floats; a float parameter reads the first) as its parameter `param`, on this model
+       only, until it is set again or a clip that moves that colour plays. The cook names each parameter's place in
+       <model>.params beside the model: places 0 to 2 hold -4 to 4, places 3 to 6 hold 0 to 1, both in 255ths; a value
+       outside is held to them. LUMA_OK. A material or parameter the model's parameters lack, or a model that shows
+       nothing: LUMA_E_NOT_FOUND, Content.MissingParam in the mod log. An ended handle: LUMA_E_HANDLE, reported; a null
+       material, param or rgba, or a value that is not a number: LUMA_E_ARGUMENT, reported. Off the game thread:
+       LUMA_E_THREAD, reported; while the game takes the mod out: LUMA_E_CANCELLED. */
+    int32_t (*set_param)(const LumaMod* mod, LumaContentModel model, const char* material, const char* param,
+                         const float* rgba);
 } LumaContentModelService;
 
 #ifdef __cplusplus
