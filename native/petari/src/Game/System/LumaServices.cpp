@@ -50,6 +50,7 @@ namespace luma {
                 {"net.internet", 1, 3, "net.internet", "services-net"},
                 {"assets", 1, 0, nullptr, "services-assets"},
                 {"input", 1, 0, nullptr, "services-input"},
+                {"audio", 1, 0, nullptr, "services-audio"},
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 

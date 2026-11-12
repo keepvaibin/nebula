@@ -6,6 +6,7 @@
 
 #include "galaxy/audio_device.h"
 #include "galaxy/audio_mixer.h"
+#include "galaxy/luma_audio_service.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/wiimote_speaker.h"
 
@@ -77,6 +78,7 @@ struct NativeGameAudio::State {
     // 1 while heard, 0 while the window is in the background with focus_loss=mute; ramped across a frame on a change.
     float audible{1.0f};
     std::vector<float> speaker_frame;  // the remote speaker's frame on its own, while `audible` ramps
+    std::vector<float> mods;           // the mods' voices and streams (luma_audio::mix), before the master
     galaxy::SoundOutput sound_output{galaxy::SoundOutput::Stereo};
     // The frames made and not yet pulled, interleaved; the device's thread only. Center, surround left and right apart
     // from them while the device has rear speakers.
@@ -235,10 +237,15 @@ void NativeGameAudio::frame() {
     const std::size_t at = s.pending.size();
     s.pending.resize(at + frames * 2u);
     const std::span<float> out(s.pending.data() + at, frames * 2u);
+    // The mods' sound (LumaCore audio, services-audio) joins the game's front left and right before the master volume,
+    // each bus at the player's volume for it: effects and ui follow Sound effects.
+    const float buses[4] = {audio.sfx, audio.sfx, audio.voice, audio.music};
+    s.mods.assign(frames * 2u, 0.0f);
+    const bool mods = galaxy::luma_audio::mix(s.mods.data(), frames, s.mixer->rate(), buses);
     for (std::size_t i = 0; i < frames; ++i) {
         const float gain = start + (target - start) * static_cast<float>(i + 1u) / static_cast<float>(frames);
-        out[i * 2u] = samples[i * 2u] * gain;
-        out[i * 2u + 1u] = samples[i * 2u + 1u] * gain;
+        out[i * 2u] = (mods ? samples[i * 2u] + s.mods[i * 2u] : samples[i * 2u]) * gain;
+        out[i * 2u + 1u] = (mods ? samples[i * 2u + 1u] + s.mods[i * 2u + 1u] : samples[i * 2u + 1u]) * gain;
     }
     if (!apart.empty()) {
         const std::size_t apart_at = s.pending_surround.size();
